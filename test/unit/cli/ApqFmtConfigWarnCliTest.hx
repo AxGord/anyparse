@@ -1,6 +1,6 @@
 package unit.cli;
 
-import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
+import anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics;
 import anyparse.query.Cli;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.RunLedger;

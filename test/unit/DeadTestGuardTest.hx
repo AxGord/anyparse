@@ -1,6 +1,6 @@
 package unit;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.CondDirectives;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;

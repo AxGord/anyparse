@@ -1,8 +1,8 @@
 package unit.format;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 
 /**
  * A source grid of an array literal keeps its rows when a blank line or a comment sits between them.

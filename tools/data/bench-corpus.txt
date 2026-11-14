@@ -49,7 +49,7 @@ src/anyparse/format/WhitespacePolicy.hx
 src/anyparse/format/comment/BlockCommentLine.hx
 src/anyparse/format/comment/BlockCommentLineBody.hx
 src/anyparse/format/comment/LineCommentNormalizer.hx
-src/anyparse/grammar/haxe/HaxeStringFoldSupport.hx
+src/anyparse/grammar/haxe/query/HaxeStringFoldSupport.hx
 src/anyparse/grammar/haxe/stmt/HxCasePattern.hx
 src/anyparse/grammar/haxe/stmt/HxCatchParam.hx
 src/anyparse/grammar/haxe/cond/HxCondNameFnDecl.hx

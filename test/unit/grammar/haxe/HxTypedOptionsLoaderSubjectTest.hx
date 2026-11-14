@@ -1,7 +1,7 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.grammar.haxe.HxTypedOptionsRewrite;
+import anyparse.grammar.haxe.format.HxTypedOptionsRewrite;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
 

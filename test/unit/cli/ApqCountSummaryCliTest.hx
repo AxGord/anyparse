@@ -9,7 +9,7 @@ using StringTools;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.common.naming.Naming;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.RunLedger;
 import anyparse.query.SymbolIndex;

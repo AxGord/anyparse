@@ -2,8 +2,8 @@ package unit.format;
 
 import anyparse.format.BodyPolicy;
 import anyparse.format.OptionsSource;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import anyparse.macro.OptionKnobs;
 import haxe.Exception;
 

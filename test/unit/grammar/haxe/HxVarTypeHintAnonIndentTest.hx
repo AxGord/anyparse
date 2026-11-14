@@ -4,8 +4,8 @@ import anyparse.format.BracePlacement;
 import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxListsKeepSource;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HxListsKeepSource;
 import utest.Assert;
 import utest.Test;
 

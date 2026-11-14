@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeLexicalRegions;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
 import anyparse.query.LexicalRegions;
 
 /**

@@ -48,7 +48,7 @@
 			"type": "unit.grammar.haxe.HxWriteConfig",
 			"method": "ofJson",
 			"find": "HxWriteOptionsKit.strictJson(json)",
-			"replace": "anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson(json)",
+			"replace": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader.loadHxFormatJson(json)",
 			"note": "a fixture write handed a hxformat.json document loads it as the plain loader does, so a key the loader ignores leaves the test writing the default"
 		}
 	]

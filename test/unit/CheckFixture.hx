@@ -3,7 +3,7 @@ package unit;
 import anyparse.check.Check;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;

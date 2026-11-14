@@ -2,8 +2,8 @@ package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.AstPreds;
 import anyparse.grammar.haxe.AstPredsT;
-import anyparse.grammar.haxe.HxComplexItems;
 import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.glue.HxComplexItems;
 import utest.Assert;
 import utest.Test;
 
@@ -15,7 +15,7 @@ import utest.Test;
  * delimited list. The classifier is `HxComplexItems`, a grammar-side reflective
  * walk, and until this seam BOTH of the macro's emit sites for the flag —
  * `WriterLowering`'s plain postfix-Star and `TriviaSepLowering`'s trivia
- * sep-Star — put `anyparse.grammar.haxe.HxComplexItems.kinds` straight into the
+ * sep-Star — put `anyparse.grammar.haxe.glue.HxComplexItems.kinds` straight into the
  * code they generate. A second grammar could name the flag and get a call to
  * the Haxe classifier; that is invariant 4 read backwards.
  *

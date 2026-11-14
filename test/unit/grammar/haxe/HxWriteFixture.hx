@@ -3,9 +3,9 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HxListsKeepSource;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.format.HxListsKeepSource;
 
 /**
  * Shared trivia-writer round-trip for the Haxe formatter slice tests.

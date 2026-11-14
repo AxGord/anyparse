@@ -93,7 +93,7 @@
 				"anyparse.query.cli.command.LintOracleRun",
 				"anyparse.query.cli.command.LintCommand",
 				"anyparse.check.haxe.facts.TypedFactsRun",
-				"anyparse.grammar.haxe.HaxeQueryPlugin",
+				"anyparse.grammar.haxe.query.HaxeQueryPlugin",
 				"anyparse.query.OracleProviders",
 				"anyparse.query.OracleProvider"
 			],
@@ -176,7 +176,7 @@
 				"anyparse.check.haxe.expressions.FactsBindings",
 				"anyparse.check.haxe.expressions.PreferStaticExtension",
 				"anyparse.check.haxe.expressions.StaticExtensionFacts",
-				"anyparse.grammar.haxe.HaxeQueryPlugin",
+				"anyparse.grammar.haxe.query.HaxeQueryPlugin",
 				"dev.TyperConformance"
 			],
 			"why": "the Haxe build of the compiler facts: a generic rule, gate or fix phase asks a FactsOracle through OracleProvider, and only the Haxe side of the checks names the class behind it"
@@ -316,10 +316,10 @@
 				"src/anyparse/query/ParsedRootProvider.hx",
 				"src/anyparse/query/CachingGrammarPlugin.hx",
 				"src/anyparse/query/SymbolIndexBuilder.hx",
-				"src/anyparse/grammar/haxe/HaxeQueryPlugin.hx",
+				"src/anyparse/grammar/haxe/query/HaxeQueryPlugin.hx",
 				"src/anyparse/grammar/haxe/HaxeFormat.hx",
-				"src/anyparse/grammar/haxe/HxComplexItems.hx",
-				"src/anyparse/grammar/haxe/HxTernaryBranchBlocks.hx",
+				"src/anyparse/grammar/haxe/glue/HxComplexItems.hx",
+				"src/anyparse/grammar/haxe/glue/HxTernaryBranchBlocks.hx",
 				"src/anyparse/format/LoopBodyShape.hx",
 				"src/anyparse/format/SingleStmtBraces.hx",
 				"src/anyparse/macro/LexicalLowering.hx",

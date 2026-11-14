@@ -1,9 +1,9 @@
 package unit.grammar.haxe;
 
 import anyparse.format.WhitespacePolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
-import anyparse.grammar.haxe.HaxeFormatConfigIssues;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics;
+import anyparse.grammar.haxe.format.HaxeFormatConfigIssues;
 import utest.Assert;
 import utest.Test;
 

@@ -1,7 +1,7 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.cli.command.FmtCommand;
 import utest.Assert;
 import utest.Test;

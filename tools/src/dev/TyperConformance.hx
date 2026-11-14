@@ -7,7 +7,7 @@ import anyparse.check.haxe.facts.TypedFactsProbe;
 import anyparse.check.haxe.oracle.OracleGeneration;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.RunScan;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;

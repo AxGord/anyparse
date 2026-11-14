@@ -1,8 +1,8 @@
 package unit.query;
 
 import anyparse.check.scan.NullFlow;
-import anyparse.grammar.haxe.HaxeQueryWalker;
-import anyparse.grammar.haxe.HaxeStringFoldSupport;
+import anyparse.grammar.haxe.query.HaxeQueryWalker;
+import anyparse.grammar.haxe.query.HaxeStringFoldSupport;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Lit;
 import anyparse.query.MemberKinds;
@@ -43,7 +43,7 @@ using StringTools;
  */
 @:nullSafety(Strict)
 @:access(anyparse.query.MemberKinds)
-@:access(anyparse.grammar.haxe.HaxeStringFoldSupport)
+@:access(anyparse.grammar.haxe.query.HaxeStringFoldSupport)
 class LiteralClassificationTest extends Test {
 
 	/** The Haxe grammar's own vocabulary — the declaration under test. */

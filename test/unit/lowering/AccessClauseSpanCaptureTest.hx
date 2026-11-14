@@ -1,6 +1,6 @@
 package unit.lowering;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.AccessorClause;
 
 /**

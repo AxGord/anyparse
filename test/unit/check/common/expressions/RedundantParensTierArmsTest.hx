@@ -1,9 +1,9 @@
 package unit.check.common.expressions;
 
 import anyparse.check.LintConfig;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 
 /**
  * The two PRECEDENCE-TIER operand arms of `redundant-parens`, plus the postfix

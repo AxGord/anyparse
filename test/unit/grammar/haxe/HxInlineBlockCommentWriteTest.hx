@@ -2,7 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
 

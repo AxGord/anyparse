@@ -1,6 +1,6 @@
 package unit.dev;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.util.Compare;
 import dev.Binaries;
 import haxe.io.Path;

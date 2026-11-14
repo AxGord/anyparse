@@ -2,7 +2,7 @@ package unit.grammar.haxe;
 
 import anyparse.format.TrailingCommaPolicy;
 import anyparse.format.wrap.WrapMode;
-import anyparse.grammar.haxe.HxListsKeepSource;
+import anyparse.grammar.haxe.format.HxListsKeepSource;
 import utest.Assert;
 import utest.Test;
 

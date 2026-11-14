@@ -6,10 +6,10 @@ import anyparse.format.wrap.WrapList;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 

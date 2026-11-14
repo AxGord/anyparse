@@ -1,6 +1,6 @@
 package unit.cli;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
 import anyparse.query.cli.CliArgs;

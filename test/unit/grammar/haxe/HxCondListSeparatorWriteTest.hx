@@ -2,8 +2,8 @@ package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
 

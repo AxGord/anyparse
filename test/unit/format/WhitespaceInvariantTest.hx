@@ -1,7 +1,7 @@
 package unit.format;
 
 import anyparse.format.WhitespaceInvariant;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.OccurrenceScan;
 
 /**

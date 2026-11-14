@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeAmbientImports;
+import anyparse.grammar.haxe.query.HaxeAmbientImports;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;

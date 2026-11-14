@@ -1,8 +1,8 @@
 package unit.grammar.haxe;
 
 import anyparse.format.BracePlacement;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 

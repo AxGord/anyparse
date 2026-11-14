@@ -1,6 +1,6 @@
 package dev;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;

@@ -51,7 +51,7 @@ import anyparse.grammar.haxe.lit.HxWordLit;
  */
 @:peg
 @:memo
-@:fmt(preWrite(HaxeTypeRewrites.arrowFnOldStyleRewrite))
+@:fmt(preWrite(anyparse.grammar.haxe.query.HaxeTypeRewrites.arrowFnOldStyleRewrite))
 enum HxType {
 
 	Named(ref: HxTypeRef);

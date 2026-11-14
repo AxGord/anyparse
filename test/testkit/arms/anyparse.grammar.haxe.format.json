@@ -1,0 +1,605 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe.format. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-ALWAYS-NEXT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Next, opt.expressionForBody);",
+			"note": "every value of sameLine.comprehensionFor becomes `next`, so a body the key asked to keep on the head line leaves it"
+		},
+		{
+			"name": "M-ARROW-BODY-PAD-KEY-OFF",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyBracesConfig",
+			"find": "if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = objectLit.arrowBodyOpenPad;",
+			"replace": "if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = false;",
+			"note": "objectLiteralBraces.arrowBodyOpenPad:true is read as false, so an arrow-lambda-body literal loses its open pad again under a config that asked to keep it"
+		},
+		{
+			"name": "M-ARROW-BODY-PAD-KEY-IGNORED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyBracesConfig",
+			"find": "if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = objectLit.arrowBodyOpenPad;",
+			"replace": "if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = true;",
+			"note": "objectLiteralBraces.arrowBodyOpenPad:false is read as true, so a caller who asked for the open pad dropped after `->` still gets it"
+		},
+		{
+			"name": "M-ALWAYS-SAME",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);",
+			"replace": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(HxFormatBodyPolicy.Same, opt.expressionForBody);",
+			"note": "every value of sameLine.comprehensionFor becomes `same`, so `keep` stops reproducing the source break"
+		},
+		{
+			"name": "M-FANOUT-FIRST",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": [
+				"applyExpressionIfFanout(section, opt);",
+				"opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);"
+			],
+			"replace": [
+				"if (section.comprehensionFor != null) opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);\n\tapplyExpressionIfFanout(section, opt);",
+				"{}"
+			],
+			"note": "the specific comprehensionFor key is read BEFORE the general expressionIf fanout, so the fanout clobbers it — the S77 precedence PERMUTED, which is what its note asked for and what one find/replace pair could not express"
+		},
+		{
+			"name": "M-NO-WIRE",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionForBody = HaxeFormatValues.bodyPolicyToRuntime(section.comprehensionFor, opt.expressionForBody);",
+			"replace": "{}",
+			"note": "the one read that wires sameLine.comprehensionFor is gone, so the key goes back to the inert state S77 found it in"
+		},
+		{
+			"name": "M-EXPR-ELSE-NEXT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
+			"replace": "case BodyPolicy.Next: SameLinePolicy.Next;",
+			"note": "`sameLine.expressionIf: next` maps the else-gap to `Next`, so a value-`if` with a `{ … }` branch puts its `else` on the line after the `}` while its statement twin joins"
+		},
+		{
+			"name": "M-EXPR-ELSE-PLAIN-SAME",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "case BodyPolicy.Next: SameLinePolicy.SameOnBlock;",
+			"replace": "case BodyPolicy.Next: SameLinePolicy.Same;",
+			"note": "the refuted cheap fix, wired as an arm: `next` maps onto a plain `Same`, so the shape-aware bracket arm joins an `else` onto a `]` and the curly `;` drop stops firing"
+		},
+		{
+			"name": "M-ELSE-BODY-SAME",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyExpressionIfFanout",
+			"find": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = p;\n\t}",
+			"replace": "else if (p == BodyPolicy.Next || p == BodyPolicy.FitLine) {\n\t\topt.expressionIfBody = p;\n\t\topt.expressionElseBody = BodyPolicy.Same;\n\t}",
+			"note": "the else BODY stops following `expressionIf: next`, so the shape-aware forced break is suppressed and `SameOnBlock` joins an `else` onto an object-literal close"
+		},
+		{
+			"name": "M-TYPE-BODY-EDGE-NO-INTERFACE",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyTypeBodyEdges",
+			"find": "opt.interfaceBeginType = section.interfaceEmptyLines?.beginType ?? opt.interfaceBeginType;",
+			"replace": "",
+			"note": "`interfaceEmptyLines.beginType` is parsed and dropped, so an interface body keeps the source edge"
+		},
+		{
+			"name": "M-LOADER-DEFAULT-INDENT-INHERIT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "wrapRulesFromConfig",
+			"find": "resolvedDefault != null ? 0 : base.defaultAdditionalIndent",
+			"replace": "base.defaultAdditionalIndent",
+			"note": "a block restating defaultWrap inherits the built-in fallback indent of the mode it replaced"
+		},
+		{
+			"name": "M-LOADER-RULE-INDENT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "wrapRuleFromConfig",
+			"find": "if (additionalIndent != null) rule.additionalIndent = additionalIndent;",
+			"replace": "",
+			"note": "a configured rule additionalIndent is dropped at load time"
+		},
+		{
+			"name": "M-CHAIN-INDENT-UNREPORTED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics",
+			"method": "collectWrappingIssues",
+			"find": "if (chain != null && chainStatesIndent(chain))",
+			"replace": "if (chain != null && false)",
+			"note": "an indent stated on a chain cascade is accepted silently though the chain emitters never read it"
+		},
+		{
+			"name": "M-EXTERN-CLASS-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyExternClassEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.externClassBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`externClassEmptyLines.betweenVars` is parsed and dropped, so an extern class stays tight between vars whatever the section says"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyEnumAbstractEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.enumAbstractBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`enumAbstractEmptyLines.betweenVars` is parsed and dropped, so an enum abstract keeps its default count"
+		},
+		{
+			"name": "M-ABSTRACT-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyAbstractEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.abstractBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`abstractEmptyLines.betweenVars` is parsed and dropped, so an abstract keeps its default count"
+		},
+		{
+			"name": "M-MACRO-CLASS-BETWEEN-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyMacroClassEmptyLines",
+			"find": "if (conf.betweenVars != null) opt.macroClassBetweenVars = conf.betweenVars;",
+			"replace": "",
+			"note": "`macroClassEmptyLines.betweenVars` is parsed and dropped, so a macro class keeps its default count"
+		},
+		{
+			"name": "M-INTERFACE-EXISTING-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyInterfaceEnumTypedefEmptyLines",
+			"find": "opt.interfaceExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(interfaceSection.existingBetweenFields);",
+			"replace": "{}",
+			"note": "`interfaceEmptyLines.existingBetweenFields` is parsed and dropped, so an interface keeps its source blanks under `remove`"
+		},
+		{
+			"name": "M-CASE-PATTERN-RULES-KEPT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWrappingRulesA",
+			"find": "casePatternClearsRules(section.casePattern)",
+			"replace": "false",
+			"note": "a `casePattern` block naming `defaultWrap` still runs the built-in rules, so that default and its location never answer"
+		},
+		{
+			"name": "M-CASE-PATTERN-IGNORE-CLEARS-RULES",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "casePatternClearsRules",
+			"force": "true",
+			"note": "`ignore` drops the built-in rules, and the plain list then writes one flat line past the limit"
+		},
+		{
+			"name": "M-OBJLIT-GLUE-FORBODY-OFF",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyComprehensionForPadding",
+			"find": "opt.comprehensionObjectLitGlue = section.forBody == HxFormatBodyPolicy.FitLine",
+			"replace": "opt.comprehensionObjectLitGlue = section.forBody != HxFormatBodyPolicy.FitLine",
+			"note": "the glue stops answering forBody: fitLine, so a comprehension literal goes back to Allman under it"
+		},
+		{
+			"name": "M-OBJLIT-GLUE-ABSENT-KEY",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyComprehensionForPadding",
+			"find": "&& comprehensionFor != HxFormatBodyPolicy.Next",
+			"replace": "&& comprehensionFor != null && comprehensionFor != HxFormatBodyPolicy.Next",
+			"note": "an absent comprehensionFor stops deferring to forBody, though it means the same default"
+		},
+		{
+			"name": "M-OBJLIT-GLUE-EVERY-VALUE",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyComprehensionForPadding",
+			"find": "&& comprehensionFor != HxFormatBodyPolicy.Next",
+			"replace": "&& true",
+			"note": "forBody overrides a comprehensionFor of keep or next, which place the body themselves"
+		},
+		{
+			"name": "M-LOADER-WRITES-THE-DEFAULT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "loadHxFormatJson",
+			"find": "new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions)",
+			"replace": "HaxeFormat.instance.defaultWriteOptions",
+			"note": "a config load re-baselines the shared default record"
+		},
+		{
+			"name": "M-ENUM-EXISTING-LEAKS",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyInterfaceEnumTypedefEmptyLines",
+			"find": "opt.enumExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);",
+			"replace": "opt.existingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);",
+			"note": "enumEmptyLines.existingBetweenFields lands on the knob a class body reads, so an enum config rewrites class bodies"
+		},
+		{
+			"name": "M-ENUM-EXISTING-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyInterfaceEnumTypedefEmptyLines",
+			"find": "opt.enumExistingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(enumSection.existingBetweenFields);",
+			"replace": "{}",
+			"note": "enumEmptyLines.existingBetweenFields is parsed and dropped, so an enum body keeps its source blank lines"
+		},
+		{
+			"name": "M-CLASS-EXISTING-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyClassEmptyLines",
+			"find": "opt.existingBetweenFields = HaxeFormatValues.keepEmptyLinesToRuntime(classSection.existingBetweenFields);",
+			"replace": "{}",
+			"note": "classEmptyLines.existingBetweenFields is parsed and dropped, so a class body keeps its source blank lines"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-DOC-KEY-UNREAD",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyTypeBodyDocEdges",
+			"find": "opt.enumAbstractBeginTypeIfDocComments = section.enumAbstractEmptyLines?.beginTypeIfDocComments",
+			"replace": "opt.enumAbstractBeginTypeIfDocComments = null",
+			"note": "`enumAbstractEmptyLines.beginTypeIfDocComments` is dropped on load, so an enum abstract holding a doc comment gets no blank after its `{`"
+		},
+		{
+			"name": "M-SAMELINE-KEEP-UNREPORTED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics",
+			"method": "collectSameLineKeep",
+			"find": "if (isKeep(value))",
+			"replace": "if (false)",
+			"note": "a sameLine key stating keep loads as its default and no line says so"
+		},
+		{
+			"name": "M-KEEP-CLAUSE-SILENT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics",
+			"method": "message",
+			"find": "if (issues.unsupported.length > 0)",
+			"replace": "if (false)",
+			"note": "the report finds the keep settings and prints nothing about them"
+		},
+		{
+			"name": "M-BODY-KEEP-NOT-DEFAULT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatValues",
+			"method": "bodyPolicyToRuntime",
+			"find": "case HxFormatBodyPolicy.Keep: current;",
+			"replace": "case HxFormatBodyPolicy.Keep: BodyPolicy.Same;",
+			"note": "an unsupported keep body policy overrides the knob instead of leaving its default"
+		},
+		{
+			"name": "M-TRAILING-COMMA-KEEP-MAPS-TO-REMOVE",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatValues",
+			"method": "trailingCommaRemovalToRuntime",
+			"find": "case _: TrailingCommaPolicy.Keep;",
+			"replace": "case _: TrailingCommaPolicy.Remove;",
+			"note": "an explicit `keep` is read as `remove`, so the opt-out of the Remove default stops working"
+		},
+		{
+			"name": "M-TRAILING-COMMA-ABSENT-KEY-RESETS",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWrappingScalars",
+			"find": "if (section.trailingComma != null) opt.trailingComma = HaxeFormatValues.trailingCommaRemovalToRuntime(section.trailingComma);",
+			"replace": "opt.trailingComma = section.trailingComma == null ? anyparse.format.TrailingCommaPolicy.Keep : HaxeFormatValues.trailingCommaRemovalToRuntime(section.trailingComma);",
+			"note": "a wrapping section without the key resets the policy to Keep instead of leaving the default"
+		},
+		{
+			"name": "M-TRAILING-COMMA-ADD-KNOB-IMPLIES-REMOVE",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "loadHxFormatJson",
+			"find": "if (addKnobWithoutPolicy(cfg, result)) result.trailingComma = TrailingCommaPolicy.Keep;",
+			"replace": "if (addKnobWithoutPolicy(cfg, result)) result.trailingComma = TrailingCommaPolicy.Remove;",
+			"note": "an add-knob config without wrapping.trailingComma loads as Remove, which silently voids the requested trailing comma"
+		},
+		{
+			"name": "M-TRY-OVERFLOW-KEY",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applySameLine",
+			"find": "opt.expressionTryOverflow = HaxeFormatValues.sameLineToRuntime(section.expressionTryOverflow, opt.expressionTryOverflow);",
+			"replace": "opt.expressionTryOverflow = anyparse.format.SameLinePolicy.Next;",
+			"note": "the key is ignored, so A cannot be selected"
+		},
+		{
+			"name": "M-META-CONFIG-TYPE",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyLineEnds",
+			"find": "opt.metadataTypeLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataType);",
+			"replace": "{}",
+			"note": "lineEnds.metadataType is read and dropped"
+		},
+		{
+			"name": "M-META-CONFIG-VAR",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyLineEnds",
+			"find": "opt.metadataVarLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataVar);",
+			"replace": "{}",
+			"note": "lineEnds.metadataVar is read and dropped"
+		},
+		{
+			"name": "M-META-CONFIG-OTHER",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyLineEnds",
+			"find": "opt.metadataOtherLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataOther);",
+			"replace": "{}",
+			"note": "lineEnds.metadataOther is read and dropped"
+		},
+		{
+			"name": "M-CONTAINER-ITEM-WRAP-CONFIG-IGNORED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "containerItemWrapFromConfig",
+			"force": "base",
+			"note": "a configured containerItemWrap block is dropped and the built-in nested cascade stays, so a project cannot send simple literal arguments to their own line"
+		},
+		{
+			"name": "M-ENUM-ABSTRACT-RULES-KEY-UNREAD",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyEnumAbstractEmptyLines",
+			"find": "if (conf.abstractRulesUnlessValueList != null) opt.enumAbstractRulesUnlessValueList = conf.abstractRulesUnlessValueList;",
+			"replace": "",
+			"note": "`enumAbstractEmptyLines.abstractRulesUnlessValueList` is parsed and dropped, so every enum abstract body keeps the enumAbstract rules"
+		},
+		{
+			"name": "M-INDENT-CHARACTER-UNREPORTED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics",
+			"method": "diagnose",
+			"find": "if (indentation != null) collectIndentationIssue(indentation, values);",
+			"replace": "if (indentation != null && false) collectIndentationIssue(indentation, values);",
+			"note": "an indentation.character the loader cannot read keeps the default indent with nothing to say so"
+		},
+		{
+			"name": "M-VALUES-CLAUSE-SILENT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics",
+			"method": "message",
+			"find": "if (issues.values.length > 0)",
+			"replace": "if (false)",
+			"note": "the report finds the unreadable values and prints nothing about them"
+		},
+		{
+			"name": "M-ARROW-COLON-KEY-UNMAPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "HaxeFormatValues.whitespaceToRuntime(section.arrowParamColonPolicy)",
+			"replace": "WhitespacePolicy.None",
+			"note": "whitespace.arrowParamColonPolicy is read and dropped, so the colon of a named function-type parameter stays tight under every value of the key"
+		},
+		{
+			"name": "M-CONSTRAINT-COLON-KEY-UNMAPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "HaxeFormatValues.whitespaceToRuntime(section.typeParamConstraintColonPolicy)",
+			"replace": "WhitespacePolicy.None",
+			"note": "whitespace.typeParamConstraintColonPolicy is read and dropped, so the colon of a type-parameter constraint stays tight under every value of the key"
+		},
+		{
+			"name": "M-ARROW-COLON-ABSENT-TIGHT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "(section.arrowParamColonPolicy)\n\t\t\t: opt.typeHintColon",
+			"replace": "(section.arrowParamColonPolicy)\n\t\t\t: WhitespacePolicy.None",
+			"note": "an absent whitespace.arrowParamColonPolicy keeps the function-type parameter colon tight instead of following typeHintColonPolicy"
+		},
+		{
+			"name": "M-CONSTRAINT-COLON-ABSENT-TIGHT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceOperatorPolicies",
+			"find": "(section.typeParamConstraintColonPolicy)\n\t\t\t: opt.typeHintColon",
+			"replace": "(section.typeParamConstraintColonPolicy)\n\t\t\t: WhitespacePolicy.None",
+			"note": "an absent whitespace.typeParamConstraintColonPolicy keeps the type-parameter constraint colon tight instead of following typeHintColonPolicy"
+		},
+		{
+			"name": "M-META-FIT-UNMAPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatValues",
+			"method": "metadataLineEndToRuntime",
+			"find": "case HxFormatMetadataLineEndPolicy.Fit: MetadataLineEndPolicy.Fit;",
+			"replace": "",
+			"note": "lineEnds value fit falls to none"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-BASELINE",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "typedEdit",
+			"find": "final base: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(kept ? HxListsKeepSource.of('{}') : '{}');",
+			"replace": "final base: HxModuleWriteOptions = new HxModuleWriteOptions(HaxeFormat.instance.defaultWriteOptions);",
+			"note": "the edit is written over the compiled defaults instead of the baseline the call started from, so an empty document assigns the six body policies and the curly blanks the loader re-baselines"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LITERAL-ONLY",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "literalOf",
+			"force": "''",
+			"note": "every argument reads as an empty document, so a variable or a concatenation is rewritten as if it were a literal instead of refused"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-IGNORED-KEY",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics",
+			"method": "ignored",
+			"force": "[]",
+			"note": "a document setting a key the loader does not act on is rewritten as if every key were read, so the typed edit silently drops it"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-STRICTJSON-SITE",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "callShapes",
+			"find": "{ pattern: '$kitName.strictJson($$json)', asConfig: false, argumentOnly: false },",
+			"replace": "",
+			"note": "the kit's own strictJson call is not a call shape, so it is left as the JSON it loads instead of becoming the typed edit"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-FIXTURE-SITE",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "callShapes",
+			"find": "{ pattern: 'HxWriteFixture.triviaWrite($$source, $$json)', asConfig: false, argumentOnly: true },",
+			"replace": "",
+			"note": "a HxWriteFixture.triviaWrite call is not a call shape, so its JSON configuration argument stays a string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-ARGUMENT-ONLY",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "replacement",
+			"find": "edits.push({ span: target, text: fork });",
+			"replace": "edits.push({ span: m.span, text: fork });",
+			"note": "a fixture call is replaced whole by the typed edit, so the source text it was given is dropped along with the configuration"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-ALREADY-TYPED",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "isTypedConfig",
+			"force": "false",
+			"note": "a fixture call whose configuration is already the typed edit is refused as a non-literal argument, so a second run over a migrated file fails"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NESTED-FIXTURE",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "replacement",
+			"find": "final refusal: Null<String> = nestedEdits(source, run, edits);",
+			"replace": "final refusal: Null<String> = null;",
+			"note": "a fixture call inside another fixture call's source argument is not read, so the outer call is migrated and the inner one keeps its JSON"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NAMED-FINAL",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "namedReads",
+			"force": "[]",
+			"note": "no final is read as a named configuration, so an argument naming a constant final is refused as a non-literal argument"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-CONCATENATION",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "literalOf",
+			"find": "if (node.kind == CONCATENATION_KIND && node.children.length == 2) {",
+			"replace": "if (false) {",
+			"note": "a concatenation of string literals is no constant string, so it is refused instead of read as one document"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-INLINE-CUT",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "for (cut in cuts) edits.push(cut);",
+			"replace": "",
+			"note": "a retyped inline final keeps its inline modifier, so its initializer, now a call, does not compile"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-PUBLIC-FINAL",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": "modifiers.names.contains(publicName) || ",
+			"replace": "",
+			"note": "a public final is retyped though another module may read it as a string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NAMED-READERS",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "!entry.readers.exists(hit.span.from)",
+			"replace": "false",
+			"note": "a final read outside a configuration call is retyped anyway, so that reader is left expecting the string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-FIELD-READ",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "if (Matcher.search(run.plugin.parsePattern('$$_.${entry.name}'), tree).length > 0)",
+			"replace": "if (false)",
+			"note": "a final read as a field is retyped anyway, a read the binding walk does not see"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-TYPED-VALUE",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "typedValue",
+			"force": "false",
+			"note": "a fixture call reading a value typed as the options is refused as a non-literal argument, so a second run over a retyped final fails"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-FINAL-CLASS",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": "if (wrapper.kind != shape.finalClassDeclKind)",
+			"replace": "if (false)",
+			"note": "a member final of a class a subclass in another module may extend is retyped, so that subclass reading it as a string no longer compiles"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-GUARDED-PUBLIC",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": " || modifiers.guarded.contains(publicName)",
+			"replace": "",
+			"note": "a final public only under a conditional region is retyped, so another module reading it under that define no longer compiles"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-GUARDED-INLINE",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "retyping",
+			"find": "if (modifiers.guarded.contains(inlineName))",
+			"replace": "if (false)",
+			"note": "a final inline only under a conditional region is retyped, keeping an inline over a call initializer that does not compile under that define"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-ACCESS-GRANT",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "granted",
+			"force": "false",
+			"note": "a member final opened to another module by an access-granting meta, on it or on its type, is retyped though that module may read it as a string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-NO-SUBJECT",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "subject",
+			"find": "if (!examined || !note) return examined;",
+			"replace": "if (!examined || !note || true) return false;",
+			"note": "no call is a loader subject, so a test whose options are only read by field is rewritten into a tautology"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-ASSERT-SUBJECT",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "underAssert",
+			"find": "call.receiver.name == ASSERT_TYPE",
+			"replace": "call.receiver.name == ASSERT_TYPE && false",
+			"note": "a field read under an assertion is no subject unless every read is by field, so a test that also hands its options to a writer is rewritten into a tautology"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-EMPTY-FORK",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "typedEdit",
+			"find": "if (edits.length == 0) {",
+			"replace": "if (edits.length < 0) {",
+			"note": "a {} document becomes forkWith(edited -> {}) instead of the bare baseline"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "unwrapped",
+			"find": "found.node == node",
+			"replace": "false",
+			"note": "a listsKeepSource call is no wrapper, so its argument is read as the document and the call is refused as no constant string"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-NAMED",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "entry.kept, at, run",
+			"replace": "false, at, run",
+			"note": "a final read under the wrapper is retyped without what the wrapper adds"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-MIXED",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "namedEdits",
+			"find": "if (entry.mixed)",
+			"replace": "if (false)",
+			"note": "a final read both under the wrapper and outside it is retyped anyway, so one of its readers gets the wrong document"
+		},
+		{
+			"name": "M-TYPED-OPTIONS-LISTS-KEEP-SOURCE-OWN",
+			"type": "anyparse.grammar.haxe.format.HxTypedOptionsRewrite",
+			"method": "unwrapped",
+			"find": "'HxWriteFixture.listsKeepSource($$doc)'",
+			"replace": "'listsKeepSource($$doc)'",
+			"note": "a test's own listsKeepSource helper is read as the fixture's wrapper, so its document is rewritten with list wraps it never had"
+		},
+		{
+			"name": "M-LISTS-KEEP-SOURCE-KEEP-ANON",
+			"type": "anyparse.grammar.haxe.format.HxListsKeepSource",
+			"method": "keep",
+			"find": "options.anonTypeWrap = wrapped.anonTypeWrap;",
+			"replace": "",
+			"note": "the typed counterpart leaves the anonymous-type wrap on its default fallback, so it no longer loads like the wrapped document"
+		},
+		{
+			"name": "M-COND-SIBLINGS-KEY-IGNORED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applySameLineBodies",
+			"find": "opt.conditionalSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.conditionalSiblings);",
+			"replace": "opt.conditionalSiblings = opt.conditionalSiblings;",
+			"note": "sameLine.conditionalSiblings is read and dropped, so a config that asked for off still shares the branches of a region"
+		}
+	]
+}

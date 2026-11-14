@@ -2,7 +2,7 @@ package anyparse.check.haxe;
 
 import anyparse.check.Check.LanguageBound;
 import anyparse.check.RuleCategory;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 
 /**
  * The base of a builtin rule that only Haxe answers — one whose subject is a Haxe standard-library API or a construct

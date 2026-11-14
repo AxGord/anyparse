@@ -1,6 +1,6 @@
 package unit.dev;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.OwnerIndex;

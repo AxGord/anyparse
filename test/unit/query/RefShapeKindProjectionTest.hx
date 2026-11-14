@@ -1,6 +1,6 @@
 package unit.query;
 
-import anyparse.grammar.haxe.HaxeQueryWalker;
+import anyparse.grammar.haxe.query.HaxeQueryWalker;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.cli.CliArgs;

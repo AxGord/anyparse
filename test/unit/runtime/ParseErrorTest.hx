@@ -1,6 +1,6 @@
 package unit.runtime;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Severity;
 import anyparse.runtime.Span;

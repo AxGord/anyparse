@@ -4,10 +4,10 @@ import anyparse.format.BodyPolicy;
 import anyparse.format.KeywordPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 

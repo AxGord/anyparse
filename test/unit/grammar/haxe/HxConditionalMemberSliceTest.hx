@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxModule;
@@ -11,6 +10,7 @@ import anyparse.grammar.haxe.decl.HxAbstractDecl;
 import anyparse.grammar.haxe.decl.HxClassDecl;
 import anyparse.grammar.haxe.decl.HxInterfaceDecl;
 import anyparse.grammar.haxe.decl.HxMemberDecl;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.meta.HxMetadata;
 import anyparse.runtime.ParseError;
 import utest.Assert;

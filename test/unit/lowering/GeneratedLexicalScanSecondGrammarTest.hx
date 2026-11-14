@@ -1,6 +1,6 @@
 package unit.lowering;
 
-import anyparse.grammar.haxe.HaxeLexicalRegions;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import unit.minilex.MiniLexScan;

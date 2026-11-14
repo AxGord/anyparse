@@ -1,6 +1,6 @@
 package unit.check.common.naming;
 
-import anyparse.grammar.haxe.HaxeNamingSupport;
+import anyparse.grammar.haxe.query.HaxeNamingSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.QueryNode;

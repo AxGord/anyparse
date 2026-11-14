@@ -216,7 +216,7 @@ final class LandTest extends Test {
 			'src/anyparse/query/ShardPlan.hx',
 			'src/anyparse/query/SharedParseTier.hx',
 			'src/anyparse/query/FormatConfigDiscovery.hx',
-			'src/anyparse/grammar/haxe/HaxeQueryPlugin.hx',
+			'src/anyparse/grammar/haxe/query/HaxeQueryPlugin.hx',
 			'src/anyparse/macro/QueryWalkerCodegen.hx',
 			'src/anyparse/runtime/Parser.hx',
 			'src/anyparse/query/cli/TestTranscript.hx',

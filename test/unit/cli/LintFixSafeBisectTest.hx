@@ -9,7 +9,7 @@ import anyparse.check.Linter;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.check.haxe.oracle.CompilerOracle;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.ExitCode;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;

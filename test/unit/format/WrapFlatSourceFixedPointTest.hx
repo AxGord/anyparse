@@ -1,10 +1,10 @@
 package unit.format;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.FormatFixedPoint;
 import haxe.Timer;

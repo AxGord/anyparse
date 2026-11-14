@@ -3,7 +3,7 @@ package unit.cli;
 #if nodejs
 import js.Node;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.query.format.Text;
 import haxe.Exception;

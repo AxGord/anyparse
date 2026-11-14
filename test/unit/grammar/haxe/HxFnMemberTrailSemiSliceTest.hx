@@ -1,7 +1,7 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 

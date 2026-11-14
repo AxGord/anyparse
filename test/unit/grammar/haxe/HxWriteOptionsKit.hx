@@ -1,10 +1,10 @@
 package unit.grammar.haxe;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
-import anyparse.grammar.haxe.HaxeFormatConfigIssues;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics;
+import anyparse.grammar.haxe.format.HaxeFormatConfigIssues;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 
 /**
  * The one answer to "how does a test hand the writer typed `HxModuleWriteOptions` instead of a hxformat.json string, and how does a

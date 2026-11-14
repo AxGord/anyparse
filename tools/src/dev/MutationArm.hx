@@ -1,7 +1,7 @@
 package dev;
 
 import anyparse.core.PoolLease;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.json.JValueTools;
 import anyparse.proc.PendingRuns;
 import anyparse.proc.ProcessSpawn;

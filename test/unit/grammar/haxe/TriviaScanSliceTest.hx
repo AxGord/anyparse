@@ -1,6 +1,6 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;

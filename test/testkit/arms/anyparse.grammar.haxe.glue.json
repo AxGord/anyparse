@@ -1,0 +1,239 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package anyparse.grammar.haxe.glue. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-KINDS",
+			"type": "anyparse.grammar.haxe.glue.HxComplexItems",
+			"method": "kinds",
+			"find": "subtreeHasCallOrNew(node, 0) ? CONTAINER : CONTAINER_PLAIN;",
+			"replace": "subtreeHasCallOrNew(node, 0) ? CONTAINER : NONE;",
+			"note": "CONTAINER_PLAIN collapses into NONE, so the generated forwarder and the classifier stop agreeing on the four codes"
+		},
+		{
+			"name": "M-NAMED-FN-STMT-NO-ARM",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], namedFnBodySwitch),\n",
+			"replace": "",
+			"note": "`x = function n() { return 1; } trace(x());` no longer parses: the named literal's `}` does not end the statement"
+		},
+		{
+			"name": "M-NAMED-FN-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "endsWithCloseBraceField",
+			"find": "\t\t\tcaseBind(HX_EXPR, 'NamedFnExpr', [0 => '_f'], fnBodySwitch),\n",
+			"replace": "",
+			"note": "`var g = function n() { … }` keeps a `;` the anonymous spelling drops: the var-rhs gate reads the named literal as not brace-ended"
+		},
+		{
+			"name": "M-NAMED-FN-EXPR-BODY-RELAXED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "stmtExprNoSemiAtField",
+			"find": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], at(ident('_e'), macro true))",
+			"replace": "caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro true)",
+			"note": "a named literal's EXPRESSION body ends its statement with no `;`, so `x = function n() return 1 trace(x());` (Haxe: `Missing ;`) parses"
+		},
+		{
+			"name": "M-TERNARY-MLB-NO-DESCENT",
+			"type": "anyparse.grammar.haxe.glue.HxTernaryBranchBlocks",
+			"method": "holdsBlock",
+			"find": "case _: params.exists(param -> holdsBlock(param, depth + 1));",
+			"replace": "case _: false;",
+			"note": "a block below the branch top (a function argument, an object-literal value) is not found, so `inline` breaks those ternaries"
+		},
+		{
+			"name": "M-TERNARY-MLB-PATH-UNSEARCHED",
+			"type": "anyparse.grammar.haxe.glue.HxTernaryBranchBlocks",
+			"method": "holdsMultilineBlock",
+			"find": "for (i in 1...params.length) if (holdsBlock(params[i], 0)) return true;",
+			"replace": "for (i in 1...params.length) if (false) return true;",
+			"note": "the operands after the opening group are skipped along with it, so `[a, b].map(function() {…})` is not acted on"
+		},
+		{
+			"name": "M-FNBODY-COMMENT-EMPTY",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "fnBlockEmptyExpr",
+			"find": "$openComment == null && ",
+			"replace": "",
+			"note": "a body holding only a comment after its open brace counts as empty and its signature loses the additional indent"
+		},
+		{
+			"name": "M-ANON-SEP-COND-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "['Conditional'], macro true)",
+			"replace": "['Conditional'], macro false)",
+			"note": "a `#if … #end` field region owes a `,` after its `#end`, so an anon type with a guarded field followed by another field is refused"
+		},
+		{
+			"name": "M-ANON-SEP-FN-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "['Conditional']",
+			"replace": "['Conditional', 'FnField']",
+			"note": "a `function` field is waived like a region, so `function f():Void {}` followed by another field parses though Haxe refuses a body there"
+		},
+		{
+			"name": "M-ANON-SEP-VAR-BRACE-NOT-SELF-ENDED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "anonMemberNoSepField",
+			"find": "[0 => '_b'], varBody)",
+			"replace": "[0 => '_b'], macro false)",
+			"note": "a `var` field whose type ends with `}` owes a `,` before the next field, though Haxe's class notation takes the `}` for its `;`"
+		},
+		{
+			"name": "M-ANON-SEP-ARROW-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "typeEndsWithBraceField",
+			"find": "caseBind(HX_TYPE, 'Arrow', [1 => '_r'], rec(ident('_r')))",
+			"replace": "caseBind(HX_TYPE, 'Arrow', [1 => '_r'], macro false)",
+			"note": "`var a:Int->{x:Int}` is not seen to end with `}`, so the next anon field is refused"
+		},
+		{
+			"name": "M-ANON-SEP-ARROW-FN-NOT-BRACE-ENDED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "typeEndsWithBraceField",
+			"find": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))",
+			"replace": "caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], macro false)",
+			"note": "`var a:(Int) -> {x:Int}` is not seen to end with `}`, so the next anon field is refused"
+		},
+		{
+			"name": "M-MEMBER-BEYOND-VALUE-NEVER",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro Lambda.exists(md.modifiers, _x -> $isStatic) || $isMethodOrProperty",
+			"replace": "macro false",
+			"note": "no member counts as more than a value, so only a line comment hands a body to the abstract rules"
+		},
+		{
+			"name": "M-ABSTRACT-BODY-LINE-COMMENT-UNREAD",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "abstractBodyBeyondValuesField",
+			"find": "? macro anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)",
+			"replace": "? macro false",
+			"note": "a line comment above a value is no trigger, so line-comment groups close up under the key"
+		},
+		{
+			"name": "M-ABSTRACT-BODY-BEYOND-VALUES-ALWAYS",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "abstractBodyBeyondValuesField",
+			"find": "macro d != null && Lambda.exists(d.members, _m -> $lineLed || $member)",
+			"replace": "macro d != null",
+			"note": "every body counts as more than values, so a plain value list takes the abstract rules under the key"
+		},
+		{
+			"name": "M-MEMBER-PROPERTY-AS-VALUE",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro _v.access != null",
+			"replace": "macro false",
+			"note": "a field with accessors counts as a value, so a property is no trigger"
+		},
+		{
+			"name": "M-MEMBER-STATIC-AS-VALUE",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "caseOf(HX_MEMBER_MODIFIER, ['Static'], macro true)",
+			"replace": "caseOf(HX_MEMBER_MODIFIER, ['Static'], macro false)",
+			"note": "a static member counts as a value, so a static var is no trigger"
+		},
+		{
+			"name": "M-MEMBER-METHOD-AS-VALUE",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "caseOf(HX_CLASS_MEMBER, FN_MEMBER_CTORS, macro true)",
+			"replace": "caseOf(HX_CLASS_MEMBER, FN_MEMBER_CTORS, macro false)",
+			"note": "a method counts as a value, so a function is no trigger"
+		},
+		{
+			"name": "M-COND-MEMBER-THEN-UNREAD",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro $elseifBody || $elseBody",
+			"note": "a member in the then-branch of a `#if` region does not count, so the region reads as values"
+		},
+		{
+			"name": "M-COND-MEMBER-ELSEIF-UNREAD",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro $thenBody || $elseBody",
+			"note": "a member in an `#elseif` branch does not count"
+		},
+		{
+			"name": "M-COND-MEMBER-ELSE-UNREAD",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro $thenBody || $elseifBody",
+			"note": "a member in the `#else` branch does not count"
+		},
+		{
+			"name": "M-COND-REGION-ALWAYS-BEYOND",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "macro $thenBody || $elseifBody || $elseBody",
+			"replace": "macro true",
+			"note": "any `#if` region counts as beyond a value, so a region of plain values hands the body to the abstract rules"
+		},
+		{
+			"name": "M-ABSTRACT-BODY-TRAILING-COMMENT-READ",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "abstractBodyBeyondValuesField",
+			"find": "? macro anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)",
+			"replace": "? macro _m.trailingComment != null || anyparse.format.MemberGap.lineCommentLed(_m.leadingComments)",
+			"note": "a comment trailing a value counts as a group label, so a trailing line comment hands the body to the abstract rules"
+		},
+		{
+			"name": "M-MEMBER-FINAL-AS-BEYOND-VALUE",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "memberBeyondValueField",
+			"find": "caseBindMulti(HX_CLASS_MEMBER, FIELD_MEMBER_CTORS, [0 => '_v'], macro _v.access != null)",
+			"replace": "caseBindMulti(HX_CLASS_MEMBER, ['VarMember'], [0 => '_v'], macro _v.access != null), caseOf(HX_CLASS_MEMBER, ['FinalMember'], macro true)",
+			"note": "a final field counts as more than a value whatever its accessors, so a final value hands the body to the abstract rules"
+		},
+		{
+			"name": "M-META-FIT-ARGS-IGNORED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metadataIsSimpleField",
+			"find": "macro $args.length == 0 || $args.length == 1 && $argSimple",
+			"replace": "macro true",
+			"note": "every metadata call reads as simple, so a call or several arguments no longer break the run"
+		},
+		{
+			"name": "M-META-FIT-INTERP-PLAIN",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "interpStringIsPlainField",
+			"find": "caseOf(HX_STRING_SEGMENT, ['Block', 'Ident'], macro true)",
+			"replace": "caseOf(HX_STRING_SEGMENT, ['Block', 'Ident'], macro false)",
+			"note": "an interpolated string argument reads as simple"
+		},
+		{
+			"name": "M-META-FIT-MULTILINE-PLAIN",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "interpStringIsPlainField",
+			"find": "macro StringTools.contains(_l, '\\n')",
+			"replace": "macro false",
+			"note": "a string argument spanning lines reads as simple"
+		},
+		{
+			"name": "M-META-FIT-PATH-OFF",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "exprIsPathField",
+			"find": "caseBind(HX_EXPR, 'FieldAccess', [0 => '_o'], rec)",
+			"replace": "caseBind(HX_EXPR, 'FieldAccess', [0 => '_o'], macro false)",
+			"note": "a dotted-path argument reads as complex"
+		},
+		{
+			"name": "M-META-FIT-LITERAL-OFF",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro true)",
+			"replace": "caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro false)",
+			"note": "a number or bool argument reads as complex"
+		}
+	]
+}

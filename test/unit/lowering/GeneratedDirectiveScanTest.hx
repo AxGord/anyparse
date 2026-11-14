@@ -1,7 +1,7 @@
 package unit.lowering;
 
-import anyparse.grammar.haxe.HaxeLexicalRegions;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexDirective;
 import unit.minilex.MiniLexScan;

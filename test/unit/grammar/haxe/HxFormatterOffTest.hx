@@ -1,10 +1,10 @@
 package unit.grammar.haxe;
 
 import anyparse.format.comment.FormatterOff;
-import anyparse.grammar.haxe.HaxeLexicalRegions;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
 import utest.Assert;
 import utest.Test;
 

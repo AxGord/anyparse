@@ -2,8 +2,8 @@ package unit.grammar.haxe;
 
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.SiblingPolicy;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 

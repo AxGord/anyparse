@@ -9,6 +9,6 @@ package anyparse.grammar.haxe;
  * as inside the trivia AST itself. See `AstPreds` for the family
  * overview.
  */
-@:build(anyparse.grammar.haxe.HxPredBuild.build({ trivia: true }))
+@:build(anyparse.grammar.haxe.glue.HxPredBuild.build({ trivia: true }))
 @:nullSafety(Strict)
 final class AstPredsT {}

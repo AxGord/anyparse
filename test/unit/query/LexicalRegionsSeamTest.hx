@@ -4,7 +4,7 @@ package unit.query;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeLexicalRegions;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
@@ -238,7 +238,7 @@ class LexicalRegionsSeamTest extends Test {
 	 * strings `HxFnBody` / `HxFnBodyT` / `HxFnExprBody` / `HxFnExprBodyT` to pick
 	 * which set of BODY CTORS to emit, and named two of them again in its
 	 * `fatalError` text. The others emitted a direct call to
-	 * `anyparse.grammar.haxe.HxComplexItems.kinds` — one in `WriterLowering`, one
+	 * `anyparse.grammar.haxe.glue.HxComplexItems.kinds` — one in `WriterLowering`, one
 	 * in `TriviaSepLowering`, the plain and trivia halves of one flag.
 	 *
 	 * The inventory is DERIVED, not listed: the Haxe grammar is one module per

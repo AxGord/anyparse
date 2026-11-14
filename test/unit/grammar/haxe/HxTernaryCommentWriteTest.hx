@@ -78,7 +78,7 @@ class HxTernaryCommentWriteTest extends Test {
 		final expected: String =
 			'class Foo {\n\tfunction bar(a:Bool, b:Int, c:Int):Int {\n\t\treturn a // cond note\n\t\t\t? b\n\t\t\t: c;\n\t}\n}\n';
 		try
-			Assert.equals(expected, new anyparse.grammar.haxe.HaxeQueryPlugin().writeRoundTrip(source))
+			Assert.equals(expected, new anyparse.grammar.haxe.query.HaxeQueryPlugin().writeRoundTrip(source))
 		catch (exception: CommentLossException)
 			Assert.fail('round trip still refuses: ${exception.comment}');
 	}

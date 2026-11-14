@@ -4,7 +4,7 @@ package unit.cli;
 import sys.FileSystem;
 import sys.io.File;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.cli.WriteFailure;

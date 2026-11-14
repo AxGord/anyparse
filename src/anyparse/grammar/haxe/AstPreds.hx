@@ -10,6 +10,6 @@ package anyparse.grammar.haxe;
  * Siblings: `AstPredsT` (trivia family), `AstPredsS` (spans family).
  * The class body is empty on purpose — it is generated.
  */
-@:build(anyparse.grammar.haxe.HxPredBuild.build())
+@:build(anyparse.grammar.haxe.glue.HxPredBuild.build())
 @:nullSafety(Strict)
 final class AstPreds {}

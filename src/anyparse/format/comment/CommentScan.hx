@@ -14,7 +14,7 @@ package anyparse.format.comment;
  * (`'…'` interpolation frames, `$$`, `~/…/`) because the Haxe writer was its only
  * consumer — one grammar's syntax deciding what a comment is for every language,
  * which is invariant 4 in reverse. The lexer now lives beside the grammar's other
- * one, `anyparse.grammar.haxe.HaxeLexicalRegions.scanComments`, and reaches here as
+ * one, `anyparse.grammar.haxe.query.HaxeLexicalRegions.scanComments`, and reaches here as
  * this function.
  *
  * NOT interchangeable with `GrammarPlugin.lexicalRegions` filtered to its comment

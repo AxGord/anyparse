@@ -3,8 +3,8 @@ package unit.grammar.haxe;
 import anyparse.format.wrap.WrapConditionType;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRule;
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import utest.Assert;
 import utest.Test;
 

@@ -148,7 +148,7 @@ class HxCallArgCommentWriteTest extends Test {
 	public function testArgLineCommentNoLongerRefusesTheRoundTrip(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\tone, // first arg note\n\t\t\ttwo\n\t\t);\n\t}\n}';
 		try
-			Assert.equals('$source\n', new anyparse.grammar.haxe.HaxeQueryPlugin().writeRoundTrip(source))
+			Assert.equals('$source\n', new anyparse.grammar.haxe.query.HaxeQueryPlugin().writeRoundTrip(source))
 		catch (exception: CommentLossException)
 			Assert.fail('round trip still refuses: ${exception.comment}');
 	}

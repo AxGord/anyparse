@@ -1,6 +1,6 @@
 package unit.macro;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 
 /**
  * The generated `rewindOrStashTrivia` settles the whitespace/comment run an operator loop consumed and matched no

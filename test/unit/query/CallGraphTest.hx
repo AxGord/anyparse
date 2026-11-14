@@ -1266,7 +1266,7 @@ class CallGraphTest extends Test {
 		}
 		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.field'), 'a field');
 		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], waits('C.call'), 'a return');
-		final typeSyntax: anyparse.query.TypeSyntax.TypeSyntaxReader = new anyparse.grammar.haxe.HaxeQueryPlugin().typeSyntax;
+		final typeSyntax: anyparse.query.TypeSyntax.TypeSyntaxReader = new anyparse.grammar.haxe.query.HaxeQueryPlugin().typeSyntax;
 		Assert.isNull(
 			anyparse.query.CallGraphKeys.keyedInFiles(g.types.imports, typeSyntax, ['app/Hold.hx', 'cp2/app/Hold.hx'], 'Lock'),
 			'a reader needing one type has none'

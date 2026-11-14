@@ -5,7 +5,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.common.naming.Naming;
 import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.check.common.unused.UnusedPublicMember;
-import anyparse.grammar.haxe.HaxeNamingSupport;
+import anyparse.grammar.haxe.query.HaxeNamingSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;

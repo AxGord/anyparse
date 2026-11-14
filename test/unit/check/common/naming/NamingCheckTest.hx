@@ -1,8 +1,8 @@
 package unit.check.common.naming;
 
 import anyparse.check.Severity;
-import anyparse.grammar.haxe.CheckstyleConfigLoader;
-import anyparse.grammar.haxe.HaxeNamingSupport;
+import anyparse.grammar.haxe.checkstyle.CheckstyleConfigLoader;
+import anyparse.grammar.haxe.query.HaxeNamingSupport;
 import anyparse.query.NamingPolicy.NamedDecl;
 import anyparse.query.NamingPolicy.NamingPolicy;
 

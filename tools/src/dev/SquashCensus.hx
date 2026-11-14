@@ -58,7 +58,7 @@ final class SquashCensus {
 	 * that left the set as progress to remove here.
 	 */
 	public static final SQUASH_DIFFERS: Array<String> = [
-		'src/anyparse/grammar/haxe/HaxeQueryPlugin.hx',
+		'src/anyparse/grammar/haxe/query/HaxeQueryPlugin.hx',
 		'src/anyparse/macro/TriviaBlockLowering.hx',
 		'src/anyparse/macro/WriterBodyPolicyLowering.hx',
 		'src/anyparse/query/cli/CliWalk.hx'

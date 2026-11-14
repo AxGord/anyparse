@@ -1,7 +1,7 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;

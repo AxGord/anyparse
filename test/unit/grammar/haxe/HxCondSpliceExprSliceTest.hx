@@ -1,12 +1,12 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.cond.HxCondSpliceOpExpr;
 import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
 import anyparse.grammar.haxe.decl.HxClassDecl;
 import anyparse.grammar.haxe.decl.HxFnBody;
 import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.stmt.HxStatement;
 import utest.Assert;
 

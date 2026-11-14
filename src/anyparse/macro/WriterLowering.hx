@@ -188,7 +188,7 @@ class WriterLowering {
 	 *
 	 * Addressed through `AstPredLowering` like every other grammar
 	 * predicate. Both sites used to emit a direct call to
-	 * `anyparse.grammar.haxe.HxComplexItems.kinds` instead — the last
+	 * `anyparse.grammar.haxe.glue.HxComplexItems.kinds` instead — the last
 	 * grammar type this package named, and the reason a second grammar
 	 * could not have opted into `complexItems` at all.
 	 */

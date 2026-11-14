@@ -1,6 +1,6 @@
 package dev;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;

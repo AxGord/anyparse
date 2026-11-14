@@ -7,6 +7,6 @@ package anyparse.grammar.haxe;
  * `spans.Pairs.*S` enums; every Alt pattern carries the trailing
  * `_span` wildcard. See `AstPreds` for the family overview.
  */
-@:build(anyparse.grammar.haxe.HxPredBuild.build({ spans: true }))
+@:build(anyparse.grammar.haxe.glue.HxPredBuild.build({ spans: true }))
 @:nullSafety(Strict)
 final class AstPredsS {}

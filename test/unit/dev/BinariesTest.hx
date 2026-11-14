@@ -2,7 +2,7 @@ package unit.dev;
 
 import anyparse.check.LintConfig;
 import anyparse.check.haxe.oracle.OracleCache;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
 import dev.Binaries;
 import devkit.TempDir;

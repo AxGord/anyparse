@@ -1,6 +1,6 @@
 package unit.cli;
 
-import anyparse.grammar.haxe.HaxeLexicalRegions;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
 import anyparse.query.cli.command.ReconPredict;
 
 /** `ReconPredict.stripBalancedPairs`: a pair is balanced over CODE, so a bracket in a string or a comment is not counted. */

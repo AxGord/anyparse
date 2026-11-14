@@ -5,7 +5,7 @@ import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
 #end
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.ConfigFinder;
 import anyparse.query.LexicalRegions;
 import anyparse.runtime.Span;

@@ -1,7 +1,7 @@
 package unit.query;
 
 import anyparse.check.LintConfig.ConfigNote;
-import anyparse.grammar.haxe.HaxeFormatConfigDiagnostics;
+import anyparse.grammar.haxe.format.HaxeFormatConfigDiagnostics;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.RunLedger;
 import haxe.io.Path;

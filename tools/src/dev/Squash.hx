@@ -1,8 +1,8 @@
 package dev;
 
 import anyparse.format.comment.FormatterOff;
-import anyparse.grammar.haxe.HaxeLexicalRegions;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.CondDirectives;
 import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;

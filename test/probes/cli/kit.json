@@ -9221,7 +9221,7 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "58eae49b28cbd54a",
+				"out": "8d5740f1e3f13e30",
 				"err": "f58948b1552942dd",
 				"files": "e3b0c44298fc1c14"
 			}

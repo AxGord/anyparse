@@ -4,7 +4,7 @@ import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.haxe.oracle.OracleCache;
 import anyparse.check.haxe.oracle.OracleCoverage;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import devkit.Cmd.cmd;
 import devkit.Lease;
 import devkit.Pool;

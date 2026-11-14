@@ -1,7 +1,7 @@
 package unit;
 
 import anyparse.ds.Set;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;

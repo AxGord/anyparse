@@ -4,7 +4,7 @@ import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.haxe.facts.TypedFactsProbe;
 import anyparse.check.haxe.oracle.OracleGeneration;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CallGraph;

@@ -84,7 +84,7 @@ final class Land {
 		'tools/src/dev/Battery.hx',
 		'src/anyparse/query/SharedParseTier.hx',
 		'src/anyparse/query/FormatConfigDiscovery.hx',
-		'src/anyparse/grammar/haxe/HaxeQueryPlugin.hx',
+		'src/anyparse/grammar/haxe/query/HaxeQueryPlugin.hx',
 		'src/anyparse/macro/QueryWalkerCodegen.hx',
 		'src/anyparse/runtime/'
 	];

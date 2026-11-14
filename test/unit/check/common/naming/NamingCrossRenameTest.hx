@@ -9,7 +9,7 @@ import anyparse.check.Severity;
 import anyparse.check.common.naming.NamingCrossRename;
 import anyparse.check.common.naming.NamingRenames.RenameRefusal;
 import anyparse.check.haxe.oracle.CompilerOracle;
-import anyparse.grammar.haxe.HaxeIdentifierCase;
+import anyparse.grammar.haxe.query.HaxeIdentifierCase;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;

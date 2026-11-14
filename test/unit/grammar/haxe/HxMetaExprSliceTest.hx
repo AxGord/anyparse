@@ -1,6 +1,5 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
@@ -9,6 +8,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.decl.HxFnDecl;
 import anyparse.grammar.haxe.expr.HxExpr;
+import anyparse.grammar.haxe.format.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.meta.HxMetaExpr;
 import anyparse.grammar.haxe.meta.HxMetadataUtil;
 import anyparse.grammar.haxe.stmt.HxStatement;

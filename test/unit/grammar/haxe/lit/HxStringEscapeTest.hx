@@ -2,8 +2,8 @@ package unit.grammar.haxe.lit;
 
 import anyparse.check.Check.Violation;
 import anyparse.check.common.unused.UnusedLocal;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.lit.HxStringEscape;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
 import unit.CheckFixture;
 import utest.Assert;

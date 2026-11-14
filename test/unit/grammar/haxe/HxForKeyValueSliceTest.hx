@@ -1,9 +1,9 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.expr.HxForExpr;
 import anyparse.grammar.haxe.expr.HxKeyValueBinder;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.haxe.stmt.HxForStmt;
 import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.query.QueryNode;

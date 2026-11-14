@@ -3,7 +3,7 @@ package unit.check.common.design;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Severity;
 import anyparse.check.common.design.Complexity;
-import anyparse.grammar.haxe.CheckstyleConfigLoader;
+import anyparse.grammar.haxe.checkstyle.CheckstyleConfigLoader;
 import sys.FileSystem;
 import sys.io.File;
 

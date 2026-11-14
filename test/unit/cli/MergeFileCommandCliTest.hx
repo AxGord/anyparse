@@ -1,6 +1,6 @@
 package unit.cli;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.Cli;
 import anyparse.util.Compare;
 #if nodejs

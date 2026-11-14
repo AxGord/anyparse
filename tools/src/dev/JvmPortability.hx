@@ -5,7 +5,7 @@ import anyparse.check.ConfigNotes;
 import anyparse.check.LintConfig;
 import anyparse.check.Linter;
 import anyparse.ds.Set;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LintDiff;
 import haxe.Exception;

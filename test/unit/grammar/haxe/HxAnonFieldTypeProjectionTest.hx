@@ -1,6 +1,6 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.format.Text;
 import utest.Assert;
 import utest.Test;

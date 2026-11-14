@@ -2,8 +2,8 @@ package unit.grammar.haxe;
 
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrappingLocation;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import utest.Assert;
 import utest.Test;
 

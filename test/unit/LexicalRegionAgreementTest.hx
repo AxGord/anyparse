@@ -1,8 +1,8 @@
 package unit;
 
 import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HaxeLexicalRegions;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeLexicalRegions;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.InertRegions;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.QueryNode;

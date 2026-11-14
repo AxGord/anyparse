@@ -1,6 +1,6 @@
 package unit;
 
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.StdResolver;
 import utest.Assert;
 import utest.Test;
@@ -18,7 +18,7 @@ import utest.Test;
 class ExtensionMethodsExtractionTest extends Test {
 
 	/** Every hardcoded `StringTools` name — including the PRIVATE statics — is still returned (superset, any-visibility). */
-	@:access(anyparse.grammar.haxe.HaxeQueryPlugin)
+	@:access(anyparse.grammar.haxe.query.HaxeQueryPlugin)
 	public function testStringToolsSuperset(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final got: Null<Array<String>> = plugin.knownExtensionMethods('StringTools');
@@ -29,7 +29,7 @@ class ExtensionMethodsExtractionTest extends Test {
 	}
 
 	/** Every hardcoded `Lambda` name is still returned (superset). */
-	@:access(anyparse.grammar.haxe.HaxeQueryPlugin)
+	@:access(anyparse.grammar.haxe.query.HaxeQueryPlugin)
 	public function testLambdaSuperset(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final got: Null<Array<String>> = plugin.knownExtensionMethods('Lambda');

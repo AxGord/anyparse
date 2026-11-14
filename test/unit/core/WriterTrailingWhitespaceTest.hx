@@ -3,7 +3,7 @@ package unit.core;
 import anyparse.core.Doc;
 import anyparse.core.Renderer;
 import anyparse.format.IndentChar;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonText;
 import haxe.Exception;
 
