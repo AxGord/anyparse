@@ -320,6 +320,7 @@
 		"ifElseLadder",
 		"indentValueIfCtor",
 		"inlineBlockBodyIfFlag",
+		"inlineSep",
 		"kwPolicy",
 		"leftCurly",
 		"loopBodyIfElseNext",

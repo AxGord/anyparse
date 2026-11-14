@@ -11,10 +11,34 @@
 			"note": "no branch ctor reads as a CURLY block, so the shape-aware separator sends every value-`if` branch to the hardline arm and the `} else` join stops firing"
 		},
 		{
+			"name": "M-META-EXPR-GAP-COMMENT-DROPPED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitBareRefNonFirstBody",
+			"find": "$leadAccess.length > 0 ? _dc([$commented, _doc]) : $policyJoined",
+			"replace": "$policyJoined",
+			"note": "a comment between a local metadata and its value is no longer written, so the round trip drops it"
+		},
+		{
+			"name": "M-META-EXPR-GAP-FIRST-BREAKS",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitBareRefNonFirstBody",
+			"find": "macro ${beforeLeadingNewlineAccess(fieldName)} ? _dhl() : _dt(' '), child.fmtHasFlag('inlineSep')",
+			"replace": "sepExpr, child.fmtHasFlag('inlineSep')",
+			"note": "the gap's first comment follows the gap's newline rather than the one before it, so a same-line line comment moves to its own line"
+		},
+		{
+			"name": "M-GAP-OWN-LINE-BLOCK-JOINS",
+			"type": "anyparse.macro.WriterTriviaSlotLowering",
+			"method": "buildBeforeLeadingSep",
+			"find": "blockBreak == null ? macro _dt(' ') : macro $blockBreak ? _dhl() : _dt(' ')",
+			"replace": "macro _dt(' ')",
+			"note": "an own-line block comment before a local metadata's value is followed by a space, so the value joins the comment's line"
+		},
+		{
 			"name": "M-GAP-BLOCK-COMMENT-BREAKS",
 			"type": "anyparse.macro.WriterTriviaSlotLowering",
 			"method": "buildBeforeLeadingSep",
-			"find": "$v{onLine} && !anyparse.runtime.CommentRun.isLine(_leadCm598[_ci598]) ? _dt(' ') : _dhl()",
+			"find": "$v{onLine} && !anyparse.runtime.CommentRun.isLine(_leadCm598[_ci598]) ? $afterBlock : _dhl()",
 			"replace": "_dhl()",
 			"note": "a block comment in the gap before an inlineSep field is followed by a break again, so the first write leaves it on the metadata's line and a second write moves it"
 		},

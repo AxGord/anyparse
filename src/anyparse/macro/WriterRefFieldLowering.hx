@@ -1405,9 +1405,19 @@ final class WriterRefFieldLowering {
 			final sepExpr: Expr = trivia && ctx.isTriviaBearing(typePath)
 				? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
 				: macro _dt(' ');
-			final joined: Expr = WriterMetaLineEndLowering.chainJoinExpr(
+			final policyJoined: Expr = WriterMetaLineEndLowering.chainJoinExpr(
 				ctx.ctorPat, child, typePath, fieldAccess, sepExpr, trivia, macro _doc
 			) ?? macro _dc([$sepExpr, _doc]);
+			// A comment in the gap keeps the source layout around it, whatever the metadata line-end policy says:
+			// own-line stays own-line, same-line stays inline.
+			final joined: Expr = trivia && ctx.isTriviaBearing(typePath) ? {
+				final commented: Expr = WriterTriviaSlotLowering.buildBeforeLeadingSep(
+					child, fieldName, macro ${beforeLeadingNewlineAccess(fieldName)} ? _dhl() : _dt(' '), child.fmtHasFlag('inlineSep'),
+					beforeNewlineAccess(fieldName)
+				);
+				final leadAccess: Expr = beforeLeadingAccess(fieldName);
+				macro $leadAccess.length > 0 ? _dc([$commented, _doc]) : $policyJoined;
+			} : policyJoined;
 			parts.push(macro {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _doc: anyparse.core.Doc = $writeCall;
