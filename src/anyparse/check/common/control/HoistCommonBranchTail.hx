@@ -3,6 +3,7 @@ package anyparse.check.common.control;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.TailScan;
+import anyparse.query.CondDirectives;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
@@ -56,7 +57,9 @@ final class HoistCommonBranchTail extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (c in scan(tree, entry.source, seams, null, plugin.lexicalRegions.bind(entry.source))) violations.push({
+			for (c in scan(
+				tree, entry.source, seams, TailScan.directivesOf(entry.source, plugin), null, plugin.lexicalRegions.bind(entry.source)
+			)) violations.push({
 				file: entry.file,
 				span: c.span,
 				rule: RULE_ID,
@@ -78,7 +81,9 @@ final class HoistCommonBranchTail extends RuleBase {
 		final resolvedIndex: SymbolIndex = index ?? IndexScope.over([{ file: violations[0].file, source: source }], plugin);
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
 			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, resolvedIndex, violations[0].file);
-			return TailScan.flaggedEdits(scan(tree, source, seams, purity, plugin.lexicalRegions.bind(source)), violations);
+			return TailScan.flaggedEdits(
+				scan(tree, source, seams, TailScan.directivesOf(source, plugin), purity, plugin.lexicalRegions.bind(source)), violations
+			);
 		});
 	}
 
@@ -94,20 +99,22 @@ final class HoistCommonBranchTail extends RuleBase {
 
 	/** Every common-tail candidate in `tree`, in document order — the one walk `run` and `fix` share. */
 	private static function scan(
-		tree: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>, lexicalRegions: () -> Array<LexRegion>
+		tree: QueryNode, source: String, seams: TailSeams, directives: Array<CondDirective>, purity: Null<PurityCtx>,
+		lexicalRegions: () -> Array<LexRegion>
 	): Array<Candidate> {
-		return TailScan.candidatesIn(tree, seams, site -> tryChain(site.head, source, seams, purity, lexicalRegions));
+		return TailScan.candidatesIn(tree, seams, site -> tryChain(site.head, source, seams, directives, purity, lexicalRegions));
 	}
 
 	/** The candidate for the chain headed by `head`, or null when any gate refuses (see the class doc). */
 	private static function tryChain(
-		head: QueryNode, source: String, seams: TailSeams, purity: Null<PurityCtx>, lexicalRegions: () -> Array<LexRegion>
+		head: QueryNode, source: String, seams: TailSeams, directives: Array<CondDirective>, purity: Null<PurityCtx>,
+		lexicalRegions: () -> Array<LexRegion>
 	): Null<Candidate> {
 		final branches: Null<Array<QueryNode>> = BranchChain.branchesOf(head, seams.ifKinds);
 		if (branches == null) return null;
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null) return null;
-		if (TailScan.hasConditionalCompilation(source, headSpan.from, headSpan.to)) return null;
+		if (TailScan.hasConditionalCompilation(directives, headSpan.from, headSpan.to)) return null;
 		final lists: Array<Array<QueryNode>> = branches.map(TailScan.statementsOf.bind(_, seams));
 		final count: Int = identicalBranches(lists, source, seams) ? lists[0].length : admissibleLength(lists, source, seams);
 		if (count < 1) return null;

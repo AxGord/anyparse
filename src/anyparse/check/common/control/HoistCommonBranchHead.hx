@@ -3,6 +3,7 @@ package anyparse.check.common.control;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.HeadScan;
 import anyparse.check.scan.TailScan;
+import anyparse.query.CondDirectives;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 
@@ -49,14 +50,16 @@ final class HoistCommonBranchHead extends RuleBase {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (c in scan(tree, entry.source, seams, HeadScan.lazyContext(plugin, entry.source, tree, symbols, entry.file)))
-				violations.push({
-					file: entry.file,
-					span: c.span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: message(c)
-				});
+			for (c in scan(
+				tree, entry.source, seams, TailScan.directivesOf(entry.source, plugin),
+				HeadScan.lazyContext(plugin, entry.source, tree, symbols, entry.file)
+			)) violations.push({
+				file: entry.file,
+				span: c.span,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: message(c)
+			});
 		});
 	}
 
@@ -71,7 +74,11 @@ final class HoistCommonBranchHead extends RuleBase {
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: violations[0].file, source: source }], plugin, index);
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
 			return TailScan.flaggedEdits(
-				scan(tree, source, seams, HeadScan.lazyContext(plugin, source, tree, symbols, violations[0].file)), violations
+				scan(
+					tree, source, seams, TailScan.directivesOf(source, plugin),
+					HeadScan.lazyContext(plugin, source, tree, symbols, violations[0].file)
+				),
+				violations
 			);
 		});
 	}
@@ -84,18 +91,22 @@ final class HoistCommonBranchHead extends RuleBase {
 	}
 
 	/** Every common-head candidate in `tree`, in document order — the one walk `run` and `fix` share. */
-	private static function scan(tree: QueryNode, source: String, seams: TailSeams, context: () -> Null<HeadCtx>): Array<Candidate> {
-		return TailScan.candidatesIn(tree, seams, site -> tryChain(site, source, seams, context));
+	private static function scan(
+		tree: QueryNode, source: String, seams: TailSeams, directives: Array<CondDirective>, context: () -> Null<HeadCtx>
+	): Array<Candidate> {
+		return TailScan.candidatesIn(tree, seams, site -> tryChain(site, source, seams, directives, context));
 	}
 
 	/** The candidate for the chain at `site`, or null when any gate refuses (see the class doc). */
-	private static function tryChain(site: ChainSite, source: String, seams: TailSeams, context: () -> Null<HeadCtx>): Null<Candidate> {
+	private static function tryChain(
+		site: ChainSite, source: String, seams: TailSeams, directives: Array<CondDirective>, context: () -> Null<HeadCtx>
+	): Null<Candidate> {
 		final chain: QueryNode = site.head;
 		final branches: Null<Array<QueryNode>> = BranchChain.branchesOf(chain, seams.ifKinds);
 		if (branches == null) return null;
 		final chainSpan: Null<Span> = chain.span;
 		if (chainSpan == null) return null;
-		if (TailScan.hasConditionalCompilation(source, chainSpan.from, chainSpan.to)) return null;
+		if (TailScan.hasConditionalCompilation(directives, chainSpan.from, chainSpan.to)) return null;
 		final lists: Array<Array<QueryNode>> = [for (b in branches) TailScan.statementsOf(b, seams)];
 		final conds: Array<QueryNode> = [for (link in BranchChain.linksFrom(chain, seams.ifKinds)) link.children[0]];
 		final count: Int = HeadScan.admissibleLength(lists, conds, site.following, source, seams, context);

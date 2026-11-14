@@ -3,6 +3,7 @@ package anyparse.check.scan;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.BinderScan;
+import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
@@ -16,9 +17,6 @@ import anyparse.query.TreePath;
  */
 @:nullSafety(Strict)
 final class TailScan {
-
-	/** The conditional-compilation markers that refuse a candidate wherever they appear in its regions. */
-	private static final CONDITIONAL_DIRECTIVES: Array<String> = ['#if', '#elseif', '#else', '#end'];
 
 	/**
 	 * Whether `a` and `b` are the SAME statement, token for token. Both halves are needed:
@@ -145,10 +143,13 @@ final class TailScan {
 	 * a directive spelled inside a string literal refuses too — the safe direction, and the
 	 * same string-blind conservatism as `CheckScan.hasCommentMarker`.
 	 */
-	public static function hasConditionalCompilation(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final s: String = source.substring(from, to);
-		return CONDITIONAL_DIRECTIVES.exists(d -> s.indexOf(d) != -1);
+	public static function hasConditionalCompilation(directives: Array<CondDirective>, from: Int, to: Int): Bool {
+		return from < to && CondDirectives.startingIn(directives, from, to).length > 0;
+	}
+
+	/** The generated directive events of `source`, read once per file for every span test of the tail and head rules. */
+	public static function directivesOf(source: String, plugin: GrammarPlugin): Array<CondDirective> {
+		return CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source));
 	}
 
 	/**

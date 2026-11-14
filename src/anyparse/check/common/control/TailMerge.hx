@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.check.scan.TailScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -130,7 +131,7 @@ final class TailMerge extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
-			for (c in scan(tree, entry.source, seams)) violations.push({
+			for (c in scan(tree, entry.source, TailScan.directivesOf(entry.source, plugin), seams)) violations.push({
 				file: entry.file,
 				span: c.tailSpan,
 				rule: RULE_ID,
@@ -153,7 +154,7 @@ final class TailMerge extends RuleBase {
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
 			final flagged: Array<String> = RunScan.spanKeys(violations);
 			final edits: Array<{ span: Span, text: String }> = [
-				for (c in scan(tree, source, seams))
+				for (c in scan(tree, source, TailScan.directivesOf(source, plugin), seams))
 					if (c.fixable && flagged.contains('${c.tailSpan.from}:${c.tailSpan.to}')) { span: c.removeSpan, text: '' }
 			];
 			return CanonicalEdit.dropContainedEdits(edits);
@@ -168,9 +169,9 @@ final class TailMerge extends RuleBase {
 	}
 
 	/** Every duplicated-tail candidate in `tree`, in document order — the one walk `run` and `fix` share. */
-	private static function scan(tree: QueryNode, source: String, seams: Seams): Array<Candidate> {
+	private static function scan(tree: QueryNode, source: String, directives: Array<CondDirective>, seams: Seams): Array<Candidate> {
 		final out: Array<Candidate> = [];
-		visit(tree, EMPTY_FALL, source, seams, out);
+		visit(tree, EMPTY_FALL, source, directives, seams, out);
 		return out;
 	}
 
@@ -183,14 +184,16 @@ final class TailMerge extends RuleBase {
 	 * spliced into a scope this walk never sees, so the run it appears to complete into is
 	 * not the run it will complete into.
 	 */
-	private static function visit(node: QueryNode, fall: Fall, source: String, seams: Seams, out: Array<Candidate>): Void {
+	private static function visit(
+		node: QueryNode, fall: Fall, source: String, directives: Array<CondDirective>, seams: Seams, out: Array<Candidate>
+	): Void {
 		if (seams.opaqueKinds.contains(node.kind)) return;
 		if (seams.blockKinds.contains(node.kind))
-			visitBlock(node, fall, source, seams, out);
+			visitBlock(node, fall, source, directives, seams, out);
 		else if (seams.ifKinds.contains(node.kind))
-			visitIf(node, fall, source, seams, out);
+			visitIf(node, fall, source, directives, seams, out);
 		else
-			for (c in node.children) visit(c, EMPTY_FALL, source, seams, out);
+			for (c in node.children) visit(c, EMPTY_FALL, source, directives, seams, out);
 	}
 
 	/**
@@ -198,7 +201,9 @@ final class TailMerge extends RuleBase {
 	 * block, the last one's is the block's own inherited fall — widened by the names this
 	 * block binds, which now stand between that fall's scope and anything nested deeper.
 	 */
-	private static function visitBlock(block: QueryNode, fall: Fall, source: String, seams: Seams, out: Array<Candidate>): Void {
+	private static function visitBlock(
+		block: QueryNode, fall: Fall, source: String, directives: Array<CondDirective>, seams: Seams, out: Array<Candidate>
+	): Void {
 		final kids: Array<QueryNode> = block.children;
 		final inherited: Fall = {
 			stmts: fall.stmts,
@@ -206,7 +211,7 @@ final class TailMerge extends RuleBase {
 			shadow: fall.shadow.concat(TailScan.localDeclNames(kids, seams)),
 			opaqueDecl: fall.opaqueDecl || TailScan.hasOpaqueDecl(kids, seams)
 		};
-		for (i in 0...kids.length) visit(kids[i], restFall(kids, i, inherited), source, seams, out);
+		for (i in 0...kids.length) visit(kids[i], restFall(kids, i, inherited), source, directives, seams, out);
 	}
 
 	/**
@@ -232,17 +237,19 @@ final class TailMerge extends RuleBase {
 	 * a flag candidate, and an `else if` inherits the same fall — every arm of the chain
 	 * completes into the same place.
 	 */
-	private static function visitIf(ifNode: QueryNode, fall: Fall, source: String, seams: Seams, out: Array<Candidate>): Void {
+	private static function visitIf(
+		ifNode: QueryNode, fall: Fall, source: String, directives: Array<CondDirective>, seams: Seams, out: Array<Candidate>
+	): Void {
 		final kids: Array<QueryNode> = ifNode.children;
 		if (kids.length <= BranchChain.THEN_BRANCH_INDEX) return;
-		visit(BranchChain.condOf(ifNode), EMPTY_FALL, source, seams, out);
-		branch(BranchChain.thenOf(ifNode), fall, source, seams, out);
+		visit(BranchChain.condOf(ifNode), EMPTY_FALL, source, directives, seams, out);
+		branch(BranchChain.thenOf(ifNode), fall, source, directives, seams, out);
 		if (!BranchChain.hasElse(ifNode)) return;
 		final elseNode: QueryNode = BranchChain.elseBranch(ifNode);
 		if (seams.ifKinds.contains(elseNode.kind))
-			visit(elseNode, fall, source, seams, out);
+			visit(elseNode, fall, source, directives, seams, out);
 		else
-			branch(elseNode, fall, source, seams, out);
+			branch(elseNode, fall, source, directives, seams, out);
 	}
 
 	/**
@@ -250,12 +257,14 @@ final class TailMerge extends RuleBase {
 	 * walked; a brace-less one is only walked (a bare `if` there forwards `fall` correctly,
 	 * a bare statement has no trailing run to drop).
 	 */
-	private static function branch(node: QueryNode, fall: Fall, source: String, seams: Seams, out: Array<Candidate>): Void {
+	private static function branch(
+		node: QueryNode, fall: Fall, source: String, directives: Array<CondDirective>, seams: Seams, out: Array<Candidate>
+	): Void {
 		if (seams.blockKinds.contains(node.kind)) {
-			final candidate: Null<Candidate> = tryFlag(node, fall, source, seams);
+			final candidate: Null<Candidate> = tryFlag(node, fall, source, directives, seams);
 			if (candidate != null) out.push(candidate);
 		}
-		visit(node, fall, source, seams, out);
+		visit(node, fall, source, directives, seams, out);
 	}
 
 	/**
@@ -263,7 +272,9 @@ final class TailMerge extends RuleBase {
 	 * refuses (see the class doc). A null span anywhere refuses too — every offset the
 	 * report and the edit need must be known.
 	 */
-	private static function tryFlag(branchBlock: QueryNode, fall: Fall, source: String, seams: Seams): Null<Candidate> {
+	private static function tryFlag(
+		branchBlock: QueryNode, fall: Fall, source: String, directives: Array<CondDirective>, seams: Seams
+	): Null<Candidate> {
 		final fallStmts: Array<QueryNode> = fall.stmts;
 		if (fallStmts.length == 0) return null;
 		final fallLastStmt: QueryNode = fallStmts[fallStmts.length - 1];
@@ -282,9 +293,9 @@ final class TailMerge extends RuleBase {
 		final blockSpan: Null<Span> = branchBlock.span;
 		return if (prevSpan == null || tailFirst == null || tailLast == null || fallLast == null || blockSpan == null)
 			null
-		else if (TailScan.hasConditionalCompilation(source, prevSpan.to, tailLast.to))
+		else if (TailScan.hasConditionalCompilation(directives, prevSpan.to, tailLast.to))
 			null
-		else if (TailScan.hasConditionalCompilation(source, fall.prevEnd, fallLast.to))
+		else if (TailScan.hasConditionalCompilation(directives, fall.prevEnd, fallLast.to))
 			null
 		else if (fall.opaqueDecl || TailScan.hasOpaqueDecl(kept, seams))
 			null

@@ -36,8 +36,8 @@
 			"name": "M-TAILMERGE-FALL-KEPT",
 			"type": "anyparse.check.common.control.TailMerge",
 			"method": "visit",
-			"find": "for (c in node.children) visit(c, EMPTY_FALL, source, seams, out);",
-			"replace": "for (c in node.children) visit(c, fall, source, seams, out);",
+			"find": "for (c in node.children) visit(c, EMPTY_FALL, source, directives, seams, out);",
+			"replace": "for (c in node.children) visit(c, fall, source, directives, seams, out);",
 			"note": "the fall-through run is handed to EVERY node's children instead of being reset, so a loop body, a switch arm, a catch body and a lambda all look like they complete into the run after the construct"
 		},
 		{

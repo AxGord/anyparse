@@ -1698,6 +1698,22 @@
 			"find": "typing.members.memberGetter(ctx.index.refs.aliasedName(typeName), field, true) != false",
 			"replace": "typing.members.memberGetter(ctx.index.refs.aliasedName(typeName), field, true) == true",
 			"note": "a field read of a name the type does not declare reads as plain, so a read an @:op(a.b) or @:resolve interceptor answers looks pure"
+		},
+		{
+			"name": "M-TAILSCAN-DIRECTIVES-IGNORED",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "hasConditionalCompilation",
+			"find": "from < to && CondDirectives.startingIn(directives, from, to).length > 0",
+			"replace": "false",
+			"note": "the directive events are not consulted, so a real #if never refuses a candidate"
+		},
+		{
+			"name": "M-TAILSCAN-STRING-IS-DIRECTIVE",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "directivesOf",
+			"find": "plugin.lexicalRegions.bind(source)",
+			"replace": "() -> []",
+			"note": "the lexical regions are not masked, so a directive spelling inside a string or comment counts as conditional compilation"
 		}
 	]
 }

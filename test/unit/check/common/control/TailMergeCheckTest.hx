@@ -474,6 +474,16 @@ class TailMergeCheckTest extends Test {
 		CheckFixture.assertRegistered('tail-merge');
 	}
 
+	public function testDirectiveSpellingInStringIsNotConditionalCompilation(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tfunction f(v:String):String {\n\t\tif (b) {\n\t\t\twork();\n\t\t\thelper("#if x #end");\n'
+				+ '\t\t\treturn v;\n\t\t}\n\t\thelper("#if x #end");\n\t\treturn v;\n\t}\n}'
+			).length
+		);
+	}
+
 	private static function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new TailMerge(), src);
 	}
