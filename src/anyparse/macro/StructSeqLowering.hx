@@ -364,11 +364,7 @@ final class StructSeqLowering {
 		// it as an addressable node. `_start` is in scope because
 		// `instrumentSpans` wraps the whole rule body for span-bearing
 		// (incl. Seq) rules. Flat/no-span builds skip both fields entirely.
-		final spannedKind: Null<String> = node.readMetaString(':spanned');
-		if (sc.ctx.spans && spannedKind != null) {
-			structFields.push({ field: '_span', expr: macro new anyparse.runtime.Span(_start, ctx.pos) });
-			structFields.push({ field: '_kind', expr: macro $v{spannedKind} });
-		}
+		if (sc.ctx.spans) pushSpanFields(node, structFields);
 		final structLiteral: Expr = { expr: EObjectDecl(structFields), pos: Context.currentPos() };
 		parseSteps.push(macro return $structLiteral);
 		return macro $b{parseSteps};
@@ -1617,6 +1613,18 @@ final class StructSeqLowering {
 			final value: Expr = slot.value;
 			parseSteps.push(macro final $local: $type = $value);
 		}
+	}
+
+	/**
+	 * The span fields of a span-bearing build's struct literal: `_span` for every Seq whose paired struct carries one
+	 * (`PairedShapeLowering.carriesSpan`), and `_kind` only for a `@:spanned` node. `_start` is the rule-entry position
+	 * `SpanArgLowering.instrumentSpans` binds around the whole rule body.
+	 */
+	private static function pushSpanFields(node: ShapeNode, structFields: Array<ObjectField>): Void {
+		if (PairedShapeLowering.carriesSpan(node))
+			structFields.push({ field: '_span', expr: macro new anyparse.runtime.Span(_start, ctx.pos) });
+		final spannedKind: Null<String> = node.readMetaString(PairedShapeLowering.SPANNED_META);
+		if (spannedKind != null) structFields.push({ field: '_kind', expr: macro $v{spannedKind} });
 	}
 
 }

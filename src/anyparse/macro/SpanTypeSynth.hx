@@ -93,9 +93,8 @@ class SpanTypeSynth {
 		return switch origNode.kind {
 			case Seq:
 				final fields: Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
-				if (origNode.readMetaString(SPANNED_META) != null) {
+				if (PairedShapeLowering.carriesSpan(origNode)) {
 					final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
-					final stringCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 					fields.push({
 						name: SPAN_FIELD_NAME,
 						kind: FVar(spanCT),
@@ -103,6 +102,9 @@ class SpanTypeSynth {
 						access: [],
 						meta: []
 					});
+				}
+				if (origNode.readMetaString(SPANNED_META) != null) {
+					final stringCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 					fields.push({
 						name: KIND_FIELD_NAME,
 						kind: FVar(stringCT),

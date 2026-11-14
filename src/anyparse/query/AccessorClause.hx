@@ -1,5 +1,7 @@
 package anyparse.query;
 
+import anyparse.runtime.Span;
+
 /**
  * The two accessor identifiers of a property's `(read, write)` clause, as written, and what they say about the
  * property's storage — the one answer to "what do a property's read and write accessors say". A grammar's span walk
@@ -35,9 +37,16 @@ final class AccessorClause {
 	/** The write accessor identifier, as written. */
 	public final write: String;
 
-	public function new(read: String, write: String) {
+	/**
+	 * Where the clause sits in the source: from its first accessor to past the closing `)`. The opening `(` is the
+	 * declaration's lead, not the clause's, so it lies before `span.from`.
+	 */
+	public final span: Span;
+
+	public function new(read: String, write: String, span: Span) {
 		this.read = read;
 		this.write = write;
+		this.span = span;
 	}
 
 	/** Whether the write accessor is `never` - no write from anywhere, the declaring type included. */

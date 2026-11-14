@@ -21,6 +21,7 @@ package anyparse.grammar.haxe;
  * the `HxHeritageClause` / `HxDecl` philosophy.
  */
 @:peg
+@:spanCapture
 typedef HxAccessClause = {
 	@:sep(',')
 	@:trail(')')

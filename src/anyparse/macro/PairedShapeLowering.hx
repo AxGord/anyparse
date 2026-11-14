@@ -49,6 +49,12 @@ class PairedShapeLowering {
 	/** Grammar opt-out of `Seq` transparency: `@:spanned('<Kind>')` gives the struct `_kind` + `_span` and its own node. */
 	public static inline final SPANNED_META: String = ':spanned';
 
+	/**
+	 * Grammar request for a span WITHOUT a node: `@:spanCapture` gives a `Seq`'s paired struct a `_span` and nothing
+	 * else, so the struct stays transparent to the query walk while a span-info reader can still say where it sits.
+	 */
+	public static inline final SPAN_CAPTURE_META: String = ':spanCapture';
+
 	private final _shape: ShapeBuilder.ShapeResult;
 
 	public function new(shape: ShapeBuilder.ShapeResult) {
@@ -182,6 +188,14 @@ class PairedShapeLowering {
 		final args: Array<Expr> = [for (n in argNames) ident(n)];
 		args.push(ident(SPAN_FIELD));
 		return { expr: ECall(haxe.macro.MacroStringTools.toFieldExpr(path), args), pos: Context.currentPos() };
+	}
+
+	/**
+	 * Whether a rule's paired `*S` struct carries a `_span` field — the one answer to "does this Seq's paired struct
+	 * carry its own span": every `@:spanned` node and every span-only `@:spanCapture` Seq. Only `@:spanned` makes it a node.
+	 */
+	public static function carriesSpan(node: ShapeNode): Bool {
+		return node.kind == Seq && (node.readMetaString(SPANNED_META) != null || node.hasMeta(SPAN_CAPTURE_META));
 	}
 
 }

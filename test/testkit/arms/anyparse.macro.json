@@ -3227,8 +3227,8 @@
 			"name": "M-SPANINFO-CLAUSE-SLOTS-SWAPPED",
 			"type": "anyparse.macro.SpanInfoLowering",
 			"method": "spanInfoWrites",
-			"find": "new anyparse.query.AccessorClause(cast _ac.ids[0], cast _ac.ids[1])",
-			"replace": "new anyparse.query.AccessorClause(cast _ac.ids[1], cast _ac.ids[0])",
+			"find": "new anyparse.query.AccessorClause(cast _ac.ids[0], cast _ac.ids[1], _ac._span)",
+			"replace": "new anyparse.query.AccessorClause(cast _ac.ids[1], cast _ac.ids[0], _ac._span)",
 			"note": "the clause fact reads the write accessor as the read one, so `(get, never)` says it writes through a getter"
 		},
 		{
@@ -3270,6 +3270,22 @@
 			"find": "meta: f.meta.get(),",
 			"replace": "meta: f.meta.get().filter(m -> m.name != ':lead'),",
 			"note": "a generic typedef instance drops the @:lead of the generic's fields, so the slot's value after its `:` no longer parses"
+		},
+		{
+			"name": "M-ACCESS-CLAUSE-SPAN-DROPPED",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "spanInfoWrites",
+			"find": "cast _ac.ids[1], _ac._span)",
+			"replace": "cast _ac.ids[1], new anyparse.runtime.Span(0, 0))",
+			"note": "the clause fact forgets where the clause is written"
+		},
+		{
+			"name": "M-SPAN-CAPTURE-START-SHIFTED",
+			"type": "anyparse.macro.StructSeqLowering",
+			"method": "pushSpanFields",
+			"find": "new anyparse.runtime.Span(_start, ctx.pos)",
+			"replace": "new anyparse.runtime.Span(_start + 1, ctx.pos)",
+			"note": "a captured Seq span starts one byte past the rule entry"
 		}
 	]
 }

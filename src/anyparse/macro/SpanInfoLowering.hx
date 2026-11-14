@@ -252,7 +252,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 					b.propertyWriteAccessors[_sp.from] = _accessorRunsCode(_ac.ids, 1);
 					// a clause naming fewer than both slots says nothing about either
 					if (_ac.ids.length >= 2)
-						b.accessorClauses[_sp.from] = new anyparse.query.AccessorClause(cast _ac.ids[0], cast _ac.ids[1]);
+						b.accessorClauses[_sp.from] = new anyparse.query.AccessorClause(cast _ac.ids[0], cast _ac.ids[1], _ac._span);
 				}
 			));
 		}
