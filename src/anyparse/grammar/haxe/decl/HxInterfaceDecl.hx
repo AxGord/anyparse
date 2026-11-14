@@ -41,7 +41,8 @@ typedef HxInterfaceDecl = {
 	var heritage: Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('interfaceBeginType', 'interfaceEndType'), afterFieldsWithDocComments,
 		existingBetweenFields('interfaceExistingBetweenFields'), beforeDocCommentEmptyLines,
-		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
+		metadataCountsAsDoc('meta', 'metadataCountsAsDocComment'), beforeDocCondLookThrough('member', 'Conditional', 'body'),
+		blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),

@@ -86,12 +86,13 @@ final class MemberGap {
 	/**
 	 * The `stated` count of a type body edge (`bodyEdge`'s first argument) once the body's doc comments are read:
 	 * `ifDoc`, the kind's `…TypeIfDocComments` count, replaces it when the body holds a doc comment (`bodyHasDoc`);
-	 * `null` there leaves `stated`, and the body is then not scanned.
+	 * `null` there leaves `stated`, and the body is then not scanned. `alsoDoc` is a body the caller already knows holds a
+	 * member that counts as doc-led for another reason (its metadata, under `@:fmt(metadataCountsAsDoc(...))`).
 	 */
 	public static function docEdge<T: LeadingCommented>(
-		stated: Null<Int>, ifDoc: Null<Int>, members: Array<T>, trailing: Array<String>
+		stated: Null<Int>, ifDoc: Null<Int>, members: Array<T>, trailing: Array<String>, alsoDoc: Bool = false
 	): Null<Int> {
-		return ifDoc != null && bodyHasDoc(members, trailing) ? ifDoc : stated;
+		return ifDoc != null && (alsoDoc || bodyHasDoc(members, trailing)) ? ifDoc : stated;
 	}
 
 	/**

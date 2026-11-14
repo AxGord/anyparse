@@ -136,6 +136,19 @@ or `one`, like the global key, for the blank line after a member that carries a 
 directly. Left out, an enum or typedef keeps the source blank and an `enum abstract` follows the global key. Details:
 `docs/haxe-format-config.md`.
 
+## Metadata counts as a doc comment: `emptyLines.<kind>.metadataCountsAsDocComment`
+
+`metadataCountsAsDocComment` (`true` / `false`) in `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines`,
+and at `emptyLines` level for class, interface and plain `abstract` bodies: a member whose head carries metadata
+(`@:meta`, `@:fmt(...)`) is laid out for blank lines as a doc-commented member is, so `beforeDocCommentEmptyLines`,
+`afterFieldsWithDocComments` and `beginTypeIfDocComments` / `endTypeIfDocComments` fire on it too. A member with both a
+doc comment and metadata still takes one blank line, not two. The metadata is read from the member's AST, so a
+`#if` member counts only by its doc comment. Off by default (haxe-formatter has no such key):
+
+```json
+{ "emptyLines": { "typedefEmptyLines": { "metadataCountsAsDocComment": true } } }
+```
+
 ## An `enum abstract` with more than values: `emptyLines.enumAbstractEmptyLines.abstractRulesUnlessValueList`
 
 `false` by default. Set, an `enum abstract` body holding a method, a property, a `static` member or a `//` comment in

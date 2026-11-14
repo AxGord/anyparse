@@ -50,4 +50,6 @@ typedef HxFormatTypedefEmptyLinesConfig = {
 	var endTypeIfDocComments: Int;
 	@:optional
 	var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
+	@:optional
+	var metadataCountsAsDocComment: Bool;
 };

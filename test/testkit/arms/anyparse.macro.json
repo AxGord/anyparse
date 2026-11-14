@@ -3350,6 +3350,30 @@
 			"find": "pack: synthPackOf(_shape.root, SPANS_SUBPACK),",
 			"replace": "pack: packOf(refName).concat([SPANS_SUBPACK]),",
 			"note": "the parser names a span pair by its rule's package again, so a rule below its root's package fails to find the module the synth side placed at the root"
+		},
+		{
+			"name": "M-META-DOC-LED-ELEM",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "docLedExpr",
+			"find": "reads == null ? byDoc : macro ($byDoc || ${reads.elem})",
+			"replace": "byDoc",
+			"note": "a member with metadata no longer counts as doc-led for the doc-keyed blank lines"
+		},
+		{
+			"name": "M-META-DOC-LED-BODY",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "typedefEdgeExpr",
+			"find": "_trailLC, ${reads.body})",
+			"replace": "_trailLC)",
+			"note": "a typedef body with a metadata member loses its beginTypeIfDocComments / endTypeIfDocComments edges"
+		},
+		{
+			"name": "M-META-DOC-LED-FORCE-MULTI",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepTypedefStatedBlanksExpr",
+			"find": "|| $metaLed)",
+			"replace": ")",
+			"note": "a metadata-led typedef field rides the cascade and loses the doc-keyed blank lines"
 		}
 	]
 }

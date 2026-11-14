@@ -30,4 +30,6 @@ typedef HxFormatEnumAbstractEmptyLinesConfig = {
 	var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
 	@:optional
 	var abstractRulesUnlessValueList: Bool;
+	@:optional
+	var metadataCountsAsDocComment: Bool;
 };

@@ -929,7 +929,10 @@ final class HaxeFormatConfigLoader {
 		applyTypeBodyDocEdges(section, opt);
 	}
 
-	/** The `…TypeIfDocComments` keys of the enum, `enum abstract` and typedef sections into their own knobs; absent leaves `null`. */
+	/**
+	 * The `…TypeIfDocComments` keys of the enum, `enum abstract` and typedef sections into their own knobs (absent leaves
+	 * `null`), and each body's `metadataCountsAsDocComment` (absent leaves it off).
+	 */
 	private static function applyTypeBodyDocEdges(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
 		opt.enumBeginTypeIfDocComments = section.enumEmptyLines?.beginTypeIfDocComments ?? opt.enumBeginTypeIfDocComments;
 		opt.enumEndTypeIfDocComments = section.enumEmptyLines?.endTypeIfDocComments ?? opt.enumEndTypeIfDocComments;
@@ -937,6 +940,10 @@ final class HaxeFormatConfigLoader {
 		opt.enumAbstractEndTypeIfDocComments = section.enumAbstractEmptyLines?.endTypeIfDocComments ?? opt.enumAbstractEndTypeIfDocComments;
 		opt.typedefBeginTypeIfDocComments = section.typedefEmptyLines?.beginTypeIfDocComments ?? opt.typedefBeginTypeIfDocComments;
 		opt.typedefEndTypeIfDocComments = section.typedefEmptyLines?.endTypeIfDocComments ?? opt.typedefEndTypeIfDocComments;
+		opt.metadataCountsAsDocComment = section.metadataCountsAsDocComment ?? opt.metadataCountsAsDocComment;
+		opt.enumMetadataCountsAsDocComment = section.enumEmptyLines?.metadataCountsAsDocComment ?? opt.enumMetadataCountsAsDocComment;
+		opt.enumAbstractMetadataCountsAsDocComment = section.enumAbstractEmptyLines?.metadataCountsAsDocComment ?? opt.enumAbstractMetadataCountsAsDocComment;
+		opt.typedefMetadataCountsAsDocComment = section.typedefEmptyLines?.metadataCountsAsDocComment ?? opt.typedefMetadataCountsAsDocComment;
 	}
 
 	/** Routes each type body's `afterFieldsWithDocComments` key into its kind's knob; an absent key leaves the knob unset. */

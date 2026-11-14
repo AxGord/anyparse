@@ -83,6 +83,9 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		// noqa: complexity
 		super(plan, fieldAccess, slots, openText, closeText);
 		final afterFieldsWithDocComments: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.afterDocPolicy(source.starNode);
+		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = source == null
+			? null
+			: WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
 		final existingBetweenFields: Null<Expr> = source == null
 			? null
 			: WriterTriviaStarDispatch.starKnobReads(BlockStarPlan.EXISTING_BETWEEN_FIELDS, plan.existingBetweenFields(), 1)?.pop();
@@ -90,7 +93,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			? []
 			: WriterTriviaStarDispatch.docEdgeReads(
 				plan.beginEndTypeIfDoc(),
-				WriterTriviaStarDispatch.starKnobReads(BlockStarPlan.BEGIN_END_TYPE, plan.beginEndTypeKnobs()) ?? []
+				WriterTriviaStarDispatch.starKnobReads(BlockStarPlan.BEGIN_END_TYPE, plan.beginEndTypeKnobs()) ?? [], docLedReads
 			);
 		final beginTypeAccess: Null<Expr> = beginEndKnobs[0];
 		final endTypeAccess: Null<Expr> = beginEndKnobs[1];
@@ -120,7 +123,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		_blankBeforeExpr = triviaBlockBlankBeforeExpr(
 			afterFieldsWithDocComments, existingBetweenFields, plan.beforeDocCommentEmptyLines(), infos?.condLeadingDocInfo, interMember,
 			interMemberInfo, staticVarSubdivInfo != null, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,
-			plan.uniformStmtBlanks()
+			plan.uniformStmtBlanks(), docLedReads
 		);
 		_beginEnd = triviaBlockBeginEndExpr(
 			plan.beginEndType(), plan.keepCurlyBlanks(), beginTypeAccess ?? macro null, endTypeAccess ?? macro null
@@ -130,7 +133,8 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			blockSep, blockSep != null, blockSep != null ? plan.blockEndedPredicate() : null, blockSep != null ? schemaTypePath : null
 		);
 		_leaf = triviaBlockLeafExprs(
-			afterFieldsWithDocComments, plan.beforeDocCommentEmptyLines(), interMember, plan.indentCaseLabels(), lineCommentTrailBlank
+			afterFieldsWithDocComments, plan.beforeDocCommentEmptyLines(), interMember, plan.indentCaseLabels(), lineCommentTrailBlank,
+			docLedReads
 		);
 		_blankAround = blankAroundMultilineExprs(plan.gapRule());
 		_elemPushExpr = triviaBlockElemPushExpr(plan.relocateTrailingComments());
@@ -301,7 +305,8 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	 * resolved.
 	 */
 	private static function triviaBlockCurrHasDocComputeExpr(
-		beforeDocCommentEmptyLines: Bool, condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>
+		beforeDocCommentEmptyLines: Bool, condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>,
+		docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>
 	): Expr {
 		// ω-cond-leading-doc-lookthrough: when the element is a `#if … #end`
 		// member whose first inner member opens with `/**`, treat the
@@ -324,7 +329,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		} : macro {};
 		return beforeDocCommentEmptyLines
 			? macro {
-				_currHasDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments);
+				_currHasDocComment = ${WriterTriviaStarDispatch.docLedExpr(docLedReads)};
 				$condLeadingDocExpr;
 			}
 			: macro {};
@@ -401,7 +406,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>, interMember: Bool,
 		interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
-		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool
+		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool, docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>
 	): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
@@ -429,7 +434,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final vetoByDocExpr: Expr = beforeDocCommentEmptyLines
 			? macro anyparse.format.MemberGap.docVetoes(_currHasDocComment, opt.beforeDocCommentEmptyLines)
 			: macro false;
-		final currHasDocComputeExpr: Expr = triviaBlockCurrHasDocComputeExpr(beforeDocCommentEmptyLines, condLeadingDocInfo);
+		final currHasDocComputeExpr: Expr = triviaBlockCurrHasDocComputeExpr(beforeDocCommentEmptyLines, condLeadingDocInfo, docLedReads);
 
 		final currKindComputeExpr: Expr = triviaBlockCurrKindComputeExpr(
 			interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo
@@ -901,10 +906,10 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	 */
 	private static function triviaBlockLeafExprs(
 		afterFieldsWithDocComments: Null<Expr>, beforeDocCommentEmptyLines: Bool, interMember: Bool, indentCaseLabelsGate: Bool,
-		?lineCommentTrailBlank: Expr
+		?lineCommentTrailBlank: Expr, ?docLedReads: WriterTriviaStarDispatch.DocLedReads
 	): WriterLowering.BlockLeafExprs {
 		final trackDocCommentExpr: Expr = afterFieldsWithDocComments != null
-			? macro _prevHadDocComment = anyparse.format.MemberGap.docLed(_t.leadingComments)
+			? macro _prevHadDocComment = ${WriterTriviaStarDispatch.docLedExpr(docLedReads)}
 			: macro {};
 		// ω-indent-case-labels: when the call site opts in via
 		// `@:fmt(indentCaseLabels)`, the body wrap is gated on `opt.indentCaseLabels`

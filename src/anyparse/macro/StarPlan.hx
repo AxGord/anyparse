@@ -31,6 +31,12 @@ class StarPlan {
 
 	public inline function beforeDocCommentEmptyLines(): Bool return _meta.flag('beforeDocCommentEmptyLines');
 
+	/**
+	 * `@:fmt(metadataCountsAsDoc('<field>', '<knob>'[, '<flag>', '<alt>']))`: the element field whose non-empty list makes a
+	 * member count as doc-led, and the `opt` Bool that switches it on; null when the Star carries no such flag.
+	 */
+	public inline function metadataCountsAsDoc(): Null<Array<String>> return flagArgs('metadataCountsAsDoc');
+
 	/** The separator text of `@:sep('text', …)`, or null. */
 	public inline function sepText(): Null<String> return _meta.annotation(AnnotationKeys.LIT_SEP_TEXT);
 

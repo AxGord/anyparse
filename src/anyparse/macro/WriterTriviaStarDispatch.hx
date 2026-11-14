@@ -62,6 +62,34 @@ final class WriterTriviaStarDispatch {
 	private static final STATIC_SUBDIVISION: String = 'staticVarSubdivision';
 
 	/**
+	 * The runtime reads of `@:fmt(metadataCountsAsDoc('<field>', '<knob>'[, '<flag>', '<alt>']))` (`args`, null without the
+	 * flag): whether the element `_t` counts as doc-led because its `<field>` list is non-empty, and whether any member of
+	 * `_arr` does. `<knob>` is an `opt` Bool, `''` for off; under `opt.<flag>` the `<alt>` Bool decides instead. Without the
+	 * flag both reads are null, so the Star splices its doc-comment reads unchanged.
+	 */
+	public static function docLedReads(args: Null<Array<String>>): Null<DocLedReads> {
+		if (args == null) return null;
+		if (args.length != 2 && args.length != 4)
+			Context.fatalError(
+				'@:fmt(metadataCountsAsDoc) names the element field and its knob, optionally a flag and the knob it switches to, got $args',
+				Context.currentPos()
+			);
+		final own: Expr = args[1] == '' ? macro false : knobRead(args[1]);
+		final on: Expr = args.length == 2 ? own : macro (${knobRead(args[2])} ? ${args[3] == '' ? macro false : knobRead(args[3])} : $own);
+		final pos: Position = Context.currentPos();
+		final field: String = args[0];
+		final elemList: Expr = { expr: EField(macro _t.node, field), pos: pos };
+		final memberList: Expr = { expr: EField(macro _m.node, field), pos: pos };
+		return { elem: macro ($on && $elemList.length > 0), body: macro ($on && Lambda.exists(_arr, _m -> $memberList.length > 0)) };
+	}
+
+	/** The element `_t` is doc-led: a `/**` among its leading comments, or `reads.elem` when the Star counts metadata. */
+	public static function docLedExpr(reads: Null<DocLedReads>): Expr {
+		final byDoc: Expr = macro anyparse.format.MemberGap.docLed(_t.leadingComments);
+		return reads == null ? byDoc : macro ($byDoc || ${reads.elem});
+	}
+
+	/**
 	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`
 	 * branch of the `isTriviaStar` block in `emitWriterStarField`). Emits the
 	 * leftCurly separator, routes a flat-sep Star through `triviaSepStarExpr`, else
@@ -592,9 +620,10 @@ final class WriterTriviaStarDispatch {
 
 	/**
 	 * The `beginEndType` knob reads `edges` of a type body, each passed through `MemberGap.docEdge` when the Star also
-	 * carries `@:fmt(beginEndTypeIfDoc(...))`, which names the counts a body holding a doc comment takes instead.
+	 * carries `@:fmt(beginEndTypeIfDoc(...))`, which names the counts a body holding a doc comment takes instead; `reads`
+	 * also counts a body whose member carries metadata, under `@:fmt(metadataCountsAsDoc(...))`.
 	 */
-	private static function docEdgeReads(ifDocKnobs: Null<Array<String>>, edges: Array<Expr>): Array<Expr> {
+	private static function docEdgeReads(ifDocKnobs: Null<Array<String>>, edges: Array<Expr>, ?reads: DocLedReads): Array<Expr> {
 		final ifDocFlag: String = BlockStarPlan.BEGIN_END_TYPE_IF_DOC;
 		final ifDoc: Null<Array<Expr>> = starKnobReads(ifDocFlag, ifDocKnobs);
 		if (ifDoc == null) return edges;
@@ -606,7 +635,9 @@ final class WriterTriviaStarDispatch {
 			for (i in 0...BEGIN_END_KNOBS) {
 				final stated: Expr = edges[i];
 				final docCount: Expr = ifDoc[i];
-				macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC);
+				reads == null
+					? macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC)
+					: macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC, ${reads.body});
 			}
 		];
 	}
@@ -633,4 +664,6 @@ typedef TriviaStarDispatchCtx = {
 	final isSpacedLead: (openText: Null<String>) -> Bool;
 	final mapWrapFor: (field: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
 }
+/** `WriterTriviaStarDispatch.docLedReads`: a Star's metadata-counts-as-doc reads of the element `_t` and of the body `_arr`. */
+typedef DocLedReads = { final elem: Expr; final body: Expr; }
 #end

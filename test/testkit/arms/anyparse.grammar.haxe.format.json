@@ -600,6 +600,14 @@
 			"find": "opt.conditionalSiblings = HaxeFormatValues.siblingPolicyToRuntime(section.conditionalSiblings);",
 			"replace": "opt.conditionalSiblings = opt.conditionalSiblings;",
 			"note": "sameLine.conditionalSiblings is read and dropped, so a config that asked for off still shares the branches of a region"
+		},
+		{
+			"name": "M-META-DOC-CONFIG-TYPEDEF",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyTypeBodyDocEdges",
+			"find": "section.typedefEmptyLines?.metadataCountsAsDocComment",
+			"replace": "null",
+			"note": "the typedefEmptyLines.metadataCountsAsDocComment key no longer reaches its knob"
 		}
 	]
 }

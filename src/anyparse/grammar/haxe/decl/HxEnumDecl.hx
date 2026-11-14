@@ -42,7 +42,7 @@ typedef HxEnumDecl = {
 	var typeParams: Null<Array<HxTypeParamDecl>>;
 	@:fmt(beginEndType('enumBeginType', 'enumEndType'), beginEndTypeIfDoc('enumBeginTypeIfDocComments', 'enumEndTypeIfDocComments'),
 		existingBetweenFields('enumExistingBetweenFields'), afterFieldsWithDocComments('enumAfterFieldsWithDocComments'),
-		uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines)
+		uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines, metadataCountsAsDoc('meta', 'enumMetadataCountsAsDocComment'))
 	@:lead('{')
 	@:trail('}')
 	@:trivia

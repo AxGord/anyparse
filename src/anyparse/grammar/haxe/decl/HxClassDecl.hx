@@ -53,8 +53,8 @@ typedef HxClassDecl = {
 	var heritage: Array<HxHeritageClause>;
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('beginType', 'endType', '_classExtern', 'externClassBeginType', 'externClassEndType'),
 		afterFieldsWithDocComments, existingBetweenFields('existingBetweenFields', '_classExtern', 'externExistingBetweenFields'),
-		beforeDocCommentEmptyLines, beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading,
-		blankBeforeOrphanLineCommentTrail,
+		beforeDocCommentEmptyLines, metadataCountsAsDoc('meta', 'metadataCountsAsDocComment'),
+		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember|FinalModifiedMember', 'betweenVars', 'betweenFunctions', 'afterVars',
 			'_classExtern', 'externClassBetweenVars', 'externClassBetweenFunctions', 'externClassAfterVars'

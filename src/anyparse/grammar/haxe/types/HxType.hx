@@ -168,6 +168,7 @@ enum HxType {
 	@:sepAlt(';', selfEnded('anonMemberNoSep'))
 	@:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'),
 		rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines,
+		metadataCountsAsDoc('meta', '', '_inTypedefBody', 'typedefMetadataCountsAsDocComment'),
 		afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'), forceMultiInTypedef, keepCurlyBlanks,
 		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
 	Anon(fields: Array<HxAnonMember>);

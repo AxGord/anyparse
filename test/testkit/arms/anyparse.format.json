@@ -442,8 +442,8 @@
 			"name": "M-DOC-EDGE-ABSENT-KEY-NULLS",
 			"type": "anyparse.format.MemberGap",
 			"method": "docEdge",
-			"find": "return ifDoc != null && bodyHasDoc(members, trailing) ? ifDoc : stated;",
-			"replace": "return bodyHasDoc(members, trailing) ? ifDoc : stated;",
+			"find": "return ifDoc != null && (alsoDoc || bodyHasDoc(members, trailing)) ? ifDoc : stated;",
+			"replace": "return (alsoDoc || bodyHasDoc(members, trailing)) ? ifDoc : stated;",
 			"note": "an absent `…TypeIfDocComments` key reads as a stated null for a body holding a doc comment, so the kind`s beginType / endType stops applying there"
 		},
 		{

@@ -34,6 +34,8 @@ typedef HxFormatEmptyLinesSection = {
 	@:optional
 	var beforeDocCommentEmptyLines: HxFormatCommentEmptyLinesPolicy;
 	@:optional
+	var metadataCountsAsDocComment: Bool;
+	@:optional
 	var classEmptyLines: HxFormatClassEmptyLinesConfig;
 	@:optional
 	var externClassEmptyLines: HxFormatInterfaceEmptyLinesConfig;
