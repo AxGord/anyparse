@@ -130,7 +130,7 @@ class HxCondCommentDirectiveSeamTest extends Test {
 		Assert.equals('$SAME_LINE_MEMBER\n', roundTrip(SAME_LINE_MEMBER));
 	}
 
-	/** Modifier scope (`HxConditionalMod.body`), same shape. */
+	/** Modifier scope (`HxConditionalInline<HxCondModPrefix>.body`), same shape. */
 	public function testModifierSameLineArmTrailingCommentKeepsEndOnOwnLine(): Void {
 		Assert.equals('$SAME_LINE_MODIFIER\n', roundTrip(SAME_LINE_MODIFIER));
 	}

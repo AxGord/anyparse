@@ -61,7 +61,7 @@ class HxPpCondDottedSliceTest extends HxTestHelpers {
 	}
 
 	public function testDottedIdentInMetaPrefix(): Void {
-		// The decl-prefix `#if <dotted> @:meta #end` shape (HxConditionalMeta),
+		// The decl-prefix `#if <dotted> @:meta #end` shape (HxConditionalInline<HxCondDeclPrefix>),
 		// not just the plain HxDecl.Conditional wrapper.
 		final ast: HxModule = HaxeModuleParser.parse('#if target.threaded @:keep #end class A {}');
 		switch ast.decls[0].meta[0] {

@@ -43,5 +43,5 @@ enum HxHeritageClause {
 	ImplementsClause(type: HxType);
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalHeritage);
+	Conditional(inner: HxConditionalInline<HxHeritageClause>);
 }

@@ -18,7 +18,7 @@ import utest.Test;
  * guard below).
  *
  * The flag is gated to SimpleCtor-only inter-element slots so the existing
- * `HxConditionalMod` ParamCtor layout (issue_332 V1 / V4 — source newline
+ * `HxConditionalInline` ParamCtor layout (issue_332 V1 / V4 — source newline
  * between `#end` and the next modifier keyword preserved) stays byte-
  * identical. `CondModProbeTest` is the cross-check.
  *

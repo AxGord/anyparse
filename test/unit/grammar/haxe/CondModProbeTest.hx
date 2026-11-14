@@ -15,7 +15,7 @@ import utest.Test;
  * Single-line variants (V2, V3, `issue_107`, `issue_291`) and V1 assert
  * that the input parses AND that `parse → write` round-trips byte-
  * exactly. V2 / V3 use the writer-side gate closed by
- * `@:fmt(padLeading, padTrailing)` on `HxConditionalMod.body`
+ * `@:fmt(padLeading, padTrailing)` on `HxConditionalInline.body`
  * (cond↔body[0] and body[last]↔`#end` boundary spaces). V1 (`#if … #end`
  * followed by a newline-and-indent before the next modifier keyword)
  * uses the
@@ -25,7 +25,7 @@ import utest.Test;
  * newline boundary).
  *
  * V4 (cond / modifier / `#end` on separate lines) round-trips via
- * `@:trivia` on `HxConditionalMod.body` plus a padLeading/padTrailing-
+ * `@:trivia` on `HxConditionalInline.body` plus a padLeading/padTrailing-
  * aware branch in `triviaTryparseStarExpr`. The first body element's
  * captured `newlineBefore` flag drives both pad slots — when set, both
  * cond↔body and body↔`#end` gaps render as hardlines; otherwise the

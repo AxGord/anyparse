@@ -15,7 +15,7 @@ package anyparse.grammar.haxe;
  * @:tryparse var elseBody` uses the kw-led optional Star path (`emitOptionalKwStarFieldSteps`): `#else` is the
  * commit point, a miss leaves `null`.
  *
- * Writer-side output mirrors `HxConditionalMod`: `@:fmt(padLeading, padTrailing, conditionalBodyIndent)` on
+ * Writer-side output mirrors `HxConditionalInline`: `@:fmt(padLeading, padTrailing, conditionalBodyIndent)` on
  * `body` and `elseBody` adds a leading + trailing pad around each Star when non-empty, closing the
  * `#if`/`#else`/`#end` boundary gaps; the pads switch from a space to a hardline when the first body element's
  * `newlineBefore` slot is set. Both Stars also opt into the inter-element blank-line cascade of

@@ -7,7 +7,7 @@ package anyparse.grammar.haxe;
  * `HxSwitchCase.Conditional` ctor consumes the `#if` keyword and the
  * trailing `#end`; this typedef covers the content between them.
  *
- * Case-scope twin of `HxConditionalMeta` / `HxConditionalMember`.
+ * Case-scope twin of `HxConditionalInline<HxCondDeclPrefix>` / `HxConditionalMember`.
  * Live dogfood shape (typically
  * `#if false` dead code):
  *

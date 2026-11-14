@@ -2,7 +2,7 @@ package anyparse.grammar.haxe;
 
 /**
  * Element type of the bodies inside a `#if` region that sits in modifier-prefix position —
- * the Stars of `HxConditionalMod` and `HxElseifMod`. Widens the plain modifier keyword set
+ * the Stars of `HxConditionalInline<HxCondModPrefix>` and `HxElseifInline<HxCondModPrefix>`. Widens the plain modifier keyword set
  * with the metadata tags and the bare `enum` / `macro` keywords that a branch may
  * contribute to the declaration FOLLOWING the `#end`:
  *
@@ -64,6 +64,6 @@ enum HxCondModPrefix {
 	EnumKw;
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalMod);
+	Conditional(inner: HxConditionalInline<HxCondModPrefix>);
 	Meta(entry: HxMetadata);
 }

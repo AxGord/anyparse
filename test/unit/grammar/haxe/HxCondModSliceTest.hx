@@ -6,7 +6,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxCondModPrefix;
-import anyparse.grammar.haxe.HxConditionalMod;
+import anyparse.grammar.haxe.HxConditionalInline;
 import anyparse.grammar.haxe.HxMemberModifier;
 import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
@@ -14,7 +14,7 @@ import utest.Assert;
 
 /**
  * Tests for `#else` / `#elseif` arms and widened entries in a
- * MODIFIER-prefix `#if` region: `HxConditionalMod` gaining `elseifs` /
+ * MODIFIER-prefix `#if` region: `HxConditionalInline<HxCondModPrefix>` gaining `elseifs` /
  * `elseBody`, and `HxCondModPrefix` replacing `HxModifier` as its body
  * element type.
  *
@@ -127,7 +127,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 		final mods: Array<HxMemberModifier> =
 			memberModifiers('class C { #if (haxe_ver >= 4.2) extern #else @:extern #end public inline function f():Void {} }');
 		Assert.equals(3, mods.length);
-		final inner: HxConditionalMod = expectMemberCond(mods[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectMemberCond(mods[0]);
 		Assert.equals('(haxe_ver >= 4.2)', (inner.cond: String));
 		Assert.equals(1, inner.body.length);
 		Assert.equals(HxCondModPrefix.Extern, inner.body[0]);
@@ -145,7 +145,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 		);
 		Assert.equals(0, ast.decls[0].meta.length);
 		Assert.equals(1, ast.decls[0].modifiers.length);
-		final inner: HxConditionalMod = expectDeclCond(ast.decls[0].modifiers[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectDeclCond(ast.decls[0].modifiers[0]);
 		Assert.equals(2, inner.body.length);
 		Assert.equals(HxCondModPrefix.Private, inner.body[0]);
 		Assert.equals(HxCondModPrefix.EnumKw, inner.body[1]);
@@ -165,7 +165,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 		// a tag and a modifier side by side, at type level.
 		final ast: HxModule = HaxeModuleParser.parse('#if !haxeJSON @:native("JSON") extern #end class Json {}');
 		Assert.equals(0, ast.decls[0].meta.length);
-		final inner: HxConditionalMod = expectDeclCond(ast.decls[0].modifiers[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectDeclCond(ast.decls[0].modifiers[0]);
 		Assert.equals(2, inner.body.length);
 		Assert.equals('@:native', entryMetaName(inner.body[0]));
 		Assert.equals(HxCondModPrefix.Extern, inner.body[1]);
@@ -180,7 +180,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 		Assert.equals(3, mods.length);
 		Assert.equals(HxMemberModifier.Public, mods[0]);
 		Assert.equals(HxMemberModifier.Static, mods[1]);
-		final inner: HxConditionalMod = expectMemberCond(mods[2]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectMemberCond(mods[2]);
 		Assert.equals(1, inner.body.length);
 		Assert.equals(HxCondModPrefix.Macro, inner.body[0]);
 	}
@@ -194,17 +194,17 @@ class HxCondModSliceTest extends HxTestHelpers {
 		Assert.equals(0, ast.decls[0].meta.length);
 		Assert.equals(2, ast.decls[0].modifiers.length);
 		Assert.equals(HxModifier.Private, ast.decls[0].modifiers[0]);
-		final inner: HxConditionalMod = expectDeclCond(ast.decls[0].modifiers[1]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectDeclCond(ast.decls[0].modifiers[1]);
 		Assert.equals(HxCondModPrefix.EnumKw, inner.body[0]);
 		Assert.equals('T', (expectAbstractDecl(ast.decls[0]).name: String));
 	}
 
 	public function testElseifArmInModifierRegion(): Void {
 		// No dogfood tree chains a modifier region through `#elseif`; the arm
-		// exists for symmetry with HxConditionalMeta / HxConditionalHeritage.
+		// exists for symmetry with the other HxConditionalInline instances.
 		final mods: Array<HxMemberModifier> =
 			memberModifiers('class C { #if a inline #elseif b extern #else @:extern #end public function f():Void {} }');
-		final inner: HxConditionalMod = expectMemberCond(mods[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectMemberCond(mods[0]);
 		Assert.equals(HxCondModPrefix.Inline, inner.body[0]);
 		Assert.equals(1, inner.elseifs.length);
 		Assert.equals('b', (inner.elseifs[0].cond: String));
@@ -212,7 +212,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 		Assert.equals('@:extern', elseEntryMetaName(inner, 0));
 		// Idempotency only: an `#elseif` body is followed by a double space
 		// in the writer today. That gap is PRE-EXISTING and identical in
-		// HxConditionalMeta / HxConditionalHeritage, so it is not pinned
+		// the other HxConditionalInline instances, so it is not pinned
 		// byte-exactly here - a shared-mechanism fix should flip this to
 		// triviaRoundTrip.
 		roundTrip('class C { #if a inline #elseif b extern #else @:extern #end public function f():Void {} }', 'elseif arm');
@@ -220,7 +220,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 
 	public function testEmptyElseArm(): Void {
 		final mods: Array<HxMemberModifier> = memberModifiers('class C { #if x extern #else #end public function f():Void {} }');
-		final inner: HxConditionalMod = expectMemberCond(mods[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectMemberCond(mods[0]);
 		Assert.equals(HxCondModPrefix.Extern, inner.body[0]);
 		final elseBody: Null<Array<HxCondModPrefix>> = inner.elseBody;
 		if (elseBody == null) {
@@ -259,7 +259,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 		// one entry, no elseifs, absent elseBody.
 		final mods: Array<HxMemberModifier> = memberModifiers('class C { #if !cppia inline #end function f():Void {} }');
 		Assert.equals(1, mods.length);
-		final inner: HxConditionalMod = expectMemberCond(mods[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectMemberCond(mods[0]);
 		Assert.equals('!cppia', (inner.cond: String));
 		Assert.equals(1, inner.body.length);
 		Assert.equals(HxCondModPrefix.Inline, inner.body[0]);
@@ -268,7 +268,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 	}
 
 	public function testMetadataOnlyRegionStaysMetaClaimed(): Void {
-		// Both arms metadata -> HxConditionalMeta wins on field order, and
+		// Both arms metadata -> the HxCondDeclPrefix instance wins on field order, and
 		// the modifier Star never sees the region.
 		final ast: HxModule = HaxeModuleParser.parse('#if x @:a #else @:b #end class C {}');
 		Assert.equals(1, ast.decls[0].meta.length);
@@ -286,7 +286,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 
 	public function testConditionalPublicOnVarMember(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class C { #if x public #end var y:Int; }');
-		final inner: HxConditionalMod = expectMemberCond(ast.members[0].modifiers[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectMemberCond(ast.members[0].modifiers[0]);
 		Assert.equals(HxCondModPrefix.Public, inner.body[0]);
 		Assert.isNull(inner.elseBody);
 		switch ast.members[0].member {
@@ -343,7 +343,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 		final ast: HxClassDecl = HaxeParser.parse(source);
 		Assert.equals(1, ast.members[0].meta.length);
 		Assert.equals(expectedTag, entryMetaName(Meta(ast.members[0].meta[0])));
-		final inner: HxConditionalMod = expectMemberCond(ast.members[0].modifiers[0]);
+		final inner: HxConditionalInline<HxCondModPrefix> = expectMemberCond(ast.members[0].modifiers[0]);
 		Assert.equals(HxCondModPrefix.Extern, inner.body[0]);
 		Assert.equals('@:extern', elseEntryMetaName(inner, 0));
 	}
@@ -354,14 +354,14 @@ class HxCondModSliceTest extends HxTestHelpers {
 		return ast.members[0].modifiers;
 	}
 
-	private function expectMemberCond(modifier: HxMemberModifier): HxConditionalMod {
+	private function expectMemberCond(modifier: HxMemberModifier): HxConditionalInline<HxCondModPrefix> {
 		return switch modifier {
 			case Conditional(inner): inner;
 			case _: throw 'expected HxMemberModifier.Conditional, got $modifier';
 		};
 	}
 
-	private function expectDeclCond(modifier: HxModifier): HxConditionalMod {
+	private function expectDeclCond(modifier: HxModifier): HxConditionalInline<HxCondModPrefix> {
 		return switch modifier {
 			case Conditional(inner): inner;
 			case _: throw 'expected HxModifier.Conditional, got $modifier';
@@ -382,7 +382,7 @@ class HxCondModSliceTest extends HxTestHelpers {
 	}
 
 	/** `entryMetaName` of the n-th entry of the `#else` arm. */
-	private function elseEntryMetaName(inner: HxConditionalMod, index: Int): String {
+	private function elseEntryMetaName(inner: HxConditionalInline<HxCondModPrefix>, index: Int): String {
 		final elseBody: Null<Array<HxCondModPrefix>> = inner.elseBody;
 		if (elseBody == null) throw 'expected an #else body';
 		return entryMetaName(elseBody[index]);

@@ -6,8 +6,8 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxCondDeclPrefix;
+import anyparse.grammar.haxe.HxConditionalInline;
 import anyparse.grammar.haxe.HxConditionalMember;
-import anyparse.grammar.haxe.HxConditionalMeta;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxMetadata;
@@ -131,7 +131,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		final decl: HxMemberDecl = cls.members[0];
 		Assert.isNull(decl.member, 'the region is the whole member declaration');
 		Assert.equals(1, decl.meta.length);
-		final region: HxConditionalMeta = expectConditionalMeta(decl.meta[0]);
+		final region: HxConditionalInline<HxCondDeclPrefix> = expectConditionalMeta(decl.meta[0]);
 		Assert.equals('sys', (region.cond: String));
 		Assert.equals(0, region.body.length, 'the region carries nothing');
 		Assert.isNull(region.elseBody);
@@ -146,7 +146,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		final cls: HxClassDecl = classMembersOf('class C {\n\t#if sys\n\t#else\n\t#end\n}');
 		Assert.equals(1, cls.members.length);
 		Assert.isNull(cls.members[0].member);
-		final region: HxConditionalMeta = expectConditionalMeta(cls.members[0].meta[0]);
+		final region: HxConditionalInline<HxCondDeclPrefix> = expectConditionalMeta(cls.members[0].meta[0]);
 		Assert.equals(0, region.body.length);
 		final elseBody: Null<Array<HxCondDeclPrefix>> = region.elseBody;
 		if (elseBody == null)
@@ -258,7 +258,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 	}
 
 	/** The `#if` region a member's `meta` Star claimed, or a failure naming what it got. */
-	private function expectConditionalMeta(meta: HxMetadata): HxConditionalMeta {
+	private function expectConditionalMeta(meta: HxMetadata): HxConditionalInline<HxCondDeclPrefix> {
 		return switch meta {
 			case Conditional(inner): inner;
 			case _: throw 'expected a Conditional meta region, got $meta';

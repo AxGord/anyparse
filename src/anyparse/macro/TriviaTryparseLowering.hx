@@ -823,7 +823,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	 * (`HxMemberDecl.modifiers`, `HxTopLevelDecl.modifiers`) opt in so
 	 * multi-line `static\n\toverload` round-trips as `static overload`.
 	 * ParamCtor elements (current consumers: `Conditional(inner:
-	 * HxConditionalMod)` — the `#if … #end` modifier region) are gated OUT so
+	 * HxConditionalInline<HxCondModPrefix>)` — the `#if … #end` modifier region) are gated OUT so
 	 * the existing CondMod layout (issue_332 V1/V4: source newline between
 	 * `#end` and the next keyword preserved) stays byte-identical.
 	 * Plugin-agnostic ctor classification via `Type.enumParameters` — no

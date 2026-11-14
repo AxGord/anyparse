@@ -3,7 +3,8 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxAnonMember;
-import anyparse.grammar.haxe.HxConditionalMeta;
+import anyparse.grammar.haxe.HxCondDeclPrefix;
+import anyparse.grammar.haxe.HxConditionalInline;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxEnumMember;
 import anyparse.grammar.haxe.HxMetadata;
@@ -166,7 +167,7 @@ class HxOrphanPrefixDeclSliceTest extends HxTestHelpers {
 	}
 
 	/** Unwrap the `#if` region the metadata Star claimed. */
-	private function expectConditionalMeta(meta: HxMetadata): HxConditionalMeta {
+	private function expectConditionalMeta(meta: HxMetadata): HxConditionalInline<HxCondDeclPrefix> {
 		return switch meta {
 			case Conditional(inner): inner;
 			case _: throw 'expected HxMetadata.Conditional, got $meta';

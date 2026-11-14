@@ -17,8 +17,7 @@ import utest.Assert;
  *
  * `HxConditionalType` gained an `elseifs: Array<HxElseifType>` field
  * (positioned before `elseClause`, mirroring `HxConditionalParam.
- * elseifs` / `HxConditionalMeta.elseifs` / `HxConditionalHeritage.
- * elseifs`). `HxElseifType` carries the `#elseif` keyword on its
+ * elseifs` / `HxConditionalInline.elseifs`). `HxElseifType` carries the `#elseif` keyword on its
  * `cond` field and a single `HxType` body with the same
  * `@:trailOpt(';')` shape as `HxConditionalType.type` — type-position
  * `#if`/`#elseif`/`#else` wraps exactly one type per branch in real

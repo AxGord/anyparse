@@ -773,7 +773,7 @@ final class WriterStarEmitLowering {
 		// empty (`prevTok elem1 elem2>nextTok`); `padTrailing` does
 		// the same on the trailing side; combine for the symmetric
 		// `prevTok elem1 elem2 nextTok` shape (used by
-		// `HxConditionalMod.body` to fence between `#if cond`/`#end`).
+		// `HxConditionalInline.body` to fence between `#if cond`/`#end`).
 		// Empty arrays still degrade to `_de()` (no padding, no
 		// stray space). Format-neutral — any grammar nesting a
 		// padded Star inside a surrounding-token sandwich can adopt
@@ -891,7 +891,7 @@ final class WriterStarEmitLowering {
 			// between the kw and the first body element comes
 			// from the pad logic — no need for a literal trailing
 			// space on the kw token. Empty body degrades to `_de()`
-			// inside the helper, mirroring `HxConditionalMod.body`'s
+			// inside the helper, mirroring `HxConditionalInline.body`'s
 			// non-optional precedent. First consumer:
 			// `HxConditionalDecl.elseBody`.
 			final useTriviaGap: Bool = ctx.ctx.trivia;

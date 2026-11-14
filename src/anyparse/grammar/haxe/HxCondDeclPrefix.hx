@@ -2,7 +2,7 @@ package anyparse.grammar.haxe;
 
 /**
  * Element type of the bodies inside a `#if` region that sits in declaration-prefix position
- * — the Stars of `HxConditionalMeta` and `HxElseifMeta`. Widens the plain metadata entry
+ * — the Stars of `HxConditionalInline<HxCondDeclPrefix>` and `HxElseifInline<HxCondDeclPrefix>`. Widens the plain metadata entry
  * with the bare declaration keywords a conditional may contribute to the decl that FOLLOWS
  * the `#end`:
  *

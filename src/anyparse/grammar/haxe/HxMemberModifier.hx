@@ -34,7 +34,7 @@ package anyparse.grammar.haxe;
  *
  * The `Conditional` branch covers `#if <cond> <entries> [#elseif ...] [#else ...] #end`
  * regions interleaved with real modifiers. Its inner body uses `HxCondModPrefix` via
- * `HxConditionalMod` — a widened element type that admits metadata tags and the bare `enum`
+ * `HxConditionalInline<HxCondModPrefix>` — a widened element type that admits metadata tags and the bare `enum`
  * / `macro` keywords alongside the plain modifier keywords, so a branch straddling the
  * modifier/metadata boundary (`#if (haxe_ver >= 4.2) extern #else @:extern #end`) parses as
  * one region.
@@ -63,5 +63,5 @@ enum HxMemberModifier {
 	Overload;
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalMod);
+	Conditional(inner: HxConditionalInline<HxCondModPrefix>);
 }

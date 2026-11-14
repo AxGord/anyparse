@@ -2,7 +2,7 @@ package anyparse.grammar.haxe;
 
 /**
  * One `#elseif <cond> <case clauses>` clause inside a
- * `HxConditionalCase` chain. Case-scope twin of `HxElseifMeta`.
+ * `HxConditionalCase` chain. Case-scope twin of `HxElseifInline<HxCondDeclPrefix>`.
  */
 @:peg
 typedef HxElseifCase = {

@@ -7,9 +7,8 @@ import anyparse.grammar.haxe.HxAbstractClause;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxAnonMember;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxConditionalAbstractClause;
-import anyparse.grammar.haxe.HxConditionalAnonField;
 import anyparse.grammar.haxe.HxConditionalDecl;
+import anyparse.grammar.haxe.HxConditionalInline;
 import anyparse.grammar.haxe.HxConditionalType;
 import anyparse.grammar.haxe.HxConditionalTypeElse;
 import anyparse.grammar.haxe.HxFnDecl;
@@ -72,7 +71,7 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		// lime/utils/ArrayBuffer.hx:10
 		final ad: HxAbstractDecl = firstAbstract('abstract A(Bytes) from Bytes to Bytes #if doc_gen from Dynamic to Dynamic #end {}');
 		Assert.equals(3, ad.clauses.length);
-		final inner: HxConditionalAbstractClause = expectConditionalClause(ad.clauses[2]);
+		final inner: HxConditionalInline<HxAbstractClause> = expectConditionalClause(ad.clauses[2]);
 		Assert.equals('doc_gen', (inner.cond: String));
 		Assert.equals(2, inner.body.length);
 		switch inner.body[0] {
@@ -87,7 +86,7 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		// lime/_internal/backend/html5/HTML5Thread.hx:645
 		final ad: HxAbstractDecl = firstAbstract('abstract T(Dynamic) #if macro from Dynamic #else from A from B from C #end {}');
 		Assert.equals(1, ad.clauses.length);
-		final inner: HxConditionalAbstractClause = expectConditionalClause(ad.clauses[0]);
+		final inner: HxConditionalInline<HxAbstractClause> = expectConditionalClause(ad.clauses[0]);
 		Assert.equals(1, inner.body.length);
 		final elseBody: Null<Array<HxAbstractClause>> = inner.elseBody;
 		if (elseBody == null) {
@@ -99,7 +98,7 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 
 	public function testConditionalAbstractClauseElseifArm(): Void {
 		final ad: HxAbstractDecl = firstAbstract('abstract T(Dynamic) #if macro from Dynamic #elseif js to B #else from C #end {}');
-		final inner: HxConditionalAbstractClause = expectConditionalClause(ad.clauses[0]);
+		final inner: HxConditionalInline<HxAbstractClause> = expectConditionalClause(ad.clauses[0]);
 		Assert.equals(1, inner.elseifs.length);
 		Assert.equals('js', (inner.elseifs[0].cond: String));
 		switch inner.elseifs[0].body[0] {
@@ -127,7 +126,7 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		final fields: Array<HxAnonMember> =
 			typedefAnon('typedef D = {var a:Int; #if (haxe_ver < 4) var b:Null<Bytes>; #else var ?b:Bytes; #end}');
 		Assert.equals(2, fields.length);
-		final inner: HxConditionalAnonField = expectConditionalAnonField(fields[1]);
+		final inner: HxConditionalInline<HxAnonMember> = expectConditionalAnonField(fields[1]);
 		Assert.equals('(haxe_ver < 4)', (inner.cond: String));
 		Assert.equals(1, inner.body.length);
 		final elseBody: Null<Array<HxAnonMember>> = inner.elseBody;
@@ -146,7 +145,7 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		final fields: Array<HxAnonMember> =
 			typedefAnon('typedef W = {@:optional var t:String; #if (js && html5) @:optional var e:Element; #end}');
 		Assert.equals(2, fields.length);
-		final inner: HxConditionalAnonField = expectConditionalAnonField(fields[1]);
+		final inner: HxConditionalInline<HxAnonMember> = expectConditionalAnonField(fields[1]);
 		Assert.equals(1, inner.body.length);
 		Assert.equals(1, inner.body[0].meta.length);
 	}
@@ -285,14 +284,14 @@ class HxCondTypeSlotSliceTest extends HxTestHelpers {
 		return expectAnonMembers(expectTypedefDecl(HaxeModuleParser.parse(source).decls[0]).type);
 	}
 
-	private function expectConditionalClause(clause: HxAbstractClause): HxConditionalAbstractClause {
+	private function expectConditionalClause(clause: HxAbstractClause): HxConditionalInline<HxAbstractClause> {
 		return switch clause {
 			case Conditional(inner): inner;
 			case _: throw 'expected HxAbstractClause.Conditional, got $clause';
 		};
 	}
 
-	private function expectConditionalAnonField(member: HxAnonMember): HxConditionalAnonField {
+	private function expectConditionalAnonField(member: HxAnonMember): HxConditionalInline<HxAnonMember> {
 		return switch member.field {
 			case Conditional(inner): inner;
 			case _: throw 'expected HxAnonField.Conditional, got ${member.field}';

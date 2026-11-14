@@ -5,7 +5,7 @@ package anyparse.grammar.haxe;
  * metadata (`@:optional x:Int`) is carried by the `HxAnonMember` wrapper typedef, which
  * `HxType.Anon` iterates — the `HxMemberDecl` to `HxClassMember` split at the anon level.
  *
- * `Conditional(inner:HxConditionalAnonField)` — a `#if <cond> <fields> [#elseif ...] [#else
+ * `Conditional(inner:HxConditionalInline<HxAnonMember>)` — a `#if <cond> <fields> [#elseif ...] [#else
  * <fields>] #end` preprocessor-guarded run of whole fields, dispatched by `@:kw('#if')` and
  * closed by `@:trail('#end')` on the ctor. The branch has to sit on this enum rather than on
  * the `HxAnonMember` wrapper because `HxAnonMember` is a struct typedef with no alternatives
@@ -44,7 +44,7 @@ package anyparse.grammar.haxe;
 enum HxAnonField {
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalAnonField);
+	Conditional(inner: HxConditionalInline<HxAnonMember>);
 	@:lead('?')
 	Optional(field: HxAnonFieldBody);
 	@:lead('>')

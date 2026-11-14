@@ -22,11 +22,11 @@ package anyparse.grammar.haxe;
  * The `Conditional` branch covers `#if <cond> <entries> [#elseif ...] [#else ...] #end`
  * regions interleaved with real modifiers. `@:kw('#if')` dispatches on the `#if` keyword with
  * a non-word-char boundary check (so `#iff` is rejected); `@:trail('#end')` consumes the
- * closing directive after `HxConditionalMod` parses the cond atom, the entry body, the
+ * closing directive after `HxConditionalInline<HxCondModPrefix>` parses the cond atom, the entry body, the
  * `#elseif` chain and the optional `#else` arm. The region's entries are `HxCondModPrefix`, a
  * widened element type that also admits metadata tags and the bare `enum` / `macro` keywords;
  * nested `#if` is supported transitively because `HxCondModPrefix` carries its own
- * `Conditional` branch back into `HxConditionalMod`.
+ * `Conditional` branch back into `HxConditionalInline<HxCondModPrefix>`.
  *
  * Semantic validation (rejecting `public private`, evaluating the `#if` condition) is not the
  * parser's responsibility - it belongs to a later analysis pass.
@@ -51,5 +51,5 @@ enum HxModifier {
 	Overload;
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalMod);
+	Conditional(inner: HxConditionalInline<HxCondModPrefix>);
 }

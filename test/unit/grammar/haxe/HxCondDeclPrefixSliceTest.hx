@@ -10,8 +10,8 @@ import utest.Assert;
 /**
  * Tests for `#if` regions sitting in declaration-prefix position whose
  * branches contribute a bare declaration keyword rather than metadata —
- * `HxCondDeclPrefix` as the body element type of `HxConditionalMeta` /
- * `HxElseifMeta` — plus the integer `#if` condition atom.
+ * `HxCondDeclPrefix` as the body element type of `HxConditionalInline` /
+ * `HxElseifInline` — plus the integer `#if` condition atom.
  *
  * Both gaps come from openfl: most of its unparseable modules are
  * `#if (haxe_ver >= 4.0) enum #else @:enum #end abstract Name(T)` (every

@@ -21,7 +21,7 @@ package anyparse.grammar.haxe;
  * `HxHeritageClause.Conditional`, and is distinct from the conditional
  * in the TYPE slot of a clause (`from #if x A #else B #end`), which
  * `HxType` already covers via `HxConditionalType` - the two compose.
- * Body content lives in `HxConditionalAbstractClause`.
+ * Body content lives in `HxConditionalInline<HxAbstractClause>`.
  *
  * Branch order is documentation, not disambiguation: `#if` shares no
  * prefix with `from` or `to`, and all three are word-boundary checked.
@@ -34,5 +34,5 @@ enum HxAbstractClause {
 	ToClause(type: HxType);
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalAbstractClause);
+	Conditional(inner: HxConditionalInline<HxAbstractClause>);
 }

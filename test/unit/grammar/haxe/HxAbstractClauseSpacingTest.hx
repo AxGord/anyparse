@@ -22,7 +22,7 @@ import utest.Test;
  * (`members`) carries `@:lead('{')`, a spaced lead whose own separator
  * covers the gap.
  *
- * `HxConditionalMod.body` continues to use BOTH flags together
+ * `HxConditionalInline.body` continues to use BOTH flags together
  * (`@:fmt(padLeading, padTrailing)`) — its surrounding tokens are
  * `#if cond` and `#end`, neither of which carries a separator into the
  * Star.

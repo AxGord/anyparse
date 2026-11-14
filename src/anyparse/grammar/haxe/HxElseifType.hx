@@ -2,8 +2,8 @@ package anyparse.grammar.haxe;
 
 /**
  * One `#elseif <cond> <type>;` clause inside a `HxConditionalType`
- * chain. Type-scope twin of `HxElseifParam` / `HxElseifMeta` /
- * `HxElseifHeritage`: the `#elseif` keyword commits the clause on
+ * chain. Type-scope twin of `HxElseifParam` / `HxElseifInline<HxCondDeclPrefix>` /
+ * `HxElseifInline<HxHeritageClause>`: the `#elseif` keyword commits the clause on
  * `cond`'s metadata (`HxCatchClause` precedent), so the parent's
  * `@:tryparse` Star loop tries the kw at each iteration and naturally
  * terminates when the next token isn't `#elseif`.

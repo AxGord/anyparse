@@ -57,7 +57,7 @@ src/anyparse/grammar/haxe/HxCondSpliceRaw.hx
 src/anyparse/grammar/haxe/HxConditionalSemiExpr.hx
 src/anyparse/grammar/haxe/HxDoWhileBody.hx
 src/anyparse/grammar/haxe/HxDoWhileStmt.hx
-src/anyparse/grammar/haxe/HxElseifMod.hx
+src/anyparse/grammar/haxe/HxElseifInline.hx
 src/anyparse/grammar/haxe/HxElseifParam.hx
 src/anyparse/grammar/haxe/HxFnBlock.hx
 src/anyparse/grammar/haxe/HxFnExprBody.hx

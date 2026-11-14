@@ -8,7 +8,7 @@ package anyparse.grammar.haxe;
  * between them — the condition atom, the then-body Star of further members, an optional
  * `#elseif` clause chain, and an optional `#else` clause with its own member Star.
  *
- * Distinct from `HxMemberModifier.Conditional(HxConditionalMod)`, which guards a run of
+ * Distinct from `HxMemberModifier.Conditional(HxConditionalInline<HxCondModPrefix>)`, which guards a run of
  * access/storage MODIFIERS (`#if X public #end function f()`); member scope wraps the WHOLE
  * member declaration (`#if X private function f() {} #end`). At a member position the
  * modifier-scope ctor is tried first via the modifiers Star; its `@:trail('#end')` fails on

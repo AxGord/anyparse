@@ -41,7 +41,7 @@ package anyparse.grammar.haxe;
 enum HxMetadata {
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalMeta);
+	Conditional(inner: HxConditionalInline<HxCondDeclPrefix>);
 	MetaCall(call: HxMetaCallArgs);
 	Meta(name: HxMetaName);
 	PlainMeta(raw: HxMetaRaw);
