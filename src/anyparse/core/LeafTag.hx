@@ -66,6 +66,12 @@ enum EndEdge {
 	/** The last non-blank bytes are an arrow `->`, whose body starts after it the way a run's does after its opener. */
 	Arrow;
 
+	/** The last byte ends a statement: `;`. */
+	Terminator;
+
+	/** The leaf closes a conditional-compilation region: a region terminal ending on its `#end`. */
+	ClosesRegion;
+
 }
 
 /** The one answer to "which delimiter edge does this writer-syntax literal carry", asked once where the leaf is built. */
@@ -108,6 +114,38 @@ class DelimiterLeaf {
 			case Delimiter(_, ClosesBrace): true;
 			case _: false;
 		};
+	}
+
+	/** Whether a leaf tagged `tag` ends on a statement terminator `;`. */
+	public static function endsStatement(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case Delimiter(_, Terminator): true;
+			case _: false;
+		};
+	}
+
+	/** Whether a leaf tagged `tag` closes a conditional-compilation region. */
+	public static function closesRegion(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case Delimiter(_, ClosesRegion): true;
+			case _: false;
+		};
+	}
+
+	/** Whether a leaf tagged `tag` is a captured comment, which says nothing about where the code before it ends. */
+	public static function isComment(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case LineComment, BlockComment: true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * A `Text` of a region terminal's verbatim `s`, tagged as closing its region when `s` ends on the `#end` the
+	 * terminal's grammar swallows; asked once where the terminal's leaf is built.
+	 */
+	public static function regionLeaf(s: String): Doc {
+		return Text(s, null, s.endsWith('#end') ? Delimiter(NoOpen, ClosesRegion) : null);
 	}
 
 	/** Whether a leaf tagged `tag` opens a call's argument run. */
@@ -175,6 +213,8 @@ class DelimiterLeaf {
 		final last: Int = s.fastCodeAt(s.length - 1);
 		if (last == '}'.code) return ClosesBrace;
 		if (last == ')'.code || last == ']'.code) return Closes;
+		if (last == ';'.code) return Terminator;
+		if (s.endsWith('#end')) return ClosesRegion;
 		var i: Int = s.length - 1;
 		while (i >= 0 && s.fastCodeAt(i).isSpaceOrTab()) i--;
 		if (i < 0) return Plain;

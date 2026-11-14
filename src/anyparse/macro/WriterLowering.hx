@@ -1463,6 +1463,7 @@ class WriterLowering {
 			case 'condOperatorSpacing':
 				macro return _dt(anyparse.format.DirectiveCondition.spaceOperators((cast value: String), opt.condDirectiveOpSpacing));
 
+			case _ if (node.hasMeta(':condRegionRaw')): macro return anyparse.core.LeafTag.DelimiterLeaf.regionLeaf(value);
 			case _: macro return _dt(value);
 		};
 	}

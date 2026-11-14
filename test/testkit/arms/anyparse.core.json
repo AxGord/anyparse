@@ -883,6 +883,46 @@
 			"find": "case Text(_, _, _), OptSpace(_):\n\t\t\t\tdone = onLeaf(node);",
 			"replace": "case Text(_, _, _), OptSpace(_):\n\t\t\t\tonLeaf(node);",
 			"note": "a leaf answering true no longer stops the walk"
+		},
+		{
+			"name": "M-TERMLEAF-SEMI-PLAIN",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "endEdgeOf",
+			"find": "return Terminator;",
+			"replace": "return Plain;",
+			"note": "a literal ending on `;` is tagged as ending on nothing, so every terminator reader misses the statement end"
+		},
+		{
+			"name": "M-TERMLEAF-REGION-PLAIN",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "regionLeaf",
+			"find": "Delimiter(NoOpen, ClosesRegion)",
+			"replace": "null",
+			"note": "a region terminal ending on its `#end` is untagged, so a list item ending on a closed region is not seen as one"
+		},
+		{
+			"name": "M-TERMLEAF-SEMI-BYTES",
+			"type": "anyparse.core.DocMeasure",
+			"method": "endsWithSemi",
+			"find": "return DelimiterLeaf.endsStatement(tag);",
+			"replace": "return StringTools.endsWith(StringTools.rtrim(s), \";\");",
+			"note": "the `;` reader reads a leaf last byte again, so an untagged fragment ending with `;` reads as a terminator"
+		},
+		{
+			"name": "M-TERMLEAF-COMMENT-READ",
+			"type": "anyparse.core.DocMeasure",
+			"method": "endsWithSemi",
+			"find": "!DelimiterLeaf.isComment(tag) && ",
+			"replace": "",
+			"note": "a trailing comment is read as the item end, so `a; // c` does not end on a terminator"
+		},
+		{
+			"name": "M-TERMLEAF-STMT-SEMI-OFF",
+			"type": "anyparse.core.DocMeasure",
+			"method": "endsWithStmtTerminator",
+			"find": " || DelimiterLeaf.endsStatement(tag)",
+			"replace": "",
+			"note": "a statement ending on `;` is not seen as terminated"
 		}
 	]
 }

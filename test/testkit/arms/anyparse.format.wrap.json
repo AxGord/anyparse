@@ -593,6 +593,14 @@
 			"find": "Closes | ClosesBrace",
 			"replace": "Closes",
 			"note": "a `}` leaf no longer closes a delimiter, so a binary operator after a block close stops riding its line"
+		},
+		{
+			"name": "M-TERMLEAF-CONDEND-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "endsWithCondEnd",
+			"find": "return DelimiterLeaf.closesRegion(tag);",
+			"replace": "return false;",
+			"note": "an operand ending on a closed `#end` region is not seen as one"
 		}
 	]
 }

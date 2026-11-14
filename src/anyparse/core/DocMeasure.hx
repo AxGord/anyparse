@@ -578,12 +578,11 @@ final class DocMeasure {
 			final node: Doc = stack.pop();
 			switch node {
 				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
-				case Text(s), OptSpace(s), Line(s):
-					final t: String = s.rtrim();
-					if (t.length > 0) {
-						final c: Int = t.fastCodeAt(t.length - 1);
-						return c == '}'.code || c == ';'.code;
-					}
+				case Text(s, _, tag):
+					if (!DelimiterLeaf.isComment(tag) && s.rtrim().length > 0)
+						return DelimiterLeaf.closesBrace(tag) || DelimiterLeaf.endsStatement(tag);
+				case OptSpace(s), Line(s):
+					if (s.rtrim().length > 0) return false;
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
 					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
 					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
@@ -624,12 +623,10 @@ final class DocMeasure {
 			final node: Doc = stack.pop();
 			switch node {
 				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
-				case Text(s), OptSpace(s), Line(s):
-					final t: String = s.rtrim();
-					if (t.length > 0) {
-						final c: Int = t.fastCodeAt(t.length - 1);
-						return c == ';'.code;
-					}
+				case Text(s, _, tag):
+					if (!DelimiterLeaf.isComment(tag) && s.rtrim().length > 0) return DelimiterLeaf.endsStatement(tag);
+				case OptSpace(s), Line(s):
+					if (s.rtrim().length > 0) return false;
 				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
 					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
 					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
