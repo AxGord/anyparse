@@ -28,6 +28,43 @@ final class DocMeasure {
 	}
 
 	/**
+	 * The one flat-order walk over a `Doc`: calls `onLeaf` with each visible `Text`, soft `Line` and `OptSpace` leaf, left to right,
+	 * descending the flat side of every `If*` and a `Fill`'s items with its separator between them. Forced hardlines and the
+	 * `OptHardline*` / `OptSpaceSkipAfterHardline` markers are skipped. `onLeaf` returns true to stop the walk. Every flat-order
+	 * reader (`flatText`, `flatPrefixToOpenDelim`, `operandIsCall`) supplies only its per-leaf answer.
+	 */
+	public static inline function walkFlatLeaves(d: Doc, onLeaf: (Doc) -> Bool): Void {
+		final stack: Array<Doc> = [d];
+		var done: Bool = false;
+		while (!done && stack.length > 0) {
+			final node: Doc = (cast stack.pop(): Doc);
+			switch node {
+				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
+				case Text(_, _, _), OptSpace(_):
+					done = onLeaf(node);
+				case Line(flat):
+					done = !D.isHardline(flat) && onLeaf(node);
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
+					stack.push(inner);
+				case Concat(items):
+					var k: Int = items.length;
+					while (--k >= 0) stack.push(items[k]);
+				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
+					IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
+					IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
+					IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
+					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
+					stack.push(fl);
+				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
+					pushFillReversed(stack, items, sep);
+			}
+		}
+	}
+
+	/**
 	 * Walks a `Doc` tree and returns its visible-token width — the same
 	 * width the renderer would emit in flat layout if forced hardlines
 	 * didn't terminate that mode.
@@ -302,41 +339,18 @@ final class DocMeasure {
 
 	/**
 	 * Concatenates the visible flat text of `d` left-to-right (forced
-	 * hardlines contribute nothing). Stack-based walk mirroring
-	 * `flatTokenWidth` but accumulating the characters rather than just the
-	 * width.
+	 * hardlines contribute nothing), read off `walkFlatLeaves`.
 	 */
 	public static function flatText(d: Doc): String {
 		final buf: StringBuf = new StringBuf();
-		final stack: Array<Doc> = [d];
-		while (stack.length > 0) {
-			final node: Doc = (cast stack.pop(): Doc);
-			switch node {
-				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
-				case Text(s):
+		walkFlatLeaves(d, leaf -> {
+			switch leaf {
+				case Text(s, _, _), Line(s), OptSpace(s):
 					buf.add(s);
-				case Line(flat):
-					if (!(D.isHardline(flat))) buf.add(flat);
-				case OptSpace(s):
-					buf.add(s);
-				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
-					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
-					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
-					stack.push(inner);
-				case Concat(items):
-					var k: Int = items.length;
-					while (--k >= 0) stack.push(items[k]);
-				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
-					IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
-					IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
-					IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
-					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
-					stack.push(fl);
-				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-					pushFillReversed(stack, items, sep);
+				case _:
 			}
-		}
+			return false;
+		});
 		return buf.toString();
 	}
 
@@ -347,40 +361,22 @@ final class DocMeasure {
 	 */
 	public static function flatPrefixToOpenDelim(d: Doc): Null<Int> {
 		var width: Int = 0;
-		final stack: Array<Doc> = [d];
-		while (stack.length > 0) {
-			final node: Doc = (cast stack.pop(): Doc);
-			switch node {
-				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
-				case Text(s, _, Delimiter(opens, _)) if (opens != NoOpen):
-					return width + 1;
+		var prefix: Null<Int> = null;
+		walkFlatLeaves(d, leaf -> {
+			switch leaf {
+				case Text(_, _, Delimiter(opens, _)) if (opens != NoOpen):
+					prefix = width + 1;
+					return true;
 				case Text(s, _, Delimiter(_, Opens)):
-					return width + s.rtrim().length;
-				case Text(s, _, _):
+					prefix = width + s.rtrim().length;
+					return true;
+				case Text(s, _, _), Line(s), OptSpace(s):
 					width += s.length;
-				case Line(flat):
-					if (!(D.isHardline(flat))) width += flat.length;
-				case OptSpace(s):
-					width += s.length;
-				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
-					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
-					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
-					stack.push(inner);
-				case Concat(items):
-					var k: Int = items.length;
-					while (--k >= 0) stack.push(items[k]);
-				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
-					IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
-					IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
-					IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
-					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
-					stack.push(fl);
-				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-					pushFillReversed(stack, items, sep);
+				case _:
 			}
-		}
-		return null;
+			return false;
+		});
+		return prefix;
 	}
 
 	/**
@@ -393,38 +389,24 @@ final class DocMeasure {
 	 */
 	public static function operandIsCall(d: Doc): Bool {
 		var headSeen: Bool = false;
-		final stack: Array<Doc> = [d];
-		while (stack.length > 0) {
-			final node: Doc = (cast stack.pop(): Doc);
-			switch node {
-				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline, Line(_),
-					OptSpace(_):
+		var isCall: Bool = false;
+		walkFlatLeaves(d, leaf -> {
+			switch leaf {
 				case Text(s, _, tag):
-					if (DelimiterLeaf.opensCallArgs(tag)) return headSeen;
+					if (DelimiterLeaf.opensCallArgs(tag)) {
+						isCall = headSeen;
+						return true;
+					}
 					if (!headSeen) {
 						final c: Int = firstVisibleChar(s);
-						if (c != -1 && !isIdentStart(c)) return false;
+						if (c != -1 && !isIdentStart(c)) return true;
 						headSeen = c != -1;
 					}
-				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
-					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
-					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
-					stack.push(inner);
-				case Concat(items):
-					var k: Int = items.length;
-					while (--k >= 0) stack.push(items[k]);
-				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
-					IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
-					IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
-					IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
-					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
-					stack.push(fl);
-				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
-					pushFillReversed(stack, items, sep);
+				case _:
 			}
-		}
-		return false;
+			return false;
+		});
+		return isCall;
 	}
 
 	/**

@@ -800,15 +800,15 @@
 			"name": "M-OPENDELIM-FIRST-BYTE",
 			"type": "anyparse.core.DocMeasure",
 			"method": "flatPrefixToOpenDelim",
-			"find": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\treturn width + 1;",
-			"replace": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\treturn width;",
+			"find": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\tprefix = width + 1;",
+			"replace": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\tprefix = width;",
 			"note": "the prefix to a leaf opening at its first byte leaves the opener out"
 		},
 		{
 			"name": "M-OPENDELIM-END-EDGE",
 			"type": "anyparse.core.DocMeasure",
 			"method": "flatPrefixToOpenDelim",
-			"find": "case Text(s, _, Delimiter(_, Opens)):\n\t\t\t\t\treturn width + s.rtrim().length;",
+			"find": "case Text(s, _, Delimiter(_, Opens)):\n\t\t\t\t\tprefix = width + s.rtrim().length;\n\t\t\t\t\treturn true;",
 			"replace": "case Text(s, _, Delimiter(_, Opens)):\n\t\t\t\t\twidth += s.length;",
 			"note": "a leaf opening at its end edge (`foo(`) is walked past, so the segment finds no open delimiter"
 		},
@@ -816,8 +816,8 @@
 			"name": "M-OPENDELIM-BYTES",
 			"type": "anyparse.core.DocMeasure",
 			"method": "flatPrefixToOpenDelim",
-			"find": "case Text(s, _, _):\n\t\t\t\t\twidth += s.length;",
-			"replace": "case Text(s, _, _):\n\t\t\t\t\tif (s.indexOf(\"(\") >= 0) return width + s.indexOf(\"(\") + 1;\n\t\t\t\t\twidth += s.length;",
+			"find": "case Text(s, _, _), Line(s), OptSpace(s):\n\t\t\t\t\twidth += s.length;",
+			"replace": "case Text(s, _, _), Line(s), OptSpace(s):\n\t\t\t\t\tif (s.indexOf(\"(\") >= 0) {\n\t\t\t\t\t\tprefix = width + s.indexOf(\"(\") + 1;\n\t\t\t\t\t\treturn true;\n\t\t\t\t\t}\n\t\t\t\t\twidth += s.length;",
 			"note": "an untagged leaf holding `(` (a string literal) counts as an open delimiter again"
 		},
 		{
@@ -832,8 +832,8 @@
 			"name": "M-CALLOPEN-HEAD-NAME",
 			"type": "anyparse.core.DocMeasure",
 			"method": "operandIsCall",
-			"find": "if (c != -1 && !isIdentStart(c)) return false;",
-			"replace": "if (c == -2) return false;",
+			"find": "if (c != -1 && !isIdentStart(c)) return true;",
+			"replace": "if (c == -2) return true;",
 			"note": "an operand led by a prefix operator counts as a call because a call follows its head"
 		},
 		{
@@ -859,6 +859,30 @@
 			"find": "Delimiter(CallArgs, ends)",
 			"replace": "Delimiter(CallArgs, Plain)",
 			"note": "an empty call pair `()` loses its closing end edge when it is named a call open"
+		},
+		{
+			"name": "M-FLATLEAF-IF-FLAT-SIDE",
+			"type": "anyparse.core.DocMeasure",
+			"method": "walkFlatLeaves",
+			"find": "stack.push(fl);",
+			"replace": "stack.push(Empty);",
+			"note": "an If* contributes nothing to the flat-order walk instead of its flat side"
+		},
+		{
+			"name": "M-FLATLEAF-HARDLINE",
+			"type": "anyparse.core.DocMeasure",
+			"method": "walkFlatLeaves",
+			"find": "done = !D.isHardline(flat) && onLeaf(node);",
+			"replace": "done = onLeaf(node);",
+			"note": "a forced hardline is handed to the leaf callback like a soft line"
+		},
+		{
+			"name": "M-FLATLEAF-STOP",
+			"type": "anyparse.core.DocMeasure",
+			"method": "walkFlatLeaves",
+			"find": "case Text(_, _, _), OptSpace(_):\n\t\t\t\tdone = onLeaf(node);",
+			"replace": "case Text(_, _, _), OptSpace(_):\n\t\t\t\tonLeaf(node);",
+			"note": "a leaf answering true no longer stops the walk"
 		}
 	]
 }
