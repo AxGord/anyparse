@@ -189,6 +189,14 @@ A simple one fills the argument line with its neighbours. The test is the nested
 mode lets it fill. A `callParameter` block that does not name the key keeps the built-in one. Details:
 `docs/haxe-format-config.md`.
 
+## Items with type parameters: `typeParamItemCount >= n`
+
+A wrapping rule of `anonType` or `functionSignature` may count the items whose declared type carries type parameters:
+`a:Array<Int>`, `b:Null<String>`, a nested `{c:Map<K, V>}`. A function type without them (`Int->Void`) counts zero, and
+a default value is not a type. A typedef body lays out by `anonType`, so "four fields on one line, three when one is
+generic" is an `itemCount >= n` 5 rule beside an `itemCount >= n` 4 + `typeParamItemCount >= n` 1 rule, both
+`onePerLine`. Details: `docs/haxe-format-config.md`.
+
 ## A simple value `if` on one line: `sameLine.expressionIfFit` and its caps
 
 Under `sameLine.expressionIf: next` every value `if` breaks, each value on its own line. `sameLine.expressionIfFit: true` keeps a chain on one line when it fits, and two caps narrow that to a simple chain; a chain either cap refuses keeps the `next` layout whole, never half-joined:

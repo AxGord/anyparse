@@ -164,6 +164,7 @@ read it as a POLARITY, `1` for "the signal holds" and `0` for "it does not". An 
 | `complexItemCount >= n` | at least `n` items are "complex" — see below the table |
 | `hasContainerItems` | some item is an object / array literal — see below the table |
 | `hasMultilineLambdaItems` | some MULTI-LINE item is a function literal — see below the table |
+| `typeParamItemCount >= n` | at least `n` items declare a type with type parameters — see below the table |
 
 Item width is per-construct. For a delimited list (`arrayWrap`, `mapWrap`, `objectLiteral`,
 `callParameter`, `anonType`, …) it includes the separator and the space after it for every
@@ -214,6 +215,23 @@ least one element is a function literal — an arrow lambda in any spelling, or 
 `function` — AND that element renders multi-line. Neither half answers alone: the kind alone
 matches a one-line lambda, and `hasMultilineItems` alone cannot say WHICH element breaks, which
 is the whole distinction above.
+
+**`typeParamItemCount >= n` counts the items whose declared TYPE carries type parameters** — a
+`<…>` argument list anywhere in it: `a:Array<Int>`, `b:Null<String>` (`Null` counts like any other),
+`f:Int->Array<Int>`, `c:{ m:Map<K, V> }` through the nested anonymous type, `>Base<T>`. A function type
+without one (`Int->Void`) counts zero, and so does a `#if` group of items; a default value or an
+initializer is not a type and is never read. The count is supplied for the fields of an anonymous
+type (`anonType`) and for function and enum-constructor parameters (`functionSignature`); everywhere
+else it is zero, so the condition is inert. A `typedef` body is an anonymous type, so "four fields fit
+on one line, three when one of them is generic" is two rules of `anonType`:
+
+```json
+"anonType": { "defaultWrap": "noWrap", "rules": [
+  { "conditions": [ { "cond": "itemCount >= n", "value": 5 } ], "type": "onePerLine" },
+  { "conditions": [ { "cond": "itemCount >= n", "value": 4 }, { "cond": "typeParamItemCount >= n", "value": 1 } ],
+    "type": "onePerLine" }
+] }
+```
 
 **`containerItemWrap` is a cascade nested in a list's own rules object.** It answers one question for
 each element that is a call-bearing object / array literal (the `complexItemCount` half of the

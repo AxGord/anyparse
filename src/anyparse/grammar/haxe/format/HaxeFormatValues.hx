@@ -121,6 +121,8 @@ final class HaxeFormatValues {
 			// Same array again, crossed with each item's own rendered width — see
 			// `WrapConditionType.HasMultilineLambdaItems`.
 			case 'hasMultilineLambdaItems', 'HasMultilineLambdaItems': WrapConditionType.HasMultilineLambdaItems;
+			// No fork counterpart either — see `WrapConditionType.TypeParamItemCountLargerThan`.
+			case 'typeParamItemCount >= n', 'TypeParamItemCountLargerThan': WrapConditionType.TypeParamItemCountLargerThan;
 			case _: null;
 		};
 	}

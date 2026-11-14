@@ -201,6 +201,12 @@ class WriterLowering {
 	private static final CONTAINER_ITEM_KINDS_PRED: String = 'containerItemKinds';
 
 	/**
+	 * The `AstPreds` name of the counter behind `WrapListOptions.typeParamItemCount` — how many elements of a list declare a
+	 * type carrying type parameters — read at the trivia sep-Star under `@:fmt(typeParamItems)`.
+	 */
+	private static final TYPE_PARAM_ITEM_COUNT_PRED: String = 'typeParamItemCount';
+
+	/**
 	 * ω-orphan-prefix-member — the first-field escape read at three sites that
 	 * must agree on ONE answer: it also gates `TriviaTypeSynth.isBareNonFirstRef`
 	 * (synthesise the slot) and `StructSeqLowering.computeBeforeSlots` (capture it), so a

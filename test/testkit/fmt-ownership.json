@@ -45,6 +45,7 @@
 		"rightCurly",
 		"trailingComma",
 		"trailingCommaRemovable",
+		"typeParamItems",
 		"typedefBodyBlanks",
 		"wrapRules"
 	],

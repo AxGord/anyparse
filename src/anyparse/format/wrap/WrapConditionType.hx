@@ -39,4 +39,5 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final EqualItemLengths = 12;
 	final HasContainerItems = 13;
 	final HasMultilineLambdaItems = 14;
+	final TypeParamItemCountLargerThan = 15;
 }

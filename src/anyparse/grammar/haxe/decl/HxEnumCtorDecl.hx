@@ -47,7 +47,7 @@ typedef HxEnumCtorDecl = {
 	@:trail(')')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'), bodyAwareCompactIndent, groupRestProbe,
-		ignoreSourceNewlinesForWrap)
+		ignoreSourceNewlinesForWrap, typeParamItems)
 	var params: Array<HxParam>;
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))

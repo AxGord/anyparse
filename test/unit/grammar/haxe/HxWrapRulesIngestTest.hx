@@ -245,4 +245,17 @@ class HxWrapRulesIngestTest extends Test {
 		Assert.equals(WrapMode.OnePerLine, opts.methodChainWrap.rules[0].mode);
 	}
 
+	/** `typeParamItemCount >= n` ingests with its threshold, in hxq's spelling and as the enum identifier. */
+	public function testTypeParamItemCountCondIngested(): Void {
+		for (spelling in ['typeParamItemCount >= n', 'TypeParamItemCountLargerThan']) {
+			final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
+				'{"wrapping":{"anonType":{"rules":[{"type":"onePerLine","conditions":[{"cond":"$spelling","value":3}]}]}}}'
+			);
+			final rules: Array<WrapRule> = opts.anonTypeWrap.rules;
+			Assert.equals(1, rules.length);
+			Assert.equals(WrapConditionType.TypeParamItemCountLargerThan, rules[0].conditions[0].cond);
+			Assert.equals(3, rules[0].conditions[0].value);
+		}
+	}
+
 }

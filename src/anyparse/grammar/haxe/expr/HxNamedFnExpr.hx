@@ -40,7 +40,7 @@ typedef HxNamedFnExpr = {
 	@:trail(')')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap'),
-		bodyAwareCompactIndent('body', 'fnExprBodyEmpty'), groupRestProbe, ignoreSourceNewlinesForWrap)
+		bodyAwareCompactIndent('body', 'fnExprBodyEmpty'), groupRestProbe, ignoreSourceNewlinesForWrap, typeParamItems)
 	var params: Array<HxParam>;
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))

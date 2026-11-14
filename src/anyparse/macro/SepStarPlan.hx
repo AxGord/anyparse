@@ -19,6 +19,9 @@ final class SepStarPlan extends StarPlan {
 
 	public inline function complexItems(): Bool return _meta.flag('complexItems');
 
+	/** `@:fmt(typeParamItems)`: the list hands its cascade the grammar's count of items whose type carries type parameters. */
+	public inline function typeParamItems(): Bool return _meta.flag('typeParamItems');
+
 	public inline function typedefBodyBlanks(): Bool return _meta.flag('typedefBodyBlanks');
 
 	/** `@:fmt(wrapRules('<knob>'))`: the `WrapRules` option the list's wrap cascade reads, or null. */

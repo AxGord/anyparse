@@ -201,6 +201,13 @@ typedef WrapListOptions = {
 	var ?containerItemKinds: Array<Null<Array<Int>>>;
 
 	/**
+	 * The number of items whose declared type carries type parameters at any depth (`Array<Int>`, `Null<String>`, a field
+	 * of a nested anonymous type that does), as the grammar counts it — the value of the `TypeParamItemCountLargerThan`
+	 * condition. Omitted reads as 0, so a list whose grammar supplies no count never fires the condition.
+	 */
+	var ?typeParamItemCount: Int;
+
+	/**
 	 * The next rewrite takes this list's width decision again rather than reading it from the source (`WrapMode.Ignore`,
 	 * `BreakCommits.redecided`), so it reads an object literal nested in an item that broke as a broken body: the list is
 	 * laid out once more per such literal break (`BodyFit.namedThresholdLiterals`), even a field list. Default `false`.
@@ -598,12 +605,12 @@ class WrapList {
 	public static function decideWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
 		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false,
-		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false
+		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false, typeParamItemCount: Int = 0
 	): WrapMode {
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
-				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems
+				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems, typeParamItemCount
 			))
 				return rule.mode;
 		}
@@ -630,13 +637,13 @@ class WrapList {
 	public static function decideRuleWithLineLengthState(
 		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
 		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false,
-		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false
+		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false, typeParamItemCount: Int = 0
 	): { mode: WrapMode, location: WrappingLocation, additionalIndent: Int } {
 		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires, complexItemCount,
-				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems
+				minItemLen, equalItemLengths, hasContainerItems, hasMultilineLambdaItems, typeParamItemCount
 			))
 				return {
 					mode: rule.mode,
@@ -1229,14 +1236,14 @@ class WrapList {
 	 */
 	public static function continuationCols(
 		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, sepWidth: Int, suppressAdditionalIndent: Bool, complexItemCount: Int,
-		hasContainerItems: Bool, hasMultilineLambdaItems: Bool
+		hasContainerItems: Bool, hasMultilineLambdaItems: Bool, typeParamItemCount: Int = 0
 	): Int {
 		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 		if (suppressAdditionalIndent) return baseCols;
 		final measure: WrapItemMeasure = measureItems(items, sepWidth);
 		final probe: { mode: WrapMode, location: WrappingLocation, additionalIndent: Int } = decideRuleWithLineLengthState(
 			rules, items.length, measure.maxLen, measure.total, true, measure.anyHardline, _ -> false, complexItemCount, measure.minLen,
-			measure.equalLens, hasContainerItems, hasMultilineLambdaItems
+			measure.equalLens, hasContainerItems, hasMultilineLambdaItems, typeParamItemCount
 		);
 		return probe.mode == FillLineWithLeadingBreak ? baseCols : baseCols * (1 + probe.additionalIndent);
 	}
@@ -1739,7 +1746,7 @@ class WrapList {
 	private static function matchesWithLineLengthState(
 		rule: WrapRule, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
 		lineLengthFires: Int -> Bool, complexItemCount: Int = 0, minItemLen: Int = MAX_ITEM_LEN, equalItemLengths: Bool = false,
-		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false
+		hasContainerItems: Bool = false, hasMultilineLambdaItems: Bool = false, typeParamItemCount: Int = 0
 	): Bool {
 		for (cond in rule.conditions) {
 			final ok: Bool = switch cond.cond {
@@ -1758,6 +1765,7 @@ class WrapList {
 				case ComplexItemCountLargerThan: complexItemCount >= cond.value;
 				case HasContainerItems: cond.value == 0 ? !hasContainerItems : hasContainerItems;
 				case HasMultilineLambdaItems: cond.value == 0 ? !hasMultilineLambdaItems : hasMultilineLambdaItems;
+				case TypeParamItemCountLargerThan: typeParamItemCount >= cond.value;
 			};
 			if (!ok) return false;
 		}
@@ -4440,6 +4448,7 @@ class WrapList {
 			comprehensionBodyMeasure: axes.comprehensionBodyMeasure ?? false,
 			complexItemKinds: axes.complexItemKinds,
 			containerItemKinds: axes.containerItemKinds,
+			typeParamItemCount: axes.typeParamItemCount ?? 0,
 			trailBreakDoc: axes.trailBreak ?? Line('\n')
 		};
 	}
@@ -4553,8 +4562,9 @@ class WrapList {
 		// the break, not merely that one does. Crosses the same kinds array with each item's
 		// own rendered Doc, so it has to be computed here rather than off `measure`.
 		final multilineLambda: Bool = anyMultilineLambdaItem(items, complexItemKinds);
+		final typeParamCount: Int = axes.typeParamItemCount;
 		final cols: Int = continuationCols(
-			rules, opt, items, sepWidth, suppressAdditionalIndent, complexCount, containerItems, multilineLambda
+			rules, opt, items, sepWidth, suppressAdditionalIndent, complexCount, containerItems, multilineLambda, typeParamCount
 		);
 		// The chunk policy alone reads this view; the cascade above counts the elements as the grammar classified them.
 		final chunkKinds: Null<Array<Int>> = chunkKindsByRules(rules, items, complexItemKinds, axes.containerItemKinds);
@@ -4587,7 +4597,7 @@ class WrapList {
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
 			return forceMode ?? decideWithLineLengthState(
 				rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t),
-				complexCount, minLen, equalLens, containerItems, multilineLambda
+				complexCount, minLen, equalLens, containerItems, multilineLambda, typeParamCount
 			);
 		}
 
@@ -4665,5 +4675,6 @@ private typedef ResolvedWrapListOptions = {
 	final comprehensionBodyMeasure: Bool;
 	final complexItemKinds: Null<Array<Int>>;
 	final containerItemKinds: Null<Array<Null<Array<Int>>>>;
+	final typeParamItemCount: Int;
 	final trailBreakDoc: Doc;
 };

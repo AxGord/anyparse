@@ -311,6 +311,9 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		final containerKindsDecl: Expr = _plan.complexItems()
 			? macro final _containerKinds: Null<Array<Null<Array<Int>>>> = _complexKinds == null ? null : $containerKindsCall
 			: macro final _containerKinds: Null<Array<Null<Array<Int>>>> = null;
+		// A Star without `@:fmt(typeParamItems)` counts 0, which no `typeParamItemCount >= n` rule with `n >= 1` reads as firing.
+		final typeParamCountCall: Expr = WriterLowering.astPredCallT(WriterLowering.TYPE_PARAM_ITEM_COUNT_PRED, [macro cast _arr]);
+		final typeParamCountExpr: Expr = _plan.typeParamItems() ? typeParamCountCall : macro 0;
 		return if (_plan.wrapRules() != null) {
 			final rulesExpr: Expr = wrapRulesAccess(_plan.wrapRules(), _mapWrap);
 			// ω-arraymatrix-wrap: when the Star opted into
@@ -459,6 +462,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 						comprehensionBodyMeasure: _isComprehension,
 						complexItemKinds: _complexKinds,
 						containerItemKinds: _containerKinds,
+						typeParamItemCount: $typeParamCountExpr,
 						redecided: $v{_openText == '{'} && _ignoreEmit
 					}
 				);

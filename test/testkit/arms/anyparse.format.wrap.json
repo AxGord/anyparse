@@ -617,6 +617,14 @@
 			"find": "if (rules == null) return false;",
 			"replace": "return false;",
 			"note": "a source grid never goes on one line, so a few short cells that fit keep their rows"
+		},
+		{
+			"name": "M-TYPE-PARAM-COND-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "matchesWithLineLengthState",
+			"find": "case TypeParamItemCountLargerThan: typeParamItemCount >= cond.value;",
+			"replace": "case TypeParamItemCountLargerThan: false;",
+			"note": "the typeParamItemCount condition never holds, so four items with a generic one stay on one line"
 		}
 	]
 }

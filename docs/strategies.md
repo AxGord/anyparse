@@ -139,7 +139,7 @@ switchSubjectParensStrip, switchWrapSpace, tight, tightKw, tightLead, tightOnPar
 trailingCommaRemovable, trailOptParseGate(…), trailOptShapeGate(…), tryBraceSymmetry(…),
 tryCatchBraceSymmetry(…), tryDeBrace, tryPolicy, typedefBodyBlanks,
 typedefIntersectionBreak, typeParamClose, typeParamDefaultEquals,
-typeParamOpen, uniformBetween(…), uniformStmtBlanks, valueBraceSymmetry(…), whileCondParensInsideClose,
+typeParamItems, typeParamOpen, uniformBetween(…), uniformStmtBlanks, valueBraceSymmetry(…), whileCondParensInsideClose,
 whilePolicy, widthAware, wrapRules(…)
 ```
 

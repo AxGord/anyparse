@@ -170,7 +170,7 @@ enum HxType {
 		rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines,
 		metadataCountsAsDoc('meta', '', '_inTypedefBody', 'typedefMetadataCountsAsDocComment'),
 		afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'), forceMultiInTypedef, keepCurlyBlanks,
-		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
+		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'), typeParamItems)
 	Anon(fields: Array<HxAnonMember>);
 	@:fmt(clearTypedefContext)
 	ArrowFn(fn: HxArrowFnType);

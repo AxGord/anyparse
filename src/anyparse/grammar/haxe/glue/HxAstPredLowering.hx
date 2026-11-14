@@ -318,6 +318,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			keepsBlankLeafClassifierField(),
 			complexItemKindsField(),
 			containerItemKindsField(),
+			typeParamItemCountField(),
 			ternaryBranchHoldsMultilineBlockField(),
 			fnBodyEmptyField('fnBodyEmpty', HX_FN_BODY, ['NoBody']),
 			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, []),
@@ -1250,6 +1251,18 @@ final class HxAstPredLowering extends AstPredLowering {
 			INTERP_STRING_IS_PLAIN, [valueArg('s', HX_INTERP_STRING)],
 			macro : Bool, macro s == null || !Lambda.exists(s.parts, _p -> $complex),
 			'True iff a single-quoted string neither interpolates nor spans lines.'
+		);
+	}
+
+	/**
+	 * `typeParamItemCount(elements) → Int` — forwards to `HxTypeParamItems.count`, the number of elements of a delimited list
+	 * whose declared type carries type parameters. Untyped for the same reason as `complexItemKindsField`.
+	 */
+	private function typeParamItemCountField(): Field {
+		return predField(
+			'typeParamItemCount', [{ name: 'items', type: macro : Array<Any> }],
+			macro : Int, macro anyparse.grammar.haxe.glue.HxTypeParamItems.count(items),
+			'How many elements of a delimited list declare a type with type parameters, for `WrapList`\'s `typeParamItemCount` axis.'
 		);
 	}
 

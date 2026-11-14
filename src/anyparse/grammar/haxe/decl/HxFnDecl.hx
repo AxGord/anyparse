@@ -52,7 +52,7 @@ typedef HxFnDecl = {
 	@:trail(')')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap'),
-		bodyAwareCompactIndent('body', 'fnBodyEmpty'), groupRestProbe, ignoreSourceNewlinesForWrap)
+		bodyAwareCompactIndent('body', 'fnBodyEmpty'), groupRestProbe, ignoreSourceNewlinesForWrap, typeParamItems)
 	var params: Array<HxParam>;
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))

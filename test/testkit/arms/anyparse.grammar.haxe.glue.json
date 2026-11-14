@@ -234,6 +234,22 @@
 			"find": "caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro true)",
 			"replace": "caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro false)",
 			"note": "a number or bool argument reads as complex"
+		},
+		{
+			"name": "M-TYPE-PARAM-NAMED-OFF",
+			"type": "anyparse.grammar.haxe.glue.HxTypeParamItems",
+			"method": "carries",
+			"find": "case 'Named': refHasParams(params[0]);",
+			"replace": "case 'Named': false;",
+			"note": "no type reference counts its type parameters, so every list counts zero and no generic-typed field or parameter list breaks by the rule"
+		},
+		{
+			"name": "M-TYPE-PARAM-DEFAULT-VALUE-READ",
+			"type": "anyparse.grammar.haxe.glue.HxTypeParamItems",
+			"method": "declares",
+			"find": "return carries(Reflect.field(v, 'type'), depth + 1)",
+			"replace": "return carries(v, depth + 1)",
+			"note": "a declaration's every slot is walked as a type, so a check-type default value counts and a parameter without a generic type breaks the list"
 		}
 	]
 }
