@@ -2,7 +2,6 @@ package anyparse.check.common.members;
 
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PropertyStorage;
 import anyparse.check.scan.ReflectionScan;
@@ -100,8 +99,7 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 			final span: Span = at;
 			final clause: Null<AccessorClause> = clauses[span.from];
 			if (clause == null || !clause.readsFieldWritesThroughSetter()) continue;
-			final edit: Null<FixEdit> = AccessorClauseText.neverReadEdit(source, span);
-			if (edit != null) edits.push(edit);
+			edits.push({ span: clause.readSpan(), text: AccessorClause.NEVER_ACCESSOR });
 		}
 		return edits;
 	}

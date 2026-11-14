@@ -2,11 +2,9 @@ package anyparse.check.common.members;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.scan.CheckScan;
+import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldWrite;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-
-using anyparse.util.Strings;
 
 /**
  * Flags a property whose BOTH accessors are `default` — `var x(default, default):T` — and
@@ -20,11 +18,11 @@ using anyparse.util.Strings;
  * ONLY the exact pair `(default, default)`. Every other accessor is a real declaration: `get` /
  * `set` route through a method, `dynamic` re-binds at runtime, `null` / `never` restrict write
  * access, and a method name is a custom accessor. Any of them on EITHER side, an arity other
- * than two, or an unparseable clause (a conditional-compilation directive inside it) is a safe
- * miss. `final` members and local declarations never carry a meaningful clause and are out of
- * the walk entirely (`RefactorSupport.eachFieldMember` visits mutable FIELD members only), and
- * so are INTERFACE members: `visibilityContainerKinds` covers classes and abstracts, not
- * `InterfaceDecl`. Haxe treats an interface `(default, default)` the same way, so that is a
+ * than two, or a clause the grammar does not capture (a conditional-compilation directive inside
+ * it) is a safe miss. `final` members and local declarations never carry a meaningful clause and
+ * are out of the walk entirely (`RefactorSupport.eachFieldMember` visits mutable FIELD members
+ * only), and so are INTERFACE members: `visibilityContainerKinds` covers classes and abstracts,
+ * not `InterfaceDecl`. Haxe treats an interface `(default, default)` the same way, so that is a
  * safe miss rather than a decision.
  *
  * `@:isVar` is metadata on the member, not part of the clause, and is left untouched — it is
@@ -44,32 +42,19 @@ using anyparse.util.Strings;
  * the type annotation, the initializer, the doc comment and the metadata all survive verbatim.
  *
  * A COMMENT anywhere from the declaration's start through the clause's `)` withholds the
- * finding (the `redundant-cast-type` comment-guard convention). It is a WHOLE-HEAD refusal, not
- * only a protection of the deleted bytes: a comment sitting BEFORE the name is harmless to the
- * deletion and still costs the finding. That is the price of the hazard it closes — the field
- * name is located by text search (`RefactorSupport.identTokenOffset`), so a comment ahead of the
- * name carrying a word matching it sends the whole scan into the comment's own text. A block
- * comment quoting the whole shape ahead of an ALREADY-PLAIN `var x:Int;` is the worked case (see
- * `RedundantPropertyAccessCheckTest.testCommentQuotingTheNameNotFlagged`, which spells it out —
- * a nested comment cannot be written here). The refusal is per MEMBER, not per file: a genuine
+ * finding (the `redundant-cast-type` comment-guard convention), as does a comment between the
+ * field name and the clause. It is a WHOLE-HEAD refusal, per MEMBER, not per file: a genuine
  * sibling on the next line still reports.
  *
  * ## Grammar-agnostic
  *
- * The member walk is the shared `eachFieldMember` one (`RefShape.visibilityContainerKinds` /
- * `mutableFieldDeclKinds`), and the field name token is located through
- * `RefactorSupport.identTokenOffset` rather than a keyword literal, so nothing here spells a
- * Haxe keyword. The accessor SPELLING (`default`) and the `(a, b)` clause syntax are read from
- * the source text: the projection drops `HxVarDecl.access`, and the one seam that survives it
- * (`TypeInfoProvider.propertyAccessors`) reports only whether an accessor RUNS CODE — which
- * cannot tell `(default, default)` from `(default, null)`. A grammar with a different accessor
- * syntax needs that seam widened before this check can follow it.
+ * The member walk is the shared `eachFieldMember` one, and the clause is the grammar fact
+ * `AccessorClause` (`TypeInfoProvider.accessorClauses`): its accessor identifiers and its span
+ * come from the declaration node, so nothing here spells a Haxe keyword beyond the accessor
+ * vocabulary `default`.
  */
 @:nullSafety(Strict)
 final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
-
-	/** The one accessor spelling that means "the plain stored slot" on both the read and the write side. */
-	private static inline final PLAIN_ACCESSOR: String = 'default';
 
 	public function new() {
 		super(
@@ -82,7 +67,7 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			final name: Null<String> = field.name;
-			final clause: Null<Span> = redundantClause(source, field);
+			final clause: Null<Span> = redundantClause(RunScan.accessorClausesOf(plugin, source), source, field);
 			if (name != null && clause != null) violations.push({
 				file: file,
 				span: clause,
@@ -97,23 +82,27 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 
 	/**
 	 * Delete each flagged clause together with the whitespace separating it from the field
-	 * name. The violation span is the clause itself (computed against this same `source`), and
-	 * the text at it is re-checked so a stale span deletes nothing.
+	 * name. The violation span is the clause's parenthesised pair; the clause is looked up by the
+	 * span's end and must still be a plain stored one opening at the span's start, so a stale span
+	 * deletes nothing.
 	 *
 	 * The comment guard is deliberately `run`-only: this gate is strictly weaker, which is the
 	 * sound direction under the `Check.fix` contract (the caller passes this check's OWN
-	 * violations, already guarded). Re-running it here would buy nothing — for a violation `run`
-	 * emitted, the region this deletes is provably comment-free twice over, by the guard AND by
-	 * the accessor scan's own alphabet.
+	 * violations, already guarded), and the region this deletes is whitespace and the clause.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		final byEnd: Map<Int, AccessorClause> = [
+			for (clause in RunScan.accessorClausesOf(plugin, source)) clause.span.to => clause
+		];
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span == null || plainStoredClause(source, span.from, span.to) == null) continue;
-			edits.push({ span: new Span(nameEndBefore(source, span.from), span.to), text: '' });
+			if (span == null) continue;
+			final clause: Null<AccessorClause> = byEnd[span.to];
+			if (clause == null || !clause.plainStored() || clause.parenSpan().from != span.from) continue;
+			edits.push({ span: new Span(clause.leadGap.from, span.to), text: '' });
 		}
 		return edits;
 	}
@@ -121,50 +110,15 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 	/**
 	 * The `(default, default)` clause span of `field`, or null when the member carries no
 	 * accessor clause, carries a different one, or a comment sits anywhere from the
-	 * declaration's start through the clause's `)` — where the fix would delete it, or where
-	 * it could have hijacked the name-token search (see the class doc).
+	 * declaration's start through the clause's `)`.
 	 */
-	private static function redundantClause(source: String, field: QueryNode): Null<Span> {
-		final name: Null<String> = field.name;
+	private static function redundantClause(clauses: Map<Int, AccessorClause>, source: String, field: QueryNode): Null<Span> {
 		final span: Null<Span> = field.span;
-		if (name == null || span == null) return null;
-		final nameOffset: Int = SourceText.identTokenOffset(source, span, name);
-		if (nameOffset < 0) return null;
-		final open: Int = SourceText.skipSpaces(source, nameOffset + name.length, span.to);
-		final clause: Null<Span> = plainStoredClause(source, open, span.to);
-		return clause == null || CheckScan.hasCommentMarker(source, span.from, clause.to) ? null : clause;
-	}
-
-	/**
-	 * The `[open, ')' + 1)` span of an accessor clause at `open` whose two identifiers are BOTH
-	 * `default`, or null for anything else — a different accessor, a different arity, a
-	 * non-identifier where an accessor is expected (a `#if` directive), or a missing `)`.
-	 * `limit` bounds the scan to the declaration.
-	 */
-	private static function plainStoredClause(source: String, open: Int, limit: Int): Null<Span> {
-		if (open >= limit || source.fastCodeAt(open) != '('.code) return null;
-		final read: Int = plainAccessorEnd(source, SourceText.skipSpaces(source, open + 1, limit), limit);
-		if (read < 0) return null;
-		final comma: Int = SourceText.skipSpaces(source, read, limit);
-		if (comma >= limit || source.fastCodeAt(comma) != ','.code) return null;
-		final write: Int = plainAccessorEnd(source, SourceText.skipSpaces(source, comma + 1, limit), limit);
-		if (write < 0) return null;
-		final close: Int = SourceText.skipSpaces(source, write, limit);
-		return close < limit && source.fastCodeAt(close) == ')'.code ? new Span(open, close + 1) : null;
-	}
-
-	/** The offset just past a `default` identifier at `i`, or -1 when the token there is anything else. */
-	private static function plainAccessorEnd(source: String, i: Int, limit: Int): Int {
-		var j: Int = i;
-		while (j < limit && source.fastCodeAt(j).isIdentChar()) j++;
-		return j > i && source.substring(i, j) == PLAIN_ACCESSOR ? j : -1;
-	}
-
-	/** The offset where the field name ends — `clauseFrom` walked back over the whitespace before the clause. */
-	private static function nameEndBefore(source: String, clauseFrom: Int): Int {
-		var i: Int = clauseFrom;
-		while (i > 0 && SourceText.isSpace(source.fastCodeAt(i - 1))) i--;
-		return i;
+		if (span == null) return null;
+		final clause: Null<AccessorClause> = clauses[span.from];
+		if (clause == null || !clause.plainStored()) return null;
+		final paren: Span = clause.parenSpan();
+		return CheckScan.hasCommentMarker(source, span.from, paren.to) ? null : paren;
 	}
 
 }

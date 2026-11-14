@@ -800,7 +800,8 @@ final class StructSeqLowering {
 		} else {
 			emitOptionalRefLeadCommit(
 				sc, parseSteps, localName, fieldCT, subCall, kwLead, leadText, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
-				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, beforeLeadLocal, afterLeadLocal
+				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal, beforeLeadLocal, afterLeadLocal,
+				sc.ctx.spans && PairedShapeLowering.carriesLeadGap(sc.shape.rules[refName])
 			);
 		}
 	}
@@ -1375,8 +1376,17 @@ final class StructSeqLowering {
 		sc: StructSeqCtx, parseSteps: Array<Expr>, localName: String, fieldCT: ComplexType, subCall: Expr, kwLead: Null<String>,
 		leadText: Null<String>, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String,
 		bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String, beforeLeadLocal: Null<String>,
-		afterLeadLocal: Null<String>
+		afterLeadLocal: Null<String>, leadGap: Bool
 	): Void {
+		// A span-capture child records the gap it was led across, from the end of the token before the lead to the lead
+		// literal (`_wsPos` .. `_kwStartPos`), so a reader finds the lead without scanning source text.
+		final leadedCall: Expr = leadGap
+			? macro {
+				final _led = $subCall;
+				_led._leadGap = new anyparse.runtime.Span(_wsPos, _kwStartPos);
+				_led;
+			}
+			: subCall;
 		// The commit point peeks the lead literal or keyword —
 		// on hit, consume and parse the sub-rule; on miss,
 		// rewind pos to before the pre-commit ws scan so any
@@ -1435,7 +1445,7 @@ final class StructSeqLowering {
 					$i{beforeLeadLocal} = _leadGapComment;
 					$preCommitCapture;
 					$innerCommitAction;
-					$subCall;
+					$leadedCall;
 				} else {
 					ctx.pos = _wsPos;
 					null;
@@ -1449,7 +1459,7 @@ final class StructSeqLowering {
 				if ($commitCheck) {
 					$preCommitCapture;
 					$innerCommitAction;
-					$subCall;
+					$leadedCall;
 				} else {
 					ctx.pos = _wsPos;
 					null;
@@ -1623,6 +1633,8 @@ final class StructSeqLowering {
 	private static function pushSpanFields(node: ShapeNode, structFields: Array<ObjectField>): Void {
 		if (PairedShapeLowering.carriesSpan(node))
 			structFields.push({ field: '_span', expr: macro new anyparse.runtime.Span(_start, ctx.pos) });
+		if (PairedShapeLowering.carriesLeadGap(node))
+			structFields.push({ field: PairedShapeLowering.LEAD_GAP_FIELD, expr: macro new anyparse.runtime.Span(_start, _start) });
 		final spannedKind: Null<String> = node.readMetaString(PairedShapeLowering.SPANNED_META);
 		if (spannedKind != null) structFields.push({ field: '_kind', expr: macro $v{spannedKind} });
 	}

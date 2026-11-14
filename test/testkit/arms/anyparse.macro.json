@@ -3227,8 +3227,8 @@
 			"name": "M-SPANINFO-CLAUSE-SLOTS-SWAPPED",
 			"type": "anyparse.macro.SpanInfoLowering",
 			"method": "spanInfoWrites",
-			"find": "new anyparse.query.AccessorClause(cast _ac.ids[0], cast _ac.ids[1], _ac._span)",
-			"replace": "new anyparse.query.AccessorClause(cast _ac.ids[1], cast _ac.ids[0], _ac._span)",
+			"find": "cast _ac.ids[0], cast _ac.ids[1]",
+			"replace": "cast _ac.ids[1], cast _ac.ids[0]",
 			"note": "the clause fact reads the write accessor as the read one, so `(get, never)` says it writes through a getter"
 		},
 		{
@@ -3275,9 +3275,17 @@
 			"name": "M-ACCESS-CLAUSE-SPAN-DROPPED",
 			"type": "anyparse.macro.SpanInfoLowering",
 			"method": "spanInfoWrites",
-			"find": "cast _ac.ids[1], _ac._span)",
-			"replace": "cast _ac.ids[1], new anyparse.runtime.Span(0, 0))",
+			"find": "_ac._span,",
+			"replace": "new anyparse.runtime.Span(0, 0),",
 			"note": "the clause fact forgets where the clause is written"
+		},
+		{
+			"name": "M-ACCESS-CLAUSE-LEADGAP-DROPPED",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "spanInfoWrites",
+			"find": "_ac._leadGap",
+			"replace": "new anyparse.runtime.Span(0, 0)",
+			"note": "the clause fact forgets the gap it was led across, so its paren and name end are lost"
 		},
 		{
 			"name": "M-SPAN-CAPTURE-START-SHIFTED",

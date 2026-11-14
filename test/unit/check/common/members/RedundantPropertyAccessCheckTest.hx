@@ -247,6 +247,24 @@ class RedundantPropertyAccessCheckTest extends Test {
 		);
 	}
 
+	/** Blanks inside and around the clause: the finding still spans `(` .. `)`, and the fix deletes from the name's end. */
+	public function testSpacedClauseFlaggedAndDeleted(): Void {
+		final source: String = wrap('public var x ( default , default ) : Int = 1;');
+		final vs: Array<Violation> = violations(source);
+		Assert.equals(1, vs.length);
+		final span: Null<Span> = vs[0].span;
+		Assert.notNull(span);
+		if (span != null) Assert.equals('( default , default )', source.substring(span.from, span.to));
+		final out: String = applyFixOnce(source);
+		Assert.equals(-1, out.indexOf('default'));
+		Assert.isTrue(out.indexOf('public var x') != -1, out);
+	}
+
+	/** A comment between the name and the clause withholds the finding: the deleted bytes would sit next to it. */
+	public function testCommentBetweenNameAndClauseNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('public var x /* c */ (default, default):Int = 1;')).length);
+	}
+
 	/** Wrap a member body in a minimal parseable class. */
 	private function wrap(member: String): String {
 		return 'class C {\n\t$member\n}';

@@ -93,16 +93,21 @@ class SpanTypeSynth {
 		return switch origNode.kind {
 			case Seq:
 				final fields: Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
-				if (PairedShapeLowering.carriesSpan(origNode)) {
-					final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
-					fields.push({
-						name: SPAN_FIELD_NAME,
-						kind: FVar(spanCT),
-						pos: pos,
-						access: [],
-						meta: []
-					});
-				}
+				final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
+				if (PairedShapeLowering.carriesSpan(origNode)) fields.push({
+					name: SPAN_FIELD_NAME,
+					kind: FVar(spanCT),
+					pos: pos,
+					access: [],
+					meta: []
+				});
+				if (PairedShapeLowering.carriesLeadGap(origNode)) fields.push({
+					name: PairedShapeLowering.LEAD_GAP_FIELD,
+					kind: FVar(spanCT),
+					pos: pos,
+					access: [],
+					meta: []
+				});
 				if (origNode.readMetaString(SPANNED_META) != null) {
 					final stringCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 					fields.push({

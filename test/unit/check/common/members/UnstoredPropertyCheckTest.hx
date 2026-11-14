@@ -238,6 +238,17 @@ class UnstoredPropertyCheckTest extends Test {
 		assertDeclinedAs(widget('', 'trace(Reflect.copy(w));'), 'list or render an object');
 	}
 
+	/** The fix on a spaced clause turns only the read accessor into `never`, blanks around it kept. */
+	public function testASpacedClauseKeepsItsBlanksWhenTheReadAccessBecomesNever(): Void {
+		final src: String = widget('', '').replace('label(default, set)', 'label( default, set)');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.isTrue(src.indexOf('label( default, set)') >= 0, src);
+		final out: String = fixed(src);
+		Assert.isTrue(out.indexOf('public var label( never, set):String;') >= 0, out);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new UnstoredProperty(), src);
 	}

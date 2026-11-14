@@ -27,6 +27,17 @@ final class AccessClauseSpanCaptureTest extends Test {
 		Assert.same(['get , never )'], clauseTexts('class P {\n\tvar x(  get , never ):Int;\n}'));
 	}
 
+	/**
+	 * The lead gap runs from the end of the declaration's name to the clause's own `(`: a comment after that paren,
+	 * quoting another one, never moves it.
+	 */
+	@:pin('control')
+	@:killer('M-ACCESS-CLAUSE-LEADGAP-DROPPED')
+	public function testTheLeadGapRunsFromTheNameEndToTheOpeningParen(): Void {
+		Assert.same(['x|  |('], gapTexts('class P {\n\tvar x  (get, never): Int;\n}'));
+		Assert.same(['x||('], gapTexts('class P {\n\tvar x( // (\n\t\tget, never): Int;\n}'));
+	}
+
 	/** The source text under each clause span, in source order. */
 	private static function clauseTexts(src: String): Array<String> {
 		final clauses: Map<Int, AccessorClause> = new HaxeQueryPlugin().accessorClauses(src);
@@ -36,6 +47,20 @@ final class AccessClauseSpanCaptureTest extends Test {
 		for (k in keys) {
 			final c: Null<AccessorClause> = clauses[k];
 			if (c != null) out.push(src.substring(c.span.from, c.span.to));
+		}
+		return out;
+	}
+
+	/** `name|gap|char at the paren` of each clause, in source order. */
+	private static function gapTexts(src: String): Array<String> {
+		final clauses: Map<Int, AccessorClause> = new HaxeQueryPlugin().accessorClauses(src);
+		final keys: Array<Int> = [for (k in clauses.keys()) k];
+		keys.sort((a, b) -> a - b);
+		final out: Array<String> = [];
+		for (k in keys) {
+			final c: Null<AccessorClause> = clauses[k];
+			if (c != null)
+				out.push('${src.charAt(c.leadGap.from - 1)}|${src.substring(c.leadGap.from, c.leadGap.to)}|${src.charAt(c.leadGap.to)}');
 		}
 		return out;
 	}

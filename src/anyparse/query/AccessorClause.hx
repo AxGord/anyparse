@@ -14,7 +14,10 @@ import anyparse.runtime.Span;
 final class AccessorClause {
 
 	/** The accessor that admits no access at all. */
-	private static final NEVER_ACCESSOR: String = 'never';
+	public static final NEVER_ACCESSOR: String = 'never';
+
+	/** The accessor identifiers that name the plain stored slot. */
+	private static final PLAIN_ACCESSORS: Array<String> = ['default'];
 
 	/** The write accessor that routes a write through the property's set accessor. */
 	private static final SET_ACCESSOR: String = 'set';
@@ -43,15 +46,55 @@ final class AccessorClause {
 	 */
 	public final span: Span;
 
-	public function new(read: String, write: String, span: Span) {
+	/** How many accessor identifiers the clause lists as written; a well-formed clause lists exactly two. */
+	public final count: Int;
+
+	/**
+	 * The gap the clause was led across: from the end of the token before its opening `(` to the `(` itself, so
+	 * `leadGap.to` is the paren and `leadGap.from` where the declaration's name ends.
+	 */
+	public final leadGap: Span;
+
+	public function new(read: String, write: String, span: Span, count: Int, leadGap: Span) {
 		this.read = read;
 		this.write = write;
 		this.span = span;
+		this.count = count;
+		this.leadGap = leadGap;
 	}
 
 	/** Whether the write accessor is `never` - no write from anywhere, the declaring type included. */
 	public inline function writesNever(): Bool {
 		return write == NEVER_ACCESSOR;
+	}
+
+	/**
+	 * Whether the clause is exactly `(default, default)`: the plain stored slot on both sides, what a bare `var x:T`
+	 * already declares. A third identifier makes it something else.
+	 */
+	public function plainStored(): Bool {
+		return count == 2 && PLAIN_ACCESSORS.contains(read) && PLAIN_ACCESSORS.contains(write);
+	}
+
+	/** The span of the read accessor identifier: the first accessor of the clause, whose leading blank is already skipped. */
+	public function readSpan(): Span {
+		return new Span(span.from, span.from + read.length);
+	}
+
+	/**
+	 * The `[open paren, past close paren)` span of the clause.
+	 */
+	public function parenSpan(): Span {
+		return new Span(leadGap.to, span.to);
+	}
+
+	/**
+	 * The span a collapse to a plain field deletes: the clause plus the blank separating it from what precedes it,
+	 * `[end of the token before the `(`, past close paren)`. Null when a comment sits anywhere from `memberFrom` (the
+	 * declaration's start) to the `(`, where the deleted bytes would sit next to it.
+	 */
+	public function removalSpan(source: String, memberFrom: Int): Null<Span> {
+		return SourceComments.hasCommentMarker(source, memberFrom, leadGap.to) ? null : new Span(leadGap.from, span.to);
 	}
 
 	/**

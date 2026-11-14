@@ -669,6 +669,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			isPublic: Bool,
 			isStatic: Bool,
 			write: String,
+			clause: AccessorClause,
 			isVarMeta: Null<QueryNode>
 		}> = [];
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
@@ -700,6 +701,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 							isPublic: isPublic,
 							isStatic: has(mods, shape.staticModifierKind),
 							write: access.write,
+							clause: access,
 							isVarMeta: run.find(node -> node.kind == shape.bareMetaKind && node.name == IS_VAR_META)
 						});
 					}
@@ -764,6 +766,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			span: Span,
 			isPublic: Bool,
 			write: String,
+			clause: AccessorClause,
 			isVarMeta: Null<QueryNode>
 		},
 		getters: Map<String, {
@@ -831,9 +834,10 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		// The interface-conformance gate applies only to a COLLAPSING shape (the getter is dropped);
 		// the inline arm keeps the getter, so a required interface accessor is never removed.
 		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index, file, shape)) return null;
-		final clauseSpan: Null<Span> = raw.clauseText == '' && raw.inlineGetter == null
-			? AccessorClauseText.clauseRemovalSpan(source, prop.span)
-			: AccessorClauseText.accessorParenSpan(source, prop.span);
+		// A comment between the declaration's start and the clause leaves the head unproven, so no span is offered for either arm.
+		final removal: Null<Span> = prop.clause.removalSpan(source, prop.span.from);
+		final removesClause: Bool = raw.clauseText == '' && raw.inlineGetter == null;
+		final clauseSpan: Null<Span> = removal == null || removesClause ? removal : prop.clause.parenSpan();
 		final metaSpan: Null<Span> = selfBacked ? prop.isVarMeta?.span : null;
 		return clauseSpan == null ? null : {
 			field: raw.field,
@@ -1298,6 +1302,7 @@ private typedef MemberTables = {
 		isPublic: Bool,
 		isStatic: Bool,
 		write: String,
+		clause: AccessorClause,
 		isVarMeta: Null<QueryNode>
 	}>
 };

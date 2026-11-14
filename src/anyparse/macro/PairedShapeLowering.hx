@@ -55,6 +55,12 @@ class PairedShapeLowering {
 	 */
 	public static inline final SPAN_CAPTURE_META: String = ':spanCapture';
 
+	/**
+	 * The span-only struct field holding the gap a lead-introduced optional field parses across: from the end of the token
+	 * before it to the lead literal itself. The parent field's lowering fills it in; a struct no parent leads keeps an empty gap.
+	 */
+	public static inline final LEAD_GAP_FIELD: String = '_leadGap';
+
 	private final _shape: ShapeBuilder.ShapeResult;
 
 	public function new(shape: ShapeBuilder.ShapeResult) {
@@ -196,6 +202,11 @@ class PairedShapeLowering {
 	 */
 	public static function carriesSpan(node: ShapeNode): Bool {
 		return node.kind == Seq && (node.readMetaString(SPANNED_META) != null || node.hasMeta(SPAN_CAPTURE_META));
+	}
+
+	/** Whether a rule's paired struct carries `LEAD_GAP_FIELD`: every span-only `@:spanCapture` Seq. */
+	public static function carriesLeadGap(node: ShapeNode): Bool {
+		return node.kind == Seq && node.hasMeta(SPAN_CAPTURE_META);
 	}
 
 }

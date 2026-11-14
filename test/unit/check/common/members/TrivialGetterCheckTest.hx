@@ -522,4 +522,36 @@ class TrivialGetterCheckTest extends TrivialGetterCheckTestBase {
 		Assert.isTrue(fixed.indexOf('this.total') == -1, 'a static property is not reachable through this');
 	}
 
+	/** Blanks inside and around the clause: the read-only collapse still replaces the whole parenthesised pair. */
+	public function testSpacedClauseCollapses(): Void {
+		assertFixContains(
+			cls(
+				'public var active ( get , never ) : Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool { return _active; }'
+			),
+			'public var active(default, null)'
+		);
+	}
+
+	/** A comment between the name and the clause leaves the head unproven: no finding on either arm. */
+	public function testCommentBetweenNameAndClauseNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(cls(
+				'public var active /* c */ (get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool { return _active; }'
+			)).length
+		);
+	}
+
+	public function testCommentBetweenVarAndNameNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(cls(
+				'public var /* c */ active(get, never):Bool;\n\tprivate var _active:Bool = false;\n'
+				+ '\tprivate function get_active():Bool { return _active; }'
+			)).length
+		);
+	}
+
 }
