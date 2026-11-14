@@ -405,9 +405,18 @@
 		{
 			"name": "M-ANON-SHORT-ACCESSOR",
 			"type": "anyparse.check.common.types.AnonShortFields",
-			"method": "bareHead",
-			"force": "true",
+			"method": "longFieldEdits",
+			"find": "accessors().exists(declSpan.from) ||",
+			"replace": "false ||",
 			"note": "a property with an accessor clause counts as a plain field and loses its accessor"
+		},
+		{
+			"name": "M-ANON-SHORT-HEAD",
+			"type": "anyparse.check.common.types.AnonShortFields",
+			"method": "longFieldEdits",
+			"find": "LexicalRegions.commentOpensIn(declSpan.from, typeSpan.from, lexedFile.regions)",
+			"replace": "false",
+			"note": "a comment between a field name and its type is left dangling over the rewritten field"
 		},
 		{
 			"name": "M-ANON-SHORT-TAIL",

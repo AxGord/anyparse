@@ -115,6 +115,13 @@ class AnonShortFieldsCheckTest extends Test {
 	}
 
 	@:pin('control')
+	@:killer('M-ANON-SHORT-ACCESSOR')
+	public function testOneIdentifierAccessorKeepsTheBodyAsWritten(): Void {
+		Assert.equals(0, violations('typedef P = {\n\tvar a(get):Int;\n\tvar b:Int;\n}\n').length);
+		Assert.equals(0, violations('typedef P = {\n\tvar a():Int;\n\tvar b:Int;\n}\n').length);
+	}
+
+	@:pin('control')
 	@:killer('M-ANON-SHORT-FOREIGN-META')
 	public function testOtherAnnotationKeepsTheBodyAsWritten(): Void {
 		Assert.equals(0, violations('typedef P = {\n\t@:meta var a:Int;\n\tvar b:Int;\n}\n').length);
@@ -138,6 +145,8 @@ class AnonShortFieldsCheckTest extends Test {
 		Assert.equals(0, violations('typedef P = {\n\tvar a:Int /* n */;\n}\n').length);
 	}
 
+	@:pin('control')
+	@:killer('M-ANON-SHORT-HEAD')
 	public function testCommentAroundTheColonKeepsTheBodyAsWritten(): Void {
 		Assert.equals(0, violations('typedef P = {\n\tvar a /* n */ :Int;\n}\n').length);
 	}
@@ -168,6 +177,11 @@ class AnonShortFieldsCheckTest extends Test {
 
 	public function testTheRuleIsOffUnlessAsked(): Void {
 		Assert.isTrue(new AnonShortFields() is DefaultOff);
+	}
+
+	@:pin('guard')
+	public function testParenthesisedTypeKeepsItsParentheses(): Void {
+		assertFixed('typedef P = { a:(Int), b:Int }\n', 'typedef P = {var a:(Int); var b:Int;}\n');
 	}
 
 	private function violations(source: String): Array<Violation> {

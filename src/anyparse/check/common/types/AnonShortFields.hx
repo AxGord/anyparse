@@ -2,9 +2,11 @@ package anyparse.check.common.types;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoMemo;
 
 /**
  * Flags an anonymous structure TYPE whose fields are written in the `var` long form
@@ -22,8 +24,8 @@ import anyparse.query.SymbolIndex;
  * ## What is flagged
  *
  * A body holding at least one long-form `var` field, every one of which is PLAIN: its head between
- * the declaration's start and the type is only the field name (and the optional marker), its tail only
- * the terminator, it carries no initializer and no further declarators, and its leading run is
+ * the declaration's start and the type holds no accessor clause and no comment, its tail only the terminator,
+ * it carries no initializer and no further declarators, and its leading run is
  * `RefShape.publicModifierKind` and `RefShape.optionalFieldMetaName` and nothing else. Short fields
  * ride along unchanged. ANY other member (a `final` or `function` field, an extension clause, an
  * `#if` region, another annotation on a `var` field) keeps the whole body in its long form and the
@@ -38,8 +40,10 @@ import anyparse.query.SymbolIndex;
  * last), never the type text, so a structure nested in a field's type is fixed by its own finding.
  * `;` between short fields does not parse, which is why the terminator is rewritten rather than kept.
  *
- * The accessor clause is not projected as a node, so it is recognised by the head holding
- * anything beyond the name and the colon. Grammar-agnostic over the `RefShape` seams it names
+ * The accessor clause is not projected as a node, so it is read from the grammar's own fact,
+ * `TypeInfoProvider.propertyAccessors` (every clause, whatever it names), keyed by the declaration's start;
+ * a comment in the head is read from the lexical regions; the tail stays a text test (nothing but the terminator, no node
+ * carries its end). Grammar-agnostic over the `RefShape` seams it names
  * (`anonTypeKind`, `structureVarFieldKind`, `plainStructureFieldKinds`, `optionalParamKind`); unset
  * -> no-op.
  */
@@ -51,10 +55,8 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 	/** The marker the short form spells an optional field with. */
 	private static final OPTIONAL_MARK: String = '?';
 
-	/** The separator between short fields, and the colon between a name and its type. */
+	/** The separator between short fields. */
 	private static final FIELD_SEPARATOR: String = ',';
-
-	private static final TYPE_COLON: String = ':';
 
 	/** The terminator a long-form field may carry. */
 	private static final FIELD_TERMINATOR: String = ';';
@@ -71,10 +73,11 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 		return seams == null
 			? []
 			: RunScan.collect(files, plugin, (entry, tree, violations) -> {
-				final docEnds: () -> Map<Int, Bool> = lazyDocEnds(plugin, entry.source);
+				final lexed: () -> Lexed = lazyLexed(plugin, entry.source);
+				final accessors: () -> Map<Int, Bool> = TypeInfoMemo.propertyAccessors(RunScan.typeInfoOf(plugin), entry.source);
 				for (anon in anonBodies(tree, seams)) {
 					final span: Null<Span> = anon.span;
-					if (span != null && rewrite(anon, entry.source, docEnds, seams) != null) violations.push({
+					if (span != null && rewrite(anon, entry.source, lexed, accessors, seams) != null) violations.push({
 						file: entry.file,
 						span: span,
 						rule: RULE_ID,
@@ -94,7 +97,8 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 		return seams == null
 			? []
 			: RunScan.edits(plugin, source, tree -> {
-				final docEnds: () -> Map<Int, Bool> = lazyDocEnds(plugin, source);
+				final lexed: () -> Lexed = lazyLexed(plugin, source);
+				final accessors: () -> Map<Int, Bool> = TypeInfoMemo.propertyAccessors(RunScan.typeInfoOf(plugin), source);
 				final byKey: Map<String, QueryNode> = [];
 				for (anon in anonBodies(tree, seams)) {
 					final span: Null<Span> = anon.span;
@@ -102,7 +106,7 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 				}
 				final edits: Array<FixEdit> = [];
 				RunScan.eachMatched(violations, byKey, (anon, _) -> {
-					final body: Null<Array<FixEdit>> = rewrite(anon, source, docEnds, seams);
+					final body: Null<Array<FixEdit>> = rewrite(anon, source, lexed, accessors, seams);
 					if (body != null) for (edit in body) edits.push(edit);
 				});
 				return edits;
@@ -162,7 +166,9 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 	 * (or any field) that must stay as written. The children are walked in order: a leading run of
 	 * annotations and `public` accumulates until the field it leads arrives.
 	 */
-	private static function rewrite(anon: QueryNode, source: String, docEnds: () -> Map<Int, Bool>, seams: Seams): Null<Array<FixEdit>> {
+	private static function rewrite(
+		anon: QueryNode, source: String, lexed: () -> Lexed, accessors: () -> Map<Int, Bool>, seams: Seams
+	): Null<Array<FixEdit>> {
 		final edits: Array<FixEdit> = [];
 		final members: Array<QueryNode> = anon.children;
 		final lastMember: Null<QueryNode> = members[members.length - 1];
@@ -186,7 +192,9 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 				if (isVar && foreignMeta) return null;
 				if (
 					isVar
-					&& !longFieldEdits(edits, member, runFrom ?? span.from, optionalMeta, member == lastMember, source, docEnds, seams)
+					&& !longFieldEdits(
+						edits, member, runFrom ?? span.from, optionalMeta, member == lastMember, source, lexed, accessors, seams
+					)
 				)
 					return null;
 				runFrom = null;
@@ -203,32 +211,33 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 	 * so no separator is wanted after it.
 	 */
 	private static function longFieldEdits(
-		edits: Array<FixEdit>, field: QueryNode, runFrom: Int, optionalMeta: Bool, last: Bool, source: String,
-		docEnds: () -> Map<Int, Bool>, seams: Seams
+		edits: Array<FixEdit>, field: QueryNode, runFrom: Int, optionalMeta: Bool, last: Bool, source: String, lexed: () -> Lexed,
+		accessors: () -> Map<Int, Bool>, seams: Seams
 	): Bool {
 		final fieldSpan: Null<Span> = field.span;
 		final decl: Null<QueryNode> = field.children[0];
 		if (fieldSpan == null || decl == null || field.children.length != 1) return false;
 		final declSpan: Null<Span> = decl.span;
-		final name: Null<String> = decl.name;
 		final typeSpan: Null<Span> = typeOf(decl, seams)?.span;
-		if (declSpan == null || name == null || typeSpan == null) return false;
+		if (declSpan == null || typeSpan == null) return false;
 		final optionalDecl: Bool = seams.optionalKind != null && decl.kind == seams.optionalKind;
-		final head: String = (optionalDecl ? OPTIONAL_MARK : '') + name + TYPE_COLON;
-		if (!bareHead(source, declSpan.from, typeSpan.from, head) || !bareTail(source, typeSpan.to, fieldSpan.to)) return false;
-		if (commentIn(source, runFrom, declSpan.from) || docAbove(source, docEnds(), runFrom)) return false;
+		if (accessors().exists(declSpan.from) || !bareTail(source, typeSpan.to, fieldSpan.to)) return false;
+		final lexedFile: Lexed = lexed();
+		if (LexicalRegions.commentOpensIn(declSpan.from, typeSpan.from, lexedFile.regions)) return false;
+		if (commentIn(source, runFrom, declSpan.from) || docAbove(source, lexedFile.docEnds, runFrom)) return false;
 		edits.push({ span: new Span(runFrom, declSpan.from), text: optionalMeta && !optionalDecl ? OPTIONAL_MARK : '' });
 		final wanted: String = last ? '' : FIELD_SEPARATOR;
 		if (source.substring(typeSpan.to, fieldSpan.to) != wanted) edits.push({ span: new Span(typeSpan.to, fieldSpan.to), text: wanted });
 		return true;
 	}
 
-	private static function lazyDocEnds(plugin: GrammarPlugin, source: String): () -> Map<Int, Bool> {
-		var cached: Null<Map<Int, Bool>> = null;
-		function resolve(): Map<Int, Bool> {
-			final have: Null<Map<Int, Bool>> = cached;
+	private static function lazyLexed(plugin: GrammarPlugin, source: String): () -> Lexed {
+		var cached: Null<Lexed> = null;
+		function resolve(): Lexed {
+			final have: Null<Lexed> = cached;
 			if (have != null) return have;
-			final built: Map<Int, Bool> = CheckScan.docBlockEnds(source, plugin.lexicalRegions(source));
+			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+			final built: Lexed = { regions: regions, docEnds: CheckScan.docBlockEnds(source, regions) };
 			cached = built;
 			return built;
 		}
@@ -242,11 +251,6 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 	private static function keepsLong(member: QueryNode, seams: Seams): Bool {
 		final kind: String = member.kind;
 		return !(seams.metaKinds.contains(kind) || kind == seams.publicKind || kind == seams.varKind || seams.shortKinds.contains(kind));
-	}
-
-	/** Whether the text from a field's start to its type is only the name, the colon and the optional marker: no accessor, no comment. */
-	private static function bareHead(source: String, from: Int, to: Int, head: String): Bool {
-		return SourceText.withoutSpace(source.substring(from, to)) == head;
 	}
 
 	/** Whether what follows a field's type is only its terminator, or nothing. */
@@ -267,6 +271,9 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 	}
 
 }
+
+/** A file's comment-bearing lexical regions and the block-doc ends read from them. */
+private typedef Lexed = { final regions: Array<LexRegion>; final docEnds: Map<Int, Bool>; }
 
 private typedef Seams = {
 	final anonKind: String;

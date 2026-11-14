@@ -19,15 +19,20 @@ final class TypeInfoMemo {
 		return table(provider, source, (p, s) -> p.castTargetSources(s));
 	}
 
-	private static function table(
-		provider: Null<TypeInfoProvider>, source: String, read: (provider: TypeInfoProvider, source: String) -> Map<Int, String>
-	): () -> Map<Int, String> {
-		var cache: Null<Map<Int, String>> = null;
-		return function(): Map<Int, String> {
-			final existing: Null<Map<Int, String>> = cache;
+	/** The binding-span→accessor table of every property declared with an accessor clause, whatever it names. */
+	public static function propertyAccessors(provider: Null<TypeInfoProvider>, source: String): () -> Map<Int, Bool> {
+		return table(provider, source, (p, s) -> p.propertyAccessors(s));
+	}
+
+	private static function table<V>(
+		provider: Null<TypeInfoProvider>, source: String, read: (provider: TypeInfoProvider, source: String) -> Map<Int, V>
+	): () -> Map<Int, V> {
+		var cache: Null<Map<Int, V>> = null;
+		return function(): Map<Int, V> {
+			final existing: Null<Map<Int, V>> = cache;
 			if (existing != null) return existing;
 			final p: Null<TypeInfoProvider> = provider;
-			final computed: Map<Int, String> = p != null ? read(p, source) : [];
+			final computed: Map<Int, V> = p != null ? read(p, source) : [];
 			cache = computed;
 			return computed;
 		};
