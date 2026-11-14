@@ -279,8 +279,8 @@ class WriterCodegen {
 				{ name: 's', type: macro : String },
 				{ name: 'tag', type: macro : anyparse.core.LeafTag }
 			], macro anyparse.core.Doc.Text(s, null, tag)),
-			// `_dt` of a runtime string: only its word-start fact is known, read from its bytes where the leaf is built.
-			docHelper('_dtr', [{ name: 's', type: macro : String }], macro anyparse.core.LeafTag.DelimiterLeaf.wordLeaf(s)),
+			// `_dt` of a runtime string: only what its bytes decide is known (`DelimiterLeaf.runtimeLeaf`), read where the leaf is built.
+			docHelper('_dtr', [{ name: 's', type: macro : String }], macro anyparse.core.LeafTag.DelimiterLeaf.runtimeLeaf(s)),
 			docHelper('_dop', [{ name: 's', type: macro : String }], macro anyparse.core.Doc.OptSpace(s)),
 			docHelper('_dc', [{ name: 'items', type: macro : Array<anyparse.core.Doc> }], macro anyparse.core.Doc.Concat(items)),
 			docHelper('_dn', [
@@ -1338,7 +1338,8 @@ class WriterCodegen {
 	 * Every `_dt` of a constant string (as the compiler's interpolation
 	 * reader sees it) that carries a delimiter edge or starts a word becomes
 	 * `_dtt` with that tag, classified once from the grammar literal; every `_dt` of a runtime or interpolated string becomes `_dtr`, which
-	 * reads the word-start fact off its bytes where the leaf is built. The Doc's readers ask the leaf's tag and never its bytes.
+	 * reads the facts its bytes decide (word start, leading `.`, trailing digit) where the leaf is built. The Doc's readers ask the
+	 * leaf's tag and never its bytes.
 	 */
 	private static function tagDelimiterLeaves(e: Expr): Expr {
 		return switch e.expr {

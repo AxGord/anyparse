@@ -37,6 +37,9 @@ enum OpenEdge {
 	/** The leaf opens no run, but its first visible byte starts an identifier (a letter, `_` or `$`): a keyword, a name, `foo(`. */
 	WordStart;
 
+	/** The leaf opens no run, and its very first byte is `.`: a chain link `.name`, the interval `...`, a float `.5`. */
+	Dot;
+
 	/** A parenthesised run: `(`. */
 	Paren;
 
@@ -78,6 +81,9 @@ enum EndEdge {
 	/** The leaf closes a conditional-compilation region: a region terminal ending on its `#end`. */
 	ClosesRegion;
 
+	/** The very last byte is a decimal digit: a number, or a name that ends in one. */
+	Digit;
+
 }
 
 /** The one answer to "which delimiter edge does this writer-syntax literal carry", asked once where the leaf is built. */
@@ -93,7 +99,7 @@ class DelimiterLeaf {
 		final opens: OpenEdge = if (first == '('.code)
 			Paren
 		else if (first != '['.code && first != '{'.code)
-			startsWord(s) ? WordStart : NoOpen
+			runOpen(s)
 		else if (trimmed == '[]' || trimmed == '{}')
 			EmptyCollection
 		else
@@ -111,9 +117,25 @@ class DelimiterLeaf {
 		return false;
 	}
 
-	/** A `Text` of a runtime string `s`: tagged only by the word-start fact, which its bytes alone decide. */
-	public static function wordLeaf(s: String): Doc {
-		return Text(s, null, startsWord(s) ? Delimiter(WordStart, Plain) : null);
+	/** A `Text` of a runtime string `s`: tagged only by what its bytes alone decide (a word start, a leading `.`, a trailing digit). */
+	public static function runtimeLeaf(s: String): Doc {
+		return Text(s, null, byteTag(s, Plain));
+	}
+
+	/** Whether a leaf tagged `tag` starts with a `.`. */
+	public static function startsWithDot(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case Delimiter(Dot, _): true;
+			case _: false;
+		};
+	}
+
+	/** Whether a leaf tagged `tag` ends on a decimal digit. */
+	public static function endsWithDigit(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case Delimiter(_, Digit): true;
+			case _: false;
+		};
 	}
 
 	/** Whether a leaf tagged `tag` starts with an identifier byte. */
@@ -172,12 +194,10 @@ class DelimiterLeaf {
 
 	/**
 	 * A `Text` of a region terminal's verbatim `s`, tagged as closing its region when `s` ends on the `#end` the terminal's
-	 * grammar swallows, and as a word start when it begins with a name; asked once where the terminal's leaf is built.
+	 * grammar swallows, and by the other facts its bytes decide (`byteTag`); asked once where the terminal's leaf is built.
 	 */
 	public static function regionLeaf(s: String): Doc {
-		final opens: OpenEdge = startsWord(s) ? WordStart : NoOpen;
-		final closes: Bool = s.endsWith('#end');
-		return Text(s, null, closes || opens != NoOpen ? Delimiter(opens, closes ? ClosesRegion : Plain) : null);
+		return Text(s, null, byteTag(s, s.endsWith('#end') ? ClosesRegion : Plain));
 	}
 
 	/** Whether a leaf tagged `tag` opens a call's argument run. */
@@ -240,8 +260,31 @@ class DelimiterLeaf {
 		return null;
 	}
 
+	/** The open edge of a leaf that is not a collection or a paren: a leading `.` or a word start, else none. */
+	private static function runOpen(s: String): OpenEdge {
+		if (s.fastCodeAt(0) == '.'.code) return Dot;
+		return startsWord(s) ? WordStart : NoOpen;
+	}
+
+	/** The tag of `s` from what its bytes decide, `closing` its end edge unless the last byte is a digit; null when none holds. */
+	private static function byteTag(s: String, closing: EndEdge): Null<LeafTag> {
+		if (s.length == 0) return null;
+		final opens: OpenEdge = runOpen(s);
+		final ends: EndEdge = closing == Plain && endsInDigit(s) ? Digit : closing;
+		return opens == NoOpen && ends == Plain ? null : Delimiter(opens, ends);
+	}
+
+	/**
+	 * Whether the last byte of a non-empty `s` is a decimal digit.
+	 */
+	private static function endsInDigit(s: String): Bool {
+		final last: Int = s.fastCodeAt(s.length - 1);
+		return last >= '0'.code && last <= '9'.code;
+	}
+
 	/** The end edge of a non-empty `s`, read once from its last byte and its last non-blank bytes. */
 	private static function endEdgeOf(s: String): EndEdge {
+		if (endsInDigit(s)) return Digit;
 		final last: Int = s.fastCodeAt(s.length - 1);
 		if (last == '}'.code) return ClosesBrace;
 		if (last == ')'.code || last == ']'.code) return Closes;

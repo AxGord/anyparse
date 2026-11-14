@@ -21,16 +21,16 @@ class CallOpenTagReadTest extends Test {
 	@:pin('control')
 	@:killer('M-CALLOPEN-READS-TAG')
 	public function testACallIsReadOffTheOpenTag(): Void {
-		Assert.isTrue(DocMeasure.operandIsCall(Concat([DelimiterLeaf.wordLeaf('a.f'), DelimiterLeaf.callArgs(args())])));
-		Assert.isFalse(DocMeasure.operandIsCall(Concat([DelimiterLeaf.wordLeaf('if '), args()])));
+		Assert.isTrue(DocMeasure.operandIsCall(Concat([DelimiterLeaf.runtimeLeaf('a.f'), DelimiterLeaf.callArgs(args())])));
+		Assert.isFalse(DocMeasure.operandIsCall(Concat([DelimiterLeaf.runtimeLeaf('if '), args()])));
 	}
 
 	/** An operand whose first visible byte does not start a name is not a simple call, whatever call it holds. */
 	@:pin('control')
 	@:killer('M-CALLOPEN-HEAD-NAME')
 	public function testAPrefixedOperandIsNotACall(): Void {
-		Assert.isFalse(DocMeasure.operandIsCall(Concat([Text('!'), DelimiterLeaf.wordLeaf('f'), DelimiterLeaf.callArgs(args())])));
-		Assert.isTrue(DocMeasure.operandIsCall(Concat([Text(' '), DelimiterLeaf.wordLeaf('f'), DelimiterLeaf.callArgs(args())])));
+		Assert.isFalse(DocMeasure.operandIsCall(Concat([Text('!'), DelimiterLeaf.runtimeLeaf('f'), DelimiterLeaf.callArgs(args())])));
+		Assert.isTrue(DocMeasure.operandIsCall(Concat([Text(' '), DelimiterLeaf.runtimeLeaf('f'), DelimiterLeaf.callArgs(args())])));
 	}
 
 	/** The call writer names the open of every layout its argument run offers, the broken one and the flat one. */
@@ -81,7 +81,7 @@ class CallOpenTagReadTest extends Test {
 	@:pin('control')
 	@:killer('M-CALLOPEN-HEAD-READS-BYTES')
 	public function testAHeadIsReadOffItsTag(): Void {
-		Assert.isTrue(DocMeasure.operandIsCall(Concat([DelimiterLeaf.wordLeaf('f'), DelimiterLeaf.callArgs(args())])));
+		Assert.isTrue(DocMeasure.operandIsCall(Concat([DelimiterLeaf.runtimeLeaf('f'), DelimiterLeaf.callArgs(args())])));
 		Assert.isFalse(DocMeasure.operandIsCall(Concat([Text('f'), DelimiterLeaf.callArgs(args())])));
 	}
 

@@ -3323,7 +3323,7 @@
 			"name": "M-WORDSTART-RUNTIME-DT",
 			"type": "anyparse.macro.WriterCodegen",
 			"method": "docHelperFields",
-			"find": "macro anyparse.core.LeafTag.DelimiterLeaf.wordLeaf(s)",
+			"find": "macro anyparse.core.LeafTag.DelimiterLeaf.runtimeLeaf(s)",
 			"replace": "macro anyparse.core.Doc.Text(s)",
 			"note": "a generated _dt of a runtime string builds an untagged leaf"
 		},

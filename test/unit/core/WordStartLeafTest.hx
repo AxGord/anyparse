@@ -17,8 +17,9 @@ import sys.io.File;
 #end
 
 /**
- * A leaf whose first visible byte is a letter, `_` or `$` says so through its tag, set where the writer builds it, so a
- * reader asking "does this operand start with a name" never re-reads the leaf's bytes. The sweep holds the tag equal to
+ * A leaf whose first visible byte is a letter, `_` or `$` says so through its tag, set where the writer builds it,
+ * so a reader asking "does this operand start with a name" never re-reads the leaf's bytes; a leading `.` and a
+ * trailing digit are told the same way (`ValueLeafTagTest` pins their readers). The sweep holds each tag equal to
  * the bytes' answer over every non-comment leaf of the written Docs of a source tree; `APQ_WORDSTART_ROOTS` (comma
  * separated directories) widens it for a one-off probe over other trees.
  */
@@ -38,7 +39,8 @@ class WordStartLeafTest extends Test {
 		Assert.same(LeafTag.Delimiter(WordStart, Plain), DelimiterLeaf.tagOf('else'));
 		Assert.same(LeafTag.Delimiter(WordStart, Opens), DelimiterLeaf.tagOf('foo('));
 		Assert.same(LeafTag.Delimiter(WordStart, Plain), DelimiterLeaf.tagOf(' is '));
-		Assert.isNull(DelimiterLeaf.tagOf('1'));
+		Assert.same(LeafTag.Delimiter(NoOpen, Digit), DelimiterLeaf.tagOf('1'));
+		Assert.isNull(DelimiterLeaf.tagOf('+'));
 		Assert.same(LeafTag.Delimiter(NoOpen, Closes), DelimiterLeaf.tagOf(')'));
 	}
 
@@ -46,8 +48,8 @@ class WordStartLeafTest extends Test {
 	@:pin('control')
 	@:killer('M-WORDSTART-WORDLEAF')
 	public function testWordLeafReadsTheFirstVisibleByte(): Void {
-		for (s in ['name', '_x', '$$y', ' and ']) Assert.isTrue(startsWord(DelimiterLeaf.wordLeaf(s)), s);
-		for (s in ['1', '"s"', '(', ' + ', '']) Assert.isFalse(startsWord(DelimiterLeaf.wordLeaf(s)), s);
+		for (s in ['name', '_x', '$$y', ' and ']) Assert.isTrue(startsWord(DelimiterLeaf.runtimeLeaf(s)), s);
+		for (s in ['1', '"s"', '(', ' + ', '']) Assert.isFalse(startsWord(DelimiterLeaf.runtimeLeaf(s)), s);
 	}
 
 	/** A verbatim region terminal that begins with a name is a word start, whether or not it closes its region. */
@@ -57,7 +59,8 @@ class WordStartLeafTest extends Test {
 		Assert.same(Text('cs\n#end', null, Delimiter(WordStart, ClosesRegion)), DelimiterLeaf.regionLeaf('cs\n#end'));
 		Assert.same(Text('cs x', null, Delimiter(WordStart, Plain)), DelimiterLeaf.regionLeaf('cs x'));
 		Assert.same(Text('1 #end', null, Delimiter(NoOpen, ClosesRegion)), DelimiterLeaf.regionLeaf('1 #end'));
-		Assert.same(Text('1', null, null), DelimiterLeaf.regionLeaf('1'));
+		Assert.same(Text('1', null, Delimiter(NoOpen, Digit)), DelimiterLeaf.regionLeaf('1'));
+		Assert.same(Text('+', null, null), DelimiterLeaf.regionLeaf('+'));
 	}
 
 	/** The word-start tag never reads as a run opener: a name before `(` is no open delimiter by itself. */
@@ -72,6 +75,8 @@ class WordStartLeafTest extends Test {
 	/** Over written Docs, every non-comment leaf's tag agrees with its bytes. */
 	@:pin('control')
 	@:killer('M-WORDSTART-RUNTIME-DT')
+	@:killer('M-VALUELEAF-DIGIT-RUNTIME')
+	@:killer('M-VALUELEAF-DOT-OPEN')
 	public function testWrittenLeavesAgreeWithTheirBytes(): Void {
 		#if (sys || nodejs)
 		final env: Null<String> = Sys.getEnv('APQ_WORDSTART_ROOTS');
@@ -111,8 +116,15 @@ class WordStartLeafTest extends Test {
 		if (seen.exists(d)) return;
 		seen.set(d, true);
 		switch d {
-			case Text(s, _, tag) if (!DelimiterLeaf.isComment(tag) && DelimiterLeaf.startsWordTag(tag) != DelimiterLeaf.startsWord(s)):
-				bad['${DelimiterLeaf.startsWordTag(tag) ? 'tagged' : 'untagged'}: ${s.replace('\n', '\\n')}'] = true;
+			case Text(s, _, tag) if (!DelimiterLeaf.isComment(tag)):
+				final shown: String = s.replace('\n', '\\n');
+				if (DelimiterLeaf.startsWordTag(tag) != DelimiterLeaf.startsWord(s))
+					bad['word start ${DelimiterLeaf.startsWordTag(tag)}: $shown'] = true;
+				if (DelimiterLeaf.startsWithDot(tag) != (s.length > 0 && s.charAt(0) == '.'))
+					bad['dot ${DelimiterLeaf.startsWithDot(tag)}: $shown'] = true;
+				final last: String = s.charAt(s.length - 1);
+				if (DelimiterLeaf.endsWithDigit(tag) != (s.length > 0 && last >= '0' && last <= '9'))
+					bad['digit ${DelimiterLeaf.endsWithDigit(tag)}: $shown'] = true;
 			case _:
 		}
 		D.mapChildren(d, c -> {

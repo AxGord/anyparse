@@ -1,6 +1,7 @@
 package unit.grammar.haxe;
 
 import anyparse.core.Doc;
+import anyparse.core.LeafTag.DelimiterLeaf;
 import anyparse.format.BodyPolicy;
 import anyparse.format.CommentStyle;
 import anyparse.format.SameLinePolicy;
@@ -364,8 +365,8 @@ final class HxMethodChainAllOrNothingSliceTest extends Test {
 	/** Two call segments — enough for every shape, and the last one opens a call so the re-glue tag can apply. */
 	private function chainSegments(): Array<Doc> {
 		return [
-			Concat([Text('.first('), Text('alpha'), Text(')')]),
-			Concat([Text('.second('), Text('beta'), Text(')')])
+			Concat([DelimiterLeaf.runtimeLeaf('.first('), Text('alpha'), Text(')')]),
+			Concat([DelimiterLeaf.runtimeLeaf('.second('), Text('beta'), Text(')')])
 		];
 	}
 

@@ -262,7 +262,7 @@ final class DocProbeFamilyWalkerTest extends Test {
 
 	/** A method-chain item shape — a hardline whose next sibling's first visible text starts with `.`. */
 	private static function chainShape(): Doc {
-		return Concat([Text('a'), Line('\n'), Text('.b()')]);
+		return Concat([Text('a'), Line('\n'), DelimiterLeaf.runtimeLeaf('.b()')]);
 	}
 
 }

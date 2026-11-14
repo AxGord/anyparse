@@ -609,6 +609,14 @@
 			"find": "return rules.defaultMode == NoWrap ||",
 			"replace": "return true;",
 			"note": "a source-multiline list under a cascade that never answers noWrap is deferred from its host again, so the host measures it narrow on the first write and full on the next"
+		},
+		{
+			"name": "M-VALUELEAF-DIGIT-READ",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "endsWithDecimalDigit",
+			"find": "DelimiterLeaf.endsWithDigit(tag)",
+			"replace": "false",
+			"note": "the interval writer never sees a digit-ending left operand"
 		}
 	]
 }

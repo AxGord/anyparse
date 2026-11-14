@@ -800,8 +800,8 @@
 			"name": "M-OPENDELIM-FIRST-BYTE",
 			"type": "anyparse.core.DocMeasure",
 			"method": "flatPrefixToOpenDelim",
-			"find": "Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart):\n\t\t\t\t\tprefix = width + 1;",
-			"replace": "Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart):\n\t\t\t\t\tprefix = width;",
+			"find": "Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart && opens != Dot):\n\t\t\t\t\tprefix = width + 1;",
+			"replace": "Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart && opens != Dot):\n\t\t\t\t\tprefix = width;",
 			"note": "the prefix to a leaf opening at its first byte leaves the opener out"
 		},
 		{
@@ -912,7 +912,7 @@
 			"name": "M-TERMLEAF-REGION-PLAIN",
 			"type": "anyparse.core.LeafTag.DelimiterLeaf",
 			"method": "regionLeaf",
-			"find": "closes ? ClosesRegion : Plain",
+			"find": "s.endsWith('#end') ? ClosesRegion : Plain",
 			"replace": "Plain",
 			"note": "a region terminal ending on its `#end` is tagged as ending on nothing, so a list item ending on a closed region is not seen as one"
 		},
@@ -944,15 +944,15 @@
 			"name": "M-WORDSTART-TAGOF",
 			"type": "anyparse.core.LeafTag.DelimiterLeaf",
 			"method": "tagOf",
-			"find": "startsWord(s) ? WordStart : NoOpen",
+			"find": "runOpen(s)",
 			"replace": "NoOpen",
 			"note": "a constant word-start literal carries no word-start fact"
 		},
 		{
 			"name": "M-WORDSTART-WORDLEAF",
 			"type": "anyparse.core.LeafTag.DelimiterLeaf",
-			"method": "wordLeaf",
-			"find": "startsWord(s) ? Delimiter(WordStart, Plain) : null",
+			"method": "runtimeLeaf",
+			"find": "byteTag(s, Plain)",
 			"replace": "null",
 			"note": "a runtime string is never classified as a word start"
 		},
@@ -968,9 +968,49 @@
 			"name": "M-WORDSTART-REGIONLEAF",
 			"type": "anyparse.core.LeafTag.DelimiterLeaf",
 			"method": "regionLeaf",
-			"find": "final opens: OpenEdge = startsWord(s) ? WordStart : NoOpen;",
-			"replace": "final opens: OpenEdge = NoOpen;",
+			"find": "byteTag(s, s.endsWith('#end') ? ClosesRegion : Plain)",
+			"replace": "s.endsWith('#end') ? Delimiter(NoOpen, ClosesRegion) : null",
 			"note": "a verbatim region terminal that begins with a name is no word start"
+		},
+		{
+			"name": "M-VALUELEAF-DIGIT-TAGOF",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "endEdgeOf",
+			"find": "if (endsInDigit(s)) return Digit;",
+			"replace": "",
+			"note": "a constant literal ending on a digit carries no digit end edge"
+		},
+		{
+			"name": "M-VALUELEAF-DIGIT-RUNTIME",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "byteTag",
+			"find": "closing == Plain && endsInDigit(s) ? Digit : closing",
+			"replace": "closing",
+			"note": "a runtime string ending on a digit carries no digit end edge"
+		},
+		{
+			"name": "M-VALUELEAF-DOT-OPEN",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "runOpen",
+			"find": "if (s.fastCodeAt(0) == '.'.code) return Dot;",
+			"replace": "",
+			"note": "a leaf starting with a dot carries no dot open edge"
+		},
+		{
+			"name": "M-VALUELEAF-DOT-READ",
+			"type": "anyparse.core.DocMeasure",
+			"method": "startsWithDot",
+			"find": "DelimiterLeaf.startsWithDot(tag)",
+			"replace": "false",
+			"note": "a chain link behind a hardline is never seen as one"
+		},
+		{
+			"name": "M-VALUELEAF-DOT-NOT-AN-OPENER",
+			"type": "anyparse.core.DocMeasure",
+			"method": "flatPrefixToOpenDelim",
+			"find": " && opens != Dot",
+			"replace": "",
+			"note": "a dot-led leaf reads as a run opener"
 		}
 	]
 }

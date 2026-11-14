@@ -27,7 +27,8 @@ class DelimiterLeafTest extends Test {
 		Assert.same(Delimiter(EmptyCollection, ClosesBrace), DelimiterLeaf.tagOf('{}'));
 		Assert.same(Delimiter(Paren, Closes), DelimiterLeaf.tagOf('()'));
 		Assert.same(Delimiter(WordStart, Plain), DelimiterLeaf.tagOf('a'));
-		Assert.isNull(DelimiterLeaf.tagOf('1'));
+		Assert.same(Delimiter(NoOpen, Digit), DelimiterLeaf.tagOf('1'));
+		Assert.isNull(DelimiterLeaf.tagOf('+'));
 		Assert.isNull(DelimiterLeaf.tagOf(''));
 	}
 

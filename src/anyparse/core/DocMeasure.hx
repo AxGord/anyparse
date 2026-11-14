@@ -364,7 +364,7 @@ final class DocMeasure {
 		var prefix: Null<Int> = null;
 		walkFlatLeaves(d, leaf -> {
 			switch leaf {
-				case Text(_, _, Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart):
+				case Text(_, _, Delimiter(opens, _)) if (opens != NoOpen && opens != WordStart && opens != Dot):
 					prefix = width + 1;
 					return true;
 				case Text(s, _, Delimiter(_, Opens)):
@@ -468,7 +468,7 @@ final class DocMeasure {
 	 *    thin-arrow leg, `shapeSingleArgGlue`, `arrowBodyIsBlock` (itself read
 	 *    by `shapeSoleArrowUniform` / `arrowBodyCloseParenShape`) and
 	 *    `isMethodChainItem` — which ask "is this item's body a `{ }` block /
-	 *    an object literal / a `.` chain tail".
+	 *    an object literal".
 	 *  - `Renderer.pushFlatWidthBranch`'s arrow-block-body suppression, which
 	 *    forces the flat side of an `IfResidualLineExceeds` arrow-body marker
 	 *    whose body is a block (the break side would only strand `{` on its
@@ -483,6 +483,17 @@ final class DocMeasure {
 	public static function firstVisibleTextStartsWith(d: Doc, c: Int): Bool {
 		final s: Null<String> = firstVisibleText(d);
 		return s != null && s.length > 0 && s.fastCodeAt(0) == c;
+	}
+
+	/**
+	 * True when `d`'s first visible leaf is tagged as starting with a `.` (`OpenEdge.Dot`): a method chain's link
+	 * `.name` laid out after a break. Same left-spine walk as `firstVisibleTextStartsWith`, asked of the leaf's tag.
+	 */
+	public static function startsWithDot(d: Doc): Bool {
+		return switch firstVisibleLeaf(d) {
+			case Text(_, _, tag): DelimiterLeaf.startsWithDot(tag);
+			case _: false;
+		};
 	}
 
 	/**
@@ -521,7 +532,9 @@ final class DocMeasure {
 		};
 	}
 
-	/** The first visible `Text` leaf of `d` by `firstVisibleText`'s walk, or null — for a reader of the leaf's tag. */
+	/**
+	 * The first visible `Text` leaf of `d` by `firstVisibleText`'s walk, or null — for a reader of the leaf's tag.
+	 */
 	public static function firstVisibleLeaf(d: Doc): Null<Doc> {
 		return switch d {
 			case Text(_): d;

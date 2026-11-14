@@ -940,14 +940,11 @@ class WrapList {
 	}
 
 	/**
-	 * True iff the LAST rendered `Text` atom of `d` ends with a decimal digit
-	 * (`0`-`9`). Mirrors `endsWithCloseDelim`'s Doc-tail walk, changing only
-	 * the terminal predicate. Used by the interval writer to reproduce
-	 * haxe-formatter's LEXICAL fused `IntInterval` rule: a decimal digit that
-	 * directly abuts `...` in source (`0...n`, `i + 1...len`) lexes as one
-	 * tight token, so the operator stays tight regardless of `intervalPolicy`;
-	 * any other left-operand tail is a binary `OpInterval` honouring the
-	 * policy.
+	 * True iff the LAST rendered `Text` atom of `d` is tagged as ending with a decimal digit (`EndEdge.Digit`). Mirrors
+	 * `endsWithCloseDelim`'s Doc-tail walk, changing only the terminal predicate. Used by the interval writer to reproduce
+	 * haxe-formatter's LEXICAL fused `IntInterval` rule: a decimal digit that directly abuts `...` in source (`0...n`,
+	 * `i + 1...len`) lexes as one tight token, so the operator stays tight regardless of `intervalPolicy`; any other
+	 * left-operand tail is a binary `OpInterval` honouring the policy.
 	 */
 	public static function endsWithDecimalDigit(d: Doc): Bool {
 		var node: Doc = d;
@@ -955,10 +952,8 @@ class WrapList {
 			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
 				OptHardlineSkipBeforeHardline:
 				return false;
-			case Text(s):
-				if (s.length == 0) return false;
-				final c: Int = s.fastCodeAt(s.length - 1);
-				return c >= '0'.code && c <= '9'.code;
+			case Text(_, _, tag):
+				return DelimiterLeaf.endsWithDigit(tag);
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner),
 				Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
 				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
@@ -2992,9 +2987,7 @@ class WrapList {
 			case Concat(arr):
 				var hit: Bool = false;
 				for (k in 0...arr.length) if (!hit) switch arr[k] {
-					case Line(flat) if (
-						D.isHardline(flat) && k + 1 < arr.length && DocMeasure.firstVisibleTextStartsWith(arr[k + 1], '.'.code)
-					):
+					case Line(flat) if (D.isHardline(flat) && k + 1 < arr.length && DocMeasure.startsWithDot(arr[k + 1])):
 						hit = true;
 					// Follow ONLY a bare chain-tail `Nest` (where MethodChainEmit
 					// parks segments 1..N). Sub-construct `Group`/`WrapBoundary`
