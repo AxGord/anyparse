@@ -191,7 +191,7 @@ enum HxExpr {
 	 * A general `HxExpr` ctor for the same raw shape is why the `return` keyword rides the ctor:
 	 * a raw terminal matches ANY bytes, so at expression-STATEMENT position it claims two
 	 * constructs that only parse today because nothing in the statement Star matches them — a
-	 * switch's guarded `case` region (`HxConditionalCase` relies on the case-body statement Star
+	 * switch's guarded `case` region (`HxConditionalBlock<HxSwitchCase>` relies on the case-body statement Star
 	 * failing) and a `@:meta`-prefixed statement region, which then gains a written `;` after
 	 * its `#end`. Keying the ctor on `return` keeps it out of statement position entirely.
 	 *

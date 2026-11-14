@@ -50,12 +50,13 @@ enum HxSwitchCase {
 
 	/**
 	 * `#if`-guarded run of whole case/default clauses — see
-	 * `HxConditionalCase` for the shape and the dispatch-order
+	 * `HxConditionalBlock` for the shape and the dispatch-order
 	 * interplay with statement-scope conditionals inside case bodies.
+	 * Mixed statement and case content inside one `#if` does not parse.
 	 */
 	@:kw('#if')
 	@:trail('#end')
 	@:fmt(conditionalMarkerDedent, siblingShare('anyparse.format.SiblingShare.decidePads', 'conditionalSiblings'))
-	Conditional(inner: HxConditionalCase);
+	Conditional(inner: HxConditionalBlock<HxSwitchCase>);
 
 }

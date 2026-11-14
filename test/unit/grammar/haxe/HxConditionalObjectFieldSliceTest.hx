@@ -25,7 +25,7 @@ import utest.Assert;
  *
  * Covers the single-branch / multi-field-body / between-plain-fields /
  * empty-body / nested / no-conditional-regression / `#elseif` clause
- * shapes. Empty body is ACCEPTED here (unlike `HxConditionalMember`)
+ * shapes. Empty body is ACCEPTED here (unlike `HxConditionalBlock`)
  * because `HxObjectField` is a bare sum-type with no mandatory wrapping
  * struct that forces a throw on the terminator.
  *
@@ -85,7 +85,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 		Assert.equals('c', (expectObjectFieldBody(lit.fields[2]).name: String));
 	}
 
-	// -- Empty body `#if X #end` accepted (diverges from HxConditionalMember) --
+	// -- Empty body `#if X #end` accepted (diverges from HxConditionalBlock) --
 	//
 	// HxObjectField has no mandatory wrapping struct that would throw on
 	// the terminator — the tryparse Star simply rolls back to zero

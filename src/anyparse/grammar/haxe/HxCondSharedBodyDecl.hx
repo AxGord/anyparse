@@ -29,7 +29,7 @@ package anyparse.grammar.haxe;
  * would blind the MEMBERS too, which is exactly what the parse is for. WHY NOT AN OPTIONAL ALTERNATE SLOT ON
  * `HxClassDecl`: it would have to go between `heritage` and `members`, and FIELD POSITION is load-bearing for
  * the writer's trivia slots — shifting `members` would move every class declaration's slot. A MEMBER-scope
- * ctor keyed on `#else` fails harder: `HxConditionalMember.body` is the same `Array<HxMemberDecl>` and must
+ * ctor keyed on `#else` fails harder: `HxConditionalBlock<HxMemberDecl>.body` is the same `Array<HxMemberDecl>` and must
  * STOP at `#else` so the region's own `elseBody` slot fires.
  *
  * `meta` and `modifiers` are duplicated from `HxTopLevelDecl` rather than reusing it, because `HxTopLevelDecl`

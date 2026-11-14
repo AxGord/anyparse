@@ -27,10 +27,10 @@ enum HxEnumCtor {
 	@:trail(';')
 	SimpleCtor(decl: HxEnumSimpleCtorDecl);
 
-	/** A `#if` region of whole constructors; see `HxConditionalEnumMember`. */
+	/** A `#if` region of whole constructors; see `HxConditionalBlock`. */
 	@:kw('#if')
 	@:trail('#end')
 	@:fmt(conditionalMarkerDedent, siblingShare('anyparse.format.SiblingShare.decidePads', 'conditionalSiblings'))
-	Conditional(inner: HxConditionalEnumMember);
+	Conditional(inner: HxConditionalBlock<HxEnumMember>);
 
 }

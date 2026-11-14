@@ -6,8 +6,8 @@ import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAbstractDecl;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxCondDeclPrefix;
+import anyparse.grammar.haxe.HxConditionalBlock;
 import anyparse.grammar.haxe.HxConditionalInline;
-import anyparse.grammar.haxe.HxConditionalMember;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxMetadata;
@@ -18,7 +18,7 @@ import utest.Assert;
 /**
  * Slice apq-P5-J: member-scope `#if` conditional compilation.
  *
- * `HxClassMember` gained a `Conditional(HxConditionalMember)` ctor —
+ * `HxClassMember` gained a `Conditional(HxConditionalBlock<HxMemberDecl>)` ctor —
  * the member-scope completion of the cond-comp arc (decl / stmt /
  * modifier scopes already shipped). `#if <cond> <members> [#elseif …]
  * [#else …] #end` now parses where whole class / interface / abstract
@@ -38,7 +38,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 	public function testSingleMemberConditional(): Void {
 		final cls: HxClassDecl = classMembersOf('class C {\n\t#if sys\n\tfunction a():Void {}\n\t#end\n}');
 		Assert.equals(1, cls.members.length);
-		final cond: HxConditionalMember = expectConditionalMember(cls.members[0].member);
+		final cond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(cls.members[0].member);
 		Assert.equals('sys', (cond.cond: String));
 		Assert.equals(1, cond.body.length);
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
@@ -51,7 +51,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 	public function testConditionalThenPlainMember(): Void {
 		final cls: HxClassDecl = classMembersOf('class C {\n\t#if sys\n\tfunction a():Void {}\n\t#end\n\tfunction b():Void {}\n}');
 		Assert.equals(2, cls.members.length);
-		final cond: HxConditionalMember = expectConditionalMember(cls.members[0].member);
+		final cond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(cls.members[0].member);
 		Assert.equals('sys', (cond.cond: String));
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
 		Assert.equals('b', (expectFnMember(cls.members[1].member).name: String));
@@ -62,7 +62,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 	public function testConditionalElse(): Void {
 		final cls: HxClassDecl = classMembersOf('class C {\n\t#if js\n\tfunction a():Void {}\n\t#else\n\tfunction b():Void {}\n\t#end\n}');
 		Assert.equals(1, cls.members.length);
-		final cond: HxConditionalMember = expectConditionalMember(cls.members[0].member);
+		final cond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(cls.members[0].member);
 		Assert.equals('js', (cond.cond: String));
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
 		final elseBody: Null<Array<HxMemberDecl>> = cond.elseBody;
@@ -79,7 +79,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 			'class C {\n\t#if js\n\tfunction a():Void {}\n\t#elseif sys\n\tfunction b():Void {}\n\t#else\n\tfunction c():Void {}\n\t#end\n}'
 		);
 		Assert.equals(1, cls.members.length);
-		final cond: HxConditionalMember = expectConditionalMember(cls.members[0].member);
+		final cond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(cls.members[0].member);
 		Assert.equals('js', (cond.cond: String));
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
 		Assert.equals(1, cond.elseifs.length);
@@ -95,10 +95,10 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 	public function testNestedConditional(): Void {
 		final cls: HxClassDecl = classMembersOf('class C {\n\t#if sys\n\t#if js\n\tfunction a():Void {}\n\t#end\n\t#end\n}');
 		Assert.equals(1, cls.members.length);
-		final outer: HxConditionalMember = expectConditionalMember(cls.members[0].member);
+		final outer: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(cls.members[0].member);
 		Assert.equals('sys', (outer.cond: String));
 		Assert.equals(1, outer.body.length);
-		final inner: HxConditionalMember = expectConditionalMember(outer.body[0].member);
+		final inner: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(outer.body[0].member);
 		Assert.equals('js', (inner.cond: String));
 		Assert.equals('a', (expectFnMember(inner.body[0].member).name: String));
 	}
@@ -226,7 +226,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		);
 		Assert.equals(2, cls.members.length);
 		Assert.equals('expand', (expectFnMember(cls.members[0].member).name: String));
-		final cond: HxConditionalMember = expectConditionalMember(cls.members[1].member);
+		final cond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(cls.members[1].member);
 		Assert.equals('sys', (cond.cond: String));
 		Assert.equals('collect', (expectFnMember(cond.body[0].member).name: String));
 	}
@@ -237,7 +237,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		final module: HxModule = HaxeModuleParser.parse('interface I {\n\t#if sys\n\tfunction a():Void;\n\t#end\n}');
 		final iface: HxInterfaceDecl = expectInterfaceDecl(module.decls[0]);
 		Assert.equals(1, iface.members.length);
-		final cond: HxConditionalMember = expectConditionalMember(iface.members[0].member);
+		final cond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(iface.members[0].member);
 		Assert.equals('sys', (cond.cond: String));
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
 	}
@@ -248,7 +248,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		final module: HxModule = HaxeModuleParser.parse('abstract A(Int) {\n\t#if sys\n\tpublic function a():Void {}\n\t#end\n}');
 		final abs: HxAbstractDecl = expectAbstractDecl(module.decls[0]);
 		Assert.equals(1, abs.members.length);
-		final cond: HxConditionalMember = expectConditionalMember(abs.members[0].member);
+		final cond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(abs.members[0].member);
 		Assert.equals('sys', (cond.cond: String));
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
 	}

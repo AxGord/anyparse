@@ -29,7 +29,7 @@ package anyparse.grammar.haxe;
  *
  * `Conditional` covers `#if <cond> <members> [#elseif …] [#else …] #end` regions wrapping whole member
  * declarations: `@:kw('#if')` dispatches with a non-word-char boundary check; `@:trail('#end')` consumes the
- * closing directive after `HxConditionalMember` parses the region. A member-level `#if` is reached here only
+ * closing directive after `HxConditionalBlock` parses the region. A member-level `#if` is reached here only
  * AFTER the modifier-scope `HxMemberModifier.Conditional` is tried via the modifiers Star and rolls back (its
  * `@:trail('#end')` fails on the member introducer keyword) — the `PackageDecl` to `PackageEmpty`
  * shared-keyword rollback; a pure modifier-conditional never reaches this ctor. The single `Conditional` ctor
@@ -114,7 +114,7 @@ enum HxClassMember {
 	/**
 	 * `#error "msg"` / `#error 'msg'` preprocessor directive at member
 	 * scope (slice ω-sharp-error). Reachable from
-	 * `HxConditionalMember.body` (`Array<HxMemberDecl>`) — `#if cs
+	 * `HxConditionalBlock<HxMemberDecl>.body` — `#if cs
 	 * #error '…' #end` inside a class body. Structural twin of
 	 * `@:kw('function') FnMember(decl:HxFnDecl)`: `@:kw` + single Ref,
 	 * no `@:trail`. See `HxDecl.ErrorDecl` for the shared rationale.
@@ -148,10 +148,17 @@ enum HxClassMember {
 	 */
 	@:lit(';')
 	EmptySemiMember;
+
+	/**
+	 * `#if`-guarded run of whole members. At a member position `HxMemberModifier.Conditional(HxConditionalInline<HxCondModPrefix>)`
+	 * is tried first through `HxMemberDecl.modifiers`; its `@:trail('#end')` fails on the member introducer keyword, `tryBranch`
+	 * rolls back, and this ctor then dispatches on `#if`. The element is `HxMemberDecl` so meta and modifiers inside the region
+	 * parse through the same Stars as a class body.
+	 */
 	@:kw('#if')
 	@:trail('#end')
 	@:fmt(conditionalMarkerDedent, siblingShare('anyparse.format.SiblingShare.decidePads', 'conditionalSiblings'))
-	Conditional(inner: HxConditionalMember);
+	Conditional(inner: HxConditionalBlock<HxMemberDecl>);
 
 	/**
 	 * A member-scope `#if` region the balanced `Conditional` cannot read but that is COMPLETE at its

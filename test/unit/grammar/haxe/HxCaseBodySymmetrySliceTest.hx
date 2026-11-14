@@ -18,8 +18,8 @@ using StringTools;
  * refused by a comment never lead, though a glued body still moves under someone else's trigger.
  *
  * A `#if` region is found in the list's Doc, so its cases vote like any other. `HxCondSpliceSwitchOpen.cases` is a
- * whole switch and shares by itself; `HxConditionalCase.body` and `HxElseifCase.body` do not, so the enclosing
- * switch's verdict flows into the region.
+ * whole switch and shares by itself; `HxConditionalBlock<HxSwitchCase>.body` and
+ * `HxElseifBlock<HxSwitchCase>.body` do not, so the enclosing switch's verdict flows into the region.
  */
 @:nullSafety(Strict)
 final class HxCaseBodySymmetrySliceTest extends Test {

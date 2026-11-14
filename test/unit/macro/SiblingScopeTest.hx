@@ -11,7 +11,7 @@ import unit.cli.CliFixture;
 /**
  * A sibling slot outside every list sharing its knob stops the build, asked of a second grammar by a child compiler:
  * the suite binary holds Haxe's grammar only, and that one has to build. So does a grammar whose slot sits in a region
- * nested inside a shared list, which is what `HxConditionalCase` is.
+ * nested inside a shared list, which is what `HxConditionalBlock` is.
  */
 @:access(unit.macro.TriviaTypeSynthTest)
 class SiblingScopeTest extends Test {

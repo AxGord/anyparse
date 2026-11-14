@@ -133,7 +133,7 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 	/**
 	 * REGRESSION GUARD for the case scope: a `#if` region holding WHOLE
 	 * clauses (label AND body) must keep its structured
-	 * `HxConditionalCase` representation -- `CondSpliceCase` is tried
+	 * `HxConditionalBlock<HxSwitchCase>` representation -- `CondSpliceCase` is tried
 	 * first and has to fail-rewind on it.
 	 */
 	public function testWholeClauseConditionalStaysStructured(): Void {

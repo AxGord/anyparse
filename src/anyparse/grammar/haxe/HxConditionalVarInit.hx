@@ -28,7 +28,7 @@ package anyparse.grammar.haxe;
  * nor `tightLeads`, and the non-optional path emits the lead tight).
  * Guarded MEMBER and STATEMENT regions are unaffected: a `#if` following
  * a terminated declaration is reached only after the host has consumed
- * its `;`, so `HxConditionalMember` / `HxConditionalStmt` still claim it.
+ * its `;`, so `HxConditionalBlock<HxMemberDecl>` / `HxConditionalStmt` still claim it.
  *
  * `#else` / `#elseif` arms are intentionally out of scope — no observed
  * source shape pairs a guarded initializer with an alternative one.

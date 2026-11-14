@@ -21,7 +21,7 @@ package anyparse.grammar.haxe;
  * The metadata is also what keeps this ctor NARROW. A general expression-position
  * ctor for the same raw shape claims a construct that only parses today
  * because nothing in the statement Star matches it: a switch's guarded
- * `case` region, where `HxConditionalCase` relies on the case-body
+ * `case` region, where `HxConditionalBlock<HxSwitchCase>` relies on the case-body
  * statement Star FAILING (`Pony/pony/Tools.hx:128` re-indented one level).
  * Requiring the metadata Ref first means a bare region is never a
  * candidate, so that construct is out of reach by construction rather than

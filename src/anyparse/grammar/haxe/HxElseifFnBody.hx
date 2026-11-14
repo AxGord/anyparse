@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * One `#elseif <cond> <body>` clause inside a `HxConditionalFnBody`'s
  * `elseifs` Star - the function-BODY-slot twin of `HxElseifExpr` /
- * `HxElseifStmt` / `HxElseifMember`.
+ * `HxElseifStmt` / `HxElseifBlock`.
  *
  * Carries the `#elseif` keyword on its first field's metadata
  * (`HxCatchClause` precedent), so the parent's `@:tryparse` Star tries

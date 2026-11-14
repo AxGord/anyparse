@@ -12,9 +12,9 @@ import anyparse.grammar.haxe.HxArrowParam;
 import anyparse.grammar.haxe.HxArrowParamBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
+import anyparse.grammar.haxe.HxConditionalBlock;
 import anyparse.grammar.haxe.HxConditionalCommaList;
 import anyparse.grammar.haxe.HxConditionalDecl;
-import anyparse.grammar.haxe.HxConditionalMember;
 import anyparse.grammar.haxe.HxConditionalParam;
 import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxConditionalType;
@@ -31,6 +31,7 @@ import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxLambdaParam;
 import anyparse.grammar.haxe.HxLambdaParamBody;
 import anyparse.grammar.haxe.HxMacroClass;
+import anyparse.grammar.haxe.HxMemberDecl;
 import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxObjectField;
 import anyparse.grammar.haxe.HxObjectFieldBody;
@@ -138,7 +139,7 @@ class HxTestHelpers extends Test {
 		};
 	}
 
-	private function expectConditionalMember(member: Null<HxClassMember>): HxConditionalMember {
+	private function expectConditionalMember(member: Null<HxClassMember>): HxConditionalBlock<HxMemberDecl> {
 		return switch member {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $member';
