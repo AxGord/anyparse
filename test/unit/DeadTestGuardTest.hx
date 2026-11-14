@@ -163,7 +163,7 @@ class DeadTestGuardTest extends Test {
 				// line-wrapped dead guard through, so an undelimited condition is unproven.
 				final live: Null<Bool> = condition == null
 					? null
-					: CondRegionLiveness.evaluate(source.substring(condition.from, condition.to), defines);
+					: CondRegionLiveness.evaluate(source.substring(condition.from, condition.to), shape, defines);
 				if (live != true)
 					unproven.push({
 						line: new Span(directive.span.from, directive.span.from).lineCol(source).line,

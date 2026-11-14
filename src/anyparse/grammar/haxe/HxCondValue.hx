@@ -8,7 +8,7 @@ package anyparse.grammar.haxe;
  *
  * Comparisons are declared left-associative like every binary level, but the compiler's condition grammar takes ONE
  * comparison of two operands, so a comparison whose left operand is itself a comparison is a shape the reader of the
- * value refuses (`CondRegionLiveness`). `HxPpCond` is the sibling declaration of where a condition ENDS in raw text;
+ * value refuses (`HxCondExprReader`). `HxPpCond` is the sibling declaration of where a condition ENDS in raw text;
  * this one reads what a delimited condition MEANS.
  */
 @:peg

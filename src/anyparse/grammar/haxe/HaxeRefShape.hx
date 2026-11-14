@@ -1115,6 +1115,7 @@ final class HaxeRefShape {
 		table.conditionalEndKeyword = HaxeLexicalRegions.directiveClose;
 		table.conditionEnd = HaxeQueryWalker.conditionEnd;
 		table.conditionBlankEnd = HaxeQueryWalker.conditionBlankEnd;
+		table.conditionExpr = HxCondExprReader.read;
 		table.conditionalDirectives = HaxeLexicalRegions.directives;
 		table.condDeclPrefixKeywordKinds = ['EnumKw', 'AbstractKw', 'FinalKw'];
 		// DERIVED, not written. The macro walks each ctor's own production to the terminals it

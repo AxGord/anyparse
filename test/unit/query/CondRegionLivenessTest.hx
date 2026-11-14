@@ -1,5 +1,6 @@
 package unit.query;
 
+import anyparse.query.CondExpr;
 import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
@@ -51,48 +52,48 @@ final class CondRegionLivenessTest extends Test {
 	// --- evaluate: the three-valued condition reader ---
 
 	public function testListedFlagIsTrue(): Void {
-		Assert.equals(true, CondRegionLiveness.evaluate('nodejs', ['nodejs']));
+		Assert.equals(true, CondRegionLiveness.evaluate('nodejs', SHAPE, ['nodejs']));
 	}
 
 	/** The soundness property: absence of a flag is NOT evidence it is undefined. */
 	public function testUnlistedFlagIsUnknownNotFalse(): Void {
-		Assert.isNull(CondRegionLiveness.evaluate('sys', ['nodejs']));
+		Assert.isNull(CondRegionLiveness.evaluate('sys', SHAPE, ['nodejs']));
 	}
 
 	public function testNegatedListedFlagIsFalse(): Void {
-		Assert.equals(false, CondRegionLiveness.evaluate('!nodejs', ['nodejs']));
+		Assert.equals(false, CondRegionLiveness.evaluate('!nodejs', SHAPE, ['nodejs']));
 	}
 
 	/** The same property one operator down — `!unlisted` must never come out TRUE. */
 	public function testNegatedUnlistedFlagIsNotProvablyTrue(): Void {
-		Assert.isNull(CondRegionLiveness.evaluate('!sys', ['nodejs']));
+		Assert.isNull(CondRegionLiveness.evaluate('!sys', SHAPE, ['nodejs']));
 	}
 
 	/** `||` needs only one proved operand, which is what keeps `#if (sys || nodejs)` covered on a js build. */
 	public function testDisjunctionNeedsOneProvedOperand(): Void {
-		Assert.equals(true, CondRegionLiveness.evaluate('(sys || nodejs)', ['nodejs']));
+		Assert.equals(true, CondRegionLiveness.evaluate('(sys || nodejs)', SHAPE, ['nodejs']));
 	}
 
 	public function testConjunctionNeedsBothProved(): Void {
-		Assert.isNull(CondRegionLiveness.evaluate('(sys && nodejs)', ['nodejs']));
-		Assert.equals(true, CondRegionLiveness.evaluate('(js && nodejs)', ['js', 'nodejs']));
+		Assert.isNull(CondRegionLiveness.evaluate('(sys && nodejs)', SHAPE, ['nodejs']));
+		Assert.equals(true, CondRegionLiveness.evaluate('(js && nodejs)', SHAPE, ['js', 'nodejs']));
 	}
 
 	/** A proved-false operand refutes the whole conjunction even when the other is unknown. */
 	public function testConjunctionIsFalseFromOneRefutedOperand(): Void {
-		Assert.equals(false, CondRegionLiveness.evaluate('(!nodejs && whatever)', ['nodejs']));
+		Assert.equals(false, CondRegionLiveness.evaluate('(!nodejs && whatever)', SHAPE, ['nodejs']));
 	}
 
 	/** A comparison parses — so the condition around it is not refused as malformed — and answers unknown. */
 	public function testComparisonIsUnknown(): Void {
-		Assert.isNull(CondRegionLiveness.evaluate('haxe_ver >= 4.0', ['haxe_ver']));
-		Assert.isNull(CondRegionLiveness.evaluate('(haxe_ver >= "4.0.0" && nodejs)', ['haxe_ver', 'nodejs']));
+		Assert.isNull(CondRegionLiveness.evaluate('haxe_ver >= 4.0', SHAPE, ['haxe_ver']));
+		Assert.isNull(CondRegionLiveness.evaluate('(haxe_ver >= "4.0.0" && nodejs)', SHAPE, ['haxe_ver', 'nodejs']));
 	}
 
 	/** A dotted define is ONE flag — cutting it at the dot would compare against a name no compiler prints. */
 	public function testDottedFlagIsOneName(): Void {
-		Assert.equals(true, CondRegionLiveness.evaluate('target.unicode', ['target.unicode']));
-		Assert.isNull(CondRegionLiveness.evaluate('target.unicode', ['target']));
+		Assert.equals(true, CondRegionLiveness.evaluate('target.unicode', SHAPE, ['target.unicode']));
+		Assert.isNull(CondRegionLiveness.evaluate('target.unicode', SHAPE, ['target']));
 	}
 
 	/**
@@ -103,8 +104,8 @@ final class CondRegionLivenessTest extends Test {
 	 * that was never read to the end.
 	 */
 	public function testTrailingGarbageIsUnknown(): Void {
-		Assert.isNull(CondRegionLiveness.evaluate('nodejs @@', ['nodejs']));
-		Assert.isNull(CondRegionLiveness.evaluate('nodejs )', ['nodejs']));
+		Assert.isNull(CondRegionLiveness.evaluate('nodejs @@', SHAPE, ['nodejs']));
+		Assert.isNull(CondRegionLiveness.evaluate('nodejs )', SHAPE, ['nodejs']));
 	}
 
 	// --- evaluateFacts: the same reader over a set stated in BOTH directions ---
@@ -115,18 +116,18 @@ final class CondRegionLivenessTest extends Test {
 	 * entry point instead of a wider reading of the positive one.
 	 */
 	public function testAssertedUndefinedFlagIsFalseAndItsNegationTrue(): Void {
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('!X', UNDEFINED_X));
-		Assert.equals(false, CondRegionLiveness.evaluateFacts('(X)', UNDEFINED_X));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('!X', SHAPE, UNDEFINED_X));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(X)', SHAPE, UNDEFINED_X));
 	}
 
 	/** A refuted operand refutes the whole conjunction, even beside a flag nothing decided. */
 	public function testAssertedUndefinedFlagRefutesAConjunction(): Void {
-		Assert.equals(false, CondRegionLiveness.evaluateFacts('X && other', UNDEFINED_X));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('X && other', SHAPE, UNDEFINED_X));
 	}
 
 	/** A refuted operand leaves a DISJUNCTION unknown — the other operand still decides it. */
 	public function testAssertedUndefinedFlagLeavesADisjunctionUnknown(): Void {
-		Assert.isNull(CondRegionLiveness.evaluateFacts('X || other', UNDEFINED_X));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('X || other', SHAPE, UNDEFINED_X));
 	}
 
 	/**
@@ -135,9 +136,9 @@ final class CondRegionLivenessTest extends Test {
 	 * same three conditions answer `false` / `true` / `false` above and `null` here.
 	 */
 	public function testEvaluateStaysPositiveOnly(): Void {
-		Assert.isNull(CondRegionLiveness.evaluate('(X)', []));
-		Assert.isNull(CondRegionLiveness.evaluate('!X', []));
-		Assert.isNull(CondRegionLiveness.evaluate('X && other', []));
+		Assert.isNull(CondRegionLiveness.evaluate('(X)', SHAPE, []));
+		Assert.isNull(CondRegionLiveness.evaluate('!X', SHAPE, []));
+		Assert.isNull(CondRegionLiveness.evaluate('X && other', SHAPE, []));
 	}
 
 	@:pin('control')
@@ -145,51 +146,66 @@ final class CondRegionLivenessTest extends Test {
 	@:killer('M-COND-VALUES-READ')
 	public function testAVersionDefineComparesAsANumber(): Void {
 		// `haxe_ver` is a number the compiler compares with a number literal: the string is read as one first
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(v >= 4.2)', VALUED));
-		Assert.equals(false, CondRegionLiveness.evaluateFacts('(v < 4.2)', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('!(v < 4.2)', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(num == 4.5)', VALUED));
-		Assert.equals(false, CondRegionLiveness.evaluateFacts('0', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(v >= 4.2)', SHAPE, VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(v < 4.2)', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('!(v < 4.2)', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(num == 4.5)', SHAPE, VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('0', SHAPE, VALUED));
 	}
 
 	@:pin('control')
 	@:killer('M-COND-VALUES-TEXT')
 	public function testTwoStringsCompareByTheirCharacters(): Void {
 		// `lime >= "8.0.0"` is a string comparison, so 10.0.0 sorts before 8.0.0 — what the compiler does, not what a reader means
-		Assert.equals(false, CondRegionLiveness.evaluateFacts('(lime >= "8.0.0")', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == "1")', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('("")', VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(lime >= "8.0.0")', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == "1")', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('("")', SHAPE, VALUED));
 	}
 
 	@:pin('control')
 	@:killer('M-COND-VALUES-UNDEFINED')
 	public function testAnUndefinedDefineMakesAComparisonFalseAndItsNegationTrue(): Void {
-		Assert.equals(false, CondRegionLiveness.evaluateFacts('(undefinedx == "a")', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(undefinedx != "a")', VALUED));
-		Assert.equals(false, CondRegionLiveness.evaluateFacts('((v >= 4.2) == true)', VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('(undefinedx == "a")', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(undefinedx != "a")', SHAPE, VALUED));
+		Assert.equals(false, CondRegionLiveness.evaluateFacts('((v >= 4.2) == true)', SHAPE, VALUED));
 	}
 
 	@:pin('control')
 	@:killer('M-COND-VALUES-SEMVER')
 	public function testVersionsCompareBySemVerPrecedence(): Void {
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.2.3") > version("1.2.3-rc.1"))', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(semv > version("1.0.0"))', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.10.0") > version("1.9.0"))', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-alpha") < version("1.0.0-alpha.1"))', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-beta") > version("1.0.0-alpha.1"))', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-2") < version("1.0.0-alpha"))', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.2.3") > version("1.2.3-rc.1"))', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(semv > version("1.0.0"))', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.10.0") > version("1.9.0"))', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-alpha") < version("1.0.0-alpha.1"))', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-beta") > version("1.0.0-alpha.1"))', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(version("1.0.0-2") < version("1.0.0-alpha"))', SHAPE, VALUED));
 	}
 
 	public function testAComparisonTheCompilerRefusesOrCannotBeReadStaysUnknown(): Void {
 		// `Cannot compare string "8.2.3" and float 8` — no build compiles it; a value nobody proved; a number spelled in hex
 		final facts: DefineFacts = { defined: ['bad', 'set'], undefined: [], values: ['bad' => '8.2.3'] };
-		Assert.isNull(CondRegionLiveness.evaluateFacts('(bad >= 8)', facts));
-		Assert.isNull(CondRegionLiveness.evaluateFacts('(set >= 8)', facts));
-		Assert.isNull(CondRegionLiveness.evaluateFacts('(bad == 0x8)', facts));
-		Assert.isNull(CondRegionLiveness.evaluateFacts('(version("1.2") > version("1.0.0"))', facts));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(bad >= 8)', SHAPE, facts));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(set >= 8)', SHAPE, facts));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(bad == 0x8)', SHAPE, facts));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(version("1.2") > version("1.0.0"))', SHAPE, facts));
 		// unknown as before: a define the set does not mention, and one it names without a value
-		Assert.isNull(CondRegionLiveness.evaluate('haxe_ver >= 4.0', ['haxe_ver']));
-		Assert.isNull(CondRegionLiveness.evaluateFacts('(other >= 4.0)', facts));
+		Assert.isNull(CondRegionLiveness.evaluate('haxe_ver >= 4.0', SHAPE, ['haxe_ver']));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(other >= 4.0)', SHAPE, facts));
+	}
+
+	/**
+	 * The condition is read by the shape it is handed, never by a grammar this class names: a reader that maps `yes` to
+	 * the flag `a` decides `yes` under `a`, which the Haxe reader leaves unknown, and a shape with no reader decides nothing.
+	 */
+	@:pin('control')
+	@:killer('M-COND-EXPR-SHAPE')
+	public function testTheConditionIsReadByTheShapesReader(): Void {
+		final shape: RefShape = new RefShape('Ident', [], [], [], [], []);
+		Assert.isNull(CondRegionLiveness.evaluate('a', shape, ['a']));
+		shape.conditionExpr = condition -> condition == 'yes' ? CondExpr.Flag('a') : null;
+		Assert.equals(true, CondRegionLiveness.evaluate('yes', shape, ['a']));
+		Assert.isNull(CondRegionLiveness.evaluate('a', shape, ['a']));
+		Assert.isNull(CondRegionLiveness.evaluate('yes', SHAPE, ['a']));
 	}
 
 	// --- unproven: the region walk ---
@@ -380,17 +396,17 @@ final class CondRegionLivenessTest extends Test {
 	@:pin('control')
 	@:killer('M-COND-QUOTED-ESCAPE-OFF')
 	public function testAnEscapedQuoteDoesNotEndAConditionLiteral(): Void {
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == "\\"" || flag == "1")', VALUED));
-		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == \'\\\'\' || flag == "1")', VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == "\\"" || flag == "1")', SHAPE, VALUED));
+		Assert.equals(true, CondRegionLiveness.evaluateFacts('(flag == \'\\\'\' || flag == "1")', SHAPE, VALUED));
 	}
 
 	@:pin('control')
 	@:killer('M-COND-QUOTED-UNTERMINATED')
 	public function testAnUnterminatedConditionLiteralStaysUnknown(): Void {
-		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1', VALUED));
-		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1\n"', VALUED));
-		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1\\', VALUED));
-		Assert.isNull(CondRegionLiveness.evaluateFacts('(semv > version("1.0.0))', VALUED));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1', SHAPE, VALUED));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1\n"', SHAPE, VALUED));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('flag == "1\\', SHAPE, VALUED));
+		Assert.isNull(CondRegionLiveness.evaluateFacts('(semv > version("1.0.0))', SHAPE, VALUED));
 	}
 
 	/** A zero-length span at `needle`'s first occurrence — the shape an insertion has. */

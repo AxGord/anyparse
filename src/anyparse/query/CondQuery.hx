@@ -113,7 +113,8 @@ final class CondQuery {
 			endKeyword: shape.conditionalEndKeyword,
 			elseKeywords: shape.conditionalElseKeywords ?? [],
 			define: define,
-			facts: undefined ? { defined: [], undefined: [define] } : { defined: [define], undefined: [] }
+			facts: undefined ? { defined: [], undefined: [define] } : { defined: [define], undefined: [] },
+			shape: shape
 		};
 		final out: Array<CondRegion> = [];
 		final open: Array<OpenRegion> = [];
@@ -224,7 +225,7 @@ final class CondQuery {
 		var guard: Null<Bool> = true;
 		for (i => head in frame.heads) {
 			final takes: Bool = CondDirectives.takesCondition(head.keyword, seams.ifKeyword, seams.endKeyword);
-			final value: Null<Bool> = takes ? CondRegionLiveness.conditionValueFacts(source, head, seams.facts) : true;
+			final value: Null<Bool> = takes ? CondRegionLiveness.conditionValueFacts(source, head, seams.shape, seams.facts) : true;
 			final step: CondBranchStep = CondRegionLiveness.branchStep(guard, value);
 			guard = step.guard;
 			final body: Span = frame.bodies[i];
@@ -488,7 +489,7 @@ private typedef OpenRegion = { final depth: Int; final heads: Array<CondDirectiv
 
 /**
  * The grammar's directive vocabulary plus the queried define, gathered once per
- * `regionsMentioning` call. `facts` is the hypothesis liveness is folded under: the define
+ * `regionsMentioning` call, with the `shape` a condition is read through. `facts` is the hypothesis liveness is folded under: the define
  * asserted DEFINED by default, asserted UNDEFINED when the caller opts into that polarity.
  */
 private typedef CondSeams = {
@@ -497,4 +498,5 @@ private typedef CondSeams = {
 	final elseKeywords: Array<String>;
 	final define: String;
 	final facts: DefineFacts;
+	final shape: RefShape;
 };

@@ -1886,6 +1886,13 @@ final class RefShape {
 	public var conditionBlankEnd: Null<(input: Input, at: Int) -> Int>;
 
 	/**
+	 * What one conditional-compilation condition says, read from its delimited text (`conditionEnd`), or null when that
+	 * text is no condition the grammar's compiler evaluates — the reader `CondRegionLiveness` evaluates every condition
+	 * through. Optional; unset leaves every condition unknown, so no branch is ever proved live or dead.
+	 */
+	public var conditionExpr: Null<(condition: String) -> Null<CondExpr>>;
+
+	/**
 	 * Every occurrence of a directive keyword (`conditionalIfKeyword`, `conditionalElseKeywords`,
 	 * `conditionalEndKeyword`) in a source, in source order — the generated lexical pass's `directives`. Comments and
 	 * literals are not masked here; `CondDirectives` applies its caller's mask. Optional; unset means no directive.

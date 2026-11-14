@@ -1947,6 +1947,30 @@
 			"find": "@:kw('#if')",
 			"replace": "@:kw('#if-closed')",
 			"note": "a member region complete at its own `#end` is no longer taken as a closed member, so the shared-body ctor swallows the next member as its tail"
+		},
+		{
+			"name": "M-COND-VALUE-CHAIN",
+			"type": "anyparse.grammar.haxe.HxCondExprReader",
+			"method": "chainsComparisons",
+			"find": "isComparison(left) || chainsComparisons(left) || chainsComparisons(right);",
+			"replace": "chainsComparisons(left) || chainsComparisons(right);",
+			"note": "a comparison of a comparison is evaluated, so `a == b == c` is decided where the compiler has no such condition"
+		},
+		{
+			"name": "M-COND-VALUE-GROUP",
+			"type": "anyparse.grammar.haxe.HxCondExprReader",
+			"method": "exprOf",
+			"find": "case Group(inner): exprOf(inner);",
+			"replace": "case Group(inner): CondExpr.Flag('');",
+			"note": "a parenthesised condition reads as a flag no define set names, so it is never decided"
+		},
+		{
+			"name": "M-COND-VALUE-VERSION",
+			"type": "anyparse.grammar.haxe.HxCondExprReader",
+			"method": "unquoted",
+			"find": "return literal.substring(1, literal.length - 1);",
+			"replace": "return literal;",
+			"note": "a quoted literal keeps its quotes, so no `version(\"…\")` names a version"
 		}
 	]
 }

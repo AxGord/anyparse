@@ -1,13 +1,10 @@
 package anyparse.query;
 
-import anyparse.grammar.haxe.HxCondValue;
-import anyparse.grammar.haxe.HxCondValueParser;
 import anyparse.query.CondDirectives;
 import anyparse.query.CondValue;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -87,13 +84,13 @@ private typedef Frame = {
  * stays positive-only: a thin wrapper passing an EMPTY `undefined` list, so every coverage
  * answer derived from it is unchanged.
  *
- * ## Grammar-agnostic, except one reader
+ * ## Grammar-agnostic
  *
  * The directive vocabulary comes from `RefShape.conditionalIfKeyword` /
  * `conditionalElseKeywords` / `conditionalEndKeyword` through `CondDirectives`, the
  * shared reader — so a grammar declaring no opener scans to nothing and every offset is
- * live by construction. The one exception is the condition VALUE: it is read by the Haxe
- * grammar's generated `HxCondValueParser` until a `RefShape` field carries the reader.
+ * live by construction. The condition VALUE is read by `RefShape.conditionExpr` into a
+ * `CondExpr`, and only that tree is evaluated here.
  * Pure: no filesystem, no process.
  */
 @:nullSafety(Strict)
@@ -184,17 +181,16 @@ final class CondRegionLiveness {
 	/**
 	 * Three-valued evaluation of one conditional-compilation condition against a
 	 * positive-only define set: true when the condition provably HOLDS, false when it
-	 * provably does not, and null for everything else — an unlisted flag, a comparison, a
-	 * condition this does not parse, or trailing text after one it does.
+	 * provably does not, and null for everything else — an unlisted flag, a comparison, or a
+	 * condition `shape.conditionExpr` does not read.
 	 *
-	 * The grammar is `HxCondValue`, whose generated reader parses the whole text: `||` over `&&` over a comparison
-	 * over unary `!` over a primary (a parenthesised condition, `version("…")`, a possibly-dotted flag, a
-	 * number, or a quoted string). A flag in `defines` is TRUE and a flag outside it is
+	 * The grammar's reader turns the text into a `CondExpr`, and that tree is what is evaluated, so the
+	 * meaning of a condition is the same for every grammar. A flag in `defines` is TRUE and a flag outside it is
 	 * UNKNOWN, so no amount of nesting can turn absence into a proof — which is the one
 	 * property that makes a permission derived from this sound.
 	 */
-	public static function evaluate(condition: String, defines: Array<String>): Null<Bool> {
-		return evaluateFacts(condition, { defined: defines, undefined: [] });
+	public static function evaluate(condition: String, shape: RefShape, defines: Array<String>): Null<Bool> {
+		return evaluateFacts(condition, shape, { defined: defines, undefined: [] });
 	}
 
 	/**
@@ -207,9 +203,10 @@ final class CondRegionLiveness {
 	 * makes absence an ASSERTION the operator signed for rather than something read off a
 	 * compiler's output — and only then may `!X` come out true.
 	 */
-	public static function evaluateFacts(condition: String, facts: DefineFacts): Null<Bool> {
-		final tree: Null<HxCondValue> = try HxCondValueParser.parse(condition) catch (_: Exception) null;
-		return tree == null || chainsComparisons(tree) ? null : CondValues.truth(valueOf(tree, facts));
+	public static function evaluateFacts(condition: String, shape: RefShape, facts: DefineFacts): Null<Bool> {
+		final read: Null<(condition: String) -> Null<CondExpr>> = shape.conditionExpr;
+		final tree: Null<CondExpr> = read == null ? null : read(condition);
+		return tree == null ? null : CondValues.truth(valueOf(tree, facts));
 	}
 
 	/**
@@ -229,14 +226,14 @@ final class CondRegionLiveness {
 	}
 
 	/** One directive's condition evaluated, or unknown when it carries none the reader could delimit. */
-	public static function conditionValue(source: String, directive: CondDirective, defines: Array<String>): Null<Bool> {
-		return conditionValueFacts(source, directive, { defined: defines, undefined: [] });
+	public static function conditionValue(source: String, directive: CondDirective, shape: RefShape, defines: Array<String>): Null<Bool> {
+		return conditionValueFacts(source, directive, shape, { defined: defines, undefined: [] });
 	}
 
 	/** `conditionValue` under a define set stated in both directions — the `evaluateFacts` entry for one directive. */
-	public static function conditionValueFacts(source: String, directive: CondDirective, facts: DefineFacts): Null<Bool> {
+	public static function conditionValueFacts(source: String, directive: CondDirective, shape: RefShape, facts: DefineFacts): Null<Bool> {
 		final span: Null<Span> = directive.condition;
-		return span == null ? null : evaluateFacts(source.substring(span.from, span.to), facts);
+		return span == null ? null : evaluateFacts(source.substring(span.from, span.to), shape, facts);
 	}
 
 	/** Three-valued negation: an unknown operand stays unknown. */
@@ -322,7 +319,7 @@ final class CondRegionLiveness {
 			return;
 		}
 		if (directive.keyword == shape.conditionalIfKeyword) {
-			final step: CondBranchStep = branchStep(true, conditionValueFacts(source, directive, facts));
+			final step: CondBranchStep = branchStep(true, conditionValueFacts(source, directive, shape, facts));
 			frames.push({
 				open: text,
 				branch: text,
@@ -351,7 +348,7 @@ final class CondRegionLiveness {
 		}
 		// Unknown when the condition could not be delimited, which `conditionValue` answers for a
 		// null span — the conservative half of the pair above.
-		final step: CondBranchStep = branchStep(frame.elseGuard, conditionValueFacts(source, directive, facts));
+		final step: CondBranchStep = branchStep(frame.elseGuard, conditionValueFacts(source, directive, shape, facts));
 		frame.live = step.live;
 		frame.elseGuard = step.guard;
 	}
@@ -384,59 +381,26 @@ final class CondRegionLiveness {
 	 * decide is unknown, and so is whatever depends on it. `&&` and `||` are three-valued, so one refuted or proved
 	 * operand still decides them.
 	 */
-	private static function valueOf(tree: HxCondValue, facts: DefineFacts): Null<CondValue> {
-		final value: HxCondValue -> Null<CondValue> = operand -> valueOf(operand, facts);
-		final truth: HxCondValue -> Null<Bool> = operand -> CondValues.truth(valueOf(operand, facts));
+	private static function valueOf(tree: CondExpr, facts: DefineFacts): Null<CondValue> {
+		final value: CondExpr -> Null<CondValue> = operand -> valueOf(operand, facts);
+		final truth: CondExpr -> Null<Bool> = operand -> CondValues.truth(valueOf(operand, facts));
 		return switch tree {
-			case VersionCall(literal): versionOf(literal);
-			case Group(inner): value(inner);
-			case Quoted(text): CondValues.text(unquoted(text));
+			case Version(content): versionOf(content);
+			case Text(content): CondValues.text(content);
 			case Flag(name): flagValue(name, facts);
 			case Number(text): CondValues.number(text);
 			case Not(operand): truthOf(notOf(truth(operand)));
-			case Eq(left, right): CondValues.compare('==', value(left), value(right));
-			case NotEq(left, right): CondValues.compare('!=', value(left), value(right));
-			case GtEq(left, right): CondValues.compare('>=', value(left), value(right));
-			case LtEq(left, right): CondValues.compare('<=', value(left), value(right));
-			case Gt(left, right): CondValues.compare('>', value(left), value(right));
-			case Lt(left, right): CondValues.compare('<', value(left), value(right));
+			case Compare(op, left, right): CondValues.compare(op, value(left), value(right));
 			case And(left, right): truthOf(andOf(truth(left), truth(right)));
 			case Or(left, right): truthOf(orOf(truth(left), truth(right)));
 		};
 	}
 
 	/**
-	 * Whether a comparison somewhere in `tree` takes a comparison as its left operand (`a == b == c`). The compiler's
-	 * condition grammar takes one comparison of two operands, so such a condition is no condition it evaluates; a
-	 * parenthesised one (`(a == b) == c`) is a group and stays a value.
+	 * The version a version literal's content names; an escape inside it is no version the compiler reads raw.
 	 */
-	private static function chainsComparisons(tree: HxCondValue): Bool {
-		return switch tree {
-			case Eq(left, right), NotEq(left, right), GtEq(left, right), LtEq(left, right), Gt(left, right), Lt(left, right):
-				isComparison(left) || chainsComparisons(left) || chainsComparisons(right);
-			case And(left, right), Or(left, right):
-				chainsComparisons(left) || chainsComparisons(right);
-			case Not(operand): chainsComparisons(operand);
-			case Group(inner): chainsComparisons(inner);
-			case VersionCall(_), Quoted(_), Flag(_), Number(_): false;
-		};
-	}
-
-	private static function isComparison(tree: HxCondValue): Bool {
-		return switch tree {
-			case Eq(_, _), NotEq(_, _), GtEq(_, _), LtEq(_, _), Gt(_, _), Lt(_, _): true;
-			case _: false;
-		};
-	}
-
-	/** The text between the quotes of a quoted literal. */
-	private static function unquoted(literal: String): String {
-		return literal.substring(1, literal.length - 1);
-	}
-
-	/** The version a `version("…")` literal names; an escape inside it is no version the compiler reads raw. */
-	private static function versionOf(literal: String): Null<CondValue> {
-		return literal.indexOf('\\') >= 0 ? null : CondValues.version(unquoted(literal));
+	private static function versionOf(content: String): Null<CondValue> {
+		return content.indexOf('\\') >= 0 ? null : CondValues.version(content);
 	}
 
 }

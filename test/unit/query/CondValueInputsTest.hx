@@ -1,6 +1,7 @@
 package unit.query;
 
 import anyparse.query.CondRegionLiveness;
+import anyparse.query.GrammarPlugin.RefShape;
 
 /**
  * Every input shape the `#if` condition reader accepts or refuses, one row each: the condition text and what
@@ -9,6 +10,9 @@ import anyparse.query.CondRegionLiveness;
  */
 @:nullSafety(Strict)
 final class CondValueInputsTest extends Test {
+
+	/** The Haxe grammar, whose condition reader every row goes through. */
+	private static final SHAPE: RefShape = new HaxeQueryPlugin().refShape();
 
 	/** `a`, `b`, the dotted `a.b` and a flag named `version` are set; `u` is asserted absent; every other name is unknown. */
 	private static final FLAGS: DefineFacts = { defined: ['a', 'b', 'a.b', 'version'], undefined: ['u'] };
@@ -220,7 +224,7 @@ final class CondValueInputsTest extends Test {
 	}
 
 	private static function holds(rows: Array<{ final condition: String; final expected: Null<Bool>; }>, facts: DefineFacts): Void {
-		for (r in rows) Assert.equals(r.expected, CondRegionLiveness.evaluateFacts(r.condition, facts), 'condition: ${r.condition}');
+		for (r in rows) Assert.equals(r.expected, CondRegionLiveness.evaluateFacts(r.condition, SHAPE, facts), 'condition: ${r.condition}');
 	}
 
 }
