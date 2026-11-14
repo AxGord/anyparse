@@ -2426,7 +2426,7 @@
 			"type": "anyparse.query.ReachHazards",
 			"method": "initializerSpans",
 			"find": "final seams: MemberBranchSeams = MemberBranchScan.seamsOf(_shape, source, _plugin.lexicalRegions.bind(source));",
-			"replace": "final seams: MemberBranchSeams = { source: source, condKind: null, elseKeywords: [], comments: [] };",
+			"replace": "final seams: MemberBranchSeams = { condKind: null, elseKeywords: [], directives: [] };",
 			"note": "a field declared inside a conditional region has no initializer the construction runs"
 		},
 		{
@@ -16855,6 +16855,22 @@
 			"find": "find != replace && carried.find == (carried.replace ?? replace)",
 			"replace": "false",
 			"note": "a follow that leaves an arm's find equal to its replace is written, so the arm cuts nothing and the build breaks"
+		},
+		{
+			"name": "M-CONDBRANCH-GAP-BLIND",
+			"type": "anyparse.query.CondBranchProjection",
+			"method": "opensBranch",
+			"find": "return CondDirectives.startingIn(directives, from, to).exists(directive -> elseKeywords.contains(directive.keyword));",
+			"replace": "return false;",
+			"note": "a gap between two children of a conditional region never opens a branch, so every region stays one run"
+		},
+		{
+			"name": "M-COND-SCAN-READS-NON-CODE",
+			"type": "anyparse.query.CondDirectives",
+			"method": "scan",
+			"find": "if (region < masked.length && at >= masked[region].from) continue;",
+			"replace": "if (false) continue;",
+			"note": "a keyword written inside a comment or a string literal is read as a directive, so a commented-out #else splits a conditional region's run"
 		}
 	]
 }

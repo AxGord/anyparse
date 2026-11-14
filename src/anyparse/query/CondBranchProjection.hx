@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -71,11 +72,11 @@ final class CondBranchProjection {
 		// anonymous struct literal.
 		final kind: String = condKind;
 		final keywords: Array<String> = elseKeywords;
-		return projectBranches(tree, source, {
+		return projectBranches(tree, {
 			condKind: kind,
 			elseKeywords: keywords,
 			blockKinds: blockKinds,
-			comments: SourceComments.collectCommentTokens(regions())
+			directives: CondDirectives.scan(source, shape, regions)
 		});
 	}
 
@@ -93,15 +94,16 @@ final class CondBranchProjection {
 	 * `#elseif B`); it still opens exactly one run, the statement-less branches between them
 	 * contributing none.
 	 *
-	 * Gaps are masked with `comments` first, so a `#else` on the interior line of a commented-out
-	 * block cannot split a run.
+	 * A gap's directives are read from `directives` — the file's `CondDirectives.scan` — so a
+	 * `#else` inside a comment or a string literal cannot split a run, and one sharing its line with
+	 * code (`#if A x(); #else y(); #end`) still does.
 	 *
 	 * Null when the region or any child carries no span, when a child span is empty, or when the
 	 * child spans are not strictly increasing and non-overlapping inside the region — every shape
 	 * the gaps cannot describe keeps its current projection rather than a guessed split.
 	 */
 	public static function conditionalBranchRuns(
-		region: QueryNode, source: String, elseKeywords: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+		region: QueryNode, elseKeywords: Array<String>, directives: Array<CondDirective>
 	): Null<Array<CondBranchRun>> {
 		final span: Null<Span> = region.span;
 		if (span == null) return null;
@@ -112,7 +114,7 @@ final class CondBranchProjection {
 		var start: Int = 0;
 		// Only the gaps BETWEEN children: a branch can open nowhere else. `start` therefore always
 		// trails `i`, so no pushed run can come out empty.
-		for (i in 1...kids.length) if (gapHasBranchDirective(source, bounds[i - 1].to, bounds[i].from, elseKeywords, comments)) {
+		for (i in 1...kids.length) if (opensBranch(directives, bounds[i - 1].to, bounds[i].from, elseKeywords)) {
 			runs.push({ nodes: kids.slice(start, i), span: new Span(bounds[start].from, bounds[i - 1].to) });
 			start = i;
 		}
@@ -127,11 +129,11 @@ final class CondBranchProjection {
 	 * `node` is itself a statement list — every direct conditional-region child is regrouped.
 	 * Returns `node` unchanged when nothing under it moved, so an untouched subtree is shared.
 	 */
-	private static function projectBranches(node: QueryNode, source: String, seams: BranchSeams): QueryNode {
+	private static function projectBranches(node: QueryNode, seams: BranchSeams): QueryNode {
 		final kids: Array<QueryNode> = node.children;
 		if (kids.length == 0) return node;
-		final projected: Array<QueryNode> = kids.map(projectBranches.bind(_, source, seams));
-		final rebuilt: Array<QueryNode> = seams.blockKinds.contains(node.kind) ? splitBlockChildren(projected, source, seams) : projected;
+		final projected: Array<QueryNode> = kids.map(projectBranches.bind(_, seams));
+		final rebuilt: Array<QueryNode> = seams.blockKinds.contains(node.kind) ? splitBlockChildren(projected, seams) : projected;
 		return SameItems.of(kids, rebuilt)
 			? node
 			: new QueryNode(node.kind, node.name, rebuilt, node.span, node.type, node.typeArgCount, node.target);
@@ -143,11 +145,11 @@ final class CondBranchProjection {
 	 * `CondBranch`'s own children so a region nested in a branch splits too. Returns `kids`
 	 * itself when no child was a splittable region.
 	 */
-	private static function splitBlockChildren(kids: Array<QueryNode>, source: String, seams: BranchSeams): Array<QueryNode> {
+	private static function splitBlockChildren(kids: Array<QueryNode>, seams: BranchSeams): Array<QueryNode> {
 		var changed: Bool = false;
 		final out: Array<QueryNode> = [];
 		for (k in kids) {
-			final split: Null<QueryNode> = k.kind == seams.condKind ? splitRegion(k, source, seams) : null;
+			final split: Null<QueryNode> = k.kind == seams.condKind ? splitRegion(k, seams) : null;
 			if (split != null) changed = true;
 			out.push(split ?? k);
 		}
@@ -159,11 +161,11 @@ final class CondBranchProjection {
 	 * when the splitter refused the shape or the region holds no statement at all (an empty
 	 * `#if A #else #end`) — both leave the region exactly as it was.
 	 */
-	private static function splitRegion(region: QueryNode, source: String, seams: BranchSeams): Null<QueryNode> {
-		final runs: Null<Array<CondBranchRun>> = conditionalBranchRuns(region, source, seams.elseKeywords, seams.comments);
+	private static function splitRegion(region: QueryNode, seams: BranchSeams): Null<QueryNode> {
+		final runs: Null<Array<CondBranchRun>> = conditionalBranchRuns(region, seams.elseKeywords, seams.directives);
 		if (runs == null || runs.length == 0) return null;
 		final branches: Array<QueryNode> = runs.map(run ->
-			new QueryNode(COND_BRANCH_KIND, null, splitBlockChildren(run.nodes, source, seams), run.span)
+			new QueryNode(COND_BRANCH_KIND, null, splitBlockChildren(run.nodes, seams), run.span)
 		);
 		return new QueryNode(region.kind, region.name, branches, region.span);
 	}
@@ -186,49 +188,12 @@ final class CondBranchProjection {
 	}
 
 	/**
-	 * Whether a branch directive (`elseKeywords`, e.g. `#else` / `#elseif`) opens inside
-	 * `[from, to)` of `source` — one gap between two consecutive children of a conditional
-	 * region. Comment text is masked out first, so a `#else` written inside a block comment does
-	 * not split a run.
-	 *
-	 * The keyword is anchored at the start of each ltrimmed line OF THE GAP SUBSTRING, not of the
-	 * real source line — the gap's first line therefore anchors mid-line, at `from`. That is
-	 * deliberate and load-bearing: it is exactly why `#if A x(); #else y(); #end` splits, the
-	 * ` #else ` gap ltrimming to a `#else` prefix. Turning it into a true line anchor would
-	 * silently stop splitting every single-line region.
+	 * Whether a branch directive (`elseKeywords`, e.g. `#else` / `#elseif`) starts inside `[from, to)`
+	 * — one gap between two consecutive children of a conditional region. The keyword is compared
+	 * whole, as the directive reader recovered it, never as a text prefix.
 	 */
-	private static function gapHasBranchDirective(
-		source: String, from: Int, to: Int, elseKeywords: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
-	): Bool {
-		if (from >= to) return false;
-		for (line in maskComments(source, from, to, comments).split('\n')) {
-			final trimmed: String = line.ltrim();
-			for (kw in elseKeywords) if (trimmed.startsWith(kw)) return true;
-		}
-		return false;
-	}
-
-	/**
-	 * `[from, to)` of `source` with every character inside a comment token blanked to a space —
-	 * newlines are kept, so the masked text still splits into the same lines. A gap holding no
-	 * comment is returned verbatim, which is the common case.
-	 */
-	private static function maskComments(
-		source: String, from: Int, to: Int, comments: Array<{ from: Int, to: Int, isLine: Bool }>
-	): String {
-		final hits: Array<{ from: Int, to: Int, isLine: Bool }> = [for (tok in comments) if (tok.to > from && tok.from < to) tok];
-		if (hits.length == 0) return source.substring(from, to);
-		final buf: StringBuf = new StringBuf();
-		for (i in from ... to) {
-			final c: Int = source.fastCodeAt(i);
-			buf.addChar(c == '\n'.code || !inAnyToken(i, hits) ? c : ' '.code);
-		}
-		return buf.toString();
-	}
-
-	/** Whether `pos` falls inside any of the `tokens` half-open ranges. */
-	private static function inAnyToken(pos: Int, tokens: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
-		return tokens.exists(tok -> pos >= tok.from && pos < tok.to);
+	private static function opensBranch(directives: Array<CondDirective>, from: Int, to: Int, elseKeywords: Array<String>): Bool {
+		return CondDirectives.startingIn(directives, from, to).exists(directive -> elseKeywords.contains(directive.keyword));
 	}
 
 }
@@ -245,10 +210,10 @@ final class CondBranchProjection {
  */
 typedef CondBranchRun = { final nodes: Array<QueryNode>; final span: Span; };
 
-/** The conditional / block seam kinds plus the file's comment tokens `CondBranchProjection.branchAwareTree` threads through its walk. */
+/** The conditional / block seam kinds plus the file's directives `CondBranchProjection.branchAwareTree` threads through its walk. */
 private typedef BranchSeams = {
 	final condKind: String;
 	final elseKeywords: Array<String>;
 	final blockKinds: Array<String>;
-	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	final directives: Array<CondDirective>;
 };

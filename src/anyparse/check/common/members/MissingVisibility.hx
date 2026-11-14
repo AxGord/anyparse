@@ -3,8 +3,7 @@ package anyparse.check.common.members;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.CondBranchProjection;
-import anyparse.query.LexicalRegions.LexRegion;
-import anyparse.query.SourceComments;
+import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -112,7 +111,7 @@ final class MissingVisibility extends RuleBase {
 				file: entry.file,
 				seams: seams,
 				source: entry.source,
-				comments: commentTokens(entry.source, seams, plugin.lexicalRegions.bind(entry.source)),
+				directives: directivesOf(entry.source, seams, plugin),
 				guarded: EnumAbstractForms.valueStarts(plugin, tree)
 			}, tree, false)
 		);
@@ -156,7 +155,7 @@ final class MissingVisibility extends RuleBase {
 				edits: edits,
 				seams: seams,
 				source: source,
-				comments: commentTokens(source, seams, plugin.lexicalRegions.bind(source)),
+				directives: directivesOf(source, seams, plugin),
 				visRank: visRank,
 				keyword: keyword,
 				flagged: flagged,
@@ -168,12 +167,12 @@ final class MissingVisibility extends RuleBase {
 	}
 
 	/**
-	 * The file's comment tokens, needed only to mask a `#else` written inside a comment out of a
-	 * conditional region's branch-boundary scan — so a grammar with no conditional seams, or a file
-	 * with no `#if` in it at all, pays nothing.
+	 * The file's conditional-compilation directives, read only for a conditional region's
+	 * branch-boundary scan — so a grammar with no conditional seams pays nothing, and the reader
+	 * itself skips a file with no `#if` in it at all.
 	 */
-	private static function commentTokens(source: String, seams: Seams, regions: () -> Array<LexRegion>): Array<CommentTok> {
-		return seams.condKind != null && source.indexOf(seams.ifKeyword) >= 0 ? SourceComments.collectCommentTokens(regions()) : [];
+	private static function directivesOf(source: String, seams: Seams, plugin: GrammarPlugin): Array<CondDirective> {
+		return seams.condKind != null ? CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source)) : [];
 	}
 
 	/**
@@ -254,9 +253,7 @@ final class MissingVisibility extends RuleBase {
 	 * modifies — a false positive whose fix writes a second keyword onto the same member.
 	 */
 	private static function scanConditional(ctx: ScanCtx, region: QueryNode, incoming: Bool): Bool {
-		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-			region, ctx.source, ctx.seams.elseKeywords, ctx.comments
-		);
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(region, ctx.seams.elseKeywords, ctx.directives);
 		if (runs == null || runs.length == 0) return incoming || scanRun(ctx, region.children, false);
 		var carry: Bool = false;
 		// Not `runs.exists(...)`: every branch must be scanned for its own violations, and `exists`
@@ -345,9 +342,7 @@ final class MissingVisibility extends RuleBase {
 	 */
 	private static function insertConditional(ctx: FixCtx, region: QueryNode, typeName: Null<String>, incoming: RunState): RunState {
 		final entry: RunState = { insertAt: -1, sawOverride: incoming.sawOverride };
-		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-			region, ctx.source, ctx.seams.elseKeywords, ctx.comments
-		);
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(region, ctx.seams.elseKeywords, ctx.directives);
 		if (runs == null || runs.length == 0)
 			return { insertAt: -1, sawOverride: insertRun(ctx, region.children, typeName, entry).sawOverride };
 		var sawOverride: Bool = false;
@@ -414,8 +409,7 @@ final class MissingVisibility extends RuleBase {
 			externKind: shape.externModifierKind,
 			publicMetaNames: shape.publicDefaultMetaNames ?? [],
 			condKind: shape.conditionalMemberKind,
-			elseKeywords: elseKeywords ?? [],
-			ifKeyword: shape.conditionalIfKeyword ?? '#if'
+			elseKeywords: elseKeywords ?? []
 		};
 	}
 
@@ -480,9 +474,6 @@ private typedef Seams = {
 	/** The branch-opening directives (`#else` / `#elseif`); empty makes a region one flat run. */
 	final elseKeywords: Array<String>;
 
-	/** The region-opening directive, used only as the cheap "does this file hold any `#if`" pre-scan. */
-	final ifKeyword: String;
-
 };
 
 /** What `MissingVisibility.run`'s walk threads through every frame — resolved once per file. */
@@ -492,7 +483,7 @@ private typedef ScanCtx = {
 	final file: String;
 	final seams: Seams;
 	final source: String;
-	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	final directives: Array<CondDirective>;
 
 	/**
 	 * The span starts of the values of an enum abstract the grammar does not project as one
@@ -510,7 +501,7 @@ private typedef FixCtx = {
 	final edits: Array<{ span: Span, text: String }>;
 	final seams: Seams;
 	final source: String;
-	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	final directives: Array<CondDirective>;
 	final visRank: Int;
 	final keyword: String;
 	final flagged: Array<Int>;

@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CondBranchProjection;
+import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -40,20 +41,19 @@ final class MemberBranchScan {
 
 	/**
 	 * The seams `fold` reads over one file — resolved once per file rather than per container.
-	 * Comment tokens (needed only to mask a `#else` written inside a comment out of the
-	 * branch-boundary scan) are collected only when the grammar HAS a conditional member kind AND
-	 * the source holds the `#if` keyword at all, so the overwhelmingly common file pays one string
-	 * scan. A grammar without the seam yields a `condKind` of null, which makes `fold` a plain
-	 * left fold over the children — exactly the unaware scan.
+	 * The directives (needed only to recover the branch boundaries between a region's children) are
+	 * scanned only when the grammar HAS a conditional member kind AND the source holds the `#if`
+	 * keyword at all, so the overwhelmingly common file pays one string scan. A grammar without the
+	 * seam yields a `condKind` of null, which makes `fold` a plain left fold over the children —
+	 * exactly the unaware scan.
 	 */
 	public static function seamsOf(shape: RefShape, source: String, regions: () -> Array<LexRegion>): MemberBranchSeams {
 		final condKind: Null<String> = shape.conditionalMemberKind;
 		final present: Bool = condKind != null && source.indexOf(shape.conditionalIfKeyword ?? '#if') >= 0;
 		return {
-			source: source,
 			condKind: present ? condKind : null,
 			elseKeywords: shape.conditionalElseKeywords ?? [],
-			comments: present ? SourceComments.collectCommentTokens(regions()) : []
+			directives: present ? CondDirectives.scan(source, shape, regions) : []
 		};
 	}
 
@@ -300,9 +300,7 @@ final class MemberBranchScan {
 	private static function foldRegion<S>(
 		seams: MemberBranchSeams, region: QueryNode, incoming: S, step: (S, QueryNode) -> S, join: (S, S) -> S
 	): S {
-		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-			region, seams.source, seams.elseKeywords, seams.comments
-		);
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(region, seams.elseKeywords, seams.directives);
 		if (runs == null || runs.length == 0) return join(fold(seams, region.children, incoming, step, join), incoming);
 		var out: S = fold(seams, runs[0].nodes, incoming, step, join);
 		for (i in 1...runs.length) out = join(out, fold(seams, runs[i].nodes, incoming, step, join));
@@ -319,9 +317,7 @@ final class MemberBranchScan {
 	 * nested in a branch answers with its OWN branch span — tighter, and still inside the outer one.
 	 */
 	private static function branchSpanIn(seams: MemberBranchSeams, region: QueryNode, member: QueryNode): Null<Span> {
-		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-			region, seams.source, seams.elseKeywords, seams.comments
-		);
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(region, seams.elseKeywords, seams.directives);
 		if (runs == null || runs.length == 0)
 			return region.children.contains(member) ? region.span : nestedSpan(seams, region.children, member);
 		for (run in runs) {
@@ -347,7 +343,7 @@ final class MemberBranchScan {
 			if (span == null || offset < span.from || offset >= span.to) continue;
 			if (isRegion(seams, child)) {
 				final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-					child, seams.source, seams.elseKeywords, seams.comments
+					child, seams.elseKeywords, seams.directives
 				);
 				if (runs != null && runs.exists(r -> offset >= r.span.from && offset < r.span.to))
 					for (run in runs)
@@ -396,20 +392,18 @@ final class MemberBranchScan {
 }
 
 /**
- * The per-file seams a `MemberBranchScan.fold` reads: the source the branch boundaries are
- * recovered from, the conditional region kind (null = no descent), the branch-opening directives
- * and the comment tokens that mask a directive written inside a comment.
+ * The per-file seams a `MemberBranchScan.fold` reads: the conditional region kind (null = no
+ * descent), the branch-opening directives and the file's directives the branch boundaries are
+ * recovered from.
  */
 typedef MemberBranchSeams = {
-
-	final source: String;
 
 	/** The member-position conditional region kind; null makes `fold` a plain left fold. */
 	final condKind: Null<String>;
 
 	/** The branch-opening directives (`#else` / `#elseif`); empty makes a region one flat run. */
 	final elseKeywords: Array<String>;
-	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	final directives: Array<CondDirective>;
 
 };
 

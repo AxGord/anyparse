@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CondBranchProjection.CondBranchRun;
+import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments.CommentTok;
@@ -98,6 +99,7 @@ final class OrphanContinuation {
 			kinds: kinds,
 			sequenceKinds: sequenceKinds(plugin, shape),
 			comments: null,
+			directives: null,
 			regions: plugin.lexicalRegions.bind(source)
 		}, out);
 		return out;
@@ -143,7 +145,7 @@ final class OrphanContinuation {
 		if (i > 0 && endsAtSeam(parent.children[i - 1], ctx)) return true;
 		if (!regionParent) return false;
 		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-			parent, ctx.source, ctx.shape.conditionalElseKeywords ?? [], commentsOf(ctx)
+			parent, ctx.shape.conditionalElseKeywords ?? [], directivesOf(ctx)
 		);
 		final orphan: QueryNode = parent.children[i];
 		return runs != null && runs.exists(run -> run.nodes[0] == orphan);
@@ -182,6 +184,15 @@ final class OrphanContinuation {
 		return scanned;
 	}
 
+	/** The file's conditional-compilation directives, scanned once per walk and only when a seam question needs them. */
+	private static function directivesOf(ctx: OrphanScan): Array<CondDirective> {
+		final known: Null<Array<CondDirective>> = ctx.directives;
+		if (known != null) return known;
+		final scanned: Array<CondDirective> = CondDirectives.scan(ctx.source, ctx.shape, ctx.regions);
+		ctx.directives = scanned;
+		return scanned;
+	}
+
 	/**
 	 * The first of `stranded` whose text is not one of the source's own unjustified clauses, each
 	 * source clause matching at most once — so the refusal points at the clause the edit made, not
@@ -208,12 +219,13 @@ final class OrphanContinuation {
 
 }
 
-/** One walk's seams, plus the comment tokens `OrphanContinuation.commentsOf` scans on first need. */
+/** One walk's seams, plus the comment tokens and directives `commentsOf` / `directivesOf` scan on first need. */
 private typedef OrphanScan = {
 	final source: String;
 	final shape: RefShape;
 	final kinds: Array<String>;
 	final sequenceKinds: Array<String>;
 	var comments: Null<Array<CommentTok>>;
+	var directives: Null<Array<CondDirective>>;
 	final regions: () -> Array<LexRegion>;
 };

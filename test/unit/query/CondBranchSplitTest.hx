@@ -1,12 +1,12 @@
 package unit.query;
 
 import anyparse.query.CondBranchProjection;
+import anyparse.query.CondDirectives;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
-import anyparse.query.SourceComments;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -95,10 +95,11 @@ class CondBranchSplitTest extends Test {
 		Assert.equals(1, runs[0].nodes.length);
 	}
 
+	@:pin('control')
+	@:killer('M-CONDBRANCH-GAP-BLIND')
 	public function testSingleLineRegionSplitsOnTheGapSubstring(): Void {
-		// A whole region on ONE line still splits: the ` #else ` gap between the two statements
-		// ltrims to a `#else` prefix because anchoring is relative to the GAP SUBSTRING, never to
-		// a real source line. A true line anchor would silently stop splitting these.
+		// A whole region on ONE line still splits: the directive reader finds `#else` wherever it
+		// starts in the gap, not only at the start of a line.
 		final src: String = fn('#if A x(); #else y(); #end');
 		final runs: Array<CondBranchRun> = runsOf(src);
 		Assert.equals(2, runs.length);
@@ -113,9 +114,56 @@ class CondBranchSplitTest extends Test {
 		Assert.equals(2, runs[0].nodes.length);
 	}
 
+	/**
+	 * A `#else` behind `//` is comment text: the directive reader masks it, so the gap opens no branch.
+	 */
+	@:pin('control')
+	@:killer('M-COND-SCAN-READS-NON-CODE')
+	public function testElseInALineCommentDoesNotSplit(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\t// #else\n\t\tb();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(2, runs[0].nodes.length);
+	}
+
+	/**
+	 * An `#elseif` starting its own line inside a block comment is masked the same way, condition and all.
+	 */
+	@:pin('control')
+	@:killer('M-COND-SCAN-READS-NON-CODE')
+	public function testElseifInABlockCommentDoesNotSplit(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\t/*\n\t\t#elseif B\n\t\t*/\n\t\tb();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(2, runs[0].nodes.length);
+	}
+
+	/**
+	 * A `#else` starting a line inside a multi-line string sits in a child span, never in a gap, so no cut of the reader can make it split.
+	 */
+	@:pin('guard')
+	public function testElseInAStringDoesNotSplit(): Void {
+		final src: String = fn('#if A\n\t\ta("\n#else\n");\n\t\tb();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(1, runs.length);
+		Assert.equals(2, runs[0].nodes.length);
+	}
+
+	/**
+	 * A real directive behind a comment on its own line still opens the branch: only the comment is masked, not the line.
+	 */
+	@:pin('control')
+	@:killer('M-CONDBRANCH-GAP-BLIND')
+	public function testDirectiveAfterACommentOnItsLineSplits(): Void {
+		final src: String = fn('#if A\n\t\ta();\n\t\t/* c */ #elseif B\n\t\tb();\n\t\t#end');
+		final runs: Array<CondBranchRun> = runsOf(src);
+		Assert.equals(2, runs.length);
+		Assert.equals('b();', src.substring(runs[1].span.from, runs[1].span.to));
+	}
+
 	public function testNullChildSpanBails(): Void {
 		final region: QueryNode = new QueryNode('Conditional', null, [new QueryNode('ExprStmt', null, [])], new Span(0, 10));
-		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, 'x', ELSE_KEYWORDS, []));
+		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, ELSE_KEYWORDS, []));
 	}
 
 	public function testNonMonotonicChildSpansBail(): Void {
@@ -123,14 +171,14 @@ class CondBranchSplitTest extends Test {
 			new QueryNode('ExprStmt', null, [], new Span(5, 9)),
 			new QueryNode('ExprStmt', null, [], new Span(7, 12))
 		], new Span(0, 20));
-		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, 'x', ELSE_KEYWORDS, []));
+		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, ELSE_KEYWORDS, []));
 	}
 
 	public function testChildSpanOutsideRegionBails(): Void {
 		final region: QueryNode = new QueryNode(
 			'Conditional', null, [new QueryNode('ExprStmt', null, [], new Span(5, 30))], new Span(0, 20)
 		);
-		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, 'x', ELSE_KEYWORDS, []));
+		Assert.isNull(CondBranchProjection.conditionalBranchRuns(region, ELSE_KEYWORDS, []));
 	}
 
 	public function testStatementRegionIsWrapped(): Void {
@@ -268,10 +316,8 @@ class CondBranchSplitTest extends Test {
 	}
 
 	/**
-	 * MEMBER position: the comment tokens `MemberBranchScan.seamsOf` collects are what keeps a
-	 * `#else` written inside a COMMENT from splitting a modifier run — and nothing used to
-	 * assert it. Handing `seamsOf` an empty comment set left the whole suite green, at base as
-	 * well as after the migration, so the gap is older than the move; this arm closes it.
+	 * MEMBER position: the directives `MemberBranchScan.seamsOf` reads come from the masked reader, which is what keeps a
+	 * `#else` written inside a COMMENT from splitting a modifier run.
 	 *
 	 * The fixture is discriminating by construction: `public` and the method are two children of
 	 * ONE member-position region, and the only thing between them is a commented-out `#else`.
@@ -279,9 +325,10 @@ class CondBranchSplitTest extends Test {
 	 * second branch and the method starts a fresh run with no modifier at all — which is exactly
 	 * how `missing-visibility` would invent a finding and `member-order` would misrank it.
 	 */
+	@:pin('control')
+	@:killer('M-COND-SCAN-READS-NON-CODE')
 	public function testACommentedOutElseDoesNotSplitAMemberRun(): Void {
-		// The `#else` has to START its line for the splitter to read it at all, so the comment that
-		// hides it is a BLOCK one — a `//` prefix would leave the fixture green with no masking.
+
 		final src: String = 'class C {\n\t#if flag\n\tpublic\n\t/*\n\t#else\n\t*/\n\tfunction a(): Void {}\n\t#end\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(src);
@@ -345,12 +392,13 @@ class CondBranchSplitTest extends Test {
 
 	/** The runs of the first `Conditional` in `src`, or `[]` when the splitter bailed. */
 	private static function runsOf(src: String): Array<CondBranchRun> {
-		final region: Null<QueryNode> = firstOfKind(new HaxeQueryPlugin().parseFile(src), 'Conditional');
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final region: Null<QueryNode> = firstOfKind(plugin.parseFile(src), 'Conditional');
 		Assert.notNull(region);
 		return region == null
 			? []
 			: CondBranchProjection.conditionalBranchRuns(
-				region, src, ELSE_KEYWORDS, SourceComments.collectCommentTokens(new HaxeQueryPlugin().lexicalRegions(src))
+				region, ELSE_KEYWORDS, CondDirectives.scan(src, plugin.refShape(), plugin.lexicalRegions.bind(src))
 			) ?? [];
 	}
 

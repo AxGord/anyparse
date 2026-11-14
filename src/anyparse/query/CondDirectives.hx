@@ -20,10 +20,9 @@ using anyparse.util.Strings;
  * the directive text itself survives only as trivia on the line, so every consumer that needs the
  * text has to read the source — and until this class there was no shared read, only per-caller
  * probes. The consumers of this class — the `redundant-condcomp-parens`, `cond-region-merge`,
- * `cond-assign-merge` and `member-order` checks and `apq lit --include-directives` — would otherwise
- * have grown a lexer each. `CondBranchProjection.gapHasBranchDirective` and `TailScan.hasConditionalCompilation`
- * are older probes NOT yet migrated onto this reader; folding them in is the follow-up that would
- * make the first sentence true of the whole engine rather than of this class's own consumers.
+ * `cond-assign-merge` and `member-order` checks, the branch projection's gap reading
+ * (`CondBranchProjection.conditionalBranchRuns`) and `apq lit --include-directives` — would
+ * otherwise have grown a lexer each.
  *
  * The scan is lexical: the keyword occurrences come from the grammar's generated lexical pass
  * (`RefShape.conditionalDirectives`), and the caller's non-code mask — the engine's single lexer through

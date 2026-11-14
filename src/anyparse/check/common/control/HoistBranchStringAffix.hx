@@ -285,9 +285,7 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 	private static function match(region: QueryNode, ctx: Ctx): Null<Match> {
 		final span: Null<Span> = region.span;
 		if (span == null) return null;
-		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-			region, ctx.source, ctx.seams.elseKeywords, ctx.comments
-		);
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(region, ctx.seams.elseKeywords, ctx.directives);
 		if (runs == null || runs.length < MIN_BRANCHES) return null;
 		final directives: Null<Array<CondDirective>> = ownDirectives(span, ctx);
 		// One opener per branch run, and the last opener must be the condition-less `#else`: a region

@@ -3,6 +3,7 @@ package anyparse.query;
 using Lambda;
 
 import anyparse.query.CondBranchProjection.CondBranchRun;
+import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
@@ -271,13 +272,12 @@ final class CondRegionScan {
 		// overwhelmingly common file skips it on one string scan, as the branch projection does.
 		if (source.indexOf(shape.conditionalIfKeyword ?? '#if') == -1) return null;
 		final scan: ArmScan = {
-			source: source,
 			name: name,
 			condKind: condKind,
 			declKinds: TypeResolver.blockScopedValueDeclarationKinds(shape),
 			metaKinds: plugin.metaShape().metaKinds,
 			elseKeywords: elseKeywords,
-			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
+			directives: CondDirectives.scan(source, shape, plugin.lexicalRegions.bind(source)),
 			shape: shape
 		};
 		// A PARAMETER is in effect for the whole body, so it is an "already in effect" declaration
@@ -450,9 +450,7 @@ final class CondRegionScan {
 	 * as the reachable paths need it rather than split for a path nothing can exercise.
 	 */
 	private static function condArmDeclarations(region: QueryNode, scan: ArmScan): Array<QueryNode> {
-		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(
-			region, scan.source, scan.elseKeywords, scan.comments
-		);
+		final runs: Null<Array<CondBranchRun>> = CondBranchProjection.conditionalBranchRuns(region, scan.elseKeywords, scan.directives);
 		final out: Array<QueryNode> = [];
 		if (runs == null) {
 			for (c in region.children) if (declares(c, scan)) out.push(c);
@@ -505,15 +503,14 @@ typedef OpaqueCondRegion = {
 /**
  * The seams `RefactorSupport.condArmDeclarations` reads while scanning one conditional region's
  * arms for a declaration of `name` — the grammar's conditional and declaration vocabularies plus
- * the file text the branch splitter needs, gathered once per `exclusiveBranchRedeclaration` call.
+ * the file's directives the branch splitter reads, gathered once per `exclusiveBranchRedeclaration` call.
  */
 private typedef ArmScan = {
-	final source: String;
 	final name: String;
 	final condKind: String;
 	final declKinds: Array<String>;
 	final metaKinds: Array<String>;
 	final elseKeywords: Array<String>;
-	final comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	final directives: Array<CondDirective>;
 	final shape: RefShape;
 };
