@@ -281,22 +281,6 @@
 			"note": "a literal broken by its own width is laid out bare where the next write reads it in a `BodyGroup` every width probe defers, so a method chain dot-breaks and an arrow body leaves `->` on the first write and both glue back on the second"
 		},
 		{
-			"name": "M-ALLMAN-GLUED-SPACE-KEPT",
-			"type": "anyparse.format.BodyAllman",
-			"method": "tailBreak",
-			"find": "case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):",
-			"replace": "case Doc.Concat([Doc.OptSpace(' '), body]) if (false):",
-			"note": "the layout a list is offered for an Allman body break keeps the glued placement's space, so a cuddled head measured on it counts a column the output never has and opens at exactly the limit"
-		},
-		{
-			"name": "M-ALLMAN-GLUED-SPACE-UNGUARDED",
-			"type": "anyparse.format.BodyAllman",
-			"method": "tailBreak",
-			"find": "case Doc.Concat([Doc.OptSpace(' '), body]) if (BreakCommits.decisionMapped(body, (brk, _) -> brk) != null):",
-			"replace": "case Doc.Concat([Doc.OptSpace(' '), body]):",
-			"note": "the space is dropped also before a body that only ends in the decision (a nested `for`), gluing `)for` in the offered layout"
-		},
-		{
 			"name": "M-BODY-EDGE-STATED-IGNORED",
 			"type": "anyparse.format.MemberGap",
 			"method": "bodyEdge",

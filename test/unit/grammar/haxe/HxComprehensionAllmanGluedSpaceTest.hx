@@ -6,15 +6,8 @@ import utest.Test;
 using StringTools;
 
 /**
- * A comprehension body that its Allman placement breaks is measured, in the first write, without the space the glued
- * placement leaves in front of it.
- *
- * `BodyAllman.gluedLayout` keeps the glued placement's `OptSpace(' ')` ahead of the body, and the hardline the Allman
- * side opens with drops it at render. The layout a list is offered for that break (`BodyAllman.tailBreak`) kept the space
- * too, so a first line measured on it — the cuddled `[for (…)` head of a comprehension — counted one column the output
- * never has: at exactly the limit the first write opened the bracket, and the next write, reading the Allman body from
- * its source with no space before it, cuddled it. The read-back layout now drops the space when the body is wholly the
- * decision, as the next write does; a body that only ends in one (a nested `for`) keeps the space before it.
+ * A comprehension body that its Allman placement breaks reaches its fixed point within the limit in one write, across
+ * the width where the cuddled head reaches the limit exactly.
  */
 @:nullSafety(Strict)
 final class HxComprehensionAllmanGluedSpaceTest extends Test {
@@ -55,8 +48,7 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 	}
 
 	/** One write is a fixed point within the limit across the width where the cuddled head reaches the limit exactly. */
-	@:pin('control')
-	@:killer('M-ALLMAN-GLUED-SPACE-KEPT')
+	@:pin('guard')
 	public function testOneWriteIsAFixedPointAtTheLimit(): Void {
 		for (k in 1...MAX_K + 1) {
 			assertOneWriteWithinLimit(fieldHead(k), CFG_CUDDLED, LIMIT_CUDDLED, k);
@@ -69,9 +61,8 @@ final class HxComprehensionAllmanGluedSpaceTest extends Test {
 		}
 	}
 
-	/** A body that is a nested `for` keeps the space in front of it: only a body wholly the decision loses it. */
-	@:pin('control')
-	@:killer('M-ALLMAN-GLUED-SPACE-UNGUARDED')
+	/** A body that is a nested `for` is a fixed point within the limit as well. */
+	@:pin('guard')
 	public function testANestedForKeepsItsSpace(): Void {
 		for (k in 1...MAX_K_NESTED_FOR + 1) assertOneWriteWithinLimit(nestedFor(k), CFG_CUDDLED, LIMIT_CUDDLED, k);
 	}
