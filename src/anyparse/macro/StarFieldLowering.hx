@@ -80,7 +80,7 @@ final class StarFieldLowering {
 	 *    whitespace skip and breaks (so the enclosing rule's close
 	 *    literal — e.g. `#end` on the wrapping ctor — sees the next
 	 *    token at its original position). Use case:
-	 *    `HxConditionalObjectField.body` — comma-separated object-literal
+	 *    `HxConditionalCommaList<HxObjectField>.body` — comma-separated object-literal
 	 *    fields inside a `#if … #end` block, where `#end` is consumed by
 	 *    the enclosing `HxObjectField.Conditional` ctor, not by this
 	 *    Star.

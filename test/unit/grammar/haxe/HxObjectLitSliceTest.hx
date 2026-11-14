@@ -11,13 +11,13 @@ import utest.Assert;
  * New grammar:
  *  - `HxObjectFieldBody` typedef: `name:HxIdentLit` + `@:lead(':') value:HxExpr`.
  *  - `HxObjectField` enum (Slice 18): `Field(body:HxObjectFieldBody)` +
- *    `@:kw('#if') Conditional(inner:HxConditionalObjectField)`.
+ *    `@:kw('#if') Conditional(inner:HxConditionalCommaList<HxObjectField>)`.
  *  - `HxObjectLit` typedef: `@:lead('{') @:trail('}') @:sep(',') fields:Array<HxObjectField>`.
  *  - `HxExpr.ObjectLit(lit:HxObjectLit)` atom branch — bare-Ref dispatch,
  *    the inner `@:lead('{')` drives `tryBranch` peek.
  *
  * Zero Lowering changes expected for this slice (Slice 18 adds the
- * `@:sep+@:tryparse-no-close` branch used by `HxConditionalObjectField.body`,
+ * `@:sep+@:tryparse-no-close` branch used by `HxConditionalCommaList<HxObjectField>.body`,
  * tested separately in `HxConditionalObjectFieldSliceTest`).
  */
 class HxObjectLitSliceTest extends HxTestHelpers {

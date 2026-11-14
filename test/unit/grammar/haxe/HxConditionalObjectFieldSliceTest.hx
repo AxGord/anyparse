@@ -1,6 +1,6 @@
 package unit.grammar.haxe;
 
-import anyparse.grammar.haxe.HxConditionalObjectField;
+import anyparse.grammar.haxe.HxConditionalCommaList;
 import anyparse.grammar.haxe.HxObjectField;
 import anyparse.grammar.haxe.HxObjectLit;
 import anyparse.grammar.haxe.HxVarDecl;
@@ -9,7 +9,7 @@ import utest.Assert;
 /**
  * Slice 18: cond-comp `#if … #end` inside an object-literal field list.
  *
- * `HxObjectField` gained a `Conditional(HxConditionalObjectField)` ctor —
+ * `HxObjectField` gained a `Conditional(HxConditionalCommaList<HxObjectField>)` ctor —
  * the object-literal completion of the cond-comp arc (decl / stmt /
  * member / modifier scopes already shipped). `#if <cond> <fields>
  * [#elseif …] [#else …] #end` now parses where whole object-literal
@@ -18,7 +18,7 @@ import utest.Assert;
  *
  * Drives Slice 18's new Lowering branch
  * `emitStarFieldSteps:@:sep+@:tryparse-no-close`: the body Star inside
- * `HxConditionalObjectField` is `@:sep(',') @:tryparse var
+ * `HxConditionalCommaList<HxObjectField>` is `@:sep(',') @:tryparse var
  * body:Array<HxObjectField>` with no `@:trail` — the enclosing
  * `HxObjectField.Conditional` ctor's `@:trail('#end')` consumes the
  * closing directive.
@@ -29,7 +29,7 @@ import utest.Assert;
  * because `HxObjectField` is a bare sum-type with no mandatory wrapping
  * struct that forces a throw on the terminator.
  *
- * `#else` body covered by `HxConditionalObjectField.elseBody` is
+ * `#else` body covered by `HxConditionalCommaList<HxObjectField>.elseBody` is
  * deliberately tested with a SINGLE field only — the optional-kw
  * Lowering path (`emitOptionalKwStarFieldSteps`) does not yet support
  * `@:sep` peek; a multi-field `#else` body is a documented Slice 18
@@ -42,7 +42,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 	public function testSingleFieldConditional(): Void {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { #if flash a: 1 #end }; }');
 		Assert.equals(1, lit.fields.length);
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[0]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[0]);
 		Assert.equals('flash', (cond.cond: String));
 		Assert.equals(1, cond.body.length);
 		Assert.equals('a', (expectObjectFieldBody(cond.body[0]).name: String));
@@ -55,7 +55,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 	public function testMultiFieldConditionalBody(): Void {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { #if debug a: 1, b: 2 #end }; }');
 		Assert.equals(1, lit.fields.length);
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[0]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[0]);
 		Assert.equals('debug', (cond.cond: String));
 		Assert.equals(2, cond.body.length);
 		Assert.equals('a', (expectObjectFieldBody(cond.body[0]).name: String));
@@ -68,7 +68,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { name: "foo", #if debug count: 1 #end }; }');
 		Assert.equals(2, lit.fields.length);
 		Assert.equals('name', (expectObjectFieldBody(lit.fields[0]).name: String));
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[1]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[1]);
 		Assert.equals('debug', (cond.cond: String));
 		Assert.equals('count', (expectObjectFieldBody(cond.body[0]).name: String));
 	}
@@ -79,7 +79,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { a: 1, #if debug b: 2 #end, c: 3 }; }');
 		Assert.equals(3, lit.fields.length);
 		Assert.equals('a', (expectObjectFieldBody(lit.fields[0]).name: String));
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[1]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[1]);
 		Assert.equals('debug', (cond.cond: String));
 		Assert.equals('b', (expectObjectFieldBody(cond.body[0]).name: String));
 		Assert.equals('c', (expectObjectFieldBody(lit.fields[2]).name: String));
@@ -90,13 +90,13 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 	// HxObjectField has no mandatory wrapping struct that would throw on
 	// the terminator — the tryparse Star simply rolls back to zero
 	// elements and the enclosing `@:trail('#end')` consumes `#end`. This
-	// is doc'd on `HxConditionalObjectField` and is the deliberate
+	// is doc'd on `HxConditionalCommaList<HxObjectField>` and is the deliberate
 	// divergence from member/decl-scope, not a regression.
 
 	public function testEmptyConditionalBodyAccepted(): Void {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { #if flash #end }; }');
 		Assert.equals(1, lit.fields.length);
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[0]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[0]);
 		Assert.equals('flash', (cond.cond: String));
 		Assert.equals(0, cond.body.length);
 	}
@@ -106,7 +106,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 	public function testConditionalElseSingleField(): Void {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { #if js a: 1 #else a: 2 #end }; }');
 		Assert.equals(1, lit.fields.length);
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[0]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[0]);
 		Assert.equals('js', (cond.cond: String));
 		Assert.equals('a', (expectObjectFieldBody(cond.body[0]).name: String));
 		final elseBody: Null<Array<HxObjectField>> = cond.elseBody;
@@ -121,7 +121,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 	public function testConditionalElseifSingleField(): Void {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { #if js a: 1 #elseif sys a: 2 #else a: 3 #end }; }');
 		Assert.equals(1, lit.fields.length);
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[0]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[0]);
 		Assert.equals('js', (cond.cond: String));
 		Assert.equals('a', (expectObjectFieldBody(cond.body[0]).name: String));
 		Assert.equals(1, cond.elseifs.length);
@@ -137,10 +137,10 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 	public function testNestedConditional(): Void {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { #if outer #if inner a: 1 #end #end }; }');
 		Assert.equals(1, lit.fields.length);
-		final outer: HxConditionalObjectField = expectConditionalObjectField(lit.fields[0]);
+		final outer: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[0]);
 		Assert.equals('outer', (outer.cond: String));
 		Assert.equals(1, outer.body.length);
-		final inner: HxConditionalObjectField = expectConditionalObjectField(outer.body[0]);
+		final inner: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(outer.body[0]);
 		Assert.equals('inner', (inner.cond: String));
 		Assert.equals('a', (expectObjectFieldBody(inner.body[0]).name: String));
 	}
@@ -159,7 +159,7 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 	public function testTrailingSepBeforeEnd(): Void {
 		final lit: HxObjectLit = objectLitOf('class C { var x:Dynamic = { #if debug a: 1, b: 2, #end }; }');
 		Assert.equals(1, lit.fields.length);
-		final cond: HxConditionalObjectField = expectConditionalObjectField(lit.fields[0]);
+		final cond: HxConditionalCommaList<HxObjectField> = expectConditionalObjectField(lit.fields[0]);
 		Assert.equals(2, cond.body.length);
 		Assert.equals('a', (expectObjectFieldBody(cond.body[0]).name: String));
 		Assert.equals('b', (expectObjectFieldBody(cond.body[1]).name: String));

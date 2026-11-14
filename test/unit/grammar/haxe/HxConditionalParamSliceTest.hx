@@ -35,7 +35,7 @@ import utest.Assert;
  * `#elseif` / nested / empty-body-accepted / no-cond regression /
  * trailing-sep-before-`#end`. `#else` body is tested with a SINGLE
  * param only — the optional-kw Lowering path is the same Slice 18
- * limitation as `HxConditionalObjectField.elseBody`.
+ * limitation as `HxConditionalCommaList<HxObjectField>.elseBody`.
  */
 class HxConditionalParamSliceTest extends HxTestHelpers {
 

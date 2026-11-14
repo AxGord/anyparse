@@ -2,7 +2,7 @@ package anyparse.grammar.haxe;
 
 /**
  * One `#elseif <cond> <params>` clause inside a `HxConditionalParam`'s
- * `elseifs` Star. The fn-param-scope twin of `HxElseifObjectField` /
+ * `elseifs` Star. The fn-param-scope twin of `HxElseifCommaList<HxObjectField>` /
  * `HxElseifMember` / `HxElseifStmt` / `HxElseifDecl`: carries the
  * `#elseif` keyword on its first field's metadata (HxCatchClause
  * precedent), so the parent's `@:tryparse` Star loop tries the kw at

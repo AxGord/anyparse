@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * Body of a `#if <cond> <params> [#elseif …] [#else <params>] #end` preprocessor-guarded
  * region wrapping whole function-parameter entries — the fn-param-scope twin of
- * `HxConditionalObjectField` / `HxConditionalMember`. The enclosing `HxParam.Conditional`
+ * `HxConditionalCommaList<HxObjectField>` / `HxConditionalMember`. The enclosing `HxParam.Conditional`
  * ctor consumes the `#if` keyword and the trailing `#end`; this typedef covers the content
  * between them.
  *

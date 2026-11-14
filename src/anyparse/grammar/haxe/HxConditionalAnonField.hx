@@ -7,7 +7,7 @@ package anyparse.grammar.haxe;
  * typedef covers the content between them — the condition atom, the then-body Star of further
  * anon members, an optional `#elseif` chain, and an optional `#else` clause with its own Star.
  *
- * Type-level sibling of `HxConditionalObjectField`, which does the same job for an object
+ * Type-level sibling of `HxConditionalCommaList<HxObjectField>`, which does the same job for an object
  * LITERAL. The two cannot share a body typedef: the object-literal scope holds `HxObjectField`
  * elements separated by a mandatory `,`, while an anon-type field run is `HxAnonMember` whose
  * elements terminate themselves with `;` through `HxAnonField.VarField`'s `@:trailOpt(';')`:
@@ -37,7 +37,7 @@ package anyparse.grammar.haxe;
  * nor a nested `#if` — in legal input `#elseif` / `#else` / `#end`, consumed by the following
  * field / the outer ctor's `@:trail`. `@:fmt(padLeading, padTrailing)` on the Stars closes
  * the boundary gaps against `#if <cond>` / `#else` / `#end`, the pad pair of the
- * `HxConditionalHeritage` / `HxConditionalObjectField` precedents; empty Stars degrade to
+ * `HxConditionalHeritage` / `HxConditionalCommaList<HxObjectField>` precedents; empty Stars degrade to
  * `_de()`.
  */
 @:peg

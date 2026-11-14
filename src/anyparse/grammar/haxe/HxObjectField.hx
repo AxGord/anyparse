@@ -19,7 +19,7 @@ package anyparse.grammar.haxe;
  * whole field entries — the object-literal member of the cond-comp cluster (`HxDecl`,
  * `HxStatement`, `HxClassMember`, `HxMemberModifier` carry the same ctor at their scopes).
  * `@:kw('#if')` dispatches with a non-word-char boundary check (so `#iff` is rejected);
- * `@:trail('#end')` consumes the closing directive after `HxConditionalObjectField` parses the
+ * `@:trail('#end')` consumes the closing directive after `HxConditionalCommaList<HxObjectField>` parses the
  * cond atom, the field body Star (the `@:sep+@:tryparse-no-close` Lowering branch), the
  * optional `#elseif` chain and the optional `#else` clause.
  *
@@ -29,13 +29,13 @@ package anyparse.grammar.haxe;
  * ordering is convention rather than necessity here).
  *
  * Writer dispatch fans out per ctor: `Field` re-emits the wrapped body unchanged;
- * `Conditional` delegates to the `HxConditionalObjectField` writer plus the ctor's own
+ * `Conditional` delegates to the `HxConditionalCommaList<HxObjectField>` writer plus the ctor's own
  * `@:kw('#if')` / `@:trail('#end')` literals.
  */
 @:peg
 enum HxObjectField {
 	@:kw('#if')
 	@:trail('#end')
-	Conditional(inner: HxConditionalObjectField);
+	Conditional(inner: HxConditionalCommaList<HxObjectField>);
 	Field(body: HxObjectFieldBody);
 }

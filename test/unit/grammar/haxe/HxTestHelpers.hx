@@ -12,9 +12,9 @@ import anyparse.grammar.haxe.HxArrowParam;
 import anyparse.grammar.haxe.HxArrowParamBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
+import anyparse.grammar.haxe.HxConditionalCommaList;
 import anyparse.grammar.haxe.HxConditionalDecl;
 import anyparse.grammar.haxe.HxConditionalMember;
-import anyparse.grammar.haxe.HxConditionalObjectField;
 import anyparse.grammar.haxe.HxConditionalParam;
 import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxConditionalType;
@@ -166,7 +166,7 @@ class HxTestHelpers extends Test {
 		};
 	}
 
-	private function expectConditionalObjectField(field: HxObjectField): HxConditionalObjectField {
+	private function expectConditionalObjectField(field: HxObjectField): HxConditionalCommaList<HxObjectField> {
 		return switch field {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $field';
