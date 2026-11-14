@@ -14494,6 +14494,13 @@
 			"note": "a package name held as a string value is not refused"
 		},
 		{
+			"name": "M-MODMOVE-SURVIVING-BLIND",
+			"type": "anyparse.query.ModuleMove",
+			"method": "emptiedPackages",
+			"force": "[for (p in planned) p.oldPackage]",
+			"note": "a package that keeps a module is refused like an emptied one"
+		},
+		{
 			"name": "M-MODMOVE-DECL-UNKNOWN-KEY",
 			"type": "anyparse.query.MoveDeclaration",
 			"method": "unknownKey",

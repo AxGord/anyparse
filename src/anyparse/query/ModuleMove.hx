@@ -129,7 +129,7 @@ final class ModuleMove {
 		final travelled: Map<String, String> = newPathOf.copy();
 		for (s in set.sources) travelled[s.from] = s.to;
 		// Phase 1: every spelling rewritten, the package statements, sorted import runs and declared lists kept sorted.
-		final texts: Map<String, String> = switch rewriteAll(request, planned, plugin) {
+		final texts: Map<String, String> = switch rewriteAll(request, planned, pre, plugin) {
 			case Left(reasons): return Refused(reasons);
 			case Right(t): t;
 		};
@@ -337,15 +337,15 @@ final class ModuleMove {
 	}
 
 	/**
-	 * A string literal that ends with a relocated module's OLD package (`'pkg.sub.'`, `'pkg/sub/'`), or that IS that package
-	 * held as a value (`'pkg.sub'`, `'….sub'`), composes a module path at run time, which the relocation cannot follow —
-	 * one refusal per such literal.
+	 * A string literal that ends with the OLD package of a relocated module (`'pkg.sub.'`, `'pkg/sub/'`), or that IS that
+	 * package held as a value (`'pkg.sub'`, `'….sub'`), composes a module path at run time, which the relocation cannot
+	 * follow when the move EMPTIES that package — one refusal per such literal. A package that keeps a module (or receives
+	 * one) still answers the composition.
 	 */
 	private static function compositionRefusals(
-		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, plugin: GrammarPlugin
+		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, pre: SymbolIndex, plugin: GrammarPlugin
 	): Array<String> {
-		final packages: Array<String> = [];
-		for (p in planned) if (!packages.contains(p.oldPackage)) packages.push(p.oldPackage);
+		final packages: Array<String> = emptiedPackages(planned, pre);
 		final prefixes: Array<String> = [
 			for (pkg in packages) for (prefix in ['$pkg.', '${ModulePathTokens.slashPath(pkg)}/']) prefix
 		];
@@ -642,7 +642,7 @@ final class ModuleMove {
 	 * its OLD path, the declared sorted lists put back in order; or every reason the rewrite cannot be proven.
 	 */
 	private static function rewriteAll(
-		request: ModuleMoveRequest, planned: Array<PlannedMove>, plugin: GrammarPlugin
+		request: ModuleMoveRequest, planned: Array<PlannedMove>, pre: SymbolIndex, plugin: GrammarPlugin
 	): Either<Array<String>, Map<String, String>> {
 		final renames: Array<ModuleRename> = planned.map(p -> p.rename);
 		final reasons: Array<String> = [];
@@ -656,7 +656,7 @@ final class ModuleMove {
 			case Right(text):
 				texts[e.file] = text;
 		}
-		for (r in compositionRefusals(request.scopeFiles, planned, plugin)) reasons.push(r);
+		for (r in compositionRefusals(request.scopeFiles, planned, pre, plugin)) reasons.push(r);
 		for (r in grantRefusals(request.scopeFiles, planned, plugin)) reasons.push(r);
 		final textOf: Map<String, String> = [for (e in request.textFiles) e.file => e.source];
 		for (r in registryRefusals(request.registries, textOf, planned)) reasons.push(r);
@@ -1032,6 +1032,22 @@ final class ModuleMove {
 	/** `usings` with each path kept only at its last place: a `using` repeated further in is the same ranking as the later one alone. */
 	private static function lastWins(usings: Array<String>): Array<String> {
 		return [for (i => u in usings) if (usings.lastIndexOf(u) == i) u];
+	}
+
+	/**
+	 * The old packages of `planned` the relocation EMPTIES — no module of `pre` stays in one and no relocation lands in it. A
+	 * package that only keeps sub-packages counts as emptied: a composition under it can still reach a module that left.
+	 */
+	private static function emptiedPackages(planned: Array<PlannedMove>, pre: SymbolIndex): Array<String> {
+		final leaving: Array<String> = planned.map(p -> p.move.from);
+		final kept: Array<String> = [for (fi in pre.allFiles()) if (!leaving.contains(fi.file)) fi.pkg];
+		for (p in planned) {
+			final path: String = p.rename.newPath;
+			kept.push(path.substr(0, path.lastIndexOf('.')));
+		}
+		final out: Array<String> = [];
+		for (p in planned) if (!kept.contains(p.oldPackage) && !out.contains(p.oldPackage)) out.push(p.oldPackage);
+		return out;
 	}
 
 }
