@@ -68,6 +68,8 @@ typedef HxFormatWrappingSection = {
 	@:optional
 	var anonType: HxFormatWrapRules;
 	@:optional
+	var typedefBody: HxFormatWrapRules;
+	@:optional
 	var methodChain: HxFormatWrapRules;
 	@:optional
 	var opBoolChain: HxFormatWrapRules;

@@ -531,6 +531,7 @@ final class HaxeFormatConfigLoader {
 				section.casePattern, opt.casePatternWrap, casePatternClearsRules(section.casePattern)
 			);
 		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
+		opt.typedefBodyWrap = section.typedefBody != null ? wrapRulesFromConfig(section.typedefBody, opt.anonTypeWrap) : opt.anonTypeWrap;
 		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
 		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap, true);
 		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap, true);

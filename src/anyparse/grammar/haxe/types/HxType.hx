@@ -166,8 +166,8 @@ enum HxType {
 	@:trail('}')
 	@:sep(',')
 	@:sepAlt(';', selfEnded('anonMemberNoSep'))
-	@:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), leftCurly('anonTypeLeftCurly'),
-		rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines,
+	@:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), typedefWrapRules('typedefBodyWrap'),
+		leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines,
 		metadataCountsAsDoc('meta', '', '_inTypedefBody', 'typedefMetadataCountsAsDocComment'),
 		afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'), forceMultiInTypedef, keepCurlyBlanks,
 		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'), typeParamItems)

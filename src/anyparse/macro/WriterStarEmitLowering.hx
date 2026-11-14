@@ -1123,7 +1123,7 @@ final class WriterStarEmitLowering {
 		final bodyAware: Expr = macro $v{plan.bodyAwareCompactIndent()};
 		return new TriviaSepLowering(
 			plan, c.argsAccess, slots, slots.sepTrailPresentAccess, c.elemFn, c.leadText, c.trailText, c.sepText, plan.leftCurly(),
-			openInsideExpr, closeInsideExpr, bodyAware, ctx.mapWrapFor(plan.mapWrapRules()),
+			openInsideExpr, closeInsideExpr, bodyAware, ctx.mapWrapFor(plan.mapWrapRules(), plan.typedefWrapRules()),
 			TriviaTailRehome.fnRefFor(c.starNode.children[0], ctx.shape.root), WriterTriviaStarDispatch.afterDocPolicy(branch)
 		).triviaSepStarExpr();
 	}
@@ -1448,7 +1448,7 @@ typedef StarEmitCtx = {
 	final buildKeepBlankAfterCtorGate: (child: ShapeNode, node: ShapeNode, typePath: String) -> Null<Expr>;
 	final isSpacedLead: (openText: Null<String>) -> Bool;
 	final isTriviaBearing: (refName: String) -> Bool;
-	final mapWrapFor: (field: Null<String>) -> Null<SepStarMapWrap>;
+	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<SepStarMapWrap>;
 	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
 	final writeFnFor: (refName: String) -> String;
 }

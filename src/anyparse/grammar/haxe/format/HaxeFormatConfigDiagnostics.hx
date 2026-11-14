@@ -215,6 +215,7 @@ final class HaxeFormatConfigDiagnostics {
 			section.multiVar,
 			section.casePattern,
 			section.anonType,
+			section.typedefBody,
 			section.methodChain,
 			section.opBoolChain,
 			section.opAddSubChain,

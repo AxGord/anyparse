@@ -189,7 +189,7 @@ final class WriterTriviaStarDispatch {
 				leftCurlyOwnedBySep ? knobLeftCurly : null,
 				delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false),
 				delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true),
-				bodyEmptySuppressExpr(starNode, tc.shape.root, true), tc.mapWrapFor(plan.mapWrapRules()),
+				bodyEmptySuppressExpr(starNode, tc.shape.root, true), tc.mapWrapFor(plan.mapWrapRules(), plan.typedefWrapRules()),
 				TriviaTailRehome.fnRefFor(starNode.children[0], tc.shape.root), afterDocPolicy(starNode)
 			).triviaSepStarExpr());
 			return;
@@ -662,7 +662,7 @@ typedef TriviaStarDispatchCtx = {
 	final shape: ShapeBuilder.ShapeResult;
 	final formatInfo: FormatReader.FormatInfo;
 	final isSpacedLead: (openText: Null<String>) -> Bool;
-	final mapWrapFor: (field: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
+	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
 }
 /** `WriterTriviaStarDispatch.docLedReads`: a Star's metadata-counts-as-doc reads of the element `_t` and of the body `_arr`. */
 typedef DocLedReads = { final elem: Expr; final body: Expr; }

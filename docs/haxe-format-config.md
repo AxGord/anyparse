@@ -31,7 +31,7 @@ spelling against the tables below, not to look for the missing feature.
 
 The classes (`HxFormatWrappingSection`) — each takes the same rules object:
 
-`arrayWrap`, `mapWrap`, `multiVar`, `casePattern`, `anonType`, `methodChain`,
+`arrayWrap`, `mapWrap`, `multiVar`, `casePattern`, `anonType`, `typedefBody`, `methodChain`,
 `opBoolChain`, `opAddSubChain`, `callParameter`, `objectLiteral`, `conditionWrapping`,
 `ternaryExpression`, `functionSignature`, `anonFunctionSignature`,
 `metadataCallParameter`, `typeParameter`, `expressionWrapping`, `implementsExtends`.
@@ -222,11 +222,13 @@ is the whole distinction above.
 without one (`Int->Void`) counts zero, and so does a `#if` group of items; a default value or an
 initializer is not a type and is never read. The count is supplied for the fields of an anonymous
 type (`anonType`) and for function and enum-constructor parameters (`functionSignature`); everywhere
-else it is zero, so the condition is inert. A `typedef` body is an anonymous type, so "four fields fit
-on one line, three when one of them is generic" is two rules of `anonType`:
+else it is zero, so the condition is inert. "Four fields fit on one line, three when one of them is
+generic" for `typedef` bodies only is two rules of `typedefBody`, the cascade a typedef's own body
+reads (inline anonymous types in parameters, fields and returns stay on `anonType`; without the key
+`typedefBody` is a copy of `anonType`):
 
 ```json
-"anonType": { "defaultWrap": "noWrap", "rules": [
+"typedefBody": { "defaultWrap": "noWrap", "rules": [
   { "conditions": [ { "cond": "itemCount >= n", "value": 5 } ], "type": "onePerLine" },
   { "conditions": [ { "cond": "itemCount >= n", "value": 4 }, { "cond": "typeParamItemCount >= n", "value": 1 } ],
     "type": "onePerLine" }

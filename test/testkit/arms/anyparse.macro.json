@@ -3374,6 +3374,14 @@
 			"find": "|| $metaLed)",
 			"replace": ")",
 			"note": "a metadata-led typedef field rides the cascade and loses the doc-keyed blank lines"
+		},
+		{
+			"name": "M-TYPEDEF-BODY-WRAP-OFF",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "mapWrapFor",
+			"find": "macro opt._inTypedefBody",
+			"replace": "macro false",
+			"note": "a typedef body never reads its own cascade, so it falls back to the anonType rules"
 		}
 	]
 }

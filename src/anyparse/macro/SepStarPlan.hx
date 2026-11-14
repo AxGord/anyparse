@@ -42,6 +42,9 @@ final class SepStarPlan extends StarPlan {
 	/** `@:fmt(mapWrapRules('<knob>'))`: the option of a map literal's wrap rules, or null. */
 	public inline function mapWrapRules(): Null<String> return _meta.string('mapWrapRules');
 
+	/** `@:fmt(typedefWrapRules('<knob>'))`: the option read instead of `wrapRules` while `_inTypedefBody` holds, or null. */
+	public inline function typedefWrapRules(): Null<String> return _meta.string('typedefWrapRules');
+
 	public inline function bracketKindPad(): Bool return _meta.flag('bracketKindPad');
 
 	public inline function bodyAwareCompactIndent(): Bool return _meta.flag('bodyAwareCompactIndent');

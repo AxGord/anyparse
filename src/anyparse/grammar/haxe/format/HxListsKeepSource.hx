@@ -43,6 +43,7 @@ final class HxListsKeepSource {
 		options.arrayLiteralWrap = wrapped.arrayLiteralWrap;
 		options.mapLiteralWrap = wrapped.mapLiteralWrap;
 		options.anonTypeWrap = wrapped.anonTypeWrap;
+		options.typedefBodyWrap = wrapped.typedefBodyWrap;
 	}
 
 	private static function entriesOf(value: JValue): Array<JEntry> {

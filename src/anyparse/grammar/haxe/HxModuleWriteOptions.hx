@@ -745,6 +745,9 @@ final class HxModuleWriteOptions {
 	public var multiVarWrap: WrapRules = HaxeFormat.defaultMultiVarWrap();
 	public var casePatternWrap: WrapRules = HaxeFormat.defaultCasePatternWrap();
 	public var anonTypeWrap: WrapRules = HaxeFormat.defaultAnonTypeWrap();
+	// The cascade of a typedef's own body (`typedef T = { … }`); inline anonymous types stay on `anonTypeWrap`. A config without
+	// `wrapping.typedefBody` loads it equal to `anonTypeWrap`.
+	public var typedefBodyWrap: WrapRules = HaxeFormat.defaultAnonTypeWrap();
 	public var methodChainWrap: WrapRules = HaxeFormat.defaultMethodChainWrap();
 	public var opBoolChainWrap: WrapRules = HaxeFormat.defaultOpBoolChainWrap();
 	public var opAddSubChainWrap: WrapRules = HaxeFormat.defaultOpAddSubChainWrap();

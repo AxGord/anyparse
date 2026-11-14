@@ -1633,7 +1633,8 @@ class WriterLowering {
 	 * carrying a line comment still runs the keep / ignore / noWrap checks. The
 	 * length guard is what stands between that and reading `.node` of nothing.
 	 */
-	private function mapWrapFor(field: Null<String>): Null<SepStarMapWrap> {
+	private function mapWrapFor(field: Null<String>, typedefField: Null<String>): Null<SepStarMapWrap> {
+		if (typedefField != null) return { field: typedefField, isMapLiteralExpr: macro opt._inTypedefBody };
 		if (field == null) return null;
 		final kind: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, ARRAY_BRACKET_KIND_PRED, [macro _arr[0].node]);
 		return { field: field, isMapLiteralExpr: macro (_arr.length > 0 && $kind == 1) };
