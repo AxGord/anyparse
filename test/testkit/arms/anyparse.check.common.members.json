@@ -737,9 +737,25 @@
 			"name": "M-MO-WRITER-DOC-IGNORED",
 			"type": "anyparse.check.common.members.MemberSpacing",
 			"method": "wantedBlanks",
-			"find": "final forced: Null<Int> = writer.docBlanks(a.leadComments, b.leadComments);",
+			"find": "final forced: Null<Int> = writer.docBlanks(headA, headB);",
 			"replace": "final forced: Null<Int> = null;",
 			"note": "the writer's doc-comment rule is not asked, so a glued doc-commented field stays exempt and `lint` is silent about the blanks `fmt` then adds"
+		},
+		{
+			"name": "M-MO-WRITER-META-UNREAD-PREV",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "final headA: MemberGapHead = { leading: a.leadComments, hasMeta: a.hasMeta };",
+			"replace": "final headA: MemberGapHead = { leading: a.leadComments, hasMeta: false };",
+			"note": "the check hands the writer policy no metadata for the earlier member, so the blank the writer sets after a metadata member under metadataCountsAsDocComment is not demanded"
+		},
+		{
+			"name": "M-MO-WRITER-META-UNREAD",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "wantedBlanks",
+			"find": "final headB: MemberGapHead = { leading: b.leadComments, hasMeta: b.hasMeta };",
+			"replace": "final headB: MemberGapHead = { leading: b.leadComments, hasMeta: false };",
+			"note": "the check hands the writer policy no metadata for the later member, so a glued metadata member under metadataCountsAsDocComment is not reported"
 		},
 		{
 			"name": "M-MO-WRITER-MULTILINE-IGNORED",

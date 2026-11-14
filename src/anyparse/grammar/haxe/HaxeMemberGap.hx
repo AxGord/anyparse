@@ -4,6 +4,7 @@ import anyparse.core.Doc;
 import anyparse.format.MemberGap;
 import anyparse.grammar.haxe.trivia.Pairs.HxDeclT;
 import anyparse.grammar.haxe.trivia.Pairs.HxModuleT;
+import anyparse.query.GrammarPlugin.MemberGapHead;
 import anyparse.query.GrammarPlugin.MemberGapPolicy;
 import haxe.Exception;
 
@@ -28,10 +29,13 @@ final class HaxeMemberGap {
 	public static function policy(opt: HxModuleWriteOptions): MemberGapPolicy {
 		final measured: Map<String, Bool> = [];
 		final unreadable: Array<String> = [];
-		inline function docGap(prev: Array<String>, next: Array<String>): DocGapVerdict {
+		inline function docLed(head: MemberGapHead): Bool {
+			return MemberGap.docLed(head.leading) || (opt.metadataCountsAsDocComment && head.hasMeta);
+		}
+		inline function docGap(prev: MemberGapHead, next: MemberGapHead): DocGapVerdict {
 			return MemberGap.docGap(
-				MemberGap.docLed(prev), MemberGap.docLed(next), opt.afterFieldsWithDocComments, opt.beforeDocCommentEmptyLines,
-				MemberGap.docSplitLead(next)
+				docLed(prev), docLed(next), opt.afterFieldsWithDocComments, opt.beforeDocCommentEmptyLines,
+				MemberGap.docSplitLead(next.leading)
 			);
 		}
 		return {

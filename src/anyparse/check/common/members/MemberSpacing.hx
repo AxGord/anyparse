@@ -239,7 +239,9 @@ final class MemberSpacing {
 		final writer: Null<MemberGapPolicy> = a.condition == null && b.condition == null ? spacing.writer : null;
 		final own: Null<GapWant> = ownWant(a, b, source, spacing.separateInline);
 		if (writer == null) return own;
-		final forced: Null<Int> = writer.docBlanks(a.leadComments, b.leadComments);
+		final headA: MemberGapHead = { leading: a.leadComments, hasMeta: a.hasMeta };
+		final headB: MemberGapHead = { leading: b.leadComments, hasMeta: b.hasMeta };
+		final forced: Null<Int> = writer.docBlanks(headA, headB);
 		final base: Null<GapWant> = if (forced == null)
 			own
 		else if (forced == 0)
@@ -249,7 +251,7 @@ final class MemberSpacing {
 		else
 			{ count: forced, atLeast: true, rule: DocComment };
 		if (base == null || base.count != 0) return base;
-		final lifted: Null<Int> = writer.multilineBlanks(a.leadComments, b.leadComments);
+		final lifted: Null<Int> = writer.multilineBlanks(headA, headB);
 		if (lifted == null || lifted == 0) return base;
 		final multiA: Null<Bool> = writer.multiline(source.substring(a.span.from, a.span.to));
 		if (multiA == true) return { count: lifted, atLeast: true, rule: Multiline };

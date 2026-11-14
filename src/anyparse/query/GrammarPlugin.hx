@@ -4292,6 +4292,13 @@ typedef MetaShape = { var metaKinds: Array<String>; var declHostKinds: Array<Str
 typedef LayoutMetrics = { final lineWidth: Int; final indentWidth: Int; }
 
 /**
+ * What `MemberGapPolicy` reads of one member: its leading comments in source order and whether its head carries
+ * metadata (`@:meta`, read from the node, never from text).
+ */
+@:nullSafety(Strict)
+typedef MemberGapHead = { final leading: Array<String>; final hasMeta: Bool; }
+
+/**
  * The member-gap half of a writer's blank-line policy under one format config (`GrammarPlugin.memberGapPolicy`):
  * the blank lines the writer FORCES between two adjacent members of a type body, whatever the source holds there.
  * A check that demands blank lines between members asks this instead of keeping a policy of its own, so it never
@@ -4300,7 +4307,9 @@ typedef LayoutMetrics = { final lineWidth: Int; final indentWidth: Int; }
  * the writer leaves the gap to the source, or when the policy cannot tell, which a caller reads the same way.
  *
  * `containerKinds` are the projected container kinds whose member list the writer runs this policy on.
- * `docBlanks(prev, next)` is what the doc-comment rule forces, given each member's leading comments in source order.
+ * `docBlanks(prev, next)` is what the doc-comment rule forces, given each member's head (`MemberGapHead`): its leading
+ * comments in source order and whether its metadata list is non-empty, which the writer counts as doc-led under
+ * `metadataCountsAsDoc`.
  * `multilineBlanks(prev, next)` is what the writer forces when, in addition, either member renders over several lines
  * (null when that rule is off) - a caller that would get a different answer from it asks `multiline` about each
  * member's slot (its leading comments plus its declaration): whether the writer renders it over several lines, null
@@ -4309,8 +4318,8 @@ typedef LayoutMetrics = { final lineWidth: Int; final indentWidth: Int; }
 @:nullSafety(Strict)
 typedef MemberGapPolicy = {
 	final containerKinds: Array<String>;
-	final docBlanks: (prevLeading: Array<String>, nextLeading: Array<String>) -> Null<Int>;
-	final multilineBlanks: (prevLeading: Array<String>, nextLeading: Array<String>) -> Null<Int>;
+	final docBlanks: (prev: MemberGapHead, next: MemberGapHead) -> Null<Int>;
+	final multilineBlanks: (prev: MemberGapHead, next: MemberGapHead) -> Null<Int>;
 	final multiline: (slot: String) -> Null<Bool>;
 }
 
