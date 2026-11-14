@@ -154,6 +154,17 @@ enum HxClassMember {
 	Conditional(inner: HxConditionalMember);
 
 	/**
+	 * A member-scope `#if` region the balanced `Conditional` cannot read but that is COMPLETE at its
+	 * own `#end` (`#if false {} #end`): its last token before `#end` is a `;` or `}`
+	 * (`HxCondClosedMemberRaw`). Nothing after the `#end` belongs to it, so the NEXT member stays a
+	 * sibling instead of becoming `CondSpliceMember`'s shared-body tail.
+	 *
+	 * Tried BEFORE `CondSpliceMember`, whose regions dangle (a signature with no body).
+	 */
+	@:kw('#if')
+	CondClosedMember(raw: HxCondClosedMemberRaw);
+
+	/**
 	 * Token-splice fallback for a member-scope `#if` region holding
 	 * parallel SIGNATURES whose shared function body follows the `#end`
 	 * (slice C5) - see `HxCondSharedBodyMember` for the motivating Pony

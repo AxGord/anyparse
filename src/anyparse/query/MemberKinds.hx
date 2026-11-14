@@ -228,7 +228,8 @@ final class MemberKinds {
 
 	/**
 	 * Whether `kind` is a member form a scan collecting declared members cannot read: a `#if` region
-	 * spliced at member scope (`CondSpliceMember`), a `function` whose name is itself a region
+	 * spliced at member scope (`CondSpliceMember`, or `CondClosedMember` when the
+	 * region is complete at its `#end`), a `function` whose name is itself a region
 	 * (`CondNameFnMember`) and a `function` whose signature closes inside a region (`CondSigFnMember`).
 	 * They are blind for DIFFERENT reasons — `CondSpliceMember` is raw in the grammar itself
 	 * (`HxCondSharedBodyMember` swallows the whole region as `HxCondSpliceRaw`); `CondNameFnDecl` models
@@ -246,7 +247,7 @@ final class MemberKinds {
 	 * `ExtractConstant`) filter on `isFieldMemberKind` alone and stay blind to all three kinds.
 	 */
 	public static inline function isOpaqueMemberKind(kind: String): Bool {
-		return kind == 'CondNameFnMember' || kind == 'CondSigFnMember' || kind == 'CondSpliceMember';
+		return kind == 'CondNameFnMember' || kind == 'CondSigFnMember' || kind == 'CondSpliceMember' || kind == 'CondClosedMember';
 	}
 
 	/**

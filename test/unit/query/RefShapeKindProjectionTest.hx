@@ -1179,6 +1179,7 @@ final class RefShapeKindProjectionTest extends Test {
 			{ kinds: ['CondSemiAssignStmt', 'CondSemiRegion'], source: 'class C { function f() { a = #if c 1; #else 2; #end } }' },
 			{ kinds: ['CondSigFnMember'], source: 'class C { function f(a:#if c A):A #else B):B #end {} }' },
 			{ kinds: ['CondSpliceMember'], source: 'class C { #if js function f(): Int #else function f(): String #end { return a; } }' },
+			{ kinds: ['CondClosedMember'], source: 'class C { #if false {} #end function f() {} }' },
 			{ kinds: ['DoWhileExpr'], source: 'class C { function f() { var g = () -> do a() while (b); } }' },
 			{ kinds: ['MetaStmt'], source: 'class C { function f() { @:meta if (a) b(); c(); } }' }
 		]

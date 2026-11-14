@@ -36,7 +36,9 @@ package anyparse.grammar.haxe;
  * unsafe in a way the statement-scope twin is not: `raw` swallows every byte up to the first
  * `#end`, and `HxFnBody.ExprBody` accepts a bare identifier, so a plain `#if a var x:Int;
  * #end` followed by `public function f() {}` would parse with `public` as the "shared body".
- * After `Conditional`, every region that ctor can represent is already gone.
+ * After `Conditional`, every region that ctor can represent is already gone. `CondClosedMember`
+ * sits between the two and takes a region closed by `;` / `}`, which has no dangling signature
+ * for a shared body to complete.
  */
 @:peg
 typedef HxCondSharedBodyMember = { var raw: HxCondSpliceRaw; var tail: HxFnBody; }

@@ -1938,6 +1938,15 @@
 			"find": "HxPpCondFormat",
 			"replace": "HaxeFormat",
 			"note": "a condition is read with the Haxe whitespace, so a `//` comment is a blank where the compiler refuses it"
+		},
+		{
+			"name": "M-COND-CLOSED-MEMBER-OFF",
+			"type": "anyparse.grammar.haxe.HxClassMember",
+			"method": "CondClosedMember",
+			"kind": "ParamCtor",
+			"find": "@:kw('#if')",
+			"replace": "@:kw('#if-closed')",
+			"note": "a member region complete at its own `#end` is no longer taken as a closed member, so the shared-body ctor swallows the next member as its tail"
 		}
 	]
 }

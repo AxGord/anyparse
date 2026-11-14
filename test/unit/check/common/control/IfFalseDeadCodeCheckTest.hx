@@ -368,12 +368,13 @@ class IfFalseDeadCodeCheckTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-IFFALSE-SPAN-PAST-CLOSER')
-	public function testAMisreadMemberRegionIsNeitherReportedNorFixed(): Void {
-		// The member grammar reads `#if false {} #end` together with the member after it as ONE node; that span is not one region.
+	@:killer('M-COND-CLOSED-MEMBER-OFF')
+	public function testABraceClosedMemberRegionIsReportedAndTheNextMemberKept(): Void {
+		// The region ends at its own `#end`: the member after it is a sibling, so no fix span can reach it.
 		final src: String = 'class C {\n\t#if false {} #end\n\tfunction b() {}\n}';
-		Assert.equals(0, violations(src).length);
-		Assert.equals(src, applyFix(src));
+		Assert.equals(1, violations(src).length);
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('function b() {}') != -1, 'next member kept, got: <$out>');
 	}
 
 	public function testSeveralEmptyStatementsAreTrivial(): Void {

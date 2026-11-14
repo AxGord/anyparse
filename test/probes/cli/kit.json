@@ -51,7 +51,8 @@
 		"identmap/lib/Ab.hx": "enum abstract EI(Int) {\n\tvar A = 1;\n}\n",
 		"tlit/Decl.hx": "package tlit;\n\ntypedef Foo = {x: Int};\n",
 		"tlit/Use.hx": "package tlit;\n\nclass Use {\n\n\tvar field: Foo;\n\n\tpublic function new() {}\n\n\tpublic function f(p: Foo): Void {\n\t\tfinal x: Null<Foo> = null;\n\t\tvar y: Foo = p;\n\t}\n\n}\n",
-		"zq/Zq.hx": "package a;\n\nclass C {\n\n\t/** The helper. */\n\tpublic function zq():Void {}\n\n\t// calls zq once\n\tpublic function g():Void {}\n\n}\n"
+		"zq/Zq.hx": "package a;\n\nclass C {\n\n\t/** The helper. */\n\tpublic function zq():Void {}\n\n\t// calls zq once\n\tpublic function g():Void {}\n\n}\n",
+		"cond/ClosedMember.hx": "class A {\n\t#if false {} #end function b() {}\n}\n"
 	},
 	"invocations": [
 		{
@@ -9478,6 +9479,34 @@
 				"exit": 0,
 				"out": "ed7dbd2a683ca1b0",
 				"err": "c8f7f59b15def2c7",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq ast cond/ClosedMember.hx",
+			"argv": [
+				"apq",
+				"ast",
+				"cond/ClosedMember.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bf2e77b8149d4caa",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq ast cond/ClosedMember.hx",
+			"argv": [
+				"hxq",
+				"ast",
+				"cond/ClosedMember.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bf2e77b8149d4caa",
+				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
 		}
