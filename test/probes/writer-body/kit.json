@@ -77,7 +77,11 @@
 		"keep-glued-comma/A.hx": "class A {\n\tfunction c() {\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2,\n\t\t];\n\t\tvar o = {\n\t\t\tx: 1,\n\t\t\ty: 2,\n\t\t};\n\t\tg(\n\t\t\t1,\n\t\t\t2,\n\t\t);\n\t\tvar m = [\n\t\t\t1 => 2,\n\t\t\t3 => 4,\n\t\t];\n\t\th(aaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccc, dddddddddddddddddddd, eeeeeeeeeeeee,);\n\t\tvar b = [aaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccc, dddddddddddddddddddd, eeeeeeeeeeeee,];\n\t\tf({x: 1},);\n\t\tvar t:{x:Int, y:Int,} = null;\n\t\ta.b(1, 2,).c(3,);\n\t}\n}\n",
 		"keep-glued-comma/hxformat.json": "{\"wrapping\":{\"trailingComma\":\"keep\"}}",
 		"oneperline-source-break/A.hx": "class A {\n\tfunction c() {\n\t\tvar o = {\n\t\t\tx: 1,\n\t\t\ty: 2,\n\t\t\tz: 3\n\t\t};\n\t\tg(\n\t\t\t1,\n\t\t\t2,\n\t\t\t3\n\t\t);\n\t\tvar a = [\n\t\t\t1,\n\t\t\t2,\n\t\t\t3\n\t\t];\n\t\tvar t:{\n\t\t\tx:Int,\n\t\t\ty:Int,\n\t\t\tz:Int\n\t\t} = null;\n\t\tvar o2 = {\n\t\t\tx: 1,\n\t\t\ty: 2,\n\t\t\tz: 3,\n\t\t\tw: 4,\n\t\t\tv: 5\n\t\t};\n\t}\n}\n",
-		"oneperline-source-break/hxformat.json": "{\"wrapping\":{\"objectLiteral\":{\"defaultWrap\":\"onePerLine\"},\"arrayWrap\":{\"defaultWrap\":\"onePerLine\"},\"anonType\":{\"defaultWrap\":\"onePerLine\"},\"callParameter\":{\"defaultWrap\":\"onePerLine\"}}}"
+		"oneperline-source-break/hxformat.json": "{\"wrapping\":{\"objectLiteral\":{\"defaultWrap\":\"onePerLine\"},\"arrayWrap\":{\"defaultWrap\":\"onePerLine\"},\"anonType\":{\"defaultWrap\":\"onePerLine\"},\"callParameter\":{\"defaultWrap\":\"onePerLine\"}}}",
+		"call-open-operand/Main.hx": "class Main {\n\tstatic function main() {\n\t\tif (conditionAlpha && functionWithManyParams(longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && new FunctionWithManyParams(longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && cast(longParameterA, longParameterB, longParameterC, longParameterDxxxxxxxxxxxxx) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && untyped functionWithManyParams(longParameterA, longParameterB, longParameterC, longParam) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && handlers[indexValue](longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && super.functionWithManyParams(longParameterA, longParameterB, longParameterC, longParam) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && functionWithMany()(longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && trace(longParameterA, longParameterB, longParameterC, longParameterDxxxxxxxxxxxxxxxx) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}\n",
+		"call-open-operand/hxformat.json": "{\"indentation\": {\"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 100, \"callParameter\": {\"defaultWrap\": \"fillLineWithLeadingBreak\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}]}, \"opBoolChain\": {\"defaultWrap\": \"noWrap\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"fillLine\", \"location\": \"afterLast\"}]}}}\n",
+		"call-open-operand-2/Main.hx": "class Main {\n\tstatic function main() {\n\t\tif (conditionAlpha && switch (longParameterA) { case 1: longParameterB; case _: longParameterCxxxxxxx; } && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tvar f = conditionAlpha && function(longParameterA, longParameterB, longParameterC, longParameterDxxxx) return true;\n\t\tif (conditionAlpha && new pack.sub.FunctionWithManyParams(longParameterA, longParameterB, longParameterCxx) != null && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && new FunctionWithManyParams(longParameterA, longParameterB, longParameterC).method() && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && arr[0][1](longParameterA, longParameterB, longParameterC, longParameterDxxxxxxxxxxx) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}\n",
+		"call-open-operand-2/hxformat.json": "{\"indentation\": {\"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 100, \"callParameter\": {\"defaultWrap\": \"fillLineWithLeadingBreak\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}]}, \"opBoolChain\": {\"defaultWrap\": \"noWrap\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"fillLine\", \"location\": \"afterLast\"}]}}}\n"
 	},
 	"invocations": [
 		{
@@ -856,6 +860,42 @@
 			"expect": {
 				"exit": 0,
 				"out": "1ac4952e893bcf7b",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "call-open-operand/Main.hx",
+			"note": "opBool-chain operands under the re-evaluation config: plain, `new T(args)`, `cast(…)`, `untyped f(…)`, index `a[i](…)`, `super.f(…)`, call of a call, `trace(…)` — each a call by its open-paren tag or not",
+			"fixpoint": "call-open-operand/Main.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"call-open-operand/Main.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "9b8950e07d9ecd23",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "call-open-operand-2/Main.hx",
+			"note": "opBool-chain operands under the re-evaluation config: a switch, a function literal (its params open no call), `new pack.sub.T(…) != null`, `new T(…).method()`, a double-index call `arr[0][1](…)`",
+			"fixpoint": "call-open-operand-2/Main.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"call-open-operand-2/Main.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "69e8d78adfd898f1",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

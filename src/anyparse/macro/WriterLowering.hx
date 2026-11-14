@@ -718,7 +718,8 @@ class WriterLowering {
 		// path which passes `precPostfix` for the same reason.
 		final precExpr: Expr = macro $v{precPostfix};
 		final c: ChainDispatchCtx = {
-			argsListExpr: argsListExpr,
+			// A segment's `(` opens a call's arguments, as the regular call's does (`lowerPostfixStar`).
+			argsListExpr: cb.fmtHasFlag('callArgs') ? macro anyparse.core.LeafTag.DelimiterLeaf.callArgs($argsListExpr) : argsListExpr,
 			argDocsExpr: argDocsExpr,
 			chainRulesExpr: chainRulesExpr,
 			writeIdent: writeIdent,

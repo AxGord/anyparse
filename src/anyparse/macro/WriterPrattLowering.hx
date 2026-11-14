@@ -1055,7 +1055,8 @@ final class WriterPrattLowering {
 			? _dt(' ')
 			: ${openSpace ?? macro _de()};
 		dcArgs.push(condEndSpace);
-		dcArgs.push(sepListCall);
+		// `@:fmt(callArgs)`: the run is a call's arguments, and its open leaf says so for readers that ask whether an operand calls.
+		dcArgs.push(c.branch.fmtHasFlag('callArgs') ? macro anyparse.core.LeafTag.DelimiterLeaf.callArgs($sepListCall) : sepListCall);
 		final dcExpr: Expr = dcCall(dcArgs);
 		final pushElemExpr: Expr = lowerPostfixPushElem(c);
 		final tailExpr: Expr = lowerPostfixTailExpr(c, dcExpr);

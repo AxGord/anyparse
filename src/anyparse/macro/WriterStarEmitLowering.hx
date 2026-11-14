@@ -211,6 +211,7 @@ final class WriterStarEmitLowering {
 			stalePrevBareRefBody, prevTrailFieldName
 		);
 		if (isMultiVarMoreField) gateMultiVarMoreParts(parts, multiVarPartsStart);
+		if (child.fmtHasFlag('callArgs')) nameCallArgsParts(parts, multiVarPartsStart);
 		// ω-pad-trailing-ref / ω-metadata-line-end-function: non-optional Star
 		// pad fires when non-empty (and, for metaLineEndPolicy, the knob is
 		// non-None); the Star is transparent when empty.
@@ -1410,6 +1411,15 @@ final class WriterStarEmitLowering {
 		return macro anyparse.format.wrap.LineCommentPastSep.movedPastTrail(
 			$list.length > 0 ? $list[$list.length - 1].trailingComment : null, $orphans, $afterTrail
 		);
+	}
+
+	/**
+	 * `@:fmt(callArgs)`: the field's Star is a call's argument run, so the parts it pushed from `start` become one Doc whose
+	 * open leaf is named a call's (`DelimiterLeaf.callArgs`), as the postfix call writer names its own.
+	 */
+	private static function nameCallArgsParts(parts: Array<Expr>, start: Int): Void {
+		final run: Array<Expr> = parts.splice(start, parts.length - start);
+		parts.push(macro anyparse.core.LeafTag.DelimiterLeaf.callArgs(_dc([$a{run}])));
 	}
 
 }

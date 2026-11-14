@@ -3294,6 +3294,30 @@
 			"find": "new anyparse.runtime.Span(_start, ctx.pos)",
 			"replace": "new anyparse.runtime.Span(_start + 1, ctx.pos)",
 			"note": "a captured Seq span starts one byte past the rule entry"
+		},
+		{
+			"name": "M-CALLARGS-POSTFIX-CALL",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerPostfixStar",
+			"find": "macro anyparse.core.LeafTag.DelimiterLeaf.callArgs($sepListCall)",
+			"replace": "macro $sepListCall",
+			"note": "a call's own argument run keeps an untagged open, so a call operand no longer reads as a call and the opBool chain is not re-evaluated after it"
+		},
+		{
+			"name": "M-CALLARGS-CHAIN-SEGMENT",
+			"type": "anyparse.macro.WriterLowering",
+			"method": "wrapWithChainDispatch",
+			"find": "macro anyparse.core.LeafTag.DelimiterLeaf.callArgs($argsListExpr)",
+			"replace": "macro $argsListExpr",
+			"note": "a method chain segment's argument run keeps an untagged open, so a chained call operand no longer reads as a call"
+		},
+		{
+			"name": "M-CALLARGS-NEW-ARGS",
+			"type": "anyparse.macro.WriterStarEmitLowering",
+			"method": "nameCallArgsParts",
+			"find": "parts.push(macro anyparse.core.LeafTag.DelimiterLeaf.callArgs(_dc([$a{run}])));",
+			"replace": "parts.push(macro _dc([$a{run}]));",
+			"note": "a `new T(args)` argument run keeps an untagged open, so a constructor call operand no longer reads as a call"
 		}
 	]
 }

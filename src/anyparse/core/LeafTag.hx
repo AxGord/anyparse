@@ -6,7 +6,8 @@ using StringTools;
 /**
  * What a `Doc.Text` leaf IS, said by the writer that built it, so a reader of the Doc never re-reads the leaf's bytes
  * to find out: the one answer to "which kind of leaf is this `Text`". An untagged leaf is writer syntax nobody has
- * named yet; each value is set where the leaf is built and nowhere else.
+ * named yet; each value is set where the leaf is built and nowhere else, save a call's `(`, which the call writer
+ * names at the boundary of the run a list emitter built for it (`DelimiterLeaf.callArgs`).
  */
 enum LeafTag {
 
@@ -32,6 +33,9 @@ enum OpenEdge {
 
 	/** A parenthesised run: `(`. */
 	Paren;
+
+	/** A call's argument run: the `(` right after its callee (`DelimiterLeaf.callArgs`). */
+	CallArgs;
 
 	/** A non-empty collection: `[` or `{`. */
 	Collection;
@@ -104,6 +108,66 @@ class DelimiterLeaf {
 			case Delimiter(_, ClosesBrace): true;
 			case _: false;
 		};
+	}
+
+	/** Whether a leaf tagged `tag` opens a call's argument run. */
+	public static function opensCallArgs(tag: Null<LeafTag>): Bool {
+		return switch tag {
+			case Delimiter(CallArgs, _): true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * `args`, a call's argument run, with its opening `(` leaf tagged `CallArgs` in every layout the run offers. The list
+	 * emitter that builds the run knows only its delimiter strings; the call writer that hands it the `(` knows it opens a
+	 * call, so it names the leaf here, at that boundary.
+	 */
+	public static function callArgs(args: Doc): Doc {
+		return retagOpenParen(args) ?? args;
+	}
+
+	/** `d` with its first visible leaf tagged `CallArgs` when that leaf opens a paren run, or null when `d` shows no leaf. */
+	private static function retagOpenParen(d: Doc): Null<Doc> {
+		return switch d {
+			case Text(s, verbatim, Delimiter(Paren, ends)): Text(s, verbatim, Delimiter(CallArgs, ends));
+			case Text(s, _, _): s.length == 0 ? null : d;
+			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
+				OptHardlineSkipBeforeHardline:
+				null;
+			case Concat(items):
+				final out: Null<Array<Doc>> = retagFirstItem(items);
+				out == null ? null : Concat(out);
+			case Fill(items, sep, tailReserve):
+				final out: Null<Array<Doc>> = retagFirstItem(items);
+				out == null ? null : Fill(out, sep, tailReserve);
+			case FillWithRestProbe(items, sep, tailReserve):
+				final out: Null<Array<Doc>> = retagFirstItem(items);
+				out == null ? null : FillWithRestProbe(out, sep, tailReserve);
+			case FillBreakAfterWrap(items, sep, tailReserve):
+				final out: Null<Array<Doc>> = retagFirstItem(items);
+				out == null ? null : FillBreakAfterWrap(out, sep, tailReserve);
+			case _:
+				var shown: Bool = false;
+				final out: Doc = D.mapChildren(d, c -> {
+					final r: Null<Doc> = retagOpenParen(c);
+					if (r != null) shown = true;
+					r ?? c;
+				});
+				shown ? out : null;
+		};
+	}
+
+	/** `items` with the first item that shows a leaf retagged by `retagOpenParen`, or null when no item shows one. */
+	private static function retagFirstItem(items: Array<Doc>): Null<Array<Doc>> {
+		for (i in 0...items.length) {
+			final r: Null<Doc> = retagOpenParen(items[i]);
+			if (r == null) continue;
+			final out: Array<Doc> = items.copy();
+			out[i] = r;
+			return out;
+		}
+		return null;
 	}
 
 	/** The end edge of a non-empty `s`, read once from its last byte and its last non-blank bytes. */

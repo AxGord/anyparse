@@ -304,7 +304,7 @@ final class DocMeasure {
 	 * Concatenates the visible flat text of `d` left-to-right (forced
 	 * hardlines contribute nothing). Stack-based walk mirroring
 	 * `flatTokenWidth` but accumulating the characters rather than just the
-	 * width — used by `operandIsCall` to scan an operand for a call `(`.
+	 * width.
 	 */
 	public static function flatText(d: Doc): String {
 		final buf: StringBuf = new StringBuf();
@@ -384,27 +384,45 @@ final class DocMeasure {
 	}
 
 	/**
-	 * True iff operand `d`'s flat text is a TOP-LEVEL function call —
-	 * `<ident-chain>(…)` (incl. `obj.method(…)` / `Type.fn(…)`). The operand's
-	 * FIRST visible char must be an identifier start (letter / `_` / `$`); a
-	 * leading paren-expression (`(a && b)`), array, object, or prefix-op
-	 * operand is NOT a simple call (its inner `(` is ENCLOSED by the operand,
-	 * which fork `hasSimpleCallParamBreaksBetween` does not treat as a wrapping
-	 * callParameter). Then any `(` preceded by an identifier / `)` / `>` char
-	 * marks the call. Pure flat-text scan (O(operand width), no recursion
-	 * across the binary spine). Shared by `BinaryChainEmit` (the
-	 * ω-opbool-reeval marker gate) and `CollapsePass` (the flip + flatten
-	 * decision).
+	 * True iff operand `d` is a TOP-LEVEL function call — `<ident-chain>(…)`, `obj.method(…)` / `Type.fn(…)` included: its
+	 * first visible byte starts an identifier (letter / `_` / `$`) and, in flat order, a leaf tagged as opening a call's
+	 * arguments (`OpenEdge.CallArgs`) follows. A leading paren-expression, array, object or prefix-op operand is NOT a
+	 * simple call: its inner call is ENCLOSED by the operand, which fork `hasSimpleCallParamBreaksBetween` does not treat as
+	 * a wrapping callParameter. Shared by `BinaryChainEmit` (the ω-opbool-reeval marker gate) and `CollapsePass` (the flip
+	 * + flatten decision).
 	 */
 	public static function operandIsCall(d: Doc): Bool {
-		final s: String = flatText(d);
-		var prevNonWs: Int = -1;
-		for (i in 0...s.length) {
-			final c: Int = s.fastCodeAt(i);
-			if (c == ' '.code || c == '\t'.code) continue;
-			if (prevNonWs == -1 && !isIdentStart(c)) return false;
-			if (c == '('.code && prevNonWs != -1 && isCallPrefixChar(prevNonWs)) return true;
-			prevNonWs = c;
+		var headSeen: Bool = false;
+		final stack: Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node: Doc = (cast stack.pop(): Doc);
+			switch node {
+				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline, Line(_),
+					OptSpace(_):
+				case Text(s, _, tag):
+					if (DelimiterLeaf.opensCallArgs(tag)) return headSeen;
+					if (!headSeen) {
+						final c: Int = firstVisibleChar(s);
+						if (c != -1 && !isIdentStart(c)) return false;
+						headSeen = c != -1;
+					}
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
+					stack.push(inner);
+				case Concat(items):
+					var k: Int = items.length;
+					while (--k >= 0) stack.push(items[k]);
+				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
+					IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
+					IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
+					IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
+					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
+					stack.push(fl);
+				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
+					pushFillReversed(stack, items, sep);
+			}
 		}
 		return false;
 	}
@@ -810,21 +828,6 @@ final class DocMeasure {
 	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
 	private static inline function isIdentStart(c: Int): Bool {
 		return c == '$'.code || c.isIdentStart();
-	}
-
-	/**
-	 * True iff char code `c` (the char immediately before a `(`) marks that `(`
-	 * as a CALL open paren rather than a grouping paren — an identifier char,
-	 * a close `)` (`f()()`), or a type-param close `>` (`f<T>()`).
-	 */
-	private static inline function isCallPrefixChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code)
-			|| (c >= 'A'.code && c <= 'Z'.code)
-			|| (c >= '0'.code && c <= '9'.code)
-			|| c == '_'.code
-			|| c == '$'.code
-			|| c == ')'.code
-			|| c == '>'.code;
 	}
 
 	/**

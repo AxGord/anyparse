@@ -33,6 +33,9 @@ package anyparse.grammar.haxe;
  * into `wrapping.trailingComma`: under `remove` a broken argument list never ends with a `,`,
  * whatever the source had and whatever `trailingCommas.callArgumentDefault` asks for. The
  * trailing separator is optional here, so the removal direction is always syntactically safe.
+ *
+ * `@:fmt(callArgs)` names the argument list a call's arguments, as on `HxExpr.Call`: its `(` is tagged a call's open,
+ * so a `new T(args)` operand reads as a call.
  */
 @:peg
 typedef HxNewExpr = {
@@ -49,6 +52,6 @@ typedef HxNewExpr = {
 	@:trail(')')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable, wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap,
-		groupRestProbe, complexItems, relocateTrailingComments)
+		groupRestProbe, complexItems, relocateTrailingComments, callArgs)
 	var args: Array<HxExpr>;
 };

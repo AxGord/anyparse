@@ -819,6 +819,46 @@
 			"find": "case Text(s, _, _):\n\t\t\t\t\twidth += s.length;",
 			"replace": "case Text(s, _, _):\n\t\t\t\t\tif (s.indexOf(\"(\") >= 0) return width + s.indexOf(\"(\") + 1;\n\t\t\t\t\twidth += s.length;",
 			"note": "an untagged leaf holding `(` (a string literal) counts as an open delimiter again"
+		},
+		{
+			"name": "M-CALLOPEN-READS-TAG",
+			"type": "anyparse.core.DocMeasure",
+			"method": "operandIsCall",
+			"find": "DelimiterLeaf.opensCallArgs(tag)",
+			"replace": "s == '('",
+			"note": "a paren leaf after a name is a call by its byte, the way the flat-text scan also called a keyword paren one"
+		},
+		{
+			"name": "M-CALLOPEN-HEAD-NAME",
+			"type": "anyparse.core.DocMeasure",
+			"method": "operandIsCall",
+			"find": "if (c != -1 && !isIdentStart(c)) return false;",
+			"replace": "if (c == -2) return false;",
+			"note": "an operand led by a prefix operator counts as a call because a call follows its head"
+		},
+		{
+			"name": "M-CALLARGS-EVERY-LAYOUT",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "retagOpenParen",
+			"find": "shown ? out : null",
+			"replace": "null",
+			"note": "a run that offers its layouts through a conditional node keeps an untagged open, so no layout of it reads as a call"
+		},
+		{
+			"name": "M-CALLARGS-HEAD-ONLY",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "retagOpenParen",
+			"find": "s.length == 0 ? null : d",
+			"replace": "null",
+			"note": "the retag walks past a visible non-paren head and tags a later paren as the call open"
+		},
+		{
+			"name": "M-CALLARGS-KEEPS-END-EDGE",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "retagOpenParen",
+			"find": "Delimiter(CallArgs, ends)",
+			"replace": "Delimiter(CallArgs, Plain)",
+			"note": "an empty call pair `()` loses its closing end edge when it is named a call open"
 		}
 	]
 }

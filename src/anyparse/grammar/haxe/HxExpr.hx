@@ -319,7 +319,7 @@ enum HxExpr {
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable, callParens, callParensInside, wrapRules('callParameterWrap'),
 		methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest, groupRestProbe, arrowValueIfElemTrail, complexItems,
-		relocateTrailingComments)
+		relocateTrailingComments, callArgs)
 	Call(operand: HxExpr, args: Array<HxExpr>);
 	@:postfix('++')
 	PostIncr(operand: HxExpr);

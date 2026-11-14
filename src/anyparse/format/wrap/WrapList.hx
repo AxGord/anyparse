@@ -863,7 +863,7 @@ class WrapList {
 			case Empty, Line(_), OptSpace(_), OptSpaceSkipAfterHardline, OptHardline, OptHardlineSkipAtOpenDelim,
 				OptHardlineSkipBeforeHardline:
 				return false;
-			case Text(_, _, Delimiter(Paren | Collection | EmptyCollection, _)):
+			case Text(_, _, Delimiter(Paren | CallArgs | Collection | EmptyCollection, _)):
 				return true;
 			case Text(_):
 				return false;
