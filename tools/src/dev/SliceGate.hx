@@ -394,12 +394,13 @@ final class SliceGate {
 		GateTree.clearSnapshotIn(_gate.tree);
 		final scope: SuiteScope = SuiteImpact.ofTree(_gate.tree, _gate.base);
 		final only: Null<Array<String>> = switch scope {
-			case Selected(classes): classes;
+			case Selected(classes), Trimmed(_, classes, _): classes;
 			case WholeSuite(_): null;
 		};
 		final mode: String = switch scope {
 			case WholeSuite(why): 'whole suite — $why';
 			case Selected(classes): 'impact — ${classes.length} class(es) the change reaches';
+			case Trimmed(why, _, left): 'whole suite — ${SuiteImpact.trimmedReading(why, left)}';
 		};
 		File.saveContent(_gate.log('suite-scope.txt'), [mode].concat(only ?? []).join('\n') + '\n');
 		_selected = only;
@@ -639,7 +640,7 @@ final class SliceGate {
 	private function wholeSuite(): Bool {
 		return switch SuiteImpact.ofTree(_gate.tree, _gate.base) {
 			case WholeSuite(_): true;
-			case Selected(_): false;
+			case Selected(_), Trimmed(_, _, _): false;
 		};
 	}
 

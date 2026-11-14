@@ -49,8 +49,17 @@ final class SuiteImpact {
 	 */
 	public static final LAYERS: Array<String> = ['src', 'tools/src', 'test'];
 
+	/** The code the macros build and the runtime they build on, which no text of the module they build ever names. */
+	public static final GENERATED_PREFIXES: Array<String> = [MACROS, 'src/anyparse/runtime/', 'src/anyparse/grammar/'];
+
 	/** Where a change reaches generated code or the harness every class runs in: no text dependency bounds it. */
-	public static final WHOLE_PREFIXES: Array<String> = [MACROS, 'src/anyparse/runtime/', 'src/anyparse/grammar/', 'test/testkit/'];
+	public static final WHOLE_PREFIXES: Array<String> = GENERATED_PREFIXES.concat(['test/testkit/']);
+
+	/** The test packages whose subject is a `tools/src` module: git, process, lease and build mechanics. */
+	public static final TOOLING_PACKAGES: Array<String> = ['unit.dev', 'unit.devkit', 'unit.proc'];
+
+	/** The test classes outside those packages whose subject is a process or build mechanic no generated code reaches. */
+	public static final TOOLING_CLASSES: Array<String> = ['unit.RunTestsPipeTest', 'unit.FixtureCompileCacheTest'];
 
 	/** The configuration a build or a run reads whatever the module. */
 	public static final WHOLE_FILES: Array<String> = ['apq.json', 'apqlint.json', 'hxformat.json', 'haxelib.json'];
@@ -66,6 +75,7 @@ final class SuiteImpact {
 	private static final TEST_ROOT: String = 'test/';
 	private static final TEST_SUFFIX: String = 'Test.hx';
 	private static final HX: String = '.hx';
+	private static final TOOLS_ROOT: String = 'tools/src/';
 
 	public static inline function isTest(path: String): Bool {
 		return path.startsWith(TEST_ROOT);
@@ -106,6 +116,8 @@ final class SuiteImpact {
 		Sys.println(describe(scope, testClassCount(sources)));
 		if (list) switch scope {
 			case Selected(classes):
+				for (name in classes) Sys.println('  $name');
+			case Trimmed(_, classes, _):
 				for (name in classes) Sys.println('  $name');
 			case WholeSuite(_):
 		}
@@ -288,6 +300,7 @@ final class SuiteImpact {
 	public static function describe(scope: SuiteScope, total: Int): String {
 		return switch scope {
 			case WholeSuite(why): 'suite: whole — $why';
+			case Trimmed(why, _, left): 'suite: whole — ${trimmedReading(why, left)}';
 			case Selected(classes): 'suite: impact — ${classes.length} of $total test classes';
 		};
 	}
@@ -332,6 +345,9 @@ final class SuiteImpact {
 			switch scope(sources, entries, touched, declared) {
 				case WholeSuite(why):
 					print('$short  whole   $why — $subject');
+				case Trimmed(why, classes, left):
+					saved += total - classTime(classes, measured);
+					print('$short  whole   ${trimmedReading(why, left)} — $subject');
 				case Selected(classes):
 					selected++;
 					final time: Float = classTime(classes, measured);
@@ -359,7 +375,7 @@ final class SuiteImpact {
 		final tests: Array<String> = touched.filter(isTestClass);
 		if (others.length == 0 || tests.length == 0) return [];
 		final reached: Array<String> = switch scope(sources, entries, others, declared) {
-			case WholeSuite(_): return [];
+			case WholeSuite(_), Trimmed(_, _, _): return [];
 			case Selected(classes): classes;
 		};
 		final out: Array<String> = [];
@@ -465,6 +481,7 @@ final class SuiteImpact {
 	): ArmReach {
 		final types: DeclaredTypes = declared ?? declaredTypes(sources);
 		final graph: ImpactGraph = new ImpactGraph(sources, entries, types);
+		final sinked: ImpactGraph = sinkedGraph(sources, entries, types);
 		final reach: Map<String, Null<Array<String>>> = [];
 		final misses: Array<String> = [];
 		var whole: Int = 0;
@@ -475,11 +492,11 @@ final class SuiteImpact {
 			final file: Null<String> = fileOfType(sources, type);
 			var reached: Array<String> = [];
 			if (file != null) {
-				if (!reach.exists(file)) reach[file] = switch scopeOn(sources, entries, [file], types, graph) {
+				if (!reach.exists(file)) reach[file] = switch scopeOn(sources, entries, [file], types, graph, sinked) {
 					case WholeSuite(_):
 						whole++;
 						null;
-					case Selected(selected): selected;
+					case Selected(selected), Trimmed(_, selected, _): selected;
 				};
 				reached = reach[file] ?? continue;
 			}
@@ -489,28 +506,55 @@ final class SuiteImpact {
 		return { misses: misses, files: reach.count(), whole: whole };
 	}
 
+	/** Whether a change of `path` is generated code or what it builds on, which a tooling class cannot reach. */
+	public static function isGenerated(path: String): Bool {
+		return path.endsWith(HX) && GENERATED_PREFIXES.exists(prefix -> path.startsWith(prefix));
+	}
+
+	/** Whether `module`, a test class, has a `tools/src` module for its subject. */
+	public static function isToolingClass(module: ImpactModule): Bool {
+		return TOOLING_PACKAGES.contains(module.pack) || TOOLING_CLASSES.contains(module.qualified);
+	}
+
+	/**
+	 * What a gate, a land or a census says of a trimmed suite: why it runs every class, and how many tooling classes it
+	 * leaves to the post-land run.
+	 */
+	public static function trimmedReading(why: String, left: Int): String {
+		return '$why, $left tooling class(es) left to post-land';
+	}
+
 	/** `scope` over the `types` the caller read, on `shared` when it keeps one graph of `sources` for many touches. */
 	private static function scopeOn(
-		sources: Array<ImpactSource>, entries: Map<String, String>, touched: Array<String>, types: DeclaredTypes, ?shared: ImpactGraph
+		sources: Array<ImpactSource>, entries: Map<String, String>, touched: Array<String>, types: DeclaredTypes, ?shared: ImpactGraph,
+		?sinked: ImpactGraph
 	): SuiteScope {
 		final runner: Null<String> = entries[SUITE_OUTPUT];
+		var generated: Null<String> = null;
+		var tooling: Bool = false;
 		for (path in touched) {
-			final why: Null<String> = wholeReason(path) ?? stateReason(path, textOf(sources, path), sources, runner);
-			if (why != null) return WholeSuite(why);
+			if (path.startsWith(TOOLS_ROOT)) tooling = true;
+			final whole: Null<String> = wholeReason(path);
+			final why: Null<String> = whole ?? stateReason(path, textOf(sources, path), sources, runner);
+			if (why != null) {
+				if (whole == null || !isGenerated(path)) return WholeSuite(why);
+				generated ??= why;
+			}
 			if (runner != null && moduleOf(path)?.qualified == runner) return WholeSuite('$path is the runner every class runs inside');
 		}
 		if (types.unparsed.length > 0) return WholeSuite('${types.unparsed[0]} does not parse, so the types it declares are unknown');
 		final graph: ImpactGraph = shared ?? new ImpactGraph(sources, entries, types);
 		final reached: Array<String> = graph.dependents(withReaders(sources, touched));
-		for (path in reached) if (path.startsWith(MACROS))
-			return WholeSuite('a macro depends on the change: ${graph.chain(path).join(' <- ')}');
+		for (path in reached) if (generated == null && path.startsWith(MACROS))
+			generated = 'a macro depends on the change: ${graph.chain(path).join(' <- ')}';
 		final classes: Array<String> = [];
 		for (path in reached) {
 			final module: Null<ImpactModule> = isTestClass(path) ? moduleOf(path) : null;
 			if (module != null) classes.push(module.qualified);
 		}
 		classes.sort(Compare.compareString);
-		return Selected(classes);
+		if (generated == null) return Selected(classes);
+		return tooling ? WholeSuite(generated) : trimmed(sources, sinked ?? sinkedGraph(sources, entries, types), generated, touched);
 	}
 
 	private static function isNameCode(code: Null<Int>): Bool {
@@ -575,6 +619,36 @@ final class SuiteImpact {
 
 	private static function textOf(sources: Array<ImpactSource>, path: String): String {
 		return sources.find(s -> s.path == path)?.text ?? '';
+	}
+
+	/**
+	 * The suite a change of generated code needs: every class but the tooling ones, whose subject is a `tools/src` module no
+	 * generated code is held to reach. A tooling class stays when the change reaches it through code that is not generated: from a touched
+	 * file that is not generated, over a chain that passes through no generated module.
+	 */
+	private static function trimmed(sources: Array<ImpactSource>, sinked: ImpactGraph, why: String, touched: Array<String>): SuiteScope {
+		final reached: Array<String> = sinked.dependents(withReaders(sources, touched.filter(path -> !isGenerated(path))));
+		final kept: Array<String> = [];
+		var left: Int = 0;
+		for (source in sources) {
+			final module: Null<ImpactModule> = isTestClass(source.path) ? moduleOf(source.path) : null;
+			if (module == null) continue;
+			if (isToolingClass(module) && !reached.contains(source.path))
+				left++;
+			else
+				kept.push(module.qualified);
+		}
+		kept.sort(Compare.compareString);
+		return left == 0 ? WholeSuite(why) : Trimmed(why, kept, left);
+	}
+
+	/**
+	 * The graph of `sources` in which generated code is reached but passes a change on to nothing: how far code that is not
+	 * generated reaches.
+	 */
+	private static function sinkedGraph(sources: Array<ImpactSource>, entries: Map<String, String>, types: DeclaredTypes): ImpactGraph {
+		final sinks: Array<String> = [for (source in sources) if (isGenerated(source.path)) source.path];
+		return new ImpactGraph(sources, entries, types, sinks);
 	}
 
 }
@@ -790,5 +864,8 @@ enum SuiteScope {
 
 	/** Only these test classes, by their qualified names; none when no class depends on the change. */
 	Selected(classes: Array<String>);
+
+	/** Every class but `left` tooling ones: `why` names the generated code the change reaches, which those classes cannot. */
+	Trimmed(why: String, classes: Array<String>, left: Int);
 
 }

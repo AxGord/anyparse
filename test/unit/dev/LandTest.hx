@@ -736,6 +736,16 @@ final class LandTest extends Test {
 		Assert.equals('unit.a.ATest\nunit.b.BTest\n', run.selected);
 		Assert.equals(run.headBefore, run.impactBase);
 		Assert.stringContains('impact suite under the lock', run.output);
+		final trimmed: Landing = landing(
+			() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null,
+			{ impact: Trimmed('a macro depends on the change', ['unit.a.ATest'], 3) }
+		);
+		Assert.equals(0, trimmed.status, trimmed.output);
+		Assert.equals('unit.a.ATest\n', trimmed.selected);
+		Assert.same([trimmed.headAfter], trimmed.started);
+		Assert.stringContains(
+			'whole suite under the lock — a macro depends on the change, 3 tooling class(es) left to post-land', trimmed.output
+		);
 	}
 
 	public function testAnImpactLandStartsTheWholeSuiteOfTheLandedCommit(): Void {

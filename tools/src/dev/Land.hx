@@ -386,14 +386,19 @@ final class Land {
 	private function impactFile(): Null<String> {
 		final impact: Null<ImpactScope> = _impact;
 		if (impact == null) return null;
-		return switch impact(_candidate.tree, _candidate.before) {
+		final scope: SuiteScope = impact(_candidate.tree, _candidate.before);
+		return switch scope {
 			case WholeSuite(why):
 				_summary.detail('whole suite under the lock — $why');
 				null;
-			case Selected(classes):
+			case Selected(classes), Trimmed(_, classes, _):
+				final reading: String = switch scope {
+					case Trimmed(why, _, left): 'whole suite under the lock — ${SuiteImpact.trimmedReading(why, left)}';
+					case _: 'impact suite under the lock — ${classes.length} class(es)';
+				};
 				final file: String = Path.join([_logs, 'suite-impact.txt']);
 				File.saveContent(file, classes.map(name -> '$name\n').join(''));
-				_summary.detail('impact suite under the lock — ${classes.length} class(es), listed in $file');
+				_summary.detail('$reading, listed in $file');
 				_impacted = true;
 				file;
 		}

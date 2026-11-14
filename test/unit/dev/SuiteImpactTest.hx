@@ -27,6 +27,25 @@ final class SuiteImpactTest extends Test {
 	/** The engine's build, whose output runs the engine's main module, and the suite's, whose output runs the runner. */
 	private static final ENTRIES: Map<String, String> = ['apq.js' => 'anyparse.query.Cli', 'test.js' => 'RunTests'];
 
+	/** The test classes about `tools/src` beside the classes a macro could reach, and one tooling class that runs a macro build. */
+	private static final TOOLING_TREE: Array<ImpactSource> = TREE.concat([
+		source('tools/src/dev/Shard.hx', 'package dev;\nclass Shard {}'),
+		source('test/unit/dev/ShardTest.hx', 'package unit.dev;\nimport dev.Shard;'),
+		source('test/unit/devkit/LeaseTest.hx', 'package unit.devkit;\nclass LeaseTest {}'),
+		source('test/unit/proc/SpawnTest.hx', 'package unit.proc;\nclass SpawnTest {}'),
+		source('test/unit/proc/OtherUserTest.hx', 'package unit.proc;\nimport anyparse.query.Other;'),
+		source('test/unit/RunTestsPipeTest.hx', 'package unit;\nclass RunTestsPipeTest {}'),
+		source('test/unit/FixtureCompileCacheTest.hx', 'package unit;\nclass FixtureCompileCacheTest {}'),
+		source('test/unit/TestDiscoveryNarrowTest.hx', 'package unit;\nclass TestDiscoveryNarrowTest {}'),
+		source('test/unit/devx/NearTest.hx', 'package unit.devx;\nclass NearTest {}'),
+		source('src/anyparse/macro/Build.hx', 'package anyparse.macro;\nimport anyparse.query.Other;'),
+		source('src/anyparse/grammar/haxe/HxGrammar.hx', 'package anyparse.grammar.haxe;\nclass HxGrammar {}'),
+		source('test/unit/grammar/GrammarNamesTest.hx', 'package unit.grammar;\nimport anyparse.grammar.haxe.HxGrammar;'),
+		source('src/anyparse/grammar/haxe/HxOtherUser.hx', 'package anyparse.grammar.haxe;\nimport anyparse.query.Other;'),
+		source('test/unit/dev/GrammarUserToolTest.hx', 'package unit.dev;\nimport anyparse.grammar.haxe.HxOtherUser;'),
+		source('test/unit/dev/GrammarToolTest.hx', 'package unit.dev;\nimport anyparse.grammar.haxe.HxGrammar;')
+	]);
+
 	@:pin('control')
 	@:killer('M-SUITE-IMPACT-NOTHING-REACHED')
 	public function testACheckRuleReachesItsCategoryTestsAndEveryImporterDownToTheEngine(): Void {
@@ -84,7 +103,7 @@ final class SuiteImpactTest extends Test {
 		switch SuiteImpact.scope(tree, ENTRIES, ['src/anyparse/query/Other.hx']) {
 			case WholeSuite(why):
 				Assert.stringContains('src/anyparse/macro/Build.hx', why);
-			case Selected(classes):
+			case Selected(classes), Trimmed(_, classes, _):
 				Assert.fail('selected ${classes.join(', ')}');
 		}
 	}
@@ -177,7 +196,7 @@ final class SuiteImpactTest extends Test {
 			case WholeSuite(why):
 				Assert.stringContains('KIT_KEY', why);
 				Assert.stringContains(reader.path, why);
-			case Selected(classes):
+			case Selected(classes), Trimmed(_, classes, _):
 				Assert.fail('${reader.path}: selected ${classes.join(', ')}');
 		}
 	}
@@ -242,7 +261,7 @@ final class SuiteImpactTest extends Test {
 		switch SuiteImpact.scope(tree, ENTRIES, ['src/anyparse/query/Other.hx']) {
 			case WholeSuite(why):
 				Assert.stringContains('src/anyparse/query/Broken.hx', why);
-			case Selected(classes):
+			case Selected(classes), Trimmed(_, classes, _):
 				Assert.fail('selected ${classes.join(', ')}');
 		}
 	}
@@ -357,6 +376,113 @@ final class SuiteImpactTest extends Test {
 		final chain: Array<String> = SuiteImpact.explain(tree, ENTRIES, ['tools/src/dev/Exporter.hx'], 'test/unit/dev/ConsumerTest.hx');
 		Assert.equals('test/unit/dev/ConsumerTest.hx', chain[0]);
 		Assert.isTrue(chain.length > 1);
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-TOOLING-TRIMMED')
+	@:killer('M-SUITE-IMPACT-MACRO-DEPENDENT-BOUNDED')
+	public function testAChangeOfGeneratedCodeLeavesOutTheToolingClassesNoTextOfItReaches(): Void {
+		final kept: Array<String> = [
+			'unit.TestDiscoveryNarrowTest',
+			'unit.check.RegistryTest',
+			'unit.check.common.naming.RuleTest',
+			'unit.cli.EngineTest',
+			'unit.devx.NearTest',
+			'unit.grammar.GrammarNamesTest',
+			'unit.query.OtherTest'
+		];
+		for (path in ['src/anyparse/macro/Codegen.hx', 'src/anyparse/runtime/Parser.hx']) switch SuiteImpact.scope(
+			TOOLING_TREE, ENTRIES, [path]
+		) {
+			case Trimmed(why, classes, left):
+				Assert.stringContains(path, why);
+				Assert.same(kept, classes, path);
+				Assert.equals(8, left, path);
+			case other:
+				Assert.fail('$path: $other');
+		}
+		final withUser: Array<String> = kept.slice(0, 6).concat(['unit.proc.OtherUserTest']).concat(kept.slice(6));
+		switch SuiteImpact.scope(TOOLING_TREE, ENTRIES, ['src/anyparse/query/Other.hx']) {
+			case Trimmed(why, classes, left):
+				Assert.stringContains('src/anyparse/macro/Build.hx', why);
+				Assert.same(withUser, classes);
+				Assert.equals(7, left);
+			case other:
+				Assert.fail('$other');
+		}
+		switch SuiteImpact.scope(TOOLING_TREE, ENTRIES, ['src/anyparse/macro/Codegen.hx', 'src/anyparse/query/Other.hx']) {
+			case Trimmed(_, classes, left):
+				Assert.same(withUser, classes);
+				Assert.equals(7, left);
+			case other:
+				Assert.fail('$other');
+		}
+		Assert.equals(
+			'suite: whole — src/anyparse/runtime/Parser.hx is under src/anyparse/runtime/, 8 tooling class(es) left to post-land',
+			SuiteImpact.describe(SuiteImpact.scope(TOOLING_TREE, ENTRIES, ['src/anyparse/runtime/Parser.hx']), 0)
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-TOOLING-REACHED-KEPT')
+	public function testAToolingClassTheChangeTouchesStaysBesideGeneratedCode(): Void {
+		switch SuiteImpact.scope(TOOLING_TREE, ENTRIES, ['src/anyparse/grammar/haxe/HxGrammar.hx', 'test/unit/dev/GrammarToolTest.hx']) {
+			case Trimmed(_, classes, left):
+				Assert.contains('unit.dev.GrammarToolTest', classes);
+				Assert.notContains('unit.dev.ShardTest', classes);
+				Assert.equals(7, left);
+			case other:
+				Assert.fail('$other');
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-TOOLS-TOUCH-WHOLE')
+	@:killer('M-SUITE-IMPACT-TOOLING-WHOLE-REASON')
+	public function testATouchOfToolsTheHarnessOrABuildKeepsEveryClassBesideGeneratedCode(): Void {
+		for (other in [
+			'tools/src/dev/Shard.hx',
+			'test/testkit/TestDiscovery.hx',
+			'test-js.hxml',
+			'apq.json',
+			'test/RunTests.hx'
+		]) {
+			final scope: SuiteScope = SuiteImpact.scope(TOOLING_TREE, ENTRIES, ['src/anyparse/macro/Codegen.hx', other]);
+			Assert.isTrue(scope.match(WholeSuite(_)), '$other: $scope');
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-TOOLING-REACHED-KEPT')
+	public function testAToolingClassOfCodeThatIsNotGeneratedStaysWhateverGeneratedCodeAlsoReaches(): Void {
+		for (touched in [
+			['src/anyparse/query/Other.hx'],
+			['src/anyparse/runtime/Parser.hx', 'src/anyparse/query/Other.hx']
+		]) switch SuiteImpact.scope(TOOLING_TREE, ENTRIES, touched) {
+			case Trimmed(_, classes, _):
+				Assert.contains('unit.proc.OtherUserTest', classes, touched.join(' '));
+				Assert.notContains('unit.proc.SpawnTest', classes);
+			case other:
+				Assert.fail('$other');
+		}
+		switch SuiteImpact.scope(TOOLING_TREE, ENTRIES, ['src/anyparse/runtime/Parser.hx']) {
+			case Trimmed(_, classes, _):
+				Assert.notContains('unit.proc.OtherUserTest', classes);
+			case other:
+				Assert.fail('$other');
+		}
+	}
+
+	@:pin('control')
+	@:killer('M-SUITE-IMPACT-TOOLING-REACH-STOPS-AT-GENERATED')
+	public function testTheReachOfNonGeneratedCodeStopsAtAGeneratedModule(): Void {
+		switch SuiteImpact.scope(TOOLING_TREE, ENTRIES, ['src/anyparse/query/Other.hx']) {
+			case Trimmed(_, classes, _):
+				Assert.contains('unit.proc.OtherUserTest', classes);
+				Assert.notContains('unit.dev.GrammarUserToolTest', classes, 'it names Other only through a grammar module');
+			case other:
+				Assert.fail('$other');
+		}
 	}
 
 	private static function source(path: String, text: String): ImpactSource {

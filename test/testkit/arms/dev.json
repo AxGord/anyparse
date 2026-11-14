@@ -914,7 +914,7 @@
 			"name": "M-SUITE-IMPACT-MACRO-DEPENDENT-BOUNDED",
 			"type": "dev.SuiteImpact",
 			"method": "scopeOn",
-			"find": "if (path.startsWith(MACROS))",
+			"find": "if (generated == null && path.startsWith(MACROS))",
 			"replace": "if (false)",
 			"note": "a module a macro depends on runs only the classes that name it, though the macro's generated code reaches classes that never name the module"
 		},
@@ -2810,6 +2810,46 @@
 			"note": "a branch that ran on a share of its caller's held lease records that share's time as a pool grant, so the curve mixes sizes the pool never granted",
 			"find": "if (pooled && demand(rows) == null)",
 			"replace": "if (demand(rows) == null)"
+		},
+		{
+			"name": "M-SUITE-IMPACT-TOOLING-TRIMMED",
+			"type": "dev.SuiteImpact",
+			"method": "trimmed",
+			"find": "return left == 0 ? WholeSuite(why) : Trimmed(why, kept, left);",
+			"replace": "return WholeSuite(why);",
+			"note": "a change of generated code runs every class, the tooling classes whose subject is a tools/src module among them"
+		},
+		{
+			"name": "M-SUITE-IMPACT-TOOLING-REACHED-KEPT",
+			"type": "dev.SuiteImpact",
+			"method": "trimmed",
+			"find": "if (isToolingClass(module) && !reached.contains(source.path))",
+			"replace": "if (isToolingClass(module))",
+			"note": "a tooling class that the change reaches through code that is not generated, or that the change touches, is left out with the classes generated code never reaches"
+		},
+		{
+			"name": "M-SUITE-IMPACT-TOOLS-TOUCH-WHOLE",
+			"type": "dev.SuiteImpact",
+			"method": "scopeOn",
+			"find": "return tooling ? WholeSuite(generated) : trimmed(sources, sinked ?? sinkedGraph(sources, entries, types), generated, touched);",
+			"replace": "return trimmed(sources, sinked ?? sinkedGraph(sources, entries, types), generated, touched);",
+			"note": "a change under tools/src beside generated code leaves out the tooling classes the tools change is aimed at"
+		},
+		{
+			"name": "M-SUITE-IMPACT-TOOLING-WHOLE-REASON",
+			"type": "dev.SuiteImpact",
+			"method": "scopeOn",
+			"find": "if (whole == null || !isGenerated(path)) return WholeSuite(why);",
+			"replace": "if (whole == null) return WholeSuite(why);",
+			"note": "a harness, build or configuration touch beside generated code leaves out tooling classes that no text dependency excludes"
+		},
+		{
+			"name": "M-SUITE-IMPACT-TOOLING-REACH-STOPS-AT-GENERATED",
+			"type": "dev.SuiteImpact",
+			"method": "sinkedGraph",
+			"find": "return new ImpactGraph(sources, entries, types, sinks);",
+			"replace": "return new ImpactGraph(sources, entries, types);",
+			"note": "a tooling class that reaches a touched module only through a macro, runtime or grammar module is kept, though that code reaches every class and no text of the tooling class names the change"
 		}
 	]
 }
