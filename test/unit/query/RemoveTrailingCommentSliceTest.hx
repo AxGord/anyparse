@@ -79,9 +79,9 @@ class RemoveTrailingCommentSliceTest extends Test {
 	}
 
 	@:pin('guard')
-	public function testLeadingOwnLineCommentOfTheRemovedStatementStays(): Void {
+	public function testLeadingOwnLineCommentOfTheRemovedStatementLeavesToo(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\t// lead b\n\t\tb(); // t2\n\t\tc();\n\t}\n}\n';
-		assertRemove(source, 4, 3, 'class C {\n\tfunction f():Void {\n\t\t// lead b\n\t\tc();\n\t}\n}\n');
+		assertRemove(source, 4, 3, 'class C {\n\tfunction f():Void {\n\t\tc();\n\t}\n}\n');
 	}
 
 	/** The last element cuts back to its leading comma and takes only its own note: the previous element's note stays with it. */

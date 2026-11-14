@@ -359,10 +359,7 @@ final class InlineMethod {
 		return POk({
 			name: name,
 			// The whole declaration goes: its modifier / meta run, its doc comment and the line it held.
-			declSpan: ElementSpan.elementCut(
-				source, decl, parent, declSpanNN, true, ElementSpan.lazyRegions(source, plugin), shape.commaContainerKinds ?? []
-			)
-				.span,
+			declSpan: ElementSpan.elementCut(source, decl, parent, declSpanNN, true, ElementSpan.lazyRegions(source, plugin), shape).span,
 			params: params,
 			paramNames: paramNames,
 			exprBody: exprBody,

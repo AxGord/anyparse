@@ -26,11 +26,11 @@ class CommentWeldTrailingSliceTest extends Test {
 
 	/** The same shape with `// c` on its own line — the weld the guard exists to refuse. */
 	private static final OWN_LINE: String =
-		'class C {\n\tfunction f(): Void {\n\t\ta();\n\t\t// c\n\t\tb();\n\t\t// doc\n\t\tc();\n\t}\n}\n';
+		'class C {\n\tfunction f(): Void {\n\t\ta();\n\t\t// c\n\n\t\tb();\n\t\t// doc\n\t\tc();\n\t}\n}\n';
 
 	/** A trailing comment, an own-line comment under it, then the statement and `// doc`. */
 	private static final TRAILING_PAIR: String =
-		'class C {\n\tfunction f(): Void {\n\t\ta(); // c\n\t\t// c2\n\t\tb();\n\t\t// doc\n\t\tc();\n\t}\n}\n';
+		'class C {\n\tfunction f(): Void {\n\t\ta(); // c\n\t\t// c2\n\n\t\tb();\n\t\t// doc\n\t\tc();\n\t}\n}\n';
 
 	@:pin('control')
 	@:killer('M-COMMENT-TRAILING-GROUPED')
@@ -57,8 +57,8 @@ class CommentWeldTrailingSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-COMMENT-WELD-BLIND')
 	public function testOwnLineCommentsAroundTheDeletedStatementStayRefused(): Void {
-		assertWelded(RemoveElement.removeElement(OWN_LINE, 5, 3, true, new HaxeQueryPlugin()));
-		assertWelded(ReplaceNode.replaceNode(OWN_LINE, ByKindPosition(5, 3, 'ExprStmt'), '', true, new HaxeQueryPlugin()));
+		assertWelded(RemoveElement.removeElement(OWN_LINE, 6, 3, true, new HaxeQueryPlugin()));
+		assertWelded(ReplaceNode.replaceNode(OWN_LINE, ByKindPosition(6, 3, 'ExprStmt'), '', true, new HaxeQueryPlugin()));
 		assertWelded(Patch.patchNode(OWN_LINE, BySelector('FnMember:f'), 'b();', '', true, new HaxeQueryPlugin()));
 	}
 
@@ -69,7 +69,7 @@ class CommentWeldTrailingSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-COMMENT-WELD-BLIND')
 	public function testTrailingCommentWithItsOwnLineSiblingStillWeldsToTheNextBlock(): Void {
-		assertWelded(RemoveElement.removeElement(TRAILING_PAIR, 5, 3, true, new HaxeQueryPlugin()));
+		assertWelded(RemoveElement.removeElement(TRAILING_PAIR, 6, 3, true, new HaxeQueryPlugin()));
 	}
 
 	/**

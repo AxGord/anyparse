@@ -976,8 +976,8 @@
 			"name": "M-CUT-DOC-KEPT-BY-ANY-PREFIX",
 			"type": "anyparse.query.ElementSpan",
 			"method": "elementCut",
-			"find": "\tfinal lead: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
-			"replace": "\tfinal lead: Span = withDoc && !isDeclPrefixSibling(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;",
+			"find": "\tfinal inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);\n\t\tfinal lead: Span = withDoc && !isAnnotationElement(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;",
+			"replace": "\tfinal inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);\n\t\tfinal lead: Span = withDoc && !isDeclPrefixSibling(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;",
 			"note": "the doc exception widens from annotations to every declaration prefix sibling, so a cursor on a bare modifier removes the member and leaves its doc block behind to document the next one"
 		},
 		{
@@ -16886,6 +16886,46 @@
 			"find": "final read: Null<(condition: String) -> Null<CondExpr>> = shape.conditionExpr;",
 			"replace": "final read: Null<(condition: String) -> Null<CondExpr>> = anyparse.grammar.haxe.HxCondExprReader.read;",
 			"note": "a condition is read by the Haxe grammar whatever shape the caller hands in"
+		},
+		{
+			"name": "M-CUT-LEAD-NOTE-KEPT",
+			"type": "anyparse.query.ElementSpan",
+			"method": "elementCut",
+			"find": "noteExtendedSpan(source, group, regionsOf, inStatements)",
+			"replace": "docExtendedSpan(source, group, regionsOf(), true)",
+			"note": "the cut reaches only a doc block above the element, so an own-line note over a removed statement survives to document the next one"
+		},
+		{
+			"name": "M-NOTE-RUN-CROSSES-BLANK-LINE",
+			"type": "anyparse.query.SourceComments",
+			"method": "lineNotesAbove",
+			"find": "gap.indexOf('\\n') != gap.lastIndexOf('\\n')",
+			"replace": "false",
+			"note": "a note separated from the element by a blank line still counts as its own, so deleting the element takes a note that documents a section"
+		},
+		{
+			"name": "M-REPLACE-EMPTY-BYPASSES-CUT",
+			"type": "anyparse.query.ReplaceNode",
+			"method": "replaceNode",
+			"find": "trimmedNew == '') {\n\t\t\tfinal element: Null<QueryNode> = ElementSpan.wholeLines",
+			"replace": "false) {\n\t\t\tfinal element: Null<QueryNode> = ElementSpan.wholeLines",
+			"note": "an empty replacement splices nothing over the span, so the previous line gains a `;` and the removed statement's trailing note is left over the next sibling"
+		},
+		{
+			"name": "M-NOTE-SCOPE-ALL-ELEMENTS",
+			"type": "anyparse.query.ElementSpan",
+			"method": "elementCut",
+			"find": "final inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);",
+			"replace": "final inStatements: Bool = true;",
+			"note": "every element takes the notes above it, so removing a member or an import deletes the section banner or group header that labels what stays"
+		},
+		{
+			"name": "M-REPLACE-EMPTY-CLIMBS-TO-ANY-PARENT",
+			"type": "anyparse.query.ElementSpan",
+			"method": "wholeLinesElement",
+			"find": "&& parentSpan.to > span.to\n\t\t\t&& ownsItsLines(source, declEditSpan(source, tree, parent, parentSpan, regions), regions)\n",
+			"replace": "&& parentSpan.to > span.to\n",
+			"note": "the statement is taken from any single-child wrapper that starts where the node does, so an empty replace of a callee or an operand deletes the whole statement the base refused"
 		}
 	]
 }

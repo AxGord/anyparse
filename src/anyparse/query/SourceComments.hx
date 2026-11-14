@@ -787,6 +787,26 @@ final class SourceComments {
 	}
 
 	/**
+	 * Where the run of own-line `//` notes directly above `from` begins, or `from` itself when none
+	 * sits there. A note belongs to the element under it only while no blank line separates them, so
+	 * the run stops at the first gap, at a block comment and at a comment that shares its line with
+	 * code (that one trails the line before).
+	 */
+	public static function lineNotesAbove(source: String, comments: Array<CommentTok>, from: Int): Int {
+		var result: Int = from;
+		while (true) {
+			final open: Int = ownLineCommentAbove(source, comments, result, false);
+			if (open < 0) break;
+			final note: Null<CommentTok> = comments.find(t -> t.from == open);
+			if (note == null || !note.isLine) break;
+			final gap: String = source.substring(note.to, result);
+			if (gap.indexOf('\n') != gap.lastIndexOf('\n')) break;
+			result = open;
+		}
+		return result;
+	}
+
+	/**
 	 * The continuation prefix ONE interior line of a block comment already uses: its own
 	 * indentation, extended through the gutter star and the single space after it when the line
 	 * carries one. A star followed by anything but whitespace is prose (`**BETA**`), not a

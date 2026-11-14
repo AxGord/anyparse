@@ -52,7 +52,8 @@
 		"tlit/Decl.hx": "package tlit;\n\ntypedef Foo = {x: Int};\n",
 		"tlit/Use.hx": "package tlit;\n\nclass Use {\n\n\tvar field: Foo;\n\n\tpublic function new() {}\n\n\tpublic function f(p: Foo): Void {\n\t\tfinal x: Null<Foo> = null;\n\t\tvar y: Foo = p;\n\t}\n\n}\n",
 		"zq/Zq.hx": "package a;\n\nclass C {\n\n\t/** The helper. */\n\tpublic function zq():Void {}\n\n\t// calls zq once\n\tpublic function g():Void {}\n\n}\n",
-		"cond/ClosedMember.hx": "class A {\n\t#if false {} #end function b() {}\n}\n"
+		"cond/ClosedMember.hx": "class A {\n\t#if false {} #end function b() {}\n}\n",
+		"pkg/Notes.hx": "class C {\n\tfunction f():Void {\n\t\ta(); // t1\n\t\tb(); // t2\n\t\tc();\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -680,7 +681,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "1de9bd3b3cd58515",
-				"err": "f7080661e69ee4a7",
+				"err": "ab00039884ceb534",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -699,7 +700,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "1de9bd3b3cd58515",
-				"err": "f7080661e69ee4a7",
+				"err": "ab00039884ceb534",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -926,7 +927,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "a35c5e1fe4f7f3a1",
-				"err": "408ce753f647dbcb",
+				"err": "e948f6c54b163f88",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -945,7 +946,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "a35c5e1fe4f7f3a1",
-				"err": "408ce753f647dbcb",
+				"err": "e948f6c54b163f88",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1425,7 +1426,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "c1bee505ace0da6c",
-				"err": "054b3efcd9957abf",
+				"err": "731a2328c0d3d364",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1445,7 +1446,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "c1bee505ace0da6c",
-				"err": "054b3efcd9957abf",
+				"err": "731a2328c0d3d364",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1463,7 +1464,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "0e95e18ac9bcb105",
+				"out": "bd8087b3fccbe6a9",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -1482,7 +1483,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "0e95e18ac9bcb105",
+				"out": "bd8087b3fccbe6a9",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -1815,7 +1816,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e50282891a3303c9",
-				"err": "31c67f29053df869",
+				"err": "0ecc9f8954ae82f3",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1831,7 +1832,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e50282891a3303c9",
-				"err": "31c67f29053df869",
+				"err": "0ecc9f8954ae82f3",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1849,7 +1850,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "2aca882d37add7be",
-				"err": "8fda086f5a8f9293",
+				"err": "336b76647017e864",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1867,7 +1868,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "2aca882d37add7be",
-				"err": "8fda086f5a8f9293",
+				"err": "336b76647017e864",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1886,7 +1887,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "16a23a67df841d7c",
-				"err": "ec20c8f0bfcf22b7",
+				"err": "522d585a61fe1099",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1905,7 +1906,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "16a23a67df841d7c",
-				"err": "ec20c8f0bfcf22b7",
+				"err": "522d585a61fe1099",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1921,7 +1922,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "4285e7f45e1dc8a0",
-				"err": "ee1689ec7daaea00",
+				"err": "6eceb43a180db32d",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1937,7 +1938,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "4285e7f45e1dc8a0",
-				"err": "ee1689ec7daaea00",
+				"err": "6eceb43a180db32d",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -1951,7 +1952,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "dacbcc6953071428",
+				"out": "632e1a166fb285c7",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -1966,7 +1967,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "dacbcc6953071428",
+				"out": "632e1a166fb285c7",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2017,7 +2018,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "295f0fa509cf5b65",
+				"out": "c5d7ed930b801175",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2034,7 +2035,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "295f0fa509cf5b65",
+				"out": "c5d7ed930b801175",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2049,7 +2050,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "e7b5974b2f8dfb8c",
+				"out": "7f8afcc6c9b99502",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2064,7 +2065,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "e7b5974b2f8dfb8c",
+				"out": "7f8afcc6c9b99502",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2081,7 +2082,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "e7b5974b2f8dfb8c",
+				"out": "7f8afcc6c9b99502",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2098,7 +2099,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "e7b5974b2f8dfb8c",
+				"out": "7f8afcc6c9b99502",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2178,7 +2179,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "0bf9839eb8450534",
+				"err": "a99007c98df052f1",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2193,7 +2194,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "0bf9839eb8450534",
+				"err": "a99007c98df052f1",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2211,7 +2212,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "0bf9839eb8450534",
+				"err": "a99007c98df052f1",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2229,7 +2230,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "0bf9839eb8450534",
+				"err": "a99007c98df052f1",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2832,7 +2833,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "5a3b0022962cefc1",
-				"err": "9c61c9068e2ee6bf",
+				"err": "411c75bdc166ec8c",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -2849,7 +2850,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "5a3b0022962cefc1",
-				"err": "9c61c9068e2ee6bf",
+				"err": "411c75bdc166ec8c",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -3308,7 +3309,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "d639e8b738b26cc1",
+				"out": "2a8957c383a921b1",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -3323,7 +3324,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "d639e8b738b26cc1",
+				"out": "2a8957c383a921b1",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -7154,7 +7155,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "ef51f5cb78c0bdf4",
+				"out": "e7cf4fdbf5400b2c",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -7171,7 +7172,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "ef51f5cb78c0bdf4",
+				"out": "e7cf4fdbf5400b2c",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -9507,6 +9508,42 @@
 				"exit": 0,
 				"out": "bf2e77b8149d4caa",
 				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq replace-node pkg/Notes.hx --match b(); (empty)",
+			"argv": [
+				"apq",
+				"replace-node",
+				"pkg/Notes.hx",
+				"--match",
+				"b();",
+				""
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d3f75b062be494fd",
+				"err": "a404a1d5525ae749",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq replace-node pkg/Notes.hx --match b(); (empty)",
+			"argv": [
+				"hxq",
+				"replace-node",
+				"pkg/Notes.hx",
+				"--match",
+				"b();",
+				""
+			],
+			"stdin": "{\"a\": [1, 2]}",
+			"expect": {
+				"exit": 0,
+				"out": "d3f75b062be494fd",
+				"err": "a404a1d5525ae749",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.ElementSpan.ElementHit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -114,6 +115,16 @@ final class ReplaceNode {
 		// surviving modifier siblings. A non-decl node (expression, statement,
 		// package) has no modifier run, so `declGroupSpan` returns it intact.
 		final groupSpan: Span = ElementSpan.declEditSpan(source, tree, node, span, plugin.lexicalRegions.bind(source));
+		// Replacing an element that fills its own lines by nothing is a deletion, so it takes the element
+		// cut — the notes that belong to the element, the line and the separator — instead of leaving a
+		// blank line, a welded `;` or a comment documenting the next sibling.
+		if (trimmedNew == '') {
+			final element: Null<QueryNode> = ElementSpan.wholeLinesElement(source, tree, node, plugin.lexicalRegions.bind(source));
+			if (element != null) {
+				final hit: ElementHit = ElementSpan.liftedElement(tree, element);
+				return ElementSpan.deleteNode(source, hit.node, hit.parent, reformat, plugin, true, optsJson);
+			}
+		}
 		// `--with-doc` extends the replaced range back over the leading doc / block
 		// comment run (trivia the grammar keeps outside the node span) so the new
 		// source carries the declaration documentation. The same extension applies

@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
@@ -380,11 +381,11 @@ final class ElementSpan {
 		if (targets.length == 0) return Err('no node to remove');
 		final edits: Array<{ span: Span, text: String }> = [];
 		final regionsOf: () -> Array<LexRegion> = lazyRegions(source, plugin);
-		final commaKinds: Array<String> = plugin.refShape().commaContainerKinds ?? [];
+		final shape: RefShape = plugin.refShape();
 		for (target in targets) {
 			final nodeSpan: Null<Span> = target.node.span;
 			if (nodeSpan == null) return Err('the node to remove has no source span');
-			edits.push({ span: elementCut(source, target.node, target.parent, nodeSpan, withDoc, regionsOf, commaKinds).span, text: '' });
+			edits.push({ span: elementCut(source, target.node, target.parent, nodeSpan, withDoc, regionsOf, shape).span, text: '' });
 		}
 		// A target nested in another — a member and the region holding it, two nested regions — is
 		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
@@ -535,7 +536,7 @@ final class ElementSpan {
 	 */
 	public static function elementCut(
 		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, regionsOf: () -> Array<LexRegion>,
-		commaKinds: Array<String>
+		shape: RefShape
 	): { span: Span, doc: Bool, annotations: Int } {
 		final group: Span = trailingTrimmedSpan(source, declGroupSpan(node, parent, nodeSpan), regionsOf);
 		// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
@@ -549,12 +550,13 @@ final class ElementSpan {
 		// DECLARATION under it, which is staying. Removing an `@:access` off a real
 		// 79-line Pony class took the class's own `/** … */` with it — orphaning nothing,
 		// just deleting documentation the caller never addressed.
-		final lead: Span = withDoc && !isAnnotationElement(node) ? docExtendedSpan(source, group, regionsOf(), true) : group;
+		final inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);
+		final lead: Span = withDoc && !isAnnotationElement(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;
 		// A comment that closes the element's own line is the element's trailing note and leaves with it.
 		final span: Span = lineClosingCommentSpan(source, lead, regionsOf);
 
 		var isComma: Bool = adjacentToComma(source, span);
-		if (!isComma && parent != null) isComma = commaKinds.contains(parent.kind);
+		if (!isComma && parent != null) isComma = (shape.commaContainerKinds ?? []).contains(parent.kind);
 
 		// A comma list has no blank separators, so only the line branch gives one back. An element that
 		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
@@ -617,7 +619,7 @@ final class ElementSpan {
 		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, plugin: GrammarPlugin
 	): String {
 		final cut: { span: Span, doc: Bool, annotations: Int } = elementCut(
-			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin), plugin.refShape().commaContainerKinds ?? []
+			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin), plugin.refShape()
 		);
 		final subject: QueryNode = cutSubject(node, parent);
 		// A wrapper that folds a type's modifier in reads as the declaration it names (`ClassDecl X`).
@@ -722,6 +724,39 @@ final class ElementSpan {
 		var from: Int = meta.from;
 		while (from > 0 && source.fastCodeAt(from - 1).isSpaceOrTab()) from--;
 		return new Span(from, meta.to);
+	}
+
+	/**
+	 * Whether `span`, with the comment that closes its last line, is the only thing on the lines it
+	 * occupies — the shape of a statement, a member or a one-per-line list element, as opposed to a
+	 * node written inline among others.
+	 */
+	public static function ownsItsLines(source: String, span: Span, regions: () -> Array<LexRegion>): Bool {
+		return ownedLinesSpan(source, lineClosingCommentSpan(source, span, regions)) != null;
+	}
+
+	/**
+	 * The element `node` stands for when a caller deletes it: `node` itself when it fills its own
+	 * lines, else its parent when that parent begins where `node` begins, holds nothing else and itself
+	 * fills its lines — the statement around the expression that is its whole content, so a call the
+	 * statement consists of is deleted as that statement. Null when neither does, e.g. a sub-expression
+	 * of a statement, which is not an element to delete.
+	 */
+	public static function wholeLinesElement(
+		source: String, tree: QueryNode, node: QueryNode, regions: () -> Array<LexRegion>
+	): Null<QueryNode> {
+		final span: Null<Span> = node.span;
+		if (span == null) return null;
+		if (ownsItsLines(source, declEditSpan(source, tree, node, span, regions), regions)) return node;
+		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
+		if (parent == null || parent.children.length != 1) return null;
+		final parentSpan: Null<Span> = parent.span;
+		return parentSpan != null
+			&& parentSpan.from == span.from
+			&& parentSpan.to > span.to
+			&& ownsItsLines(source, declEditSpan(source, tree, parent, parentSpan, regions), regions)
+			? parent
+			: null;
 	}
 
 	/** `n` with its noun, singular or plural — the one place the report's `s` is decided. */
@@ -860,6 +895,25 @@ final class ElementSpan {
 		var p: Int = from;
 		while (p < source.length && SourceText.isHorizontalSpace(source.fastCodeAt(p))) p++;
 		return p;
+	}
+
+	/**
+	 * `span` widened over the own-line comments that belong to the element it spans: the doc block
+	 * above it and, when `notes` (the element is a statement), the `//` notes directly above it, each
+	 * reaching past the other until neither goes further. Elsewhere a `//` note labels what stays — a
+	 * section banner, an import group header — and is left.
+	 */
+	private static function noteExtendedSpan(source: String, span: Span, regionsOf: () -> Array<LexRegion>, notes: Bool): Span {
+		final regions: Array<LexRegion> = regionsOf();
+		final tokens: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
+		var from: Int = span.from;
+		while (true) {
+			final above: Int = notes ? SourceComments.lineNotesAbove(source, tokens, from) : from;
+			final next: Int = docExtendedSpan(source, new Span(above, span.to), regions, true).from;
+			if (next == from) break;
+			from = next;
+		}
+		return from == span.from ? span : new Span(from, span.to);
 	}
 
 }
