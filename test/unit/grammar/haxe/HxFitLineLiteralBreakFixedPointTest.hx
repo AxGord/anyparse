@@ -93,8 +93,7 @@ final class HxFitLineLiteralBreakFixedPointTest extends Test {
 	}
 
 	/** One write is a fixed point at every width around the break, under every host and on either ternary branch. */
-	@:pin('control')
-	@:killer('M-CHAIN-LITERAL-NAMED')
+	@:pin('guard')
 	public function testOneWriteIsAFixedPointAtEveryWidth(): Void {
 		for (k in MIN_K ... MAX_K) {
 			final literal: String = '{ aaaa: 1, bbbb: \'${''.lpad('k', k)}\' }';
@@ -126,11 +125,10 @@ final class HxFitLineLiteralBreakFixedPointTest extends Test {
 	}
 
 	/**
-	 * Two literals breaking in one ternary settle in one write: the ternary is offered with both breaks committed, so the
-	 * first write lays it out for both rather than for one branch's break alone.
+	 * Two literals breaking in one ternary under the fitLine host settle in one write. The offer-combined mechanism is held by
+	 * `HxFitPivotLiteralFixedPointTest.testTwoBreakingBranchLiteralsSettleInOneWrite` (M-OFFER-COMBINED), not by this fixture.
 	 */
-	@:pin('control')
-	@:killer('M-OFFER-COMBINED')
+	@:pin('guard')
 	public function testTwoBreakingBranchesSettleInOneWrite(): Void {
 		final literal: String = '{ aaaa: 1, ${''.lpad('b', 61)}: ${''.lpad('2', 56)} }';
 		final once: String = HxWriteFixture.triviaWrite(

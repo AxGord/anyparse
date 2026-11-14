@@ -64,13 +64,10 @@ final class HxFitPivotLiteralFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-ARROW-LITERAL-NAMED')
 	public function testAnArrowLiteralBodyGluesOnceItBreaks(): Void {
-		final k: String = ''.lpad('k', 100);
+		final k: String = ''.lpad('k', 110);
 		settlesOn(
-			statement('check(sources, {sources: () -> {report: report, projectRoots: [], library: \'$k\'}});'),
-			statement(
-				'check(sources, {\n\t\t\tsources: () -> {\n\t\t\t\treport: report,\n\t\t\t\tprojectRoots: [],\n'
-				+ '\t\t\t\tlibrary: \'$k\'\n\t\t\t}\n\t\t});'
-			)
+			statement('return () -> {report: report, projectRoots: [], library: \'$k\'};'),
+			statement('return () -> {\n\t\t\treport: report,\n\t\t\tprojectRoots: [],\n\t\t\tlibrary: \'$k\'\n\t\t};')
 		);
 	}
 
