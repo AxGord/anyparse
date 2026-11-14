@@ -46,12 +46,15 @@ class MemberSpacingPolicyTest extends Test {
 	 * lifts a tight gap to one blank, and measures every slot as `multiline`.
 	 */
 	private static function multilineAnswering(multiline: Null<Bool>): MemberGapPolicy {
-		return {
-			containerKinds: ['ClassDecl'],
+		var self: Null<MemberGapPolicy> = null;
+		final policy: MemberGapPolicy = {
+			forKind: kind -> kind == 'ClassDecl' ? self : null,
 			docBlanks: (_, _) -> null,
 			multilineBlanks: (_, _) -> 1,
 			multiline: _ -> multiline
 		};
+		self = policy;
+		return policy;
 	}
 
 	/** The spacing finding's message for the single class in `src` under `writer`, or null. */

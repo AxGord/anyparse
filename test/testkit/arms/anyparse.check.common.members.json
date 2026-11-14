@@ -785,8 +785,8 @@
 			"name": "M-MO-WRITER-CONTAINER-KIND",
 			"type": "anyparse.check.common.members.MemberSpacing",
 			"method": "forContainer",
-			"find": "return writer == null || writer.containerKinds.contains(containerKind)",
-			"replace": "return true",
+			"find": "writer: writer.forKind(containerKind)",
+			"replace": "writer: writer",
 			"note": "the writer's member-gap policy is applied to a container kind the writer does not run it on"
 		},
 		{

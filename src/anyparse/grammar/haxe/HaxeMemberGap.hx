@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 import anyparse.core.Doc;
+import anyparse.format.CommentEmptyLinesPolicy;
 import anyparse.format.MemberGap;
 import anyparse.grammar.haxe.trivia.Pairs.HxDeclT;
 import anyparse.grammar.haxe.trivia.Pairs.HxModuleT;
@@ -19,43 +20,46 @@ import haxe.Exception;
 final class HaxeMemberGap {
 
 	/**
-	 * The projected container kinds written through a member Star that carries the whole policy: a class (plain,
-	 * `final`, `abstract`) and an abstract all carry `afterFieldsWithDocComments`, `beforeDocCommentEmptyLines` and
-	 * `blankAroundMultilineMembers('aroundMultilineFields')`.
+	 * The projected container kinds written through a class-body Star: a class (plain, `final`, `abstract`) and an
+	 * abstract all carry the global `afterFieldsWithDocComments`, `metadataCountsAsDocComment`,
+	 * `beforeDocCommentEmptyLines` and `blankAroundMultilineMembers('aroundMultilineFields')`.
 	 */
-	private static final CONTAINER_KINDS: Array<String> = ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'];
+	private static final CLASS_KINDS: Array<String> = ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'];
 
-	/** The policy under `opt`, with a per-slot memo of the multi-line measure. */
+	/**
+	 * The policy under `opt`, with a per-slot memo of the multi-line measure. An `enum abstract` body reads its own
+	 * `enumAbstract*` doc knobs (an unset after-policy falls back to the global one, as its Star does); under
+	 * `enumAbstractRulesUnlessValueList` the set a body reads depends on the body, so that kind has no policy.
+	 */
 	public static function policy(opt: HxModuleWriteOptions): MemberGapPolicy {
 		final measured: Map<String, Bool> = [];
 		final unreadable: Array<String> = [];
-		inline function docLed(head: MemberGapHead): Bool {
-			return MemberGap.docLed(head.leading) || (opt.metadataCountsAsDocComment && head.hasMeta);
-		}
-		inline function docGap(prev: MemberGapHead, next: MemberGapHead): DocGapVerdict {
-			return MemberGap.docGap(
-				docLed(prev), docLed(next), opt.afterFieldsWithDocComments, opt.beforeDocCommentEmptyLines,
-				MemberGap.docSplitLead(next.leading)
-			);
-		}
-		return {
-			containerKinds: CONTAINER_KINDS,
-			docBlanks: (prev, next) -> MemberGap.forcedBlanks(docGap(prev, next), false, opt.aroundMultilineFields),
-			multilineBlanks: (prev, next) ->
-				opt.aroundMultilineFields > 0 ? MemberGap.forcedBlanks(docGap(prev, next), true, opt.aroundMultilineFields) : null,
-			multiline: slot -> {
-				if (measured.exists(slot)) return measured[slot];
-				if (unreadable.contains(slot)) return null;
-				final doc: Null<Doc> = memberDoc(slot, opt);
-				if (doc == null) {
-					unreadable.push(slot);
-					return null;
-				}
-				final multi: Bool = MemberGap.multiline(doc, opt);
-				measured[slot] = multi;
-				return multi;
+		function multiline(slot: String): Null<Bool> {
+			if (measured.exists(slot)) return measured[slot];
+			if (unreadable.contains(slot)) return null;
+			final doc: Null<Doc> = memberDoc(slot, opt);
+			if (doc == null) {
+				unreadable.push(slot);
+				return null;
 			}
-		};
+			final multi: Bool = MemberGap.multiline(doc, opt);
+			measured[slot] = multi;
+			return multi;
+		}
+		var classBody: Null<MemberGapPolicy> = null;
+		var enumAbstractBody: Null<MemberGapPolicy> = null;
+		function forKind(kind: String): Null<MemberGapPolicy> {
+			if (CLASS_KINDS.contains(kind)) return classBody;
+			if (kind == 'EnumAbstractDecl' && !opt.enumAbstractRulesUnlessValueList) return enumAbstractBody;
+			return null;
+		}
+		final cls: MemberGapPolicy = body(opt, opt.metadataCountsAsDocComment, opt.afterFieldsWithDocComments, multiline, forKind);
+		classBody = cls;
+		enumAbstractBody = body(
+			opt, opt.enumAbstractMetadataCountsAsDocComment, opt.enumAbstractAfterFieldsWithDocComments ?? opt.afterFieldsWithDocComments,
+			multiline, forKind
+		);
+		return cls;
 	}
 
 	/**
@@ -71,6 +75,28 @@ final class HaxeMemberGap {
 		return switch decl {
 			case ClassDecl(body) if (body.members.length == 1): HaxeModuleTriviaWriter.writeHxMemberDeclT(body.members[0].node, opt);
 			case _: null;
+		};
+	}
+
+	/** One body kind's policy: the doc-led notion under `metaCountsAsDoc` and the after-doc policy `after`. */
+	private static function body(
+		opt: HxModuleWriteOptions, metaCountsAsDoc: Bool, after: CommentEmptyLinesPolicy, multiline: (slot: String) -> Null<Bool>,
+		forKind: (kind: String) -> Null<MemberGapPolicy>
+	): MemberGapPolicy {
+		inline function docLed(head: MemberGapHead): Bool {
+			return MemberGap.docLed(head.leading) || (metaCountsAsDoc && head.hasMeta);
+		}
+		inline function docGap(prev: MemberGapHead, next: MemberGapHead): DocGapVerdict {
+			return MemberGap.docGap(
+				docLed(prev), docLed(next), after, opt.beforeDocCommentEmptyLines, MemberGap.docSplitLead(next.leading)
+			);
+		}
+		return {
+			forKind: forKind,
+			docBlanks: (prev, next) -> MemberGap.forcedBlanks(docGap(prev, next), false, opt.aroundMultilineFields),
+			multilineBlanks: (prev, next) ->
+				opt.aroundMultilineFields > 0 ? MemberGap.forcedBlanks(docGap(prev, next), true, opt.aroundMultilineFields) : null,
+			multiline: multiline
 		};
 	}
 

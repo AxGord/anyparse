@@ -86,12 +86,10 @@ final class MemberSpacing {
 		return { separateInline: separateInline, writer: plugin.memberGapPolicy(FormatConfigDiscovery.discover(file, notes)) };
 	}
 
-	/** `spacing` for one container of kind `containerKind`: the writer policy is kept only when the writer runs it on that kind. */
+	/** `spacing` for one container of kind `containerKind`: the writer policy the writer runs on that kind, if any. */
 	public static function forContainer(spacing: SpacingPolicy, containerKind: String): SpacingPolicy {
 		final writer: Null<MemberGapPolicy> = spacing.writer;
-		return writer == null || writer.containerKinds.contains(containerKind)
-			? spacing
-			: { separateInline: spacing.separateInline, writer: null };
+		return writer == null ? spacing : { separateInline: spacing.separateInline, writer: writer.forKind(containerKind) };
 	}
 
 	/**

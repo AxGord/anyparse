@@ -4306,7 +4306,8 @@ typedef MemberGapHead = { final leading: Array<String>; final hasMeta: Bool; }
  * many blank lines and keeps a non-empty one as the source has it - and 0 is exact; every answer is null when
  * the writer leaves the gap to the source, or when the policy cannot tell, which a caller reads the same way.
  *
- * `containerKinds` are the projected container kinds whose member list the writer runs this policy on.
+ * `forKind(containerKind)` is the policy the writer runs on a body of that projected container kind (each kind may
+ * read its own knobs), null when it runs none there or the policy cannot tell which.
  * `docBlanks(prev, next)` is what the doc-comment rule forces, given each member's head (`MemberGapHead`): its leading
  * comments in source order and whether its metadata list is non-empty, which the writer counts as doc-led under
  * `metadataCountsAsDoc`.
@@ -4317,7 +4318,7 @@ typedef MemberGapHead = { final leading: Array<String>; final hasMeta: Bool; }
  */
 @:nullSafety(Strict)
 typedef MemberGapPolicy = {
-	final containerKinds: Array<String>;
+	final forKind: (containerKind: String) -> Null<MemberGapPolicy>;
 	final docBlanks: (prev: MemberGapHead, next: MemberGapHead) -> Null<Int>;
 	final multilineBlanks: (prev: MemberGapHead, next: MemberGapHead) -> Null<Int>;
 	final multiline: (slot: String) -> Null<Bool>;

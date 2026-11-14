@@ -31,7 +31,7 @@
 		{
 			"name": "M-MEMBER-GAP-POLICY-NO-SPLIT-LEAD",
 			"type": "anyparse.grammar.haxe.HaxeMemberGap",
-			"method": "policy",
+			"method": "body",
 			"find": "MemberGap.docSplitLead(next.leading)",
 			"replace": "false",
 			"note": "the member-order policy stops reading the split lead, so it demands a before-doc blank above a split-led member that fmt never writes"
@@ -39,8 +39,8 @@
 		{
 			"name": "M-MEMBER-GAP-POLICY-META-UNREAD",
 			"type": "anyparse.grammar.haxe.HaxeMemberGap",
-			"method": "policy",
-			"find": "MemberGap.docLed(head.leading) || (opt.metadataCountsAsDocComment && head.hasMeta)",
+			"method": "body",
+			"find": "MemberGap.docLed(head.leading) || (metaCountsAsDoc && head.hasMeta)",
 			"replace": "MemberGap.docLed(head.leading)",
 			"note": "the member-order policy stops counting a metadata member as doc-led under metadataCountsAsDocComment, so it predicts no blank around a member fmt sets off"
 		},
@@ -84,6 +84,14 @@
 			"find": "MetadataLineEndPolicy.After",
 			"replace": "MetadataLineEndPolicy.None",
 			"note": "a type's metadata defaults to None again, so it joins its declaration on one line"
+		},
+		{
+			"name": "M-MEMBER-GAP-ENUM-ABSTRACT-UNREAD",
+			"type": "anyparse.grammar.haxe.HaxeMemberGap",
+			"method": "policy",
+			"find": "if (kind == 'EnumAbstractDecl' && !opt.enumAbstractRulesUnlessValueList) return enumAbstractBody;",
+			"replace": "",
+			"note": "an enum-abstract body gets no writer policy again, so member-order reports the blank fmt writes under the enumAbstract knobs"
 		}
 	]
 }
