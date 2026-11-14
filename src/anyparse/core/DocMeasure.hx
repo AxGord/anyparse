@@ -341,6 +341,49 @@ final class DocMeasure {
 	}
 
 	/**
+	 * The flat width of `d` up to and including its first open delimiter, read off the leaf tags in `flatText`'s order:
+	 * a leaf opening at its first byte ends the prefix there, one opening at its end edge ends it at its last non-blank byte.
+	 * Null when no tagged leaf opens a run.
+	 */
+	public static function flatPrefixToOpenDelim(d: Doc): Null<Int> {
+		var width: Int = 0;
+		final stack: Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node: Doc = (cast stack.pop(): Doc);
+			switch node {
+				case Empty, OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline, OptSpaceSkipAfterHardline:
+				case Text(s, _, Delimiter(opens, _)) if (opens != NoOpen):
+					return width + 1;
+				case Text(s, _, Delimiter(_, Opens)):
+					return width + s.rtrim().length;
+				case Text(s, _, _):
+					width += s.length;
+				case Line(flat):
+					if (!(D.isHardline(flat))) width += flat.length;
+				case OptSpace(s):
+					width += s.length;
+				case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
+					BodyGroup(inner), Flatten(inner), WrapBoundary(inner), HardFlatten(inner), CollapseProbe(inner),
+					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
+					stack.push(inner);
+				case Concat(items):
+					var k: Int = items.length;
+					while (--k >= 0) stack.push(items[k]);
+				case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
+					IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
+					IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
+					IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
+					IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
+					stack.push(fl);
+				case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
+					pushFillReversed(stack, items, sep);
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * True iff operand `d`'s flat text is a TOP-LEVEL function call —
 	 * `<ident-chain>(…)` (incl. `obj.method(…)` / `Type.fn(…)`). The operand's
 	 * FIRST visible char must be an identifier start (letter / `_` / `$`); a

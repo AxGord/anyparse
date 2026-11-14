@@ -812,7 +812,7 @@ final class CollapsePass {
 		};
 		if (parts == null) return null;
 		final last: Doc = parts[parts.length - 1];
-		final lastPrefix: Null<Int> = flatPrefixToOpenDelim(last);
+		final lastPrefix: Null<Int> = DocMeasure.flatPrefixToOpenDelim(last);
 		if (lastPrefix == null) return null;
 		var total: Int = lastPrefix;
 		for (i in 0...parts.length - 1) total += DocMeasure.flatTokenWidth(parts[i]);
@@ -873,21 +873,6 @@ final class CollapsePass {
 			case Nest(cols, _): cols;
 			case null, _: null;
 		};
-	}
-
-	/**
-	 * The flat-text width of `seg` up to and including its first open delimiter
-	 * (`(`/`[`/`{`). Null when the segment has no open delim. Used to size the
-	 * `.field(` prefix of a chain's last call segment — the part that stays on
-	 * the glued first line when the call's args break.
-	 */
-	private static function flatPrefixToOpenDelim(seg: Doc): Null<Int> {
-		final flat: String = DocMeasure.flatText(seg);
-		for (i in 0...flat.length) {
-			final c: Int = flat.fastCodeAt(i);
-			if (c == '('.code || c == '['.code || c == '{'.code) return i + 1;
-		}
-		return null;
 	}
 
 	/**
@@ -1228,7 +1213,7 @@ final class CollapsePass {
 		if (cols == null) return null;
 		final argsBrk: Null<Doc> = findLeadingBreakArgsBrk(last);
 		if (argsBrk == null || !singleArgBrkFitsOwnLine(argsBrk, nestBase + cols, width)) return null;
-		final prefix: Null<Int> = flatPrefixToOpenDelim(last);
+		final prefix: Null<Int> = DocMeasure.flatPrefixToOpenDelim(last);
 		return prefix == null ? null : nestBase + cols + prefix;
 	}
 

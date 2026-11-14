@@ -6,8 +6,6 @@ import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
 import anyparse.format.IndentChar;
 
-using StringTools;
-
 /**
  * Runtime helper that emits a `Doc` for a method-chain construct (`a.b().c().d()`,
  * a left-associative nest of Call / FieldAccess) whose layout is driven by a
@@ -424,18 +422,11 @@ class MethodChainEmit {
 	}
 
 	/**
-	 * True iff the chain segment `seg` is a call `.field(args)` whose flat text
-	 * contains an open delimiter (`(`/`[`/`{`) after the leading `.field` — i.e.
-	 * a breakable call whose args can wrap onto their own lines. A bare
-	 * `.field` access (no call) has no breakable args.
+	 * True iff the chain segment `seg` holds a leaf tagged as opening a delimited run (`DocMeasure.flatPrefixToOpenDelim`),
+	 * i.e. a breakable call `.field(args)`; a bare `.field` access has no breakable args.
 	 */
 	private static function segmentOpensCall(seg: Doc): Bool {
-		final flat: String = DocMeasure.flatText(seg);
-		for (i in 0...flat.length) {
-			final c: Int = flat.fastCodeAt(i);
-			if (c == '('.code || c == '['.code || c == '{'.code) return true;
-		}
-		return false;
+		return DocMeasure.flatPrefixToOpenDelim(seg) != null;
 	}
 
 	private static function shapeOnePerLineAfterFirst(

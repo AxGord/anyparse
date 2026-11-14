@@ -795,6 +795,30 @@
 			"find": "if (last == '}'.code) return ClosesBrace;",
 			"replace": "if (last == '}'.code) return Closes;",
 			"note": "a `}` leaf is tagged like any other close, so the brace question cannot tell it from `)`"
+		},
+		{
+			"name": "M-OPENDELIM-FIRST-BYTE",
+			"type": "anyparse.core.DocMeasure",
+			"method": "flatPrefixToOpenDelim",
+			"find": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\treturn width + 1;",
+			"replace": "Delimiter(opens, _)) if (opens != NoOpen):\n\t\t\t\t\treturn width;",
+			"note": "the prefix to a leaf opening at its first byte leaves the opener out"
+		},
+		{
+			"name": "M-OPENDELIM-END-EDGE",
+			"type": "anyparse.core.DocMeasure",
+			"method": "flatPrefixToOpenDelim",
+			"find": "case Text(s, _, Delimiter(_, Opens)):\n\t\t\t\t\treturn width + s.rtrim().length;",
+			"replace": "case Text(s, _, Delimiter(_, Opens)):\n\t\t\t\t\twidth += s.length;",
+			"note": "a leaf opening at its end edge (`foo(`) is walked past, so the segment finds no open delimiter"
+		},
+		{
+			"name": "M-OPENDELIM-BYTES",
+			"type": "anyparse.core.DocMeasure",
+			"method": "flatPrefixToOpenDelim",
+			"find": "case Text(s, _, _):\n\t\t\t\t\twidth += s.length;",
+			"replace": "case Text(s, _, _):\n\t\t\t\t\tif (s.indexOf(\"(\") >= 0) return width + s.indexOf(\"(\") + 1;\n\t\t\t\t\twidth += s.length;",
+			"note": "an untagged leaf holding `(` (a string literal) counts as an open delimiter again"
 		}
 	]
 }
