@@ -4,7 +4,6 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.LintConfig;
-import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.AccessorClause;
 import anyparse.query.CanonicalEdit;
@@ -599,7 +598,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		cls: QueryNode, source: String, clauseSpan: Span, clauseText: String, deletedAccessors: Array<QueryNode>, metaSpan: Null<Span>
 	): Null<Array<{ span: Span, text: String }>> {
 		final edits: Array<{ span: Span, text: String }> = [{ span: clauseSpan, text: clauseText }];
-		if (metaSpan != null) edits.push({ span: AccessorClauseText.metaRemovalSpan(source, metaSpan), text: '' });
+		if (metaSpan != null) edits.push({ span: ElementSpan.metaRemovalSpan(source, metaSpan), text: '' });
 		for (acc in deletedAccessors) {
 			final span: Null<Span> = acc.span;
 			if (span == null) return null;

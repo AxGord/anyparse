@@ -4,12 +4,12 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.scan.AccessorClauseText;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.PropertyStorage;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldFold;
+import anyparse.query.ElementSpan;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
@@ -108,13 +108,13 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 		});
 	}
 
-	/** Delete each flagged `@:isVar`, with the whitespace or line it leaves behind (`AccessorClauseText.metaRemovalSpan`). */
+	/** Delete each flagged `@:isVar`, with the whitespace or line it leaves behind (`ElementSpan.metaRemovalSpan`). */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		final edits: Array<FixEdit> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null && v.declineReason == null && isVarSpelling(source.substring(span.from, span.to)))
-				edits.push({ span: AccessorClauseText.metaRemovalSpan(source, span), text: '' });
+				edits.push({ span: ElementSpan.metaRemovalSpan(source, span), text: '' });
 		}
 		return edits;
 	}
