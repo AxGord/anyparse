@@ -16966,6 +16966,54 @@
 			"find": "return sameKind && iType.children.length == 0 ? null : pname.substring(1);",
 			"replace": "return null;",
 			"note": "a type metavariable binds only a plain named type again, so a function type, an anonymous structure or a parameterized type in the slot no longer matches"
+		},
+		{
+			"name": "M-SPAN-COMMENT-LITERAL-COUNTS",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "commentIntersects",
+			"find": "if ((region.holes ?? []).exists(hole -> commentIntersects(from, to, hole.regions))) return true;",
+			"replace": "return true;",
+			"note": "a string or regex literal counts as a comment region again, so a marker spelled inside a literal reads as a comment"
+		},
+		{
+			"name": "M-SPAN-COMMENT-HOLE-BLIND",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "commentIntersects",
+			"find": "if ((region.holes ?? []).exists(hole -> commentIntersects(from, to, hole.regions))) return true;",
+			"replace": "",
+			"note": "a literal is skipped wholesale and its code holes are no longer read, so a comment written inside a hole reads as comment-free"
+		},
+		{
+			"name": "M-SPAN-COMMENT-REGIONS-IGNORED",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "commentIntersects",
+			"find": "case LineComment, BlockComment:",
+			"replace": "case LineComment, BlockComment: continue;",
+			"note": "a comment region no longer answers yes, so a span holding a real line or block comment reads as comment-free"
+		},
+		{
+			"name": "M-SPAN-COMMENT-START-INCLUSIVE",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "commentIntersects",
+			"find": "if (region.from >= to) break;",
+			"replace": "if (region.from > to) break;",
+			"note": "the span is no longer half-open at the region start, so a span ending exactly where a comment opens counts it"
+		},
+		{
+			"name": "M-SPAN-COMMENT-END-INCLUSIVE",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "commentIntersects",
+			"find": "if (region.to <= from) continue;",
+			"replace": "if (region.to < from) continue;",
+			"note": "the span is no longer half-open at the region end, so a span starting exactly where a comment closes counts it"
+		},
+		{
+			"name": "M-SPAN-COMMENT-EMPTY-SPAN-SCANNED",
+			"type": "anyparse.query.LexicalRegions",
+			"method": "commentIntersects",
+			"find": "if (from >= to) return false;",
+			"replace": "",
+			"note": "an empty or reversed span is scanned like any other, so one sitting inside a comment body answers yes"
 		}
 	]
 }

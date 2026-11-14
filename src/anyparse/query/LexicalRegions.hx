@@ -157,10 +157,10 @@ final class LexicalRegions {
 	}
 
 	/**
-	 * Does a COMMENT region open inside `[from, to)`? A `//` or `/*` inside a string literal is text, so it is no
-	 * comment; one inside a `${ … }` hole of a string is code and counts. The one answer to "does this source range hold a
-	 * comment" for a caller that must not splice over one and cannot accept the string-blind
-	 * `SourceComments.hasCommentMarker`.
+	 * Does a COMMENT region OPEN inside `[from, to)`? Reads the top-level regions only: a `//` or `/*` inside a string literal is
+	 * text and no comment, and a comment written inside a `${ … }` hole of a literal is not seen. A guard that splices a whole
+	 * span, which a comment may straddle or sit in a hole of, wants `commentIntersects`; the string-blind
+	 * `SourceComments.hasCommentMarker` is the contract for callers that rely on it.
 	 */
 	public static function commentOpensIn(from: Int, to: Int, regions: Array<LexRegion>): Bool {
 		return regions.exists(region -> region.from >= from && region.from < to && isComment(region));
@@ -251,6 +251,27 @@ final class LexicalRegions {
 			case StringLit, RegexLit:
 				for (hole in region.holes ?? []) eachComment(hole.regions, onComment);
 		}
+	}
+
+	/**
+	 * Does a COMMENT region INTERSECT `[from, to)`? Where `commentOpensIn` asks only for a comment that opens inside the
+	 * range, this also counts one the range starts or ends inside, so it is the answer for a guard that splices the whole
+	 * span and must not drop any byte of a comment. A comment in a `${ … }` hole of a literal is code and counts; the text
+	 * of the literal does not. Half-open at both edges; an empty or reversed range holds none.
+	 */
+	public static function commentIntersects(from: Int, to: Int, regions: Array<LexRegion>): Bool {
+		if (from >= to) return false;
+		for (region in regions) {
+			if (region.from >= to) break;
+			if (region.to <= from) continue;
+			switch region.kind {
+				case LineComment, BlockComment:
+					return true;
+				case StringLit, RegexLit:
+					if ((region.holes ?? []).exists(hole -> commentIntersects(from, to, hole.regions))) return true;
+			}
+		}
+		return false;
 	}
 
 	/** The entries waiting at `depth`, the level created on first use. */
