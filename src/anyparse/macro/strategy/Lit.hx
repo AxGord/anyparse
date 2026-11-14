@@ -150,7 +150,7 @@ class Lit implements Strategy {
 				node.annotations[AnnotationKeys.LIT_SEP_TAIL_RELAX] = true;
 			// `sepFaithful` (ω-sep-faithful): source-fidelity sep mode for
 			// comma-lists inside preprocessor-guarded element groups
-			// (`HxConditionalArgs.body` and kin). Parse side reuses the
+			// (`HxConditionalCommaList.body` and kin). Parse side reuses the
 			// permissive trivia tryparse loop (per-element `sepAfter`
 			// capture); writer side re-emits the sep iff the element's
 			// captured `sepAfter` is true — no `}`/`;` byte-check, no

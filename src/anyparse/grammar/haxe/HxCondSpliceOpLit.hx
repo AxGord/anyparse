@@ -23,7 +23,7 @@ package anyparse.grammar.haxe;
  * before. Byte round-trip of an unchanged region outranks one more modelled site, so the
  * ternary keeps `HxCondSpliceRaw`'s verbatim capture and its rename refusal; restoring the
  * two operators is a one-token edit the day the writer can reproduce a per-element nest.
- * `,` is not here either — a comma-separated splice is `HxConditionalArgs`' shape, dispatched
+ * `,` is not here either — a comma-separated splice is `HxConditionalCommaList`' shape, dispatched
  * before this one.
  *
  * `@:rawString` — the matched slice is stored verbatim, no string-unescape pass; the writer

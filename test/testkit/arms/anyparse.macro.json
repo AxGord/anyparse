@@ -3262,6 +3262,14 @@
 			"find": "_meta.args(name) ?? []",
 			"replace": "_meta.args(name)",
 			"note": "a bare knob-list flag reads as absent, so the emitter skips it instead of refusing it"
+		},
+		{
+			"name": "M-GENERIC-INSTANCE-FIELD-META",
+			"type": "anyparse.macro.ShapeBuilder",
+			"method": "concreteInstance",
+			"find": "meta: f.meta.get(),",
+			"replace": "meta: f.meta.get().filter(m -> m.name != ':lead'),",
+			"note": "a generic typedef instance drops the @:lead of the generic's fields, so the slot's value after its `:` no longer parses"
 		}
 	]
 }

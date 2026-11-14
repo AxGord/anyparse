@@ -9,7 +9,7 @@ package anyparse.grammar.haxe;
  * behind its own leading comma, and `endKw` the closing directive (a
  * TERMINAL, see `HxCondEndLit`).
  *
- * WHY THE ARGUMENT LIST DOES NOT OWN THIS SHAPE. `HxConditionalArgs`
+ * WHY THE ARGUMENT LIST DOES NOT OWN THIS SHAPE. `HxConditionalCommaList`
  * models a region occupying whole ELEMENTS of a comma-separated list, and
  * it only fires when `#if` STARTS an element. Here the directive follows a
  * complete element, so the postfix `#if` binds inside that element's own

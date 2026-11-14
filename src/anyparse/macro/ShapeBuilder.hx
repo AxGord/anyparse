@@ -310,9 +310,10 @@ class ShapeBuilder {
 			return term;
 		}
 		// Named types become Ref + enqueue
-		final refName: Null<String> = qualifiedNameOrNull(t);
+		final named: Type = concreteInstance(t);
+		final refName: Null<String> = qualifiedNameOrNull(named);
 		if (refName != null) {
-			enqueue(refName, t);
+			enqueue(refName, named);
 			final node: ShapeNode = new ShapeNode(Ref);
 			node.annotations[AnnotationKeys.BASE_REF] = refName;
 			return node;
@@ -478,6 +479,88 @@ class ShapeBuilder {
 
 	private static function typeToString(t: Type): String {
 		return try haxe.macro.TypeTools.toString(t) catch (_: haxe.Exception) 'unknown';
+	}
+
+	/**
+	 * A typedef applied to type arguments (`HxConditionalCommaList<HxExpr>`) as the concrete typedef
+	 * the rest of the pipeline reads like any declared one: its fields carry the generic's metadata and
+	 * positions with the arguments substituted, its own metadata is the generic's, and its name is the
+	 * generic's followed by its arguments (`instanceName`). Defined once per compilation; a later build
+	 * asks the compiler for it again, and a type under that name that is not this application stops the build.
+	 */
+	private static function concreteInstance(t: Type): Type {
+		switch t {
+			case TType(ref, params) if (params.length > 0):
+				final d: DefType = ref.get();
+				final name: String = instanceName(d, params);
+				final path: String = joinPack(d.pack, name);
+				final applied: AnonType = switch Context.follow(t, true) {
+					case TAnonymous(a): a.get();
+					case _:
+						Context.fatalError(
+							'ShapeBuilder: typedef ${d.name} does not resolve to an anonymous structure', Context.currentPos()
+						);
+				};
+				final found: Null<Type> = try Context.getType(path) catch (_: haxe.Exception) null;
+				if (found != null) {
+					if (!isInstanceOf(found, d, t))
+						Context.fatalError(
+							'ShapeBuilder: ${typeToString(t)} names its instance $path, which is another type', Context.currentPos()
+						);
+					return found;
+				}
+				Context.defineType({
+					pack: d.pack,
+					name: name,
+					pos: d.pos,
+					meta: d.meta.get(),
+					kind: TDStructure,
+					fields: [
+						for (f in applied.fields) {
+							name: f.name,
+							kind: FVar(Context.toComplexType(f.type)),
+							meta: f.meta.get(),
+							pos: f.pos
+						}
+					]
+				});
+				return Context.getType(path);
+			case _:
+				return t;
+		}
+	}
+
+	/**
+	 * The type name of a generic typedef's instance: the generic's name, then each argument's name after
+	 * `_` — simple when it shares the generic's package, its whole path with `_` for `.` otherwise, and an
+	 * argument that is itself an instance contributes its own instance name.
+	 */
+	private static function instanceName(d: DefType, params: Array<Type>): String {
+		final own: String = d.pack.join('.');
+		final args: Array<String> = [
+			for (p in params) {
+				final arg: String = qualifiedName(concreteInstance(p));
+				final dot: Int = arg.lastIndexOf('.');
+				dot != -1 && arg.substr(0, dot) == own ? arg.substr(dot + 1) : arg.split('.').join('_');
+			}
+		];
+		return [d.name].concat(args).join('_');
+	}
+
+	/**
+	 * Whether `found` is the instance `concreteInstance` defined for `applied`: declared at the generic's
+	 * position, with the applied structure.
+	 */
+	private static function isInstanceOf(found: Type, generic: DefType, applied: Type): Bool {
+		return switch found {
+			case TType(ref, _):
+				final at: { file: String, min: Int, max: Int } = Context.getPosInfos(ref.get().pos);
+				final own: { file: String, min: Int, max: Int } = Context.getPosInfos(generic.pos);
+				at.file == own.file
+					&& at.min == own.min
+					&& typeToString(Context.follow(found, true)) == typeToString(Context.follow(applied, true));
+			case _: false;
+		};
 	}
 
 }

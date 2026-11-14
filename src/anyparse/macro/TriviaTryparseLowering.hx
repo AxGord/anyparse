@@ -1143,7 +1143,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		// ω-sep-faithful: source-fidelity mode — the sep re-emits iff the
 		// parser captured one after the prior element (`sepAfter`), with no
 		// `}`/`;` shape heuristics. Used by comma-lists inside conditional
-		// element groups (`HxConditionalArgs.body`), where a `}`-ending
+		// element groups (`HxConditionalCommaList.body`), where a `}`-ending
 		// object-literal element still needs its comma.
 		final priorCondProbe: Expr = elemCondFnExpr == null ? macro false : macro $elemCondFnExpr(_arr[_si - 1].node);
 		return sepText != null && sepFaithful

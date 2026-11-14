@@ -229,9 +229,16 @@ enum HxExpr {
 	@:trail('#end')
 	@:fmt(condExprFitGroup)
 	ConditionalExpr(inner: HxConditionalExpr);
+
+	/**
+	 * `#if` region wrapping whole elements of a comma-separated expression list — array-literal
+	 * entries, call and `new` arguments: `[a, #if !mobile b, c, #end d]`, `[#if mobile A, #else B, #end c]`.
+	 * `ConditionalExpr` is tried first and keeps every balanced single-expression shape; this ctor
+	 * commits only when a branch holds list punctuation (a `,` before `#elseif`/`#else`/`#end`).
+	 */
 	@:kw('#if')
 	@:trail('#end')
-	ConditionalArgs(inner: HxConditionalArgs);
+	ConditionalArgs(inner: HxConditionalCommaList<HxExpr>);
 
 	/**
 	 * Token-splice `#if` region whose fragment is a run of complete

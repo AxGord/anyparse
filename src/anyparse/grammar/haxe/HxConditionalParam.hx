@@ -28,7 +28,7 @@ package anyparse.grammar.haxe;
  * against `#if <cond>` / `#else` / `#end`; inter-element trivia is `HxFnDecl.params`'s job.
  *
  * Every arm's body (`body`, each `HxElseifParam.body`, `elseBody`) carries `@:trivia
- * @:sep(',', sepFaithful)`, the trio `HxConditionalArgs` uses: only a trivia Star captures the
+ * @:sep(',', sepFaithful)`, the trio `HxConditionalCommaList` uses: only a trivia Star captures the
  * per-element `sepAfter`, so only it writes a separator INSIDE the region back where the
  * source put it — `#if js ?parentDom:String, #end`, `#else baz:Int, #end`. Without it the
  * tryparse rewind swallowed that comma and the outer Star emitted none either (its own

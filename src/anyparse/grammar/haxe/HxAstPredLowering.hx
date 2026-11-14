@@ -56,7 +56,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
 	private static final HX_VAR_DECL: String = 'anyparse.grammar.haxe.HxVarDecl';
 	private static final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
-	private static final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalArgs';
+
+	/** The rule of `HxConditionalCommaList<HxExpr>`, under the instance name `ShapeBuilder` gives it. */
+	private static final HX_COND_ARGS: String = 'anyparse.grammar.haxe.HxConditionalCommaList_HxExpr';
+
 	private static final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
 	private static final HX_COND_SPLICE_TAIL_BODY: String = 'anyparse.grammar.haxe.HxCondSpliceTailBody';
 	private static final HX_ANON_MEMBER: String = 'anyparse.grammar.haxe.HxAnonMember';
@@ -923,7 +926,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * LIST, and every call site hands over the first element alone; closing the second needs a
 	 * general subtree walk that stops at every nested `[`. Neither buys a shape that compiles as
 	 * Haxe, so both stay open. The `#elseif` tail does compile and is open only for want of a
-	 * fixture — two LOOPS, not two reads: `elseifs` is an array, and each `HxElseifArgs` carries
+	 * fixture — two LOOPS, not two reads: `elseifs` is an array, and each `HxElseifCommaList` carries
 	 * a body list of its own.
 	 */
 	private function arrayBracketKindField(): Field {
