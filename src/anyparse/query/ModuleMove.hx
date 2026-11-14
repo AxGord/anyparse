@@ -66,6 +66,7 @@ typedef ModuleMoveOutcome = {
 	final moves: Array<ModuleRelocation>;
 	final renames: Array<ModuleRename>;
 	final imports: Array<String>;
+	final modules: Array<String>;
 }
 
 /**
@@ -155,7 +156,8 @@ final class ModuleMove {
 				removed: set.sources.map(s -> s.from).concat(planned.map(p -> p.move.from)).concat(placed.removed),
 				moves: set.sources.concat(planned.map(p -> p.move)),
 				renames: renames,
-				imports: imports
+				imports: imports,
+				modules: modulesAfter(planned, pre)
 			});
 		};
 	}
@@ -1046,6 +1048,14 @@ final class ModuleMove {
 		}
 		final out: Array<String> = [];
 		for (p in planned) if (!kept.contains(p.oldPackage) && !out.contains(p.oldPackage)) out.push(p.oldPackage);
+		return out;
+	}
+
+	/** Every module path the project holds once `planned` ran: each unmoved module as indexed, each moved one under its new path. */
+	private static function modulesAfter(planned: Array<PlannedMove>, pre: SymbolIndex): Array<String> {
+		final leaving: Array<String> = planned.map(p -> p.move.from);
+		final out: Array<String> = [for (fi in pre.allFiles()) if (!leaving.contains(fi.file)) fi.module];
+		for (p in planned) out.push(p.rename.newPath);
 		return out;
 	}
 

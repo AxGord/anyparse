@@ -2487,6 +2487,128 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "C1",
+			"note": "move of p.X into q: an arm find X replace Y on a qualified p.X carries to find q.X replace p.Y, the cut still naming p.Y",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/X.hx",
+				"--to",
+				"src/q",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"X\",\"replace\":\"Y\"}]}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f():Int {\n\t\treturn p.X.h();\n\t}\n}\n",
+				"src/p/X.hx": "package p;\n\nclass X {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n",
+				"src/p/Y.hx": "package p;\n\nclass Y {\n\tpublic static function h():Int {\n\t\treturn 2;\n\t}\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(p.C); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "683de64d9841d9b5",
+				"files": "9ae5367b7f2a7686",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C2",
+			"note": "a module r.q.Y whose path ends like the moved package path q.Y does not stand for it: the arm still carries to find q.X replace p.Y",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/X.hx",
+				"--to",
+				"src/q",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"X\",\"replace\":\"Y\"}]}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f():Int {\n\t\treturn p.X.h();\n\t}\n}\n",
+				"src/p/X.hx": "package p;\n\nclass X {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n",
+				"src/p/Y.hx": "package p;\n\nclass Y {\n\tpublic static function h():Int {\n\t\treturn 2;\n\t}\n}\n",
+				"src/r/q/Y.hx": "package r.q;\n\nclass Y {\n\tpublic static function h():Int {\n\t\treturn 3;\n\t}\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(p.C); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "683de64d9841d9b5",
+				"files": "9ae5367b7f2a7686",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C3",
+			"note": "p.Y and q.Y both exist after the move: the cut keeps resolving to p.Y, the arm carries to find q.X replace p.Y",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/X.hx",
+				"--to",
+				"src/q",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"X\",\"replace\":\"Y\"}]}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f():Int {\n\t\treturn p.X.h();\n\t}\n}\n",
+				"src/p/X.hx": "package p;\n\nclass X {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n",
+				"src/p/Y.hx": "package p;\n\nclass Y {\n\tpublic static function h():Int {\n\t\treturn 2;\n\t}\n}\n",
+				"src/q/Y.hx": "package q;\n\nclass Y {\n\tpublic static function h():Int {\n\t\treturn 3;\n\t}\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(p.C); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "683de64d9841d9b5",
+				"files": "9ae5367b7f2a7686",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "C4",
+			"note": "a module r.q.Y whose path ends like q.Y, with no p.Y: the replace names no module in either package, the arm stays and is named",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/X.hx",
+				"--to",
+				"src/q",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"],\"registries\":[{\"file\":\"arms\",\"keys\":[\"arms.type\"],\"byPackage\":true,\"members\":{\"records\":\"arms\",\"name\":\"name\",\"type\":\"type\",\"member\":\"method\",\"kind\":\"kind\",\"defaultKind\":\"FnMember\",\"find\":\"find\",\"replace\":\"replace\",\"opaque\":[\"force\"]}}]}}\n",
+				"arms/p.json": "{\"arms\":[{\"name\":\"A\",\"type\":\"p.C\",\"method\":\"f\",\"find\":\"X\",\"replace\":\"Y\"}]}\n",
+				"src/p/C.hx": "package p;\n\nclass C {\n\tfunction f():Int {\n\t\treturn p.X.h();\n\t}\n}\n",
+				"src/p/X.hx": "package p;\n\nclass X {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n",
+				"src/r/q/Y.hx": "package r.q;\n\nclass Y {\n\tpublic static function h():Int {\n\t\treturn 3;\n\t}\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(p.C); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "674655143181d936",
+				"files": "2f805f8d96f2e1fb",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

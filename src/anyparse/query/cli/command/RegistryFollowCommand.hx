@@ -88,7 +88,7 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 				return ExitCode.EXIT_RUNTIME;
 			case Right(found): found;
 		};
-		final followed: RegistriesFollowed = followDocuments(memberDocuments(declaration), modules, plugin);
+		final followed: RegistriesFollowed = followDocuments(memberDocuments(declaration), modules, plugin, null);
 		if (write) CliIo.writeFiles(followed.writes);
 		for (note in followed.notes) CliIo.stderr('apq registry-follow: $note\n');
 		final tail: String = write ? '' : ' (not written; pass --write)';
@@ -124,9 +124,12 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 	/**
 	 * Carry the registry fragments over what a write op (`lint --fix`, `fmt --write`, `move`) has just written, from the two
 	 * texts the op held rather than a git revision, and write the re-spelled documents. A fragment that cannot be carried is
-	 * named on stderr and the op's exit is left as it was: its own write stands either way.
+	 * named on stderr and the op's exit is left as it was: its own write stands either way. `exists` says whether a dotted path
+	 * names a module once the op's write stands, for an op that re-packages the paths a fragment edits.
 	 */
-	public static function followWrite(op: String, written: Array<WrittenSource>, plugin: GrammarPlugin): Void {
+	public static function followWrite(
+		op: String, written: Array<WrittenSource>, plugin: GrammarPlugin, ?exists: Null<String -> Bool>
+	): Void {
 		final changed: Array<WrittenSource> = written.filter(w -> w.before != w.after);
 		if (changed.length == 0) return;
 		final declaration: MoveDeclarationData = switch ModuleMoveCli.declarationFor(changed[0].path) {
@@ -166,7 +169,7 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 		final reached: Array<MemberDocument> = [
 			for (i in 0...documents.length) if (typesOf[i].exists(t -> modules.exists(m -> m.path == t))) documents[i]
 		];
-		final followed: RegistriesFollowed = followDocuments(reached, modules, plugin);
+		final followed: RegistriesFollowed = followDocuments(reached, modules, plugin, exists);
 		CliIo.writeFiles(followed.writes);
 		for (note in followed.notes) CliIo.stderr('apq $op: registry-follow: $note\n');
 		if (followed.count > 0)
@@ -242,13 +245,13 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 
 	/** The documents re-spelled over `modules`: what to write, how many fragments moved, and each one that could not be carried. */
 	private static function followDocuments(
-		documents: Array<MemberDocument>, modules: Array<RewrittenModule>, plugin: GrammarPlugin
+		documents: Array<MemberDocument>, modules: Array<RewrittenModule>, plugin: GrammarPlugin, exists: Null<String -> Bool>
 	): RegistriesFollowed {
 		final writes: Array<{ path: String, content: String }> = [];
 		final notes: Array<String> = [];
 		var count: Int = 0;
 		for (d in documents) {
-			final followed: RegistryFollow = RegistryFragmentFollow.follow(d.members, d.json, modules, plugin);
+			final followed: RegistryFollow = RegistryFragmentFollow.follow(d.members, d.json, modules, plugin, exists);
 			for (note in followed.notes) notes.push(note);
 			count += followed.count;
 			final text: Null<String> = followed.text;

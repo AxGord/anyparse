@@ -95,6 +95,31 @@ final class SourceText {
 		return code == ' '.code || code == '\t'.code || code == '\r'.code;
 	}
 
+	/**
+	 * The qualifier written directly before `at`: the run of names each followed by a dot that ends there (`a.b.` for
+	 * `a.b.X` at the `X`), empty when `at` sits inside a name or no dot precedes it.
+	 */
+	public static function qualifierBefore(source: String, at: Int): String {
+		if (at <= 0 || at > source.length || source.fastCodeAt(at - 1) != '.'.code) return '';
+		var from: Int = at - 1;
+		while (from > 0) {
+			final c: Int = source.fastCodeAt(from - 1);
+			if (!c.isIdentChar() && c != '.'.code) break;
+			from--;
+		}
+		return source.substring(from, at);
+	}
+
+	/** Whether `text` is one dotted name of identifier segments (`a.b.C`, `C`), with no space or other character. */
+	public static function isDottedName(text: String): Bool {
+		if (text.length == 0 || text.fastCodeAt(0) == '.'.code || text.fastCodeAt(text.length - 1) == '.'.code) return false;
+		for (i in 0...text.length) {
+			final c: Int = text.fastCodeAt(i);
+			if (!c.isIdentChar() && c != '.'.code) return false;
+		}
+		return true;
+	}
+
 	/** `text` with every space, tab, CR and LF removed — the form two source fragments are compared in when layout is irrelevant. */
 	public static function withoutSpace(text: String): String {
 		final out: StringBuf = new StringBuf();

@@ -5,6 +5,7 @@ import anyparse.query.ModuleMove;
 import anyparse.query.MoveDeclaration;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
+import anyparse.util.Compare;
 
 using StringTools;
 using Lambda;
@@ -733,6 +734,21 @@ class ModuleMoveTest extends Test {
 		Assert.isTrue(textOf(out, 'src/s/M.hx').contains('class M'));
 	}
 
+	@:pin('control')
+	@:killer('M-MODMOVE-MODULES-DROP-OLD-PATH')
+	public function testTheOutcomeNamesTheModulesTheProjectHoldsAfterTheMove(): Void {
+		final a: String = 'package pkg;\n\nclass A {}\n';
+		final user: String = 'package other;\n\nclass User {}\n';
+		final lib: String = 'package ext;\n\nclass Lib {}\n';
+		final out: ModuleMoveOutcome = moved(
+			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/other/User.hx', user)],
+			null, null, null, null, [file('lib/ext/Lib.hx', lib)]
+		);
+		final modules: Array<String> = out.modules.copy();
+		modules.sort(Compare.compareString);
+		Assert.same(['ext.Lib', 'other.User', 'pkg.sub.A'], modules);
+	}
+
 	private static inline function move(from: String, to: String): ModuleRelocation {
 		return { from: from, to: to };
 	}
@@ -771,7 +787,8 @@ class ModuleMoveTest extends Test {
 					removed: [],
 					moves: [],
 					renames: [],
-					imports: []
+					imports: [],
+					modules: []
 				};
 		};
 	}

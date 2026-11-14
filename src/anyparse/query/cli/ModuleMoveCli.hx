@@ -203,10 +203,20 @@ final class ModuleMoveCli {
 		write(canonical, outcome.removed);
 		RegistryFollowCommand.followWrite('move', [
 			for (c in canonical) if (c.file.endsWith(ext)) { path: c.file, before: originalOf[c.file] ?? c.newSource, after: c.newSource }
-		], plugin);
+		], plugin, namesModuleAmong.bind(outcome.modules));
 		for (i in outcome.imports) CliIo.stderr('apq move: import added: $i\n');
 		CliIo.stderr('apq move: moved ${outcome.moves.length} module(s), wrote ${canonical.length} file(s)\n');
 		return EXIT_OK;
+	}
+
+	/** Whether `dotted` names a module, or a member or sub-type of one, among `modules` — the project as the move left it. */
+	private static function namesModuleAmong(modules: Array<String>, dotted: String): Bool {
+		var path: String = dotted;
+		while (path != '') {
+			if (modules.contains(path)) return true;
+			path = SourceText.parentPath(path);
+		}
+		return false;
 	}
 
 	/** A module change canonicalised when the text it replaces was writer-canonical; any other text as is. */

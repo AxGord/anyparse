@@ -16191,8 +16191,8 @@
 			"name": "M-REGISTRY-FOLLOW-AS-WRITTEN-FIRST",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "followRecord",
-			"find": "if (!applies(record, i, module, after[0], plugin))",
-			"replace": "if (true)",
+			"find": "if (applies(record, i, module, after[0], plugin))",
+			"replace": "if (false)",
 			"note": "a find that still applies is carried through the alignment anyway"
 		},
 		{
@@ -16926,6 +16926,38 @@
 			"find": "&& parentSpan.to > span.to\n\t\t\t&& ownsItsLines(source, declEditSpan(source, tree, parent, parentSpan, regions), regions)\n",
 			"replace": "&& parentSpan.to > span.to\n",
 			"note": "the statement is taken from any single-child wrapper that starts where the node does, so an empty replace of a callee or an operand deletes the whole statement the base refused"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-REQUALIFY-OLD-PACKAGE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "requalify",
+			"find": "final newFind: String = nowSegments.slice(shared).join('.') + find.value;",
+			"replace": "final newFind: String = find.value;",
+			"note": "a find on the last segment of a re-packaged path keeps its own spelling, so its replace names the new package"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-REQUALIFY-NEW-PACKAGE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "requalify",
+			"find": "if (exists(now + replace.value)) return;",
+			"replace": "if (false) return;",
+			"note": "a replace that names a module in the new package only is named or re-spelled instead of left alone"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-REQUALIFY-NAMES-NEITHER",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "requalify",
+			"find": "if (!exists(was + replace.value)) {",
+			"replace": "if (false) {",
+			"note": "a replace naming no module in either package is written instead of named"
+		},
+		{
+			"name": "M-MODMOVE-MODULES-DROP-OLD-PATH",
+			"type": "anyparse.query.ModuleMove",
+			"method": "modulesAfter",
+			"find": "if (!leaving.contains(fi.file)) fi.module",
+			"replace": "fi.module",
+			"note": "a relocated module's old path stays among the modules the project holds after the move"
 		}
 	]
 }

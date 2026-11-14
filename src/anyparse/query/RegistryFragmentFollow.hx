@@ -32,6 +32,7 @@ private typedef Rewrite = {
 	final now: String;
 	final maps: Array<Array<Int>>;
 	final plugin: GrammarPlugin;
+	final exists: Null<String -> Bool>;
 }
 
 /**
@@ -48,7 +49,7 @@ final class RegistryFragmentFollow {
 
 	/** The registry document with every fragment of a rewritten member re-spelled; a fragment that cannot be carried is named. */
 	public static function follow(
-		members: MemberKeys, json: String, modules: Array<RewrittenModule>, plugin: GrammarPlugin
+		members: MemberKeys, json: String, modules: Array<RewrittenModule>, plugin: GrammarPlugin, ?exists: Null<String -> Bool>
 	): RegistryFollow {
 		final edits: Array<RegistryEdit> = [];
 		final notes: Array<String> = [];
@@ -56,14 +57,14 @@ final class RegistryFragmentFollow {
 			final module: Null<RewrittenModule> = modules.find(m -> m.path == record.type);
 			final member: Null<StringSlot> = record.member;
 			if (module != null && member != null && record.finds.length > 0)
-				followRecord(record, member.value, module, plugin, edits, notes);
+				followRecord(record, member.value, module, plugin, exists, edits, notes);
 		}
 		return { text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits), count: edits.length, notes: notes };
 	}
 
 	private static function followRecord(
-		record: MemberRecord, member: String, module: RewrittenModule, plugin: GrammarPlugin, edits: Array<RegistryEdit>,
-		notes: Array<String>
+		record: MemberRecord, member: String, module: RewrittenModule, plugin: GrammarPlugin, exists: Null<String -> Bool>,
+		edits: Array<RegistryEdit>, notes: Array<String>
 	): Void {
 		final before: Array<QueryNode> = MemberRegistryRename.selected(module.tree, record.kind, member, plugin);
 		final after: Array<QueryNode> = MemberRegistryRename.selected(module.newTree, record.kind, member, plugin);
@@ -86,9 +87,12 @@ final class RegistryFragmentFollow {
 			at: newSpan.from,
 			now: now,
 			maps: maps,
-			plugin: plugin
+			plugin: plugin,
+			exists: exists
 		};
-		for (i in 0...record.finds.length) if (!applies(record, i, module, after[0], plugin)) {
+		for (i in 0...record.finds.length) if (applies(record, i, module, after[0], plugin)) {
+			requalify(record, i, rewrite, before[0], edits, notes);
+		} else {
 			final find: StringSlot = record.finds[i];
 			final replace: Null<StringSlot> = replaceOf(record, i);
 			final cut: Null<Span> = Patch.cutSpan(module.source, module.tree, before[0], find.value, plugin);
@@ -116,6 +120,50 @@ final class RegistryFragmentFollow {
 			if (replace != null && newReplace != null && newReplace != replace.value)
 				edits.push(TypePathRegistries.respell(replace, newReplace));
 		}
+	}
+
+	/**
+	 * A find that still applies may edit the last segment of a qualified path whose package the rewrite changed: its replace
+	 * then names the old package's type before and the new package's after. When the old one still names a module the find
+	 * takes the qualifier segments that changed and the replace the old ones, so the cut resolves where it did; otherwise the
+	 * pair stays when the new one names a module, and the arm is named when neither does. Nothing is judged without `exists`.
+	 */
+	private static function requalify(
+		record: MemberRecord, i: Int, rewrite: Rewrite, before: QueryNode, edits: Array<RegistryEdit>, notes: Array<String>
+	): Void {
+		final exists: Null<String -> Bool> = rewrite.exists;
+		final find: StringSlot = record.finds[i];
+		final replace: Null<StringSlot> = replaceOf(record, i);
+		if (exists == null || replace == null) return;
+		if (!SourceText.isDottedName(find.value) || !SourceText.isDottedName(replace.value)) return;
+		final module: RewrittenModule = rewrite.module;
+		final oldCut: Null<Span> = Patch.cutSpan(module.source, module.tree, before, find.value, rewrite.plugin);
+		final newCut: Null<Span> = Patch.cutSpan(module.newSource, module.newTree, rewrite.target, find.value, rewrite.plugin);
+		if (oldCut == null || newCut == null) return;
+		final was: String = SourceText.qualifierBefore(module.source, oldCut.from);
+		final now: String = SourceText.qualifierBefore(module.newSource, newCut.from);
+		if (was == now) return;
+		if (!exists(was + replace.value)) {
+			if (exists(now + replace.value)) return;
+			notes.push(
+				'arm ${record.name}: its find edits the last segment of "$now${find.value}", whose package the rewrite changed, and '
+				+ 'neither "$was${replace.value}" nor "$now${replace.value}" names a module — re-aim it'
+			);
+			return;
+		}
+		final wasSegments: Array<String> = was.split('.');
+		final nowSegments: Array<String> = now.split('.');
+		var shared: Int = 0;
+		while (shared < wasSegments.length - 1 && shared < nowSegments.length - 1 && wasSegments[shared] == nowSegments[shared]) shared++;
+		final newFind: String = nowSegments.slice(shared).join('.') + find.value;
+		final newReplace: String = wasSegments.slice(shared).join('.') + replace.value;
+		final located: Null<Span> = Patch.cutSpan(module.newSource, module.newTree, rewrite.target, newFind, rewrite.plugin);
+		if (located == null || !splices(module.newSource, located, newReplace, rewrite.plugin)) {
+			notes.push('arm ${record.name}: no re-spelling of its cut names "$was${replace.value}" in the rewritten source — re-aim it');
+			return;
+		}
+		edits.push(TypePathRegistries.respell(find, newFind));
+		edits.push(TypePathRegistries.respell(replace, newReplace));
 	}
 
 	/**

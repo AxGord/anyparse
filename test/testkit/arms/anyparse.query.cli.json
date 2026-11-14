@@ -783,6 +783,22 @@
 			"find": "before: before ?? text",
 			"replace": "before: text",
 			"note": "patch, replace-node, extract-method and the other writer-emit ops no longer carry the registry fragments of the members they rewrote"
+		},
+		{
+			"name": "M-MOVE-FOLLOW-KNOWS-MODULES",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "emit",
+			"find": "], plugin, namesModuleAmong.bind(outcome.modules));",
+			"replace": "], plugin, null);",
+			"note": "the registry follow is given no way to tell which module a re-spelled path names"
+		},
+		{
+			"name": "M-MOVE-FOLLOW-EXACT-MODULE",
+			"type": "anyparse.query.cli.ModuleMoveCli",
+			"method": "namesModuleAmong",
+			"find": "if (modules.contains(path)) return true;",
+			"replace": "if (modules.exists(m -> m.endsWith(path))) return true;",
+			"note": "a module of another package whose path ends the same stands for the moved one"
 		}
 	]
 }

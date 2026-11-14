@@ -196,7 +196,8 @@ class ModuleMoveAmbientChainTest extends Test {
 					removed: [],
 					moves: [],
 					renames: [],
-					imports: []
+					imports: [],
+					modules: []
 				};
 		};
 	}

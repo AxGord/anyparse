@@ -94,6 +94,37 @@ final class RegistryFragmentFollowTest extends Test {
 		assertCarried('return Xy || Zw;', 'return xy || zw;', 'Xy || Zw', 'Xy && Zw', 'xy || zw', 'xy && zw');
 	}
 
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-REQUALIFY-OLD-PACKAGE')
+	public function testAFindOnTheLastSegmentOfARePackagedPathTakesTheSegmentsThatChanged(): Void {
+		assertCarriedFrom('return a.b.X;', 'return a.c.X;', 'X', 'Y', 'c.X', 'b.Y', ['a.b.Y']);
+		assertCarriedFrom('return a.b.X;', 'return a.b.cond.X;', 'X', 'Y', 'cond.X', 'Y', ['a.b.Y']);
+		assertCarriedFrom('return a.b.X;', 'return a.c.X;', 'X', 'Y', 'c.X', 'b.Y', ['a.b.Y', 'a.c.Y']);
+	}
+
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-REQUALIFY-NEW-PACKAGE')
+	public function testAFindWhoseReplaceNamesAModuleInTheNewPackageIsLeftAlone(): Void {
+		final out: RegistryFollow = followIn('return a.b.X;', 'return a.c.X;', 'X', 'Y', ['a.c.Y']);
+		Assert.isNull(out.text);
+		Assert.equals(0, out.notes.length);
+	}
+
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-REQUALIFY-NAMES-NEITHER')
+	public function testAFindWhoseReplaceNamesNoModuleInEitherPackageIsNamed(): Void {
+		final out: RegistryFollow = followIn('return a.b.X;', 'return a.c.X;', 'X', 'Y', ['a.b.Z']);
+		Assert.isNull(out.text);
+		Assert.equals(1, out.notes.length);
+		Assert.isTrue(out.notes[0].indexOf('arm A:') == 0, out.notes[0]);
+	}
+
+	public function testAPackageChangeIsNotJudgedWithoutAnExistenceCheck(): Void {
+		final out: RegistryFollow = followIn('return a.b.X;', 'return a.c.X;', 'X', 'Y', null);
+		Assert.isNull(out.text);
+		Assert.equals(0, out.notes.length);
+	}
+
 	private static function follow(find: String, replace: String): RegistryFollow {
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor('haxe', 'C.hx');
 		final tree: QueryNode = plugin.parseFile(BEFORE);
@@ -119,7 +150,19 @@ final class RegistryFragmentFollowTest extends Test {
 		Assert.isTrue(text.indexOf('"replace":${JsonText.quote(newReplace)}') >= 0, text);
 	}
 
-	private static function followIn(before: String, after: String, find: String, replace: String): RegistryFollow {
+	private static function assertCarriedFrom(
+		before: String, after: String, find: String, replace: String, newFind: String, newReplace: String, modules: Array<String>
+	): Void {
+		final out: RegistryFollow = followIn(before, after, find, replace, modules);
+		Assert.equals('', out.notes.join('\n'));
+		final text: String = out.text ?? '';
+		Assert.isTrue(text.indexOf('"find":${JsonText.quote(newFind)}') >= 0, text);
+		Assert.isTrue(text.indexOf('"replace":${JsonText.quote(newReplace)}') >= 0, text);
+	}
+
+	private static function followIn(
+		before: String, after: String, find: String, replace: String, ?modules: Null<Array<String>>
+	): RegistryFollow {
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor('haxe', 'C.hx');
 		final head: String = 'package p;\n\nclass C {\n\tfunction f(a: Bool, b: Bool, c: Bool, x: Bool): Bool {\n\t\t';
 		final tail: String = '\n\t}\n}\n';
@@ -135,7 +178,7 @@ final class RegistryFragmentFollowTest extends Test {
 				newSource: now,
 				newTree: plugin.parseFile(now)
 			}
-		], plugin);
+		], plugin, modules == null ? null : p -> modules.contains(p));
 	}
 
 }
