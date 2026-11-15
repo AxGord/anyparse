@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.LineDiff.LineEdits;
 import anyparse.query.MemberRegistryRename.RegistryFollow;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.query.TypePathRegistries.MemberKeys;
 import anyparse.query.TypePathRegistries.MemberRecord;
 import anyparse.query.TypePathRegistries.RegistryEdit;
@@ -30,7 +31,7 @@ private typedef Rewrite = {
 	final target: QueryNode;
 	final at: Int;
 	final oldAt: Int;
-	final leaves: Array<Span>;
+	final tokens: Array<TokenSpan>;
 	final literals: Array<Span>;
 	final now: String;
 	final maps: Array<Array<Int>>;
@@ -89,7 +90,7 @@ final class RegistryFragmentFollow {
 			target: after[0],
 			at: newSpan.from,
 			oldAt: oldSpan.from,
-			leaves: LeafSpans.collect(before[0], []),
+			tokens: plugin.tokenSpans(module.source, 0, module.source.length),
 			literals: literalSpans(module.source, plugin),
 			now: now,
 			maps: maps,
@@ -318,8 +319,8 @@ final class RegistryFragmentFollow {
 
 	/**
 	 * Whether the run of cut characters around `written[w]` that the rewrite deleted is one token replaced in place: inside one
-	 * string or regex literal; otherwise blank-free and not straddling a leaf of the old member, a leaf being one token or a
-	 * childless multi-token node (so lying inside one does not excuse a blank). A deleted phrase or call is not one token.
+	 * string or regex literal, or inside one token of the old source by its grammar's token reader. A deleted phrase, call or
+	 * bracket pair is not one token.
 	 */
 	private static function replacedToken(map: Array<Int>, written: String, from: Int, rewrite: Rewrite, w: Int): Bool {
 		var lo: Int = w;
@@ -328,10 +329,8 @@ final class RegistryFragmentFollow {
 		while (hi < written.length && map[from + hi] < 0) hi++;
 		final start: Int = rewrite.oldAt + from + lo;
 		final end: Int = rewrite.oldAt + from + hi;
-		if (rewrite.literals.exists(literal -> literal.from <= start && end <= literal.to)) return true;
-		if (rewrite.leaves.exists(leaf -> leaf.from < end && start < leaf.to && (start < leaf.from || leaf.to < end))) return false;
-		for (i in lo ... hi) if (written.isSpace(i)) return false;
-		return true;
+		return rewrite.literals.exists(literal -> literal.from <= start && end <= literal.to)
+			|| rewrite.tokens.filter(token -> token.from < end && start < token.to).length == 1;
 	}
 
 	/**

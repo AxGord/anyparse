@@ -17049,17 +17049,17 @@
 			"name": "M-REGISTRY-FOLLOW-ONE-TOKEN-REPLACED",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "replacedToken",
-			"find": "if (rewrite.leaves.exists(leaf -> leaf.from < end && start < leaf.to && (start < leaf.from || leaf.to < end))) return false;",
-			"replace": "",
-			"note": "a deleted run that straddles leaves counts as one token while it holds no blank, so a call the rewrite replaced by a name still carries the edit inside it"
+			"find": ".length == 1;",
+			"replace": ".length > 0;",
+			"note": "a deleted run that several tokens of the old source share counts as one token, so a call the rewrite replaced by a name still carries the edit inside it"
 		},
 		{
 			"name": "M-REGISTRY-FOLLOW-LEAF-KEEPS-BLANK-TEST",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "replacedToken",
-			"find": "for (i in lo ... hi) if (written.isSpace(i)) return false;",
-			"replace": "",
-			"note": "a deleted run inside one childless multi-token leaf counts as one token even with a blank in it, so an array literal the rewrite replaced by a name still carries the edit inside it"
+			"find": "|| rewrite.tokens.filter(token -> token.from < end && start < token.to).length == 1;",
+			"replace": "|| true;",
+			"note": "every deleted run counts as one token, so an array literal the rewrite replaced by a name still carries the edit inside it"
 		}
 	]
 }
