@@ -5,6 +5,7 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -101,13 +102,14 @@ final class SimplifyBooleanBranchAssignment extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
 				final m: Null<Match> = match(node, source, comments, seams);
-				return m == null ? null : buildEdit(m, source, span, seams);
+				return m == null ? null : buildEdit(m, source, regions, span, seams);
 			});
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
@@ -261,11 +263,13 @@ final class SimplifyBooleanBranchAssignment extends RuleBase {
 	}
 
 	/** Build the one-statement-per-target edit replacing the whole `if`/`else` span. */
-	private static function buildEdit(m: Match, source: String, span: Span, s: Seams): Null<{ span: Span, text: String }> {
+	private static function buildEdit(
+		m: Match, source: String, regions: Array<LexRegion>, span: Span, s: Seams
+	): Null<{ span: Span, text: String }> {
 		final condSpan: Null<Span> = m.condition.span;
 		if (condSpan == null) return null;
 		final positive: String = source.substring(condSpan.from, condSpan.to);
-		final negative: String = NegationScan.negateConditionText(m.condition, source, s.negation, s.logic);
+		final negative: String = NegationScan.negateConditionText(m.condition, source, s.negation, s.logic, null, null, regions);
 		final indent: String = SourceText.lineIndentAt(source, span.from);
 		final statements: Array<String> = [];
 		for (p in m.pairs) {

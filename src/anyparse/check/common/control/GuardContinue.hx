@@ -140,8 +140,9 @@ final class GuardContinue extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
-			indexCandidates(tree, tree, source, ElementSpan.lazyRegions(source, plugin), seams, byIf, true);
-			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, seams, types));
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+			indexCandidates(tree, tree, source, regions, seams, byIf, true);
+			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, regions, seams, types));
 		});
 	}
 
@@ -235,7 +236,7 @@ final class GuardContinue extends RuleBase {
 			final m: Null<Candidate> = match(node, root, source, regions, s, shielded, types);
 			if (m != null)
 				GuardScan.report(
-					out, file, source, m, s.support, types, 'guard-continue',
+					out, file, source, regions, m, s.support, types, 'guard-continue',
 					'this trailing if can de-nest to an if (!cond) continue; guard'
 				);
 		}
@@ -296,7 +297,7 @@ final class GuardContinue extends RuleBase {
 		// oscillation, and the fix is to make the claim single. A CASCADE (a second `if`-continue
 		// right after the first) stays THIS rule's, which is exactly what the shared predicate
 		// excludes.
-		if (loopGuardClaims(body, source, s, shielded, types)) return null;
+		if (loopGuardClaims(body, source, regions, s, shielded, types)) return null;
 		final g: Null<GuardedIf> = GuardScan.guardedIf(stmts[ifIndex], s.ifKinds, s.blockKinds, 1);
 		if (g == null) return null;
 		if (tail.length != 0 && !tailHoistSafe(loop, g.ifNode, g.thenBlock, tail, regions, s)) return null;
@@ -568,9 +569,9 @@ final class GuardContinue extends RuleBase {
 	 * statements (the writer re-indents the de-nested run).
 	 */
 	private static function editFor(
-		m: Candidate, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
+		m: Candidate, source: String, regions: () -> Array<LexRegion>, s: Seams, ?types: (QueryNode) -> Null<String>
 	): Null<{ span: Span, text: String }> {
-		final cut: Null<GuardSplice> = GuardScan.splice(m, source, s.negation, s.support, types);
+		final cut: Null<GuardSplice> = GuardScan.splice(m, source, regions, s.negation, s.support, types);
 		if (cut == null) return null;
 		final inner: String = applyRenames(cut.inner, cut.innerFrom, m.renames).rtrim();
 		var to: Int = cut.ifSpan.to;
@@ -624,11 +625,11 @@ final class GuardContinue extends RuleBase {
 	 * which no check does.
 	 */
 	private static function loopGuardClaims(
-		body: QueryNode, source: String, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
+		body: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
 	): Bool {
 		if (!shielded) return false;
 		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, source, s.ifKinds, s.blockStmtKind, s.continueKind);
-		return guard != null && NegationScan.negationIsClean(guard.children[0], source, s.support, types);
+		return guard != null && NegationScan.negationIsClean(guard.children[0], source, s.support, types, regions());
 	}
 
 }

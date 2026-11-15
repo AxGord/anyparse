@@ -10,6 +10,7 @@ import anyparse.check.scan.AssignmentTreeHoist;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
@@ -129,11 +130,12 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware impl
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
-		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree);
+		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree, () -> regions);
 		final guarded: Array<GuardedEdit> = [];
 		final plain: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {

@@ -7,6 +7,7 @@ import anyparse.check.common.control.NegatedCondition.InversionSite;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParenGuard;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
@@ -169,12 +170,13 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware impl
 		if (tree == null) return [];
 		final root: QueryNode = tree;
 		final out: Array<Match> = [];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		walk(root, {
 			root: root,
 			source: source,
 			file: file,
-			site: NegatedCondition.siteOf(s.negation, file, source, root),
-			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
+			site: NegatedCondition.siteOf(s.negation, file, source, root, () -> regions),
+			comments: SourceComments.collectCommentTokens(regions),
 			seams: s,
 			plugin: plugin,
 			resolveIndex: resolveIndex

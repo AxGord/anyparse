@@ -129,7 +129,7 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
-		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree);
+		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree, () -> regions);
 		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions, plugin, site);
 		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits(
 			edits.map(edit -> { span: edit.span, text: edit.text })

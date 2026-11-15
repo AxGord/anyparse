@@ -5,6 +5,7 @@ import anyparse.check.scan.NegationScan;
 import anyparse.check.scan.OperatorSelection;
 import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParenGuard;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -97,15 +98,19 @@ final class NegatedCondition {
 	}
 
 	/** The negation site of `file`'s `tree`, or null when the run has no `seams` (the grammar declares no not kind). */
-	public static function siteOf(seams: Null<InversionSeams>, file: String, source: String, root: Null<QueryNode>): Null<InversionSite> {
-		return seams == null ? null : site(seams, file, source, root);
+	public static function siteOf(
+		seams: Null<InversionSeams>, file: String, source: String, root: Null<QueryNode>, regions: () -> Array<LexRegion>
+	): Null<InversionSite> {
+		return seams == null ? null : site(seams, file, source, root, regions);
 	}
 
 	/**
 	 * The negation site of `file`'s `tree` under `seams`. Its `keepDefaultElse` and `defaultLast` read the
 	 * file's config once, on first demand — a file whose choices have no default-literal arm never resolves it.
 	 */
-	public static function site(seams: InversionSeams, file: String, source: String, root: Null<QueryNode>): InversionSite {
+	public static function site(
+		seams: InversionSeams, file: String, source: String, root: Null<QueryNode>, regions: () -> Array<LexRegion>
+	): InversionSite {
 		var known: Null<{ keep: Bool, last: Bool }> = null;
 		function options(): { keep: Bool, last: Bool } {
 			final read: Null<{ keep: Bool, last: Bool }> = known;
@@ -123,6 +128,7 @@ final class NegatedCondition {
 			seams: seams,
 			file: file,
 			source: source,
+			regions: regions,
 			root: root,
 			keepDefaultElse: () -> options().keep,
 			defaultLast: () -> options().last
@@ -209,7 +215,7 @@ final class NegatedCondition {
 			|| !site.defaultLast()
 			|| !builtin(written, d.negationKinds, site)
 			? null
-			: NegationScan.negateConditionText(written, site.source, d.negation, d.support);
+			: NegationScan.negateConditionText(written, site.source, d.negation, d.support, null, null, site.regions());
 	}
 
 	/**
@@ -375,6 +381,9 @@ typedef InversionSite = {
 	final seams: InversionSeams;
 	final file: String;
 	final source: String;
+
+	/** The file's lexical regions, lexed once on first demand, so a negation tells a comment from a string literal. */
+	final regions: () -> Array<LexRegion>;
 
 	/** The file's tree, read only when the run declares an overloaded `!` (to type the operand). */
 	final root: Null<QueryNode>;

@@ -6,6 +6,7 @@ import anyparse.check.common.control.NegatedCondition.InversionSeams;
 import anyparse.check.common.control.NegatedCondition.InversionSite;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
 import anyparse.query.ParseGate;
@@ -183,8 +184,9 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 	private static function matchesIn(file: String, source: String, plugin: GrammarPlugin, s: Seams): Array<Match> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final site: Null<InversionSite> = NegatedCondition.siteOf(s.negation, file, source, tree);
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final site: Null<InversionSite> = NegatedCondition.siteOf(s.negation, file, source, tree, () -> regions);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		final nestedFnSpans: Array<Span> = [];
 		collectNestedFnSpans(tree, s.nestedFnKinds, nestedFnSpans);
 		final out: Array<Match> = [];

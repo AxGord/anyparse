@@ -191,7 +191,7 @@
 			"name": "M-GUARD-UNCLEAN-INVERSION-REPORTED",
 			"type": "anyparse.check.common.control.GuardScan",
 			"method": "report",
-			"find": " && NegationScan.negationIsClean(g.cond, source, logic, types)",
+			"find": " && NegationScan.negationIsClean(g.cond, source, logic, types, regions())",
 			"replace": "",
 			"note": "a condition that can only invert into a `!( … )` wrap is reported, so the guard form reads worse than the nesting it removes"
 		},
@@ -316,7 +316,7 @@
 			"name": "M-PTR-NO-ORIENT",
 			"type": "anyparse.check.common.control.PreferTernaryReturn",
 			"method": "fixCarrying",
-			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree, () -> regions)",
 			"replace": "null",
 			"note": "prefer-ternary-return writes `return !c ? a : b;` again"
 		},
@@ -332,7 +332,7 @@
 			"name": "M-RRT-NO-ORIENT",
 			"type": "anyparse.check.common.control.ReturnReassignTernary",
 			"method": "matchesIn",
-			"find": "NegatedCondition.siteOf(s.negation, file, source, tree)",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, tree, () -> regions)",
 			"replace": "null",
 			"note": "return-reassign-ternary writes `return !c ? e : x;` again"
 		},
@@ -340,7 +340,7 @@
 			"name": "M-PTA-NO-ORIENT",
 			"type": "anyparse.check.common.control.PreferTernaryAssignment",
 			"method": "fix",
-			"find": "NegatedCondition.siteOf(negation, file, source, tree)",
+			"find": "NegatedCondition.siteOf(negation, file, source, tree, () -> regions)",
 			"replace": "null",
 			"note": "prefer-ternary-assignment writes `x = !c ? a : b;` again, in both arms"
 		},
@@ -348,7 +348,7 @@
 			"name": "M-PTE-NO-ORIENT",
 			"type": "anyparse.check.common.control.PreferTernaryExpression",
 			"method": "collect",
-			"find": "NegatedCondition.siteOf(s.negation, file, source, root)",
+			"find": "NegatedCondition.siteOf(s.negation, file, source, root, () -> regions)",
 			"replace": "null",
 			"note": "prefer-ternary-expression writes `!c ? a : b` again"
 		},
@@ -635,7 +635,7 @@
 			"name": "M-PIER-OUTER-UNNEGATED",
 			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
 			"method": "mergedEdit",
-			"find": "case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types());",
+			"find": "case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types(), null, emit.regions());",
 			"replace": "case Outer: text(source, m.pairs[rung].cond);",
 			"note": "the outer merge keeps the first condition positive, inverting which branch returns what"
 		},
@@ -1376,6 +1376,30 @@
 			"find": "lazy.types(), null, lazy.regions())",
 			"replace": "lazy.types())",
 			"note": "a string literal holding // in an inverted rung condition makes the negation fall back to a !( ... ) wrap instead of the De Morgan flip"
+		},
+		{
+			"name": "M-GUARD-SPLICE-REGIONS-DROPPED",
+			"type": "anyparse.check.common.control.GuardScan",
+			"method": "splice",
+			"find": "negation, logic, types, null, regions())",
+			"replace": "negation, logic, types)",
+			"note": "the guard inversion reads a string-spelled // as a comment and wraps the condition verbatim"
+		},
+		{
+			"name": "M-GUARD-REPORT-REGIONS-DROPPED",
+			"type": "anyparse.check.common.control.GuardScan",
+			"method": "report",
+			"find": "logic, types, regions())",
+			"replace": "logic, types)",
+			"note": "a string-spelled // hides a declined flip, so a guard that can only wrap is reported"
+		},
+		{
+			"name": "M-PIER-OUTER-REGIONS-DROPPED",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "mergedEdit",
+			"find": "emit.types(), null, emit.regions())",
+			"replace": "emit.types())",
+			"note": "the outer merge wraps a condition holding a string-spelled // verbatim"
 		}
 	]
 }

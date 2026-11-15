@@ -74,11 +74,11 @@ final class GuardScan {
 	 * reads worse than the nesting the guard removes, so the site is left alone.
 	 */
 	public static function report(
-		out: Array<Violation>, file: String, source: String, g: GuardedIf, logic: Null<BooleanLogicSupport>,
-		types: Null<(QueryNode) -> Null<String>>, rule: String, message: String
+		out: Array<Violation>, file: String, source: String, regions: () -> Array<LexRegion>, g: GuardedIf,
+		logic: Null<BooleanLogicSupport>, types: Null<(QueryNode) -> Null<String>>, rule: String, message: String
 	): Void {
 		final span: Null<Span> = g.ifNode.span;
-		if (span != null && NegationScan.negationIsClean(g.cond, source, logic, types)) out.push({
+		if (span != null && NegationScan.negationIsClean(g.cond, source, logic, types, regions())) out.push({
 			file: file,
 			span: span,
 			rule: rule,
@@ -92,7 +92,8 @@ final class GuardScan {
 	 * `negation` / `logic` / `types`; null when a span is unknown.
 	 */
 	public static function splice(
-		g: GuardedIf, source: String, negation: NegationSeams, logic: Null<BooleanLogicSupport>, types: Null<(QueryNode) -> Null<String>>
+		g: GuardedIf, source: String, regions: () -> Array<LexRegion>, negation: NegationSeams, logic: Null<BooleanLogicSupport>,
+		types: Null<(QueryNode) -> Null<String>>
 	): Null<GuardSplice> {
 		final ifSpan: Null<Span> = g.ifNode.span;
 		final thenSpan: Null<Span> = g.thenBlock.span;
@@ -102,7 +103,7 @@ final class GuardScan {
 			ifSpan: ifSpan,
 			innerFrom: innerFrom,
 			inner: source.substring(innerFrom, thenSpan.to - 1),
-			neg: NegationScan.negateConditionText(g.cond, source, negation, logic, types)
+			neg: NegationScan.negateConditionText(g.cond, source, negation, logic, types, null, regions())
 		};
 	}
 

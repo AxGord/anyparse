@@ -208,11 +208,12 @@ final class GuardReturn extends RuleBase {
 			final file: String = entry.file;
 			final source: String = entry.source;
 			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, file);
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 			walk(
-				tree, source, ElementSpan.lazyRegions(source, plugin), s, [], null,
+				tree, source, regions, s, [], null,
 				m ->
 					GuardScan.report(
-						violations, file, source, m, s.logic, types, 'guard-return',
+						violations, file, source, regions, m, s.logic, types, 'guard-return',
 						'this trailing if can invert into an early-return guard'
 					)
 			);
@@ -225,8 +226,9 @@ final class GuardReturn extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
-			walk(tree, source, ElementSpan.lazyRegions(source, plugin), seams, [], null, GuardScan.index.bind(byIf));
-			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, seams, types));
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+			walk(tree, source, regions, seams, [], null, GuardScan.index.bind(byIf));
+			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, regions, seams, types));
 		}, CheckScan.parseBranchAwareOrNull);
 	}
 
@@ -499,9 +501,9 @@ final class GuardReturn extends RuleBase {
 	 * likewise gates on a seam (`continueStatementKind`) and then emits the literal `continue;`.
 	 */
 	private static function editFor(
-		m: Candidate, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
+		m: Candidate, source: String, regions: () -> Array<LexRegion>, s: Seams, ?types: (QueryNode) -> Null<String>
 	): Null<{ span: Span, text: String }> {
-		final cut: Null<GuardSplice> = GuardScan.splice(m, source, s.negation, s.logic, types);
+		final cut: Null<GuardSplice> = GuardScan.splice(m, source, regions, s.negation, s.logic, types);
 		if (cut == null) return null;
 		final inner: String = cut.inner.rtrim();
 		final tail: Null<QueryNode> = m.tail;

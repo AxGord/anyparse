@@ -265,18 +265,8 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 
 	/** The per-file scan state over `seams`; the lexical regions are lexed once, on first demand. */
 	private static function scanOf(seams: Seams, file: String, source: String, root: QueryNode, plugin: GrammarPlugin): Scan {
-		var lexed: Null<Array<LexRegion>> = null;
-		return {
-			regions: () -> {
-				final known: Null<Array<LexRegion>> = lexed;
-				if (known != null) return known;
-				final fresh: Array<LexRegion> = plugin.lexicalRegions(source);
-				lexed = fresh;
-				return fresh;
-			},
-			seams: seams,
-			site: NegatedCondition.site(seams.negation, file, source, root)
-		};
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+		return { regions: regions, seams: seams, site: NegatedCondition.site(seams.negation, file, source, root, regions) };
 	}
 
 	/** Resolve the if / value-form / negation seams, or null when a required piece is unset; `config` resolves `keepDefaultElse`. */

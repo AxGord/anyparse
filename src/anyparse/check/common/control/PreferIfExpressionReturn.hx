@@ -7,6 +7,8 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.ParenGuard;
 import anyparse.query.ShapeVocab;
@@ -185,6 +187,7 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 		final emit: Emit = {
 			plugin: plugin,
 			logic: plugin.booleanLogicSupport(),
+			regions: ElementSpan.lazyRegions(source, plugin),
 			types: () -> {
 				if (!asked) {
 					asked = true;
@@ -573,7 +576,7 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 		final rung: Int = merge.from;
 		final first: String = switch merge.shape {
 			case Leading: text(source, m.pairs[rung].cond);
-			case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types());
+			case Outer: NegationScan.negateConditionText(m.conds[rung], source, s.negation, emit.logic, emit.types(), null, emit.regions());
 		};
 		final pieces: Array<String> = [
 			first,
@@ -834,4 +837,5 @@ private typedef Emit = {
 	var plugin: GrammarPlugin;
 	var logic: Null<BooleanLogicSupport>;
 	var types: () -> Null<(QueryNode) -> Null<String>>;
+	var regions: () -> Array<LexRegion>;
 }
