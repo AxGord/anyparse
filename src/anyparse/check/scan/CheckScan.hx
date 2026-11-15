@@ -4,7 +4,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
-import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamedDecl;
@@ -740,13 +740,13 @@ final class CheckScan {
 	 * Whether the text of `region` outside the ascending `kept` spans — the text a rewrite drops — holds a comment: a
 	 * rewrite that keeps only those spans would take the comment with it.
 	 */
-	public static function regionHoldsComment(source: String, region: Span, kept: Array<Span>): Bool {
+	public static function regionHoldsComment(regions: () -> Array<LexRegion>, region: Span, kept: Array<Span>): Bool {
 		var cursor: Int = region.from;
 		for (span in kept) {
-			if (hasCommentMarker(source, cursor, span.from)) return true;
+			if (LexicalRegions.commentIntersects(cursor, span.from, regions())) return true;
 			cursor = span.to;
 		}
-		return hasCommentMarker(source, cursor, region.to);
+		return LexicalRegions.commentIntersects(cursor, region.to, regions());
 	}
 
 	/**

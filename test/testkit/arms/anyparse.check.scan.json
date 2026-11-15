@@ -1738,6 +1738,20 @@
 			"find": "if (descend.contains(child.kind)) pending.push(child);",
 			"replace": "if (descend.length < 0) pending.push(child);",
 			"note": "the walk never descends, so only top-level declarations' runs are found"
+		},
+		{
+			"name": "M-REGION-HOLDS-COMMENT-ANY-TEXT",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "regionHoldsComment",
+			"force": "true",
+			"note": "every dropped region reads as holding a comment, so a `//` spelled inside a string literal there refuses the rewrite again"
+		},
+		{
+			"name": "M-REGION-HOLDS-COMMENT-NEVER",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "regionHoldsComment",
+			"force": "false",
+			"note": "no dropped region holds a comment, so a rewrite takes a real comment between the kept spans with it"
 		}
 	]
 }

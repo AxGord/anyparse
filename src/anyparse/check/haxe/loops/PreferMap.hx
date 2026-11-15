@@ -107,7 +107,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 				}
 				final types: Null<(QueryNode) -> Null<String>> = nominal;
 				final type: Null<String> = types == null ? null : types(head.iterable);
-				final mapper: Null<String> = type != null && seams.arrayTypeNames.contains(type) && gapsHoldNoComment(head, at, source)
+				final mapper: Null<String> = type != null && seams.arrayTypeNames.contains(type) && gapsHoldNoComment(head, at, regions)
 					? boundMapper(head, bind, regions, seams) ?? lambdaMapper(head, source, seams)
 					: null;
 				if (mapper != null) {
@@ -228,8 +228,8 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	}
 
 	/** Whether the text the rewrite drops around the iterable and the body — `[for (x in `, `) `, `]` — holds no comment. */
-	private static function gapsHoldNoComment(m: Mapping, whole: Span, source: String): Bool {
-		return !CheckScan.regionHoldsComment(source, whole, [m.iterableSpan, m.bodySpan]);
+	private static function gapsHoldNoComment(m: Mapping, whole: Span, regions: () -> Array<LexRegion>): Bool {
+		return !CheckScan.regionHoldsComment(regions, whole, [m.iterableSpan, m.bodySpan]);
 	}
 
 	/** Whether `node` is the binder under a type ascription, `(x : T)` — the copy that `identity-map` reads. */

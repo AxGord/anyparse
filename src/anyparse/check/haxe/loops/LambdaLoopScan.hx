@@ -20,6 +20,7 @@ import anyparse.check.common.loops.DeadBinderCounterLoop;
 import anyparse.check.scan.RunScan;
 import anyparse.query.NominalTypes;
 import anyparse.check.common.control.BranchChain;
+import anyparse.query.ElementSpan;
 
 /**
  * The shape engine behind `prefer-exists`, `prefer-foreach` and `prefer-count`: a `for` loop whose
@@ -174,6 +175,7 @@ final class LambdaLoopScan {
 		final probe: Probes = lazyProbes(
 			source, plugin, tree, file, IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index), kind, s.loopSeams
 		);
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		final byKey: Map<String, Cand> = [];
 		scan(tree, null, source, s, kind, probe, cand -> {
 			final span: Null<Span> = cand.anchor.span;
@@ -192,7 +194,7 @@ final class LambdaLoopScan {
 			if (span == null) continue;
 			final cand: Null<Cand> = byKey['${span.from}:${span.to}'];
 			if (cand == null) continue;
-			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, s, kind);
+			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, regions, s, kind);
 			if (edit == null || CanonicalEdit.editsOverlapAny([edit], rewrites)) continue;
 			rewrites.push(edit);
 			extensionForm.push(cand.head.spelling == CallSpelling.Extension);
@@ -882,7 +884,9 @@ final class LambdaLoopScan {
 	}
 
 	/** The one edit replacing `cand`'s loop (and its trailing return) with the call, or null when a gate refuses it. */
-	private static function buildEdit(cand: Cand, source: String, s: Seams, kind: LambdaLoopKind): Null<{ span: Span, text: String }> {
+	private static function buildEdit(
+		cand: Cand, source: String, regions: () -> Array<LexRegion>, s: Seams, kind: LambdaLoopKind
+	): Null<{ span: Span, text: String }> {
 		final anchorSpan: Null<Span> = cand.anchor.span;
 		final trailingSpan: Null<Span> = cand.trailing.span;
 		final parts: Null<Parts> = callParts(cand, source, s, kind);
@@ -890,7 +894,7 @@ final class LambdaLoopScan {
 		// A subsumed trailing return is swallowed by the replacement; a fall-through one is reached
 		// by other paths and must survive, so the region stops at the loop.
 		final region: Span = cand.subsumesTrailing ? new Span(anchorSpan.from, trailingSpan.to) : anchorSpan;
-		if (CheckScan.regionHoldsComment(source, region, parts.kept)) return null;
+		if (CheckScan.regionHoldsComment(regions, region, parts.kept)) return null;
 		final core: String = callText(cand.head, parts.iterable, parts.predicate, kind);
 		final guard: Null<String> = parts.guard;
 		final flag: Null<Flag> = cand.flag;

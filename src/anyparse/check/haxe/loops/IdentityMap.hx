@@ -6,6 +6,8 @@ import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
 import anyparse.check.haxe.loops.MappedComprehension.Mapping;
 import anyparse.check.scan.RunScan;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NominalTypes;
 import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
@@ -89,6 +91,7 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 	): Array<Match> {
 		final out: Array<Match> = [];
 		var typing: Null<Typing> = null;
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
 			if (seams.opaqueKinds.contains(node.kind)) return;
 			final hit: Null<Hit> = identityOf(node, seams);
@@ -97,7 +100,7 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 				final at: Span = span;
 				typing ??= typingOf(tree, file, source, plugin, index(file));
 				final ty: Null<Typing> = typing;
-				if (ty != null && provesIdentity(hit, at, source, ty, seams)) {
+				if (ty != null && provesIdentity(hit, at, source, regions, ty, seams)) {
 					final typeSpan: Null<Span> = hit.typeSpan;
 					final iterable: String = source.substring(hit.iterableSpan.from, hit.iterableSpan.to);
 					final base: String = typeSpan == null
@@ -177,9 +180,9 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 	}
 
 	/** Whether the text the rewrite drops — everything of the map but its iterable and the ascribed type — holds a comment. */
-	private static function droppedTextHoldsComment(whole: Span, hit: Hit, source: String): Bool {
+	private static function droppedTextHoldsComment(whole: Span, hit: Hit, regions: () -> Array<LexRegion>): Bool {
 		final typeSpan: Null<Span> = hit.typeSpan;
-		return CheckScan.regionHoldsComment(source, whole, typeSpan == null ? [hit.iterableSpan] : [hit.iterableSpan, typeSpan]);
+		return CheckScan.regionHoldsComment(regions, whole, typeSpan == null ? [hit.iterableSpan] : [hit.iterableSpan, typeSpan]);
 	}
 
 	/** The seams the rule reads, or null when one it cannot do without is unset. */
@@ -242,7 +245,9 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 	 * `Array` whose element type is written and is no value type, the ascribed type is no value type, and the rewrite drops
 	 * no comment.
 	 */
-	private static function provesIdentity(hit: Hit, whole: Span, source: String, ty: Typing, s: Seams): Bool {
+	private static function provesIdentity(
+		hit: Hit, whole: Span, source: String, regions: () -> Array<LexRegion>, ty: Typing, s: Seams
+	): Bool {
 		final typeSpan: Null<Span> = hit.typeSpan;
 		final written: Null<String> = ty.written(hit.iterable);
 		final element: Null<String> = written == null ? null : NominalTypes.elementTypeSourceOf(written, s.elementParams, [], s.typeSyntax);
@@ -250,7 +255,7 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 			&& element != null
 			&& !holdsValueType(element, whole.from, ty, s)
 			&& (typeSpan == null || !holdsValueType(source.substring(typeSpan.from, typeSpan.to), whole.from, ty, s))
-			&& !droppedTextHoldsComment(whole, hit, source);
+			&& !droppedTextHoldsComment(whole, hit, regions);
 	}
 
 	/** The typing the rule asks of a file: the nominal and the written type of an expression, and the index its names resolve in. */

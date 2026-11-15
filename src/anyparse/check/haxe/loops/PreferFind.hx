@@ -623,7 +623,7 @@ final class PreferFind extends HaxeRule {
 			final declName: Null<String> = cand.declName;
 			return declName == null
 				|| !declTypeTolerable(decl, source)
-				|| CheckScan.regionHoldsComment(source, forSpan, [iterSpan, condSpan])
+				|| CheckScan.regionHoldsComment(regions, forSpan, [iterSpan, condSpan])
 				? null
 				: [{ span: forSpan, text: '$declName = $findExpr;' }];
 		}
@@ -635,7 +635,7 @@ final class PreferFind extends HaxeRule {
 		}
 		final ret: QueryNode = cand.sibling;
 		final retSpan: Null<Span> = ret.span;
-		if (retSpan == null || ret.children.length < 1 || droppedRegionHasComment(source, regions, forSpan, iterSpan, condSpan, retSpan))
+		if (retSpan == null || ret.children.length < 1 || droppedRegionHasComment(regions, forSpan, iterSpan, condSpan, retSpan))
 			return null;
 		final fallback: QueryNode = ret.children[0];
 		final whole: Span = new Span(forSpan.from, retSpan.to);
@@ -724,9 +724,9 @@ final class PreferFind extends HaxeRule {
 	 * their spans are excluded; refusing here keeps such a loop a report-only finding.
 	 */
 	private static function droppedRegionHasComment(
-		source: String, regions: () -> Array<LexRegion>, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span
+		regions: () -> Array<LexRegion>, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span
 	): Bool {
-		return CheckScan.regionHoldsComment(source, forSpan, [iterSpan, condSpan])
+		return CheckScan.regionHoldsComment(regions, forSpan, [iterSpan, condSpan])
 			|| LexicalRegions.commentIntersects(forSpan.to, retSpan.from, regions());
 	}
 
