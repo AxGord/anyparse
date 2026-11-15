@@ -53,7 +53,9 @@
 		"tlit/Use.hx": "package tlit;\n\nclass Use {\n\n\tvar field: Foo;\n\n\tpublic function new() {}\n\n\tpublic function f(p: Foo): Void {\n\t\tfinal x: Null<Foo> = null;\n\t\tvar y: Foo = p;\n\t}\n\n}\n",
 		"zq/Zq.hx": "package a;\n\nclass C {\n\n\t/** The helper. */\n\tpublic function zq():Void {}\n\n\t// calls zq once\n\tpublic function g():Void {}\n\n}\n",
 		"cond/ClosedMember.hx": "class A {\n\t#if false {} #end function b() {}\n}\n",
-		"pkg/Notes.hx": "class C {\n\tfunction f():Void {\n\t\ta(); // t1\n\t\tb(); // t2\n\t\tc();\n\t}\n}\n"
+		"pkg/Notes.hx": "class C {\n\tfunction f():Void {\n\t\ta(); // t1\n\t\tb(); // t2\n\t\tc();\n\t}\n}\n",
+		"narrowingcopy/M.hx": "@:nullSafety class M {\n\tpublic var onChange:Null<M->Void> = null;\n\tpublic var o:Null<O> = null;\n\tpublic function new() {}\n\tprivate inline function notify():Void {\n\t\tfinal listener:Null<M->Void> = onChange;\n\t\tif (listener != null) listener(this);\n\t}\n\tprivate function notify2():Void {\n\t\tfinal listener:Null<M->Void> = onChange;\n\t\tif (listener != null) listener(this);\n\t}\n\tprivate function useO():Void {\n\t\tfinal l:Null<O> = o;\n\t\tif (l != null) l.x = 1;\n\t}\n}\nclass O { public var x:Int = 0; public function new() {} }\n",
+		"narrowingcopy/apqlint.json": "{\"rules\":{}}"
 	},
 	"invocations": [
 		{
@@ -9544,6 +9546,24 @@
 				"exit": 0,
 				"out": "d3f75b062be494fd",
 				"err": "a404a1d5525ae749",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq lint narrowingcopy/M.hx --rule redundant-narrowing-copy --all --no-oracle",
+			"argv": [
+				"apq",
+				"lint",
+				"narrowingcopy/M.hx",
+				"--rule",
+				"redundant-narrowing-copy",
+				"--all",
+				"--no-oracle"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "c2eb6e0a3e4a610d",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

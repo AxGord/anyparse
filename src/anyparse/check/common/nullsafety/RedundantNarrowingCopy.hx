@@ -6,6 +6,7 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.threads.FieldWrites;
 import anyparse.check.common.design.threads.LockTaint.ChainLists;
+import anyparse.check.common.design.threads.ProjectCoverage;
 import anyparse.check.common.design.threads.ReflectiveReach;
 import anyparse.check.common.design.threads.SpawnedWriters;
 import anyparse.check.common.design.threads.ThreadContexts;
@@ -90,6 +91,16 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 		}
 		if (local.length == 0) return [];
 		final threads: ThreadFacts = new ThreadFacts(files, plugin, _resolveConfig, _configNotes);
+		final missing: Null<String> = threads.missing();
+		if (missing != null)
+			ConfigNotes.into(
+				_configNotes,
+				notes ->
+					ConfigNotes.note(
+						notes, 'redundant-narrowing-copy.closedWorld',
+						'apq: redundant-narrowing-copy: ${local.length} copy(ies) of a field left alone, as $missing\n'
+					)
+			);
 		return [
 			for (l in local) if (threads.steady(l.file, l.found.field, l.found.firstUse)) ({
 				file: l.file,
@@ -366,14 +377,33 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 private final class ThreadFacts {
 
 	private final _known: Null<KnownThreads>;
+	private final _open: Null<String>;
+	private final _leftOut: Null<String>;
 
 	public function new(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
 		notes: Null<Array<ConfigNote>>
 	) {
-		_known = files.foreach(f -> ThreadSafetyOptions.read(LintConfig.resolveWith(resolve, f.file)).flag('closedWorld'))
-			? known(files, plugin, resolve, notes)
-			: null;
+		final open: Null<{ file: String, source: String }> = files.find(f ->
+			!ThreadSafetyOptions.read(LintConfig.resolveWith(resolve, f.file)).flag('closedWorld')
+		);
+		_open = open?.file;
+		final held: Null<KnownThreads> = open == null ? known(files, plugin, resolve, notes) : null;
+		_known = held;
+		_leftOut = held == null || held.complete ? null : projectLeftOut(files, held);
+	}
+
+	/** Why no copy can be judged — what the project leaves unsaid about its writers — or null when the facts hold. */
+	public function missing(): Null<String> {
+		final open: Null<String> = _open;
+		if (open != null)
+			return 'the config of $open declares no thread-safety "closedWorld" — declare it (true) in the project\'s config'
+				+ ' and lint the whole project to judge them';
+		final leftOut: Null<String> = _leftOut;
+		return leftOut == null
+			? null
+			: 'this run leaves part of the project of $leftOut out (a file it does not hold, or one it could not parse), so its'
+				+ ' "closedWorld" is read as false — lint the whole project to judge them';
 	}
 
 	/** Whether the field `field`, read in `file` from offset `at`, is known to hold still under two reads there. */
@@ -383,6 +413,12 @@ private final class ThreadFacts {
 			&& known.complete
 			&& known.chains[file]?.closedWorld == true
 			&& !known.writers.mayChangeUnderRead(field, known.graph.functionAt(file, at));
+	}
+
+	/** The project, as `ProjectCoverage` names it, of the first file whose `closedWorld` the run does not close. */
+	private static function projectLeftOut(files: Array<{ file: String, source: String }>, held: KnownThreads): String {
+		final file: Null<{ file: String, source: String }> = files.find(f -> held.chains[f.file]?.closedWorld != true);
+		return file == null ? '' : new ProjectCoverage([], null).projectOf(file.file);
 	}
 
 	private static function known(

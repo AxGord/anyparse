@@ -344,6 +344,30 @@
 			"find": "new ThreadFacts(files, plugin, _resolveConfig, _configNotes)",
 			"replace": "new ThreadFacts(files, plugin, _resolveConfig, null)",
 			"note": "the thread facts of redundant-narrowing-copy walk the config chain without the rule's run notes: its diagnostics go to stderr"
+		},
+		{
+			"name": "M-RNC-HELD-BACK-SILENT",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "run",
+			"find": "if (missing != null)",
+			"replace": "if (false)",
+			"note": "a run that holds copies back for want of thread facts says nothing, so a clean result looks like a judged one"
+		},
+		{
+			"name": "M-RNC-HELD-BACK-ALWAYS",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
+			"method": "run",
+			"find": "final missing: Null<String> = threads.missing();",
+			"replace": "final missing: Null<String> = threads.missing() ?? 'held';",
+			"note": "the held-back note is said whatever the project declares, so a judged run is told it was not"
+		},
+		{
+			"name": "M-RNC-HELD-BACK-PARTIAL",
+			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy.ThreadFacts",
+			"method": "missing",
+			"find": "final leftOut: Null<String> = _leftOut;",
+			"replace": "final leftOut: Null<String> = null;",
+			"note": "a run over part of a project whose config closes the world says nothing about the coverage it lacks"
 		}
 	]
 }
