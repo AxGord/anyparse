@@ -34,6 +34,7 @@ final class Dev {
 		{ name: 'rule-scope', main: RuleScope.main, usage: RuleScope.USAGE },
 		{ name: 'slice-stats', main: SliceStats.main, usage: SliceStats.USAGE },
 		{ name: 'token-audit', main: TokenAudit.main, usage: TokenAudit.USAGE },
+		{ name: 'exec-ledger', main: ExecLedgerCli.main, usage: ExecLedgerCli.USAGE },
 		{ name: 'battery', main: Battery.main, usage: Battery.USAGE },
 		{ name: 'base-engine', main: BaseEngine.main, usage: BaseEngine.USAGE },
 		{ name: 'parity', main: Parity.main, usage: Parity.USAGE },

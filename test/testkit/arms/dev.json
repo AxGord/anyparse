@@ -2866,6 +2866,37 @@
 			"find": "if (held != null) for",
 			"replace": "if (held != null && name == rows[0]) for",
 			"note": "only the first row of a branch carries its threads, so a ledger reads the later rows as holding none"
+		},
+		{
+			"name": "M-EXECLEDGERCLI-BRANCH-KEY",
+			"type": "dev.ExecLedgerCli",
+			"method": "runOf",
+			"find": "row.branch ?? row.row",
+			"replace": "row.row",
+			"note": "a later row of a branch is summed as its own branch, so the branch cpu sits on its first row and the wall it was spent over is cut short"
+		},
+		{
+			"name": "M-EXECLEDGERCLI-UNMETERED-ZERO",
+			"type": "dev.ExecLedgerCli",
+			"method": "cores",
+			"force": "0.0",
+			"note": "a branch no cpu reading reached shows zero cores, as if it ran idle"
+		},
+		{
+			"name": "M-EXECLEDGERCLI-SINCE-IGNORED",
+			"type": "dev.ExecLedgerCli",
+			"method": "summarize",
+			"find": "if (from != null && (at == null || at < from)) continue;",
+			"replace": "",
+			"note": "--since keeps every row, so a window over recent lands sums the whole file"
+		},
+		{
+			"name": "M-EXECLEDGERCLI-RUN-PER-LAND",
+			"type": "dev.ExecLedgerCli",
+			"method": "runOf",
+			"find": "\\t${row.at ?? -1}",
+			"replace": "",
+			"note": "the runs of one branch from different lands merge, so one measured run makes every run of the branch metered and its unmetered runs vanish"
 		}
 	]
 }

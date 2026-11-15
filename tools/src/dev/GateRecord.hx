@@ -42,4 +42,11 @@ typedef GateRecord = {
 	@:optional
 	var sweep: Null<String>;
 
+	/**
+	 * The gate's rows as `ExecLedger` lines (`ExecLedger.encode`), so a land taking its rows over carries what they cost;
+	 * null on a record an older gate wrote.
+	 */
+	@:optional
+	var timings: Null<Array<String>>;
+
 }

@@ -2,6 +2,8 @@ package devkit;
 
 using StringTools;
 
+import devkit.Summary.Step;
+
 /**
  * The one answer to "what did each row of a tool run cost, wall and lease wait and cpu and threads, across runs": the
  * finished rows of a run, recorded as one line `row TAB phase TAB wall_ms TAB wait_ms TAB cpu_s TAB threads` in a file
@@ -24,6 +26,8 @@ final class ExecLedger {
 	private static inline final WAIT_FIELD: Int = 3;
 	private static inline final CPU_FIELD: Int = 4;
 	private static inline final THREADS_FIELD: Int = 5;
+	private static inline final BRANCH_FIELD: Int = 6;
+	private static inline final AT_FIELD: Int = 7;
 
 	/** A cpu reading is kept to a thousandth of a second. */
 	private static inline final MILLIS: Float = 1000;
@@ -55,13 +59,17 @@ final class ExecLedger {
 		final wait: Null<Float> = entry.waitMs;
 		final cpu: Null<Float> = entry.cpuS;
 		final threads: Null<Int> = entry.threads;
+		final branch: Null<String> = entry.branch;
+		final at: Null<Float> = entry.at;
 		return [
 			clean(entry.row),
 			clean(entry.phase),
 			'${Math.round(entry.wallMs)}',
 			wait == null ? '' : '${Math.round(wait)}',
 			cpu == null ? '' : '${Math.round(cpu * MILLIS) / MILLIS}',
-			threads == null ? '' : '$threads'
+			threads == null ? '' : '$threads',
+			branch == null ? '' : clean(branch),
+			at == null ? '' : '${Math.round(at)}'
 		].join('\t');
 	}
 
@@ -70,7 +78,7 @@ final class ExecLedger {
 		final fields: Array<String> = line.split('\t');
 		if (fields.length < MIN_FIELDS || fields[0] == '') return null;
 		final wall: Float = Std.parseFloat(fields[2]);
-		return Math.isNaN(wall) ? null : {
+		final row: Null<LedgerRow> = Math.isNaN(wall) ? null : {
 			row: fields[0],
 			phase: fields[1],
 			wallMs: wall,
@@ -78,6 +86,40 @@ final class ExecLedger {
 			cpuS: number(fields, CPU_FIELD),
 			threads: whole(fields, THREADS_FIELD)
 		};
+		// the newer fields are left out when absent, so a line an older tool wrote reads back as the row it recorded
+		if (row != null) {
+			if (BRANCH_FIELD < fields.length && fields[BRANCH_FIELD] != '') row.branch = fields[BRANCH_FIELD];
+			final at: Null<Float> = number(fields, AT_FIELD);
+			if (at != null) row.at = at;
+		}
+		return row;
+	}
+
+	/**
+	 * The rows of a run's `steps` in `phase`, recorded at `at`: a branch starts at a step carrying its lease wait or cpu,
+	 * which only a branch's first step carries, or at a step that held no lease; every later step names that first step.
+	 */
+	public static function ofSteps(phase: String, steps: Array<Step>, at: Float): Array<LedgerRow> {
+		final out: Array<LedgerRow> = [];
+		var first: String = '';
+		for (step in steps) {
+			final wait: Null<Float> = step.wait;
+			final cpu: Null<Float> = step.cpu;
+			final threads: Null<Int> = step.threads;
+			if (wait != null || cpu != null || threads == null) first = step.name;
+			final row: LedgerRow = {
+				row: step.name,
+				phase: phase,
+				wallMs: step.ms,
+				at: at
+			};
+			if (threads != null) row.threads = threads;
+			if (wait != null) row.waitMs = wait;
+			if (cpu != null) row.cpuS = cpu;
+			if (first != step.name) row.branch = first;
+			out.push(row);
+		}
+		return out;
 	}
 
 	/** The reading in field `at`, or null when the line has no such field or it is empty or no number. */
@@ -119,5 +161,13 @@ typedef LedgerRow = {
 	/** The pool threads it held. */
 	@:optional
 	var threads: Int;
+
+	/** The first row of the branch that ran it, whose cpu and wait are the whole branch's; absent when the row is its own branch. */
+	@:optional
+	var branch: String;
+
+	/** When the row was recorded, in milliseconds since the epoch; absent on a line an older tool wrote. */
+	@:optional
+	var at: Float;
 
 }

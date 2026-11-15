@@ -2,6 +2,7 @@ package dev;
 
 import anyparse.grammar.json.JsonFormat;
 import devkit.Cmd.cmd;
+import devkit.ExecLedger;
 import devkit.Result;
 import devkit.Summary.Step;
 import haxe.Exception;
@@ -192,7 +193,8 @@ final class GateReuse {
 			tests: readings['tests'] ?? 0,
 			assertions: readings['assertions'] ?? 0,
 			impact: readings[IMPACT],
-			sweep: FileSystem.exists(sweep) ? sweep : null
+			sweep: FileSystem.exists(sweep) ? sweep : null,
+			timings: timingsOf(gate.summary.steps(), Date.now().getTime())
 		});
 	}
 
@@ -207,6 +209,11 @@ final class GateReuse {
 		final taken: Array<String> = gate == null ? [] : rows(gate, facts);
 		print(report(gate, facts, taken));
 		return { gate: taken.length == 0 ? null : gate, rows: taken };
+	}
+
+	/** The gate's `steps` as the `ExecLedger` lines of its `gate` phase, recorded at `at`. */
+	public static function timingsOf(steps: Array<Step>, at: Float): Array<String> {
+		return ExecLedger.ofSteps('gate', steps, at).map(ExecLedger.encode);
 	}
 
 }

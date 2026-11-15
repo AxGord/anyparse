@@ -245,6 +245,14 @@
 			"find": "decimal.replace(',', '.')",
 			"replace": "decimal",
 			"note": "a time(1) report in a comma locale reads 2,99 as 2"
+		},
+		{
+			"name": "M-EXECLEDGER-OFSTEPS-BRANCH",
+			"type": "devkit.ExecLedger",
+			"method": "ofSteps",
+			"find": "if (first != step.name) row.branch = first;",
+			"replace": "",
+			"note": "a gate step after its branch first names no branch, so the ledger sums it apart from the cpu its branch used"
 		}
 	]
 }

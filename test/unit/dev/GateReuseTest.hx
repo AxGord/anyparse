@@ -222,7 +222,8 @@ final class GateReuseTest extends Test {
 			tests: 5,
 			assertions: 6,
 			sweep: '/logs/${GateReuse.SWEEP}',
-			impact: null
+			impact: null,
+			timings: null
 		};
 	}
 
