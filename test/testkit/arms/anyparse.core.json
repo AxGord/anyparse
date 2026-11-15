@@ -1023,9 +1023,9 @@
 		{
 			"name": "M-META-FIT-FILL-WRAP-UNSEEN",
 			"type": "anyparse.core.Renderer",
-			"method": "siblingRestStep",
-			"find": "{ add: DocMeasure.flatTokenWidth(items[0]) + sepWidthBeforeBreak(sep), aborted: true }",
-			"replace": "null",
+			"method": "ungluedRestStep",
+			"find": "return { add: col - renderCol + sepWidthBeforeBreak(sep), aborted: true };",
+			"replace": "return null;",
 			"note": "a lone simple metadata measures a parameter list flat past where it wraps, so it leaves the line though the first line fits"
 		},
 		{
@@ -1035,6 +1035,62 @@
 			"find": "lineEnd: lineAsker ? f.indent + flatTokenWidthOfRestStack(stack) : null",
 			"replace": "lineEnd: lineAsker ? col + pendingSpace + flatWidth + flatTokenWidthOfRestStack(stack) : null",
 			"note": "the later breaks are predicted on the line WITH the metadata glued, so a break only the glue causes keeps the metadata on the line"
+		},
+		{
+			"name": "M-META-FIT-GLUED-COLUMN",
+			"type": "anyparse.core.Renderer",
+			"method": "pushExceedsBranch",
+			"find": "col: lineAsker ? f.indent : col + pendingSpace + flatWidth",
+			"replace": "col: col + pendingSpace + flatWidth",
+			"note": "a glued asker's later breaks decide at the glued column, so a break only the glue causes ends its line and the metadata stays glued over a head it wrapped"
+		},
+		{
+			"name": "M-META-FIT-REST-GROUP-UNGLUED-ONLY",
+			"type": "anyparse.core.Renderer",
+			"method": "ungluedRestStep",
+			"find": "(lineFits || fitsFlat(sibling.width - penCol - glue, 0, d))",
+			"replace": "true",
+			"note": "a rest-aware group that fits by itself without the glue counts as flat though its line wraps anyway, so the metadata leaves a head that breaks without it"
+		},
+		{
+			"name": "M-META-FIT-FILL-FIRST-ITEM-ONLY",
+			"type": "anyparse.core.Renderer",
+			"method": "ungluedRestStep",
+			"find": "if (!fillItemFits(probe, col, sibling.width, restAfter, false))",
+			"replace": "if (true)",
+			"note": "a glued metadata measures a fill's first line by its first item only, so it stays glued though it pushes later items off that line"
+		},
+		{
+			"name": "M-META-FIT-NATURAL-BREAK-ASSUMED",
+			"type": "anyparse.core.Renderer",
+			"method": "ungluedRestStep",
+			"find": "if (naturalFirstLineWidth(flatDoc, renderCol, sibling.col, sibling.width, true) >= n)",
+			"replace": "if (true)",
+			"note": "a relocating `=` break ends a glued metadata's line though the unglued line keeps its right side, so the glue alone breaks the initializer"
+		},
+		{
+			"name": "M-META-FIT-NATURAL-BREAK-IGNORED",
+			"type": "anyparse.core.Renderer",
+			"method": "ungluedRestStep",
+			"find": "if (naturalFirstLineWidth(flatDoc, renderCol, sibling.col, sibling.width, true) >= n)",
+			"replace": "if (false)",
+			"note": "a glued metadata measures an initializer flat past the `=` break it takes anyway, so it leaves a declaration whose first line fits"
+		},
+		{
+			"name": "M-META-FIT-FILL-TAIL-UNRESERVED",
+			"type": "anyparse.core.Renderer",
+			"method": "ungluedRestStep",
+			"find": "final restAfter: Int = Std.int(Math.max(0, lineEnd - renderCol - DocMeasure.flatTokenWidth(doc)));",
+			"replace": "final restAfter: Int = 0;",
+			"note": "the fill's last item reserves no room for the line's tail after the fill, so every item seems to pack and the metadata leaves a head whose layout is the same glued or not"
+		},
+		{
+			"name": "M-META-FIT-FILL-GLUED-PACKING",
+			"type": "anyparse.core.Renderer",
+			"method": "ungluedRestStep",
+			"find": "fillItemFits(probe, col + glue, sibling.width, restAfter, false)",
+			"replace": "fillItemFits(probe, col, sibling.width, restAfter, false)",
+			"note": "a glued metadata decides a fill's items only at the unglued column, so it stays glued over a first line that packs an item fewer"
 		}
 	]
 }

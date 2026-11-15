@@ -86,7 +86,9 @@
 		"sw/hxformat.json": "{\"sameLine\": {\"caseBody\": \"fitLine\", \"ifBody\": \"fitLine\", \"fitLineBodyGlue\": true}, \"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"remove\"}}}\n",
 		"loop-body/L.hx": "class L {\n\tfunction f() {\n\t\tvar q = function() for (x in xs) if (c) a(); else b();\n\t\tvar r = function() while (x) if (c) a(); else b();\n\t\tvar n = function() for (x in xs) for (y in ys) if (c) a(); else b();\n\t\tvar iter = function() for (x in (c ? xs : ys)) if (d) a(); else b();\n\t}\n}\n",
 		"meta-fit/C.hx": "@:nullSafety final class Cls\n\textends Base<Array<ItemWithAVeryLongName>, ResponseWithAnotherVeryLongName, { timestamp:String, description:String, identifier:Int }> {\n}\n",
-		"meta-fit/hxformat.json": "{\"lineEnds\":{\"metadataType\":\"fit\",\"metadataFunction\":\"fit\",\"metadataVar\":\"fit\",\"metadataOther\":\"fit\"},\"wrapping\":{\"maxLineLength\":140}}"
+		"meta-fit/hxformat.json": "{\"lineEnds\":{\"metadataType\":\"fit\",\"metadataFunction\":\"fit\",\"metadataVar\":\"fit\",\"metadataOther\":\"fit\"},\"wrapping\":{\"maxLineLength\":140}}",
+		"meta-fit-k/K.hx": "class C {\n\t@:allow(pkg.sub.Type)\n\tpublic static inline function k(aaaaaaaaaaaaaaaaaaaaaaaaaaaaa:String, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:String, ccccc:String):Void {\n\t\ttrace(1);\n\t}\n}\n",
+		"meta-fit-k/hxformat.json": "{\"lineEnds\": {\"emptyCurly\": \"noBreak\", \"metadataFunction\": \"fit\", \"metadataType\": \"fit\", \"metadataVar\": \"fit\", \"metadataOther\": \"fit\"}, \"wrapping\": {\"maxLineLength\": 140, \"functionSignature\": {\"defaultWrap\": \"fillLineWithLeadingBreak\", \"rules\": [{\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 100}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}, {\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}], \"type\": \"noWrap\"}]}}}"
 	},
 	"invocations": [
 		{
@@ -955,6 +957,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "e50373faf3307c57",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "meta-fit-k/K.hx",
+			"note": "a lone simple metadata under fit leaves a function head the glue alone would wrap, which stays whole below it",
+			"fixpoint": "meta-fit-k/K.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"meta-fit-k/K.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "247299ed954b30cb",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

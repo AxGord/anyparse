@@ -90,6 +90,12 @@ private typedef RestSibling = {
 	 */
 	final ?lineEnd: Int;
 
+	/**
+	 * Set with `lineEnd`: how far right of `col` the rest begins on the glued side. Such an asker's `col` is the
+	 * broken side's line start, so each width probe in the rest decides the layout it takes without the glue.
+	 */
+	final ?glue: Int;
+
 };
 
 /**
@@ -627,31 +633,6 @@ class Renderer {
 	}
 
 	/**
-	 * First-line-only view of `embeddedLineWidths`, for the `Fill` packing probe:
-	 * lets a fill pack a verbatim multi-line token when its FIRST line fits the
-	 * remaining budget (matching haxe-formatter, which re-flows the head of a
-	 * token-splice operand onto the packed chain line) instead of breaking the
-	 * whole operand onto its own line for its full flat width. A packed item's
-	 * tail is the fill's own business, so the `last` half is not consulted.
-	 *
-	 * Falls back to `condSpliceFirstLine` — the same measurement over a REAL
-	 * hardline rather than a `Text`-embedded newline — when the item is a
-	 * conditional-compilation splice operand that carries no embedded newline.
-	 * That population used to be empty: a `#if … #end` operand was reachable
-	 * only as `HxCondSpliceRaw`'s verbatim capture, whose newline lives inside
-	 * a `Text`. `HxCondSpliceOpExpr` models the same region as real nodes, so
-	 * its newline is a genuine hardline and `first` reads `-1` there, which
-	 * would send the fill to the full flat width and break an operand the fork
-	 * packs. Widening the fallback to EVERY fill item was measured first and
-	 * declined: five writer tests move, and the shapes they cover are ordinary
-	 * multi-line arguments a fill is supposed to refuse.
-	 */
-	private static inline function embeddedFirstLineWidth(d: Doc): Int {
-		final w: EmbeddedLineWidths = embeddedLineWidths(d);
-		return w.first >= 0 ? w.first : w.condSpliceFirstLine;
-	}
-
-	/**
 	 * omega-arrow-block-body-open: does `flatDoc` — the FLAT side of an
 	 * `@:fmt(arrowBodyLineWrap)` arrow-body marker — open with `{` and break
 	 * IMMEDIATELY after it, before any other token? That is the population whose head
@@ -761,6 +742,82 @@ class Renderer {
 	/** What a leaf spelling `s` tagged `tag` leaves as the last byte written: an open the tag names, unless a blank follows it. */
 	private static inline function lastEmitOf(s: String, tag: Null<LeafTag>): LastEmit {
 		return DelimiterLeaf.leavesOpen(tag, false) && trailBlankStart(s) == s.length ? OpenDelim : Other;
+	}
+
+	/**
+	 * Whether fill item `f.fillIdx` of the `FillCont` frame `f` packs onto the line at `col`: the per-item decision
+	 * `resumeFill` renders and the glued-metadata rest walk (`ungluedRestStep`) predicts by. `restAfter` is the
+	 * same-line content after the fill, read only for a rest-probe fill's last item and for a leading-break fill;
+	 * `prevWrapped` says the item before this one self-wrapped.
+	 *
+	 * A verbatim multi-line item (a `#if … #end` token splice) is probed by its FIRST line only, so its head packs
+	 * onto the current line as haxe-formatter re-flows it instead of breaking the whole operand for its full flat
+	 * width; a splice modelled as real nodes carries a real hardline instead of a `Text`-embedded newline and is read
+	 * through `condSpliceFirstLine`. A packed item's tail is the fill's own business, so the `last` half is not consulted.
+	 */
+	private static function fillItemFits(f: Frame, col: Int, width: Int, restAfter: Int, prevWrapped: Bool): Bool {
+		final items: Null<Array<Doc>> = f.fillRest;
+		if (items == null) return true;
+		final idx: Int = f.fillIdx;
+		final sep: Doc = f.fillSep;
+		final last: Bool = idx == items.length - 1;
+		// `tailReserve` cols are reserved for post-Fill same-line
+		// content (trailing comma + close delim emitted OUTSIDE
+		// the Fill — see `Doc.Fill` doc-comment). Subtracting it
+		// from the probe budget makes the LAST packed item leave
+		// room for that tail, matching fork's `wrapFillLine2AfterLast`
+		// `lineLength + tokenLength >= maxLineLength` accounting
+		// where each item carries its trailing comma in
+		// `firstLineLength` (slice ω-fill-tail-reserve).
+		//
+		// `restW` is the additional tail beyond the Fill subtree
+		// itself (content trailing the Fill on the same rendered
+		// line — e.g. typedef RHS `= RequestMethod<...>;` after a
+		// typeParams Fill). Subtracted only when the originating
+		// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe)
+		// AND we're probing the LAST item (slice 4): fork's
+		// `wrapFillLine2AfterLast` reserves the rest-of-line tail
+		// for the AFTER-LAST decision, not every per-item probe.
+		// Middle items break only when they themselves overflow;
+		// the tail lands on whichever line the last item ends on,
+		// so only the last item's probe must account for it.
+		// Applying restW per-item is over-pessimistic (regresses
+		// e.g. `wrapping/issue_494_type_parameter` — it breaks too
+		// early and packs fewer items than fit).
+		// Default `restW=0` preserves byte-equivalent legacy
+		// behavior; sister to `GroupWithRestProbe` at the Group
+		// decision layer.
+		final restW: Int = f.fillRestProbe && last ? restAfter : 0;
+		// The LAST item of a leading-break fill (FillBreakAfterWrap;
+		// `fillLineStart >= 0`) has no following item on its line -- the close
+		// sits on its own line -- so the per-line trailing-comma component of
+		// `tailReserve` must not bind it. Reserve only the genuine same-line
+		// tail (an optional trailing comma, measured by
+		// `flatTokenWidthOfRestStack`) plus the `+ 1` fork-`>=` boundary
+		// alignment, the same term the shape's `sep.length + 1` reserve carries.
+		// Without it a last param that fits broke onto its own line a column early.
+		final effTailReserve: Int = f.fillLineStart >= 0 && last ? restAfter + 1 : f.fillTailReserve;
+		// ω-fill-after-collection: a collection item dominates the line it
+		// lands on, and its brackets are a structural boundary a reader
+		// navigates by. Packing only SOME of the followers onto its tail puts
+		// the break at an arbitrary width point instead — `[…], 155,` / `null`
+		// rather than `[…],` / `155, null`. So once the previous item was a
+		// collection, the rest either ALL fits on its line or ALL moves to the
+		// next one. Scoped to the leading-break fill (`fillLineStart >= 0`, the
+		// `FillBreakAfterWrap` ctor — the call-argument shape); a plain `Fill`
+		// keeps its greedy packing byte-for-byte. The whole tail is measured
+		// against the LAST item's reserve — the post-Fill content lands after
+		// it, not after the item being probed now.
+		final runFit: Int = f.fillLineStart >= 0 ? literalRunFit(f, items, col, width, restAfter + 1) : -1;
+		if (runFit >= 0) return !prevWrapped && runFit == 1;
+		final afterCollection: Bool = f.fillLineStart >= 0
+			&& CollectionRun.startsCollection(items[idx - 1])
+			&& !fitsFlat(width - col - restAfter - 1, f.indent, CollectionRun.remainingFlat(items, sep, idx));
+		if (prevWrapped || afterCollection) return false;
+		final next: Doc = Concat([sep, items[idx]]);
+		final embedded: EmbeddedLineWidths = embeddedLineWidths(next);
+		final embW: Int = embedded.first >= 0 ? embedded.first : embedded.condSpliceFirstLine;
+		return embW >= 0 ? embW <= width - col : fitsFlat(width - col - effTailReserve - restW, f.indent, next);
 	}
 
 	/**
@@ -2495,11 +2552,12 @@ class Renderer {
 					final lineAsker: Bool = breaksLineAlone(breakDoc);
 					final restWidth: Int = flatTokenWidthOfRestStack(stack, {
 						width: width,
-						col: col + pendingSpace + flatWidth,
+						col: lineAsker ? f.indent : col + pendingSpace + flatWidth,
 						exactCol: (opensDelimiterAlone(breakDoc) || lineAsker)
 						&& rendersAsMeasured(flatDoc, false, col + pendingSpace + flatWidth),
 						groupAsker: false,
-						lineEnd: lineAsker ? f.indent + flatTokenWidthOfRestStack(stack) : null
+						lineEnd: lineAsker ? f.indent + flatTokenWidthOfRestStack(stack) : null,
+						glue: lineAsker ? col + pendingSpace + flatWidth - f.indent : null
 					});
 					final fullLineCrosses: Bool = col + effPending + flatWidth + restWidth >= fireAt;
 					// ω-collapse-commit: record the open/glued decision at
@@ -3362,33 +3420,6 @@ class Renderer {
 		final idx: Int = f.fillIdx;
 		final tailReserve: Int = f.fillTailReserve;
 		if (idx >= fillRest.length) return;
-		// `tailReserve` cols are reserved for post-Fill same-line
-		// content (trailing comma + close delim emitted OUTSIDE
-		// the Fill — see `Doc.Fill` doc-comment). Subtracting it
-		// from the probe budget makes the LAST packed item leave
-		// room for that tail, matching fork's `wrapFillLine2AfterLast`
-		// `lineLength + tokenLength >= maxLineLength` accounting
-		// where each item carries its trailing comma in
-		// `firstLineLength` (slice ω-fill-tail-reserve).
-		//
-		// `restW` is the additional tail beyond the Fill subtree
-		// itself (content trailing the Fill on the same rendered
-		// line — e.g. typedef RHS `= RequestMethod<...>;` after a
-		// typeParams Fill). Subtracted only when the originating
-		// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe)
-		// AND we're probing the LAST item (slice 4): fork's
-		// `wrapFillLine2AfterLast` reserves the rest-of-line tail
-		// for the AFTER-LAST decision, not every per-item probe.
-		// Middle items break only when they themselves overflow;
-		// the tail lands on whichever line the last item ends on,
-		// so only the last item's probe must account for it.
-		// Applying restW per-item is over-pessimistic (regresses
-		// e.g. `wrapping/issue_494_type_parameter` — it breaks too
-		// early and packs fewer items than fit).
-		// Default `restW=0` preserves byte-equivalent legacy
-		// behavior; sister to `GroupWithRestProbe` at the Group
-		// decision layer.
-		final restW: Int = f.fillRestProbe && idx == fillRest.length - 1 ? flatTokenWidthOfRestStack(stack) : 0;
 		// ω-fill-break-after-wrap: the just-drained previous item
 		// (`fillRest[idx - 1]`) self-wrapped when the render's
 		// physical-line count advanced past the snapshot taken when
@@ -3400,49 +3431,11 @@ class Renderer {
 		// on `fillLineStart >= 0` so non-opting / force-flat Fills
 		// stay byte-identical via the legacy `fits` probe alone.
 		final prevWrapped: Bool = f.fillLineStart >= 0 && ctx.lineCount > f.fillLineStart;
-		// ω-fill-after-collection: a collection item dominates the line it
-		// lands on, and its brackets are a structural boundary a reader
-		// navigates by. Packing only SOME of the followers onto its tail puts
-		// the break at an arbitrary width point instead — `[…], 155,` / `null`
-		// rather than `[…],` / `155, null`. So once the previous item was a
-		// collection, the rest either ALL fits on its line or ALL moves to the
-		// next one.
-		//
-		// Scoped to the leading-break fill (`fillLineStart >= 0`, the
-		// `FillBreakAfterWrap` ctor — the call-argument shape); a plain `Fill`
-		// keeps its greedy packing byte-for-byte.
-		// The LAST item of a leading-break fill (FillBreakAfterWrap;
-		// `fillLineStart >= 0`) has no following item on its line -- the close
-		// sits on its own line -- so the per-line trailing-comma component of
-		// `tailReserve` must not bind it. Reserve only the genuine same-line
-		// tail (an optional trailing comma, measured by
-		// `flatTokenWidthOfRestStack`) plus the `+ 1` fork-`>=` boundary
-		// alignment, the same term the shape's `sep.length + 1` reserve carries.
-		// Without it a last param that fits broke onto its own line a column early.
-		final effTailReserve: Int = f.fillLineStart >= 0 && idx == fillRest.length - 1 ? flatTokenWidthOfRestStack(stack) + 1 : tailReserve;
-		// omega-fill-embedded-firstline: a fill item whose flat projection carries
-		// an embedded `\n` inside a `Text` (a `#if … #end` token-splice raw) is a
-		// multi-line token whose full flat width overflows any budget. Probe only
-		// its FIRST line against the remaining column so the head packs onto the
-		// current line (fork re-flows a splice operand this way) and the verbatim
-		// newline breaks the rest; `-1` = no embedded break → the standard probe.
-		// ω-fill-after-collection: the whole tail is measured against the
-		// LAST item's reserve — the post-Fill content lands after it, not
-		// after the item being probed now.
-		final runFit: Int = f.fillLineStart >= 0 ? literalRunFit(f, fillRest, ctx.col, width, flatTokenWidthOfRestStack(stack) + 1) : -1;
-		final afterCollection: Bool = f.fillLineStart >= 0
-			&& CollectionRun.startsCollection(fillRest[idx - 1])
-			&& !fitsFlat(
-				width - ctx.col - flatTokenWidthOfRestStack(stack) - 1, f.indent, CollectionRun.remainingFlat(fillRest, fillSep, idx)
-			);
-		final embW: Int = embeddedFirstLineWidth(Concat([fillSep, fillRest[idx]]));
-		final fits: Bool = runFit >= 0
-			? !prevWrapped && runFit == 1
-			: !prevWrapped && !afterCollection && (
-				embW >= 0
-					? embW <= width - ctx.col
-					: fitsFlat(width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]))
-			);
+		// The same-line content after the fill, measured only where `fillItemFits` reads it.
+		final restAfter: Int = f.fillLineStart >= 0 || (f.fillRestProbe && idx == fillRest.length - 1)
+			? flatTokenWidthOfRestStack(stack)
+			: 0;
+		final fits: Bool = fillItemFits(f, ctx.col, width, restAfter, prevWrapped);
 		if (idx + 1 < fillRest.length) {
 			// Snapshot the line where `fillRest[idx]` STARTS: when the
 			// separator breaks (`!fits`) the item begins on the next
@@ -4004,6 +3997,9 @@ class Renderer {
 		}
 		return switch node.doc {
 			case Group(innerDoc) if (renderCol >= 0): fitsFlat(sibling.width - renderCol, 0, innerDoc) ? null : broken(innerDoc);
+			case GroupWithRestProbe(_), Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _),
+				IfNaturalFirstLineExceeds(_, _, _) if (sibling.glue != null && renderCol >= 0):
+				ungluedRestStep(node.doc, inner, sibling, renderCol, penCol);
 			case GroupWithRestProbe(innerDoc) if (renderCol >= 0): fitsFlat(sibling.width - penCol, 0, innerDoc) ? null : broken(innerDoc);
 			case IfWidthExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
 				renderCol + DocMeasure.flatTokenWidth(flatDoc) >= n ? broken(breakDoc) : null;
@@ -4011,11 +4007,7 @@ class Renderer {
 				renderCol + flatTokenWidthFirstLine(flatDoc) >= n ? broken(breakDoc) : null;
 			case IfLineExceeds(n, breakDoc, _) if (sibling.lineEnd != null && renderCol >= 0 && breaksLineAlone(breakDoc)):
 				sibling.lineEnd >= n ? { add: 0, aborted: true } : null;
-			case Fill(items, sep, _), FillWithRestProbe(items, sep, _),
-				FillBreakAfterWrap(items, sep, _) if (
-					sibling.lineEnd != null && renderCol >= 0 && sibling.lineEnd > sibling.width && items.length > 1
-				):
-				{ add: DocMeasure.flatTokenWidth(items[0]) + sepWidthBeforeBreak(sep), aborted: true };
+
 			case IfFullLineExceeds(_, breakDoc, _) if (onPath && !sibling.groupAsker):
 				final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 				open.broke && findCollapseProbe(breakDoc) == null ? { add: open.width, aborted: true } : null;
@@ -4031,6 +4023,53 @@ class Renderer {
 				{ add: add, aborted: aborted };
 			case _: null;
 		};
+	}
+
+	/**
+	 * The `siblingRestStep` of a probe under a glued asker (`RestSibling.glue`), whose columns are the unglued line's:
+	 * each break decides the layout the declaration takes without the glue, so only a break it takes anyway ends the
+	 * asker's line. `null` measures the node flat.
+	 */
+	private static function ungluedRestStep(
+		doc: Doc, inner: Array<{ doc: Doc, mode: Mode }>, sibling: RestSibling, renderCol: Int, penCol: Int
+	): Null<{ add: Int, aborted: Bool }> {
+		final lineEnd: Int = sibling.lineEnd ?? 0;
+		final lineFits: Bool = lineEnd <= sibling.width;
+		switch doc {
+			case GroupWithRestProbe(d):
+				// A group that fits by itself still breaks when its line does not fit; whether its own rest forces that
+				// is beyond this walk, so such a group keeps the decision at the glued column.
+				final glue: Int = sibling.glue ?? 0;
+				if (fitsFlat(sibling.width - penCol, 0, d) && (lineFits || fitsFlat(sibling.width - penCol - glue, 0, d))) return null;
+				inner.push({ doc: d, mode: MBreak });
+				return { add: 0, aborted: false };
+			case Fill(items, sep, reserve), FillWithRestProbe(items, sep, reserve), FillBreakAfterWrap(items, sep, reserve):
+				// The items the fill packs on its first line, each decided as the render decides it, up to its break;
+				// the line's content after the fill is what the unglued line holds past the fill laid flat. An item that
+				// fits unglued but not at the glued column packs the glued line differently, so the asker's line crosses.
+				if (lineFits || items.length < 2) return null;
+				final restAfter: Int = Std.int(Math.max(0, lineEnd - renderCol - DocMeasure.flatTokenWidth(doc)));
+				final leadingBreak: Int = doc.match(FillBreakAfterWrap(_, _, _)) ? 0 : -1;
+				final glue: Int = sibling.glue ?? 0;
+				var col: Int = renderCol + DocMeasure.flatTokenWidth(items[0]);
+				for (k in 1...items.length) {
+					final probe: Frame = Frame.fillCont(
+						sibling.col, items, k, sep, reserve ?? 0, false, doc.match(FillWithRestProbe(_, _, _)), false, leadingBreak
+					);
+					if (!fillItemFits(probe, col, sibling.width, restAfter, false))
+						return { add: col - renderCol + sepWidthBeforeBreak(sep), aborted: true };
+					if (!fillItemFits(probe, col + glue, sibling.width, restAfter, false)) return { add: sibling.width, aborted: true };
+					col += DocMeasure.flatTokenWidth(Concat([sep, items[k]]));
+				}
+				return null;
+			case IfNaturalFirstLineExceeds(n, _, flatDoc):
+				// A relocating `=` break the unglued line does not take leaves the right side on the asker's line.
+				if (naturalFirstLineWidth(flatDoc, renderCol, sibling.col, sibling.width, true) >= n) return { add: 0, aborted: true };
+				inner.push({ doc: flatDoc, mode: MFlat });
+				return { add: 0, aborted: false };
+			case _:
+				return null;
+		}
 	}
 
 	/**
