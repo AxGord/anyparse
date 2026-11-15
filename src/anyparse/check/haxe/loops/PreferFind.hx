@@ -6,7 +6,9 @@ import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParenGuard;
@@ -164,12 +166,13 @@ final class PreferFind extends HaxeRule {
 			// The findings whose loop actually became an edit, and the ONLY ones the refusals below may
 			// name: a `byKey` miss got no edit for its own reason, and the `using` gate did not decide it.
 			final accepted: Array<Violation> = [];
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 			for (v in violations) {
 				final span: Null<Span> = v.span;
 				if (span == null) continue;
 				final cand: Null<FixCandidate> = byKey['${span.from}:${span.to}'];
 				if (cand == null) continue;
-				final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s, plugin);
+				final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, regions, s, plugin);
 				if (candEdits == null || CanonicalEdit.editsOverlapAny(candEdits, edits)) continue;
 				for (e in candEdits) edits.push(e);
 				accepted.push(v);
@@ -600,7 +603,7 @@ final class PreferFind extends HaxeRule {
 
 	/** The span edits rewriting `cand`'s loop to `xs.find(v -> cond)`, or null when a fix gate refuses it (then it stays a finding). */
 	private static function buildEdits(
-		cand: FixCandidate, source: String, s: Seams, plugin: GrammarPlugin
+		cand: FixCandidate, source: String, regions: () -> Array<LexRegion>, s: Seams, plugin: GrammarPlugin
 	): Null<Array<{ span: Span, text: String }>> {
 		if (!condIsPure(cand.cond, s)) return null;
 		final iterSpan: Null<Span> = cand.iterable.span;
@@ -632,7 +635,7 @@ final class PreferFind extends HaxeRule {
 		}
 		final ret: QueryNode = cand.sibling;
 		final retSpan: Null<Span> = ret.span;
-		if (retSpan == null || ret.children.length < 1 || droppedRegionHasComment(source, forSpan, iterSpan, condSpan, retSpan))
+		if (retSpan == null || ret.children.length < 1 || droppedRegionHasComment(source, regions, forSpan, iterSpan, condSpan, retSpan))
 			return null;
 		final fallback: QueryNode = ret.children[0];
 		final whole: Span = new Span(forSpan.from, retSpan.to);
@@ -720,9 +723,11 @@ final class PreferFind extends HaxeRule {
 	 * where it would be silently lost. The iterable and condition are re-spliced, so
 	 * their spans are excluded; refusing here keeps such a loop a report-only finding.
 	 */
-	private static function droppedRegionHasComment(source: String, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span): Bool {
+	private static function droppedRegionHasComment(
+		source: String, regions: () -> Array<LexRegion>, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span
+	): Bool {
 		return CheckScan.regionHoldsComment(source, forSpan, [iterSpan, condSpan])
-			|| CheckScan.hasCommentMarker(source, forSpan.to, retSpan.from);
+			|| LexicalRegions.commentIntersects(forSpan.to, retSpan.from, regions());
 	}
 
 }

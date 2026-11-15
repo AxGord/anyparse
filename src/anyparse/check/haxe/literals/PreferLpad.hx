@@ -5,7 +5,9 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
@@ -141,7 +143,7 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, s, violations) -> {
-			for (site in sitesOf(tree, s, entry.source)) violations.push({
+			for (site in sitesOf(tree, s, entry.source, ElementSpan.lazyRegions(entry.source, plugin))) violations.push({
 				file: entry.file,
 				span: site.span,
 				rule: RULE_ID,
@@ -171,7 +173,7 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 			// reason, and handing it the `using` gate's sentence would answer for a decision that gate
 			// never made.
 			final accepted: Array<Violation> = [];
-			for (site in sitesOf(tree, seams, source)) {
+			for (site in sitesOf(tree, seams, source, ElementSpan.lazyRegions(source, plugin))) {
 				final found: Null<Violation> = wanted['${site.span.from}:${site.span.to}'];
 				if (!site.proven || found == null) continue;
 				edits.push({ span: site.span, text: replacement(site.ladder) });
@@ -223,10 +225,10 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 	}
 
 	/** Every ladder in `tree`, each already carrying the range verdict of the scope it sits in. */
-	private static function sitesOf(tree: QueryNode, s: LpadSeams, source: String): Array<LpadSite> {
+	private static function sitesOf(tree: QueryNode, s: LpadSeams, source: String, regions: () -> Array<LexRegion>): Array<LpadSite> {
 		final out: Array<LpadSite> = [];
 		final env: Map<String, Int> = [];
-		collect(tree, env, s, source, out);
+		collect(tree, env, s, source, regions, out);
 		return out;
 	}
 
@@ -235,24 +237,26 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 	 * binds its name to the interval's exclusive upper bound, and a body that redeclares the name --
 	 * or an interval this check cannot read -- removes the binding instead of narrowing it.
 	 */
-	private static function collect(node: QueryNode, env: Map<String, Int>, s: LpadSeams, source: String, out: Array<LpadSite>): Void {
+	private static function collect(
+		node: QueryNode, env: Map<String, Int>, s: LpadSeams, source: String, regions: () -> Array<LexRegion>, out: Array<LpadSite>
+	): Void {
 		final binder: Null<String> = node.name;
 		if (node.kind == s.forKind && binder != null && LoopScan.hasForShape(node.children)) {
 			final iterable: QueryNode = LoopScan.forHead(node.children);
 			final body: QueryNode = LoopScan.forBody(node.children);
-			collect(iterable, env, s, source, out);
+			collect(iterable, env, s, source, regions, out);
 			final bound: Null<Int> = rangeBound(iterable, s, source);
 			final inner: Map<String, Int> = env.copy();
 			if (bound != null && !rebinds(body, binder, s))
 				inner[binder] = bound;
 			else
 				inner.remove(binder);
-			collect(body, inner, s, source, out);
+			collect(body, inner, s, source, regions, out);
 			return;
 		}
 		final ladder: Null<LpadLadder> = ladderOf(node, s, source);
 		final span: Null<Span> = node.span;
-		if (ladder != null && span != null && !CheckScan.hasCommentMarker(source, span.from, span.to)) {
+		if (ladder != null && span != null && !LexicalRegions.commentIntersects(span.from, span.to, regions())) {
 			// Re-bound out of the narrowed locals: a narrowing never reaches an anonymous-structure
 			// literal whose field type is non-nullable.
 			final at: Span = span;
@@ -261,7 +265,7 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 			out.push({ span: at, ladder: found, proven: limit != null && limit <= found.top });
 			return;
 		}
-		for (child in node.children) collect(child, env, s, source, out);
+		for (child in node.children) collect(child, env, s, source, regions, out);
 	}
 
 	/**

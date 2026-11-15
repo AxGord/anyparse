@@ -9,6 +9,8 @@ import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
 import anyparse.check.haxe.loops.MappedComprehension.Mapping;
 import anyparse.check.scan.RunScan;
 import anyparse.query.BinderScan;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
@@ -88,6 +90,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
 	): Array<FixEdit> {
 		final out: Array<FixEdit> = [];
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		var bind: Null<(QueryNode, Int) -> Null<String>> = null;
 		var nominal: Null<(QueryNode) -> Null<String>> = null;
 		var built: Bool = false;
@@ -105,7 +108,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 				final types: Null<(QueryNode) -> Null<String>> = nominal;
 				final type: Null<String> = types == null ? null : types(head.iterable);
 				final mapper: Null<String> = type != null && seams.arrayTypeNames.contains(type) && gapsHoldNoComment(head, at, source)
-					? boundMapper(head, bind, source, seams) ?? lambdaMapper(head, source, seams)
+					? boundMapper(head, bind, regions, seams) ?? lambdaMapper(head, source, seams)
 					: null;
 				if (mapper != null) {
 					out.push({ span: at, text: '${source.substring(head.iterableSpan.from, head.iterableSpan.to)}.map($mapper)' });
@@ -119,9 +122,12 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	}
 
 	/** The partial application the body is when it is one call taking the binder as one bare argument and `bind` is proven. */
-	private static function boundMapper(m: Mapping, bind: Null<(QueryNode, Int) -> Null<String>>, source: String, s: Seams): Null<String> {
+	private static function boundMapper(
+		m: Mapping, bind: Null<(QueryNode, Int) -> Null<String>>, regions: () -> Array<LexRegion>, s: Seams
+	): Null<String> {
 		final call: QueryNode = m.body;
-		if (bind == null || call.kind != s.callKind || CheckScan.hasCommentMarker(source, m.bodySpan.from, m.bodySpan.to)) return null;
+		if (bind == null || call.kind != s.callKind || LexicalRegions.commentIntersects(m.bodySpan.from, m.bodySpan.to, regions()))
+			return null;
 		var free: Int = -1;
 		for (i in 1...call.children.length) {
 			final arg: QueryNode = call.children[i];

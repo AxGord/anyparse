@@ -199,6 +199,15 @@ class PreferCompareFunctionCheckTest extends Test {
 		Assert.equals(1, violations(sorted('xs.sort((a:Item, b:Item) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0); // sorted')).length);
 	}
 
+	/** A `//` inside a string literal of an operand is no comment, so the chain is still reported. */
+	@:pin('control')
+	@:killer('M-SPAN-COMMENT-LITERAL-COUNTS')
+	public function testCommentMarkerInAnOperandStringIsReported(): Void {
+		Assert.equals(
+			1, violations(sorted('xs.sort((a:Item, b:Item) -> a.s + "//" < b.s + "//" ? -1 : a.s + "//" > b.s + "//" ? 1 : 0);')).length
+		);
+	}
+
 	public function testRegisteredDefaultOff(): Void {
 		Assert.notNull(Linter.byId('prefer-compare-function'));
 		Assert.isNull(Linter.byId('prefer-reflect-compare'));

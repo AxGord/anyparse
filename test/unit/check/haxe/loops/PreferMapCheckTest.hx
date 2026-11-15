@@ -189,6 +189,15 @@ class PreferMapCheckTest extends Test {
 		Assert.equals(wrap('final ys = xs.map(x -> g(/* keep */ k, x));'), fixed(wrap('final ys = [for (x in xs) g(/* keep */ k, x)];')));
 	}
 
+	/** A `//` inside a string literal of the body is no comment, so the bind spelling is still offered. */
+	@:pin('control')
+	@:killer('M-SPAN-COMMENT-LITERAL-COUNTS')
+	public function testCommentMarkerInStringKeepsTheBind(): Void {
+		final head: String =
+			'class C {\n\tfunction h(a: String, b: Int): Int {\n\t\treturn b;\n\t}\n\n\tfunction f(xs: Array<Int>): Void {\n\t\t';
+		Assert.equals('${head}final ys = xs.map(h.bind("//"));\n\t}\n}', fixed('${head}final ys = [for (x in xs) h("//", x)];\n\t}\n}'));
+	}
+
 	/** A comment outside the body goes with the rewrite's punctuation, so neither spelling is offered. */
 	@:pin('control')
 	@:killer('M-PM-GAP-COMMENT')

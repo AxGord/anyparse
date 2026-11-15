@@ -130,6 +130,14 @@ class PreferApiIdiomCheckTest extends Test {
 		Assert.equals(0, violationsOf(user('p.x = 1;\n\t\tp.y = 2; // two')).length);
 	}
 
+	/** A `//` inside a string literal on the window's last line is no comment, so neither rewrite refuses. */
+	@:pin('control')
+	@:killer('M-SPAN-COMMENT-LITERAL-COUNTS')
+	public function testACommentMarkerInAStringDoesNotRefuse(): Void {
+		Assert.equals('p.setTo(1, 2);', onlyEditText(user('p.x = 1;\n\t\tp.y = 2; trace("//");')));
+		Assert.equals('p.copyFrom(q);', onlyEditText(user('p.x = q.x;\n\t\tp.y = q.y; trace("//");')));
+	}
+
 	public function testACompoundWriteRefuses(): Void {
 		Assert.equals(0, violationsOf(user('p.x += 1;\n\t\tp.y = 2;')).length);
 	}

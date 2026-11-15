@@ -273,6 +273,13 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 		Assert.equals(0, violations(wrap('var b = !(!p /* why */ || q);')).length);
 	}
 
+	/** A `//` spelled inside a string literal is no comment, so the span still flips. */
+	@:pin('control')
+	@:killer('M-SPAN-COMMENT-LITERAL-COUNTS')
+	public function testCommentMarkerInStringStillFlips(): Void {
+		Assert.equals(wrap('var b = a != "//";'), applyFix(wrap('var b = !(a == "//");')));
+	}
+
 	public function testConditionalCompilationNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('var b = !(!p || #if js q #else r #end);')).length);
 	}

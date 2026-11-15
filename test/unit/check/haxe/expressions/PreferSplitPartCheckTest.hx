@@ -93,6 +93,13 @@ class PreferSplitPartCheckTest extends Test {
 		Assert.equals(0, violations(holder('var a = s.split(/* c */ ",")[0];')).length);
 	}
 
+	/** A `//` delimiter is a string literal, not a comment, so the cut is still rewritten. */
+	@:pin('control')
+	@:killer('M-SPAN-COMMENT-LITERAL-COUNTS')
+	public function testCommentMarkerDelimiterIsACut(): Void {
+		Assert.equals(importing(holder('var a = Text.allBefore(s, "//");')), fixed(holder('var a = s.split("//")[0];')));
+	}
+
 	/** A cut over a cut is rewritten one level at a time, the inner first. */
 	public function testNestedCutsRewriteOneLevelAtATime(): Void {
 		final src: String = holder('var a = s.split(",")[0].split(":")[0];');

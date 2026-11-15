@@ -159,6 +159,16 @@ class PreferLpadCheckTest extends Test {
 		);
 	}
 
+	/** A `//` inside the ladder's string segments is no comment, so the ladder is still rewritten. */
+	@:pin('control')
+	@:killer('M-SPAN-COMMENT-LITERAL-COUNTS')
+	public function testCommentMarkerInSegmentIsRewritten(): Void {
+		Assert.equals(
+			"using StringTools;\n\nclass C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push('//' + '$i'.lpad('0', 2));\n\t}\n}\n",
+			applyFix("class C {\n\tfunction f() {\n\t\tfor (i in 0...100) items.push(if (i < 10) '//0$i' else '//$i');\n\t}\n}")
+		);
+	}
+
 	/** A comment inside the ladder would be dropped by the splice, so the site is not claimed at all. */
 	public function testCommentInsideLadderRefused(): Void {
 		Assert.equals(

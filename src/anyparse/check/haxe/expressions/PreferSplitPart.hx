@@ -7,7 +7,9 @@ import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.scan.RunScan;
 import anyparse.grammar.json.JValue;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -97,7 +99,7 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final problems: Array<Violation> = [];
 		final found: Array<Violation> = RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, out) -> {
-			final cuts: Array<Cut> = candidates(tree, entry.source, seams);
+			final cuts: Array<Cut> = candidates(tree, entry.source, ElementSpan.lazyRegions(entry.source, plugin), seams);
 			if (cuts.length == 0) return;
 			final tools: Tools = toolsOf(entry.file, plugin, seams, index);
 			final path: Null<String> = tools.path;
@@ -148,7 +150,7 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		if (tools.problems.length > 0 || path == null) return [];
 		final wanted: Array<String> = sites.map(v -> spanKey(v.span));
 		final fixed: Array<Cut> = proved(
-			candidates(tree, source, seams), tree, file, source, seams, plugin, scope()
+			candidates(tree, source, ElementSpan.lazyRegions(source, plugin), seams), tree, file, source, seams, plugin, scope()
 		).filter(c -> wanted.contains(spanKey(c.span)));
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
 			file, source, tree, RunScan.typeInfoOf(plugin)?.importMap(source, file) ?? [], plugin, scope()
@@ -178,11 +180,11 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 	}
 
 	/** Every `s.split(d)[0]` and `s.split(d).pop()` of `tree` whose delimiter is a non-empty literal. */
-	private static function candidates(tree: QueryNode, source: String, s: Seams): Array<Cut> {
+	private static function candidates(tree: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Array<Cut> {
 		final out: Array<Cut> = [];
 		function walk(node: QueryNode): Void {
 			if (s.opaqueKinds.contains(node.kind)) return;
-			final cut: Null<Cut> = cutAt(node, source, s);
+			final cut: Null<Cut> = cutAt(node, source, regions, s);
 			if (cut != null) out.push(cut);
 			for (c in node.children) walk(c);
 		}
@@ -190,7 +192,7 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		return out;
 	}
 
-	private static function cutAt(node: QueryNode, source: String, s: Seams): Null<Cut> {
+	private static function cutAt(node: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Null<Cut> {
 		final span: Null<Span> = node.span;
 		final read: Null<SplitRead> = splitRead(node, source, s);
 		if (span == null || read == null) return null;
@@ -203,7 +205,8 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		final delimiterSpan: Null<Span> = delimiter.span;
 		if (operand == null || operandSpan == null || delimiterSpan == null) return null;
 		if (callee.kind != s.fieldAccessKind || callee.name != SPLIT || callee.children.length != 1) return null;
-		if (!fits(read.member, delimiter, delimiterSpan, source, s) || CheckScan.hasCommentMarker(source, span.from, span.to)) return null;
+		if (!fits(read.member, delimiter, delimiterSpan, source, s) || LexicalRegions.commentIntersects(span.from, span.to, regions()))
+			return null;
 		return {
 			span: span,
 			operand: operand,

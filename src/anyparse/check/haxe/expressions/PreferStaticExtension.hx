@@ -8,7 +8,9 @@ import anyparse.check.scan.RunScan;
 import anyparse.check.scan.SpanRender;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ModuleScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
@@ -246,6 +248,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 				// libraries and the std). Without this a std-typed receiver reads as unresolvable here,
 				// every finding degrades to report-only, and the autofix silently never fires.
 				final byKey: Map<String, Candidate> = [];
+				final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 				for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
 					byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;
 				final edits: Array<FixEdit> = [];
@@ -284,7 +287,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 							+ ' extension call would not resolve';
 						continue;
 					}
-					final pair: Null<Array<FixEdit>> = rewriteEdits(candidate, source);
+					final pair: Null<Array<FixEdit>> = rewriteEdits(candidate, regions());
 					if (pair == null) {
 						violation.declineReason = 'a comment sits inside the region the rewrite deletes, and dropping a comment silently is'
 							+ ' never acceptable';
@@ -395,7 +398,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	 * comment sits in either deleted region: dropping it silently is never acceptable, so the
 	 * site stays a report-only finding.
 	 */
-	public static function rewriteEdits(candidate: Candidate, source: String): Null<Array<FixEdit>> {
+	public static function rewriteEdits(candidate: Candidate, regions: Array<LexRegion>): Null<Array<FixEdit>> {
 		final recvSpan: Null<Span> = candidate.recv.span;
 		if (recvSpan == null) return null;
 		final callSpan: Span = candidate.callSpan;
@@ -404,7 +407,8 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		if (children.length > REST_INDEX && restSpan == null) return null;
 		final tailTo: Int = restSpan != null ? restSpan.from : callSpan.to;
 		final tailText: String = restSpan != null ? '.${candidate.method}(' : '.${candidate.method}()';
-		return CheckScan.hasCommentMarker(source, callSpan.from, recvSpan.from) || CheckScan.hasCommentMarker(source, recvSpan.to, tailTo)
+		return LexicalRegions.commentIntersects(callSpan.from, recvSpan.from, regions)
+			|| LexicalRegions.commentIntersects(recvSpan.to, tailTo, regions)
 			? null
 			: [
 				{ span: new Span(callSpan.from, recvSpan.from), text: '' },

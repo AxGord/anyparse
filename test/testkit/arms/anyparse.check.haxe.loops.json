@@ -95,7 +95,7 @@
 			"name": "M-PM-BIND-COMMENT",
 			"type": "anyparse.check.haxe.loops.PreferMap",
 			"method": "boundMapper",
-			"find": " || CheckScan.hasCommentMarker(source, m.bodySpan.from, m.bodySpan.to)",
+			"find": " || LexicalRegions.commentIntersects(m.bodySpan.from, m.bodySpan.to, regions())",
 			"replace": "",
 			"note": "the bind spelling drops a comment inside the body"
 		},
@@ -174,7 +174,7 @@
 			"name": "M-PSP-COMMENT",
 			"type": "anyparse.check.haxe.loops.PreferSinglePass",
 			"method": "gapsHoldNoComment",
-			"find": "!CheckScan.hasCommentMarker(source, p.bodySpan.to, q.bodySpan.from)",
+			"find": "!LexicalRegions.commentIntersects(p.bodySpan.to, q.bodySpan.from, regions)",
 			"replace": "true",
 			"note": "a comment between the two lambdas goes with the rewrite punctuation"
 		},

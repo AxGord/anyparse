@@ -6,7 +6,9 @@ import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.ThrowFreeScan;
+import anyparse.query.ElementSpan;
 import anyparse.query.InlineMethod;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -84,6 +86,7 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
 	): Array<Finding> {
 		final out: Array<Finding> = [];
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		var types: Null<(QueryNode) -> Null<String>> = null;
 		var purity: Null<PurityCtx> = null;
 		var built: Bool = false;
@@ -100,7 +103,7 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 				final resolve: Null<(QueryNode) -> Null<String>> = types;
 				final type: Null<String> = resolve == null ? null : resolve(arrayBase(head.receiver, seams));
 				if (type != null && seams.arrayTypeNames.contains(type)) {
-					final text: Null<String> = merged(head, source, seams, purity);
+					final text: Null<String> = merged(head, source, regions, seams, purity);
 					out.push({ span: head.span, message: message(head.pairing), text: text });
 					if (text != null) return;
 				}
@@ -164,11 +167,13 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 	}
 
 	/** The one-pass spelling of `c`, or null where the merge is not proven safe or has no one-call spelling. */
-	private static function merged(c: Chain, source: String, s: Seams, purity: Null<PurityCtx>): Null<String> {
+	private static function merged(
+		c: Chain, source: String, regions: () -> Array<LexRegion>, s: Seams, purity: Null<PurityCtx>
+	): Null<String> {
 		final p: Null<Arrow> = lambdaOf(c.first, source, s);
 		final q: Null<Arrow> = lambdaOf(c.second, source, s);
 		if (purity == null || p == null || q == null || c.pairing == MapFilter) return null;
-		if (!gapsHoldNoComment(c, p, q, source) || !interleavesSafely(c.pairing, p, q, purity, s)) return null;
+		if (!gapsHoldNoComment(c, p, q, regions()) || !interleavesSafely(c.pairing, p, q, purity, s)) return null;
 		final shape: RefShape = s.shape;
 		final receiver: String = source.substring(c.receiverSpan.from, c.receiverSpan.to);
 		final firstText: String = source.substring(p.bodySpan.from, p.bodySpan.to);
@@ -223,11 +228,11 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 	}
 
 	/** Whether the text the rewrite drops around the receiver and the two bodies holds no comment. */
-	private static function gapsHoldNoComment(c: Chain, p: Arrow, q: Arrow, source: String): Bool {
-		return !CheckScan.hasCommentMarker(source, c.span.from, c.receiverSpan.from)
-			&& !CheckScan.hasCommentMarker(source, c.receiverSpan.to, p.bodySpan.from)
-			&& !CheckScan.hasCommentMarker(source, p.bodySpan.to, q.bodySpan.from)
-			&& !CheckScan.hasCommentMarker(source, q.bodySpan.to, c.span.to);
+	private static function gapsHoldNoComment(c: Chain, p: Arrow, q: Arrow, regions: Array<LexRegion>): Bool {
+		return !LexicalRegions.commentIntersects(c.span.from, c.receiverSpan.from, regions)
+			&& !LexicalRegions.commentIntersects(c.receiverSpan.to, p.bodySpan.from, regions)
+			&& !LexicalRegions.commentIntersects(p.bodySpan.to, q.bodySpan.from, regions)
+			&& !LexicalRegions.commentIntersects(q.bodySpan.to, c.span.to, regions);
 	}
 
 	/** The seams the rule reads, or null when one it cannot do without is unset. */

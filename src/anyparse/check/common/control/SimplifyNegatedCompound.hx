@@ -4,6 +4,8 @@ import anyparse.check.scan.NegationScan;
 import anyparse.check.scan.OperatorSelection;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondRegionScan;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 
@@ -106,7 +108,8 @@ final class SimplifyNegatedCompound extends RuleBase {
 			if (tree == null || !hasShape(tree, seams)) continue;
 			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file);
 			final written: Null<OperandTyping> = seams.selection?.typingFor(entry.file, entry.source, tree);
-			for (c in candidates(tree, null, entry.source, seams, types, written, [])) violations.push({
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(entry.source, plugin);
+			for (c in candidates(tree, null, entry.source, regions, seams, types, written, [])) violations.push({
 				file: entry.file,
 				span: c.span,
 				rule: 'simplify-negated-compound',
@@ -135,7 +138,8 @@ final class SimplifyNegatedCompound extends RuleBase {
 				);
 				final bySpan: Map<String, Candidate> = [];
 				final written: Null<OperandTyping> = s.selection?.typingFor(violations[0].file, source, tree);
-				for (c in candidates(tree, null, source, s, types, written, [])) bySpan['${c.span.from}:${c.span.to}'] = c;
+				final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+				for (c in candidates(tree, null, source, regions, s, types, written, [])) bySpan['${c.span.from}:${c.span.to}'] = c;
 				return CheckScan.collectSpanEdits(violations, bySpan, (c, _) -> ({ span: c.span, text: c.text }));
 			});
 	}
@@ -158,23 +162,23 @@ final class SimplifyNegatedCompound extends RuleBase {
 	 * can overlap; a REJECTED node is descended into normally, since nothing will consume it.
 	 */
 	private static function candidates(
-		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>,
-		written: Null<OperandTyping>, out: Array<Candidate>
+		node: QueryNode, parent: Null<QueryNode>, source: String, regions: () -> Array<LexRegion>, s: Seams,
+		types: Null<(QueryNode) -> Null<String>>, written: Null<OperandTyping>, out: Array<Candidate>
 	): Array<Candidate> {
 		if (s.opaqueKinds.contains(node.kind)) return out;
-		final accepted: Null<Candidate> = candidateAt(node, parent, source, s, types, written);
+		final accepted: Null<Candidate> = candidateAt(node, parent, source, regions, s, types, written);
 		if (accepted != null) {
 			out.push(accepted);
 			return out;
 		}
-		for (c in node.children) candidates(c, node, source, s, types, written, out);
+		for (c in node.children) candidates(c, node, source, regions, s, types, written, out);
 		return out;
 	}
 
 	/** The accepted rewrite AT `node`, or null when it is not the shape or any gate refuses it. */
 	private static function candidateAt(
-		node: QueryNode, parent: Null<QueryNode>, source: String, s: Seams, types: Null<(QueryNode) -> Null<String>>,
-		written: Null<OperandTyping>
+		node: QueryNode, parent: Null<QueryNode>, source: String, regions: () -> Array<LexRegion>, s: Seams,
+		types: Null<(QueryNode) -> Null<String>>, written: Null<OperandTyping>
 	): Null<Candidate> {
 		final operand: Null<QueryNode> = s.support.negatedOperandOf(node);
 		final span: Null<Span> = node.span;
@@ -187,7 +191,7 @@ final class SimplifyNegatedCompound extends RuleBase {
 		// The engine rebuilds the operator glue between operands, so a comment inside the span
 		// would be dropped; a `#if` region projects as flat siblings, so a rebuilt chain would
 		// splice both arms together. Both refuse rather than emit a lossy rewrite.
-		if (CheckScan.hasCommentMarker(source, span.from, span.to) || hasConditionalRegion(node, s.shape)) return null;
+		if (LexicalRegions.commentIntersects(span.from, span.to, regions()) || hasConditionalRegion(node, s.shape)) return null;
 		final text: Null<String> = s.support.simplifyNegatedCompound(node, parent, source, types);
 		return text == null ? null : { span: span, text: text, message: messageFor(operand, s) };
 	}

@@ -2,7 +2,9 @@ package anyparse.check.common.unused;
 
 import anyparse.check.scan.CasePatternScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;
 
@@ -161,8 +163,9 @@ final class UnusedCaseBinder extends RuleBase {
 	): Array<Candidate> {
 		final out: Array<Candidate> = [];
 		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, index);
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		CasePatternScan.eachCaseArm(
-			seams, tree, (switchNode, at) -> armCandidates(seams, tree, switchNode, at, source, constants, index, scope, out)
+			seams, tree, (switchNode, at) -> armCandidates(seams, tree, switchNode, at, regions, constants, index, scope, out)
 		);
 		return out;
 	}
@@ -170,8 +173,8 @@ final class UnusedCaseBinder extends RuleBase {
 
 	/** Every unread binder of `switchNode`'s arm at `at`, grouped by name so an or-pattern is replaced as one. */
 	private static function armCandidates(
-		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, at: Int, source: String, constants: Array<String>, index: SymbolIndex,
-		scope: Null<PatternNameScope>, out: Array<Candidate>
+		seams: CaseSeams, root: QueryNode, switchNode: QueryNode, at: Int, regions: () -> Array<LexRegion>, constants: Array<String>,
+		index: SymbolIndex, scope: Null<PatternNameScope>, out: Array<Candidate>
 	): Void {
 		final arm: QueryNode = switchNode.children[at];
 		final groups: Null<Array<Array<PatternBinder>>> = CasePatternScan.binderGroups(seams, arm);
@@ -193,7 +196,7 @@ final class UnusedCaseBinder extends RuleBase {
 			final name: String = group[0].name;
 			if (CasePatternScan.mentionCount(seams, arm, name) != group.length) continue;
 			if (!CasePatternScan.provesCapture(seams, root, switchNode, arm, group[0], scope)) continue;
-			if (!admissible(group, constants, last, single, constantLanguage) || !commentFree(group, source)) continue;
+			if (!admissible(group, constants, last, single, constantLanguage) || !commentFree(group, regions)) continue;
 			// A WHOLE-pattern binder naming something already in scope, read nowhere — almost always an
 			// intended comparison Haxe silently turned into a catch-all. Spelling it `_` preserves
 			// behaviour and deletes the only evidence, so it stays for `shadowing-case-binder` to report
@@ -246,9 +249,9 @@ final class UnusedCaseBinder extends RuleBase {
 	 * NAME GROUP, never one occurrence: an or-pattern must lose its binding in every
 	 * alternative or in none.
 	 */
-	private static function commentFree(group: Array<PatternBinder>, source: String): Bool {
+	private static function commentFree(group: Array<PatternBinder>, regions: () -> Array<LexRegion>): Bool {
 		return group.foreach(
-			binder -> !(binder.editText == '' && CheckScan.hasCommentMarker(source, binder.editSpan.from, binder.editSpan.to))
+			binder -> !(binder.editText == '' && LexicalRegions.commentIntersects(binder.editSpan.from, binder.editSpan.to, regions()))
 		);
 	}
 

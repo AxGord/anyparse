@@ -13,6 +13,7 @@ import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.RunScan;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -198,7 +199,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		named: CompareFunctions
 	): Array<Match> {
 		final out: Array<Match> = [];
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(regions);
 		var typed: Null<Typed> = null;
 		var built: Bool = false;
 		function typing(): Null<Typed> {
@@ -228,7 +230,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 				node.kind == seams.callKind && callee != null && callee.kind == seams.fieldAccessKind && callee.name == SORT
 			) for (arg in node.children) {
 				if (isComparator(arg, seams))
-					fromCallback(arg, source, seams, typing, comments, named, out);
+					fromCallback(arg, source, regions, seams, typing, comments, named, out);
 				else if (!named.isEmpty() && isReflectCompare(arg, seams))
 					fromBareReference(callee, arg, typing, named, out);
 			}
@@ -244,8 +246,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 
 	/** The comparisons a callback's body holds: its value, a returned value, or the statements closing it. */
 	private static function fromCallback(
-		fn: QueryNode, source: String, s: Seams, typing: () -> Null<Typed>, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		named: CompareFunctions, out: Array<Match>
+		fn: QueryNode, source: String, regions: Array<LexRegion>, s: Seams, typing: () -> Null<Typed>,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, named: CompareFunctions, out: Array<Match>
 	): Void {
 		final body: Null<QueryNode> = fn.children[fn.children.length - 1];
 		if (body == null) return;
@@ -278,11 +280,13 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			final extent: Span = IfExpressionChain.tokenSpan(chain.extent, source, comments);
 			if (called == null) continue;
 			final found: Match = matched(fn, chain, extent, called, named.of(called.type), source, s);
-			if (!CheckScan.hasCommentMarker(source, found.replaced.from, found.replaced.to)) out.push(found);
+			if (!LexicalRegions.commentIntersects(found.replaced.from, found.replaced.to, regions)) out.push(found);
 		}
 		final t: Null<Typed> = named.isEmpty() ? null : typing();
 		if (t != null)
-			movedCalls(body, fn, sole == null ? null : peeled(sole, s), returnedValues(fn, body, sole, s), source, s, t, named, out);
+			movedCalls(
+				body, fn, sole == null ? null : peeled(sole, s), returnedValues(fn, body, sole, s), source, regions, s, t, named, out
+			);
 	}
 
 	/** The finding of a hand-written chain: the whole function when it is nothing but the comparison of its parameters in order. */
@@ -529,13 +533,13 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	 * a call in `results`: anywhere else its value may be read for more than a sign, which the named function need not match.
 	 */
 	private static function movedCalls(
-		node: QueryNode, fn: QueryNode, sole: Null<QueryNode>, results: Array<QueryNode>, source: String, s: Seams, t: Typed,
-		named: CompareFunctions, out: Array<Match>
+		node: QueryNode, fn: QueryNode, sole: Null<QueryNode>, results: Array<QueryNode>, source: String, regions: Array<LexRegion>,
+		s: Seams, t: Typed, named: CompareFunctions, out: Array<Match>
 	): Void {
 		if (s.nestedFunctionKinds.contains(node.kind)) return;
 		final call: QueryNode = peeled(node, s);
 		if (!isReflectCompareCall(call, s) || !t.isStdReflect(call.children[0].children[0])) {
-			for (c in node.children) movedCalls(c, fn, sole, results, source, s, t, named, out);
+			for (c in node.children) movedCalls(c, fn, sole, results, source, regions, s, t, named, out);
 			return;
 		}
 		final left: QueryNode = call.children[1];
@@ -545,7 +549,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final whole: Null<Span> = call == sole && comparesParameters(fn, left, right, s) ? fn.span : null;
 		final span: Null<Span> = whole ?? node.span;
 		if (compare == null || span == null) return;
-		if (CheckScan.hasCommentMarker(source, span.from, span.to)) return;
+		if (LexicalRegions.commentIntersects(span.from, span.to, regions)) return;
 		final operands: Null<Operands> = whole == null ? { left: textOf(left, source), right: textOf(right, source) } : null;
 		final noFix: Null<String> = if (!results.contains(call))
 			NOT_RETURNED

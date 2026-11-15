@@ -8,7 +8,9 @@ import anyparse.check.scan.UsingScan;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberLookup;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -161,11 +163,12 @@ final class PreferUsingOverStaticImport extends HaxeRule implements RiskyFix {
 		}
 		final candidates: Array<Null<Candidate>> = PreferStaticExtension.judgeSites(sites, tree, source, info.file, seams, plugin, symbols);
 		final edits: Array<FixEdit> = [{ span: target.span, text: '' }];
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		for (candidate in candidates) {
 			if (candidate == null) return declined(base, 'the extension form of a call could bind another function than `${target.path}`');
 			if (candidate.verdict != Verdict.Fixable)
 				return declined(base, PreferStaticExtension.declineReasonFor(candidate.verdict) ?? 'a call is not provably rewritable');
-			final pair: Null<Array<FixEdit>> = PreferStaticExtension.rewriteEdits(candidate, source);
+			final pair: Null<Array<FixEdit>> = PreferStaticExtension.rewriteEdits(candidate, regions());
 			if (pair == null) return declined(base, 'a comment sits inside the region the rewrite of a call deletes');
 			if (CanonicalEdit.editsOverlapAny(pair, edits)) return declined(base, 'two calls overlap, so they converge on a later pass');
 			for (edit in pair) edits.push(edit);

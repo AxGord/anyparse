@@ -5,17 +5,18 @@ import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.common.design.ConfiguredTypes.OwnedMember;
 import anyparse.check.common.design.RuleDeclaration.IdiomSpec;
+import anyparse.check.scan.PurityScan;
 import anyparse.query.BinderScan;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
+import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.check.scan.CheckScan;
-import anyparse.check.scan.PurityScan;
-import anyparse.query.NodeShape;
 
 using anyparse.util.Strings;
 
@@ -313,6 +314,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		final readPurity: PurityCtx = purity;
 		final ctx: Ctx = {
 			source: source,
+			regions: ElementSpan.lazyRegions(source, plugin),
 			file: file,
 			info: fileInfo,
 			root: root,
@@ -424,13 +426,13 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		if (recvSpan == null) return null;
 		final recvText: String = ctx.source.substring(recvSpan.from, recvSpan.to);
 		final text: String = if (copy != null) {
-			if (CheckScan.hasCommentMarker(ctx.source, from, lineEnd)) return null;
+			if (LexicalRegions.commentIntersects(from, lineEnd, ctx.regions())) return null;
 			final value: Null<QueryNode> = copySource(window, idiom, ctx);
 			final valueSpan: Null<Span> = value?.span;
 			if (valueSpan == null) return null;
 			'$recvText.$copy(${ctx.source.substring(valueSpan.from, valueSpan.to)});';
 		} else {
-			if (!carriedOnly(window, ctx.source, lineEnd)) return null;
+			if (!carriedOnly(window, ctx.regions(), lineEnd)) return null;
 			for (k in 0...window.length) {
 				final earlier: Array<String> = window.slice(0, k).map(w -> w.field);
 				if (!PurityScan.isPure(window[k].rhs, ctx.purity) || mentionsAny(window[k].rhs, earlier, ctx.seams)) return null;
@@ -481,14 +483,14 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 	 * Whether every byte the method rewrite DELETES is free of a comment: the window from its first statement to the end
 	 * of its last line, minus the right-hand sides it carries verbatim.
 	 */
-	private static function carriedOnly(window: Array<Write>, source: String, lineEnd: Int): Bool {
+	private static function carriedOnly(window: Array<Write>, regions: Array<LexRegion>, lineEnd: Int): Bool {
 		var cursor: Int = window[0].span.from;
 		for (w in window) {
 			final rhsSpan: Null<Span> = w.rhs.span;
-			if (rhsSpan == null || CheckScan.hasCommentMarker(source, cursor, rhsSpan.from)) return false;
+			if (rhsSpan == null || LexicalRegions.commentIntersects(cursor, rhsSpan.from, regions)) return false;
 			cursor = rhsSpan.to;
 		}
-		return !CheckScan.hasCommentMarker(source, cursor, lineEnd);
+		return !LexicalRegions.commentIntersects(cursor, lineEnd, regions);
 	}
 
 	/** The verbatim text of the right-hand side of `w`. */
@@ -602,6 +604,7 @@ private typedef Seams = {
 /** Per-file state of one scan. */
 private typedef Ctx = {
 	final source: String;
+	final regions: () -> Array<LexRegion>;
 	final file: String;
 	final info: FileInfo;
 	final root: QueryNode;
