@@ -40,16 +40,14 @@ import anyparse.query.SymbolIndex;
  * rewrites it into. A terminal ternary spine counts its own leaves, so
  * `if (c) return a; return p ? q : r;` is three.
  *
- * The REWRITE is narrower than the ownership. A value chain of three or more branches reads worse
- * than the statements it replaces (the formatter keeps such a chain exploded,
- * `expressionIfFitMaxBranches: 2`), so one is written only where the author already WROTE at least
- * two conditions as an else-linked chain; the conditions a folded ternary contributes do not count,
- * and a cascade - guard returns plus a final return - is never turned into one. Either spelling is
- * rewritten when its three values MERGE into two (`mergeShape`): `if (m == null) return null;
+ * Either spelling is REWRITTEN into one `return if … else if … else …;` by default. A run whose
+ * three values MERGE into two (`mergeShape`) becomes a ternary instead: `if (m == null) return null;
  * return x ? p : null;` becomes `return m != null && x ? p : null;`, and a longer fall-through run
- * merges its LAST three (`mergeOf`). An owned run that is not rewritten is not reported: its
- * statements are the canon, and owning it is what keeps the pairwise march from building the same
- * chain the long way.
+ * merges its LAST three (`mergeOf`). `plainRun` names the runs left as statements: a value spanning
+ * several lines, and a GUARD - a constant early exit before a returned computation. A chain whose
+ * author wrote two else-linked conditions is rewritten past those two refusals. An owned run that is
+ * not rewritten is not reported: its statements are the canon, and owning it is what keeps the
+ * pairwise march from building the same chain the long way.
  *
  * The other two rules defer by ASKING this one (`claimsChain` / `claimsCascade`), gates and all,
  * rather than mirroring the shape: a shape-only deferral silences them wherever this rule refuses
@@ -234,8 +232,8 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 	 * TAIL of an owned cascade is one rung of a run this rule decides whole, and collapsing it alone
 	 * starts the march into the ternary chain that has to be unrolled again afterwards.
 	 *
-	 * Owned is not rewritten: the answer is true for a run whose values do not merge, which this rule
-	 * leaves as its statements (see the type doc), so the deferral is what keeps those statements.
+	 * Owned is not rewritten: the answer is true for a run `plainRun` refuses, which this rule leaves as
+	 * its statements (see the type doc), so the deferral is what keeps those statements.
 	 */
 	public static function claimsCascade(
 		kids: Array<QueryNode>, at: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, shape: RefShape
@@ -268,17 +266,46 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 	}
 
 	/**
-	 * Whether a matched chain is REWRITTEN rather than only owned: its values merge into two, or the
-	 * author WROTE at least two conditions as an else-linked chain. Branches the fold of a terminal
-	 * ternary contributes are not written ones, so they never make a chain on their own.
+	 * Whether a matched else-linked chain is REWRITTEN rather than only owned: it is a rewritten run
+	 * (`rewritesRun`), or the author WROTE at least two conditions as an else-linked chain, which is
+	 * rewritten whatever its values look like.
 	 */
 	private static inline function rewritesChain(m: Match): Bool {
-		return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;
+		return rewritesRun(m) || m.writtenRungs >= MIN_CHAIN_RUNGS;
+	}
+
+	/** Whether a matched run of either spelling is rewritten: its values merge into two, or no refusal of `plainRun` applies. */
+	private static inline function rewritesRun(m: Match): Bool {
+		return m.merge != null || m.plain;
 	}
 
 	/** The returned expression of `stmt` when it is a valued `return`; null for a bare `return;` or any other statement. */
 	private static inline function returnValue(stmt: QueryNode, s: Seams): Null<QueryNode> {
 		return NodeShape.returnValueOf(stmt, s.returnKind);
+	}
+
+	/**
+	 * Whether a run of `values` (the terminal last) is rewritten into one if-expression, refusing two
+	 * shapes whose statements read better: a value spanning several lines (`valueSpans`, token-trimmed),
+	 * which the expression nests one level deeper, and a GUARD - a constant early exit (`null`, a
+	 * literal, a bare name) before a returned COMPUTATION, the terminal being a folded ternary
+	 * (`foldedTernary`) or any non-constant, non-name expression.
+	 */
+	private static function plainRun(
+		values: Array<QueryNode>, foldedTernary: Bool, valueSpans: Array<Span>, source: String, s: Seams
+	): Bool {
+		for (v in valueSpans) if (text(source, v).indexOf('\n') >= 0) return false;
+		final terminal: QueryNode = values[values.length - 1];
+		if (!foldedTernary && (isConstant(terminal, s) || terminal.kind == s.shape.identKind)) return true;
+		for (i in 0...values.length - 1) if (isConstant(values[i], s) || values[i].kind == s.shape.identKind) return false;
+		return true;
+	}
+
+	/** Whether `value` is a literal constant: `null`, a string, or a literal kind the grammar names. */
+	private static function isConstant(value: QueryNode, s: Seams): Bool {
+		return value.kind == s.shape.nullLiteralKind
+			|| (s.shape.caseLiteralKinds ?? []).contains(value.kind)
+			|| (s.shape.stringLiteralKinds ?? []).contains(value.kind);
 	}
 
 	/**
@@ -301,16 +328,18 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 		node: QueryNode, out: Array<Violation>, file: String, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
 		s: Seams, blockKinds: Array<String>
 	): Void {
-		if (blockKinds.contains(node.kind)) eachMergedRun(
+		if (blockKinds.contains(node.kind)) eachRewrittenRun(
 			node.children, source, comments, s,
-			(_, merge, span) -> out.push({
+			(_, merge, span, _) -> out.push({
 				file: file,
 				span: span,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: merge.from == 0
-					? 'this if/return cascade repeats a value and can be a single ternary return'
-					: 'the last three values of this if/return cascade repeat one and can be a single ternary return'
+				message: merge == null
+					? 'this if/return cascade can be a single if-expression return'
+					: merge.from == 0
+						? 'this if/return cascade repeats a value and can be a single ternary return'
+						: 'the last three values of this if/return cascade repeat one and can be a single ternary return'
 			})
 		);
 		for (c in node.children) walkCascades(c, out, file, source, comments, s, blockKinds);
@@ -326,29 +355,31 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, blockKinds: Array<String>,
 		flagged: Array<String>, edits: Array<{ span: Span, text: String }>, emit: Emit
 	): Void {
-		if (blockKinds.contains(node.kind)) eachMergedRun(node.children, source, comments, s, (m, merge, reported) -> {
-			if (flagged.contains(IfExpressionChain.spanKey(reported))) edits.push(mergedEdit(m, merge, source, s, emit));
+		if (blockKinds.contains(node.kind)) eachRewrittenRun(node.children, source, comments, s, (m, _, reported, run) -> {
+			if (flagged.contains(IfExpressionChain.spanKey(reported))) edits.push(buildEdit(m, source, run, s, emit));
 		});
 		for (c in node.children) collectCascadeFixes(c, source, comments, s, blockKinds, flagged, edits, emit);
 	}
 
 	/**
-	 * Call `found` for every fall-through run of `kids` whose values merge, with its match, the merge and
-	 * the statement the finding names - the one the merged edit starts at. Only a run HEAD is asked, the
-	 * index whose predecessor is not itself a rung: the collector is greedy, so every later index of one
-	 * run would collect a shorter cascade of the same code. A run that is owned but does not merge is
-	 * not passed on: its statements are the canon.
+	 * Call `found` for every fall-through run of `kids` this rule rewrites (`rewritesRun`), with its
+	 * match, the merge or null, the statement the finding names - the one the edit starts at - and the
+	 * whole run's span. Only a run HEAD is asked, the index whose predecessor is not itself a rung: the
+	 * collector is greedy, so every later index of one run would collect a shorter cascade of the same
+	 * code. A run that is owned but refused is not passed on: its statements are the canon.
 	 */
-	private static function eachMergedRun(
+	private static function eachRewrittenRun(
 		kids: Array<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams,
-		found: (Match, Merge, Span) -> Void
+		found: (Match, Null<Merge>, Span, Span) -> Void
 	): Void {
 		for (i in 0...kids.length) if (i <= 0 || !isReturnRung(kids[i - 1], s)) { // a run HEAD: the previous kid is no return rung
 			final m: Null<Match> = cascadeMatch(kids, i, source, comments, s);
-			final merge: Null<Merge> = m?.merge;
-			if (m == null || merge == null) continue;
-			final reported: Null<Span> = kids[i + merge.from].span;
-			if (reported != null) found(m, merge, reported);
+			if (m == null || !rewritesRun(m)) continue;
+			final merge: Null<Merge> = m.merge;
+			final reported: Null<Span> = kids[i + (merge == null ? 0 : merge.from)].span;
+			final from: Null<Span> = kids[i].span;
+			final to: Null<Span> = kids[i + m.writtenRungs].span;
+			if (reported != null && from != null && to != null) found(m, merge, reported, new Span(from.from, to.to));
 		}
 	}
 
@@ -517,7 +548,8 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 			carried: slots,
 			conds: conds,
 			writtenRungs: chain.branches.length,
-			merge: mergeOf(values, chain, rungs, pairs, region, source, comments, s)
+			merge: mergeOf(values, chain, rungs, pairs, region, source, comments, s),
+			plain: plainRun(values, tail.pairs.length > 0, pairs.map(p -> p.value).concat([terminalValue]), source, s)
 		};
 	}
 
@@ -804,6 +836,9 @@ private typedef Match = {
 
 	/** Which three values merge into two and how, or null when none do. */
 	var merge: Null<Merge>;
+
+	/** Whether the run is rewritten without a merge: no refusal of `plainRun` applies. */
+	var plain: Bool;
 
 }
 

@@ -322,8 +322,12 @@ final class HaxeFormatValues {
 	 * misspelling `"space"` is unreadable there too.
 	 */
 	private static function indentCharFromString(s: String): Null<IndentChar> {
-		if (s == 'tab') return IndentChar.Tab;
-		return s.length > 0 && isAllSpaces(s) ? IndentChar.Space : null;
+		return if (s == 'tab')
+			IndentChar.Tab
+		else if (s.length > 0 && isAllSpaces(s))
+			IndentChar.Space
+		else
+			null;
 	}
 
 	private static function isAllSpaces(s: String): Bool {

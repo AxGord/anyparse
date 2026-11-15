@@ -749,9 +749,12 @@ final class Battery {
 	/** The line that opens a run: the snapshot it compares against, or why it compares nothing. */
 	public static function startLine(repo: String, head: String, base: Null<String>, cache: String): String {
 		final opening: String = 'battery: repo $repo at $head, ';
-		if (base == null) return '${opening}no cached baseline (first run — use --snapshot)';
-		if (!FileSystem.exists(Path.join([cache, '$base-suite.txt']))) return '${opening}base $base has no snapshot — nothing compared';
-		return '${opening}comparing against $base';
+		return if (base == null)
+			'${opening}no cached baseline (first run — use --snapshot)'
+		else if (FileSystem.exists(Path.join([cache, '$base-suite.txt'])))
+			'${opening}comparing against $base'
+		else
+			'${opening}base $base has no snapshot — nothing compared';
 	}
 
 	/**

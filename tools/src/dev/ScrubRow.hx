@@ -15,10 +15,12 @@ final class ScrubRow {
 
 	/** The verdict of the row from the tree scan `tree` and the range scan `range`. */
 	public static function verdict(tree: Result, range: Result): Outcome {
-		if (!tree.ok || !range.ok) return Failed(GateTree.quote(tree.ok ? range : tree));
-		return tree.err.indexOf(UNCONFIGURED) >= 0
-			? NotRun('no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS)')
-			: Passed;
+		return if (!tree.ok || !range.ok)
+			Failed(GateTree.quote(tree.ok ? range : tree))
+		else if (tree.err.indexOf(UNCONFIGURED) >= 0)
+			NotRun('no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS)')
+		else
+			Passed;
 	}
 
 }

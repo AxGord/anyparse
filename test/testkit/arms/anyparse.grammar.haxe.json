@@ -89,7 +89,7 @@
 			"name": "M-MEMBER-GAP-ENUM-ABSTRACT-UNREAD",
 			"type": "anyparse.grammar.haxe.HaxeMemberGap",
 			"method": "policy",
-			"find": "if (kind == 'EnumAbstractDecl' && !opt.enumAbstractRulesUnlessValueList) return enumAbstractBody;",
+			"find": "else if (kind == 'EnumAbstractDecl' && !opt.enumAbstractRulesUnlessValueList)\n\t\t\t\tenumAbstractBody",
 			"replace": "",
 			"note": "an enum-abstract body gets no writer policy again, so member-order reports the blank fmt writes under the enumAbstract knobs"
 		}

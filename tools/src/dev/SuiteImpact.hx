@@ -553,8 +553,12 @@ final class SuiteImpact {
 			if (module != null) classes.push(module.qualified);
 		}
 		classes.sort(Compare.compareString);
-		if (generated == null) return Selected(classes);
-		return tooling ? WholeSuite(generated) : trimmed(sources, sinked ?? sinkedGraph(sources, entries, types), generated, touched);
+		return if (generated == null)
+			Selected(classes)
+		else if (tooling)
+			WholeSuite(generated)
+		else
+			trimmed(sources, sinked ?? sinkedGraph(sources, entries, types), generated, touched);
 	}
 
 	private static function isNameCode(code: Null<Int>): Bool {

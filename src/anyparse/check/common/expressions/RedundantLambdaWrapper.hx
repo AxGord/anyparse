@@ -356,8 +356,12 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		final signature: Null<Signature> = callee.kind == ctx.seams.identKind
 			? bareSignature(name, enclosing, ctx)
 			: staticSignature(callee, name, ctx) ?? receiverSignature(callee, name, enclosing, ctx);
-		if (signature != null) return signature.safe && signature.arity == forward.arity ? Reduction.Plain : Reduction.None;
-		return stdStatic(callee, name, forward.arity, ctx) ? Reduction.Std : Reduction.None;
+		return if (signature != null)
+			signature.safe && signature.arity == forward.arity ? Reduction.Plain : Reduction.None
+		else if (stdStatic(callee, name, forward.arity, ctx))
+			Reduction.Std
+		else
+			Reduction.None;
 	}
 
 	/**

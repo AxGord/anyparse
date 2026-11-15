@@ -122,12 +122,18 @@ final class GateReuse {
 	/** Why no row of `record` stands for a battery of `facts`, or null when its rows may. */
 	public static function refusal(record: GateRecord, facts: GateFacts): Null<String> {
 		final judged: String = GateTree.short(record.tree);
-		if (!record.passed) return 'the gate of $judged failed';
-		if (record.tree != facts.tree) return 'the gate judged $judged, the land verifies ${GateTree.short(facts.tree)}';
-		if (record.toolchain != facts.toolchain) return 'the gate of $judged built with another compiler';
-		if (record.node != facts.node) return 'the gate of $judged ran under another node, or recorded none';
-		if (record.fork != facts.fork) return 'the corpus fork moved since the gate of $judged';
-		return null;
+		return if (!record.passed)
+			'the gate of $judged failed'
+		else if (record.tree != facts.tree)
+			'the gate judged $judged, the land verifies ${GateTree.short(facts.tree)}'
+		else if (record.toolchain != facts.toolchain)
+			'the gate of $judged built with another compiler'
+		else if (record.node != facts.node)
+			'the gate of $judged ran under another node, or recorded none'
+		else if (record.fork != facts.fork)
+			'the corpus fork moved since the gate of $judged'
+		else
+			null;
 	}
 
 	/**
@@ -156,9 +162,12 @@ final class GateReuse {
 	public static function report(record: Null<GateRecord>, facts: GateFacts, taken: Array<String>): String {
 		if (record == null) return 'battery: the gate record could not be read — every row runs';
 		final refused: Null<String> = refusal(record, facts);
-		if (refused != null) return 'battery: gate record not reused — $refused';
-		if (taken.length == 0) return 'battery: the gate record covers no row this battery runs';
-		return 'battery: reused gate ${GateTree.short(record.tree)} for ${taken.join(', ')}';
+		return if (refused != null)
+			'battery: gate record not reused — $refused'
+		else if (taken.length == 0)
+			'battery: the gate record covers no row this battery runs'
+		else
+			'battery: reused gate ${GateTree.short(record.tree)} for ${taken.join(', ')}';
 	}
 
 	/** Drops the record and the snapshot an earlier check of `gate` left, so only the record of the check now running can be reused. */

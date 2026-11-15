@@ -320,9 +320,12 @@ final class OrderGuards {
 	private static function survivesCalls(node: QueryNode, ctx: OrderContext): Bool {
 		final seams: OrderSeams = ctx.seams;
 		final kids: Array<QueryNode> = node.children;
-		if (node.kind == seams.parenKind && kids.length == 1) return survivesCalls(kids[0], ctx);
-		if (seams.memberKinds.contains(node.kind) && kids.length == 1) return survivesCalls(kids[0], ctx) && ctx.effects.immutable(kids[0]);
-		return ctx.locals.survivesCalls(node);
+		return if (node.kind == seams.parenKind && kids.length == 1)
+			survivesCalls(kids[0], ctx)
+		else if (seams.memberKinds.contains(node.kind) && kids.length == 1)
+			survivesCalls(kids[0], ctx) && ctx.effects.immutable(kids[0])
+		else
+			ctx.locals.survivesCalls(node);
 	}
 
 	/** Whether `at` lies in the code a write or call there may change `bound` from: its region or the condition that proved it. */

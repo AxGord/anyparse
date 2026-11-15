@@ -1210,8 +1210,12 @@ final class SymbolIndex {
 		// field, which binds none — whether or not the index holds the module: a module a build macro makes
 		// has no file to read. Only a path naming the module itself needs the module's type set.
 		final rest: Null<Array<String>> = TypeNameBinding.splitPath(imp.raw)?.rest;
-		if (rest == null || rest.length == 0) return publicTypes[imp.raw];
-		return rest.length == 1 && SourceText.isUpperInitial(leaf) ? [leaf] : [];
+		return if (rest == null || rest.length == 0)
+			publicTypes[imp.raw]
+		else if (rest.length == 1 && SourceText.isUpperInitial(leaf))
+			[leaf]
+		else
+			[];
 	}
 
 	/**

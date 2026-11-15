@@ -504,11 +504,12 @@ final class CrossRenameMember {
 		source: String, file: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex,
 		module: ModulePath, cursorFile: String
 	): LocatedOffsets {
-		if (target.isStatic)
-			return staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module, plugin.lexicalRegions(source));
-		return StructureFieldOffsets.structureOf(target, index, cursorFile) != null && plugin is TypeInfoProvider
-			? StructureFieldOffsets.structureReadOffsets(source, file, tree, target, plugin, refShape, index, cursorFile)
-			: instanceMemberOffsets(source, file, tree, target, plugin, refShape, index, cursorFile);
+		return if (target.isStatic)
+			staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape, module, plugin.lexicalRegions(source))
+		else if (StructureFieldOffsets.structureOf(target, index, cursorFile) != null && plugin is TypeInfoProvider)
+			StructureFieldOffsets.structureReadOffsets(source, file, tree, target, plugin, refShape, index, cursorFile)
+		else
+			instanceMemberOffsets(source, file, tree, target, plugin, refShape, index, cursorFile);
 	}
 
 	/**

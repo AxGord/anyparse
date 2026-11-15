@@ -75,10 +75,14 @@ final class RedOnBase {
 	 * and the tests it named red (`baseRed`). A red run that names no test did not finish, which says nothing about the base.
 	 */
 	public static function ofSuite(status: Int, totals: Null<Tally>, baseRed: Array<String>, candidate: Array<String>): OnBase {
-		if (totals == null || totals.tests == 0) return Unknown('the base re-run counted no tests');
-		if (status == 0) return compare(candidate, []);
-		if (baseRed.length == 0) return Unknown('the base re-run was red but named no failing test');
-		return compare(candidate, baseRed);
+		return if (totals == null || totals.tests == 0)
+			Unknown('the base re-run counted no tests')
+		else if (status == 0)
+			compare(candidate, [])
+		else if (baseRed.length == 0)
+			Unknown('the base re-run was red but named no failing test')
+		else
+			compare(candidate, baseRed);
 	}
 
 	/** `answer` as the row's `red on base:` text. */

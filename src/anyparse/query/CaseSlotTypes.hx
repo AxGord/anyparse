@@ -249,9 +249,12 @@ final class CaseSlotTypes {
 	private function declarationHolds(decl: Null<ResolvedType>, name: String): Bool {
 		if (decl == null) return false;
 		final kind: String = decl.type.kind;
-		if ((_shape.bareConstructorTypeKinds ?? []).contains(kind)) return !decl.type.members.exists(m -> m.name == name);
-		if ((_shape.aliasingDeclKinds ?? []).contains(kind)) return decl.type.isAnonStruct;
-		return (_shape.typeDeclKinds ?? []).contains(kind);
+		return if ((_shape.bareConstructorTypeKinds ?? []).contains(kind))
+			!decl.type.members.exists(m -> m.name == name)
+		else if ((_shape.aliasingDeclKinds ?? []).contains(kind))
+			decl.type.isAnonStruct
+		else
+			(_shape.typeDeclKinds ?? []).contains(kind);
 	}
 
 	private function peeled(node: QueryNode): QueryNode {

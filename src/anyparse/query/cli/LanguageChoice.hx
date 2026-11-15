@@ -73,11 +73,15 @@ final class LanguageChoice {
 				ofFiles.push(lang);
 		}
 		// Under a preset a mixed set reads as the preset's grammar, as it did before the preset yielded to extensions.
-		if (ofFiles.length > 1 && preset == null) return perLanguage(ofFiles, args, files, command);
-		if (ofFiles.length == 1) return named(ofFiles[0], args);
+		return if (ofFiles.length > 1 && preset == null)
+			perLanguage(ofFiles, args, files, command)
+		else if (ofFiles.length == 1)
+			named(ofFiles[0], args)
 		// A preset is a default, not an override: a file another grammar's extension names is read by that grammar.
-		if (preset != null) return named(preset, args);
-		return byProject(args, command, files, scopes, readStdin, LanguageDeclaration.near(scopes.find(FileSystem.exists) ?? base));
+		else if (preset != null)
+			named(preset, args)
+		else
+			byProject(args, command, files, scopes, readStdin, LanguageDeclaration.near(scopes.find(FileSystem.exists) ?? base));
 	}
 
 	/**

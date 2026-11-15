@@ -209,9 +209,12 @@ final class TerminalScanLowering {
 	}
 
 	private static function rangeTest(code: Expr, range: CodeRange): Expr {
-		if (range.lo == range.hi) return macro $code == $v{range.lo};
-		if (range.hi == CodeSet.MAX_CODE) return macro $code >= $v{range.lo};
-		return macro $code >= $v{range.lo} && $code <= $v{range.hi};
+		return if (range.lo == range.hi)
+			macro $code == $v{range.lo}
+		else if (range.hi == CodeSet.MAX_CODE)
+			macro $code >= $v{range.lo}
+		else
+			macro $code >= $v{range.lo} && $code <= $v{range.hi};
 	}
 
 }

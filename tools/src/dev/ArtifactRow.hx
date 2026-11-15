@@ -37,10 +37,14 @@ final class ArtifactRow {
 			if (size * PERCENT > baseSize * (PERCENT + MAX_GROWTH_PERCENT))
 				return 'grew over $MAX_GROWTH_PERCENT% ($baseSize -> $size bytes)';
 		}
-		if (OUTPUT_DIRECTORIES.contains(segments[0])) return 'build output directory ${segments[0]}/';
-		if (OUTPUT_EXTENSIONS.contains(extension)) return 'build output .$extension';
-		if (segments[0] == 'bin' && extension != '' && extension != 'hxml') return 'build output under bin/';
-		return null;
+		return if (OUTPUT_DIRECTORIES.contains(segments[0]))
+			'build output directory ${segments[0]}/'
+		else if (OUTPUT_EXTENSIONS.contains(extension))
+			'build output .$extension'
+		else if (segments[0] == 'bin' && extension != '' && extension != 'hxml')
+			'build output under bin/'
+		else
+			null;
 	}
 
 	/**

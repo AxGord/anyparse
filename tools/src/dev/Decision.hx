@@ -70,11 +70,12 @@ final class Decision {
 		if (text.indexOf('\n') >= 0 || text.indexOf('\r') >= 0) return 'the text spans several lines — a decision is one line';
 		if (text.trim() == '') return 'the text is empty';
 		final arrow: Int = text.lastIndexOf(ARROW);
-		if (arrow >= 0 && SLICE_ID.match(text.substr(arrow + ARROW.length)))
-			return 'the text already ends in `→ <ID>` — pass the id with --slice only';
-		if (text.length > MAX_TEXT)
-			return 'the text is ${text.length} characters, over $MAX_TEXT — one sentence; the detail is the commit message';
-		return null;
+		return if (arrow >= 0 && SLICE_ID.match(text.substr(arrow + ARROW.length)))
+			'the text already ends in `→ <ID>` — pass the id with --slice only'
+		else if (text.length > MAX_TEXT)
+			'the text is ${text.length} characters, over $MAX_TEXT — one sentence; the detail is the commit message'
+		else
+			null;
 	}
 
 	/** Why `line`, added to the ledger, is not a line `dev decision` would write, or null when it is. */

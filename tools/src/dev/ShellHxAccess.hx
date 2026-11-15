@@ -115,9 +115,12 @@ final class ShellHxAccess {
 
 	/** The absolute path `word` names from `dir`, or null when it is held in a variable, in `~`, or `dir` is unknown. */
 	private static function resolve(word: String, dir: Null<String>): Null<String> {
-		if (word.startsWith('/')) return word;
-		if (word.contains('$') || word.startsWith('~') || dir == null) return null;
-		return '$dir/${word.startsWith('./') ? word.substr(2) : word}';
+		return if (word.startsWith('/'))
+			word
+		else if (word.contains('$') || word.startsWith('~') || dir == null)
+			null
+		else
+			'$dir/${word.startsWith('./') ? word.substr(2) : word}';
 	}
 
 	/** The directory after `cd target` from `dir`: unknown (null) when the target is a variable, `~` or `-`. */

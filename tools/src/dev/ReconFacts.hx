@@ -224,10 +224,12 @@ final class ReconFacts {
 			return Update('recon.md is older than facts.md: the recon that followed those facts did not finish');
 		if (HASH_FIELD.matched(1) != hash) return Update('the queue line (text, touches or owner) changed since the previous recon');
 		final moved: Null<Array<String>> = commitsOf(tree, ['$recorded..$head'], line.touches);
-		if (moved == null) return Update('the previous base $recorded is not reachable from main');
-		if (moved.length > 0)
-			return Update('${moved.length} commit(s) on main touched the touched paths since the previous base $recorded');
-		return Skip('the previous recon.md stands: base $recorded, same line, no commit touched ${line.touches.join(', ')} since');
+		return if (moved == null)
+			Update('the previous base $recorded is not reachable from main')
+		else if (moved.length > 0)
+			Update('${moved.length} commit(s) on main touched the touched paths since the previous base $recorded')
+		else
+			Skip('the previous recon.md stands: base $recorded, same line, no commit touched ${line.touches.join(', ')} since');
 	}
 
 	/** The commits of `range` touching `paths` as `<hash> <date> <subject>`; null when git cannot answer; none when `paths` is empty. */

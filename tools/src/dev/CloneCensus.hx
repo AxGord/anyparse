@@ -335,10 +335,14 @@ final class Runs {
 		final statements: Null<Array<AstNodeJson>> = runOf(f);
 		if (statements == null) return 'unresolved';
 		final texts: Array<String> = statements.map(s -> CloneCensus.pyStrip(text(f.file, s.span)));
-		if (texts.foreach(t -> _bareDecl.match(t))) return 'bare-decl';
-		if (texts.foreach(t -> _bareAssign.match(t))) return 'bare-assign';
-		if (texts.foreach(t -> _bareDecl.match(t) || _bareAssign.match(t))) return 'bare-mixed';
-		return 'logic';
+		return if (texts.foreach(t -> _bareDecl.match(t)))
+			'bare-decl'
+		else if (texts.foreach(t -> _bareAssign.match(t)))
+			'bare-assign'
+		else if (texts.foreach(t -> _bareDecl.match(t) || _bareAssign.match(t)))
+			'bare-mixed'
+		else
+			'logic';
 	}
 
 	/** The `n` statement nodes of finding `f`, or null when its position resolves to no run. */

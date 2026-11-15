@@ -246,10 +246,12 @@ final class TailScan {
 	public static function framesTailAfter(
 		parent: QueryNode, position: Int, child: QueryNode, outer: Array<QueryNode>, seams: TailSeams
 	): Array<QueryNode> {
-		if (seams.scopeKinds.contains(child.kind)) return [];
-		return seams.blockKinds.contains(parent.kind) && child.kind == seams.condKind
-			? parent.children.slice(position + 1).concat(outer)
-			: outer;
+		return if (seams.scopeKinds.contains(child.kind))
+			[]
+		else if (seams.blockKinds.contains(parent.kind) && child.kind == seams.condKind)
+			parent.children.slice(position + 1).concat(outer)
+		else
+			outer;
 	}
 
 	/** Whether `node`'s subtree holds an identifier (or string-interpolation identifier) named in `names`. */

@@ -58,11 +58,14 @@ final class JvmProbe {
 	public static function refusal(run: Result): Null<String> {
 		if (!run.ok) return run.failure != '' ? run.failure : 'the probe exited ${run.status}';
 		final gate: EReg = ~/^gate: files=(\d+) wrote=(\d+) threw=(\d+)/m;
-		if (!gate.match(run.out)) return 'the probe printed no gate line';
-		if (gate.matched(THREW_GROUP) != '0')
-			return 'the portability probe threw (a parse failure or a comment loss, never a formatting difference)';
-		if (gate.matched(1) != gate.matched(2)) return 'the probe wrote ${gate.matched(2)} of ${gate.matched(1)} file(s)';
-		return null;
+		return if (!gate.match(run.out))
+			'the probe printed no gate line'
+		else if (gate.matched(THREW_GROUP) != '0')
+			'the portability probe threw (a parse failure or a comment loss, never a formatting difference)'
+		else if (gate.matched(1) != gate.matched(2))
+			'the probe wrote ${gate.matched(2)} of ${gate.matched(1)} file(s)'
+		else
+			null;
 	}
 
 }

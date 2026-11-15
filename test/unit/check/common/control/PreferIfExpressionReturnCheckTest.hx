@@ -243,23 +243,51 @@ class PreferIfExpressionReturnCheckTest extends Test {
 
 	/**
 	 * The FALL-THROUGH spelling - a run of no-`else` `if`s each returning a value, plus the sibling
-	 * return past the run - is OWNED by this rule but never rewritten into a value chain: three or
-	 * more values the author wrote as guard statements read better as those statements than as an
-	 * `if` / `else if` / `else` value (the formatter's `expressionIfFitMaxBranches: 2`). Owning it is
-	 * what keeps `prefer-ternary-return` from marching it pairwise into the same chain by the long
-	 * route, so the cascade is claimed and the finding count is zero.
-	 *
-	 * Two leaf values are a ternary and not this rule's at all; a longer cascade is claimed at its head.
+	 * return past the run - is rewritten into one if-expression by default, the `forKind` shape among
+	 * them (name rungs before a `null` terminal). Two leaf values are a ternary and not this rule's at
+	 * all; a longer cascade is claimed at its head.
 	 */
 	@:pin('control')
-	@:killer('M-PIER-CASCADE-UNMERGED-REPORTED')
-	public function testFallThroughCascadeClaimedNotRewritten(): Void {
-		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;')).length);
+	@:killer('M-PIER-PLAIN-RUN-KEPT')
+	public function testFallThroughCascadeRewritten(): Void {
+		final src: String = wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('this if/return cascade can be a single if-expression return', vs[0].message);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) 1 else if (b) 2 else 3;', es[0].text);
+		final names: Array<{ span: Span, text: String }> = edits(
+			wrap('if (CLASS_KINDS.contains(kind)) return classBody;\n\t\tif (kind == \'E\' && !opt.e) return enumBody;\n\t\treturn null;')
+		);
+		Assert.equals(1, names.length);
+		Assert.equals(
+			'return if (CLASS_KINDS.contains(kind)) classBody else if (kind == \'E\' && !opt.e) enumBody else null;', names[0].text
+		);
 		Assert.isTrue(claimsCascade('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 3;'), 'the cascade stays this rule\'s');
 		Assert.isFalse(claimsCascade('if (a) return 1;\n\t\treturn 3;'), 'two leaf values are a ternary, not a chain');
 		Assert.isTrue(
 			claimsCascade('if (a) return 1;\n\t\tif (b) return 2;\n\t\tif (c) return 3;\n\t\treturn 4;'),
 			'a longer cascade is claimed at its head'
+		);
+	}
+
+	/** A cascade whose value spans several lines keeps its statements: the expression would nest it one level deeper. */
+	@:pin('control')
+	@:killer('M-PIER-MULTILINE-REWRITTEN')
+	public function testMultiLineValueCascadeNotRewritten(): Void {
+		Assert.equals(0, violations(wrap('if (a) return [\n\t\t\t1,\n\t\t\t2\n\t\t];\n\t\tif (b) return [];\n\t\treturn [3];')).length);
+		Assert.isTrue(claimsCascade('if (a) return [\n\t\t\t1,\n\t\t\t2\n\t\t];\n\t\tif (b) return [];\n\t\treturn [3];'));
+	}
+
+	/** A GUARD - a constant early exit before a returned computation - keeps its statements, and stays claimed. */
+	@:pin('control')
+	@:killer('M-PIER-GUARD-REWRITTEN')
+	public function testGuardBeforeComputationNotRewritten(): Void {
+		Assert.equals(0, violations(wrap('if (a) return null;\n\t\tif (b) return x;\n\t\treturn f(y);')).length);
+		Assert.isTrue(claimsCascade('if (a) return null;\n\t\tif (b) return x;\n\t\treturn f(y);'));
+		Assert.equals(
+			0, violations(wrap('if (a) return "why";\n\t\treturn b ? "other" : null;')).length, 'a string guard before a folded ternary'
 		);
 	}
 
@@ -355,17 +383,15 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	@:killer('M-PIER-MERGE-ANY-VALUE')
 	@:killer('M-PIER-MERGE-COMMENT')
 	public function testMergeRefusals(): Void {
-		Assert.equals(
-			0, violations(wrap('if (a) return g();\n\t\tif (b) return g();\n\t\treturn h();')).length, 'a call is not a repeated value'
-		);
-		Assert.equals(0, violations(wrap('if (a) return m.x;\n\t\tif (b) return m.x;\n\t\treturn h();')).length, 'nor is a field read');
+		Assert.equals(0, merges(wrap('if (a) return g();\n\t\tif (b) return g();\n\t\treturn h();')), 'a call is not a repeated value');
+		Assert.equals(0, merges(wrap('if (a) return m.x;\n\t\tif (b) return m.x;\n\t\treturn h();')), 'nor is a field read');
 		Assert.equals(1, violations(wrap('if (a) return k;\n\t\tif (b) return k;\n\t\treturn h();')).length, 'a name is');
 		Assert.equals(0, violations(wrap('if (a) return true;\n\t\tif (b) return true;\n\t\treturn h();')).length, 'a bool literal is not');
-		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 2;')).length, 'dropping c2 is not a merge');
+		Assert.equals(0, merges(wrap('if (a) return 1;\n\t\tif (b) return 2;\n\t\treturn 2;')), 'dropping c2 is not a merge');
 		Assert.equals(0, violations(wrap('if (a) return null; // none\n\t\treturn b ? p : null;')).length, 'a comment fails it closed');
 		Assert.equals(1, violations(wrap('if (a) return null;\n\t\treturn b ? p : null;')).length, 'the same cascade without it merges');
 		Assert.equals(
-			0, violations(wrap('if (a) return 1;\n\t\tif (b) return 1;\n\t\tif (c) return 2;\n\t\treturn 3;')).length,
+			0, merges(wrap('if (a) return 1;\n\t\tif (b) return 1;\n\t\tif (c) return 2;\n\t\treturn 3;')),
 			'four values do not merge, even where the first two repeat'
 		);
 	}
@@ -497,16 +523,13 @@ class PreferIfExpressionReturnCheckTest extends Test {
 			0, violations(wrap('if (a) return 0;\n\t\tif (b) return null; // none\n\t\treturn c ? p : null;')).length,
 			'a comment in the tail'
 		);
+		Assert.equals(0, merges(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (c) return 2;\n\t\treturn 3;')), 'distinct values');
 		Assert.equals(
-			0, violations(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (c) return 2;\n\t\treturn 3;')).length, 'distinct values'
-		);
-		Assert.equals(
-			0, violations(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (next()) return 2;\n\t\treturn 2;')).length,
+			0, merges(wrap('if (a) return 0;\n\t\tif (b) return 1;\n\t\tif (next()) return 2;\n\t\treturn 2;')),
 			'dropping a condition that may have a side effect'
 		);
 		Assert.equals(
-			0, violations(wrap('if (a) return 0;\n\t\tif (b) return g();\n\t\tif (c) return g();\n\t\treturn 3;')).length,
-			'a repeated call'
+			0, merges(wrap('if (a) return 0;\n\t\tif (b) return g();\n\t\tif (c) return g();\n\t\treturn 3;')), 'a repeated call'
 		);
 		Assert.equals(0, violations(wrap('if (a) return 0;\n\t\treturn b ? 1 : c ? 1 : 3;')).length, 'a tail inside the ternary');
 		Assert.isTrue(claimsCascade('if (a) return 0;\n\t\treturn b ? 1 : c ? 1 : 3;'), 'which stays owned');
@@ -527,26 +550,23 @@ class PreferIfExpressionReturnCheckTest extends Test {
 	@:killer('M-PIER-TAIL-LADDER')
 	public function testGuardLadderIsNotMerged(): Void {
 		Assert.equals(
-			0, violations(wrap('if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\treturn x;')).length,
-			'three guards'
+			0, merges(wrap('if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\treturn x;')), 'three guards'
 		);
 		Assert.equals(
 			0,
-			violations(
-				wrap('if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\tif (d) return null;\n\t\treturn x;')
-			).length,
+			merges(wrap('if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\tif (d) return null;\n\t\treturn x;')),
 			'four guards'
 		);
 		Assert.equals(
 			0,
-			violations(wrap(
+			merges(wrap(
 				'if (a) return null;\n\t\tif (b) return null;\n\t\tif (c) return null;\n\t\tif (d) return null;\n'
 				+ '\t\tif (e) return null;\n\t\treturn x;'
-			)).length,
+			)),
 			'five guards'
 		);
 		Assert.equals(
-			0, violations(wrap('if (a) return 5;\n\t\tif (b) return null;\n\t\tif (c) return 5;\n\t\treturn null;')).length,
+			0, merges(wrap('if (a) return 5;\n\t\tif (b) return null;\n\t\tif (c) return 5;\n\t\treturn null;')),
 			'the value before the tail repeats the tail\'s other value'
 		);
 		Assert.isTrue(
@@ -594,6 +614,11 @@ class PreferIfExpressionReturnCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferIfExpressionReturn(), src);
+	}
+
+	/** How many findings of `src` are MERGES - a ternary rewrite rather than the plain if-expression. */
+	private function merges(src: String): Int {
+		return violations(src).filter(v -> v.message.indexOf('ternary') >= 0).length;
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {

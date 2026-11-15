@@ -226,11 +226,12 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 			if (statement == null) return Declined('a bare branch carries no terminator of its own, so it would not compile inside braces');
 			edits.push(bracedEdit(site, placed.from, placed.from + text.length, statement));
 		}
-		if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
-			return Declined('it overlaps a branch this pass braces - the next pass takes it');
-		return chainBracedAfter(site, edits, links)
-			? Braced(edits)
-			: Declined('the braced chain does not parse back as the same if/else with every branch braced');
+		return if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
+			Declined('it overlaps a branch this pass braces - the next pass takes it')
+		else if (chainBracedAfter(site, edits, links))
+			Braced(edits)
+		else
+			Declined('the braced chain does not parse back as the same if/else with every branch braced');
 	}
 
 	/**
@@ -292,11 +293,12 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 				site, placed.from, last && site.source.substring(textEnd, end).trim() == site.terminator ? end : textEnd, statement
 			));
 		}
-		if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
-			return Declined('it overlaps a branch this pass braces - the next pass takes it');
-		return tryBracedAfter(site, edits, found.node, bodies)
-			? Braced(edits)
-			: Declined('the braced try does not parse back as the same try/catch with every body braced');
+		return if (edits.exists(e -> taken.exists(t -> e.span.from < t.span.to && t.span.from < e.span.to)))
+			Declined('it overlaps a branch this pass braces - the next pass takes it')
+		else if (tryBracedAfter(site, edits, found.node, bodies))
+			Braced(edits)
+		else
+			Declined('the braced try does not parse back as the same try/catch with every body braced');
 	}
 
 	/**

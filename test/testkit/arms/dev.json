@@ -124,8 +124,8 @@
 			"name": "M-SCRUB-ROW-UNCONFIGURED-FIRST",
 			"type": "dev.ScrubRow",
 			"method": "verdict",
-			"find": "if (!tree.ok || !range.ok) return Failed(GateTree.quote(tree.ok ? range : tree));",
-			"replace": "if (tree.err.indexOf(UNCONFIGURED) >= 0) return NotRun('unconfigured'); if (!tree.ok || !range.ok) return Failed(GateTree.quote(tree.ok ? range : tree));",
+			"find": "return if (!tree.ok || !range.ok)",
+			"replace": "if (tree.err.indexOf(UNCONFIGURED) >= 0) return NotRun('unconfigured');\n\t\treturn if (!tree.ok || !range.ok)",
 			"note": "an unconfigured tree scan is read before the exit statuses, so a range that refused an added home path shows as not run"
 		},
 		{
@@ -743,8 +743,8 @@
 			"name": "M-GATE-REUSE-TREE-BLIND",
 			"type": "dev.GateReuse",
 			"method": "refusal",
-			"find": "if (record.tree != facts.tree) return",
-			"replace": "if (false) return",
+			"find": "if (record.tree != facts.tree)\n\t\t\t",
+			"replace": "if (false)\n\t\t\t",
 			"note": "a gate record stands for a land whatever tree it merged, so a slice landed onto a main that moved since its gate skips the rows that never saw main's new commit"
 		},
 		{
@@ -758,8 +758,8 @@
 			"name": "M-GATE-REUSE-FAIL-TRUSTED",
 			"type": "dev.GateReuse",
 			"method": "refusal",
-			"find": "if (!record.passed) return",
-			"replace": "if (false) return",
+			"find": "if (!record.passed)\n\t\t\t",
+			"replace": "if (false)\n\t\t\t",
 			"note": "the record of a red gate stands for the land's rows, so a slice whose gate failed lands with the rows that passed read off it"
 		},
 		{
@@ -835,8 +835,8 @@
 			"name": "M-GATE-REUSE-NODE-BLIND",
 			"type": "dev.GateReuse",
 			"method": "refusal",
-			"find": "if (record.node != facts.node) return",
-			"replace": "if (false) return",
+			"find": "if (record.node != facts.node)\n\t\t\t",
+			"replace": "if (false)\n\t\t\t",
 			"note": "a gate record stands for a land under another node, or for an older record that names none, so a node upgrade between the gate and the land takes rows measured by the old runtime"
 		},
 		{
@@ -891,8 +891,8 @@
 			"name": "M-SUITE-IMPACT-NOTHING-REACHED",
 			"type": "dev.SuiteImpact",
 			"method": "scopeOn",
-			"find": "return Selected(classes);",
-			"replace": "return Selected([]);",
+			"find": "\n\t\t\tSelected(classes)",
+			"replace": "\n\t\t\tSelected([])",
 			"note": "a change reaches no test class, so a gate passes a slice whose tests never ran"
 		},
 		{
@@ -1649,8 +1649,8 @@
 			"name": "M-REDONBASE-SUITE-EMPTY-TRUSTED",
 			"type": "dev.RedOnBase",
 			"method": "ofSuite",
-			"find": "if (totals == null || totals.tests == 0) return",
-			"replace": "if (false) return",
+			"find": "if (totals == null || totals.tests == 0)\n\t\t\t",
+			"replace": "if (false)\n\t\t\t",
 			"note": "a re-run that counted nothing is read by its exit status, so a runner that ran no test answers for the base"
 		},
 		{
@@ -1689,7 +1689,7 @@
 			"name": "M-REDONBASE-SUITE-GREEN-NOT-READ",
 			"type": "dev.RedOnBase",
 			"method": "ofSuite",
-			"find": "if (status == 0) return compare(candidate, []);",
+			"find": "else if (status == 0)\n\t\t\tcompare(candidate, [])",
 			"replace": "",
 			"note": "a green re-run on the base is read as a red run that named nothing, so a candidate-only failure reads unknown instead of no"
 		},
@@ -1697,7 +1697,7 @@
 			"name": "M-REDONBASE-SUITE-UNNAMED-RED-TRUSTED",
 			"type": "dev.RedOnBase",
 			"method": "ofSuite",
-			"find": "if (baseRed.length == 0) return Unknown('the base re-run was red but named no failing test');",
+			"find": "else if (baseRed.length == 0)\n\t\t\tUnknown('the base re-run was red but named no failing test')",
 			"replace": "",
 			"note": "a base re-run that was red but named no test (a shard that died) reads no, as if the base were green"
 		},
@@ -2390,8 +2390,8 @@
 			"name": "M-RECON-SKIP-WHEN-STILL-GOOD",
 			"type": "dev.ReconFacts",
 			"method": "previous",
-			"find": "return Skip('the previous recon.md stands: base $recorded, same line, no commit touched ${line.touches.join(', ')} since');",
-			"replace": "return Update('x');",
+			"find": "else\n\t\t\tSkip('the previous recon.md stands: base $recorded, same line, no commit touched ${line.touches.join(', ')} since');",
+			"replace": "else\n\t\t\tUpdate('x');",
 			"note": "a recon that is still good is redone anyway, so the route saves nothing"
 		},
 		{
@@ -2831,8 +2831,8 @@
 			"name": "M-SUITE-IMPACT-TOOLS-TOUCH-WHOLE",
 			"type": "dev.SuiteImpact",
 			"method": "scopeOn",
-			"find": "return tooling ? WholeSuite(generated) : trimmed(sources, sinked ?? sinkedGraph(sources, entries, types), generated, touched);",
-			"replace": "return trimmed(sources, sinked ?? sinkedGraph(sources, entries, types), generated, touched);",
+			"find": "else if (tooling)",
+			"replace": "else if (false)",
 			"note": "a change under tools/src beside generated code leaves out the tooling classes the tools change is aimed at"
 		},
 		{

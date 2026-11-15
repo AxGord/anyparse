@@ -1296,8 +1296,8 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "7bd7750d5a2ea5e9",
-				"err": "c41d047739c25fad",
+				"out": "395e31b04411ced0",
+				"err": "f7f1028e6b19c0a9",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [
 					false,

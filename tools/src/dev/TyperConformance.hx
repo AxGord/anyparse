@@ -1208,19 +1208,32 @@ private final class UnknownCauses {
 
 	private function causeOf(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
 		final k: String = node.kind;
-		if (k == _shape.parenKind && node.children.length == 1) return cause(node.children[0], sc, depth + 1);
-		if (_lambdaKinds.contains(k)) return rooted(ExpectedLiteral, 'lambda value${expectedTag(node)}');
-		if (k == _shape.objectLiteralKind || k == _shape.nullLiteralKind) return rooted(ExpectedLiteral, '$k${expectedTag(node)}');
-		if (k == _shape.arrayLiteralKind) return rooted(ExpectedLiteral, '${node.children.length == 0 ? '[]' : k}${expectedTag(node)}');
-		if (k == _shape.newExprKind) return rooted(Construction, k);
-		if (k == _shape.checkTypeKind) return rooted(CheckType, k);
-		if (isLocalDeclaration(k)) return declarationCause(node, sc, depth);
-		if ((_shape.localFunctionKinds ?? []).contains(k)) return rooted(DeclarationNode, 'local function');
-		if (BOOL_OPERATOR_KINDS.contains(k)) return rooted(OperatorResult, 'bool-valued operator');
-		if (k == _shape.identKind) return identCause(node, sc, depth);
-		if (k == _shape.callKind) return callCause(node, sc, depth);
-		if (_accessKinds.contains(k)) return accessCause(node, sc, depth, false);
-		return childCause(node, sc, depth);
+		return if (k == _shape.parenKind && node.children.length == 1)
+			cause(node.children[0], sc, depth + 1)
+		else if (_lambdaKinds.contains(k))
+			rooted(ExpectedLiteral, 'lambda value${expectedTag(node)}')
+		else if (k == _shape.objectLiteralKind || k == _shape.nullLiteralKind)
+			rooted(ExpectedLiteral, '$k${expectedTag(node)}')
+		else if (k == _shape.arrayLiteralKind)
+			rooted(ExpectedLiteral, '${node.children.length == 0 ? '[]' : k}${expectedTag(node)}')
+		else if (k == _shape.newExprKind)
+			rooted(Construction, k)
+		else if (k == _shape.checkTypeKind)
+			rooted(CheckType, k)
+		else if (isLocalDeclaration(k))
+			declarationCause(node, sc, depth)
+		else if ((_shape.localFunctionKinds ?? []).contains(k))
+			rooted(DeclarationNode, 'local function')
+		else if (BOOL_OPERATOR_KINDS.contains(k))
+			rooted(OperatorResult, 'bool-valued operator')
+		else if (k == _shape.identKind)
+			identCause(node, sc, depth)
+		else if (k == _shape.callKind)
+			callCause(node, sc, depth)
+		else if (_accessKinds.contains(k))
+			accessCause(node, sc, depth, false)
+		else
+			childCause(node, sc, depth);
 	}
 
 	/** A kind with no rule of its own: its first unanswered operand, or the kind itself when the typer answers every one. */
@@ -1276,9 +1289,14 @@ private final class UnknownCauses {
 	private function localCause(decl: QueryNode, sc: Bool, depth: Int): UnknownCause {
 		if (annotated(decl)) return rooted(DeclaredTypeNotRead, 'annotated local');
 		final init: Null<QueryNode> = initOf(decl);
-		if (init == null) return rooted(LocalMonomorph, 'local without an initializer');
-		if (isMonomorphSeed(init)) return rooted(LocalMonomorph, 'local initialized with ${init.kind}');
-		return typed(init, sc) ? rooted(DeclaredTypeNotRead, 'local whose initializer is typed') : cause(init, sc, depth + 1);
+		return if (init == null)
+			rooted(LocalMonomorph, 'local without an initializer')
+		else if (isMonomorphSeed(init))
+			rooted(LocalMonomorph, 'local initialized with ${init.kind}')
+		else if (typed(init, sc))
+			rooted(DeclaredTypeNotRead, 'local whose initializer is typed')
+		else
+			cause(init, sc, depth + 1);
 	}
 
 	/** A read of the parameter `param`: written, a lambda's (its expected type), or another function's. */
@@ -1286,17 +1304,24 @@ private final class UnknownCauses {
 		if (annotated(param)) return rooted(DeclaredTypeNotRead, 'annotated parameter');
 		final fn: Null<QueryNode> = _parents[param];
 		final fk: String = fn?.kind ?? '?';
-		if (fn != null && _lambdaKinds.contains(fk)) return rooted(LambdaParameter, 'lambda parameter${expectedTag(fn)}${calleeWhy(fn)}');
-		if ((_shape.localFunctionKinds ?? []).contains(fk)) return rooted(LocalMonomorph, 'local function parameter without a type');
-		return rooted(LocalMonomorph, 'parameter without a type in $fk');
+		return if (fn != null && _lambdaKinds.contains(fk))
+			rooted(LambdaParameter, 'lambda parameter${expectedTag(fn)}${calleeWhy(fn)}')
+		else if ((_shape.localFunctionKinds ?? []).contains(fk))
+			rooted(LocalMonomorph, 'local function parameter without a type')
+		else
+			rooted(LocalMonomorph, 'parameter without a type in $fk');
 	}
 
 	/** A read of a loop's binder `binder`: the element of what the loop iterates. */
 	private function loopCause(binder: QueryNode, sc: Bool, depth: Int): UnknownCause {
 		final loop: Null<QueryNode> = binder.kind == KEY_VALUE_BINDER ? _parents[binder] : binder;
 		final iterated: Null<QueryNode> = loop?.children.find(c -> c.kind != KEY_VALUE_BINDER);
-		if (iterated == null) return rooted(LoopElement, 'loop binder');
-		return typed(iterated, sc) ? rooted(LoopElement, 'loop binder, its iterable typed') : cause(iterated, sc, depth + 1);
+		return if (iterated == null)
+			rooted(LoopElement, 'loop binder')
+		else if (typed(iterated, sc))
+			rooted(LoopElement, 'loop binder, its iterable typed')
+		else
+			cause(iterated, sc, depth + 1);
 	}
 
 	private function callCause(node: QueryNode, sc: Bool, depth: Int): UnknownCause {
@@ -1323,9 +1348,12 @@ private final class UnknownCauses {
 		if (access.children.length == 0) return rooted(Other, 'shapeless member access');
 		final recv: QueryNode = access.children[0];
 		final named: Null<String> = staticReceiver(recv);
-		if (named != null) return memberCause(named, access.name ?? '', call);
-		if (!typed(recv, sc)) return cause(recv, sc, depth + 1);
-		return memberCause(receiverType(recv, sc), access.name ?? '', call);
+		return if (named != null)
+			memberCause(named, access.name ?? '', call)
+		else if (typed(recv, sc))
+			memberCause(receiverType(recv, sc), access.name ?? '', call)
+		else
+			cause(recv, sc, depth + 1);
 	}
 
 	/** The member `name` of `typeName` read or (`call`) called. */
@@ -1336,18 +1364,23 @@ private final class UnknownCauses {
 		if (decls.length == 0) return rooted(MemberNotFound, '$what of a member the receiver type does not declare');
 		if (!call) {
 			final fields: Array<MemberDeclaration> = decls.filter(d -> d.member.signatures.length == 0);
-			if (fields.length == 0) return rooted(Other, 'method value');
-			return fields.exists(d -> d.member.typeSource == null)
-				? rooted(InferredSignature, 'member field without a type')
-				: rooted(DeclaredTypeNotRead, 'read of an annotated member');
+			return if (fields.length == 0)
+				rooted(Other, 'method value')
+			else if (fields.exists(d -> d.member.typeSource == null))
+				rooted(InferredSignature, 'member field without a type')
+			else
+				rooted(DeclaredTypeNotRead, 'read of an annotated member');
 		}
 		if (decls.exists(d -> d.member.hasOverloadMeta || d.member.isOverload)) return rooted(Other, 'call of an overloaded member');
 		final fns: Array<MemberDeclaration> = decls.filter(d -> d.member.signatures.length > 0);
-		if (fns.length == 0) return rooted(Other, 'call of a field value');
-		if (fns.exists(d -> d.member.returnSource == null && !d.member.isMacro && d.member.name != 'new'))
-			return rooted(InferredSignature, 'call of a member function without a return type');
-		if (fns.exists(d -> d.member.typeParamNames.length > 0)) return rooted(Other, 'call of a generic method');
-		return rooted(DeclaredTypeNotRead, 'call of an annotated member');
+		return if (fns.length == 0)
+			rooted(Other, 'call of a field value')
+		else if (fns.exists(d -> d.member.returnSource == null && !d.member.isMacro && d.member.name != 'new'))
+			rooted(InferredSignature, 'call of a member function without a return type')
+		else if (fns.exists(d -> d.member.typeParamNames.length > 0))
+			rooted(Other, 'call of a generic method')
+		else
+			rooted(DeclaredTypeNotRead, 'call of an annotated member');
 	}
 
 	/** Why `lambda`, an argument of a call, gets no expected type for its parameters: the callee and what it declares there. */
@@ -1383,10 +1416,12 @@ private final class UnknownCauses {
 		final pt: Null<String> = index >= 0 && index < m.paramTypeSources.length ? m.paramTypeSources[index] : null;
 		if (pt == null) return ' / callee parameter untyped or out of range';
 		final written: String = pt;
-		if (m.typeParamNames.exists(t -> new EReg('\\b$t\\b', '').match(written)))
-			return ' / callee parameter mentions a METHOD type parameter';
-		if (~/\b[A-Z]\b/.match(written)) return ' / callee parameter mentions a CLASS type parameter';
-		return ' / callee parameter concrete';
+		return if (m.typeParamNames.exists(t -> new EReg('\\b$t\\b', '').match(written)))
+			' / callee parameter mentions a METHOD type parameter'
+		else if (~/\b[A-Z]\b/.match(written))
+			' / callee parameter mentions a CLASS type parameter'
+		else
+			' / callee parameter concrete';
 	}
 
 	/** Where `node` stands, the slot its expected type would come from. */
@@ -1394,16 +1429,26 @@ private final class UnknownCauses {
 		final p: Null<QueryNode> = _parents[node];
 		if (p == null) return ' [no parent]';
 		final pk: String = p.kind;
-		if (pk == _shape.callKind) return p.children[0] == node ? ' [callee]' : ' [call argument]';
-		if (pk == _shape.newExprKind) return ' [constructor argument]';
-		if ((_shape.localDeclKinds ?? []).contains(pk)) return annotated(p) ? ' [annotated local]' : ' [unannotated local]';
-		if ((_shape.fieldDeclKinds ?? []).contains(pk)) return annotated(p) ? ' [annotated member]' : ' [unannotated member]';
-		if ((_shape.valueReturnKinds ?? []).contains(pk)) return ' [return]';
-		if (pk == _shape.assignKind) return ' [assignment]';
-		if (pk == _shape.objectFieldKind) return ' [object field]';
-		if (pk == _shape.arrayLiteralKind) return ' [array element]';
-		if (pk == _shape.parenKind) return expectedTag(p);
-		return ' [$pk]';
+		return if (pk == _shape.callKind)
+			p.children[0] == node ? ' [callee]' : ' [call argument]'
+		else if (pk == _shape.newExprKind)
+			' [constructor argument]'
+		else if ((_shape.localDeclKinds ?? []).contains(pk))
+			annotated(p) ? ' [annotated local]' : ' [unannotated local]'
+		else if ((_shape.fieldDeclKinds ?? []).contains(pk))
+			annotated(p) ? ' [annotated member]' : ' [unannotated member]'
+		else if ((_shape.valueReturnKinds ?? []).contains(pk))
+			' [return]'
+		else if (pk == _shape.assignKind)
+			' [assignment]'
+		else if (pk == _shape.objectFieldKind)
+			' [object field]'
+		else if (pk == _shape.arrayLiteralKind)
+			' [array element]'
+		else if (pk == _shape.parenKind)
+			expectedTag(p)
+		else
+			' [$pk]';
 	}
 
 	/** Whether the typer answers `node` in the currency asked. */

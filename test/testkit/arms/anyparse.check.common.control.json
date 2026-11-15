@@ -611,7 +611,7 @@
 			"name": "M-PIER-REWRITES-FOLDED",
 			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
 			"method": "rewritesChain",
-			"find": "return m.merge != null || m.writtenRungs >= MIN_CHAIN_RUNGS;",
+			"find": "return rewritesRun(m) || m.writtenRungs >= MIN_CHAIN_RUNGS;",
 			"replace": "return true;",
 			"note": "every owned chain is rewritten, so a two-branch chain with a ternary tail becomes a three-branch value chain the author never wrote"
 		},
@@ -626,10 +626,10 @@
 		{
 			"name": "M-PIER-CASCADE-UNMERGED-REPORTED",
 			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
-			"method": "eachMergedRun",
-			"find": "final merge: Null<Merge> = m?.merge;",
-			"replace": "final merge: Null<Merge> = m == null ? null : m.merge ?? { shape: Leading, from: 0, span: m.prefix, prefix: m.prefix };",
-			"note": "an owned cascade that does not merge is reported, with no fix behind the finding"
+			"method": "eachRewrittenRun",
+			"find": "if (m == null || !rewritesRun(m)) continue;",
+			"replace": "if (m == null) continue;",
+			"note": "an owned cascade this rule refuses is reported and rewritten"
 		},
 		{
 			"name": "M-PIER-OUTER-UNNEGATED",
@@ -650,10 +650,34 @@
 		{
 			"name": "M-PIER-TAIL-REPORTED-AT-HEAD",
 			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
-			"method": "eachMergedRun",
-			"find": "final reported: Null<Span> = kids[i + merge.from].span;",
+			"method": "eachRewrittenRun",
+			"find": "final reported: Null<Span> = kids[i + (merge == null ? 0 : merge.from)].span;",
 			"replace": "final reported: Null<Span> = kids[i].span;",
 			"note": "a merged tail is reported and keyed at the run head, so the finding names a guard the edit does not touch"
+		},
+		{
+			"name": "M-PIER-PLAIN-RUN-KEPT",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "rewritesRun",
+			"find": "return m.merge != null || m.plain;",
+			"replace": "return m.merge != null;",
+			"note": "a run of three plain values is left as its statements"
+		},
+		{
+			"name": "M-PIER-GUARD-REWRITTEN",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "plainRun",
+			"find": "for (i in 0...values.length - 1) if (isConstant(values[i], s) || values[i].kind == s.shape.identKind) return false;",
+			"replace": "if (false) return false;",
+			"note": "a constant guard before a returned computation is rewritten into one expression"
+		},
+		{
+			"name": "M-PIER-MULTILINE-REWRITTEN",
+			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
+			"method": "plainRun",
+			"find": "for (v in valueSpans) if (text(source, v).indexOf('\\n') >= 0) return false;",
+			"replace": "if (false) return false;",
+			"note": "a run whose value spans several lines is rewritten into the deeper-nested expression"
 		},
 		{
 			"name": "M-PIER-TAIL-SPAN-WHOLE",

@@ -64,9 +64,12 @@ final class QualifiedReceiver {
 
 	private function classify(decl: ResolvedType, name: String): ReceiverTarget {
 		final type: TypeDeclInfo = decl.type;
-		if (FileIdentity.same(decl.file.file, _declFile) && type.span.from <= _declFrom && _declFrom < type.span.to) return DeclaringType;
-		if (type.aliasTargetRaw != null || !type.members.exists(m -> m.name == name)) return Unproven;
-		return OtherType;
+		return if (FileIdentity.same(decl.file.file, _declFile) && type.span.from <= _declFrom && _declFrom < type.span.to)
+			DeclaringType
+		else if (type.aliasTargetRaw != null || !type.members.exists(m -> m.name == name))
+			Unproven
+		else
+			OtherType;
 	}
 
 }

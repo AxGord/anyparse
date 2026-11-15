@@ -253,8 +253,8 @@
 			"name": "M-LANG-PRESET-OVERRIDES",
 			"type": "anyparse.query.cli.LanguageChoice",
 			"method": "choose",
-			"find": "if (ofFiles.length == 1) return",
-			"replace": "if (preset == null && ofFiles.length == 1) return",
+			"find": "if (ofFiles.length == 1)\n\t\t\t",
+			"replace": "if (preset == null && ofFiles.length == 1)\n\t\t\t",
 			"note": "a preset's grammar overrides the file extensions, so `hxq fmt arms.json` reads JSON as Haxe and fails with a parse error"
 		},
 		{

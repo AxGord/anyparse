@@ -101,11 +101,16 @@ final class ArmRecordText {
 		final force: Null<JValue> = JValueTools.field(root, 'force');
 		final find: Null<JValue> = JValueTools.field(root, 'find');
 		final replace: Null<JValue> = JValueTools.field(root, 'replace');
-		if (force == null && find == null) return '$at declares neither "force" nor "find" — an arm has to say what it cuts';
-		if (force != null && find != null) return '$at declares both "force" and "find" — an arm cuts one way';
-		if (find != null && replace == null) return '$at declares "find" without "replace"';
-		if (force != null && replace != null) return '$at declares "replace" without "find"';
-		return null;
+		return if (force == null && find == null)
+			'$at declares neither "force" nor "find" — an arm has to say what it cuts'
+		else if (force != null && find != null)
+			'$at declares both "force" and "find" — an arm cuts one way'
+		else if (find != null && replace == null)
+			'$at declares "find" without "replace"'
+		else if (force != null && replace != null)
+			'$at declares "replace" without "find"'
+		else
+			null;
 	}
 
 }

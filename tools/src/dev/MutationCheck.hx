@@ -169,10 +169,12 @@ final class MutationCheck {
 	public static function jobsFor(asked: Null<String>, held: Null<Int>, cores: Int, memory: Float): JobCount {
 		if (asked == null) return Count(defaultJobs(cores, memory, held), null);
 		final n: Int = (~/^[0-9]+$/.match(asked) ? Std.parseInt(asked) : null) ?? 0;
-		if (n < 1) return Unusable('--jobs must be a positive integer, got \'$asked\'');
-		return held != null && n > held
-			? Count(held, '--jobs $n exceeds the pool lease of $held thread(s): running $held')
-			: Count(n, null);
+		return if (n < 1)
+			Unusable('--jobs must be a positive integer, got \'$asked\'')
+		else if (held != null && n > held)
+			Count(held, '--jobs $n exceeds the pool lease of $held thread(s): running $held')
+		else
+			Count(n, null);
 	}
 
 	/** The report row of one track. */

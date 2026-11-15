@@ -54,8 +54,12 @@ final class HaxeCallbackMods {
 
 	/** `[CALLBACK_MOD]` for a method declaration `node` named `name` of the type `owner` that is a callback, else an empty list. */
 	public function modsOf(node: QueryNode, category: NamingCategory, name: String, owner: Null<String>): Array<String> {
-		if (category != NamingCategory.Method) return [];
-		return returnsNoValue(node) || _readMethods.contains(node) || _reads.contains(key(owner, name)) ? [CALLBACK_MOD] : [];
+		return if (category != NamingCategory.Method)
+			[]
+		else if (returnsNoValue(node) || _readMethods.contains(node) || _reads.contains(key(owner, name)))
+			[CALLBACK_MOD]
+		else
+			[];
 	}
 
 	private function note(owner: Null<String>, name: String): Void {

@@ -13415,8 +13415,8 @@
 			"name": "M-IMPORT-MODULE-TAIL-UNKNOWN",
 			"type": "anyparse.query.SymbolIndex",
 			"method": "namesBoundBy",
-			"find": "return rest.length == 1 && SourceText.isUpperInitial(leaf) ? [leaf] : [];",
-			"replace": "return (publicTypes[SourceText.parentPath(imp.raw)] ?? []).contains(leaf) ? [leaf] : null;",
+			"find": "else if (rest.length == 1 && SourceText.isUpperInitial(leaf))\n\t\t\t[leaf]\n\t\telse\n\t\t\t[];",
+			"replace": "else (publicTypes[SourceText.parentPath(imp.raw)] ?? []).contains(leaf) ? [leaf] : null;",
 			"note": "a path past its module binds a known set only when the index declares that very type, so a static-field import or one of a type a build macro makes reads as an unknown set, counts as a second binder of every statement, and refuses every hoist in a directory where one module imports a function"
 		},
 		{
@@ -15252,16 +15252,16 @@
 			"name": "M-COLLAPSE-TYPED-MEMBER-NAME",
 			"type": "anyparse.query.CaseSlotTypes",
 			"method": "declarationHolds",
-			"find": "return !decl.type.members.exists(m -> m.name == name);",
-			"replace": "return true;",
+			"find": "\n\t\t\t!decl.type.members.exists(m -> m.name == name)",
+			"replace": "\n\t\t\ttrue",
 			"note": "an enum abstract slot is a capture though it declares the name the binder spells"
 		},
 		{
 			"name": "M-COLLAPSE-TYPED-ALIAS",
 			"type": "anyparse.query.CaseSlotTypes",
 			"method": "declarationHolds",
-			"find": "return decl.type.isAnonStruct;",
-			"replace": "return true;",
+			"find": "\n\t\t\tdecl.type.isAnonStruct",
+			"replace": "\n\t\t\ttrue",
 			"note": "a typedef standing for an enum abstract proves a capture"
 		},
 		{

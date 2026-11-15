@@ -343,10 +343,12 @@ final class TypingService {
 		var head: QueryNode = node;
 		while (head.kind != identKind && head.children.length == 1) head = head.children[0];
 		final headSpan: Null<Span> = head.span;
-		if (path == null || headSpan == null) return Tier.Unknown;
-		return ValueDoors.bindsNoValue(head, path[0], headSpan, fi, tree, shape, file, index)
-			? index.typing.reading(fi, path.join('.'), at, ValuePosition)
-			: Tier.Unknown;
+		return if (path == null || headSpan == null)
+			Tier.Unknown
+		else if (ValueDoors.bindsNoValue(head, path[0], headSpan, fi, tree, shape, file, index))
+			index.typing.reading(fi, path.join('.'), at, ValuePosition)
+		else
+			Tier.Unknown;
 	}
 
 	/** The one declaration `tier` binds (`TypeRefIndex.oneDeclaration`), or `Unknown`. */

@@ -675,8 +675,12 @@ final class BinaryChainEmit {
 		}
 		final opensList: Bool = mode == OnePerLine;
 		final close: Doc = Text(list.close);
-		if (opensList) return Concat([body(endingIn(list.tail)), Line('\n'), close]);
-		return list.tail.length == 0 ? body(endingIn([close])) : Concat([body(items)].concat(list.tail).concat([close]));
+		return if (opensList)
+			Concat([body(endingIn(list.tail)), Line('\n'), close])
+		else if (list.tail.length == 0)
+			body(endingIn([close]))
+		else
+			Concat([body(items)].concat(list.tail).concat([close]));
 	}
 
 	private static function shapeNoWrap(items: Array<Doc>, ops: Array<String>, ?listSep: String): Doc {
@@ -765,18 +769,20 @@ final class BinaryChainEmit {
 	private static function keepGap(
 		op: String, location: WrappingLocation, broken: Bool, after: Null<Doc>, own: Null<Doc>, leftLineComment: Bool = false
 	): Array<Doc> {
-		if (after != null || own != null) {
-			final parts: Array<Doc> = [Text(' $op')];
-			if (after != null) parts.push(after);
+		if (after == null && own == null) return if (!broken)
+			[Text(' $op ')]
+		else if (location == BeforeLast || leftLineComment)
+			[Line('\n'), Text('$op ')]
+		else
+			[Text(' $op'), Line('\n')];
+		final parts: Array<Doc> = [Text(' $op')];
+		if (after != null) parts.push(after);
+		parts.push(Line('\n'));
+		if (own != null) {
+			parts.push(own);
 			parts.push(Line('\n'));
-			if (own != null) {
-				parts.push(own);
-				parts.push(Line('\n'));
-			}
-			return parts;
 		}
-		if (!broken) return [Text(' $op ')];
-		return location == BeforeLast || leftLineComment ? [Line('\n'), Text('$op ')] : [Text(' $op'), Line('\n')];
+		return parts;
 	}
 
 	/**

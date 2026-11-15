@@ -698,8 +698,12 @@ final class SliceGate {
 			threads: threads != null && threads > 0 ? threads : null,
 			run: run
 		}, leaseModeOf(rows));
-		if (rows != null) return gate.runBranch(rows.split(','), threadsOption == null);
-		return baseline ? gate.recordBaseline() : gate.check();
+		return if (rows != null)
+			gate.runBranch(rows.split(','), threadsOption == null)
+		else if (baseline)
+			gate.recordBaseline()
+		else
+			gate.check();
 	}
 
 	/**

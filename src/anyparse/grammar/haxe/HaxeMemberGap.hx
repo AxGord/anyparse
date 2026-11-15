@@ -49,9 +49,12 @@ final class HaxeMemberGap {
 		var classBody: Null<MemberGapPolicy> = null;
 		var enumAbstractBody: Null<MemberGapPolicy> = null;
 		function forKind(kind: String): Null<MemberGapPolicy> {
-			if (CLASS_KINDS.contains(kind)) return classBody;
-			if (kind == 'EnumAbstractDecl' && !opt.enumAbstractRulesUnlessValueList) return enumAbstractBody;
-			return null;
+			return if (CLASS_KINDS.contains(kind))
+				classBody
+			else if (kind == 'EnumAbstractDecl' && !opt.enumAbstractRulesUnlessValueList)
+				enumAbstractBody
+			else
+				null;
 		}
 		final cls: MemberGapPolicy = body(opt, opt.metadataCountsAsDocComment, opt.afterFieldsWithDocComments, multiline, forKind);
 		classBody = cls;
