@@ -1,6 +1,8 @@
 package anyparse.check.scan;
 
 import anyparse.check.common.control.BranchChain;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
@@ -474,7 +476,7 @@ final class LoopScan {
 	 * caller must keep whatever it would have done without the question.
 	 */
 	public static function leadingContinueGuard(
-		body: QueryNode, source: String, ifKinds: Array<String>, blockStmtKind: Null<String>, continueKind: Null<String>
+		body: QueryNode, regions: Array<LexRegion>, ifKinds: Array<String>, blockStmtKind: Null<String>, continueKind: Null<String>
 	): Null<QueryNode> {
 		if (continueKind == null || blockStmtKind == null) return null;
 		final stmts: Array<QueryNode> = body.children;
@@ -493,7 +495,7 @@ final class LoopScan {
 		// `prefer-if-expression-chain` finding. That cascade is confluent (both `--rule` orders give
 		// the same bytes), so it is not an order-dependent crossing — it is the tool telling the
 		// reader to write something it then reports, on this very file.
-		final glued: Bool = CheckScan.hasCommentMarker(source, bs.from, gs.to);
+		final glued: Bool = LexicalRegions.commentIntersects(bs.from, gs.to, regions);
 		return glued ? null : guard;
 	}
 
@@ -506,6 +508,7 @@ final class LoopScan {
 			source: source,
 			types: types,
 			inert: OccurrenceScan.inertMask(source, plugin),
+			regions: ElementSpan.lazyRegions(source, plugin),
 			seams: seams,
 			typeSyntax: plugin.typeSyntax
 		};
@@ -683,6 +686,9 @@ typedef LoopFileScan = {
 	var source: String;
 	var types: Null<Map<Int, String>>;
 	var inert: Array<Span>;
+
+	/** The file's lexical regions, scanned once on first ask: what a comment gate reads instead of the raw text. */
+	var regions: () -> Array<LexRegion>;
 	var seams: IntervalLoopSeams;
 
 	/** `GrammarPlugin.typeSyntax` — how a gate reads a declared type's arguments. */

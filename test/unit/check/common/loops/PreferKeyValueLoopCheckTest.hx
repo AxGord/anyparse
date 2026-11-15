@@ -533,6 +533,15 @@ class PreferKeyValueLoopCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { for (i in 0...items.length) { final it = items[i];').length);
 	}
 
+	/** A `//` inside a string literal on the binding's line is no trailing comment, so it refuses no rewrite. */
+	public function testStringSlashesAfterBindingFixed(): Void {
+		final text: String = fixedText(
+			wrapSink('for (i in 0...items.length) {\n\t\t\tfinal it = items[i]; sink.note("//");\n\t\t\tsink.use(it, i);\n\t\t}')
+		);
+		Assert.isTrue(text.indexOf(' in items) {') >= 0, text);
+		Assert.isTrue(text.indexOf('items[i]') == -1, text);
+	}
+
 	private function wrapFn(body: String): String {
 		return 'class C {\n\tfunction f(items:Array<Item>):Void {\n\t\t$body\n\t}\n}';
 	}

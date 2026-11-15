@@ -5,6 +5,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.common.loops.ElementLoopRewrite.BinderChoice;
 import anyparse.check.common.loops.ElementLoopRewrite.ReachGate;
 import anyparse.check.scan.LoopScan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -127,7 +128,7 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}'))
-			ElementLoopRewrite.gatedEdits(buildEdits(m, f.source), gate, m.header, m.forSpan, m.decline, out);
+			ElementLoopRewrite.gatedEdits(buildEdits(m, f.regions()), gate, m.header, m.forSpan, m.decline, out);
 		for (c in node.children) fixWalk(c, f, wanted, out, gate);
 	}
 
@@ -210,12 +211,12 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 	 * one per `X[i]` — or an empty list when the rewrite is refused: no binder name, an
 	 * unresolved container, or a comment inside a region a splice would overwrite.
 	 */
-	private static function buildEdits(m: Match, source: String): Array<FixEdit> {
+	private static function buildEdits(m: Match, regions: Array<LexRegion>): Array<FixEdit> {
 		final binder: Null<String> = m.binder;
 		return binder == null || m.decline != null
 			? []
 			: ElementLoopRewrite.elementReadEdits(
-				source, m.forSpan, m.iterableSpan, 'for ($binder in ${m.collection}', m.readSpans, binder
+				regions, m.forSpan, m.iterableSpan, 'for ($binder in ${m.collection}', m.readSpans, binder
 			);
 	}
 

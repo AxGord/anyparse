@@ -5,6 +5,7 @@ import anyparse.check.common.loops.PreferComprehension.ComprehensionCtx;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionSeams;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CtorFieldFold;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.SourceText;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -101,7 +102,7 @@ final class ComprehensionFills {
 		final initSpan: Null<Span> = decl.children[0].span;
 		final pushed: Null<QueryNode> = PreferComprehension.pushCallArgument(kids[2], name, s);
 		if (innerName == null || declSpan == null || initSpan == null) return null;
-		if (PreferComprehension.commentIntersects(declSpan, ctx)) return null;
+		if (LexicalRegions.commentIntersects(declSpan.from, declSpan.to, ctx.regions)) return null;
 		if (pushed == null || pushed.kind != s.identKind || pushed.name != innerName) return null;
 		if (fill.kind != s.forStmtKind && fill.kind != s.whileStmtKind) return null;
 		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(ctx.source, decl);

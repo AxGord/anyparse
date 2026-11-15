@@ -9,6 +9,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.common.naming.ShadowingLocal;
+import anyparse.query.LexicalRegions;
 
 using anyparse.util.Strings;
 using StringTools;
@@ -177,7 +178,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		}
 		final r: Null<ReadsMatch> = m == null ? analyzeReads(node, f) : null;
 		if (r != null && wanted.contains('${r.forSpan.from}:${r.forSpan.to}'))
-			ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.source), gate, r.header, r.forSpan, r.decline, out);
+			ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.regions()), gate, r.header, r.forSpan, r.decline, out);
 		for (c in node.children) fixWalk(c, f, wanted, out, gate);
 	}
 
@@ -350,12 +351,12 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	}
 
 	/** The no-opener splices — the key-value header, then each `X[i]` as the binder — or none when the fix is refused. */
-	private static function buildReadEdits(r: ReadsMatch, source: String): Array<FixEdit> {
+	private static function buildReadEdits(r: ReadsMatch, regions: Array<LexRegion>): Array<FixEdit> {
 		final binder: Null<String> = r.binder;
 		return binder == null || r.decline != null
 			? []
 			: ElementLoopRewrite.elementReadEdits(
-				source, r.forSpan, r.iterableSpan, 'for (${r.index} => $binder in ${r.collection}', r.readSpans, binder
+				regions, r.forSpan, r.iterableSpan, 'for (${r.index} => $binder in ${r.collection}', r.readSpans, binder
 			);
 	}
 
@@ -394,9 +395,9 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		final declEnd: Int = m.declSpan.to;
 		return if (!provablyArrayElement(m, f.typeSyntax))
 			ELEMENT_TYPE_DECLINE
-		else if (CheckScan.hasCommentMarker(source, m.forSpan.from, declEnd))
+		else if (LexicalRegions.commentIntersects(m.forSpan.from, declEnd, f.regions()))
 			ElementLoopRewrite.COMMENT_DECLINE
-		else if (CheckScan.hasCommentMarker(source, declEnd, source.lineEnd(declEnd)))
+		else if (LexicalRegions.commentIntersects(declEnd, source.lineEnd(declEnd), f.regions()))
 			TRAILING_COMMENT_DECLINE
 		else
 			null;

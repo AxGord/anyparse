@@ -4,6 +4,8 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
@@ -120,7 +122,7 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
-			for (m in collectMatches(tree, entry.source, seams)) violations.push({
+			for (m in collectMatches(tree, entry.source, ElementSpan.lazyRegions(entry.source, plugin), seams)) violations.push({
 				file: entry.file,
 				span: m.span,
 				rule: 'prefer-for-in',
@@ -135,7 +137,11 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
-		return seams == null ? [] : CheckScan.applyTextMatches(plugin, source, violations, (tree, src) -> collectMatches(tree, src, seams));
+		return seams == null
+			? []
+			: CheckScan.applyTextMatches(
+				plugin, source, violations, (tree, src) -> collectMatches(tree, src, ElementSpan.lazyRegions(src, plugin), seams)
+			);
 	}
 
 	/** Bundle the `RefShape` kinds this check reads, or null when a required one is unset (the check is then a no-op). */
@@ -185,8 +191,8 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 	}
 
 	/** Walk `tree` and return every qualifying loop, each with its replacement span and text. */
-	private static function collectMatches(tree: QueryNode, source: String, s: Seams): Array<Match> {
-		final ctx: Ctx = { source: source, seams: s };
+	private static function collectMatches(tree: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Array<Match> {
+		final ctx: Ctx = { source: source, regions: regions, seams: s };
 		final out: Array<Match> = [];
 		walk(tree, tree, null, ctx, out);
 		return out;
@@ -368,7 +374,7 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		final declSpan: Null<Span> = prev.span;
 		final initSpan: Null<Span> = prev.children[0].span;
 		if (declSpan == null || initSpan == null) return null;
-		if (CheckScan.hasCommentMarker(ctx.source, declSpan.to, loopSpan.from)) return null;
+		if (LexicalRegions.commentIntersects(declSpan.to, loopSpan.from, ctx.regions())) return null;
 		if (occurrences(scope, iterator, s) != PROTOCOL_OCCURRENCES) return null;
 		final iterable: String = ctx.source.substring(initSpan.from, initSpan.to).rtrim();
 		return SourceComments.textHasCommentMarker(iterable.substring(iterable.lastIndexOf('\n') + 1))
@@ -421,4 +427,4 @@ private typedef Seams = {
 private typedef Match = { var span: Span; var text: String; }
 
 /** Per-file inputs the walkers share: the source and the resolved seams. */
-private typedef Ctx = { var source: String; var seams: Seams; }
+private typedef Ctx = { var source: String; var regions: () -> Array<LexRegion>; var seams: Seams; }

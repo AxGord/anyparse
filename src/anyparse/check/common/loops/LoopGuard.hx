@@ -149,12 +149,12 @@ final class LoopGuard extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byGuard: Map<String, Candidate> = [];
-			indexCandidates(tree, source, seams, byGuard, true);
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+			indexCandidates(tree, source, regions, seams, byGuard, true);
 			final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
 				? null
 				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
 			final edits: Array<{ span: Span, text: String }> = [];
-			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 			RunScan.eachMatched(violations, byGuard, (m, _) -> {
 				final bodySpan: Null<Span> = m.body.span;
 				final guardSpan: Null<Span> = m.guard.span;
@@ -226,7 +226,7 @@ final class LoopGuard extends RuleBase {
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.loopKinds.contains(node.kind)) {
-			final m: Null<Candidate> = match(node, source, s, shielded);
+			final m: Null<Candidate> = match(node, source, regions, s, shielded);
 			// The lifted header tests the INVERTED guard condition; if that inversion cannot
 			// shed its `!( … )` wrap, the header reads worse than the `continue` it replaces.
 			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types, regions())) {
@@ -245,16 +245,19 @@ final class LoopGuard extends RuleBase {
 	}
 
 	/** Index every liftable loop's candidate by its guard's `from:to` span key (for `fix` to re-find it). */
-	private static function indexCandidates(node: QueryNode, source: String, s: Seams, out: Map<String, Candidate>, shielded: Bool): Void {
+	private static function indexCandidates(
+		node: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, out: Map<String, Candidate>, shielded: Bool
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.loopKinds.contains(node.kind)) {
-			final m: Null<Candidate> = match(node, source, s, shielded);
+			final m: Null<Candidate> = match(node, source, regions, s, shielded);
 			if (m != null) {
 				final span: Null<Span> = m.guard.span;
 				if (span != null) out['${span.from}:${span.to}'] = m;
 			}
 		}
-		for (i => c in node.children) indexCandidates(c, source, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
+		for (i => c in node.children)
+			indexCandidates(c, source, regions, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
 	}
 
 	/**
@@ -265,14 +268,16 @@ final class LoopGuard extends RuleBase {
 	 * emits (`andOperatorText` for the joiner, `logicalAndKind` for the slot the inversion is
 	 * parenthesised against).
 	 */
-	private static function match(loop: QueryNode, source: String, s: Seams, shielded: Bool): Null<Candidate> {
+	private static function match(
+		loop: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, shielded: Bool
+	): Null<Candidate> {
 		final body: Null<QueryNode> = LoopScan.loopBody(loop, s.doWhileKinds);
 		if (body == null) return null;
 		// The LIFT arm creates an `if` header with NO `else`, so in a position an `else` can
 		// reach, that trailing `else` rebinds to the emitted header. Refuse there. The MERGE arm
 		// below needs none: it edits an EXISTING header's condition instead of emitting an `if`,
 		// so it changes no else-binding at all. See the dangling-else gate in the class doc.
-		if (s.bodyBlockKinds.contains(body.kind)) return shielded ? matchBlock(body, source, s, null) : null;
+		if (s.bodyBlockKinds.contains(body.kind)) return shielded ? matchBlock(body, source, regions, s, null) : null;
 		// The MERGE arm: the loop body is already a lifted header `if (c) { … }`, so the guard
 		// joins that header with `&&` instead of creating one. An `else` disqualifies the site —
 		// it fires on `!c` today and would fire on `!c || g` after the merge.
@@ -284,7 +289,7 @@ final class LoopGuard extends RuleBase {
 		final header: QueryNode = s.exprBodyKinds.contains(body.kind) && body.children.length == 1 ? body.children[0] : body;
 		if (!s.headerIfKinds.contains(header.kind) || BranchChain.hasElse(header)) return null;
 		final thenBranch: QueryNode = BranchChain.thenOf(header);
-		return s.bodyBlockKinds.contains(thenBranch.kind) ? matchBlock(thenBranch, source, s, BranchChain.condOf(header)) : null;
+		return s.bodyBlockKinds.contains(thenBranch.kind) ? matchBlock(thenBranch, source, regions, s, BranchChain.condOf(header)) : null;
 	}
 
 	/**
@@ -296,9 +301,11 @@ final class LoopGuard extends RuleBase {
 	 * because `guard-continue` must read the SAME answer to know what it may not claim: the two rules
 	 * fired on one loop body and gave opposite advice until they shared it.
 	 */
-	private static function matchBlock(body: QueryNode, source: String, s: Seams, headerCond: Null<QueryNode>): Null<Candidate> {
-		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, source, s.ifKinds, s.blockStmtKind, s.continueKind);
-		return guard == null || commentFollowsGuard(source, guard, body.children[1]) ? null : {
+	private static function matchBlock(
+		body: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, headerCond: Null<QueryNode>
+	): Null<Candidate> {
+		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, regions(), s.ifKinds, s.blockStmtKind, s.continueKind);
+		return guard == null || commentFollowsGuard(source, regions(), guard, body.children[1]) ? null : {
 			guard: guard,
 			body: body,
 			cond: guard.children[0],
@@ -310,11 +317,12 @@ final class LoopGuard extends RuleBase {
 	 * Whether a comment sits between `guard` and the `next` statement (a trailing `// why` on the `continue;` line), or a span is
 	 * unknown. The lift would carry it after the new header's `{`, where it reads as describing the inverted condition.
 	 */
-	private static function commentFollowsGuard(source: String, guard: QueryNode, next: QueryNode): Bool {
+	private static function commentFollowsGuard(source: String, regions: Array<LexRegion>, guard: QueryNode, next: QueryNode): Bool {
 		final guardSpan: Null<Span> = guard.span;
 		final nextSpan: Null<Span> = next.span;
-		return guardSpan == null
-			|| (nextSpan == null || CheckScan.hasCommentMarker(source, guardSpan.to, guardLineEnd(source, guardSpan.to, nextSpan.from)));
+		return guardSpan == null || (
+			nextSpan == null || LexicalRegions.commentIntersects(guardSpan.to, guardLineEnd(source, guardSpan.to, nextSpan.from), regions)
+		);
 	}
 
 	/** The end of the line `from` sits on, capped at `limit`: the part of the gap a trailing comment on the guard's own line can occupy. */

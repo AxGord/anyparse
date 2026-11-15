@@ -7,7 +7,7 @@ import anyparse.check.scan.NativeCodeScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
 import anyparse.query.IndexScope;
-import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.Refs;
@@ -158,6 +158,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 			plugin: plugin,
 			inert: OccurrenceScan.inertRegions(source, regions),
 			comments: SourceComments.collectCommentRegions(regions),
+			regions: regions,
 			strings: [for (r in regions) if (r.kind == StringLit) new Span(r.from, r.to)],
 			fieldNames: OccurrenceScan.structureFieldNameSpans(tree, source, s.shape),
 			patterns: patterns,
@@ -252,7 +253,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 		}
 		final keyToken: Null<Span> = OccurrenceScan.binderTokenSpan(ctx.source, loopSpan.from, valueSpan?.from ?? iterSpan.from, keyName);
 		// The token is located in the header text, so a comment before it could hold a decoy.
-		if (keyToken == null || CheckScan.hasCommentMarker(ctx.source, loopSpan.from, keyToken.from)) return;
+		if (keyToken == null || LexicalRegions.commentIntersects(loopSpan.from, keyToken.from, ctx.regions)) return;
 		final keyUnread: Bool = unread(ctx, keyName, body, bodySpan);
 		if (valueBinder == null || valueSpan == null) {
 			if (keyUnread) out.push(renamed(keyToken, 'loop binder \'$keyName\' is never read; rename it to _'));
@@ -287,7 +288,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 		ctx: FileCtx, iterable: QueryNode, bodySpan: Span, keyName: String, keyToken: Span, valueSpan: Span, valueName: String
 	): Candidate {
 		final drop: Span = new Span(keyToken.from, valueSpan.from);
-		final kind: ValueIteration = CheckScan.hasCommentMarker(ctx.source, drop.from, drop.to)
+		final kind: ValueIteration = LexicalRegions.commentIntersects(drop.from, drop.to, ctx.regions)
 			? Unprovable
 			: ValueIterationProof.kindOf(iterable, ctx.root, ctx.s.shape, ctx.types(), ctx.index(), ctx.file, ctx.importMap());
 		final dropped: (message: String, keyed: Null<KeyedLoop>) -> Candidate = (message, keyed) -> {
@@ -429,6 +430,9 @@ private typedef FileCtx = {
 	/** Comments, regexes and non-interpolating literals — bytes that can neither bind nor read a name. */
 	var inert: Array<Span>;
 	var comments: Array<Span>;
+
+	/** The file's lexical regions: a comment gate over header text reads these, so a `//` in a string is no comment. */
+	var regions: Array<LexRegion>;
 
 	/** Every string literal; an occurrence inside one that is not inert sits in an interpolating literal. */
 	var strings: Array<Span>;

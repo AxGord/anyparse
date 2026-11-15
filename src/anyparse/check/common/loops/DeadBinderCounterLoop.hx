@@ -11,6 +11,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.UsingScan;
+import anyparse.query.LexicalRegions;
+import anyparse.query.ElementSpan;
 
 /**
  * Flags a `for`-in loop that iterates a collection ONLY to count it — `var i = 0;` immediately
@@ -171,7 +173,7 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 				if (span != null) wanted['${span.from}:${span.to}'] = v;
 			}
 			final collected: Array<CountEdit> = [];
-			fixWalk(tree, tree, source, types, s, wanted, lambdaBlocked, symbols, file, collected);
+			fixWalk(tree, tree, source, ElementSpan.lazyRegions(source, plugin), types, s, wanted, lambdaBlocked, symbols, file, collected);
 			// The containment filter runs BEFORE the `using` decision, not after: a nested rewrite whose
 			// edit an enclosing one swallows is not in the output, so neither is the `count()` that
 			// needed `Lambda` — deciding first would leave an unused `using Lambda;` behind, which
@@ -297,8 +299,8 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 
 	/** Mirror of `walk` for the fix path: emit the range-loop rewrite for each wanted, rewritable pair. */
 	private static function fixWalk(
-		node: QueryNode, root: QueryNode, source: String, types: Null<Map<Int, String>>, s: Seams, wanted: Map<String, Violation>,
-		lambdaBlocked: Bool, index: () -> Null<SymbolIndex>, file: String, out: Array<CountEdit>
+		node: QueryNode, root: QueryNode, source: String, regions: () -> Array<LexRegion>, types: Null<Map<Int, String>>, s: Seams,
+		wanted: Map<String, Violation>, lambdaBlocked: Bool, index: () -> Null<SymbolIndex>, file: String, out: Array<CountEdit>
 	): Void {
 		if (s.core.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
@@ -317,13 +319,13 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 				found.declineReason = UsingScan.conflictingUsingDecline(LAMBDA_MODULE, COUNT_METHOD);
 				continue;
 			}
-			final e: Null<{ span: Span, text: String }> = buildEdit(m, source);
+			final e: Null<{ span: Span, text: String }> = buildEdit(m, source, regions());
 			if (e == null) continue;
 			// Re-bound because strict null-safety narrowing does not reach INTO a struct literal.
 			final edit: { span: Span, text: String } = e;
 			out.push({ edit: edit, lambda: m.needsLambda, key: key });
 		}
-		for (c in kids) fixWalk(c, root, source, types, s, wanted, lambdaBlocked, index, file, out);
+		for (c in kids) fixWalk(c, root, source, regions, types, s, wanted, lambdaBlocked, index, file, out);
 	}
 
 	/**
@@ -445,9 +447,9 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 	 * or the stretch between the increment and the body's `}`. The interior `[body {, increment)`
 	 * is carried verbatim, so comments there survive.
 	 */
-	private static function buildEdit(m: Match, source: String): Null<{ span: Span, text: String }> {
-		if (CheckScan.hasCommentMarker(source, m.declSpan.from, m.bodySpan.from)) return null;
-		if (CheckScan.hasCommentMarker(source, m.incrSpan.to, m.bodySpan.to - 1)) return null;
+	private static function buildEdit(m: Match, source: String, regions: Array<LexRegion>): Null<{ span: Span, text: String }> {
+		if (LexicalRegions.commentIntersects(m.declSpan.from, m.bodySpan.from, regions)) return null;
+		if (LexicalRegions.commentIntersects(m.incrSpan.to, m.bodySpan.to - 1, regions)) return null;
 		final interior: String = source.substring(m.bodySpan.from + 1, m.incrSpan.from);
 		return { span: new Span(m.declSpan.from, m.forSpan.to), text: 'for (${m.counter} in 0...${m.bound}) {$interior}' };
 	}

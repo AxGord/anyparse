@@ -628,7 +628,7 @@ final class GuardContinue extends RuleBase {
 		body: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
 	): Bool {
 		if (!shielded) return false;
-		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, source, s.ifKinds, s.blockStmtKind, s.continueKind);
+		final guard: Null<QueryNode> = LoopScan.leadingContinueGuard(body, regions(), s.ifKinds, s.blockStmtKind, s.continueKind);
 		return guard != null && NegationScan.negationIsClean(guard.children[0], source, s.support, types, regions());
 	}
 

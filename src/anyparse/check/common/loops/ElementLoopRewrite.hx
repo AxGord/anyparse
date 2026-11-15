@@ -2,6 +2,7 @@ package anyparse.check.common.loops;
 
 import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.LoopScan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;
 
@@ -129,10 +130,10 @@ final class ElementLoopRewrite {
 	 * an unbraced body take the same edits.
 	 */
 	public static function elementReadEdits(
-		source: String, forSpan: Span, iterableSpan: Span, header: String, readSpans: Array<Span>, binder: String
+		regions: Array<LexRegion>, forSpan: Span, iterableSpan: Span, header: String, readSpans: Array<Span>, binder: String
 	): Array<FixEdit> {
-		if (CheckScan.hasCommentMarker(source, forSpan.from, iterableSpan.to)) return [];
-		for (span in readSpans) if (CheckScan.hasCommentMarker(source, span.from, span.to)) return [];
+		if (LexicalRegions.commentIntersects(forSpan.from, iterableSpan.to, regions)) return [];
+		for (span in readSpans) if (LexicalRegions.commentIntersects(span.from, span.to, regions)) return [];
 		final edits: Array<FixEdit> = [{ span: new Span(forSpan.from, iterableSpan.to), text: header }];
 		for (span in readSpans) edits.push({ span: span, text: binder });
 		return edits;

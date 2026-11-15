@@ -134,8 +134,8 @@
 			"name": "M-VALUE-LOOP-SELF-CALL",
 			"type": "anyparse.check.common.loops.PreferValueLoop",
 			"method": "fixWalk",
-			"find": "ElementLoopRewrite.gatedEdits(buildEdits(m, f.source), gate, m.header, m.forSpan, m.decline, out);",
-			"replace": "for (e in buildEdits(m, f.source)) out.push(e);",
+			"find": "ElementLoopRewrite.gatedEdits(buildEdits(m, f.regions()), gate, m.header, m.forSpan, m.decline, out);",
+			"replace": "for (e in buildEdits(m, f.regions())) out.push(e);",
 			"note": "the value-loop fix never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the collection, changes what the loop reads"
 		},
 		{
@@ -166,8 +166,8 @@
 			"name": "M-KV-NOOPENER-SELF-CALL",
 			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
 			"method": "fixWalk",
-			"find": "ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.source), gate, r.header, r.forSpan, r.decline, out);",
-			"replace": "for (e in buildReadEdits(r, f.source)) out.push(e);",
+			"find": "ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.regions()), gate, r.header, r.forSpan, r.decline, out);",
+			"replace": "for (e in buildReadEdits(r, f.regions())) out.push(e);",
 			"note": "the no-opener arm never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the field, changes what the loop reads"
 		},
 		{
@@ -480,7 +480,7 @@
 			"name": "M-COMPR-NESTED-DECL-COMMENT",
 			"type": "anyparse.check.common.loops.ComprehensionFills",
 			"method": "nestedBuild",
-			"find": "if (PreferComprehension.commentIntersects(declSpan, ctx)) return null;",
+			"find": "if (LexicalRegions.commentIntersects(declSpan.from, declSpan.to, ctx.regions)) return null;",
 			"replace": "",
 			"note": "a comment inside the inner declaration is stranded when the nest dissolves it"
 		},
@@ -685,7 +685,7 @@
 			"name": "M-LOOPGUARD-TRAILING-COMMENT-LIFTED",
 			"type": "anyparse.check.common.loops.LoopGuard",
 			"method": "commentFollowsGuard",
-			"find": " || CheckScan.hasCommentMarker(source, guardSpan.to, guardLineEnd(source, guardSpan.to, nextSpan.from)));",
+			"find": " || LexicalRegions.commentIntersects(guardSpan.to, guardLineEnd(source, guardSpan.to, nextSpan.from), regions)\n\t\t);",
 			"replace": ");",
 			"note": "a comment trailing the `continue;` line is lifted onto the inverted header's `{`, where it reads as describing the condition that KEEPS the item"
 		},

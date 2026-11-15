@@ -2,6 +2,8 @@ package anyparse.check.common.loops;
 
 import anyparse.check.scan.LoopScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
@@ -118,7 +120,7 @@ final class PreferRangeLoop extends RuleBase {
 			final dt: Null<Map<Int, String>> = typed?.declaredTypes(source);
 			final wanted: Array<String> = RunScan.spanKeys(violations);
 			final edits: Array<{ span: Span, text: String }> = [];
-			fixWalk(tree, tree, source, dt, s, wanted, edits);
+			fixWalk(tree, tree, source, ElementSpan.lazyRegions(source, plugin), dt, s, wanted, edits);
 			return CanonicalEdit.dropContainedEdits(edits);
 		});
 	}
@@ -335,18 +337,18 @@ final class PreferRangeLoop extends RuleBase {
 
 	/** Mirror of `walk` for the fix path: emit the range-loop rewrite for each wanted, convertible loop. */
 	private static function fixWalk(
-		node: QueryNode, root: QueryNode, source: String, dt: Null<Map<Int, String>>, s: Seams, wanted: Array<String>,
-		out: Array<{ span: Span, text: String }>
+		node: QueryNode, root: QueryNode, source: String, regions: () -> Array<LexRegion>, dt: Null<Map<Int, String>>, s: Seams,
+		wanted: Array<String>, out: Array<{ span: Span, text: String }>
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length - 1) {
 			final m = analyze(kids[i], kids[i + 1], node, root, source, dt, s);
 			if (!(m != null && wanted.contains('${m.declSpan.from}:${m.declSpan.to}'))) continue;
-			final e: Null<{ span: Span, text: String }> = buildRangeEdit(m, source, s);
+			final e: Null<{ span: Span, text: String }> = buildRangeEdit(m, source, regions(), s);
 			if (e != null) out.push(e);
 		}
-		for (c in kids) fixWalk(c, root, source, dt, s, wanted, out);
+		for (c in kids) fixWalk(c, root, source, regions, dt, s, wanted, out);
 	}
 
 	/**
@@ -367,7 +369,7 @@ final class PreferRangeLoop extends RuleBase {
 			whileNode: QueryNode,
 			body: QueryNode
 		},
-		source: String, s: Seams
+		source: String, regions: Array<LexRegion>, s: Seams
 	): Null<{ span: Span, text: String }> {
 		final incr: QueryNode = m.body.children[m.body.children.length - 1];
 		final bodySpan: Null<Span> = m.body.span;
@@ -376,9 +378,9 @@ final class PreferRangeLoop extends RuleBase {
 		final initSpan: Null<Span> = m.initNode.span;
 		final boundSpan: Null<Span> = m.boundNode.span;
 		if (bodySpan == null || incrSpan == null || whileSpan == null || initSpan == null || boundSpan == null) return null;
-		if (CheckScan.hasCommentMarker(source, incrSpan.to, bodySpan.to - 1)) return null;
-		if (CheckScan.hasCommentMarker(source, m.declSpan.from, initSpan.from)) return null;
-		if (CheckScan.hasCommentMarker(source, initSpan.to, bodySpan.from)) return null;
+		if (LexicalRegions.commentIntersects(incrSpan.to, bodySpan.to - 1, regions)) return null;
+		if (LexicalRegions.commentIntersects(m.declSpan.from, initSpan.from, regions)) return null;
+		if (LexicalRegions.commentIntersects(initSpan.to, bodySpan.from, regions)) return null;
 		final interior: String = source.substring(bodySpan.from + 1, incrSpan.from);
 		final rawStart: String = source.substring(initSpan.from, initSpan.to);
 		final start: String = s.atomicKinds.contains(m.initNode.kind) ? rawStart : '($rawStart)';

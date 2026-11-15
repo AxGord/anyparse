@@ -14,6 +14,8 @@ import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.check.scan.PurityScan;
 import anyparse.query.NodeShape;
+import anyparse.query.LexicalRegions;
+import anyparse.query.ElementSpan;
 
 using anyparse.util.Strings;
 
@@ -334,6 +336,7 @@ final class JoinArrayPushes extends RuleBase {
 			source: source,
 			seams: seams,
 			writes: writes,
+			regions: ElementSpan.lazyRegions(source, plugin),
 			purity: () -> {
 				if (!built) {
 					built = true;
@@ -470,7 +473,7 @@ final class JoinArrayPushes extends RuleBase {
 	private static function localMatch(decl: LocalDecl, run: Array<Push>, scope: Span, ctx: Ctx): Null<Match> {
 		final source: String = ctx.source;
 		final end: Int = run[run.length - 1].stmt.to;
-		if (CheckScan.hasCommentMarker(source, decl.span.from, source.lineEnd(end))) return null;
+		if (LexicalRegions.commentIntersects(decl.span.from, source.lineEnd(end), ctx.regions())) return null;
 		for (push in run) if (referencesName(push.arg, decl.name, ctx.seams)) return null;
 		return OccurrenceScan.referencedInRange(source, decl.name, end, scope.to, [])
 			? { span: decl.span, edits: foldEdits(decl.literal, run, ctx) }
@@ -536,8 +539,8 @@ final class JoinArrayPushes extends RuleBase {
 		final from: Int = run[0].stmt.from;
 		final end: Int = run[run.length - 1].stmt.to;
 		if (!receiversDenoteField(run, container, decl.span.from, ctx)) return null;
-		if (CheckScan.hasCommentMarker(source, decl.span.from, decl.span.to)) return null;
-		if (CheckScan.hasCommentMarker(source, from, source.lineEnd(end))) return null;
+		if (LexicalRegions.commentIntersects(decl.span.from, decl.span.to, ctx.regions())) return null;
+		if (LexicalRegions.commentIntersects(from, source.lineEnd(end), ctx.regions())) return null;
 		if (OccurrenceScan.referencedInRange(source, name, ctorSpan.from, from, [])) return null;
 		// The field's OWN declaration is excluded: a field declared BELOW the constructor lies in
 		// this range and would satisfy the read-after gate with nothing but itself.
@@ -789,6 +792,7 @@ private typedef Ctx = {
 	var source: String;
 	var seams: Seams;
 	var writes: () -> FieldWriteIndex;
+	var regions: () -> Array<LexRegion>;
 	var purity: () -> Null<PurityCtx>;
 }
 

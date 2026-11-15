@@ -7,7 +7,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;
-import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SourceComments;
@@ -328,6 +328,7 @@ final class PreferComprehension extends RuleBase {
 			source: source,
 			seams: s,
 			comments: SourceComments.collectCommentTokens(regions),
+			regions: regions,
 			tree: tree,
 			shape: shape
 		};
@@ -425,7 +426,7 @@ final class PreferComprehension extends RuleBase {
 		final forSpan: Null<Span> = forNode.span;
 		final scopeSpan: Null<Span> = scope.span;
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
-		if (!gapAdmits(source, declName, declSpan, forSpan, gapped)) return null;
+		if (!gapAdmits(source, ctx.regions, declName, declSpan, forSpan, gapped)) return null;
 		final annotation: Null<String> = CtorFieldFold.declaredTypeAnnotation(source, decl);
 		final element: Null<String> = annotation == null
 			? null
@@ -467,10 +468,12 @@ final class PreferComprehension extends RuleBase {
 	 * it refuses a read, a write and a SHADOWING redeclaration alike — in Haxe a second `var a` in
 	 * the same block makes the loop's `a` a different binding, and the declaration must not cross it.
 	 */
-	private static function gapAdmits(source: String, declName: String, declSpan: Span, forSpan: Span, gapped: Bool): Bool {
+	private static function gapAdmits(
+		source: String, regions: Array<LexRegion>, declName: String, declSpan: Span, forSpan: Span, gapped: Bool
+	): Bool {
 		final lineEnd: Int = source.lineEnd(declSpan.to);
 		final commentTo: Int = gapped || lineEnd < forSpan.from ? lineEnd : forSpan.from;
-		return !CheckScan.hasCommentMarker(source, declSpan.to, commentTo)
+		return !LexicalRegions.commentIntersects(declSpan.to, commentTo, regions)
 			&& (!gapped || !OccurrenceScan.referencedInRange(source, declName, declSpan.to, forSpan.from, []));
 	}
 
@@ -725,7 +728,7 @@ final class PreferComprehension extends RuleBase {
 		final initSpan: Null<Span> = init.span;
 		if (declName == null || declSpan == null || initSpan == null || declName == name) return null;
 		for (l in taken) if (l.name == declName) return null;
-		if (commentIntersects(declSpan, ctx)) return null;
+		if (LexicalRegions.commentIntersects(declSpan.from, declSpan.to, ctx.regions)) return null;
 		final uses: Array<Use> = [];
 		var useHost: Null<QueryNode> = null;
 		for (j in i + 1...kids.length) {
@@ -840,15 +843,6 @@ final class PreferComprehension extends RuleBase {
 		final span: Null<Span> = node.span;
 		if (span != null && span.to <= at && !s.pureKinds.contains(node.kind)) return false;
 		return node.children.foreach(c -> precedingNodesPure(c, at, s));
-	}
-
-	/**
-	 * Whether any comment token overlaps `span`. Dissolving a declaration a comment sits across
-	 * would strand that comment inside an expression; a comment inside the terminal push statement
-	 * is a different matter — `pushArgument` hoists it, or the argument text carries it verbatim.
-	 */
-	private static function commentIntersects(span: Span, ctx: ComprehensionCtx): Bool {
-		return ctx.comments.exists(tok -> tok.from < span.to && tok.to > span.from);
 	}
 
 
@@ -1109,6 +1103,9 @@ typedef ComprehensionCtx = {
 	var source: String;
 	var seams: ComprehensionSeams;
 	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+
+	/** The file's lexical regions: what a comment gate over a span reads, so a `//` inside a string is no comment. */
+	var regions: Array<LexRegion>;
 
 	/** The file's tree and ref shape — the write scan that decides `var` vs `final` needs both. */
 	var tree: QueryNode;

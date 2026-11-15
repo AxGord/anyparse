@@ -299,6 +299,14 @@ class JoinArrayPushesCheckTest extends Test {
 		CheckFixture.assertRegistered('join-array-pushes');
 	}
 
+	/** A `//` inside a pushed string literal is no comment, so it refuses no fold. */
+	public function testStringSlashesInPushFixed(): Void {
+		Assert.equals(
+			fn('final a:Array<String> = ["x//y"];\n\t\treturn a;'),
+			applyFix(fn('final a:Array<String> = [];\n\t\ta.push("x//y");\n\t\treturn a;'))
+		);
+	}
+
 	/** The `TextFlavors` shape: a field-assigning prologue statement, `super()`, then object-literal pushes. */
 	private inline function motivating(): String {
 		return ctor(
