@@ -2972,8 +2972,8 @@
 			"name": "M-IF-ELSE-LADDER-IN-EXPR",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildIfElseLadderTest",
-			"find": "return macro ($statement && $inChain)",
-			"replace": "return inChain",
+			"find": "return plain == null ? macro ($statement && $inChain) : macro ($statement && $inChain && !$plain);",
+			"replace": "return inChain;",
 			"note": "a statement if in expression position ladders too, so a block's value tail if leaves its expression-knob placement"
 		},
 		{
@@ -3028,16 +3028,16 @@
 			"name": "M-EXPR-ELSE-IF-LINK-UNMARKED",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "optionalRefOptArgExpr",
-			"find": "macro ($statement ? $mark : $e);",
-			"replace": "e;",
+			"find": "macro (${WriterBodyPolicyLowering.ifElseLadderStatementTest(true)} ? $mark : $e)",
+			"replace": "e",
 			"note": "an else-if link of an expression if is never marked a chain, so a function body chain without a last else half-ladders"
 		},
 		{
 			"name": "M-EXPR-ELSE-IF-LINK-UNGATED",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "optionalRefOptArgExpr",
-			"find": "macro ($statement ? $mark : $e);",
-			"replace": "mark;",
+			"find": "macro (${WriterBodyPolicyLowering.ifElseLadderStatementTest(true)} ? $mark : $e)",
+			"replace": "mark",
 			"note": "an else-if link of an expression if is marked a chain in a value position too, so a value chain breaks its last link"
 		},
 		{
@@ -3457,6 +3457,14 @@
 			"find": "if (kwGap != null) parts.push(kwGap);",
 			"replace": "",
 			"note": "the comment captured between a field's own keyword and its block is no longer written, so the round trip drops it"
+		},
+		{
+			"name": "M-PLAIN-VALUE-LINK-OWN-VERDICT",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "plainValueChainProbe",
+			"find": "&& !opt._inElseIfBranch",
+			"replace": "",
+			"note": "an else-if link of plain values decides for itself, so a chain whose head calls renders half-laddered"
 		}
 	]
 }

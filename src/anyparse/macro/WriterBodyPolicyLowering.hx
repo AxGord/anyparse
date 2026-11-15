@@ -49,11 +49,42 @@ final class WriterBodyPolicyLowering {
 	/** Where the braced ctors start in `@:fmt(ifElseLadder(...))`'s names, after the if ctor and the then field. */
 	public static inline final LADDER_BRACED_ARG: Int = 2;
 
+	/** The first plain-value ctor argument of `@:fmt(plainValueIf(...))`, after its if ctor, two fields and wrapper ctor. */
+	public static inline final PLAIN_VALUE_CTOR_ARG: Int = 4;
+
 	/** Where the braced ctors start in `@:fmt(statementIfBody(...))`'s names, after the wrapper ctor. */
 	private static inline final STATEMENT_IF_BRACED_ARG: Int = 4;
 
 	/** The prefix of a `@:fmt(statementIfBody(...))` name for a loop (`loop:ForExpr.body`) whose body is the statement asked about. */
 	private static final STATEMENT_IF_LOOP_TAG: String = 'loop:';
+
+	/**
+	 * `@:fmt(plainValueIf('<ifCtor>', '<thenField>', '<elseField>', '<wrapperCtor>', '<plainCtor>'…))` as a runtime test over
+	 * the `if` struct `value`: in expression position (a block's value tail) its chain is a simple value
+	 * (`LoopBodyShape.isPlainValueChain`), which the ladder and the `else` separator leave to the expression knobs. An
+	 * `else if` link the head marked (`_inElseIfBranch`) follows its laddered head instead. Null when
+	 * the field names nothing.
+	 */
+	public static function plainValueChainProbe(args: Null<Array<String>>): Null<Expr> {
+		return args == null || args.length <= PLAIN_VALUE_CTOR_ARG
+			? null
+			: macro (
+				opt._inExprPosition
+				&& !opt._inElseIfBranch
+				&& anyparse.format.LoopBodyShape.isPlainValueChain(
+					value, $v{args[0]}, $v{args[1]}, $v{args[2]}, $v{args[3]}, $v{args.slice(PLAIN_VALUE_CTOR_ARG)}
+				)
+			);
+	}
+
+	/**
+	 * The opt an `else if` link of a statement chain is written with: marked a chain link (`mark`), except under a head that
+	 * is a simple value chain (`plainValueChainProbe`), whose links stay unmarked (`unmarked`) and so follow it inline.
+	 */
+	public static function plainChainLinkMark(plainArgs: Null<Array<String>>, unmarked: Expr, mark: Expr): Expr {
+		final plain: Null<Expr> = plainValueChainProbe(plainArgs);
+		return plain == null ? mark : macro ($plain ? $unmarked : $mark);
+	}
 
 	/**
 	 * Build a Doc expression that wraps a bare-Ref body field with a
@@ -1127,7 +1158,8 @@ final class WriterBodyPolicyLowering {
 		};
 		if (opts.exprFlagName == null) return inChain;
 		final statement: Expr = ifElseLadderStatementTest(opts.exprIfElseLadder == true);
-		return macro ($statement && $inChain);
+		final plain: Null<Expr> = plainValueChainProbe(opts.plainValueIfArgs);
+		return plain == null ? macro ($statement && $inChain) : macro ($statement && $inChain && !$plain);
 	}
 
 	/**

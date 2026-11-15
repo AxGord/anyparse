@@ -1884,6 +1884,10 @@ typedef WrapBodyOpts = {
 	// `@:fmt(nestedIfElseLadder('<ifCtor>'))` beside `ifElseLadder` on a then-body: a body that is itself an `<ifCtor>`
 	// owning an `else` (read through the same `ladderElseFieldName`) joins the ladder too. Null → byte-inert.
 	?nestedIfCtor: String,
+	// `@:fmt(plainValueIf('<ifCtor>', '<thenField>', '<wrapperCtor>', '<plainCtor>'…))` beside `ifElseLadder`: a chain the
+	// ladder reaches only through `opt._statementFrame` in expression position keeps the knob's layout when every branch is
+	// a plain value (`LoopBodyShape.isPlainValueChain`). Null → byte-inert.
+	?plainValueIfArgs: Array<String>,
 	// `@:fmt(ifElseLadder('<ifCtor>', '<thenField>', '<bracedCtor>'…))`: a `switch` branch the `elseSwitch` knob would glue
 	// ladders instead when a branch of its chain is none of the braced ctors
 	// (`WriterBodyPolicyLowering.buildSwitchBranchLadderTest`). Null (the bare flag) → byte-inert.

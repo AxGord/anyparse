@@ -338,7 +338,10 @@ final class WriterFieldSepLowering {
 			macro false;
 		} else {
 			final statement: Expr = WriterBodyPolicyLowering.ifElseLadderStatementTest(exprLadder);
-			macro !$statement && $bpAccess == $samePat;
+			// A simple value chain is no ladder (`plainValueChainProbe`): its `else` follows the knob as off a statement.
+			final plain: Null<Expr> = WriterBodyPolicyLowering.plainValueChainProbe(c.child.fmtReadStringArgs('plainValueIf'));
+			final notLadder: Expr = plain == null ? macro !$statement : macro (!$statement || $plain);
+			macro $notLadder && $bpAccess == $samePat;
 		};
 		// ω-ifelse-semicolon-next-line: when the body is forced inline
 		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice

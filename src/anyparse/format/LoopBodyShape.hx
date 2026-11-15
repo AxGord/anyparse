@@ -114,6 +114,25 @@ final class LoopBodyShape {
 	}
 
 	/**
+	 * The one answer to "is this `if` / `else` chain a simple value": every branch of the chain `head` (an `<ifCtor>`'s
+	 * struct) owns an `else`, and each branch is a `<wrapperCtor>` around a plain value, a node of `plainCtors` whose
+	 * enum-valued children are plain values too (a literal, a name, a field read; never a call). An `else if` link is
+	 * asked the same of its own chain.
+	 */
+	public static function isPlainValueChain(
+		head: Null<Any>, ifCtor: String, thenField: String, elseField: String, wrapperCtor: String, plainCtors: Array<String>
+	): Bool {
+		if (head == null || Reflect.isEnumValue(head)) return false;
+
+		final elseBranch: Null<Any> = Reflect.field(head, elseField);
+		if (!Reflect.isEnumValue(elseBranch) || !isPlainBranch(Reflect.field(head, thenField), wrapperCtor, plainCtors)) return false;
+		final elseValue: EnumValue = cast elseBranch;
+		return Type.enumConstructor(elseValue) == ifCtor
+			? isPlainValueChain(Type.enumParameters(elseValue)[0], ifCtor, thenField, elseField, wrapperCtor, plainCtors)
+			: isPlainBranch(elseValue, wrapperCtor, plainCtors);
+	}
+
+	/**
 	 * The statement a function body stands for: `body` with `wrapperCtor` unwrapped, then every loop of `loopCtors`
 	 * (`Ctor.field`: the field of the ctor's struct that holds the loop body) looked through down to its body. `null` when
 	 * the wrapper is missing; with no loop in the way it is the unwrap `isIfWithElse` does itself.
@@ -138,6 +157,19 @@ final class LoopBodyShape {
 	 */
 	private static function isBareBranch(branch: Null<Any>, bracedCtors: Array<String>): Bool {
 		return Reflect.isEnumValue(branch) && !bracedCtors.contains(Type.enumConstructor(cast branch));
+	}
+
+	private static function isPlainBranch(branch: Null<Any>, wrapperCtor: String, plainCtors: Array<String>): Bool {
+		if (!Reflect.isEnumValue(branch)) return false;
+		final value: EnumValue = cast branch;
+		return Type.enumConstructor(value) == wrapperCtor && isPlainValue(Type.enumParameters(value)[0], plainCtors);
+	}
+
+	private static function isPlainValue(node: Null<Any>, plainCtors: Array<String>): Bool {
+		if (!Reflect.isEnumValue(node)) return false;
+		final value: EnumValue = cast node;
+		return plainCtors.contains(Type.enumConstructor(value))
+			&& Type.enumParameters(value).foreach(param -> !Reflect.isEnumValue(param) || isPlainValue(param, plainCtors));
 	}
 
 	/** The entry of `selectors` (`Ctor.field`) naming the ctor of `value`, `null` when none does. */

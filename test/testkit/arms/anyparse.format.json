@@ -693,6 +693,22 @@
 			"find": "!bracedCtors.contains(Type.enumConstructor(cast branch))",
 			"replace": "![\"MetaExpr\", \"ParenExpr\"].concat(bracedCtors).contains(Type.enumConstructor(cast branch))",
 			"note": "a block wrapped in metadata or parentheses counts as braced, so an all-wrapped chain leaves its function body placement for the next line although the if writes the wrapped blocks on their own lines"
+		},
+		{
+			"name": "M-PLAIN-VALUE-CHAIN-NEVER",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isPlainValueChain",
+			"find": "if (head == null || Reflect.isEnumValue(head)) return false;",
+			"replace": "return false;",
+			"note": "a value-tail if/else of plain values ladders like a call chain again"
+		},
+		{
+			"name": "M-PLAIN-VALUE-ANY-CTOR",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isPlainValue",
+			"find": "return plainCtors.contains(Type.enumConstructor(value))",
+			"replace": "return true",
+			"note": "a call branch counts as a plain value, so a value-tail chain with a call stays inline"
 		}
 	]
 }

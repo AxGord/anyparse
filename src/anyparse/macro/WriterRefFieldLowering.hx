@@ -53,6 +53,7 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.WriterRefLeadLowering, anyparse.macro.WriterTriviaSlotLowering)
 final class WriterRefFieldLowering {
 
+	private static final PLAIN_VALUE_IF: String = 'plainValueIf';
 	private static final IF_ELSE_LADDER: String = 'ifElseLadder';
 	private static final STATEMENT_IF_BODY: String = 'statementIfBody';
 
@@ -469,7 +470,8 @@ final class WriterRefFieldLowering {
 				ladderWrittenBareExpr: WriterBraceSymmetryLowering.chainBareBranchTest(
 					ctx.braceSym, child, child.fmtReadStringArgs(IF_ELSE_LADDER)
 				),
-				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
+				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch'),
+				plainValueIfArgs: child.fmtReadStringArgs(PLAIN_VALUE_IF)
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
 			// ω-cond-comp-expr-body-nest: optional-kw-Ref body
@@ -579,12 +581,9 @@ final class WriterRefFieldLowering {
 				// (`if {} else if {} else { … }`) — the block is not an else-branch-if.
 				// An expression `if` link is marked only where it stands as a statement: a value chain keeps its layout.
 				final mark: Expr = macro _setElseIfBranch($e, opt);
-				final setExpr: Expr = if (stmtPat != null) {
-					mark;
-				} else {
-					final statement: Expr = WriterBodyPolicyLowering.ifElseLadderStatementTest(true);
-					macro ($statement ? $mark : $e);
-				};
+				final setExpr: Expr = stmtPat != null
+					? WriterBodyPolicyLowering.plainChainLinkMark(child.fmtReadStringArgs(PLAIN_VALUE_IF), e, mark)
+					: macro (${WriterBodyPolicyLowering.ifElseLadderStatementTest(true)} ? $mark : $e);
 				final clearExpr: Expr = macro _clearElseIfBranch($e, opt);
 				e = {
 					expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
@@ -1008,7 +1007,8 @@ final class WriterRefFieldLowering {
 			ladderWrittenBareExpr: WriterBraceSymmetryLowering.chainBareBranchTest(
 				ctx.braceSym, child, child.fmtReadStringArgs(IF_ELSE_LADDER)
 			),
-			nestedIfCtor: child.fmtReadString('nestedIfElseLadder')
+			nestedIfCtor: child.fmtReadString('nestedIfElseLadder'),
+			plainValueIfArgs: child.fmtReadStringArgs(PLAIN_VALUE_IF)
 		};
 		// Read before the wrap retargets `wrapOpts`' value access to its own local. A `switch` the ladder takes off its
 		// keyword's line closes one indent deeper, so its `}` is no glued close.

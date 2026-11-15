@@ -52,7 +52,11 @@ typedef HxIfStmt = {
 
 	@:trailOpt(';')
 	@:fmt(bodyPolicy('ifBody', 'expressionIfBody'), ifElseLadder('IfStmt', 'thenBody', 'BlockStmt', 'SwitchStmt', 'SwitchStmtBare'),
-		nestedIfElseLadder('IfStmt'), clearElseIfBranch, elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces)
+		nestedIfElseLadder('IfStmt'),
+		plainValueIf(
+			'IfStmt', 'thenBody', 'elseBody', 'ExprStmt', 'IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit', 'IdentExpr', 'FieldAccess',
+			'DoubleStringExpr', 'SingleStringExpr'
+		), clearElseIfBranch, elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces)
 	var thenBody: HxStatement;
 
 	@:optional
@@ -60,7 +64,10 @@ typedef HxIfStmt = {
 	@:kw('else')
 	@:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse, bodyPolicy('elseBody', 'expressionElseBody'), elseIf,
 		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), elseIfCommentReflow, ifElseLadder, propagateElseIfBranch,
-		dropSingleStmtBraces)
+		plainValueIf(
+			'IfStmt', 'thenBody', 'elseBody', 'ExprStmt', 'IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit', 'IdentExpr', 'FieldAccess',
+			'DoubleStringExpr', 'SingleStringExpr'
+		), dropSingleStmtBraces)
 	var elseBody: Null<HxStatement>;
 
 };

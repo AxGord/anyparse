@@ -2526,7 +2526,7 @@
 				"--fix"
 			],
 			"files": {
-				"Main.hx": "class Main {\n\tstatic function g(h:Int->Int):Int {\n\t\treturn h(-3);\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) {\n\t\t\tfinal a = 10;\n\t\t\tfinal b = 20;\n\t\t\tfinal v = () -> if (c) 1 else 2;\n\t\t\tfinal w = () -> {\n\t\t\t\tif (!c)\n\t\t\t\t\ta\n\t\t\t\telse\n\t\t\t\t\tb; // trailing\n\t\t\t};\n\t\t\tSys.println(v() + ',' + w() + ',' + g(x -> if (x > 0) x else -x));\n\t\t}\n\t}\n}\n",
+				"Main.hx": "class Main {\n\tstatic function g(h:Int->Int):Int {\n\t\treturn h(-3);\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) {\n\t\t\tfinal a = 10;\n\t\t\tfinal b = 20;\n\t\t\tfinal v = () -> if (c) 1 else 2;\n\t\t\tfinal w = () -> {\n\t\t\t\tif (!c) a else b; // trailing\n\t\t\t};\n\t\t\tSys.println(v() + ',' + w() + ',' + g(x -> if (x > 0) x else -x));\n\t\t}\n\t}\n}\n",
 				"apq.json": "{}\n"
 			},
 			"expect": {
