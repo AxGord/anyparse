@@ -145,18 +145,20 @@ final class WriterMetaLineEndLowering {
 			final _link: Bool = $fieldAccess.match($chainPat);
 			if ((_policy: Int) < 0)
 				_dc([$sourceSep, $doc]);
-			else if (_policy == anyparse.format.MetadataLineEndPolicy.Fit) switch (opt._metaChain) {
-				case 0 if (_chainSimple && _link):
-					_dg(_dc([_dl(), $doc]));
-				case 0 if (_chainSimple):
-					_dc([_dile(opt.lineWidth + 1, _dhl(), _dt(' ')), $doc]);
-				case 1 if (_link):
-					_dc([_dl(), $doc]);
-				case 1:
-					_dbg(_dc([_dhl(), $doc]));
-				case _:
-					_dc([_dhl(), $doc]);
-			} else if (
+			else if (_policy == anyparse.format.MetadataLineEndPolicy.Fit)
+				switch (opt._metaChain) {
+					case 0 if (_chainSimple && _link):
+						_dg(_dc([_dl(), $doc]));
+					case 0 if (_chainSimple):
+						_dc([_dile(opt.lineWidth + 1, _dhl(), _dt(' ')), $doc]);
+					case 1 if (_link):
+						_dc([_dl(), $doc]);
+					case 1:
+						_dbg(_dc([_dhl(), $doc]));
+					case _:
+						_dc([_dhl(), $doc]);
+				}
+			else if (
 				_policy != anyparse.format.MetadataLineEndPolicy.None && (!_link || _policy == anyparse.format.MetadataLineEndPolicy.After)
 			)
 				_dc([_dhl(), $doc]);

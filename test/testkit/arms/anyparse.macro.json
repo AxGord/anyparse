@@ -3390,6 +3390,36 @@
 			"find": "macro ($ownChain || $nestedChain)",
 			"replace": "ownChain",
 			"note": "a then-body that is an if with an else keeps the outer placement, so the inner else lands in the outer head column"
+		},
+		{
+			"name": "M-SWITCH-BRANCH-LADDER-NONE",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildSwitchBranchLadderTest",
+			"force": "null",
+			"note": "no brace-less sibling un-glues a then switch, so `if (c) switch e {` stays on the head line beside a bare else"
+		},
+		{
+			"name": "M-SWITCH-BRANCH-LADDER-ALWAYS",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildSwitchBranchLadderTest",
+			"find": "return macro ($ladderTest && $bare);",
+			"replace": "return ladderTest;",
+			"note": "every then switch of a chain ladders, so an all-switch chain loses its glue"
+		},
+		{
+			"name": "M-SWITCH-LADDER-CLOSE-GLUED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitBodyPolicyBareRef",
+			"find": ": macro ($switchGlueTest && !$switchLadderTest);",
+			"replace": ": switchGlueTest;",
+			"note": "the close of a laddered then switch still reads as glued, so the else cuddles a } one indent deeper"
+		},
+		{
+			"name": "M-LADDER-DEBRACE-OFF",
+			"type": "anyparse.macro.WriterBraceSymmetryLowering",
+			"method": "chainBareBranchTest",
+			"force": "null",
+			"note": "the ladder reads the branches as parsed, so a { single; } else the writer de-braces reads as braced and the then switch ladders only on a second pass"
 		}
 	]
 }

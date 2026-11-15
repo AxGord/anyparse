@@ -68,10 +68,12 @@ final class HxIfElseLadderTest extends Test {
 		'\ta();',
 		'} else',
 		'\tbar();',
-		'if (c) switch a {',
-		'\tcase 1:',
-		'\t\tx();',
-		'} else',
+		'if (c)',
+		'\tswitch a {',
+		'\t\tcase 1:',
+		'\t\t\tx();',
+		'\t}',
+		'else',
 		'\tfoo();'
 	];
 	private static final NO_ELSE: Array<String> = ['if (c) foo();'];

@@ -53,6 +53,7 @@ using anyparse.macro.MetaInspect;
 	anyparse.macro.WriterRefLeadLowering, anyparse.macro.WriterTriviaSlotLowering)
 final class WriterRefFieldLowering {
 
+	private static final IF_ELSE_LADDER: String = 'ifElseLadder';
 	private static final STATEMENT_IF_BODY: String = 'statementIfBody';
 
 	/**
@@ -461,9 +462,13 @@ final class WriterRefFieldLowering {
 				bracketBodyGlueArgs: child.fmtReadStringArgs(WriterLowering.BRACKET_BODY_GLUE),
 				arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
 				elseIfCommentReflow: child.fmtHasFlag('elseIfCommentReflow'),
-				ifElseLadder: child.fmtHasFlag('ifElseLadder'),
+				ifElseLadder: child.fmtHasFlag(IF_ELSE_LADDER),
 				exprIfElseLadder: child.fmtHasFlag('exprIfElseLadder'),
 				ladderElseFieldName: site.fieldName,
+				ladderBranchArgs: child.fmtReadStringArgs(IF_ELSE_LADDER),
+				ladderWrittenBareExpr: WriterBraceSymmetryLowering.chainBareBranchTest(
+					ctx.braceSym, child, child.fmtReadStringArgs(IF_ELSE_LADDER)
+				),
 				elseSwitchArgs: child.fmtReadStringArgs('elseSwitch')
 			}));
 		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
@@ -970,7 +975,7 @@ final class WriterRefFieldLowering {
 		// omega-else-switch: read ONCE - the body wrap decides the head glue from it and the
 		// close-side verdict below is built from the same names, so the two cannot drift.
 		final elseSwitchArgs: Null<Array<String>> = child.fmtReadStringArgs('elseSwitch');
-		parts.push(WriterBodyPolicyLowering.bodyPolicyWrap(ctx.bodyPolicy, {
+		final wrapOpts: WriterLowering.WrapBodyOpts = {
 			flagName: bodyPolicyFlag,
 			exprFlagName: site.bodyPolicyExprFlag,
 			writeCall: writeCall,
@@ -996,11 +1001,19 @@ final class WriterRefFieldLowering {
 			arrowValueIfSite: child.fmtHasFlag(WriterLowering.ARROW_VALUE_IF_SITE),
 			loopBodyIfElseArgs: loopBodyIfElseArgs,
 			elseSwitchArgs: elseSwitchArgs,
-			ifElseLadder: child.fmtHasFlag('ifElseLadder'),
+			ifElseLadder: child.fmtHasFlag(IF_ELSE_LADDER),
 			exprIfElseLadder: child.fmtHasFlag('exprIfElseLadder'),
 			ladderElseFieldName: site.elseFieldName,
+			ladderBranchArgs: child.fmtReadStringArgs(IF_ELSE_LADDER),
+			ladderWrittenBareExpr: WriterBraceSymmetryLowering.chainBareBranchTest(
+				ctx.braceSym, child, child.fmtReadStringArgs(IF_ELSE_LADDER)
+			),
 			nestedIfCtor: child.fmtReadString('nestedIfElseLadder')
-		}));
+		};
+		// Read before the wrap retargets `wrapOpts`' value access to its own local. A `switch` the ladder takes off its
+		// keyword's line closes one indent deeper, so its `}` is no glued close.
+		final switchLadderTest: Null<Expr> = WriterBodyPolicyLowering.buildSwitchBranchLadderTest(wrapOpts);
+		parts.push(WriterBodyPolicyLowering.bodyPolicyWrap(ctx.bodyPolicy, wrapOpts));
 		// omega-else-switch CLOSE side: the next field's gap gets the glue verdict
 		// from HERE, where the field's own meta and its own comment slots are in
 		// scope. A comment captured between the head and this body forces the body
@@ -1009,7 +1022,10 @@ final class WriterRefFieldLowering {
 		// field carrying no `@:fmt(elseSwitch(...))` never glues at all, however
 		// the keyword field beside it is annotated. Null when the knob is absent -
 		// every existing gap keeps its bytes.
-		final glueCtorTest: Null<Expr> = buildElseSwitchGlueTest(ctx.ctorPat, elseSwitchArgs, refName, fieldAccess);
+		final switchGlueTest: Null<Expr> = buildElseSwitchGlueTest(ctx.ctorPat, elseSwitchArgs, refName, fieldAccess);
+		final glueCtorTest: Null<Expr> = switchGlueTest == null || switchLadderTest == null
+			? switchGlueTest
+			: macro ($switchGlueTest && !$switchLadderTest);
 		final headGlue: Null<Expr> = if (glueCtorTest == null || (afterTrailExpr == null && beforeLeadingExpr == null)) {
 			glueCtorTest;
 		} else {

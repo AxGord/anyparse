@@ -661,6 +661,14 @@
 			"find": "offerLiteralBreaks(body, b -> fitLineLayout(cols, b, nestGluedBody, lineWidth, refuseGlue))",
 			"replace": "fitLineLayout(cols, body, nestGluedBody, lineWidth, refuseGlue)",
 			"note": "a case body is laid out for its flat literal only: the next write reads the broken literal as a glued body and a threshold-literal case body takes two rewrites"
+		},
+		{
+			"name": "M-LADDER-WRITTEN-CTOR-BLIND",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "chainHasBareBranch",
+			"find": "return isBareOf(eff, bracedCtors);",
+			"replace": "return eff != elseBody || isBareOf(eff, bracedCtors);",
+			"note": "a de-braced else counts as brace-less whatever it de-braces to, so `else { switch f {…} }` ladders a then switch on the first pass and glues it on the second"
 		}
 	]
 }

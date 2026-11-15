@@ -46,6 +46,9 @@ using anyparse.macro.MetaInspect;
 @:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterLoweringSupport, anyparse.macro.WriterPolicyLowering)
 final class WriterBodyPolicyLowering {
 
+	/** Where the braced ctors start in `@:fmt(ifElseLadder(...))`'s names, after the if ctor and the then field. */
+	public static inline final LADDER_BRACED_ARG: Int = 2;
+
 	/** Where the braced ctors start in `@:fmt(statementIfBody(...))`'s names, after the wrapper ctor. */
 	private static inline final STATEMENT_IF_BRACED_ARG: Int = 4;
 
@@ -732,12 +735,16 @@ final class WriterBodyPolicyLowering {
 		// on the policy value the same decision costs one ternary over two enum constants.
 		// A `switch` body matches neither the block-ctor arms nor the `IfStmt` one, so it
 		// still reaches this switch exactly as the prepended arms intended.
+		// A `switch` branch glues to its keyword only while every branch of its chain is brace-delimited; one brace-less
+		// branch ladders it like any other body, through `policyFlag`, which the ladder test has already made `Next`.
 		final tests: ElseSwitchTests = buildElseSwitchTests(bp, opts);
 		final esSame: Null<Expr> = tests.same;
 		final esNext: Null<Expr> = tests.next;
-		final elseSwitchPolicy: Expr = esSame == null
+		final switchLadderTest: Null<Expr> = buildSwitchBranchLadderTest(opts);
+		final sameGlue: Null<Expr> = esSame == null || switchLadderTest == null ? esSame : macro ($esSame && !$switchLadderTest);
+		final elseSwitchPolicy: Expr = sameGlue == null
 			? policyFlag
-			: macro (if ($esSame)
+			: macro (if ($sameGlue)
 				$samePat
 			else if ($esNext)
 				$nextPat
@@ -1118,6 +1125,25 @@ final class WriterBodyPolicyLowering {
 		if (opts.exprFlagName == null) return inChain;
 		final statement: Expr = ifElseLadderStatementTest(opts.exprIfElseLadder == true);
 		return macro ($statement && $inChain);
+	}
+
+	/**
+	 * The runtime test that a `switch` branch of a ladder chain must leave its keyword's line: the body's `if` is a ladder
+	 * (`buildIfElseLadderTest`) and a branch of its own chain is none of `@:fmt(ifElseLadder('<ifCtor>', '<thenField>',
+	 * '<bracedCtor>'…))`'s braced ctors. The body selector and the then-branch close both read it, so the `else` after a
+	 * laddered `switch` never cuddles its `}`. Null on a field whose `ifElseLadder` names nothing.
+	 */
+	private static function buildSwitchBranchLadderTest(opts: WriterLowering.WrapBodyOpts): Null<Expr> {
+		final args: Null<Array<String>> = opts.ladderBranchArgs;
+		final elseFieldName: Null<String> = opts.ladderElseFieldName;
+		final ladderTest: Null<Expr> = buildIfElseLadderTest(opts);
+		if (args == null || args.length <= LADDER_BRACED_ARG || elseFieldName == null || ladderTest == null) return null;
+		final braced: Array<String> = args.slice(LADDER_BRACED_ARG);
+		final writtenBare: Null<Expr> = opts.ladderWrittenBareExpr;
+		final bare: Expr = writtenBare ?? macro anyparse.format.LoopBodyShape.headHasBareBranch(
+			value, $v{args[0]}, $v{args[1]}, $v{elseFieldName}, $v{braced}
+		);
+		return macro ($ladderTest && $bare);
 	}
 
 	/**

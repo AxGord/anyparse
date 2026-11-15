@@ -88,11 +88,21 @@ final class LoopBodyShape {
 	): Bool {
 		if (!Reflect.isEnumValue(body)) return false;
 		final value: EnumValue = cast body;
-		if (wrapperCtor != null)
-			return Type.enumConstructor(value) == wrapperCtor
-				&& hasBareBranch(Type.enumParameters(value)[0], ifCtor, thenField, elseField, bracedCtors);
-		if (Type.enumConstructor(value) != ifCtor) return false;
-		final head: Null<Any> = Type.enumParameters(value)[0];
+		return wrapperCtor != null
+			? Type.enumConstructor(value) == wrapperCtor
+				&& hasBareBranch(Type.enumParameters(value)[0], ifCtor, thenField, elseField, bracedCtors)
+			: Type.enumConstructor(value) == ifCtor
+				&& headHasBareBranch(Type.enumParameters(value)[0], ifCtor, thenField, elseField, bracedCtors);
+	}
+
+	/**
+	 * `hasBareBranch` asked of an `if` HEAD (the struct holding `thenField` and `elseField`) rather than of the `ifCtor`
+	 * value around it: a branch body's writer holds the head of its own `if`, and `@:fmt(ifElseLadder(...))` asks it
+	 * whether a glued `switch` branch must ladder after all.
+	 */
+	public static function headHasBareBranch(
+		head: Null<Any>, ifCtor: String, thenField: String, elseField: String, bracedCtors: Array<String>
+	): Bool {
 		if (head == null || Reflect.isEnumValue(head)) return false;
 		if (isBareBranch(Reflect.field(head, thenField), bracedCtors)) return true;
 		final elseBranch: Null<Any> = Reflect.field(head, elseField);

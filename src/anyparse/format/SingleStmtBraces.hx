@@ -225,6 +225,33 @@ class SingleStmtBraces {
 	}
 
 	/**
+	 * Does the `if` chain at `ifStmt`, read branch by branch AS THE WRITER EMITS IT, hold a branch none of `bracedCtors`?
+	 * Each branch goes through `unwrapStmt` with the chain's own brace verdict (`chainSuppress`, or `chainForcesBraces` at a
+	 * root), so a `{ single; }` the writer de-braces is read as the statement it becomes and a de-braced `else { if … }` is
+	 * the next link. The ladder of a glued `switch` branch asks it, so its verdict holds on the writer's first pass.
+	 */
+	public static function chainHasBareBranch(
+		ifStmt: Any, drop: Bool, symmetry: Bool, suppress: Bool, chainSuppress: Bool, bracedCtors: Array<String>
+	): Bool {
+		final forced: Bool = chainSuppress || chainForcesBraces(ifStmt, drop, symmetry, suppress);
+		var stmt: Null<Any> = ifStmt;
+		while (stmt != null) {
+			final elseBody: Null<Any> = elseBodyOf(stmt);
+			final thenTrail: Bool = Reflect.field(stmt, 'thenBodyTrailPresent') == true;
+			final thenBody: Null<Any> = unwrapStmt(
+				Reflect.field(stmt, 'thenBody'), drop, symmetry, suppress, elseBody != null, thenTrail, forced, true
+			);
+			if (isBareOf(thenBody, bracedCtors)) return true;
+			if (elseBody == null) return false;
+			final elseTrail: Bool = Reflect.field(stmt, 'elseBodyTrailPresent') == true;
+			final eff: Null<Any> = unwrapStmt(elseBody, drop, symmetry, suppress, false, elseTrail, forced, false);
+			if (!Reflect.isEnumValue(eff) || Type.enumConstructor(cast eff) != 'IfStmt') return isBareOf(eff, bracedCtors);
+			stmt = paramAt(cast eff, 0);
+		}
+		return false;
+	}
+
+	/**
 	 * The same-line trailing comment (verbatim, delimiters intact) that must
 	 * travel with the de-braced single statement, or `null` when `unwrapStmt`
 	 * does not de-brace `body` to a plain inner statement OR the statement
@@ -970,6 +997,11 @@ class SingleStmtBraces {
 		if (v == null || !Reflect.isEnumValue(v)) return false;
 		final ctor: String = Type.enumConstructor(cast v);
 		return ctor == 'ExprStmt' ? isSplice(paramAt(cast v, 0)) : SPLICE_CTORS.contains(ctor);
+	}
+
+	/** A present branch value whose ctor is none of `bracedCtors`. */
+	private static function isBareOf(branch: Null<Any>, bracedCtors: Array<String>): Bool {
+		return Reflect.isEnumValue(branch) && !bracedCtors.contains(Type.enumConstructor(cast branch));
 	}
 
 }

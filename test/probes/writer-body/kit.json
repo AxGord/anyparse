@@ -81,7 +81,9 @@
 		"call-open-operand/Main.hx": "class Main {\n\tstatic function main() {\n\t\tif (conditionAlpha && functionWithManyParams(longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && new FunctionWithManyParams(longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && cast(longParameterA, longParameterB, longParameterC, longParameterDxxxxxxxxxxxxx) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && untyped functionWithManyParams(longParameterA, longParameterB, longParameterC, longParam) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && handlers[indexValue](longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && super.functionWithManyParams(longParameterA, longParameterB, longParameterC, longParam) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && functionWithMany()(longParameterA, longParameterB, longParameterC, longParameterD) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && trace(longParameterA, longParameterB, longParameterC, longParameterDxxxxxxxxxxxxxxxx) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}\n",
 		"call-open-operand/hxformat.json": "{\"indentation\": {\"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 100, \"callParameter\": {\"defaultWrap\": \"fillLineWithLeadingBreak\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}]}, \"opBoolChain\": {\"defaultWrap\": \"noWrap\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"fillLine\", \"location\": \"afterLast\"}]}}}\n",
 		"call-open-operand-2/Main.hx": "class Main {\n\tstatic function main() {\n\t\tif (conditionAlpha && switch (longParameterA) { case 1: longParameterB; case _: longParameterCxxxxxxx; } && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tvar f = conditionAlpha && function(longParameterA, longParameterB, longParameterC, longParameterDxxxx) return true;\n\t\tif (conditionAlpha && new pack.sub.FunctionWithManyParams(longParameterA, longParameterB, longParameterCxx) != null && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && new FunctionWithManyParams(longParameterA, longParameterB, longParameterC).method() && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && arr[0][1](longParameterA, longParameterB, longParameterC, longParameterDxxxxxxxxxxx) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}\n",
-		"call-open-operand-2/hxformat.json": "{\"indentation\": {\"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 100, \"callParameter\": {\"defaultWrap\": \"fillLineWithLeadingBreak\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}]}, \"opBoolChain\": {\"defaultWrap\": \"noWrap\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"fillLine\", \"location\": \"afterLast\"}]}}}\n"
+		"call-open-operand-2/hxformat.json": "{\"indentation\": {\"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 100, \"callParameter\": {\"defaultWrap\": \"fillLineWithLeadingBreak\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}]}, \"opBoolChain\": {\"defaultWrap\": \"noWrap\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"fillLine\", \"location\": \"afterLast\"}]}}}\n",
+		"sw/B.hx": "class B {\n\tfunction a(c:Bool) {\n\t\tif (c) foo(); else switch e(1) { case X: 1; case Y: 2; }\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else foo();\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else switch f(1) { case X: 1; case Y: 2; }\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else { foo(); }\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else if (d) foo();\n\t\tif (c) switch e(1) { case X: 1; } else { switch f(1) { case Y: 2; } }\n\t\tif (c) switch e(1) { case X: 1; } else { if (d) foo(); else bar(); }\n\t}\n}\n",
+		"sw/hxformat.json": "{\"sameLine\": {\"caseBody\": \"fitLine\", \"ifBody\": \"fitLine\", \"fitLineBodyGlue\": true}, \"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"remove\"}}}\n"
 	},
 	"invocations": [
 		{
@@ -896,6 +898,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "69e8d78adfd898f1",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sw/B.hx",
+			"note": "a then-branch switch beside a brace-less, de-braced or else-if sibling ladders under the head; an else switch, an all-switch chain and a de-braced else { switch } stay glued, all in one write",
+			"fixpoint": "sw/B.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sw/B.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "faec58cc4cab97dd",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

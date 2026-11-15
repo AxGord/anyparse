@@ -445,6 +445,20 @@ final class WriterBraceSymmetryLowering {
 	}
 
 	/**
+	 * The runtime test that the `if` chain at `value`, read as written, holds a branch none of the braced ctors
+	 * `@:fmt(ifElseLadder(...))` names (`SingleStmtBraces.chainHasBareBranch`), for a branch body field carrying
+	 * `@:fmt(dropSingleStmtBraces)` (trivia mode only), where the writer de-braces a branch before it lays it out. Null
+	 * elsewhere: the branches are written as parsed.
+	 */
+	private static function chainBareBranchTest(bs: BraceSymmetryCtx, child: ShapeNode, ladderArgs: Null<Array<String>>): Null<Expr> {
+		if (ladderArgs == null || !bs.ctx.trivia || !child.fmtHasFlag(DROP_SINGLE_STMT_BRACES)) return null;
+		final braced: Array<String> = ladderArgs.slice(WriterBodyPolicyLowering.LADDER_BRACED_ARG);
+		return macro anyparse.format.SingleStmtBraces.chainHasBareBranch(
+			value, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, opt._ssbChainSuppress, $v{braced}
+		);
+	}
+
+	/**
 	 * The de-braced substitute for a body field carrying `@:fmt(dropSingleStmtBraces)`, plus
 	 * the two side channels its gates feed (the nested-unwrap suppress frame and the hoisted
 	 * trailing comment). Off-path the access is byte-identical to the raw field access.
