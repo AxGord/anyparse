@@ -13,7 +13,9 @@ import anyparse.check.common.types.DynamicShape.DynPos;
 import anyparse.check.common.types.DynamicShape.DynReport;
 import anyparse.check.common.types.ParamAscription.ParamVerdict;
 import anyparse.ds.Set;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
@@ -226,6 +228,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 		// holds the std. The local arm keeps the narrower index it has always answered against.
 		final scope: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? symbols;
 		final edits: Array<GroupedEdit> = [];
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		var group: Int = 0;
 		for (v in violations) if (v.rule == RULE_ID) {
 			final found: Null<Span> = v.span;
@@ -251,7 +254,9 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 			// parameter whose reads or whose owning method refuse the signature rewrite. Folded into
 			// one sentence, a reader chasing either of the last two would look for a failure that
 			// never ran.
-			final param: ParamVerdict = ParamAscription.rewrite(tree, source, span, shape, dynName, castTargets, typeParams, scope);
+			final param: ParamVerdict = ParamAscription.rewrite(
+				tree, source, regions, span, shape, dynName, castTargets, typeParams, scope
+			);
 			if (!param.subject) {
 				v.declineReason = DECLINE_NOT_A_LOCAL;
 				continue;

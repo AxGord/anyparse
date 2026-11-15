@@ -3,6 +3,8 @@ package anyparse.check.common.nullsafety;
 import anyparse.check.Check.VersionGated;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ShapeVocab;
@@ -146,7 +148,7 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, readSeams(plugin.refShape()), (entry, tree, s, violations) -> {
-			for (r in collectRuns(tree, entry.source, s)) violations.push({
+			for (r in collectRuns(tree, entry.source, ElementSpan.lazyRegions(entry.source, plugin), s)) violations.push({
 				file: entry.file,
 				span: new Span(r.from, r.to),
 				rule: RULE_ID,
@@ -167,8 +169,9 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 				if (span != null && v.rule == RULE_ID) wanted.push('${span.from}:${span.to}');
 			}
 			final edits: Array<{ span: Span, text: String }> = [];
-			for (r in collectRuns(tree, source, s)) if (wanted.contains('${r.from}:${r.to}')) {
-				final edit: Null<{ span: Span, text: String }> = rewrite(r, source);
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+			for (r in collectRuns(tree, source, regions, s)) if (wanted.contains('${r.from}:${r.to}')) {
+				final edit: Null<{ span: Span, text: String }> = rewrite(r, source, regions());
 				if (edit != null) edits.push(edit);
 			}
 			return CanonicalEdit.dropContainedEdits(edits);
@@ -222,9 +225,9 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 	}
 
 	/** Every collapsible run in `tree`, in document order — the ONE matcher `run` and `fix` share. */
-	private static function collectRuns(tree: QueryNode, source: String, s: Seams): Array<NullRun> {
+	private static function collectRuns(tree: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Array<NullRun> {
 		final out: Array<NullRun> = [];
-		walk(tree, [], null, source, s, out);
+		walk(tree, [], null, source, regions, s, out);
 		return out;
 	}
 
@@ -236,21 +239,22 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 	 * A reification subtree (`opaqueKinds`) is skipped wholesale.
 	 */
 	private static function walk(
-		node: QueryNode, stack: Array<QueryNode>, parentKind: Null<String>, source: String, s: Seams, out: Array<NullRun>
+		node: QueryNode, stack: Array<QueryNode>, parentKind: Null<String>, source: String, regions: () -> Array<LexRegion>, s: Seams,
+		out: Array<NullRun>
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if ((node.kind == s.andKind || node.kind == s.orKind) && parentKind != node.kind) {
 			final conjuncts: Array<QueryNode> = flatten(node);
 			if (conjuncts.length >= MIN_RUN_LENGTH) {
-				final covered: Array<Bool> = emitRuns(conjuncts, node.kind, stack, source, s, out);
+				final covered: Array<Bool> = emitRuns(conjuncts, node.kind, stack, source, regions, s, out);
 				stack.push(node);
-				for (i => c in conjuncts) if (!covered[i]) walk(c, stack, node.kind, source, s, out);
+				for (i => c in conjuncts) if (!covered[i]) walk(c, stack, node.kind, source, regions, s, out);
 				stack.pop();
 				return;
 			}
 		}
 		stack.push(node);
-		for (c in node.children) walk(c, stack, node.kind, source, s, out);
+		for (c in node.children) walk(c, stack, node.kind, source, regions, s, out);
 		stack.pop();
 	}
 
@@ -279,7 +283,8 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 	 * run starts after it.
 	 */
 	private static function emitRuns(
-		conjuncts: Array<QueryNode>, chainKind: String, stack: Array<QueryNode>, source: String, s: Seams, out: Array<NullRun>
+		conjuncts: Array<QueryNode>, chainKind: String, stack: Array<QueryNode>, source: String, regions: () -> Array<LexRegion>, s: Seams,
+		out: Array<NullRun>
 	): Array<Bool> {
 		final covered: Array<Bool> = [for (_ in 0...conjuncts.length) false];
 		if (inInlineFunction(stack, s)) return covered;
@@ -293,7 +298,7 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 				i++;
 				continue;
 			}
-			final r: Null<NullRun> = build(conjuncts, operands, i, k, stack, source, s);
+			final r: Null<NullRun> = build(conjuncts, operands, i, k, stack, source, regions, s);
 			if (r == null) {
 				// A gate rejected the greedy run, so nothing is covered — resume at the NEXT
 				// conjunct rather than past the run: a shorter sub-run inside it may still pass.
@@ -343,12 +348,13 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 
 	/** The run over `conjuncts[i...k]`, or null when the dropped text holds a comment or the narrowing scan finds a later mention. */
 	private static function build(
-		conjuncts: Array<QueryNode>, operands: Array<Null<QueryNode>>, i: Int, k: Int, stack: Array<QueryNode>, source: String, s: Seams
+		conjuncts: Array<QueryNode>, operands: Array<Null<QueryNode>>, i: Int, k: Int, stack: Array<QueryNode>, source: String,
+		regions: () -> Array<LexRegion>, s: Seams
 	): Null<NullRun> {
 		final firstSpan: Null<Span> = conjuncts[i].span;
 		final lastSpan: Null<Span> = conjuncts[k].span;
 		if (firstSpan == null || lastSpan == null) return null;
-		if (CheckScan.hasCommentMarker(source, firstSpan.from, lastSpan.from)) return null;
+		if (LexicalRegions.commentIntersects(firstSpan.from, lastSpan.from, regions())) return null;
 		final ops: Array<QueryNode> = [];
 		for (j in i ... k + 1) {
 			final o: Null<QueryNode> = operands[j];
@@ -445,7 +451,7 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 	 * located inside the last conjunct (whitespace drift between the conjuncts) — the run
 	 * is then reported but not fixed.
 	 */
-	private static function rewrite(r: NullRun, source: String): Null<{ span: Span, text: String }> {
+	private static function rewrite(r: NullRun, source: String, regions: Array<LexRegion>): Null<{ span: Span, text: String }> {
 		final chain: Array<QueryNode> = descentChain(r.operands[r.operands.length - 1]);
 		final dots: Array<Int> = [];
 		for (j in 0...r.operands.length - 1) {
@@ -457,7 +463,7 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 			final dot: Int = source.indexOf('.', recvSpan.to);
 			if (dot < r.lastFrom || dot >= r.to) return null;
 			// A comment between the receiver and its dot would swallow the inserted `?`.
-			if (CheckScan.hasCommentMarker(source, recvSpan.to, dot)) return null;
+			if (LexicalRegions.commentIntersects(recvSpan.to, dot, regions)) return null;
 			dots.push(dot);
 		}
 		dots.sort((a, b) -> b - a);

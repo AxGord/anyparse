@@ -1,6 +1,8 @@
 package anyparse.check.common.types;
 
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.SymbolIndex;
@@ -158,7 +160,8 @@ final class ExpectedType {
 				file: entry.file,
 				root: entry.tree,
 				types: fileTypes(shape, typed, plugin.typeSyntax, entry.source, entry.file),
-				resolutionIndex: resolutionIndex
+				resolutionIndex: resolutionIndex,
+				regions: ElementSpan.lazyRegions(entry.source, plugin)
 			};
 			eachCastInPosition(entry.tree, kind, shape, site -> report(site, scan));
 		}
@@ -484,10 +487,15 @@ typedef CastSite = {
  * type information, and the resolution index the whole run shares.
  */
 typedef CastScan = {
+
 	final file: String;
 	final root: QueryNode;
 	final types: FileTypes;
 	final resolutionIndex: () -> SymbolIndex;
+
+	/** The file's lexical regions, scanned on first ask: the string-aware answer to where its comments sit. */
+	final regions: () -> Array<LexRegion>;
+
 }
 
 /**

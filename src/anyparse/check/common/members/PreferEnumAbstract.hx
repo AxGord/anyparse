@@ -3,8 +3,9 @@ package anyparse.check.common.members;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -181,7 +182,11 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		final candidates: Array<ConversionPlan> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
-			if (tree != null) flagFile(violations, candidates, entry.file, entry.source, tree, containerKinds, cfg);
+			if (tree != null)
+				flagFile(
+					violations, candidates, entry.file, entry.source, ElementSpan.lazyRegions(entry.source, plugin), tree, containerKinds,
+					cfg
+				);
 		}
 		_plans = [];
 		for (plan in acceptedPlans(files, plugin, candidates)) _plans[planKey(plan.file, plan.from)] = plan;
@@ -389,12 +394,12 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 * throughout the file, not only near their declaration.
 	 */
 	private static function flagFile(
-		out: Array<Violation>, plans: Array<ConversionPlan>, file: String, source: String, tree: QueryNode, containerKinds: Array<String>,
-		cfg: EnumAbstractCfg
+		out: Array<Violation>, plans: Array<ConversionPlan>, file: String, source: String, regions: () -> Array<LexRegion>,
+		tree: QueryNode, containerKinds: Array<String>, cfg: EnumAbstractCfg
 	): Void {
 		final groups: Array<Group> = [];
 		final whole: Array<WholeType> = [];
-		collectGroups(groups, whole, tree, [], -1, source, containerKinds, cfg);
+		collectGroups(groups, whole, tree, [], -1, source, regions, containerKinds, cfg);
 		for (w in whole) {
 			final plan: Null<ConversionPlan> = w.plan;
 			if (plan != null) plans.push({
@@ -436,10 +441,10 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 */
 	private static function collectGroups(
 		out: Array<Group>, whole: Array<WholeType>, node: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String,
-		containerKinds: Array<String>, cfg: EnumAbstractCfg
+		regions: () -> Array<LexRegion>, containerKinds: Array<String>, cfg: EnumAbstractCfg
 	): Void {
 		if (containerKinds.contains(node.kind)) {
-			final wt: Null<WholeType> = wholeType(node, siblings, selfIndex, source, cfg);
+			final wt: Null<WholeType> = wholeType(node, siblings, selfIndex, source, regions, cfg);
 			if (wt != null) {
 				whole.push(wt);
 			} else {
@@ -455,7 +460,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 					out.push({ prefix: prefix, span: group[0].span, members: group.map(d -> d.name) });
 			}
 		}
-		for (i in 0...node.children.length) collectGroups(out, whole, node.children[i], node.children, i, source, containerKinds, cfg);
+		for (i in 0...node.children.length)
+			collectGroups(out, whole, node.children[i], node.children, i, source, regions, containerKinds, cfg);
 	}
 
 	/**
@@ -467,7 +473,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 * the container rather than leaking through a list of exclusions.
 	 */
 	private static function wholeType(
-		container: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String, cfg: EnumAbstractCfg
+		container: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String, regions: () -> Array<LexRegion>,
+		cfg: EnumAbstractCfg
 	): Null<WholeType> {
 		final name: Null<String> = container.name;
 		final span: Null<Span> = container.span;
@@ -497,7 +504,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 			name: nameValue,
 			count: values.length,
 			typeName: typeName,
-			plan: conversionPlan(container, siblings, selfIndex, source, nameValue, spanValue, typeName, cfg)
+			plan: conversionPlan(container, siblings, selfIndex, source, regions, nameValue, spanValue, typeName, cfg)
 		};
 	}
 
@@ -508,8 +515,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 * either way, and only a container this function fully accepts is ever rewritten.
 	 */
 	private static function conversionPlan(
-		container: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String, name: String, span: Span, typeName: String,
-		cfg: EnumAbstractCfg
+		container: QueryNode, siblings: Array<QueryNode>, selfIndex: Int, source: String, regions: () -> Array<LexRegion>, name: String,
+		span: Span, typeName: String, cfg: EnumAbstractCfg
 	): Null<ConversionPlan> {
 		final syntax: Null<EnumAbstractSyntax> = cfg.syntax;
 		if (syntax == null || !cfg.classKinds.contains(container.kind)) return null;
@@ -527,7 +534,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		if (head == null) return null;
 		final edits: Array<{ span: Span, text: String }> = [head];
 		final kids: Array<QueryNode> = container.children;
-		for (i in 0...kids.length) if (cfg.constKinds.contains(kids[i].kind) && !memberEdits(kids, i, source, cfg, edits)) return null;
+		for (i in 0...kids.length) if (cfg.constKinds.contains(kids[i].kind) && !memberEdits(kids, i, source, regions, cfg, edits))
+			return null;
 		return {
 			file: '',
 			from: span.from,
@@ -580,7 +588,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 * where it should be, is a shape this rewrite has no answer for.
 	 */
 	private static function memberEdits(
-		kids: Array<QueryNode>, i: Int, source: String, cfg: EnumAbstractCfg, edits: Array<{ span: Span, text: String }>
+		kids: Array<QueryNode>, i: Int, source: String, regions: () -> Array<LexRegion>, cfg: EnumAbstractCfg,
+		edits: Array<{ span: Span, text: String }>
 	): Bool {
 		final member: QueryNode = kids[i];
 		final memberSpan: Null<Span> = member.span;
@@ -594,7 +603,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 			j--;
 		}
 		if (runStart >= 0) {
-			if (CheckScan.hasCommentMarker(source, runStart, memberSpan.from)) return false;
+			if (LexicalRegions.commentIntersects(runStart, memberSpan.from, regions())) return false;
 			edits.push({ span: new Span(runStart, memberSpan.from), text: '' });
 		}
 		final annotation: Null<QueryNode> = member.type;
@@ -604,7 +613,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		var sep: Int = annSpan.from - 1;
 		while (sep > memberSpan.from && SourceText.isSpace(source.fastCodeAt(sep))) sep--;
 		if (sep <= memberSpan.from || source.charAt(sep) != ANNOTATION_SEPARATOR) return false;
-		if (CheckScan.hasCommentMarker(source, sep, annSpan.to)) return false;
+		if (LexicalRegions.commentIntersects(sep, annSpan.to, regions())) return false;
 		edits.push({ span: new Span(sep, annSpan.to), text: '' });
 		return true;
 	}

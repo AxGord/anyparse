@@ -285,7 +285,7 @@
 			"name": "M-RNC-COMMENT",
 			"type": "anyparse.check.common.nullsafety.RedundantNarrowingCopy",
 			"method": "candidate",
-			"find": "if (CheckScan.hasCommentMarker(source, dropSpan.from, dropSpan.to)) return null;",
+			"find": "if (LexicalRegions.commentIntersects(dropSpan.from, dropSpan.to, scan.regions())) return null;",
 			"replace": "if (false) return null;",
 			"note": "a comment on the copy's line is deleted with it"
 		},

@@ -1,6 +1,8 @@
 package anyparse.check.common.types;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -100,6 +102,7 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 		final source: String = entry.source;
 		final castTargets: Map<Int, String> = typed.castTargetSources(source);
 		final opaqueKinds: Array<String> = seams.opaqueKinds;
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		function walk(node: QueryNode): Void {
 			if (opaqueKinds.contains(node.kind)) return;
 			if (node.kind == seams.checkTypeKind && node.children.length == 1) {
@@ -110,7 +113,7 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 					span != null
 					&& operandSpan != null
 					&& operand.kind == seams.newExprKind
-					&& redundantTargetSource(node, span, operand, operandSpan, source, castTargets, plugin.typeSyntax) != null
+					&& redundantTargetSource(node, span, operand, operandSpan, regions, castTargets, plugin.typeSyntax) != null
 				) violations.push({
 					file: entry.file,
 					span: span,
@@ -131,7 +134,7 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 	 * either region the fix deletes. Null at the first gate that fails.
 	 */
 	private static function redundantTargetSource(
-		node: QueryNode, span: Span, operand: QueryNode, operandSpan: Span, source: String, castTargets: Map<Int, String>,
+		node: QueryNode, span: Span, operand: QueryNode, operandSpan: Span, regions: () -> Array<LexRegion>, castTargets: Map<Int, String>,
 		typeSyntax: TypeSyntaxReader
 	): Null<String> {
 		final ctorName: Null<String> = operand.name;
@@ -143,7 +146,7 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 		};
 		return if (targetSource == null || plainName != TypeResolver.stripWs(ctorName))
 			null
-		else if (deletedRegionHasComment(source, span, operandSpan))
+		else if (deletedRegionHasComment(regions(), span, operandSpan))
 			null
 		else
 			targetSource;
@@ -154,9 +157,9 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 	 * `[node.from, operand.from)` or the ` : T)` tail `[operand.to, node.to)`. A comment inside
 	 * the operand is preserved verbatim by the fix and is fine.
 	 */
-	private static function deletedRegionHasComment(source: String, nodeSpan: Span, operandSpan: Span): Bool {
-		return CheckScan.hasCommentMarker(source, nodeSpan.from, operandSpan.from)
-			|| CheckScan.hasCommentMarker(source, operandSpan.to, nodeSpan.to);
+	private static function deletedRegionHasComment(regions: Array<LexRegion>, nodeSpan: Span, operandSpan: Span): Bool {
+		return LexicalRegions.commentIntersects(nodeSpan.from, operandSpan.from, regions)
+			|| LexicalRegions.commentIntersects(operandSpan.to, nodeSpan.to, regions);
 	}
 
 	/** Resolve the check-type + new-expr + opaque seam kinds, or null when either required kind is unset. */

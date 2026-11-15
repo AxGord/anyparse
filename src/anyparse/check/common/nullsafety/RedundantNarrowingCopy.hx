@@ -17,6 +17,7 @@ import anyparse.check.scan.UnseenCalls;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
@@ -140,6 +141,7 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 		final annotations: () -> Map<Int, String> = TypeInfoMemo.declaredTypeSources(RunScan.typeInfoOf(plugin), source);
 		final scan: Scan = {
 			source: source,
+			regions: ElementSpan.lazyRegions(source, plugin),
 			tree: tree,
 			seams: s,
 			chains: new StableChain(tree, shape, new UnchangedLocal(tree, shape), annotations, symbols, file, true),
@@ -185,7 +187,7 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 		if (SourceText.isMultiDeclarator(decl, s.continuationKinds) || source.charAt(declSpan.to - 1) != ';') return null;
 		final dropSpan: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		if (dropSpan.from == declSpan.from && dropSpan.to == declSpan.to) return null;
-		if (CheckScan.hasCommentMarker(source, dropSpan.from, dropSpan.to)) return null;
+		if (LexicalRegions.commentIntersects(dropSpan.from, dropSpan.to, scan.regions())) return null;
 		final field: Null<String> = fieldOf(init, scan);
 		final root: Null<String> = rootName(init, s);
 		if (field == null || root == null || CheckScan.escapesConditionalRegion(name, declSpan, scan.tree, s.shape)) return null;
@@ -471,6 +473,7 @@ private typedef Window = { final uses: Array<Span>; final firstUse: Int; };
 /** One file's scan: its text and tree, the stable-chain reader, every write and the spans of every call. */
 private typedef Scan = {
 	final source: String;
+	final regions: () -> Array<LexRegion>;
 	final tree: QueryNode;
 	final seams: Seams;
 	final chains: StableChain;

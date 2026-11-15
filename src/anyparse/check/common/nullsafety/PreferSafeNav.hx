@@ -5,6 +5,7 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
@@ -172,7 +173,10 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 				final index: Null<SymbolIndex> = getIndex();
 				return index != null && TypeResolver.isPlainFieldRead(subject, tree, shape, declaredTypes(), index);
 			};
-			walk(tree, violations, entry.file, entry.source, bindings, fieldProver(tree, entry.source, plugin, seams), plainRead, seams);
+			walk(
+				tree, violations, entry.file, entry.source, ElementSpan.lazyRegions(entry.source, plugin), bindings,
+				fieldProver(tree, entry.source, plugin, seams), plainRead, seams
+			);
 		});
 	}
 
@@ -189,22 +193,23 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final spanIndexKinds: Array<String> = ternaryKind == null ? seams.ifKinds : seams.ifKinds.concat([ternaryKind]);
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final assigns: Map<String, AssignGuard> = [];
-		if (tree != null) collectAssignGuards(tree, source, seams, assigns);
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+		if (tree != null) collectAssignGuards(tree, source, regions, seams, assigns);
 		final edits: Array<{ span: Span, text: String }> = [];
 		RunScan.eachMatched(violations, assigns, (guard, _) -> {
-			final pair: Null<Array<{ span: Span, text: String }>> = assignEdits(guard, source);
+			final pair: Null<Array<{ span: Span, text: String }>> = assignEdits(guard, source, regions());
 			if (pair != null) for (e in pair) edits.push(e);
 		});
 		for (e in CheckScan.applyBySpan(plugin, source, violations, spanIndexKinds, (node, span) -> {
 			// An `if` the ASSIGNMENT arm owns is folded into its declaration above, not rewritten
 			// in place — its statement-arm reading (if any) must not also fire.
 			if (assigns.exists('${span.from}:${span.to}')) return null;
-			final m: Null<Candidate> = candidate(node, source, seams);
+			final m: Null<Candidate> = candidate(node, source, regions, seams);
 			if (m == null) return null;
 			final stmtSpan: Null<Span> = m.stmt.span;
 			final rootSpan: Null<Span> = m.rootIdent.span;
 			if (stmtSpan == null || rootSpan == null) return null;
-			final body: Null<String> = safeNavText(source, rootSpan, stmtSpan);
+			final body: Null<String> = safeNavText(source, regions(), rootSpan, stmtSpan);
 			if (body == null) return null;
 			final rest: Null<QueryNode> = m.restCond;
 			final restSpan: Null<Span> = rest?.span;
@@ -274,18 +279,19 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * (a null-initialized declaration immediately followed by its guarded assignment).
 	 */
 	private static function walk(
-		node: QueryNode, out: Array<Violation>, file: String, source: String, bindings: Array<{ name: String, scope: Span, declEnd: Int }>,
-		fieldOk: (String, Span) -> Bool, plainRead: QueryNode -> Bool, s: Seams
+		node: QueryNode, out: Array<Violation>, file: String, source: String, regions: () -> Array<LexRegion>,
+		bindings: Array<{ name: String, scope: Span, declEnd: Int }>, fieldOk: (String, Span) -> Bool, plainRead: QueryNode -> Bool,
+		s: Seams
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
-		final m: Null<Candidate> = candidate(node, source, s);
+		final m: Null<Candidate> = candidate(node, source, regions, s);
 		if (m != null && acceptedReceiver(m.condIdent, bindings, fieldOk, plainRead, s)) report(node, out, file);
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final a: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, s);
+			final a: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, regions, s);
 			if (a != null && acceptedReceiver(a.condIdent, bindings, fieldOk, plainRead, s)) report(kids[i + 1], out, file);
 		}
-		for (c in kids) walk(c, out, file, source, bindings, fieldOk, plainRead, s);
+		for (c in kids) walk(c, out, file, source, regions, bindings, fieldOk, plainRead, s);
 	}
 
 	/** Push the `Info` finding anchored at `node` — the guarding `if` statement, or the guarding ternary. */
@@ -312,7 +318,9 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * `nullInitLocal` and `guardedChainAssignment`; what is decided here is the comment gate — a
 	 * comment in the dropped `if` head or tail would be lost, so such a pair is left unflagged.
 	 */
-	private static function assignGuard(decl: QueryNode, ifNode: QueryNode, source: String, s: Seams): Null<AssignGuard> {
+	private static function assignGuard(
+		decl: QueryNode, ifNode: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams
+	): Null<AssignGuard> {
 		final target: Null<{ name: String, nullLiteral: QueryNode }> = nullInitLocal(decl, s);
 		if (target == null) return null;
 		final found: Null<{ condIdent: QueryNode, rhs: QueryNode, root: QueryNode }> = guardedChainAssignment(ifNode, target.name, s);
@@ -320,8 +328,8 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final ifSpan: Null<Span> = ifNode.span;
 		final rhsSpan: Null<Span> = found.rhs.span;
 		if (ifSpan == null || rhsSpan == null) return null;
-		final hasComment: Bool = CheckScan.hasCommentMarker(source, ifSpan.from, rhsSpan.from)
-			|| CheckScan.hasCommentMarker(source, rhsSpan.to, ifSpan.to);
+		final hasComment: Bool = LexicalRegions.commentIntersects(ifSpan.from, rhsSpan.from, regions())
+			|| LexicalRegions.commentIntersects(rhsSpan.to, ifSpan.to, regions());
 		return hasComment ? null : {
 			condIdent: found.condIdent,
 			ifNode: ifNode,
@@ -374,25 +382,29 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	}
 
 	/** Index every ASSIGNMENT-arm guard by its `if` statement's `from:to` span — the key `run` anchors its finding on. */
-	private static function collectAssignGuards(node: QueryNode, source: String, s: Seams, out: Map<String, AssignGuard>): Void {
+	private static function collectAssignGuards(
+		node: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, out: Map<String, AssignGuard>
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
-			final g: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, s);
+			final g: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, regions, s);
 			final span: Null<Span> = kids[i + 1].span;
 			if (g != null && span != null) out['${span.from}:${span.to}'] = g;
 		}
-		for (c in kids) collectAssignGuards(c, source, s, out);
+		for (c in kids) collectAssignGuards(c, source, regions, s, out);
 	}
 
 	/** The two edits folding `g` into its declaration: the `null` initializer becomes the safe-nav chain, the whole `if` goes. */
-	private static function assignEdits(g: AssignGuard, source: String): Null<Array<{ span: Span, text: String }>> {
+	private static function assignEdits(
+		g: AssignGuard, source: String, regions: Array<LexRegion>
+	): Null<Array<{ span: Span, text: String }>> {
 		final ifSpan: Null<Span> = g.ifNode.span;
 		final rhsSpan: Null<Span> = g.rhs.span;
 		final rootSpan: Null<Span> = g.rootIdent.span;
 		final nullSpan: Null<Span> = g.nullLiteral.span;
 		if (ifSpan == null || rhsSpan == null || rootSpan == null || nullSpan == null) return null;
-		final nav: Null<String> = safeNavText(source, rootSpan, rhsSpan);
+		final nav: Null<String> = safeNavText(source, regions, rootSpan, rhsSpan);
 		// The `if` occupies a whole line of its own in the common case; deleting the bare span
 		// would leave that line behind as a blank one. `lineExtendedSpan` falls back to the bare
 		// span when the statement shares its line, so a one-line `var r = null; if (…) …;` is safe.
@@ -407,19 +419,19 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * `?.`, or null when there is no such dot inside the region or a comment sits between the
 	 * receiver and it (the comment would swallow the inserted `?`).
 	 */
-	private static function safeNavText(source: String, rootSpan: Span, region: Span): Null<String> {
+	private static function safeNavText(source: String, regions: Array<LexRegion>, rootSpan: Span, region: Span): Null<String> {
 		final dotPos: Int = source.indexOf('.', rootSpan.to);
-		return dotPos < 0 || dotPos >= region.to || CheckScan.hasCommentMarker(source, rootSpan.to, dotPos)
+		return dotPos < 0 || dotPos >= region.to || LexicalRegions.commentIntersects(rootSpan.to, dotPos, regions)
 			? null
 			: '${source.substring(region.from, dotPos)}?.${source.substring(dotPos + 1, region.to)}';
 	}
 
 	/** The candidate `node` yields — the `if`-statement guard or the ternary guard, whichever arm its kind selects. */
-	private static function candidate(node: QueryNode, source: String, s: Seams): Null<Candidate> {
+	private static function candidate(node: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Null<Candidate> {
 		return if (s.ifKinds.contains(node.kind))
-			match(node, source, s)
+			match(node, source, regions, s)
 		else if (node.kind == s.ternaryKind)
-			matchTernary(node, source, s)
+			matchTernary(node, source, regions, s)
 		else
 			null;
 	}
@@ -433,7 +445,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * appear anywhere in the branch but at the chain root, and no comment may sit in the
 	 * dropped text around the branch.
 	 */
-	private static function matchTernary(ternary: QueryNode, source: String, s: Seams): Null<Candidate> {
+	private static function matchTernary(ternary: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Null<Candidate> {
 		if (!BranchChain.hasElse(ternary)) return null;
 		final cond: QueryNode = BoolExprShape.unwrapParens(BranchChain.condOf(ternary), s.parenKind);
 		if (!NodeShape.hasComparisonShape(cond)) return null;
@@ -453,8 +465,8 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final ternarySpan: Null<Span> = ternary.span;
 		final branchSpan: Null<Span> = branch.span;
 		if (ternarySpan == null || branchSpan == null) return null;
-		final hasComment: Bool = CheckScan.hasCommentMarker(source, ternarySpan.from, branchSpan.from)
-			|| CheckScan.hasCommentMarker(source, branchSpan.to, ternarySpan.to);
+		final hasComment: Bool = LexicalRegions.commentIntersects(ternarySpan.from, branchSpan.from, regions())
+			|| LexicalRegions.commentIntersects(branchSpan.to, ternarySpan.to, regions());
 		return hasComment ? null : {
 			condIdent: condIdent,
 			stmt: branch,
@@ -510,7 +522,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * appears in the call ARGUMENTS (`x.m(x)` — `x?.m(x)` would leave it `Null<T>`),
 	 * and when a comment sits in a DROPPED part of the removed `if` region.
 	 */
-	private static function match(ifNode: QueryNode, source: String, s: Seams): Null<Candidate> {
+	private static function match(ifNode: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Null<Candidate> {
 		if (BranchChain.hasElse(ifNode)) return null;
 		final guard: Null<{ operand: QueryNode, rest: Null<QueryNode> }> = guardCondition(BranchChain.condOf(ifNode), s);
 		if (guard == null) return null;
@@ -528,10 +540,10 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final restSpan: Null<Span> = rest?.span;
 		if (rest != null && restSpan == null) return null;
 		final headHasComment: Bool = restSpan != null
-			? CheckScan.hasCommentMarker(source, ifSpan.from, restSpan.from)
-				|| CheckScan.hasCommentMarker(source, restSpan.to, stmtSpan.from)
-			: CheckScan.hasCommentMarker(source, ifSpan.from, stmtSpan.from);
-		final hasComment: Bool = headHasComment || CheckScan.hasCommentMarker(source, stmtSpan.to, ifSpan.to);
+			? LexicalRegions.commentIntersects(ifSpan.from, restSpan.from, regions())
+				|| LexicalRegions.commentIntersects(restSpan.to, stmtSpan.from, regions())
+			: LexicalRegions.commentIntersects(ifSpan.from, stmtSpan.from, regions());
+		final hasComment: Bool = headHasComment || LexicalRegions.commentIntersects(stmtSpan.to, ifSpan.to, regions());
 		return hasComment ? null : {
 			condIdent: condIdent,
 			stmt: stmt,

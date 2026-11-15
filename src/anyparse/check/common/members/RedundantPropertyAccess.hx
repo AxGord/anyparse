@@ -1,9 +1,9 @@
 package anyparse.check.common.members;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.scan.CheckScan;
 import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldWrite;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -67,7 +67,7 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 		final violations: Array<Violation> = [];
 		CtorFieldWrite.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			final name: Null<String> = field.name;
-			final clause: Null<Span> = redundantClause(RunScan.accessorClausesOf(plugin, source), source, field);
+			final clause: Null<Span> = redundantClause(RunScan.accessorClausesOf(plugin, source), source, plugin, field);
 			if (name != null && clause != null) violations.push({
 				file: file,
 				span: clause,
@@ -112,13 +112,16 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 	 * accessor clause, carries a different one, or a comment sits anywhere from the
 	 * declaration's start through the clause's `)`.
 	 */
-	private static function redundantClause(clauses: Map<Int, AccessorClause>, source: String, field: QueryNode): Null<Span> {
+	private static function redundantClause(
+		clauses: Map<Int, AccessorClause>, source: String, plugin: GrammarPlugin, field: QueryNode
+	): Null<Span> {
 		final span: Null<Span> = field.span;
 		if (span == null) return null;
 		final clause: Null<AccessorClause> = clauses[span.from];
 		if (clause == null || !clause.plainStored()) return null;
 		final paren: Span = clause.parenSpan();
-		return CheckScan.hasCommentMarker(source, span.from, paren.to) ? null : paren;
+		// Regions are scanned only past the clause gate: a plain stored clause is the rare case.
+		return LexicalRegions.commentIntersects(span.from, paren.to, plugin.lexicalRegions(source)) ? null : paren;
 	}
 
 }

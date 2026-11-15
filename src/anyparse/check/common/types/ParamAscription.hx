@@ -1,6 +1,7 @@
 package anyparse.check.common.types;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberLookup.SupertypeProof;
 import anyparse.query.NodeShape;
 import anyparse.query.NominalTypes;
@@ -38,13 +39,13 @@ final class ParamAscription {
 	 * The arm's verdict for one `Dynamic` finding — see `ParamVerdict` for what its two answers separate.
 	 */
 	public static function rewrite(
-		tree: QueryNode, source: String, span: Span, shape: RefShape, dynName: String, castTargets: Map<Int, String>,
-		typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
+		tree: QueryNode, source: String, regions: () -> Array<LexRegion>, span: Span, shape: RefShape, dynName: String,
+		castTargets: Map<Int, String>, typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
 	): ParamVerdict {
 		final subject: Null<ParamSubject> = wholeDynamicParam(tree, span, shape, dynName);
 		return subject == null
 			? { subject: false, edits: null }
-			: { subject: true, edits: editsFor(subject, tree, source, shape, dynName, castTargets, typeParams, symbols) };
+			: { subject: true, edits: editsFor(subject, tree, source, regions, shape, dynName, castTargets, typeParams, symbols) };
 	}
 
 	/**
@@ -109,13 +110,13 @@ final class ParamAscription {
 	 * across every read, and must resolve to a conversion-free declaration.
 	 */
 	private static function editsFor(
-		subject: ParamSubject, tree: QueryNode, source: String, shape: RefShape, dynName: String, castTargets: Map<Int, String>,
-		typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
+		subject: ParamSubject, tree: QueryNode, source: String, regions: () -> Array<LexRegion>, shape: RefShape, dynName: String,
+		castTargets: Map<Int, String>, typeParams: Map<Int, Array<String>>, symbols: SymbolIndex
 	): Null<Array<FixEdit>> {
 		final host: Null<TypeDeclMatch> = ownerAllowsSignatureRewrite(subject, shape, typeParams, symbols);
 		// The signature edit replaces the WHOLE written type, so a comment anywhere inside it is text
 		// the replacement would delete.
-		if (host == null || CheckScan.hasCommentMarker(source, subject.typeSpan.from, subject.typeSpan.to)) return null;
+		if (host == null || LexicalRegions.commentIntersects(subject.typeSpan.from, subject.typeSpan.to, regions())) return null;
 		final pinned: Null<ParamReads> = paramReads(subject, tree, shape, castTargets);
 		if (pinned == null || pinned.ascriptions.length == 0) return null;
 		final written: String = pinned.types[0];
@@ -135,7 +136,7 @@ final class ParamAscription {
 			|| !symbols.resolvesToConversionFreeType(path)
 		)
 			return null;
-		final edits: Null<Array<FixEdit>> = unwrapEdits(pinned, source);
+		final edits: Null<Array<FixEdit>> = unwrapEdits(pinned, source, regions());
 		if (edits == null) return null;
 		// A parameter the source declared nullable, or one a read compares with null, must keep
 		// admitting it; every other one takes the ascribed type verbatim.
@@ -158,7 +159,7 @@ final class ParamAscription {
 	 * in a region the replacement deletes (the `(` head or the ` : T)` tail), which is content no
 	 * replacement text carries.
 	 */
-	private static function unwrapEdits(reads: ParamReads, source: String): Null<Array<FixEdit>> {
+	private static function unwrapEdits(reads: ParamReads, source: String, regions: Array<LexRegion>): Null<Array<FixEdit>> {
 		final edits: Array<FixEdit> = [];
 		for (node in reads.ascriptions) {
 			final nodeSpan: Null<Span> = node.span;
@@ -169,8 +170,8 @@ final class ParamAscription {
 			final ascription: Span = nodeSpan;
 			final operand: Span = operandSpan;
 			if (
-				CheckScan.hasCommentMarker(source, ascription.from, operand.from)
-				|| CheckScan.hasCommentMarker(source, operand.to, ascription.to)
+				LexicalRegions.commentIntersects(ascription.from, operand.from, regions)
+				|| LexicalRegions.commentIntersects(operand.to, ascription.to, regions)
 			)
 				return null;
 			edits.push({ span: ascription, text: source.substring(operand.from, operand.to) });

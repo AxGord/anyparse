@@ -4,6 +4,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.common.types.ExpectedType.CastScan;
 import anyparse.check.common.types.ExpectedType.CastSite;
 import anyparse.check.common.types.ExpectedType.FileTypes;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -107,7 +108,7 @@ final class RedundantCastType extends RuleBase implements DefaultOff {
 		if (operandSpan == null || rawTarget == null) return null;
 		final targetSource: String = rawTarget;
 		if (ExpectedType.isNullableWrapper(targetSource, types)) return null;
-		if (deletedRegionHasComment(types.source, site.span, operandSpan)) return null;
+		if (deletedRegionHasComment(scan.regions(), site.span, operandSpan)) return null;
 		final expected: Null<String> = ExpectedType.expectedTypeSource(site, scan.root, types, scan.resolutionIndex);
 		return expected != null && TypeResolver.sameTypeSource(expected, targetSource, types.importMap) ? targetSource : null;
 	}
@@ -117,9 +118,9 @@ final class RedundantCastType extends RuleBase implements DefaultOff {
 	 * `[cast.from, operand.from)` or the `, T)` tail `[operand.to, cast.to)`. Comments inside the
 	 * operand are preserved verbatim by the fix and are fine.
 	 */
-	private static function deletedRegionHasComment(source: String, castSpan: Span, operandSpan: Span): Bool {
-		return CheckScan.hasCommentMarker(source, castSpan.from, operandSpan.from)
-			|| CheckScan.hasCommentMarker(source, operandSpan.to, castSpan.to);
+	private static function deletedRegionHasComment(regions: Array<LexRegion>, castSpan: Span, operandSpan: Span): Bool {
+		return LexicalRegions.commentIntersects(castSpan.from, operandSpan.from, regions)
+			|| LexicalRegions.commentIntersects(operandSpan.to, castSpan.to, regions);
 	}
 
 }

@@ -3,6 +3,7 @@ package anyparse.check.common.types;
 import anyparse.check.common.types.ExpectedType.CastScan;
 import anyparse.check.common.types.ExpectedType.CastSite;
 import anyparse.check.common.types.ExpectedType.FileTypes;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -98,7 +99,7 @@ final class RedundantUncheckedCast extends RuleBase {
 		final operand: Null<QueryNode> = ExpectedType.soleOperand(site);
 		if (operand == null) return null;
 		final operandSpan: Null<Span> = operand.span;
-		if (operandSpan == null || CheckScan.hasCommentMarker(types.source, site.span.from, operandSpan.from)) return null;
+		if (operandSpan == null || LexicalRegions.commentIntersects(site.span.from, operandSpan.from, scan.regions())) return null;
 		final expected: Null<String> = ExpectedType.expectedTypeSource(site, scan.root, types, scan.resolutionIndex);
 		if (expected == null || ExpectedType.isNullableWrapper(expected, types)) return null;
 		final position: String = expected;
