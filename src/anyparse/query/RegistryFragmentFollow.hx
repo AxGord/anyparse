@@ -29,6 +29,9 @@ private typedef Rewrite = {
 	final module: RewrittenModule;
 	final target: QueryNode;
 	final at: Int;
+	final oldAt: Int;
+	final leaves: Array<Span>;
+	final literals: Array<Span>;
 	final now: String;
 	final maps: Array<Array<Int>>;
 	final plugin: GrammarPlugin;
@@ -85,6 +88,9 @@ final class RegistryFragmentFollow {
 			module: module,
 			target: after[0],
 			at: newSpan.from,
+			oldAt: oldSpan.from,
+			leaves: LeafSpans.collect(before[0], []),
+			literals: literalSpans(module.source, plugin),
 			now: now,
 			maps: maps,
 			plugin: plugin,
@@ -246,7 +252,7 @@ final class RegistryFragmentFollow {
 		// An indent-tolerant cut starts at its line's indentation, which the find never spelled: the carried find leaves it out too.
 		final dedent: Bool = fit.length > 0 && fit[0] > 0 && written.substring(0, fit[0]).trim() == '';
 		for (newFrom in starts) for (newTo in cutBoundaries(maps, from + written.length, now.length, false)) if (
-			newTo > newFrom && keepsEdit(find, replace, fit, written, from, maps, newFrom, newTo)
+			newTo > newFrom && keepsEdit(find, replace, fit, written, from, rewrite, newFrom, newTo)
 		) {
 			final spelled: String = now.substring(newFrom, newTo);
 			final newFind: String = dedent ? spelled.ltrim() : spelled;
@@ -269,7 +275,7 @@ final class RegistryFragmentFollow {
 	 * still stands inside the carried cut `[newFrom, newTo)`: a cut whose edited text the rewrite deleted has nothing left to edit.
 	 */
 	private static function keepsEdit(
-		find: String, replace: Null<String>, fit: Array<Int>, written: String, from: Int, maps: Array<Array<Int>>, newFrom: Int, newTo: Int
+		find: String, replace: Null<String>, fit: Array<Int>, written: String, from: Int, rewrite: Rewrite, newFrom: Int, newTo: Int
 	): Bool {
 		var lo: Int = 0;
 		var hi: Int = find.length;
@@ -281,7 +287,7 @@ final class RegistryFragmentFollow {
 				lo = lo > 0 ? lo - 1 : lo;
 			}
 		}
-		return maps.exists(map -> holdsIn(map, find, fit, written, from, lo, hi, newFrom, newTo));
+		return rewrite.maps.exists(map -> holdsIn(map, find, fit, written, from, rewrite, lo, hi, newFrom, newTo));
 	}
 
 	/**
@@ -290,7 +296,8 @@ final class RegistryFragmentFollow {
 	 * mostly deleted is not re-spelled as the text that happens to stand around its remains.
 	 */
 	private static function holdsIn(
-		map: Array<Int>, find: String, fit: Array<Int>, written: String, from: Int, lo: Int, hi: Int, newFrom: Int, newTo: Int
+		map: Array<Int>, find: String, fit: Array<Int>, written: String, from: Int, rewrite: Rewrite, lo: Int, hi: Int, newFrom: Int,
+		newTo: Int
 	): Bool {
 		var edited: Bool = false;
 		var solids: Int = 0;
@@ -299,7 +306,7 @@ final class RegistryFragmentFollow {
 			final solid: Bool = find.charAt(k).trim() != '';
 			if (solid) solids++;
 			final w: Int = fit[k];
-			if (w >= 0 && map[from + w] < 0 && k >= lo && k < hi && replacedToken(map, written, from, w)) edited = true;
+			if (w >= 0 && map[from + w] < 0 && k >= lo && k < hi && replacedToken(map, written, from, rewrite, w)) edited = true;
 			if (w < 0 || map[from + w] < 0) continue;
 			final p: Int = map[from + w];
 			if (p < newFrom || p >= newTo) return false;
@@ -310,14 +317,19 @@ final class RegistryFragmentFollow {
 	}
 
 	/**
-	 * Whether the run of cut characters around `written[w]` that the rewrite deleted holds no blank: one token replaced in
-	 * place (a literal become a constant's name) still stands where the edit was, a deleted phrase does not.
+	 * Whether the run of cut characters around `written[w]` that the rewrite deleted is one token replaced in place: inside one
+	 * string or regex literal; otherwise blank-free and not straddling a leaf of the old member, a leaf being one token or a
+	 * childless multi-token node (so lying inside one does not excuse a blank). A deleted phrase or call is not one token.
 	 */
-	private static function replacedToken(map: Array<Int>, written: String, from: Int, w: Int): Bool {
+	private static function replacedToken(map: Array<Int>, written: String, from: Int, rewrite: Rewrite, w: Int): Bool {
 		var lo: Int = w;
 		while (lo > 0 && map[from + lo - 1] < 0) lo--;
 		var hi: Int = w + 1;
 		while (hi < written.length && map[from + hi] < 0) hi++;
+		final start: Int = rewrite.oldAt + from + lo;
+		final end: Int = rewrite.oldAt + from + hi;
+		if (rewrite.literals.exists(literal -> literal.from <= start && end <= literal.to)) return true;
+		if (rewrite.leaves.exists(leaf -> leaf.from < end && start < leaf.to && (start < leaf.from || leaf.to < end))) return false;
 		for (i in lo ... hi) if (written.isSpace(i)) return false;
 		return true;
 	}
@@ -406,6 +418,13 @@ final class RegistryFragmentFollow {
 		}
 		out.sort((a, b) -> a - b);
 		return out;
+	}
+
+	/** The string and regex literals of `source`, which the lexer scans whole while the tree may project only their contents as leaves. */
+	private static function literalSpans(source: String, plugin: GrammarPlugin): Array<Span> {
+		return [
+			for (region in plugin.lexicalRegions(source)) if (!LexicalRegions.isComment(region)) new Span(region.from, region.to)
+		];
 	}
 
 }

@@ -1,5 +1,7 @@
 package anyparse.check.scan;
 
+import anyparse.query.LeafSpans;
+
 /**
  * Renders a source span as ONE LINE of display text for a finding's message: a whitespace run
  * BETWEEN tokens collapses to a single space, whitespace INSIDE a token — a string or regex
@@ -76,24 +78,13 @@ final class SpanRender {
 		return buf.toString();
 	}
 
-	/** Append the span of every LEAF in `node`'s subtree to `out` — the token interiors `renderSpan` copies verbatim. */
-	private static function collectLeafSpans(node: QueryNode, out: Array<Span>): Void {
-		if (node.children.length > 0) {
-			for (child in node.children) collectLeafSpans(child, out);
-			return;
-		}
-		final span: Null<Span> = node.span;
-		if (span != null) out.push(span);
-	}
-
 	/**
 	 * The spans `renderSpan` walks, in document order: every LEAF of `root` except one an override
 	 * replaces whole, plus every override in place. A part with a null `text` is copied from the
 	 * source; one carrying text is emitted instead of the bytes it covers.
 	 */
 	private static function renderParts(root: QueryNode, overrides: Array<SpanOverride>): Array<RenderPart> {
-		final tokens: Array<Span> = [];
-		collectLeafSpans(root, tokens);
+		final tokens: Array<Span> = LeafSpans.collect(root, []);
 		final parts: Array<RenderPart> = [
 			for (token in tokens) if (!replaced(overrides, token)) { from: token.from, to: token.to, text: null }
 		];

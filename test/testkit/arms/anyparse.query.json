@@ -17044,6 +17044,22 @@
 			"method": "denotesMoved",
 			"force": "true",
 			"note": "every Module.Sub spelling is taken to denote the moved secondary type, so a file whose Module binds another module (another package, a shadowing import) refuses a legitimate move"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-ONE-TOKEN-REPLACED",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacedToken",
+			"find": "if (rewrite.leaves.exists(leaf -> leaf.from < end && start < leaf.to && (start < leaf.from || leaf.to < end))) return false;",
+			"replace": "",
+			"note": "a deleted run that straddles leaves counts as one token while it holds no blank, so a call the rewrite replaced by a name still carries the edit inside it"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-LEAF-KEEPS-BLANK-TEST",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "replacedToken",
+			"find": "for (i in lo ... hi) if (written.isSpace(i)) return false;",
+			"replace": "",
+			"note": "a deleted run inside one childless multi-token leaf counts as one token even with a blank in it, so an array literal the rewrite replaced by a name still carries the edit inside it"
 		}
 	]
 }
