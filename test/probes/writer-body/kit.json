@@ -83,7 +83,8 @@
 		"call-open-operand-2/Main.hx": "class Main {\n\tstatic function main() {\n\t\tif (conditionAlpha && switch (longParameterA) { case 1: longParameterB; case _: longParameterCxxxxxxx; } && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tvar f = conditionAlpha && function(longParameterA, longParameterB, longParameterC, longParameterDxxxx) return true;\n\t\tif (conditionAlpha && new pack.sub.FunctionWithManyParams(longParameterA, longParameterB, longParameterCxx) != null && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && new FunctionWithManyParams(longParameterA, longParameterB, longParameterC).method() && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t\tif (conditionAlpha && arr[0][1](longParameterA, longParameterB, longParameterC, longParameterDxxxxxxxxxxx) && conditionBravo) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}\n",
 		"call-open-operand-2/hxformat.json": "{\"indentation\": {\"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 100, \"callParameter\": {\"defaultWrap\": \"fillLineWithLeadingBreak\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}]}, \"opBoolChain\": {\"defaultWrap\": \"noWrap\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"fillLine\", \"location\": \"afterLast\"}]}}}\n",
 		"sw/B.hx": "class B {\n\tfunction a(c:Bool) {\n\t\tif (c) foo(); else switch e(1) { case X: 1; case Y: 2; }\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else foo();\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else switch f(1) { case X: 1; case Y: 2; }\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else { foo(); }\n\t\tif (c) switch e(1) { case X: 1; case Y: 2; } else if (d) foo();\n\t\tif (c) switch e(1) { case X: 1; } else { switch f(1) { case Y: 2; } }\n\t\tif (c) switch e(1) { case X: 1; } else { if (d) foo(); else bar(); }\n\t}\n}\n",
-		"sw/hxformat.json": "{\"sameLine\": {\"caseBody\": \"fitLine\", \"ifBody\": \"fitLine\", \"fitLineBodyGlue\": true}, \"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"remove\"}}}\n"
+		"sw/hxformat.json": "{\"sameLine\": {\"caseBody\": \"fitLine\", \"ifBody\": \"fitLine\", \"fitLineBodyGlue\": true}, \"whitespace\": {\"bracesConfig\": {\"singleStatementBraces\": \"remove\"}}}\n",
+		"loop-body/L.hx": "class L {\n\tfunction f() {\n\t\tvar q = function() for (x in xs) if (c) a(); else b();\n\t\tvar r = function() while (x) if (c) a(); else b();\n\t\tvar n = function() for (x in xs) for (y in ys) if (c) a(); else b();\n\t\tvar iter = function() for (x in (c ? xs : ys)) if (d) a(); else b();\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -916,6 +917,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "faec58cc4cab97dd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "loop-body/L.hx",
+			"note": "the loop body of a brace-less anonymous function ladders its if/else through one loop, two nested loops, a while and a parenthesised iterable",
+			"fixpoint": "loop-body/L.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"loop-body/L.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "417838bbfe00db99",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

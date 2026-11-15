@@ -52,6 +52,9 @@ final class WriterBodyPolicyLowering {
 	/** Where the braced ctors start in `@:fmt(statementIfBody(...))`'s names, after the wrapper ctor. */
 	private static inline final STATEMENT_IF_BRACED_ARG: Int = 4;
 
+	/** The prefix of a `@:fmt(statementIfBody(...))` name for a loop (`loop:ForExpr.body`) whose body is the statement asked about. */
+	private static final STATEMENT_IF_LOOP_TAG: String = 'loop:';
+
 	/**
 	 * Build a Doc expression that wraps a bare-Ref body field with a
 	 * runtime-switched separator driven by `@:fmt(bodyPolicy("flagName"))`.
@@ -1157,7 +1160,8 @@ final class WriterBodyPolicyLowering {
 	}
 
 	/**
-	 * The `@:fmt(statementIfBody(ifCtor, thenField, elseField, wrapperCtor, bracedCtor…))` placement TEST: a function body
+	 * The `@:fmt(statementIfBody(ifCtor, thenField, elseField, wrapperCtor, bracedCtor…, loop:<Ctor>.<field>…))`
+	 * placement TEST: a function body
 	 * that is an `if` owning an `else` with a brace-less branch is a statement ladder, so `buildBodyCoreWrap`
 	 * substitutes `Next` for whatever placement the body knob chose, as the loop-body substitution does. A chain whose
 	 * every branch is braced keeps the knob's placement. Null when the field carries no such names.
@@ -1165,14 +1169,35 @@ final class WriterBodyPolicyLowering {
 	private static function buildStatementIfBodyNextTest(opts: WriterLowering.WrapBodyOpts): Null<Expr> {
 		final args: Null<Array<String>> = opts.statementIfBodyArgs;
 		if (args == null) return null;
-		final value: Expr = opts.bodyValueExpr;
-		final wrapperCtor: Null<String> = statementIfBodyWrapper(args);
-		final withElse: Expr = ifWithElseProbe(value, args[0], args[2], wrapperCtor);
-		final braced: Array<String> = args.slice(STATEMENT_IF_BRACED_ARG);
-		final bare: Expr = wrapperCtor == null
-			? macro anyparse.format.LoopBodyShape.hasBareBranch($value, $v{args[0]}, $v{args[1]}, $v{args[2]}, $v{braced})
-			: macro anyparse.format.LoopBodyShape.hasBareBranch($value, $v{args[0]}, $v{args[1]}, $v{args[2]}, $v{braced}, $v{wrapperCtor});
+		final tail: Expr = statementIfBodyTail(opts.bodyValueExpr, args);
+		final withElse: Expr = ifWithElseProbe(tail, args[0], args[2], null);
+		final braced: Array<String> = statementIfBodyNames(args, false);
+		final bare: Expr = macro anyparse.format.LoopBodyShape.hasBareBranch($tail, $v{args[0]}, $v{args[1]}, $v{args[2]}, $v{braced});
 		return macro $withElse && $bare;
+	}
+
+	/**
+	 * The statement `@:fmt(statementIfBody(...))` asks about, as a runtime expression over the body `value`: the body
+	 * unwrapped by `wrapperCtor`, then looked through every `loop:<Ctor>.<field>` loop it names, so `function() for (…) if
+	 * (c) a(); else b();` is asked about its `if`.
+	 */
+	private static function statementIfBodyTail(value: Expr, args: Array<String>): Expr {
+		final wrapperCtor: Null<String> = statementIfBodyWrapper(args);
+		final loops: Array<String> = statementIfBodyNames(args, true);
+		return macro anyparse.format.LoopBodyShape.statementTail($value, $v{wrapperCtor}, $v{loops});
+	}
+
+	/**
+	 * The names of `@:fmt(statementIfBody(...))` after the wrapper ctor: the `loop:<Ctor>.<field>` ones, the tag stripped,
+	 * when `loops` is set, else the untagged braced ctors.
+	 */
+	private static function statementIfBodyNames(args: Array<String>, loops: Bool): Array<String> {
+		final names: Array<String> = [];
+		for (arg in args.slice(STATEMENT_IF_BRACED_ARG)) {
+			final isLoop: Bool = arg.substr(0, STATEMENT_IF_LOOP_TAG.length) == STATEMENT_IF_LOOP_TAG;
+			if (isLoop == loops) names.push(isLoop ? arg.substr(STATEMENT_IF_LOOP_TAG.length) : arg);
+		}
+		return names;
 	}
 
 	/** The `wrapperCtor` of `@:fmt(statementIfBody(...))` names, null when it is empty (the body is the `if` itself). */

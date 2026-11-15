@@ -1,5 +1,7 @@
 package anyparse.format;
 
+using Lambda;
+
 /**
  * Runtime shape probes over a BODY VALUE, for the writer knobs whose placement depends on what the body IS rather than
  * on how wide it renders (`loopBodyIfElseNext`, JSON key `sameLine.loopBodyIfElseNext`; `@:fmt(strictFitLineBody(...))`).
@@ -111,9 +113,46 @@ final class LoopBodyShape {
 			: hasBareBranch(elseBranch, ifCtor, thenField, elseField, bracedCtors);
 	}
 
-	/** A present branch value that is an enum value none of `bracedCtors` names. */
+	/**
+	 * The statement a function body stands for: `body` with `wrapperCtor` unwrapped, then every loop of `loopCtors`
+	 * (`Ctor.field`: the field of the ctor's struct that holds the loop body) looked through down to its body. `null` when
+	 * the wrapper is missing; with no loop in the way it is the unwrap `isIfWithElse` does itself.
+	 */
+	public static function statementTail(body: Null<Any>, wrapperCtor: Null<String>, loopCtors: Array<String>): Null<Any> {
+		var value: Null<Any> = body;
+		if (wrapperCtor != null) {
+			if (!Reflect.isEnumValue(value) || Type.enumConstructor(cast value) != wrapperCtor) return null;
+			value = Type.enumParameters(cast value)[0];
+		}
+		while (Reflect.isEnumValue(value)) {
+			final selector: Null<String> = peelSelector(cast value, loopCtors);
+			if (selector == null) break;
+			value = peeled(cast value, selector);
+		}
+		return value;
+	}
+
+	/**
+	 * A present branch value that is an enum value none of `bracedCtors` names. A block wrapped in metadata or
+	 * parentheses is none of them: the `if` writes it on its own line like a brace-less branch, so the chain ladders.
+	 */
 	private static function isBareBranch(branch: Null<Any>, bracedCtors: Array<String>): Bool {
 		return Reflect.isEnumValue(branch) && !bracedCtors.contains(Type.enumConstructor(cast branch));
+	}
+
+	/** The entry of `selectors` (`Ctor.field`) naming the ctor of `value`, `null` when none does. */
+	private static function peelSelector(value: EnumValue, selectors: Array<String>): Null<String> {
+		final ctor: String = Type.enumConstructor(value);
+		return selectors.find(selector -> selector.split('.')[0] == ctor);
+	}
+
+	/**
+	 * What `selector` (`Ctor.field`) reaches inside `value`: the field of its first parameter, `null` when the parameter
+	 * is absent or has no such field.
+	 */
+	private static function peeled(value: EnumValue, selector: String): Null<Any> {
+		final param: Null<Any> = Type.enumParameters(value)[0];
+		return param == null || Reflect.isEnumValue(param) ? null : Reflect.field(param, selector.substr(selector.indexOf('.') + 1));
 	}
 
 }

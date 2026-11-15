@@ -2024,23 +2024,26 @@ final class WriterRefFieldLowering {
 	}
 
 	/**
-	 * `@:fmt(statementIfBody('<ifCtor>', '<thenField>', '<elseField>', '<wrapperCtor>', '<bracedCtor>'…))`: a body field
+	 * `@:fmt(statementIfBody('<ifCtor>', '<thenField>', '<elseField>', '<wrapperCtor>', '<bracedCtor>'…, 'loop:<Ctor>.<field>'…))`:
+	 * a body field
 	 * whose value is an `if` with an `else` (`LoopBodyShape.isIfWithElse`) holds it as a statement — a function body's
 	 * value is never the enclosing expression's. The `if` is written outside expression position and under
 	 * `_statementFrame`, so its branches ladder; `thenField` and the braced ctors (a block, a brace-led `switch`) feed the
-	 * body's own-line test. An empty `wrapperCtor` means the body is the `if` itself.
+	 * body's own-line test. An empty `wrapperCtor` means the body is the
+	 * `if` itself; each `loop:<Ctor>.<field>` names a loop the body is looked
+	 * through to reach it.
 	 */
 	private static function statementIfBodyOpt(child: ShapeNode, fieldAccess: Expr, e: Expr): Expr {
 		final args: Null<Array<String>> = child.fmtReadStringArgs(STATEMENT_IF_BODY);
 		if (args == null) return e;
 		if (args.length <= WriterBodyPolicyLowering.STATEMENT_IF_BRACED_ARG)
 			Context.fatalError(
-				'WriterLowering: @:fmt(statementIfBody(...)) requires (ifCtor, thenField, elseField, wrapperCtor, bracedCtor...), got '
-				+ '${args.length} args',
+				'WriterLowering: @:fmt(statementIfBody(...)) requires ('
+				+ 'ifCtor, thenField, elseField, wrapperCtor, bracedCtor..., loop:<Ctor>.<field>...), got ${args.length} args',
 				Context.currentPos()
 			);
 		final probe: Expr = WriterBodyPolicyLowering.ifWithElseProbe(
-			fieldAccess, args[0], args[2], WriterBodyPolicyLowering.statementIfBodyWrapper(args)
+			WriterBodyPolicyLowering.statementIfBodyTail(fieldAccess, args), args[0], args[2], null
 		);
 		return macro ($probe ? _setStatementFrame(_clearExprPosition($e, opt), opt) : $e);
 	}

@@ -669,6 +669,30 @@
 			"find": "return isBareOf(eff, bracedCtors);",
 			"replace": "return eff != elseBody || isBareOf(eff, bracedCtors);",
 			"note": "a de-braced else counts as brace-less whatever it de-braces to, so `else { switch f {…} }` ladders a then switch on the first pass and glues it on the second"
+		},
+		{
+			"name": "M-STATEMENT-TAIL-IGNORES-LOOPS",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "statementTail",
+			"find": "while (Reflect.isEnumValue(value)) {",
+			"replace": "while (false) {",
+			"note": "a function body that is a loop is no longer looked through, so the if / else under it stays an expression and keeps its inline layout"
+		},
+		{
+			"name": "M-STATEMENT-TAIL-LOOKS-THROUGH-ONE-LOOP",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "statementTail",
+			"find": "while (Reflect.isEnumValue(value)) {",
+			"replace": "for (_ in 0...1) if (Reflect.isEnumValue(value)) {",
+			"note": "the look-through stops after one loop, so an if / else under two nested loops stays an expression and keeps its inline layout"
+		},
+		{
+			"name": "M-WRAPPED-BLOCK-COUNTS-BRACED",
+			"type": "anyparse.format.LoopBodyShape",
+			"method": "isBareBranch",
+			"find": "!bracedCtors.contains(Type.enumConstructor(cast branch))",
+			"replace": "![\"MetaExpr\", \"ParenExpr\"].concat(bracedCtors).contains(Type.enumConstructor(cast branch))",
+			"note": "a block wrapped in metadata or parentheses counts as braced, so an all-wrapped chain leaves its function body placement for the next line although the if writes the wrapped blocks on their own lines"
 		}
 	]
 }
