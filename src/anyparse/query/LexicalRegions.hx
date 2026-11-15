@@ -274,6 +274,20 @@ final class LexicalRegions {
 		return false;
 	}
 
+	/**
+	 * The regions of `source` as `plugin` lexes them, lexed on the first ask and kept for every later one: the one answer
+	 * to "the regions of a source, lexed once and only when a scan needs them", the thunk the `() -> Array<LexRegion>`
+	 * helpers take.
+	 */
+	public static function lazyOf(source: String, plugin: GrammarPlugin): () -> Array<LexRegion> {
+		var regions: Null<Array<LexRegion>> = null;
+		return () -> {
+			final lexed: Array<LexRegion> = regions ?? plugin.lexicalRegions(source);
+			regions = lexed;
+			return lexed;
+		};
+	}
+
 	/** The entries waiting at `depth`, the level created on first use. */
 	private static function pending<T>(levels: Array<Array<T>>, depth: Int): Array<T> {
 		while (levels.length <= depth) levels.push([]);

@@ -1,5 +1,8 @@
 package anyparse.query;
 
+import anyparse.query.LexicalRegions.LexHole;
+import anyparse.query.LexicalRegions.LexRegion;
+
 /**
  * What a token span IS — the kinds a generated token reader tells apart.
  *
@@ -43,9 +46,7 @@ final class TokenSpans {
 	 * A region never counts, so a name inside a string or a comment is not a token of it.
 	 */
 	public static function wordOffsets(spans: Array<TokenSpan>, source: String, name: String): Array<Int> {
-		return [
-			for (span in spans) if ((span.kind == Word || span.kind == Literal) && spells(span, source, name)) span.from
-		];
+		return [for (span in spans) if (spellsWord(span, source, name)) span.from];
 	}
 
 	/**
@@ -90,6 +91,55 @@ final class TokenSpans {
 	/** Whether `span`'s whole text is `text`. */
 	private static function spells(span: TokenSpan, source: String, text: String): Bool {
 		return span.to - span.from == text.length && source.substr(span.from, text.length) == text;
+	}
+
+	/**
+	 * The start of every token of `source` in `[from, to)` that spells `name` as a word of CODE — the code inside an
+	 * interpolating literal's holes included, read by `plugin`'s own token reader: the one answer to "where is this name
+	 * written as code". A literal's own text and a comment never count, and a token must end by `to`; `from` is read as
+	 * a token boundary.
+	 */
+	public static function codeWordOffsets(source: String, from: Int, to: Int, name: String, plugin: GrammarPlugin): Array<Int> {
+		final out: Array<Int> = [];
+		// A range that never holds the text holds no token of it, so the lex is skipped.
+		if (!holdsText(source, from, to, name)) return out;
+		collectCodeWords(source, from, to, to, name, plugin, LexicalRegions.lazyOf(source, plugin), out);
+		return out;
+	}
+
+	/** Whether `span` is a word token — a `Word`, or a `Literal` of the same text — whose whole text is `name`. */
+	public static function spellsWord(span: TokenSpan, source: String, name: String): Bool {
+		return (span.kind == Word || span.kind == Literal)
+			&& span.to - span.from == name.length
+			&& source.substr(span.from, name.length) == name;
+	}
+
+	/** Whether the text `name` occurs whole inside `[from, to)` of `source`. */
+	private static function holdsText(source: String, from: Int, to: Int, name: String): Bool {
+		if (name.length == 0) return false;
+		final at: Int = source.indexOf(name, from);
+		return at >= 0 && at + name.length <= to;
+	}
+
+	/**
+	 * Push to `out` the start of every word token spelling `name` in `[from, to)` that ends by `limit`, descending into
+	 * the holes of each region `regionsHere` finds at a region token, so a name in a hole's code counts and one in the
+	 * literal's text does not.
+	 */
+	private static function collectCodeWords(
+		source: String, from: Int, to: Int, limit: Int, name: String, plugin: GrammarPlugin, regionsHere: () -> Array<LexRegion>,
+		out: Array<Int>
+	): Void {
+		for (span in plugin.tokenSpans(source, from, to)) {
+			if (span.kind != Region) {
+				if (span.to <= limit && spellsWord(span, source, name)) out.push(span.from);
+				continue;
+			}
+			if (!holdsText(source, span.from, span.to, name)) continue;
+			final holes: Null<Array<LexHole>> = LexicalRegions.regionAt(span.from, regionsHere())?.holes;
+			if (holes == null) continue;
+			for (hole in holes) collectCodeWords(source, hole.from, hole.to, limit, name, plugin, () -> hole.regions, out);
+		}
 	}
 
 }

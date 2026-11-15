@@ -17064,7 +17064,7 @@
 		{
 			"name": "M-WORD-OFFSETS-LITERAL-DROPPED",
 			"type": "anyparse.query.TokenSpans",
-			"method": "wordOffsets",
+			"method": "spellsWord",
 			"find": "span.kind == Word || span.kind == Literal",
 			"replace": "span.kind == Word",
 			"note": "a contextual keyword spelled as a name (from, to) reads as a Literal and is no longer a word of it, so a member named to is never found"
@@ -17121,6 +17121,30 @@
 			"find": "if (k > 0 && span.from != spans[start + k - 1].to) return false;",
 			"replace": "",
 			"note": "the run's tokens need not touch, so a path spelled with spaces between its tokens reads as the path and its span is wrong"
+		},
+		{
+			"name": "M-CODE-WORDS-HOLES-SKIPPED",
+			"type": "anyparse.query.TokenSpans",
+			"method": "collectCodeWords",
+			"find": "for (hole in holes) collectCodeWords(source, hole.from, hole.to, limit, name, plugin, () -> hole.regions, out);",
+			"replace": "continue;",
+			"note": "an interpolating literal is read as text only, so a name written in the code of a hole is no occurrence and a write there is missed"
+		},
+		{
+			"name": "M-CODE-WORDS-REGION-TEXT-COUNTS",
+			"type": "anyparse.query.TokenSpans",
+			"method": "collectCodeWords",
+			"find": "if (!holdsText(source, span.from, span.to, name)) continue;",
+			"replace": "if (holdsText(source, span.from, span.to, name)) out.push(source.indexOf(name, span.from));",
+			"note": "a name spelled in a literal text or a comment counts as code again, the text scan the token reader replaced"
+		},
+		{
+			"name": "M-CODE-WORDS-PAST-LIMIT",
+			"type": "anyparse.query.TokenSpans",
+			"method": "collectCodeWords",
+			"find": "span.to <= limit && spellsWord",
+			"replace": "spellsWord",
+			"note": "a token that starts in the range but ends past it counts, so a range cut before a name still reports it"
 		}
 	]
 }

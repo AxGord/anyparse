@@ -36,6 +36,32 @@ final class TokenSpansTest extends Test {
 		Assert.same([source.lastIndexOf('pkg.T')], paths(source, 'pkg.T'));
 	}
 
+	/** A name in the code of an interpolation hole counts; the same name in the literal's own text does not. */
+	@:pin('control')
+	@:killer('M-CODE-WORDS-HOLES-SKIPPED')
+	public function testANameInAnInterpolationHoleIsCode(): Void {
+		Assert.same([5, 23], codeOffsets("'a ${count} b count' + count", 0, 'count'));
+	}
+
+	/** A name in a plain string or a comment is no code word; the one in code is. */
+	@:pin('control')
+	@:killer('M-CODE-WORDS-REGION-TEXT-COUNTS')
+	public function testANameInAStringOrACommentIsNoCodeWord(): Void {
+		Assert.same([0], codeOffsets('count + "count" /* count */ // count', 0, 'count'));
+	}
+
+	/** A token that starts inside the range but ends past it is not reported. */
+	@:pin('control')
+	@:killer('M-CODE-WORDS-PAST-LIMIT')
+	public function testAWordMustEndByTheRangeEnd(): Void {
+		Assert.same([0], codeOffsets('count count', 3, 'count'));
+	}
+
+	/** The code-word offsets of `name` in `source` up to `cut` characters before its end, by the Haxe token reader. */
+	private static function codeOffsets(source: String, cut: Int, name: String): Array<Int> {
+		return TokenSpans.codeWordOffsets(source, 0, source.length - cut, name, new HaxeQueryPlugin());
+	}
+
 	/** The offsets of `name` in `source`, read by the Haxe grammar's token reader. */
 	private static function offsets(source: String, name: String): Array<Int> {
 		return TokenSpans.wordOffsets(new HaxeQueryPlugin().tokenSpans(source, 0, source.length), source, name);

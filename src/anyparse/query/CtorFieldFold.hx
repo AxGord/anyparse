@@ -115,8 +115,8 @@ final class CtorFieldFold {
 	 *    wrapped, or `= null`-defaulted (a non-nullable parameter cannot be
 	 *    `??`-defaulted);
 	 *  - no other write to the field name appears ANYWHERE in the file — the same
-	 *    conservative raw-text scan `ctorSoleAssignmentFinalizable` uses, which sees
-	 *    `#if` bodies — with the declaration and that one constructor target excluded.
+	 *    conservative token scan of the code `ctorSoleAssignmentFinalizable` uses, which
+	 *    still sees `#if` bodies — with the declaration and that one constructor target excluded.
 	 *
 	 * Cross-file soundness (an external, subtype, or unresolved write; an `@:access`
 	 * grantee) stays the CONSUMER's job, exactly as for `ctorSoleAssignmentFinalizable`.
@@ -233,8 +233,8 @@ final class CtorFieldFold {
 	 *  - the value assigned does not itself read the field, and no comment sits in a byte range
 	 *    the fold regenerates;
 	 *  - no other write to the field name appears ANYWHERE in the file — the same conservative
-	 *    raw-text scan (`MemberWriteScan.writtenInRange`, which sees `#if` bodies) the `??` fold
-	 *    uses, with the declaration and that one constructor target excluded.
+	 *    token scan of the code (`MemberWriteScan.writtenInRange`, which still sees `#if` bodies)
+	 *    the `??` fold uses, with the declaration and that one constructor target excluded.
 	 *
 	 * Cross-file soundness (an external, subtype or unresolved write, an `@:access` grantee) stays
 	 * the CONSUMER's job, as for `ctorSoleAssignmentFinalizable`.

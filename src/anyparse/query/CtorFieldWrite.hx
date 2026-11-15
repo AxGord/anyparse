@@ -508,9 +508,9 @@ final class CtorFieldWrite {
 	 */
 	public static function abstractMethodMayMutate(
 		source: String, name: String, declType: Null<String>, exclude: Span, index: () -> Null<SymbolIndex>, abstractKinds: Array<String>,
-		lexicalRegions: () -> Array<LexRegion>
+		plugin: GrammarPlugin
 	): Bool {
-		if (declType == null || !methodCalledOn(source, name, exclude, lexicalRegions)) return false;
+		if (declType == null || !methodCalledOn(source, name, exclude, plugin)) return false;
 		final idx: Null<SymbolIndex> = index();
 		final resolvedRebind: Null<Bool> = idx?.traits.abstractRebindsThis(declType, abstractKinds);
 		return resolvedRebind ?? !finalSafeStdlibTypes.contains(declType);
@@ -524,8 +524,8 @@ final class CtorFieldWrite {
 	 * constructor assignment `x = expr` / `this.x = expr` OUTSIDE a closure
 	 * (`soleConstructorFieldWrite`), it is not static (`static final` requires a
 	 * declaration initializer), and no other write to its name appears anywhere in
-	 * `source` — a conservative text scan (`MemberWriteScan.writtenInRange`) that also
-	 * sees `#if` bodies the structural walkers cannot. A `@:build` macro injecting a
+	 * `source` — a conservative token scan of the code (`MemberWriteScan.writtenInRange`) that
+	 * also sees `#if` bodies the structural walkers cannot. A `@:build` macro injecting a
 	 * writer is the residual blind spot, shared with every other arm of the three
 	 * consumers and surfacing as a loud compile error at the injected write.
 	 *
@@ -764,27 +764,17 @@ final class CtorFieldWrite {
 	}
 
 	/**
-	 * Whether a word-bounded occurrence of `name` outside `exclude` is the receiver of a
-	 * method call — followed, past whitespace and comments, by `.`, then an identifier,
-	 * then `(`. Matches `name.m(...)` and `this.name.m(...)` alike (the `name` token in
-	 * `this.name` is bounded by the preceding `.`). A plain field read (`name.x`) or a
-	 * method reference without a call (`name.m`) is not a match — only a `this`-mutating
-	 * abstract method call is a write the assignment scans miss.
+	 * Whether a word token of `name` in the code outside `exclude` (`TokenSpans.codeWordOffsets`) is the
+	 * receiver of a method call — followed, past whitespace and comments, by `.`, then an identifier,
+	 * then `(`. Matches `name.m(...)` and `this.name.m(...)` alike. A plain field read (`name.x`) or a
+	 * method reference without a call (`name.m`) is not a match — only a `this`-mutating abstract method
+	 * call is a write the assignment scans miss.
 	 */
-	private static function methodCalledOn(source: String, name: String, exclude: Span, lexicalRegions: () -> Array<LexRegion>): Bool {
-		final n: Int = source.length;
-		final len: Int = name.length;
-		if (len == 0) return false;
-		var from: Int = 0;
-		while (true) {
-			final idx: Int = source.indexOf(name, from);
-			if (idx < 0) return false;
-			from = idx + len;
-			final boundedBefore: Bool = idx == 0 || !source.fastCodeAt(idx - 1).isIdentChar();
-			final boundedAfter: Bool = from >= n || !source.fastCodeAt(from).isIdentChar();
-			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from, lexicalRegions))
-				return true;
-		}
+	private static function methodCalledOn(source: String, name: String, exclude: Span, plugin: GrammarPlugin): Bool {
+		// One lex per scan, and only once an occurrence asks what follows it.
+		final lexicalRegions: () -> Array<LexRegion> = LexicalRegions.lazyOf(source, plugin);
+		return TokenSpans.codeWordOffsets(source, 0, source.length, name, plugin)
+			.exists(idx -> (idx < exclude.from || idx >= exclude.to) && callFollows(source, idx + name.length, lexicalRegions));
 	}
 
 	/** Whether the tokens starting at `pos` are `.` <identifier> ... `(` — a method call, ignoring interposed whitespace and comments. */

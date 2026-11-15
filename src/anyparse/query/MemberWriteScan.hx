@@ -4,8 +4,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
 import anyparse.runtime.Span;
 
-using anyparse.util.Strings;
-
 /**
  * Conservative text scans for the cross-file questions a member-access rewrite has to answer:
  * "is this member NAME written here" (does a SUBTYPE write an inherited member, does an
@@ -239,34 +237,20 @@ final class MemberWriteScan {
 
 	/**
 	 * Whether `name` is written anywhere in `source` outside `exclude` (typically its own
-	 * declaration), over the offsets `from ... to` only. A candidate name must lie WHOLLY
-	 * inside the range; the operator scan that follows it may run past `to`, and the
-	 * word-boundary tests read the real neighbouring characters rather than the range edges.
+	 * declaration), over the offsets `from ... to` only. A candidate is a word token of the code
+	 * (`TokenSpans.codeWordOffsets`: a hole of an interpolating literal counts, its text and a comment
+	 * do not) lying WHOLLY inside the range; the operator scan that follows it may run past `to`.
 	 */
 	public static function writtenInRange(
 		source: String, name: String, exclude: Null<Span>, from: Int, to: Int, plugin: GrammarPlugin
 	): Bool {
-		final n: Int = source.length;
-		final len: Int = name.length;
-		if (len == 0) return false;
 		// One lex per scan: every occurrence that starts a line asks for the regions.
-		var regions: Null<Array<LexRegion>> = null;
-		final lexicalRegions: () -> Array<LexRegion> = () -> {
-			final lexed: Array<LexRegion> = regions ?? plugin.lexicalRegions(source);
-			regions = lexed;
-			return lexed;
-		};
-		var at: Int = from;
-		while (true) {
-			final idx: Int = source.indexOf(name, at);
-			if (idx < 0 || idx + len > to) return false;
-			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !source.fastCodeAt(idx - 1).isIdentChar();
-			final boundedAfter: Bool = at >= n || !source.fastCodeAt(at).isIdentChar();
-			if (!boundedBefore || !boundedAfter) continue;
+		final lexicalRegions: () -> Array<LexRegion> = LexicalRegions.lazyOf(source, plugin);
+		for (idx in TokenSpans.codeWordOffsets(source, from, to, name, plugin)) {
 			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
-			if (precededByIncrDecr(source, idx, lexicalRegions) || followedByAssign(source, at, lexicalRegions)) return true;
+			if (precededByIncrDecr(source, idx, lexicalRegions) || followedByAssign(source, idx + name.length, lexicalRegions)) return true;
 		}
+		return false;
 	}
 
 	/**

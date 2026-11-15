@@ -29,15 +29,15 @@ import anyparse.query.TypeInfoProvider;
  *    no skip-parsed file, no `@:access` grant, no `@:allow`, and no subtype writing the
  *    inherited member. A non-default visibility (public) is excluded: a public field
  *    is writable from another file regardless of confinement.
- * 3. No other write to the field name appears in the file. The scan is a
- *    conservative, COMPLETE text scan — it treats the name followed by any
+ * 3. No other write to the field name appears in the file. The scan
+ *    (`MemberWriteScan.writtenInRange`) reads the name's word tokens in the code, holes of
+ *    interpolating literals included, and is conservative and COMPLETE: it treats the name followed by any
  *    assignment operator (`=`, `+=`, … but not `==` / `<=` / `!=` / `=>`) or
  *    adjacent to `++` / `--` as a write, matching `this.x = …`, `obj.x = …`,
  *    `x++`, and `++x` alike, and skips whitespace AND interposed comments between
  *    the name and the operator (a write whose name is separated from `=` by a
- *    comment is still detected). It over-counts (a same-named local, or the name in
- *    a comment / string, reads as a write) which only ever KEEPS a `var`, never
- *    produces a wrong `final`.
+ *    comment is still detected). It over-counts (a same-named local reads as a
+ *    write) which only ever KEEPS a `var`, never produces a wrong `final`.
  *
  * Together these prove the assignment is the sole one, so `var → final` is always sound. An interface-mutability
  * gate additionally skips a field an implemented interface declares — or that ANY unresolvable implemented
@@ -233,10 +233,7 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 		if (folded) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			final foldDeclType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-			if (CtorFieldWrite.abstractMethodMayMutate(
-				source, name, foldDeclType, span, lazyIndex, abstractKinds, plugin.lexicalRegions.bind(source)
-			))
-				return;
+			if (CtorFieldWrite.abstractMethodMayMutate(source, name, foldDeclType, span, lazyIndex, abstractKinds, plugin)) return;
 			flag(out, file, span, name, 'has a null-guarded constructor default', decline);
 			return;
 		}
@@ -244,10 +241,7 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			if (writtenInFile(source, name, span, plugin)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-			if (CtorFieldWrite.abstractMethodMayMutate(
-				source, name, declType, span, lazyIndex, abstractKinds, plugin.lexicalRegions.bind(source)
-			))
-				return;
+			if (CtorFieldWrite.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds, plugin)) return;
 			flag(out, file, span, name, 'is assigned only at its declaration', decline);
 			return;
 		}

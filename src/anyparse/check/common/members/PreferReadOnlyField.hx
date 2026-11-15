@@ -7,8 +7,7 @@ import anyparse.query.MemberWriteScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-
-using anyparse.util.Strings;
+import anyparse.query.TokenSpans;
 
 /**
  * Flags a PUBLIC `var` field written ONLY inside its declaring class — never from
@@ -122,7 +121,7 @@ final class PreferReadOnlyField extends RuleBase {
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final nameEnd: Int = nameEndOffset(source, span);
+			final nameEnd: Int = nameEndOffset(source, span, plugin);
 			if (nameEnd < 0) continue;
 			edits.push({ span: new Span(nameEnd, nameEnd), text: '(default, null)' });
 		}
@@ -141,7 +140,7 @@ final class PreferReadOnlyField extends RuleBase {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
-		final nameEnd: Int = nameEndOffset(source, span);
+		final nameEnd: Int = nameEndOffset(source, span, plugin);
 		if (nameEnd < 0 || SourceText.isProperty(source, nameEnd)) return;
 		// A file the grammar could not read can hold any write, so no internal-only proof
 		// survives it — but only when it can reach this MEMBER, which it can only do by
@@ -198,20 +197,15 @@ final class PreferReadOnlyField extends RuleBase {
 	}
 
 	/**
-	 * Offset just past the field name — after the `var` keyword, whitespace, and the
-	 * identifier — or -1 when the decl does not begin with the `var` keyword.
+	 * Offset just past the field name — the end of the word token after the `var` keyword token, by the
+	 * grammar's token reader — or -1 when the decl does not begin with the `var` keyword followed by a name.
 	 */
-	private static function nameEndOffset(source: String, span: Span): Int {
+	private static function nameEndOffset(source: String, span: Span, plugin: GrammarPlugin): Int {
 		final keyword: String = 'var';
-		final n: Int = source.length;
-		if (span.from + keyword.length > n || source.substring(span.from, span.from + keyword.length) != keyword) return -1;
-		var i: Int = span.from + keyword.length;
-		while (i < n && SourceText.isSpace(source.fastCodeAt(i))) i++;
-		final start: Int = i;
-		while (i < n && source.fastCodeAt(i).isIdentChar()) i++;
-		return i > start ? i : -1;
+		final tokens: Array<TokenSpan> = plugin.tokenSpans(source, span.from, span.to);
+		if (tokens.length < 2 || !TokenSpans.spellsWord(tokens[0], source, keyword)) return -1;
+		final nameToken: TokenSpan = tokens[1];
+		return nameToken.kind == Word || nameToken.kind == Literal ? nameToken.to : -1;
 	}
-
-	/** Whether `c` is an identifier character. */
 
 }

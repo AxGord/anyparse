@@ -138,10 +138,7 @@ final class PreferFinal extends RuleBase {
 			final writes: Null<Array<Span>> = writesByName[c.name];
 			if (writes != null && reassignedInScope(writes, c.scope)) continue;
 			final declType: Null<String> = (declaredTypes == null ? null : declaredTypes[c.span.from]) ?? c.constructed;
-			if (CtorFieldWrite.abstractMethodMayMutate(
-				source, c.name, declType, c.span, index, abstractKinds, plugin.lexicalRegions.bind(source)
-			))
-				continue;
+			if (CtorFieldWrite.abstractMethodMayMutate(source, c.name, declType, c.span, index, abstractKinds, plugin)) continue;
 			out.push({
 				file: file,
 				span: c.span,

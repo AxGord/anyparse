@@ -9,8 +9,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-
-using anyparse.util.Strings;
+import anyparse.query.TokenSpans;
 
 /**
  * Flags an INSTANCE `final` field whose initializer is a pure compile-time literal, and rewrites it
@@ -249,7 +248,7 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 		if (init == null || !ConstantFieldScan.isConstantLiteral(init, ctx.source, ctx.seams)) return;
 		if (MemberWriteScan.writtenInRange(ctx.source, name, span, 0, ctx.source.length, ctx.plugin)) return;
 		if (ReflectionScan.runtimeName(ctx.reflected, name)) return;
-		if (memberAccessedInFile(ctx.source, name, span)) return;
+		if (memberAccessedInFile(ctx.source, name, span, ctx.plugin)) return;
 		if (!RefactorSupport.privateMemberScanIsSound(ctx.source, ctx.index, name)) return;
 		// A macro-built type's fields are not what the declaration says — a builder that moves
 		// a field's assignment into the constructor makes a `static` promotion
@@ -268,25 +267,18 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 	}
 
 	/**
-	 * Whether `name` occurs in `source` — outside its own declaration `decl` — immediately after a
-	 * `.`, i.e. as a member access. Both `this.NAME` and `obj.NAME` are `Cannot access static field
-	 * NAME from a class instance`, so ONE such occurrence refuses the promotion. Conservative: the
-	 * scan is textual and word-boundary only, so a same-named member of an unrelated type, or the
-	 * name inside a comment or string, also refuses — which only ever KEEPS the field an instance
-	 * one.
+	 * Whether a word token of `name` in the code of `source` (`TokenSpans.codeWordOffsets`) — outside
+	 * its own declaration `decl` — sits immediately after a `.`, i.e. as a member access. Both
+	 * `this.NAME` and `obj.NAME` are `Cannot access static field NAME from a class instance`, so ONE
+	 * such occurrence refuses the promotion. Conservative: a same-named member of an unrelated type
+	 * also refuses — which only ever KEEPS the field an instance one.
 	 */
-	private static function memberAccessedInFile(source: String, name: String, decl: Span): Bool {
-		final len: Int = name.length;
-		var at: Int = 0;
-		while (true) {
-			final idx: Int = source.indexOf(name, at);
-			if (idx < 0) return false;
-			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !source.fastCodeAt(idx - 1).isIdentChar();
-			final boundedAfter: Bool = at >= source.length || !source.fastCodeAt(at).isIdentChar();
-			if (!boundedBefore || !boundedAfter || (idx >= decl.from && idx < decl.to)) continue;
+	private static function memberAccessedInFile(source: String, name: String, decl: Span, plugin: GrammarPlugin): Bool {
+		for (idx in TokenSpans.codeWordOffsets(source, 0, source.length, name, plugin)) {
+			if (idx >= decl.from && idx < decl.to) continue;
 			if (precededByDot(source, idx)) return true;
 		}
+		return false;
 	}
 
 	/** Whether the nearest non-space character before `idx` is a `.` — the member-access form. */
