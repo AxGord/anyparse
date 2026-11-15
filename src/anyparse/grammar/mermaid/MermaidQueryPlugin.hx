@@ -10,6 +10,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.query.TypeSyntax;
 import anyparse.query.merge.StructuralMerge.MergeShape;
 import anyparse.runtime.Span;
@@ -156,6 +157,11 @@ final class MermaidQueryPlugin implements GrammarPlugin {
 		final regions: Array<LexRegion> = [];
 		if (document != null) collectComments(document, regions);
 		return regions;
+	}
+
+	/** None yet: the Mermaid grammar has no generated lexical pass and tags no `@:token` terminal. */
+	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan> {
+		return [];
 	}
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> {

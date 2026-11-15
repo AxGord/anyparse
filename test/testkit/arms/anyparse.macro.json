@@ -3420,6 +3420,35 @@
 			"method": "chainBareBranchTest",
 			"force": "null",
 			"note": "the ladder reads the branches as parsed, so a { single; } else the writer de-braces reads as braced and the then switch ladders only on a second pass"
+		},
+		{
+			"name": "M-TOKEN-LITERALS-NONE",
+			"type": "anyparse.macro.LexicalLowering",
+			"method": "tokenLiterals",
+			"force": "[]",
+			"note": "the token reader spells no literal text, so a grammar's own punctuation and directive keywords read as unknown characters"
+		},
+		{
+			"name": "M-TOKEN-TERMINALS-NONE",
+			"type": "anyparse.macro.LexicalLowering",
+			"method": "tokenTerminals",
+			"force": "[]",
+			"note": "no @:token terminal reaches the token reader, so a word or number splits into one unknown token per character"
+		},
+		{
+			"name": "M-TOKEN-REGIONS-NONE",
+			"type": "anyparse.macro.LexicalCodegen",
+			"method": "tokenRegionArms",
+			"force": "[]",
+			"note": "the token reader runs no region walk, so a string or comment splits into the tokens of its body"
+		},
+		{
+			"name": "M-TOKEN-TIE-TO-TERMINAL",
+			"type": "anyparse.macro.LexicalCodegen",
+			"method": "tokensField",
+			"find": "if (end > best) {",
+			"replace": "if (end >= best) {",
+			"note": "a terminal as long as the literal replaces it, so a keyword the word pattern also matches reads as a word"
 		}
 	]
 }

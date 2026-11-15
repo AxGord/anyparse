@@ -33,6 +33,7 @@ using StringTools;
  */
 @:re('[0-9](?:_?[0-9])*(?:_?(?:i8|i16|i32|i64|u8|u16|u32|u64))?')
 @:rawString
+@:token(Number)
 abstract HxIntLit(String) from String to String {
 
 	@:to

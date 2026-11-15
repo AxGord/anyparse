@@ -10,4 +10,5 @@ package anyparse.grammar.haxe.lit;
  */
 @:re('[A-Za-z_][A-Za-z0-9_]*')
 @:rawString
+@:token(Word)
 abstract HxWordLit(String) from String to String {}

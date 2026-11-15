@@ -9,6 +9,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 
@@ -119,6 +120,10 @@ final class OrphanInjectingPlugin implements GrammarPlugin {
 
 	public function lexicalRegions(source: String): Array<LexRegion> {
 		return _inner.lexicalRegions(source);
+	}
+
+	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan> {
+		return _inner.tokenSpans(source, from, to);
 	}
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> {

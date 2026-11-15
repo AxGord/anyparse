@@ -2,10 +2,12 @@ package anyparse.macro;
 
 #if macro
 import anyparse.core.ShapeTree;
+import anyparse.util.Compare;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.Type;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -78,6 +80,37 @@ typedef LexDirectiveSpec = {
 	close: Null<String>
 
 };
+/**
+ * The token reader a grammar declares, in the form the generated reader consumes. Every field is DERIVED — from
+ * the format's whitespace, from the literal texts the grammar's own tags spell, and from `@:token(<Kind>)` on a
+ * `@:re` terminal.
+ */
+typedef LexTokenSpec = {
+
+	/** Character codes the format declares as whitespace: they separate tokens and are never one. */
+	whitespace: Array<Int>,
+
+	/** Every literal text the grammar spells, longest first, so the first one that matches is the maximal munch. */
+	literals: Array<String>,
+
+	/** Every terminal tagged `@:token(<Kind>)`, in rule-name order. */
+	terminals: Array<LexTokenTerminal>
+
+};
+
+/** One `@:token(<Kind>)` terminal: the `TokenKind` constructor its tokens carry and the pattern that reads them. */
+typedef LexTokenTerminal = {
+
+	/** The `TokenKind` constructor a token this terminal reads carries. */
+	kind: String,
+
+	/** The terminal's own `@:re`. */
+	pattern: String,
+
+	/** The declaration this was read from — named in the generated doc. */
+	origin: String
+
+};
 
 /**
  * The lexical pass's LOWERING — the third of the five passes, run for the
@@ -102,6 +135,10 @@ typedef LexDirectiveSpec = {
  * and the escape, not just a matcher: a literal left open at EOF still bounds a region, and a
  * regex cannot express that. A pattern of any other shape is a compile error naming the rule,
  * never a silently-skipped arm.
+ *
+ * `tokens` answers a second question from the same declarations — which TOKENS a source holds: every
+ * literal text the grammar's own tags spell, every terminal tagged `@:token(<Kind>)`, and the regions above
+ * as one token each.
  */
 class LexicalLowering {
 
@@ -114,6 +151,30 @@ class LexicalLowering {
 	/** `(?:[^` — the opening of the body alternation a delimited-literal pattern must have. */
 	private static final BODY_OPEN: String = '(?:[^';
 
+	/** The `TokenKind`s the token reader assigns itself, which a `@:token(<Kind>)` may therefore not declare. */
+	private static final READER_KINDS: Array<String> = ['Literal', 'Region', 'Unknown'];
+
+	/** The tags whose string arguments are text the grammar spells literally — the token reader's literal set. */
+	private static final LITERAL_TAGS: Array<String> = [
+		':lit',
+		':lead',
+		':trail',
+		':trailOpt',
+		':wrap',
+		':sep',
+		':sepAlt',
+		':kw',
+		':infix',
+		':prefix',
+		':postfix',
+		':ternary'
+	];
+
+	/** The kinds a region may carry — the constructors of the engine's own `LexRegionKind`. */
+	public static inline function kindNames(): Array<String> {
+		return constructorNames('anyparse.query.LexicalRegions.LexRegionKind');
+	}
+
 	/**
 	 * Every non-code region `shape`'s grammar and `formatInfo`'s format declare, ordered so a
 	 * longer opener is tried before a shorter one that prefixes it.
@@ -123,18 +184,10 @@ class LexicalLowering {
 	): Array<LexRegionSpec> {
 		final kinds: Array<String> = kindNames();
 		final out: Array<LexRegionSpec> = [];
-		// Map iteration order is not specified; sort so the generated arms are byte-stable.
-		final names: Array<String> = [for (name in shape.rules.keys()) name];
-		names.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
-		for (name in names) {
+		for (name in sortedRuleNames(shape)) {
 			final node: Null<ShapeNode> = shape.rules[name];
 			if (node == null) continue;
-			final kind: Null<String> = lexicalKindOf(node, name, kinds);
+			final kind: Null<String> = kindArgOf(node, ':lexical', name, kinds);
 			if (kind == null) continue;
 			out.push( switch node.kind {
 				case Terminal: atomicSpec(node, kind, name);
@@ -158,13 +211,19 @@ class LexicalLowering {
 		return out;
 	}
 
-	/** The kinds a region may carry — the constructors of the engine's own `LexRegionKind`. */
-	public static function kindNames(): Array<String> {
-		return switch Context.getType('anyparse.query.LexicalRegions.LexRegionKind') {
-			case TAbstract(ref, _):
-				final impl: Null<Ref<ClassType>> = ref.get().impl;
-				impl == null ? [] : [for (f in impl.get().statics.get()) f.name];
-			case _: [];
+	/**
+	 * The token reader `shape`'s grammar declares: `formatInfo`'s whitespace, every literal text the grammar
+	 * spells — the string arguments of `LITERAL_TAGS` on any rule, constructor or field, and `directives`'
+	 * keywords — and every `@:re` terminal tagged `@:token(<Kind>)`.
+	 */
+	public static function tokens(
+		shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, directives: LexDirectiveSpec
+	): LexTokenSpec {
+		final ws: String = formatInfo.whitespace;
+		return {
+			whitespace: [for (k in 0...ws.length) ws.fastCodeAt(k)],
+			literals: tokenLiterals(shape, directives),
+			terminals: tokenTerminals(shape)
 		};
 	}
 
@@ -194,6 +253,63 @@ class LexicalLowering {
 		return stringMetaOf(node, ':re');
 	}
 
+	/** Every literal text the grammar spells, longest first and then in byte order, so the walk is byte-stable. */
+	private static function tokenLiterals(shape: ShapeBuilder.ShapeResult, directives: LexDirectiveSpec): Array<String> {
+		final seen: Map<String, Bool> = [];
+		for (node in shape.rules) collectLiterals(node, seen);
+		final keywords: Array<Null<String>> = [directives.open, directives.close];
+		for (keyword in directives.branches) keywords.push(keyword);
+		for (keyword in keywords) if (keyword != null && keyword != '') seen[keyword] = true;
+		final out: Array<String> = [for (text in seen.keys()) text];
+		out.sort((a: String, b: String) -> a.length != b.length ? b.length - a.length : Compare.compareString(a, b));
+		return out;
+	}
+
+	/** Add to `seen` the string arguments every `LITERAL_TAGS` entry of `node` and of its descendants carries. */
+	private static function collectLiterals(node: ShapeNode, seen: Map<String, Bool>): Void {
+		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
+		if (meta != null) for (entry in meta) if (LITERAL_TAGS.contains(entry.name)) for (param in entry.params) switch param.expr {
+			case EConst(CString(text, _)) if (text != ''):
+				seen[text] = true;
+			case _:
+		}
+		for (child in node.children) collectLiterals(child, seen);
+	}
+
+	/** Every terminal tagged `@:token(<Kind>)`, in rule-name order. */
+	private static function tokenTerminals(shape: ShapeBuilder.ShapeResult): Array<LexTokenTerminal> {
+		final kinds: Array<String> = constructorNames('anyparse.query.TokenSpans.TokenKind').filter(kind -> !READER_KINDS.contains(kind));
+		final out: Array<LexTokenTerminal> = [];
+		for (name in sortedRuleNames(shape)) {
+			final node: Null<ShapeNode> = shape.rules[name];
+			if (node == null) continue;
+			final kind: Null<String> = kindArgOf(node, ':token', name, kinds);
+			if (kind == null) continue;
+			final pattern: String = node.kind == Terminal
+				? patternOf(node) ?? fail('LexicalLowering: @:token on $name needs a @:re pattern to match its tokens by')
+				: fail('LexicalLowering: @:token on $name needs a @:re terminal');
+			out.push({ kind: kind, pattern: pattern, origin: name });
+		}
+		return out;
+	}
+
+	/** The names of `shape`'s rules in byte order — map iteration order is not specified, and the emitted walk must be byte-stable. */
+	private static function sortedRuleNames(shape: ShapeBuilder.ShapeResult): Array<String> {
+		final names: Array<String> = [for (name in shape.rules.keys()) name];
+		names.sort(Compare.compareString);
+		return names;
+	}
+
+	/** The constructor names of the enum abstract at `typePath`. */
+	private static function constructorNames(typePath: String): Array<String> {
+		return switch Context.getType(typePath) {
+			case TAbstract(ref, _):
+				final impl: Null<Ref<ClassType>> = ref.get().impl;
+				impl == null ? [] : [for (f in impl.get().statics.get()) f.name];
+			case _: [];
+		};
+	}
+
 	/**
 	 * Report `message` and stop the build. Typed `Dynamic` so a caller in a value position can
 	 * `return` it: `Context.fatalError` never returns, but only a throw says so to the typer,
@@ -203,18 +319,18 @@ class LexicalLowering {
 		return Context.fatalError(message, pos ?? Context.currentPos());
 	}
 
-	/** The `@:lexical(<Kind>)` argument on `node`, or null when it declares none. */
-	private static function lexicalKindOf(node: ShapeNode, origin: String, kinds: Array<String>): Null<String> {
+	/** The kind argument of `tag` (`@:lexical(<Kind>)`, `@:token(<Kind>)`) on `node`, or null when it declares none. */
+	private static function kindArgOf(node: ShapeNode, tag: String, origin: String, kinds: Array<String>): Null<String> {
 		final meta: Null<Metadata> = node.annotations[AnnotationKeys.BASE_META];
 		if (meta == null) return null;
-		for (entry in meta) if (entry.name == ':lexical') {
-			if (entry.params.length != 1) Context.fatalError('@:lexical expects exactly one region-kind argument', entry.pos);
+		for (entry in meta) if (entry.name == tag) {
+			if (entry.params.length != 1) Context.fatalError('@$tag expects exactly one kind argument', entry.pos);
 			final name: String = switch entry.params[0].expr {
 				case EConst(CIdent(s)): s;
-				case _: fail('@:lexical argument must be a region-kind identifier', entry.params[0].pos);
+				case _: fail('@$tag argument must be a kind identifier', entry.params[0].pos);
 			};
 			if (!kinds.contains(name))
-				Context.fatalError('@:lexical on $origin names "$name", which is not a region kind (${kinds.join(', ')})', entry.pos);
+				Context.fatalError('@$tag on $origin names "$name", which is not one of its kinds (${kinds.join(', ')})', entry.pos);
 			return name;
 		}
 		return null;

@@ -8,7 +8,9 @@ package anyparse.grammar.haxe.query;
  * a source to its NON-CODE regions — comment, string literal, regex literal — for the occurrence scans that mask
  * them; `scanComments` (behind `anyparse.format.comment.CommentScan`) reports only COMMENTS, and follows a `${ …
  * }` interpolation hole into the code inside it, for the writer's comment-loss guard. They are two FILTERS over
- * ONE generated walk, and their one disagreement is a declared policy — stated on `scanComments`.
+ * ONE generated walk, and their one disagreement is a declared policy — stated on `scanComments`. Beside them,
+ * `tokens` (behind `GrammarPlugin.tokenSpans`) reads the TOKENS of a range: the literal texts the grammar spells,
+ * the `@:token` terminals, and each region of those walks as one token.
  *
  * ## Why it lives HERE
  *

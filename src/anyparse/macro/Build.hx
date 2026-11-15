@@ -308,8 +308,10 @@ class Build {
 		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
 		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(resolved.rootType);
 
+		final directives: LexicalLowering.LexDirectiveSpec = LexicalLowering.directives(shape);
 		final fields: Array<Field> = LexicalCodegen.emit(
-			LexicalLowering.generate(shape, formatInfo, resolved.schemaTypePath), LexicalLowering.directives(shape)
+			LexicalLowering.generate(shape, formatInfo, resolved.schemaTypePath), directives,
+			LexicalLowering.tokens(shape, formatInfo, directives)
 		);
 
 		#if anyparse_dump

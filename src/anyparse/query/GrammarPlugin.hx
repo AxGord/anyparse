@@ -8,6 +8,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.runtime.Input;
 import anyparse.runtime.Span;
 
@@ -336,6 +337,15 @@ interface GrammarPlugin {
 	 * `unit.LexicalRegionAgreementTest` has it.
 	 */
 	public function lexicalRegions(source: String): Array<LexRegion>;
+
+	/**
+	 * Every token of `source` that starts in `[from, to)`, in source order, by THIS grammar's own declarations: a
+	 * declared literal text, a terminal the grammar tags `@:token(<Kind>)`, or a whole non-code region of
+	 * `lexicalRegions` as one token. A grammar with a generated lexical pass answers with its `tokens`; one that
+	 * declares no token reader answers empty. `from` is read as a token boundary: a token that starts before it is
+	 * not reported, and one it falls inside is read from `from` on.
+	 */
+	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan>;
 
 	/**
 	 * Optional: the grammar's boolean-expression simplification capability,

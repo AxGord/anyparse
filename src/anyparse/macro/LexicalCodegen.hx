@@ -4,6 +4,7 @@ package anyparse.macro;
 import anyparse.macro.LexicalLowering.LexBodyAtom;
 import anyparse.macro.LexicalLowering.LexDirectiveSpec;
 import anyparse.macro.LexicalLowering.LexRegionSpec;
+import anyparse.macro.LexicalLowering.LexTokenSpec;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
@@ -12,8 +13,9 @@ import haxe.macro.Expr;
  * `Build.buildLexicalScan` entry point.
  *
  * It turns the `LexRegionSpec` list into a specialised byte walk: one arm per declared
- * region, one walk function per region, one balancing walk per interpolation hole, and the
- * two public entries every consumer already calls. Nothing about the grammar survives as a
+ * region, one walk function per region, one balancing walk per interpolation hole, the
+ * two public region entries every consumer already calls, and the `tokens` reader over the
+ * same walks. Nothing about the grammar survives as a
  * literal in this file — every character the emitted code compares against arrives in a
  * spec, which is what makes the pass answer for a SECOND grammar without a core change.
  *
@@ -54,10 +56,11 @@ class LexicalCodegen {
 	 * The fields the marker class receives: the two public entries, the code walk, one walk
 	 * per declared region and one balancing walk per declared hole.
 	 */
-	public static function emit(specs: Array<LexRegionSpec>, directives: LexDirectiveSpec): Array<Field> {
+	public static function emit(specs: Array<LexRegionSpec>, directives: LexDirectiveSpec, tokens: LexTokenSpec): Array<Field> {
 		final fields: Array<Field> = [
 			scanField(specs),
 			scanCommentsField(),
+			tokensField(specs, tokens),
 			codeField(specs),
 			directivesField(directives)
 		];
@@ -86,6 +89,10 @@ class LexicalCodegen {
 
 	private static inline function codeAt(text: String, at: Int): Int {
 		return text.charCodeAt(at) ?? -1;
+	}
+
+	private static inline function tokenReName(t: Int): String {
+		return '_tokenRe$t';
 	}
 
 	// -------- public entries --------
@@ -409,6 +416,148 @@ class LexicalCodegen {
 			kind: FVar(type, value),
 			pos: Context.currentPos()
 		};
+	}
+
+	/**
+	 * The public `tokens` entry: maximal munch over the declared literal texts and `@:token` terminals, with every
+	 * declared region read as ONE token by its own walk and the format's whitespace between tokens. A literal wins a
+	 * tie with a terminal, because it is tried first and a terminal must be strictly longer to replace it.
+	 */
+	private static function tokensField(specs: Array<LexRegionSpec>, tokens: LexTokenSpec): Field {
+		// One FLAT statement list: a regex local a nested `$b{}` declared would be invisible to the loop.
+		final stmts: Array<Expr> = [];
+		for (t in 0...tokens.terminals.length) stmts.push({
+			expr: EVars([
+				{
+					name: tokenReName(t),
+					type: macro : EReg,
+					expr: macro anyparse.runtime.AnchoredRegex.of($v{tokens.terminals[t].pattern}),
+					isFinal: true
+				}
+			]),
+			pos: Context.currentPos()
+		});
+		final kindType: ComplexType = kindCT();
+		stmts.push(macro final out: Array<anyparse.query.TokenSpans.TokenSpan> = []);
+		stmts.push(macro final n: Int = source.length);
+		stmts.push(macro final limit: Int = to < n ? to : n);
+		stmts.push(macro final noRegion: (Int, Int, $kindType, Int) -> Void = (_, _, _, _) -> {});
+		stmts.push(macro final noHole: (Int, Int, Int) -> Void = (_, _, _) -> {});
+		stmts.push(macro var i: Int = from < 0 ? 0 : from);
+		final steps: Array<Expr> = [];
+		if (tokens.whitespace.length > 0) {
+			var ws: Expr = macro c == $v{tokens.whitespace[0]};
+			for (k in 1...tokens.whitespace.length) ws = macro $ws || c == $v{tokens.whitespace[k]};
+			steps.push(macro if ($ws) {
+				i++;
+				continue;
+			});
+		}
+		for (arm in tokenRegionArms(specs)) steps.push(arm);
+		steps.push(macro var best: Int = i);
+		steps.push(macro var kind: anyparse.query.TokenSpans.TokenKind = ${tokenKindValue('Unknown')});
+		final literals: Null<Expr> = literalSwitch(tokens.literals);
+		if (literals != null) steps.push(literals);
+		for (t in 0...tokens.terminals.length) {
+			final re: Expr = macro $i{tokenReName(t)};
+			final terminalKind: Expr = tokenKindValue(tokens.terminals[t].kind);
+			steps.push(macro if (anyparse.runtime.AnchoredRegex.matchIn($re, source, i)) {
+				final end: Int = i + $re.matched(0).length;
+				if (end > best) {
+					best = end;
+					kind = $terminalKind;
+				}
+			});
+		}
+		steps.push(macro if (best == i) best = i + 1);
+		steps.push(macro out.push({ from: i, to: best, kind: kind }));
+		steps.push(macro i = best);
+		stmts.push(macro while (i < limit) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			$b{steps};
+		});
+		stmts.push(macro return out);
+		final origins: String = [for (terminal in tokens.terminals) terminal.origin].join(', ');
+		return {
+			name: 'tokens',
+			doc: ' Every token of `source` that starts in `[from, to)`, as `[from, to)` byte offsets in source order, each at its\n'
+				+ ' full extent: a declared literal text, a `@:token` terminal, or a whole non-code region; whitespace is no token,\n'
+				+ ' and a character nothing declares is one `Unknown` token.\n\n Generated from the token terminals: $origins.',
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [
+					{ name: SOURCE_ARG, type: macro : String },
+					{ name: 'from', type: macro : Int },
+					{ name: 'to', type: macro : Int }
+				],
+				ret: macro : Array<anyparse.query.TokenSpans.TokenSpan>,
+				expr: macro $b{stmts}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * One switch on the first character over `literals`, each case an else-if chain in the given longest-first order,
+	 * so the first literal that matches is the longest one; null when the grammar spells none.
+	 */
+	private static function literalSwitch(literals: Array<String>): Null<Expr> {
+		final groups: Array<{ code: Int, texts: Array<String> }> = [];
+		for (text in literals) {
+			final code: Int = codeAt(text, 0);
+			var group: Null<{ code: Int, texts: Array<String> }> = null;
+			for (g in groups) if (g.code == code) group = g;
+			if (group == null)
+				groups.push({ code: code, texts: [text] })
+			else
+				group.texts.push(text);
+		}
+		if (groups.length == 0) return null;
+		groups.sort((a: { code: Int, texts: Array<String> }, b: { code: Int, texts: Array<String> }) -> a.code - b.code);
+		final literal: Expr = tokenKindValue('Literal');
+		final cases: Array<Case> = [];
+		for (group in groups) {
+			var chain: Expr = macro {};
+			var k: Int = group.texts.length;
+			while (k > 0) {
+				k--;
+				final text: String = group.texts[k];
+				final test: Expr = literalTest(text);
+				chain = macro if ($test) {
+					best = i + $v{text.length};
+					kind = $literal;
+				} else
+					$chain;
+			}
+			cases.push({ values: [macro $v{group.code}], expr: chain });
+		}
+		return { expr: ESwitch(macro c, cases, macro {}), pos: Context.currentPos() };
+	}
+
+	private static function tokenKindValue(name: String): Expr {
+		return { expr: EField(macro $p{['anyparse', 'query', 'TokenSpans', 'TokenKind']}, name), pos: Context.currentPos() };
+	}
+
+	/**
+	 * One arm per declared region for the token reader: the region's own walk finds its end and the whole region is
+	 * one token; an opener that opens nothing falls through to the literals and terminals.
+	 */
+	private static function tokenRegionArms(specs: Array<LexRegionSpec>): Array<Expr> {
+		final region: Expr = tokenKindValue('Region');
+		return [
+			for (k in 0...specs.length) {
+				final test: Expr = literalTest(specs[k].open);
+				final call: Expr = macro $i{regionFn(k)}(source, i, 0, noRegion, noHole);
+				macro if ($test) {
+					final end: Int = $call;
+					if (end >= 0) {
+						out.push({ from: i, to: end, kind: $region });
+						i = end;
+						continue;
+					}
+				};
+			}
+		];
 	}
 
 }

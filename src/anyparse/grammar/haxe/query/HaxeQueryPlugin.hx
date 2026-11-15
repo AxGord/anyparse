@@ -49,6 +49,7 @@ import anyparse.query.SourceText;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StdResolver;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.query.merge.StructuralMerge.MergeShape;
@@ -521,6 +522,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function lexicalRegions(source: String): Array<LexRegion> {
 		return HaxeLexicalRegions.scan(source);
+	}
+
+	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan> {
+		return HaxeLexicalRegions.tokens(source, from, to);
 	}
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> {

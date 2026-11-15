@@ -25,4 +25,5 @@ package anyparse.grammar.haxe.lit;
  */
 @:re('0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*(?:_?(?:i8|i16|i32|i64|u8|u16|u32|u64))?')
 @:rawString
+@:token(Number)
 abstract HxHexLit(String) from String to String {}

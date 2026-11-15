@@ -21,6 +21,7 @@ import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.runtime.Span;
 import haxe.io.Path;
 
@@ -673,6 +674,11 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final regions: Array<LexRegion> = _inner.lexicalRegions(source);
 		_lexicalRegionsCache[source] = regions.copy();
 		return regions;
+	}
+
+	/** Uncached: a range-dependent answer is cheap and rarely asked twice for the same text and range. */
+	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan> {
+		return _inner.tokenSpans(source, from, to);
 	}
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> return _inner.booleanLogicSupport();

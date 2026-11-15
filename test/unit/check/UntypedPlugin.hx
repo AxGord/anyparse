@@ -9,6 +9,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.Pattern;
 import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.query.TypeSyntax;
 import anyparse.runtime.Span;
 import haxe.exceptions.NotImplementedException;
@@ -108,6 +109,10 @@ final class UntypedPlugin implements GrammarPlugin {
 	}
 
 	public function lexicalRegions(source: String): Array<LexRegion> {
+		throw new NotImplementedException();
+	}
+
+	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan> {
 		throw new NotImplementedException();
 	}
 
