@@ -18,8 +18,8 @@ class RegistryFollowTokenJoinCliTest extends Test {
 		+ '"members":{"records":"arms","name":"name","type":"type","member":"method","kind":"kind",'
 		+ '"defaultKind":"FnMember","find":"find","replace":"replace","opaque":["force"]}}]}}\n';
 
-	@:pin('control')
-	@:killer('M-REGISTRY-FOLLOW-REPLACE-HEAD-GLUES')
+	// Held twice: the dropped argument takes the edited text with it, and the rebuilt replace would glue; no one cut flips it.
+	@:pin('guard')
 	public function testADroppedArgumentRefusesAReplaceThatWouldGlueToItsNeighbour(): Void {
 		#if nodejs
 		final cut: String = '"find":"g(1, 2, null, c)","replace":"g(1, 2, null, true)"';
@@ -62,8 +62,8 @@ class RegistryFollowTokenJoinCliTest extends Test {
 		#end
 	}
 
-	@:pin('control')
-	@:killer('M-REGISTRY-FOLLOW-REPLACE-REST-GLUES')
+	// Held twice: the dropped argument takes the edited text with it, and the rebuilt replace would glue; no one cut flips it.
+	@:pin('guard')
 	public function testADroppedLeadingArgumentRefusesAReplaceThatWouldGlueToTheRest(): Void {
 		#if nodejs
 		final cut: String = '"find":"k(true, a)","replace":"k(false, a)"';

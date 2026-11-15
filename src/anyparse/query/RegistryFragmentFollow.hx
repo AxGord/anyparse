@@ -243,17 +243,83 @@ final class RegistryFragmentFollow {
 		final maps: Array<Array<Int>> = rewrite.maps;
 		final starts: Array<Int> = cutBoundaries(maps, from, now.length, true);
 		starts.reverse();
-		for (newFrom in starts) for (newTo in cutBoundaries(maps, from + written.length, now.length, false)) if (newTo > newFrom) {
-			final newFind: String = now.substring(newFrom, newTo);
+		// An indent-tolerant cut starts at its line's indentation, which the find never spelled: the carried find leaves it out too.
+		final dedent: Bool = fit.length > 0 && fit[0] > 0 && written.substring(0, fit[0]).trim() == '';
+		for (newFrom in starts) for (newTo in cutBoundaries(maps, from + written.length, now.length, false)) if (
+			newTo > newFrom && keepsEdit(find, replace, fit, written, from, maps, newFrom, newTo)
+		) {
+			final spelled: String = now.substring(newFrom, newTo);
+			final newFind: String = dedent ? spelled.ltrim() : spelled;
 			final located: Null<Span> = Patch.cutSpan(
 				rewrite.module.newSource, rewrite.module.newTree, rewrite.target, newFind, rewrite.plugin
 			);
-			if (located == null || located.from != rewrite.at + newFrom) continue;
+			final lead: Int = spelled.length - newFind.length;
+			if (located == null || (located.from != rewrite.at + newFrom && located.from != rewrite.at + newFrom + lead)) continue;
 			if (replace == null) return { find: newFind, replace: null };
-			for (candidate in replacesOf(find, replace, from, fit, written.length, newFrom, newTo, rewrite))
+			for (built in replacesOf(find, replace, from, fit, written.length, newFrom, newTo, rewrite)) {
+				final candidate: String = dedent ? built.ltrim() : built;
 				if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin)) return { find: newFind, replace: candidate };
+			}
 		}
 		return null;
+	}
+
+	/**
+	 * Whether a character of `find` that its replace changes (the whole find without a replace, the two around a pure insertion)
+	 * still stands inside the carried cut `[newFrom, newTo)`: a cut whose edited text the rewrite deleted has nothing left to edit.
+	 */
+	private static function keepsEdit(
+		find: String, replace: Null<String>, fit: Array<Int>, written: String, from: Int, maps: Array<Array<Int>>, newFrom: Int, newTo: Int
+	): Bool {
+		var lo: Int = 0;
+		var hi: Int = find.length;
+		if (replace != null) {
+			lo = MemberRegistryRename.sharedPrefix(find, replace);
+			hi = find.length - MemberRegistryRename.sharedSuffix(find, replace, lo);
+			if (hi <= lo) {
+				hi = lo < find.length ? lo + 1 : lo;
+				lo = lo > 0 ? lo - 1 : lo;
+			}
+		}
+		return maps.exists(map -> holdsIn(map, find, fit, written, from, lo, hi, newFrom, newTo));
+	}
+
+	/**
+	 * Whether one alignment carries the cut whole into `[newFrom, newTo)`: an edited character stands inside, no kept character
+	 * of the cut lands outside, and at least half of its non-blank characters are kept, so a cut the rewrite moved apart or
+	 * mostly deleted is not re-spelled as the text that happens to stand around its remains.
+	 */
+	private static function holdsIn(
+		map: Array<Int>, find: String, fit: Array<Int>, written: String, from: Int, lo: Int, hi: Int, newFrom: Int, newTo: Int
+	): Bool {
+		var edited: Bool = false;
+		var solids: Int = 0;
+		var kept: Int = 0;
+		for (k in 0...find.length) {
+			final solid: Bool = find.charAt(k).trim() != '';
+			if (solid) solids++;
+			final w: Int = fit[k];
+			if (w >= 0 && map[from + w] < 0 && k >= lo && k < hi && replacedToken(map, written, from, w)) edited = true;
+			if (w < 0 || map[from + w] < 0) continue;
+			final p: Int = map[from + w];
+			if (p < newFrom || p >= newTo) return false;
+			if (solid) kept++;
+			if (k >= lo && k < hi) edited = true;
+		}
+		return edited && kept * 2 >= solids;
+	}
+
+	/**
+	 * Whether the run of cut characters around `written[w]` that the rewrite deleted holds no blank: one token replaced in
+	 * place (a literal become a constant's name) still stands where the edit was, a deleted phrase does not.
+	 */
+	private static function replacedToken(map: Array<Int>, written: String, from: Int, w: Int): Bool {
+		var lo: Int = w;
+		while (lo > 0 && map[from + lo - 1] < 0) lo--;
+		var hi: Int = w + 1;
+		while (hi < written.length && map[from + hi] < 0) hi++;
+		for (i in lo ... hi) if (written.isSpace(i)) return false;
+		return true;
 	}
 
 	/**

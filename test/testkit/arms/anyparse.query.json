@@ -17014,6 +17014,22 @@
 			"find": "if (from >= to) return false;",
 			"replace": "",
 			"note": "an empty or reversed span is scanned like any other, so one sitting inside a comment body answers yes"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-CARRIES-CUT-WHOLE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "holdsIn",
+			"find": "return edited && kept * 2 >= solids;",
+			"replace": "return true;",
+			"note": "a carry no longer requires the edited text to survive and the cut to stay whole, so a deleted or moved-apart cut is re-spelled as the text around its remains"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-FIND-LEAVES-INDENT",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "carry",
+			"find": "final newFind: String = dedent ? spelled.ltrim() : spelled;",
+			"replace": "final newFind: String = spelled;",
+			"note": "a carried find takes the line indentation an indent-tolerant cut started at, which the written find never spelled"
 		}
 	]
 }
