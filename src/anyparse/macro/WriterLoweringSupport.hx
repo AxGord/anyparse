@@ -478,5 +478,25 @@ final class WriterLoweringSupport {
 			: macro false;
 	}
 
+	/**
+	 * The comments between a mandatory field's OWN keyword and its value (a comment after `untyped`, before `{`),
+	 * held in the kw-trivia slots of a first field opted in by `@:fmt(ctorKwTrivia)`; null when the field grows none.
+	 */
+	private static function ownKwGapComments(trivia: Bool, child: ShapeNode, isFirstField: Bool, fieldAccess: Expr): Null<Expr> {
+		if (!trivia || !TriviaPairSlots.isCtorKwBodyRef(child, isFirstField)) return null;
+		final fieldName: String = switch fieldAccess.expr {
+			case EField(_, name): name;
+			case _: Context.fatalError('WriterLowering: ctorKwTrivia field access is not a field read', Context.currentPos());
+		};
+		final afterKw: Expr = valueFieldAccess(fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX);
+		final kwLeading: Expr = valueFieldAccess(fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX);
+		return macro {
+			final _gapAfter: Null<String> = $afterKw;
+			final _gapLeading: Array<String> = $kwLeading;
+			final _gapCm: Array<String> = _gapAfter == null ? _gapLeading : [_gapAfter].concat(_gapLeading);
+			_gapCm.length == 0 ? _de() : _dc([for (_c in _gapCm) trailingCommentDocGuarded(_c, opt)]);
+		};
+	}
+
 }
 #end

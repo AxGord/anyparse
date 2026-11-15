@@ -182,6 +182,15 @@
 			"find": "@:kw('#if')",
 			"replace": "@:kw('#if-closed')",
 			"note": "a member region complete at its own `#end` is no longer taken as a closed member, so the shared-body ctor swallows the next member as its tail"
+		},
+		{
+			"name": "M-UNTYPED-BLOCK-KW-COMMENT-DROPPED",
+			"type": "anyparse.grammar.haxe.decl.HxUntypedFnBody",
+			"method": "HxUntypedFnBody",
+			"kind": "TypedefDecl",
+			"find": "@:fmt(leftCurly('blockLeftCurly'), ctorKwTrivia)",
+			"replace": "@:fmt(leftCurly('blockLeftCurly'))",
+			"note": "the untyped block grows no kw-trivia slots, so a comment between `untyped` and its `{` is dropped at parse"
 		}
 	]
 }

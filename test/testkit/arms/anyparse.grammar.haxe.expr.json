@@ -8,7 +8,7 @@
 			"type": "anyparse.grammar.haxe.expr.HxExpr",
 			"method": "MacroExpr",
 			"kind": "ParamCtor",
-			"find": "@:fmt(clearExprPosition)",
+			"find": "@:fmt(clearExprPosition, ctorKwTrivia)",
 			"replace": "@:fmt(clearExprPosition, tightOnParenOperand('ParenExpr', 'ECheckTypeExpr'))",
 			"note": "`macro` is written like the call-shaped `cast`, so `macro (x + 1)` loses the space the user keeps: it reads as a construct whose operand can be anything"
 		},
@@ -56,6 +56,15 @@
 			"find": "@:fmt(ctorKwTrivia)",
 			"replace": "",
 			"note": "`untyped` grows no kw-trivia args, so the comment between `untyped` and its operand is dropped at parse"
+		},
+		{
+			"name": "M-MACRO-KW-COMMENT-DROPPED",
+			"type": "anyparse.grammar.haxe.expr.HxExpr",
+			"method": "MacroExpr",
+			"kind": "ParamCtor",
+			"find": "@:fmt(clearExprPosition, ctorKwTrivia)",
+			"replace": "@:fmt(clearExprPosition)",
+			"note": "`macro` grows no kw-trivia args, so the comment between `macro` and its operand is dropped at parse"
 		}
 	]
 }

@@ -98,7 +98,10 @@ class HxInlineBlockCommentGapTest extends Test {
 		// The gap after `return` / `throw` / `untyped` fills the ctor's kw-trivia args (`@:fmt(ctorKwTrivia)`).
 		['return_lead', 'return /* r */ x;'],
 		['throw_lead', 'throw /* t */ e;'],
-		['untyped_lead', 'var v = untyped /* u */ x;']
+		['untyped_lead', 'var v = untyped /* u */ x;'],
+		['macro_lead', 'var v = macro /* m */ x;'],
+		// The gap between `untyped` and its block fills the block field's kw-trivia slots (`@:fmt(ctorKwTrivia)`).
+		['untyped_block_lead', 'untyped /* u */ {\n\t\t\trun();\n\t\t}']
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
@@ -127,8 +130,7 @@ class HxInlineBlockCommentGapTest extends Test {
 		['index_lead', 'var v = a[/* ix */ 0];'],
 		['obj_field', 'var o = { a: /* o */ 1 };'],
 		['cast_lead', 'var v = cast(/* c */ x, Int);'],
-		['arrow_body', 'var f = () -> /* b */ 1;'],
-		['macro_lead', 'var v = macro /* m */ x;']
+		['arrow_body', 'var f = () -> /* b */ 1;']
 	];
 
 	/** Slot-less seams outside a function body — same contract, other hosts. */

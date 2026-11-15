@@ -189,7 +189,7 @@ enum HxExpr {
 	 * operand can be anything, where `cast(e)` reads as a call.
 	 */
 	@:kw('macro')
-	@:fmt(clearExprPosition)
+	@:fmt(clearExprPosition, ctorKwTrivia)
 	MacroExpr(operand: HxExpr);
 
 	@:kw('var')

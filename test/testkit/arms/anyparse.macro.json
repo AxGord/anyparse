@@ -537,7 +537,7 @@
 			"method": "wrapChainTriviaBody",
 			"find": "if (_isChain) {",
 			"replace": "if (true) {",
-			"note": "the method-chain walk writes every call's arguments before it knows the value is a chain, and the plain call writes them again, so `a.m(a.m(\u2026))` doubles per level"
+			"note": "the method-chain walk writes every call's arguments before it knows the value is a chain, and the plain call writes them again, so `a.m(a.m(…))` doubles per level"
 		},
 		{
 			"name": "M-SPANINFO-BOUND-MORE",
@@ -3449,6 +3449,14 @@
 			"find": "if (end > best) {",
 			"replace": "if (end >= best) {",
 			"note": "a terminal as long as the literal replaces it, so a keyword the word pattern also matches reads as a word"
+		},
+		{
+			"name": "M-OWN-KW-GAP-COMMENT-UNWRITTEN",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitKwPrefix",
+			"find": "if (kwGap != null) parts.push(kwGap);",
+			"replace": "",
+			"note": "the comment captured between a field's own keyword and its block is no longer written, so the round trip drops it"
 		}
 	]
 }

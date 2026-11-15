@@ -29,7 +29,7 @@ package anyparse.grammar.haxe.decl;
 typedef HxUntypedFnBody = {
 
 	@:kw('untyped')
-	@:fmt(leftCurly('blockLeftCurly'))
+	@:fmt(leftCurly('blockLeftCurly'), ctorKwTrivia)
 	var block: HxFnBlock;
 
 }

@@ -1860,7 +1860,10 @@ final class WriterRefFieldLowering {
 		// space. @:fmt(sameLine(...)) switches the leading space to a hardline;
 		// @:fmt(leftCurly) splits the kw emission for a runtime BracePlacement.
 		if (kwLead != null && !isOptional)
-			emitKwPrefix(ctx, child, parts, kwLead, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing, prevAnyStarNonEmpty);
+			emitKwPrefix(
+				ctx, child, parts, kwLead, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing, prevAnyStarNonEmpty,
+				ownKwGapComments(ctx.ctx.trivia, child, isFirstField, fieldAccess)
+			);
 		// D61: non-optional lead — no space before lead. The end-field of a
 		// condWrap span cannot push its own `@:lead` (the open paren is owned by
 		// the start field and emitted via the splice's emitCondition wrap).
@@ -1884,7 +1887,8 @@ final class WriterRefFieldLowering {
 	 */
 	private static function emitKwPrefix(
 		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, kwLead: String, isFirstField: Bool, isRaw: Bool,
-		prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, prevAnyStarNonEmpty: Null<Expr>
+		prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, prevAnyStarNonEmpty: Null<Expr>,
+		kwGap: Null<Expr>
 	): Void {
 		if (!isFirstField && !isRaw) {
 			final sep: Expr = sameLineSeparator(ctx.fieldSep, child, prevBodyField, typePath, prevPadTrailing);
@@ -1913,6 +1917,7 @@ final class WriterRefFieldLowering {
 			// per-construct `Block` knob alongside the global
 			// cascade.
 			parts.push(macro _dt($v{kwLead}));
+			if (kwGap != null) parts.push(kwGap);
 			parts.push(leftCurlySeparator(child));
 		} else if (child.fmtHasFlag('anonFuncParens')) {
 			// `@:fmt(anonFuncParens)` on a kw-led mandatory Ref
