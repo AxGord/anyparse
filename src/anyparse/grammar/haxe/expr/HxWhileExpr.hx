@@ -19,11 +19,14 @@ package anyparse.grammar.haxe.expr;
  */
 @:peg
 typedef HxWhileExpr = {
+
 	@:lead('(')
 	@:trail(')')
 	var cond: HxExpr;
+
 	@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),
 		reflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),
 		strictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))
 	var body: HxExpr;
+
 };

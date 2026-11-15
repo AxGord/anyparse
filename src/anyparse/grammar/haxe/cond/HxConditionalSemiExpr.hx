@@ -40,14 +40,19 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxConditionalSemiExpr = {
+
 	@:kw('#if')
 	var cond: HxPpCondLit;
+
 	@:trail(';')
 	var expr: HxExpr;
+
 	@:tryparse
 	@:fmt(padLeading)
 	var elseifs: Array<HxElseifSemiExpr>;
+
 	@:optional
 	@:kw('#else')
 	var elseClause: Null<HxConditionalSemiExprElse>;
+
 };

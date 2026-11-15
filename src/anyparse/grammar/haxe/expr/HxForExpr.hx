@@ -44,17 +44,22 @@ import anyparse.grammar.haxe.lit.HxIdentLit;
  */
 @:peg
 typedef HxForExpr = {
+
 	@:lead('(')
 	var varName: HxIdentLit;
+
 	@:optional
 	@:lead('=>')
 	var valueName: Null<HxKeyValueBinder>;
+
 	@:kw('in')
 	@:trail(')')
 	var iterable: HxExpr;
+
 	@:trailOpt(';')
 	@:fmt(bodyPolicy('expressionForBody'), bodyAllmanIndentForCtor('ObjectLit', 'indentObjectLiteral', 'comprehensionObjectLitGlue'),
 		reflowCtorOnFitLine('expressionForBody', 'ObjectLit', 'ParenExpr'),
 		strictFitLineBody('IfExpr', 'ForExpr', 'ForReifExpr', 'WhileExpr'))
 	var body: HxExpr;
+
 };

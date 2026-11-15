@@ -5,6 +5,8 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef HookToolInput = {
+
 	@:optional
 	var command: String;
+
 };

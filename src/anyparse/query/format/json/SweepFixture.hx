@@ -23,8 +23,11 @@ package anyparse.query.format.json;
  */
 @:peg
 typedef SweepFixture = {
+
 	@:optional
 	var path: String;
+
 	@:optional
 	var status: String;
+
 };

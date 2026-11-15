@@ -7,7 +7,10 @@ import anyparse.grammar.haxe.lit.HxIdentLit;
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
 typedef TightLeadPair = {
+
 	var name: HxIdentLit;
+
 	@:lead(':')
 	var type: HxIdentLit;
+
 }

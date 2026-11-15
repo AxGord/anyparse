@@ -40,16 +40,23 @@ package anyparse.query.format.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef AstNodeJson = {
+
 	var kind: String;
+
 	@:optional
 	var name: String;
 	var children: Array<AstNodeJson>;
+
 	@:optional
 	var span: AstSearchSpan;
+
 	@:optional
 	var type: AstNodeJson;
+
 	@:optional
 	var doc: String;
+
 	@:optional
 	var source: String;
+
 };

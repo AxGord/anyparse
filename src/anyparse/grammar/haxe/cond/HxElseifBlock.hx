@@ -7,11 +7,14 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxElseifBlock<T> = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
 		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	var body: Array<T>;
+
 };

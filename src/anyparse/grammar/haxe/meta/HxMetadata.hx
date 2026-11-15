@@ -42,10 +42,12 @@ import anyparse.grammar.haxe.cond.HxConditionalInline;
  */
 @:peg
 enum HxMetadata {
+
 	@:kw('#if')
 	@:trail('#end')
 	Conditional(inner: HxConditionalInline<HxCondDeclPrefix>);
 	MetaCall(call: HxMetaCallArgs);
 	Meta(name: HxMetaName);
 	PlainMeta(raw: HxMetaRaw);
+
 }

@@ -10,8 +10,11 @@ package unit.query;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ApqProbeNode = {
+
 	var kind: String;
+
 	@:optional
 	var name: String;
 	var children: Array<ApqProbeNode>;
+
 };

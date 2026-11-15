@@ -40,10 +40,13 @@ import anyparse.grammar.haxe.meta.HxMemberModifier;
  */
 @:peg
 typedef HxFinalModifierMember = {
+
 	@:trivia
 	@:tryparse
 	@:fmt(forceInlineSep)
 	var modifiers: Array<HxMemberModifier>;
+
 	@:kw('function')
 	var fn: HxFnDecl;
+
 }

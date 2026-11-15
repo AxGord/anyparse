@@ -31,11 +31,15 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 enum HxAbstractClause {
+
 	@:kw('from')
 	FromClause(type: HxType);
+
 	@:kw('to')
 	ToClause(type: HxType);
+
 	@:kw('#if')
 	@:trail('#end')
 	Conditional(inner: HxConditionalInline<HxAbstractClause>);
+
 }

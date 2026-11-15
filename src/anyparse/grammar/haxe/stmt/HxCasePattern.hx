@@ -35,6 +35,7 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxCasePattern = {
+
 	// `@:fmt(suppressCallRestProbe)` (omega-call-grouprestprobe-subposition) sets
 	// `opt._suppressCallRestProbe = true` on the pattern-body subtree so a `Call`
 	// ctor pattern (`Nest(_, _)` in `case Nest(_, _) | Concat(_):`) skips the
@@ -53,7 +54,9 @@ typedef HxCasePattern = {
 	// Also not applied to `guard`, for the same reason as above.
 	@:fmt(suppressCallRestProbe, suppressComplexItems, suppressPatternRestProbe)
 	var expr: HxCasePatternBody;
+
 	@:optional
 	@:kw('if')
 	var guard: Null<HxExpr>;
+
 };

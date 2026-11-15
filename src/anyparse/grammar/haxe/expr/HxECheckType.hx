@@ -24,11 +24,14 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxECheckType = {
+
 	@:lead('(')
 	var expr: HxExpr;
+
 	@:fmt(space('typeCheckColon', 'lead'))
 	@:lead(':')
 	@:trail(')')
 	@:queryTypeSlot
 	var type: HxType;
+
 };

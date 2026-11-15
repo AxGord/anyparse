@@ -44,10 +44,13 @@ import anyparse.grammar.haxe.stmt.HxStatement;
  */
 @:peg
 typedef HxCondSpliceBlockOpen = {
+
 	var raw: HxCondBlockOpenRaw;
+
 	@:trail('}')
 	@:trivia
 	@:fmt(nestBody, rightCurly)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
+
 }

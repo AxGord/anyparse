@@ -49,20 +49,25 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
 @:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))
 @:fmt(multilineWhenStarFieldWrapsCascade('typeParams', 'typeParameterWrap', 'name'))
 typedef HxTypedefDecl = {
+
 	@:kw('typedef')
 	var name: HxIdentLit;
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:fmt(space('typedefAssign', 'lead'), propagateTypedefContext, captureAfterLead)
 	@:lead('=')
 	@:queryTypeSlot
 	var type: HxType;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, operandBreakAfterMultilineBrace)
 	var intersections: Array<HxIntersectionClause>;
+
 }

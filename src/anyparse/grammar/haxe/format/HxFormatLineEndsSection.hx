@@ -19,28 +19,41 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatLineEndsSection = {
+
 	@:optional
 	var leftCurly: HxFormatLeftCurlyPolicy;
+
 	@:optional
 	var rightCurly: HxFormatRightCurlyPolicy;
+
 	@:optional
 	var emptyCurly: HxFormatEmptyCurlyPolicy;
+
 	@:optional
 	var objectLiteralCurly: HxFormatCurlyLineEndPolicy;
+
 	@:optional
 	var anonFunctionCurly: HxFormatCurlyLineEndPolicy;
+
 	@:optional
 	var anonTypeCurly: HxFormatCurlyLineEndPolicy;
+
 	@:optional
 	var blockCurly: HxFormatCurlyLineEndPolicy;
+
 	@:optional
 	var metadataFunction: HxFormatMetadataLineEndPolicy;
+
 	@:optional
 	var metadataType: HxFormatMetadataLineEndPolicy;
+
 	@:optional
 	var metadataVar: HxFormatMetadataLineEndPolicy;
+
 	@:optional
 	var metadataOther: HxFormatMetadataLineEndPolicy;
+
 	@:optional
 	var lineEndCharacter: HxFormatLineEndCharacter;
+
 };

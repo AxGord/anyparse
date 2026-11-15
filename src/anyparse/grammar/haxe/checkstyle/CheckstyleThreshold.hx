@@ -20,8 +20,11 @@ package anyparse.grammar.haxe.checkstyle;
  */
 @:peg
 typedef CheckstyleThreshold = {
+
 	@:optional
 	var severity: String;
+
 	@:optional
 	var complexity: Float;
+
 };

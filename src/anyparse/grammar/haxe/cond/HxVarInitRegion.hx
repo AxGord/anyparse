@@ -20,7 +20,9 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 enum HxVarInitRegion {
+
 	@:trail('#end')
 	@:fmt(spaceBeforeTrail)
 	Conditional(inner: HxConditionalVarInit);
+
 }

@@ -7,10 +7,13 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxElseifInline<T> = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing)
 	var body: Array<T>;
+
 };

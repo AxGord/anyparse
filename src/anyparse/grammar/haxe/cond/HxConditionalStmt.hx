@@ -42,18 +42,22 @@ import anyparse.grammar.haxe.stmt.HxStatement;
  */
 @:peg
 typedef HxConditionalStmt = {
+
 	@:fmt(sharpCondParensInside('sharpCondParensInsideOpen', 'sharpCondParensInsideClose'))
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
 		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(elemSelfTrailsNewline)
 	var elseifs: Array<HxElseifStmt>;
+
 	@:optional
 	@:kw('#else')
 	@:trivia
@@ -62,4 +66,5 @@ typedef HxConditionalStmt = {
 		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var elseBody: Null<Array<HxStatement>>;
+
 };

@@ -17,9 +17,12 @@ import anyparse.grammar.haxe.stmt.HxStatement;
  */
 @:peg
 typedef HxMetaStmt = {
+
 	var first: HxMetadata;
+
 	@:trivia
 	@:tryparse
 	var rest: Array<HxMetadata>;
 	var stmt: HxStatement;
+
 }

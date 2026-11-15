@@ -25,9 +25,12 @@ import anyparse.grammar.haxe.lit.HxObjectKeyLit;
  */
 @:peg
 typedef HxObjectFieldBody = {
+
 	var name: HxObjectKeyLit;
+
 	@:fmt(space('objectFieldColon', 'lead'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		propagateExprPosition)
 	@:lead(':')
 	var value: HxExpr;
+
 }

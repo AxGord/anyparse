@@ -9,11 +9,14 @@ import anyparse.grammar.haxe.stmt.HxStatement;
  */
 @:peg
 typedef HxCondSemiElseif = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
+
 };

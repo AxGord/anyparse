@@ -22,9 +22,12 @@ package unit.miniblock;
 @:schema(unit.miniblock.MiniBlockFormat)
 @:ws
 enum MiniBlock {
+
 	Atom(s: MiniAtomLit);
+
 	@:lead('{')
 	@:trail('}')
 	@:sep(';', tailRelax, blockEnded('endsImplicitly'))
 	Block(items: Array<MiniBlock>);
+
 }

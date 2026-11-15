@@ -24,10 +24,14 @@ import anyparse.grammar.haxe.lit.HxFnNameLit;
 @:peg
 @:fmt(multilineWhenFieldShape('body'))
 typedef HxCondSigFnDecl = {
+
 	var name: HxFnNameLit;
+
 	@:lead('(')
 	var signature: HxCondSigRaw;
+
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'),
 		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
 	var body: HxFnBody;
+
 }

@@ -35,7 +35,9 @@ package anyparse.grammar.haxe.decl;
  */
 @:peg
 enum HxAnonVarBody {
+
 	@:lead('?')
 	Optional(decl: HxVarDecl);
 	Plain(decl: HxVarDecl);
+
 }

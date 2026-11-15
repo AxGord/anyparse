@@ -31,13 +31,16 @@ package anyparse.grammar.haxe.expr;
  */
 @:peg
 typedef HxThinParenLambda = {
+
 	@:lead('(')
 	@:trail(')')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap'))
 	var params: Array<HxLambdaParam>;
+
 	@:fmt(space('arrowFunctions', 'lead'), propagateExprPosition, propagateAnonFnContext, propagateArrowLambdaBody, arrowBodyLineWrap,
 		statementBodyForCtor('BlockExpr'))
 	@:lead('->')
 	var body: HxExpr;
+
 }

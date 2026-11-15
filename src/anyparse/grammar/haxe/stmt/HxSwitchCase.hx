@@ -34,6 +34,7 @@ enum HxSwitchCase {
 	@:kw('case')
 	@:fmt(forwardNewlineForBody, deferKwSpace)
 	CaseBranch(branch: HxCaseBranch);
+
 	@:kw('default')
 	DefaultBranch(branch: HxDefaultBranch);
 

@@ -10,9 +10,12 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxEnumSimpleCtorDecl = {
+
 	var name: HxIdentLit;
+
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))
 	@:lead(':')
 	var returnType: Null<HxType>;
+
 };

@@ -16,11 +16,14 @@ using StringTools;
  * parameter's string passes it exactly when `value` is true.
  */
 private typedef SiteFact = {
+
 	final param: Int;
 	final value: Bool;
 	final nullTest: Bool;
+
 	@:optional
 	final test: AffixTest;
+
 }
 
 /**

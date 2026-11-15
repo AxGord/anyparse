@@ -7,8 +7,10 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 enum HxCondSemiValue {
+
 	@:lead('=')
 	@:trail('#end')
 	@:fmt(spaceBeforeLead, spaceAfterLead)
 	CondSemiRegion(inner: HxCondSemiRegion);
+
 }

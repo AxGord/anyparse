@@ -35,7 +35,9 @@ package anyparse.grammar.haxe.decl;
  */
 @:peg
 enum HxFinalDecl {
+
 	@:fmt(multilineCtor)
 	ClassForm(decl: HxClassDecl);
 	VarForm(decl: HxVarDecl);
+
 }

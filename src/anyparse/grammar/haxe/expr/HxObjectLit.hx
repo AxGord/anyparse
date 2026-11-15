@@ -42,6 +42,7 @@ package anyparse.grammar.haxe.expr;
  */
 @:peg
 typedef HxObjectLit = {
+
 	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'),
 		rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits'), trailingCommaRemovable, reflowInExprPosition,
 		arrowBodyOpenPadSuppress, groupRestProbe, relocateTrailingComments)
@@ -50,4 +51,5 @@ typedef HxObjectLit = {
 	@:sep(',')
 	@:trivia
 	var fields: Array<HxObjectField>;
+
 }

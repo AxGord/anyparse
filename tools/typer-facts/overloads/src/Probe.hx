@@ -8,6 +8,7 @@ extern class Ext {
 
 	@:overload(function(o: Other): Void {})
 	public static function ovo(o: Opts): Void;
+
 	overload public static function ol(o: Opts): Void;
 	overload public static function ol(o: Other, x: Int): Void;
 

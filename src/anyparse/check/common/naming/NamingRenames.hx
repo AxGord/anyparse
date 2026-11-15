@@ -1420,10 +1420,13 @@ final class NamingRenames {
  * just as much as a field does.
  */
 typedef RenameContext = {
+
 	final index: SymbolIndex;
 	final file: String;
+
 	@:optional
 	final ownerName: String;
+
 };
 
 /**

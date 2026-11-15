@@ -31,16 +31,20 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
 typedef HxClassDeclHead = {
+
 	@:kw('class')
 	var name: HxIdentLit;
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, lineLengthAwareSeps, listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap'))
 	var heritage: Array<HxHeritageClause>;
+
 }

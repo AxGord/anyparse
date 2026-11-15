@@ -33,8 +33,11 @@ import anyparse.grammar.haxe.types.HxTypeName;
  */
 @:peg
 typedef HxImportAlias = {
+
 	@:queryTarget
 	var path: HxTypeName;
+
 	@:kw('as')
 	var name: HxIdentLit;
+
 }

@@ -13,9 +13,12 @@ package unit.minilex;
 @:ws
 @:condDirectives('%when', ['%or'], '%done')
 enum MiniLexDoc {
+
 	Word(s: MiniLexAtom);
 	Text(s: MiniLexStringLit);
+
 	@:lead('(')
 	@:trail(')')
 	List(items: Array<MiniLexDoc>);
+
 }

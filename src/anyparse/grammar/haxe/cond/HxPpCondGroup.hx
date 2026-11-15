@@ -6,7 +6,9 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxPpCondGroup = {
+
 	@:lead('(')
 	@:trail(')')
 	var items: Array<HxPpCondGroupItem>;
+
 }

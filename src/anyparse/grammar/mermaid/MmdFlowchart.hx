@@ -17,8 +17,11 @@ package anyparse.grammar.mermaid;
 @:schema(anyparse.grammar.mermaid.MermaidFormat)
 @:ws
 typedef MmdFlowchart = {
+
 	var first: MmdStatement;
+
 	@:tryparse
 	@:fmt(sameLine('statementBreak'))
 	var rest: Array<MmdStatement>;
+
 }

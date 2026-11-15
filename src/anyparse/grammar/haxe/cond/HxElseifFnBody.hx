@@ -24,7 +24,9 @@ import anyparse.grammar.haxe.decl.HxFnBody;
  */
 @:peg
 typedef HxElseifFnBody = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
 	var body: HxFnBody;
+
 };

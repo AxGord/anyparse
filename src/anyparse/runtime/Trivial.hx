@@ -30,6 +30,7 @@ typedef Trivial<T> = {
 	 * emits a separator-level blank from it when preserving source grouping.
 	 */
 	var blankBefore: Bool;
+
 	@:optional
 	var blankBefore2: Int;
 

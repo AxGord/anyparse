@@ -5,8 +5,11 @@ package anyparse.query.format.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef FlowEdgeJson = {
+
 	var from: String;
 	var to: String;
+
 	@:optional
 	var label: Null<String>;
+
 };

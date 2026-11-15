@@ -13,6 +13,7 @@
 		"afterLeftCurly": "keep",
 		"beforeRightCurly": "keep",
 		"beforeDocCommentEmptyLines": "one",
+		"metadataCountsAsDocComment": true,
 		"classEmptyLines": {
 			"beginType": 1,
 			"endType": 1
@@ -34,6 +35,7 @@
 			"endType": 0
 		},
 		"enumEmptyLines": {
+			"metadataCountsAsDocComment": true,
 			"betweenFields": 0,
 			"existingBetweenFields": "remove",
 			"beginType": 0,
@@ -43,6 +45,7 @@
 			"afterFieldsWithDocComments": "none"
 		},
 		"typedefEmptyLines": {
+			"metadataCountsAsDocComment": true,
 			"betweenFields": 0,
 			"existingBetweenFields": "remove",
 			"beginType": 0,
@@ -52,6 +55,7 @@
 			"afterFieldsWithDocComments": "none"
 		},
 		"enumAbstractEmptyLines": {
+			"metadataCountsAsDocComment": true,
 			"betweenVars": 0,
 			"existingBetweenFields": "remove",
 			"beginType": 0,

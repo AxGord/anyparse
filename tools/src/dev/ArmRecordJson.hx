@@ -7,15 +7,21 @@ import anyparse.grammar.json.JValue;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ArmRecordJson = {
+
 	var name: String;
 	var type: String;
 	var method: String;
+
 	@:optional
 	var kind: String;
+
 	@:optional
 	var force: JValue;
+
 	@:optional
 	var find: JValue;
+
 	@:optional
 	var replace: JValue;
+
 };

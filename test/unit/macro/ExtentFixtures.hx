@@ -6,19 +6,24 @@ package unit.macro;
  */
 @:peg
 enum LineCond {
+
 	@:lead('defined')
 	Defined(arg: LineDefinedArg);
 	Rest(text: LineRest);
+
 }
 
 /** The parenthesised name after `defined`, with the optional blank before it. */
 @:peg
 typedef LineDefinedArg = {
+
 	@:optional
 	var blank: Null<LineBlank>;
+
 	@:lead('(')
 	@:trail(')')
 	var names: Array<LineName>;
+
 }
 
 /** Spaces or tabs, never a line break. */

@@ -24,12 +24,16 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatParenPolicySection = {
+
 	@:optional
 	var openingPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var closingPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var removeInnerWhenEmpty: Bool;
+
 	// ω-arrow-body-objlit-pad-keep: `objectLiteralBraces`-only key —
 	// `true` / absent keeps the `openingPolicy` inner pad on an object
 	// literal that is an arrow-lambda body (`u -> { email: v }`);
@@ -37,6 +41,7 @@ typedef HxFormatParenPolicySection = {
 	// kinds parse and ignore the key.
 	@:optional
 	var arrowBodyOpenPad: Bool;
+
 	// ω-arrow-body-objlit-reflow: `objectLiteralBraces`-only key —
 	// `true` re-flows a source-multiline object literal that is an
 	// arrow-lambda body by width (collapses to `u -> { a: 1 }` when it
@@ -44,4 +49,5 @@ typedef HxFormatParenPolicySection = {
 	// parity). Sibling kinds parse and ignore the key.
 	@:optional
 	var arrowBodyReflow: Bool;
+
 };

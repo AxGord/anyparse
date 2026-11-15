@@ -35,13 +35,16 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
  */
 @:peg
 typedef HxEnumCtorDecl = {
+
 	var name: HxIdentLit;
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:trivia
 	@:lead('(')
 	@:trail(')')
@@ -49,8 +52,10 @@ typedef HxEnumCtorDecl = {
 	@:fmt(trailingComma('trailingCommaParams'), wrapRules('functionSignatureWrap'), bodyAwareCompactIndent, groupRestProbe,
 		ignoreSourceNewlinesForWrap, typeParamItems)
 	var params: Array<HxParam>;
+
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))
 	@:lead(':')
 	var returnType: Null<HxType>;
+
 };

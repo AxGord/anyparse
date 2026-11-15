@@ -38,15 +38,20 @@ import anyparse.grammar.haxe.lit.HxIdentLit;
  */
 @:peg
 typedef HxConditionalFnName = {
+
 	var cond: HxPpCondLit;
+
 	@:fmt(padTrailing)
 	var name: HxIdentLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padTrailing)
 	var elseifs: Array<HxElseifFnName>;
+
 	@:optional
 	@:kw('#else')
 	@:fmt(padTrailing)
 	var elseName: Null<HxIdentLit>;
+
 };

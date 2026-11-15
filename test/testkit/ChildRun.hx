@@ -5,14 +5,18 @@ package testkit;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ChildRun = {
+
 	@:optional
 	var status: Null<Int>;
 	var out: String;
 	var err: String;
 	var failure: String;
 	var overflowed: Bool;
+
 	@:optional
 	var cancelled: Bool;
+
 	@:optional
 	var unstarted: Bool;
+
 };

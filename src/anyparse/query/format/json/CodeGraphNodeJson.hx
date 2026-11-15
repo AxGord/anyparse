@@ -15,6 +15,7 @@ typedef CodeGraphNodeJson = {
 	var level: String;
 	var name: String;
 	var label: String;
+
 	@:optional
 	var parent: Null<String>;
 	var external: Bool;

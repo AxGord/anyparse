@@ -40,13 +40,16 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  */
 @:peg
 typedef HxEnumMember = {
+
 	@:trivia
 	@:tryparse
 	@:fmt(metaLineEndSimple('metadataIsSimple'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))
 	var meta: Array<HxMetadata>;
+
 	@:optional
 	@:absentOn('}')
 	@:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional'))
 	var ctor: Null<HxEnumCtor>;
+
 }

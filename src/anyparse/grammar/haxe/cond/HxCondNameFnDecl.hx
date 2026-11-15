@@ -47,14 +47,17 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
 @:peg
 @:fmt(multilineWhenFieldShape('body'))
 typedef HxCondNameFnDecl = {
+
 	@:kw('#if')
 	var region: HxFnNameRegion;
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:trivia
 	@:lead('(')
 	@:trail(')')
@@ -62,11 +65,14 @@ typedef HxCondNameFnDecl = {
 	@:fmt(trailingComma('trailingCommaParams'), funcParamParens, wrapRules('functionSignatureWrap'),
 		bodyAwareCompactIndent('body', 'fnBodyEmpty'), groupRestProbe, ignoreSourceNewlinesForWrap, typeParamItems)
 	var params: Array<HxParam>;
+
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))
 	@:lead(':')
 	var returnType: Null<HxType>;
+
 	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'),
 		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
 	var body: HxFnBody;
+
 }

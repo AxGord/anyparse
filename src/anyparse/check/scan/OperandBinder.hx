@@ -536,12 +536,16 @@ final class OperandBinder {
  * type parameters in scope there `host` names; a type parameter `bindings` holds is the type the call binds it to.
  */
 typedef Located = {
+
 	final text: String;
 	final at: Int;
+
 	@:optional
 	final host: WrittenHost;
+
 	@:optional
 	final bindings: Map<String, Located>;
+
 }
 
 /** The file of the index a type is written in, and the type parameters in scope where it is. */

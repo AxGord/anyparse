@@ -35,62 +35,91 @@ typedef HxFormatSameLineSection = {
 
 	@:optional
 	var ifElse: HxFormatSameLinePolicy;
+
 	@:optional
 	var tryCatch: HxFormatSameLinePolicy;
+
 	@:optional
 	var doWhile: HxFormatSameLinePolicy;
+
 	@:optional
 	var ifBody: HxFormatBodyPolicy;
+
 	@:optional
 	var elseBody: HxFormatBodyPolicy;
+
 	@:optional
 	var forBody: HxFormatBodyPolicy;
+
 	@:optional
 	var whileBody: HxFormatBodyPolicy;
+
 	@:optional
 	var doWhileBody: HxFormatBodyPolicy;
+
 	@:optional
 	var elseIf: HxFormatKeywordPlacement;
+
 	@:optional
 	var elseSwitch: HxFormatKeywordPlacement;
+
 	@:optional
 	var fitLineIfWithElse: Bool;
+
 	@:optional
 	var fitLineBodyGlue: Bool;
+
 	@:optional
 	var loopBodyIfElseNext: Bool;
+
 	@:optional
 	var conditionalExprFit: Bool;
+
 	@:optional
 	var ifElseSemicolonNextLine: Bool;
+
 	@:optional
 	var expressionTry: HxFormatSameLinePolicy;
+
 	@:optional
 	var expressionTryOverflow: HxFormatSameLinePolicy;
+
 	@:optional
 	var returnBody: HxFormatBodyPolicy;
+
 	@:optional
 	var returnBodySingleLine: HxFormatBodyPolicy;
+
 	@:optional
 	var catchBody: HxFormatBodyPolicy;
+
 	@:optional
 	var tryBody: HxFormatBodyPolicy;
+
 	@:optional
 	var caseBody: HxFormatBodyPolicy;
+
 	@:optional
 	var expressionCase: HxFormatBodyPolicy;
+
 	@:optional
 	var caseSiblings: HxFormatSiblingPolicy;
+
 	@:optional
 	var conditionalSiblings: HxFormatSiblingPolicy;
+
 	@:optional
 	var functionBody: HxFormatBodyPolicy;
+
 	@:optional
 	var anonFunctionBody: HxFormatBodyPolicy;
+
 	@:optional
 	var untypedBody: HxFormatBodyPolicy;
+
 	@:optional
 	var expressionIf: HxFormatBodyPolicy;
+
 	@:optional
 	var expressionIfWithBlocks: Bool;
 
@@ -122,6 +151,7 @@ typedef HxFormatSameLineSection = {
 	 */
 	@:optional
 	var expressionIfWithBrackets: Bool;
+
 	@:optional
 	var expressionIfArrowBodyReflow: Bool;
 
@@ -148,6 +178,7 @@ typedef HxFormatSameLineSection = {
 	 */
 	@:optional
 	var expressionIfFitMaxValueWidth: Int;
+
 	@:optional
 	var elseIfCommentReflow: Bool;
 

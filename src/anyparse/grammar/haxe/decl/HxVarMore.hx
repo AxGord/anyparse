@@ -39,7 +39,9 @@ package anyparse.grammar.haxe.decl;
 @:peg
 @:spanned('VarMore')
 typedef HxVarMore = {
+
 	@:lead(',')
 	@:fmt(spaceAfterLead)
 	var decl: HxVarDecl;
+
 };

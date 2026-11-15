@@ -27,18 +27,22 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxInterfaceDecl = {
+
 	@:kw('interface')
 	var name: HxIdentLit;
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, lineLengthAwareSeps, listLayout('anyparse.format.wrap.ClauseWrap.layout', 'implementsExtendsWrap'))
 	var heritage: Array<HxHeritageClause>;
+
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('interfaceBeginType', 'interfaceEndType'), afterFieldsWithDocComments,
 		existingBetweenFields('interfaceExistingBetweenFields'), beforeDocCommentEmptyLines,
 		metadataCountsAsDoc('meta', 'metadataCountsAsDocComment'), beforeDocCondLookThrough('member', 'Conditional', 'body'),
@@ -51,4 +55,5 @@ typedef HxInterfaceDecl = {
 	@:trail('}')
 	@:trivia
 	var members: Array<HxMemberDecl>;
+
 }

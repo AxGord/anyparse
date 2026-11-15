@@ -21,18 +21,26 @@ package anyparse.query.format.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef SweepSnapshot = {
+
 	@:optional
 	var pass: Int;
+
 	@:optional
 	var fail: Int;
+
 	@:optional
 	var skipParse: Int;
+
 	@:optional
 	var skipWrite: Int;
+
 	@:optional
 	var skipConfig: Int;
+
 	@:optional
 	var skipMalformed: Int;
+
 	@:optional
 	var fixtures: Array<SweepFixture>;
+
 };

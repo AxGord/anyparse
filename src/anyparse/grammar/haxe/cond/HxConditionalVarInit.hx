@@ -40,8 +40,11 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxConditionalVarInit = {
+
 	var cond: HxPpCondLit;
+
 	@:optional
 	@:lead('=')
 	var init: Null<HxExpr>;
+
 };

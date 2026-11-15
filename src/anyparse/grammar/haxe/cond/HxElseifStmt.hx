@@ -24,12 +24,15 @@ import anyparse.grammar.haxe.stmt.HxStatement;
  */
 @:peg
 typedef HxElseifStmt = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
 		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
+
 };

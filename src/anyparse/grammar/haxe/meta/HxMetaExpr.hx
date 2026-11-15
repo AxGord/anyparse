@@ -43,9 +43,12 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxMetaExpr = {
+
 	var meta: HxMetadata;
+
 	@:fmt(metaLineEndSimple('metadataIsSimple', 'meta'))
 	@:fmt(inlineSep, allmanIndentForCtor('ObjectLit'), metaLineEndChain('MetaExpr', 'expr'),
 		metaLineEndIfCtor('expr', 'metadataVarLineEnd', 'VarExpr', 'FinalExpr'))
 	var expr: HxExpr;
+
 }

@@ -34,7 +34,9 @@ package anyparse.grammar.haxe.lit;
 @:raw
 @:lexical(StringLit)
 typedef HxInterpString = {
+
 	@:lead("'")
 	@:trail("'")
 	var parts: Array<HxStringSegment>;
+
 };

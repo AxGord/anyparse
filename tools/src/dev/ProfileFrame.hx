@@ -5,10 +5,14 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ProfileFrame = {
+
 	@:optional
 	var functionName: String;
+
 	@:optional
 	var url: String;
+
 	@:optional
 	var lineNumber: Int;
+
 };

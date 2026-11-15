@@ -5,6 +5,7 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef AuditReport = {
+
 	var agents: Int;
 	var turns: Int;
 	var toolInTok: Int;
@@ -14,9 +15,11 @@ typedef AuditReport = {
 	var roles: Array<RoleToolRow>;
 	var models: Array<ModelRow>;
 	var slices: Array<SliceCost>;
+
 	@:optional
 	var landed: Null<LandedSummary>;
 	var rewrites: RewriteSummary;
 	var bypass: BypassSummary;
 	var assumptions: Array<String>;
+
 }

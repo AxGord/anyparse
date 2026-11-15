@@ -55,6 +55,7 @@ import anyparse.grammar.haxe.lit.HxWordLit;
 enum HxType {
 
 	Named(ref: HxTypeRef);
+
 	@:lead("$")
 	DollarType(name: HxWordLit);
 
@@ -135,10 +136,12 @@ enum HxType {
 	@:trail(']')
 	@:sep(',')
 	BracketExprListType(elems: Array<HxExpr>);
+
 	@:kw('#if')
 	@:trail('#end')
 	@:fmt(spaceBeforeTrail, propagateNestedType)
 	ConditionalType(c: HxConditionalType);
+
 	@:infix('->', 0, 'Right')
 	@:fmt(functionTypeHaxe3, clearTypedefContext)
 	Arrow(left: HxType, right: HxType);
@@ -172,8 +175,10 @@ enum HxType {
 		afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'), forceMultiInTypedef, keepCurlyBlanks,
 		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'), typeParamItems)
 	Anon(fields: Array<HxAnonMember>);
+
 	@:fmt(clearTypedefContext)
 	ArrowFn(fn: HxArrowFnType);
+
 	@:wrap('(', ')')
 	@:fmt(propagateNestedType)
 	Parens(inner: HxType);

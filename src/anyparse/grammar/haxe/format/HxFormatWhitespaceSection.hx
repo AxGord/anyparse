@@ -40,6 +40,7 @@ typedef HxFormatWhitespaceSection = {
 
 	@:optional
 	var objectFieldColonPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var typeHintColonPolicy: HxFormatWhitespacePolicy;
 
@@ -51,6 +52,7 @@ typedef HxFormatWhitespaceSection = {
 	 */
 	@:optional
 	var colonPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var typeCheckColonPolicy: HxFormatWhitespacePolicy;
 
@@ -67,40 +69,58 @@ typedef HxFormatWhitespaceSection = {
 	 */
 	@:optional
 	var typeParamConstraintColonPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var typeParamOpenPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var typeParamClosePolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var binopPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var conditionalCompilationBinop: Bool;
+
 	@:optional
 	var intervalPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var functionTypeHaxe4Policy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var functionTypeHaxe3Policy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var arrowFunctionsPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var ifPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var forPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var whilePolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var switchPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var tryPolicy: HxFormatWhitespacePolicy;
+
 	@:optional
 	var addLineCommentSpace: Bool;
+
 	@:optional
 	var normalizeLineCommentIndent: Bool;
+
 	@:optional
 	var compressSuccessiveParenthesis: Bool;
+
 	@:optional
 	var formatStringInterpolation: Bool;
+
 	@:optional
 	var optionalSemicolon: HxFormatOptionalSemicolonPolicy;
 
@@ -115,10 +135,13 @@ typedef HxFormatWhitespaceSection = {
 	 */
 	@:optional
 	var semicolonBeforeElse: HxFormatOptionalSemicolonPolicy;
+
 	@:optional
 	var parenConfig: HxFormatParenConfigSection;
+
 	@:optional
 	var bracesConfig: HxFormatBracesConfigSection;
+
 	@:optional
 	var bracketConfig: HxFormatBracketConfigSection;
 

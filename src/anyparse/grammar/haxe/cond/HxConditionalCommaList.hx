@@ -10,14 +10,18 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxConditionalCommaList<T> = {
+
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:sep(',', sepFaithful)
 	@:tryparse
 	@:fmt(padLeading, padTrailing, sepBeforeOpt, conditionalBodyIndent)
 	var body: Array<T>;
+
 	@:tryparse
 	var elseifs: Array<HxElseifCommaList<T>>;
+
 	@:optional
 	@:kw('#else')
 	@:trivia
@@ -25,4 +29,5 @@ typedef HxConditionalCommaList<T> = {
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	var elseBody: Null<Array<T>>;
+
 };

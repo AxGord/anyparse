@@ -5,7 +5,10 @@ package unit.macro;
 @:schema(anyparse.grammar.haxe.HaxeFormat)
 @:ws
 typedef GenericPair = {
+
 	var bare: GenericSlot<GenericBare>;
+
 	@:lead(',')
 	var marked: GenericSlot<GenericMarked>;
+
 }

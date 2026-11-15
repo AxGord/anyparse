@@ -24,11 +24,15 @@ package unit.miniblockstrict;
 @:schema(unit.miniblockstrict.MiniBlockStrictFormat)
 @:ws
 enum MiniBlockStrict {
+
 	Atom(s: MiniAtomLitStrict);
+
 	@:lit(';')
 	EmptyAtom;
+
 	@:lead('{')
 	@:trail('}')
 	@:sep(';', tailRelax, blockEnded('endsImplicitly', sepStartsElement))
 	Block(items: Array<MiniBlockStrict>);
+
 }

@@ -40,12 +40,16 @@ import anyparse.grammar.haxe.cond.HxConditionalParam;
  */
 @:peg
 enum HxParam {
+
 	@:kw('#if')
 	@:trail('#end')
 	Conditional(inner: HxConditionalParam);
+
 	@:lead('?')
 	Optional(body: HxParamBody);
+
 	@:lead('...')
 	Rest(body: HxParamBody);
 	Required(body: HxParamBody);
+
 }

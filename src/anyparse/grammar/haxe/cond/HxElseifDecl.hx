@@ -34,8 +34,10 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  */
 @:peg
 typedef HxElseifDecl = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
@@ -58,8 +60,10 @@ typedef HxElseifDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var body: Array<HxTopLevelDecl>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padTrailing)
 	var trailingMeta: Array<HxMetadata>;
+
 };

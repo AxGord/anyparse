@@ -40,11 +40,16 @@ import anyparse.grammar.haxe.expr.HxExpr;
 @:peg
 @:fmt(fillParts)
 typedef HxCondSpliceOpTail = {
+
 	var cond: HxPpCondLit;
+
 	@:fmt(fillSeam)
 	var op: HxCondSpliceOpLit;
+
 	@:fmt(fillSeam)
 	var operand: HxExpr;
+
 	@:fmt(fillSeam)
 	var endKw: HxCondEndLit;
+
 };

@@ -10,10 +10,14 @@ import anyparse.proc.SpawnJob;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef TestChildDocument = {
+
 	@:optional
 	var jobs: Array<SpawnJob>;
+
 	@:optional
 	var configs: Array<ChildOracleConfig>;
+
 	@:optional
 	var runs: Array<ChildRun>;
+
 };

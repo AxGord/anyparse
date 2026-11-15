@@ -5,7 +5,10 @@ package unit.grammar.nativedoor;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef DoorInner = {
+
 	var n: Int;
+
 	@:optional
 	var label: Null<String>;
+
 }

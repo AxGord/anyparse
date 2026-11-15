@@ -5,8 +5,11 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ProfileNode = {
+
 	var id: Int;
 	var callFrame: ProfileFrame;
+
 	@:optional
 	var children: Array<Int>;
+
 };

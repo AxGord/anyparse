@@ -5,9 +5,12 @@ package testkit;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ChildOracleGenerate = {
+
 	var command: String;
 	var root: String;
+
 	@:optional
 	var inputs: Null<Array<String>>;
 	var probeDir: Bool;
+
 };

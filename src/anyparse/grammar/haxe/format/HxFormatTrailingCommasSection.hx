@@ -14,14 +14,20 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatTrailingCommasSection = {
+
 	@:optional
 	var arrayLiteralDefault: HxFormatTrailingCommaPolicy;
+
 	@:optional
 	var callArgumentDefault: HxFormatTrailingCommaPolicy;
+
 	@:optional
 	var functionParameterDefault: HxFormatTrailingCommaPolicy;
+
 	@:optional
 	var objectLiteralDefault: HxFormatTrailingCommaPolicy;
+
 	@:optional
 	var anonTypeDefault: HxFormatTrailingCommaPolicy;
+
 };

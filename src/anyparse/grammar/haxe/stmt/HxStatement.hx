@@ -64,15 +64,18 @@ enum HxStatement {
 	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticVarStmt(decl: HxVarDecl);
+
 	@:kw('static')
 	@:lead('final')
 	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticFinalStmt(decl: HxVarDecl);
+
 	@:kw('var')
 	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
 	VarStmt(decl: HxVarDecl);
+
 	@:kw('final')
 	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
@@ -98,6 +101,7 @@ enum HxStatement {
 	 */
 	@:kw('return')
 	CondSpliceReturnStmt(inner: HxCondSpliceClosedRegion);
+
 	@:kw('return')
 	@:trailOpt(';')
 	@:fmt(bodyPolicy('returnBody'),
@@ -107,45 +111,58 @@ enum HxStatement {
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), optionalSemicolon('endsWithCloseBrace'), widthAware,
 		propagateExprPosition, ctorKwTrivia)
 	ReturnStmt(value: HxExpr);
+
 	@:kw('return')
 	@:trail(';')
 	VoidReturnStmt;
+
 	@:kw('if')
 	@:fmt(ifPolicy)
 	IfStmt(stmt: HxIfStmt);
+
 	@:kw('while')
 	@:fmt(whilePolicy)
 	WhileStmt(stmt: HxWhileStmt);
+
 	@:kw('for')
 	@:fmt(forPolicy)
 	ForStmt(stmt: HxForStmt);
+
 	@:kw('switch')
 	@:fmt(switchPolicy)
 	SwitchStmt(stmt: HxSwitchStmt);
+
 	@:kw('switch')
 	@:fmt(switchPolicy)
 	SwitchStmtBare(stmt: HxSwitchStmtBare);
+
 	@:kw('throw')
 	@:trail(';')
 	@:fmt(bodyPolicy('throwBody'), ctorKwTrivia)
 	ThrowStmt(expr: HxExpr);
+
 	@:kw('do')
 	@:trail(';')
 	@:fmt(forwardNewlineForBody)
 	DoWhileStmt(stmt: HxDoWhileStmt);
+
 	@:kw('break')
 	@:trail(';')
 	BreakStmt;
+
 	@:kw('continue')
 	@:trail(';')
 	ContinueStmt;
+
 	@:kw('try')
 	@:rejectFollowKw('catch')
 	@:fmt(tryPolicy, forwardNewlineForBody)
 	TryCatchStmt(stmt: HxTryCatchStmt);
+
 	@:kw('try')
 	@:trail(';')
 	TryCatchStmtBare(stmt: HxTryCatchStmtBare);
+
 	@:fmt(blockShape)
 	UntypedBlockStmt(body: HxUntypedFnBody);
 
@@ -160,6 +177,7 @@ enum HxStatement {
 	 */
 	@:kw('#error')
 	ErrorStmt(message: HxErrorMsg);
+
 	@:kw('#if')
 	@:trail('#end')
 	@:fmt(sharpCondParensGap, conditionalMarkerDedent, siblingShare('anyparse.format.SiblingShare.decidePads', 'conditionalSiblings'))
@@ -275,11 +293,14 @@ enum HxStatement {
 	 */
 	@:kw('else')
 	OrphanElseStmt(stmt: HxStatement);
+
 	@:kw('function')
 	LocalFnStmt(decl: HxFnDecl);
+
 	@:kw('inline')
 	@:lead('function')
 	LocalInlineFnStmt(decl: HxFnDecl);
+
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks,
 		clearExprPositionNonTail, uniformStmtBlanks, relocateTrailingComments)
 	@:lead('{')
@@ -287,6 +308,7 @@ enum HxStatement {
 	@:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockStmt(stmts: Array<HxStatement>);
+
 	@:lit(';')
 	EmptyStmt;
 

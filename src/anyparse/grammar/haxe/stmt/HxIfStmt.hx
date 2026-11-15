@@ -44,14 +44,17 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxIfStmt = {
+
 	@:lead('(')
 	@:trail(')')
 	@:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'))
 	var cond: HxExpr;
+
 	@:trailOpt(';')
 	@:fmt(bodyPolicy('ifBody', 'expressionIfBody'), ifElseLadder, nestedIfElseLadder('IfStmt'), clearElseIfBranch,
 		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces)
 	var thenBody: HxStatement;
+
 	@:optional
 	@:trailOpt(';')
 	@:kw('else')
@@ -59,4 +62,5 @@ typedef HxIfStmt = {
 		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), elseIfCommentReflow, ifElseLadder, propagateElseIfBranch,
 		dropSingleStmtBraces)
 	var elseBody: Null<HxStatement>;
+
 };

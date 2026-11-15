@@ -23,10 +23,14 @@ package anyparse.format.wrap;
  * answers only when no rule matches — haxe-formatter's per-rule `additionalIndent`.
  */
 typedef WrapRule = {
+
 	var conditions: Array<WrapCondition>;
 	var mode: WrapMode;
+
 	@:optional
 	var location: WrappingLocation;
+
 	@:optional
 	var additionalIndent: Int;
+
 };

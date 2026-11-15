@@ -5,7 +5,9 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef Rewrite = {
+
 	var agent: String;
+
 	@:optional
 	var slice: Null<String>;
 	var model: String;
@@ -13,4 +15,5 @@ typedef Rewrite = {
 	var context: Int;
 	var gapSeconds: Float;
 	var extraCost: Float;
+
 }

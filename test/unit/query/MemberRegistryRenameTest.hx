@@ -536,21 +536,29 @@ final class MemberRegistryRenameTest extends Test {
  * A fixture record; `finds` and `replaces` spell `find` and `replace` as a list.
  */
 private typedef ArmRow = {
+
 	final name: String;
 	final type: String;
 	final method: String;
+
 	@:optional
 	final kind: String;
+
 	@:optional
 	final find: String;
+
 	@:optional
 	final replace: String;
+
 	@:optional
 	final finds: Array<String>;
+
 	@:optional
 	final replaces: Array<String>;
+
 	@:optional
 	final force: String;
+
 }
 
 /** One record of a followed document. */

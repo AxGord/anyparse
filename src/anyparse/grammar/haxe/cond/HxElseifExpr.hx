@@ -30,8 +30,11 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxElseifExpr = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:fmt(nestBodyOnSourceNewline)
 	var expr: HxExpr;
+
 };

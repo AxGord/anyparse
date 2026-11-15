@@ -45,19 +45,24 @@ import anyparse.grammar.haxe.meta.HxModifier;
  */
 @:peg
 typedef HxCondSharedBodyDecl = {
+
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading)
 	var meta: Array<HxMetadata>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(forceInlineSep)
 	var modifiers: Array<HxModifier>;
 	var head: HxDeclHead;
 	var alt: HxCondAltRaw;
+
 	@:trail('}')
 	@:trivia
 	@:fmt(padLeading, nestBody, existingBetweenFields('existingBetweenFields'), rightCurly, glueToPrevious('member', 'EmptySemiMember'))
 	var members: Array<HxMemberDecl>;
+
 }

@@ -36,8 +36,10 @@ import anyparse.grammar.haxe.cond.HxConditionalCommaList;
  */
 @:peg
 enum HxObjectField {
+
 	@:kw('#if')
 	@:trail('#end')
 	Conditional(inner: HxConditionalCommaList<HxObjectField>);
 	Field(body: HxObjectFieldBody);
+
 }

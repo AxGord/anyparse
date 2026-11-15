@@ -8,12 +8,14 @@ typedef TranscriptEntry = {
 
 	@:optional
 	var type: String;
+
 	@:optional
 	var timestamp: String;
 
 	/** The directory the agent's shell was in. */
 	@:optional
 	var cwd: String;
+
 	@:optional
 	var message: TranscriptMessage;
 

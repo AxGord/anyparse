@@ -42,19 +42,23 @@ import anyparse.grammar.haxe.meta.HxModifier;
  */
 @:peg
 typedef HxTopLevelDecl = {
+
 	@:trivia
 	@:tryparse
 	@:fmt(metaLineEndSimple('metadataIsSimple'))
 	@:fmt(metaLineEndPolicy('metadataTypeLineEnd'), metaLineEndIfCtor('decl', 'metadataVarLineEnd', 'VarDecl'),
 		metaLineEndIfCtor('decl', 'metadataFunctionLineEnd', 'FnDecl'))
 	var meta: Array<HxMetadata>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(forceInlineSep, keepBlankAfterStarCtor('meta', 'Conditional'))
 	var modifiers: Array<HxModifier>;
+
 	@:fmt(setBoolFlagFromStarCtor('_classExtern', 'modifiers', 'Extern'))
 	@:optional
 	@:absentOnEof
 	@:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional'))
 	var decl: Null<HxDecl>;
+
 }

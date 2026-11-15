@@ -18,7 +18,9 @@ import anyparse.grammar.haxe.lit.HxIdentLit;
  */
 @:peg
 typedef HxElseifFnName = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
 	var name: HxIdentLit;
+
 };

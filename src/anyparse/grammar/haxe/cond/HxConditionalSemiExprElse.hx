@@ -18,6 +18,8 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxConditionalSemiExprElse = {
+
 	@:trail(';')
 	var expr: HxExpr;
+
 };

@@ -8,11 +8,15 @@ package anyparse.query.format.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef LintFindingDataRecord = {
+
 	var family: String;
+
 	@:key('function')
 	var member: String;
 	var subject: String;
 	var chain: Array<String>;
+
 	@:optional
 	var repeatedBy: Null<Array<LintRepeatSiteRecord>>;
+
 };

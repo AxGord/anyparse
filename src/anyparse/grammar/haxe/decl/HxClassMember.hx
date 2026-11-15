@@ -65,6 +65,7 @@ enum HxClassMember {
 	 */
 	@:kw('var')
 	VarSemiCondInitMember(decl: HxVarSemiCondInitDecl);
+
 	@:kw('var')
 	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), propagateFieldLevelVar)
@@ -87,6 +88,7 @@ enum HxClassMember {
 	 */
 	@:kw('final')
 	FinalModifiedMember(rest: HxFinalModifierMember);
+
 	@:kw('final')
 	@:trailOpt(';')
 	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), propagateFieldLevelVar)
@@ -107,6 +109,7 @@ enum HxClassMember {
 	 */
 	@:kw('function')
 	CondNameFnMember(decl: HxCondNameFnDecl);
+
 	@:kw('function')
 	FnMember(decl: HxFnDecl);
 

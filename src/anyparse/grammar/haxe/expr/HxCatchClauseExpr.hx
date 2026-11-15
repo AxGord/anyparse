@@ -38,10 +38,13 @@ import anyparse.grammar.haxe.stmt.HxCatchParam;
 @:peg
 @:spanned('CatchClause')
 typedef HxCatchClauseExpr = {
+
 	@:kw('catch')
 	@:lead('(')
 	@:trail(')')
 	var param: HxCatchParam;
+
 	@:fmt(bodyBreak('expressionTry'), blockBodyKeepsInline, constructFitBody('expressionTryOverflow'))
 	var body: HxExpr;
+
 };

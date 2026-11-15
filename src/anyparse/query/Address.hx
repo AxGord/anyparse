@@ -27,10 +27,13 @@ typedef AddressSpec = {
 
 	@:optional
 	var at: String;
+
 	@:optional
 	var select: String;
+
 	@:optional
 	var match: String;
+
 	@:optional
 	var nth: Null<Int>;
 

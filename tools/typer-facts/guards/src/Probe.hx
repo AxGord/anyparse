@@ -5,6 +5,7 @@ abstract W(Int) from Int to Int {
 	@:op(A * B)
 	static function mulA(a: W, b: W): W return new W((a: Int) * (b: Int));
 	#end
+
 	@:op(A * B)
 	static function mulB(a: W, b: Float): Float return 1.0;
 
@@ -17,6 +18,7 @@ abstract V(Array<Int>) {
 	@:arrayAccess
 	function geta(i: Int): String return "a";
 	#end
+
 	@:arrayAccess
 	function getb(i: Float): Bool return true;
 

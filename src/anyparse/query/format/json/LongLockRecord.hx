@@ -5,10 +5,13 @@ package anyparse.query.format.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef LongLockRecord = {
+
 	var lock: String;
 	var reasons: Array<LongLockReasonRecord>;
 	var circular: Int;
+
 	@:optional
 	@:writeNull
 	var aside: Null<Array<LongLockReasonRecord>>;
+
 };

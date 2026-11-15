@@ -24,7 +24,10 @@ import anyparse.grammar.haxe.lit.HxWordLit;
  */
 @:peg
 typedef HxDollarReif = {
+
 	var name: HxWordLit;
+
 	@:lead('{')
 	var expr: HxExpr;
+
 };

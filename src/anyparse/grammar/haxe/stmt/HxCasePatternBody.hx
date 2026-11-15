@@ -40,7 +40,9 @@ import anyparse.grammar.haxe.lit.HxVarNameLit;
  */
 @:peg
 enum HxCasePatternBody {
+
 	@:kw('var')
 	Capture(name: HxVarNameLit);
 	Plain(expr: HxExpr);
+
 }

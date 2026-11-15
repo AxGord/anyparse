@@ -21,8 +21,10 @@ typedef WrapRules = {
 
 	var rules: Array<WrapRule>;
 	var defaultMode: WrapMode;
+
 	@:optional
 	var defaultLocation: WrappingLocation;
+
 	@:optional
 	var defaultAdditionalIndent: Int;
 

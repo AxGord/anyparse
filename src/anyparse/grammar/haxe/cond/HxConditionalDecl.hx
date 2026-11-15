@@ -43,7 +43,9 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  */
 @:peg
 typedef HxConditionalDecl = {
+
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
@@ -66,13 +68,16 @@ typedef HxConditionalDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var body: Array<HxTopLevelDecl>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padTrailing)
 	var trailingMeta: Array<HxMetadata>;
+
 	@:trivia
 	@:tryparse
 	var elseifs: Array<HxElseifDecl>;
+
 	@:optional
 	@:kw('#else')
 	@:trivia
@@ -97,8 +102,10 @@ typedef HxConditionalDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var elseBody: Null<Array<HxTopLevelDecl>>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padTrailing)
 	var elseTrailingMeta: Array<HxMetadata>;
+
 };

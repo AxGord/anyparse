@@ -29,48 +29,71 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatEmptyLinesSection = {
+
 	@:optional
 	var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
+
 	@:optional
 	var beforeDocCommentEmptyLines: HxFormatCommentEmptyLinesPolicy;
+
 	@:optional
 	var metadataCountsAsDocComment: Bool;
+
 	@:optional
 	var classEmptyLines: HxFormatClassEmptyLinesConfig;
+
 	@:optional
 	var externClassEmptyLines: HxFormatInterfaceEmptyLinesConfig;
+
 	@:optional
 	var abstractEmptyLines: HxFormatClassEmptyLinesConfig;
+
 	@:optional
 	var interfaceEmptyLines: HxFormatInterfaceEmptyLinesConfig;
+
 	@:optional
 	var enumEmptyLines: HxFormatEnumEmptyLinesConfig;
+
 	@:optional
 	var enumAbstractEmptyLines: HxFormatEnumAbstractEmptyLinesConfig;
+
 	@:optional
 	var macroClassEmptyLines: HxFormatClassEmptyLinesConfig;
+
 	@:optional
 	var typedefEmptyLines: HxFormatTypedefEmptyLinesConfig;
+
 	@:optional
 	var afterPackage: Int;
+
 	@:optional
 	var beforePackage: Int;
+
 	@:optional
 	var afterLeftCurly: HxFormatKeepEmptyLinesPolicy;
+
 	@:optional
 	var beforeRightCurly: HxFormatKeepEmptyLinesPolicy;
+
 	@:optional
 	var importAndUsing: HxFormatImportAndUsingConfig;
+
 	@:optional
 	var afterFileHeaderComment: Int;
+
 	@:optional
 	var betweenMultilineComments: Int;
+
 	@:optional
 	var betweenSingleLineTypes: Int;
+
 	@:optional
 	var aroundMultilineFields: Int;
+
 	@:optional
 	var uniformStatementBlanks: HxFormatUniformStatementBlanksPolicy;
+
 	@:optional
 	var maxAnywhereInFile: Int;
+
 };

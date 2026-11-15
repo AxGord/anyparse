@@ -46,28 +46,36 @@ enum HxDecl {
 	@:kw('package')
 	@:trail(';')
 	PackageDecl(path: HxTypeName);
+
 	@:kw('package')
 	@:trail(';')
 	PackageEmpty;
+
 	@:kw('import')
 	@:trail(';')
 	ImportWildDecl(path: HxWildPath);
+
 	@:kw('using')
 	@:trail(';')
 	UsingWildDecl(path: HxWildPath);
+
 	@:kw('import')
 	@:trail(';')
 	ImportAliasDecl(decl: HxImportAlias);
+
 	@:kw('import')
 	@:trail(';')
 	ImportAliasInDecl(decl: HxImportAliasIn);
+
 	@:kw('import')
 	@:trail(';')
 	ImportDecl(path: HxTypeName);
+
 	@:kw('using')
 	@:trail(';')
 	UsingDecl(path: HxTypeName);
 	ClassDecl(decl: HxClassDecl);
+
 	@:trailOpt(';')
 	TypedefDecl(decl: HxTypedefDecl);
 
@@ -118,6 +126,7 @@ enum HxDecl {
 	@:kw('abstract')
 	AbstractClassDecl(decl: HxClassDecl);
 	AbstractDecl(decl: HxAbstractDecl);
+
 	@:kw('var')
 	@:trailOpt(';')
 	VarDecl(decl: HxVarDecl);
@@ -137,6 +146,7 @@ enum HxDecl {
 	@:kw('final')
 	@:trailOpt(';')
 	FinalDecl(decl: HxFinalDecl);
+
 	@:kw('function')
 	FnDecl(decl: HxFnDecl);
 

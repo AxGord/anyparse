@@ -1308,8 +1308,10 @@ private typedef Battery = {
 	 */
 	@:optional
 	var noSnapshot: Bool;
+
 	@:optional
 	var baseRed: Bool;
+
 	@:optional
 	var baseFails: Bool;
 
@@ -1332,6 +1334,7 @@ private typedef Setup = {
 	/** Files in the base commit, and files the branch's commit writes beside its own. */
 	@:optional
 	var base: Array<Edit>;
+
 	@:optional
 	var onSide: Array<Edit>;
 
@@ -1358,6 +1361,7 @@ private typedef Setup = {
 	/** The message of the branch's commit, and the `-m` of the landing. */
 	@:optional
 	var sideMessage: String;
+
 	@:optional
 	var message: String;
 
@@ -1372,6 +1376,7 @@ private typedef Setup = {
 	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
 	@:optional
 	var during: (repo: String) -> Void;
+
 	@:optional
 	var again: Bool;
 

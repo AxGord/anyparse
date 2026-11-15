@@ -10,26 +10,38 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatEnumAbstractEmptyLinesConfig = {
+
 	@:optional
 	var betweenVars: Int;
+
 	@:optional
 	var betweenFunctions: Int;
+
 	@:optional
 	var afterVars: Int;
+
 	@:optional
 	var existingBetweenFields: HxFormatKeepEmptyLinesPolicy;
+
 	@:optional
 	var beginType: Int;
+
 	@:optional
 	var endType: Int;
+
 	@:optional
 	var beginTypeIfDocComments: Int;
+
 	@:optional
 	var endTypeIfDocComments: Int;
+
 	@:optional
 	var afterFieldsWithDocComments: HxFormatCommentEmptyLinesPolicy;
+
 	@:optional
 	var abstractRulesUnlessValueList: Bool;
+
 	@:optional
 	var metadataCountsAsDocComment: Bool;
+
 };

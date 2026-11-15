@@ -13,14 +13,17 @@ typedef SuiteFile = {
 
 	@:optional
 	var about: String;
+
 	@:optional
 	var commandHelp: Bool;
 
 	/** File name to content, shared by the invocations that name none; the keys are data. */
 	@:optional
 	var files: JValue;
+
 	@:optional
 	var compile: CompileSpec;
+
 	@:optional
 	var invocations: Array<SuiteInvocation>;
 

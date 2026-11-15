@@ -26,8 +26,10 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 enum HxVarSemiInitRegion {
+
 	@:lead('=')
 	@:trail('#end')
 	@:fmt(spaceBeforeLead, spaceAfterLead, spaceBeforeTrail)
 	Conditional(inner: HxConditionalSemiExpr);
+
 }

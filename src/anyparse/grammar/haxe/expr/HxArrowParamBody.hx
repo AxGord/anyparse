@@ -19,8 +19,11 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxArrowParamBody = {
+
 	var name: HxIdentLit;
+
 	@:fmt(space('arrowParamColon', 'lead'))
 	@:lead(':')
 	var type: HxType;
+
 }

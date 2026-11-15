@@ -32,7 +32,10 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxCondSpliceExpr = {
+
 	var raw: HxCondSpliceRaw;
+
 	@:fmt(chainNestSuppress)
 	var tail: HxExpr;
+
 }

@@ -25,7 +25,9 @@ import anyparse.grammar.haxe.lit.HxWordLit;
 @:peg
 @:spanCapture
 typedef HxAccessClause = {
+
 	@:sep(',')
 	@:trail(')')
 	var ids: Array<HxWordLit>;
+
 };

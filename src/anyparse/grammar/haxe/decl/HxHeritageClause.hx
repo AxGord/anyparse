@@ -40,11 +40,15 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 enum HxHeritageClause {
+
 	@:kw('extends')
 	ExtendsClause(type: HxType);
+
 	@:kw('implements')
 	ImplementsClause(type: HxType);
+
 	@:kw('#if')
 	@:trail('#end')
 	Conditional(inner: HxConditionalInline<HxHeritageClause>);
+
 }

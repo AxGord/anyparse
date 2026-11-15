@@ -37,11 +37,14 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxMetaCallArgs = {
+
 	var name: HxMetaNameTight;
+
 	@:trivia
 	@:lead('(')
 	@:trail(')')
 	@:sep(',')
 	@:fmt(wrapRules('metadataCallParameterWrap'), ignoreSourceNewlinesForWrap)
 	var args: Array<HxExpr>;
+
 }

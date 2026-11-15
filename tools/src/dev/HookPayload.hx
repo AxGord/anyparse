@@ -5,18 +5,24 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef HookPayload = {
+
 	@:key('session_id')
 	@:optional
 	var sessionId: String;
+
 	@:optional
 	var cwd: String;
+
 	@:key('tool_name')
 	@:optional
 	var toolName: String;
+
 	@:key('tool_input')
 	@:optional
 	var toolInput: HookToolInput;
+
 	@:key('tool_response')
 	@:optional
 	var toolResponse: HookToolResponse;
+
 };

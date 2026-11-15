@@ -40,6 +40,7 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  */
 @:peg
 typedef HxMemberDecl = {
+
 	@:trivia
 	@:tryparse
 	@:fmt(metaLineEndSimple('metadataIsSimple'))
@@ -47,12 +48,15 @@ typedef HxMemberDecl = {
 		metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),
 		metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'))
 	var meta: Array<HxMetadata>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(forceInlineSep, keepBlankAfterStarCtor('meta', 'Conditional'))
 	var modifiers: Array<HxMemberModifier>;
+
 	@:optional
 	@:absentOn('}')
 	@:fmt(bareRefSepWhenPresent, keepBlankAfterStarCtor('meta', 'Conditional'))
 	var member: Null<HxClassMember>;
+
 }

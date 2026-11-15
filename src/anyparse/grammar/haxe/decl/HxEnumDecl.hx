@@ -32,14 +32,17 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('ctors'))
 typedef HxEnumDecl = {
+
 	@:kw('enum')
 	var name: HxIdentLit;
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:fmt(beginEndType('enumBeginType', 'enumEndType'), beginEndTypeIfDoc('enumBeginTypeIfDocComments', 'enumEndTypeIfDocComments'),
 		existingBetweenFields('enumExistingBetweenFields'), afterFieldsWithDocComments('enumAfterFieldsWithDocComments'),
 		uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines, metadataCountsAsDoc('meta', 'enumMetadataCountsAsDocComment'))
@@ -47,4 +50,5 @@ typedef HxEnumDecl = {
 	@:trail('}')
 	@:trivia
 	var ctors: Array<HxEnumMember>;
+
 }

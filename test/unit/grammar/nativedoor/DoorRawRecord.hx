@@ -7,11 +7,15 @@ import anyparse.grammar.json.JValue;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef DoorRawRecord = {
+
 	var id: String;
 	var raw: JValue;
+
 	@:optional
 	var maybe: Null<JValue>;
 	var tuples: Array<Array<JValue>>;
+
 	@:optional
 	var named: Null<Map<String, DoorInner>>;
+
 }

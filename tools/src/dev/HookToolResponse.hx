@@ -5,8 +5,11 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef HookToolResponse = {
+
 	@:optional
 	var stdout: String;
+
 	@:optional
 	var stderr: String;
+
 };

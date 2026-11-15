@@ -524,6 +524,7 @@ final class MemberSlots {
  * abstract).
  */
 enum abstract MemberRank(Int) {
+
 	final EnumValue = -1;
 	final StaticPublicImmutableField = 0;
 	final StaticPublicMutableField = 1;
@@ -549,4 +550,5 @@ enum abstract MemberRank(Int) {
 
 	@:op(A - B)
 	static function sub(a: MemberRank, b: MemberRank): Int;
+
 }

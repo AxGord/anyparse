@@ -24,10 +24,13 @@ typedef HxFormatWrapRules = {
 
 	@:optional
 	var defaultWrap: String;
+
 	@:optional
 	var defaultLocation: String;
+
 	@:optional
 	var defaultAdditionalIndent: Int;
+
 	@:optional
 	var rules: Array<HxFormatWrapRule>;
 

@@ -27,6 +27,7 @@ package anyparse.format;
  * fall back to `null` so the loader keeps the existing default.
  */
 enum abstract ConditionalIndentationPolicy(Int) {
+
 	final FixedZero = 0;
 	final FixedZeroIncrease = 1;
 	final FixedZeroIncreaseBlocks = 2;
@@ -48,4 +49,5 @@ enum abstract ConditionalIndentationPolicy(Int) {
 			case _: null;
 		};
 	}
+
 }

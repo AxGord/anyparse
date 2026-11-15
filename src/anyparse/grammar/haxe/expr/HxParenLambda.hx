@@ -17,12 +17,15 @@ package anyparse.grammar.haxe.expr;
  */
 @:peg
 typedef HxParenLambda = {
+
 	@:lead('(')
 	@:trail(')')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaParams'), wrapRules('anonFunctionSignatureWrap'))
 	var params: Array<HxLambdaParam>;
+
 	@:fmt(propagateExprPosition, propagateAnonFnContext, arrowBodyLineWrap, statementBodyForCtor('BlockExpr'))
 	@:lead('=>')
 	var body: HxExpr;
+
 }

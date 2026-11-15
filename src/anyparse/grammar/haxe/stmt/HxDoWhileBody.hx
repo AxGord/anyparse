@@ -27,6 +27,7 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 enum HxDoWhileBody {
+
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), keepCurlyBlanks,
 		uniformStmtBlanks)
 	@:lead('{')
@@ -34,10 +35,13 @@ enum HxDoWhileBody {
 	@:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockBody(stmts: Array<HxStatement>);
+
 	@:kw('do')
 	@:fmt(forwardNewlineForBody)
 	InnerDoWhile(inner: HxDoWhileStmt);
+
 	@:trailOpt(';')
 	@:fmt(trailOptParseOnly)
 	ExprBody(expr: HxExpr);
+
 }

@@ -805,6 +805,7 @@ private typedef OrLeaf = {
  * need (Haxe otherwise forbids ordered comparison on an abstract).
  */
 private enum abstract Precedence(Int) {
+
 	final PREC_ATOM = 100;
 	final PREC_NOT = 90;
 	// Any binary / type-check operator (is, bitwise, shift, arithmetic, ...) — binds
@@ -829,4 +830,5 @@ private enum abstract Precedence(Int) {
 
 	@:op(A >= B)
 	static function gte(a: Precedence, b: Precedence): Bool;
+
 }

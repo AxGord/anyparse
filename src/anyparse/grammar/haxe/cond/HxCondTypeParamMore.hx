@@ -35,7 +35,9 @@ import anyparse.grammar.haxe.decl.HxParam;
  */
 @:peg
 typedef HxCondTypeParamMore = {
+
 	@:lead(',')
 	@:fmt(spaceAfterLead)
 	var param: HxParam;
+
 };

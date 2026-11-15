@@ -9,11 +9,15 @@ import anyparse.grammar.json.JValue;
  */
 @:peg
 typedef MutationArmJson = {
+
 	var name: String;
 	var type: String;
 	var method: String;
+
 	@:optional
 	var kind: String;
+
 	@:optional
 	var find: JValue;
+
 };

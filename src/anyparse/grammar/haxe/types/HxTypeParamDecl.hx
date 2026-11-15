@@ -34,22 +34,28 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  */
 @:peg
 typedef HxTypeParamDecl = {
+
 	@:trivia
 	@:tryparse
 	@:fmt(metaLineEndInline)
 	var meta: Array<HxMetadata>;
+
 	@:fmt(inlineSep)
 	var name: HxIdentLit;
+
 	@:optional
 	@:fmt(space('typeParamConstraintColon', 'lead'), captureAfterLead)
 	@:lead(':')
 	var constraint: Null<HxType>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading)
 	var constraintMore: Array<HxIntersectionClause>;
+
 	@:optional
 	@:fmt(typeParamDefaultEquals, captureAfterLead)
 	@:lead('=')
 	var defaultValue: Null<HxType>;
+
 }

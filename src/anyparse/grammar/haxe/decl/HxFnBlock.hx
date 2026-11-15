@@ -38,6 +38,7 @@ import anyparse.grammar.haxe.stmt.HxStatement;
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
+
 	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'), clearExprPositionNonTail,
 		uniformStmtBlanks, relocateTrailingComments)
 	@:lead('{')
@@ -46,4 +47,5 @@ typedef HxFnBlock = {
 	@:skimmable
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var stmts: Array<HxStatement>;
+
 }

@@ -5,8 +5,11 @@ package anyparse.query.format.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef LintExplainedDocument = {
+
 	var findings: Array<LintFindingRecord>;
+
 	@:optional
 	@:writeNull
 	var longLocks: Null<LongLocksRecord>;
+
 };

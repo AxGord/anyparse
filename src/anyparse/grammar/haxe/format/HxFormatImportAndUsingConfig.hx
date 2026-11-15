@@ -34,14 +34,20 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatImportAndUsingConfig = {
+
 	@:optional
 	var beforeUsing: Int;
+
 	@:optional
 	var betweenImports: Int;
+
 	@:optional
 	var betweenImportsLevel: String;
+
 	@:optional
 	var beforeType: Int;
+
 	@:optional
 	var keepSourceBlankAcrossConditional: Bool;
+
 };

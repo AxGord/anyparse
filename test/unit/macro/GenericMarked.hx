@@ -8,6 +8,8 @@ import anyparse.grammar.haxe.lit.HxIdentLit;
  */
 @:peg
 typedef GenericMarked = {
+
 	@:lead('@')
 	var word: HxIdentLit;
+
 }

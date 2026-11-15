@@ -28,15 +28,18 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxSwitchStmt = {
+
 	@:lead('(')
 	@:trail(')')
 	@:fmt(space('switchCondParensInsideOpen', 'lead'), switchCondParensInsideClose, switchSubjectNoWrap, switchSubjectParensStrip,
 		suppressComplexItems)
 	var expr: HxExpr;
+
 	@:fmt(leftCurly('blockLeftCurly'), emptyCurlyBreak('blockEmptyCurly'), rightCurly('blockRightCurly'), indentCaseLabels,
 		siblingShare('anyparse.format.SiblingShare.decide', 'caseSiblings'))
 	@:lead('{')
 	@:trail('}')
 	@:trivia
 	var cases: Array<HxSwitchCase>;
+
 };

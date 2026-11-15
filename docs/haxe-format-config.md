@@ -704,6 +704,21 @@ then leaves `_inEnumAbstract` off.
 keeps the blank lines between `// arrows` and `// letters` groups of values and between the values
 and a property below them, while a plain `enum abstract` value list still loses its blank lines.
 
+## `emptyLines.metadataCountsAsDocComment` / `emptyLines.<kind>.metadataCountsAsDocComment`
+
+anyparse-only, a Bool, `false` by default. At `emptyLines` level it covers class, interface and
+plain `abstract` bodies; `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines` each
+carry their own. Set, a member whose head carries metadata (`@:meta`, `@:fmt(...)`) is laid out
+for blank lines as a doc-commented member: `beforeDocCommentEmptyLines`,
+`afterFieldsWithDocComments` and `beginTypeIfDocComments` / `endTypeIfDocComments` fire on it. A
+member with both a doc comment and metadata takes one blank line, not two; a `#if` member counts
+only by its doc comment. The `member-order` check reads the same keys (`MemberGapPolicy.forKind`).
+Runtime: `WriterTriviaStarDispatch.docLedReads`.
+
+```json
+{"emptyLines": {"metadataCountsAsDocComment": true, "typedefEmptyLines": {"metadataCountsAsDocComment": true}}}
+```
+
 ## `comments.*`
 
 The fork has a `comments` section holding only `blockCommentBodyIndent`, which hxq accepts and does not read. `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only and additive.

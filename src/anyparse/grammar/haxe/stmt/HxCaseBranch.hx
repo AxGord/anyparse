@@ -42,11 +42,13 @@ package anyparse.grammar.haxe.stmt;
  */
 @:peg
 typedef HxCaseBranch = {
+
 	@:trivia
 	@:sep(',')
 	@:trail(':')
 	@:fmt(wrapRules('casePatternWrap'), elemChainOp('|'), beforeNewlineSlotFirst, captureTrailComment, inlineElemTrivia)
 	var patterns: Array<HxCasePattern>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
@@ -55,4 +57,5 @@ typedef HxCaseBranch = {
 		siblingSlot('anyparse.format.SiblingShare.bodySlot', 'anyparse.format.SiblingShare.fitLineSlot', 'caseSiblings'),
 		belowWrappedLabel)
 	var body: Array<HxStatement>;
+
 };

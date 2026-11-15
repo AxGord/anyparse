@@ -29,8 +29,11 @@ package anyparse.grammar.haxe.decl;
  */
 @:peg
 enum HxMacroClassHead {
+
 	@:kw('class')
 	NamedHead(name: HxMacroClassName);
+
 	@:kw('class')
 	AnonHead;
+
 }

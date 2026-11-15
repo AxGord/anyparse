@@ -17,8 +17,11 @@ package anyparse.grammar.haxe.checkstyle;
  */
 @:peg
 typedef CheckstyleCheck = {
+
 	@:optional
 	var type: String;
+
 	@:optional
 	var props: CheckstyleCheckProps;
+
 };

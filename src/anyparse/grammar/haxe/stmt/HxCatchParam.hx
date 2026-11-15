@@ -29,10 +29,13 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxCatchParam = {
+
 	var name: HxIdentLit;
+
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))
 	@:lead(':')
 	@:queryTypeSlot
 	var type: Null<HxType>;
+
 }

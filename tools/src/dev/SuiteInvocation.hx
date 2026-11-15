@@ -9,17 +9,23 @@ import anyparse.grammar.json.JValue;
 typedef SuiteInvocation = {
 
 	var name: String;
+
 	@:optional
 	var note: String;
+
 	@:optional
 	var knownDefect: String;
+
 	@:optional
 	var fixpoint: String;
+
 	@:optional
 	var outShape: String;
+
 	@:optional
 	var outMinLines: Int;
 	var argv: Array<String>;
+
 	@:optional
 	var stdin: String;
 
@@ -30,8 +36,10 @@ typedef SuiteInvocation = {
 	/** Trees committed in order into a git repository, file name to content; `files` is then the working tree (default: last commit). */
 	@:optional
 	var commits: Array<JValue>;
+
 	@:optional
 	var compile: CompileSpec;
+
 	@:optional
 	var expect: Expectation;
 

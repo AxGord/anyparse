@@ -34,9 +34,12 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxAnonFieldBody = {
+
 	var name: HxIdentLit;
+
 	@:fmt(space('typeHintColon', 'lead'))
 	@:lead(':')
 	@:queryTypeRef
 	var type: HxType;
+
 }

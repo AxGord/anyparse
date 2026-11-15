@@ -45,19 +45,26 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxConditionalType = {
+
 	var cond: HxPpCondLit;
+
 	@:trailOpt(';')
 	var type: HxType;
+
 	@:optional
 	@:lead('=')
 	var init: Null<HxExpr>;
+
 	@:tryparse
 	var moreParams: Array<HxCondTypeParamMore>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading)
 	var elseifs: Array<HxElseifType>;
+
 	@:optional
 	@:kw('#else')
 	var elseClause: Null<HxConditionalTypeElse>;
+
 };

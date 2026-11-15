@@ -22,11 +22,14 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxTypedCast = {
+
 	@:lead('(')
 	var target: HxExpr;
+
 	@:lead(',')
 	@:fmt(spaceAfterLead)
 	@:trail(')')
 	@:queryTypeSlot
 	var type: HxType;
+
 };

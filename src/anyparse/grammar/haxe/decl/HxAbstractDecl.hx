@@ -45,24 +45,29 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('members'))
 typedef HxAbstractDecl = {
+
 	@:kw('abstract')
 	var name: HxIdentLit;
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:optional
 	@:lead('(')
 	@:trail(')')
 	@:fmt(tightLead, propagateNestedType)
 	@:queryTypeSlot
 	var underlyingType: Null<HxType>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, lineLengthAwareSeps)
 	var clauses: Array<HxAbstractClause>;
+
 	@:fmt(leftCurly, emptyCurlyBreak,
 		beginEndType('abstractBeginType', 'abstractEndType', '_inEnumAbstract', 'enumAbstractBeginType', 'enumAbstractEndType'),
 		beginEndTypeIfDoc('', '', '_inEnumAbstract', 'enumAbstractBeginTypeIfDocComments', 'enumAbstractEndTypeIfDocComments'),
@@ -85,4 +90,5 @@ typedef HxAbstractDecl = {
 	@:trail('}')
 	@:trivia
 	var members: Array<HxMemberDecl>;
+
 }

@@ -32,6 +32,7 @@ package anyparse.grammar.haxe.stmt;
  */
 @:peg
 typedef HxDefaultBranch = {
+
 	@:lead(':')
 	@:trivia
 	@:tryparse
@@ -40,4 +41,5 @@ typedef HxDefaultBranch = {
 		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt'),
 		siblingSlot('anyparse.format.SiblingShare.bodySlot', 'anyparse.format.SiblingShare.fitLineSlot', 'caseSiblings'))
 	var stmts: Array<HxStatement>;
+
 };

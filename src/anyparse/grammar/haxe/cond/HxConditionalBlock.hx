@@ -17,16 +17,20 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxConditionalBlock<T> = {
+
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
 		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	var body: Array<T>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(elemSelfTrailsNewline)
 	var elseifs: Array<HxElseifBlock<T>>;
+
 	@:optional
 	@:kw('#else')
 	@:trivia
@@ -34,4 +38,5 @@ typedef HxConditionalBlock<T> = {
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent, elementPerLine,
 		siblingPad('anyparse.format.SiblingShare.padSlot', 'conditionalSiblings'))
 	var elseBody: Null<Array<T>>;
+
 };

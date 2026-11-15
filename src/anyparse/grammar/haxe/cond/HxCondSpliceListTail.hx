@@ -42,10 +42,14 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxCondSpliceListTail = {
+
 	var cond: HxPpCondLit;
+
 	@:lead(',')
 	@:fmt(spaceAfterLead)
 	var operand: HxExpr;
+
 	@:fmt(inlineSep)
 	var endKw: HxCondEndLit;
+
 };

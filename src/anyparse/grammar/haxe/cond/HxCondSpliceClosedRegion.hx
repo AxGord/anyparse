@@ -17,6 +17,8 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxCondSpliceClosedRegion = {
+
 	@:kw('#if')
 	var raw: HxCondSpliceClosedRaw;
+
 };

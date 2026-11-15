@@ -7,12 +7,14 @@ package dev;
 typedef SweepProbe = {
 
 	var file: String;
+
 	@:optional
 	var text: Array<String>;
 
 	/** The resolution traps' position: the first `at` in the file moved by `offset`; the sweep reads none of these. */
 	@:optional
 	var at: String;
+
 	@:optional
 	var offset: Int;
 

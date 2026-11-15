@@ -26,7 +26,9 @@ package anyparse.grammar.haxe.expr;
  */
 @:peg
 enum HxLambdaParam {
+
 	@:lead('?')
 	Optional(body: HxLambdaParamBody);
 	Required(body: HxLambdaParamBody);
+
 }

@@ -40,17 +40,23 @@ import anyparse.grammar.haxe.expr.HxExpr;
 @:peg
 @:raw
 enum HxStringSegment {
+
 	Literal(s: HxStringLitSegment);
+
 	@:lit("$$")
 	Dollar;
+
 	@:lead("${")
 	@:trail('}')
 	@:balanced('{', '}')
 	@:fmt(captureSource('formatStringInterpolation'))
 	Block(expr: HxExpr);
+
 	@:lead("$")
 	Ident(name: HxWordLit);
+
 	@:lit("$")
 	@:rejectFollowLit('{')
 	LoneDollar;
+
 }

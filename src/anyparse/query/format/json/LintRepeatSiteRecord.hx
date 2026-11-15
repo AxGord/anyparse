@@ -5,7 +5,9 @@ package anyparse.query.format.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef LintRepeatSiteRecord = {
+
 	@:key('function')
 	var member: String;
 	var at: String;
+
 };

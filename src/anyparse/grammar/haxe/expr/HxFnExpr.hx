@@ -42,26 +42,31 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
  */
 @:peg
 typedef HxFnExpr = {
+
 	@:optional
 	@:lead('<')
 	@:trail('>')
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
+
 	@:lead('(')
 	@:trail(')')
 	@:sep(',')
 	@:fmt(trailingComma('trailingCommaParams'), keepInnerWhenEmpty('anonFuncParamParensKeepInnerWhenEmpty'),
 		wrapRules('anonFunctionSignatureWrap'), bodyAwareCompactIndent('body', 'fnExprBodyEmpty'))
 	var params: Array<HxLambdaParam>;
+
 	@:optional
 	@:fmt(space('typeHintColon', 'lead'))
 	@:lead(':')
 	var returnType: Null<HxType>;
+
 	@:optional
 	@:absentOn(',', ')', ';', '}', ']')
 	@:fmt(leftCurly('anonFunctionLeftCurly'), propagateAnonFnContext, bodyPolicyForCtor('ExprBody', 'anonFunctionBody'),
 		statementIfBody('IfExpr', 'thenBranch', 'elseBranch', 'ExprBody', 'BlockExpr', 'SwitchExpr', 'SwitchExprBare'),
 		statementBodyForCtor('BlockBody'))
 	var body: Null<HxFnExprBody>;
+
 }

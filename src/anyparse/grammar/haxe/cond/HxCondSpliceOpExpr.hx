@@ -45,13 +45,18 @@ import anyparse.grammar.haxe.expr.HxExpr;
 @:peg
 @:fmt(fillParts)
 typedef HxCondSpliceOpExpr = {
+
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, fillItems)
 	var terms: Array<HxCondSpliceOpTerm>;
+
 	@:fmt(fillSeam)
 	var endKw: HxCondEndLit;
+
 	@:fmt(chainNestSuppress, fillSeam)
 	var tail: HxExpr;
+
 };

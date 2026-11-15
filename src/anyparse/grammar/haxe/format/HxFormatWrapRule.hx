@@ -37,12 +37,17 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatWrapRule = {
+
 	@:optional
 	var type: String;
+
 	@:optional
 	var location: String;
+
 	@:optional
 	var additionalIndent: Int;
+
 	@:optional
 	var conditions: Array<HxFormatWrapCondition>;
+
 };

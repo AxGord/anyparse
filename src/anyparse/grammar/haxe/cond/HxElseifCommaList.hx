@@ -7,11 +7,14 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxElseifCommaList<T> = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:sep(',', sepFaithful)
 	@:tryparse
 	@:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	var body: Array<T>;
+
 };

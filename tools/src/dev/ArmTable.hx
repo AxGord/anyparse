@@ -5,6 +5,8 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ArmTable = {
+
 	@:optional
 	var arms: Array<ArmRecordJson>;
+
 };

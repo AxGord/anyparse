@@ -42,7 +42,9 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxNewExpr = {
+
 	var type: HxNewTypeName;
+
 	@:optional
 	@:queryTypeArgs
 	@:lead('<')
@@ -50,6 +52,7 @@ typedef HxNewExpr = {
 	@:sep(',')
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe, propagateNestedType)
 	var params: Null<Array<HxType>>;
+
 	@:trivia
 	@:lead('(')
 	@:trail(')')
@@ -57,4 +60,5 @@ typedef HxNewExpr = {
 	@:fmt(trailingComma('trailingCommaArgs'), trailingCommaRemovable, wrapRules('callParameterWrap'), ignoreSourceNewlinesForWrap,
 		groupRestProbe, complexItems, relocateTrailingComments, callArgs)
 	var args: Array<HxExpr>;
+
 };

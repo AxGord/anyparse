@@ -31,8 +31,11 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 typedef HxElseifType = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trailOpt(';')
 	var type: HxType;
+
 };

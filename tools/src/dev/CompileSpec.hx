@@ -7,8 +7,10 @@ package dev;
 typedef CompileSpec = {
 
 	var args: Array<String>;
+
 	@:optional
 	var dir: String;
+
 	@:optional
 	var defines: Array<Array<String>>;
 

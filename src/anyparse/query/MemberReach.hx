@@ -162,10 +162,13 @@ typedef SharedRead = { final owner: String; final name: String; final inert: Boo
  * (`FactsView.pinnedOwner`).
  */
 typedef MemberRef = {
+
 	var owner: String;
 	var name: String;
+
 	@:optional
 	var site: Null<Span>;
+
 }
 
 /**

@@ -44,11 +44,15 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  */
 @:peg
 enum HxCondDeclPrefix {
+
 	@:kw('enum')
 	EnumKw;
+
 	@:kw('abstract')
 	AbstractKw;
+
 	@:kw('final')
 	FinalKw;
 	Meta(entry: HxMetadata);
+
 }

@@ -31,8 +31,11 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxElseifSemiExpr = {
+
 	@:kw('#elseif')
 	var cond: HxPpCondLit;
+
 	@:trail(';')
 	var expr: HxExpr;
+
 };

@@ -42,8 +42,10 @@ enum HxFnBody {
 
 	@:fmt(multilineCtor)
 	UntypedBlockBody(body: HxUntypedFnBody);
+
 	@:fmt(multilineCtor)
 	BlockBody(block: HxFnBlock);
+
 	@:lit(';')
 	NoBody;
 
@@ -89,6 +91,7 @@ enum HxFnBody {
 	 */
 	@:trail('#end')
 	CondBody(inner: HxConditionalFnBody);
+
 	@:trailOpt(';')
 	ExprBody(expr: HxExpr);
 

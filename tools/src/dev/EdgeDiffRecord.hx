@@ -5,9 +5,12 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef EdgeDiffRecord = {
+
 	var id: String;
+
 	@:optional
 	var file: String;
 	var syntax: Array<String>;
 	var facts: Array<String>;
+
 };

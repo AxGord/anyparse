@@ -43,8 +43,10 @@ import anyparse.grammar.haxe.types.HxType;
  */
 @:peg
 enum HxArrowParam {
+
 	@:lead('?')
 	OptionalNamedParam(body: HxArrowParamBody);
 	NamedParam(body: HxArrowParamBody);
 	Positional(type: HxType);
+
 }

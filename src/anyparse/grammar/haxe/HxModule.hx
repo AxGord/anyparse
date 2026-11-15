@@ -45,6 +45,7 @@ import anyparse.grammar.haxe.decl.HxTopLevelDecl;
 @:ws
 @:condDirectives('#if', ['#else', '#elseif'], '#end')
 typedef HxModule = {
+
 	@:trivia
 	@:fmt(blankLinesAtHeadIfCtor('decl', 'PackageDecl', 'PackageEmpty', 'beforePackage'))
 	@:fmt(blankLinesAfterCtor('decl', 'PackageDecl', 'PackageEmpty', 'afterPackage'))
@@ -102,4 +103,5 @@ typedef HxModule = {
 	@:fmt(afterFileHeaderCommentBlanks)
 	@:fmt(betweenMultilineCommentsBlanks)
 	var decls: Array<HxTopLevelDecl>;
+
 }

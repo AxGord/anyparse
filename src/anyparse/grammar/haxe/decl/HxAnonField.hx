@@ -45,21 +45,28 @@ import anyparse.grammar.haxe.types.HxTypeRef;
  */
 @:peg
 enum HxAnonField {
+
 	@:kw('#if')
 	@:trail('#end')
 	Conditional(inner: HxConditionalInline<HxAnonMember>);
+
 	@:lead('?')
 	Optional(field: HxAnonFieldBody);
+
 	@:lead('>')
 	@:fmt(spaceAfterLead)
 	ExtendsField(type: HxTypeRef);
+
 	@:kw('var')
 	@:trailOpt(';')
 	VarField(body: HxAnonVarBody);
+
 	@:kw('final')
 	@:trailOpt(';')
 	FinalField(body: HxAnonVarBody);
+
 	@:kw('function')
 	FnField(decl: HxFnDecl);
 	Required(field: HxAnonFieldBody);
+
 }

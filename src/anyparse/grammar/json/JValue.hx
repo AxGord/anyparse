@@ -28,18 +28,23 @@ package anyparse.grammar.json;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 enum JValue {
+
 	@:lit('null')
 	JNull;
+
 	@:lit('true', 'false')
 	JBool(v: Bool);
 	JNumber(v: JNumberLit);
 	JString(v: JStringLit);
+
 	@:lead('[')
 	@:trail(']')
 	@:sep(',', tailRelax)
 	JArray(items: Array<JValue>);
+
 	@:lead('{')
 	@:trail('}')
 	@:sep(',', tailRelax)
 	JObject(entries: Array<JEntry>);
+
 }

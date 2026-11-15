@@ -16,19 +16,24 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 typedef HxConditionalInline<T> = {
+
 	var cond: HxPpCondLit;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing)
 	var body: Array<T>;
+
 	@:trivia
 	@:tryparse
 	@:fmt(elemSelfTrailsNewline)
 	var elseifs: Array<HxElseifInline<T>>;
+
 	@:optional
 	@:kw('#else')
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading, padTrailing)
 	var elseBody: Null<Array<T>>;
+
 };

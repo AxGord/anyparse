@@ -5,9 +5,13 @@ package dev;
 @:schema(anyparse.grammar.json.JsonFormat)
 @:ws
 typedef ArmHead = {
+
 	var name: String;
+
 	@:optional
 	var type: String;
+
 	@:optional
 	var method: String;
+
 };

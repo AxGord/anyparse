@@ -36,17 +36,22 @@ import anyparse.grammar.haxe.lit.HxIdentLit;
  */
 @:peg
 typedef HxForStmt = {
+
 	@:lead('(')
 	@:fmt(condWrap('conditionWrap'))
 	var varName: HxIdentLit;
+
 	@:optional
 	@:lead('=>')
 	var valueName: Null<HxKeyValueBinder>;
+
 	@:kw('in')
 	@:trail(')')
 	@:fmt(condWrapEnd)
 	var iterable: HxExpr;
+
 	@:trailOpt(';')
 	@:fmt(bodyPolicy('forBody'), dropSingleStmtBraces, loopBodyIfElseNext('loopBodyIfElseNext', 'IfStmt', 'elseBody'))
 	var body: HxStatement;
+
 };

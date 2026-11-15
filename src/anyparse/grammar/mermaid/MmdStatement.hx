@@ -16,30 +16,40 @@ enum MmdStatement {
 	Semicolon;
 	Header(header: MmdHeader);
 	AnonymousSubgraph(subgraph: MmdAnonymousSubgraph);
+
 	@:kw('subgraph')
 	Subgraph(subgraph: MmdSubgraph);
+
 	@:kw('direction')
 	Direction(direction: MmdDirection);
+
 	@:kw('classDef')
 	ClassDef(def: MmdClassDef);
+
 	@:kw('class')
 	Class(assign: MmdClassAssign);
+
 	@:kw('style')
 	Style(style: MmdStyle);
 
 	/** `linkStyle <links> interpolate <curve>` with no style list; tried first, see `MmdCurveLit`. */
 	@:kw('linkStyle')
 	LinkCurve(curve: MmdLinkCurve);
+
 	@:kw('linkStyle')
 	LinkStyle(style: MmdLinkStyle);
+
 	@:kw('click')
 	Click(click: MmdClick);
+
 	@:kw('accTitle')
 	@:lead(':')
 	AccTitle(text: MmdLineTextLit);
+
 	@:kw('accDescr')
 	@:lead(':')
 	AccDescr(text: MmdLineTextLit);
+
 	@:kw('accDescr')
 	@:lead('{')
 	@:trail('}')

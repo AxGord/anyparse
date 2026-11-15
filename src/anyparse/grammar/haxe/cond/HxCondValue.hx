@@ -15,31 +15,43 @@ package anyparse.grammar.haxe.cond;
 @:schema(anyparse.grammar.haxe.cond.HxPpCondFormat)
 @:ws
 enum HxCondValue {
+
 	@:kw('version')
 	@:lead('(')
 	@:trail(')')
 	VersionCall(raw: HxPpCondQuoted);
+
 	@:wrap('(', ')')
 	Group(inner: HxCondValue);
 	Quoted(text: HxPpCondQuoted);
 	Flag(name: HxPpCondFlag);
 	Number(text: HxPpCondNumber);
+
 	@:prefix('!')
 	Not(operand: HxCondValue);
+
 	@:infix('==', 3)
 	Eq(left: HxCondValue, right: HxCondValue);
+
 	@:infix('!=', 3)
 	NotEq(left: HxCondValue, right: HxCondValue);
+
 	@:infix('>=', 3)
 	GtEq(left: HxCondValue, right: HxCondValue);
+
 	@:infix('<=', 3)
 	LtEq(left: HxCondValue, right: HxCondValue);
+
 	@:infix('>', 3)
 	Gt(left: HxCondValue, right: HxCondValue);
+
 	@:infix('<', 3)
 	Lt(left: HxCondValue, right: HxCondValue);
+
 	@:infix('&&', 2)
 	And(left: HxCondValue, right: HxCondValue);
+
 	@:infix('||', 1)
 	Or(left: HxCondValue, right: HxCondValue);
+
 }

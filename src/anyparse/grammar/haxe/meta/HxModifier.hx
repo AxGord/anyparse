@@ -36,23 +36,33 @@ import anyparse.grammar.haxe.cond.HxConditionalInline;
  */
 @:peg
 enum HxModifier {
+
 	@:kw('public')
 	Public;
+
 	@:kw('private')
 	Private;
+
 	@:kw('static')
 	Static;
+
 	@:kw('inline')
 	Inline;
+
 	@:kw('override')
 	Override;
+
 	@:kw('dynamic')
 	Dynamic;
+
 	@:kw('extern')
 	Extern;
+
 	@:kw('overload')
 	Overload;
+
 	@:kw('#if')
 	@:trail('#end')
 	Conditional(inner: HxConditionalInline<HxCondModPrefix>);
+
 }

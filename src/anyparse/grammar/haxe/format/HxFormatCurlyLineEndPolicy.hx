@@ -32,10 +32,14 @@ package anyparse.grammar.haxe.format;
  */
 @:peg
 typedef HxFormatCurlyLineEndPolicy = {
+
 	@:optional
 	var leftCurly: HxFormatLeftCurlyPolicy;
+
 	@:optional
 	var emptyCurly: HxFormatEmptyCurlyPolicy;
+
 	@:optional
 	var rightCurly: HxFormatRightCurlyPolicy;
+
 };

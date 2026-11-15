@@ -29,11 +29,14 @@ package anyparse.grammar.haxe.types;
  */
 @:peg
 typedef HxTypeArg = {
+
 	@:queryType
 	@:fmt(propagateNestedType)
 	var type: HxType;
+
 	@:trivia
 	@:tryparse
 	@:fmt(padLeading)
 	var intersections: Array<HxIntersectionClause>;
+
 }

@@ -24,8 +24,11 @@ import anyparse.grammar.haxe.expr.HxExpr;
  */
 @:peg
 typedef HxCondSpliceOpTerm = {
+
 	@:fmt(atomOperand)
 	var operand: HxExpr;
+
 	@:fmt(inlineSep)
 	var op: HxCondSpliceOpLit;
+
 };

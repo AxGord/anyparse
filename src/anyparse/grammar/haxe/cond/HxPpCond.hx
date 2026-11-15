@@ -11,10 +11,12 @@ package anyparse.grammar.haxe.cond;
  */
 @:peg
 enum HxPpCond {
+
 	@:lead('!')
 	Not(blank: HxPpCondBlank, operand: HxPpCond);
 	Group(group: HxPpCondGroup);
 	Quoted(text: HxPpCondQuoted);
 	Flag(name: HxPpCondFlag);
 	Number(text: HxPpCondNumber);
+
 }
