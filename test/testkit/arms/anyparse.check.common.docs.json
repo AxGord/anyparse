@@ -176,6 +176,62 @@
 			"find": "if (bodies.count(opensADoc) > 1) {",
 			"replace": "if (false) {",
 			"note": "two blocks that each open a doc are merged, so an orphan doc of a moved member becomes part of the next declaration's doc"
+		},
+		{
+			"name": "M-BETWEEN-META-BLIND",
+			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
+			"method": "betweenMetaDocs",
+			"find": "final runs: Array<Span> = CheckScan.leadingRuns(\n\t\t\ttree, seams.descend, node -> CheckScan.isLeadingAnnotation(node, seams.modifiers) || guardedPrefixRun(node, seams)\n\t\t);",
+			"replace": "final runs: Array<Span> = [];",
+			"note": "no leading run is examined, so a doc between metadata entries is neither reported nor moved"
+		},
+		{
+			"name": "M-BETWEEN-META-INDENT-LOST",
+			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
+			"method": "fix",
+			"find": "text: '${source.substring(between.doc.from, between.doc.to)}\\n$indent'",
+			"replace": "text: '${source.substring(between.doc.from, between.doc.to)}\\n'",
+			"note": "the moved doc drops the member indentation, so the metadata entry below it lands at column 0"
+		},
+		{
+			"name": "M-BETWEEN-META-OVERWRITES-DOC",
+			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
+			"method": "betweenMetaDocs",
+			"find": "final above: Bool = CheckScan.hasDocBefore(source, docEnds, run.from);",
+			"replace": "final above: Bool = false;",
+			"note": "a doc already above the run no longer blocks the move, so two docs are stacked and the live one is shadowed"
+		},
+		{
+			"name": "M-BETWEEN-META-COND-REGION",
+			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
+			"method": "resolveSeams",
+			"find": "if (conditional != null) descend.push(conditional);",
+			"replace": "if (conditional == null) descend.push('');",
+			"note": "conditional regions are not descended, so a member inside #if is never checked"
+		},
+		{
+			"name": "M-BETWEEN-META-TWO-BLOCKS",
+			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
+			"method": "refusalOf",
+			"find": "else if (docsInRun > 1)",
+			"replace": "else if (docsInRun > 99)",
+			"note": "two blocks in one run are both moved to the run start, stacking two docs"
+		},
+		{
+			"name": "M-BETWEEN-META-SHARED-LINE",
+			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
+			"method": "refusalOf",
+			"find": "else if (wholeLineSpan(source, doc) == null)",
+			"replace": "else if (doc == null)",
+			"note": "a block sharing a line with a meta is advised as movable though the fix cannot move it"
+		},
+		{
+			"name": "M-BETWEEN-META-STACKS",
+			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
+			"method": "fix",
+			"find": " || (found != null && found.anchor == between.anchor)",
+			"replace": "",
+			"note": "a stranded doc and a between-run doc on one type are both inserted at the same anchor"
 		}
 	]
 }

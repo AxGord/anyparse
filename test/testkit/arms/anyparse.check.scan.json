@@ -1730,6 +1730,14 @@
 			"find": "LexicalRegions.commentIntersects(l.to, r.from, regions)",
 			"replace": "false",
 			"note": "a comment in the operator gap no longer declines the flip, so the flip drops it"
+		},
+		{
+			"name": "M-BETWEEN-META-TOPLEVEL-ONLY",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "leadingRuns",
+			"find": "if (descend.contains(child.kind)) pending.push(child);",
+			"replace": "if (descend.length < 0) pending.push(child);",
+			"note": "the walk never descends, so only top-level declarations' runs are found"
 		}
 	]
 }

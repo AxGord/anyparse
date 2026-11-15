@@ -2,6 +2,7 @@ package anyparse.check.common.docs;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.scan.CheckScan;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 
@@ -14,6 +15,12 @@ using anyparse.util.Strings;
  * run documents nothing — a DEAD doc, invisible to every IDE and doc generator, which
  * still reads as documentation to the next human. `Severity.Warning`; `--fix` MOVES the
  * block verbatim into the type declaration's leading trivia.
+ *
+ * It also flags a doc block written INSIDE a declaration's leading `@:meta` / modifier run
+ * (a top-level type's or a member's): the compiler reads a doc only at the run's start, so
+ * this one is not the declaration's — it is dropped, or in a type body handed to the next
+ * member that has no doc of its own. `--fix` moves it there unless a doc already sits above the run (two docs
+ * are never merged), the run holds two such blocks, or the block shares a line with code.
  *
  * ## Detection
  *
@@ -84,7 +91,12 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 	private static final DOC_OPEN: String = '/**';
 
 	public function new() {
-		super(RULE_ID, 'a doc comment stranded between the package statement and the imports', RuleCategory.Docs);
+		super(
+			RULE_ID,
+			'a doc comment the compiler never attaches: between the package statement and the imports, or inside a declaration\'s '
+			+ 'metadata run',
+			RuleCategory.Docs
+		);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -93,14 +105,22 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final found: Null<Stranded> = strandedDoc(entry.source, plugin, seams);
-			if (found == null) continue;
-			violations.push({
+			if (found != null) violations.push({
 				file: entry.file,
 				span: new Span(found.doc.from, found.doc.to),
 				rule: RULE_ID,
 				severity: Severity.Warning,
 				message: 'this doc comment is separated from \'${found.name}'
 				+ '\' by the imports, so it documents nothing; move it to the declaration'
+			});
+			for (between in betweenMetaDocs(entry.source, plugin, seams)) violations.push({
+				file: entry.file,
+				span: new Span(between.doc.from, between.doc.to),
+				rule: RULE_ID,
+				severity: Severity.Warning,
+				message: 'this doc comment sits inside its declaration\'s metadata / modifier run, so it is not this declaration\'s doc'
+				+ ' (the compiler drops it, or hands it to the next undocumented member); '
+				+ (between.refusal ?? 'move it before the first entry')
 			});
 		}
 		return violations;
@@ -117,16 +137,26 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 		if (violations.length == 0) return [];
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
+		final edits: Array<{ span: Span, text: String }> = [];
 		final found: Null<Stranded> = strandedDoc(source, plugin, seams);
-		if (found == null) return [];
-		final block: Null<Span> = wholeLineSpan(source, found.doc);
-		if (block == null) return [];
-		final text: String = source.substring(found.doc.from, found.doc.to);
-		final separator: String = blankLineBefore(source, found.anchor) ? '' : '\n';
-		return [
-			{ span: block, text: '' },
-			{ span: new Span(found.anchor, found.anchor), text: '$separator$text\n' }
-		];
+		final block: Null<Span> = found == null ? null : wholeLineSpan(source, found.doc);
+		if (found != null && block != null) {
+			final separator: String = blankLineBefore(source, found.anchor) ? '' : '\n';
+			edits.push({ span: block, text: '' });
+			edits.push(
+				{ span: new Span(found.anchor, found.anchor), text: '$separator${source.substring(found.doc.from, found.doc.to)}\n' }
+			);
+		}
+		for (between in betweenMetaDocs(source, plugin, seams)) {
+			final line: Null<Span> = wholeLineSpan(source, between.doc);
+			if (between.refusal != null || line == null || (found != null && found.anchor == between.anchor)) continue;
+			final indent: String = source.substring(source.lineStart(between.anchor), between.anchor);
+			edits.push({ span: line, text: '' });
+			edits.push(
+				{ span: new Span(between.anchor, between.anchor), text: '${source.substring(between.doc.from, between.doc.to)}\n$indent' }
+			);
+		}
+		return edits;
 	}
 
 	/**
@@ -276,15 +306,63 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 		final enumAbstract: Null<String> = shape.enumAbstractDeclKind;
 		if (enumAbstract != null && !typeDecls.contains(enumAbstract)) typeDecls.push(enumAbstract);
 		final modifiers: Array<String> = CheckScan.modifierKinds(shape);
+		final nameHosts: Array<String> = (shape.visibilityContainerKinds ?? []).concat(shape.interfaceDeclKinds ?? []);
+		final descend: Array<String> = typeDecls.concat(nameHosts);
+		final anon: Null<String> = shape.anonTypeKind;
+		if (anon != null) descend.push(anon);
+		final conditional: Null<String> = shape.conditionalMemberKind;
+		if (conditional != null) descend.push(conditional);
 		return {
 			typeDecls: typeDecls,
-			nameHosts: (shape.visibilityContainerKinds ?? []).concat(shape.interfaceDeclKinds ?? []),
+			nameHosts: nameHosts,
+			descend: descend,
 			modifiers: modifiers,
 			packageKind: packageKind,
 			conditionalKind: shape.conditionalMemberKind,
 			metaKinds: plugin.metaShape().metaKinds,
 			declPrefixKeywords: shape.condDeclPrefixKeywordKinds ?? []
 		};
+	}
+
+	/**
+	 * Every doc block written INSIDE a declaration's leading `@:meta` / modifier run — after
+	 * its first entry, before the declaration — for the module's top-level declarations and
+	 * each type's members (through member containers and conditional regions). The compiler
+	 * reads a doc only at the run's start, so such a block is dropped or, in a type body, handed
+	 * to the next undocumented member. `refusal` says why the fix may not move it, if it may not.
+	 */
+	private static function betweenMetaDocs(source: String, plugin: GrammarPlugin, seams: Seams): Array<BetweenDoc> {
+		if (source.indexOf(DOC_OPEN) < 0) return [];
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final runs: Array<Span> = CheckScan.leadingRuns(
+			tree, seams.descend, node -> CheckScan.isLeadingAnnotation(node, seams.modifiers) || guardedPrefixRun(node, seams)
+		);
+		if (runs.length == 0) return [];
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(regions);
+		final docEnds: Map<Int, Bool> = CheckScan.docBlockEnds(source, regions);
+		final out: Array<BetweenDoc> = [];
+		for (run in runs) {
+			final docs: Array<CommentTok> = [
+				for (tok in comments) if (tok.from > run.from && tok.to <= run.to && SourceComments.isDocBlock(source, tok)) tok
+			];
+			final above: Bool = CheckScan.hasDocBefore(source, docEnds, run.from);
+			for (doc in docs) out.push({ doc: doc, anchor: run.from, refusal: refusalOf(source, doc, docs.length, above) });
+		}
+		return out;
+	}
+
+	/** Why a between-run doc may not be moved, as the finding's advice, or null when the fix may move it. */
+	private static function refusalOf(source: String, doc: CommentTok, docsInRun: Int, docAbove: Bool): Null<String> {
+		return if (docAbove)
+			'the declaration already has a doc above the run: merge the two by hand'
+		else if (docsInRun > 1)
+			'the run holds more than one doc block: merge them by hand'
+		else if (wholeLineSpan(source, doc) == null)
+			'it shares a line with code: move it before the first entry by hand'
+		else
+			null;
 	}
 
 }
@@ -295,6 +373,9 @@ private typedef CommentTok = { from: Int, to: Int, isLine: Bool };
 /** A confirmed finding: the stranded block, the offset to move it to, and the type it belongs to. */
 private typedef Stranded = { final doc: CommentTok; final anchor: Int; final name: String; };
 
+/** A doc block inside a declaration's leading run, the run's start it belongs at, and why the fix may not move it (null when it may). */
+private typedef BetweenDoc = { final doc: CommentTok; final anchor: Int; final refusal: Null<String>; };
+
 /** The header decls preceding a module's sole type, plus that type's doc anchor and reported name. */
 private typedef Header = { final decls: Array<QueryNode>; final anchor: Int; final name: String; };
 
@@ -303,6 +384,12 @@ private typedef Seams = {
 
 	final typeDecls: Array<String>;
 	final nameHosts: Array<String>;
+
+	/**
+	 * The kinds whose children may hold declarations with a leading run: types,
+	 * member containers, a typedef's anonymous structure, conditional regions.
+	 */
+	final descend: Array<String>;
 	final modifiers: Array<String>;
 	final packageKind: String;
 

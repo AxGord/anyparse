@@ -750,6 +750,34 @@ final class CheckScan {
 	}
 
 	/**
+	 * The one answer to "each declaration's leading `@:meta` / modifier run": every run of
+	 * `isRunEntry` siblings directly followed by the declaration they prefix, as the span from
+	 * the run's first entry to that declaration's start. Descends only into nodes whose kind is
+	 * in `descend` (type declarations, member containers, conditional regions), never into a
+	 * member, so expression-level metadata is out of reach.
+	 */
+	public static function leadingRuns(root: QueryNode, descend: Array<String>, isRunEntry: (QueryNode) -> Bool): Array<Span> {
+		final runs: Array<Span> = [];
+		final pending: Array<QueryNode> = [root];
+		while (pending.length > 0) {
+			final node: Null<QueryNode> = pending.pop();
+			if (node == null) break;
+			var runStart: Int = -1;
+			for (child in node.children) {
+				final span: Null<Span> = child.span;
+				if (span != null && isRunEntry(child)) {
+					if (runStart < 0) runStart = span.from;
+					continue;
+				}
+				if (span != null && runStart >= 0) runs.push(new Span(runStart, span.from));
+				runStart = -1;
+				if (descend.contains(child.kind)) pending.push(child);
+			}
+		}
+		return runs;
+	}
+
+	/**
 	 * The edit for one flagged constant comparison `node`, or null (refuse). Shape (a)
 	 * when `node` is the sole condition of a no-`else` `if`; shape (b) when it is a
 	 * direct operand of the matching homogeneous logical chain (`&&` for always-true,

@@ -48,7 +48,7 @@ comments and doc comments.
 | [`empty-doc-tag`](guide/lint/docs.md#empty-doc-tag) | any | on | a doc-comment tag with no description (name-only @param, bare @return) |
 | [`english-comments`](guide/lint/docs.md#english-comments) | any | on | a comment containing a non-Latin letter (Cyrillic, CJK, Arabic, ...) — comments must be English only |
 | [`fragmented-doc-comment`](guide/lint/docs.md#fragmented-doc-comment) | any | on | a declaration documented by several adjacent comment blocks instead of one |
-| [`misplaced-type-doc`](guide/lint/docs.md#misplaced-type-doc) | any | off | a doc comment stranded between the package statement and the imports |
+| [`misplaced-type-doc`](guide/lint/docs.md#misplaced-type-doc) | any | off | a doc comment the compiler never attaches: between the package statement and the imports, or inside a declaration's metadata run |
 | [`prefer-doc-comment`](guide/lint/docs.md#prefer-doc-comment) | any | off | a line comment directly above a declaration, replaceable with a doc comment |
 | [`prefer-line-comment`](guide/lint/docs.md#prefer-line-comment) | any | off | a block comment in a statement position, replaceable with a line comment |
 

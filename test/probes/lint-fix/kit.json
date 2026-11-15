@@ -2543,6 +2543,37 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "MTD-BETWEEN-METAS",
+			"note": "a doc written between a class's metadata entries is reported and moved before the first entry; the program still compiles and runs",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"misplaced-type-doc",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "@:keep\n/** Doc between metas. */\n@:native(\"Main\")\nclass Main {\n\tstatic function main() {\n\t\tSys.println(\"0\");\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "3b561ddf4ec4b8c0",
+				"files": "4c5b5ffe7fe09141",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }
