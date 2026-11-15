@@ -44,14 +44,52 @@ final class TokenSpans {
 	 */
 	public static function wordOffsets(spans: Array<TokenSpan>, source: String, name: String): Array<Int> {
 		return [
-			for (span in spans)
-				if (
-					(span.kind == Word || span.kind == Literal)
-					&& span.to - span.from == name.length
-					&& source.substr(span.from, name.length) == name
-				)
-					span.from
+			for (span in spans) if ((span.kind == Word || span.kind == Literal) && spells(span, source, name)) span.from
 		];
+	}
+
+	/**
+	 * The start of every run of `spans` that spells the dotted `path` with no gap between its tokens: each segment
+	 * and each `separator` a whole token of that text. A run a `separator` touches on either side is the head or the
+	 * tail of a longer path and does not count; a region is one token of its whole text, so a path inside a comment or a
+	 * string is never a run.
+	 */
+	public static function pathOffsets(spans: Array<TokenSpan>, source: String, path: String, separator: String): Array<Int> {
+		final segments: Array<String> = path.split(separator);
+		final width: Int = segments.length * 2 - 1;
+		return [
+			for (start in 0...spans.length - width + 1)
+				if (
+					spellsRun(spans, source, start, segments, separator)
+					&& !touchesSeparator(spans, source, start - 1, spans[start].from, separator)
+					&& !touchesSeparator(spans, source, start + width, spans[start + width - 1].to, separator)
+				)
+					spans[start].from
+		];
+	}
+
+	/** Whether the tokens from `start` on spell `segments` joined by `separator`, each one starting where the last ended. */
+	private static function spellsRun(
+		spans: Array<TokenSpan>, source: String, start: Int, segments: Array<String>, separator: String
+	): Bool {
+		for (k in 0...segments.length * 2 - 1) {
+			final span: TokenSpan = spans[start + k];
+			if (k > 0 && span.from != spans[start + k - 1].to) return false;
+			if (!spells(span, source, k % 2 == 0 ? segments[k >> 1] : separator)) return false;
+		}
+		return true;
+	}
+
+	/** Whether the token at `at` exists, touches the run at `edge`, and is a `separator`. */
+	private static function touchesSeparator(spans: Array<TokenSpan>, source: String, at: Int, edge: Int, separator: String): Bool {
+		if (at < 0 || at >= spans.length) return false;
+		final span: TokenSpan = spans[at];
+		return (span.to == edge || span.from == edge) && spells(span, source, separator);
+	}
+
+	/** Whether `span`'s whole text is `text`. */
+	private static function spells(span: TokenSpan, source: String, text: String): Bool {
+		return span.to - span.from == text.length && source.substr(span.from, text.length) == text;
 	}
 
 }

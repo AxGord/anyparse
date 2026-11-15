@@ -7,9 +7,9 @@ import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TokenSpans;
 import anyparse.query.TypeInfoProvider;
 
-using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -175,6 +175,7 @@ final class MapKeysLookup extends RuleBase {
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		return {
 			shape: shape,
+			plugin: plugin,
 			forKind: forKind,
 			identKind: identKind,
 			callKind: callKind,
@@ -560,21 +561,20 @@ final class MapKeysLookup extends RuleBase {
 		final initSpan: Null<Span> = decl.children[0].span;
 		if (name == null || declSpan == null || initSpan == null) return null;
 		if (!isLookup(decl.children[0], path, keyName, cfg)) return null;
-		final annotation: Null<String> = annotationBaseName(source, declSpan.from, initSpan.from);
+		final annotation: Null<String> = annotationBaseName(cfg.plugin, source, declSpan.from, initSpan.from);
 		return annotation != null && !cfg.safeAnnotationTypes.contains(annotation) ? null : { name: name, span: declSpan };
 	}
 
 	/**
 	 * The base name of the type annotation in the declaration head `source[from...to)` (the
-	 * `Null` of `final v:Null<Int> = `), or null when the declaration carries none.
+	 * `Null` of `final v:Null<Int> = `), or null when the declaration carries none: the word token right after the
+	 * first `:` token, so a colon or a name inside a comment of the head is not one.
 	 */
-	private static function annotationBaseName(source: String, from: Int, to: Int): Null<String> {
-		final colon: Int = source.indexOf(':', from);
-		if (colon < 0 || colon >= to) return null;
-		final start: Int = skipSpace(source, colon + 1, to);
-		var i: Int = start;
-		while (i < to && source.fastCodeAt(i).isIdentChar()) i++;
-		return i == start ? null : source.substring(start, i);
+	private static function annotationBaseName(plugin: GrammarPlugin, source: String, from: Int, to: Int): Null<String> {
+		final spans: Array<TokenSpan> = plugin.tokenSpans(source, from, to);
+		final texts: Array<String> = TokenSpans.texts(source, spans);
+		final colon: Int = texts.indexOf(':');
+		return colon < 0 || colon + 1 >= spans.length || spans[colon + 1].kind != TokenKind.Word ? null : texts[colon + 1];
 	}
 
 	/** Push a `{span → value}` edit for every `<path>[key]` / `<path>.get(key)` lookup in `node`'s subtree. */
@@ -625,6 +625,7 @@ final class MapKeysLookup extends RuleBase {
 /** Per-run resolved `RefShape` seams and the optional type provider. */
 private typedef Cfg = {
 	var shape: RefShape;
+	var plugin: GrammarPlugin;
 	var forKind: String;
 	var identKind: String;
 	var callKind: String;

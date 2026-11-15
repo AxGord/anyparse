@@ -534,6 +534,15 @@ class MapKeysLookupCheckTest extends Test {
 		assertFixCanonical(wrapMap('for (k in m.keys()) trace(m[k]);'), 'for (k => value in m) trace(value);', 'm.keys()');
 	}
 
+	/** A colon inside a comment of the value local's head is no type annotation: the local is reused as the value name. */
+	@:pin('control')
+	@:killer('M-MAPKEYS-ANNOTATION-RAW-COLON')
+	public function testFixReusesLocalWhoseHeadCommentHoldsAColon(): Void {
+		assertFixCanonical(
+			wrapMap('for (k in m.keys()) {\n\t\t\tfinal v /* was:Widget */ = m[k];\n\t\t\ttrace(v);\n\t\t}'), 'for (k => v in m) {', 'm[k]'
+		);
+	}
+
 	private function wrapMap(loopCode: String): String {
 		return 'class C {\n\tfunction f(m:Map<String,Int>):Void {\n\t\t$loopCode\n\t}\n}';
 	}

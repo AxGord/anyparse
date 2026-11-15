@@ -768,6 +768,13 @@
 			"find": "LexicalRegions.commentIntersects(from + lastLine + 1, from + header.length, ctx.regions)",
 			"replace": "header.indexOf(\"//\") >= 0",
 			"note": "a string-blind marker scan refuses a header holding a string with //"
+		},
+		{
+			"name": "M-MAPKEYS-ANNOTATION-RAW-COLON",
+			"type": "anyparse.check.common.loops.MapKeysLookup",
+			"method": "annotationBaseName",
+			"force": "source.substring(from, to).split(':')[1]",
+			"note": "the annotation is read off the raw head text, so a colon inside a comment of the head reads as a type annotation and the value local is not reused"
 		}
 	]
 }

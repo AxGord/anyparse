@@ -3,10 +3,10 @@ package anyparse.query;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.TokenSpans;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -54,6 +54,9 @@ final class CtorFieldFold {
 	/** Why a `var` -> `final` swap is never admitted when the owner's resolvable builder reads field finality. */
 	public static inline final MACRO_FINALITY_DECLINE: String = 'the build macro reaching the owner reads field finality or '
 		+ 'property kind, so `final` changes what it generates, which no compiler oracle can check';
+
+	/** The tokens of the one property head `final` reproduces, `(default, null)`, which the fold deletes. */
+	private static final DROPPED_ACCESSOR_HEAD: Array<String> = ['(', 'default', ',', 'null', ')'];
 
 	/**
 	 * The `var` → `final` keyword-swap edits for each non-null span in `spans` (a field
@@ -379,27 +382,24 @@ final class CtorFieldFold {
 	}
 
 	/**
-	 * The declaration head just past the field NAME: `end` is where the type annotation
-	 * (or the `=`) begins, and `dropped` the span of a `(default, null)` property head to
-	 * delete — null for a plain `var`. Returns null when the head cannot be read, or
-	 * carries any OTHER accessor pair, whose access `final` does not reproduce.
+	 * The declaration head just past the field NAME, read off the grammar's tokens: `end` is where the type
+	 * annotation (or the `=`) begins, and `dropped` the span of a `(default, null)` property head to delete — null for
+	 * a plain `var`. Returns null when the token after `var` is not the name, or the head carries any OTHER accessor
+	 * pair, whose access `final` does not reproduce; a comment inside the head is a region token, so it refuses too.
 	 */
-	private static function declHeadAfterName(source: String, declSpan: Span): Null<{ dropped: Null<Span>, end: Int }> {
-		final limit: Int = declSpan.to;
-		var i: Int = declSpan.from + 'var'.length;
-		while (i < limit && SourceText.isSpace(source.fastCodeAt(i))) i++;
-		final nameStart: Int = i;
-		while (i < limit && source.fastCodeAt(i).isIdentChar()) i++;
-		if (i == nameStart) return null;
-		final nameEnd: Int = i;
-		while (i < limit && SourceText.isSpace(source.fastCodeAt(i))) i++;
-		if (i >= limit || source.fastCodeAt(i) != '('.code) return { dropped: null, end: nameEnd };
-		final close: Int = source.indexOf(')', i);
-		if (close < 0 || close >= limit) return null;
-		final accessors: Array<String> = source.substring(i + 1, close).split(',').map(StringTools.trim);
-		return accessors.length != 2 || accessors[0] != 'default' || accessors[1] != 'null'
-			? null
-			: { dropped: new Span(nameEnd, close + 1), end: close + 1 };
+	private static function declHeadAfterName(
+		plugin: GrammarPlugin, source: String, declSpan: Span, name: String
+	): Null<{ dropped: Null<Span>, end: Int }> {
+		final spans: Array<TokenSpan> = plugin.tokenSpans(source, declSpan.from, declSpan.to);
+		if (spans.length < 2 || !TokenSpans.wordOffsets(spans, source, name).contains(spans[1].from)) return null;
+		final nameEnd: Int = spans[1].to;
+		final texts: Array<String> = TokenSpans.texts(source, spans);
+		if (texts.length < 3 || texts[2] != '(') return { dropped: null, end: nameEnd };
+		final width: Int = DROPPED_ACCESSOR_HEAD.length;
+		if (texts.length < 2 + width) return null;
+		for (k => text in DROPPED_ACCESSOR_HEAD) if (texts[2 + k] != text) return null;
+		final close: Int = spans[1 + width].to;
+		return { dropped: new Span(nameEnd, close), end: close };
 	}
 
 	/**
@@ -562,7 +562,7 @@ final class CtorFieldFold {
 		if (name == null || fieldSpan == null) return null;
 		if (fieldSpan.from != declSpan.from) return null;
 		if (MemberKinds.staticMemberFroms(loc.container, shape).contains(fieldSpan.from)) return null;
-		final head: Null<{ dropped: Null<Span>, end: Int }> = declHeadAfterName(source, fieldSpan);
+		final head: Null<{ dropped: Null<Span>, end: Int }> = declHeadAfterName(plugin, source, fieldSpan, name);
 		final init: Null<QueryNode> = declInitializer(field, shape);
 		final initSpan: Null<Span> = init?.span;
 		if (head == null || init == null || initSpan == null) return null;

@@ -17106,6 +17106,21 @@
 			"find": "!textOf(text, spans[k - 1]).endsWith(ACCESS)",
 			"replace": "textOf(text, spans[k - 1]) != ACCESS",
 			"note": "only a plain . reads as an access, so b?.walk() reads as a bare self spelling and a foreign member's replace is rewritten unnamed"
+		},
+		{
+			"name": "M-PATH-OFFSETS-ANY-NEIGHBOUR",
+			"type": "anyparse.query.TokenSpans",
+			"method": "touchesSeparator",
+			"force": "false",
+			"note": "a separator touching the run no longer refuses it, so the head or the tail of a longer dotted path reads as the path"
+		},
+		{
+			"name": "M-PATH-OFFSETS-GAPS",
+			"type": "anyparse.query.TokenSpans",
+			"method": "spellsRun",
+			"find": "if (k > 0 && span.from != spans[start + k - 1].to) return false;",
+			"replace": "",
+			"note": "the run's tokens need not touch, so a path spelled with spaces between its tokens reads as the path and its span is wrong"
 		}
 	]
 }

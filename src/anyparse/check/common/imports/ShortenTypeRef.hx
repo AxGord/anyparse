@@ -17,12 +17,11 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TokenSpans;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.query.ValueDoors;
-
-using anyparse.util.Strings;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -83,6 +82,7 @@ private typedef RuleOptions = { var importMinUses: Int; var valuePositions: Bool
 private typedef ScanContext = {
 
 	var source: String;
+	var plugin: GrammarPlugin;
 	var shape: RefShape;
 	var typeKinds: Array<String>;
 	var metaKinds: Array<String>;
@@ -459,11 +459,6 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		return importPath == null ? null : byPath[importPath];
 	}
 
-	/** Whether `c` can sit INSIDE a dotted type path — an identifier character or the separator itself. */
-	private static inline function isPathChar(c: Int): Bool {
-		return c == '.'.code || c.isIdentChar();
-	}
-
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */
 	private static inline function spanKey(span: Span): String {
 		return '${span.from}:${span.to}';
@@ -551,6 +546,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		final lexical: Array<LexRegion> = plugin.lexicalRegions(source);
 		final context: ScanContext = {
 			source: source,
+			plugin: plugin,
 			shape: shape,
 			typeKinds: plugin.typeRefShape().typeRefKinds,
 			metaKinds: plugin.metaShape().metaKinds,
@@ -835,30 +831,19 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	}
 
 	/**
-	 * The offset of `token` inside `source[from...to)` as a whole PATH token in CODE — neither
-	 * neighbour an identifier character or a `.`, so the tail of a longer dotted path never matches,
-	 * and never inside a comment — or -1 when it does not occur.
+	 * The offset of `token` inside `source[from...to)` as a whole PATH run of the grammar's tokens — no `.`
+	 * touching either end, so the tail of a longer dotted path never matches — or -1 when it does not occur.
 	 *
-	 * The comment mask is the whole point. The only caller is the `new pkg.T(...)` shape, whose node
-	 * span opens on the `new` keyword, and the only thing that can sit between that keyword and the
-	 * path is trivia — so a BLOCK COMMENT naming the same path is a first-match trap: the rewrite then
-	 * lands in the COMMENT and leaves the real path qualified. That output COMPILES, so the `RiskyFix`
-	 * verifier confirms it rather than reverting, and the next fixpoint pass shortens the real path
-	 * with the mangled comment left behind.
+	 * A comment is one region token, so it never holds a run, and that is the whole point. The only caller is the
+	 * `new pkg.T(...)` shape, whose node span opens on the `new` keyword, and the only thing that can sit between that
+	 * keyword and the path is trivia — so a BLOCK COMMENT naming the same path is a first-match trap: the rewrite then
+	 * lands in the COMMENT and leaves the real path qualified. That output COMPILES, so the `RiskyFix` verifier confirms
+	 * it rather than reverting, and the next fixpoint pass shortens the real path with the mangled comment left behind.
 	 */
 	private static function tokenOffset(context: ScanContext, token: String, from: Int, to: Int): Int {
 		final source: String = context.source;
-		var i: Int = from;
-		while (i + token.length <= to) {
-			final at: Int = source.indexOf(token, i);
-			if (at < 0 || at + token.length > to) return -1;
-			final after: Int = at + token.length;
-			final boundedLeft: Bool = at == 0 || !isPathChar(source.fastCodeAt(at - 1));
-			final boundedRight: Bool = after >= source.length || !isPathChar(source.fastCodeAt(after));
-			if (boundedLeft && boundedRight && !OccurrenceScan.offsetWithinAny(at, context.comments)) return at;
-			i = at + 1;
-		}
-		return -1;
+		final found: Array<Int> = TokenSpans.pathOffsets(context.plugin.tokenSpans(source, from, to), source, token, '.');
+		return found.length == 0 ? -1 : found[0];
 	}
 
 }
