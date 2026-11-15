@@ -1,6 +1,8 @@
 package anyparse.check.common.control;
 
 import anyparse.check.scan.CasePatternScan;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 
@@ -96,7 +98,7 @@ final class RedundantCaseBody extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, CasePatternScan.seamsOf(plugin), (entry, parsed, resolved, violations) -> {
-			for (candidate in collect(resolved, parsed, entry.source)) violations.push({
+			for (candidate in collect(resolved, parsed, entry.source, plugin)) violations.push({
 				file: entry.file,
 				span: candidate.span,
 				rule: RULE_ID,
@@ -123,7 +125,7 @@ final class RedundantCaseBody extends RuleBase {
 		RunScan.assertOneFile(violations, RULE_ID);
 		return RunScan.edits(plugin, source, parsed -> {
 			final byKey: Map<String, Candidate> = [];
-			for (candidate in collect(resolved, parsed, source)) byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
+			for (candidate in collect(resolved, parsed, source, plugin)) byKey['${candidate.span.from}:${candidate.span.to}'] = candidate;
 
 			final edits: Array<{ span: Span, text: String }> = [];
 			RunScan.eachMatched(violations, byKey, (candidate, _) -> edits.push({ span: candidate.editSpan, text: candidate.editText }));
@@ -132,24 +134,28 @@ final class RedundantCaseBody extends RuleBase {
 	}
 
 	/** Every foldable adjacent pair in `tree`, in document order. */
-	private static function collect(seams: CaseSeams, tree: QueryNode, source: String): Array<Candidate> {
+	private static function collect(seams: CaseSeams, tree: QueryNode, source: String, plugin: GrammarPlugin): Array<Candidate> {
 		final out: Array<Candidate> = [];
-		walk(seams, tree, source, out);
+		walk(seams, tree, source, ElementSpan.lazyRegions(source, plugin), out);
 		return out;
 	}
 
 	/** Walk the whole tree so a nested switch is reached too, never descending into a reification subtree. */
-	private static function walk(seams: CaseSeams, node: QueryNode, source: String, out: Array<Candidate>): Void {
+	private static function walk(
+		seams: CaseSeams, node: QueryNode, source: String, regions: () -> Array<LexRegion>, out: Array<Candidate>
+	): Void {
 		if (seams.opaqueKinds.contains(node.kind)) return;
 		if (seams.switchKinds.contains(node.kind)) for (at in 1...node.children.length - 1) {
-			final candidate: Null<Candidate> = candidateFor(seams, node, at, source);
+			final candidate: Null<Candidate> = candidateFor(seams, node, at, source, regions);
 			if (candidate != null) out.push(candidate);
 		}
-		for (child in node.children) walk(seams, child, source, out);
+		for (child in node.children) walk(seams, child, source, regions, out);
 	}
 
 	/** The fold for the pair starting at `switchNode`'s arm `at`, or null when any gate refuses it. */
-	private static function candidateFor(seams: CaseSeams, switchNode: QueryNode, at: Int, source: String): Null<Candidate> {
+	private static function candidateFor(
+		seams: CaseSeams, switchNode: QueryNode, at: Int, source: String, regions: () -> Array<LexRegion>
+	): Null<Candidate> {
 		final first: QueryNode = switchNode.children[at];
 		final next: QueryNode = switchNode.children[at + 1];
 		if (first.kind != seams.caseBranchKind) return null;
@@ -167,9 +173,9 @@ final class RedundantCaseBody extends RuleBase {
 		return if (firstSpan == null)
 			null
 		else if (CasePatternScan.isCatchAll(seams, next))
-			subsumedCandidate(switchNode, at, next, source, firstSpan)
+			subsumedCandidate(switchNode, at, next, source, regions, firstSpan)
 		else
-			alternativeCandidate(seams, next, source, firstSpan, firstRun);
+			alternativeCandidate(seams, next, regions, firstSpan, firstRun);
 	}
 
 	/**
@@ -181,13 +187,13 @@ final class RedundantCaseBody extends RuleBase {
 	 * comment marker in that window refuses the candidate.
 	 */
 	private static function subsumedCandidate(
-		switchNode: QueryNode, at: Int, next: QueryNode, source: String, firstSpan: Span
+		switchNode: QueryNode, at: Int, next: QueryNode, source: String, regions: () -> Array<LexRegion>, firstSpan: Span
 	): Null<Candidate> {
 		final prev: Null<Span> = switchNode.children[at - 1].span;
 		final nextSpan: Null<Span> = next.span;
 		return if (prev == null || nextSpan == null)
 			null
-		else if (CheckScan.hasCommentMarker(source, prev.to, nextSpan.from))
+		else if (LexicalRegions.commentIntersects(prev.to, nextSpan.from, regions()))
 			null
 		else
 			{
@@ -204,7 +210,7 @@ final class RedundantCaseBody extends RuleBase {
 	 * arm must itself be binder-free and unguarded, and a comment in that window refuses the merge.
 	 */
 	private static function alternativeCandidate(
-		seams: CaseSeams, next: QueryNode, source: String, firstSpan: Span, firstRun: Array<QueryNode>
+		seams: CaseSeams, next: QueryNode, regions: () -> Array<LexRegion>, firstSpan: Span, firstRun: Array<QueryNode>
 	): Null<Candidate> {
 		final nextRun: Array<QueryNode> = CasePatternScan.patternRun(seams, next);
 		if (nextRun.length == 0 || CasePatternScan.guardOf(seams, next, nextRun.length) != null) return null;
@@ -214,7 +220,7 @@ final class RedundantCaseBody extends RuleBase {
 		final firstOfNext: Null<Span> = nextRun[0].span;
 		return if (lastPattern == null || firstOfNext == null)
 			null
-		else if (CheckScan.hasCommentMarker(source, lastPattern.to, firstOfNext.from))
+		else if (LexicalRegions.commentIntersects(lastPattern.to, firstOfNext.from, regions()))
 			null
 		else
 			{

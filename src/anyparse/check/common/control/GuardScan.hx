@@ -5,6 +5,7 @@ import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /** The trailing `if` a guard rewrite inverts: the statement, its condition and its braced then-branch. */
@@ -59,13 +60,13 @@ final class GuardScan {
 	 * Whether a comment sits in the `if (` or `) {` glue of `g`, which the rewrite drops (a comment in the condition or
 	 * the then-branch rides along); true when a span is unknown, so an unplaceable site is refused.
 	 */
-	public static function headerHasComment(source: String, g: GuardedIf): Bool {
+	public static function headerHasComment(g: GuardedIf, regions: Array<LexRegion>): Bool {
 		final ifSpan: Null<Span> = g.ifNode.span;
 		final condSpan: Null<Span> = g.cond.span;
 		final thenSpan: Null<Span> = g.thenBlock.span;
 		if (ifSpan == null || condSpan == null || thenSpan == null) return true;
-		final headerGap: Bool = CheckScan.hasCommentMarker(source, ifSpan.from, condSpan.from);
-		return headerGap || CheckScan.hasCommentMarker(source, condSpan.to, thenSpan.from);
+		final headerGap: Bool = LexicalRegions.commentIntersects(ifSpan.from, condSpan.from, regions);
+		return headerGap || LexicalRegions.commentIntersects(condSpan.to, thenSpan.from, regions);
 	}
 
 	/**

@@ -8,6 +8,8 @@ import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
@@ -126,7 +128,7 @@ final class GuardContinue extends RuleBase {
 			// The module root is shielded, for the reason `loop-guard` seeds the same flag true
 			// there: nothing follows a top-level declaration but another one.
 			walk(
-				tree, tree, violations, entry.file, entry.source, seams, true,
+				tree, tree, violations, entry.file, entry.source, ElementSpan.lazyRegions(entry.source, plugin), seams, true,
 				CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
 			);
 		});
@@ -138,7 +140,7 @@ final class GuardContinue extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
-			indexCandidates(tree, tree, source, seams, byIf, true);
+			indexCandidates(tree, tree, source, ElementSpan.lazyRegions(source, plugin), seams, byIf, true);
 			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, seams, types));
 		});
 	}
@@ -225,12 +227,12 @@ final class GuardContinue extends RuleBase {
 
 	/** Walk `node`, flagging each loop whose body ends in a de-nestable trailing `if`. */
 	private static function walk(
-		node: QueryNode, root: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, shielded: Bool,
-		?types: (QueryNode) -> Null<String>
+		node: QueryNode, root: QueryNode, out: Array<Violation>, file: String, source: String, regions: () -> Array<LexRegion>, s: Seams,
+		shielded: Bool, ?types: (QueryNode) -> Null<String>
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (isLoop(node, s)) {
-			final m: Null<Candidate> = match(node, root, source, s, shielded, types);
+			final m: Null<Candidate> = match(node, root, source, regions, s, shielded, types);
 			if (m != null)
 				GuardScan.report(
 					out, file, source, m, s.support, types, 'guard-continue',
@@ -238,12 +240,13 @@ final class GuardContinue extends RuleBase {
 				);
 		}
 		for (i => c in node.children)
-			walk(c, root, out, file, source, s, IfExpressionChain.childShielded(node, i, s.shield, shielded), types);
+			walk(c, root, out, file, source, regions, s, IfExpressionChain.childShielded(node, i, s.shield, shielded), types);
 	}
 
 	/** Index every de-nestable loop's candidate by its `if`'s `from:to` span key (for `fix` to re-find it). */
 	private static function indexCandidates(
-		node: QueryNode, root: QueryNode, source: String, s: Seams, out: Map<String, Candidate>, shielded: Bool
+		node: QueryNode, root: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, out: Map<String, Candidate>,
+		shielded: Bool
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (isLoop(node, s)) {
@@ -253,11 +256,11 @@ final class GuardContinue extends RuleBase {
 			// reported, and `fix` would then skip that edit in silence. Asked type-blind, the deferral
 			// can only ever answer "not claimed" here, so this map stays the SUPERSET of what `run`
 			// reported that `fix` has always relied on.
-			final m: Null<Candidate> = match(node, root, source, s, shielded);
+			final m: Null<Candidate> = match(node, root, source, regions, s, shielded);
 			if (m != null) GuardScan.index(out, m);
 		}
 		for (i => c in node.children)
-			indexCandidates(c, root, source, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
+			indexCandidates(c, root, source, regions, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded));
 	}
 
 	/**
@@ -268,7 +271,8 @@ final class GuardContinue extends RuleBase {
 	 * then-branch, its condition and the tail; else null.
 	 */
 	private static function match(
-		loop: QueryNode, root: QueryNode, source: String, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
+		loop: QueryNode, root: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, shielded: Bool,
+		?types: (QueryNode) -> Null<String>
 	): Null<Candidate> {
 		final body: Null<QueryNode> = LoopScan.loopBody(loop, s.doWhileKinds);
 		if (body == null || !s.blockKinds.contains(body.kind)) return null;
@@ -295,8 +299,8 @@ final class GuardContinue extends RuleBase {
 		if (loopGuardClaims(body, source, s, shielded, types)) return null;
 		final g: Null<GuardedIf> = GuardScan.guardedIf(stmts[ifIndex], s.ifKinds, s.blockKinds, 1);
 		if (g == null) return null;
-		if (tail.length != 0 && !tailHoistSafe(loop, g.ifNode, g.thenBlock, tail, source, s)) return null;
-		if (GuardScan.headerHasComment(source, g)) return null;
+		if (tail.length != 0 && !tailHoistSafe(loop, g.ifNode, g.thenBlock, tail, regions, s)) return null;
+		if (GuardScan.headerHasComment(g, regions())) return null;
 		final renames: Null<Array<LocalRename>> = collisionRenames(loop, root, body, g.ifNode, g.thenBlock, source, s);
 		return renames == null ? null : {
 			ifNode: g.ifNode,
@@ -335,7 +339,7 @@ final class GuardContinue extends RuleBase {
 	 * comment sits in the dropped gaps between the `if` and the tail statements.
 	 */
 	private static function tailHoistSafe(
-		loop: QueryNode, ifNode: QueryNode, thenBlock: QueryNode, tail: Array<QueryNode>, source: String, s: Seams
+		loop: QueryNode, ifNode: QueryNode, thenBlock: QueryNode, tail: Array<QueryNode>, regions: () -> Array<LexRegion>, s: Seams
 	): Bool {
 		final iter: Null<String> = loop.name;
 		for (t in tail) {
@@ -348,7 +352,7 @@ final class GuardContinue extends RuleBase {
 		var prevTo: Int = ifSpan.to;
 		for (t in tail) {
 			final ts: Null<Span> = t.span;
-			if (ts == null || CheckScan.hasCommentMarker(source, prevTo, ts.from)) return false;
+			if (ts == null || LexicalRegions.commentIntersects(prevTo, ts.from, regions())) return false;
 			prevTo = ts.to;
 		}
 		return true;

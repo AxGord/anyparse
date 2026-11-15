@@ -2479,6 +2479,38 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "US-LITERAL-SUBJECT",
+			"note": "an empty catch-all statement switch whose literal subject spells `//` is deleted like its plain twin; the one with a real comment is refused",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"unnecessary-switch",
+				"--no-oracle",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function f():Void {\n\t\tSys.println(\"0\");\n\t\tswitch ('http://x') {\n\t\t\tcase _:\n\t\t}\n\t\tSys.println(\"1\");\n\t}\n\n\tstatic function g():Void {\n\t\tSys.println(\"0\");\n\t\tswitch ('a') {\n\t\t\tcase _:\n\t\t}\n\t\tSys.println(\"1\");\n\t}\n\n\tstatic function h():Void {\n\t\tSys.println(\"0\");\n\t\tswitch (1) { // c\n\t\t\tcase _:\n\t\t}\n\t\tSys.println(\"1\");\n\t}\n\n\tstatic function main() {\n\t\tf();\n\t\tg();\n\t\th();\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5ab8c3e73b25f618",
+				"files": "e393eb33e9128d13",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

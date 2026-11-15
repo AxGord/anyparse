@@ -1,7 +1,9 @@
 package anyparse.check.common.control;
 
 import anyparse.check.scan.CasePatternScan;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
@@ -186,7 +188,8 @@ final class EmptyCaseArm extends RuleBase {
 			root: tree,
 			declaredTypes: scan.provider.declaredTypes(source),
 			index: index,
-			file: file
+			file: file,
+			regions: ElementSpan.lazyRegions(source, plugin)
 		};
 	}
 
@@ -232,7 +235,7 @@ final class EmptyCaseArm extends RuleBase {
 		// arms share a line there is no such newline and the wider bound stands.
 		final lineBreak: Int = source.indexOf('\n', prevSpan.to);
 		final scanFrom: Int = lineBreak < 0 || lineBreak > armSpan.from ? prevSpan.to : lineBreak;
-		return if (CheckScan.hasCommentMarker(source, scanFrom, switchSpan.to))
+		return if (LexicalRegions.commentIntersects(scanFrom, switchSpan.to, ctx.regions()))
 			null
 		else if (subjectOpen(ctx, kids[0]))
 			armSpan
@@ -349,4 +352,5 @@ private typedef Ctx = {
 	final declaredTypes: Map<Int, String>;
 	final index: SymbolIndex;
 	final file: String;
+	final regions: () -> Array<LexRegion>;
 };

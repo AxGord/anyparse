@@ -36,8 +36,8 @@
 			"name": "M-TAILMERGE-FALL-KEPT",
 			"type": "anyparse.check.common.control.TailMerge",
 			"method": "visit",
-			"find": "for (c in node.children) visit(c, EMPTY_FALL, source, directives, seams, out);",
-			"replace": "for (c in node.children) visit(c, fall, source, directives, seams, out);",
+			"find": "for (c in node.children) visit(c, EMPTY_FALL, source, directives, regions, seams, out);",
+			"replace": "for (c in node.children) visit(c, fall, source, directives, regions, seams, out);",
 			"note": "the fall-through run is handed to EVERY node's children instead of being reset, so a loop body, a switch arm, a catch body and a lambda all look like they complete into the run after the construct"
 		},
 		{
@@ -1256,6 +1256,54 @@
 			"find": "flow.blockKinds().copy()",
 			"replace": "flow.blockKinds()",
 			"note": "the filler container kinds alias the grammar's shared block-kind array and the object literal kind is pushed into it, so every other rule reads an object literal as a block"
+		},
+		{
+			"name": "M-GUARD-RETURN-TAIL-LINE-STRING-BLIND",
+			"type": "anyparse.check.common.control.GuardReturn",
+			"method": "spanCommentBlocked",
+			"find": "return LexicalRegions.commentIntersects(endSpan.to, lineEnd == -1 ? source.length : lineEnd, regions);",
+			"replace": "return CheckScan.hasCommentMarker(source, endSpan.to, lineEnd == -1 ? source.length : lineEnd);",
+			"note": "the rest of the tail return's line is scanned as raw text, so a `//` spelled inside a string literal there reads as a comment and refuses the guard"
+		},
+		{
+			"name": "M-EMPTY-CASE-ARM-STRING-BLIND",
+			"type": "anyparse.check.common.control.EmptyCaseArm",
+			"method": "candidateFor",
+			"find": "LexicalRegions.commentIntersects(scanFrom, switchSpan.to, ctx.regions())",
+			"replace": "CheckScan.hasCommentMarker(source, scanFrom, switchSpan.to)",
+			"note": "the deleted arm is scanned as raw text, so a `//` inside its string pattern reads as a comment and hides the finding"
+		},
+		{
+			"name": "M-REDUNDANT-CASE-ALTERNATIVE-STRING-BLIND",
+			"type": "anyparse.check.common.control.RedundantCaseBody",
+			"method": "alternativeCandidate",
+			"find": "LexicalRegions.commentIntersects(lastPattern.to, firstOfNext.from, regions())",
+			"replace": "Lambda.exists(regions(), r -> r.from < firstOfNext.from && r.to > lastPattern.to)",
+			"note": "every lexical region between the two pattern runs refuses the merge, string literals included, so a `//` in a string of the repeated body hides it"
+		},
+		{
+			"name": "M-UNNECESSARY-SWITCH-HEAD-STRING-BLIND",
+			"type": "anyparse.check.common.control.UnnecessarySwitch",
+			"method": "candidateOf",
+			"find": "LexicalRegions.commentIntersects(at.from, open.from, scanned)",
+			"replace": "CheckScan.hasCommentMarker(source, at.from, open.from)",
+			"note": "the switch head is scanned as raw text, so a `//` inside a string-literal subject reads as a comment and hides the finding"
+		},
+		{
+			"name": "M-REDUNDANT-CASE-SUBSUMED-STRING-BLIND",
+			"type": "anyparse.check.common.control.RedundantCaseBody",
+			"method": "subsumedCandidate",
+			"find": "LexicalRegions.commentIntersects(prev.to, nextSpan.from, regions())",
+			"replace": "CheckScan.hasCommentMarker(source, prev.to, nextSpan.from)",
+			"note": "the deleted arm is scanned as raw text, so a `//` in a string of its body reads as a comment and hides the finding"
+		},
+		{
+			"name": "M-UNNECESSARY-SWITCH-EMPTY-BODY-STRING-BLIND",
+			"type": "anyparse.check.common.control.UnnecessarySwitch",
+			"method": "candidateOf",
+			"find": "LexicalRegions.commentIntersects(at.from, at.to, regions())",
+			"replace": "CheckScan.hasCommentMarker(source, at.from, at.to)",
+			"note": "an empty-body switch is scanned whole as raw text, so a `//` inside its string-literal subject reads as a comment and refuses the deletion"
 		}
 	]
 }

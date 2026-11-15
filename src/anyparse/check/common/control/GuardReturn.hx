@@ -9,6 +9,8 @@ import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
@@ -207,7 +209,7 @@ final class GuardReturn extends RuleBase {
 			final source: String = entry.source;
 			final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, file);
 			walk(
-				tree, source, s, [], null,
+				tree, source, ElementSpan.lazyRegions(source, plugin), s, [], null,
 				m ->
 					GuardScan.report(
 						violations, file, source, m, s.logic, types, 'guard-return',
@@ -223,7 +225,7 @@ final class GuardReturn extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
-			walk(tree, source, seams, [], null, GuardScan.index.bind(byIf));
+			walk(tree, source, ElementSpan.lazyRegions(source, plugin), seams, [], null, GuardScan.index.bind(byIf));
 			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, seams, types));
 		}, CheckScan.parseBranchAwareOrNull);
 	}
@@ -275,19 +277,20 @@ final class GuardReturn extends RuleBase {
 	 * threading and the `childTailFn` chain live here once.
 	 */
 	private static function walk(
-		node: QueryNode, source: String, s: Seams, inherited: Array<String>, tailFn: Null<QueryNode>, sink: (Candidate) -> Void
+		node: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, inherited: Array<String>, tailFn: Null<QueryNode>,
+		sink: (Candidate) -> Void
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final scopeNames: Array<String> = ScopeFrames.ownScopeNames(node, s, inherited);
 		if (s.blockKinds.contains(node.kind)) {
-			final m: Null<Candidate> = match(node, source, s, scopeNames, tailFn);
+			final m: Null<Candidate> = match(node, source, regions, s, scopeNames, tailFn);
 			if (m != null) sink(m);
 		}
 		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, s);
 		for (i in 0...node.children.length) {
 			final c: QueryNode = node.children[i];
 			walk(
-				c, source, s, ScopeFrames.childScopeNames(node, c, s, inherited, scopeNames, ownParams),
+				c, source, regions, s, ScopeFrames.childScopeNames(node, c, s, inherited, scopeNames, ownParams),
 				childTailFn(node, c, i, s, tailFn), sink
 			);
 		}
@@ -336,11 +339,13 @@ final class GuardReturn extends RuleBase {
 	 * Every gate but the terminal one is shared between the arms - see `gatedCandidate`.
 	 */
 	private static function match(
-		block: QueryNode, source: String, s: Seams, scopeNames: Array<String>, tailFn: Null<QueryNode>
+		block: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, scopeNames: Array<String>, tailFn: Null<QueryNode>
 	): Null<Candidate> {
 		final stmts: Array<QueryNode> = block.children;
 		if (stmts.length >= MIN_BLOCK_STATEMENTS && s.returnKinds.contains(stmts[stmts.length - 1].kind)) {
-			final pair: Null<Candidate> = gatedCandidate(block, stmts[stmts.length - 2], stmts[stmts.length - 1], s, source, scopeNames);
+			final pair: Null<Candidate> = gatedCandidate(
+				block, stmts[stmts.length - 2], stmts[stmts.length - 1], s, source, regions, scopeNames
+			);
 			if (pair != null) return pair;
 		}
 		// The implicit-tail arm needs ONE statement, the `if` itself — `MIN_BLOCK_STATEMENTS`
@@ -349,7 +354,7 @@ final class GuardReturn extends RuleBase {
 		// The gates are pure predicates, so the Void proof runs LAST: it walks the whole body
 		// looking for a value `return`, and every tail-position block would pay for that walk
 		// even when its last statement is not an `if` at all.
-		final solo: Null<Candidate> = gatedCandidate(block, stmts[stmts.length - 1], null, s, source, scopeNames);
+		final solo: Null<Candidate> = gatedCandidate(block, stmts[stmts.length - 1], null, s, source, regions, scopeNames);
 		return solo != null && returnsNothing(tailFn, s, source) ? solo : null;
 	}
 
@@ -371,14 +376,16 @@ final class GuardReturn extends RuleBase {
 	 * function.
 	 */
 	private static function gatedCandidate(
-		block: QueryNode, ifNode: QueryNode, tail: Null<QueryNode>, s: Seams, source: String, scopeNames: Array<String>
+		block: QueryNode, ifNode: QueryNode, tail: Null<QueryNode>, s: Seams, source: String, regions: () -> Array<LexRegion>,
+		scopeNames: Array<String>
 	): Null<Candidate> {
 		final g: Null<GuardedIf> = GuardScan.guardedIf(ifNode, s.ifKinds, s.blockKinds, MIN_THEN_STATEMENTS);
 		if (g == null) return null;
 		final thenBlock: QueryNode = g.thenBlock;
 		if (tail != null && !s.flow.isTerminal(thenBlock.children[thenBlock.children.length - 1])) return null;
 		if (hasConditionalRegion(ifNode, s.shape) || (tail != null && hasConditionalRegion(tail, s.shape))) return null;
-		final blocked: Bool = spanCommentBlocked(source, g, tail ?? ifNode) || redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
+		final blocked: Bool = spanCommentBlocked(source, regions(), g, tail ?? ifNode)
+			|| redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
 		return blocked ? null : {
 			ifNode: ifNode,
 			thenBlock: thenBlock,
@@ -438,20 +445,20 @@ final class GuardReturn extends RuleBase {
 	 * closing brace, a comment that would otherwise end up documenting the last de-nested
 	 * statement.
 	 */
-	private static function spanCommentBlocked(source: String, g: GuardedIf, endNode: QueryNode): Bool {
+	private static function spanCommentBlocked(source: String, regions: Array<LexRegion>, g: GuardedIf, endNode: QueryNode): Bool {
 		final ifSpan: Null<Span> = g.ifNode.span;
 		final endSpan: Null<Span> = endNode.span;
-		if (ifSpan == null || endSpan == null || GuardScan.headerHasComment(source, g)) return true;
+		if (ifSpan == null || endSpan == null || GuardScan.headerHasComment(g, regions)) return true;
 		// On the implicit-tail arm `endNode` IS the `if`, so the gap degenerates to an empty
 		// range and both checks fall away — nothing sits between the `if` and itself. Guarded
 		// rather than sliced: `String.substring` SWAPS a reversed pair and would hand back the
 		// whole `if`.
 		if (endSpan.from > ifSpan.to) {
 			final gap: String = source.substring(ifSpan.to, endSpan.from);
-			if (gap.indexOf('#') != -1 || CheckScan.hasCommentMarker(source, ifSpan.to, endSpan.from)) return true;
+			if (gap.indexOf('#') != -1 || LexicalRegions.commentIntersects(ifSpan.to, endSpan.from, regions)) return true;
 		}
 		final lineEnd: Int = source.indexOf('\n', endSpan.to);
-		return CheckScan.hasCommentMarker(source, endSpan.to, lineEnd == -1 ? source.length : lineEnd);
+		return LexicalRegions.commentIntersects(endSpan.to, lineEnd == -1 ? source.length : lineEnd, regions);
 	}
 
 	/**

@@ -5,6 +5,7 @@ import anyparse.check.scan.PurityScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
@@ -156,7 +157,7 @@ final class UnnecessarySwitch extends RuleBase {
 		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index, file);
 		if (purity == null) return [];
 		final out: Array<Candidate> = [];
-		walk(seams, purity, tree, source, false, null, out);
+		walk(seams, purity, tree, source, ElementSpan.lazyRegions(source, plugin), false, null, out);
 		return out;
 	}
 
@@ -166,20 +167,22 @@ final class UnnecessarySwitch extends RuleBase {
 	 * anything other than a single statement needs.
 	 */
 	private static function walk(
-		seams: Seams, purity: PurityCtx, node: QueryNode, source: String, inList: Bool, statementEnd: Null<Int>, out: Array<Candidate>
+		seams: Seams, purity: PurityCtx, node: QueryNode, source: String, regions: () -> Array<LexRegion>, inList: Bool,
+		statementEnd: Null<Int>, out: Array<Candidate>
 	): Void {
 		if (seams.cases.opaqueKinds.contains(node.kind)) return;
 		if (seams.cases.switchKinds.contains(node.kind)) {
-			final candidate: Null<Candidate> = candidateOf(seams, purity, node, source, inList, statementEnd);
+			final candidate: Null<Candidate> = candidateOf(seams, purity, node, source, regions, inList, statementEnd);
 			if (candidate != null) out.push(candidate);
 		}
 		final container: Bool = seams.containerKinds.contains(node.kind);
-		for (child in node.children) walk(seams, purity, child, source, container, container ? child.span?.to : statementEnd, out);
+		for (child in node.children) walk(seams, purity, child, source, regions, container, container ? child.span?.to : statementEnd, out);
 	}
 
 	/** `node` as a degenerate switch plus the edit that unwraps it, or null when any gate refuses. */
 	private static function candidateOf(
-		seams: Seams, purity: PurityCtx, node: QueryNode, source: String, inList: Bool, statementEnd: Null<Int>
+		seams: Seams, purity: PurityCtx, node: QueryNode, source: String, regions: () -> Array<LexRegion>, inList: Bool,
+		statementEnd: Null<Int>
 	): Null<Candidate> {
 		final span: Null<Span> = node.span;
 		if (span == null || node.children.length != SUBJECT_AND_ONE_ARM) return null;
@@ -189,7 +192,7 @@ final class UnnecessarySwitch extends RuleBase {
 		final body: Array<QueryNode> = bodyOf(seams.cases, branch);
 		final statement: Bool = seams.statementKinds.contains(node.kind);
 		if (body.length == 0)
-			return !statement || !inList || CheckScan.hasCommentMarker(source, at.from, at.to)
+			return !statement || !inList || LexicalRegions.commentIntersects(at.from, at.to, regions())
 				? null
 				: { span: at, edit: { span: ElementSpan.lineDeletionSpan(source, at), text: '' } };
 		final first: Null<Span> = body[0].span;
@@ -197,7 +200,9 @@ final class UnnecessarySwitch extends RuleBase {
 		if (first == null || last == null) return null;
 		final open: Span = first;
 		final close: Span = last;
-		if (CheckScan.hasCommentMarker(source, at.from, open.from) || CheckScan.hasCommentMarker(source, close.to, at.to)) return null;
+		final scanned: Array<LexRegion> = regions();
+		if (LexicalRegions.commentIntersects(at.from, open.from, scanned) || LexicalRegions.commentIntersects(close.to, at.to, scanned))
+			return null;
 		if (statement) return { span: at, edit: { span: at, text: '{ ${source.substring(open.from, close.to).trim()} }' } };
 		final valueSpan: Null<Span> = soleValueSpan(seams, body);
 		if (valueSpan == null) return null;
