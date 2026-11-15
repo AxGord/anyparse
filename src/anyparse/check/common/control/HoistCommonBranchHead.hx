@@ -4,7 +4,9 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.HeadScan;
 import anyparse.check.scan.TailScan;
 import anyparse.query.CondDirectives;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -52,7 +54,7 @@ final class HoistCommonBranchHead extends RuleBase {
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			for (c in scan(
 				tree, entry.source, seams, TailScan.directivesOf(entry.source, plugin),
-				HeadScan.lazyContext(plugin, entry.source, tree, symbols, entry.file)
+				HeadScan.lazyContext(plugin, entry.source, tree, symbols, entry.file), ElementSpan.lazyRegions(entry.source, plugin)
 			)) violations.push({
 				file: entry.file,
 				span: c.span,
@@ -76,7 +78,7 @@ final class HoistCommonBranchHead extends RuleBase {
 			return TailScan.flaggedEdits(
 				scan(
 					tree, source, seams, TailScan.directivesOf(source, plugin),
-					HeadScan.lazyContext(plugin, source, tree, symbols, violations[0].file)
+					HeadScan.lazyContext(plugin, source, tree, symbols, violations[0].file), ElementSpan.lazyRegions(source, plugin)
 				),
 				violations
 			);
@@ -92,14 +94,16 @@ final class HoistCommonBranchHead extends RuleBase {
 
 	/** Every common-head candidate in `tree`, in document order — the one walk `run` and `fix` share. */
 	private static function scan(
-		tree: QueryNode, source: String, seams: TailSeams, directives: Array<CondDirective>, context: () -> Null<HeadCtx>
+		tree: QueryNode, source: String, seams: TailSeams, directives: Array<CondDirective>, context: () -> Null<HeadCtx>,
+		regions: () -> Array<LexRegion>
 	): Array<Candidate> {
-		return TailScan.candidatesIn(tree, seams, site -> tryChain(site, source, seams, directives, context));
+		return TailScan.candidatesIn(tree, seams, site -> tryChain(site, source, seams, directives, context, regions));
 	}
 
 	/** The candidate for the chain at `site`, or null when any gate refuses (see the class doc). */
 	private static function tryChain(
-		site: ChainSite, source: String, seams: TailSeams, directives: Array<CondDirective>, context: () -> Null<HeadCtx>
+		site: ChainSite, source: String, seams: TailSeams, directives: Array<CondDirective>, context: () -> Null<HeadCtx>,
+		regions: () -> Array<LexRegion>
 	): Null<Candidate> {
 		final chain: QueryNode = site.head;
 		final branches: Null<Array<QueryNode>> = BranchChain.branchesOf(chain, seams.ifKinds);
@@ -124,7 +128,7 @@ final class HoistCommonBranchHead extends RuleBase {
 			chain: chain,
 			span: new Span(firsts[0].from, lasts[0].to),
 			count: count,
-			edits: fixEdits(branches, lists, firsts, lasts, count, chainSpan, source)
+			edits: fixEdits(branches, lists, firsts, lasts, count, chainSpan, source, regions)
 		};
 	}
 
@@ -135,7 +139,7 @@ final class HoistCommonBranchHead extends RuleBase {
 	 */
 	private static function fixEdits(
 		branches: Array<QueryNode>, lists: Array<Array<QueryNode>>, firsts: Array<Span>, lasts: Array<Span>, count: Int, chainSpan: Span,
-		source: String
+		source: String, regions: () -> Array<LexRegion>
 	): Array<FixEdit> {
 
 		final ends: Null<ElseEnds> = TailScan.elseEnds(branches);
@@ -143,12 +147,12 @@ final class HoistCommonBranchHead extends RuleBase {
 		final edits: Array<FixEdit> = [];
 		for (i in 0...branches.length) {
 			if (lists[i].length == count) {
-				if (i != ends.last || CheckScan.hasCommentMarker(source, ends.beforeElse.to, ends.chainEnd.to)) return [];
+				if (i != ends.last || LexicalRegions.commentIntersects(ends.beforeElse.to, ends.chainEnd.to, regions())) return [];
 				edits.push({ span: new Span(ends.beforeElse.to, ends.chainEnd.to), text: '' });
 				continue;
 			}
 			final next: Null<Span> = lists[i][count].span;
-			if (next == null || CheckScan.hasCommentMarker(source, firsts[i].from, next.from)) return [];
+			if (next == null || LexicalRegions.commentIntersects(firsts[i].from, next.from, regions())) return [];
 			edits.push({ span: new Span(firsts[i].from, next.from), text: '' });
 		}
 		edits.push({ span: new Span(chainSpan.from, chainSpan.from), text: '${source.substring(firsts[0].from, lasts[0].to)}\n' });

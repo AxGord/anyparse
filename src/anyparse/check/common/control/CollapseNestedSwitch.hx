@@ -5,7 +5,9 @@ import anyparse.check.scan.CasePatternScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CasePatterns;
 import anyparse.query.CaseSlotTypes;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;
@@ -234,7 +236,8 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 			source: source,
 			seams: seams,
 			scope: PatternNameScope.of(file, tree, plugin, index),
-			slots: provider == null ? null : new CaseSlotTypes(file, source, tree, plugin, provider, index)
+			slots: provider == null ? null : new CaseSlotTypes(file, source, tree, plugin, provider, index),
+			regions: ElementSpan.lazyRegions(source, plugin)
 		};
 	}
 
@@ -390,9 +393,9 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final binderSpan: Null<Span> = frame.binderNode.span;
 		final innerSpan: Null<Span> = frame.inner.span;
 		if (armSpan == null || plainSpan == null || patSpan == null || binderSpan == null || innerSpan == null) return null;
-		if (CheckScan.hasCommentMarker(source, armSpan.from, plainSpan.from)) return null;
-		if (CheckScan.hasCommentMarker(source, patSpan.from, binderSpan.from)) return null;
-		if (CheckScan.hasCommentMarker(source, binderSpan.to, patSpan.to)) return null;
+		if (LexicalRegions.commentIntersects(armSpan.from, plainSpan.from, scan.regions())) return null;
+		if (LexicalRegions.commentIntersects(patSpan.from, binderSpan.from, scan.regions())) return null;
+		if (LexicalRegions.commentIntersects(binderSpan.to, patSpan.to, scan.regions())) return null;
 		final terminator: String = source.substring(patSpan.to, innerSpan.from).trim();
 		if (terminator != LABEL_TERMINATOR || !innerGapsClean(scan, frame, innerSpan, armSpan)) return null;
 		final spelled: Null<String> = extractorText(scan, frame);
@@ -449,8 +452,8 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final first: Null<Span> = arms[0].span;
 		final last: Null<Span> = arms[arms.length - 1].span;
 		if (first == null || last == null) return false;
-		if (CheckScan.hasCommentMarker(source, innerSpan.from, first.from)) return false;
-		if (CheckScan.hasCommentMarker(source, last.to, innerSpan.to)) return false;
+		if (LexicalRegions.commentIntersects(innerSpan.from, first.from, scan.regions())) return false;
+		if (LexicalRegions.commentIntersects(last.to, innerSpan.to, scan.regions())) return false;
 		if (source.substring(innerSpan.to, armSpan.to).trim() != '') return false;
 		for (i in 1...arms.length) {
 			final prev: Null<Span> = arms[i - 1].span;
@@ -489,7 +492,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		}
 		final separators: Array<String> = [];
 		for (i in 1...spans.length) {
-			if (CheckScan.hasCommentMarker(source, spans[i - 1].to, spans[i].from)) return null;
+			if (LexicalRegions.commentIntersects(spans[i - 1].to, spans[i].from, scan.regions())) return null;
 			separators.push(source.substring(spans[i - 1].to, spans[i].from));
 		}
 		final headStart: Int = spans[spans.length - 1].to;
@@ -498,7 +501,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		var headEnd: Int = headStart;
 		if (guardNode != null) {
 			final guardSpan: Null<Span> = guardNode.span;
-			if (guardSpan == null || CheckScan.hasCommentMarker(source, headStart, guardSpan.from)) return null;
+			if (guardSpan == null || LexicalRegions.commentIntersects(headStart, guardSpan.from, scan.regions())) return null;
 			guard = source.substring(headStart, guardSpan.to);
 			headEnd = guardSpan.to;
 		}
@@ -855,6 +858,9 @@ private typedef Scan = {
 
 	/** The typed proofs of a capture and of inner coverage; null without type info. */
 	final slots: Null<CaseSlotTypes>;
+
+	/** The file's lexical regions, scanned once on the first comment gate a candidate reaches. */
+	final regions: () -> Array<LexRegion>;
 
 };
 

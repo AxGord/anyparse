@@ -8,6 +8,8 @@ import anyparse.check.scan.SwitchChain;
 import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -290,9 +292,10 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final out: Array<Match> = [];
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		walk(
-			tree, source, SourceComments.collectCommentTokens(plugin.lexicalRegions(source)), s, plugin,
-			lazyOf(plugin, file, source, tree, resolveIndex, selection, index), out, null, false
+			tree, source, SourceComments.collectCommentTokens(regions()), s, plugin,
+			lazyOf(plugin, file, source, tree, resolveIndex, selection, regions, index), out, null, false
 		);
 		return out;
 	}
@@ -307,7 +310,7 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 	 */
 	private static function lazyOf(
 		plugin: GrammarPlugin, file: String, source: String, root: QueryNode, resolveIndex: () -> Null<SymbolIndex>,
-		selection: Null<OperatorSelection>, ?index: SymbolIndex
+		selection: Null<OperatorSelection>, regions: () -> Array<LexRegion>, ?index: SymbolIndex
 	): Lazy {
 		var cached: Null<(QueryNode) -> Null<String>> = null;
 		var asked: Bool = false;
@@ -324,7 +327,8 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 		return {
 			switchScope: SwitchChain.scopeOf(plugin, file, source, root, resolveIndex, selection),
 			types: types,
-			boolTernaryClaims: boolTernaryClaims
+			boolTernaryClaims: boolTernaryClaims,
+			regions: regions
 		};
 	}
 
@@ -537,7 +541,7 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 			// The negation engine REBUILDS the condition from its operands, dropping the glue between
 			// them — so a comment anywhere in that span would be lost or welded into a position the
 			// author did not write. Decline, and the rung stays unexpanded.
-			if (condSpan == null || CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to)) break;
+			if (condSpan == null || LexicalRegions.commentIntersects(condSpan.from, condSpan.to, lazy.regions())) break;
 			// The engine's OWN worth gate, the one `guard-return` / `guard-continue` / `loop-guard`
 			// ask before they invert: an ordered comparison it cannot prove NaN- and null-free stays
 			// wrapped `!(a < b)`, which reads worse than the positive form.
@@ -548,7 +552,7 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 			// chain BELOW the minimum converts only BECAUSE of the fold: declining leaves exactly the
 			// nested ternary this rule exists to remove, and the alternative the conjunctive form used
 			// to take was the whole condition DUPLICATED — worse than one wrap on every axis.
-			if (count >= MIN_RUNGS && !NegationScan.negationIsClean(last.cond, source, s.logic, lazy.types())) break;
+			if (count >= MIN_RUNGS && !NegationScan.negationIsClean(last.cond, source, s.logic, lazy.types(), lazy.regions())) break;
 			final inner: Chain = spine(nested, s);
 			chain.folded.push(nested);
 			chain.rungs.pop();
@@ -585,7 +589,7 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 				return null;
 			final condSpan: Span = IfExpressionChain.tokenSpan(rawCond, source, comments);
 			final condText: String = rung.invert
-				? NegationScan.negateConditionText(rung.cond, source, s.negation, s.logic, lazy.types())
+				? NegationScan.negateConditionText(rung.cond, source, s.negation, s.logic, lazy.types(), null, lazy.regions())
 				: source.substring(condSpan.from, condSpan.to);
 			out.push({ condText: condText, condSpan: condSpan, value: IfExpressionChain.tokenSpan(rawValue, source, comments) });
 		}
@@ -650,9 +654,14 @@ private typedef Emitted = { var condText: String; var condSpan: Span; var value:
  * per service.
  */
 private typedef Lazy = {
+
 	var switchScope: ChainScope;
 	var types: () -> Null<(QueryNode) -> Null<String>>;
 	var boolTernaryClaims: () -> Map<String, Bool>;
+
+	/** The file's lexical regions, scanned once for the whole walk. */
+	var regions: () -> Array<LexRegion>;
+
 }
 
 /** A convertible chain: the finding key span, the (trivia-trimmed) replaced span, and the if-chain text. */

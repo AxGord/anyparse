@@ -4,6 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.TailScan;
 import anyparse.query.CondDirectives;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
@@ -58,7 +59,7 @@ final class HoistCommonBranchTail extends RuleBase {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collectWith(files, plugin, TailScan.resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			for (c in scan(
-				tree, entry.source, seams, TailScan.directivesOf(entry.source, plugin), null, plugin.lexicalRegions.bind(entry.source)
+				tree, entry.source, seams, TailScan.directivesOf(entry.source, plugin), null, ElementSpan.lazyRegions(entry.source, plugin)
 			)) violations.push({
 				file: entry.file,
 				span: c.span,
@@ -82,7 +83,8 @@ final class HoistCommonBranchTail extends RuleBase {
 		return RunScan.editsWith(plugin, source, TailScan.resolveSeams(plugin), (tree, seams) -> {
 			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, resolvedIndex, violations[0].file);
 			return TailScan.flaggedEdits(
-				scan(tree, source, seams, TailScan.directivesOf(source, plugin), purity, plugin.lexicalRegions.bind(source)), violations
+				scan(tree, source, seams, TailScan.directivesOf(source, plugin), purity, ElementSpan.lazyRegions(source, plugin)),
+				violations
 			);
 		});
 	}
@@ -135,7 +137,7 @@ final class HoistCommonBranchTail extends RuleBase {
 			count: count,
 			whole: whole,
 			edits: whole
-				? wholeEdits(head, branches, lists, source, seams, purity)
+				? wholeEdits(head, branches, lists, source, seams, purity, lexicalRegions)
 				: fixEdits(branches, lists, firsts, lasts, count, source, seams.terminator, lexicalRegions)
 		};
 	}
@@ -191,8 +193,8 @@ final class HoistCommonBranchTail extends RuleBase {
 			final kept: Int = lists[i].length - count;
 			if (kept == 0) {
 				if (i != ends.last) return [];
-				if (CheckScan.hasCommentMarker(source, ends.beforeElse.to, firsts[i].from)) return [];
-				if (CheckScan.hasCommentMarker(source, lasts[i].to, after)) return [];
+				if (LexicalRegions.commentIntersects(ends.beforeElse.to, firsts[i].from, lexicalRegions())) return [];
+				if (LexicalRegions.commentIntersects(lasts[i].to, after, lexicalRegions())) return [];
 				continue;
 			}
 			final prev: Null<Span> = lists[i][kept - 1].span;
@@ -200,7 +202,7 @@ final class HoistCommonBranchTail extends RuleBase {
 			if (prev == null) return [];
 			if (block == null) return [];
 			if (TailScan.runComments(source, lists[i].slice(kept), prev.to).length != 0) return [];
-			if (CheckScan.hasCommentMarker(source, lasts[i].to, block.to)) return [];
+			if (LexicalRegions.commentIntersects(lasts[i].to, block.to, lexicalRegions())) return [];
 			edits.push({ span: new Span(prev.to, lasts[i].to), text: '' });
 		}
 		final copy: String = '\n${source.substring(firsts[ends.last].from, lasts[ends.last].to)}';
@@ -242,7 +244,7 @@ final class HoistCommonBranchTail extends RuleBase {
 	 */
 	private static function wholeEdits(
 		head: QueryNode, branches: Array<QueryNode>, lists: Array<Array<QueryNode>>, source: String, seams: TailSeams,
-		purity: Null<PurityCtx>
+		purity: Null<PurityCtx>, lexicalRegions: () -> Array<LexRegion>
 	): Array<FixEdit> {
 		if (purity == null) return [];
 		final headSpan: Null<Span> = head.span;
@@ -253,7 +255,7 @@ final class HoistCommonBranchTail extends RuleBase {
 		final last: Null<Span> = body[body.length - 1].span;
 		if (headSpan == null || lastBranch == null || first == null || last == null) return [];
 		if (!BranchChain.linksFrom(head, seams.ifKinds).foreach(link -> PurityScan.isPlainValue(link.children[0], purity))) return [];
-		if (CheckScan.hasCommentMarker(source, headSpan.from, lastBranch.to)) return [];
+		if (LexicalRegions.commentIntersects(headSpan.from, lastBranch.to, lexicalRegions())) return [];
 		final keepBlock: Bool = seams.blockKinds.contains(branches[lastIndex].kind)
 			&& (body.length != 1 || TailScan.localDeclNames(body, seams).length != 0 || TailScan.hasOpaqueDecl(body, seams));
 		final copy: Span = keepBlock ? lastBranch : new Span(first.from, last.to);

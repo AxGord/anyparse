@@ -954,7 +954,7 @@
 			"name": "M-HCBT-WHOLE-COMMENT",
 			"type": "anyparse.check.common.control.HoistCommonBranchTail",
 			"method": "wholeEdits",
-			"find": "CheckScan.hasCommentMarker(source, headSpan.from, lastBranch.to)",
+			"find": "LexicalRegions.commentIntersects(headSpan.from, lastBranch.to, lexicalRegions())",
 			"replace": "false",
 			"note": "a comment inside a chain collapsed to one copy of its body is deleted with the other branches, so prose that explained the chain vanishes"
 		},
@@ -978,7 +978,7 @@
 			"name": "M-HCBH-COMMENT-IN-HEAD",
 			"type": "anyparse.check.common.control.HoistCommonBranchHead",
 			"method": "fixEdits",
-			"find": "next == null || CheckScan.hasCommentMarker(source, firsts[i].from, next.from)",
+			"find": "next == null || LexicalRegions.commentIntersects(firsts[i].from, next.from, regions())",
 			"replace": "next == null",
 			"note": "a comment between the moved statements and the next kept one is deleted with the branch's copy and appears nowhere"
 		},
@@ -986,7 +986,7 @@
 			"name": "M-HCBH-COMMENT-IN-ELSE",
 			"type": "anyparse.check.common.control.HoistCommonBranchHead",
 			"method": "fixEdits",
-			"find": " || CheckScan.hasCommentMarker(source, ends.beforeElse.to, ends.chainEnd.to)",
+			"find": " || LexicalRegions.commentIntersects(ends.beforeElse.to, ends.chainEnd.to, regions())",
 			"replace": "",
 			"note": "an else emptied by the move is dropped with the comment written inside it"
 		},
@@ -1304,6 +1304,78 @@
 			"find": "LexicalRegions.commentIntersects(at.from, at.to, regions())",
 			"replace": "CheckScan.hasCommentMarker(source, at.from, at.to)",
 			"note": "an empty-body switch is scanned whole as raw text, so a `//` inside its string-literal subject reads as a comment and refuses the deletion"
+		},
+		{
+			"name": "M-COLLAPSE-PATTERN-PREFIX-STRING-BLIND",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "emit",
+			"find": "LexicalRegions.commentIntersects(patSpan.from, binderSpan.from, scan.regions())",
+			"replace": "CheckScan.hasCommentMarker(source, patSpan.from, binderSpan.from)",
+			"note": "a string literal holding // before the switched binder reads as a comment and hides the collapse"
+		},
+		{
+			"name": "M-COLLAPSE-PATTERN-SUFFIX-STRING-BLIND",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "emit",
+			"find": "LexicalRegions.commentIntersects(binderSpan.to, patSpan.to, scan.regions())",
+			"replace": "CheckScan.hasCommentMarker(source, binderSpan.to, patSpan.to)",
+			"note": "a string literal holding // after the switched binder reads as a comment and hides the collapse"
+		},
+		{
+			"name": "M-COLLAPSE-INNER-SUBJECT-STRING-BLIND",
+			"type": "anyparse.check.common.control.CollapseNestedSwitch",
+			"method": "innerGapsClean",
+			"find": "LexicalRegions.commentIntersects(innerSpan.from, first.from, scan.regions())",
+			"replace": "CheckScan.hasCommentMarker(source, innerSpan.from, first.from)",
+			"note": "a string literal holding // in the inner switch subject reads as a comment and hides the collapse"
+		},
+		{
+			"name": "M-HCBH-HEAD-STRING-BLIND",
+			"type": "anyparse.check.common.control.HoistCommonBranchHead",
+			"method": "fixEdits",
+			"find": "LexicalRegions.commentIntersects(firsts[i].from, next.from, regions())",
+			"replace": "CheckScan.hasCommentMarker(source, firsts[i].from, next.from)",
+			"note": "a string literal holding // in the moved head reads as a comment and refuses the move"
+		},
+		{
+			"name": "M-HCBH-ELSE-STRING-BLIND",
+			"type": "anyparse.check.common.control.HoistCommonBranchHead",
+			"method": "fixEdits",
+			"find": "LexicalRegions.commentIntersects(ends.beforeElse.to, ends.chainEnd.to, regions())",
+			"replace": "CheckScan.hasCommentMarker(source, ends.beforeElse.to, ends.chainEnd.to)",
+			"note": "a string literal holding // in the emptied else reads as a comment and refuses dropping it"
+		},
+		{
+			"name": "M-HCBT-WHOLE-STRING-BLIND",
+			"type": "anyparse.check.common.control.HoistCommonBranchTail",
+			"method": "wholeEdits",
+			"find": "LexicalRegions.commentIntersects(headSpan.from, lastBranch.to, lexicalRegions())",
+			"replace": "CheckScan.hasCommentMarker(source, headSpan.from, lastBranch.to)",
+			"note": "a string literal holding // in an identical-branch chain reads as a comment and refuses keeping one copy"
+		},
+		{
+			"name": "M-PIEC-INVERT-STRING-BLIND",
+			"type": "anyparse.check.common.control.PreferIfExpressionChain",
+			"method": "invertTail",
+			"find": "LexicalRegions.commentIntersects(condSpan.from, condSpan.to, lazy.regions())",
+			"replace": "CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to)",
+			"note": "a string literal holding // in the inverted condition reads as a comment and declines the inversion"
+		},
+		{
+			"name": "M-PIEC-WORTH-GATE-STRING-BLIND",
+			"type": "anyparse.check.common.control.PreferIfExpressionChain",
+			"method": "invertTail",
+			"find": "lazy.types(), lazy.regions())",
+			"replace": "lazy.types())",
+			"note": "a string literal holding // in the condition makes the worth gate read it as commented and pass, so an unprovable ordered comparison is wrapped in !( ... )"
+		},
+		{
+			"name": "M-PIEC-NEGATE-TEXT-STRING-BLIND",
+			"type": "anyparse.check.common.control.PreferIfExpressionChain",
+			"method": "emit",
+			"find": "lazy.types(), null, lazy.regions())",
+			"replace": "lazy.types())",
+			"note": "a string literal holding // in an inverted rung condition makes the negation fall back to a !( ... ) wrap instead of the De Morgan flip"
 		}
 	]
 }
