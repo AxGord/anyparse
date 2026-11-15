@@ -355,4 +355,69 @@ final class BranchesTest extends Test {
 		Assert.equals('2-4', argv[argv.indexOf('--threads') + 1], 'the base branch asks for its half, not the whole rest');
 	}
 
+	/** A step's lease wait, cpu seconds and threads survive the round trip, and a report an older tool left reads them as absent. */
+	@:pin('control')
+	@:killer('M-BRANCHES-READINGS-ENCODED')
+	public function testAStepKeepsItsReadingsAcrossTheRoundTrip(): Void {
+		final summary: Summary = new Summary();
+		summary.addStep({
+			name: 'a',
+			outcome: Passed,
+			ms: 1,
+			note: '',
+			excerpt: [],
+			wait: 2500,
+			cpu: 1.5,
+			threads: 3
+		});
+		final read: Array<Step> = Branches.decode(Branches.encode('r1', summary.steps(), [])).steps;
+		Assert.equals(2500.0, read[0].wait);
+		Assert.equals(1.5, read[0].cpu);
+		Assert.equals(3, read[0].threads);
+		final older: Array<Step> = Branches.decode(
+			'{"run": "r0", "steps": [{"name": "a", "outcome": "passed", "why": "", "ms": 1, "note": ""}], "readings": []}'
+		)
+			.steps;
+		Assert.isNull(older[0].wait);
+		Assert.isNull(older[0].cpu);
+		Assert.isNull(older[0].threads);
+	}
+
+	/** The wait of a branch is on its first step only, so the table shows it once per branch, not on every row. */
+	@:pin('control')
+	@:killer('M-BRANCHES-WAIT-FIRST-STEP')
+	public function testTheWaitOfABranchIsOnItsFirstStepOnly(): Void {
+		TempDir.with(dir -> {
+			final now: Float = Date.now().getTime();
+			final script: String = 'require("fs").writeFileSync(process.argv[1], process.argv[2])';
+			final report: String = dir.file('a.json');
+			final left: String = Branches.encode('r1', [
+				{
+					name: 'a',
+					outcome: Passed,
+					ms: 0,
+					note: '',
+					excerpt: []
+				},
+				{
+					name: 'b',
+					outcome: Passed,
+					ms: 0,
+					note: '',
+					excerpt: []
+				}
+			], [], now + 2400);
+			final summary: Summary = new Summary();
+			final readings: Map<String, Int> = Branches.run(
+				'r1', [['a', 'b']], ['a', 'b'],
+				names -> Command.of(['node', '-e', script, report, left]), names -> report, summary
+			);
+			Assert.isFalse(readings.keys().hasNext());
+			final steps: Array<Step> = summary.steps();
+			Assert.isTrue((steps[0].wait ?? 0) >= 2000, 'the first step carries the wait');
+			Assert.isNull(steps[1].wait);
+			Assert.equals(1, summary.table().split('waited').length - 1, summary.table());
+		});
+	}
+
 }

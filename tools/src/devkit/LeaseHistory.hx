@@ -2,8 +2,6 @@ package devkit;
 
 import haxe.io.Path;
 import js.Node;
-import sys.FileSystem;
-import sys.io.File;
 
 using StringTools;
 
@@ -36,23 +34,16 @@ final class LeaseHistory {
 	/** What differs between runs of one command and names none of it: a slice or task id, a commit hash. */
 	private static final RUN_SPECIFIC: EReg = ~/\b[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+\b|\b[A-Z]\d+\b|\b(?=[0-9a-f]*\d)[0-9a-f]{7,40}\b/g;
 
-	private final _file: String;
+	private final _log: BoundedLog;
 
 	public function new(file: String) {
-		_file = file;
+		_log = new BoundedLog(file);
 	}
 
 	/** One more finished run of `key` on `threads` threads that took `ms`; a reading that is no time is not recorded. */
 	public function record(key: String, threads: Int, ms: Float): Void {
 		if (key == '' || threads < 1 || !(ms > 0)) return;
-		final directory: String = Path.directory(_file);
-		if (directory != '' && !FileSystem.exists(directory)) FileSystem.createDirectory(directory);
-		js.node.Fs.appendFileSync(_file, '$key\t$threads\t${Math.round(ms)}\n');
-		final lines: Array<String> = linesOf();
-		if (lines.length <= MAX_LINES) return;
-		final temp: String = '$_file.${Node.process.pid}.tmp';
-		File.saveContent(temp, bounded(lines).map(line -> '$line\n').join(''));
-		FileSystem.rename(temp, _file);
+		_log.append('$key\t$threads\t${Math.round(ms)}', MAX_LINES, bounded);
 	}
 
 	/** A run of `key` that began with this process and ends now, on the `threads` its lease granted (none: not recorded). */
@@ -66,7 +57,7 @@ final class LeaseHistory {
 	 */
 	public function seconds(key: String, min: Int, max: Int): Null<Map<Int, Int>> {
 		final runs: Map<Int, Array<Float>> = [];
-		for (line in linesOf()) {
+		for (line in _log.lines()) {
 			final fields: Array<String> = line.split('\t');
 			if (fields.length != 3 || fields[0] != key) continue;
 			final threads: Null<Int> = Std.parseInt(fields[1]);
@@ -85,10 +76,6 @@ final class LeaseHistory {
 		return fitted == null ? null : [
 			for (threads => ms in fitted) threads => Std.int(Math.max(1, Math.ceil(ms / MS_PER_SECOND)))
 		];
-	}
-
-	private function linesOf(): Array<String> {
-		return FileSystem.exists(_file) ? File.getContent(_file).split('\n').filter(line -> line != '') : [];
 	}
 
 	/** The history kept in the cache directory `cache`. */

@@ -76,7 +76,7 @@ final class LeaseHistoryTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-LEASEHISTORY-BOUND')
+	@:killer('M-BOUNDEDLOG-BOUND')
 	public function testTheFileKeepsABoundedTail(): Void {
 		TempDir.with(dir -> {
 			final file: String = dir.file('h.tsv');

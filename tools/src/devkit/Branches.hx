@@ -41,6 +41,7 @@ final class Branches {
 		final runs: Array<Result> = Pool.of(branches.length).map(branches, command);
 		final readings: Map<String, Int> = [];
 		final steps: Map<String, Step> = [];
+		final waits: Map<String, Float> = [];
 		var longest: Float = 0;
 		for (i => names in branches) {
 			final file: String = report(names);
@@ -50,7 +51,7 @@ final class Branches {
 			final began: Null<Float> = left?.started;
 			if (began != null) {
 				final waited: Float = waitedMs(spawned, began);
-				into.wait(names[0], waited);
+				waits[names[0]] = waited;
 				longest = Math.max(longest, waited);
 			}
 			if (left != null) for (name => value in left.readings) readings[name] = value;
@@ -65,7 +66,10 @@ final class Branches {
 		}
 		for (name in order) {
 			final step: Null<Step> = steps[name];
-			if (step != null) into.add(step.name, step.outcome, step.ms, step.note, step.excerpt);
+			if (step == null) continue;
+			final waited: Null<Float> = waits[name];
+			if (waited != null) step.wait = waited;
+			into.addStep(step);
 		}
 		into.phase(longest);
 		return readings;
@@ -121,7 +125,10 @@ final class Branches {
 					why: kind[1],
 					ms: step.ms,
 					note: step.note,
-					excerpt: step.excerpt
+					excerpt: step.excerpt,
+					wait: step.wait,
+					cpu: step.cpu,
+					threads: step.threads
 				};
 			}
 		];
@@ -140,18 +147,7 @@ final class Branches {
 		return {
 			run: parsed.run ?? '',
 			started: parsed.started,
-			steps: parsed.steps.map(row -> {
-				name: row.name,
-				outcome: switch row.outcome {
-					case 'passed': Passed;
-					case 'failed': Failed(row.why);
-					case 'skipped': Skipped(row.why);
-					case _: NotRun(row.why);
-				},
-				ms: row.ms,
-				note: row.note,
-				excerpt: row.excerpt ?? []
-			}),
+			steps: parsed.steps.map(stepOf),
 			readings: [for (reading in parsed.readings) reading.name => reading.value]
 		};
 	}
@@ -232,6 +228,29 @@ final class Branches {
 		if (rest == null) return null;
 		final heavy: Int = branches.count(rows -> demand(rows) == null);
 		return Std.int(Math.max(1, Math.floor(rest / Math.max(1, heavy))));
+	}
+
+	/** The step a report row records; a reading the row has none of stays absent on the step, as on a step nothing measured. */
+	private static function stepOf(row: StepRecord): Step {
+		final step: Step = {
+			name: row.name,
+			outcome: switch row.outcome {
+				case 'passed': Passed;
+				case 'failed': Failed(row.why);
+				case 'skipped': Skipped(row.why);
+				case _: NotRun(row.why);
+			},
+			ms: row.ms,
+			note: row.note,
+			excerpt: row.excerpt ?? []
+		};
+		final wait: Null<Float> = row.wait;
+		final cpu: Null<Float> = row.cpu;
+		final threads: Null<Int> = row.threads;
+		if (wait != null) step.wait = wait;
+		if (cpu != null) step.cpu = cpu;
+		if (threads != null) step.threads = threads;
+		return step;
 	}
 
 }

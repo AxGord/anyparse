@@ -32,9 +32,6 @@ final class Summary {
 
 	private final _steps: Array<Step> = [];
 
-	/** How long the branch that ran each step waited for its pool lease before the step, in milliseconds, by step name. */
-	private final _waits: Map<String, Float> = [];
-
 	/** The longest wait of each fan-out, in milliseconds: fan-outs run one after another, so these add up to at most the wall. */
 	private final _phases: Array<Float> = [];
 
@@ -72,9 +69,14 @@ final class Summary {
 		return _steps.copy();
 	}
 
+	/** Record `step` as it is, with the readings (`wait`, `cpu`, `threads`) a branch measured for it. */
+	public inline function addStep(step: Step): Void {
+		_steps.push(step);
+	}
+
 	/** Record `name` as ended with `outcome` after `ms` milliseconds, with `note` shown beside a pass and `excerpt` under a failure. */
 	public function add(name: String, outcome: Outcome, ms: Float = 0, note: String = '', ?excerpt: Array<String>): Void {
-		_steps.push({
+		addStep({
 			name: name,
 			outcome: outcome,
 			ms: ms,
@@ -91,11 +93,6 @@ final class Summary {
 		final outcome: Outcome = try step() catch (exception: Exception) NotRun(exception.message);
 		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND, _note, _excerpt);
 		return outcome;
-	}
-
-	/** Record that the branch whose first step is `name` waited `ms` milliseconds for its pool lease. */
-	public function wait(name: String, ms: Float): Void {
-		_waits[name] = ms;
 	}
 
 	/** The seconds the branches waited for their leases in all, as the verdict line shows them; empty when none waited. */
@@ -130,7 +127,7 @@ final class Summary {
 					case Passed: step.note == '' ? '' : '  ${step.note}';
 					case Failed(why), NotRun(why), Skipped(why): '  $why';
 				};
-				final waited: Float = _waits[step.name] ?? 0;
+				final waited: Float = step.wait ?? 0;
 				final wait: String = waited >= WAIT_SHOWN_MS ? '  waited ${Math.round(waited / MS_PER_SECOND)}s' : '';
 				'${step.name.rpad(' ', width)}  ${label(step.outcome).rpad(' ', OUTCOME_WIDTH)}  ${seconds(step.ms).lpad(' ', SECONDS_WIDTH)}$why$wait';
 			}
@@ -198,5 +195,17 @@ typedef Step = {
 
 	/** The lines that decide a step that failed or did not run; empty when it set none. */
 	var excerpt: Array<String>;
+
+	/** How long the branch that ran the step waited for its pool lease before it, in milliseconds; set on the branch's first step only. */
+	@:optional
+	var wait: Float;
+
+	/** The cpu seconds the step's process used; absent when nothing measured it. */
+	@:optional
+	var cpu: Float;
+
+	/** The pool threads the step held; absent when nothing measured it. */
+	@:optional
+	var threads: Int;
 
 }

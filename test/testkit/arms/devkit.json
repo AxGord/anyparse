@@ -104,12 +104,12 @@
 			"note": "a branch with a failed step records its time, and a red run that stopped early reads as the branch's speed"
 		},
 		{
-			"name": "M-LEASEHISTORY-BOUND",
-			"type": "devkit.LeaseHistory",
-			"method": "record",
-			"find": "if (lines.length <= MAX_LINES) return;",
+			"name": "M-BOUNDEDLOG-BOUND",
+			"type": "devkit.BoundedLog",
+			"method": "append",
+			"find": "if (held.length <= max) return;",
 			"replace": "return;",
-			"note": "the history file is never compacted and grows with every run"
+			"note": "a bounded line file is never compacted, so the history and the ledger grow with every run"
 		},
 		{
 			"name": "M-LEASEHISTORY-FIT-FILL",
@@ -158,6 +158,62 @@
 			"find": "if (count <= RECENT) kept.push(lines[i]);",
 			"replace": "kept.push(lines[i]);",
 			"note": "a compaction keeps every run of a series, so one command run often fills the file with its own past"
+		},
+		{
+			"name": "M-EXECLEDGER-READINGS-WRITTEN",
+			"type": "devkit.ExecLedger",
+			"method": "encode",
+			"find": "cpu == null ? '' : '${Math.round(cpu * MILLIS) / MILLIS}'",
+			"replace": "''",
+			"note": "a row's cpu seconds are dropped from its line, so the ledger shows a row with no cpu reading whatever its process used"
+		},
+		{
+			"name": "M-EXECLEDGER-BOUND",
+			"type": "devkit.ExecLedger",
+			"method": "record",
+			"find": "lines.slice(-MAX_LINES)",
+			"replace": "lines",
+			"note": "the file never compacts, so a ledger appended to by every run grows without bound"
+		},
+		{
+			"name": "M-EXECLEDGER-NO-WALL-SKIPPED",
+			"type": "devkit.ExecLedger",
+			"method": "decode",
+			"find": "Math.isNaN(wall) ? null :",
+			"replace": "false ? null :",
+			"note": "a line whose wall time is no number reads back as a row with a NaN wall time"
+		},
+		{
+			"name": "M-EXECLEDGER-NO-NAME-RECORDED",
+			"type": "devkit.ExecLedger",
+			"method": "record",
+			"find": "entry.row == '' ||",
+			"replace": "false ||",
+			"note": "a row with no name is appended, and its line names no row on the next read"
+		},
+		{
+			"name": "M-EXECLEDGER-TAB-IN-NAME",
+			"type": "devkit.ExecLedger",
+			"method": "clean",
+			"find": "text.replace('\\t', ' ')",
+			"replace": "text",
+			"note": "a tab in a row's name splits its line into more fields, so every reading after it shifts one field"
+		},
+		{
+			"name": "M-BRANCHES-READINGS-ENCODED",
+			"type": "devkit.Branches",
+			"method": "encode",
+			"find": "cpu: step.cpu,",
+			"replace": "cpu: null,",
+			"note": "a step's cpu seconds never reach its branch's report, so the parent's summary shows none however much a branch measured"
+		},
+		{
+			"name": "M-BRANCHES-WAIT-FIRST-STEP",
+			"type": "devkit.Branches",
+			"method": "run",
+			"find": "waits[names[0]] = waited;",
+			"replace": "for (name in names) waits[name] = waited;",
+			"note": "every row of a waiting branch carries its lease wait, so the table shows the same wait on each of them"
 		}
 	]
 }
