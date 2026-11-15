@@ -1011,6 +1011,30 @@
 			"find": " && opens != Dot",
 			"replace": "",
 			"note": "a dot-led leaf reads as a run opener"
+		},
+		{
+			"name": "M-META-FIT-LATER-LINE-BREAK-UNSEEN",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "sibling.lineEnd >= n ? { add: 0, aborted: true } : null",
+			"replace": "null",
+			"note": "a lone simple metadata measures a declaration header flat past its own later line break, so it leaves the line though the first line fits"
+		},
+		{
+			"name": "M-META-FIT-FILL-WRAP-UNSEEN",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "{ add: DocMeasure.flatTokenWidth(items[0]) + sepWidthBeforeBreak(sep), aborted: true }",
+			"replace": "null",
+			"note": "a lone simple metadata measures a parameter list flat past where it wraps, so it leaves the line though the first line fits"
+		},
+		{
+			"name": "M-META-FIT-LINE-END-WITH-META",
+			"type": "anyparse.core.Renderer",
+			"method": "pushExceedsBranch",
+			"find": "lineEnd: lineAsker ? f.indent + flatTokenWidthOfRestStack(stack) : null",
+			"replace": "lineEnd: lineAsker ? col + pendingSpace + flatWidth + flatTokenWidthOfRestStack(stack) : null",
+			"note": "the later breaks are predicted on the line WITH the metadata glued, so a break only the glue causes keeps the metadata on the line"
 		}
 	]
 }

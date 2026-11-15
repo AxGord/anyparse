@@ -76,10 +76,20 @@ private typedef EmbeddedLineWidths = { final first: Int; final last: Int; final 
  * anything after it, where no column matters to the asker any more.
  */
 private typedef RestSibling = {
+
 	final width: Int;
 	final col: Int;
 	final exactCol: Bool;
 	final groupAsker: Bool;
+
+	/**
+	 * Set only for an asker whose break side is a lone line break (`breaksLineAlone`): the column the rest ends at
+	 * laid flat on the asker's BROKEN side, the line as it stands without the asker. A later break decided on that
+	 * line exists whether or not the asker glues, so only such a break ends the asker's line; one the glue alone
+	 * would cause must not.
+	 */
+	final ?lineEnd: Int;
+
 };
 
 /**
@@ -2482,11 +2492,14 @@ class Renderer {
 					// fits stays glued when the line fits up to the next paren's, or a
 					// crossing argument list's, open delimiter.
 					final flatWidth: Int = DocMeasure.flatTokenWidth(flatDoc);
+					final lineAsker: Bool = breaksLineAlone(breakDoc);
 					final restWidth: Int = flatTokenWidthOfRestStack(stack, {
 						width: width,
 						col: col + pendingSpace + flatWidth,
-						exactCol: opensDelimiterAlone(breakDoc) && rendersAsMeasured(flatDoc, false, col + pendingSpace + flatWidth),
-						groupAsker: false
+						exactCol: (opensDelimiterAlone(breakDoc) || lineAsker)
+						&& rendersAsMeasured(flatDoc, false, col + pendingSpace + flatWidth),
+						groupAsker: false,
+						lineEnd: lineAsker ? f.indent + flatTokenWidthOfRestStack(stack) : null
 					});
 					final fullLineCrosses: Bool = col + effPending + flatWidth + restWidth >= fireAt;
 					// ω-collapse-commit: record the open/glued decision at
@@ -3975,6 +3988,9 @@ class Renderer {
 	 *    still counts a held-back `OptSpace`, which the rest-aware group charges
 	 *    and the plain group and the width probes do not). A group that fits alone
 	 *    may still break on what trails it, and is measured flat.
+	 *  - For an asker whose break is a lone line break (`lineEnd`), a later probe of
+	 *    that shape breaks when the whole flat line reaches its threshold, and a fill
+	 *    on a line past the width wraps after an item, so the line ends at either.
 	 *  - A `Flatten` / `HardFlatten` region renders flat whatever it holds, so
 	 *    nothing in it is a break point: it is measured without these rules.
 	 */
@@ -3993,6 +4009,13 @@ class Renderer {
 				renderCol + DocMeasure.flatTokenWidth(flatDoc) >= n ? broken(breakDoc) : null;
 			case IfFirstLineExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
 				renderCol + flatTokenWidthFirstLine(flatDoc) >= n ? broken(breakDoc) : null;
+			case IfLineExceeds(n, breakDoc, _) if (sibling.lineEnd != null && renderCol >= 0 && breaksLineAlone(breakDoc)):
+				sibling.lineEnd >= n ? { add: 0, aborted: true } : null;
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _),
+				FillBreakAfterWrap(items, sep, _) if (
+					sibling.lineEnd != null && renderCol >= 0 && sibling.lineEnd > sibling.width && items.length > 1
+				):
+				{ add: DocMeasure.flatTokenWidth(items[0]) + sepWidthBeforeBreak(sep), aborted: true };
 			case IfFullLineExceeds(_, breakDoc, _) if (onPath && !sibling.groupAsker):
 				final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 				open.broke && findCollapseProbe(breakDoc) == null ? { add: open.width, aborted: true } : null;
@@ -4105,6 +4128,15 @@ class Renderer {
 	private static function opensDelimiterAlone(breakDoc: Doc): Bool {
 		final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 		return open.broke && open.width == 1 && DocMeasure.firstVisibleTextStartsWith(breakDoc, '('.code);
+	}
+
+	/**
+	 * Whether a probe's break branch is a lone line break: the metadata-run shape, whose break moves everything after it
+	 * to the next line, so the column of its glued side is exact and its line ends where a later such break fires.
+	 */
+	private static function breaksLineAlone(breakDoc: Doc): Bool {
+		final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
+		return open.broke && open.width == 0 && DocMeasure.flatTokenWidth(breakDoc) == 0;
 	}
 
 	/**

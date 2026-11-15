@@ -2791,7 +2791,7 @@
 			"name": "M-META-FIT-ONE-BREAKS",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitAfterLastExpr",
-			"find": "_metaFit == 1 ? _dile(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl()",
+			"find": "_metaFit == 1 ? _dfle(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl()",
 			"replace": "_dhl()",
 			"note": "under fit a lone simple metadata always takes its own line, as under after"
 		},
@@ -2799,7 +2799,7 @@
 			"name": "M-META-FIT-ONE-GLUES",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitAfterLastExpr",
-			"find": "_dile(opt.lineWidth + 1, _dhl(), _dt(' '))",
+			"find": "_dfle(opt.lineWidth + 1, _dhl(), _dt(' '))",
 			"replace": "_dt(' ')",
 			"note": "under fit a lone simple metadata stays on the declaration's line even when that line passes the maximum"
 		},
@@ -2808,7 +2808,7 @@
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitAfterLastExpr",
 			"find": "opt.lineWidth + 1, _dhl(), _dt(' '))",
-			"replace": "opt.lineWidth, _dhl(), _dt(' '))",
+			"replace": "opt.lineWidth - 1, _dhl(), _dt(' '))",
 			"note": "a declaration line of exactly the maximum width counts as too long, so its metadata moves off it"
 		},
 		{

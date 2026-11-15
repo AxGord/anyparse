@@ -79,7 +79,7 @@ final class WriterMetaLineEndLowering {
 
 	/** The break after a run's last element: a lone simple one under `Fit` stays on the line it fits. */
 	public static function fitAfterLastExpr(): Expr {
-		return macro (_metaFit == 1 ? _dile(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl());
+		return macro (_metaFit == 1 ? _dfle(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl());
 	}
 
 	/** Wraps `_docs` from `from` on in one group when the run is a `Fit` row: it stays one line when it fits, else one per line. */
