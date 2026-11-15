@@ -2850,6 +2850,22 @@
 			"find": "return new ImpactGraph(sources, entries, types, sinks);",
 			"replace": "return new ImpactGraph(sources, entries, types);",
 			"note": "a tooling class that reaches a touched module only through a macro, runtime or grammar module is kept, though that code reaches every class and no text of the tooling class names the change"
+		},
+		{
+			"name": "M-GATE-BRANCH-UNMETERED",
+			"type": "dev.SliceGate",
+			"method": "branchCommand",
+			"find": "Branches.metered(",
+			"replace": "((command: Command, report: String) -> command)(",
+			"note": "a branch runs without time(1), so no row of the gate carries cpu"
+		},
+		{
+			"name": "M-GATE-ROW-THREADS-FIRST",
+			"type": "dev.SliceGate",
+			"method": "runBranch",
+			"find": "if (held != null) for",
+			"replace": "if (held != null && name == rows[0]) for",
+			"note": "only the first row of a branch carries its threads, so a ledger reads the later rows as holding none"
 		}
 	]
 }

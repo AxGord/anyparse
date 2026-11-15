@@ -631,6 +631,46 @@ final class SliceGateTest extends Test {
 		});
 	}
 
+	/** A branch runs under time(1) inside its lease prefix, so the cpu it reports is the held window's; only macOS meters. */
+	@:pin('control')
+	@:killer('M-GATE-BRANCH-UNMETERED')
+	public function testABranchRunsUnderTimeInsideItsLease(): Void {
+		final ran: GateRan = gateRun(BASE_REGISTRY);
+		final line: String = ran.leases.split('\n').find(lease -> lease.contains(' suite,corpus -- ')) ?? '';
+		final timed: Int = line.indexOf(' sh /usr/bin/time -l -o ');
+		if (Sys.systemName() == 'Mac') {
+			Assert.isTrue(line.indexOf(' -- sh -c ') < timed && timed < line.indexOf(' node '), 'leases: ${ran.leases}');
+			Assert.isTrue(line.contains('rows/suite.json.time node '), line);
+		} else {
+			Assert.equals(-1, timed, line);
+		}
+	}
+
+	/** Every row of a branch carries the threads the branch held: its lease's, or the share its caller handed it. */
+	@:pin('control')
+	@:killer('M-GATE-ROW-THREADS-FIRST')
+	public function testEveryRowOfABranchCarriesTheThreadsItHeld(): Void {
+		TempDir.with(dir -> {
+			final tree: String = scratchTree(dir, BASE_REGISTRY, GRAPH_HXQ);
+			final logs: String = dir.file('logs');
+			FileSystem.createDirectory(Path.join([logs, 'rows']));
+			File.saveContent(Path.join([tree, 'bin/apq.js']), 'built');
+			File.saveContent(Path.join([tree, 'bin/test.js']), '');
+			function threadsOf(): String
+				return (Branches.reportOf(Path.join([logs, 'rows/artifacts.json']), 'r')?.steps ?? []).map(step -> '${step.threads}')
+					.join(',');
+			final saved: String = Sys.getEnv('WF_THREADS') ?? '';
+			CliFixture.always(() -> Sys.putEnv('WF_THREADS', saved), () -> {
+				Sys.putEnv('WF_THREADS', '3');
+				final branch: Array<String> = [tree, '--rows', 'artifacts,lists', '--logs', logs, '--run', 'r'];
+				Assert.equals(0, SliceGate.main(branch));
+				Assert.equals('3,3', threadsOf(), 'the lease the branch ran under');
+				Assert.equals(0, SliceGate.main(branch.concat(['--threads', '2'])));
+				Assert.equals('2,2', threadsOf(), 'the share its caller handed it');
+			});
+		});
+	}
+
 	/**
 	 * A scratch tree whose base commit holds the arm registry `BASE_REGISTRY` and whose slice commit holds `registry`, with the
 	 * stand-ins the gate's tools need; it answers the baseline record the gate reads.

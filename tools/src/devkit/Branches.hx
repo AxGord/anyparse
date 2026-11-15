@@ -7,6 +7,7 @@ import devkit.Summary;
 import sys.FileSystem;
 import sys.io.File;
 
+using StringTools;
 using Lambda;
 
 /**
@@ -28,6 +29,14 @@ final class Branches {
 	/** The bound of a run id's random part. */
 	private static inline final NONCE_BOUND: Int = 0x7fffffff;
 
+	/** The time(1) whose `-l` writes the resource usage of the whole process tree it waited for. */
+	private static final TIME: String = '/usr/bin/time';
+
+	/** The file `metered` has time(1) write a branch's usage into, beside the branch's report. */
+	public static inline function usageFile(report: String): String {
+		return '$report.time';
+	}
+
 	/**
 	 * Run every branch of `branches` as the process `command` makes of its steps, which leaves its report for the run `id`
 	 * at `report(steps)`; add the steps to `into` in `order` and answer the counts the branches read.
@@ -36,12 +45,15 @@ final class Branches {
 		id: String, branches: Array<Array<String>>, order: Array<String>, command: Array<String> -> Command,
 		report: Array<String> -> String, into: Summary
 	): Map<String, Int> {
-		for (names in branches) if (FileSystem.exists(report(names))) FileSystem.deleteFile(report(names));
+		for (names in branches)
+			for (stale in [report(names), usageFile(report(names))])
+				if (FileSystem.exists(stale)) FileSystem.deleteFile(stale);
 		final spawned: Float = Date.now().getTime();
 		final runs: Array<Result> = Pool.of(branches.length).map(branches, command);
 		final readings: Map<String, Int> = [];
 		final steps: Map<String, Step> = [];
 		final waits: Map<String, Float> = [];
+		final cpus: Map<String, Float> = [];
 		var longest: Float = 0;
 		for (i => names in branches) {
 			final file: String = report(names);
@@ -54,6 +66,8 @@ final class Branches {
 				waits[names[0]] = waited;
 				longest = Math.max(longest, waited);
 			}
+			final used: Null<Float> = cpuOf(file);
+			if (used != null) cpus[names[0]] = used;
 			if (left != null) for (name => value in left.readings) readings[name] = value;
 			final why: String = reasonOf(ran);
 			for (name in names) steps[name] = left?.steps.find(s -> s.name == name) ?? {
@@ -69,6 +83,8 @@ final class Branches {
 			if (step == null) continue;
 			final waited: Null<Float> = waits[name];
 			if (waited != null) step.wait = waited;
+			final used: Null<Float> = cpus[name];
+			if (used != null) step.cpu = used;
 			into.addStep(step);
 		}
 		into.phase(longest);
@@ -230,6 +246,22 @@ final class Branches {
 		return Std.int(Math.max(1, Math.floor(rest / Math.max(1, heavy))));
 	}
 
+	/**
+	 * The branch `command` under time(1), which leaves the cpu its whole process tree used in `usageFile(report)` for `run` to
+	 * put on the branch's first step: the rows of a branch run in one process, so the reading is the branch's, not a row's.
+	 * Applied before a lease prefix, it measures the held window; only macOS's time(1) has `-l`, so elsewhere the command
+	 * runs unmetered and its steps carry no cpu.
+	 */
+	public static function metered(command: Command, report: String): Command {
+		return Sys.systemName() == 'Mac' && FileSystem.exists(TIME) ? command.under([TIME, '-l', '-o', usageFile(report)]) : command;
+	}
+
+	/** The user plus system cpu seconds of a time(1) report; null when it holds none, as a time killed with its branch leaves. */
+	public static function cpuSeconds(text: String): Null<Float> {
+		final reading: EReg = ~/([0-9]+[.,][0-9]+) +user +([0-9]+[.,][0-9]+) +sys/;
+		return reading.match(text) ? seconds(reading.matched(1)) + seconds(reading.matched(2)) : null;
+	}
+
 	/** The step a report row records; a reading the row has none of stays absent on the step, as on a step nothing measured. */
 	private static function stepOf(row: StepRecord): Step {
 		final step: Step = {
@@ -251,6 +283,17 @@ final class Branches {
 		if (cpu != null) step.cpu = cpu;
 		if (threads != null) step.threads = threads;
 		return step;
+	}
+
+	/** The cpu seconds the time(1) of the branch reporting at `report` left; null when it left none. */
+	private static function cpuOf(report: String): Null<Float> {
+		final file: String = usageFile(report);
+		return FileSystem.exists(file) ? cpuSeconds(File.getContent(file)) : null;
+	}
+
+	/** A decimal of time(1)'s report, whose mark may be a comma. */
+	private static function seconds(decimal: String): Float {
+		return Std.parseFloat(decimal.replace(',', '.'));
 	}
 
 }

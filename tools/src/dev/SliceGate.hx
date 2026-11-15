@@ -222,6 +222,8 @@ final class SliceGate {
 		for (name in rows) {
 			File.saveContent(branchProgress(rows), name);
 			gate(name, rowStep(name));
+			final held: Null<Int> = _gate.options.threads;
+			if (held != null) for (step in _gate.summary.steps()) if (step.name == name) step.threads = held;
 			Branches.leave(branchReport(rows), _gate.options.run, _gate.summary, _readings);
 		}
 		if (pooled && demand(rows) == null) {
@@ -314,12 +316,14 @@ final class SliceGate {
 
 	/** The `--rows` process of a branch running `rows`, over the logs' copy `self` of this script, handed `threads`. */
 	private function branchCommand(self: String, threads: Null<Int>): Array<String> -> Command {
-		return rows ->
+		return rows -> Branches.metered(
 			Command.of(['node', self, 'slice-gate'].concat(branchArgs(_gate.options, rows, threads)))
 				.at(_gate.tree)
 				.env('HXQ_BIN', _gate.apq())
 				.timeout(BRANCH_TIMEOUT_MS)
-				.watched(BranchWatch.idleOf(rows), branchProgress(rows), true);
+				.watched(BranchWatch.idleOf(rows), branchProgress(rows), true),
+			branchReport(rows)
+		);
 	}
 
 	/** The file the branch running `rows` rewrites with the name of each row it starts: a branch that stops rewriting it is stalled. */

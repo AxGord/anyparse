@@ -214,6 +214,37 @@
 			"find": "waits[names[0]] = waited;",
 			"replace": "for (name in names) waits[name] = waited;",
 			"note": "every row of a waiting branch carries its lease wait, so the table shows the same wait on each of them"
+		},
+		{
+			"name": "M-BRANCHES-CPU-FIRST-STEP",
+			"type": "devkit.Branches",
+			"method": "run",
+			"find": "if (used != null) cpus[names[0]] = used;",
+			"replace": "if (used != null) for (name in names) cpus[name] = used;",
+			"note": "every row of a metered branch carries the whole branch cpu, so a ledger summing rows counts it once per row"
+		},
+		{
+			"name": "M-BRANCHES-CPU-STALE",
+			"type": "devkit.Branches",
+			"method": "run",
+			"find": "for (stale in [report(names), usageFile(report(names))])",
+			"replace": "for (stale in [report(names)])",
+			"note": "a usage file an earlier run left is read as this branch cpu"
+		},
+		{
+			"name": "M-BRANCHES-METERED-OFF",
+			"type": "devkit.Branches",
+			"method": "metered",
+			"force": "command",
+			"note": "the branch runs without time(1), so no step carries cpu"
+		},
+		{
+			"name": "M-BRANCHES-CPU-COMMA",
+			"type": "devkit.Branches",
+			"method": "seconds",
+			"find": "decimal.replace(',', '.')",
+			"replace": "decimal",
+			"note": "a time(1) report in a comma locale reads 2,99 as 2"
 		}
 	]
 }

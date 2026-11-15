@@ -8,6 +8,7 @@ import devkit.Result;
 import devkit.Summary;
 import devkit.TempDir;
 import haxe.io.Path;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
@@ -418,6 +419,58 @@ final class BranchesTest extends Test {
 			Assert.isNull(steps[1].wait);
 			Assert.equals(1, summary.table().split('waited').length - 1, summary.table());
 		});
+	}
+
+	/**
+	 * A metered branch's cpu is the whole process tree's, on the branch's first step only;
+	 * a branch that left no usage has none, whatever an earlier run left.
+	 */
+	@:pin('control')
+	@:killer('M-BRANCHES-CPU-FIRST-STEP')
+	@:killer('M-BRANCHES-CPU-STALE')
+	@:killer('M-BRANCHES-METERED-OFF')
+	public function testTheCpuOfAMeteredBranchIsOnItsFirstStepOnly(): Void {
+		TempDir.with(dir -> {
+			final report: String = dir.file('a.json');
+			final left: String = Branches.encode('r1', [
+				for (name in ['a', 'b']) {
+					name: name,
+					outcome: Passed,
+					ms: 0,
+					note: '',
+					excerpt: []
+				}
+			], []);
+			final spin: String = 'const used = () => { const u = process.cpuUsage(); return u.user + u.system; }; while (used() '
+				+ '< 400000) {} require("fs").writeFileSync(process.argv[1], process.argv[2])';
+			final run: Command -> Array<Step> = command -> {
+				final summary: Summary = new Summary();
+				Assert.isFalse(Branches.run('r1', [['a', 'b']], ['a', 'b'], names -> command, names -> report, summary).keys().hasNext());
+				summary.steps();
+			};
+			final metered: Array<Step> = run(Branches.metered(Command.of(['node', '-e', spin, report, left]), report));
+			if (Sys.systemName() == 'Mac')
+				Assert.isTrue((metered[0].cpu ?? 0) >= 0.3, 'the child spun 0.4 s of cpu: ${metered[0].cpu}')
+			else
+				Assert.isNull(metered[0].cpu, 'only macOS time(1) meters');
+			Assert.isNull(metered[1].cpu, 'the second row shares the first row\'s process and reading');
+			File.saveContent(Branches.usageFile(report), '        1,00 real         5,00 user         1,00 sys\n');
+			final unmetered: Array<Step> = run(Command.of(['node', '-e', spin, report, left]));
+			Assert.isNull(unmetered[0].cpu, 'an earlier run\'s usage is not this branch\'s');
+		});
+	}
+
+	/**
+	 * time(1) prints its decimals with the locale's mark; cpu is user plus system,
+	 * and an empty report (a time killed with its branch) holds none.
+	 */
+	@:pin('control')
+	@:killer('M-BRANCHES-CPU-COMMA')
+	public function testTheCpuOfATimeReportIsUserPlusSystemInEitherDecimalMark(): Void {
+		final comma: String = '        1,53 real         2,99 user         0,03 sys\n  45629440  maximum resident set size';
+		Assert.floatEquals(3.02, Branches.cpuSeconds(comma) ?? -1);
+		Assert.floatEquals(3.02, Branches.cpuSeconds(comma.replace(',', '.')) ?? -1);
+		Assert.isNull(Branches.cpuSeconds(''));
 	}
 
 }

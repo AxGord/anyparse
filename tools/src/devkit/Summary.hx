@@ -200,11 +200,14 @@ typedef Step = {
 	@:optional
 	var wait: Float;
 
-	/** The cpu seconds the step's process used; absent when nothing measured it. */
+	/**
+	 * The cpu seconds the process tree of the branch that ran the step used (`Branches.metered`); set on the branch's first
+	 * step only, since its rows share one process, and absent when nothing measured it.
+	 */
 	@:optional
 	var cpu: Float;
 
-	/** The pool threads the step held; absent when nothing measured it. */
+	/** The pool threads the branch that ran the step held, on each of its steps; absent when it held no lease. */
 	@:optional
 	var threads: Int;
 
