@@ -37,6 +37,16 @@ final class ShapeVocab {
 	}
 
 	/**
+	 * The ARROW lambdas — every `lambdaKinds` entry but `fnExprKind`, the anonymous `function` literal, whose block body
+	 * returns nothing without `return` and which no arrow rewrite may produce. Empty when `fnExprKind` is unset: no lambda is
+	 * then told apart from that literal, so none may be read as an arrow.
+	 */
+	public static function arrowLambdaKinds(shape: RefShape): Array<String> {
+		final fnExprKind: Null<String> = shape.fnExprKind;
+		return fnExprKind == null ? [] : union([shape.lambdaKinds]).filter(k -> k != fnExprKind);
+	}
+
+	/**
 	 * Every declaration binding a local or a parameter — `localDeclKinds`, `localDeclContinuationKinds` and `paramKinds`,
 	 * each once: a binding only its own function can write, unlike a field any code may change.
 	 */

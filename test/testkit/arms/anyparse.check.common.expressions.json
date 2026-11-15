@@ -462,6 +462,14 @@
 			"find": "|| projectDeclares(callee, typeName, ctx)",
 			"replace": "|| ctx.types.exists(typeName)",
 			"note": "the std arm refuses a name any linted file declares, even one the host cannot see, so the finding depends on which files were handed"
+		},
+		{
+			"name": "M-LBBB-TERNARY-HANDOFF-OFF",
+			"type": "anyparse.check.common.expressions.LambdaBranchingBodyBlock",
+			"method": "walk",
+			"find": "&& !PreferTernaryExpression.claimsArrowBody(plugin, source, node)",
+			"replace": "&& true",
+			"note": "lambda-branching-body-braces stops deferring to prefer-ternary-expression, so a plain-value arrow if body is told to take braces on the span the ternary rewrites"
 		}
 	]
 }

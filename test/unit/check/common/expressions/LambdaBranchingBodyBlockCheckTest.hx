@@ -1,5 +1,6 @@
 package unit.check.common.expressions;
 
+import anyparse.check.common.control.PreferTernaryExpression;
 import anyparse.check.common.expressions.LambdaBranchingBodyBlock;
 import anyparse.check.common.expressions.PreferLambdaExpressionBody;
 import anyparse.query.CanonicalEdit;
@@ -91,6 +92,29 @@ class LambdaBranchingBodyBlockCheckTest extends Test {
 	/** GUARD: a plain expression body is not branching. */
 	public function testExpressionBodyNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tpost(v -> compute(v));\n\t}\n}').length);
+	}
+
+	/**
+	 * A plain-value two-branch `if` body is `prefer-ternary-expression`'s: it becomes a ternary, so no braces are
+	 * advised on that span. A body of calls still is this rule's.
+	 */
+	@:pin('control')
+	@:killer('M-LBBB-TERNARY-HANDOFF-OFF')
+	public function testPlainValueIfBodyLeftToTheTernary(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tfinal v = () -> if (c) 1 else 2;\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tfinal v = () -> if (c) a() else b();\n\t}\n}').length);
+	}
+
+	/**
+	 * A plain-value body whose ternary rebuild would drop a comment is not claimed: `prefer-ternary-expression` refuses it,
+	 * so the braces finding stays and the site is never left with neither.
+	 */
+	@:pin('control')
+	@:killer('M-PTE-CLAIM-COMMENT-BLIND')
+	public function testCommentRefusedTernaryKeepsTheBraces(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tfinal v = () -> if (c) /* k */ 1 else 2;\n\t}\n}';
+		Assert.equals(0, CheckFixture.violations(new PreferTernaryExpression(), src).length);
+		Assert.equals(1, violations(src).length);
 	}
 
 	/**

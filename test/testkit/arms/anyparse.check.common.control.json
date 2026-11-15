@@ -1400,6 +1400,54 @@
 			"find": "emit.types(), null, emit.regions())",
 			"replace": "emit.types())",
 			"note": "the outer merge wraps a condition holding a string-spelled // verbatim"
+		},
+		{
+			"name": "M-PTE-ARROW-EXPR-BODY-BLIND",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "matchArrowBody",
+			"find": "arrowIfBody(lambda, s.ifExprKinds, s.branchKinds, s.callKinds)",
+			"replace": "arrowIfBody(lambda, [], s.branchKinds, s.callKinds)",
+			"note": "prefer-ternary-expression stops reading an arrow lambda expression body, so `() -> if (c) 1 else 2` is left an if again"
+		},
+		{
+			"name": "M-PTE-ARROW-BLOCK-TAIL-BLIND",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "matchArrowBody",
+			"find": "if (!s.blockKinds.contains(body.kind) || body.children.length == 0) return null;",
+			"replace": "return null;",
+			"note": "prefer-ternary-expression stops reading the if statement ending an arrow lambda block, so `() -> { if (c) 1 else 2; }` is left an if again"
+		},
+		{
+			"name": "M-PTE-ARROW-TAIL-FIRST",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "matchArrowBody",
+			"find": "final tail: QueryNode = body.children[body.children.length - 1];",
+			"replace": "final tail: QueryNode = body.children[0];",
+			"note": "the arrow block read takes its FIRST statement for the returned one, so a statement if before the tail becomes a ternary"
+		},
+		{
+			"name": "M-PTE-ARROW-READS-FUNCTION",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "readSeams",
+			"find": "arrowKinds: ShapeVocab.arrowLambdaKinds(shape),",
+			"replace": "arrowKinds: shape.lambdaKinds ?? [],",
+			"note": "the function literal counts as an arrow, so the tail of `function() { if (c) 1 else 2; }`, which is not returned, becomes a ternary"
+		},
+		{
+			"name": "M-PTE-ARROW-CALLS-PLAIN",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "plainValue",
+			"find": "&& !callKinds.contains(node.kind)",
+			"replace": "|| callKinds.contains(node.kind)",
+			"note": "a call counts as a plain value in an arrow body, so a branching lambda of calls becomes a ternary instead of keeping its if"
+		},
+		{
+			"name": "M-PTE-CLAIM-COMMENT-BLIND",
+			"type": "anyparse.check.common.control.PreferTernaryExpression",
+			"method": "claimsArrowBody",
+			"find": "SourceComments.collectCommentTokens(plugin.lexicalRegions(source))",
+			"replace": "[]",
+			"note": "the arrow-body claim stops asking whether the ternary rebuild drops a comment, so a comment-refused plain-value if body loses the braces finding too and the site is reported by neither rule"
 		}
 	]
 }

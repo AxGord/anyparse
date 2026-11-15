@@ -1,6 +1,7 @@
 package anyparse.check.common.expressions;
 
 import anyparse.check.common.control.BranchChain;
+import anyparse.check.common.control.PreferTernaryExpression;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
@@ -142,18 +143,28 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final out: Array<Span> = [];
-		walk(tree, s, out, false);
+		walk(tree, plugin, source, s, out, false);
 		return out;
 	}
 
-	private static function walk(node: QueryNode, s: Seams, out: Array<Span>, tailArg: Bool): Void {
+	/**
+	 * Walk `node`, collecting every brace-less branching arrow body. A body `prefer-ternary-expression` rewrites into a
+	 * ternary is left to it, so the two rules never advise opposite shapes on one span.
+	 */
+	private static function walk(node: QueryNode, plugin: GrammarPlugin, source: String, s: Seams, out: Array<Span>, tailArg: Bool): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (!tailArg && s.arrowKinds.contains(node.kind) && node.children.length > 0) {
 			final body: QueryNode = node.children[node.children.length - 1];
 			final span: Null<Span> = body.span;
-			if (span != null && !s.blockKinds.contains(body.kind) && branchesInternally(body, s)) out.push(span);
+			if (
+				span != null
+				&& !s.blockKinds.contains(body.kind)
+				&& branchesInternally(body, s)
+				&& !PreferTernaryExpression.claimsArrowBody(plugin, source, node)
+			)
+				out.push(span);
 		}
-		for (i => child in node.children) walk(child, s, out, isTrailingCallArg(node, i, s));
+		for (i => child in node.children) walk(child, plugin, source, s, out, isTrailingCallArg(node, i, s));
 	}
 
 	/**
@@ -175,14 +186,11 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return null;
-		final fnExprKind: Null<String> = shape.fnExprKind;
-		if (fnExprKind == null) return null;
-		final arrowKinds: Array<String> = (shape.lambdaKinds ?? []).filter(k -> k != fnExprKind);
+		final arrowKinds: Array<String> = ShapeVocab.arrowLambdaKinds(shape);
 		final conditionalKinds: Array<String> = ShapeVocab.ifKinds(shape);
 		final switchKinds: Array<String> = shape.switchKinds ?? [];
-		return arrowKinds.length == 0 || (conditionalKinds.length == 0 && switchKinds.length == 0) ? null : {
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		return support == null || (arrowKinds.length == 0 || (conditionalKinds.length == 0 && switchKinds.length == 0)) ? null : {
 			arrowKinds: arrowKinds,
 			blockKinds: support.blockKinds(),
 			conditionalKinds: conditionalKinds,

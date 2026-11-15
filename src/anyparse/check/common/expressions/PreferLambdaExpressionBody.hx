@@ -8,6 +8,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
@@ -564,9 +565,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 		// `function` literal's block to `function(v) e`, which does not even compile — so an
 		// unset seam is a no-op, not a wider match. `prefer-arrow-callback` is inert without
 		// it too, so nothing is lost that this check could compose with.
-		final fnExprKind: Null<String> = shape.fnExprKind;
-		if (fnExprKind == null) return null;
-		final arrowKinds: Array<String> = (shape.lambdaKinds ?? []).filter(k -> k != fnExprKind);
+		final arrowKinds: Array<String> = ShapeVocab.arrowLambdaKinds(shape);
 		final blockKinds: Array<String> = support.blockKinds();
 		final valueReturnKinds: Array<String> = shape.valueReturnKinds ?? [];
 		final exprStatementKind: Null<String> = shape.exprStatementKind;
