@@ -2574,6 +2574,40 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PD1",
+			"note": "prefer-doc-comment: a // run above a #if region holding only metadata documents the type below it (the region is part of the leading run), so it is reported",
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"p.G",
+					"--interp"
+				]
+			},
+			"argv": [
+				"hxq",
+				"lint",
+				"p/G.hx",
+				"--rule",
+				"prefer-doc-comment",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"p/G.hx": "package p;\n\n// Doc.\n#if !macro\n@:keep\n#end\nclass C {}\n",
+				"apq.json": "{\"rules\":{\"prefer-doc-comment\":true}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "ad4f8d058a473b2d",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
 		}
 	]
 }

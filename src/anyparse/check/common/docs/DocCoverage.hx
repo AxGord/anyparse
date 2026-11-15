@@ -126,87 +126,70 @@ final class DocCoverage extends RuleBase implements ConfigAware implements NoAut
 		return CheckScan.typeDeclName(node, seams.containers.concat(seams.interfaceDecls));
 	}
 
-	/** Whether `node` is a leading modifier / `@:meta` annotation (part of a decl's preceding run), not a member or clause. */
-	private static inline function isLeadingAnnotation(node: QueryNode, seams: Seams): Bool {
-		return CheckScan.isLeadingAnnotation(node, seams.modifiers);
+	/**
+	 * Whether a run entry is a metadata entry that makes the members of its type public by default (`@:publicFields`).
+	 */
+	private static inline function publicMeta(entry: QueryNode, seams: Seams): Bool {
+		final nm: Null<String> = entry.name;
+		return nm != null && seams.publicMetaNames.contains(nm);
 	}
 
 	/**
-	 * Scan a module's direct children. A running modifier / `@:meta` sibling run
-	 * precedes each top-level type decl; `runStart` tracks its start (the doc anchor),
-	 * `sawPrivate` whether the run makes the type module-private, and `publicByDefault`
-	 * whether an extern / `@:publicFields` marker makes its members implicitly public.
-	 * A non-annotation, non-type child (package / import / clause) resets the run.
+	 * Scan a module's direct children. A top-level type decl's leading run (`CheckScan.leadingRuns`)
+	 * gives its doc anchor (the run start) and the entries read off it: a private modifier makes the
+	 * type module-private, an extern modifier or a `@:publicFields`-style marker makes its members
+	 * implicitly public.
 	 */
 	private static function scanModule(
 		out: Array<Violation>, file: String, source: String, root: QueryNode, seams: Seams, cfg: DocCfg, docEnds: Map<Int, Bool>
 	): Void {
-		var runStart: Int = -1;
-		var sawPrivate: Bool = false;
-		var publicByDefault: Bool = false;
+		final runs: Map<Int, LeadingRun> = runsByDecl(root, seams);
 		for (child in root.children) {
-			if (seams.typeDecls.contains(child.kind)) {
-				final span: Null<Span> = child.span;
-				if (span != null && !sawPrivate) {
-					final anchor: Int = runStart >= 0 ? runStart : span.from;
-					if (cfg.requireTypeDoc && !CheckScan.hasDocBefore(source, docEnds, anchor))
-						out.push(finding(file, source, span, 'public type \'${typeName(child, seams)}\' has no doc comment'));
-					if (cfg.requireMemberDoc) {
-						final container: Null<QueryNode> = memberContainerOf(child, seams);
-						if (container != null)
-							scanMembers(
-								out, file, source, container, seams, seams.interfaceDecls.contains(child.kind) || publicByDefault,
-								cfg.includeConstructor, docEnds
-							);
-					}
-				}
-			} else if (isLeadingAnnotation(child, seams)) {
-				final span: Null<Span> = child.span;
-				if (runStart < 0 && span != null) runStart = span.from;
-				if (seams.privateKind != null && child.kind == seams.privateKind) sawPrivate = true;
-				if (seams.externKind != null && child.kind == seams.externKind) publicByDefault = true;
-				final nm: Null<String> = child.name;
-				if (nm != null && seams.publicMetaNames.contains(nm)) publicByDefault = true;
-				continue;
-			}
-			runStart = -1;
-			sawPrivate = false;
-			publicByDefault = false;
+			final span: Null<Span> = child.span;
+			if (span == null || !seams.typeDecls.contains(child.kind)) continue;
+			final run: Null<LeadingRun> = runs[span.from];
+			final entries: Array<QueryNode> = run?.entries ?? [];
+			if (entries.exists(entry -> entry.kind == seams.privateKind)) continue;
+			if (cfg.requireTypeDoc && !CheckScan.hasDocBefore(source, docEnds, run?.span.from ?? span.from))
+				out.push(finding(file, source, span, 'public type \'${typeName(child, seams)}\' has no doc comment'));
+			if (!cfg.requireMemberDoc) continue;
+			final container: Null<QueryNode> = memberContainerOf(child, seams);
+			if (container == null) continue;
+			final publicByDefault: Bool = entries.exists(entry -> entry.kind == seams.externKind || publicMeta(entry, seams));
+			scanMembers(
+				out, file, source, container, seams, seams.interfaceDecls.contains(child.kind) || publicByDefault, cfg.includeConstructor,
+				docEnds
+			);
 		}
 	}
 
 	/**
 	 * Scan a container's members. A member is public when `implicitPublic` (an interface
-	 * / public-default container) or its preceding modifier run carries the public
-	 * modifier (`sawPublic`). `runStart` tracks the doc anchor (the run start). The
-	 * constructor is skipped unless `includeConstructor`.
+	 * / public-default container) or its leading run holds the public modifier; the run's start
+	 * is the doc anchor. The constructor is skipped unless `includeConstructor`.
 	 */
 	private static function scanMembers(
 		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: Seams, implicitPublic: Bool,
 		includeConstructor: Bool, docEnds: Map<Int, Bool>
 	): Void {
-		var runStart: Int = -1;
-		var sawPublic: Bool = false;
+		final runs: Map<Int, LeadingRun> = runsByDecl(container, seams);
 		for (child in container.children) {
-			if (seams.members.contains(child.kind)) {
-				final span: Null<Span> = child.span;
-				if (span != null) {
-					final isPublic: Bool = implicitPublic || sawPublic;
-					final name: String = child.name ?? '';
-					final isCtor: Bool = seams.constructorName != null && name == seams.constructorName;
-					final anchor: Int = runStart >= 0 ? runStart : span.from;
-					if (isPublic && (includeConstructor || !isCtor) && !CheckScan.hasDocBefore(source, docEnds, anchor))
-						out.push(finding(file, source, span, 'public member \'$name\' has no doc comment'));
-				}
-			} else if (isLeadingAnnotation(child, seams)) {
-				final span: Null<Span> = child.span;
-				if (runStart < 0 && span != null) runStart = span.from;
-				if (seams.publicKind != null && child.kind == seams.publicKind) sawPublic = true;
-				continue;
-			}
-			runStart = -1;
-			sawPublic = false;
+			final span: Null<Span> = child.span;
+			if (span == null || !seams.members.contains(child.kind)) continue;
+			final run: Null<LeadingRun> = runs[span.from];
+			final isPublic: Bool = implicitPublic || (run != null && run.entries.exists(entry -> entry.kind == seams.publicKind));
+			final name: String = child.name ?? '';
+			final isCtor: Bool = seams.constructorName != null && name == seams.constructorName;
+			if (isPublic && (includeConstructor || !isCtor) && !CheckScan.hasDocBefore(source, docEnds, run?.span.from ?? span.from))
+				out.push(finding(file, source, span, 'public member \'$name\' has no doc comment'));
 		}
+	}
+
+	/** Each declaration's leading run among `node`'s direct children, keyed by the declaration's start. */
+	private static function runsByDecl(node: QueryNode, seams: Seams): Map<Int, LeadingRun> {
+		return [
+			for (run in CheckScan.leadingRuns(node, [], seams.isRunEntry)) run.span.to => run
+		];
 	}
 
 	/**
@@ -241,13 +224,12 @@ final class DocCoverage extends RuleBase implements ConfigAware implements NoAut
 		final publicKind: Null<String> = shape.publicModifierKind;
 		var privateKind: Null<String> = null;
 		for (v in visibility) if (v != publicKind) privateKind = v;
-		final modifiers: Array<String> = CheckScan.modifierKinds(shape);
 		return {
 			typeDecls: typeDecls,
 			members: shape.memberDeclKinds ?? [],
 			containers: shape.visibilityContainerKinds ?? [],
 			interfaceDecls: shape.interfaceDeclKinds ?? [],
-			modifiers: modifiers,
+			isRunEntry: CheckScan.leadingRunEntry(plugin),
 			publicKind: publicKind,
 			privateKind: privateKind,
 			externKind: shape.externModifierKind,
@@ -264,7 +246,7 @@ private typedef Seams = {
 	final members: Array<String>;
 	final containers: Array<String>;
 	final interfaceDecls: Array<String>;
-	final modifiers: Array<String>;
+	final isRunEntry: (QueryNode) -> Bool;
 	final publicKind: Null<String>;
 	final privateKind: Null<String>;
 	final externKind: Null<String>;

@@ -181,8 +181,8 @@
 			"name": "M-BETWEEN-META-BLIND",
 			"type": "anyparse.check.common.docs.MisplacedTypeDoc",
 			"method": "betweenMetaDocs",
-			"find": "final runs: Array<Span> = CheckScan.leadingRuns(\n\t\t\ttree, seams.descend, node -> CheckScan.isLeadingAnnotation(node, seams.modifiers) || guardedPrefixRun(node, seams)\n\t\t);",
-			"replace": "final runs: Array<Span> = [];",
+			"find": "final runs: Array<LeadingRun> = CheckScan.leadingRuns(tree, seams.descend, seams.isRunEntry);",
+			"replace": "final runs: Array<LeadingRun> = [];",
 			"note": "no leading run is examined, so a doc between metadata entries is neither reported nor moved"
 		},
 		{
@@ -232,6 +232,22 @@
 			"find": " || (found != null && found.anchor == between.anchor)",
 			"replace": "",
 			"note": "a stranded doc and a between-run doc on one type are both inserted at the same anchor"
+		},
+		{
+			"name": "M-COVERAGE-RUN-UNGUARDED",
+			"type": "anyparse.check.common.docs.DocCoverage",
+			"method": "resolveSeams",
+			"find": "isRunEntry: CheckScan.leadingRunEntry(plugin),",
+			"replace": "isRunEntry: node -> CheckScan.isLeadingAnnotation(node, CheckScan.modifierKinds(shape)),",
+			"note": "doc-coverage stops counting a #if region of metadata or modifiers as part of the leading run, so its doc anchor sits below the region"
+		},
+		{
+			"name": "M-PREFER-DOC-RUN-UNGUARDED",
+			"type": "anyparse.check.common.docs.PreferDocComment",
+			"method": "resolveSeams",
+			"find": "isRunEntry: CheckScan.leadingRunEntry(plugin)",
+			"replace": "isRunEntry: node -> CheckScan.isLeadingAnnotation(node, CheckScan.modifierKinds(shape))",
+			"note": "prefer-doc-comment stops counting a #if region of metadata or modifiers as part of the leading run, so a comment above the region documents nothing"
 		}
 	]
 }

@@ -752,29 +752,63 @@ final class CheckScan {
 	/**
 	 * The one answer to "each declaration's leading `@:meta` / modifier run": every run of
 	 * `isRunEntry` siblings directly followed by the declaration they prefix, as the span from
-	 * the run's first entry to that declaration's start. Descends only into nodes whose kind is
+	 * the run's first entry to that declaration's start plus the entries themselves (a rule
+	 * reads a visibility or extern modifier off them). Descends only into nodes whose kind is
 	 * in `descend` (type declarations, member containers, conditional regions), never into a
 	 * member, so expression-level metadata is out of reach.
 	 */
-	public static function leadingRuns(root: QueryNode, descend: Array<String>, isRunEntry: (QueryNode) -> Bool): Array<Span> {
-		final runs: Array<Span> = [];
+	public static function leadingRuns(root: QueryNode, descend: Array<String>, isRunEntry: (QueryNode) -> Bool): Array<LeadingRun> {
+		final runs: Array<LeadingRun> = [];
 		final pending: Array<QueryNode> = [root];
 		while (pending.length > 0) {
 			final node: Null<QueryNode> = pending.pop();
 			if (node == null) break;
 			var runStart: Int = -1;
+			var entries: Array<QueryNode> = [];
 			for (child in node.children) {
 				final span: Null<Span> = child.span;
 				if (span != null && isRunEntry(child)) {
 					if (runStart < 0) runStart = span.from;
+					entries.push(child);
 					continue;
 				}
-				if (span != null && runStart >= 0) runs.push(new Span(runStart, span.from));
+				if (span != null && runStart >= 0) runs.push({ span: new Span(runStart, span.from), entries: entries });
 				runStart = -1;
+				entries = [];
 				if (descend.contains(child.kind)) pending.push(child);
 			}
 		}
 		return runs;
+	}
+
+	/**
+	 * The one answer to "is this sibling part of the declaration's leading run": an annotation or
+	 * modifier, or a conditional-compilation region holding NOTHING but declaration PREFIX material
+	 * — annotations (`#if !macro @:keep #end`), modifiers, and the bare declaration-starting keywords
+	 * (`#if (haxe_ver >= 4.2) enum #else @:enum #end`). Every rule that reads a run through
+	 * `leadingRuns` takes its entry test here, so they agree on where a declaration's doc anchor is.
+	 *
+	 * Such a region is part of the run exactly like a bare `@:keep`: the compiler reads the
+	 * declaration's doc above the region, never between it and the declaration. Counting it as
+	 * an ordinary sibling instead moved a doc below the metadata, where the doc silently stopped
+	 * existing. The keyword kinds (`RefShape.condDeclPrefixKeywordKinds`) carry neither a name nor
+	 * a modifier kind and the metadata kinds (`MetaShape.metaKinds`) cover a `@:keep` that projects
+	 * as a nameless wrapper inside a region, so the test reads both sets off the grammar.
+	 *
+	 * An EMPTY region guards nothing and is not an entry; neither is a region holding a real
+	 * declaration (`#if x class B {} #end`) — that IS a sibling declaration.
+	 */
+	public static function leadingRunEntry(plugin: GrammarPlugin): (QueryNode) -> Bool {
+		final shape: RefShape = plugin.refShape();
+		final modifiers: Array<String> = modifierKinds(shape);
+		final conditional: Null<String> = shape.conditionalMemberKind;
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
+		final prefixKeywords: Array<String> = shape.condDeclPrefixKeywordKinds ?? [];
+		final prefixMaterial: (QueryNode) -> Bool = node ->
+			isLeadingAnnotation(node, modifiers) || metaKinds.contains(node.kind) || prefixKeywords.contains(node.kind);
+		return node ->
+			isLeadingAnnotation(node, modifiers)
+				|| (conditional != null && node.kind == conditional && node.children.length != 0 && node.children.foreach(prefixMaterial));
 	}
 
 	/**
@@ -1037,3 +1071,9 @@ typedef NegationSeams = {
 	final orKind: Null<String>;
 	final andLowerPrecedenceKinds: Array<String>;
 };
+
+/**
+ * A declaration's leading run as `CheckScan.leadingRuns` reads it: the span from the run's first entry to the
+ * declaration's start, and the run's entries in source order.
+ */
+typedef LeadingRun = { final span: Span; final entries: Array<QueryNode>; };

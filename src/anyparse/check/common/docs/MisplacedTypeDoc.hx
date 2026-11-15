@@ -209,7 +209,7 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 					anchor: runStart >= 0 ? runStart : span.from,
 					name: CheckScan.typeDeclName(child, seams.nameHosts)
 				};
-			} else if (CheckScan.isLeadingAnnotation(child, seams.modifiers) || guardedPrefixRun(child, seams)) {
+			} else if (seams.isRunEntry(child)) {
 				final span: Null<Span> = child.span;
 				if (runStart < 0 && span != null) {
 					runStart = span.from;
@@ -221,44 +221,6 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 			runIndex = -1;
 		}
 		return found;
-	}
-
-	/**
-	 * Whether `node` is a conditional-compilation region holding NOTHING but declaration
-	 * PREFIX material — annotations (`#if !macro @:keep #end`), modifiers, and the bare
-	 * declaration-starting keywords (`#if (haxe_ver >= 4.2) enum #else @:enum #end`).
-	 *
-	 * Such a region is part of the type's leading run, exactly like a bare `@:keep`.
-	 * Counting it as an ordinary top-level declaration instead put it in the "first
-	 * import" slot, so a doc comment written directly above it looked stranded between
-	 * the package statement and the imports; the fix then moved that doc BELOW the
-	 * region, i.e. below the metadata — where the compiler no longer attaches it. The
-	 * doc silently stopped existing, and nothing reported it: not the writer, not the
-	 * linter, not the compiler.
-	 *
-	 * The KEYWORD half is the same defect one grammar seam over. `enum` / `abstract` /
-	 * `final` can each introduce a type of their own, so the grammar captures them as bare
-	 * tokens (`seams.declPrefixKeywords`) rather than as modifier siblings — and an
-	 * annotation-only test saw a region with a `haxe_ver` gate around `enum` as a second
-	 * header declaration. The doc stayed attached there (`-D dox -xml` reports `haxe_doc`
-	 * either way), so the damage was a wrong normalisation rather than a dead doc: `--fix`
-	 * hoisted the region ABOVE the doc, inverting the tree's accepted order of doc, then
-	 * metadata and modifiers, then the type.
-	 *
-	 * An EMPTY region is not one: it guards nothing, so treating it as annotation
-	 * trivia would let the rule reach past it. A region holding a real declaration
-	 * (`#if x class B {} #end`) is not one either — that IS a sibling declaration, and
-	 * the whitelist is what keeps the two apart.
-	 */
-	private static function guardedPrefixRun(node: QueryNode, seams: Seams): Bool {
-		return node.kind == seams.conditionalKind
-			&& node.children.length != 0
-			&& node.children.foreach(
-				child ->
-					CheckScan.isLeadingAnnotation(child, seams.modifiers)
-					|| seams.metaKinds.contains(child.kind)
-					|| seams.declPrefixKeywords.contains(child.kind)
-			);
 	}
 
 	/**
@@ -305,7 +267,6 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 		final typeDecls: Array<String> = declared.copy();
 		final enumAbstract: Null<String> = shape.enumAbstractDeclKind;
 		if (enumAbstract != null && !typeDecls.contains(enumAbstract)) typeDecls.push(enumAbstract);
-		final modifiers: Array<String> = CheckScan.modifierKinds(shape);
 		final nameHosts: Array<String> = (shape.visibilityContainerKinds ?? []).concat(shape.interfaceDeclKinds ?? []);
 		final descend: Array<String> = typeDecls.concat(nameHosts);
 		final anon: Null<String> = shape.anonTypeKind;
@@ -316,11 +277,8 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 			typeDecls: typeDecls,
 			nameHosts: nameHosts,
 			descend: descend,
-			modifiers: modifiers,
 			packageKind: packageKind,
-			conditionalKind: shape.conditionalMemberKind,
-			metaKinds: plugin.metaShape().metaKinds,
-			declPrefixKeywords: shape.condDeclPrefixKeywordKinds ?? []
+			isRunEntry: CheckScan.leadingRunEntry(plugin)
 		};
 	}
 
@@ -335,15 +293,14 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 		if (source.indexOf(DOC_OPEN) < 0) return [];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final runs: Array<Span> = CheckScan.leadingRuns(
-			tree, seams.descend, node -> CheckScan.isLeadingAnnotation(node, seams.modifiers) || guardedPrefixRun(node, seams)
-		);
+		final runs: Array<LeadingRun> = CheckScan.leadingRuns(tree, seams.descend, seams.isRunEntry);
 		if (runs.length == 0) return [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(regions);
 		final docEnds: Map<Int, Bool> = CheckScan.docBlockEnds(source, regions);
 		final out: Array<BetweenDoc> = [];
-		for (run in runs) {
+		for (leading in runs) {
+			final run: Span = leading.span;
 			final docs: Array<CommentTok> = [
 				for (tok in comments) if (tok.from > run.from && tok.to <= run.to && SourceComments.isDocBlock(source, tok)) tok
 			];
@@ -390,27 +347,9 @@ private typedef Seams = {
 	 * member containers, a typedef's anonymous structure, conditional regions.
 	 */
 	final descend: Array<String>;
-	final modifiers: Array<String>;
 	final packageKind: String;
 
-	/** The conditional-compilation region kind, or null when the grammar has none — see `guardedPrefixRun`. */
-	final conditionalKind: Null<String>;
-
-	/**
-	 * The annotation node kinds (`MetaShape.metaKinds`). `isLeadingAnnotation` reads a
-	 * node's NAME, which a metadata node only carries in some of its spellings —
-	 * `@:keep` inside a conditional region projects as a nameless wrapper — so the
-	 * kind set is what makes the guarded-run test see it.
-	 */
-	final metaKinds: Array<String>;
-
-	/**
-	 * The bare declaration-starting keyword kinds a conditional region may contribute to the
-	 * declaration after it (`RefShape.condDeclPrefixKeywordKinds`: Haxe `EnumKw` / `AbstractKw`
-	 * / `FinalKw`). They carry neither a name nor a modifier kind, so `guardedPrefixRun` reads
-	 * them off this set — without it a `#if (haxe_ver >= 4.2) enum #else @:enum #end` region
-	 * reads as a second header declaration. Empty when the grammar leaves the seam unset.
-	 */
-	final declPrefixKeywords: Array<String>;
+	/** Whether a sibling belongs to a declaration's leading run (`CheckScan.leadingRunEntry`). */
+	final isRunEntry: (QueryNode) -> Bool;
 
 };

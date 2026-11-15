@@ -500,8 +500,8 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	}
 
 	/**
-	 * Index every declaration's DOC ANCHOR — the start of its leading `@:meta` / modifier
-	 * run, or the declaration itself when it has none — keyed by the anchor's LINE START
+	 * Index every declaration's DOC ANCHOR — the start of its leading run
+	 * (`CheckScan.leadingRuns`), or the declaration itself when it has none — keyed by the anchor's LINE START
 	 * and keeping the LEFTMOST anchor per line, which is the declaration a comment above
 	 * that line documents. Each entry carries the declaration's END (so the group gate can
 	 * tell an ENCLOSING declaration from a sibling), its kind, and the span of the
@@ -510,21 +510,17 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	 * reached the same way a top-level type is.
 	 */
 	private static function collectAnchors(source: String, node: QueryNode, seams: Seams, owner: Span, out: Map<Int, Anchor>): Void {
-		var runStart: Int = -1;
+		final runFrom: Map<Int, Int> = [
+			for (run in CheckScan.leadingRuns(node, [], seams.isRunEntry)) run.span.to => run.span.from
+		];
 		for (child in node.children) {
 			final span: Null<Span> = child.span;
 			if (seams.decls.contains(child.kind) && span != null) {
-				record(source, runStart >= 0 ? runStart : span.from, span.from, span.to, child.kind, owner, out);
-				runStart = -1;
+				record(source, runFrom[span.from] ?? span.from, span.from, span.to, child.kind, owner, out);
 				collectAnchors(source, child, seams, span, out);
-				continue;
+			} else if (!seams.isRunEntry(child)) {
+				collectAnchors(source, child, seams, owner, out);
 			}
-			if (CheckScan.isLeadingAnnotation(child, seams.modifiers)) {
-				if (runStart < 0 && span != null) runStart = span.from;
-				continue;
-			}
-			runStart = -1;
-			collectAnchors(source, child, seams, owner, out);
 		}
 	}
 
@@ -585,8 +581,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 		if (decls.length == 0) return null;
 		final enumAbstract: Null<String> = shape.enumAbstractDeclKind;
 		if (enumAbstract != null && !decls.contains(enumAbstract)) decls.push(enumAbstract);
-		final modifiers: Array<String> = CheckScan.modifierKinds(shape);
-		return { decls: decls, modifiers: modifiers };
+		return { decls: decls, isRunEntry: CheckScan.leadingRunEntry(plugin) };
 	}
 
 }
@@ -616,4 +611,4 @@ private typedef Anchor = {
 };
 
 /** Resolved kind-sets the anchor walk threads through its recursion. */
-private typedef Seams = { final decls: Array<String>; final modifiers: Array<String>; };
+private typedef Seams = { final decls: Array<String>; final isRunEntry: (QueryNode) -> Bool; };
