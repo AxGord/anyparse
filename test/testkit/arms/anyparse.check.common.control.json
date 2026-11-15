@@ -1366,7 +1366,7 @@
 			"type": "anyparse.check.common.control.PreferIfExpressionChain",
 			"method": "invertTail",
 			"find": "lazy.types(), lazy.regions())",
-			"replace": "lazy.types())",
+			"replace": "lazy.types(), [{ from: 0, to: 0x7FFFFFFF, kind: anyparse.query.LexicalRegions.LexRegionKind.LineComment }])",
 			"note": "a string literal holding // in the condition makes the worth gate read it as commented and pass, so an unprovable ordered comparison is wrapped in !( ... )"
 		},
 		{
@@ -1374,7 +1374,7 @@
 			"type": "anyparse.check.common.control.PreferIfExpressionChain",
 			"method": "emit",
 			"find": "lazy.types(), null, lazy.regions())",
-			"replace": "lazy.types())",
+			"replace": "lazy.types(), null, [{ from: 0, to: 0x7FFFFFFF, kind: anyparse.query.LexicalRegions.LexRegionKind.LineComment }])",
 			"note": "a string literal holding // in an inverted rung condition makes the negation fall back to a !( ... ) wrap instead of the De Morgan flip"
 		},
 		{
@@ -1382,7 +1382,7 @@
 			"type": "anyparse.check.common.control.GuardScan",
 			"method": "splice",
 			"find": "negation, logic, types, null, regions())",
-			"replace": "negation, logic, types)",
+			"replace": "negation, logic, types, null, [{ from: 0, to: 0x7FFFFFFF, kind: anyparse.query.LexicalRegions.LexRegionKind.LineComment }])",
 			"note": "the guard inversion reads a string-spelled // as a comment and wraps the condition verbatim"
 		},
 		{
@@ -1390,7 +1390,7 @@
 			"type": "anyparse.check.common.control.GuardScan",
 			"method": "report",
 			"find": "logic, types, regions())",
-			"replace": "logic, types)",
+			"replace": "logic, types, [{ from: 0, to: 0x7FFFFFFF, kind: anyparse.query.LexicalRegions.LexRegionKind.LineComment }])",
 			"note": "a string-spelled // hides a declined flip, so a guard that can only wrap is reported"
 		},
 		{
@@ -1398,7 +1398,7 @@
 			"type": "anyparse.check.common.control.PreferIfExpressionReturn",
 			"method": "mergedEdit",
 			"find": "emit.types(), null, emit.regions())",
-			"replace": "emit.types())",
+			"replace": "emit.types(), null, [{ from: 0, to: 0x7FFFFFFF, kind: anyparse.query.LexicalRegions.LexRegionKind.LineComment }])",
 			"note": "the outer merge wraps a condition holding a string-spelled // verbatim"
 		},
 		{

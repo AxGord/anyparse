@@ -25,9 +25,8 @@ final class NegationScan {
 	 * delegated to `BooleanLogicSupport.negateCondition`: De Morgan pushed inward
 	 * (`a && b` → `!a || !b`) order-safely — ordered comparisons stay wrapped `!(a < b)` unless
 	 * `typeNominalOf` proves both operands totally ordered, and a `||` chain that would strand a
-	 * null-safety narrowing right-nests a parenthesised group instead (the engine's own guarantee). Given the file's
-	 * lexical `regions` only a REAL comment counts; without them the scan is STRING-LITERAL-BLIND: a `//` or `/*`
-	 * inside a string operand conservatively forces the fallback (a verbatim `!(cond)` wrap). With no `support`
+	 * null-safety narrowing right-nests a parenthesised group instead (the engine's own guarantee). Only a REAL
+	 * comment in the file's lexical `regions` counts: a `//` or `/*` spelled inside a string operand does not. With no `support`
 	 * or a comment in the condition span, the text engine below is used, in three shapes, in
 	 * order:
 	 *
@@ -50,11 +49,11 @@ final class NegationScan {
 	 */
 	public static function negateConditionText(
 		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>,
-		?slotKind: String, ?regions: Array<LexRegion>
+		slotKind: Null<String>, regions: Array<LexRegion>
 	): String {
 		final cs: Null<Span> = cond.span;
 		if (cs == null) return '';
-		if (support != null && !commentIn(source, cs.from, cs.to, regions))
+		if (support != null && !LexicalRegions.commentIntersects(cs.from, cs.to, regions))
 			return support.negateCondition(cond, source, typeNominalOf, slotKind);
 		final inner: Null<QueryNode> = notUnwrapNode(cond, seams);
 		if (inner != null) {
@@ -90,14 +89,14 @@ final class NegationScan {
 	 */
 	public static function negationIsClean(
 		cond: QueryNode, source: String, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>,
-		?regions: Array<LexRegion>
+		regions: Array<LexRegion>
 	): Bool {
 		final cs: Null<Span> = cond.span;
 		// Only the De Morgan tier can decline anything — the text fallback has no flip to refuse,
 		// so its verbatim wrap is the shape it always emitted and the site still inverts.
 		return cs != null && (
 			support == null
-			|| commentIn(source, cs.from, cs.to, regions)
+			|| LexicalRegions.commentIntersects(cs.from, cs.to, regions)
 			|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf)
 		);
 	}
@@ -156,27 +155,16 @@ final class NegationScan {
 	 * `@:op` abstract caveat shared with `loop-guard`). Null when `cond` is not a binary
 	 * (in)equality or a comment sits in the operator gap (the flip would drop it).
 	 */
-	private static function eqFlipText(
-		cond: QueryNode, source: String, seams: NegationSeams, regions: Null<Array<LexRegion>>
-	): Null<String> {
+	private static function eqFlipText(cond: QueryNode, source: String, seams: NegationSeams, regions: Array<LexRegion>): Null<String> {
 		final eqKind: Null<String> = seams.eqKind;
 		final notEqKind: Null<String> = seams.notEqKind;
 		if (eqKind == null || notEqKind == null) return null;
 		if ((cond.kind != eqKind && cond.kind != notEqKind) || cond.children.length != 2) return null;
 		final l: Null<Span> = cond.children[0].span;
 		final r: Null<Span> = cond.children[1].span;
-		if (l == null || (r == null || commentIn(source, l.to, r.from, regions))) return null;
+		if (l == null || (r == null || LexicalRegions.commentIntersects(l.to, r.from, regions))) return null;
 		final op: String = cond.kind == eqKind ? ' != ' : ' == ';
 		return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
-	}
-
-	/**
-	 * Whether `[from, to)` holds a comment a rewrite would drop: with the file's lexical `regions` a REAL comment
-	 * (`LexicalRegions.commentIntersects`, a marker inside a string literal is not one), without them the
-	 * string-blind marker scan the regions-free callers have always read.
-	 */
-	private static function commentIn(source: String, from: Int, to: Int, regions: Null<Array<LexRegion>>): Bool {
-		return regions != null ? LexicalRegions.commentIntersects(from, to, regions) : CheckScan.hasCommentMarker(source, from, to);
 	}
 
 }

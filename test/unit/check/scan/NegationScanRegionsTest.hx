@@ -9,7 +9,7 @@ import anyparse.query.QueryNode;
 
 /**
  * `NegationScan` read through real lexical regions: a `//` spelled inside a string operand is not a comment, so
- * the De Morgan tier runs, while the regions-free call keeps the string-blind marker scan and its verbatim wrap.
+ * the De Morgan tier runs, while a real comment keeps the verbatim wrap.
  */
 class NegationScanRegionsTest extends Test {
 
@@ -20,12 +20,6 @@ class NegationScanRegionsTest extends Test {
 		Assert.equals("'a//b' != x || !y", NegationScan.negateConditionText(r.cond, r.src, r.seams, r.support, null, null, r.regions));
 	}
 
-	@:pin('control')
-	@:killer('M-NEGATION-MARKER-SCAN-DROPPED')
-	public function testStringMarkerKeepsTextTierWithoutRegions(): Void {
-		final r: Run = run("'a//b' == x && y");
-		Assert.equals("!('a//b' == x && y)", NegationScan.negateConditionText(r.cond, r.src, r.seams, r.support));
-	}
 
 	public function testRealCommentKeepsTextTierWithRegions(): Void {
 		final r: Run = run('a /* c */ == x && y');
@@ -47,7 +41,7 @@ class NegationScanRegionsTest extends Test {
 	public function testNegationIsCleanReadsRegions(): Void {
 		final r: Run = run("'a//b' == x && y");
 		Assert.isTrue(NegationScan.negationIsClean(r.cond, r.src, r.support, null, r.regions));
-		Assert.isTrue(NegationScan.negationIsClean(r.cond, r.src, r.support));
+
 	}
 
 	private function run(cond: String): Run {

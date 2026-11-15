@@ -6,6 +6,8 @@ import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 
@@ -135,7 +137,7 @@ final class LoopGuard extends RuleBase {
 			// The module root is shielded: nothing follows a top-level declaration but another
 			// one, so no `else` can reach a loop that inherits its exposure from there.
 			walk(
-				tree, violations, entry.file, entry.source, seams, true,
+				tree, violations, entry.file, entry.source, ElementSpan.lazyRegions(entry.source, plugin), seams, true,
 				CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
 			);
 		});
@@ -152,6 +154,7 @@ final class LoopGuard extends RuleBase {
 				? null
 				: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
 			final edits: Array<{ span: Span, text: String }> = [];
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 			RunScan.eachMatched(violations, byGuard, (m, _) -> {
 				final bodySpan: Null<Span> = m.body.span;
 				final guardSpan: Null<Span> = m.guard.span;
@@ -159,7 +162,7 @@ final class LoopGuard extends RuleBase {
 				final rest: String = source.substring(guardSpan.to, bodySpan.to - 1);
 				final headerCond: Null<QueryNode> = m.headerCond;
 				if (headerCond == null) {
-					edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, seams, types)}) {$rest}' });
+					edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, regions, seams, types)}) {$rest}' });
 					return;
 				}
 				final headerSpan: Null<Span> = headerCond.span;
@@ -167,7 +170,9 @@ final class LoopGuard extends RuleBase {
 				if (headerSpan == null || andOp == null) return;
 				final kept: String = source.substring(headerSpan.from, headerSpan.to);
 				final lhs: String = seams.negation.andLowerPrecedenceKinds.contains(headerCond.kind) ? '($kept)' : kept;
-				edits.push({ span: headerSpan, text: '$lhs $andOp ${invert(m.cond, source, seams, types, seams.negation.andKind)}' });
+				edits.push(
+					{ span: headerSpan, text: '$lhs $andOp ${invert(m.cond, source, regions, seams, types, seams.negation.andKind)}' }
+				);
 				edits.push({ span: bodySpan, text: '{$rest}' });
 			});
 			return CanonicalEdit.dropContainedEdits(edits);
@@ -180,9 +185,9 @@ final class LoopGuard extends RuleBase {
 	 * header's `&&` and a De Morgan `||` result must carry a parenthesis pair.
 	 */
 	private static inline function invert(
-		cond: QueryNode, source: String, s: Seams, ?types: (QueryNode) -> Null<String>, ?slotKind: String
+		cond: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams, ?types: (QueryNode) -> Null<String>, ?slotKind: String
 	): String {
-		return NegationScan.negateConditionText(cond, source, s.negation, s.support, types, slotKind);
+		return NegationScan.negateConditionText(cond, source, s.negation, s.support, types, slotKind, regions());
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -216,14 +221,15 @@ final class LoopGuard extends RuleBase {
 
 	/** Walk `node`, flagging each loop whose body opens with a liftable `if`-continue guard. */
 	private static function walk(
-		node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, shielded: Bool, ?types: (QueryNode) -> Null<String>
+		node: QueryNode, out: Array<Violation>, file: String, source: String, regions: () -> Array<LexRegion>, s: Seams, shielded: Bool,
+		?types: (QueryNode) -> Null<String>
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.loopKinds.contains(node.kind)) {
 			final m: Null<Candidate> = match(node, source, s, shielded);
 			// The lifted header tests the INVERTED guard condition; if that inversion cannot
 			// shed its `!( … )` wrap, the header reads worse than the `continue` it replaces.
-			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types)) {
+			if (m != null && NegationScan.negationIsClean(m.cond, source, s.support, types, regions())) {
 				final span: Null<Span> = m.guard.span;
 				if (span != null) out.push({
 					file: file,
@@ -234,7 +240,8 @@ final class LoopGuard extends RuleBase {
 				});
 			}
 		}
-		for (i => c in node.children) walk(c, out, file, source, s, IfExpressionChain.childShielded(node, i, s.shield, shielded), types);
+		for (i => c in node.children)
+			walk(c, out, file, source, regions, s, IfExpressionChain.childShielded(node, i, s.shield, shielded), types);
 	}
 
 	/** Index every liftable loop's candidate by its guard's `from:to` span key (for `fix` to re-find it). */

@@ -1718,24 +1718,16 @@
 		{
 			"name": "M-NEGATION-REGIONS-IGNORED",
 			"type": "anyparse.check.scan.NegationScan",
-			"method": "commentIn",
-			"find": "regions != null ?",
-			"replace": "regions != null && false ?",
+			"method": "negateConditionText",
+			"find": "!LexicalRegions.commentIntersects(cs.from, cs.to, regions)",
+			"replace": "!CheckScan.hasCommentMarker(source, cs.from, cs.to)",
 			"note": "the regions are never read, so a `//` inside a string operand still forces the verbatim text tier"
-		},
-		{
-			"name": "M-NEGATION-MARKER-SCAN-DROPPED",
-			"type": "anyparse.check.scan.NegationScan",
-			"method": "commentIn",
-			"find": ": CheckScan.hasCommentMarker(source, from, to)",
-			"replace": ": false",
-			"note": "a regions-free call no longer scans for a marker, so it De Morgans a condition whose text it should keep verbatim"
 		},
 		{
 			"name": "M-NEGATION-GAP-COMMENT-FLIPPED",
 			"type": "anyparse.check.scan.NegationScan",
 			"method": "eqFlipText",
-			"find": "commentIn(source, l.to, r.from, regions)",
+			"find": "LexicalRegions.commentIntersects(l.to, r.from, regions)",
 			"replace": "false",
 			"note": "a comment in the operator gap no longer declines the flip, so the flip drops it"
 		}

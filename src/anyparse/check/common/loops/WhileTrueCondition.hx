@@ -6,6 +6,7 @@ import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
@@ -178,10 +179,12 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 	private static function collectMatches(
 		tree: QueryNode, source: String, s: Seams, plugin: GrammarPlugin, file: String, index: Null<SymbolIndex>
 	): Array<Match> {
+		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final ctx: Ctx = {
 			source: source,
 			seams: s,
-			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
+			regions: regions,
+			comments: SourceComments.collectCommentTokens(regions),
 			types: CheckScan.typeNominalResolver(source, plugin, tree, file, index)
 		};
 		final out: Array<Match> = [];
@@ -222,7 +225,7 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 		final condSpan: Null<Span> = cond.span;
 		if (kept == null || condSpan == null) return null;
 		final condText: String = arms.negate
-			? NegationScan.negateConditionText(cond, ctx.source, s.negation, s.support, ctx.types)
+			? NegationScan.negateConditionText(cond, ctx.source, s.negation, s.support, ctx.types, null, ctx.regions)
 			: spanText(ctx.source, condSpan);
 		final lift: Null<String> = liftedText(arms, [condSpan, kept.region], loopSpan, ctx);
 		final head: String = 'while ($condText) ${kept.text}';
@@ -382,6 +385,7 @@ private typedef Seams = {
 private typedef Ctx = {
 	var source: String;
 	var seams: Seams;
+	var regions: Array<LexRegion>;
 	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
 	var types: Null<(QueryNode) -> Null<String>>;
 }
