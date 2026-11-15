@@ -5,11 +5,13 @@ import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.LeaseHistory;
 import devkit.Result;
 import devkit.Summary.Outcome;
 import devkit.TmpLifecycle;
+import haxe.Timer;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -35,6 +37,7 @@ final class PostLand {
 	private static inline final RED: String = 'red';
 	private static inline final SHARD_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
 	private static inline final HXCPP_TIMEOUT_MS: Int = 30 * 60 * 1000;
+	private static inline final MS_PER_SECOND: Float = 1000;
 	private static final HXCPP_ONLY: String = '--hxcpp-only';
 	private static final HXCPP_CACHE: String = 'hxcpp-compile';
 
@@ -387,11 +390,15 @@ final class PostLand {
 		FileSystem.createDirectory(directory(cache));
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
 		File.saveContent(fileOf(cache, sha, PID), '${js.Node.process.pid}\n');
+		final started: Float = Timer.stamp();
 		final verdict: Outcome = inWorktree(
 			repo, sha, DIRECTORY,
 			(work, tree) -> suite ? judge(repo, sha, cache, work, tree) : hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache))
 		);
 		settle(cache, sha, verdict);
+		// a detached run: its wall is known only here, and nothing meters its cpu
+		ExecLedger.under(cache)
+			.record({ row: suite ? 'shard' : 'hxcpp', phase: 'post-land', wallMs: (Timer.stamp() - started) * MS_PER_SECOND });
 		if (suite && verdict.match(Passed))
 			LeaseHistory.under(cache).recordLived(LeaseHistory.keyOf('post-land $sha'), PoolLease.threads());
 		switch verdict {

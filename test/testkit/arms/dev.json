@@ -2897,6 +2897,46 @@
 			"find": "\\t${row.at ?? -1}",
 			"replace": "",
 			"note": "the runs of one branch from different lands merge, so one measured run makes every run of the branch metered and its unmetered runs vanish"
+		},
+		{
+			"name": "M-BATTERY-BRANCH-UNMETERED",
+			"type": "dev.BatteryBranch",
+			"method": "command",
+			"find": "Branches.metered(",
+			"replace": "((command: Command, report: String) -> command)(",
+			"note": "a battery branch runs without time(1), so no battery row carries cpu"
+		},
+		{
+			"name": "M-BATTERY-ROW-THREADS-DROPPED",
+			"type": "dev.BatteryBranch",
+			"method": "carryThreads",
+			"find": "step.threads = held;",
+			"replace": "{}",
+			"note": "a battery row never carries the pool threads its branch held"
+		},
+		{
+			"name": "M-LAND-STALE-BATTERY-ROWS",
+			"type": "dev.Land",
+			"method": "run",
+			"find": "if (FileSystem.exists(batteryRows)) FileSystem.deleteFile(batteryRows);",
+			"replace": "",
+			"note": "an earlier attempt battery file left in the logs is read back and recorded as this land battery rows"
+		},
+		{
+			"name": "M-LAND-NO-LEDGER-FLAG",
+			"type": "dev.Land",
+			"method": "runBattery",
+			"find": "flags.push('--ledger');",
+			"replace": "",
+			"note": "the battery is never handed the land file, so its rows go to the shared ledger and the land records no battery row"
+		},
+		{
+			"name": "M-BATTERY-LEDGER-OPTION-IGNORED",
+			"type": "dev.BatteryBranch",
+			"method": "ledgerOf",
+			"find": "args.option('--ledger')",
+			"replace": "null",
+			"note": "dev battery --ledger is read as no file, so the battery writes its rows to the shared ledger and the land never sees them"
 		}
 	]
 }

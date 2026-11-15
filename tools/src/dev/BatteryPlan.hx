@@ -60,4 +60,8 @@ typedef BatteryPlan = {
 	@:optional
 	var reused: Null<Array<String>>;
 
+	/** The ledger file the run's rows go to (`--ledger`, the land's own), or null for the blast cache's. */
+	@:optional
+	var ledger: Null<String>;
+
 };

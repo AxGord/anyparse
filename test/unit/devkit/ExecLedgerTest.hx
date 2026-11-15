@@ -110,4 +110,43 @@ final class ExecLedgerTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-EXECLEDGER-BATTERY-TWICE')
+	public function testTheLandBatteryStepKeepsOnlyItsOverhead(): Void {
+		final land: Array<LedgerRow> = [
+			{ row: 'build', phase: 'land', wallMs: 10 },
+			{ row: 'battery', phase: 'land', wallMs: 100 }
+		];
+		final inner: Array<LedgerRow> = [
+			{ row: 'suite', phase: 'battery', wallMs: 70 },
+			{ row: 'fmt', phase: 'battery', wallMs: 60 },
+			{ row: 'span', phase: 'battery', wallMs: 80 }
+		];
+		final out: Array<LedgerRow> = ExecLedger.withoutDoubleCount(land, inner);
+		Assert.equals('build', out[0].row);
+		Assert.equals(10.0, out[0].wallMs);
+		Assert.equals('battery-overhead', out[1].row);
+		Assert.equals(20.0, out[1].wallMs, 'cut by the span, never by the overlapping rows');
+		Assert.equals(0.0, ExecLedger.withoutDoubleCount(land, [{ row: 'span', phase: 'battery', wallMs: 120 }])[1].wallMs);
+	}
+
+	/** A land records its battery's rows from the file the battery wrote, so a shared ledger already at its cap still gets them. */
+	@:pin('control')
+	@:killer('M-EXECLEDGER-LAND-DROPS-BATTERY')
+	public function testAFullLedgerStillGetsTheLandsBatteryRows(): Void {
+		TempDir.with(dir -> {
+			final shared: ExecLedger = new ExecLedger(dir.file('shared.tsv'));
+			for (i in 0...ExecLedger.MAX_LINES) shared.record({ row: 'old$i', phase: 'gate', wallMs: 1 });
+			final battery: ExecLedger = new ExecLedger(dir.file('battery.tsv'));
+			battery.record({ row: 'suite', phase: 'battery', wallMs: 70 });
+			battery.record({ row: 'span', phase: 'battery', wallMs: 80 });
+			final land: Array<LedgerRow> = [{ row: 'battery', phase: 'land', wallMs: 100 }];
+			for (row in ExecLedger.ofLand(land, battery.rows())) shared.record(row);
+			final tail: Array<LedgerRow> = shared.rows().slice(-3);
+			Assert.same(['battery-overhead', 'suite', 'span'], tail.map(row -> row.row));
+			Assert.equals(20.0, tail[0].wallMs);
+			Assert.equals(ExecLedger.MAX_LINES, shared.rows().length);
+		});
+	}
+
 }

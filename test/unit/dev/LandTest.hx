@@ -177,11 +177,21 @@ final class LandTest extends Test {
 		Assert.same(['--allow', 'corpus', '--allow', 'lint', '--quick'], Land.batteryFlags(false, false, false, null, ['corpus', 'lint']));
 	}
 
+	/**
+	 * A land hands its battery a ledger file of its own and records what the battery wrote there, its `battery` step cut by
+	 * the battery's span; an earlier attempt's file in the same logs is never this land's.
+	 */
+	@:pin('control')
+	@:killer('M-LAND-STALE-BATTERY-ROWS')
 	public function testAQuietLandingRunsTheQuickBattery(): Void {
 		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 });
 		Assert.equals(0, run.status);
 		Assert.same([['--quick', '--base', run.base]], run.flags);
 		Assert.isTrue(run.output.indexOf('battery quick') >= 0, run.output);
+		Assert.isTrue(run.output.indexOf('ledger\tsuite\tbattery\t300') >= 0, run.output);
+		Assert.isTrue(run.output.indexOf('ledger\tspan\tbattery\t400') >= 0, run.output);
+		Assert.isTrue(run.output.indexOf('ledger\tbattery-overhead\tland\t') >= 0, run.output);
+		Assert.equals(-1, run.output.indexOf(LandLedgerSeam.STALE_ROW), run.output);
 	}
 
 	@:pin('control')
@@ -203,10 +213,14 @@ final class LandTest extends Test {
 		Assert.isTrue(tenth.output.indexOf('battery full: landing 10') >= 0, tenth.output);
 	}
 
+	/** The battery is handed the land's own ledger file, and the rows it writes there come back as the land's ledger lines. */
+	@:pin('control')
+	@:killer('M-LAND-NO-LEDGER-FLAG')
 	public function testAskedForFullTheBatteryIsFullWhateverTheMergeBrings(): Void {
 		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: true, landed: 0 });
 		Assert.same([['--base', run.base]], run.flags);
 		Assert.isTrue(run.output.indexOf('battery full: --full') >= 0, run.output);
+		Assert.isTrue(run.output.indexOf('ledger\tspan\tbattery\t400') >= 0, run.output);
 	}
 
 	public function testEveryPathWhereShardsAndTheMonolithCanDivergeAsksForFull(): Void {
@@ -895,7 +909,7 @@ final class LandTest extends Test {
 			final headBefore: String = cmd('git -C $repo rev-parse HEAD').run().out.trim();
 			final base: String = headBefore.substr(0, dev.Battery.KEY_LENGTH);
 			final logs: String = dir.file('logs');
-			FileSystem.createDirectory(logs);
+			LandLedgerSeam.seedStale(logs);
 			final printed: Array<String> = [];
 			final flags: Array<Array<String>> = [];
 			var builds: Int = 0;
@@ -955,7 +969,9 @@ final class LandTest extends Test {
 				},
 				format: shape.format ?? idle(),
 				exec: (words, tree, log) -> {
-					flags.push(words);
+					// the battery's own ledger file is per land, so the recorded flags leave it out
+					flags.push(words.filter(word -> !word.endsWith('ledger')));
+					LandLedgerSeam.fill(words);
 					final at: Int = words.indexOf('--repo');
 					if (at >= 0) {
 						builtTree = words[at + 1];

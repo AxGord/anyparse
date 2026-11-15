@@ -11,6 +11,7 @@ import dev.SuiteImpact.SuiteScope;
 import devkit.Args.UsageError;
 import devkit.Branches;
 import devkit.Cmd.cmd;
+import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.Result;
 import devkit.Summary;
@@ -89,6 +90,9 @@ final class Land {
 		'src/anyparse/runtime/'
 	];
 
+	/** The phase a land's own rows carry in the ledger. */
+	private static final LAND_PHASE: String = 'land';
+
 	private final _summary: Summary = new Summary();
 	private final _repo: String;
 	private final _branch: String;
@@ -153,6 +157,9 @@ final class Land {
 	private function run(message: Null<String>, battery: Null<BatteryRequest>, warm: Null<WarmStart>, sweep: Null<SweepStart>): Int {
 		final cache: Null<String> = battery?.cache;
 		var landing: Null<Int> = null;
+		final batteryRows: String = Path.join([_logs, 'battery.ledger']);
+		// the logs outlive an attempt: an earlier land's battery rows are never this one's
+		if (FileSystem.exists(batteryRows)) FileSystem.deleteFile(batteryRows);
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
 			{ name: 'post-red', step: () -> PostLand.unsettled(cache, _postLand, _repo, _summary.detail) },
 			{ name: 'clean', step: clean },
@@ -162,7 +169,7 @@ final class Land {
 			{ name: 'build', step: build },
 			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message) },
-			{ name: 'battery', step: () -> runBattery(battery, claimed -> landing = claimed) },
+			{ name: 'battery', step: () -> runBattery(battery, claimed -> landing = claimed, batteryRows) },
 			{ name: 'advance', step: _candidate.advance },
 			{ name: 'binaries', step: install },
 			{ name: 'prose-refs', step: _prose.run },
@@ -180,9 +187,16 @@ final class Land {
 					ArmSweep.afterwards(sweep, landing, ArmSweep.EVERY, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail)
 			}
 		];
+		final ledger: Null<ExecLedger> = cache == null ? null : ExecLedger.under(cache);
+
 		for (s in steps) if (_summary.passed()) _summary.time(s.name, s.step);
 		final left: Null<String> = _candidate.drop();
 		_print(_summary.table());
+		final inner: Array<LedgerRow> = FileSystem.exists(batteryRows) ? new ExecLedger(batteryRows).rows() : [];
+		for (row in ExecLedger.ofLand(ExecLedger.ofSteps(LAND_PHASE, _summary.steps(), Date.now().getTime()), inner)) {
+			ledger?.record(row);
+			_print(ExecLedger.line(row));
+		}
 		final race: Null<String> = _race;
 		if (race != null) _print(race);
 		if (left != null) _print('the candidate tree ${_candidate.tree} is left in place: $left');
@@ -316,7 +330,7 @@ final class Land {
 	 * decided here, from what the commit brought in and the count of landings, and the row names why; the number this landing
 	 * claimed from that count goes to `claimed`.
 	 */
-	private function runBattery(request: Null<BatteryRequest>, claimed: Int -> Void): Outcome {
+	private function runBattery(request: Null<BatteryRequest>, claimed: Int -> Void, ledger: String): Outcome {
 		if (request == null) return Skipped(NO_BATTERY);
 		final landing: Int = Tally.next(Path.join([request.cache, TALLY_DIR]));
 		claimed(landing);
@@ -328,6 +342,9 @@ final class Land {
 			request.allowBlast, request.snapshot, why != null, request.leased, request.allow, _base, record,
 			why == null ? impactFile() : null
 		);
+		// the battery's rows come back through a file of this land's own, never by position in the shared ledger
+		flags.push('--ledger');
+		flags.push(ledger);
 		final log: String = Path.join([_logs, 'battery.log']);
 		return switch _exec(flags, _candidate.tree, log) {
 			case Failed(failure):
@@ -336,7 +353,6 @@ final class Land {
 			case other: other;
 		};
 	}
-
 
 	private function git(words: Array<String>): Result {
 		return cmd('git -C $_repo $words').run();

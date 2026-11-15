@@ -15,6 +15,7 @@ import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.LeaseHistory;
 import devkit.Pool;
@@ -45,8 +46,8 @@ final class Battery {
 	/** The characters of HEAD a snapshot is keyed by. */
 	public static inline final KEY_LENGTH: Int = 8;
 
-	/** What a branch may run before it is killed: a wedged run, not a slow one. */
-	private static inline final BRANCH_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
+	/** A wall reading in seconds becomes one in milliseconds. */
+	private static inline final MS_PER_SECOND: Float = 1000;
 
 	/** The readings a branch leaves: the suite's counts, the corpus sweep's, and whether the client tree was linted. */
 	private static final TESTS: String = 'tests';
@@ -126,18 +127,8 @@ final class Battery {
 			'battery: running suite→corpus ∥ fmt ∥ jvm ∥ oracle→lint concurrently — output replays in a fixed order once they join'
 		);
 		final parallel: Float = Timer.stamp();
-		final command: Array<String> -> Command = rows -> Command.of([
-			'node',
-			self,
-			'battery',
-			'--rows',
-			rows.join(','),
-			'--plan',
-			workFile('plan.json')
-		])
-			.at(_plan.repo)
-			.env(GateTree.ENGINE_VAR, Path.join([_plan.repo, 'bin/apq.js']))
-			.timeout(BRANCH_TIMEOUT_MS);
+		final command: Array<String> -> Command = rows ->
+			BatteryBranch.command(_plan, self, workFile('plan.json'), rows, branchReport(rows));
 		final order: Array<String> = [for (rows in BRANCHES) for (row in rows) row];
 		final leased: Array<String> -> Command = Branches.leased(
 			_mode, BRANCHES, branchThreads, command, 'battery ${_plan.head}', LeaseHistory.under(_plan.cache)
@@ -164,6 +155,7 @@ final class Battery {
 				return Passed;
 			});
 		}
+		BatteryBranch.carryThreads(_summary.steps(), rows, PoolLease.threads());
 		Branches.leave(branchReport(rows), _plan.run, _summary, _readings);
 		if (_plan.ownLease && branchThreads(rows) == null)
 			Branches.record(LeaseHistory.under(_plan.cache), 'battery ${_plan.head}', rows, PoolLease.threads(), _summary);
@@ -208,6 +200,16 @@ final class Battery {
 			Sys.println('');
 		}
 		Sys.println(_summary.table());
+		// the battery's own rows leave its process only through a ledger: the land's file when it handed one, which it cuts its step by
+		final file: Null<String> = _plan.ledger;
+		final ledger: ExecLedger = file == null ? ExecLedger.under(_plan.cache) : new ExecLedger(file);
+		for (row in ExecLedger.ofSteps(ExecLedger.BATTERY_ROW, _summary.steps(), Date.now().getTime())) ledger.record(row);
+		ledger.record({
+			row: ExecLedger.SPAN_ROW,
+			phase: ExecLedger.BATTERY_ROW,
+			wallMs: (Timer.stamp() - started) * MS_PER_SECOND,
+			at: Date.now().getTime()
+		});
 		final wall: String = seconds(Timer.stamp() - started);
 		Sys.println('');
 		if (span == null) {
@@ -548,6 +550,7 @@ final class Battery {
 		final noJvm: Bool = args.flag('--no-jvm');
 		final reuse: Null<String> = args.option('--reuse');
 		final onlyFile: Null<String> = args.option('--only');
+		final ledger: Null<String> = BatteryBranch.ledgerOf(args);
 		final repo: String = Repo.resolve(args.option('--repo'));
 		args.done();
 		for (name in allow) if (!rowNames().contains(name))
@@ -587,7 +590,8 @@ final class Battery {
 			run: Branches.newRunId(),
 			ownLease: mode.match(Own(_, _)),
 			gate: offer.gate,
-			reused: offer.rows
+			reused: offer.rows,
+			ledger: ledger
 		};
 		final status: Int = try {
 			new Battery(plan, mode).drive();

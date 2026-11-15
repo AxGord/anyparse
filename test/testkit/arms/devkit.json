@@ -253,6 +253,22 @@
 			"find": "if (first != step.name) row.branch = first;",
 			"replace": "",
 			"note": "a gate step after its branch first names no branch, so the ledger sums it apart from the cpu its branch used"
+		},
+		{
+			"name": "M-EXECLEDGER-BATTERY-TWICE",
+			"type": "devkit.ExecLedger",
+			"method": "withoutDoubleCount",
+			"find": "Math.max(0, row.wallMs - covered)",
+			"replace": "row.wallMs",
+			"note": "the land battery step keeps its whole wall beside the battery rows, so a sum over the ledger counts the battery twice"
+		},
+		{
+			"name": "M-EXECLEDGER-LAND-DROPS-BATTERY",
+			"type": "devkit.ExecLedger",
+			"method": "ofLand",
+			"find": ".concat(inner)",
+			"replace": "",
+			"note": "a land records only its own rows, so the battery rows its child wrote never reach the shared ledger"
 		}
 	]
 }

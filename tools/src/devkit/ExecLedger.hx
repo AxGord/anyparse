@@ -20,6 +20,17 @@ final class ExecLedger {
 	/** The file's name under the cache directory. */
 	public static final FILE: String = 'exec-ledger.tsv';
 
+	/** The land step that runs the battery, and the row it becomes once the battery's own rows are taken out of it. */
+	public static final BATTERY_ROW: String = 'battery';
+
+	public static final OVERHEAD_ROW: String = 'battery-overhead';
+
+	/** The battery's own elapsed wall: its branches overlap, so only this row, never the sum of the others, says what the battery took. */
+	public static final SPAN_ROW: String = 'span';
+
+	/** The tag that starts a printed ledger line. */
+	public static final LINE_TAG: String = 'ledger';
+
 	/** The fields a line must have to name a row: its row, phase and wall time. */
 	private static inline final MIN_FIELDS: Int = 3;
 
@@ -120,6 +131,46 @@ final class ExecLedger {
 			out.push(row);
 		}
 		return out;
+	}
+
+	/** The ledger of the blast cache `cache`. */
+	public static function under(cache: String): ExecLedger {
+		return new ExecLedger(haxe.io.Path.join([cache, FILE]));
+	}
+
+
+	/**
+	 * The land's rows with its `battery` step renamed `battery-overhead` and cut by the battery's `span` row in `inner`, so
+	 * a sum over the land's rows and the span counts the battery once; the battery's other rows overlap and are a breakdown, never
+	 * summed. An overhead below zero is zero.
+	 */
+	public static function withoutDoubleCount(land: Array<LedgerRow>, inner: Array<LedgerRow>): Array<LedgerRow> {
+		var covered: Float = 0;
+		for (row in inner) if (row.row == SPAN_ROW) covered += row.wallMs;
+		return land.map(row ->
+			row.row != BATTERY_ROW
+				? row
+				: ({
+					row: OVERHEAD_ROW,
+					phase: row.phase,
+					wallMs: Math.max(0, row.wallMs - covered),
+					waitMs: row.waitMs,
+					cpuS: row.cpuS,
+					threads: row.threads,
+					branch: row.branch,
+					at: row.at
+				}: LedgerRow)
+		);
+	}
+
+	/** `entry` as the machine-readable line a tool prints for it: `ledger TAB` and its encoded line. */
+	public static function line(entry: LedgerRow): String {
+		return '$LINE_TAG\t${encode(entry)}';
+	}
+
+	/** What a land records: its rows cut by `withoutDoubleCount`, then the battery's own rows `inner` as the battery wrote them. */
+	public static function ofLand(land: Array<LedgerRow>, inner: Array<LedgerRow>): Array<LedgerRow> {
+		return withoutDoubleCount(land, inner).concat(inner);
 	}
 
 	/** The reading in field `at`, or null when the line has no such field or it is empty or no number. */
