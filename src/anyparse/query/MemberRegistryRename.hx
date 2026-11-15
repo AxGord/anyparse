@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.CrossRename.FileChange;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
+import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.query.TypePathRegistries.MemberKeys;
 import anyparse.query.TypePathRegistries.MemberRecord;
 import anyparse.query.TypePathRegistries.RegistryEdit;
@@ -9,7 +10,6 @@ import anyparse.query.TypePathRegistries.StringSlot;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
-using anyparse.util.Strings;
 using Lambda;
 
 /** One module a member rename changed: its source before and after, and the spans the op proved to be the member. */
@@ -39,10 +39,10 @@ typedef RegistryFollow = { final text: Null<String>; final count: Int; final not
 final class MemberRegistryRename {
 
 	/** The access operator a receiver spells before a member. */
-	private static inline final ACCESS: Int = '.'.code;
+	private static final ACCESS: String = '.';
 
-	/** How a member of the enclosing instance is spelled with a receiver. */
-	private static final SELF_RECEIVER: String = 'this.';
+	/** The receiver that names the enclosing instance. */
+	private static final SELF_RECEIVER: String = 'this';
 
 	/**
 	 * The rename the op's `changes` performed over `sources`, the originals it read; null when it changed nothing.
@@ -78,15 +78,23 @@ final class MemberRegistryRename {
 	public static function follow(members: MemberKeys, json: String, rename: MemberRename, plugin: GrammarPlugin): RegistryFollow {
 		final edits: Array<RegistryEdit> = [];
 		final notes: Array<String> = [];
-		for (record in TypePathRegistries.memberRecords(members, json)) {
-			for (held in record.opaque) if (tokensOf(held.slot.value, rename.oldName).length > 0)
+		final records: Array<MemberRecord> = TypePathRegistries.memberRecords(members, json);
+		if (records.length > 0 && tokensOf(rename.oldName, rename.oldName, plugin).length != 1) return {
+			text: null,
+			count: 0,
+			notes: [
+				'the grammar reads no word "${rename.oldName}", so no record follows its rename — re-aim them'
+			]
+		};
+		for (record in records) {
+			for (held in record.opaque) if (tokensOf(held.slot.value, rename.oldName, plugin).length > 0)
 				notes.push(
 					'arm ${record.name}: its "${held.key}" value spells "${rename.oldName}", which a rename does not follow — re-aim it'
 				);
 			final module: Null<RenamedModule> = rename.modules.find(m -> m.path == record.type);
 			final member: Null<StringSlot> = record.member;
 			if (module == null)
-				nameUnprovenReplaces(record, rename.oldName, notes);
+				nameUnprovenReplaces(record, rename.oldName, plugin, notes);
 			else if (member != null)
 				followRecord(record, member, module, rename, plugin, edits, notes);
 		}
@@ -128,16 +136,24 @@ final class MemberRegistryRename {
 		return edit.from < cut.to && cut.from < edit.to && (edit.from < cut.from || edit.to > cut.to);
 	}
 
+	private static inline function textOf(text: String, span: TokenSpan): String {
+		return text.substring(span.from, span.to);
+	}
+
 	/**
 	 * The notes of one record on a module the rename left alone. A replace there is named only for a receiver-qualified
 	 * spelling its find lacks: a bare or `this.` spelling in an unedited module is that module's own member unless it is
 	 * inherited, and the source cannot say which, so it stays silent.
 	 */
-	private static function nameUnprovenReplaces(record: MemberRecord, old: String, notes: Array<String>): Void {
+	private static function nameUnprovenReplaces(record: MemberRecord, old: String, plugin: GrammarPlugin, notes: Array<String>): Void {
 		if (record.replaces.length != record.finds.length) return;
 		for (i in 0...record.finds.length) {
 			final replace: String = record.replaces[i].value;
-			if (tokensOf(record.finds[i].value, old).length == 0 && tokensOf(replace, old).exists(at -> !isSelfSpelling(replace, at)))
+			final spans: Array<TokenSpan> = plugin.tokenSpans(replace, 0, replace.length);
+			if (
+				tokensOf(record.finds[i].value, old, plugin).length == 0
+				&& TokenSpans.wordOffsets(spans, replace, old).exists(at -> !isSelfSpelling(replace, spans, at))
+			)
 				notes.push(
 					'arm ${record.name}: its replace spells "$old" on a receiver the rename cannot read — re-aim it if that is this member'
 				);
@@ -151,7 +167,7 @@ final class MemberRegistryRename {
 	): Void {
 		final old: String = rename.oldName;
 		final renamed: Bool = member.value == old
-			&& selected(module.tree, record.kind, old, plugin).exists(node -> nameEdited(module, node, old));
+			&& selected(module.tree, record.kind, old, plugin).exists(node -> nameEdited(module, node, old, plugin));
 		if (renamed) edits.push(TypePathRegistries.spliceOf(member, 0, member.value.length, rename.newName));
 		final targets: Array<QueryNode> = selected(module.tree, record.kind, member.value, plugin);
 		if (targets.length != 1) return;
@@ -162,8 +178,8 @@ final class MemberRegistryRename {
 			final find: StringSlot = record.finds[i];
 			final cut: Null<Span> = Patch.cutSpan(module.source, module.tree, target, find.value, plugin);
 			if (cut == null) continue;
-			final inFind: Array<Int> = tokensOf(find.value, old);
-			final inSource: Array<Int> = tokensOf(module.source.substring(cut.from, cut.to), old);
+			final inFind: Array<Int> = tokensOf(find.value, old, plugin);
+			final inSource: Array<Int> = tokensOf(module.source.substring(cut.from, cut.to), old, plugin);
 			if (inFind.length != inSource.length || module.edited.exists(e -> straddles(e, cut))) {
 				notes.push('arm ${record.name}: its find cannot be carried over the rename of "$old" — re-aim it');
 				continue;
@@ -176,13 +192,13 @@ final class MemberRegistryRename {
 			if (record.replaces.length != record.finds.length) continue;
 			final replace: StringSlot = record.replaces[i];
 			final replaced: Null<Array<Bool>> = replaceVerdicts(
-				find.value, inFind, verdicts, replace.value, old, holdsRenamedMember.bind(module, target, old, plugin)
+				find.value, inFind, verdicts, replace.value, old, plugin, holdsRenamedMember.bind(module, target, old, plugin)
 			);
 			if (replaced == null) {
 				notes.push(unprovenReplace(record, old));
 				continue;
 			}
-			for (k => at in tokensOf(replace.value, old)) if (replaced[k])
+			for (k => at in tokensOf(replace.value, old, plugin)) if (replaced[k])
 				edits.push(TypePathRegistries.spliceOf(replace, at, at + old.length, rename.newName));
 		}
 	}
@@ -194,19 +210,21 @@ final class MemberRegistryRename {
 	 * a type holding a renamed declaration (`holdsRenamed`). Null when some token has no verdict.
 	 */
 	private static function replaceVerdicts(
-		find: String, inFind: Array<Int>, verdicts: Array<Bool>, replace: String, old: String, holdsRenamed: () -> Bool
+		find: String, inFind: Array<Int>, verdicts: Array<Bool>, replace: String, old: String, plugin: GrammarPlugin,
+		holdsRenamed: () -> Bool
 	): Null<Array<Bool>> {
 		final prefix: Int = sharedPrefix(find, replace);
 		final suffix: Int = sharedSuffix(find, replace, prefix);
 		final out: Array<Bool> = [];
-		for (at in tokensOf(replace, old)) {
+		final spans: Array<TokenSpan> = plugin.tokenSpans(replace, 0, replace.length);
+		for (at in TokenSpans.wordOffsets(spans, replace, old)) {
 			final inPrefix: Int = at + old.length <= prefix ? inFind.indexOf(at) : -1;
 			final inSuffix: Int = at >= replace.length - suffix ? inFind.indexOf(at + find.length - replace.length) : -1;
 			final shared: Int = inPrefix >= 0 ? inPrefix : inSuffix;
 			final verdict: Null<Bool> = if (shared >= 0)
 				verdicts[shared]
 			else if (verdicts.length == 0) {
-				isSelfSpelling(replace, at) && holdsRenamed() ? true : null;
+				isSelfSpelling(replace, spans, at) && holdsRenamed() ? true : null;
 			} else if (verdicts.exists(v -> v != verdicts[0])) {
 				null;
 			} else {
@@ -218,11 +236,13 @@ final class MemberRegistryRename {
 		return out;
 	}
 
-	/** Whether the token at `at` of `text` is spelled with no receiver, or with the enclosing instance as its receiver. */
-	private static function isSelfSpelling(text: String, at: Int): Bool {
-		if (at == 0 || text.fastCodeAt(at - 1) != ACCESS) return true;
-		final from: Int = at - SELF_RECEIVER.length;
-		return from >= 0 && text.substring(from, at) == SELF_RECEIVER && (from == 0 || !text.fastCodeAt(from - 1).isIdentChar());
+	/**
+	 * Whether the token of `spans` (the tokens of `text`) starting at `at` is spelled with no receiver, or with the
+	 * enclosing instance as its receiver. An access is any token ending in the access spelling, so `?.` is one.
+	 */
+	private static function isSelfSpelling(text: String, spans: Array<TokenSpan>, at: Int): Bool {
+		final k: Int = spans.findIndex(span -> span.from == at);
+		return k < 1 || !textOf(text, spans[k - 1]).endsWith(ACCESS) || (k >= 2 && textOf(text, spans[k - 2]) == SELF_RECEIVER);
 	}
 
 	/** Whether the top-level type around `target` declares a member named `name` whose name the rename edited. */
@@ -234,7 +254,7 @@ final class MemberRegistryRename {
 			var held: Bool = false;
 			MemberBranchScan.eachTypeMember(
 				decl, plugin.refShape(), module.source, n -> n.name == name,
-				(member, _) -> if (nameEdited(module, member, name)) held = true, plugin.lexicalRegions.bind(module.source)
+				(member, _) -> if (nameEdited(module, member, name, plugin)) held = true, plugin.lexicalRegions.bind(module.source)
 			);
 			return held;
 		}
@@ -242,20 +262,16 @@ final class MemberRegistryRename {
 	}
 
 	/** Whether the first `name` token of the declaration `node`, its own name, carries an edit of the rename. */
-	private static function nameEdited(module: RenamedModule, node: QueryNode, name: String): Bool {
+	private static function nameEdited(module: RenamedModule, node: QueryNode, name: String, plugin: GrammarPlugin): Bool {
 		final span: Null<Span> = node.span;
-		return span != null && isEdited(module, SourceText.identTokenOffset(module.source, span, name));
+		if (span == null) return false;
+		final found: Array<Int> = TokenSpans.wordOffsets(plugin.tokenSpans(module.source, span.from, span.to), module.source, name);
+		return found.length > 0 && isEdited(module, found[0]);
 	}
 
-	/** The offset of every identifier token `name` of `text`, the text's own ends counting as boundaries. */
-	private static function tokensOf(text: String, name: String): Array<Int> {
-		final out: Array<Int> = [];
-		var at: Int = SourceText.identTokenOffset(text, new Span(0, text.length), name);
-		while (at >= 0) {
-			out.push(at);
-			at = SourceText.identTokenOffset(text, new Span(at + name.length, text.length), name);
-		}
-		return out;
+	/** The offset of every token of `text` that spells `name` as a word, by the grammar's own token reader. */
+	private static function tokensOf(text: String, name: String, plugin: GrammarPlugin): Array<Int> {
+		return TokenSpans.wordOffsets(plugin.tokenSpans(text, 0, text.length), text, name);
 	}
 
 	/** `text` with the `old` tokens at `offsets` (ascending) replaced by `name`. */

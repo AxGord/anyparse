@@ -37,4 +37,21 @@ final class TokenSpans {
 		return spans.map(span -> source.substring(span.from, span.to));
 	}
 
+	/**
+	 * The start of every token of `spans` that spells `name` as a word: a `Word`, or a `Literal` of the same text, since a
+	 * declared keyword wins its tie with the word pattern and a contextual keyword used as a name (`from`) reads as one.
+	 * A region never counts, so a name inside a string or a comment is not a token of it.
+	 */
+	public static function wordOffsets(spans: Array<TokenSpan>, source: String, name: String): Array<Int> {
+		return [
+			for (span in spans)
+				if (
+					(span.kind == Word || span.kind == Literal)
+					&& span.to - span.from == name.length
+					&& source.substr(span.from, name.length) == name
+				)
+					span.from
+		];
+	}
+
 }

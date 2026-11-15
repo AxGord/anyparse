@@ -2859,6 +2859,36 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "RT1",
+			"note": "a registry find holding the renamed name inside a string: the quoted name is no token, so the replace follows its one real token",
+			"argv": [
+				"hxq",
+				"rename",
+				"src/p/Base.hx",
+				"6:18",
+				"step",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"move\": {\"scope\": [\"src\"], \"registries\": [{\"file\": \"arms.json\", \"keys\": [\"arms.type\"], \"members\": {\"records\": \"arms\", \"name\": \"name\", \"type\": \"type\", \"member\": \"method\", \"kind\": \"kind\", \"defaultKind\": \"FnMember\", \"find\": \"find\", \"replace\": \"replace\", \"opaque\": [\"force\"]}}]}}\n",
+				"arms.json": "{\"arms\": [{\"name\": \"QUOTED\", \"type\": \"p.Base\", \"method\": \"label\", \"find\": \"return 'walk' + walk();\", \"replace\": \"walk() + 1;\"}]}\n",
+				"src/p/Base.hx": "package p;\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic function walk(): Int {\n\t\treturn 1;\n\t}\n\n\tpublic function label(): String {\n\t\treturn 'walk' + walk();\n\t}\n}\n",
+				"main/Main.hx": "class Main { static function main() { new p.Base().label(); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "0bb0bf53e1cde675",
+				"files": "1e9890ed71eb23c5",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.json.JsonText;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRenameMember;
@@ -236,16 +237,18 @@ final class MemberRegistryRenameTest extends Test {
 	}
 
 	public function testMixedVerdictsLeaveTheReplaceAndNameTheRecord(): Void {
-		final out: ArmsAfter = followBase([
+		final source: String = 'package p;\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic function walk(): Int {\n\t\treturn 1;\n'
+			+ '\t}\n\n\tpublic function label(): Int {\n\t\tfinal walk: Int = 2;\n\t\treturn walk + this.walk();\n\t}\n}\n';
+		final out: ArmsAfter = follow('src/p/Base.hx', source, 'function walk', 'step', [
 			{
 				name: 'MIXED',
 				type: 'p.Base',
 				method: 'label',
-				find: 'return \'walk\' + walk();',
+				find: 'return walk + this.walk();',
 				replace: 'walk() + 1;'
 			}
 		]);
-		Assert.equals('return \'walk\' + step();', out.arm('MIXED').find);
+		Assert.equals('return walk + this.step();', out.arm('MIXED').find);
 		Assert.equals('walk() + 1;', out.arm('MIXED').replace);
 		Assert.isTrue(
 			out.notes.length == 1 && out.notes[0].startsWith('arm MIXED: ') && out.notes[0].endsWith('re-aim it'), out.notes.join('|')
@@ -480,6 +483,103 @@ final class MemberRegistryRenameTest extends Test {
 		Assert.isNull(followed.text);
 		Assert.equals(0, followed.count);
 		Assert.isNull(MemberRegistryRename.of([], SCOPE, 'step', new HaxeQueryPlugin()));
+	}
+
+	/** A name inside a string is no token of the find, so the find's one real token decides the replace's own token. */
+	@:pin('control')
+	@:killer('M-REGISTRY-TOKENS-BY-TEXT')
+	public function testANameInsideAStringIsNoTokenOfTheFind(): Void {
+		final out: ArmsAfter = followBase([
+			{
+				name: 'QUOTED',
+				type: 'p.Base',
+				method: 'label',
+				find: 'return \'walk\' + walk();',
+				replace: 'walk() + 1;'
+			}
+		]);
+		Assert.equals('return \'walk\' + step();', out.arm('QUOTED').find);
+		Assert.equals('step() + 1;', out.arm('QUOTED').replace);
+		Assert.same([], out.notes);
+	}
+
+	/** A receiver read token by token: `b . walk()` names `b` as the receiver however the access is spaced. */
+	@:pin('control')
+	@:killer('M-REGISTRY-SELF-SPELLING-BY-CHAR')
+	public function testASpacedReceiverIsStillAReceiver(): Void {
+		final out: ArmsAfter = followBase([
+			{
+				name: 'SPACED',
+				type: 'p.Quiet',
+				method: 'run',
+				find: 'return 0;',
+				replace: 'return b . walk();'
+			},
+			{
+				name: 'SPACED-SELF',
+				type: 'p.Quiet',
+				method: 'run',
+				find: 'return 0;',
+				replace: 'return this . walk();'
+			}
+		]);
+		Assert.same(['arm SPACED'], out.notes.map(note -> note.split(':')[0]));
+	}
+
+	/** An optional-chaining access `?.` is an access: `b?.walk()` names `b` as the receiver, `this?.walk()` the instance. */
+	@:pin('control')
+	@:killer('M-REGISTRY-OPTIONAL-ACCESS-SELF')
+	public function testAnOptionalChainIsAReceiver(): Void {
+		final out: ArmsAfter = followBase([
+			{
+				name: 'OPTIONAL',
+				type: 'p.Quiet',
+				method: 'run',
+				find: 'return 0;',
+				replace: 'return b?.walk();'
+			},
+			{
+				name: 'OPTIONAL-SELF',
+				type: 'p.Quiet',
+				method: 'run',
+				find: 'return 0;',
+				replace: 'return this?.walk();'
+			},
+			{
+				name: 'OPTIONAL-RENAMED',
+				type: 'p.Base',
+				method: 'label',
+				find: 'trace(\'walk\');',
+				replace: 'trace(other?.walk());'
+			}
+		]);
+		Assert.same(['arm OPTIONAL', 'arm OPTIONAL-RENAMED'], out.notes.map(note -> note.split(':')[0]));
+		Assert.equals('return b?.walk();', out.arm('OPTIONAL').replace);
+		Assert.equals('trace(other?.walk());', out.arm('OPTIONAL-RENAMED').replace);
+	}
+
+	/** A grammar whose token reader does not read the name as a word follows no record and says so once. */
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-NO-READER-SILENT')
+	public function testAGrammarThatReadsNoWordFollowsNothingAndSaysSo(): Void {
+		final rename: Null<MemberRename> = renameOf('src/p/Base.hx', BASE, 'function walk', 'step');
+		if (rename == null) {
+			Assert.fail('the fixture renames');
+			return;
+		}
+		final doc: String = document([
+			{
+				name: 'A',
+				type: 'p.Base',
+				method: 'walk',
+				find: 'return 1;'
+			}
+		]);
+		final followed: RegistryFollow = MemberRegistryRename.follow(LAYOUT, doc, rename, new JsonQueryPlugin());
+		Assert.isNull(followed.text);
+		Assert.same([
+			'the grammar reads no word "walk", so no record follows its rename — re-aim them'
+		], followed.notes);
 	}
 
 	private static function followBase(arms: Array<ArmRow>): ArmsAfter {

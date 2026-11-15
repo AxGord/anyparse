@@ -17060,6 +17060,52 @@
 			"find": "|| rewrite.tokens.filter(token -> token.from < end && start < token.to).length == 1;",
 			"replace": "|| true;",
 			"note": "every deleted run counts as one token, so an array literal the rewrite replaced by a name still carries the edit inside it"
+		},
+		{
+			"name": "M-WORD-OFFSETS-LITERAL-DROPPED",
+			"type": "anyparse.query.TokenSpans",
+			"method": "wordOffsets",
+			"find": "span.kind == Word || span.kind == Literal",
+			"replace": "span.kind == Word",
+			"note": "a contextual keyword spelled as a name (from, to) reads as a Literal and is no longer a word of it, so a member named to is never found"
+		},
+		{
+			"name": "M-WORD-OFFSETS-ANY-WORD",
+			"type": "anyparse.query.TokenSpans",
+			"method": "wordOffsets",
+			"force": "[for (span in spans) if (span.kind == Word) span.from]",
+			"note": "every word token counts whatever its text, so a longer name or another name reads as the one asked for"
+		},
+		{
+			"name": "M-REGISTRY-SELF-SPELLING-BY-CHAR",
+			"type": "anyparse.query.MemberRegistryRename",
+			"method": "isSelfSpelling",
+			"find": "!textOf(text, spans[k - 1]).endsWith(ACCESS)",
+			"replace": "text.charAt(at - 1) != ACCESS",
+			"note": "the receiver is read off the character before the name again, so a spaced access b . walk() reads as a bare self spelling and its replace is not named"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-NO-READER-SILENT",
+			"type": "anyparse.query.MemberRegistryRename",
+			"method": "follow",
+			"find": "records.length > 0 && tokensOf(rename.oldName, rename.oldName, plugin).length != 1",
+			"replace": "false",
+			"note": "a grammar with no token reader finds no token of any record and follows nothing without a word"
+		},
+		{
+			"name": "M-REGISTRY-TOKENS-BY-TEXT",
+			"type": "anyparse.query.MemberRegistryRename",
+			"method": "tokensOf",
+			"force": "[for (i in 0...text.length - name.length + 1) if (text.substr(i, name.length) == name) i]",
+			"note": "the name is found by its text again, so a quoted name inside a find reads as an unedited token and its verdicts disagree"
+		},
+		{
+			"name": "M-REGISTRY-OPTIONAL-ACCESS-SELF",
+			"type": "anyparse.query.MemberRegistryRename",
+			"method": "isSelfSpelling",
+			"find": "!textOf(text, spans[k - 1]).endsWith(ACCESS)",
+			"replace": "textOf(text, spans[k - 1]) != ACCESS",
+			"note": "only a plain . reads as an access, so b?.walk() reads as a bare self spelling and a foreign member's replace is rewritten unnamed"
 		}
 	]
 }
