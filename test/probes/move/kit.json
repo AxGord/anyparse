@@ -2609,6 +2609,256 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "MQ1",
+			"note": "import p.* binds D: D.Sub is the moved type, refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/D.hx",
+				"--select",
+				"ClassDecl:Sub",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/D.hx": "package p;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n\nclass Sub {\n\tpublic static function h():Int\n\t\treturn 2;\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"src/r/C.hx": "package r;\n\nimport p.*;\n\nclass C {\n\tpublic static function g():Int return D.Sub.h();\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(r.C); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "bf61dce095e15d2b",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MQ2",
+			"note": "var x:D.Sub type position in the same package, refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/D.hx",
+				"--select",
+				"ClassDecl:Sub",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/C.hx": "package p;\n\nclass C {\n\tpublic static var x:D.Sub;\n}\n",
+				"src/p/D.hx": "package p;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n\nclass Sub {\n\tpublic static function h():Int\n\t\treturn 2;\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"main/Main.hx": "class Main { static function main() { trace(p.C); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "5b5c7e04bd590f15",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MQ3",
+			"note": "using p.D binds D: D.Sub refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/D.hx",
+				"--select",
+				"ClassDecl:Sub",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/D.hx": "package p;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n\nclass Sub {\n\tpublic static function h():Int\n\t\treturn 2;\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"src/r/C.hx": "package r;\n\nusing p.D;\n\nclass C {\n\tpublic static function g():Int return D.Sub.h();\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(r.C); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "bf61dce095e15d2b",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "MQ4",
+			"note": "package p.x resolves D through its parent package: D.Sub refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/D.hx",
+				"--select",
+				"ClassDecl:Sub",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/D.hx": "package p;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n\nclass Sub {\n\tpublic static function h():Int\n\t\treturn 2;\n}\n",
+				"src/p/x/C.hx": "package p.x;\n\nclass C {\n\tpublic static function g():Int return D.Sub.h();\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"main/Main.hx": "class Main { static function main() { trace(p.x.C); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "464cc2799f5060ca",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MQ5",
+			"note": "an import.hx import p.D binds D in another package: D.Sub refused",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/D.hx",
+				"--select",
+				"ClassDecl:Sub",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/D.hx": "package p;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n\nclass Sub {\n\tpublic static function h():Int\n\t\treturn 2;\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"src/r/C.hx": "package r;\n\nclass C {\n\tpublic static function g():Int return D.Sub.h();\n}\n",
+				"src/r/import.hx": "import p.D;\n",
+				"main/Main.hx": "class Main { static function main() { trace(r.C); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "bf61dce095e15d2b",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "MQ6",
+			"note": "import p.D as DD: DD.Sub refused naming the alias spelling",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/D.hx",
+				"--select",
+				"ClassDecl:Sub",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/D.hx": "package p;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n\nclass Sub {\n\tpublic static function h():Int\n\t\treturn 2;\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"src/r/C.hx": "package r;\n\nimport p.D as DD;\n\nclass C {\n\tpublic static function g():Int return DD.Sub.h();\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(r.C); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f9c86f513b88a562",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "MQ7",
+			"note": "import r.D shadows the same-package p.D: D.Sub is r.D static, the move proceeds",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/D.hx",
+				"--select",
+				"ClassDecl:Sub",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/p/C.hx": "package p;\n\nimport r.D;\n\nclass C {\n\tpublic static function g():Dynamic return D.Sub;\n}\n",
+				"src/p/D.hx": "package p;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n\nclass Sub {\n\tpublic static function h():Int\n\t\treturn 2;\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"src/r/D.hx": "package r;\n\nclass D {\n\tpublic static final Sub: Dynamic = null;\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(p.C); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "cb417c7333660c0f",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MQ8",
+			"note": "moving the MAIN type a.b.D with an unrelated b.D field read in package a: the move proceeds",
+			"argv": [
+				"hxq",
+				"move",
+				"src/a/b/D.hx",
+				"--select",
+				"ClassDecl:D",
+				"src/q/E.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/a/X.hx": "package a;\n\nclass X {\n\tstatic var b = {D: 1};\n\tpublic static function g():Int return b.D;\n}\n",
+				"src/a/b/D.hx": "package a.b;\n\nclass D {\n\tpublic static function f():Int return 1;\n}\n",
+				"src/q/E.hx": "package q;\n\nclass E {}\n",
+				"main/Main.hx": "class Main { static function main() { trace(a.X); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "4f16c38b8b410219",
+				"files": "63857a38f6011188",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

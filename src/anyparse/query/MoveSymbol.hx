@@ -200,7 +200,7 @@ final class MoveSymbol {
 		// that was only asked cross-package let `pony.net.rpc.IRPC.RPCBuilder` stand over a move inside
 		// `pony.net.rpc` and wrote two files at rc 0 for a tree that no longer compiles.
 		final fqnErr: Null<String> = qualifiedPathRefusal(
-			index, sourceOf, oldImportPath, typeName, cursorInfo.pkg == destInfo.pkg, plugin.lexicalRegions
+			index, sourceOf, oldImportPath, typeName, cursorInfo, cursorInfo.pkg == destInfo.pkg, plugin.lexicalRegions
 		);
 		if (fqnErr != null) return Err(fqnErr);
 		final carried: Array<String> = switch DependencyCarry.dependencyImportLinesToCarry(
@@ -1301,8 +1301,8 @@ final class MoveSymbol {
 	 * rewrites, so the refusal is the correct answer there.
 	 */
 	private static function qualifiedPathRefusal(
-		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String, samePackage: Bool,
-		lexicalRegions: (String) -> Array<LexRegion>
+		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String, movedFrom: FileInfo,
+		samePackage: Bool, lexicalRegions: (String) -> Array<LexRegion>
 	): Null<String> {
 		if (oldImportPath == null) return null;
 		final path: String = oldImportPath;
@@ -1314,21 +1314,30 @@ final class MoveSymbol {
 		// third file is left dangling (`Module Foo does not define type Foo`, compile-proved on both
 		// engines). Exempting the dotless path unconditionally turned that refusal into a silent write.
 		if (samePackage && path.indexOf('.') < 0) return null;
+		final moduleName: Null<String> = secondaryModuleName(movedFrom, typeName);
 		for (file => source in sourceOf) {
-			// The lexical scan is per file and only for the files that spell the path at all — an
-			// early `indexOf` keeps every other file at the cost it had.
-			if (source.indexOf(path) < 0) continue;
 			final info: Null<FileInfo> = index.fileInfo(file);
 			if (info == null) continue;
-			// An ALIAS statement's `raw` is the alias, so the path it spells is `aliasTarget` — read
-			// `raw` here and the statement's own `p.Thing` reads as a fully-qualified CODE reference,
-			// refusing a move over a file that only ever names the type through the alias, with a
-			// message telling its author to add the import they already wrote.
-			final own: Array<Span> = [for (imp in info.imports) if (SymbolIndex.pathImportedBy(imp) == path) imp.span];
-			final comments: Array<Span> = SourceComments.collectCommentRegions(lexicalRegions(source));
-			if (NameMentionScan.qualifiedPathMention(source, path, own, comments) >= 0)
-				return '"$file" references "$path" by its fully-qualified path — the move changes that path and '
-					+ 'repointing a code reference is unsafe; convert it to a bare "$typeName" (with an import) first';
+			// The lexical scan is per file and only for the files that spell the path at all — an
+			// early `indexOf` keeps every other file at the cost it had.
+			if (source.indexOf(path) >= 0) {
+				// An ALIAS statement's `raw` is the alias, so the path it spells is `aliasTarget` — read
+				// `raw` here and the statement's own `p.Thing` reads as a fully-qualified CODE reference,
+				// refusing a move over a file that only ever names the type through the alias, with a
+				// message telling its author to add the import they already wrote.
+				final own: Array<Span> = [for (imp in info.imports) if (SymbolIndex.pathImportedBy(imp) == path) imp.span];
+				final comments: Array<Span> = SourceComments.collectCommentRegions(lexicalRegions(source));
+				if (NameMentionScan.qualifiedPathMention(source, path, own, comments) >= 0)
+					return '"$file" references "$path" by its fully-qualified path — the move changes that path and '
+						+ 'repointing a code reference is unsafe; convert it to a bare "$typeName" (with an import) first';
+			}
+			if (moduleName == null) continue;
+			final spelling: Null<String> = moduleQualifiedSpelling(
+				index, file, source, info, path, moduleName, typeName, movedFrom, lexicalRegions
+			);
+			if (spelling != null)
+				return '"$file" references "$spelling" through its module — the move takes "$typeName" out of that module '
+					+ 'and repointing a code reference is unsafe; convert it to a bare "$typeName" (with an import) first';
 		}
 		return null;
 	}
@@ -1472,6 +1481,58 @@ final class MoveSymbol {
 		if (span == null || span.to != trimmedEnd) return -1;
 		final lineStart: Int = source.lastIndexOf('\n', trimmedEnd - 1) + 1;
 		return lineStart > span.from && source.substring(lineStart, trimmedEnd).trim() == '#end' ? lineStart : -1;
+	}
+
+	/**
+	 * The simple name of the module `movedFrom` when `typeName` is one of its SECONDARY types, else null:
+	 * only a secondary type is spelled `Module.Sub`.
+	 */
+	private static function secondaryModuleName(movedFrom: FileInfo, typeName: String): Null<String> {
+		final moved: Null<TypeDeclInfo> = movedFrom.types.find(t -> t.name == typeName);
+		return moved == null || moved.isMain ? null : movedFrom.module.substring(movedFrom.module.lastIndexOf('.') + 1);
+	}
+
+	/**
+	 * The first `<binding>.<typeName>` code spelling in `file` that denotes the moved declaration, or null. The bindings
+	 * are the module's own name and each alias the file declares for it; what a spelling denotes is the type-reference
+	 * resolver's answer at its offset, so a parent package, an ambient `import.hx` or a shadowing import reads as the
+	 * compiler reads it.
+	 */
+	private static function moduleQualifiedSpelling(
+		index: SymbolIndex, file: String, source: String, info: FileInfo, path: String, moduleName: String, typeName: String,
+		movedFrom: FileInfo, lexicalRegions: (String) -> Array<LexRegion>
+	): Null<String> {
+		final modulePath: String = path.substring(0, path.length - typeName.length - 1);
+		final bindings: Array<String> = [moduleName];
+		for (imp in info.imports) {
+			final alias: Null<String> = imp.alias;
+			if (alias != null && imp.aliasTarget == modulePath) bindings.push(alias);
+		}
+		var comments: Null<Array<Span>> = null;
+		for (binding in bindings) {
+			final spelling: String = '$binding.$typeName';
+			if (source.indexOf(spelling) < 0) continue;
+			final scanned: Array<Span> = comments ?? SourceComments.collectCommentRegions(lexicalRegions(source));
+			comments = scanned;
+			final at: Int = NameMentionScan.qualifiedPathMention(source, spelling, info.imports.map(imp -> imp.span), scanned);
+			if (at >= 0 && denotesMoved(index, file, binding, at, movedFrom, typeName)) return spelling;
+		}
+		return null;
+	}
+
+	/**
+	 * Whether `binding.typeName` written at `at` in `file` denotes the declaration `typeName` of `movedFrom`, asked of the
+	 * index before the cut. The bare `binding` is asked first, since an import that binds it outranks the package walk the
+	 * dotted resolver takes; only a binding that names no type falls back to the dotted spelling.
+	 */
+	private static function denotesMoved(
+		index: SymbolIndex, file: String, binding: String, at: Int, movedFrom: FileInfo, typeName: String
+	): Bool {
+		final bound: Array<{ file: FileInfo, type: TypeDeclInfo }> = index.resolveTypeRefsFrom(binding, file, at);
+		return bound.length > 0
+			? bound.exists(r -> r.file.file == movedFrom.file)
+			: index.resolveTypeRefsFrom('$binding.$typeName', file, at)
+				.exists(r -> r.file.file == movedFrom.file && r.type.name == typeName);
 	}
 
 }

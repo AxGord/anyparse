@@ -17030,6 +17030,20 @@
 			"find": "final newFind: String = dedent ? spelled.ltrim() : spelled;",
 			"replace": "final newFind: String = spelled;",
 			"note": "a carried find takes the line indentation an indent-tolerant cut started at, which the written find never spelled"
+		},
+		{
+			"name": "M-MOVE-MODULE-QUALIFIED-DENOTES-NONE",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "denotesMoved",
+			"force": "false",
+			"note": "no Module.Sub spelling is taken to denote the moved secondary type, so a module-qualified reference through the package, an import, an import.hx or an alias is left dangling at rc 0"
+		},
+		{
+			"name": "M-MOVE-MODULE-QUALIFIED-DENOTES-ALL",
+			"type": "anyparse.query.MoveSymbol",
+			"method": "denotesMoved",
+			"force": "true",
+			"note": "every Module.Sub spelling is taken to denote the moved secondary type, so a file whose Module binds another module (another package, a shadowing import) refuses a legitimate move"
 		}
 	]
 }
