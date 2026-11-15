@@ -278,7 +278,15 @@ final class HxAstPredLowering extends AstPredLowering {
 		return [
 			arrayBracketKindField(),
 			endsWithCloseBraceField(),
-			varDeclTailEndsWithCloseBraceField(),
+			varDeclTailField(
+				'varDeclTailEndsWithCloseBrace', 'endsWithCloseBrace',
+				'True iff the LAST binding of a (possibly multi-variable) declaration ends with `}`.'
+			),
+			varInitDropsSemicolonField(),
+			varDeclTailField(
+				'varDeclTailDropsSemicolon', 'varInitDropsSemicolon',
+				'True iff the plain writer omits the `;` after the LAST binding of a (possibly multi-variable) declaration.'
+			),
 			operandIsBlockExprField(),
 			tailStmtReadsExprPositionField(),
 			elementIsConditionalEnumField(HX_STATEMENT, 's'),
@@ -334,9 +342,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	/**
 	 * `endsWithCloseBrace(e) → Bool` — true iff `e` is a control-flow
 	 * expression whose `}` may serve as a statement terminator on the
-	 * rhs of `var x = …` / `final x = …`. The writer-side gate on `HxClassMember.VarMember` /
-	 * `FinalMember` and the `HxStatement` var family asks it through
-	 * `varDeclTailEndsWithCloseBrace`, of the LAST binding (drop the `;` iff true).
+	 * rhs of `var x = …` / `final x = …`. The `optionalSemicolon` "never" policy on
+	 * `HxClassMember.VarMember` / `FinalMember` and the `HxStatement` var family asks it through
+	 * `varDeclTailEndsWithCloseBrace`, of the LAST binding (drop the `;` iff true); the plain
+	 * writer's gate asks the narrower `varInitDropsSemicolon`.
 	 *
 	 * True (brace-terminated): `SwitchExpr` / `SwitchExprBare` /
 	 * `BlockExpr` / `ObjectLit` / `MacroClassExpr` outright; `FnExpr` /
@@ -399,22 +408,39 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * is brace-terminated while the token before the `;` is `2`.
 	 *
 	 * Drives `@:fmt(optionalSemicolon('varDeclTailEndsWithCloseBrace'))`
-	 * on the `var` / `final` family, and its `trailOptShapeGate` twin. Reading the
-	 * HEAD's `init` there instead drops the `;` off that statement and emits
-	 * `var a = { … }, b = 2` before a `}`, which is `Missing ;`.
+	 * on the `var` / `final` family. Reading the HEAD's `init` there instead
+	 * drops the `;` off that statement and emits `var a = switch … }, b = 2`
+	 * before a `}`, which is `Missing ;`.
+	 *
+	 * Built once per init predicate `initPred`: `varDeclTailDropsSemicolon` is the same walk asking
+	 * `varInitDropsSemicolon`, the plain writer's `trailOptShapeGate`.
 	 */
-	private function varDeclTailEndsWithCloseBraceField(): Field {
+	private function varDeclTailField(name: String, initPred: String, doc: String): Field {
 		final tailDecl: Expr = field(starElem(HX_VAR_DECL, 'more', macro _m[_m.length - 1]), 'decl');
-		final recTail: Expr = { expr: ECall(ident('varDeclTailEndsWithCloseBrace'), [tailDecl]), pos: Context.currentPos() };
-		final headInit: Expr = { expr: ECall(ident('endsWithCloseBrace'), [field(ident('d'), 'init')]), pos: Context.currentPos() };
+		final recTail: Expr = { expr: ECall(ident(name), [tailDecl]), pos: Context.currentPos() };
+		final headInit: Expr = { expr: ECall(ident(initPred), [field(ident('d'), 'init')]), pos: Context.currentPos() };
 		final body: Expr = macro {
 			if (d == null) return false;
 			final _m = d.more;
 			_m.length == 0 ? $headInit : $recTail;
 		};
+		return predField(name, [valueArg('d', HX_VAR_DECL)], macro : Bool, body, doc);
+	}
+
+	/**
+	 * `varInitDropsSemicolon(e) → Bool` — whether the PLAIN writer omits the `;` after a var / final
+	 * initializer. A `{ … }` value — an object literal or a block expression — keeps it, as the trivia
+	 * writer keeps the `;` the source wrote; every other `}`-ended shape (`switch`, a block-bodied
+	 * `function`, a `try … catch`) answers as `endsWithCloseBrace`, which stays the answer to whether the
+	 * `;` may be omitted at all (`optionalSemicolon` "never").
+	 */
+	private function varInitDropsSemicolonField(): Field {
+		final body: Expr = nullSwitch(
+			ident('e'), macro false, [caseOf(HX_EXPR, ['BlockExpr', 'ObjectLit'], macro false)], macro endsWithCloseBrace(e)
+		);
 		return predField(
-			'varDeclTailEndsWithCloseBrace', [valueArg('d', HX_VAR_DECL)],
-			macro : Bool, body, 'True iff the LAST binding of a (possibly multi-variable) declaration ends with `}`.'
+			'varInitDropsSemicolon', [valueArg('e', HX_EXPR)],
+			macro : Bool, body, 'True iff the plain writer omits the `;` after this var / final initializer.'
 		);
 	}
 

@@ -250,6 +250,30 @@
 			"find": "return carries(Reflect.field(v, 'type'), depth + 1)",
 			"replace": "return carries(v, depth + 1)",
 			"note": "a declaration's every slot is walked as a type, so a check-type default value counts and a parameter without a generic type breaks the list"
+		},
+		{
+			"name": "M-PLAIN-VAR-OBJLIT-SEMI",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "varInitDropsSemicolonField",
+			"find": "['BlockExpr', 'ObjectLit']",
+			"replace": "['BlockExpr']",
+			"note": "the plain writer drops the ; after a var initializer that is an object literal, where the trivia writer keeps the one the source wrote"
+		},
+		{
+			"name": "M-PLAIN-VAR-BLOCK-SEMI",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "varInitDropsSemicolonField",
+			"find": "['BlockExpr', 'ObjectLit']",
+			"replace": "['ObjectLit']",
+			"note": "the plain writer drops the ; after a var initializer that is a block expression, where the trivia writer keeps the one the source wrote"
+		},
+		{
+			"name": "M-PLAIN-VAR-TAIL-OBJLIT-SEMI",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "varDeclTailField",
+			"find": "ECall(ident(name), [tailDecl])",
+			"replace": "ECall(ident('varDeclTailEndsWithCloseBrace'), [tailDecl])",
+			"note": "the plain gate reads the last binding of a multi-var declaration through endsWithCloseBrace, so var c = 3, d = {y: 4} loses its ;"
 		}
 	]
 }

@@ -25,10 +25,10 @@ import anyparse.grammar.haxe.meta.HxMetaStmt;
  * `StaticVarStmt` / `StaticFinalStmt` — `static var|final name = init;` static locals, the byte-twin of
  * `VarStmt` / `FinalStmt` through the kw+lead single-Ref pattern. `VarStmt` / `FinalStmt` — local declarations
  * reusing `HxVarDecl`; the trailing `;` is `@:trailOpt(';')`, shape-gated on write via
- * `@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon(…))` — the predicate asks the
+ * `@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon(…))` — the predicate asks the
  * LAST binding of a multi-var declaration, the one that owns the `;` — so `var foo = switch (x) { … }` emits
- * no redundant `;`. On parse the `;` is optional for every `var` / `final` — looser than Haxe (`var x = 5\nvar
- * y = 6` is accepted) — and harmless because the writer only emits the gate's canonical form. `ReturnStmt` —
+ * no redundant `;` while `var o = {a: 1};` keeps it. On parse the `;` is optional for every `var` / `final`
+ * (`var x = 5\nvar y = 6` is accepted), harmless as the writer emits only the gate's form. `ReturnStmt` —
  * `return expr`, tried before `VoidReturnStmt` (`return;`, Lowering Case 0 with a trail literal);
  * `@:trailOpt(';')` (Haxe allows `return expr` before `}`) with trivia mode preserving the source's `;` via
  * the `trailPresent` synth slot. `@:fmt(bodyPolicy('returnBody'))` on `value` routes the `return`→value
@@ -62,23 +62,23 @@ enum HxStatement {
 	@:kw('static')
 	@:lead('var')
 	@:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
+	@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticVarStmt(decl: HxVarDecl);
 
 	@:kw('static')
 	@:lead('final')
 	@:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
+	@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon('varDeclTailEndsWithCloseBrace'))
 	StaticFinalStmt(decl: HxVarDecl);
 
 	@:kw('var')
 	@:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
+	@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
 	VarStmt(decl: HxVarDecl);
 
 	@:kw('final')
 	@:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
+	@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), deferKwSpace)
 	FinalStmt(decl: HxVarDecl);
 
 	/**

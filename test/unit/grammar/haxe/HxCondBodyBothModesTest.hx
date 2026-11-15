@@ -104,6 +104,16 @@ final class HxCondBodyBothModesTest extends Test {
 		bothModes(src, src, opts);
 	}
 
+	@:pin('control')
+	@:killer('M-PLAIN-VAR-OBJLIT-SEMI')
+	public function testARegionObjectLiteralInitKeepsItsSemicolon(): Void {
+		final src: String = 'class C {\n\tvar x:Dynamic = {#if debug a: 1, b: 2 #else c: 3, d: 4 #end};\n}';
+		bothModes(src, src, defaults());
+		final opts: HxModuleWriteOptions = defaults();
+		opts.conditionalSiblings = SiblingPolicy.Off;
+		bothModes(src, src, opts);
+	}
+
 	private function defaults(): HxModuleWriteOptions {
 		return HaxeFormatConfigLoader.loadHxFormatJson('{}');
 	}

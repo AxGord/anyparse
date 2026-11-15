@@ -149,21 +149,21 @@ final class HxOptionalSemicolonSliceTest extends Test {
 	}
 
 	/**
-	 * The PLAIN writer's own `;`-elision gate had the same head-binding flaw the `never` mode was
-	 * fixed for: `trailOptShapeGate('endsWithCloseBrace', 'init')` asks the HEAD binding of a
-	 * right-recursive `HxVarDecl`, so `var a = {x: 1}, b = 2;` lost its terminator and the emitted
-	 * text is `Missing ;` under `haxe -cpp` (verified by compiling both arms; the single-binding
-	 * `var a = {x: 1}` with no `;` compiles clean, which is why only the multi-var form moves).
+	 * The PLAIN writer's `;` gate (`varDeclTailDropsSemicolon`) asks the LAST binding of a
+	 * right-recursive `HxVarDecl`, the one that owns the `;`: asking the head instead would drop the
+	 * terminator after a `}`-ended head (`var a = switch … }, b = 2;`), which is `Missing ;`.
 	 */
 	public function testPlainWriterKeepsTheSemicolonOfAMultiVarDecl(): Void {
 		final out: String = plainWrite('class C {\n\tfunction f() {\n\t\tvar a = {x: 1}, b = 2;\n\t\ttrace(b);\n\t}\n}');
 		Assert.isTrue(out.indexOf('var a = {x: 1}, b = 2;') != -1, 'the last binding owns the `;` - got: <$out>');
 	}
 
-	/** Control: a SINGLE brace-terminated binding still elides, so the fix costs no elision it used to make. */
+	/** Control: a SINGLE brace-terminated control-flow binding still elides, so the fix costs no elision it used to make. */
 	public function testPlainWriterStillElidesAfterASingleBraceTerminatedInit(): Void {
-		final out: String = plainWrite('class C {\n\tfunction f() {\n\t\tvar a = {x: 1};\n\t\ttrace(a);\n\t}\n}');
-		Assert.isTrue(out.indexOf('var a = {x: 1}\n') != -1, 'a lone brace-terminated init keeps eliding - got: <$out>');
+		final out: String = plainWrite(
+			'class C {\n\tfunction f() {\n\t\tvar a = switch (x) {\n\t\t\tcase _: 1;\n\t\t}\n\t\ttrace(a);\n\t}\n}'
+		);
+		Assert.isTrue(out.indexOf('\t\t}\n\t\ttrace(a);') != -1, 'a lone brace-terminated init keeps eliding - got: <$out>');
 	}
 
 	private inline function triviaWrite(src: String, json: String): String {

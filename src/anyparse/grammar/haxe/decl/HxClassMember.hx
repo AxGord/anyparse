@@ -15,9 +15,10 @@ import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
  * keyword so the generated parser enforces a word boundary (`finalists` is not `final` followed by `ists`).
  *
  * The trailing `;` on `VarMember` and `FinalMember` is `@:trailOpt(';')` writer-gated by
- * `@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon(…))` — the byte twin of
- * `HxStatement.VarStmt` / `FinalStmt`: the `;` may be omitted when the initializer of the LAST binding ends in
- * `}` (`= function() { … }`), Haxe's rule that a `}`-closed initializer needs no terminator; on parse the `;`
+ * `@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon(…))` — the byte twin of
+ * `HxStatement.VarStmt` / `FinalStmt`: the plain writer omits the `;` when the initializer of the LAST binding
+ * is a `}`-closed control-flow value (`= function() { … }`), Haxe's rule that a `}`-closed initializer needs no
+ * terminator, and keeps it after a `{ … }` object literal or block value; on parse the `;`
  * is optional for every member. Trivia mode preserves the source's `;` presence verbatim through the generic
  * `isAltTrailOptBranch` `trailPresent` synth slot; plain mode always emits `;` unless the gate fires.
  *
@@ -68,7 +69,7 @@ enum HxClassMember {
 
 	@:kw('var')
 	@:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), propagateFieldLevelVar)
+	@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), propagateFieldLevelVar)
 	VarMember(decl: HxVarDecl);
 
 	/**
@@ -91,7 +92,7 @@ enum HxClassMember {
 
 	@:kw('final')
 	@:trailOpt(';')
-	@:fmt(trailOptShapeGate('varDeclTailEndsWithCloseBrace'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), propagateFieldLevelVar)
+	@:fmt(trailOptShapeGate('varDeclTailDropsSemicolon'), optionalSemicolon('varDeclTailEndsWithCloseBrace'), propagateFieldLevelVar)
 	FinalMember(decl: HxVarDecl);
 
 	/**
