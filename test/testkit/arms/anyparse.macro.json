@@ -3382,6 +3382,14 @@
 			"find": "macro opt._inTypedefBody",
 			"replace": "macro false",
 			"note": "a typedef body never reads its own cascade, so it falls back to the anonType rules"
+		},
+		{
+			"name": "M-IF-ELSE-LADDER-NO-NESTED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "buildIfElseLadderTest",
+			"find": "macro ($ownChain || $nestedChain)",
+			"replace": "ownChain",
+			"note": "a then-body that is an if with an else keeps the outer placement, so the inner else lands in the outer head column"
 		}
 	]
 }

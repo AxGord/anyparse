@@ -30,7 +30,7 @@ import anyparse.grammar.haxe.expr.HxExpr;
  * `@:fmt(ifElseLadder)` on BOTH bodies makes an `if` / `else` chain a ladder in every config: a
  * branch body without braces of its own sits on its own line one indent deeper, whatever its
  * placement and width, while a block or a glued `switch` keeps its glue. An `if` with no `else`
- * that is not an `else if` link is no chain and keeps its placement.
+ * that is not an `else if` link keeps its placement, unless its body is an `if` with an `else` (`nestedIfElseLadder`).
  * `@:fmt(elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'))` on BOTH bodies: a `switch`
  * branch under `opt.elseSwitch == Same` glues to its keyword's line the way `elseIf` glues a
  * nested `if`. The THEN branch owns a SECOND seam: a glued `switch` closes with a `}` in the
@@ -49,7 +49,7 @@ typedef HxIfStmt = {
 	@:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'))
 	var cond: HxExpr;
 	@:trailOpt(';')
-	@:fmt(bodyPolicy('ifBody', 'expressionIfBody'), ifElseLadder, clearElseIfBranch,
+	@:fmt(bodyPolicy('ifBody', 'expressionIfBody'), ifElseLadder, nestedIfElseLadder('IfStmt'), clearElseIfBranch,
 		elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'), dropSingleStmtBraces)
 	var thenBody: HxStatement;
 	@:optional

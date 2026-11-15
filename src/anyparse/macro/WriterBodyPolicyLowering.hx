@@ -1097,7 +1097,9 @@ final class WriterBodyPolicyLowering {
 
 	/**
 	 * The runtime test that a body of `@:fmt(ifElseLadder)` belongs to an `if` / `else` chain of statements: its own `if` has
-	 * an `else` (`ladderElseFieldName`), or it is an `else if` link (`opt._inElseIfBranch`). A field with an expression-position
+	 * an `else` (`ladderElseFieldName`), or it is an `else if` link (`opt._inElseIfBranch`), or, under
+	 * `@:fmt(nestedIfElseLadder('<ifCtor>'))`, the body is itself an `if` with an `else`, whose `else` would otherwise sit in
+	 * the enclosing head's column and read as its branch. A field with an expression-position
 	 * knob (`exprFlagName`) also asks `ifElseLadderStatementTest` whether the `if` stands as a statement here; where it
 	 * yields a value the expression knob places it. Null on any other body field.
 	 */
@@ -1105,7 +1107,14 @@ final class WriterBodyPolicyLowering {
 		final elseFieldName: Null<String> = opts.ladderElseFieldName;
 		if (opts.ifElseLadder != true || elseFieldName == null) return null;
 		final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
-		final inChain: Expr = macro ($elseAccess != null || opt._inElseIfBranch);
+		final ownChain: Expr = macro ($elseAccess != null || opt._inElseIfBranch);
+		final nestedIfCtor: Null<String> = opts.nestedIfCtor;
+		final inChain: Expr = if (nestedIfCtor == null) {
+			ownChain;
+		} else {
+			final nestedChain: Expr = ifWithElseProbe(opts.bodyValueExpr, nestedIfCtor, elseFieldName, null);
+			macro ($ownChain || $nestedChain);
+		};
 		if (opts.exprFlagName == null) return inChain;
 		final statement: Expr = ifElseLadderStatementTest(opts.exprIfElseLadder == true);
 		return macro ($statement && $inChain);

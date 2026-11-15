@@ -124,7 +124,7 @@ leftCurlyAnonFnOverride(…), lineLengthAwareSeps, liftNoSemi(…), listLayout(�
 matrixCollapseRules(…), measuredMultilineDecls, metaBlockGlue(…), metaLineEndInline, metaLineEndPolicy(…), methodChain(…), multilineCtor,
 multilineWhenFieldCtorAndOpt(…), multilineWhenFieldNonEmpty(…), multilineWhenFieldShape(…),
 multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(…), multiVarWrap(…), nestBody,
-nestBodyOnSourceNewline, noSiblingFallback(…), objectLiteralBracesClose,
+nestBodyOnSourceNewline, nestedIfElseLadder(…), noSiblingFallback(…), objectLiteralBracesClose,
 objectLiteralBracesOpen, operandBreakAfterMultilineBrace, optionalSemicolon(…), padLeading, padTrailing,
 preWrite(…), propagateAnonFnContext, propagateArrowLambdaBody, propagateElseIfBranch,
 propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, propagateNestedType, propagateTypedefContext,

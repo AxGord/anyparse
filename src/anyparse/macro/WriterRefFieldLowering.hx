@@ -998,7 +998,8 @@ final class WriterRefFieldLowering {
 			elseSwitchArgs: elseSwitchArgs,
 			ifElseLadder: child.fmtHasFlag('ifElseLadder'),
 			exprIfElseLadder: child.fmtHasFlag('exprIfElseLadder'),
-			ladderElseFieldName: site.elseFieldName
+			ladderElseFieldName: site.elseFieldName,
+			nestedIfCtor: child.fmtReadString('nestedIfElseLadder')
 		}));
 		// omega-else-switch CLOSE side: the next field's gap gets the glue verdict
 		// from HERE, where the field's own meta and its own comment slots are in

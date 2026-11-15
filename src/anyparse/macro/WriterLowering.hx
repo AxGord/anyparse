@@ -1881,6 +1881,9 @@ typedef WrapBodyOpts = {
 	// The `else` field whose presence puts a ladder body in a chain, read by the ladder alone: an expression `if`'s
 	// `else` branch leaves `elseFieldName` null, so its FitLine layout keeps reading `fitLineIfWithElse` as before.
 	?ladderElseFieldName: String,
+	// `@:fmt(nestedIfElseLadder('<ifCtor>'))` beside `ifElseLadder` on a then-body: a body that is itself an `<ifCtor>`
+	// owning an `else` (read through the same `ladderElseFieldName`) joins the ladder too. Null → byte-inert.
+	?nestedIfCtor: String,
 	?afterKwExpr: Null<Expr>,
 	?kwLeadingExpr: Null<Expr>,
 	?kwPolicyFlagName: Null<String>,
