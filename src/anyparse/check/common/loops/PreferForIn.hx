@@ -7,7 +7,6 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
-import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
@@ -377,7 +376,9 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		if (LexicalRegions.commentIntersects(declSpan.to, loopSpan.from, ctx.regions())) return null;
 		if (occurrences(scope, iterator, s) != PROTOCOL_OCCURRENCES) return null;
 		final iterable: String = ctx.source.substring(initSpan.from, initSpan.to).rtrim();
-		return SourceComments.textHasCommentMarker(iterable.substring(iterable.lastIndexOf('\n') + 1))
+		return LexicalRegions.commentIntersects(
+			initSpan.from + iterable.lastIndexOf('\n') + 1, initSpan.from + iterable.length, ctx.regions()
+		)
 			? null
 			: { span: new Span(declSpan.from, loopSpan.to), text: 'for ($binder in $iterable) $interior' };
 	}

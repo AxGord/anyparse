@@ -4,10 +4,11 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.loops.MapValueScan.ValueSeams;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParenGuard;
-import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -115,19 +116,21 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {
 			final declaredTypes: Map<Int, String> = cfg.typed.declaredTypes(entry.source);
 			final declaredTypeSources: Map<Int, String> = cfg.typed.declaredTypeSources(entry.source);
-			collect(root, entry.source, root, declaredTypes, declaredTypeSources, cfg, m -> {
-				final proof: Bool = isProven(m, entry.file, entry.source, root, valueSeams, resolveSymbols(), plugin, proven);
-				violations.push({
-					file: entry.file,
-					span: m.span,
-					rule: RULE_ID,
-					severity: Severity.Info,
-					message: proof ? FIXABLE_MESSAGE : UNPROVEN_MESSAGE,
-					// The failed proof IS the decline — carried onto the finding so `apq lint --fix`'s
-					// ledger reads this check's own sentence rather than reporting that it declared none.
-					declineReason: proof ? null : DECLINE_REASON
-				});
-			});
+			collect(
+				root, entry.source, ElementSpan.lazyRegions(entry.source, plugin), root, declaredTypes, declaredTypeSources, cfg, m -> {
+					final proof: Bool = isProven(m, entry.file, entry.source, root, valueSeams, resolveSymbols(), plugin, proven);
+					violations.push({
+						file: entry.file,
+						span: m.span,
+						rule: RULE_ID,
+						severity: Severity.Info,
+						message: proof ? FIXABLE_MESSAGE : UNPROVEN_MESSAGE,
+						// The failed proof IS the decline — carried onto the finding so `apq lint --fix`'s
+						// ledger reads this check's own sentence rather than reporting that it declared none.
+						declineReason: proof ? null : DECLINE_REASON
+					});
+				}
+			);
 		});
 	}
 
@@ -154,11 +157,12 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(source);
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(source);
 			final proven: Map<String, Bool> = [];
+			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 			final file: String = violations.length > 0 ? violations[0].file : '';
 			final guarded: Array<GuardedEdit> = [];
 			final plain: Array<{ span: Span, text: String }> = CheckScan.applyBySpan(
 				plugin, source, violations, [c.ternaryKind], (node, span) -> {
-					final m: Null<Match> = match(node, source, tree, declaredTypes, declaredTypeSources, c);
+					final m: Null<Match> = match(node, source, regions, tree, declaredTypes, declaredTypeSources, c);
 					if (m == null || !isProven(m, file, source, tree, valueSeams, report, plugin, proven)) return null;
 					final edit: GuardedEdit = ParenGuard.binaryEdit(span, m.readSource, '??', m.fallbackSource);
 					guarded.push(edit);
@@ -196,18 +200,18 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 	 * pass once the outer rewrite has re-parsed.
 	 */
 	private static function collect(
-		node: QueryNode, source: String, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg,
-		sink: Match -> Void
+		node: QueryNode, source: String, regions: () -> Array<LexRegion>, root: QueryNode, declaredTypes: Map<Int, String>,
+		declaredTypeSources: Map<Int, String>, cfg: Cfg, sink: Match -> Void
 	): Void {
 		if (cfg.opaqueKinds.contains(node.kind)) return;
 		if (node.kind == cfg.ternaryKind) {
-			final m: Null<Match> = match(node, source, root, declaredTypes, declaredTypeSources, cfg);
+			final m: Null<Match> = match(node, source, regions, root, declaredTypes, declaredTypeSources, cfg);
 			if (m != null) {
 				sink(m);
 				return;
 			}
 		}
-		for (c in node.children) collect(c, source, root, declaredTypes, declaredTypeSources, cfg, sink);
+		for (c in node.children) collect(c, source, regions, root, declaredTypes, declaredTypeSources, cfg, sink);
 	}
 
 	/**
@@ -215,8 +219,8 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 	 * and no comment in either dropped region, return the rewrite's parts; else null.
 	 */
 	private static function match(
-		ternary: QueryNode, source: String, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
-		cfg: Cfg
+		ternary: QueryNode, source: String, regions: () -> Array<LexRegion>, root: QueryNode, declaredTypes: Map<Int, String>,
+		declaredTypeSources: Map<Int, String>, cfg: Cfg
 	): Null<Match> {
 		final shape: Null<Shape> = structuralShape(ternary, source, cfg);
 		if (shape == null) return null;
@@ -233,8 +237,8 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 		// The rewrite keeps the index read and the default verbatim and drops everything
 		// between them; a comment in either dropped region would be deleted with it.
 		if (
-			SourceComments.textHasCommentMarker(source.substring(ternarySpan.from, readSpan.from))
-			|| SourceComments.textHasCommentMarker(source.substring(readSpan.to, fallbackSpan.from))
+			LexicalRegions.commentIntersects(ternarySpan.from, readSpan.from, regions())
+			|| LexicalRegions.commentIntersects(readSpan.to, fallbackSpan.from, regions())
 		)
 			return null;
 		final fallbackSource: String = source.substring(fallbackSpan.from, fallbackSpan.to);

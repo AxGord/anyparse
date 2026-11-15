@@ -744,6 +744,30 @@
 			"find": "ctx.types, null, ctx.regions)",
 			"replace": "ctx.types, null, [{ from: 0, to: 0x7FFFFFFF, kind: anyparse.query.LexicalRegions.LexRegionKind.LineComment }])",
 			"note": "the negation reads a comment over the whole file instead of its regions, so a `//` inside a string operand forces the verbatim wrap again"
+		},
+		{
+			"name": "M-HCM-E-MAPEXISTS-STRING",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "match",
+			"find": "LexicalRegions.commentIntersects(ternarySpan.from, readSpan.from, regions())",
+			"replace": "source.substring(ternarySpan.from, readSpan.from).indexOf(\"//\") >= 0",
+			"note": "a string-blind marker scan refuses a site whose exists key is a string holding //"
+		},
+		{
+			"name": "M-HCM-E-FORIN-STRING",
+			"type": "anyparse.check.common.loops.PreferForIn",
+			"method": "inlineDeclaration",
+			"find": "return LexicalRegions.commentIntersects(",
+			"replace": "return iterable.indexOf('//') >= 0 || LexicalRegions.commentIntersects(",
+			"note": "a string-blind marker scan keeps the declaration when the iterable holds a string with //"
+		},
+		{
+			"name": "M-HCM-E-COMPREH-STRING",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "transcribeHeader",
+			"find": "LexicalRegions.commentIntersects(from + lastLine + 1, from + header.length, ctx.regions)",
+			"replace": "header.indexOf(\"//\") >= 0",
+			"note": "a string-blind marker scan refuses a header holding a string with //"
 		}
 	]
 }

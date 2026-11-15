@@ -5,9 +5,10 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.AddMeta;
+import anyparse.query.ElementSpan;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberLookup.HostedMembers;
 import anyparse.query.RefactorSupport;
-import anyparse.query.SourceComments;
 import anyparse.query.StaticExtensions;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding.Tier;
@@ -106,6 +107,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		final file: String = violations.length > 0 ? violations[0].file : '';
 		final scope: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
+		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		return RunScan.editsWith(plugin, source, seamsOf(plugin), (tree, s) -> {
 			final binder: Null<OperandBinder> = scope == null ? null : OperandBinder.forFile(plugin, file, source, tree, scope);
 			final byFrom: Map<Int, Violation> = [];
@@ -121,7 +123,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 				final needed: Null<Array<String>> = binder == null || scope == null
 					? null
 					: grantsOf(w.expr, w.owner, file, binder, scope, s);
-				final reason: Null<String> = decline(w, source) ?? (needed == null ? DECLINE_UNTYPED : null);
+				final reason: Null<String> = decline(w, regions) ?? (needed == null ? DECLINE_UNTYPED : null);
 				final member: Null<QueryNode> = w.member;
 				if (reason != null || member == null || needed == null) {
 					v.declineReason = reason ?? DECLINE_PLACE;
@@ -180,12 +182,12 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 	}
 
 	/** Why the waiver `w` cannot be rewritten whatever its grants, or null. */
-	private static function decline(w: Waiver, source: String): Null<String> {
+	private static function decline(w: Waiver, regions: () -> Array<LexRegion>): Null<String> {
 		final metaSpan: Null<Span> = w.meta.span;
 		final exprSpan: Null<Span> = w.expr.span;
 		return if (w.member == null || metaSpan == null || exprSpan == null)
 			DECLINE_PLACE
-		else if (SourceComments.textHasCommentMarker(source.substring(metaSpan.to, exprSpan.from)))
+		else if (LexicalRegions.commentIntersects(metaSpan.to, exprSpan.from, regions()))
 			DECLINE_COMMENT
 		else
 			null;

@@ -174,6 +174,13 @@ class RedundantMapExistsCheckTest extends Test {
 		if (clean.length == 1) Assert.isTrue(clean[0].message.indexOf('cannot be ruled out') == -1, clean[0].message);
 	}
 
+	/** A `//` inside a string literal in a dropped region is no comment: the site is still flagged. */
+	@:pin('control')
+	@:killer('M-HCM-E-MAPEXISTS-STRING')
+	public function testStringMarkerInTheDroppedRegionFlagged(): Void {
+		Assert.equals(1, violations(cls('m', "'a' => 'b'", '', 'private', "m.exists('//') ? m['//'] : k")).length);
+	}
+
 	/** A base class with two map fields, one of which a subtype fixture may poison. */
 	private inline function base(): String {
 		return 'class Base {\n\n\tprivate var good:Map<String, String> = [];\n\n\tprivate var bad:Map<String, String> = [];\n\n'

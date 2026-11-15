@@ -218,6 +218,18 @@ class PreferForInCheckTest extends Test {
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'prefer-for-in is opt-in');
 	}
 
+	/** A `//` inside a string on the iterable's last line is no comment: the declaration is still inlined. */
+	@:pin('control')
+	@:killer('M-HCM-E-FORIN-STRING')
+	public function testStringMarkerInTheIterableInlined(): Void {
+		Assert.equals(
+			fn("for (cp in ['//'].iterator()) {\n\t\t\tuse(cp);\n\t\t}"),
+			applyFix(
+				fn("final iter = ['//'].iterator();\n\t\twhile (iter.hasNext()) {\n\t\t\tfinal cp = iter.next();\n\t\t\tuse(cp);\n\t\t}")
+			)
+		);
+	}
+
 	private function twoFunctions(first: String, second: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t$first\n\t}\n\n\tfunction g(ys:Array<Int>):Void {\n\t\t$second\n\t}\n}';
 	}

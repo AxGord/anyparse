@@ -12,7 +12,7 @@ import anyparse.check.common.members.MemberSpacing.SpacingPolicy;
 import anyparse.check.scan.EnumAbstractForms;
 import anyparse.ds.InOrder;
 import anyparse.query.CondDirectives;
-import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -353,7 +353,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				node, source, shape, metaKinds, accessors, regions, valueStarts, directives
 			);
 			final issue: Null<LayoutIssue> = firstLayoutIssue(
-				members, source, computePlan(members, source, directives, shape), MemberSpacing.forContainer(spacing, node.kind)
+				members, source, computePlan(members, source, regions, directives, shape), MemberSpacing.forContainer(spacing, node.kind)
 			);
 			if (issue != null) out.push({
 				file: file,
@@ -402,7 +402,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			container, source, shape, metaKinds, accessors, regions, valueStarts, directives
 		);
 		if (members.length < 2) return;
-		final plan: SortPlan = computePlan(members, source, directives, shape);
+		final plan: SortPlan = computePlan(members, source, regions, directives, shape);
 		final spacing: SpacingPolicy = MemberSpacing.forContainer(options.spacing, container.kind);
 		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan, spacing);
 		if (bad == null) return;
@@ -522,7 +522,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			'the order is pinned: this type holds an `#else` shape the branch model does not represent'
 		else if (hasOrphanComment(members, source, regions))
 			'the order is pinned: a comment between two members belongs to no member slot, so a reorder would strand it'
-		else if (!conditionalRegionsCovered(members, source, directives))
+		else if (!conditionalRegionsCovered(members, source, regions, directives))
 			'the order is pinned: a conditional region holds bytes no member slot covers, so rebuilding it would drop them'
 		else if (splitsCoexistingRegion(members))
 			'the order is pinned: one conditional construct declares members of two sections, and reordering would split it'
@@ -653,13 +653,13 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * tightening it for a block-local reason also widens this container-wide bail.
 	 */
 	private static function conditionalRegionsCovered(
-		members: Array<OrderedMember>, source: String, directives: Array<CondDirective>
+		members: Array<OrderedMember>, source: String, regions: Array<LexRegion>, directives: Array<CondDirective>
 	): Bool {
 		final conditional: Array<OrderedMember> = [for (m in members) if (m.condition != null) m];
 		return conditional.length == 0 || (
-			regionContentCovered(conditional, members, source, directives)
+			regionContentCovered(conditional, members, source, regions, directives)
 			&& uncoveredIsDirectiveOnly(
-				source, directives, members[0].regionFrom, members[members.length - 1].regionTo, coveredSlotSpans(members)
+				source, regions, directives, members[0].regionFrom, members[members.length - 1].regionTo, coveredSlotSpans(members)
 			)
 		);
 	}
@@ -850,7 +850,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * merge those two blocks and pin both on the mixed rank.
 	 */
 	private static function computePlan(
-		members: Array<OrderedMember>, source: String, directives: Array<CondDirective>, shape: RefShape
+		members: Array<OrderedMember>, source: String, regions: Array<LexRegion>, directives: Array<CondDirective>, shape: RefShape
 	): SortPlan {
 		final groupFirst: Map<String, Int> = [];
 		final buckets: Map<String, Array<OrderedMember>> = [];
@@ -874,7 +874,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			final bucket: Null<Array<OrderedMember>> = buckets[key];
 			final ordinal: Null<Int> = groupFirst[key];
 			if (bucket == null || ordinal == null || !uniformRank(bucket)) continue;
-			if (!regionContentCovered(bucket, members, source, directives)) continue;
+			if (!regionContentCovered(bucket, members, source, regions, directives)) continue;
 			if (!MemberInitDeps.blockInitInert(bucket, members, shape, source)) continue;
 			ranked[key] = ordinal;
 			if (uniformInline(bucket)) rankedInline.push(key);
@@ -928,7 +928,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * there.
 	 */
 	private static function regionContentCovered(
-		block: Array<OrderedMember>, all: Array<OrderedMember>, source: String, directives: Array<CondDirective>
+		block: Array<OrderedMember>, all: Array<OrderedMember>, source: String, regions: Array<LexRegion>, directives: Array<CondDirective>
 	): Bool {
 		final covered: Array<Span> = coveredSlotSpans(all);
 		final seen: Array<String> = [];
@@ -936,7 +936,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			final key: String = '${m.regionFrom} ${m.regionTo}';
 			if (seen.contains(key)) continue;
 			seen.push(key);
-			if (!uncoveredIsDirectiveOnly(source, directives, m.regionFrom, m.regionTo, covered)) return false;
+			if (!uncoveredIsDirectiveOnly(source, regions, directives, m.regionFrom, m.regionTo, covered)) return false;
 			if (!tailOfLineBlank(source, m.regionTo)) return false;
 		}
 		return true;
@@ -947,17 +947,17 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * from-sorted `covered` spans holds only blank or directive lines.
 	 */
 	private static function uncoveredIsDirectiveOnly(
-		source: String, directives: Array<CondDirective>, from: Int, to: Int, covered: Array<Span>
+		source: String, regions: Array<LexRegion>, directives: Array<CondDirective>, from: Int, to: Int, covered: Array<Span>
 	): Bool {
 		var cursor: Int = from;
 		for (c in covered) {
 			if (c.from >= to) break;
 			if (c.to <= cursor) continue;
-			if (c.from > cursor && !isDirectiveOrBlank(source, directives, cursor, c.from)) return false;
+			if (c.from > cursor && !isDirectiveOrBlank(source, regions, directives, cursor, c.from)) return false;
 			cursor = c.to;
 			if (cursor >= to) return true;
 		}
-		return isDirectiveOrBlank(source, directives, cursor, to);
+		return isDirectiveOrBlank(source, regions, directives, cursor, to);
 	}
 
 	/**
@@ -968,7 +968,9 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * keeping the block pinned - without it the container reads as out of order and reports a finding
 	 * the fixer can never apply.
 	 */
-	private static function isDirectiveOrBlank(source: String, directives: Array<CondDirective>, from: Int, to: Int): Bool {
+	private static function isDirectiveOrBlank(
+		source: String, regions: Array<LexRegion>, directives: Array<CondDirective>, from: Int, to: Int
+	): Bool {
 		var lineFrom: Int = from;
 		while (lineFrom < to) {
 			final newline: Int = source.indexOf('\n', lineFrom);
@@ -978,7 +980,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			if (
 				trimmed != '' && (
 					CondDirectives.startingAt(directives, lineFrom + line.length - trimmed.length) == null
-					|| SourceComments.textHasCommentMarker(trimmed)
+					|| LexicalRegions.commentIntersects(lineFrom, lineTo, regions)
 				)
 			)
 				return false;

@@ -1270,6 +1270,14 @@
 			"find": "resolved == null || resolved.extension ||",
 			"replace": "resolved == null ||",
 			"note": "a static-extension call joins the census with its arguments one parameter off, so the receiver's slot is defaulted"
+		},
+		{
+			"name": "M-HCM-E-MEMBERORDER-STRING",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "isDirectiveOrBlank",
+			"find": "LexicalRegions.commentIntersects(lineFrom, lineTo, regions)",
+			"replace": "trimmed.indexOf(\"//\") >= 0",
+			"note": "a string-blind marker scan pins a block whose directive line holds a // inside a string"
 		}
 	]
 }

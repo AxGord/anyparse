@@ -579,7 +579,7 @@ final class PreferComprehension extends RuleBase {
 	private static function transcribeHeader(from: Int, to: Int, ctx: ComprehensionCtx): Null<String> {
 		final header: String = ctx.source.substring(from, to).rtrim();
 		final lastLine: Int = header.lastIndexOf('\n');
-		return SourceComments.textHasCommentMarker(header.substring(lastLine + 1)) ? null : header;
+		return LexicalRegions.commentIntersects(from + lastLine + 1, from + header.length, ctx.regions) ? null : header;
 	}
 
 	/**

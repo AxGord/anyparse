@@ -597,6 +597,16 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\twhile (p(x)) // note\n\t\t\tout.push(x);')).length);
 	}
 
+	/** A `//` inside a string on the header's last line is no comment: the loop still folds. */
+	@:pin('control')
+	@:killer('M-HCM-E-COMPREH-STRING')
+	public function testStringMarkerInTranscribedHeaderFixed(): Void {
+		Assert.equals(
+			fnRet("final out:Array<String> = [for (x in ['//']) x];"),
+			applyFix(fnRet("final out:Array<String> = [];\n\t\tfor (x in ['//']) out.push(x);"))
+		);
+	}
+
 	private inline function chainBody(): String {
 		return 'final out:Array<Cmd> = [];\n\t\tfor (x in xs) if (isKind(x)) {\n\t\t\tfinal tool:ToolBase = cast x;'
 			+ '\n\t\t\tfinal cmd:Cmd = new MakeCmd(tool, m);\n\t\t\t// note\n\t\t\tout.push(cmd);\n\t\t}';

@@ -1,11 +1,12 @@
 package anyparse.check.common.expressions;
 
 import anyparse.ds.Set;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
-import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
@@ -178,6 +179,7 @@ final class PreferArrowCallback extends RuleBase {
 			callKind: callKind,
 			getIndex: getIndex,
 			typeSources: TypeResolver.memoizedDeclaredTypeSources(plugin, source),
+			regions: ElementSpan.lazyRegions(source, plugin),
 			declTrees: declTrees
 		};
 	}
@@ -330,8 +332,9 @@ final class PreferArrowCallback extends RuleBase {
 			final es: Null<Span> = carried?.span;
 			if (es == null) return null;
 			kept.push(bodySpan);
-			final gap: String = ctx.source.substring(bodySpan.from, es.from) + ctx.source.substring(es.to, bodySpan.to);
-			return SourceComments.textHasCommentMarker(gap) ? null : ctx.source.substring(es.from, es.to);
+			final gapHolds: Bool = LexicalRegions.commentIntersects(bodySpan.from, es.from, ctx.regions())
+				|| LexicalRegions.commentIntersects(es.to, bodySpan.to, ctx.regions());
+			return gapHolds ? null : ctx.source.substring(es.from, es.to);
 		}
 		kept.push(bodySpan);
 		final lone: Null<QueryNode> = body.children.length == 1 ? body.children[0] : null;
@@ -340,8 +343,9 @@ final class PreferArrowCallback extends RuleBase {
 		if (lone != null && collapsible && lone.children.length == 1) {
 			final inner: Null<Span> = lone.children[0].span;
 			if (inner != null) {
-				final interior: String = ctx.source.substring(bodySpan.from, inner.from) + ctx.source.substring(inner.to, bodySpan.to);
-				if (!SourceComments.textHasCommentMarker(interior)) return ctx.source.substring(inner.from, inner.to);
+				final interiorHolds: Bool = LexicalRegions.commentIntersects(bodySpan.from, inner.from, ctx.regions())
+					|| LexicalRegions.commentIntersects(inner.to, bodySpan.to, ctx.regions());
+				if (!interiorHolds) return ctx.source.substring(inner.from, inner.to);
 			}
 		}
 		return ctx.source.substring(bodySpan.from, bodySpan.to);
@@ -369,13 +373,11 @@ final class PreferArrowCallback extends RuleBase {
 		final sorted: Array<Span> = kept.copy();
 		sorted.sort((a, b) -> a.from - b.from);
 		var cursor: Int = outer.from;
-		var gaps: String = '';
 		for (s in sorted) {
-			if (s.from > cursor) gaps += ctx.source.substring(cursor, s.from);
+			if (s.from > cursor && LexicalRegions.commentIntersects(cursor, s.from, ctx.regions())) return true;
 			if (s.to > cursor) cursor = s.to;
 		}
-		if (outer.to > cursor) gaps += ctx.source.substring(cursor, outer.to);
-		return SourceComments.textHasCommentMarker(gaps);
+		return LexicalRegions.commentIntersects(cursor, outer.to, ctx.regions());
 	}
 
 	/**
@@ -733,6 +735,7 @@ final class PreferArrowCallback extends RuleBase {
 
 /** The per-file analysis context threaded through the walk. */
 private typedef Ctx = {
+
 	final file: String;
 	final source: String;
 	final tree: QueryNode;
@@ -742,7 +745,11 @@ private typedef Ctx = {
 	final callKind: String;
 	final getIndex: () -> Null<SymbolIndex>;
 	final typeSources: () -> Map<Int, String>;
+
+	/** The file's lexical regions, lexed on first ask: a comment gate reads them, so a `//` inside a string is no comment. */
+	final regions: () -> Array<LexRegion>;
 	final declTrees: Map<String, Null<QueryNode>>;
+
 };
 
 /** A resolved type-reference candidate — a declaration paired with its declaring file. */
