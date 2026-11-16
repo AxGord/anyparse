@@ -10,7 +10,7 @@ private typedef Followed = { final arms: String; final err: String; }
 
 /**
  * A registry fragment re-spelled over a write keeps its token boundaries: a replace is never rebuilt by joining two
- * pieces whose edges are both word characters.
+ * pieces whose edges are both word characters, nor onto one half of a node the rewrite split.
  */
 class RegistryFollowTokenJoinCliTest extends Test {
 
@@ -68,6 +68,52 @@ class RegistryFollowTokenJoinCliTest extends Test {
 		#if nodejs
 		final cut: String = '"find":"k(true, a)","replace":"k(false, a)"';
 		assertRefused(followOf('var x = k(true, a);', cut, 'k(true, a)\n====\nk(a)\n'), cut);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-SPLIT-ENCLOSURE')
+	public function testASplitArmRefusesAReplaceThatEditedOnlyTheWholeOfIt(): Void {
+		#if nodejs
+		final cut: String = '"find":"case true, false: k(1);","replace":"case true, false: k(2); k(1);"';
+		final body: String = 'switch a {\n\t\t\tcase true, false: k(1);\n\t\t}\n\t\treturn 0;';
+		assertRefused(followOf(body, cut, 'case true, false: k(1);\n====\ncase true: k(0);\ncase false: k(1);\n'), cut);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-SPLIT-ENCLOSURE')
+	public function testASplitMultiLineArmRefusesAReplaceThatEditedOnlyTheWholeOfIt(): Void {
+		#if nodejs
+		final cut: String =
+			'"find":"case true, false:\\n\\tk(1);\\n\\tk(3);","replace":"case true, false:\\n\\tk(2);\\n\\tk(1);\\n\\tk(3);"';
+		final body: String = 'switch a {\n\t\t\tcase true, false:\n\t\t\t\tk(1);\n\t\t\t\tk(3);\n\t\t}\n\t\treturn 0;';
+		final payload: String = 'case true, false:\n\t\t\t\tk(1);\n\t\t\t\tk(3);\n====\ncase true:\n\t\t\t\tk(0);\n\t\t\tcase false:\n'
+			+ '\t\t\t\tk(1);\n\t\t\t\tk(3);\n';
+		assertRefused(followOf(body, cut, payload), cut);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-SPLIT-ENCLOSURE')
+	public function testAGuardedStatementHoistedIntoATernaryRefusesAReplaceOfItsBranch(): Void {
+		#if nodejs
+		final cut: String = '"find":"o.arrow = V.w(s.arrowPolicy);","replace":"o.arrow = N;"';
+		final body: String = 'if (s.arrowPolicy != null) o.arrow = V.w(s.arrowPolicy);\n\t\treturn 0;';
+		assertRefused(
+			followOf(
+				body, cut,
+				'if (s.arrowPolicy != null) o.arrow = V.w(s.arrowPolicy);\n====\n'
+				+ 'o.arrow = s.arrowPolicy != null ? V.w(s.arrowPolicy) : o.hint;\n'
+			),
+			cut
+		);
 		#else
 		Assert.pass('the scratch project needs the nodejs target');
 		#end

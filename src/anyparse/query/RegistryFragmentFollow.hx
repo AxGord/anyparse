@@ -263,12 +263,25 @@ final class RegistryFragmentFollow {
 			final lead: Int = spelled.length - newFind.length;
 			if (located == null || (located.from != rewrite.at + newFrom && located.from != rewrite.at + newFrom + lead)) continue;
 			if (replace == null) return { find: newFind, replace: null };
+			if (!staysOneNode(
+				rewrite, new Span(rewrite.oldAt + from + (dedent ? fit[0] : 0), rewrite.oldAt + from + written.length), located
+			))
+				continue;
 			for (built in replacesOf(find, replace, from, fit, written.length, newFrom, newTo, rewrite)) {
 				final candidate: String = dedent ? built.ltrim() : built;
 				if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin)) return { find: newFind, replace: candidate };
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Whether a written cut that was exactly one node still is one in the carried spelling. A replace is rebuilt from the edit
+	 * its find carried, so a rewrite that split the node the edit belonged to (an arm with several patterns became two arms)
+	 * leaves no single place the edit mirrors: the arm is named instead of getting the edit on one half.
+	 */
+	private static function staysOneNode(rewrite: Rewrite, written: Span, located: Span): Bool {
+		return TreePath.withSpan(rewrite.module.tree, written) == null || TreePath.withSpan(rewrite.module.newTree, located) != null;
 	}
 
 	/**

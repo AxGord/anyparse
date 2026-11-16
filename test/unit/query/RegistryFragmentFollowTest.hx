@@ -91,7 +91,7 @@ final class RegistryFragmentFollowTest extends Test {
 	@:pin('control')
 	@:killer('M-REGISTRY-FOLLOW-REPLACED-EDGE-INSIDE')
 	public function testACharacterReplacedAtEitherEdgeOfTheCutStaysInsideIt(): Void {
-		assertCarried('return Xy || Zw;', 'return xy || zw;', 'Xy || Zw', 'Xy && Zw', 'xy || zw', 'xy && zw');
+		assertCarried('return Xy || Zw;', 'return xy || zw;', 'Xy || Zw;', 'Xy && Zw;', 'xy || zw;', 'xy && zw;');
 	}
 
 	@:pin('control')

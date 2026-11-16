@@ -17145,6 +17145,14 @@
 			"find": "span.to <= limit && spellsWord",
 			"replace": "spellsWord",
 			"note": "a token that starts in the range but ends past it counts, so a range cut before a name still reports it"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-SPLIT-ENCLOSURE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "staysOneNode",
+			"find": "TreePath.withSpan(rewrite.module.newTree, located) != null",
+			"replace": "true",
+			"note": "a replace whose edit belonged to one node is rebuilt onto one half of it when the rewrite split that node, instead of the arm being named"
 		}
 	]
 }
