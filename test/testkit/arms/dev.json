@@ -3040,6 +3040,94 @@
 			"find": "case SUITE_ROW: quick ? null : 1;",
 			"replace": "case SUITE_ROW: null;",
 			"note": "a full battery's one-shard suite asks the pool for a flexible lease, so it holds threads its monolith run cannot use"
+		},
+		{
+			"name": "M-SHARD-COUNT-IGNORES-LEASE",
+			"type": "dev.Shard",
+			"method": "shardCount",
+			"find": "held ?? DEFAULT_SHARDS",
+			"replace": "DEFAULT_SHARDS",
+			"note": "a shard run that names no count never reads the threads of its lease, so a leased run shards by the default whatever it was granted"
+		},
+		{
+			"name": "M-POSTLAND-LINT-LEASE-SHARE",
+			"type": "dev.PostLand",
+			"method": "lintLeased",
+			"find": "{ min: LINT_THREADS, max: LINT_THREADS, priority: 0 }",
+			"replace": "{ min: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS, priority: 0 }",
+			"note": "the whole lint asks the pool for the share of a heavy phase, so one apq.js process holds several threads"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-NO-LEASE",
+			"type": "dev.PostLand",
+			"method": "hxcppCommand",
+			"find": "Lease.take(mode, build,",
+			"replace": "Lease.take(Unpooled, build,",
+			"note": "the hxcpp build never takes a lease of its own, so it compiles on threads the pool did not grant"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-IGNORES-GRANT",
+			"type": "dev.PostLand",
+			"method": "hxcppCommand",
+			"find": "HXCPP_COMPILE_THREADS=\"$${WF_THREADS",
+			"replace": "HXCPP_COMPILE_THREADS=\"$${WF_NO_THREADS",
+			"note": "the hxcpp compile sizes itself by the default whatever its lease granted"
+		},
+		{
+			"name": "M-POSTLAND-PHASE-ROW-THREADS",
+			"type": "dev.PostLand",
+			"method": "timed",
+			"find": "if (threads != null) row.threads = threads;",
+			"replace": "row.wallMs = row.wallMs;",
+			"note": "a phase's ledger row never records the threads it held, so thread-minutes of a post-land run vanish from the ledger"
+		},
+		{
+			"name": "M-POSTLAND-SUITE-RUN-LEASED",
+			"type": "dev.PostLand",
+			"method": "argvOf",
+			"find": "return suite ? words :",
+			"replace": "return !suite ? words :",
+			"note": "the whole-suite run takes one lease around all its phases, so the lint holds the threads of the suite"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-ONLY-UNLEASED",
+			"type": "dev.PostLand",
+			"method": "argvOf",
+			"find": "leased(mode, Command.of(words.concat([HXCPP_ONLY])), 'post-land $sha').argv",
+			"replace": "Command.of(words.concat([HXCPP_ONLY])).argv",
+			"note": "the hxcpp-only run, one phase, never takes a lease"
+		},
+		{
+			"name": "M-POSTLAND-SPAN-READS-SHARDS",
+			"type": "dev.PostLand",
+			"method": "spanOf",
+			"find": "Std.parseInt(SPAN.matched(2))",
+			"replace": "Std.parseInt(SPAN.matched(1))",
+			"note": "the shards the suite ran on are read from the seconds field, so the run records a wrong grant"
+		},
+		{
+			"name": "M-POSTLAND-PHASE-MODE-ENVIRONMENT",
+			"type": "dev.PostLand",
+			"method": "phaseMode",
+			"find": "return Lease.pooled();",
+			"replace": "return Lease.ofEnvironment();",
+			"note": "the phases of a suite run read the lease their starter held, so the run's inherited WF_THREADS makes them run unleased on a stale grant"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-GRANT-FIELD",
+			"type": "dev.PostLand",
+			"method": "hxcppGrantOf",
+			"find": "THREADS_LINE.matched(1)",
+			"replace": "THREADS_LINE.matched(0)",
+			"note": "the hxcpp grant is read from the whole printed line, so the phase's row never records its threads"
+		},
+		{
+			"name": "M-POSTLAND-HXCPP-MARK-DRIFT",
+			"type": "dev.PostLand",
+			"method": "hxcppCommand",
+			"find": "echo \"$THREADS_MARK$${WF_THREADS:-}\"",
+			"replace": "echo \"$THREADS_MARK$${WF_NO_THREADS:-}\"",
+			"note": "the build command prints no grant after its mark, so the read-back finds none"
 		}
 	]
 }

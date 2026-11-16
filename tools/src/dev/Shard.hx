@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.core.PoolLease;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.ShardPlan;
@@ -80,6 +81,18 @@ final class Shard {
 	/** The prefix of the lines the process driver adds to a shard's stderr for what its process group left running. */
 	private static final ORPHAN_NOTE: String = 'orphan ';
 
+	/**
+	 * The shard count of a run that named `asked` (`-n`): that, validated; else the threads its caller's lease `held` grants it,
+	 * else `DEFAULT_SHARDS`.
+	 */
+	public static function shardCount(asked: Null<String>, held: Null<Int>): Int {
+		final text: String = asked ?? '${held ?? DEFAULT_SHARDS}';
+		if (!isCount(text)) throw new UsageError('-n expects a positive integer, got \'$text\'');
+		final shards: Int = Std.parseInt(text) ?? 0;
+		if (shards < 1) throw new UsageError('-n must be >= 1');
+		return shards;
+	}
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final short: Null<String> = args.option('-n');
@@ -92,10 +105,7 @@ final class Shard {
 		final timings: Null<String> = args.option('--timings');
 		final repo: String = Repo.resolve(args.option('--repo'));
 		args.done();
-		final shardsText: String = short ?? long ?? '$DEFAULT_SHARDS';
-		if (!isCount(shardsText)) throw new UsageError('-n expects a positive integer, got \'$shardsText\'');
-		final shards: Int = Std.parseInt(shardsText) ?? 0;
-		if (shards < 1) throw new UsageError('-n must be >= 1');
+		final shards: Int = shardCount(short ?? long, PoolLease.threads());
 		if (verify && expectText != null)
 			throw new UsageError('pass --verify or --expect, not both — --verify measures the pair --expect asserts');
 		final own: String = Path.join([repo, 'bin/test.js']);

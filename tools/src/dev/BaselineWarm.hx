@@ -60,7 +60,7 @@ final class BaselineWarm {
 		final words: Array<String> = ['node', script, DIRECTORY, 'run', sha, '--repo', repo, '--cache', cache];
 		for (dir in recipe.frozen) words.push('--frozen=$dir');
 		for (dir in recipe.infra) words.push('--infra-tree=$dir');
-		return PostLand.leased(mode, words, 'baseline-warm $sha');
+		return PostLand.leased(mode, Command.of(words), 'baseline-warm $sha').argv;
 	}
 
 	/** Start the warm run of `sha` and answer at once; the process outlives the caller. */

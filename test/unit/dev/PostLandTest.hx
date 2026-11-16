@@ -67,47 +67,43 @@ final class PostLandTest extends Test {
 		Assert.isNull(PostLand.countsOf('dev shard: no totals'));
 	}
 
-	public function testTheRunTakesALeaseOfItsOwnThroughThePoolAndKeepsItsOwnCopyOfTheTool(): Void {
-		final argv: Array<String> = PostLand.argvOf(Own('/plugin/scripts/wf-run', 8), '/cache/abc.dev.js', '/repo', 'abc', '/cache');
+	@:pin('control')
+	@:killer('M-POSTLAND-SUITE-RUN-LEASED')
+	@:killer('M-POSTLAND-HXCPP-ONLY-UNLEASED')
+	public function testTheSuiteRunHoldsNoLeaseAndTheHxcppOnlyRunHoldsOneAndBothKeepTheirOwnCopyOfTheTool(): Void {
+		final suite: Array<String> = [
+			'node',
+			'/cache/abc.dev.js',
+			'post-land',
+			'run',
+			'abc',
+			'--repo',
+			'/repo',
+			'--cache',
+			'/cache'
+		];
+		// the suite run's phases take their own leases: a lease around the whole run would hold its threads through the lint
+		Assert.same(suite, PostLand.argvOf(Own('/plugin/scripts/wf-run', 8), '/cache/abc.dev.js', '/repo', 'abc', '/cache'));
+		Assert.same(suite, PostLand.argvOf(Unpooled, '/cache/abc.dev.js', '/repo', 'abc', '/cache'));
+		final argv: Array<String> = PostLand.argvOf(Own('/plugin/scripts/wf-run', 8), '/cache/abc.dev.js', '/repo', 'abc', '/cache', false);
 		Assert.equals('/plugin/scripts/wf-run', argv[0]);
 		Assert.isTrue(argv.contains('--threads'), argv.join(' '));
 		// the lease's grant mark (`Command.leasedUnder`) stands between the wrapper and the run
 		final at: Int = argv.indexOf('--') + 4;
 		Assert.same(['sh', '-c'], argv.slice(at - 3, at - 1));
-		Assert.same([
-			'node',
-			'/cache/abc.dev.js',
-			'post-land',
-			'run',
-			'abc',
-			'--repo',
-			'/repo',
-			'--cache',
-			'/cache'
-		], argv.slice(at + 1));
-		Assert.same([
-			'node',
-			'/cache/abc.dev.js',
-			'post-land',
-			'run',
-			'abc',
-			'--repo',
-			'/repo',
-			'--cache',
-			'/cache'
-		], PostLand.argvOf(Unpooled, '/cache/abc.dev.js', '/repo', 'abc', '/cache'));
-		Assert.same([
-			'node',
-			'/cache/abc.dev.js',
-			'post-land',
-			'run',
-			'abc',
-			'--repo',
-			'/repo',
-			'--cache',
-			'/cache',
-			'--hxcpp-only'
-		], PostLand.argvOf(Unpooled, '/cache/abc.dev.js', '/repo', 'abc', '/cache', false));
+		Assert.same(suite.concat(['--hxcpp-only']), argv.slice(at + 1));
+		Assert.same(suite.concat(['--hxcpp-only']), PostLand.argvOf(Unpooled, '/cache/abc.dev.js', '/repo', 'abc', '/cache', false));
+	}
+
+	@:pin('control')
+	@:killer('M-POSTLAND-SPAN-READS-SHARDS')
+	public function testTheShardsAndTheSecondsOfTheShardTranscriptAreRead(): Void {
+		final span: Null<ShardSpan> = PostLand.spanOf(
+			'x\n--- suite-shard: 3 classes / 9 tests / 31 assertions / 0 failures / 0 errors in 1.200s across 2 shards ---\n'
+		);
+		Assert.equals(2, span?.shards);
+		Assert.floatEquals(1200, span?.ms ?? 0);
+		Assert.isNull(PostLand.spanOf('dev shard: no totals'));
 	}
 
 	@:pin('control')

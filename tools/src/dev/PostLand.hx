@@ -22,11 +22,12 @@ using StringTools;
 
 /**
  * The one answer to "did the whole suite pass on a commit whose land ran only the classes its change reaches": `dev land`
- * starts `dev post-land run <sha>` once the land has passed, a process that outlives the land and its lock, takes a lease
- * of its own from the pool, checks the commit out into a worktree of its own, builds it and runs the whole suite
- * there and then the whole lint (the check of the lint snapshot a land carried from its base, `LintScope`). A green
- * run leaves nothing; a red one leaves `<sha>.red` in the snapshot cache, which the next land refuses on until
- * `dev post-land clear <sha>`. The run never holds the land lock, so it never delays the next land.
+ * starts `dev post-land run <sha>` once the land has passed, a process that outlives the land and its lock, checks the commit
+ * out into a worktree of its own, builds it and runs the whole suite there and then the whole lint (the check of the lint
+ * snapshot a land carried from its base, `LintScope`). It holds no lease through all that: the build, the suite, the whole
+ * lint and the hxcpp build each take a lease sized to what that phase runs. A green run leaves nothing; a red one leaves
+ * `<sha>.red` in the snapshot cache, which the next land refuses on until `dev post-land clear <sha>`. The run never holds
+ * the land lock, so it never delays the next land.
  */
 @:nullSafety(Strict)
 final class PostLand {
@@ -39,6 +40,12 @@ final class PostLand {
 	private static inline final SHARD_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
 	private static inline final HXCPP_TIMEOUT_MS: Int = 30 * 60 * 1000;
 	private static inline final MS_PER_SECOND: Float = 1000;
+
+	/**
+	 * The threads the whole lint is leased: a cap on its compile fan-out, not the size of a process.
+	 */
+	private static inline final LINT_THREADS: Int = 1;
+
 	private static final HXCPP_ONLY: String = '--hxcpp-only';
 	private static final HXCPP_CACHE: String = 'hxcpp-compile';
 
@@ -57,9 +64,30 @@ final class PostLand {
 	/** The totals line `dev shard` ends its tally with. */
 	private static final TOTALS: EReg = ~/--- suite-shard: \d+ classes \/ (\d+) tests \/ (\d+) assertions/;
 
+	private static final BUILD_ROW: String = 'build';
+	private static final SHARD_ROW: String = 'shard';
+	private static final LINT_ROW: String = 'lint';
+	private static final HXCPP_ROW: String = 'hxcpp';
+
+	/** The line the hxcpp build prints first, naming the threads its lease granted it. */
+	private static final THREADS_MARK: String = 'post-land threads: ';
+
+	private static final THREADS_LINE: EReg = ~/^post-land threads: (\d+)$/m;
+
+	/** The end of the totals line of `dev shard`: its elapsed seconds and the shards it ran on. */
+	private static final SPAN: EReg = ~/ in (\d+(?:\.\d+)?)s across (\d+) shards ---/;
+
 	/** The commits whose whole suite ended red and were not cleared. */
 	public static inline function red(cache: String): Array<String> {
 		return recorded(directory(cache), RED);
+	}
+
+	/**
+	 * The mode every phase of a whole-suite run leases under: always the pool, whatever lease the caller of the run holds. The
+	 * detached run inherits its starter's `WF_THREADS`, which `Lease.ofEnvironment` would read as a held lease and so wrap nothing.
+	 */
+	public static inline function phaseMode(): LeaseMode {
+		return Lease.pooled();
 	}
 
 	/** The commits whose whole suite was started, has not ended and whose process is still there. */
@@ -153,16 +181,24 @@ final class PostLand {
 		return tests == null || assertions == null ? null : [tests, assertions];
 	}
 
+	/** The shards and the milliseconds the `dev shard` transcript `text` ran on, or null when it holds no totals line. */
+	public static function spanOf(text: String): Null<ShardSpan> {
+		if (!SPAN.match(text)) return null;
+		final shards: Null<Int> = Std.parseInt(SPAN.matched(2));
+		final seconds: Float = Std.parseFloat(SPAN.matched(1));
+		return shards == null || Math.isNaN(seconds) ? null : { shards: shards, ms: seconds * MS_PER_SECOND };
+	}
+
 	/**
-	 * The command line of the run for `sha`: a copy of `dev.js` the run owns (a later land rebuilds the shared one), under
-	 * the pool lease `mode` grants it.
+	 * The command line of the run for `sha`: a copy of `dev.js` the run owns (a later land rebuilds the shared one).
+	 * The whole-suite run holds no lease of its own, each of its phases takes the lease it needs; the hxcpp-only run is
+	 * one phase, under the pool lease `mode` grants it.
 	 */
 	public static function argvOf(
 		mode: LeaseMode, script: String, repo: String, sha: String, cache: String, suite: Bool = true
 	): Array<String> {
-		return leased(mode, ['node', script, DIRECTORY, 'run', sha, '--repo', repo, '--cache', cache].concat(
-			suite ? [] : [HXCPP_ONLY]
-		), 'post-land $sha', suite ? LeaseHistory.under(cache) : null);
+		final words: Array<String> = ['node', script, DIRECTORY, 'run', sha, '--repo', repo, '--cache', cache];
+		return suite ? words : leased(mode, Command.of(words.concat([HXCPP_ONLY])), 'post-land $sha').argv;
 	}
 
 	/**
@@ -266,11 +302,19 @@ final class PostLand {
 		return detach(argvOf(script), repo, fileIn(dir, sha, LOG));
 	}
 
-	/** The command `words` behind the pool lease `mode` grants, as a detached run of this tool asks for it. */
-	public static function leased(mode: LeaseMode, words: Array<String>, label: String, ?history: LeaseHistory): Array<String> {
+	/** The command `command` behind the pool lease `mode` grants, of the share a heavy phase of a detached run asks for. */
+	public static function leased(mode: LeaseMode, command: Command, label: String, ?history: LeaseHistory): Command {
 		final ask: Ask = Branches.heavyAsk(Lease.HEAVY_MIN, Shard.DEFAULT_SHARDS, history, LeaseHistory.keyOf(label));
 		ask.priority = 0;
-		return Lease.take(mode, Command.of(words), ask, label).argv;
+		return Lease.take(mode, command, ask, label);
+	}
+
+	/**
+	 * `command`, the whole lint, behind a lease of one thread. The lint is not one single-threaded process: its compiler-oracle
+	 * builds fan out by the threads the lease grants (`WF_THREADS`), so the lease caps that fan-out at one compile at a time.
+	 */
+	public static function lintLeased(mode: LeaseMode, command: Command, label: String): Command {
+		return Lease.take(mode, command, { min: LINT_THREADS, max: LINT_THREADS, priority: 0 }, label);
 	}
 
 	/** What `launch` left in `dir` for `sha`: the script copy always, the log unless `keepLog`. */
@@ -309,8 +353,10 @@ final class PostLand {
 	 * reaches (`LintScope`) carried the rest from its base, and a finding that moved elsewhere makes this run red. The truth replaces
 	 * the snapshot either way, so the next landing compares with what the tree really holds.
 	 */
-	public static function wholeLint(repo: String, sha: String, cache: String, tree: String): Outcome {
-		final lint: Result = GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)).run();
+	public static function wholeLint(repo: String, sha: String, cache: String, tree: String, mode: LeaseMode = Unpooled): Outcome {
+		final lint: Result = lintLeased(
+			mode, GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)), 'post-land-lint $sha'
+		).run();
 		if (!lint.out.trim().startsWith('[')) return Failed('the whole lint of $sha printed no report: ${lint.firstError()}');
 		final snapshot: String = Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-anyparse.json']);
 		final truth: String = '$snapshot.truth';
@@ -334,15 +380,32 @@ final class PostLand {
 	 * The full build of `tools/bench-hxcpp.hxml` in `tree`, Haxe and C++ compile both (neither `--no-output` nor
 	 * `-D no-compilation` reaches the C++ errors), through a compile cache of the snapshot cache so a later run only recompiles what moved.
 	 */
-	public static function hxcppBuild(tree: String, cache: String): Outcome {
-		final built: Result = cmd('haxe tools/bench-hxcpp.hxml')
+	public static function hxcppBuild(tree: String, cache: String, mode: LeaseMode, granted: Int -> Void): Outcome {
+		final built: Result = hxcppCommand(tree, cache, mode).run();
+		final text: String = built.out + built.err;
+		Sys.println(text);
+		final held: Null<Int> = hxcppGrantOf(text);
+		if (mode.match(Own(_, _)) && held != null) granted(held);
+		return built.ok ? Passed : Failed('the hxcpp build failed: ${built.firstError()}');
+	}
+
+	/**
+	 * The hxcpp build of `tree` behind a lease of its own under `mode`, compiling on the threads its grant (`WF_THREADS`) names, else
+	 * `Shard.DEFAULT_SHARDS`; it prints the grant first, as the one place the run reads what it held.
+	 */
+	public static function hxcppCommand(tree: String, cache: String, mode: LeaseMode): Command {
+		final script: String = 'echo "$THREADS_MARK$${WF_THREADS:-}"; HXCPP_COMPILE_THREADS="$${WF_THREADS:-${Shard.DEFAULT_SHARDS}}" '
+			+ 'exec haxe tools/bench-hxcpp.hxml';
+		final build: Command = Command.of(['sh', '-c', script, 'sh'])
 			.at(tree)
 			.env('HXCPP_COMPILE_CACHE', Path.join([cache, HXCPP_CACHE]))
-			.env('HXCPP_COMPILE_THREADS', Std.string(PoolLease.threads() ?? Shard.DEFAULT_SHARDS))
-			.timeout(HXCPP_TIMEOUT_MS)
-			.run();
-		Sys.println(built.out + built.err);
-		return built.ok ? Passed : Failed('the hxcpp build failed: ${built.firstError()}');
+			.timeout(HXCPP_TIMEOUT_MS);
+		return Lease.take(mode, build, { min: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS, priority: 0 }, 'post-land-hxcpp');
+	}
+
+	/** The threads the hxcpp build's lease granted, as `hxcppCommand` prints them first in `text`; null when it printed none. */
+	public static function hxcppGrantOf(text: String): Null<Int> {
+		return THREADS_LINE.match(text) ? Std.parseInt(THREADS_LINE.matched(1)) : null;
 	}
 
 	/** Writes `pid` into `file` unless the run, faster than its starter, has already written its own. */
@@ -364,6 +427,23 @@ final class PostLand {
 	/** Deletes `path` when it exists. */
 	public static function remove(path: String): Void {
 		if (FileSystem.exists(path)) FileSystem.deleteFile(path);
+	}
+
+	/**
+	 * `body` as the phase `name` of a post-land run, recorded in the ledger with its wall, the cpu of the processes it started and
+	 * the threads it reports through the function it is given (none when it holds none the pool granted).
+	 */
+	public static function timed(cache: String, name: String, body: (Int -> Void) -> Outcome): Outcome {
+		final started: Float = Timer.stamp();
+		final cpuBefore: Null<Float> = CpuMeter.reading();
+		var threads: Null<Int> = null;
+		final outcome: Outcome = body(held -> threads = held);
+		final row: LedgerRow = { row: name, phase: DIRECTORY, wallMs: (Timer.stamp() - started) * MS_PER_SECOND };
+		final cpuAfter: Null<Float> = CpuMeter.reading();
+		if (cpuBefore != null && cpuAfter != null) row.cpuS = cpuAfter - cpuBefore;
+		if (threads != null) row.threads = threads;
+		ExecLedger.under(cache).record(row);
+		return outcome;
 	}
 
 	private static inline function recordOf(cache: String, sha: String, state: String = RED): String {
@@ -397,20 +477,21 @@ final class PostLand {
 		File.saveContent(fileOf(cache, sha, PID), '${js.Node.process.pid}\n');
 		final started: Float = Timer.stamp();
 		CpuMeter.begin(fileOf(cache, sha, CPU));
+		// the suite run holds no lease: its phases take theirs, and the caller's `WF_THREADS` it inherited is none of its own
 		final verdict: Outcome = inWorktree(
-			repo, sha, DIRECTORY,
-			(work, tree) -> suite ? judge(repo, sha, cache, work, tree) : hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache))
+			repo, sha, DIRECTORY, (work, tree) -> suite ? judge(repo, sha, cache, work, tree) : hxcppHeld(tree, cache)
 		);
 		settle(cache, sha, verdict);
-		// a detached run: its wall and the cpu of the processes it started are known only here
+		// the hxcpp-only run is one phase under one lease: its wall and the cpu of the processes it started are known only here
 		final threads: Null<Int> = PoolLease.threads();
 		final used: Null<Float> = CpuMeter.reading();
 		CpuMeter.end();
-		final landed: LedgerRow = { row: suite ? 'shard' : 'hxcpp', phase: 'post-land', wallMs: (Timer.stamp() - started) * MS_PER_SECOND };
-		if (threads != null) landed.threads = threads;
-		if (used != null) landed.cpuS = used;
-		ExecLedger.under(cache).record(landed);
-		if (suite && verdict.match(Passed)) LeaseHistory.under(cache).recordLived(LeaseHistory.keyOf('post-land $sha'), threads);
+		if (!suite) {
+			final landed: LedgerRow = { row: HXCPP_ROW, phase: DIRECTORY, wallMs: (Timer.stamp() - started) * MS_PER_SECOND };
+			if (threads != null) landed.threads = threads;
+			if (used != null) landed.cpuS = used;
+			ExecLedger.under(cache).record(landed);
+		}
 		switch verdict {
 			case Failed(why):
 				Sys.println('post-land: $sha RED — $why');
@@ -422,26 +503,49 @@ final class PostLand {
 	}
 
 	private static function judge(repo: String, sha: String, cache: String, work: String, tree: String): Outcome {
-
-		switch Binaries.compileWith(tree, Path.join([work, 'build.log']), [], Lease.ofEnvironment()) {
+		final mode: LeaseMode = phaseMode();
+		final built: Outcome = timed(cache, BUILD_ROW, _ -> Binaries.compileWith(tree, Path.join([work, 'build.log']), [], mode));
+		switch built {
 			case Failed(why):
 				return Failed('the build of $sha failed: $why');
 			case _:
 		}
-		final shards: Int = PoolLease.threads() ?? Shard.DEFAULT_SHARDS;
-		final ran: Result = cmd('node bin/dev.js shard -n $shards')
+		final ran: Outcome = timed(cache, SHARD_ROW, granted -> shardRun(repo, sha, cache, tree, mode, granted));
+		if (ran.match(Failed(_))) return ran;
+		final linted: Outcome = timed(cache, LINT_ROW, granted -> {
+			if (mode.match(Own(_, _))) granted(LINT_THREADS);
+			return wholeLint(repo, sha, cache, tree, mode);
+		});
+		return linted.match(Failed(_))
+			? linted
+			: hxcppRow(Land.mergedPaths(tree), () -> timed(cache, HXCPP_ROW, granted -> hxcppBuild(tree, cache, mode, granted)));
+	}
+
+	/**
+	 * The whole suite of `tree` as `dev shard`, behind a lease of its own that it sizes its shards by (`WF_THREADS`). A green run
+	 * leaves its time on that many threads in the lease history of its label, which is what the next lease asks the pool with.
+	 */
+	private static function shardRun(
+		repo: String, sha: String, cache: String, tree: String, mode: LeaseMode, granted: Int -> Void
+	): Outcome {
+		final history: LeaseHistory = LeaseHistory.under(cache);
+		final label: String = 'post-land-shard $sha';
+		final shard: Command = cmd('node bin/dev.js shard')
 			.at(tree)
 			.env('HXQ_BIN', Path.join([tree, 'bin/apq.js']))
-			.timeout(SHARD_TIMEOUT_MS)
-			.run();
+			.timeout(SHARD_TIMEOUT_MS);
+		final ran: Result = leased(mode, shard, label, history).run();
 		final text: String = ran.out + ran.err;
 		Sys.println(text);
 		final counts: Null<Array<Int>> = countsOf(text);
 		if (counts != null)
 			File.saveContent(Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-suite.txt']), '${counts[0]} ${counts[1]}\n');
-		if (!ran.ok) return Failed(text.split('\n').find(l -> l.startsWith('suite-shard: FAILED')) ?? ran.firstError());
-		final linted: Outcome = wholeLint(repo, sha, cache, tree);
-		return linted.match(Failed(_)) ? linted : hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache));
+		final span: Null<ShardSpan> = spanOf(text);
+		if (span != null && mode.match(Own(_, _))) {
+			granted(span.shards);
+			if (ran.ok) history.record(LeaseHistory.keyOf(label), span.shards, span.ms);
+		}
+		return ran.ok ? Passed : Failed(text.split('\n').find(l -> l.startsWith('suite-shard: FAILED')) ?? ran.firstError());
 	}
 
 	private static function directory(cache: String): String {
@@ -460,9 +564,7 @@ final class PostLand {
 	}
 
 	private static function hxcppProbe(repo: String, sha: String, cache: String): Int {
-		final verdict: Outcome = inWorktree(
-			repo, sha, DIRECTORY, (work, tree) -> hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache))
-		);
+		final verdict: Outcome = inWorktree(repo, sha, DIRECTORY, (work, tree) -> hxcppHeld(tree, cache));
 		switch verdict {
 			case Failed(why):
 				Sys.println('post-land: hxcpp $sha RED — $why');
@@ -476,6 +578,11 @@ final class PostLand {
 		}
 	}
 
+	/** The hxcpp row of a run that holds a lease of its own, or whose caller does. */
+	private static function hxcppHeld(tree: String, cache: String): Outcome {
+		return hxcppRow(Land.mergedPaths(tree), () -> hxcppBuild(tree, cache, Lease.ofEnvironment(), _ -> {}));
+	}
+
 }
 
 /**
@@ -483,3 +590,5 @@ final class PostLand {
  * A land whose battery ran every class starts the hxcpp build alone.
  */
 typedef PostLandStart = (tree: String, sha: String, cache: String, suite: Bool) -> Outcome;
+/** What a `dev shard` run reports of itself: the shards it ran on and the milliseconds it took. */
+typedef ShardSpan = { var shards: Int; var ms: Float; }

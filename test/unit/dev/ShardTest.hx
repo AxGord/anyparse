@@ -64,6 +64,15 @@ process.exitCode = failed;
 		for (bad in ['12', '1/2/3', 'a/1', '/1', '1/', '-1/2']) Assert.raises(() -> Shard.parseExpect(bad), UsageError, bad);
 	}
 
+	@:pin('control')
+	@:killer('M-SHARD-COUNT-IGNORES-LEASE')
+	public function testAShardRunThatNamesNoCountTakesTheThreadsOfItsLease(): Void {
+		Assert.equals(3, Shard.shardCount(null, 3));
+		Assert.equals(Shard.DEFAULT_SHARDS, Shard.shardCount(null, null));
+		Assert.equals(2, Shard.shardCount('2', 3));
+		Assert.raises(Shard.shardCount.bind('0', 3), UsageError);
+	}
+
 	public function testTheFileCountTakesTestFilesInAPackageOnly(): Void {
 		TempDir.with(dir -> {
 			Assert.isNull(Shard.testFileCount(dir.file('test')), 'no test tree');
