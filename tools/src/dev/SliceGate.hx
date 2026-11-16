@@ -294,7 +294,7 @@ final class SliceGate {
 		final command: Array<String> -> Command = branchCommand(self, threads);
 		final leased: Array<String> -> Command = Branches.leased(
 			_mode, branches, demand, command, 'slice-gate ${Path.withoutDirectory(_gate.tree)}',
-			LeaseHistory.under(Land.cacheDir(Sys.getEnv))
+			LeaseHistory.under(Land.cacheDir(Sys.getEnv)), GateLint.coresOf
 		);
 		final started: Array<String> -> Command = rows -> GateLint.leasesItsOwn(rows) ? command(rows) : leased(rows);
 		for (name => value in Branches.run(_gate.options.run, branches, order, started, branchReport, _gate.summary))

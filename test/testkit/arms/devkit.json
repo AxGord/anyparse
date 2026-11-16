@@ -37,8 +37,8 @@
 			"name": "M-BRANCHES-LIGHT-NOT-AHEAD",
 			"type": "devkit.Branches",
 			"method": "leased",
-			"find": "{ min: threads, max: threads, priority: ahead }",
-			"replace": "{ min: threads, max: threads }",
+			"find": "{\n\t\t\t\t\t\t\tmin: threads,\n\t\t\t\t\t\t\tmax: threads,\n\t\t\t\t\t\t\tpriority: ahead,\n\t\t\t\t\t\t\tcores: coresOf(rows)\n\t\t\t\t\t\t}",
+			"replace": "{\n\t\t\t\t\t\t\tmin: threads,\n\t\t\t\t\t\t\tmax: threads,\n\t\t\t\t\t\t\tcores: coresOf(rows)\n\t\t\t\t\t\t}",
 			"note": "the light branches queue at the heavy one's priority, so on a busy pool the heavy one's whole-share wait closes the free threads to its own siblings and the lint and the probes wait for the pool to drain"
 		},
 		{
@@ -357,6 +357,60 @@
 			"find": "clear(dir);",
 			"replace": "{}",
 			"note": "a usage file an earlier attempt left under a name this run reuses is read as this run's cpu"
+		},
+		{
+			"name": "M-LEASE-CORES-IGNORED",
+			"type": "devkit.Lease",
+			"method": "coresOf",
+			"force": "1",
+			"note": "an ask whose processes each run on several cpus still leases one thread per process, so a node engine runs on more cpus than its lease holds"
+		},
+		{
+			"name": "M-LEASE-CORES-UNCAPPED",
+			"type": "devkit.Lease",
+			"method": "scaled",
+			"find": "Std.int(Math.min(ask.max * cores, budget))",
+			"replace": "ask.max * cores",
+			"note": "a scaled ask can name more threads than the pool has, so the lease waits for a grant that never comes"
+		},
+		{
+			"name": "M-LEASE-CORES-CPUS-TO-COMMAND",
+			"type": "devkit.Lease",
+			"method": "take",
+			"find": "command.under(['sh', '-c', perProcess(cores), 'sh'])",
+			"replace": "command",
+			"note": "a command leased by the cpu reads the cpus as its process count, so its compiler fan-out doubles and overruns the lease it was scaled to fit"
+		},
+		{
+			"name": "M-BRANCHES-CORES-UNASKED",
+			"type": "devkit.Branches",
+			"method": "leased",
+			"find": "cores: coresOf(rows)",
+			"replace": "cores: 1",
+			"note": "a light branch of node engine processes leases one thread per process, so the gate lint runs on more cpus than it holds"
+		},
+		{
+			"name": "M-BRANCHES-HEAVY-BESIDE-THREADS",
+			"type": "devkit.Branches",
+			"method": "leased",
+			"find": "perHeavy(budget, branches, leasedDemand)",
+			"replace": "perHeavy(budget, branches, demand)",
+			"note": "the heavy branch is sized beside the light ones processes, not the cpus they lease, so together they ask for more than the budget"
+		},
+		{
+			"name": "M-LEASE-CORES-PRIORITY-DROPPED",
+			"type": "devkit.Lease",
+			"method": "scaled",
+			"find": "priority: ask.priority",
+			"replace": "priority: null",
+			"note": "a scaled ask loses its priority, so the gate lint queues behind the heavy branch's whole-share wait"
+		},
+		{
+			"name": "M-LEASE-CORES-UNGUARDED",
+			"type": "devkit.Lease",
+			"method": "perProcess",
+			"force": "'WF_THREADS=$$(( $${WF_THREADS:-0} / $cores )); [ \"$$WF_THREADS\" -ge 1 ] || WF_THREADS=1; export WF_THREADS; exec \"$$@\"'",
+			"note": "a command with no grant is handed one process in WF_THREADS, so a caller outside any lease reads a lease it never took"
 		}
 	]
 }

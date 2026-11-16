@@ -10,6 +10,9 @@ import unit.cli.CliFixture;
 import utest.Assert;
 import utest.Test;
 
+using StringTools;
+using Lambda;
+
 /**
  * `devkit.Lease`: a run under its caller's lease never asks the pool again, a run inside a workflow without one asks the
  * pool through `wf-run`, and a leased command keeps everything but the prefix that takes the lease.
@@ -139,6 +142,81 @@ final class LeaseTest extends Test {
 			{ min: 2, max: 3, estSeconds: [2 => 120, 3 => 0] }
 		];
 		for (ask in asks) Assert.equals(-1, Lease.take(mode, command, ask, 'x').argv.join(' ').indexOf('--est-by-threads'));
+	}
+
+	@:pin('control')
+	@:killer('M-LEASE-CORES-IGNORED')
+	@:killer('M-LEASE-CORES-UNCAPPED')
+	@:killer('M-LEASE-CORES-PRIORITY-DROPPED')
+	public function testAnAskOfProcessesOnSeveralCpusLeasesTheCpus(): Void {
+		final command: Command = Command.of(['node', 'bin/apq.js']);
+		final mode: LeaseMode = Own('/p/scripts/wf-run', 10);
+		final threadsOf: Ask -> String = ask -> {
+			final argv: Array<String> = Lease.take(mode, command, ask, 'lint').argv;
+			return argv[argv.indexOf('--threads') + 1];
+		};
+		Assert.equals('2', threadsOf({ min: 1, max: 1, cores: 2 }));
+		Assert.equals('4-10', threadsOf({ min: 2, max: 6, cores: 2 }), 'a scaled ask never names more than the budget');
+		Assert.equals('1', threadsOf({ min: 1, max: 1, cores: 0 }), 'fewer than one cpu is one');
+		final curve: Array<String> = Lease.take(mode, command, {
+			min: 1,
+			max: 2,
+			cores: 2,
+			estSeconds: [1 => 60, 2 => 40]
+		}, 'lint').argv;
+		Assert.isFalse(curve.exists(word -> word.startsWith('--est-by-threads')), 'a curve by process count names no size of cpus');
+		Assert.same(command.argv, Lease.take(Held(10), command, { min: 1, max: 1, cores: 2 }, 'x').argv);
+		final ranked: Array<String> = Lease.take(mode, command, {
+			min: 1,
+			max: 1,
+			cores: 2,
+			priority: 3
+		}, 'lint').argv;
+		Assert.contains('--priority=3', ranked, 'a scaled ask keeps the priority it queues at');
+	}
+
+	@:pin('control')
+	@:killer('M-LEASE-CORES-UNGUARDED')
+	public function testACommandWithoutAGrantIsHandedNoProcessCount(): Void {
+		TempDir.with(dir -> {
+			final unleased: Result = Command.of([
+				'env',
+				'-u',
+				'WF_THREADS',
+				'sh',
+				'-c',
+				Lease.perProcess(2),
+				'sh',
+				'node',
+				'-e',
+				SHOW_LEASE
+			])
+				.at(dir.path)
+				.env('DEVKIT_PROBE', 'kept')
+				.run();
+			Assert.equals('kept|undefined', unleased.out, unleased.err);
+			final one: Result = Command.of(['sh', '-c', Lease.perProcess(2), 'sh', 'node', '-e', SHOW_LEASE])
+				.at(dir.path)
+				.env('DEVKIT_PROBE', 'kept')
+				.env('WF_THREADS', '1')
+				.run();
+			Assert.equals('kept|1', one.out, 'a grant below the cpus of one process still runs one');
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-LEASE-CORES-CPUS-TO-COMMAND')
+	public function testACommandLeasedByTheCpuSeesItsProcesses(): Void {
+		TempDir.with(dir -> {
+			final wfRun: String = Path.join([pluginRoot(dir), 'scripts/wf-run']);
+			final command: Command = Command.of(['node', '-e', SHOW_LEASE]).at(dir.path).env('DEVKIT_PROBE', 'kept');
+			final twoCpus: Result = Lease.take(Own(wfRun, 10), command, { min: 1, max: 1, cores: 2 }, 'probe').run();
+			Assert.equals('kept|1', twoCpus.out, twoCpus.err);
+			final fourCpus: Result = Lease.take(Own(wfRun, 10), command, { min: 1, max: 1, cores: 4 }, 'probe').run();
+			Assert.equals('kept|1', fourCpus.out, 'never fewer than one process');
+			final oneCpu: Result = Lease.take(Own(wfRun, 10), command, { min: 1, max: 1, cores: 1 }, 'probe').run();
+			Assert.equals('kept|3', oneCpu.out, oneCpu.err);
+		});
 	}
 
 	/** A workflow plugin root in `dir` whose `scripts/wf-run` is the fake one. */

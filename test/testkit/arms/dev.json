@@ -3053,8 +3053,8 @@
 			"name": "M-POSTLAND-LINT-LEASE-SHARE",
 			"type": "dev.PostLand",
 			"method": "lintLeased",
-			"find": "{ min: LINT_THREADS, max: LINT_THREADS, priority: 0 }",
-			"replace": "{ min: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS, priority: 0 }",
+			"find": "{\n\t\t\tmin: LINT_THREADS,\n\t\t\tmax: LINT_THREADS,\n\t\t\tpriority: 0,\n\t\t\tcores: Lease.NODE_CORES\n\t\t}",
+			"replace": "{\n\t\t\tmin: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS,\n\t\t\tpriority: 0,\n\t\t\tcores: Lease.NODE_CORES\n\t\t}",
 			"note": "the whole lint asks the pool for the share of a heavy phase, so one apq.js process holds several threads"
 		},
 		{
@@ -3401,6 +3401,21 @@
 			"find": ", priority: Lease.ahead() }",
 			"replace": " }",
 			"note": "the infra4 row's lints queue at the gate's own priority instead of one step ahead, so they wait behind the leases of the run that started the gate"
+		},
+		{
+			"name": "M-GATE-LINT-CORES-ONE",
+			"type": "dev.GateLint",
+			"method": "coresOf",
+			"force": "1",
+			"note": "the gate lint branches lease one thread per node engine process, so the lint runs on more cpus than its lease holds"
+		},
+		{
+			"name": "M-POSTLAND-LINT-CORES-ONE",
+			"type": "dev.PostLand",
+			"method": "lintLeased",
+			"find": "cores: Lease.NODE_CORES",
+			"replace": "cores: 1",
+			"note": "the post-land whole lint leases one thread for a node engine process, so it runs on more cpus than its lease holds"
 		}
 	]
 }

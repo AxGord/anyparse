@@ -3,7 +3,9 @@ package unit.dev;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import dev.BaseLint;
 import dev.GateLint;
+import devkit.Lease;
 import devkit.Summary.Outcome;
 import utest.Assert;
 import utest.Test;
@@ -139,6 +141,15 @@ final class GateLintTest extends Test {
 			['x.C belongs to a.new.C, a.old.CTest and a.new.C.Sub'],
 			JValueTools.items(JValueParser.parse(GateLint.rebased(report, moves))).map(JValueTools.stringAt.bind(_, 'message'))
 		);
+	}
+
+	@:pin('control')
+	@:killer('M-GATE-LINT-CORES-ONE')
+	public function testTheLintBranchesLeaseTheNodeEnginesCpusAndTheOthersOne(): Void {
+		Assert.equals(Lease.NODE_CORES, GateLint.coresOf(['lint']));
+		Assert.equals(Lease.NODE_CORES, GateLint.coresOf([BaseLint.ROW]));
+		Assert.equals(1, GateLint.coresOf(['jvm']));
+		Assert.equals(1, GateLint.coresOf(['suite', 'corpus']));
 	}
 
 }

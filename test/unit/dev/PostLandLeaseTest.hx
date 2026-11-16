@@ -4,6 +4,7 @@ import dev.PostLand;
 import dev.Shard;
 import devkit.Command;
 import devkit.ExecLedger;
+import devkit.Lease;
 import devkit.LeaseHistory;
 import devkit.TempDir;
 import unit.cli.CliFixture;
@@ -39,10 +40,11 @@ final class PostLandLeaseTest extends Test {
 
 	@:pin('control')
 	@:killer('M-POSTLAND-LINT-LEASE-SHARE')
-	public function testTheWholeLintIsLeasedOneThread(): Void {
+	@:killer('M-POSTLAND-LINT-CORES-ONE')
+	public function testTheWholeLintIsLeasedOneProcessOnTheEnginesCpus(): Void {
 		final lint: Command = Command.of(['hxq', 'lint']);
 		final argv: Array<String> = PostLand.lintLeased(Own('/p/scripts/wf-run', 10), lint, 'post-land-lint 0123abcd').argv;
-		Assert.equals('1', argv[argv.indexOf('--threads') + 1]);
+		Assert.equals('${Lease.NODE_CORES}', argv[argv.indexOf('--threads') + 1]);
 		Assert.isFalse(argv.exists(word -> word.startsWith('--wait-full')));
 		Assert.same(['hxq', 'lint'], PostLand.lintLeased(Unpooled, lint, 'post-land-lint 0123abcd').argv);
 	}

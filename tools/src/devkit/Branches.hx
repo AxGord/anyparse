@@ -178,23 +178,35 @@ final class Branches {
 	 * `demand` names for its rows (none at 0), and the one branch it answers null for, the heavy one, from `Lease.HEAVY_MIN`
 	 * up to what the budget leaves beside the others (`share`). The light ones queue a priority step ahead of the
 	 * heavy one (`Lease.ahead`): on a busy pool the heavy one waits for its whole share with every free thread closed
-	 * behind it, and its own siblings must not wait behind it. A branch's threads go back to the pool as it ends. Under
-	 * `Held` and `Unpooled` the command is as it was: the caller splits a held lease with `share` and `light`.
+	 * behind it, and its own siblings must not wait behind it. A branch's threads go back to the pool as it ends. `cores` names
+	 * the cpus each process of a light branch runs on (`Ask.cores`, one without it), and the heavy share is what is left beside
+	 * the cpus the light ones lease. Under `Held` and `Unpooled` the command is as it was: the caller splits a held lease with
+	 * `share` and `light`.
 	 */
 	public static function leased(
 		mode: LeaseMode, branches: Array<Array<String>>, demand: Array<String> -> Null<Int>, command: Array<String> -> Command,
-		label: String, ?history: LeaseHistory
+		label: String, ?history: LeaseHistory, ?cores: Array<String> -> Int
 	): Array<String> -> Command {
 		return switch mode {
 			case Own(_, budget):
-				final rest: Int = perHeavy(budget, branches, demand) ?? 1;
+				final coresOf: Array<String> -> Int = cores ?? (_ -> 1);
+				final leasedDemand: Array<String> -> Null<Int> = rows -> {
+					final threads: Null<Int> = demand(rows);
+					return threads == null ? null : threads * coresOf(rows);
+				};
+				final rest: Int = perHeavy(budget, branches, leasedDemand) ?? 1;
 				final ahead: Int = Lease.ahead();
 				rows -> {
 					final threads: Null<Int> = demand(rows);
 					final ask: Null<Ask> = if (threads == null)
 						heavyAsk(Std.int(Math.min(Lease.HEAVY_MIN, rest)), rest, history, timingKey(label, rows))
 					else if (threads > 0)
-						{ min: threads, max: threads, priority: ahead }
+						{
+							min: threads,
+							max: threads,
+							priority: ahead,
+							cores: coresOf(rows)
+						}
 					else
 						null;
 					Lease.take(mode, command(rows), ask, '$label ${rows.join(',')}');

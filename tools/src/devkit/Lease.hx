@@ -19,6 +19,9 @@ final class Lease {
 	/** How long a flexible lease waits for its whole share before it takes what fits, in seconds. */
 	public static inline final WAIT_FULL_SECONDS: Int = 30;
 
+	/** The cpus one node engine process runs on: V8 runs its collector and compiler threads beside the script's own. */
+	public static inline final NODE_CORES: Int = 2;
+
 	/** What the pool's status may take before the run gives up on the pool. */
 	private static inline final STATUS_TIMEOUT_MS: Int = 30 * 1000;
 
@@ -63,23 +66,27 @@ final class Lease {
 	 * `command` under a lease of its own of `ask` threads, labelled `label` in the pool, when `mode` is `Own` and there is an
 	 * `ask`; else `command` as it is. A pool `wf-run` cannot use runs the command unleased on the fewest threads it asked
 	 * (`--fail-open`): the pool never fails a run. `WF_THREADS` of the command is what the lease granted, and its `timeout`
-	 * counts from the grant (`Command.leasedUnder`).
+	 * counts from the grant (`Command.leasedUnder`). An ask whose processes each run on more than one cpu (`Ask.cores`) leases
+	 * the cpus and hands the command the processes (`perProcess`).
 	 */
 	public static function take(mode: LeaseMode, command: Command, ask: Null<Ask>, label: String): Command {
 		return switch [mode, ask] {
-			case [Own(wfRun, _), ask] if (ask != null):
-				final flexible: Bool = ask.min < ask.max;
+			case [Own(wfRun, budget), ask] if (ask != null):
+				final cores: Int = coresOf(ask);
+				final threads: Ask = cores > 1 ? scaled(ask, cores, budget) : ask;
+				final flexible: Bool = threads.min < threads.max;
 				final prefix: Array<String> = [
 					wfRun,
 					'--fail-open',
 					'--threads',
-					flexible ? '${ask.min}-${ask.max}' : '${ask.max}'
+					flexible ? '${threads.min}-${threads.max}' : '${threads.max}'
 				];
 				if (flexible) prefix.push('--wait-full=$WAIT_FULL_SECONDS');
-				final estimate: Null<String> = estimateOf(ask);
+				final estimate: Null<String> = estimateOf(threads);
 				if (estimate != null) prefix.push('--est-by-threads=$estimate');
-				if (ask.priority != null) prefix.push('--priority=${ask.priority}');
-				command.leasedUnder(prefix.concat(['--label', label, '--']));
+				if (threads.priority != null) prefix.push('--priority=${threads.priority}');
+				final run: Command = cores > 1 ? command.under(['sh', '-c', perProcess(cores), 'sh']) : command;
+				run.leasedUnder(prefix.concat(['--label', label, '--']));
 			case _: command;
 		};
 	}
@@ -107,6 +114,29 @@ final class Lease {
 			pairs.push('$size:$known');
 		}
 		return pairs.join(',');
+	}
+
+	/** The cpus one of `ask`'s processes runs on, at least one. */
+	public static function coresOf(ask: Ask): Int {
+		return Std.int(Math.max(1, ask.cores ?? 1));
+	}
+
+	/**
+	 * The threads of `ask` when each of its processes runs on `cores` cpus: each size times `cores`, at most `budget`. Its curve
+	 * is by process count, so the scaled ask names none.
+	 */
+	public static function scaled(ask: Ask, cores: Int, budget: Int): Ask {
+		final max: Int = Std.int(Math.min(ask.max * cores, budget));
+		return { min: Std.int(Math.min(ask.min * cores, max)), max: max, priority: ask.priority };
+	}
+
+	/**
+	 * The `sh` script that hands a command leased by the cpu the processes its grant runs: `WF_THREADS` divided by `cores`, at
+	 * least one, left unset when the grant names none.
+	 */
+	public static function perProcess(cores: Int): String {
+		return 'if [ -n "$${WF_THREADS:-}" ]; then WF_THREADS=$$(( WF_THREADS / $cores )); '
+			+ '[ "$$WF_THREADS" -ge 1 ] || WF_THREADS=1; export WF_THREADS; fi; exec "$$@"';
 	}
 
 	/** The pool's budget as `wf-run --status` names it, or null when the status does not come. */
@@ -150,5 +180,12 @@ typedef Ask = {
 	 */
 	@:optional
 	var estSeconds: Map<Int, Int>;
+
+	/**
+	 * The cpus each process of the command runs on, one when it names none. A command that opts in leases that many threads
+	 * per process and still sees its process count in `WF_THREADS`.
+	 */
+	@:optional
+	var cores: Int;
 
 }

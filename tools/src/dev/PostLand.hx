@@ -320,12 +320,18 @@ final class PostLand {
 	}
 
 	/**
-	 * `command`, the whole lint, behind a lease of one thread. The lint is not one single-threaded process: its compiler-oracle
-	 * builds fan out by the threads the lease grants (`WF_THREADS`), so the lease caps that fan-out at one compile at a time. The lint
+	 * `command`, the whole lint, behind a lease of one process on the node engine's cpus (`Lease.NODE_CORES`). The lint is not one
+	 * single-threaded process: its compiler-oracle builds fan out by the processes the lease hands it (`WF_THREADS`), so the lease
+	 * caps that fan-out at one compile at a time. The lint
 	 * is bounded from its grant by `PHASE_TIMEOUT_MS`: the driver's default bound for a leased job sits at what an honest whole lint takes.
 	 */
 	public static function lintLeased(mode: LeaseMode, command: Command, label: String): Command {
-		return Lease.take(mode, command.timeout(PHASE_TIMEOUT_MS), { min: LINT_THREADS, max: LINT_THREADS, priority: 0 }, label);
+		return Lease.take(mode, command.timeout(PHASE_TIMEOUT_MS), {
+			min: LINT_THREADS,
+			max: LINT_THREADS,
+			priority: 0,
+			cores: Lease.NODE_CORES
+		}, label);
 	}
 
 	/** What `launch` left in `dir` for `sha`: the script copy always, the log unless `keepLog`. */

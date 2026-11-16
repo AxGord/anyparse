@@ -473,4 +473,28 @@ final class BranchesTest extends Test {
 		Assert.isNull(Branches.cpuSeconds(''));
 	}
 
+	@:pin('control')
+	@:killer('M-BRANCHES-CORES-UNASKED')
+	@:killer('M-BRANCHES-HEAVY-BESIDE-THREADS')
+	public function testALightBranchLeasesTheCpusOfItsProcessesAndTheHeavyOneWhatIsLeft(): Void {
+		final branches: Array<Array<String>> = [['heavy'], ['lint'], ['short']];
+		final demand: Array<String> -> Null<Int> = rows -> {
+			switch rows[0] {
+				case 'heavy': null;
+				case 'lint': 2;
+				case _: 1;
+			}
+		};
+		final cores: Array<String> -> Int = rows -> rows[0] == 'lint' ? 2 : 1;
+		final command: Array<String> -> Command = rows -> Command.of(['node', 'dev.js', rows.join(',')]);
+		final threadsOf: Array<String> -> String = rows -> {
+			final argv: Array<String> = Branches.leased(Own('/p/scripts/wf-run', 10), branches, demand, command, 'gate', null, cores)(rows)
+				.argv;
+			return argv[argv.indexOf('--threads') + 1];
+		};
+		Assert.equals('4', threadsOf(['lint']));
+		Assert.equals('1', threadsOf(['short']));
+		Assert.equals('2-5', threadsOf(['heavy']), 'the heavy branch takes what the light ones leave of their cpus');
+	}
+
 }
