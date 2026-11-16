@@ -686,6 +686,11 @@ final class HxModuleWriteOptions {
 	// terminator, so source presence always wins there. Fed by
 	// `whitespace.semicolonBeforeElse`.
 	public var semicolonBeforeElse: OptionalSemicolon = OptionalSemicolon.Preserve;
+	// The optional `;` after a typedef: a separate key from `optionalSemicolon`, because a config
+	// that wants `Always` for statement terminators may want `Never` here. `Never` drops it only
+	// when the written right-hand side ends with `}`; `Preserve` (default) re-emits source presence.
+	// Fed by `whitespace.typedefSemicolon`.
+	public var typedefSemicolon: OptionalSemicolon = OptionalSemicolon.Preserve;
 	public var accessBracketsOpen: WhitespacePolicy = WhitespacePolicy.None;
 	public var accessBracketsClose: WhitespacePolicy = WhitespacePolicy.None;
 	public var arrayLiteralBracketsOpen: WhitespacePolicy = WhitespacePolicy.None;

@@ -77,6 +77,7 @@ enum HxDecl {
 	ClassDecl(decl: HxClassDecl);
 
 	@:trailOpt(';')
+	@:fmt(optionalSemicolon('typedefBodyEndsWithBrace', 'typedefSemicolon'))
 	TypedefDecl(decl: HxTypedefDecl);
 
 	/**

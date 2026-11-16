@@ -1188,6 +1188,8 @@ final class HaxeFormatConfigLoader {
 		// (statement terminators) composes with `semicolonBeforeElse: never`.
 		final semiElse: Null<HxFormatOptionalSemicolonPolicy> = section.semicolonBeforeElse;
 		if (semiElse != null) opt.semicolonBeforeElse = HaxeFormatValues.optionalSemicolonToRuntime(semiElse);
+		final semiTypedef: Null<HxFormatOptionalSemicolonPolicy> = section.typedefSemicolon;
+		if (semiTypedef != null) opt.typedefSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semiTypedef);
 	}
 
 	/**

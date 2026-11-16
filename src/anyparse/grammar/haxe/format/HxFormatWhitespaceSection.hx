@@ -136,6 +136,15 @@ typedef HxFormatWhitespaceSection = {
 	@:optional
 	var semicolonBeforeElse: HxFormatOptionalSemicolonPolicy;
 
+	/**
+	 * The optional `;` after a typedef -- a separate key from `optionalSemicolon`, sharing its
+	 * three-way policy type. Default `"preserve"` re-emits what the source had; `"never"` drops it
+	 * when the written right-hand side ends with `}` (a non-brace body keeps it); `"always"` writes
+	 * it. Feeds `opt.typedefSemicolon`.
+	 */
+	@:optional
+	var typedefSemicolon: HxFormatOptionalSemicolonPolicy;
+
 	@:optional
 	var parenConfig: HxFormatParenConfigSection;
 

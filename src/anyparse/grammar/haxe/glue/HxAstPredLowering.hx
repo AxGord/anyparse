@@ -29,6 +29,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	public static inline final HX_STATEMENT: String = 'anyparse.grammar.haxe.stmt.HxStatement';
 	public static inline final HX_SWITCH_CASE: String = 'anyparse.grammar.haxe.stmt.HxSwitchCase';
 
+	private static final TYPE_FIELD: String = 'type';
 	private static final HX_TOP_LEVEL_DECL: String = 'anyparse.grammar.haxe.decl.HxTopLevelDecl';
 	private static final HX_DECL: String = 'anyparse.grammar.haxe.decl.HxDecl';
 	private static final HX_OBJECT_FIELD: String = 'anyparse.grammar.haxe.expr.HxObjectField';
@@ -59,6 +60,7 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	private static final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.expr.HxTryCatchExpr';
 	private static final HX_VAR_DECL: String = 'anyparse.grammar.haxe.decl.HxVarDecl';
+	private static final HX_TYPEDEF_DECL: String = 'anyparse.grammar.haxe.decl.HxTypedefDecl';
 	private static final HX_COND_DECL: String = 'anyparse.grammar.haxe.cond.HxConditionalDecl';
 
 	/** The rule of `HxConditionalCommaList<HxExpr>`, under the instance name `ShapeBuilder` gives it. */
@@ -283,6 +285,7 @@ final class HxAstPredLowering extends AstPredLowering {
 				'True iff the LAST binding of a (possibly multi-variable) declaration ends with `}`.'
 			),
 			varInitDropsSemicolonField(),
+			typedefBodyEndsWithBraceField(),
 			varDeclTailField(
 				'varDeclTailDropsSemicolon', 'varInitDropsSemicolon',
 				'True iff the plain writer omits the `;` after the LAST binding of a (possibly multi-variable) declaration.'
@@ -1143,7 +1146,7 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	/** `_anonVarBodyEndsWithBrace(b)` — the `var` / `final` anon field's declared type ends with `}`. */
 	private function anonVarBodyEndsWithBraceField(): Field {
-		final decl: Expr = { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [field(ident('_d'), 'type')]), pos: Context.currentPos() };
+		final decl: Expr = { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [field(ident('_d'), TYPE_FIELD)]), pos: Context.currentPos() };
 		final body: Expr = nullSwitch(
 			ident('b'), macro false,
 			[caseBindMulti(HX_ANON_VAR_BODY, ['Optional', 'Plain'], [0 => '_d'], decl)],
@@ -1289,6 +1292,26 @@ final class HxAstPredLowering extends AstPredLowering {
 			'typeParamItemCount', [{ name: 'items', type: macro : Array<Any> }],
 			macro : Int, macro anyparse.grammar.haxe.glue.HxTypeParamItems.count(items),
 			'How many elements of a delimited list declare a type with type parameters, for `WrapList`\'s `typeParamItemCount` axis.'
+		);
+	}
+
+	/**
+	 * `typedefBodyEndsWithBrace(d)` — the WRITTEN right-hand side of a typedef ends with `}`: its last
+	 * `& Type` clause, or the head type when there is none. Read on the AST the writer receives, so a
+	 * fixer that turns a brace body into an intersection keeps its `;`.
+	 */
+	private function typedefBodyEndsWithBraceField(): Field {
+		final tailType: Expr = field(starElem(HX_TYPEDEF_DECL, 'intersections', macro _m[_m.length - 1]), TYPE_FIELD);
+		final recTail: Expr = { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [tailType]), pos: Context.currentPos() };
+		final headType: Expr = { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [field(ident('d'), TYPE_FIELD)]), pos: Context.currentPos() };
+		final body: Expr = macro {
+			if (d == null) return false;
+			final _m = d.intersections;
+			_m.length == 0 ? $headType : $recTail;
+		};
+		return predField(
+			'typedefBodyEndsWithBrace', [valueArg('d', HX_TYPEDEF_DECL)],
+			macro : Bool, body, 'True iff the written right-hand side of a typedef ends with `}`.'
 		);
 	}
 

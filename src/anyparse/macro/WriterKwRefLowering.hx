@@ -934,9 +934,12 @@ final class WriterKwRefLowering {
 		kw: KwRefCtx, branch: ShapeNode, trailText: String, rootArg: String, presentFlag: Expr
 	): Null<Expr> {
 		final args: Null<Array<String>> = branch.fmtReadStringArgs('optionalSemicolon');
-		if (args == null || args.length != 1) return null;
+		if (args == null || args.length < 1 || args.length > 2) return null;
+		// The optional second argument names the policy field, so a slot whose style is a separate
+		// user choice (the typedef `;`) reuses this lowering under its own key.
+		final policyField: String = args.length == 2 ? args[1] : 'optionalSemicolon';
 		final gateCall: Expr = AstPredLowering.predCallExpr(kw.shape.root, kw.ctx.trivia, false, args[0], [macro $i{rootArg}]);
-		return macro switch opt.optionalSemicolon {
+		return macro switch opt.$policyField {
 			case anyparse.format.OptionalSemicolon.Always: _dt($v{trailText});
 			case anyparse.format.OptionalSemicolon.Never: $gateCall ? _de() : _dt($v{trailText});
 			case _: $presentFlag ? _dt($v{trailText}) : _de();

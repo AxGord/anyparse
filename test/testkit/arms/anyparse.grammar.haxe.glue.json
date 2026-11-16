@@ -274,6 +274,30 @@
 			"find": "ECall(ident(name), [tailDecl])",
 			"replace": "ECall(ident('varDeclTailEndsWithCloseBrace'), [tailDecl])",
 			"note": "the plain gate reads the last binding of a multi-var declaration through endsWithCloseBrace, so var c = 3, d = {y: 4} loses its ;"
+		},
+		{
+			"name": "M-TDSEMI-NEVER-DROPS-NOTHING",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "typedefBodyEndsWithBraceField",
+			"find": "_m.length == 0 ? $headType : $recTail;",
+			"replace": "false;",
+			"note": "`typedefSemicolon: never` reads every typedef body as not brace-ended, so a structure keeps its `;`"
+		},
+		{
+			"name": "M-TDSEMI-NEVER-DROPS-ALL",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "typedefBodyEndsWithBraceField",
+			"find": "_m.length == 0 ? $headType : $recTail;",
+			"replace": "true;",
+			"note": "`typedefSemicolon: never` drops the `;` the policy keeps after a non-brace body such as `A & B` and `(a:Int) -> Void`"
+		},
+		{
+			"name": "M-TDSEMI-TAIL-IGNORED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "typedefBodyEndsWithBraceField",
+			"find": "_m.length == 0 ? $headType : $recTail;",
+			"replace": "$headType;",
+			"note": "the brace test reads the head type past its `& T` clauses, so `{x:Int} & Base` loses its required `;` and `Base & {x:Int}` keeps an optional one"
 		}
 	]
 }

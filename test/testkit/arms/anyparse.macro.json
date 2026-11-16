@@ -3561,6 +3561,14 @@
 			"find": "if (excluded != null) for (tail in excluded) matchCall = macro !peekLit(ctx, $v{opText + tail}) && $matchCall;",
 			"replace": "",
 			"note": "the exclusion is dropped, so a type `&` takes the first `&` of `&&` and the wrapper never sees its lead"
+		},
+		{
+			"name": "M-TDSEMI-SHARED-KEY",
+			"type": "anyparse.macro.WriterKwRefLowering",
+			"method": "optionalSemicolonWrap",
+			"find": "args.length == 2 ? args[1] : 'optionalSemicolon'",
+			"replace": "'optionalSemicolon'",
+			"note": "the typedef `;` follows `optionalSemicolon` instead of its own key, so `optionalSemicolon: always` writes it after a structure that `typedefSemicolon: never` asked to drop"
 		}
 	]
 }

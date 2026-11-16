@@ -608,6 +608,14 @@
 			"find": "section.typedefEmptyLines?.metadataCountsAsDocComment",
 			"replace": "null",
 			"note": "the typedefEmptyLines.metadataCountsAsDocComment key no longer reaches its knob"
+		},
+		{
+			"name": "M-TDSEMI-KEY-NOT-LOADED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceToggles",
+			"find": "if (semiTypedef != null) opt.typedefSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semiTypedef);",
+			"replace": "",
+			"note": "`whitespace.typedefSemicolon` is read and ignored, so every value behaves as `preserve`"
 		}
 	]
 }

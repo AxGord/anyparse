@@ -92,6 +92,15 @@
 			"find": "else if (kind == 'EnumAbstractDecl' && !opt.enumAbstractRulesUnlessValueList)\n\t\t\t\tenumAbstractBody",
 			"replace": "",
 			"note": "an enum-abstract body gets no writer policy again, so member-order reports the blank fmt writes under the enumAbstract knobs"
+		},
+		{
+			"name": "M-TDSEMI-DEFAULT-NEVER",
+			"type": "anyparse.grammar.haxe.HxModuleWriteOptions",
+			"method": "typedefSemicolon",
+			"kind": "VarMember",
+			"find": "OptionalSemicolon = OptionalSemicolon.Preserve",
+			"replace": "OptionalSemicolon = OptionalSemicolon.Never",
+			"note": "a config without the key drops the `;` after a structure typedef, so the default is no longer byte-inert"
 		}
 	]
 }

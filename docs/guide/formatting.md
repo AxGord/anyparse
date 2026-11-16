@@ -68,6 +68,20 @@ typedef Check = (call: QueryNode) -> Bool;
 function first<T : Dynamic>(items:Array<T>):T {}
 ```
 
+## The `;` after a typedef: `whitespace.typedefSemicolon`
+
+A key of its own, not part of haxe-formatter's schema: `preserve` (the default) writes the `;` where the source has it, `always` writes it after every typedef, `never` drops it where Haxe does not need it. It shares its values with `whitespace.optionalSemicolon` but never its setting, so `optionalSemicolon: always` for statements composes with `typedefSemicolon: never`.
+
+`never` drops the `;` only when the right-hand side as written ends with `}`: an anonymous structure (one line or several), the last `& {…}` clause of an intersection, a function type returning a structure. Any other body keeps it. The test reads the typedef the formatter writes, not the source, so a structure that `prefer-intersection-type` rewrote into `A & B` keeps its `;`. A blank line or a comment after the dropped `;` stays where it was.
+
+```haxe
+// "typedefSemicolon": "never"
+typedef Named = {> Base, name:String}
+typedef Both = Base & Other;
+typedef Tail = Base & {x:Int}
+typedef Callback = (a:Int) -> Void;
+```
+
 ## A value `try` that does not fit: `sameLine.expressionTryOverflow`
 
 A brace-less value `try` (`final x = try f() catch (e: E) g()`) that fits the line stays on it. One that does not fit breaks at its seams, never inside the first call or the tail, with `sameLine.expressionTry` left at `same`. `next` (the default) puts each body on its own indented line with `catch` at the statement's indent, the shape a value `if` takes under `sameLine.expressionIf: next`:
