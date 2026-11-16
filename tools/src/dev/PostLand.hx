@@ -5,6 +5,7 @@ import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.CpuMeter;
 import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.LeaseHistory;
@@ -46,6 +47,10 @@ final class PostLand {
 
 	private static final LOG: String = 'log';
 	private static final PID: String = 'pid';
+
+	/** The suffix of the directory a run keeps the usage files of the processes it starts in. */
+	private static final CPU: String = 'cpu';
+
 	private static final SCRIPT: String = 'dev.js';
 	private static final WORK_PREFIX: String = 'apq-dev';
 
@@ -391,15 +396,19 @@ final class PostLand {
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
 		File.saveContent(fileOf(cache, sha, PID), '${js.Node.process.pid}\n');
 		final started: Float = Timer.stamp();
+		CpuMeter.begin(fileOf(cache, sha, CPU));
 		final verdict: Outcome = inWorktree(
 			repo, sha, DIRECTORY,
 			(work, tree) -> suite ? judge(repo, sha, cache, work, tree) : hxcppRow(Land.mergedPaths(tree), hxcppBuild.bind(tree, cache))
 		);
 		settle(cache, sha, verdict);
-		// a detached run: its wall is known only here, and nothing meters its cpu
+		// a detached run: its wall and the cpu of the processes it started are known only here
 		final threads: Null<Int> = PoolLease.threads();
+		final used: Null<Float> = CpuMeter.reading();
+		CpuMeter.end();
 		final landed: LedgerRow = { row: suite ? 'shard' : 'hxcpp', phase: 'post-land', wallMs: (Timer.stamp() - started) * MS_PER_SECOND };
 		if (threads != null) landed.threads = threads;
+		if (used != null) landed.cpuS = used;
 		ExecLedger.under(cache).record(landed);
 		if (suite && verdict.match(Passed)) LeaseHistory.under(cache).recordLived(LeaseHistory.keyOf('post-land $sha'), threads);
 		switch verdict {

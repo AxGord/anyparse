@@ -1,8 +1,12 @@
 package unit.devkit;
 
+import anyparse.proc.SpawnJob;
+import devkit.CpuMeter;
 import devkit.Excerpt;
 import devkit.Summary;
+import devkit.TempDir;
 import haxe.Exception;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
@@ -110,6 +114,29 @@ final class SummaryTest extends Test {
 		Assert.isTrue(rows[0].endsWith('  12 tests'), rows[0]);
 		Assert.isTrue(rows[1].endsWith('  1 new'), 'a failure shows why it failed, not the reading: ${rows[1]}');
 		Assert.isTrue(rows[2].endsWith('s'), 'a step that set no detail does not inherit the last one: ${rows[2]}');
+	}
+
+	/** A step run while a meter is active records the cpu of the processes it started, and nothing is recorded when none is. */
+	@:pin('control')
+	@:killer('M-SUMMARY-STEP-CPU')
+	public function testAStepRecordsTheCpuOfTheProcessesItStarted(): Void {
+		TempDir.with(dir -> {
+			final plain: Summary = new Summary();
+			Assert.isTrue(plain.time('quiet', () -> Passed).match(Passed));
+			Assert.isNull(plain.steps()[0].cpu, 'no meter, no reading');
+			CpuMeter.begin(dir.file('usage'), '/usr/bin/time');
+			final summary: Summary = new Summary();
+			final build: () -> Outcome = () -> {
+				final job: SpawnJob = CpuMeter.wrap({ cmd: 'tool', args: [] });
+				File.saveContent(job.args[2], '        2.00 real         1.00 user         0.25 sys\n');
+				return Passed;
+			};
+			Assert.isTrue(summary.time('build', build).match(Passed));
+			Assert.isTrue(summary.time('idle', () -> Passed).match(Passed));
+			CpuMeter.end();
+			Assert.equals(1.25, summary.steps()[0].cpu);
+			Assert.equals(0.0, summary.steps()[1].cpu, 'a metered step that started nothing used nothing');
+		});
 	}
 
 }

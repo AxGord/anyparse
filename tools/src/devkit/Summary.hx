@@ -85,13 +85,19 @@ final class Summary {
 		});
 	}
 
-	/** Run `step` as the step `name`, timed; a step that throws is recorded `NotRun` with the exception's message. */
+	/**
+	 * Run `step` as the step `name`, timed, with the cpu of the processes it started when a `CpuMeter` is active; a step that
+	 * throws is recorded `NotRun` with the exception's message.
+	 */
 	public function time(name: String, step: () -> Outcome): Outcome {
 		final started: Float = Timer.stamp();
+		final cpuBefore: Null<Float> = CpuMeter.reading();
 		_note = '';
 		_excerpt = [];
 		final outcome: Outcome = try step() catch (exception: Exception) NotRun(exception.message);
 		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND, _note, _excerpt);
+		final cpuAfter: Null<Float> = CpuMeter.reading();
+		if (cpuBefore != null && cpuAfter != null) _steps[_steps.length - 1].cpu = cpuAfter - cpuBefore;
 		return outcome;
 	}
 

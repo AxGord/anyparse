@@ -63,4 +63,21 @@ final class BatteryBranchTest extends Test {
 		Assert.isNull(BatteryBranch.ledgerOf(new Args(['--quick'])));
 	}
 
+	/** A lease the battery's caller holds is recorded once, on the span; a branch's own lease is its own. */
+	@:pin('control')
+	@:killer('M-BATTERYBRANCH-LEASE-PER-BRANCH')
+	public function testASharedLeaseIsNotCarriedByEveryBranch(): Void {
+		Assert.isNull(BatteryBranch.branchHeld(false, 8));
+		Assert.equals(2, BatteryBranch.branchHeld(true, 2));
+		Assert.isNull(BatteryBranch.branchHeld(true, null));
+	}
+
+	@:pin('control')
+	@:killer('M-BATTERYBRANCH-SPAN-LEASE')
+	public function testASharedLeaseIsRecordedOnTheSpan(): Void {
+		Assert.equals(8, BatteryBranch.spanHeld(false, 8));
+		Assert.isNull(BatteryBranch.spanHeld(true, 2));
+		Assert.isNull(BatteryBranch.spanHeld(false, null));
+	}
+
 }

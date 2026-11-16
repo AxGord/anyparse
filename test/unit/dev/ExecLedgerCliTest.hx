@@ -165,6 +165,35 @@ final class ExecLedgerCliTest extends Test {
 		Assert.same(['suite', 'lint'], ExecLedger.ofBattery(steps, [], 9).map(row -> row.row));
 	}
 
+	/** The battery's span covers the rows of its branches, so it is listed on its own and the phase total sums only the rows. */
+	@:pin('control')
+	@:killer('M-LEDGERCLI-SPAN-IN-TOTAL')
+	public function testTheBatterySpanIsNotSummedBesideTheRowsItCovers(): Void {
+		final totals: Array<LedgerTotal> = ExecLedgerCli.summarize([
+			{
+				row: 'suite',
+				phase: 'battery',
+				wallMs: 60000,
+				cpuS: 60
+			},
+			{
+				row: 'span',
+				phase: 'battery',
+				wallMs: 70000,
+				cpuS: 70,
+				threads: 4
+			}
+		], null);
+		Assert.equals(3, totals.length);
+		Assert.equals('span', totals[1].branch);
+		Assert.equals(70.0, totals[1].cpuS);
+		Assert.equals(ExecLedgerCli.TOTAL, totals[2].branch);
+		Assert.equals(60.0, totals[2].cpuS);
+		Assert.equals(1, totals[2].rows);
+		Assert.floatEquals(70000 * 4 / 60000, totals[2].threadMinutes, 'the lease is held for the span, once');
+		Assert.equals(60000.0, totals[2].wallMs);
+	}
+
 	private static function step(name: String, wait: Null<Float>, cpu: Null<Float>, threads: Null<Int>): Step {
 		final out: Step = {
 			name: name,

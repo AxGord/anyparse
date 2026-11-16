@@ -11,6 +11,7 @@ import dev.SuiteImpact.SuiteScope;
 import devkit.Args.UsageError;
 import devkit.Branches;
 import devkit.Cmd.cmd;
+import devkit.CpuMeter;
 import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.Result;
@@ -89,6 +90,9 @@ final class Land {
 		'src/anyparse/macro/QueryWalkerCodegen.hx',
 		'src/anyparse/runtime/'
 	];
+
+	/** Where, under the logs, the usage files of the land's processes are kept while its steps run. */
+	private static final CPU_DIR: String = 'cpu';
 
 	/** The phase a land's own rows carry in the ledger. */
 	private static final LAND_PHASE: String = 'land';
@@ -189,7 +193,9 @@ final class Land {
 		];
 		final ledger: Null<ExecLedger> = cache == null ? null : ExecLedger.under(cache);
 
+		CpuMeter.begin(Path.join([_logs, CPU_DIR]));
 		for (s in steps) if (_summary.passed()) _summary.time(s.name, s.step);
+		CpuMeter.end();
 		final left: Null<String> = _candidate.drop();
 		_print(_summary.table());
 		final inner: Array<LedgerRow> = FileSystem.exists(batteryRows) ? new ExecLedger(batteryRows).rows() : [];

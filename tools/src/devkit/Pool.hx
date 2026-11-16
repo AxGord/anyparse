@@ -48,7 +48,8 @@ final class Pool {
 		final batch: Int = _size * BATCH_ROUNDS;
 		var from: Int = 0;
 		while (from < jobs.length) {
-			for (run in ProcessSpawn.runDriven(jobs.slice(from, from + batch), Command.MAX_BUFFER, _size)) runs.push(run);
+			for (run in ProcessSpawn.runDriven(jobs.slice(from, from + batch).map(CpuMeter.wrap), Command.MAX_BUFFER, _size))
+				runs.push(run);
 			from += batch;
 		}
 		return [for (i => c in commands) new Result(c.toString(), runs[i])];

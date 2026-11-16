@@ -185,7 +185,7 @@ final class Command {
 	 */
 	public function background(): PendingRuns {
 		if (_upstream != null || _input != null) throw new Exception('`${toString()}` is a pipeline or reads an input — run it with `run`');
-		return ProcessSpawn.startAll([job(null)], MAX_BUFFER, 1);
+		return ProcessSpawn.startAll([CpuMeter.wrap(job(null))], MAX_BUFFER, 1);
 	}
 
 	/** The result of this command's `batch` (from `background`), waiting for it to end. */
@@ -271,7 +271,9 @@ final class Command {
 	 * `timeout`; a short program that names none gets the default of `ProcessSpawn.boundOf`.
 	 */
 	private static function one(job: SpawnJob): ProcessRun {
-		return runsDirect(job) ? ProcessSpawn.exec(job, MAX_BUFFER) : ProcessSpawn.runDriven([job], MAX_BUFFER, 1)[0];
+		final direct: Bool = runsDirect(job);
+		final metered: SpawnJob = CpuMeter.wrap(job);
+		return direct ? ProcessSpawn.exec(metered, MAX_BUFFER) : ProcessSpawn.runDriven([metered], MAX_BUFFER, 1)[0];
 	}
 
 	/** `arg` as it would have to be written in a POSIX shell. */

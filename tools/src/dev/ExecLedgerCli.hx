@@ -46,7 +46,8 @@ final class ExecLedgerCli {
 	/**
 	 * The totals of `rows` recorded since `from` (every row when null; a row with no time is then left out), one per phase
 	 * and branch in first-seen order, each phase closed by its total line. Each run of a branch is metered on its own, so a
-	 * run no cpu reached stays unmetered beside a run of the same branch that was measured.
+	 * run no cpu reached stays unmetered beside a run of the same branch that was measured. The battery's `span` line is listed on its
+	 * own; the phase total takes only its thread-minutes (the lease held for the whole battery), since it covers the branches' rows.
 	 */
 	public static function summarize(rows: Array<LedgerRow>, from: Null<Float>): Array<LedgerTotal> {
 		final runs: Map<String, LedgerTotal> = [];
@@ -64,7 +65,10 @@ final class ExecLedgerCli {
 			final sum: LedgerTotal = empty(phase, TOTAL);
 			for (total in groups[phase] ?? []) {
 				out.push(total);
-				fold(sum, total);
+				if (isEnvelope(total))
+					sum.threadMinutes += total.threadMinutes;
+				else
+					fold(sum, total);
 			}
 			out.push(sum);
 		}
@@ -108,6 +112,11 @@ final class ExecLedgerCli {
 			'cpu-min',
 			'unmetered'
 		], cells);
+	}
+
+	/** Whether `total` is the battery's span, the row that covers the rest of its phase. */
+	private static inline function isEnvelope(total: LedgerTotal): Bool {
+		return total.phase == ExecLedger.BATTERY_ROW && total.branch == ExecLedger.SPAN_ROW;
 	}
 
 	/** The run of a branch `row` adds to: its branch (or, when it names none, itself) recorded at the same time. */

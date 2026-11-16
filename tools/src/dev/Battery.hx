@@ -15,6 +15,7 @@ import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.CpuMeter;
 import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.LeaseHistory;
@@ -71,6 +72,9 @@ final class Battery {
 	/** The build file only a typecheck reaches: the corpus drill's driver, a root-level module no binary's `-main` types. */
 	private static final RECON_HXML: String = 'recon.hxml';
 
+	/** Where, in the work directory, the usage files of the processes the battery starts are kept while it runs. */
+	private static final CPU_DIR: String = 'cpu';
+
 	private static final CORPUS_ROW: String = 'corpus';
 	private static final SUITE_ROW: String = 'suite';
 
@@ -109,6 +113,7 @@ final class Battery {
 	/** The run over the claimed work directory: build, the four branches, their transcripts, the table; answers the exit status. */
 	private function drive(): Int {
 		final started: Float = Timer.stamp();
+		CpuMeter.begin(workFile(CPU_DIR));
 		final base: Null<String> = _plan.base;
 		Sys.println(startLine(_plan.repo, _plan.head, base, _plan.cache));
 		// the branches run the code this run started with, not the `dev.js` the build is about to replace
@@ -155,7 +160,7 @@ final class Battery {
 				return Passed;
 			});
 		}
-		BatteryBranch.carryThreads(_summary.steps(), rows, PoolLease.threads());
+		BatteryBranch.carryThreads(_summary.steps(), rows, BatteryBranch.branchHeld(_plan.ownLease, PoolLease.threads()));
 		Branches.leave(branchReport(rows), _plan.run, _summary, _readings);
 		if (_plan.ownLease && branchThreads(rows) == null)
 			Branches.record(LeaseHistory.under(_plan.cache), 'battery ${_plan.head}', rows, PoolLease.threads(), _summary);
@@ -204,12 +209,11 @@ final class Battery {
 		final file: Null<String> = _plan.ledger;
 		final ledger: ExecLedger = file == null ? ExecLedger.under(_plan.cache) : new ExecLedger(file);
 		for (row in ExecLedger.ofBattery(_summary.steps(), _plan.gate?.timings ?? [], Date.now().getTime())) ledger.record(row);
-		ledger.record({
-			row: ExecLedger.SPAN_ROW,
-			phase: ExecLedger.BATTERY_ROW,
-			wallMs: (Timer.stamp() - started) * MS_PER_SECOND,
-			at: Date.now().getTime()
-		});
+		ledger.record(ExecLedger.spanRow(
+			_summary.steps(), (Timer.stamp() - started) * MS_PER_SECOND, Date.now().getTime(),
+			BatteryBranch.spanHeld(_plan.ownLease, PoolLease.threads())
+		));
+		CpuMeter.end();
 		final wall: String = seconds(Timer.stamp() - started);
 		Sys.println('');
 		if (span == null) {

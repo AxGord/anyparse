@@ -1,6 +1,7 @@
 package unit.devkit;
 
 import devkit.ExecLedger;
+import devkit.Summary.Step;
 import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
@@ -147,6 +148,78 @@ final class ExecLedgerTest extends Test {
 			Assert.equals(20.0, tail[0].wallMs);
 			Assert.equals(ExecLedger.MAX_LINES, shared.rows().length);
 		});
+	}
+
+	/** The land's battery step is cut by the span's cpu as by its wall, and the span carries the cpu of everything the battery measured. */
+	@:pin('control')
+	@:killer('M-EXECLEDGER-OVERHEAD-CPU-TWICE')
+	public function testTheLandBatteryStepKeepsOnlyItsOverheadCpu(): Void {
+		final land: Array<LedgerRow> = [
+			{
+				row: 'battery',
+				phase: 'land',
+				wallMs: 100,
+				cpuS: 30
+			}
+		];
+		final span: Array<LedgerRow> = [
+			{
+				row: 'span',
+				phase: 'battery',
+				wallMs: 80,
+				cpuS: 25
+			}
+		];
+		Assert.equals(5.0, ExecLedger.withoutDoubleCount(land, span)[0].cpuS);
+		Assert.equals(0.0, ExecLedger.withoutDoubleCount(land, [
+			{
+				row: 'span',
+				phase: 'battery',
+				wallMs: 80,
+				cpuS: 40
+			}
+		])[0].cpuS);
+		Assert.equals(
+			30.0, ExecLedger.withoutDoubleCount(land, [{ row: 'span', phase: 'battery', wallMs: 80 }])[0].cpuS,
+			'an unmeasured span cuts nothing'
+		);
+		Assert.isNull(ExecLedger.withoutDoubleCount([{ row: 'battery', phase: 'land', wallMs: 100 }], span)[0].cpuS);
+	}
+
+	@:pin('control')
+	@:killer('M-EXECLEDGER-SPAN-CPU')
+	public function testTheSpanRowSumsWhatItsStepsMeasured(): Void {
+		final steps: Array<Step> = [
+			{
+				name: 'build (parallel)',
+				outcome: Passed,
+				ms: 1,
+				note: '',
+				excerpt: [],
+				cpu: 10
+			},
+			{
+				name: 'suite',
+				outcome: Passed,
+				ms: 1,
+				note: '',
+				excerpt: [],
+				cpu: 20
+			},
+			{
+				name: 'corpus',
+				outcome: Passed,
+				ms: 1,
+				note: '',
+				excerpt: []
+			}
+		];
+		final span: LedgerRow = ExecLedger.spanRow(steps, 500, 7, 4);
+		Assert.equals(30.0, span.cpuS);
+		Assert.equals(4, span.threads, 'the lease the battery held is recorded on the span, once');
+		Assert.equals(500.0, span.wallMs);
+		Assert.equals('span', span.row);
+		Assert.isNull(ExecLedger.spanRow([steps[2]], 500, 7, null).cpuS, 'nothing measured, nothing recorded');
 	}
 
 }

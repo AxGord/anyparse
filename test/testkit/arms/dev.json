@@ -2992,6 +2992,30 @@
 			"find": "if (targets == null) return 2;",
 			"replace": "if (targets == null) return 1;",
 			"note": "a lost render batch ends the run as a verdict-less failure no longer, so it reads as a run with arms that did not apply"
+		},
+		{
+			"name": "M-LEDGERCLI-SPAN-IN-TOTAL",
+			"type": "dev.ExecLedgerCli",
+			"method": "summarize",
+			"find": "if (isEnvelope(total))\n\t\t\t\t\tsum.threadMinutes += total.threadMinutes;\n\t\t\t\telse\n\t\t\t\t\tfold(sum, total);",
+			"replace": "fold(sum, total);",
+			"note": "the battery's span line is summed into its phase total beside the rows it covers, so the total counts the battery's wall and cpu twice"
+		},
+		{
+			"name": "M-BATTERYBRANCH-LEASE-PER-BRANCH",
+			"type": "dev.BatteryBranch",
+			"method": "branchHeld",
+			"find": "return ownLease ? lease : null;",
+			"replace": "return lease;",
+			"note": "each branch of a battery under its caller's lease carries the whole lease, so the ledger counts the lease once per branch"
+		},
+		{
+			"name": "M-BATTERYBRANCH-SPAN-LEASE",
+			"type": "dev.BatteryBranch",
+			"method": "spanHeld",
+			"find": "return ownLease ? null : lease;",
+			"replace": "return null;",
+			"note": "the span row of a battery under its caller's lease records no threads, so the lease it held for the whole run is missing from the ledger"
 		}
 	]
 }

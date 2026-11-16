@@ -20,6 +20,9 @@ using Lambda;
 @:nullSafety(Strict)
 final class Branches {
 
+	/** The time(1) whose `-l` writes the resource usage of the whole process tree it waited for. */
+	public static final TIME: String = '/usr/bin/time';
+
 	/** How long the reason of a step whose branch left no report may grow. */
 	private static inline final WHY_WIDTH: Int = 100;
 
@@ -28,9 +31,6 @@ final class Branches {
 
 	/** The bound of a run id's random part. */
 	private static inline final NONCE_BOUND: Int = 0x7fffffff;
-
-	/** The time(1) whose `-l` writes the resource usage of the whole process tree it waited for. */
-	private static final TIME: String = '/usr/bin/time';
 
 	/** The file `metered` has time(1) write a branch's usage into, beside the branch's report. */
 	public static inline function usageFile(report: String): String {

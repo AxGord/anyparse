@@ -277,6 +277,86 @@
 			"find": ".concat(decodeAll(gateLines))",
 			"replace": "",
 			"note": "a land that takes a gate record over leaves that gate's rows out of the ledger, so dev exec-ledger under-counts every reused land"
+		},
+		{
+			"name": "M-CPUMETER-READS-USAGE",
+			"type": "devkit.CpuMeter",
+			"method": "collect",
+			"find": "_used += used;",
+			"replace": "_used += 0;",
+			"note": "the usage file of an ended process is read and thrown away, so a step that ran work reads zero cpu"
+		},
+		{
+			"name": "M-CPUMETER-WRAP-OFF",
+			"type": "devkit.CpuMeter",
+			"method": "wrap",
+			"find": "job.cmd = program;",
+			"replace": "job.cmd = cmd;",
+			"note": "a job is handed to time(1) with its arguments but still starts the program itself, so no process runs under the meter"
+		},
+		{
+			"name": "M-CPUMETER-WRAPS-MEASURED",
+			"type": "devkit.CpuMeter",
+			"method": "wrap",
+			"find": "if (cmd == Branches.TIME || job.args.contains(Branches.TIME)) return job;",
+			"replace": "if (false) return job;",
+			"note": "a branch already under time(1) is wrapped a second time, and the meter counts its cpu again"
+		},
+		{
+			"name": "M-CPUMETER-SHORT-BOUND",
+			"type": "devkit.CpuMeter",
+			"method": "wrap",
+			"find": "if (bound > 0 && (job.timeout ?? 0) <= 0) job.timeout = bound;",
+			"replace": "",
+			"note": "a short program under the meter loses the bound it would have had in this process, so a wedged git is never killed"
+		},
+		{
+			"name": "M-COMMAND-RUNS-METERED",
+			"type": "devkit.Command",
+			"method": "one",
+			"find": "final metered: SpawnJob = CpuMeter.wrap(job);",
+			"replace": "final metered: SpawnJob = job;",
+			"note": "a command a tool runs is started as it is, so a metered run's steps measure none of the processes they start"
+		},
+		{
+			"name": "M-SUMMARY-STEP-CPU",
+			"type": "devkit.Summary",
+			"method": "time",
+			"find": "_steps[_steps.length - 1].cpu = cpuAfter - cpuBefore;",
+			"replace": "_steps[_steps.length - 1].cpu = 0;",
+			"note": "a timed step records no cpu of the processes it started, so a land's phases show as unmetered"
+		},
+		{
+			"name": "M-EXECLEDGER-OVERHEAD-CPU-TWICE",
+			"type": "devkit.ExecLedger",
+			"method": "cut",
+			"find": "Math.max(0, whole - covered)",
+			"replace": "whole",
+			"note": "the land's battery step keeps its whole cpu beside the battery's span, so a sum over the ledger counts the battery's cpu twice"
+		},
+		{
+			"name": "M-EXECLEDGER-SPAN-CPU",
+			"type": "devkit.ExecLedger",
+			"method": "spanRow",
+			"find": "row.cpuS = (row.cpuS ?? 0) + used;",
+			"replace": "row.cpuS = null;",
+			"note": "the battery's span row carries no cpu, so the whole battery shows as unmetered beside its metered branches"
+		},
+		{
+			"name": "M-CPUMETER-RUNNING-READ-ZERO",
+			"type": "devkit.CpuMeter",
+			"method": "collect",
+			"find": "if (used == null) continue;",
+			"replace": "if (used == null) {\n\t\t\t_pending.remove(file);\n\t\t\tcontinue;\n\t\t}",
+			"note": "a process still running (its usage file opened and not yet filled) is dropped from the meter, so its cpu is lost"
+		},
+		{
+			"name": "M-CPUMETER-BEGIN-KEEPS-STRAYS",
+			"type": "devkit.CpuMeter",
+			"method": "begin",
+			"find": "clear(dir);",
+			"replace": "{}",
+			"note": "a usage file an earlier attempt left under a name this run reuses is read as this run's cpu"
 		}
 	]
 }

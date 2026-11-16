@@ -151,15 +151,19 @@ final class ExecLedger {
 		return new ExecLedger(haxe.io.Path.join([cache, FILE]));
 	}
 
-
 	/**
-	 * The land's rows with its `battery` step renamed `battery-overhead` and cut by the battery's `span` row in `inner`, so
-	 * a sum over the land's rows and the span counts the battery once; the battery's other rows overlap and are a breakdown, never
-	 * summed. An overhead below zero is zero.
+	 * The land's rows with its `battery` step renamed `battery-overhead` and cut by the battery's `span` row in `inner` — its wall
+	 * and its cpu — so a sum over the land's rows and the span counts the battery once; the battery's other rows overlap and are a
+	 * breakdown, never summed. An overhead below zero is zero.
 	 */
 	public static function withoutDoubleCount(land: Array<LedgerRow>, inner: Array<LedgerRow>): Array<LedgerRow> {
 		var covered: Float = 0;
-		for (row in inner) if (row.row == SPAN_ROW) covered += row.wallMs;
+		var coveredCpu: Null<Float> = null;
+		for (row in inner) if (row.row == SPAN_ROW) {
+			covered += row.wallMs;
+			final cpu: Null<Float> = row.cpuS;
+			if (cpu != null) coveredCpu = (coveredCpu ?? 0) + cpu;
+		}
 		return land.map(row ->
 			row.row != BATTERY_ROW
 				? row
@@ -168,7 +172,7 @@ final class ExecLedger {
 					phase: row.phase,
 					wallMs: Math.max(0, row.wallMs - covered),
 					waitMs: row.waitMs,
-					cpuS: row.cpuS,
+					cpuS: cut(row.cpuS, coveredCpu),
 					threads: row.threads,
 					branch: row.branch,
 					at: row.at
@@ -186,6 +190,26 @@ final class ExecLedger {
 		return withoutDoubleCount(land, inner).concat(inner);
 	}
 
+	/**
+	 * The battery's `span` row: its elapsed wall `wallMs`, and the cpu of every process it ran — the sum of what its `steps` measured,
+	 * which are its build and the first step of each branch — when any step was measured. A battery that runs under a lease of its
+	 * caller (`held` threads) holds it for the whole span, so the span row is where that lease is recorded, once; the branches share it.
+	 */
+	public static function spanRow(steps: Array<Step>, wallMs: Float, at: Float, held: Null<Int>): LedgerRow {
+		final row: LedgerRow = {
+			row: SPAN_ROW,
+			phase: BATTERY_ROW,
+			wallMs: wallMs,
+			at: at
+		};
+		if (held != null) row.threads = held;
+		for (step in steps) {
+			final used: Null<Float> = step.cpu;
+			if (used != null) row.cpuS = (row.cpuS ?? 0) + used;
+		}
+		return row;
+	}
+
 	/** The reading in field `at`, or null when the line has no such field or it is empty or no number. */
 	private static function number(fields: Array<String>, at: Int): Null<Float> {
 		final value: Float = at < fields.length ? Std.parseFloat(fields[at]) : Math.NaN;
@@ -199,6 +223,11 @@ final class ExecLedger {
 
 	private static function clean(text: String): String {
 		return text.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
+	}
+
+	/** The cpu `whole` leaves once `covered` is cut out of it, never below zero; null when `whole` was not measured. */
+	private static function cut(whole: Null<Float>, covered: Null<Float>): Null<Float> {
+		return whole == null || covered == null ? whole : Math.max(0, whole - covered);
 	}
 
 }

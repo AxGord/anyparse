@@ -39,4 +39,16 @@ final class BatteryBranch {
 		if (held != null) for (step in steps) if (rows.contains(step.name)) step.threads = held;
 	}
 
+	/** The threads a branch's steps carry: its own lease when each branch takes one, none when the branches share their caller's. */
+	public static function branchHeld(ownLease: Bool, lease: Null<Int>): Null<Int> {
+		return ownLease ? lease : null;
+	}
+
+	/**
+	 * The threads the battery's span row carries: the lease its caller holds for the whole run, once; none when each branch took its own.
+	 */
+	public static function spanHeld(ownLease: Bool, lease: Null<Int>): Null<Int> {
+		return ownLease ? null : lease;
+	}
+
 }
