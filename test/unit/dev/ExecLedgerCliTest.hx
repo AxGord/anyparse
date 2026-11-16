@@ -143,6 +143,28 @@ final class ExecLedgerCliTest extends Test {
 		Assert.equals(1, totals[1].unmetered);
 	}
 
+	@:pin('control')
+	@:killer('M-EXECLEDGER-OFBATTERY-GATE')
+	public function testATakenGatesRowsFollowTheBatteryRowsInTheLedger(): Void {
+		final steps: Array<Step> = [step('suite', 500, 30, 4), step('lint', null, null, null)];
+		final record: GateRecord = {
+			tree: 't',
+			passed: true,
+			toolchain: 'h',
+			fork: '',
+			allow: [],
+			rows: [],
+			tests: 0,
+			assertions: 0,
+			timings: GateReuse.timingsOf([step('suite', 900, 40, 2)], 7)
+		};
+		final taken: Array<LedgerRow> = ExecLedger.ofBattery(steps, record.timings ?? [], 9);
+		Assert.same(['battery', 'battery', 'gate'], taken.map(row -> row.phase));
+		Assert.same(['suite', 'lint', 'suite'], taken.map(row -> row.row));
+		Assert.same([9.0, 9.0, 7.0], taken.map(row -> row.at));
+		Assert.same(['suite', 'lint'], ExecLedger.ofBattery(steps, [], 9).map(row -> row.row));
+	}
+
 	private static function step(name: String, wait: Null<Float>, cpu: Null<Float>, threads: Null<Int>): Step {
 		final out: Step = {
 			name: name,

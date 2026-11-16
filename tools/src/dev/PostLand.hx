@@ -397,10 +397,11 @@ final class PostLand {
 		);
 		settle(cache, sha, verdict);
 		// a detached run: its wall is known only here, and nothing meters its cpu
-		ExecLedger.under(cache)
-			.record({ row: suite ? 'shard' : 'hxcpp', phase: 'post-land', wallMs: (Timer.stamp() - started) * MS_PER_SECOND });
-		if (suite && verdict.match(Passed))
-			LeaseHistory.under(cache).recordLived(LeaseHistory.keyOf('post-land $sha'), PoolLease.threads());
+		final threads: Null<Int> = PoolLease.threads();
+		final landed: LedgerRow = { row: suite ? 'shard' : 'hxcpp', phase: 'post-land', wallMs: (Timer.stamp() - started) * MS_PER_SECOND };
+		if (threads != null) landed.threads = threads;
+		ExecLedger.under(cache).record(landed);
+		if (suite && verdict.match(Passed)) LeaseHistory.under(cache).recordLived(LeaseHistory.keyOf('post-land $sha'), threads);
 		switch verdict {
 			case Failed(why):
 				Sys.println('post-land: $sha RED — $why');

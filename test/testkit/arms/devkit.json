@@ -269,6 +269,14 @@
 			"find": ".concat(inner)",
 			"replace": "",
 			"note": "a land records only its own rows, so the battery rows its child wrote never reach the shared ledger"
+		},
+		{
+			"name": "M-EXECLEDGER-OFBATTERY-GATE",
+			"type": "devkit.ExecLedger",
+			"method": "ofBattery",
+			"find": ".concat(decodeAll(gateLines))",
+			"replace": "",
+			"note": "a land that takes a gate record over leaves that gate's rows out of the ledger, so dev exec-ledger under-counts every reused land"
 		}
 	]
 }

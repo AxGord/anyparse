@@ -57,8 +57,21 @@ final class ExecLedger {
 
 	/** Every row the file holds, oldest first; a line that names no row is skipped. */
 	public function rows(): Array<LedgerRow> {
+		return decodeAll(_log.lines());
+	}
+
+	/**
+	 * The rows the battery leaves in the ledger: its own `steps`, then the rows of a taken gate's `gateLines`, which are this land's
+	 * to carry — what the gate cost is recorded with the land that took it over.
+	 */
+	public static function ofBattery(steps: Array<Step>, gateLines: Array<String>, at: Float): Array<LedgerRow> {
+		return ofSteps(BATTERY_ROW, steps, at).concat(decodeAll(gateLines));
+	}
+
+	/** The rows `lines` record, in order; a line that names no row is skipped. */
+	public static function decodeAll(lines: Array<String>): Array<LedgerRow> {
 		final read: Array<LedgerRow> = [];
-		for (line in _log.lines()) {
+		for (line in lines) {
 			final entry: Null<LedgerRow> = decode(line);
 			if (entry != null) read.push(entry);
 		}

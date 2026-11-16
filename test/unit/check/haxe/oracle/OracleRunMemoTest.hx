@@ -242,7 +242,7 @@ final class OracleRunMemoTest extends Test {
 		Assert.equals(
 			0, second.filter(port -> first.contains(port)).length, 'the drifted server was invalidated path by path, not replaced'
 		);
-		Assert.equals(0, ProcessProbe.awaitGone(replaced, ProcessProbe.GONE_MS).length, 'the replaced server still runs');
+		Assert.equals(0, ProcessProbe.awaitGone(replaced).length, 'the replaced server still runs');
 		pool?.stop();
 		CliFixture.removeDir(dir);
 		#else
@@ -283,7 +283,7 @@ final class OracleRunMemoTest extends Test {
 		final keptPids: Array<Int> = kept == null ? [] : ProcessProbe.pidsRunning('haxe --wait $kept');
 		Assert.isTrue(endedPids.length > 0 && keptPids.length > 0, 'both servers run');
 		pool.end(oracles[0]);
-		Assert.equals(0, ProcessProbe.awaitGone(endedPids, ProcessProbe.GONE_MS).length, 'the ended server still runs');
+		Assert.equals(0, ProcessProbe.awaitGone(endedPids).length, 'the ended server still runs');
 		Assert.equals(keptPids.length, keptPids.filter(ProcessProbe.alive).length, 'ending one server ended the other too');
 		Assert.equals(0, pool.compile([oracles[1]])[0]?.status, 'the kept server no longer answers its compiles');
 		pool.stop();
@@ -326,7 +326,7 @@ final class OracleRunMemoTest extends Test {
 		Assert.equals(
 			0, second.filter(port -> first.contains(port)).length, 'the drifted server was invalidated path by path, not replaced'
 		);
-		Assert.equals(0, ProcessProbe.awaitGone(replaced, ProcessProbe.GONE_MS).length, 'the replaced server still runs');
+		Assert.equals(0, ProcessProbe.awaitGone(replaced).length, 'the replaced server still runs');
 		pool?.stop();
 		CliFixture.removeDir(dir);
 		#else

@@ -79,7 +79,7 @@ final class ProcessProbe {
 	}
 
 	/** The ones of `pids` still running after waiting up to `ms` milliseconds for all of them to end. */
-	public static function awaitGone(pids: Array<Int>, ms: Int): Array<Int> {
+	public static function awaitGone(pids: Array<Int>, ms: Int = GONE_MS): Array<Int> {
 		final until: Float = Sys.time() + ms / 1000;
 		var left: Array<Int> = pids.filter(alive);
 		while (left.length > 0 && Sys.time() < until) {
@@ -97,7 +97,7 @@ final class ProcessProbe {
 		#if nodejs
 		js.Node.process.kill(driver, 'SIGKILL');
 		#end
-		final left: Array<Int> = awaitGone(pids, GONE_MS);
+		final left: Array<Int> = awaitGone(pids);
 		killAll(left);
 		return left;
 	}

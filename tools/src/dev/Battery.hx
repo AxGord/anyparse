@@ -203,7 +203,7 @@ final class Battery {
 		// the battery's own rows leave its process only through a ledger: the land's file when it handed one, which it cuts its step by
 		final file: Null<String> = _plan.ledger;
 		final ledger: ExecLedger = file == null ? ExecLedger.under(_plan.cache) : new ExecLedger(file);
-		for (row in ExecLedger.ofSteps(ExecLedger.BATTERY_ROW, _summary.steps(), Date.now().getTime())) ledger.record(row);
+		for (row in ExecLedger.ofBattery(_summary.steps(), _plan.gate?.timings ?? [], Date.now().getTime())) ledger.record(row);
 		ledger.record({
 			row: ExecLedger.SPAN_ROW,
 			phase: ExecLedger.BATTERY_ROW,
