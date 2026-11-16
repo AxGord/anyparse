@@ -123,6 +123,7 @@
 	"prefer-find",
 	"prefer-for-in",
 	"prefer-foreach",
+	"prefer-helper",
 	"prefer-if-expression-assignment",
 	"prefer-if-expression-chain",
 	"prefer-if-expression-return",

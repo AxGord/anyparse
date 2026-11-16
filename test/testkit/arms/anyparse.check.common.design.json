@@ -1188,6 +1188,61 @@
 			"find": "plugin, problems, _configNotes",
 			"replace": "plugin, problems, null",
 			"note": "the libraryBodies oracle read bypasses the rule's run notes and says its config diagnostic on stderr"
+		},
+		{
+			"name": "M-PREFER-HELPER-NO-SITE",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "siteOf",
+			"force": "null",
+			"note": "no match is a site any more, so a copy of a marked helper's body is neither reported nor fixed to the call"
+		},
+		{
+			"name": "M-PREFER-HELPER-USED-LATER",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "siteOf",
+			"find": "if (after == null || after.exists(s -> mentions(s, localNames, ctx.seams))) return null;",
+			"replace": "if (after == null) return null;",
+			"note": "the code after a copy is no longer read, so a copy whose local is still read later is replaced by a call that no longer declares it"
+		},
+		{
+			"name": "M-PREFER-HELPER-NO-PURITY",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "siteOf",
+			"find": "if (!PurityScan.isPure(bound, ctx.purity)) return null;",
+			"replace": "",
+			"note": "a hole may bind a call, which the copy runs at each read, after the body effects before it, and the helper call once and first"
+		},
+		{
+			"name": "M-PREFER-HELPER-OWN-BODY",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "siteOf",
+			"find": "if (ctx.file == template.file && span.from >= template.span.from && span.to <= template.span.to) return null;",
+			"replace": "",
+			"note": "the helper's own body matches its own pattern, so it is reported and fixed into a call of itself"
+		},
+		{
+			"name": "M-PREFER-HELPER-FOREIGN-NAME",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "scanBody",
+			"find": "if (name == null || !scan.holes.contains(name)) {",
+			"replace": "if (name == null) {",
+			"note": "a name the body reads that is no parameter or top-level local becomes a hole, so a site binding it to anything else is fixed to a call that reads the helper's own"
+		},
+		{
+			"name": "M-PREFER-HELPER-EARLY-EXIT",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "scanBody",
+			"find": "if (seams.jumpKinds.contains(node.kind)) {",
+			"replace": "if (false) {",
+			"note": "a body that returns early is a template, so a copy that returns from its own function is fixed to a call that only returns from the helper"
+		},
+		{
+			"name": "M-PREFER-HELPER-ARG-READS-LOCAL",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "siteOf",
+			"find": "if (bound == null || at == null || mentions(bound, localNames, ctx.seams)) return null;",
+			"replace": "if (bound == null || at == null) return null;",
+			"note": "an argument reading the copy's own local is kept, so the call reads a name it no longer declares"
 		}
 	]
 }

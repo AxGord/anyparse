@@ -16,6 +16,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 import haxe.ds.Either;
 
 using anyparse.util.Strings;
@@ -323,10 +324,6 @@ final class MoveMember {
 
 	private static inline function quoted(names: Array<String>): String {
 		return names.map(n -> '"$n"').join(', ');
-	}
-
-	private static inline function pushUnique(names: Array<String>, name: String): Void {
-		if (!names.contains(name)) names.push(name);
 	}
 
 	private static inline function constructorGroupOf(
@@ -751,7 +748,7 @@ final class MoveMember {
 				// is the same file) and no promotion (the member is landing there).
 				if (isDest) continue;
 				outsideCallersOf[ref.name] = (outsideCallersOf[ref.name] ?? 0) + 1;
-				pushUnique(callerFilesNeedingImport, file);
+				Groups.pushUnique(callerFilesNeedingImport, file);
 			}
 		}
 	}
@@ -956,8 +953,7 @@ final class MoveMember {
 			case CarryErr(message):
 				return message;
 			case CarryOk(lines):
-				for (line in lines) if (!carried.contains(line))
-					carried.push(line);
+				for (line in lines) Groups.pushUnique(carried, line);
 		}
 		// Each member's list holds the source's `using` lines in declaration order, the union across members need not
 		// (`[using A]` then `[using B, using A]` reads B after A) — and their order decides which extension wins a name.
@@ -1048,14 +1044,14 @@ final class MoveMember {
 						prep.destDecl, siblingName, prep.destSource, prep.shape, lexicalRegions
 					);
 					if (destField == null || !FINAL_FIELD_KINDS.contains(destField.member.kind))
-						pushUnique(state.missingDestFields, siblingName);
+						Groups.pushUnique(state.missingDestFields, siblingName);
 					else
-						pushUnique(state.fieldDeps, siblingName);
+						Groups.pushUnique(state.fieldDeps, siblingName);
 				} else {
-					pushUnique(state.mutableDeps, siblingName);
+					Groups.pushUnique(state.mutableDeps, siblingName);
 				}
 			} else {
-				pushUnique(state.staysBehind, siblingName);
+				Groups.pushUnique(state.staysBehind, siblingName);
 			}
 		}
 	}
@@ -1245,7 +1241,7 @@ final class MoveMember {
 		if (!prep.index.subtypes.supertypeChainResolved(prep.srcTypeName))
 			return '${head}the supertypes of "${prep.srcTypeName}" do not resolve in scope, and a static they declare would win';
 		final names: Array<String> = DependencyCarry.wildcardBoundNames(prep.destInfo, prep.shape);
-		for (m in prep.moved) if (m.isStatic) pushUnique(names, m.name);
+		for (m in prep.moved) if (m.isStatic) Groups.pushUnique(names, m.name);
 		for (n in names) {
 			final rival: Null<String> = keepBareRival(prep, n);
 			if (rival != null) return '$head$rival "$n", which would win';
@@ -1438,7 +1434,7 @@ final class MoveMember {
 		for (c in candidates) {
 			final cSpan: Null<Span> = c.member.span;
 			final nm: String = c.member.name ?? '';
-			if (cSpan != null && calledFromCuts(hitsByName[nm] ?? [], cSpan, cuts)) pushUnique(added, nm);
+			if (cSpan != null && calledFromCuts(hitsByName[nm] ?? [], cSpan, cuts)) Groups.pushUnique(added, nm);
 		}
 		return added;
 	}

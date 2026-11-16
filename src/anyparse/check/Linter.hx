@@ -70,6 +70,7 @@ import anyparse.check.common.design.ListenerSymmetry;
 import anyparse.check.common.design.OversizedType;
 import anyparse.check.common.design.OwnedTypes;
 import anyparse.check.common.design.PreferApiIdiom;
+import anyparse.check.common.design.PreferHelper;
 import anyparse.check.common.design.RefusalAssertIgnoresMessage;
 import anyparse.check.common.design.RepeatedCast;
 import anyparse.check.common.design.ThreadSafety;
@@ -535,6 +536,9 @@ final class Linter {
 			// rule rewrites as a WINDOW: `field-init-at-declaration` moves one constructor write onto its own field, and a
 			// receiver of an idiom type is never the class whose constructor that is. Registry order is free.
 			new PreferApiIdiom(),
+			// Inert without a `marker`. It claims a run of statements that copies a marked helper's body; the rules rewriting a
+			// window of statements read other shapes, and a site that also matches one of them is decided by whichever runs first.
+			new PreferHelper(),
 			new LoopGuard(),
 			new GuardContinue(),
 			new GuardReturn(),

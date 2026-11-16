@@ -401,6 +401,9 @@
 		"prefer-exists": true,
 		"prefer-for-in": true,
 		"prefer-foreach": true,
+		"prefer-helper": {
+			"marker": "@:preferHelper"
+		},
 		"prefer-keyvalue-loop": true,
 		"prefer-line-comment": true,
 		"prefer-lpad": true,

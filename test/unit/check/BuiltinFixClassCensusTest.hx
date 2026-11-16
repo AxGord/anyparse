@@ -117,6 +117,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'prefer-exists',
 			'prefer-final-field',
 			'prefer-final-public-field',
+			'prefer-helper',
 			'prefer-inline',
 			'prefer-intersection-type',
 			'prefer-map',

@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -75,7 +76,7 @@ final class MoveMemberFields {
 		) {
 			final holder: Null<MemberGroup> = members.find(g -> h.span.from >= g.groupSpan.from && h.span.from < (g.member.span?.to ?? -1));
 			final name: Null<String> = holder?.member.name;
-			if (name != null && name != field) MoveMember.pushUnique(readers, name);
+			if (name != null && name != field) Groups.pushUnique(readers, name);
 		}
 		return readers.length == 0 ? '' : ' — staying member(s) ${MoveMember.quoted(readers)} use them too; move those along';
 	}

@@ -9345,7 +9345,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "d8063700c0bd53d4",
+				"err": "9c73ee015740b2b6",
 				"files": "d0b6574a899a4117"
 			}
 		},
@@ -9373,7 +9373,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "d8063700c0bd53d4",
+				"err": "9c73ee015740b2b6",
 				"files": "d0b6574a899a4117"
 			}
 		},

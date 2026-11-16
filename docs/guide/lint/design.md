@@ -154,6 +154,35 @@ a mention of a TYPE, or a read or call of a MEMBER, that the project's `ownedTyp
 
 adjacent writes of EVERY field a project-declared idiom names, on one receiver of EXACTLY the declared type, replaceable with the declared method — `p.x = a; p.y = b;` -> `p.setTo(a, b);`, `p.x = q.x; p.y = q.y;` -> `p.copyFrom(q);`; `Info`, `--fix` rewrites the window. INERT until `apq.json` declares the idioms, because the equivalence is the FRAMEWORK's and the project names it: `"prefer-api-idiom": {"idioms": [{"type": "openfl.geom.Point", "fields": ["x", "y"], "method": "setTo"}, {"type": "openfl.geom.Point", "fields": ["x", "y"], "copy": "copyFrom"}]}` (`method`: one argument per field, in the declared order; `copy`: one value of the type whose same-named fields are copied; `"subtypes": true` also accepts a subclass receiver, which a subclass's override of the method could otherwise falsify). Each idiom is checked against the resolution index first and dropped with one stderr line when it cannot be true: a type naming no single declaration, a field that is not a plain instance field (a property with an accessor, a static, a method), a method that is not an instance method of exactly that arity, a copy method that does not take the type; an entry the reader cannot parse is dropped the same way. The fix is safe BY DECLARATION (no `RiskyFix`); what the rule proves itself is the rest — the receiver's static type is the declared one (a local's or parameter's written annotation, or a field walked through the index; an unannotated local is refused), every receiver hop is a plain read (a getter would run a different number of times), every right-hand side is pure and none mentions a field written ABOVE it on ANY receiver (an alias reads the new value today and the old one in the call), no comment sits in the deleted bytes (a trailing comment on the last write included), and the window is not inside the declared type or a subtype (the method's own body would become a self-call). A partial write, an interrupted run or a compound `+=` is no finding; a longer run is matched window by window.
 
+## `prefer-helper`
+
+A run of statements that repeats the body of a helper the project marks as a TEMPLATE, replaceable with a call of
+that helper — `final ys = m[k] ?? []; ys.push(v); m[k] = ys;` -> `Groups.push(m, k, v);`. `Info`, `--fix` under a
+compiler oracle only. One rule serves every helper: a new helper is found everywhere it applies once it carries the
+marker, with no new rule.
+
+```json
+"prefer-helper": { "marker": "@:preferHelper" }
+```
+
+Without `marker` the rule does nothing. Every static function of the project sources (`resolutionRoots` joined to the
+report) carrying that annotation is a template: its block body is a structural pattern (the `apq search` engine) whose
+parameters are holes, and so are the locals its top-level statements declare — a site may name them anything, and the
+local's written type is not part of the pattern. A marked function is no template, and is named once on stderr, when its
+body returns, breaks or continues (a site would leave its own function), declares a local below its top level, reads a
+name that is neither a parameter nor such a local (a site may bind it to something else), or never reads a parameter.
+
+A site is the body's statements, adjacent and in order — a statement between them is no match. It is declined when the
+code after it still reads one of its locals (the call no longer declares it) or an argument does, when any hole binds
+an impure value (the call evaluates each argument once and before the body: the copy at each read, after the body's own
+effects), when a comment sits in the replaced bytes or trails its last line, and inside the helper's own body. Still
+matched: a pure hole read after a body effect it observes (`xs.push(a); xs.push(b)` with `b` = `xs.length`).
+
+The fix is `RiskyFix`: nothing proves the site's values have the helper's parameter types, and a method the pattern
+matches by name may belong to another type, so `--fix` applies it only under `compilerOracle` and reverts a file whose
+build breaks; without an oracle the finding is report-only. The helper's type is spelled as the file can see it, and the
+import it needs rides on the call.
+
 ## `refusal-assert-ignores-message`
 
 A `case` arm over a refusal constructor that passes without reading what the refusal carries — an assertion any

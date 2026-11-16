@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.Selector.SelectorSegment;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 /**
  * Generic tree-walker operations used by every `apq` subcommand.
@@ -108,11 +109,6 @@ final class Engine {
 		return atKindWalk(tree, offset, new SelectorSegment(kind, null), equiv, null, -1).node;
 	}
 
-	/** Collect `node` once — nested `>>` ancestor contexts can reach the same descendant through several chains (reference identity). */
-	private static inline function pushUnique(out: Array<QueryNode>, node: QueryNode): Void {
-		if (!out.contains(node)) out.push(node);
-	}
-
 	/** Whether a pruned walk must enter `node`: its span covers `offset`, or it has none and rules nothing out. */
 	private static inline function holdsOffset(node: QueryNode, offset: Int): Bool {
 		final span: Null<Span> = node.span;
@@ -151,7 +147,7 @@ final class Engine {
 		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
 			if (segIdx == sel.segments.length - 1)
-				pushUnique(out, node);
+				Groups.pushUnique(out, node);
 			else if (sel.segments[segIdx + 1].descendant)
 				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
 			else
@@ -170,7 +166,7 @@ final class Engine {
 		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
 			if (segIdx == sel.segments.length - 1)
-				pushUnique(out, node);
+				Groups.pushUnique(out, node);
 			else if (sel.segments[segIdx + 1].descendant)
 				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
 			else
