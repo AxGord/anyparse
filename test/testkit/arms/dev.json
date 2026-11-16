@@ -3355,6 +3355,14 @@
 			"find": "never started: ${endOf(lint)}",
 			"replace": "never started: ${lint.firstError()}",
 			"note": "the reason a lint never started is picked from the waiting text, so it names another lease holder instead of how the lease wrapper ended"
+		},
+		{
+			"name": "M-BUILD-STAMP-SPELLING-BLIND",
+			"type": "dev.Binaries",
+			"method": "compileBuilds",
+			"find": "FileIdentity.realPath(tree)",
+			"replace": "tree",
+			"note": "the stamp keys the tree by the spelling the caller used, so a battery naming the candidate through its real path never takes the build its land made under the symlinked one"
 		}
 	]
 }

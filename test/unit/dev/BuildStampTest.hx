@@ -109,6 +109,22 @@ final class BuildStampTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-BUILD-STAMP-SPELLING-BLIND')
+	public function testABuildThroughASymlinkedSpellingIsTakenAtTheRealOne(): Void {
+		TempDir.with(dir -> {
+			final tree: Null<String> = project(dir);
+			if (tree == null) return;
+			final link: String = dir.file('link');
+			js.node.Fs.symlinkSync(tree, link);
+			Assert.isFalse(held(link, dir.file('first.log')), 'the first build compiles');
+			Assert.isTrue(held(tree, dir.file('second.log')), 'the real spelling takes the build of the symlinked one');
+			Assert.isTrue(held(link, dir.file('third.log')), 'and the other way round');
+			File.saveContent(Path.join([tree, 'Good.hx']), 'class Good {\n\tstatic function main() {\n\t\ttrace(2);\n\t}\n}\n');
+			Assert.isFalse(held(tree, dir.file('moved.log')), 'a content change compiles again');
+		});
+	}
+
 	/**
 	 * Build `words` in `tree` and answer whether the stamp took it instead; a failed build fails the test. The log names a line
 	 * taken from the stamp with `Binaries.CURRENT`.

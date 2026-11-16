@@ -5,6 +5,7 @@ import anyparse.check.LintConfig;
 import anyparse.check.haxe.oracle.OracleCache;
 import anyparse.check.haxe.oracle.OracleCoverage;
 import anyparse.grammar.haxe.query.HaxeQueryPlugin;
+import anyparse.query.FileIdentity;
 import devkit.Cmd.cmd;
 import devkit.Lease;
 import devkit.Pool;
@@ -55,9 +56,11 @@ final class Binaries {
 	 * (`OracleCache.storeIfUnchanged`), so a lint or a battery over the same content does not compile it again. The
 	 * configuration a build leaf stands for may be the leaf itself or its `checkOf` typecheck leaf. A `reusable` line whose
 	 * binaries the tree already holds for its content as it stands (`BuildStamp`) is not run again: a land's build stands for
-	 * the battery's over the same candidate.
+	 * the battery's over the same candidate; the stamp keys the tree by its real path, so the spelling a caller names it by
+	 * (a symlinked temp root) never splits one tree's stamp.
 	 */
 	public static function compileBuilds(tree: String, log: String, builds: Array<Array<String>>, mode: LeaseMode): Outcome {
+		final real: String = FileIdentity.realPath(tree);
 		final declared: Array<OracleConfig> = plainOracles(tree);
 		final oracles: Array<Null<OracleConfig>> = builds.map(words ->
 			declared.find(oracle ->
@@ -65,7 +68,7 @@ final class Binaries {
 			)
 		);
 		final read: Map<String, String> = [];
-		final stamp: BuildStamp = BuildStamp.of(tree, hxml -> OracleCache.fingerprint(hxml, tree, null, read));
+		final stamp: BuildStamp = BuildStamp.of(real, hxml -> OracleCache.fingerprint(hxml, real, null, read));
 		final pending: Array<Int> = [for (i => words in builds) if (!(reusable(words) && stamp.holds(words))) i];
 		final fingerprints: Array<Null<String>> = oracles.map(
 			oracle -> oracle == null ? null : OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, read)
