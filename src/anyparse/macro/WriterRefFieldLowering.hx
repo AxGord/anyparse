@@ -137,7 +137,7 @@ final class WriterRefFieldLowering {
 		// corpus fixtures (`emptylines/issue_65_extern_class`,
 		// `issue_147_between_fields_with_comments`) went byte-fail.
 		final boolFlagArgs: Null<Array<String>> = readBoolFlagStarCtorArgs(child);
-		final optArgExpr: Expr = boolFlagArgs != null ? (macro _wo) : optionalRefOptArgExpr(ctx, child, refName, elseChainSuppressExpr);
+		final optArgExpr: Expr = boolFlagArgs != null ? (macro _wo) : optionalRefOptArgExpr(ctx, child, node, elseChainSuppressExpr);
 		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(
 			ctx, boolFlagArgs,
 			{ expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]), pos: Context.currentPos() },
@@ -549,11 +549,9 @@ final class WriterRefFieldLowering {
 	 */
 	@:access(anyparse.macro.WriterArrowValueIfLowering)
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
-	private static function optionalRefOptArgExpr(ctx: RefFieldCtx, child: ShapeNode, refName: String, elseChainSuppressExpr: Expr): Expr {
-		// ω-issue-423-mech-a / ω-anonfunction-empty-curly /
-		// ω-expressionif-collapse: opt-fanout flags wrapping the descendant
-		// writer's `opt` arg in `_setExprPosition` / `_setAnonFnBody` /
-		// `_setValueIfBranch`.
+	private static function optionalRefOptArgExpr(ctx: RefFieldCtx, child: ShapeNode, node: ShapeNode, elseChainSuppressExpr: Expr): Expr {
+		// Opt-fanout flags wrapping the descendant writer's `opt` arg in `_setExprPosition` / `_setAnonFnBody` / `_setValueIfBranch`.
+		final refName: String = child.annotations[AnnotationKeys.BASE_REF];
 		final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
 		final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
 		final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
@@ -580,7 +578,7 @@ final class WriterRefFieldLowering {
 				// CLEAR the flag it may have inherited from a preceding chain link
 				// (`if {} else if {} else { … }`) — the block is not an else-branch-if.
 				// An expression `if` link is marked only where it stands as a statement: a value chain keeps its layout.
-				final mark: Expr = macro _setElseIfBranch($e, opt);
+				final mark: Expr = WriterBodyPolicyLowering.elseIfLinkMark(ctx.braceSym, node, child, e);
 				final setExpr: Expr = stmtPat != null
 					? WriterBodyPolicyLowering.plainChainLinkMark(child.fmtReadStringArgs(PLAIN_VALUE_IF), e, mark)
 					: macro (${WriterBodyPolicyLowering.ifElseLadderStatementTest(true)} ? $mark : $e);

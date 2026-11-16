@@ -87,6 +87,26 @@ final class WriterBodyPolicyLowering {
 	}
 
 	/**
+	 * The opt an `if` head hands the `else if` link `e` it marks (`_setElseIfBranch`), carrying the chain's verdict that a
+	 * branch at or above the link is brace-less (`opt._ladderChainBare`), read through the sibling branch field naming the
+	 * ladder's braced ctors (`@:fmt(ifElseLadder('<ifCtor>', '<thenField>', '<bracedCtor>'…))`) as its own `switch` reads it.
+	 */
+	@:access(anyparse.macro.WriterBraceSymmetryLowering)
+	public static function elseIfLinkMark(
+		bs: WriterBraceSymmetryLowering.BraceSymmetryCtx, node: ShapeNode, child: ShapeNode, e: Expr
+	): Expr {
+		final mark: Expr = macro _setElseIfBranch($e, opt);
+		final elseField: Null<String> = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
+		for (sibling in node.children) {
+			final args: Null<Array<String>> = sibling == child ? null : sibling.fmtReadStringArgs('ifElseLadder');
+			final written: Null<Expr> = args == null ? null : WriterBraceSymmetryLowering.chainBareBranchTest(bs, sibling, args);
+			final bare: Null<Expr> = ladderHeadBareTest(args, elseField, written);
+			if (bare != null) return macro _setLadderChainBare($mark, opt._ladderChainBare || $bare, opt);
+		}
+		return mark;
+	}
+
+	/**
 	 * Build a Doc expression that wraps a bare-Ref body field with a
 	 * runtime-switched separator driven by `@:fmt(bodyPolicy("flagName"))`.
 	 *
@@ -1164,21 +1184,31 @@ final class WriterBodyPolicyLowering {
 
 	/**
 	 * The runtime test that a `switch` branch of a ladder chain must leave its keyword's line: the body's `if` is a ladder
-	 * (`buildIfElseLadderTest`) and a branch of its own chain is none of `@:fmt(ifElseLadder('<ifCtor>', '<thenField>',
-	 * '<bracedCtor>'…))`'s braced ctors. The body selector and the then-branch close both read it, so the `else` after a
-	 * laddered `switch` never cuddles its `}`. Null on a field whose `ifElseLadder` names nothing.
+	 * (`buildIfElseLadderTest`) and a branch of its whole chain is none of `@:fmt(ifElseLadder('<ifCtor>', '<thenField>',
+	 * '<bracedCtor>'…))`'s braced ctors — from this head down (`ladderHeadBareTest`) or above it, as the head that marked
+	 * this `else if` link recorded (`opt._ladderChainBare`). The body selector and the then-branch close both read it, so
+	 * the `else` after a laddered `switch` never cuddles its `}`. Null on a field whose `ifElseLadder` names nothing.
 	 */
 	private static function buildSwitchBranchLadderTest(opts: WriterLowering.WrapBodyOpts): Null<Expr> {
-		final args: Null<Array<String>> = opts.ladderBranchArgs;
-		final elseFieldName: Null<String> = opts.ladderElseFieldName;
 		final ladderTest: Null<Expr> = buildIfElseLadderTest(opts);
-		if (args == null || args.length <= LADDER_BRACED_ARG || elseFieldName == null || ladderTest == null) return null;
+		final bare: Null<Expr> = ladderHeadBareTest(opts.ladderBranchArgs, opts.ladderElseFieldName, opts.ladderWrittenBareExpr);
+		return ladderTest == null || bare == null ? null : macro ($ladderTest && (opt._ladderChainBare || $bare));
+	}
+
+	/**
+	 * The one answer to "does the `if` chain from this head down hold a brace-less branch" for the ladder, as a runtime
+	 * test over the `if` struct `value`: a branch none of `@:fmt(ifElseLadder('<ifCtor>', '<thenField>', '<bracedCtor>'…))`'s
+	 * braced ctors names, read as written when the writer de-braces branches (`writtenBare`). Null when the field's
+	 * `ifElseLadder` names no braced ctor or the `if` has no else field.
+	 */
+	private static function ladderHeadBareTest(
+		args: Null<Array<String>>, elseFieldName: Null<String>, writtenBare: Null<Expr>
+	): Null<Expr> {
+		if (args == null || args.length <= LADDER_BRACED_ARG || elseFieldName == null) return null;
 		final braced: Array<String> = args.slice(LADDER_BRACED_ARG);
-		final writtenBare: Null<Expr> = opts.ladderWrittenBareExpr;
-		final bare: Expr = writtenBare ?? macro anyparse.format.LoopBodyShape.headHasBareBranch(
+		return writtenBare ?? macro anyparse.format.LoopBodyShape.headHasBareBranch(
 			value, $v{args[0]}, $v{args[1]}, $v{elseFieldName}, $v{braced}
 		);
-		return macro ($ladderTest && $bare);
 	}
 
 	/**

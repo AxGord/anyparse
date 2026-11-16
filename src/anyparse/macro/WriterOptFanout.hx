@@ -533,9 +533,13 @@ final class WriterOptFanout {
 	 * `if`'s then-body recursion (`@:fmt(clearElseIfBranch)`) drops it before
 	 * rendering the body content — a statement nested inside the else-if body is
 	 * not itself an else-branch. Idempotent: returns `o` unchanged when the flag
-	 * is already false (no allocation on the common non-else-if descent).
+	 * is already false (no allocation on the common non-else-if descent). With
+	 * `chainBare` it drops the link's `_ladderChainBare` too, which lives exactly
+	 * as long as the link marker.
 	 */
-	private static function clearElseIfBranchField(optionsCT: ComplexType): Field {
+	private static function clearElseIfBranchField(optionsCT: ComplexType, chainBare: Bool): Field {
+		final clearBare: Expr = chainBare ? macro _c._ladderChainBare = false : macro {};
+		final bareSet: Expr = chainBare ? macro o._ladderChainBare : macro false;
 		return {
 			name: '_clearElseIfBranch',
 			access: [APrivate, AStatic],
@@ -543,9 +547,36 @@ final class WriterOptFanout {
 				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
 				ret: optionsCT,
 				expr: macro {
-					if (!o._inElseIfBranch) return o;
+					if (!o._inElseIfBranch && !$bareSet) return o;
 					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
 					_c._inElseIfBranch = false;
+					$clearBare;
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * Opt-fanout setter for `_ladderChainBare`: the head that marks an `else if` link hands it the chain's verdict that a
+	 * brace-less branch stands at or above it. Idempotent: returns `o` unchanged when the flag already equals `v`.
+	 */
+	private static function setLadderChainBareField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setLadderChainBare',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro : Bool },
+					chainBaseArg(optionsCT)
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._ladderChainBare == v) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._ladderChainBare = v;
 					return _c;
 				}
 			}),
@@ -1227,8 +1258,10 @@ final class WriterOptFanout {
 		// (HxIfStmt.elseBody set-site) and `clearElseIfBranch` (inner if's
 		// then-body one-level clear). Gated on `_inElseIfBranch:Bool` presence.
 		if (optionsHasField(optionsTypePath, '_inElseIfBranch')) {
+			final chainBare: Bool = optionsHasField(optionsTypePath, '_ladderChainBare');
 			fields.push(setElseIfBranchField(optionsCT));
-			fields.push(clearElseIfBranchField(optionsCT));
+			fields.push(clearElseIfBranchField(optionsCT, chainBare));
+			if (chainBare) fields.push(setLadderChainBareField(optionsCT));
 		}
 
 		if (hasValueIfBranch) {

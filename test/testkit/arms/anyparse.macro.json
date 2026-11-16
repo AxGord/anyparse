@@ -3402,8 +3402,8 @@
 			"name": "M-SWITCH-BRANCH-LADDER-ALWAYS",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildSwitchBranchLadderTest",
-			"find": "return macro ($ladderTest && $bare);",
-			"replace": "return ladderTest;",
+			"find": ": macro ($ladderTest && (opt._ladderChainBare || $bare));",
+			"replace": ": ladderTest;",
 			"note": "every then switch of a chain ladders, so an all-switch chain loses its glue"
 		},
 		{
@@ -3521,6 +3521,38 @@
 			"find": "_segs.unshift(_dt('.' + _fld));\nswitch _prev {\ncase Call(_, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = true;",
 			"replace": "_segs.unshift(_dt('.' + _fld));\nswitch _prev {\ncase Call(_, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = false;",
 			"note": "the plain writer's chain walk glues a bare-field-led first link to an array literal head the same way"
+		},
+		{
+			"name": "M-LADDER-LINK-BARE-DROPPED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "elseIfLinkMark",
+			"find": "if (bare != null) return macro _setLadderChainBare($mark, opt._ladderChainBare || $bare, opt);",
+			"replace": "if (bare != null) return mark;",
+			"note": "an else-if link never hears that a branch above it is brace-less, so its switch stays glued under a laddered head"
+		},
+		{
+			"name": "M-LADDER-LINK-BARE-NOT-INHERITED",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "elseIfLinkMark",
+			"find": "opt._ladderChainBare || $bare, opt)",
+			"replace": "$bare, opt)",
+			"note": "a link passes on only its own head's verdict, so a brace-less branch two links up is lost across a braced link"
+		},
+		{
+			"name": "M-LADDER-CHAIN-BARE-LEAKS",
+			"type": "anyparse.macro.WriterOptFanout",
+			"method": "clearElseIfBranchField",
+			"find": "final clearBare: Expr = chainBare ? macro _c._ladderChainBare = false : macro {};",
+			"replace": "final clearBare: Expr = macro {};",
+			"note": "the chain verdict survives the link's then-body descent, so an all-braced if nested in that block ladders its switch"
+		},
+		{
+			"name": "M-LADDER-LINK-WRITTEN-BLIND",
+			"type": "anyparse.macro.WriterBodyPolicyLowering",
+			"method": "elseIfLinkMark",
+			"find": "WriterBraceSymmetryLowering.chainBareBranchTest(bs, sibling, args)",
+			"replace": "null",
+			"note": "the link mark reads the chain as parsed, so a { single; } head the writer de-braces reads as braced and the link's switch stays glued on the first pass"
 		}
 	]
 }

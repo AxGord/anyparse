@@ -69,13 +69,15 @@ typedef HxIfExpr = {
 	var cond: HxExpr;
 
 	// `ifElseLadder, exprIfElseLadder` on both branches: the chain ladders like `HxIfStmt`'s where `opt._statementFrame`
-	// marks this `if` a statement (a function body, `HxFnDecl`'s `statementIfBody`), never on an unset frame alone.
+	// marks this `if` a statement (a function body, `HxFnDecl`'s `statementIfBody`), never on an unset frame alone; the
+	// then-branch's braced ctors leave a then `switch` glued only while no branch of the chain is brace-less.
 	// `propagateElseIfBranch` / `clearElseIfBranch` mark an `else if` link as in that chain only there, as `HxIfStmt`'s do.
 	@:trailOpt(';')
 	@:fmt(bodyPolicy('ifBody', 'expressionIfBody'), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		noSiblingFallback('ifBody'), inlineBlockBodyIfFlag('expressionIfWithBlocks'), bracketBodyGlueIfFlag('expressionIfWithBrackets'),
 		propagateValueIfBranch, arrowValueIfReflowSite, semicolonBeforeSibling('elseBranch', 'sameLineExpressionElse'),
-		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'), ifElseLadder, exprIfElseLadder, clearElseIfBranch,
+		elseSwitch('elseSwitch', 'SwitchExpr', 'SwitchExprBare'),
+		ifElseLadder('IfExpr', 'thenBranch', 'BlockExpr', 'SwitchExpr', 'SwitchExprBare'), exprIfElseLadder, clearElseIfBranch,
 		valueBraceSymmetry('elseBranch', 'BlockExpr', 'ExprStmt', 'IfExpr', 'SwitchExpr', 'SwitchExprBare', 'ObjectLit'))
 	var thenBranch: HxExpr;
 

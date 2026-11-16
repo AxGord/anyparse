@@ -29,7 +29,7 @@ import anyparse.grammar.haxe.expr.HxExpr;
  *
  * `@:fmt(ifElseLadder)` on BOTH bodies makes an `if` / `else` chain a ladder in every config: a
  * branch body without braces of its own sits on its own line one indent deeper, whatever its
- * placement and width; a block keeps its glue, a then `switch` only while no branch is brace-less. An `if` with no `else`
+ * placement and width; a block keeps its glue, a `switch` only while no branch of the whole chain is brace-less. An `if` with no `else`
  * that is not an `else if` link keeps its placement, unless its body is an `if` with an `else` (`nestedIfElseLadder`).
  * `@:fmt(elseSwitch('elseSwitch', 'SwitchStmt', 'SwitchStmtBare'))` on BOTH bodies: a `switch`
  * branch under `opt.elseSwitch == Same` glues to its keyword's line the way `elseIf` glues a

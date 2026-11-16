@@ -65,6 +65,15 @@
 			"find": "@:fmt(clearExprPosition, ctorKwTrivia)",
 			"replace": "@:fmt(clearExprPosition)",
 			"note": "`macro` grows no kw-trivia args, so the comment between `macro` and its operand is dropped at parse"
+		},
+		{
+			"name": "M-EXPR-IF-SWITCH-LADDER-OFF",
+			"type": "anyparse.grammar.haxe.expr.HxIfExpr",
+			"method": "thenBranch",
+			"kind": "VarField",
+			"find": "ifElseLadder('IfExpr', 'thenBranch', 'BlockExpr', 'SwitchExpr', 'SwitchExprBare')",
+			"replace": "ifElseLadder",
+			"note": "the expression if names no braced ctors, so a function-body if keeps its then switch glued beside a brace-less else"
 		}
 	]
 }
