@@ -3275,6 +3275,38 @@
 			"find": "!vouches(record, held) || ",
 			"replace": "false || ",
 			"note": "a check whose suite did not vouch replaces the standing record, so a later check keeps classes from a failed run"
+		},
+		{
+			"name": "M-BASE-BRANCH-BUDGET-COUNTS-LEASE-WAIT",
+			"type": "dev.BaseBranch",
+			"method": "await",
+			"find": "if (!granted && FileSystem.exists(gate.branchProgress(row))) {",
+			"replace": "if (!granted) {",
+			"note": "the row's limit runs from its ask, so a branch queued for its pool lease past the limit is cut before it ran"
+		},
+		{
+			"name": "M-BASE-BRANCH-BUDGET-IGNORES-GRANT",
+			"type": "dev.BaseBranch",
+			"method": "await",
+			"find": "deadline = Math.min(ceiling, Timer.stamp() + limit);",
+			"replace": "deadline = ceiling;",
+			"note": "a granted branch has the whole ceiling instead of the row's own limit, so work over the limit is waited for"
+		},
+		{
+			"name": "M-BASE-BRANCH-CEILING-LOOSE",
+			"type": "dev.BaseBranch",
+			"method": "await",
+			"find": "final ceiling: Float = Timer.stamp() + limit * CEILING_FACTOR;",
+			"replace": "final ceiling: Float = Timer.stamp() + limit * 3;",
+			"note": "the whole wait for a branch never granted its lease runs past its ceiling"
+		},
+		{
+			"name": "M-BASE-BRANCH-ANNOUNCE-KEEPS-OLD-GRANT",
+			"type": "dev.BaseBranch",
+			"method": "announce",
+			"find": "if (FileSystem.exists(granted)) FileSystem.deleteFile(granted);",
+			"replace": "",
+			"note": "an announcement keeps the progress an earlier run left, so a branch not yet granted its lease reads as granted"
 		}
 	]
 }

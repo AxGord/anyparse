@@ -27,6 +27,9 @@ final class BaseBranch {
 	private static inline final MS_PER_SECOND: Float = 1000;
 	private static inline final POLL_MS: Int = 1000;
 
+	/** How many of a row's limits the whole wait for its branch may take, the time queued for a lease included. */
+	private static inline final CEILING_FACTOR: Float = 2;
+
 	/** The gate row of the branch; it is no line of the gate's table. */
 	public final row: String;
 
@@ -70,6 +73,8 @@ final class BaseBranch {
 
 	/** Announce this run's branch: from now on a row asking for the reading waits for it. */
 	public function announce(gate: GateTree): Void {
+		final granted: String = gate.branchProgress(row);
+		if (FileSystem.exists(granted)) FileSystem.deleteFile(granted);
 		File.saveContent(gate.log(pendingFile), gate.options.run);
 	}
 
@@ -100,8 +105,7 @@ final class BaseBranch {
 		final failed: Null<String> = unreadWhy(gate);
 		if (failed != null) return NotGot(failed);
 		if (pending(gate)) {
-			final deadline: Float = Timer.stamp() + BranchWatch.idleOf([row]) / MS_PER_SECOND;
-			while (pending(gate) && Timer.stamp() < deadline) Sleep.pause(POLL_MS);
+			await(gate);
 		} else {
 			final why: Null<String> = measure();
 			if (why != null) return NotGot(unread(gate, why));
@@ -120,6 +124,25 @@ final class BaseBranch {
 	public function unread(gate: GateTree, why: String): String {
 		File.saveContent(gate.log(unreadFile), why);
 		return why;
+	}
+
+	/**
+	 * Wait while the branch is announced: while it queues for its pool lease the row's budget does not run, and from the moment
+	 * it rewrites its progress file (`announce` removed the last run's) the branch has the row's own limit; the whole wait is
+	 * capped at `CEILING_FACTOR` limits so a dead pool still ends it.
+	 */
+	private function await(gate: GateTree): Void {
+		final limit: Float = BranchWatch.idleOf([row]) / MS_PER_SECOND;
+		final ceiling: Float = Timer.stamp() + limit * CEILING_FACTOR;
+		var deadline: Float = ceiling;
+		var granted: Bool = false;
+		while (pending(gate) && Timer.stamp() < deadline) {
+			if (!granted && FileSystem.exists(gate.branchProgress(row))) {
+				granted = true;
+				deadline = Math.min(ceiling, Timer.stamp() + limit);
+			}
+			Sleep.pause(POLL_MS);
+		}
 	}
 
 	/** The one rule of a shared cache's place: the environment variable `cacheVar` when set, else `name` under the scratch root. */
