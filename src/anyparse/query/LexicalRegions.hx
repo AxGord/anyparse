@@ -159,8 +159,7 @@ final class LexicalRegions {
 	/**
 	 * Does a COMMENT region OPEN inside `[from, to)`? Reads the top-level regions only: a `//` or `/*` inside a string literal is
 	 * text and no comment, and a comment written inside a `${ … }` hole of a literal is not seen. A guard that splices a whole
-	 * span, which a comment may straddle or sit in a hole of, wants `commentIntersects`; the string-blind
-	 * `SourceComments.hasCommentMarker` is the contract for callers that rely on it.
+	 * span, which a comment may straddle or sit in a hole of, wants `commentIntersects`.
 	 */
 	public static function commentOpensIn(from: Int, to: Int, regions: Array<LexRegion>): Bool {
 		return regions.exists(region -> region.from >= from && region.from < to && isComment(region));

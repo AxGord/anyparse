@@ -2,12 +2,10 @@ package unit.query;
 
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
-import anyparse.query.SourceComments;
 
 /**
- * `LexicalRegions.commentIntersects`: a range holds a REAL comment of the file's lexical regions, where the string-blind
- * `SourceComments.hasCommentMarker` answers yes for a `//` spelled inside a literal and sees no difference between a
- * comment in a literal's text and one written in its `${ … }` code hole.
+ * `LexicalRegions.commentIntersects`: a range holds a REAL comment of the file's lexical regions, so a `//` spelled
+ * inside a literal is text and a comment written in a literal's `${ … }` code hole is a comment.
  */
 class LexicalRegionsCommentIntersectsTest extends Test {
 
@@ -16,7 +14,6 @@ class LexicalRegionsCommentIntersectsTest extends Test {
 	public function testMarkerInsideStringLiteralIsNotAComment(): Void {
 		final src: String = "var u = 'http://x';";
 		Assert.isFalse(has(src, 0, src.length));
-		Assert.isTrue(SourceComments.hasCommentMarker(src, 0, src.length));
 	}
 
 	@:pin('control')
@@ -86,7 +83,6 @@ class LexicalRegionsCommentIntersectsTest extends Test {
 	public function testBlockCommentInsideAnInterpolationHoleIsAComment(): Void {
 		final src: String = "var s = '${a /* c */ + b}';";
 		Assert.isTrue(has(src, 0, src.length));
-		Assert.isTrue(SourceComments.hasCommentMarker(src, 0, src.length));
 	}
 
 	@:pin('control')

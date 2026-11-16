@@ -51,48 +51,6 @@ final class SourceComments {
 	 */
 	private static final DOC_OPEN: String = '/**';
 
-	/**
-	 * Whether `text` holds a `//` or `/*` comment marker. The primitive under
-	 * `hasCommentMarker` and under `CheckScan.hasCommentMarker`, exposed separately for the
-	 * callers whose subject is not a contiguous source range — a concatenation of trivia
-	 * gaps, or one already-trimmed line.
-	 *
-	 * Deliberately STRING-BLIND: a marker inside a string literal (`'http://x'`) answers yes.
-	 * See `hasCommentMarker` for why that stays.
-	 */
-	public static inline function textHasCommentMarker(text: String): Bool {
-		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
-	}
-
-	/**
-	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the "don't
-	 * delete a comment" guard every rewriting check consults before regenerating a region.
-	 * An empty or reversed range answers no; the guard is load-bearing, since
-	 * `String.substring` SWAPS a reversed pair and would otherwise scan the wrong text.
-	 *
-	 * ## Why it stays string-blind
-	 *
-	 * The scan cannot tell a real marker from one inside a string literal, so `'http://x'`
-	 * reads as a comment. Teaching it about literals would make it answer `false` on inputs
-	 * where it now answers `true` — a TIGHTENING, and a shared predicate may only be
-	 * tightened when every caller's conservative direction points the same way.
-	 *
-	 * It does not. For nearly every consumer a spurious `true` REFUSES a rewrite (report-only
-	 * instead of autofixed) — harmless, and the direction that never deletes a comment. The
-	 * exceptions are `CheckScan`'s negation machinery — `negateConditionText`,
-	 * `negationIsClean` and the `eqFlipText` it dispatches through — where the answer is not
-	 * a refusal but a TIER SELECTOR: a `true` routes the rewrite to the verbatim text
-	 * fallback, and `negationIsClean` then reports the site as clean precisely BECAUSE that
-	 * tier declines nothing. Making the scan literal-aware moves such a condition onto the
-	 * De Morgan tier, which can decline — flipping a finding off — and changes the text
-	 * `eqFlipText` emits. That is a real behaviour change, not extra safety, so the
-	 * string-blind answer is the shared contract and any caller that needs precision must
-	 * ask the lexical regions (`scanLexicalRegions`) rather than tighten this.
-	 */
-	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		return from < to && textHasCommentMarker(source.substring(from, to));
-	}
-
 	/** Whether the block comment opening at `open` is a `/**` doc rather than a plain block. */
 	public static inline function isDocOpener(source: String, open: Int): Bool {
 		return open + 2 < source.length && source.fastCodeAt(open + 2) == '*'.code;

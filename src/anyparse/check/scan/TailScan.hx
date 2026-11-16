@@ -140,8 +140,7 @@ final class TailScan {
 
 	/**
 	 * Whether `[from, to)` holds a conditional-compilation directive. A plain text scan, so
-	 * a directive spelled inside a string literal refuses too — the safe direction, and the
-	 * same string-blind conservatism as `CheckScan.hasCommentMarker`.
+	 * a directive spelled inside a string literal refuses too — the safe direction.
 	 */
 	public static function hasConditionalCompilation(directives: Array<CondDirective>, from: Int, to: Int): Bool {
 		return from < to && CondDirectives.startingIn(directives, from, to).length > 0;

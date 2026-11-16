@@ -4,7 +4,9 @@ import anyparse.check.common.literals.FoldStringLiterals;
 import anyparse.check.common.literals.MacroGate.CallRef;
 import anyparse.check.common.literals.MacroGate.MacroGate;
 import anyparse.check.common.literals.MacroGate.MacroIndex;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.StdResolver;
@@ -181,6 +183,7 @@ final class PreferInterpolation extends HaxeRule {
 			relaxed: relaxed,
 			collectNested: collectNested,
 			gate: gate,
+			regions: ElementSpan.lazyRegions(source, plugin),
 			calls: []
 		}, tree, null, false, false, false);
 		return matches;
@@ -429,7 +432,7 @@ final class PreferInterpolation extends HaxeRule {
 		final argSpan: Null<Span> = arg.span;
 		final replacement: Null<String> = sole ? peelText(arg, ctx.source) : render(arg, ctx.source, ctx.seams.identKind);
 		if (span == null || argSpan == null || replacement == null) return false;
-		if (callCarriesComment(span, argSpan, ctx.source)) return false;
+		if (callCarriesComment(span, argSpan, ctx.regions())) return false;
 		final at: Span = span;
 		final text: String = replacement;
 		out.push({ span: at, replacement: text, message: 'this Std.string() call can be string interpolation${syntaxRefusal(ctx)}' });
@@ -450,17 +453,12 @@ final class PreferInterpolation extends HaxeRule {
 	 * Whether the call carries a COMMENT between its parentheses outside the argument's
 	 * own span — `Std.string(<comment> x)`. Both rewrites replace the WHOLE call span
 	 * with text derived from the argument alone, which would silently delete it, so
-	 * such a call is left alone (the same refusal `redundant-tostring` makes). Only
-	 * whitespace and comments can occupy the probed head / tail regions, so a marker
-	 * hit is never a false positive.
+	 * such a call is left alone (the same refusal `redundant-tostring` makes). The
+	 * probed head / tail hold only whitespace and comments, read from the file's
+	 * lexical regions.
 	 */
-	private static function callCarriesComment(call: Span, arg: Span, source: String): Bool {
-		return hasCommentMarker(source.substring(call.from, arg.from)) || hasCommentMarker(source.substring(arg.to, call.to));
-	}
-
-	/** Whether `src` contains a line- or block-comment opener. */
-	private static function hasCommentMarker(src: String): Bool {
-		return src.indexOf('//') != -1 || src.indexOf('/*') != -1;
+	private static function callCarriesComment(call: Span, arg: Span, regions: Array<LexRegion>): Bool {
+		return LexicalRegions.commentIntersects(call.from, arg.from, regions) || LexicalRegions.commentIntersects(arg.to, call.to, regions);
 	}
 
 	/**
@@ -564,6 +562,9 @@ private typedef ScanCtx = {
 
 	/** The macro-argument gate of a `run` scan, null for the `fix`-side re-find (the finding already carries the verdict). */
 	final gate: Null<MacroGate>;
+
+	/** The file's lexical regions, lexed when first asked — what the comment gate of a rewrite reads. */
+	final regions: () -> Array<LexRegion>;
 
 	/** The calls enclosing the node being scanned, innermost last — what `gate` is asked about. */
 	final calls: Array<CallRef>;

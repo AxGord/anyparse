@@ -80,20 +80,6 @@ final class CheckScan {
 	}
 
 	/**
-	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — the check
-	 * layer's entry point to `RefactorSupport.hasCommentMarker`, which owns the scan and
-	 * the recorded per-caller argument for why it stays string-blind.
-	 *
-	 * The conservative "don't delete a comment" guard: for every consumer but the negation
-	 * pair below, a marker found inside a string literal only ever REFUSES a fix, never
-	 * deletes code. `negateConditionText` / `negationIsClean` read it as a tier selector
-	 * instead — see the primitive's doc before changing anything here.
-	 */
-	public static inline function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		return SourceComments.hasCommentMarker(source, from, to);
-	}
-
-	/**
 	 * The check layer's entry point to `RefactorSupport.lineDeletionSpan`, which owns the scan:
 	 * `span` extended BACKWARD over its own line's leading indentation and the newline before it, so
 	 * deleting the result removes the whole line instead of leaving a blank one. Every caller pairs it

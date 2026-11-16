@@ -2,8 +2,7 @@ package unit.check.common.members;
 
 /**
  * Where `trivial-getter` reads a comment before the accessor clause it deletes: a real comment between the declaration's
- * start and the `(`, in the head the collapse rewrites, refuses the finding; a `//` spelled inside a string of an
- * annotation there is no comment.
+ * start and the `(`, in the head the collapse rewrites, refuses the finding.
  */
 class TrivialGetterClauseCommentTest extends TrivialGetterCheckTestBase {
 

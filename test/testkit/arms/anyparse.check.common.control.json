@@ -1286,7 +1286,7 @@
 			"type": "anyparse.check.common.control.GuardReturn",
 			"method": "spanCommentBlocked",
 			"find": "return LexicalRegions.commentIntersects(endSpan.to, lineEnd == -1 ? source.length : lineEnd, regions);",
-			"replace": "return CheckScan.hasCommentMarker(source, endSpan.to, lineEnd == -1 ? source.length : lineEnd);",
+			"replace": "return (source.substring(endSpan.to, lineEnd == -1 ? source.length : lineEnd).indexOf('//') >= 0 || source.substring(endSpan.to, lineEnd == -1 ? source.length : lineEnd).indexOf('/*') >= 0);",
 			"note": "the rest of the tail return's line is scanned as raw text, so a `//` spelled inside a string literal there reads as a comment and refuses the guard"
 		},
 		{
@@ -1294,7 +1294,7 @@
 			"type": "anyparse.check.common.control.EmptyCaseArm",
 			"method": "candidateFor",
 			"find": "LexicalRegions.commentIntersects(scanFrom, switchSpan.to, ctx.regions())",
-			"replace": "CheckScan.hasCommentMarker(source, scanFrom, switchSpan.to)",
+			"replace": "(source.substring(scanFrom, switchSpan.to).indexOf('//') >= 0 || source.substring(scanFrom, switchSpan.to).indexOf('/*') >= 0)",
 			"note": "the deleted arm is scanned as raw text, so a `//` inside its string pattern reads as a comment and hides the finding"
 		},
 		{
@@ -1310,7 +1310,7 @@
 			"type": "anyparse.check.common.control.UnnecessarySwitch",
 			"method": "candidateOf",
 			"find": "LexicalRegions.commentIntersects(at.from, open.from, scanned)",
-			"replace": "CheckScan.hasCommentMarker(source, at.from, open.from)",
+			"replace": "(source.substring(at.from, open.from).indexOf('//') >= 0 || source.substring(at.from, open.from).indexOf('/*') >= 0)",
 			"note": "the switch head is scanned as raw text, so a `//` inside a string-literal subject reads as a comment and hides the finding"
 		},
 		{
@@ -1318,7 +1318,7 @@
 			"type": "anyparse.check.common.control.RedundantCaseBody",
 			"method": "subsumedCandidate",
 			"find": "LexicalRegions.commentIntersects(prev.to, nextSpan.from, regions())",
-			"replace": "CheckScan.hasCommentMarker(source, prev.to, nextSpan.from)",
+			"replace": "(source.substring(prev.to, nextSpan.from).indexOf('//') >= 0 || source.substring(prev.to, nextSpan.from).indexOf('/*') >= 0)",
 			"note": "the deleted arm is scanned as raw text, so a `//` in a string of its body reads as a comment and hides the finding"
 		},
 		{
@@ -1326,7 +1326,7 @@
 			"type": "anyparse.check.common.control.UnnecessarySwitch",
 			"method": "candidateOf",
 			"find": "LexicalRegions.commentIntersects(at.from, at.to, regions())",
-			"replace": "CheckScan.hasCommentMarker(source, at.from, at.to)",
+			"replace": "(source.substring(at.from, at.to).indexOf('//') >= 0 || source.substring(at.from, at.to).indexOf('/*') >= 0)",
 			"note": "an empty-body switch is scanned whole as raw text, so a `//` inside its string-literal subject reads as a comment and refuses the deletion"
 		},
 		{
@@ -1334,7 +1334,7 @@
 			"type": "anyparse.check.common.control.CollapseNestedSwitch",
 			"method": "emit",
 			"find": "LexicalRegions.commentIntersects(patSpan.from, binderSpan.from, scan.regions())",
-			"replace": "CheckScan.hasCommentMarker(source, patSpan.from, binderSpan.from)",
+			"replace": "(source.substring(patSpan.from, binderSpan.from).indexOf('//') >= 0 || source.substring(patSpan.from, binderSpan.from).indexOf('/*') >= 0)",
 			"note": "a string literal holding // before the switched binder reads as a comment and hides the collapse"
 		},
 		{
@@ -1342,7 +1342,7 @@
 			"type": "anyparse.check.common.control.CollapseNestedSwitch",
 			"method": "emit",
 			"find": "LexicalRegions.commentIntersects(binderSpan.to, patSpan.to, scan.regions())",
-			"replace": "CheckScan.hasCommentMarker(source, binderSpan.to, patSpan.to)",
+			"replace": "(source.substring(binderSpan.to, patSpan.to).indexOf('//') >= 0 || source.substring(binderSpan.to, patSpan.to).indexOf('/*') >= 0)",
 			"note": "a string literal holding // after the switched binder reads as a comment and hides the collapse"
 		},
 		{
@@ -1350,7 +1350,7 @@
 			"type": "anyparse.check.common.control.CollapseNestedSwitch",
 			"method": "innerGapsClean",
 			"find": "LexicalRegions.commentIntersects(innerSpan.from, first.from, scan.regions())",
-			"replace": "CheckScan.hasCommentMarker(source, innerSpan.from, first.from)",
+			"replace": "(source.substring(innerSpan.from, first.from).indexOf('//') >= 0 || source.substring(innerSpan.from, first.from).indexOf('/*') >= 0)",
 			"note": "a string literal holding // in the inner switch subject reads as a comment and hides the collapse"
 		},
 		{
@@ -1358,7 +1358,7 @@
 			"type": "anyparse.check.common.control.HoistCommonBranchHead",
 			"method": "fixEdits",
 			"find": "LexicalRegions.commentIntersects(firsts[i].from, next.from, regions())",
-			"replace": "CheckScan.hasCommentMarker(source, firsts[i].from, next.from)",
+			"replace": "(source.substring(firsts[i].from, next.from).indexOf('//') >= 0 || source.substring(firsts[i].from, next.from).indexOf('/*') >= 0)",
 			"note": "a string literal holding // in the moved head reads as a comment and refuses the move"
 		},
 		{
@@ -1366,7 +1366,7 @@
 			"type": "anyparse.check.common.control.HoistCommonBranchHead",
 			"method": "fixEdits",
 			"find": "LexicalRegions.commentIntersects(ends.beforeElse.to, ends.chainEnd.to, regions())",
-			"replace": "CheckScan.hasCommentMarker(source, ends.beforeElse.to, ends.chainEnd.to)",
+			"replace": "(source.substring(ends.beforeElse.to, ends.chainEnd.to).indexOf('//') >= 0 || source.substring(ends.beforeElse.to, ends.chainEnd.to).indexOf('/*') >= 0)",
 			"note": "a string literal holding // in the emptied else reads as a comment and refuses dropping it"
 		},
 		{
@@ -1374,7 +1374,7 @@
 			"type": "anyparse.check.common.control.HoistCommonBranchTail",
 			"method": "wholeEdits",
 			"find": "LexicalRegions.commentIntersects(headSpan.from, lastBranch.to, lexicalRegions())",
-			"replace": "CheckScan.hasCommentMarker(source, headSpan.from, lastBranch.to)",
+			"replace": "(source.substring(headSpan.from, lastBranch.to).indexOf('//') >= 0 || source.substring(headSpan.from, lastBranch.to).indexOf('/*') >= 0)",
 			"note": "a string literal holding // in an identical-branch chain reads as a comment and refuses keeping one copy"
 		},
 		{
@@ -1382,7 +1382,7 @@
 			"type": "anyparse.check.common.control.PreferIfExpressionChain",
 			"method": "invertTail",
 			"find": "LexicalRegions.commentIntersects(condSpan.from, condSpan.to, lazy.regions())",
-			"replace": "CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to)",
+			"replace": "(source.substring(condSpan.from, condSpan.to).indexOf('//') >= 0 || source.substring(condSpan.from, condSpan.to).indexOf('/*') >= 0)",
 			"note": "a string literal holding // in the inverted condition reads as a comment and declines the inversion"
 		},
 		{

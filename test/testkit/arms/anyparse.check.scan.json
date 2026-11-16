@@ -1720,7 +1720,7 @@
 			"type": "anyparse.check.scan.NegationScan",
 			"method": "negateConditionText",
 			"find": "!LexicalRegions.commentIntersects(cs.from, cs.to, regions)",
-			"replace": "!CheckScan.hasCommentMarker(source, cs.from, cs.to)",
+			"replace": "(source.substring(cs.from, cs.to).indexOf('//') < 0 && source.substring(cs.from, cs.to).indexOf('/*') < 0)",
 			"note": "the regions are never read, so a `//` inside a string operand still forces the verbatim text tier"
 		},
 		{
