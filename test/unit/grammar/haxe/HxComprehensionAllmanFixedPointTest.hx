@@ -106,7 +106,12 @@ final class HxComprehensionAllmanFixedPointTest extends Test {
 		Assert.equals(AT_LIMIT, HxWriteFixture.triviaWrite(fieldShape(42), HxWriteFixture.listsKeepSource(CFG_SAME)));
 	}
 
-	/** Past it the FIRST write lands on the shape a source-multi-line literal gets, and that shape is a fixed point. */
+	/**
+	 * Past it the FIRST write lands on the shape a source-multi-line literal gets, and that shape is a fixed point. The
+	 * literal reaches the limit only with the space pending before its `{`, so it counts as crossing.
+	 */
+	@:pin('control')
+	@:killer('M-PROBE-GLUED-BLIND')
 	public function testALiteralBrokenByWidthLandsInAllmanInOneWrite(): Void {
 		Assert.equals(PAST_LIMIT, HxWriteFixture.triviaWrite(fieldShape(43), HxWriteFixture.listsKeepSource(CFG_SAME)));
 		Assert.equals(PAST_LIMIT, HxWriteFixture.triviaWrite(PAST_LIMIT, HxWriteFixture.listsKeepSource(CFG_SAME)));

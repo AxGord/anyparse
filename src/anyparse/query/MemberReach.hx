@@ -2983,8 +2983,7 @@ final class MemberReach {
 		// the resolution scope is what the project declares, not what its builds compile: only the builds can say that no
 		// subtype or override lies outside the index (`configuredFor`)
 		final built: MemberReach = new MemberReach(
-			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false,
-			FactsView.over(host?.compilerFacts())
+			plugin, project, index, scoped != null, MAX_LIBRARY_FILES, MAX_VISITED, null, () -> false, FactsView.over(host?.compilerFacts())
 		);
 		// the builds are probed only once a question needs them (`escalation`), and read the project's text as it is then
 		if (host != null) {

@@ -58,8 +58,7 @@ final class Json {
 	 * `span` and one reading `source` get different bytes for the same match by design.
 	 */
 	public static function renderMatches(
-		file: String, source: String, matches: Array<QueryNode>, windows: Array<Null<Span>>, doc: Bool, src: Bool,
-		regions: Array<LexRegion>
+		file: String, source: String, matches: Array<QueryNode>, windows: Array<Null<Span>>, doc: Bool, src: Bool, regions: Array<LexRegion>
 	): String {
 		final index: LineIndex = new LineIndex(source);
 		final out: AstMatchesJson = {

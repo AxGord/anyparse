@@ -199,8 +199,7 @@ class ClassifyOccurrencesTest extends Test {
 	public function testNameBoundCountsEveryBindingForm(): Void {
 		Assert.isTrue(nameBound('class C {\n\tfunction m(xs:Array<Int>) {\n\t\tfor (items in xs) {}\n\t}\n}', 'items'), 'loop variable');
 		Assert.isTrue(
-			nameBound('class C {\n\tfunction m(mp:Map<Int, Int>) {\n\t\tfor (k => items in mp) {}\n\t}\n}', 'items'),
-			'key-value loop value'
+			nameBound('class C {\n\tfunction m(mp:Map<Int, Int>) {\n\t\tfor (k => items in mp) {}\n\t}\n}', 'items'), 'key-value loop value'
 		);
 		Assert.isTrue(
 			nameBound('class C {\n\tfunction m(v:Any) {\n\t\tswitch v {\n\t\t\tcase items: trace(items);\n\t\t}\n\t}\n}', 'items'),

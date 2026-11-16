@@ -90,8 +90,8 @@ final class WriterCondWrapLowering {
 	 * via `Context.fatalError` on any violation.
 	 */
 	private static function validateCondWrap(
-		condWrapArgs: Array<String>, leadText: Null<String>, trailText: Null<String>, kwLead: Null<String>, hasSpan: Bool,
-		isOptional: Bool, isStar: Bool, childKind: ShapeKind
+		condWrapArgs: Array<String>, leadText: Null<String>, trailText: Null<String>, kwLead: Null<String>, hasSpan: Bool, isOptional: Bool,
+		isStar: Bool, childKind: ShapeKind
 	): Void {
 		if (condWrapArgs.length != 1)
 			Context.fatalError(

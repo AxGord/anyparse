@@ -34,8 +34,7 @@ class HxTypedefBetweenBlankTest extends Test {
 		final src: String = 'typedef Point2D = {\n\tx:Int,\n\ty:Int\n};\ntypedef Point3D = {x:Int, y:Int, z:Int};\n';
 		final out: String = writeWithLeftCurlyBoth(src);
 		Assert.isTrue(
-			out.indexOf('};\n\ntypedef Point3D') != -1,
-			'expected blank line between consecutive multi-line typedefs under Next in:\n<$out>'
+			out.indexOf('};\n\ntypedef Point3D') != -1, 'expected blank line between consecutive multi-line typedefs under Next in:\n<$out>'
 		);
 	}
 

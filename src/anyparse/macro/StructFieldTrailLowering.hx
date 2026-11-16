@@ -346,8 +346,7 @@ final class StructFieldTrailLowering {
 	 * lifted from `lowerStruct`.
 	 */
 	private static function emitFieldLeadIn(
-		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>,
-		beforeLeadLocal: Null<String>
+		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>, beforeLeadLocal: Null<String>
 	): Void {
 		if (isStar || isOptional) return;
 		if (kwLead != null) {

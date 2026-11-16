@@ -266,8 +266,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			if (last != null) {
 				final statements: Bool = s.ifStatementKinds.contains(last.kind);
 				addIfSome(
-					chains, statements ? statementChain(last, s) : sequentialChain(stmts, s),
-					statements ? alone : stmts.length == RUNGS + 1
+					chains, statements ? statementChain(last, s) : sequentialChain(stmts, s), statements ? alone : stmts.length == RUNGS + 1
 				);
 			}
 		} else {

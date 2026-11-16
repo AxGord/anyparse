@@ -29,8 +29,7 @@ class HxTypeEndOrphanCommentTest extends Test {
 	public function testClassEndTypeAfterTrailingLineComment(): Void {
 		final src: String = 'class C {\n\tfunction e() {\n\t\ta();\n\t}\n\n\tfunction f() {\n\t\ta();\n\t}\n\t// x\n}\n';
 		assertWrites(
-			src, cfg('classEmptyLines', 1),
-			'class C {\n\tfunction e() {\n\t\ta();\n\t}\n\n\tfunction f() {\n\t\ta();\n\t}\n\n\t// x\n\n}\n'
+			src, cfg('classEmptyLines', 1), 'class C {\n\tfunction e() {\n\t\ta();\n\t}\n\n\tfunction f() {\n\t\ta();\n\t}\n\n\t// x\n\n}\n'
 		);
 		assertWrites(
 			src, cfg('classEmptyLines', 0), 'class C {\n\tfunction e() {\n\t\ta();\n\t}\n\n\tfunction f() {\n\t\ta();\n\t}\n\n\t// x\n}\n'

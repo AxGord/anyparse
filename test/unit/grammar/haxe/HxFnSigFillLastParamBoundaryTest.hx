@@ -11,8 +11,8 @@ import utest.Test;
  * line while they fit within maxLineLength. The LAST param was breaking onto its
  * own line one column early: the fill's per-line trailing-comma reserve
  * spuriously bound the last item, which has nothing after it on its line (the
- * `)` sits on its own line). A param line of width 139 (<= 140) must stay inline;
- * width 140 (fork breaks fill items AT the limit) and beyond still break.
+ * `)` sits on its own line). A param line of width 139 or 140 stays inline; 141
+ * breaks.
  * Identifiers are synthetic and bear no relation to any downstream code.
  */
 @:nullSafety(Strict)
@@ -51,14 +51,29 @@ final class HxFnSigFillLastParamBoundaryTest extends Test {
 		Assert.equals(expected, triviaWrite(src));
 	}
 
-	/** GUARD: param line at width 140 (fork breaks fill items AT the limit): last param on its own line. */
-	public function testLastParamBreaksAtLimit(): Void {
+	/** Param line at width 140, exactly the limit: all nine params stay on the continuation line. */
+	@:pin('control')
+	@:killer('M-FILL-LAST-TAIL-FORK')
+	public function testLastParamFitsInlineAtLimit(): Void {
 		final src: String = 'class M {\n'
 			+ '\tpublic static function processTactic(alphaVal:Float, bravoVal:Float, charlie:Float, deltaXy:Float, '
 			+ 'echoPt:Float, foxtrotQ:Float, golfIdx:Float, hotelLen:Float, idx:Float):Void {\n\t\ttrace(idx);\n\t}\n}';
 		final expected: String = 'class M {\n\tpublic static function processTactic(\n'
 			+ '\t\talphaVal:Float, bravoVal:Float, charlie:Float, deltaXy:Float, echoPt:Float, foxtrotQ:Float, golfIdx:Float, '
-			+ 'hotelLen:Float,\n\t\tidx:Float\n\t):Void {\n\t\ttrace(idx);\n\t}\n}';
+			+ 'hotelLen:Float, idx:Float\n\t):Void {\n\t\ttrace(idx);\n\t}\n}';
+		Assert.equals(expected, triviaWrite(src));
+	}
+
+	/** Param line at width 141, one past the limit: the last param goes on its own line. */
+	@:pin('control')
+	@:killer('M-FILL-LAST-TAIL-SLACK')
+	public function testLastParamBreaksPastLimit(): Void {
+		final src: String = 'class M {\n'
+			+ '\tpublic static function processTactic(alphaVal:Float, bravoVal:Float, charlie:Float, deltaXy:Float, '
+			+ 'echoPt:Float, foxtrotQ:Float, golfIdx:Float, hotelLen:Float, idxx:Float):Void {\n\t\ttrace(idxx);\n\t}\n}';
+		final expected: String = 'class M {\n\tpublic static function processTactic(\n'
+			+ '\t\talphaVal:Float, bravoVal:Float, charlie:Float, deltaXy:Float, echoPt:Float, foxtrotQ:Float, golfIdx:Float, '
+			+ 'hotelLen:Float,\n\t\tidxx:Float\n\t):Void {\n\t\ttrace(idxx);\n\t}\n}';
 		Assert.equals(expected, triviaWrite(src));
 	}
 

@@ -92,8 +92,7 @@ final class SimplifyNegatedCompound extends RuleBase {
 
 	public function new() {
 		super(
-			'simplify-negated-compound', 'a negated boolean compound or comparison that simplifies to fewer negations',
-			RuleCategory.Control
+			'simplify-negated-compound', 'a negated boolean compound or comparison that simplifies to fewer negations', RuleCategory.Control
 		);
 	}
 

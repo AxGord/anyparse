@@ -119,8 +119,8 @@ class Probe {
 		var ev = Color.Red;
 		var ev2 = Color.Other;
 		trace(([
-			e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, c1, c2, c3, c4, c5, c6, c7, c8, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10, o11, o12,
-			o13, o14, o15, o16, o17, o18, o19, ev, ev2
+			e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, c1, c2, c3, c4, c5, c6, c7, c8, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10, o11, o12, o13,
+			o14, o15, o16, o17, o18, o19, ev, ev2
 		]: Array<Dynamic>));
 	}
 

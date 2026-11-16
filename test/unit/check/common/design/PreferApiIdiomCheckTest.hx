@@ -186,8 +186,7 @@ class PreferApiIdiomCheckTest extends Test {
 		], problems);
 		final notArray: Array<String> = [];
 		Assert.equals(
-			0,
-			RuleDeclaration.idioms(LintConfig.parse('{"rules":{"prefer-api-idiom":{"idioms":{}}}}'), 'prefer-api-idiom', notArray).length
+			0, RuleDeclaration.idioms(LintConfig.parse('{"rules":{"prefer-api-idiom":{"idioms":{}}}}'), 'prefer-api-idiom', notArray).length
 		);
 		Assert.same(['"idioms" is not an array — ignored'], notArray);
 	}

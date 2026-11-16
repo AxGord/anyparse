@@ -1019,8 +1019,7 @@ class MemberOrderCheckTest extends Test {
 		final fixed: String = canonicalizedFix(contentRankedBlockSource());
 		Assert.isTrue(fixed.indexOf('\n\n\n') < 0, 'no double blank anywhere: $fixed');
 		Assert.equals(
-			1, MemberSpacing.blankLineCount(fixed.substring(fixed.indexOf('final a'), fixed.indexOf('#if'))),
-			'one blank before #if: $fixed'
+			1, MemberSpacing.blankLineCount(fixed.substring(fixed.indexOf('final a'), fixed.indexOf('#if'))), 'one blank before #if: $fixed'
 		);
 		Assert.equals(
 			1, MemberSpacing.blankLineCount(fixed.substring(fixed.indexOf('#end'), fixed.indexOf('private var p'))),

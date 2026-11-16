@@ -480,8 +480,7 @@ final class ComparisonToBoolean extends RuleBase {
 	 * strip without proof — an unproven `== true` may be load-bearing).
 	 */
 	private static function operandProvablyBool(
-		other: QueryNode, root: QueryNode, shape: RefShape, nullity: Null<DeclaredNullity>, boolOpKinds: Array<String>,
-		fallbackReport: Bool
+		other: QueryNode, root: QueryNode, shape: RefShape, nullity: Null<DeclaredNullity>, boolOpKinds: Array<String>, fallbackReport: Bool
 	): Bool {
 		return BoolExprShape.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || (
 			other.kind == shape.identKind

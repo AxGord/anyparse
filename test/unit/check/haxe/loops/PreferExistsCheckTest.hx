@@ -354,8 +354,7 @@ class PreferExistsCheckTest extends Test {
 		// the local `found`, so the sink-mention gate must not refuse them.
 		for (cond in ['p.found', 'p.name == \'found\''])
 			Assert.equals(
-				1, violations(itemFn('var found:Bool = false;\n\t\tfor (p in ps) if ($cond) found = true;\n\t\treturn found;')).length,
-				cond
+				1, violations(itemFn('var found:Bool = false;\n\t\tfor (p in ps) if ($cond) found = true;\n\t\treturn found;')).length, cond
 			);
 	}
 

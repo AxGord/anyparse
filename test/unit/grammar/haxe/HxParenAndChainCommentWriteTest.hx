@@ -17,8 +17,7 @@ class HxParenAndChainCommentWriteTest extends Test {
 
 	public function testLineCommentAfterParenOpenKeepsItsLine(): Void {
 		assertSettles(
-			body('if (a && ( // c\n\t\t\tb || d)) {\n\t\t\tx();\n\t\t}'),
-			body('if (a && ( // c\n\t\t\tb || d\n\t\t)) {\n\t\t\tx();\n\t\t}')
+			body('if (a && ( // c\n\t\t\tb || d)) {\n\t\t\tx();\n\t\t}'), body('if (a && ( // c\n\t\t\tb || d\n\t\t)) {\n\t\t\tx();\n\t\t}')
 		);
 	}
 

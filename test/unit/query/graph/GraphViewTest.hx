@@ -134,8 +134,7 @@ class GraphViewTest extends Test {
 		);
 		Assert.equals('String,p.a.A.m1,p.a.A.m2,p.a,p.b,p.a.A', names(view));
 		Assert.equals(
-			edges(GraphView.lift(members(), Package)),
-			edges(GraphView.filter(GraphView.opened(members(), []), filter(1, [], false, false)))
+			edges(GraphView.lift(members(), Package)), edges(GraphView.filter(GraphView.opened(members(), []), filter(1, [], false, false)))
 		);
 	}
 

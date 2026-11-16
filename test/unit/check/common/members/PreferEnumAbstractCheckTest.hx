@@ -246,8 +246,7 @@ class PreferEnumAbstractCheckTest extends Test {
 
 	public function testWholeTypeBelowThresholdNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations('class Pair { public static inline final A:String = \'a\'; public static inline final B:String = \'b\'; }').length
+			0, violations('class Pair { public static inline final A:String = \'a\'; public static inline final B:String = \'b\'; }').length
 		);
 	}
 

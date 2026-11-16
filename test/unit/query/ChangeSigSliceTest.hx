@@ -240,16 +240,16 @@ class ChangeSigSliceTest extends Test {
 	@:killer('M-SIGNATURE-EDIT-RAW-SPLICE')
 	public function testAReorderThatMovesTheBreakComesBackCanonical(): Void {
 		final source: String = canonical(
-			'class S {\n\tfunction s(a:Int, beta:String, gamma:Int, deltaepsilonzeta:Int):Bool {\n\t\treturn true;\n\t}\n}\n'
+			'class S {\n\tfunction s(a:Int, beta:String, gamma:Int, deltaepsilonzetaeta:Int):Bool {\n\t\treturn true;\n\t}\n}\n'
 		);
-		Assert.isTrue(source.contains('gamma:Int,\n\t\t\tdeltaepsilonzeta:Int):Bool {'), 'the fixture starts wrapped:\n$source');
+		Assert.isTrue(source.contains('gamma:Int,\n\t\t\tdeltaepsilonzetaeta:Int):Bool {'), 'the fixture starts wrapped:\n$source');
 		final text: String = switch changeSigOf(source, 2, 11, '3,1,2,0', NARROW) {
 			case Ok(t, _): t;
 			case Err(message):
 				Assert.fail('expected Ok, got Err: $message');
 				'';
 		};
-		Assert.isTrue(text.contains('function s(deltaepsilonzeta:Int, beta:String'), 'the parameters were reordered:\n$text');
+		Assert.isTrue(text.contains('function s(deltaepsilonzetaeta:Int, beta:String'), 'the parameters were reordered:\n$text');
 		Assert.equals(canonical(text), text, 'and the file is canonical');
 	}
 

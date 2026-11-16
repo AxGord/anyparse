@@ -71,8 +71,8 @@ typedef HxCondNameFnDecl = {
 	@:lead(':')
 	var returnType: Null<HxType>;
 
-	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'),
-		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
+	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'), bodyPolicyForCtor('ExprBody', 'functionBody'),
+		metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
 	var body: HxFnBody;
 
 }

@@ -180,6 +180,10 @@ values (`onePerLine`, `fillLine`, …) an object literal and an anonymous type a
 source-broken short `{x: 1, y: 2, z: 3}` or `{x:Int, y:Int, z:Int}` glues onto one line; only an array or a map literal
 still keeps a break the source put between its items. A typedef's body keeps its source lines until its own decision.
 
+A `fillLine` / `fillLineWithLeadingBreak` list and a filled operator chain keep an item on its row while the row, its
+`,` or closing delimiters included, is at most `maxLineLength` wide: a row of exactly the limit fits, one column more
+breaks (haxe-formatter breaks one column earlier). A call that ends such a row exactly at the limit keeps its arguments flat.
+
 ## A literal argument: `callParameter.containerItemWrap`
 
 When a call's argument list breaks, an array or object literal argument that carries a call takes a line of its own,

@@ -84,8 +84,7 @@ class ModuleMoveTest extends Test {
 			[move('src/pkg/A.hx', 'src/pkg/sub/A.hx')], [file('src/pkg/A.hx', a), file('src/pkg/User.hx', user)]
 		);
 		Assert.equals(
-			'package pkg;\n\nimport haxe.ds.StringMap;\nimport pkg.sub.A;\n\nclass User {\n\tvar a: A;\n}\n',
-			textOf(out, 'src/pkg/User.hx')
+			'package pkg;\n\nimport haxe.ds.StringMap;\nimport pkg.sub.A;\n\nclass User {\n\tvar a: A;\n}\n', textOf(out, 'src/pkg/User.hx')
 		);
 		Assert.same(['src/pkg/User.hx: import pkg.sub.A;'], out.imports);
 	}
@@ -337,8 +336,7 @@ class ModuleMoveTest extends Test {
 			file('src/p/import.hx', 'using p.Tools;\n')
 		]);
 		Assert.equals(
-			'package s;\n\nusing p.Tools;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n',
-			textOf(out, 'src/s/A.hx')
+			'package s;\n\nusing p.Tools;\n\nclass A {\n\tpublic static function f(): Int return 3.twice();\n}\n', textOf(out, 'src/s/A.hx')
 		);
 	}
 

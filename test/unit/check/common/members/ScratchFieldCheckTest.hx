@@ -232,8 +232,7 @@ class ScratchFieldCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(scratch(
-				'private var _o:Int = 0;',
-				'function a():Void {\n\t\t_o = 1;\n\t}\n\n\tfunction b():Int {\n\t\t_o = 2;\n\t\treturn _o;\n\t}'
+				'private var _o:Int = 0;', 'function a():Void {\n\t\t_o = 1;\n\t}\n\n\tfunction b():Int {\n\t\t_o = 2;\n\t\treturn _o;\n\t}'
 			)).length
 		);
 	}

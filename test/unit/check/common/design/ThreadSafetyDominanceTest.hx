@@ -383,8 +383,7 @@ class ThreadSafetyDominanceTest extends Test {
 		Assert.same(
 			['info B D.quick | D._outer', 'warning B D.slow | D._outer'],
 			holds(run(
-				'$slow public function peek():Void { _inner.acquire(); trace("x"); _inner.release(); }', 'd.slow(); d.peek();', true,
-				config
+				'$slow public function peek():Void { _inner.acquire(); trace("x"); _inner.release(); }', 'd.slow(); d.peek();', true, config
 			)),
 			'run once'
 		);

@@ -206,8 +206,8 @@ final class CrossRenameMember {
 	 * include `cursorFile`.
 	 */
 	public static function crossRenameMember(
-		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
-		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, refShape: RefShape
+		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String, scopeFiles: Array<{ file: String, source: String }>,
+		plugin: GrammarPlugin, refShape: RefShape
 	): CrossRenameResult {
 		if (!newName.isIdentifier()) return Err('new name "$newName" is not a valid identifier');
 
@@ -817,8 +817,8 @@ final class CrossRenameMember {
 	 * as an instance receiver does (`receiverIsSourceType`).
 	 */
 	private static function provenCandidateOffsets(
-		candidates: Array<{ subject: QueryNode, offsets: Array<Int> }>, source: String, file: String, tree: QueryNode,
-		target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex, cursorFile: String
+		candidates: Array<{ subject: QueryNode, offsets: Array<Int> }>, source: String, file: String, tree: QueryNode, target: MemberTarget,
+		plugin: GrammarPlugin, refShape: RefShape, index: SymbolIndex, cursorFile: String
 	): Array<Int> {
 		if (candidates.length == 0) return [];
 		final subjectNames: Array<String> = [];

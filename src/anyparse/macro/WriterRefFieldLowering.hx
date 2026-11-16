@@ -866,8 +866,8 @@ final class WriterRefFieldLowering {
 	 */
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function emitBodyPolicyBareRef(
-		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, bodyPolicyFlag: String, writeCall: Expr, fieldAccess: Expr,
-		refName: String, indentObjArgs: Null<Array<String>>, ssbTrailCommentExpr: Null<Expr>, site: RefFieldSite
+		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, bodyPolicyFlag: String, writeCall: Expr, fieldAccess: Expr, refName: String,
+		indentObjArgs: Null<Array<String>>, ssbTrailCommentExpr: Null<Expr>, site: RefFieldSite
 	): PrevBodyInfo {
 		final kwPolicyFlag: Null<String> = child.fmtReadString('kwPolicy');
 		// ω-trivia-after-trail: when the IMMEDIATELY preceding
@@ -1729,8 +1729,8 @@ final class WriterRefFieldLowering {
 	 */
 	@:access(anyparse.macro.WriterBodyPolicyLowering)
 	private static function buildBodyPolicyForCtorChain(
-		ctx: RefFieldCtx, pairs: Array<Array<String>>, ctorExpr: Expr, sepExpr: Expr, writeCall: Expr, bodyValueExpr: Expr,
-		refName: String, metaBlockGlueArgs: Null<Array<String>>, statementIfBodyArgs: Null<Array<String>>
+		ctx: RefFieldCtx, pairs: Array<Array<String>>, ctorExpr: Expr, sepExpr: Expr, writeCall: Expr, bodyValueExpr: Expr, refName: String,
+		metaBlockGlueArgs: Null<Array<String>>, statementIfBodyArgs: Null<Array<String>>
 	): Expr {
 		final defaultPair: Expr = macro _dc([$sepExpr, $writeCall]);
 		// Fold the pairs into a ternary chain. Iterate in reverse
@@ -1885,8 +1885,7 @@ final class WriterRefFieldLowering {
 	 */
 	private static function emitKwPrefix(
 		ctx: RefFieldCtx, child: ShapeNode, parts: Array<Expr>, kwLead: String, isFirstField: Bool, isRaw: Bool,
-		prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, prevAnyStarNonEmpty: Null<Expr>,
-		kwGap: Null<Expr>
+		prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, prevAnyStarNonEmpty: Null<Expr>, kwGap: Null<Expr>
 	): Void {
 		if (!isFirstField && !isRaw) {
 			final sep: Expr = sameLineSeparator(ctx.fieldSep, child, prevBodyField, typePath, prevPadTrailing);

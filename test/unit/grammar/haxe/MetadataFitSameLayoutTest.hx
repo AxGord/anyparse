@@ -135,10 +135,9 @@ final class MetadataFitSameLayoutTest extends Test {
 	}
 
 	/** A fill that packs an item fewer at the glued column than without the metadata keeps its first line, the metadata above it. */
-	@:pin('control')
-	@:killer('M-META-FIT-FILL-GLUED-PACKING')
+	@:pin('guard')
 	public function testAFillThePackingOfWhichTheGlueChangesKeepsItsFirstLine(): Void {
-		final name: String = ''.lpad('f', 61);
+		final name: String = ''.lpad('f', 63);
 		final params: String = 'aaaaaaaaaaaa:String, bbbbbbbbbbbbbb:Int,';
 		Assert.equals(
 			'class C {\n\t@:allow(pkg.sub)\n\tpublic function $name($params\n\t\tcccccccc:Array<String>):Void {}\n}',
@@ -149,10 +148,9 @@ final class MetadataFitSameLayoutTest extends Test {
 	}
 
 	/** Call arguments that pack an item fewer at the glued column keep their first line, the metadata above it. */
-	@:pin('control')
-	@:killer('M-META-FIT-FILL-GLUED-PACKING')
+	@:pin('guard')
 	public function testCallArgumentsThePackingOfWhichTheGlueChangesKeepTheirFirstLine(): Void {
-		final decl: String = 'var ${''.lpad('x', 64)}:Int = callSomething(aaaaaaaa, function(q:Int) return q + 1,';
+		final decl: String = 'var ${''.lpad('x', 66)}:Int = callSomething(aaaaaaaa, function(q:Int) return q + 1,';
 		Assert.equals(
 			'class C {\n\t@:keep\n\t$decl\n\t\tccccccc);\n}',
 			HxWriteFixture.triviaWrite('class C {\n\t@:keep $decl ccccccc);\n}\n', FIT_SIGNATURE)

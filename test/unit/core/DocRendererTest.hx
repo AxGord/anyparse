@@ -358,13 +358,13 @@ class DocRendererTest extends Test {
 	}
 
 	private function testFillPacksMultiplePerLine(): Void {
-		// Width 8 fits "aa, bb" (6 cols) but ", cc" overflows (need 4, have
-		// 2). After breaking to col 2, "cc, dd" fits exactly (8 cols), then
-		// ", ee" overflows again so the last item starts a new line.
+		// Width 8 fits "aa, bb," (7 cols) but ", cc" overflows. After breaking to
+		// col 2, "cc, dd," would be 9 cols with the comma that stays on the line,
+		// so `dd` starts the next line, where "dd, ee" fits exactly (8 cols).
 		final sep: Doc = D.concat([D.text(','), D.line()]);
 		final items: Array<Doc> = [D.text('aa'), D.text('bb'), D.text('cc'), D.text('dd'), D.text('ee')];
 		final doc: Doc = D.nest(2, D.fill(items, sep));
-		Assert.equals('aa, bb,\n  cc, dd,\n  ee', Renderer.render(doc, 8));
+		Assert.equals('aa, bb,\n  cc,\n  dd, ee', Renderer.render(doc, 8));
 	}
 
 	private function testFillFirstItemAlwaysInline(): Void {
@@ -515,10 +515,13 @@ class DocRendererTest extends Test {
 	}
 
 	private function testIfFirstLineExceedsAtColumnZeroReachesThreshold(): Void {
-		// At col 0 with 10-char single-line flat and threshold 10, col +
-		// firstLine = 10 — reaches threshold (`>= n`) → brk fires.
+		// At col 0 with 10-char single-line flat and threshold 10, col + firstLine = 10 reaches the threshold: with a
+		// `;` glued after it the line would cross, so brk fires; at the render width with nothing after it the flat form
+		// fits exactly.
 		final doc: Doc = IfFirstLineExceeds(10, D.text('BREAKBREAK'), D.text('FLATXFLATX'));
+		Assert.equals('BREAKBREAK;', Renderer.render(D.concat([doc, D.text(';')]), 80));
 		Assert.equals('BREAKBREAK', Renderer.render(doc, 80));
+		Assert.equals('FLATXFLATX', Renderer.render(doc, 10));
 	}
 
 	private function testIfFirstLineExceedsCapsAtFirstHardline(): Void {

@@ -1284,8 +1284,8 @@ class WrapList {
 		if (rules == null) return false;
 		final measure: WrapItemMeasure = measureItems(items, 2);
 		return decideWithLineLengthState(
-			rules, items.length, measure.maxLen, measure.total, false, measure.anyHardline, _ -> false,
-			countComplexItems(complexItemKinds), measure.minLen, measure.equalLens, anyContainerItem(complexItemKinds), false
+			rules, items.length, measure.maxLen, measure.total, false, measure.anyHardline, _ -> false, countComplexItems(complexItemKinds),
+			measure.minLen, measure.equalLens, anyContainerItem(complexItemKinds), false
 		) == NoWrap;
 	}
 
@@ -1437,8 +1437,8 @@ class WrapList {
 	 * breaks after `->` (ω-thinarrow-break leg-3).
 	 */
 	private static function emitZeroThresholdAgree(
-		modeFlat: WrapMode, rules: WrapRules, items: Array<Doc>, opt: WriteOptions, cols: Int, open: String, close: String,
-		openInside: Doc, closeInside: Doc, forceMode: Null<WrapMode>, leadFlat: Doc, leadBreak: Doc, shapeAt: (WrapMode, Doc) -> Doc,
+		modeFlat: WrapMode, rules: WrapRules, items: Array<Doc>, opt: WriteOptions, cols: Int, open: String, close: String, openInside: Doc,
+		closeInside: Doc, forceMode: Null<WrapMode>, leadFlat: Doc, leadBreak: Doc, shapeAt: (WrapMode, Doc) -> Doc,
 		leadFor: WrapMode -> Doc, defaultBreakMode: WrapMode
 	): Doc {
 		// ω-iffirstline-callarg: both states resolve to `NoWrap`
@@ -2854,10 +2854,10 @@ class WrapList {
 					IfArrowContinuationFits(_, _, _, _, _), IfArrowContinuationFitsWithRest(_, _, _, _, _),
 					IfIndentWidthExceeds(_, _, _, _), IfGluedFirstLineExceeds(_, _, _, _), IfTrailingCommentOverflows(_, _, _, _, _):
 					return true;
-				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner),
-					BreakCommit(_, inner), LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner),
-					CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-					ConditionalMarkerDecrease(inner), BreakMark(inner, _):
+				case WrapBoundary(inner), Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Nest(_, inner), BreakCommit(_, inner),
+					LeadingBreak(_, inner), Flatten(inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+					CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+					BreakMark(inner, _):
 					stack.push(inner);
 				case Concat(arr):
 					for (it in arr) stack.push(it);
@@ -3452,31 +3452,9 @@ class WrapList {
 		// `fitsFlat` aborts on it and the Group commits to MBreak with
 		// `Nest` providing the continuation indent.
 		final softSep: Doc = Concat([Text(sep), Line(' ')]);
-		// Cols of post-Fill same-line content. Three components:
-		//   1. The eventual trailing-separator that lands on EACH wrapped
-		//      line (`,` from softSep going break-mode between this line's
-		//      last packed item and the next line's first item). Universal
-		//      — every non-final wrapped line ends with this `,`.
-		//   2. A `+1` semantic alignment for fork's `lineLength +
-		//      tokenLength >= maxLineLength` (strict-break-at-threshold)
-		//      vs our `fitsFlat`'s `flatWidth <= remaining` (lenient-pack-
-		//      at-threshold) semantic mismatch. Without it the per-item-
-		//      fit probe packs one item too many on lines that fork would
-		//      break at exactly `col == lineWidth` (target fixture:
-		//      `wrapping_of_function_signature.hxtest` byte-diff @ 616).
-		//   3. Last-line tail: optional explicit trailing comma + the
-		//      `closeInside` Doc's flat width + close delim. These share
-		//      the line with the LAST packed item of the LAST chunk.
-		// Subtracted from the Fill's per-item-fit budget so the last
-		// packed item on EACH wrapped line leaves room for that tail —
-		// mirrors fork's `wrapFillLine2AfterLast` accounting where each
-		// item carries its trailing comma in `firstLineLength`
-		// (slice ω-fill-tail-reserve).
-		final lastChunkTailReserve: Int = sep.length
-			+ 1
-			+ (appendTrailingComma ? sep.length : 0)
-			+ DocMeasure.flatTokenWidth(closeInside)
-			+ close.length;
+		// What shares the line with the last item of the last chunk: the optional trailing comma, the inside-of-delimiter
+		// padding and the close delimiter. A middle item's `,` is the renderer's own business (the separator's head).
+		final lastChunkTailReserve: Int = (appendTrailingComma ? sep.length : 0) + DocMeasure.flatTokenWidth(closeInside) + close.length;
 		final bodyParts: Array<Doc> = [];
 		var chunkStart: Int = 0;
 		for (i in 1...items.length + 1) {
@@ -3501,12 +3479,13 @@ class WrapList {
 			if (i - chunkStart == 1) {
 				bodyParts.push(items[chunkStart]);
 			} else {
-				// Only the LAST chunk reserves cols for the tail —
-				// earlier chunks are followed by a forced `,\n` chunk
-				// boundary so their last-item-fit decision can't push
-				// the tail off the line. Reserving on them would
-				// tighten the in-chunk wrap budget without benefit.
-				final tailReserve: Int = atEnd ? lastChunkTailReserve : 0;
+				// An earlier chunk's last item is followed by the chunk boundary's `,` (unless the source elided it).
+				final tailReserve: Int = if (atEnd)
+					lastChunkTailReserve
+				else if (skipSepBefore(sepBeforeFlags, i))
+					0
+				else
+					sep.length;
 				// ω-fill-rest-probe: opt-in to `FillWithRestProbe` on the
 				// LAST chunk when the caller's Star opted in via
 				// `@:fmt(groupRestProbe)`. Mirrors `GroupWithRestProbe`
@@ -3670,14 +3649,9 @@ class WrapList {
 		?sepBeforeFlags: Array<Bool>
 	): Doc {
 		final softSep: Doc = Concat([Text(sep), Line(' ')]);
-		// Tail reserve identical in structure to `shapeFillLine` but
-		// without the `closeInside + close` component — FLWLB places
-		// close on its own line via the forced `Line('\n')` between
-		// the Nest exit and `closeInside`. The `sep.length + 1` base
-		// covers (a) trailing softSep `,` landing on every wrapped
-		// line and (b) the fork-`>=` vs ours-`<=` semantic alignment.
-		// ω-fill-tail-reserve.
-		final tailReserve: Int = sep.length + 1 + (appendTrailingComma ? sep.length : 0);
+		// The close sits on its own line, so only an appended trailing comma follows the last item (the renderer
+		// measures that rest of line itself for this fill).
+		final tailReserve: Int = appendTrailingComma ? sep.length : 0;
 		// ω-fill-break-after-wrap: `FillBreakAfterWrap` forces the separator
 		// before an item to break when the preceding arg self-wrapped (e.g. a
 		// long opAddSub chain arg that fills across continuation lines). Plain

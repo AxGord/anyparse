@@ -41,8 +41,7 @@ class HeadGapCommentWrapTest extends Test {
 	public function testAValueCatchHeadGapCommentMovesInsideTheWrap(): Void {
 		final cuddled: String = fmt(valueReturn('try {\n\t\t\tg();\n\t\t\t1;\n\t\t} catch (e:Dynamic) // c2\n\t\t\t3;'), SYMMETRIC);
 		Assert.isTrue(
-			cuddled.indexOf('} catch (e:Dynamic) { // c2\n\t\t\t3;\n\t\t};') != -1,
-			'the comment must open the wrapped block in: <$cuddled>'
+			cuddled.indexOf('} catch (e:Dynamic) { // c2\n\t\t\t3;\n\t\t};') != -1, 'the comment must open the wrapped block in: <$cuddled>'
 		);
 		final own: String = fmt(valueReturn('try {\n\t\t\tg();\n\t\t\t1;\n\t\t} catch (e:Dynamic)\n\t\t\t// c3\n\t\t\t3;'), SYMMETRIC);
 		Assert.isTrue(

@@ -264,8 +264,7 @@ class DuplicateCodeRenamedCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals('test/Bar.hx', vs[0].file);
 		Assert.equals(
-			'3 statements duplicated from src/Foo.hx:3 — extract a shared helper (bindings renamed; report-only, cross-file)',
-			vs[0].message
+			'3 statements duplicated from src/Foo.hx:3 — extract a shared helper (bindings renamed; report-only, cross-file)', vs[0].message
 		);
 	}
 

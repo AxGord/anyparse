@@ -465,9 +465,8 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	 * replacement.
 	 */
 	private static function collectRenameEdits(
-		node: QueryNode, parent: Null<QueryNode>, source: String, shape: RefShape, functionKinds: Array<String>,
-		opaqueKinds: Array<String>, renameFlagged: Array<String>, index: Null<SymbolIndex>, edits: Array<{ span: Span, text: String }>,
-		matchMask: Array<Span>
+		node: QueryNode, parent: Null<QueryNode>, source: String, shape: RefShape, functionKinds: Array<String>, opaqueKinds: Array<String>,
+		renameFlagged: Array<String>, index: Null<SymbolIndex>, edits: Array<{ span: Span, text: String }>, matchMask: Array<Span>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
 		if (functionKinds.contains(node.kind)) {

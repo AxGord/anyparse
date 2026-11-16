@@ -167,8 +167,8 @@
 			"name": "M-TERNARY-HEAD-PENDING-OFF",
 			"type": "anyparse.core.Renderer",
 			"method": "pushFlatWidthBranch",
-			"find": "final effPending: Int = n > width ? pendingSpace : 0;",
-			"replace": "final effPending: Int = 0;",
+			"find": "? reach + pendingSpace >= n",
+			"replace": "? reach >= n",
 			"note": "a strict-limit first-line probe ignores the separator still pending before it, so a head after `= ` glues one column past the limit"
 		},
 		{
@@ -1085,12 +1085,52 @@
 			"note": "the fill's last item reserves no room for the line's tail after the fill, so every item seems to pack and the metadata leaves a head whose layout is the same glued or not"
 		},
 		{
-			"name": "M-META-FIT-FILL-GLUED-PACKING",
+			"name": "M-FILL-SEP-HEAD-FORK",
 			"type": "anyparse.core.Renderer",
-			"method": "ungluedRestStep",
-			"find": "fillItemFits(probe, col + glue, sibling.width, restAfter, false)",
-			"replace": "fillItemFits(probe, col, sibling.width, restAfter, false)",
-			"note": "a glued metadata decides a fill's items only at the unglued column, so it stays glued over a first line that packs an item fewer"
+			"method": "fillItemFits",
+			"find": "last ? lastTail : sepHead;",
+			"replace": "last ? lastTail : sepHead + 1;",
+			"note": "a fill row that ends with its separator exactly at the limit breaks before its last item"
+		},
+		{
+			"name": "M-FILL-SEP-HEAD-SLACK",
+			"type": "anyparse.core.Renderer",
+			"method": "fillItemFits",
+			"find": "last ? lastTail : sepHead;",
+			"replace": "last ? lastTail : sepHead - 1;",
+			"note": "a fill row whose separator ends one column past the limit keeps its last item"
+		},
+		{
+			"name": "M-FILL-LAST-TAIL-FORK",
+			"type": "anyparse.core.Renderer",
+			"method": "fillItemFits",
+			"find": "? restAfter : f.fillTailReserve;",
+			"replace": "? restAfter + 1 : f.fillTailReserve + 1;",
+			"note": "a fill's last item that ends its row exactly at the limit breaks onto a line of its own"
+		},
+		{
+			"name": "M-FILL-LAST-TAIL-SLACK",
+			"type": "anyparse.core.Renderer",
+			"method": "fillItemFits",
+			"find": "? restAfter : f.fillTailReserve;",
+			"replace": "? restAfter - 1 : f.fillTailReserve - 1;",
+			"note": "a fill's last item whose row with its tail ends one column past the limit stays on the row"
+		},
+		{
+			"name": "M-PROBE-GLUED-BLIND",
+			"type": "anyparse.core.Renderer",
+			"method": "pushFlatWidthBranch",
+			"find": "(reach == n && !Frame.lineEndsAfter(stack, flatDoc, firstLine, n == width && pendingSpace == 0))",
+			"replace": "false",
+			"note": "a first-line probe whose flat form reaches the limit never crosses, so a call whose line ends one column past the limit with its `;` stays flat"
+		},
+		{
+			"name": "M-PROBE-GLUED-ALWAYS",
+			"type": "anyparse.core.Renderer",
+			"method": "pushFlatWidthBranch",
+			"find": "(reach == n && !Frame.lineEndsAfter(stack, flatDoc, firstLine, n == width && pendingSpace == 0))",
+			"replace": "reach == n",
+			"note": "a first-line probe whose flat form ends its line exactly at the limit still crosses, so a call operand a fill packs flush at the limit splits its own arguments"
 		}
 	]
 }

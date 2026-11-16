@@ -32,8 +32,7 @@ class ThreadSafetyRootCauseTest extends Test {
 	public function testACallOnlyACatchRunsLeavesTheFoldStanding(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info B S.save | S._x', 'warning B S.scan | S._t'],
-			holds(waits('', '', 'try { step(); } catch (e:Dynamic) { Sys.sleep(1); }'))
+			['info B S.save | S._x', 'warning B S.scan | S._t'], holds(waits('', '', 'try { step(); } catch (e:Dynamic) { Sys.sleep(1); }'))
 		);
 		#else
 		Assert.pass('non-sys target');

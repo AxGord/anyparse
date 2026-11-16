@@ -66,8 +66,8 @@ final class HxTrailingCommentOverflowSliceTest extends Test {
 		+ 'overflow\n\t\t}\n\t\tfinal wideIdentifierName:String = anotherIdentifierName; // c\n\t}\n}';
 
 	/** Code that spans lines on its own: the comment trails its last line, as before. */
-	private static final MULTI_LINE_SRC: String = 'class C {\n\tfunction f() {\n\t\tcall(alphaArgumentNumberOne,\n'
-		+ '\t\t\tbetaArgumentNumberTwo,\n\t\t\tgammaArgument); // trailing comment that is long\n\t}\n}';
+	private static final MULTI_LINE_SRC: String = 'class C {\n\tfunction f() {\n\t\tcall(alphaArgumentNumberOne, betaArgumentNumberTwo,\n'
+		+ '\t\t\tgammaArgument); // trailing comment that is long\n\t}\n}';
 
 	public function new(): Void {
 		super();

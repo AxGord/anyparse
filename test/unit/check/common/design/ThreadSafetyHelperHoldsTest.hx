@@ -152,8 +152,7 @@ class ThreadSafetyHelperHoldsTest extends Test {
 		final me: String = 'function me():S { Sys.sleep(1); return this; }';
 		Assert.same(
 			['warning B S.lockBoth | S._a', 'warning B S.work | S._a'],
-			holds(pair(lock, 'function unlockBoth():Void { me()._b.release(); _a.release(); }', 'lockBoth(); unlockBoth();', me)),
-			'chained'
+			holds(pair(lock, 'function unlockBoth():Void { me()._b.release(); _a.release(); }', 'lockBoth(); unlockBoth();', me)), 'chained'
 		);
 		Assert.same(
 			['warning B S.lockBoth | S._a', 'warning B S.work | S._a'],

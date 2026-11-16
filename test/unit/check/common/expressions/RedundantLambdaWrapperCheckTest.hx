@@ -39,8 +39,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 
 	public function testZeroParamZeroArgFlagged(): Void {
 		Assert.equals(
-			1,
-			violations('class C {\n\tstatic function go():Bool return true;\n\tfunction f():Void {\n\t\trun(() -> go());\n\t}\n}').length
+			1, violations('class C {\n\tstatic function go():Bool return true;\n\tfunction f():Void {\n\t\trun(() -> go());\n\t}\n}').length
 		);
 	}
 
@@ -292,8 +291,7 @@ class RedundantLambdaWrapperCheckTest extends Test {
 	 */
 	public function testCaseBinderCalleeNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations('class C {\n\tfunction f(v:()->Void):Void {\n\t\tswitch v {\n\t\t\tcase w: run(() -> w());\n\t\t}\n\t}\n}').length
+			0, violations('class C {\n\tfunction f(v:()->Void):Void {\n\t\tswitch v {\n\t\t\tcase w: run(() -> w());\n\t\t}\n\t}\n}').length
 		);
 	}
 

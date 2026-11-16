@@ -363,8 +363,8 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 	 * enclosing chain, which is skipped so a chain is reported once.
 	 */
 	private static function walk(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, plugin: GrammarPlugin,
-		lazy: Lazy, out: Array<Match>, parentKind: Null<String>, inElseSlot: Bool
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, plugin: GrammarPlugin, lazy: Lazy,
+		out: Array<Match>, parentKind: Null<String>, inElseSlot: Bool
 	): Void {
 		final isChain: Bool = s.chainKinds.contains(node.kind);
 		if (isChain && !inElseSlot && parentKind != null && s.hostKinds.contains(parentKind)) {
@@ -383,8 +383,8 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 	 * node's span runs on through the trivia after its last token.
 	 */
 	private static function match(
-		head: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, plugin: GrammarPlugin,
-		lazy: Lazy, parentKind: String
+		head: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, plugin: GrammarPlugin, lazy: Lazy,
+		parentKind: String
 	): Null<Match> {
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null) return null;

@@ -259,8 +259,8 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 	 * a comment would be dropped -- the site is then reported but not fixed.
 	 */
 	private static function matchPair(
-		ifNode: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams,
-		tree: QueryNode, lambdaSpans: Array<Span>, site: Null<InversionSite>
+		ifNode: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, tree: QueryNode,
+		lambdaSpans: Array<Span>, site: Null<InversionSite>
 	): Null<Match> {
 		if (!s.ifKinds.contains(ifNode.kind) || BranchChain.hasElse(ifNode)) return null;
 		final assign: Null<QueryNode> = assignmentIn(BranchChain.thenOf(ifNode), s);

@@ -977,8 +977,8 @@ final class SubtypeGraph {
 
 	/** `chainArguments` from `typeName` up, `seen` the types already walked. */
 	private static function chainVia(
-		owner: String, typeName: String, seen: Array<String>, linksOf: String -> Array<WrittenSupertype>,
-		paramsOf: String -> Array<String>, typeSyntax: TypeSyntaxReader, keyIn: Null<(String, String, String) -> String>
+		owner: String, typeName: String, seen: Array<String>, linksOf: String -> Array<WrittenSupertype>, paramsOf: String -> Array<String>,
+		typeSyntax: TypeSyntaxReader, keyIn: Null<(String, String, String) -> String>
 	): Null<Array<String>> {
 		if (seen.contains(typeName)) return null;
 		seen.push(typeName);

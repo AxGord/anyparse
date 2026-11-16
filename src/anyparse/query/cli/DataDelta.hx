@@ -167,8 +167,8 @@ final class DataDelta {
 			is.map(element -> DataPath.json(element, versions.now, shape)), partner, taken
 		);
 		pairEqual(
-			remainingKeys(versions.base, old.children, taken), remainingKeys(versions.now, now.children, partner.map(j -> j >= 0)),
-			partner, taken
+			remainingKeys(versions.base, old.children, taken), remainingKeys(versions.now, now.children, partner.map(j -> j >= 0)), partner,
+			taken
 		);
 		return partner;
 	}

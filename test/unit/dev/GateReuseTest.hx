@@ -83,8 +83,7 @@ final class GateReuseTest extends Test {
 		final record: GateRecord = passing('t1');
 		record.allow = ['suite'];
 		Assert.same(
-			['jvm probe', 'kit probes', 'typer probes'],
-			GateReuse.rows(record, facts('t1')), 'nor the corpus, which reads the waived suite'
+			['jvm probe', 'kit probes', 'typer probes'], GateReuse.rows(record, facts('t1')), 'nor the corpus, which reads the waived suite'
 		);
 		record.allow = ['corpus'];
 		Assert.same(['suite', 'jvm probe', 'kit probes', 'typer probes'], GateReuse.rows(record, facts('t1')));

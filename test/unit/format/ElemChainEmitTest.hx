@@ -47,7 +47,7 @@ final class ElemChainEmitTest extends Test {
 	@:pin('control')
 	@:killer('M-ELEM-CHAIN-OFF')
 	public function testAlternativesFillWithTheOperatorEndingTheLine(): Void {
-		assertLabel(NINE, NARROW, 'case "aaaa" | "bbbb" | "cccc" | "dddd" |\n\t\t\t\t"eeee" | "ffff" | "gggg" | "hhhh" |\n\t\t\t\t"iiii":');
+		assertLabel(NINE, NARROW, 'case "aaaa" | "bbbb" | "cccc" | "dddd" |\n\t\t\t\t"eeee" | "ffff" | "gggg" | "hhhh" | "iiii":');
 	}
 
 	@:pin('control')
@@ -60,25 +60,20 @@ final class ElemChainEmitTest extends Test {
 	@:pin('control')
 	@:killer('M-ELEM-CHAIN-OFF')
 	public function testFillPacksAcrossBothSeparators(): Void {
-		assertLabel(
-			MIXED, NARROW, 'case "aaaa" | "bbbb", "cccc" | "dddd",\n\t\t\t\t"eeee" | "ffff", "gggg" | "hhhh", "iiii" |\n\t\t\t\t"jjjj":'
-		);
+		assertLabel(MIXED, NARROW, 'case "aaaa" | "bbbb", "cccc" | "dddd", "eeee" |\n\t\t\t\t"ffff", "gggg" | "hhhh", "iiii" | "jjjj":');
 	}
 
 	@:pin('control')
 	@:killer('M-ELEM-CHAIN-OFF')
 	public function testLocationPlacesTheOperatorAtTheLineHead(): Void {
-		assertLabel(
-			NINE, BEFORE_LAST, 'case "aaaa" | "bbbb" | "cccc" | "dddd"\n\t\t\t\t| "eeee" | "ffff" | "gggg" | "hhhh"\n\t\t\t\t| "iiii":'
-		);
+		assertLabel(NINE, BEFORE_LAST, 'case "aaaa" | "bbbb" | "cccc" | "dddd" | "eeee"\n\t\t\t\t| "ffff" | "gggg" | "hhhh" | "iiii":');
 	}
 
 	@:pin('control')
 	@:killer('M-LIST-SEP-TIGHT-OFF')
 	public function testLeadingSeparatorHugsItsOperandWhileTheLineHolds(): Void {
 		assertLabel(
-			MIXED, BEFORE_LAST,
-			'case "aaaa" | "bbbb", "cccc" | "dddd", "eeee"\n\t\t\t\t| "ffff", "gggg" | "hhhh", "iiii"\n\t\t\t\t| "jjjj":'
+			MIXED, BEFORE_LAST, 'case "aaaa" | "bbbb", "cccc" | "dddd", "eeee"\n\t\t\t\t| "ffff", "gggg" | "hhhh", "iiii" | "jjjj":'
 		);
 	}
 
@@ -101,18 +96,18 @@ final class ElemChainEmitTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-LIST-CHAIN-RESERVE-TIGHT')
+	@:killer('M-FILL-SEP-HEAD-FORK')
 	public function testSeparatorReachingTheBudgetStaysOnTheLine(): Void {
 		final head: String = quoted(20);
-		final fits: String = quoted(16);
+		final fits: String = quoted(18);
 		assertLabel('$head | $fits | "zzz"', NARROW, 'case $head | $fits |\n\t\t\t\t"zzz":');
 	}
 
 	@:pin('control')
-	@:killer('M-LIST-CHAIN-RESERVE-LOOSE')
+	@:killer('M-FILL-SEP-HEAD-SLACK')
 	public function testSeparatorPastTheBudgetBreaksBeforeItsOperand(): Void {
 		final head: String = quoted(20);
-		final over: String = quoted(17);
+		final over: String = quoted(19);
 		assertLabel('$head | $over | "zzz"', NARROW, 'case $head |\n\t\t\t\t$over | "zzz":');
 	}
 

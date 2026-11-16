@@ -408,9 +408,7 @@ final class LockAliases {
 			final target: Null<QueryNode> = writeKinds.contains(node.kind) && node.children.length > 0 ? node.children[0] : null;
 			final name: Null<String> = target?.name;
 			if (
-				target != null && name != null && (target.kind == _shape.identKind || _sites.isAccess(target.kind)) && !found.contains(
-					name
-				)
+				target != null && name != null && (target.kind == _shape.identKind || _sites.isAccess(target.kind)) && !found.contains(name)
 			)
 				found.push(name);
 			for (c in node.children) walk(c);

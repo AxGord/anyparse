@@ -63,8 +63,8 @@ typedef HxFnDecl = {
 	@:lead(':')
 	var returnType: Null<HxType>;
 
-	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'),
-		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'),
+	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'), bodyPolicyForCtor('ExprBody', 'functionBody'),
+		metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'),
 		statementIfBody('IfExpr', 'thenBranch', 'elseBranch', 'ExprBody', 'BlockExpr', 'SwitchExpr', 'SwitchExprBare'))
 	var body: HxFnBody;
 

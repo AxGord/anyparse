@@ -336,8 +336,7 @@ class HoistCommonBranchHeadTest extends Test {
 	@:killer('M-PURITY-GETTER-OFF')
 	public function testGetterReadThroughItsOwnTypeIsNotPure(): Void {
 		Assert.equals(
-			0,
-			violationsIn(GETTER_OWNER, 'static function f() { if (C.next > 1) { var t = n; a(t); } else { var t = n; b(t); } } }').length
+			0, violationsIn(GETTER_OWNER, 'static function f() { if (C.next > 1) { var t = n; a(t); } else { var t = n; b(t); } } }').length
 		);
 	}
 

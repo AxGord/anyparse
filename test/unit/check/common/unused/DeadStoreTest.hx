@@ -372,8 +372,7 @@ class DeadStoreTest extends Test {
 	public function testShortCircuitRhsKillNotLeaked(): Void {
 		// The `&&` right operand evaluates conditionally — its overwrite must not kill the skip path.
 		Assert.equals(
-			0,
-			violations('class C { function f(a:Int):Int { var x = 1; final ok = a > 0 && (x = 2) > 0; return ok ? x : x + 1; } }').length
+			0, violations('class C { function f(a:Int):Int { var x = 1; final ok = a > 0 && (x = 2) > 0; return ok ? x : x + 1; } }').length
 		);
 	}
 

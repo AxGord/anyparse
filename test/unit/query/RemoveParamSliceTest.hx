@@ -280,13 +280,13 @@ class RemoveParamSliceTest extends Test {
 	public function testAClassMethodAndItsCallThatNowFitComeBackCanonical(): Void {
 		final source: String = canonical(
 			'class C {\n\tfunction h(alpha:Int, beta:String, gamma:Int, delta:Int):Bool {\n\t\treturn alpha + gamma + delta > 0;\n\t}\n\n'
-			+ '\tfunction g():Bool {\n\t\treturn h(1000000, "a long string argument", 3000000, 4000000);\n\t}\n}\n'
+			+ '\tfunction g():Bool {\n\t\treturn h(1000000, "a long string argument", 30000000, 4000000);\n\t}\n}\n'
 		);
 		Assert.isTrue(source.contains('gamma:Int,\n\t\t\tdelta:Int):Bool {'), 'the signature starts wrapped:\n$source');
-		Assert.isTrue(source.contains('argument",\n\t\t\t3000000'), 'and so does the call:\n$source');
+		Assert.isTrue(source.contains('argument",\n\t\t\t30000000'), 'and so does the call:\n$source');
 		final text: String = okText(removeOf(source, 2, 11, 1, NARROW));
 		Assert.isTrue(text.contains('\tfunction h(alpha:Int, gamma:Int, delta:Int):Bool {\n'), 'the signature is one line:\n$text');
-		Assert.isTrue(text.contains('\t\treturn h(1000000, 3000000, 4000000);\n'), 'and so is the call:\n$text');
+		Assert.isTrue(text.contains('\t\treturn h(1000000, 30000000, 4000000);\n'), 'and so is the call:\n$text');
 		Assert.equals(canonical(text), text, 'and the file is canonical');
 	}
 

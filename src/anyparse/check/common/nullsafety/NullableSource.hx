@@ -217,8 +217,7 @@ final class NullableSource {
 	 * `this.f()` and an external-typed receiver are safe misses.
 	 */
 	private static function crossFileReturnCallSource(
-		receiver: QueryNode, root: QueryNode, cfg: NullableSourceCfg, index: Null<SymbolIndex>,
-		nominalOf: Null<(QueryNode) -> Null<String>>
+		receiver: QueryNode, root: QueryNode, cfg: NullableSourceCfg, index: Null<SymbolIndex>, nominalOf: Null<(QueryNode) -> Null<String>>
 	): Null<String> {
 		if (index == null || cfg.returnMarkers.length == 0) return null;
 		final parts: Null<{ recv: QueryNode, method: String }> = methodCallParts(receiver, cfg);

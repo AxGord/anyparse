@@ -274,9 +274,7 @@ final class CommentProse {
 			if (c == '}'.code && (terminatesLine(raw, i + 1) || raw.substring(0, i).trim() == '')) return true;
 			if (c == '('.code && i > 0 && isIdentChar(bare.fastCodeAt(i - 1))) return true;
 			if (
-				c == ':'.code && i > 0 && i + 1 < bare.length && isIdentChar(bare.fastCodeAt(i - 1)) && isIdentStart(
-					bare.fastCodeAt(i + 1)
-				)
+				c == ':'.code && i > 0 && i + 1 < bare.length && isIdentChar(bare.fastCodeAt(i - 1)) && isIdentStart(bare.fastCodeAt(i + 1))
 			)
 				return true;
 		}

@@ -394,8 +394,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 * throughout the file, not only near their declaration.
 	 */
 	private static function flagFile(
-		out: Array<Violation>, plans: Array<ConversionPlan>, file: String, source: String, regions: () -> Array<LexRegion>,
-		tree: QueryNode, containerKinds: Array<String>, cfg: EnumAbstractCfg
+		out: Array<Violation>, plans: Array<ConversionPlan>, file: String, source: String, regions: () -> Array<LexRegion>, tree: QueryNode,
+		containerKinds: Array<String>, cfg: EnumAbstractCfg
 	): Void {
 		final groups: Array<Group> = [];
 		final whole: Array<WholeType> = [];

@@ -47,8 +47,8 @@ class InheritanceMoveSliceTest extends Test {
 		assertRefusal(
 			'references subclass member',
 			InheritanceMove.pullUp(
-				'pkg/Dog.hx', 'Dog', 'describe', 'Animal',
-				[{ file: 'pkg/Animal.hx', source: ANIMAL }, { file: 'pkg/Dog.hx', source: dog }], plugin()
+				'pkg/Dog.hx', 'Dog', 'describe', 'Animal', [{ file: 'pkg/Animal.hx', source: ANIMAL }, { file: 'pkg/Dog.hx', source: dog }],
+				plugin()
 			)
 		);
 	}

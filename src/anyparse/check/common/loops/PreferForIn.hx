@@ -113,8 +113,7 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 
 	public function new() {
 		super(
-			'prefer-for-in',
-			'a hand-rolled iterator loop (while (it.hasNext()) { final x = it.next(); … }) replaceable with for (x in it)',
+			'prefer-for-in', 'a hand-rolled iterator loop (while (it.hasNext()) { final x = it.next(); … }) replaceable with for (x in it)',
 			RuleCategory.Loops
 		);
 	}

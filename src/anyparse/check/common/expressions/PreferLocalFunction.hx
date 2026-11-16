@@ -255,8 +255,7 @@ final class PreferLocalFunction extends RuleBase {
 
 	/** The match for an assignment of the literal paired with an earlier bare declaration, or null when a gate refuses it. */
 	private static function matchAssignment(
-		list: QueryNode, kids: Array<QueryNode>, index: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
-		s: Seams
+		list: QueryNode, kids: Array<QueryNode>, index: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
 		final st: QueryNode = kids[index];
 		final assign: Null<QueryNode> = findBinding(st, s);

@@ -95,8 +95,7 @@ class ExplicitLocalTypeOracleTest extends Test {
 
 	public function testKeepsPackageQualifiedType(): Void {
 		Assert.equals(
-			'haxe.ds.Map<String, Int>',
-			LiteralInfer.stripTypeParamQualifiers('haxe.ds.Map<String, Int>', { file: null, methodName: 'get' })
+			'haxe.ds.Map<String, Int>', LiteralInfer.stripTypeParamQualifiers('haxe.ds.Map<String, Int>', { file: null, methodName: 'get' })
 		);
 	}
 

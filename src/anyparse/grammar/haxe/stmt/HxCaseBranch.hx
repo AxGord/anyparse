@@ -54,8 +54,7 @@ typedef HxCaseBranch = {
 	@:fmt(nestBody, bodyPolicy('caseBody', 'expressionCase'),
 		flatChildOpt('ifBody=expressionCase', 'elseBody=expressionCase', 'forBody=expressionCase'), propagateExprPosition,
 		clearExprPositionNonTail, refuseFlatOnComplexExpr, refuseGlueOnControlFlowRoot, glueToPrevious('EmptyStmt'),
-		siblingSlot('anyparse.format.SiblingShare.bodySlot', 'anyparse.format.SiblingShare.fitLineSlot', 'caseSiblings'),
-		belowWrappedLabel)
+		siblingSlot('anyparse.format.SiblingShare.bodySlot', 'anyparse.format.SiblingShare.fitLineSlot', 'caseSiblings'), belowWrappedLabel)
 	var body: Array<HxStatement>;
 
 };

@@ -222,8 +222,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 	 * or one of them does not declare or inherit `member`. `owner`'s own members need no grant.
 	 */
 	private static function addGrants(
-		decls: Null<Array<ResolvedType>>, member: String, owner: Null<TypeDeclMatch>, file: String, scope: SymbolIndex,
-		paths: Array<String>
+		decls: Null<Array<ResolvedType>>, member: String, owner: Null<TypeDeclMatch>, file: String, scope: SymbolIndex, paths: Array<String>
 	): Bool {
 		if (decls == null || decls.length == 0) return false;
 		for (rt in decls) {

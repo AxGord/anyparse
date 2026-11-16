@@ -87,8 +87,7 @@ class UnreachableCatchTest extends Test {
 	public function testQualifiedDuplicateFlagged(): Void {
 		// `e:Eof` and `e:haxe.io.Eof` reconcile via importMap → duplicate.
 		Assert.equals(
-			1,
-			violations('import haxe.io.Eof;\nclass C { function f() { try { g(); } catch (e:Eof) {} catch (e:haxe.io.Eof) {} } }').length
+			1, violations('import haxe.io.Eof;\nclass C { function f() { try { g(); } catch (e:Eof) {} catch (e:haxe.io.Eof) {} } }').length
 		);
 	}
 

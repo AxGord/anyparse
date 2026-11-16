@@ -216,8 +216,7 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 			for (position => stmt in node.children)
 				if (seams.ifKinds.contains(stmt.kind))
 					deNest(
-						stmt, node.children.slice(position + 1).concat(outer), source, seams, scopeNames, comments, flagged, edits,
-						narrowed
+						stmt, node.children.slice(position + 1).concat(outer), source, seams, scopeNames, comments, flagged, edits, narrowed
 					);
 		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, seams);
 		for (index => c in node.children)

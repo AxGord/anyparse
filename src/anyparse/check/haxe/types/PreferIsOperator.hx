@@ -24,8 +24,8 @@ final class PreferIsOperator extends HaxeRule implements VersionGated {
 
 	public function new() {
 		super(
-			'prefer-is-operator',
-			'a Std.isOfType(x, T) call whose second argument names a type, replaceable with the is operator (x is T)', RuleCategory.Types
+			'prefer-is-operator', 'a Std.isOfType(x, T) call whose second argument names a type, replaceable with the is operator (x is T)',
+			RuleCategory.Types
 		);
 	}
 

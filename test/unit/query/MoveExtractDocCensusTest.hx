@@ -191,8 +191,7 @@ class MoveExtractDocCensusTest extends Test {
 		Assert.equals('/** Doc for above. */', docAbove(e, 'function above'), 'the source neighbour above keeps its doc');
 		Assert.equals('/** Doc for below. */', docAbove(e, 'function below'), 'the source neighbour below keeps its doc');
 		Assert.equals(
-			'/** Doc for E. */', docAbove(e, 'class E extends SupE'),
-			'and the type doc still documents the type the header rewrite touched'
+			'/** Doc for E. */', docAbove(e, 'class E extends SupE'), 'and the type doc still documents the type the header rewrite touched'
 		);
 		CliFixture.removeDir(dir);
 		#else

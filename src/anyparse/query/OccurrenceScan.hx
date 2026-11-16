@@ -474,8 +474,7 @@ final class OccurrenceScan {
 	 * a non-null `commentRegions` drops dot-qualified occurrences.
 	 */
 	private static function scanReference(
-		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>,
-		?matchMask: Array<Span>
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, commentRegions: Null<Array<Span>>, ?matchMask: Array<Span>
 	): Bool {
 		final len: Int = name.length;
 		if (len == 0) return false;

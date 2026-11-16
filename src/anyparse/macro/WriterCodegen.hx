@@ -152,8 +152,8 @@ class WriterCodegen {
 		final body: Expr = macro {
 			final _opt: $optionsCT = options ?? $defaultOptsExpr;
 			return anyparse.core.Renderer.render(
-				anyparse.core.CollapsePass.run($writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize),
-				_opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize, _opt.lineEnd, _opt.finalNewline, _opt.trailingWhitespace,
+				anyparse.core.CollapsePass.run($writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize), _opt.lineWidth,
+				_opt.indentChar, _opt.tabWidth, _opt.indentSize, _opt.lineEnd, _opt.finalNewline, _opt.trailingWhitespace,
 				_opt.maxConsecutiveBlanks
 			);
 		};

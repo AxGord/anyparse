@@ -326,8 +326,7 @@ final class RenameCommand implements CliCommand {
 	): Int {
 		return emitInFileRename(
 			CrossRename.crossRenameType(
-				filePath, source, line, col, newName, [{ file: filePath, source: source }],
-				plugin, plugin.typeRefShape(), plugin.refShape()
+				filePath, source, line, col, newName, [{ file: filePath, source: source }], plugin, plugin.typeRefShape(), plugin.refShape()
 			),
 			oldName, write, { changes: [], notes: [] }, plugin
 		);

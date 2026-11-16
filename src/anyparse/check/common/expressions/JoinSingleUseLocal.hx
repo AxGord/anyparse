@@ -476,9 +476,7 @@ final class JoinSingleUseLocal extends RuleBase {
 			if (found) return;
 			final span: Null<Span> = n.span;
 			if (
-				n.name == name && span != null && span.from >= declSpan.to && span.from != readFrom && !s.memberNamingKinds.contains(
-					n.kind
-				)
+				n.name == name && span != null && span.from >= declSpan.to && span.from != readFrom && !s.memberNamingKinds.contains(n.kind)
 			) {
 				found = true;
 				return;

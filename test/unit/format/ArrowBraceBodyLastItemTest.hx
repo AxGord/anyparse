@@ -104,7 +104,7 @@ final class ArrowBraceBodyLastItemTest extends Test {
 	public function testPlainArrowBodyKeepsItsLayout(): Void {
 		Assert.equals(
 			inMethod(
-				'var t = foo(\n\t\t\t0,\n\t\t\tu -> u.iddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd '
+				'var t = foo(\n\t\t\t0, u -> u.iddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd '
 				+ '+ u.nameeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n\t\t);'
 			),
 			write(TWO_RULES, inMethod(PLAIN_BODY))

@@ -944,18 +944,12 @@ final class BinaryChainEmit {
 		// `condition_wrapping_priority_over_opbool`. For a non-suppressed chain
 		// (`cols == indentUnit`) both arms are byte-identical.
 		final nestCols: Int = location == AfterLast && isAddSubOps(ops) ? indentUnit : cols;
-		// tailReserve = 1: match the fork's fill boundary, which breaks a chain
-		// operand that reaches EXACTLY `maxLineLength` (`>=`), unlike the Wadler-
-		// inclusive raw `Fill` whose `fitsFlat` accepts a zero-budget exact fit.
-		// Without it a middle operand ending flush at the limit stays on the packed
-		// line and an inner group (e.g. a call operand) then splits its own args
-		// instead of the chain breaking at the operator.
+		// Each operand carries its own operator, so a middle operand packs while it ends within the limit; the last one
+		// leaves a column for the closer that follows a chain on its line (`:`, `)`, `;`).
 		// omega-chain-rest-width: a `restAware` chain's own fill Group counts the
 		// whole physical line as the pivot that picked this shape did; left plain,
 		// it re-decided flat on `col + flatWidth` alone and undid that pivot's break.
-		// A list's gaps charge one column more, the budget `WrapList.shapeFillLine` leaves a `,` list: an element that
-		// reaches the limit with its separator breaks the same way whichever separator follows it.
-		final packed: Doc = Nest(nestCols, Fill(enriched, Line(location == BeforeLast && tightGaps ? '' : ' '), listSep != null ? 2 : 1));
+		final packed: Doc = Nest(nestCols, Fill(enriched, Line(location == BeforeLast && tightGaps ? '' : ' '), 1));
 		return D.groupOrRestProbe(packed, restAware);
 	}
 

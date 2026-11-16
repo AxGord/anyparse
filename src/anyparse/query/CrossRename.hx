@@ -148,8 +148,8 @@ final class CrossRename {
 	 * or an `Err` describing why the rename could not be applied.
 	 */
 	public static function crossRenameType(
-		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
-		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
+		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String, scopeFiles: Array<{ file: String, source: String }>,
+		plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
 	): CrossRenameResult {
 		if (!newName.isIdentifier()) return Err('new name "$newName" is not a valid identifier');
 
@@ -290,8 +290,8 @@ final class CrossRename {
 	 * or when nothing changed; otherwise `Ok` with the per-file changes + advisory.
 	 */
 	private static function applyTypeRename(
-		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
-		refShape: RefShape, module: ModulePath
+		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape,
+		module: ModulePath
 	): CrossRenameResult {
 		// A type name is reachable from any file of the scope, so an unparsed
 		// conditional-compilation region ANYWHERE in it can hide a type position.

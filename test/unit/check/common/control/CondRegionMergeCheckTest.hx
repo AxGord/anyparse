@@ -122,8 +122,7 @@ class CondRegionMergeCheckTest extends Test {
 
 	public function testCrlfLineEndings(): Void {
 		Assert.equals(
-			'#if mobile\r\na();\r\n#else\r\nb();\r\n#end\r\n',
-			applyFix('#if mobile\r\na();\r\n#end\r\n\r\n#if !mobile\r\nb();\r\n#end\r\n')
+			'#if mobile\r\na();\r\n#else\r\nb();\r\n#end\r\n', applyFix('#if mobile\r\na();\r\n#end\r\n\r\n#if !mobile\r\nb();\r\n#end\r\n')
 		);
 	}
 

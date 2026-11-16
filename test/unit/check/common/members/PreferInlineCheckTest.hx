@@ -799,8 +799,7 @@ class PreferInlineCheckTest extends Test {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: sources });
 		Assert.equals(
-			0, CheckFixture.violationsIn(new PreferInline(), report, scoped).length,
-			'a build-macro owner is refused whichever gate answers'
+			0, CheckFixture.violationsIn(new PreferInline(), report, scoped).length, 'a build-macro owner is refused whichever gate answers'
 		);
 		Assert.equals(0, demands, 'the owner own source answers the gate, so the widest index is never demanded');
 	}

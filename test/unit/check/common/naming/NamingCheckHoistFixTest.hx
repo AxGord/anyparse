@@ -19,8 +19,8 @@ class NamingCheckHoistFixTest extends NamingCheckTestBase {
 	public function testHoistsScalarLocalConstant(): Void {
 		final src: String = 'package pkg;\n\nclass C {\n\tpublic function f():Void {\n\t\tfinal PAD:Int = 40;\n\t\ttrace(PAD);\n\t}\n}';
 		assertRenamedIn(
-			'pkg/C.hx', src,
-			'class C {\n\tprivate static inline final PAD:Int = 40;\n\n\tpublic function f():Void {\n\t\ttrace(PAD);\n\t}', '\t\tfinal PAD'
+			'pkg/C.hx', src, 'class C {\n\tprivate static inline final PAD:Int = 40;\n\n\tpublic function f():Void {\n\t\ttrace(PAD);\n\t}',
+			'\t\tfinal PAD'
 		);
 	}
 

@@ -49,10 +49,9 @@ using anyparse.macro.MetaInspect;
  * the `lowerStar*Branch` shape leaves are the enum half, and both have a
  * twin in `WriterLowering`. A change to one is a question about all four.
  */
-@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering,
-	anyparse.macro.OperatorLoopLowering, anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering,
-	anyparse.macro.StarFieldLowering, anyparse.macro.StarLoopLowering, anyparse.macro.StructFieldTrailLowering,
-	anyparse.macro.TriviaSlotNames)
+@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering, anyparse.macro.OperatorLoopLowering,
+	anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering, anyparse.macro.StarFieldLowering, anyparse.macro.StarLoopLowering,
+	anyparse.macro.StructFieldTrailLowering, anyparse.macro.TriviaSlotNames)
 final class StructSeqLowering {
 
 	/**
@@ -183,8 +182,8 @@ final class StructSeqLowering {
 			final ctorKwBody: Bool = isCtorKwBodyField(sc, child, node, typePath);
 			if (!ctorKwBody)
 				emitPreFieldWs(
-					parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot,
-					hasBeforeNewlineSlot, beforeNlLocal, beforeLeadingLocal, hasBeforeBlankSlot ? beforeBlankLocal : null,
+					parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot, hasBeforeNewlineSlot,
+					beforeNlLocal, beforeLeadingLocal, hasBeforeBlankSlot ? beforeBlankLocal : null,
 					hasBeforeLeadingNewlineSlot ? beforeLeadingNewlineLocal : null, afterLeadLocal
 				);
 			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia

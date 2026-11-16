@@ -107,8 +107,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 		// Both halves in ONE string: the narrowed declaration next to the untouched line below
 		// it, so neither assertion can be satisfied by a run that did nothing.
 		Assert.isTrue(
-			File.getContent('$dir/Main.hx').indexOf('var x:Main = a;\n\t\tvar y:Main = x;') != -1,
-			'the compiled file carries the narrowing'
+			File.getContent('$dir/Main.hx').indexOf('var x:Main = a;\n\t\tvar y:Main = x;') != -1, 'the compiled file carries the narrowing'
 		);
 		CliFixture.removeDir(dir);
 		#else

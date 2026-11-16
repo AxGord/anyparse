@@ -152,8 +152,7 @@ final class ExtractSuperclass {
 		// scan that missed it answered "class has no instance member" on one that plainly exists.
 		final found: Map<String, { node: QueryNode, run: Array<QueryNode>, span: Span }> = [];
 		MemberBranchScan.eachTypeMember(
-			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind),
-			(child, run) -> {
+			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind), (child, run) -> {
 				final nm: Null<String> = child.name;
 				final span: Null<Span> = child.span;
 				if (nm != null && span != null && !found.exists(nm)) found[nm] = { node: child, run: run, span: span };

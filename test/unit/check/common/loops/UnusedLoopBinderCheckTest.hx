@@ -162,8 +162,7 @@ class UnusedLoopBinderCheckTest extends Test {
 	@:killer('M-ULB-IMPORT-REBIND-BLIND')
 	public function testImportOfAnotherListNotDropped(): Void {
 		Assert.equals(
-			'import other.List;\n\n' + wrap('for (_ => v in l) g(v);'),
-			applyFix('import other.List;\n\n' + wrap('for (k => v in l) g(v);'))
+			'import other.List;\n\n' + wrap('for (_ => v in l) g(v);'), applyFix('import other.List;\n\n' + wrap('for (k => v in l) g(v);'))
 		);
 		Assert.equals(
 			'import haxe.ds.List;\n\n' + wrap('for (v in l) g(v);'), applyFix('import haxe.ds.List;\n\n' + wrap('for (k => v in l) g(v);'))

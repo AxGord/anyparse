@@ -164,8 +164,7 @@ class RedundantMapIterKeyCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }, { file: 'Tree.hx', source: tree }];
 		Assert.equals(
-			src.replace('for (_ => v in m)', 'for (v in m)'),
-			CanonicalEdit.applyEdits(src, CheckFixture.fixRun(check, files, plugin).edits)
+			src.replace('for (_ => v in m)', 'for (v in m)'), CanonicalEdit.applyEdits(src, CheckFixture.fixRun(check, files, plugin).edits)
 		);
 	}
 

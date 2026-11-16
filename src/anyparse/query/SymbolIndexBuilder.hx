@@ -819,8 +819,8 @@ final class SymbolIndexBuilder {
 	 * loop does not distinguish). Any OTHER lifted modifier still has no place and is dropped.
 	 */
 	private static function pushGuardedDecl(
-		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
-		externModifierKind: Null<String>, prefixed: Bool
+		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>, externModifierKind: Null<String>,
+		prefixed: Bool
 	): Void {
 		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
 		if (decl != null) {
@@ -1132,9 +1132,8 @@ final class SymbolIndexBuilder {
 	 * does not parse contributes nothing.
 	 */
 	private static function ambientImportsOf(
-		ambient: AmbientImportSource, infos: Array<FileInfo>, extracted: Map<String, Null<Array<ImportInfo>>>,
-		identity: (String) -> String, plugin: GrammarPlugin, shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>,
-		provider: Null<TypeInfoProvider>
+		ambient: AmbientImportSource, infos: Array<FileInfo>, extracted: Map<String, Null<Array<ImportInfo>>>, identity: (String) -> String,
+		plugin: GrammarPlugin, shape: RefShape, memberSeams: MemberSeams, abstractKinds: Array<String>, provider: Null<TypeInfoProvider>
 	): Null<Array<ImportInfo>> {
 		// The memo comes FIRST: one ambient source serves every file below it, so the scan for its
 		// indexed record runs once per source rather than once per reader.

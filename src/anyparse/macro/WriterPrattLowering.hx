@@ -1244,8 +1244,7 @@ final class WriterPrattLowering {
 				: null;
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $rulesExpr, false, false, _ternaryBreaks, _forceKeep, null,
-				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc,
-				$inlineBranchExpr
+				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc, $inlineBranchExpr
 			);
 			if ($v{tPrec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])

@@ -99,8 +99,7 @@ class RepeatedCastTest extends Test {
 			).length
 		);
 		Assert.equals(
-			0,
-			violations('class C { function m(o:Dynamic) { while (cast(o, B).more()) { cast(o, B).a(); o = cast(o, B).next; } } }').length
+			0, violations('class C { function m(o:Dynamic) { while (cast(o, B).more()) { cast(o, B).a(); o = cast(o, B).next; } } }').length
 		);
 	}
 

@@ -70,8 +70,7 @@ final class RemoveMember {
 	 * or an `Err`.
 	 */
 	public static function removeMember(
-		source: String, typeName: String, memberName: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true,
-		?optsJson: String
+		source: String, typeName: String, memberName: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = true, ?optsJson: String
 	): EditResult {
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, 'source') {
 			case Unparsed(message): return Err(message);

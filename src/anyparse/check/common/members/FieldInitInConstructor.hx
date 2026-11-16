@@ -173,8 +173,7 @@ final class FieldInitInConstructor extends RuleBase implements DefaultOff {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final fold: Null<Array<{ span: Span, text: String }>> = CtorFieldFold.ctorConditionalDefaultTernaryEdits(
-				source, span, plugin,
-				site -> tree == null ? null : extractedConstant(site, source, file, tree, plugin, resolution, inserts)
+				source, span, plugin, site -> tree == null ? null : extractedConstant(site, source, file, tree, plugin, resolution, inserts)
 			);
 			if (fold != null) for (edit in fold) edits.push(edit);
 		}

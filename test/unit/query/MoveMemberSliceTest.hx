@@ -768,8 +768,7 @@ class MoveMemberSliceTest extends Test {
 		final box: String = 'package pkg;\n\nclass Box {}';
 		assertErrContains(
 			move(
-				'pkg/Meters.hx', 'Meters', 'length', 'Box',
-				[{ file: 'pkg/Meters.hx', source: meters }, { file: 'pkg/Box.hx', source: box }]
+				'pkg/Meters.hx', 'Meters', 'length', 'Box', [{ file: 'pkg/Meters.hx', source: meters }, { file: 'pkg/Box.hx', source: box }]
 			),
 			'carries no `static` modifier yet is static anyway'
 		);

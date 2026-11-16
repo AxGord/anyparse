@@ -152,8 +152,8 @@ final class MapValueScan {
 	 * `@:access` grantee — the same three doors `prefer-final-field` closes.
 	 */
 	public static function proven(
-		name: String, bindingFrom: Int, source: String, root: QueryNode, index: Null<SymbolIndex>, plugin: GrammarPlugin,
-		seams: ValueSeams, ?claim: MapClaim
+		name: String, bindingFrom: Int, source: String, root: QueryNode, index: Null<SymbolIndex>, plugin: GrammarPlugin, seams: ValueSeams,
+		?claim: MapClaim
 	): Bool {
 		final asked: MapClaim = claim ?? NoNullValue;
 		if (MemberWriteScan.carriesBuildMacro(root, plugin)) return false;
@@ -229,8 +229,8 @@ final class MapValueScan {
 	 * `m[k]` is an index access that may be an assignment target).
 	 */
 	private static function subtreeSafe(
-		node: QueryNode, parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, name: String, from: Int,
-		to: Int, seams: ValueSeams, claim: MapClaim
+		node: QueryNode, parent: Null<QueryNode>, parentSlot: Int, grand: Null<QueryNode>, grandSlot: Int, name: String, from: Int, to: Int,
+		seams: ValueSeams, claim: MapClaim
 	): Bool {
 		final span: Null<Span> = node.span;
 		final inRange: Bool = span == null || (span.from >= from && span.from < to);

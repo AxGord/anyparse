@@ -158,8 +158,7 @@ class NativeDoorTest extends Test {
 	public function testARawPartKeepsTheDocWriter(): Void {
 		final record: DoorRawPart = { id: 'a', raw: JArray([JBool(true), JNull]), tuples: [[JBool(false), JNull]] };
 		Assert.equals(
-			'{"id":"a","raw":[true,null],"tuples":[[false,null]]}',
-			DoorRawPartWriter.write(record, JsonFormat.instance.compactWriteOptions)
+			'{"id":"a","raw":[true,null],"tuples":[[false,null]]}', DoorRawPartWriter.write(record, JsonFormat.instance.compactWriteOptions)
 		);
 	}
 

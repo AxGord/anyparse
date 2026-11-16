@@ -187,8 +187,7 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 
 	/** Collect every collapsible (declaration, switch) pair reachable under `node`. */
 	private static function collectMatches(
-		node: QueryNode, root: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams,
-		out: Array<Match>
+		node: QueryNode, root: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, out: Array<Match>
 	): Void {
 		if (s.blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;

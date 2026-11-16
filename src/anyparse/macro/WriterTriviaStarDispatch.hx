@@ -456,8 +456,7 @@ final class WriterTriviaStarDispatch {
 		final condBranch: Null<ShapeNode> = enumRule.children.find(branch -> branch.annotations.get(AnnotationKeys.BASE_CTOR) == condCtor);
 		if (condBranch == null)
 			Context.fatalError(
-				'WriterLowering: @:fmt(beforeDocCondLookThrough) condCtor "$condCtor" not found on enum $enumRuleName',
-				Context.currentPos()
+				'WriterLowering: @:fmt(beforeDocCondLookThrough) condCtor "$condCtor" not found on enum $enumRuleName', Context.currentPos()
 			);
 		if (condBranch.children.length != 1)
 			Context.fatalError(

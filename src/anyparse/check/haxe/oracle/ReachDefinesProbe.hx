@@ -148,8 +148,7 @@ final class ReachDefinesProbe {
 	public static function finish(probe: DefinesProbe): Null<ReachBuilds> {
 		final runs: Null<PendingRuns> = probe.runs;
 		return PhaseTimings.measure(
-			'reach defines probe (started ahead)',
-			() -> answerAll(probe.oracles, probe.held, probe.ready, runs == null ? [] : runs.await())
+			'reach defines probe (started ahead)', () -> answerAll(probe.oracles, probe.held, probe.ready, runs == null ? [] : runs.await())
 		);
 	}
 

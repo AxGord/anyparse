@@ -11,16 +11,9 @@ import utest.Assert;
 import utest.Test;
 
 /**
- * omega-chain-fill-operand-boundary: a `+`/`-` (opAddSubChain) fill packs
- * operands per line until one overflows. A CALL operand whose flat form ends
- * at EXACTLY `maxLineLength` must NOT stay glued on the packed line -- the
- * fork's fill boundary is `>=` (the operator that follows needs room), so the
- * chain breaks at the operator and the call stays intact. Before the fix
- * `shapeFillLine` used the Wadler-inclusive raw `Fill` (glue at a zero-budget
- * exact fit), so the call sat flush at the limit and its own args split
- * (`toUnits(\n\tmemoryValue\n)`) while the chain stayed flat. `shapeFillLine`
- * now reserves the `+ 1` fork-`>=` boundary on the chain `Fill` so a middle
- * operand ending at the limit wraps at the operator instead.
+ * A `+`/`-` (opAddSubChain) fill packs operands per line while the row stays within `maxLineLength`. A CALL operand
+ * whose flat form ends at EXACTLY the limit stays on the packed row whole: the call's own break probe agrees with the
+ * fill that a row of exactly the width fits, so its arguments never split (`toUnits(\n\tmemoryValue\n)`) to keep it there.
  */
 @:nullSafety(Strict)
 final class HxChainFillBoundaryCallOperandTest extends Test {
@@ -115,13 +108,15 @@ final class HxChainFillBoundaryCallOperandTest extends Test {
 		super();
 	}
 
-	public function testCallOperandEndingAtLimitKeepsChainBreak(): Void {
+	@:pin('control')
+	@:killer('M-PROBE-GLUED-ALWAYS')
+	public function testCallOperandEndingAtLimitStaysWhole(): Void {
 		final flat: String = 'class C {\n\tfunction f() {\n'
 			+ '\t\treturn \'DiagReport\' + line() + \'{\' + line() + \'  aa : \' + hostId + line() + \'  mem: \' + '
 			+ 'memoryValue + \' KB (\' + toUnits(memoryValue) + \' GB)\' + line() + \'  cpu: \' + coreTag + \'}\';\n\t}\n}';
 		final wrapped: String = 'class C {\n\tfunction f() {\n'
-			+ "\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB ('\n"
-			+ "\t\t\t+ toUnits(memoryValue) + ' GB)' + line() + '  cpu: ' + coreTag + '}';\n\t}\n}";
+			+ "\t\treturn 'DiagReport' + line() + '{' + line() + '  aa : ' + hostId + line() + '  mem: ' + memoryValue + ' KB ('"
+			+ " + toUnits(memoryValue)\n\t\t\t+ ' GB)' + line() + '  cpu: ' + coreTag + '}';\n\t}\n}";
 		final out: String = triviaWrite(flat);
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));

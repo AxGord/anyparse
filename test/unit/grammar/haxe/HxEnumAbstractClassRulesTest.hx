@@ -62,8 +62,7 @@ class HxEnumAbstractClassRulesTest extends Test {
 	@:killer('M-ENUM-ABSTRACT-RULES-KNOB-IGNORED')
 	public function testLineCommentGroupsCloseUpWithTheKeyOff(): Void {
 		Assert.equals(
-			'enum abstract Key(Int) {\n\t// arrows\n\tvar Left = 1;\n\tvar Right = 2;\n\t// letters\n\tvar A = 3;\n}\n',
-			write(GROUPED, OFF)
+			'enum abstract Key(Int) {\n\t// arrows\n\tvar Left = 1;\n\tvar Right = 2;\n\t// letters\n\tvar A = 3;\n}\n', write(GROUPED, OFF)
 		);
 	}
 

@@ -1007,8 +1007,7 @@ final class OracleGenerationTest extends Test {
 		rival.command = 'the rival command';
 		File.saveContent('$dir/rival.json', GenerationRecordWriter.write(rival, JsonFormat.instance.compactWriteOptions));
 		final other: OracleConfig = declared(
-			dir, 'printf \'%s\\n\' \'-cp .\' \'-main Main\' > o.hxml && echo \'# rival\' >> gen.hxml && cp rival.json \'$record\'',
-			'o.hxml'
+			dir, 'printf \'%s\\n\' \'-cp .\' \'-main Main\' > o.hxml && echo \'# rival\' >> gen.hxml && cp rival.json \'$record\'', 'o.hxml'
 		);
 		final ready: Array<OracleConfig> = OracleGeneration.prepare([current, other]).oracles;
 		OracleGeneration.release([current, other]);

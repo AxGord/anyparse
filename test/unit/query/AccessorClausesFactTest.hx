@@ -47,8 +47,7 @@ class AccessorClausesFactTest extends Test {
 		final caching: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		Assert.isTrue(caching.accessorClauses(SOURCE) == caching.spanTypeInfo(SOURCE).accessorClauses);
 		Assert.same(
-			clausesByMember(SOURCE, new HaxeQueryPlugin().accessorClauses(SOURCE)),
-			clausesByMember(SOURCE, caching.accessorClauses(SOURCE))
+			clausesByMember(SOURCE, new HaxeQueryPlugin().accessorClauses(SOURCE)), clausesByMember(SOURCE, caching.accessorClauses(SOURCE))
 		);
 	}
 

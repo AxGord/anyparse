@@ -374,8 +374,7 @@ final class SourceCommand implements CliCommand {
 	 * one line), and ends at the node's body or, for a type, where its first listed member begins.
 	 */
 	private static function headerOf(
-		rows: Array<OutlineRow>, k: Int, until: Null<Int>, source: String, shape: RefShape, comments: Array<CommentTok>,
-		folded: Array<Span>
+		rows: Array<OutlineRow>, k: Int, until: Null<Int>, source: String, shape: RefShape, comments: Array<CommentTok>, folded: Array<Span>
 	): String {
 		final node: QueryNode = rows[k].entry.node;
 		final span: Null<Span> = node.span;

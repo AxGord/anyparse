@@ -603,8 +603,7 @@ final class WriterCtorBlankLowering {
 		} = buildBetweenCtorPatterns(enumRule, ctorNames, transparentCtorNames, pos);
 		for (name in ctorNames) if (built.matched.indexOf(name) < 0)
 			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$name" not found in enum $enumRuleName',
-				Context.currentPos()
+				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$name" not found in enum $enumRuleName', Context.currentPos()
 			);
 		for (name in transparentCtorNames) if (built.transparentMatched.indexOf(name) < 0)
 			Context.fatalError(

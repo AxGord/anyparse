@@ -131,8 +131,8 @@ final class WriterMetaLineEndLowering {
 	 * tail no arm names is no metadata site: `sourceSep` stands.
 	 */
 	public static function chainJoinExpr(
-		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, fieldAccess: Expr, sourceSep: Expr,
-		trivia: Bool, doc: Expr
+		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, fieldAccess: Expr, sourceSep: Expr, trivia: Bool,
+		doc: Expr
 	): Null<Expr> {
 		final walk: Null<ChainWalk> = chainWalk(ctx, field, typePath, fieldAccess, trivia);
 		if (walk == null) return null;

@@ -182,8 +182,7 @@ class TypedFactsProbeTest extends Test {
 			Assert.isTrue(call('FDynamic', 'foo'), 'a Dynamic call');
 			Assert.isTrue(call('FEnum', 'E.B'), 'an enum constructor call');
 			Assert.isTrue(
-				main.calls.exists(c -> c.access == 'local' && StringTools.startsWith(c.target ?? '', 'Main.main@')),
-				'a local function call'
+				main.calls.exists(c -> c.access == 'local' && StringTools.startsWith(c.target ?? '', 'Main.main@')), 'a local function call'
 			);
 			Assert.isTrue(main.calls.exists(c -> c.access == 'value' && c.receiver == '(Int)->Int'), 'a call of a function value');
 			Assert.isTrue(main.fields.exists(f -> f.access == 'FClosure' && f.field == 'm'), 'a method closure');
@@ -680,8 +679,7 @@ class TypedFactsProbeTest extends Test {
 			Assert.equals(3, node.elementWrites.filter(w -> readOfItems(w.receiverAt)).length, 'writes through the field');
 			final local: Int = source.indexOf('loc[0]');
 			Assert.isTrue(
-				node.elementWrites.exists(w -> w.receiverAt?.span.from == local && w.receiver == 'Array<Int>'),
-				'no write through the local'
+				node.elementWrites.exists(w -> w.receiverAt?.span.from == local && w.receiver == 'Array<Int>'), 'no write through the local'
 			);
 			Assert.isTrue(node.reads.exists(r -> r.at.span.from == local), 'the local is not read where the write points');
 			final call: Int = source.indexOf('get()[0]');

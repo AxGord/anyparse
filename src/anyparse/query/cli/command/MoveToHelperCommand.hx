@@ -81,8 +81,7 @@ final class MoveToHelperCommand implements CliCommand {
 		final slash: Int = srcFile.lastIndexOf('/');
 		final defaultHelperFile: String = '${slash < 0 ? '' : srcFile.substring(0, slash + 1)}$helper${CliArgs.sourceExtensionOf(lang)}';
 		final result: MoveResult = MoveToHelper.move(
-			srcFile, srcTypeName, names, helper, helperFile ?? defaultHelperFile, opts['--param'], scopeFiles, plugin,
-			plugin.typeRefShape()
+			srcFile, srcTypeName, names, helper, helperFile ?? defaultHelperFile, opts['--param'], scopeFiles, plugin, plugin.typeRefShape()
 		);
 		return emit(result, scopeFiles, srcTypeName, helper, opts['--arms'], flags, plugin, ledger);
 	}

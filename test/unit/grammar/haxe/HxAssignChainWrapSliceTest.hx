@@ -89,13 +89,12 @@ final class HxAssignChainWrapSliceTest extends Test {
 	}
 
 	public function testOverflowingAssignChainBreaksAfterEquals(): Void {
-		// Glued statement line = 157 columns at tab=4 (8 cols of indent + 149
-		// chars). Six operands pack onto the head line (121 cols), the fill
-		// breaks after the sixth `=` and the tail lands at +1 indent (47 cols).
+		// The glued statement line overflows; seven operands pack onto the head line, which ends with its `=` exactly
+		// at the limit, and the tail lands at +1 indent.
 		final flat: String = 'class Sample {\n\n\tfunction run() {\n\t\t_seg1.onFinished = _seg2.onFinished = _seg3.onFinished = '
 			+ '_seg4.onFinished = _seg5.onFinished = _seg6.onFinished = _seg7.onFinished = stopTheSequence;\n\t}\n\n}';
 		final wrapped: String = 'class Sample {\n\n\tfunction run() {\n\t\t_seg1.onFinished = _seg2.onFinished = _seg3.onFinished = '
-			+ '_seg4.onFinished = _seg5.onFinished = _seg6.onFinished =\n\t\t\t_seg7.onFinished = stopTheSequence;\n\t}\n\n}';
+			+ '_seg4.onFinished = _seg5.onFinished = _seg6.onFinished = _seg7.onFinished =\n\t\t\tstopTheSequence;\n\t}\n\n}';
 		Assert.equals(wrapped, triviaWrite(flat));
 		Assert.equals(wrapped, triviaWrite(wrapped));
 	}

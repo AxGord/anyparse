@@ -72,8 +72,7 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 
 	public function new() {
 		super(
-			RULE_ID,
-			'an if-else, if-expression or ternary with a top-level negated condition — invert the condition and swap the branches',
+			RULE_ID, 'an if-else, if-expression or ternary with a top-level negated condition — invert the condition and swap the branches',
 			RuleCategory.Control
 		);
 	}

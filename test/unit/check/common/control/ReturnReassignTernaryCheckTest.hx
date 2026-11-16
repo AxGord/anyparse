@@ -316,8 +316,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 				.length
 		);
 		Assert.equals(
-			0,
-			violations(fn('final g = (z) -> {\n\t\t\tvar x = 0;\n\t\t\tif (a) x = 1;\n\t\t\treturn x;\n\t\t};\n\t\treturn g(0);')).length
+			0, violations(fn('final g = (z) -> {\n\t\t\tvar x = 0;\n\t\t\tif (a) x = 1;\n\t\t\treturn x;\n\t\t};\n\t\treturn g(0);')).length
 		);
 	}
 

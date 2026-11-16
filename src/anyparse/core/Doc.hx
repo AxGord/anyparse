@@ -567,8 +567,8 @@ enum Doc {
 	 * and packs cleanly with its siblings. `tailReserve` is the width of the
 	 * post-Fill same-line content — trailing punctuation plus a close delimiter
 	 * emitted OUTSIDE the Fill but on the same line as its last packed item —
-	 * subtracted from the per-item fit budget so that last item leaves room for
-	 * the tail (ω-fill-tail-reserve).
+	 * which the last item leaves room for; any other item leaves room for the
+	 * separator's head (its text before the `Line`). A row exactly the width fits.
 	 */
 	Fill(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
 

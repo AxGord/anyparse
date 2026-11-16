@@ -559,8 +559,7 @@ class OperandTypingTest extends Test {
 
 	/** A builder's verdict: `accepted` when its one edit in `at` writes the condition positive, `refused` when it keeps the `!`. */
 	private static function positive(
-		check: Check, files: Array<{ file: String, source: String }>, found: Array<Violation>, file: String, at: Span,
-		plugin: GrammarPlugin
+		check: Check, files: Array<{ file: String, source: String }>, found: Array<Violation>, file: String, at: Span, plugin: GrammarPlugin
 	): String {
 		final edits: Array<FixEdit> = CheckFixture.fixIn(check, files, found, file, plugin).filter(e -> within(e.span, at));
 		return if (edits.length != 1)

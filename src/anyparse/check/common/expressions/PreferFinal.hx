@@ -129,8 +129,7 @@ final class PreferFinal extends RuleBase {
 	): Void {
 		final candidates: Array<Candidate> = [];
 		collect(
-			candidates, source, tree, null, scopeKinds, opaqueKinds, mutableKinds, shape.localDeclContinuationKinds ?? [],
-			shape.newExprKind
+			candidates, source, tree, null, scopeKinds, opaqueKinds, mutableKinds, shape.localDeclContinuationKinds ?? [], shape.newExprKind
 		);
 		final writesByName: Map<String, Array<Span>> = [];
 		for (c in candidates) {

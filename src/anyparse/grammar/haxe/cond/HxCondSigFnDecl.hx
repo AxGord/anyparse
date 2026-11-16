@@ -30,8 +30,8 @@ typedef HxCondSigFnDecl = {
 	@:lead('(')
 	var signature: HxCondSigRaw;
 
-	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'),
-		bodyPolicyForCtor('ExprBody', 'functionBody'), metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
+	@:fmt(leftCurly('blockLeftCurly'), bodyPolicyForCtor('UntypedBlockBody', 'untypedBody'), bodyPolicyForCtor('ExprBody', 'functionBody'),
+		metaBlockGlue('ExprBody', 'MetaExpr', 'BlockExpr'))
 	var body: HxFnBody;
 
 }

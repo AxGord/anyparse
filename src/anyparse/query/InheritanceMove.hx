@@ -240,8 +240,7 @@ final class InheritanceMove {
 		// still refused as a MOVE (`guarded`) — cutting it out of its branch would change which builds
 		// declare it — but the refusal now names the real reason.
 		MemberBranchScan.eachTypeMember(
-			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind),
-			(child, run) -> {
+			decl, shape, source, n -> MemberKinds.isFieldMemberKind(n.kind) || MemberKinds.FN_DECL_KINDS.contains(n.kind), (child, run) -> {
 				final span: Null<Span> = child.span;
 				if (hit != null || child.name != name || span == null) return;
 				final spanNN: Span = span;

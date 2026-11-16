@@ -554,8 +554,8 @@ class SingleStmtBraces {
 	private static function innerSelfTerminates(inner: EnumValue): Bool {
 		return switch Type.enumConstructor(inner) {
 			case 'ReturnStmt', 'ExprStmt': Type.enumParameters(inner)[1] == true;
-			case 'VoidReturnStmt', 'ThrowStmt', 'BreakStmt', 'ContinueStmt', 'DoWhileStmt', 'IfStmt', 'WhileStmt', 'ForStmt',
-				'SwitchStmt', 'SwitchStmtBare', 'TryCatchStmt', 'TryCatchStmtBare':
+			case 'VoidReturnStmt', 'ThrowStmt', 'BreakStmt', 'ContinueStmt', 'DoWhileStmt', 'IfStmt', 'WhileStmt', 'ForStmt', 'SwitchStmt',
+				'SwitchStmtBare', 'TryCatchStmt', 'TryCatchStmtBare':
 				true;
 			// Brace-bearing already - it self-terminates on `}`, but neither caller wants it:
 			// gate 3 would unwrap `{ { x; } }` one level (that is `unnecessary-block`'s job) and
@@ -701,8 +701,8 @@ class SingleStmtBraces {
 			case 'Ternary': 2;
 			// Every binary infix operator, incl. the arrows: the right operand is last.
 			// `Is` / `HxType.Arrow` put a type there, which the walk treats conservatively.
-			case 'Mul', 'Div', 'Mod', 'Add', 'Sub', 'Shl', 'UShr', 'Shr', 'BitOr', 'BitAnd', 'BitXor', 'Eq', 'NotEq', 'LtEq', 'GtEq',
-				'Lt', 'Gt', 'Interval', 'Is', 'And', 'Or', 'NullCoal', 'In', 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign',
+			case 'Mul', 'Div', 'Mod', 'Add', 'Sub', 'Shl', 'UShr', 'Shr', 'BitOr', 'BitAnd', 'BitXor', 'Eq', 'NotEq', 'LtEq', 'GtEq', 'Lt',
+				'Gt', 'Interval', 'Is', 'And', 'Or', 'NullCoal', 'In', 'Assign', 'AddAssign', 'SubAssign', 'MulAssign', 'DivAssign',
 				'ModAssign', 'ShlAssign', 'UShrAssign', 'ShrAssign', 'BitOrAssign', 'BitAndAssign', 'BitXorAssign', 'NullCoalAssign',
 				'BoolAndAssign', 'BoolOrAssign', 'ThinArrow', 'Arrow':
 				1;

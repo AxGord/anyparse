@@ -44,8 +44,7 @@ final class HaxePropertyStorage {
 	 * it had.
 	 */
 	public static function modsOf(
-		node: QueryNode, category: NamingCategory, head: Bool, properties: Null<() -> Map<Int, PropertyClause>>,
-		run: () -> Array<QueryNode>
+		node: QueryNode, category: NamingCategory, head: Bool, properties: Null<() -> Map<Int, PropertyClause>>, run: () -> Array<QueryNode>
 	): Array<String> {
 		final span: Null<Span> = node.span;
 		if (category != NamingCategory.Field || !head || properties == null || span == null) return [];

@@ -73,8 +73,7 @@ class PreferTernaryExpressionCheckTest extends Test {
 
 	public function testSwitchBranchNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations('class C {\n\tfunction f():Void {\n\t\tvar x = if (c) 1 else switch v {\n\t\t\tcase _: 2;\n\t\t};\n\t}\n}').length
+			0, violations('class C {\n\tfunction f():Void {\n\t\tvar x = if (c) 1 else switch v {\n\t\t\tcase _: 2;\n\t\t};\n\t}\n}').length
 		);
 	}
 

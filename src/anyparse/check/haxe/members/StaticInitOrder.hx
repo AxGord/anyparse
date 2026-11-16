@@ -28,8 +28,7 @@ final class StaticInitOrder extends HaxeRule implements NoAutofix {
 
 	public function new() {
 		super(
-			RULE_ID,
-			'a static field initializer reading a static field declared below it, which is not initialized yet when the read runs',
+			RULE_ID, 'a static field initializer reading a static field declared below it, which is not initialized yet when the read runs',
 			RuleCategory.Members
 		);
 	}

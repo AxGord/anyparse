@@ -92,8 +92,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 
 	public function new() {
 		super(
-			'catch-dynamic', 'a catch clause whose declared type is Dynamic or Any — prefer catch (exception:Exception)',
-			RuleCategory.Types
+			'catch-dynamic', 'a catch clause whose declared type is Dynamic or Any — prefer catch (exception:Exception)', RuleCategory.Types
 		);
 	}
 

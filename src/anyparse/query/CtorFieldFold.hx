@@ -502,8 +502,7 @@ final class CtorFieldFold {
 	 * bytes the assignment ends with, so the rewritten statement keeps them verbatim.
 	 */
 	private static function guardedFieldAssign(
-		source: String, regions: Array<LexRegion>, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode,
-		shape: RefShape
+		source: String, regions: Array<LexRegion>, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
 	): Null<GuardedCtorInit> {
 		final stmtSpan: Null<Span> = stmt.span;
 		final param: Null<String> = nullGuardParamName(stmt, shape);
@@ -667,8 +666,7 @@ final class CtorFieldFold {
 	 * copied verbatim, up to the end of the replaced region.
 	 */
 	private static function conditionalFieldAssign(
-		source: String, regions: Array<LexRegion>, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode,
-		shape: RefShape
+		source: String, regions: Array<LexRegion>, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
 	): Null<ConditionalCtorInit> {
 		final stmtSpan: Null<Span> = stmt.span;
 		if (stmt.children.length != 2 || stmtSpan == null) return null;

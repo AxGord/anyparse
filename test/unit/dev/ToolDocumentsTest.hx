@@ -161,8 +161,7 @@ final class ToolDocumentsTest extends Test {
 			toolResponse: { stdout: 'o', stderr: '' }
 		}, JsonFormat.instance.compactWriteOptions);
 		Assert.equals(
-			'{"session_id":"s","cwd":"/","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":"o","stderr":""}}',
-			line
+			'{"session_id":"s","cwd":"/","tool_name":"Bash","tool_input":{"command":"ls"},"tool_response":{"stdout":"o","stderr":""}}', line
 		);
 		final payload: HookPayload = HookPayloadParser.parse(line);
 		Assert.equals('s', payload.sessionId);

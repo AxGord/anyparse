@@ -614,8 +614,8 @@ final class LintFixDriver {
 	 * snapshot alone and writes those bytes back. A path the filesystem refuses to delete stays held.
 	 */
 	private static function commitRemoves(
-		removes: Array<String>, files: Array<{ file: String, source: String }>, touchedThisPass: Array<String>,
-		changedFiles: Array<String>, nextActive: Array<{ file: String, source: String }>, editsOf: Null<Map<String, Int>>
+		removes: Array<String>, files: Array<{ file: String, source: String }>, touchedThisPass: Array<String>, changedFiles: Array<String>,
+		nextActive: Array<{ file: String, source: String }>, editsOf: Null<Map<String, Int>>
 	): Array<String> {
 		final removed: Array<String> = [];
 		for (path in removes) if (CliIo.deletePath(path)) {

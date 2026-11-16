@@ -603,8 +603,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 		final src: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: listedThings.exists(function(subItem) {\n'
 			+ '\t\t\t\treturn subItem.kind == ItemData.KIND_SUBSTITUTE;\n\t\t\t});\n\t\t\tcase _: bar();\n\t\t}\n\t}\n}\n';
 		final out: String = write(
-			src,
-			'{"wrapping": {"maxLineLength": 58}, "sameLine": {"caseSiblings": "anyBreak", "caseBody": "fitLine", "ifBody": "fitLine"}}'
+			src, '{"wrapping": {"maxLineLength": 58}, "sameLine": {"caseSiblings": "anyBreak", "caseBody": "fitLine", "ifBody": "fitLine"}}'
 		);
 		Assert.isTrue(
 			out.indexOf('\t\t\tcase 1:\n\t\t\t\tlistedThings.exists(') != -1, 'the glued sibling must really have broken: <$out>'

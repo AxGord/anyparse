@@ -72,8 +72,7 @@ final class ArmMoveTest extends Test {
 			Assert.isTrue(newDocument.indexOf('"$ARM"') > 0, 'the record sits in the document of the new package');
 			final moved: Null<ArmRecord> = ArmRegistry.read(arms).find(r -> r.key == ARM);
 			Assert.equals(
-				'zz.moved.$simple', JValueTools.stringAt(JValueParser.parse(moved?.text ?? '{}'), 'type'),
-				'the record names the moved type'
+				'zz.moved.$simple', JValueTools.stringAt(JValueParser.parse(moved?.text ?? '{}'), 'type'), 'the record names the moved type'
 			);
 			Assert.isTrue(FileSystem.exists(to) && !FileSystem.exists(from));
 			final status: Int = ArmApply.applyOnly(repo, [ARM]);

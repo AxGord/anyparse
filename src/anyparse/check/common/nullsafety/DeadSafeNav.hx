@@ -36,8 +36,7 @@ final class DeadSafeNav extends RuleBase implements ConfigAware {
 
 	public function new() {
 		super(
-			'dead-safe-nav', 'a null-safe access (?.) whose receiver is already non-null on every path reaching it',
-			RuleCategory.NullSafety
+			'dead-safe-nav', 'a null-safe access (?.) whose receiver is already non-null on every path reaching it', RuleCategory.NullSafety
 		);
 	}
 

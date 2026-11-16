@@ -39,8 +39,8 @@ import anyparse.grammar.haxe.stmt.HxStatement;
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
 
-	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'), clearExprPositionNonTail,
-		uniformStmtBlanks, relocateTrailingComments)
+	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'), clearExprPositionNonTail, uniformStmtBlanks,
+		relocateTrailingComments)
 	@:lead('{')
 	@:trail('}')
 	@:trivia

@@ -737,8 +737,8 @@ final class Linter {
 	 * those gates and BEFORE supersession: a finding the caller withholds must not take the finding it supersedes with it.
 	 */
 	public static function collect(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>,
-		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true, ?narrow: (Array<Violation>) -> Array<Violation>
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, checks: Array<Check>, ?resolveConfig: (String) -> LintConfig,
+		applyEnablement: Bool = true, ?narrow: (Array<Violation>) -> Array<Violation>
 	): Array<Violation> {
 		final resolve: Null<(String) -> LintConfig> = resolveConfig;
 		for (check in checks) if (check is CrossFileAnchored)

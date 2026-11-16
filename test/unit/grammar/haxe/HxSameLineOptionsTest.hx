@@ -260,8 +260,8 @@ class HxSameLineOptionsTest extends Test {
 		// so the `else` takes its own line; the inline collapse stays an expression-position shape (`case POpen: …` of a
 		// value switch), placed by the expression knobs.
 		final out: String = writeWithBodyPolicy(
-			'class F { function f():Void { if (x) doA(); else doB(); } }', anyparse.format.BodyPolicy.Same,
-			anyparse.format.BodyPolicy.Same, true
+			'class F { function f():Void { if (x) doA(); else doB(); } }', anyparse.format.BodyPolicy.Same, anyparse.format.BodyPolicy.Same,
+			true
 		);
 		Assert.isTrue(out.indexOf('if (x)\n\t\t\tdoA();\n\t\telse\n\t\t\tdoB();') != -1, 'expected the ladder in: <$out>');
 	}

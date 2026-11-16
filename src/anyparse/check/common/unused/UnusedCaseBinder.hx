@@ -158,8 +158,7 @@ final class UnusedCaseBinder extends RuleBase {
 
 	/** Every unread binder in `tree`, in document order. */
 	private static function collect(
-		seams: CaseSeams, plugin: GrammarPlugin, file: String, tree: QueryNode, source: String, constants: Array<String>,
-		index: SymbolIndex
+		seams: CaseSeams, plugin: GrammarPlugin, file: String, tree: QueryNode, source: String, constants: Array<String>, index: SymbolIndex
 	): Array<Candidate> {
 		final out: Array<Candidate> = [];
 		final scope: Null<PatternNameScope> = PatternNameScope.of(file, tree, plugin, index);

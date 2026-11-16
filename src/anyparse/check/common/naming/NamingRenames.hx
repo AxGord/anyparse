@@ -400,8 +400,7 @@ final class NamingRenames {
 	 * drive the inheritance + rtti guards through the resolution scope.
 	 */
 	private static function correctedFieldName(
-		decl: NamedDecl, policy: NamingPolicy, ownerName: String, resolutionIndex: SymbolIndex, declFile: String,
-		?refusal: (String) -> Void
+		decl: NamedDecl, policy: NamingPolicy, ownerName: String, resolutionIndex: SymbolIndex, declFile: String, ?refusal: (String) -> Void
 	): Null<String> {
 		final say: Null<(String) -> Void> = refusal;
 		function no(reason: String): Null<String> {
@@ -430,8 +429,8 @@ final class NamingRenames {
 	 * report-only. Returns the per-file `CrossFileEdits` slices.
 	 */
 	public static function crossFileRenameFor(
-		v: Violation, sourceByFile: Map<String, String>, support: NamingSupport, shape: RefShape, plugin: GrammarPlugin,
-		index: SymbolIndex, resolutionIndex: SymbolIndex
+		v: Violation, sourceByFile: Map<String, String>, support: NamingSupport, shape: RefShape, plugin: GrammarPlugin, index: SymbolIndex,
+		resolutionIndex: SymbolIndex
 	): Null<CrossFileRename> {
 		final candidate: Null<CrossFileCandidate> = crossFileCandidate(v, sourceByFile, support, plugin, index, resolutionIndex);
 		if (candidate == null) return null;

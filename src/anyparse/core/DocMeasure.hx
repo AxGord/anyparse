@@ -1049,8 +1049,8 @@ final class DocMeasure {
 			// thresholds are decided at layout, not here); the force-flat /
 			// conditional-indent markers are render-time state transparent to
 			// static token-width measurement.
-			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
-				IfBreak(_, inner), IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner),
+				IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
 				IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 				IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),

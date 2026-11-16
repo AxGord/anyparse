@@ -149,8 +149,7 @@ class PreferTryExpressionReturnCheckTest extends Test {
 
 	public function testEmptyCatchNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations('class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {}\n\t}\n}').length
+			0, violations('class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {}\n\t}\n}').length
 		);
 	}
 

@@ -31,8 +31,7 @@ final class JValueDocumentTest extends Test {
 	public function testATabbedDocumentIndentsEachLevelByOneTab(): Void {
 		final value: JValue = JValueParser.parse('{"e":{"a":[1]},"o":{}}');
 		Assert.equals(
-			'{\n\t"e": {\n\t\t"a": [\n\t\t\t1\n\t\t]\n\t},\n\t"o": {}\n}',
-			JValueWriter.write(value, JsonFormat.instance.tabbedWriteOptions)
+			'{\n\t"e": {\n\t\t"a": [\n\t\t\t1\n\t\t]\n\t},\n\t"o": {}\n}', JValueWriter.write(value, JsonFormat.instance.tabbedWriteOptions)
 		);
 	}
 

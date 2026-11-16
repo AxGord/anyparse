@@ -147,8 +147,7 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 	/** A non-assignment arm body disqualifies. */
 	public function testNonAssignmentArmNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: trace(\'a\');\n\t\t\tcase _: x = \'d\';\n\t\t}')).length
+			0, violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: trace(\'a\');\n\t\t\tcase _: x = \'d\';\n\t\t}')).length
 		);
 	}
 

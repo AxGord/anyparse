@@ -137,8 +137,7 @@ class NullableSwitchMissingNullCheckTest extends Test {
 
 	public function testCoalescedSubjectNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations(mod('function f(e:Null<Colour>):Void { switch (e ?? Red) { case Red: trace(1); case Green: trace(2); } }')).length
+			0, violations(mod('function f(e:Null<Colour>):Void { switch (e ?? Red) { case Red: trace(1); case Green: trace(2); } }')).length
 		);
 	}
 

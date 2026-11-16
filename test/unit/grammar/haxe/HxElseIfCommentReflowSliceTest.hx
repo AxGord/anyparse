@@ -149,8 +149,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 	private static final GLUED_BODY_SRC: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a)\n\t\t\t\tone();\n\t\t\telse\n'
 		+ '\t\t\t\t// note\n\t\t\tif (b)\n\t\t\t\tcallWithSeveralArgs(alphaValue, betaValue, gammaValue, deltaValue);\n\t\t};\n\t}\n}';
 	private static final GLUED_BODY_CANON: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a) one();\n\t\t\telse\n'
-		+ '\t\t\t\t// note\n\t\t\t\tif (b)\n\t\t\t\t\tcallWithSeveralArgs(alphaValue,\n\t\t\t\t\t\tbetaValue, gammaValue,\n'
-		+ '\t\t\t\t\t\tdeltaValue);\n\t\t};\n\t}\n}';
+		+ '\t\t\t\t// note\n\t\t\t\tif (b)\n\t\t\t\t\tcallWithSeveralArgs(alphaValue,\n\t\t\t\t\t\tbetaValue, gammaValue, deltaValue);\n'
+		+ '\t\t};\n\t}\n}';
 
 	/** The probe body followed by an `else`, so a walk that stepped OVER the probe would anchor there. */
 	private static final GLUED_BODY_ELSE_SRC: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a)\n\t\t\t\tone();\n\t\t\telse\n'
@@ -158,8 +158,8 @@ final class HxElseIfCommentReflowSliceTest extends Test {
 		+ '\t\t\telse\n\t\t\t\tfallbackStep();\n\t\t};\n\t}\n}';
 
 	private static final GLUED_BODY_ELSE_CANON: String = 'class C {\n\tfunction f() {\n\t\tfinal r = {\n\t\t\tif (a) one();\n\t\t\telse\n'
-		+ '\t\t\t\t// note\n\t\t\t\tif (b)\n\t\t\t\t\tcallWithSeveralArgs(alphaValue,\n\t\t\t\t\t\tbetaValue, gammaValue,\n'
-		+ '\t\t\t\t\t\tdeltaValue);\n\t\t\t\telse fallbackStep();\n\t\t};\n\t}\n}';
+		+ '\t\t\t\t// note\n\t\t\t\tif (b)\n\t\t\t\t\tcallWithSeveralArgs(alphaValue,\n\t\t\t\t\t\tbetaValue, gammaValue, deltaValue);\n'
+		+ '\t\t\t\telse fallbackStep();\n\t\t};\n\t}\n}';
 
 	/**
 	 * An EMPTY then-body renders as one closed `{}` token with no interior break,

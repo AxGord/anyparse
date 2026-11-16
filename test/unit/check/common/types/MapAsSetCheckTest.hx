@@ -20,8 +20,7 @@ class MapAsSetCheckTest extends Test {
 		Assert.equals('map-as-set', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.equals(
-			'\'m\' is a map whose every value is true, used only as a set of keys — Array<Int> with contains() says the same',
-			vs[0].message
+			'\'m\' is a map whose every value is true, used only as a set of keys — Array<Int> with contains() says the same', vs[0].message
 		);
 	}
 

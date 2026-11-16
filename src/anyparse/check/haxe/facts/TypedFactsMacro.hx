@@ -312,8 +312,8 @@ final class TypedFactsMacro {
 	 * the type it belongs to, and numbered when it is the `overloadIndex`-th overload of its field.
 	 */
 	private function walkBody(
-		body: Null<TypedExpr>, id: String, kind: String, owner: String, isStatic: Bool, signature: String, home: String,
-		overloadIndex: Int, genericCopy: Bool
+		body: Null<TypedExpr>, id: String, kind: String, owner: String, isStatic: Bool, signature: String, home: String, overloadIndex: Int,
+		genericCopy: Bool
 	): Void {
 		if (body == null) return;
 		final walk: TypedFactsWalk = new TypedFactsWalk(

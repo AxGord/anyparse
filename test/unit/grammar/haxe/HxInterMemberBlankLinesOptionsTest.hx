@@ -76,8 +76,7 @@ class HxInterMemberBlankLinesOptionsTest extends Test {
 	public function testAfterVarsOneInsertsBlankOnFunctionToVar(): Void {
 		final out: String = writeWith('class M { public function a():Void {} public var b:Int; }', 0, 0, 1);
 		Assert.isTrue(
-			out.indexOf('a():Void {}\n\n\tpublic var b') != -1,
-			'expected blank line at function→var transition with afterVars=1 in: <$out>'
+			out.indexOf('a():Void {}\n\n\tpublic var b') != -1, 'expected blank line at function→var transition with afterVars=1 in: <$out>'
 		);
 	}
 

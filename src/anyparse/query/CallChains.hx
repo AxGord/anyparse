@@ -21,8 +21,8 @@ final class CallChains {
 	 * `sourceOf` supplies file sources for `line:col` rendering.
 	 */
 	public static function render(
-		graph: CallGraph, rootId: String, depth: Int, outward: Bool, kinds: Null<Array<EdgeKind>>,
-		sourceOf: (file: String) -> Null<String>, maxLines: Int
+		graph: CallGraph, rootId: String, depth: Int, outward: Bool, kinds: Null<Array<EdgeKind>>, sourceOf: (file: String) -> Null<String>,
+		maxLines: Int
 	): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add('${nodeLabel(graph, rootId, sourceOf)}\n');

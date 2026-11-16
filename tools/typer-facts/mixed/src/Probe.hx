@@ -196,8 +196,8 @@ class Probe {
 			a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22
 		]);
 		trace([
-			l1, l2, l3, l4, l5, l6, l7, t1, t2, t3, t4, t5, t6, dd, dm, dm2, o1, o2, o3, o4, o5, m2, m3, m4, m5, m6, e1, e2, e3, e4, e5,
-			e6, col, col2, col3, col4, pk, pl, x64, y64, x32, x32b, x32c, sm, ii, sh, paren, ra, e7
+			l1, l2, l3, l4, l5, l6, l7, t1, t2, t3, t4, t5, t6, dd, dm, dm2, o1, o2, o3, o4, o5, m2, m3, m4, m5, m6, e1, e2, e3, e4, e5, e6,
+			col, col2, col3, col4, pk, pl, x64, y64, x32, x32b, x32c, sm, ii, sh, paren, ra, e7
 		]);
 	}
 

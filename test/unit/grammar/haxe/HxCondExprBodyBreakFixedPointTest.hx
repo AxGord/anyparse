@@ -83,11 +83,11 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 		+ '\t\t#else\n\t\t\t{alpha: x.aaaaaaaaaaaaaaaaaaaaaa}\n\t\t#end\n\t\t];\n\t}\n}';
 
 	/**
-	 * The call of a comprehension at `k = 57` under `CFG_OBJECT_RULE`, laid out in one write: the call
+	 * The call of a comprehension at `k = 58` under `CFG_OBJECT_RULE`, laid out in one write: the call
 	 * stays glued to its comprehension, which a layout measured only once would open around.
 	 */
-	private static final CALL_OF_COMPREHENSION_57: String = 'class M {\n\tfunction f() {\n\t\tvar y = foo(aaaa, [for (x in xs) #if debug {\n'
-		+ '\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\tbeta: \'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\'\n'
+	private static final COMPREHENSION_CALL_58: String = 'class M {\n\tfunction f() {\n\t\tvar y = foo(aaaa, [for (x in xs) #if debug {\n'
+		+ '\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa,\n\t\t\tbeta: \'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk\'\n'
 		+ '\t\t} #else {\n\t\t\talpha: x.aaaaaaaaaaaaaaaaaaaaaa\n\t\t} #end\n\t\t]);\n\t}\n}';
 
 	public function new(): Void {
@@ -123,8 +123,8 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 
 	/**
 	 * A comprehension nested in a call: where the call opening is what pushes the second literal past the limit, the
-	 * measure follows the layout it committed and reads that literal back too (`CFG_OBJECT_RULE`, `k` 57-60). One measure
-	 * round still writes a fixed point there, so the exact text of `k` 57 is what tells the two apart.
+	 * measure follows the layout it committed and reads that literal back too (`CFG_OBJECT_RULE`, `k` 58-61). One measure
+	 * round still writes a fixed point there, so the exact text of `k` 58 is what tells the two apart.
 	 */
 	@:pin('control')
 	@:killer('M-BREAKMARK-ONE-ROUND')
@@ -134,7 +134,7 @@ final class HxCondExprBodyBreakFixedPointTest extends Test {
 			assertOneWrite(callOfComprehension(k), CFG_OBJECT_RULE, k);
 		}
 		Assert.equals(
-			CALL_OF_COMPREHENSION_57, HxWriteFixture.triviaWrite(callOfComprehension(57), HxWriteFixture.listsKeepSource(CFG_OBJECT_RULE))
+			COMPREHENSION_CALL_58, HxWriteFixture.triviaWrite(callOfComprehension(58), HxWriteFixture.listsKeepSource(CFG_OBJECT_RULE))
 		);
 	}
 

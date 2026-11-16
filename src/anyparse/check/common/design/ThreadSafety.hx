@@ -443,8 +443,8 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	 * `boundedRepeats` entry matching no function lands in `found`.
 	 */
 	private static function chainLists(
-		options: ThreadSafetyOptions, graph: CallGraph, positive: PositiveSinks, configured: Array<String>,
-		accessorPrefixes: Array<String>, closedWorld: Bool, found: Array<String>
+		options: ThreadSafetyOptions, graph: CallGraph, positive: PositiveSinks, configured: Array<String>, accessorPrefixes: Array<String>,
+		closedWorld: Bool, found: Array<String>
 	): ChainLists {
 		final option: (String) -> Array<String> = options.list;
 		final shortSinks: Array<String> = option('shortSinks');

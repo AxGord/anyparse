@@ -1159,8 +1159,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		return original == null
 			? null
 			: widestDiffering(
-				original, ctx.write(ctx.source.substring(0, span.from) + candidate + ctx.source.substring(span.to)),
-				ctx.metrics.indentWidth
+				original, ctx.write(ctx.source.substring(0, span.from) + candidate + ctx.source.substring(span.to)), ctx.metrics.indentWidth
 			);
 	}
 

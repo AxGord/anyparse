@@ -679,8 +679,8 @@ class MemberReachTest extends Test {
 			final libs: Array<{ file: String, source: String }> = [for (i in 0...library.length) { file: 'L$i.hx', source: library[i] }];
 			libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
 			return new MemberReach(
-				plugin, files, CheckFixture.index(files.concat(libs), plugin), true, MemberReach.MAX_LIBRARY_FILES,
-				MemberReach.MAX_VISITED, null, () -> complete
+				plugin, files, CheckFixture.index(files.concat(libs), plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED,
+				null, () -> complete
 			).mayReach(Region('F0.hx', regionOf(project[0])), { owner: 'C', name: 'items' }, Mutate);
 		}
 		assertMatch(run(false, [src], [base]), r -> r.match(Unknown(OutOfScope(_))));
@@ -1332,8 +1332,7 @@ class MemberReachTest extends Test {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final files: Array<{ file: String, source: String }> = [{ file: 'F0.hx', source: src }];
 		final reach: MemberReach = new MemberReach(
-			plugin, files, CheckFixture.index(files, plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, null,
-			() -> true
+			plugin, files, CheckFixture.index(files, plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, null, () -> true
 		);
 		final tree: QueryNode = plugin.parseFile(src);
 		final quiet: Array<QueryNode> = callsNamed(tree, 'quiet');

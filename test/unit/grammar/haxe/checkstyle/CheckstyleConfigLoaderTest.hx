@@ -43,9 +43,7 @@ class CheckstyleConfigLoaderTest extends Test {
 	public function testUnusedImportIgnoreModules(): Void {
 		Assert.same(
 			['haxe.macro.Expr', 'Foo'],
-			CheckstyleConfigLoader.loadOverrides(
-				'{"checks":[{"type":"UnusedImport","props":{"ignoreModules":["haxe.macro.Expr","Foo"]}}]}'
-			)
+			CheckstyleConfigLoader.loadOverrides('{"checks":[{"type":"UnusedImport","props":{"ignoreModules":["haxe.macro.Expr","Foo"]}}]}')
 				.unusedImportIgnoreModules
 		);
 	}

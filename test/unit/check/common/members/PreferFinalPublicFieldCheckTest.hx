@@ -812,8 +812,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** TWO constructor writes are not a single conditional default. */
 	public function testCtorConditionalDefaultTwoCtorWritesNotFlagged(): Void {
 		Assert.equals(
-			0,
-			violations('class C { public var n:Int = 1; public function new(?n:Int) { if (n != null) this.n = n; this.n = 2; } }').length
+			0, violations('class C { public var n:Int = 1; public function new(?n:Int) { if (n != null) this.n = n; this.n = 2; } }').length
 		);
 	}
 
@@ -841,8 +840,7 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	/** Control for the interpolation gates: a PLAIN string default is move-safe. */
 	public function testCtorConditionalDefaultPlainStringFlagged(): Void {
 		Assert.equals(
-			1,
-			violations("class C { public var s:String = 'plain'; public function new(?s:String) { if (s != null) this.s = s; } }").length
+			1, violations("class C { public var s:String = 'plain'; public function new(?s:String) { if (s != null) this.s = s; } }").length
 		);
 	}
 

@@ -90,8 +90,7 @@ class RemoveMemberDocSliceTest extends Test {
 	/** A doc written ABOVE the guard documents the guarded member, so it goes with it. */
 	public function testDocAboveTheGuardGoesWithTheMember(): Void {
 		final text: String = okMember(
-			'class C {\n\tvar keep:Int;\n\n\t/** Doc of drop. */\n\t#if !mobile\n\tpublic function drop():Void {}\n\t#end\n}\n', 'C',
-			'drop'
+			'class C {\n\tvar keep:Int;\n\n\t/** Doc of drop. */\n\t#if !mobile\n\tpublic function drop():Void {}\n\t#end\n}\n', 'C', 'drop'
 		);
 		Assert.equals(0, blockOpeners(text), text);
 		Assert.isTrue(text.indexOf('#if') == -1, text);

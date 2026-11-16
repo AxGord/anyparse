@@ -45,8 +45,7 @@ class ThreadSafetyErrorPathTest extends Test {
 	public function testABlockInTheHoldsOwnCatchIsInfo(): Void {
 		#if (sys || nodejs)
 		Assert.same(
-			['info A S.ui | Mutex.acquire', 'info B S.work | S._m'],
-			graded(run('', 'try { step(); } catch (e:Dynamic) { Report.send(); }'))
+			['info A S.ui | Mutex.acquire', 'info B S.work | S._m'], graded(run('', 'try { step(); } catch (e:Dynamic) { Report.send(); }'))
 		);
 		#else
 		Assert.pass('non-sys target');

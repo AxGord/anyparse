@@ -119,8 +119,7 @@ class MetadataLineEndSitesTest extends Test {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t@:c @:d\n\t\tvar y = 1;\n\t}\n}\n',
 			trivia(
-				'class C {\n\tfunction f() {\n\t\t@:c @:d var y = 1;\n\t}\n}\n',
-				o -> o.metadataVarLineEnd = MetadataLineEndPolicy.AfterLast
+				'class C {\n\tfunction f() {\n\t\t@:c @:d var y = 1;\n\t}\n}\n', o -> o.metadataVarLineEnd = MetadataLineEndPolicy.AfterLast
 			)
 		);
 		Assert.equals(

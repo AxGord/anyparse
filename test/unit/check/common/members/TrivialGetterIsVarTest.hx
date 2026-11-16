@@ -34,8 +34,7 @@ class TrivialGetterIsVarTest extends TrivialGetterCheckTestBase {
 		));
 		Assert.equals(1, vs.length);
 		Assert.equals(
-			'property \'angle\' is its own backing field; use \'var angle(default, set)\', remove get_angle and drop @:isVar',
-			vs[0].message
+			'property \'angle\' is its own backing field; use \'var angle(default, set)\', remove get_angle and drop @:isVar', vs[0].message
 		);
 	}
 

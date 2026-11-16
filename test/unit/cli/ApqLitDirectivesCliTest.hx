@@ -147,8 +147,7 @@ class ApqLitDirectivesCliTest extends Test {
 		#if (sys || nodejs)
 		final f: String = CliFixture.write('lit_directives', SRC);
 		Assert.equals(
-			0, Cli.run(['lit', '#if (sys)', f, '--include-directives', '--exact', '--exit-on-empty']),
-			'--exact matches the whole directive'
+			0, Cli.run(['lit', '#if (sys)', f, '--include-directives', '--exact', '--exit-on-empty']), '--exact matches the whole directive'
 		);
 		Assert.equals(
 			1, Cli.run(['lit', '#if', f, '--include-directives', '--exact', '--exit-on-empty']), '--exact rejects a prefix of it'

@@ -182,9 +182,8 @@ final class LintOracleRun {
 	 * (`factsEdited`). Unchanged with no oracle, or under `--no-oracle`.
 	 */
 	public static function withCompilerFacts(
-		compiler: OracleProvider, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>,
-		early: Null<StartedProbe<CompilerFacts>>, reflective: Null<Array<String>>, holders: Null<Array<String>>, ahead: AheadBuilds,
-		o: LintOpts
+		compiler: OracleProvider, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, early: Null<StartedProbe<CompilerFacts>>,
+		reflective: Null<Array<String>>, holders: Null<Array<String>>, ahead: AheadBuilds, o: LintOpts
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0 || o.noOracle) return resolution;
 		var probed: Bool = false;

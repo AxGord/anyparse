@@ -42,8 +42,7 @@ final class SimplifyBooleanTernary extends RuleBase {
 
 	public function new() {
 		super(
-			'simplify-boolean-ternary', 'a ternary with a boolean-literal branch that reduces to a boolean expression',
-			RuleCategory.Control
+			'simplify-boolean-ternary', 'a ternary with a boolean-literal branch that reduces to a boolean expression', RuleCategory.Control
 		);
 	}
 
@@ -193,8 +192,7 @@ final class SimplifyBooleanTernary extends RuleBase {
 	): Void {
 		final kids: Array<QueryNode> = node.children;
 		final childRetType: Null<String> = TypeResolver.childReturnTypeSource(
-			node, source, retType, shape.functionKinds ?? [], shape.lambdaKinds ?? [], shape.functionBodyKinds ?? [],
-			shape.paramKinds ?? []
+			node, source, retType, shape.functionKinds ?? [], shape.lambdaKinds ?? [], shape.functionBodyKinds ?? [], shape.paramKinds ?? []
 		);
 		final hostsReturnValue: Bool = (shape.valueReturnKinds ?? []).contains(node.kind);
 		for (i in 0...kids.length) visit(kids[i], childRetType, hostsReturnValue && i == 0);

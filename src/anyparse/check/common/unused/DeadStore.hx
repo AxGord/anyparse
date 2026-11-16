@@ -193,8 +193,7 @@ final class DeadStore extends RuleBase {
 		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		return RunScan.collectWith(files, plugin, shape.identKind, (entry, tree, id, violations) -> {
 			NullFlow.forEachFunctionUnit(
-				tree, shape,
-				(body, paramNames) -> analyzeBody(violations, entry.file, entry.source, body, shape, metaKinds, id, paramNames)
+				tree, shape, (body, paramNames) -> analyzeBody(violations, entry.file, entry.source, body, shape, metaKinds, id, paramNames)
 			);
 		});
 	}

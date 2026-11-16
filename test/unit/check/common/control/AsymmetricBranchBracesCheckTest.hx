@@ -87,8 +87,7 @@ class AsymmetricBranchBracesCheckTest extends Test {
 		Assert.equals(0, violations(wrap('if (a) p(); else if (b) q();')).length);
 		Assert.equals(0, violations(wrap('if (a) p(); else if (b) q(); else if (d == s) r();')).length);
 		Assert.equals(
-			0,
-			violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\tq();\n\t\t} else if (d == s) {\n\t\t\tr();\n\t\t}')).length
+			0, violations(wrap('if (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\tq();\n\t\t} else if (d == s) {\n\t\t\tr();\n\t\t}')).length
 		);
 	}
 

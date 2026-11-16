@@ -467,8 +467,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 		]) {
 			final declaring: String = 'package app; $imp class A { public static var lock:Lock = null; }';
 			Assert.same(
-				['warning A C.main | sys.thread.Lock.wait'],
-				graded(ThreadSafetyCheckTest.violations(config, [own, declaring, reader])), imp
+				['warning A C.main | sys.thread.Lock.wait'], graded(ThreadSafetyCheckTest.violations(config, [own, declaring, reader])), imp
 			);
 		}
 		final guarded: String =

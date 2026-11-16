@@ -584,8 +584,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 			'a `//` inside a string literal is not a comment'
 		);
 		Assert.isFalse(
-			claimsCascade('if (a) return "x";\n\t\treturn b ? /* why */ "p" : "y";'),
-			'a real comment inside the folded spine still refuses'
+			claimsCascade('if (a) return "x";\n\t\treturn b ? /* why */ "p" : "y";'), 'a real comment inside the folded spine still refuses'
 		);
 	}
 

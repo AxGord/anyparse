@@ -241,8 +241,7 @@ class PatchSliceTest extends Test {
 	public function testRenameAndAnInsertFromOneFragmentRefused(): Void {
 		final source: String = 'class C {\n\t/**\n\t * About b.\n\t */\n\tfunction b() {}\n}\n';
 		switch Patch.patchNode(
-			source, BySelector('ClassDecl:C'), 'function b() {}', 'function bee() {}\n\n\tfunction extra() {}', false,
-			new HaxeQueryPlugin()
+			source, BySelector('ClassDecl:C'), 'function b() {}', 'function bee() {}\n\n\tfunction extra() {}', false, new HaxeQueryPlugin()
 		) {
 			case Ok(text):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');

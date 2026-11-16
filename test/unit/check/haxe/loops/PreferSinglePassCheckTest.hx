@@ -126,8 +126,7 @@ class PreferSinglePassCheckTest extends Test {
 
 	public function testOneThrowingBodyIsMerged(): Void {
 		Assert.equals(
-			wrap('final ys = [for (x in xs) if (x % k == 0) x * 2];'),
-			fixed(wrap('final ys = xs.filter(x -> x % k == 0).map(x -> x * 2);'))
+			wrap('final ys = [for (x in xs) if (x % k == 0) x * 2];'), fixed(wrap('final ys = xs.filter(x -> x % k == 0).map(x -> x * 2);'))
 		);
 		Assert.equals(
 			wrap('final ys = [for (x in xs) if (x > 0) x % k];'), fixed(wrap('final ys = xs.filter(x -> x > 0).map(x -> x % k);'))

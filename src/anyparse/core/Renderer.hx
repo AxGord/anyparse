@@ -389,6 +389,45 @@ private class Frame {
 		return f;
 	}
 
+	/**
+	 * Whether the line provably ends right after a one-line flat form `flatDoc` (first-line width `firstLine`) that
+	 * reaches the render width at the pen (`atWidth`, no separator pending): the pending frames, before any text, reach a
+	 * hard line, a fill's next gap with nothing of its separator left on the line (no further item fits after a full
+	 * row), or the end of the document. A soft `Line` or anything not yet laid out could keep text on the line: no.
+	 */
+	public static function lineEndsAfter(stack: Array<Frame>, flatDoc: Doc, firstLine: Int, atWidth: Bool): Bool {
+		if (!atWidth || firstLine != DocMeasure.flatTokenWidth(flatDoc)) return false;
+		var j: Int = stack.length - 1;
+		while (j >= 0) {
+			final f: Frame = stack[j--];
+			final sep: Null<Doc> = f.fillSep;
+			final leads: Null<Bool> = f.fillRest != null ? (sep == null ? true : leadsWithBreak(sep, true)) : leadsWithBreak(f.doc, false);
+			if (leads != null) return leads;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether `d` emits a line break first (`true`; a soft `Line` counts only when `soft`), text first (`false`), or nothing (`null`).
+	 */
+	private static function leadsWithBreak(d: Doc, soft: Bool): Null<Bool> {
+		return switch d {
+			case Empty: null;
+			case Text(s, _, _): s.length == 0 ? null : false;
+			case Line(flat, _):
+				soft || flat == '\n';
+			case Nest(_, inner): leadsWithBreak(inner, soft);
+			case Concat(items):
+				var lead: Null<Bool> = null;
+				for (item in items) {
+					lead = leadsWithBreak(item, soft);
+					if (lead != null) break;
+				}
+				lead;
+			case _: false;
+		}
+	}
+
 }
 
 /**
@@ -761,42 +800,13 @@ class Renderer {
 		final idx: Int = f.fillIdx;
 		final sep: Doc = f.fillSep;
 		final last: Bool = idx == items.length - 1;
-		// `tailReserve` cols are reserved for post-Fill same-line
-		// content (trailing comma + close delim emitted OUTSIDE
-		// the Fill — see `Doc.Fill` doc-comment). Subtracting it
-		// from the probe budget makes the LAST packed item leave
-		// room for that tail, matching fork's `wrapFillLine2AfterLast`
-		// `lineLength + tokenLength >= maxLineLength` accounting
-		// where each item carries its trailing comma in
-		// `firstLineLength` (slice ω-fill-tail-reserve).
-		//
-		// `restW` is the additional tail beyond the Fill subtree
-		// itself (content trailing the Fill on the same rendered
-		// line — e.g. typedef RHS `= RequestMethod<...>;` after a
-		// typeParams Fill). Subtracted only when the originating
-		// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe)
-		// AND we're probing the LAST item (slice 4): fork's
-		// `wrapFillLine2AfterLast` reserves the rest-of-line tail
-		// for the AFTER-LAST decision, not every per-item probe.
-		// Middle items break only when they themselves overflow;
-		// the tail lands on whichever line the last item ends on,
-		// so only the last item's probe must account for it.
-		// Applying restW per-item is over-pessimistic (regresses
-		// e.g. `wrapping/issue_494_type_parameter` — it breaks too
-		// early and packs fewer items than fit).
-		// Default `restW=0` preserves byte-equivalent legacy
-		// behavior; sister to `GroupWithRestProbe` at the Group
-		// decision layer.
-		final restW: Int = f.fillRestProbe && last ? restAfter : 0;
-		// The LAST item of a leading-break fill (FillBreakAfterWrap;
-		// `fillLineStart >= 0`) has no following item on its line -- the close
-		// sits on its own line -- so the per-line trailing-comma component of
-		// `tailReserve` must not bind it. Reserve only the genuine same-line
-		// tail (an optional trailing comma, measured by
-		// `flatTokenWidthOfRestStack`) plus the `+ 1` fork-`>=` boundary
-		// alignment, the same term the shape's `sep.length + 1` reserve carries.
-		// Without it a last param that fits broke onto its own line a column early.
-		final effTailReserve: Int = f.fillLineStart >= 0 && last ? restAfter + 1 : f.fillTailReserve;
+		// A row keeps the item while the row, with what lands after the item on that line, is at most `width`. After
+		// a middle item that is the head of the next separator (`,`), which stays on this line whether or not the next
+		// item breaks. After the last item it is the fill's tail: the measured rest of the line for a leading-break or
+		// rest-probe fill, else the producer's `tailReserve` (a trailing comma and the close delimiter).
+		final lastTail: Int = f.fillLineStart >= 0 || f.fillRestProbe ? restAfter : f.fillTailReserve;
+		final sepHead: Int = sepWidthBeforeBreak(sep);
+		final effTailReserve: Int = last ? lastTail : sepHead;
 		// ω-fill-after-collection: a collection item dominates the line it
 		// lands on, and its brackets are a structural boundary a reader
 		// navigates by. Packing only SOME of the followers onto its tail puts
@@ -808,16 +818,16 @@ class Renderer {
 		// keeps its greedy packing byte-for-byte. The whole tail is measured
 		// against the LAST item's reserve — the post-Fill content lands after
 		// it, not after the item being probed now.
-		final runFit: Int = f.fillLineStart >= 0 ? literalRunFit(f, items, col, width, restAfter + 1) : -1;
+		final runFit: Int = f.fillLineStart >= 0 ? literalRunFit(f, items, col, width, lastTail, sepHead) : -1;
 		if (runFit >= 0) return !prevWrapped && runFit == 1;
 		final afterCollection: Bool = f.fillLineStart >= 0
 			&& CollectionRun.startsCollection(items[idx - 1])
-			&& !fitsFlat(width - col - restAfter - 1, f.indent, CollectionRun.remainingFlat(items, sep, idx));
+			&& !fitsFlat(width - col - lastTail, f.indent, CollectionRun.remainingFlat(items, sep, idx));
 		if (prevWrapped || afterCollection) return false;
 		final next: Doc = Concat([sep, items[idx]]);
 		final embedded: EmbeddedLineWidths = embeddedLineWidths(next);
 		final embW: Int = embedded.first >= 0 ? embedded.first : embedded.condSpliceFirstLine;
-		return embW >= 0 ? embW <= width - col : fitsFlat(width - col - effTailReserve - restW, f.indent, next);
+		return embW >= 0 ? embW <= width - col : fitsFlat(width - col - effTailReserve, f.indent, next);
 	}
 
 	/**
@@ -1566,8 +1576,8 @@ class Renderer {
 			case IfBreak(_, fl), IfWidthExceeds(_, _, fl), IfFirstLineExceeds(_, _, fl), IfLineExceeds(_, _, fl),
 				IfResidualLineExceeds(_, _, fl), IfFullLineExceeds(_, _, fl), IfNaturalFirstLineExceeds(_, _, fl),
 				IfNaturalFirstLineExceedsWithRest(_, _, fl), IfNaturalFirstLineFitsOpenDelim(_, _, fl),
-				IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl),
-				IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
+				IfArrowContinuationFits(_, _, _, _, fl), IfArrowContinuationFitsWithRest(_, _, _, _, fl), IfIndentWidthExceeds(_, _, _, fl),
+				IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
 				inner.push({ doc: fl, mode: MFlat });
 				return null;
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
@@ -1641,8 +1651,8 @@ class Renderer {
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				DocMeasure.pushFillReversed(stack, items, sep);
 				return { add: 0, aborted: false };
-			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner),
-				IfBreak(_, inner), IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
+			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), Group(inner), GroupWithRestProbe(inner), IfBreak(_, inner),
+				IfWidthExceeds(_, _, inner), IfFirstLineExceeds(_, _, inner), IfLineExceeds(_, _, inner),
 				IfResidualLineExceeds(_, _, inner), IfFullLineExceeds(_, _, inner), IfNaturalFirstLineExceeds(_, _, inner),
 				IfNaturalFirstLineExceedsWithRest(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
 				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
@@ -1741,10 +1751,10 @@ class Renderer {
 				IfNaturalFirstLineExceeds(_, _, inner), IfNaturalFirstLineExceedsWithRest(_, _, inner),
 				IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
 				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
-				IfGluedFirstLineExceeds(_, _, _, inner), IfTrailingCommentOverflows(_, _, _, _, inner), Flatten(inner),
-				WrapBoundary(inner), LeadingBreak(_, inner), BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner),
-				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
-				ConditionalMarkerDecrease(inner), BreakMark(inner, _):
+				IfGluedFirstLineExceeds(_, _, _, inner), IfTrailingCommentOverflows(_, _, _, _, inner), Flatten(inner), WrapBoundary(inner),
+				LeadingBreak(_, inner), BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner),
+				CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner),
+				BreakMark(inner, _):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1884,8 +1894,7 @@ class Renderer {
 				return { add: 0, aborted: false };
 			case Nest(_, innerDoc), BreakCommit(_, innerDoc), LeadingBreak(_, innerDoc), Flatten(innerDoc), WrapBoundary(innerDoc),
 				HardFlatten(innerDoc), CollapseProbe(innerDoc), CollapseAddProbe(innerDoc), CollapseBoolProbe(innerDoc),
-				CollapseChainProbe(innerDoc), ConditionalMarkerZero(innerDoc), ConditionalMarkerDecrease(innerDoc),
-				BreakMark(innerDoc, _):
+				CollapseChainProbe(innerDoc), ConditionalMarkerZero(innerDoc), ConditionalMarkerDecrease(innerDoc), BreakMark(innerDoc, _):
 				// Mode-preserving transparent descend: Nest, the ω-force-flat-
 				// engine markers (rest-of-stack probe measures structural
 				// width — force-flat markers add none), and the cond-indent
@@ -2079,8 +2088,8 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case IfWidthExceeds(nn, breakDoc, flatDoc), IfLineExceeds(nn, breakDoc, flatDoc),
-				IfResidualLineExceeds(nn, breakDoc, flatDoc), IfFullLineExceeds(nn, breakDoc, flatDoc):
+			case IfWidthExceeds(nn, breakDoc, flatDoc), IfLineExceeds(nn, breakDoc, flatDoc), IfResidualLineExceeds(nn, breakDoc, flatDoc),
+				IfFullLineExceeds(nn, breakDoc, flatDoc):
 				// No rest-stack lookahead is needed here: the cond's own
 				// first line determines glue-vs-open; the trailing ` {`
 				// lookahead is already covered by the width arm of the
@@ -2134,12 +2143,11 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: false
 				});
-			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
-				IfTrailingCommentOverflows(_, _, _, _, inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _),
-				LeadingBreak(_, inner), BreakCommit(_, inner):
+			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
+				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
+				IfGluedFirstLineExceeds(_, _, _, inner), IfTrailingCommentOverflows(_, _, _, _, inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner), BreakMark(inner, _), LeadingBreak(_, inner), BreakCommit(_, inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds`), the
 				// nested cond-paren-glue probes (render-time, seen flat here),
@@ -2447,12 +2455,11 @@ class Renderer {
 					mode: glueD ? node.mode : MBreak,
 					forceFlat: node.forceFlat
 				});
-			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner),
-				IfArrowContinuationFits(_, _, _, _, inner), IfArrowContinuationFitsWithRest(_, _, _, _, inner),
-				IfIndentWidthExceeds(_, _, _, inner), IfGluedFirstLineExceeds(_, _, _, inner),
-				IfTrailingCommentOverflows(_, _, _, _, inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
-				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _),
-				LeadingBreak(_, inner), BreakCommit(_, inner):
+			case IfFirstLineExceeds(_, _, inner), IfNaturalFirstLineFitsOpenDelim(_, _, inner), IfArrowContinuationFits(_, _, _, _, inner),
+				IfArrowContinuationFitsWithRest(_, _, _, _, inner), IfIndentWidthExceeds(_, _, _, inner),
+				IfGluedFirstLineExceeds(_, _, _, inner), IfTrailingCommentOverflows(_, _, _, _, inner), CollapseProbe(inner),
+				CollapseAddProbe(inner), CollapseBoolProbe(inner), CollapseChainProbe(inner), ConditionalMarkerZero(inner),
+				ConditionalMarkerDecrease(inner), BreakMark(inner, _), LeadingBreak(_, inner), BreakCommit(_, inner):
 				// Preserve-mode transparent descend to the flat / inner doc:
 				// the callarg under-wrap probe (`IfFirstLineExceeds` — the
 				// NoWrap-pinned call paren is measured kept-flat for the parent
@@ -3533,9 +3540,13 @@ class Renderer {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
 					// A strict-`>` probe (emitted at `lineWidth + 1`) counts the un-flushed separator before it, as
-					// `IfFullLineExceeds` does; the `n == width` consumers are calibrated to the bare column.
-					final effPending: Int = n > width ? pendingSpace : 0;
-					final firstLineCrosses: Bool = col + effPending + flatTokenWidthFirstLine(flatDoc) >= n;
+					// `IfFullLineExceeds` does. An `n == width` probe keeps a column for what follows the flat form, so a first
+					// line reaching `n` crosses — unless its line provably ends there, where a flat form flush at the limit fits.
+					final firstLine: Int = flatTokenWidthFirstLine(flatDoc);
+					final reach: Int = col + firstLine;
+					final firstLineCrosses: Bool = n > width
+						? reach + pendingSpace >= n
+						: reach > n || (reach == n && !Frame.lineEndsAfter(stack, flatDoc, firstLine, n == width && pendingSpace == 0));
 					final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
 				}
@@ -4188,11 +4199,11 @@ class Renderer {
 	 */
 	private static function keepsRenderedPath(d: Doc): Bool {
 		return switch d {
-			case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline, Line(_), Concat(_), Nest(_, _), WrapBoundary(_),
-				CollapseProbe(_), CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_),
-				ConditionalMarkerDecrease(_), BreakMark(_, _), Flatten(_), HardFlatten(_), Group(_), GroupWithRestProbe(_), Fill(_, _, _),
-				FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _), LeadingBreak(_, _), BreakCommit(_, _), IfBreak(_, _),
-				IfWidthExceeds(_, _, _), IfFirstLineExceeds(_, _, _):
+			case Empty, Text(_), OptSpace(_), OptSpaceSkipAfterHardline, Line(_), Concat(_), Nest(_, _), WrapBoundary(_), CollapseProbe(_),
+				CollapseAddProbe(_), CollapseBoolProbe(_), CollapseChainProbe(_), ConditionalMarkerZero(_), ConditionalMarkerDecrease(_),
+				BreakMark(_, _), Flatten(_), HardFlatten(_), Group(_), GroupWithRestProbe(_), Fill(_, _, _), FillWithRestProbe(_, _, _),
+				FillBreakAfterWrap(_, _, _), LeadingBreak(_, _), BreakCommit(_, _), IfBreak(_, _), IfWidthExceeds(_, _, _),
+				IfFirstLineExceeds(_, _, _):
 				true;
 			case _: false;
 		};
@@ -4214,8 +4225,8 @@ class Renderer {
 			case IfLineExceeds(_, brk, _), IfResidualLineExceeds(_, brk, _), IfFullLineExceeds(_, brk, _),
 				IfNaturalFirstLineExceeds(_, brk, _), IfNaturalFirstLineExceedsWithRest(_, brk, _),
 				IfNaturalFirstLineFitsOpenDelim(_, brk, _), IfArrowContinuationFits(_, _, _, brk, _),
-				IfArrowContinuationFitsWithRest(_, _, _, brk, _), IfIndentWidthExceeds(_, _, brk, _),
-				IfGluedFirstLineExceeds(_, _, brk, _), IfTrailingCommentOverflows(_, _, _, brk, _):
+				IfArrowContinuationFitsWithRest(_, _, _, brk, _), IfIndentWidthExceeds(_, _, brk, _), IfGluedFirstLineExceeds(_, _, brk, _),
+				IfTrailingCommentOverflows(_, _, _, brk, _):
 				brk;
 			case _: null;
 		};
@@ -4424,24 +4435,23 @@ class Renderer {
 	 * it fits there, else starts its own line, and ends its line either way; a run
 	 * wider than a line keeps one collection per line. `1` joins, `0` breaks, `-1`
 	 * leaves the item to the ordinary probe (no run, or a too-wide run's head).
+	 * A run ending at the fill's last item leaves `lastReserve` cols free after it, any other run `sepHead`.
 	 */
-	private static function literalRunFit(f: Frame, items: Array<Doc>, col: Int, width: Int, lastReserve: Int): Int {
+	private static function literalRunFit(f: Frame, items: Array<Doc>, col: Int, width: Int, lastReserve: Int, sepHead: Int): Int {
 		final idx: Int = f.fillIdx;
 		final sep: Doc = f.fillSep;
 		if (CollectionRun.startsCollection(items[idx])) {
 			final s: Int = CollectionRun.collectionRunStart(items, idx);
 			final e: Int = CollectionRun.collectionRunEnd(items, idx);
 			if (e == s) return -1;
-			final reserve: Int = e == items.length - 1 ? lastReserve : f.fillTailReserve;
+			final reserve: Int = e == items.length - 1 ? lastReserve : sepHead;
 			final run: Doc = CollectionRun.collectionRunDoc(items, sep, s, e);
 			if (!fitsFlat(width - f.indent - reserve, f.indent, run)) return idx > s ? 0 : -1;
 			return idx > s || fitsFlat(width - col - reserve, f.indent, Concat([sep, run])) ? 1 : 0;
 		}
 		final s: Int = CollectionRun.collectionRunStart(items, idx - 1);
 		final endsRun: Bool = CollectionRun.startsCollection(items[idx - 1]) && s < idx - 1;
-		return endsRun && fitsFlat(width - f.indent - f.fillTailReserve, f.indent, CollectionRun.collectionRunDoc(items, sep, s, idx - 1))
-			? 0
-			: -1;
+		return endsRun && fitsFlat(width - f.indent - sepHead, f.indent, CollectionRun.collectionRunDoc(items, sep, s, idx - 1)) ? 0 : -1;
 	}
 
 }

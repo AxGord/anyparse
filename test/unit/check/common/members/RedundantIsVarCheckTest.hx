@@ -106,8 +106,7 @@ class RedundantIsVarCheckTest extends Test {
 	public function testInitializerNotFlagged(): Void {
 		// `= 5` writes the field directly — it is what the metadata's storage is FOR here.
 		Assert.equals(
-			0,
-			violations('class C {\n\t@:isVar public var level(never, set):Int = 5;\n\tfunction set_level(v:Int):Int return v;\n}').length
+			0, violations('class C {\n\t@:isVar public var level(never, set):Int = 5;\n\tfunction set_level(v:Int):Int return v;\n}').length
 		);
 	}
 

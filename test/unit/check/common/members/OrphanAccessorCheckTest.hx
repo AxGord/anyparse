@@ -458,8 +458,7 @@ class OrphanAccessorCheckTest extends Test {
 
 	public function testDynamicWriteSlotCountsAsDeclared(): Void {
 		Assert.equals(
-			0,
-			violations('class C {\n\tpublic var data(default, dynamic):Int;\n\tdynamic function set_data(v:Int):Int return v;\n}').length
+			0, violations('class C {\n\tpublic var data(default, dynamic):Int;\n\tdynamic function set_data(v:Int):Int return v;\n}').length
 		);
 	}
 

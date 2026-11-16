@@ -42,9 +42,9 @@ using anyparse.macro.MetaInspect;
  * that module's header keeps together for the same reason - so a change
  * here is a question about all four.
  */
-@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering,
-	anyparse.macro.OperatorLoopLowering, anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering,
-	anyparse.macro.StarLoopLowering, anyparse.macro.StructFieldTrailLowering, anyparse.macro.TriviaSlotNames)
+@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering, anyparse.macro.OperatorLoopLowering,
+	anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering, anyparse.macro.StarLoopLowering,
+	anyparse.macro.StructFieldTrailLowering, anyparse.macro.TriviaSlotNames)
 final class StarFieldLowering {
 
 	/**
@@ -90,8 +90,8 @@ final class StarFieldLowering {
 	 * sep-peek loop at EOF without a fail-rewind signal.
 	 */
 	private static function emitStarFieldSteps(
-		sc: StructSeqCtx, starNode: ShapeNode, ownerPath: Null<String>, fieldName: Null<String>, localName: String,
-		parseSteps: Array<Expr>, isLastField: Bool
+		sc: StructSeqCtx, starNode: ShapeNode, ownerPath: Null<String>, fieldName: Null<String>, localName: String, parseSteps: Array<Expr>,
+		isLastField: Bool
 	): Void {
 		final inner: ShapeNode = starNode.children[0];
 		if (inner.kind != Ref) Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());

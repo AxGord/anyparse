@@ -614,8 +614,7 @@ final class Patch {
 	 * necessarily an intermediate the op would ever produce. It decides wording only.
 	 */
 	private static function sequencingRefusal(
-		label: String, failure: String, slice: String, placed: Array<{ span: Span, text: String }>, oldText: String, kind: String,
-		all: Bool
+		label: String, failure: String, slice: String, placed: Array<{ span: Span, text: String }>, oldText: String, kind: String, all: Bool
 	): String {
 		return placed.length == 0 || locate(CanonicalEdit.applyEdits(slice, placed), oldText, kind, '', all).error != null
 			? failure

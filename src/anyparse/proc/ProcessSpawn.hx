@@ -428,8 +428,7 @@ final class ProcessSpawn {
 		// jobs that run one after another, none tethered, are bounded by their own `timeout` alone, as a run in this process is
 		final open: Bool = sequential && jobs.exists(job -> (job.timeout ?? 0) <= 0);
 		return PhaseTimings.measure(
-			'haxe runAll',
-			() -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure, bound ?? (open ? Std.int(MAX_BOUND) : null), true)
+			'haxe runAll', () -> runAllTimed(jobs, maxBuffer, parallel, stopAfterFailure, bound ?? (open ? Std.int(MAX_BOUND) : null), true)
 		);
 	}
 

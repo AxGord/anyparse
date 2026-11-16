@@ -237,9 +237,8 @@ class LexicalCodegen {
 			return -1;
 		};
 		return walkField(
-			holeFn(k, h),
-			' The offset just past the `$close` that balances the code hole opened at `from`, or -1 when it is unterminated.', body,
-			macro : Int
+			holeFn(k, h), ' The offset just past the `$close` that balances the code hole opened at `from`, or -1 when it is unterminated.',
+			body, macro : Int
 		);
 	}
 

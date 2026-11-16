@@ -83,13 +83,13 @@ typedef HxModule = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	@:fmt(blankLinesAfterCtorIf(
-		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl',
-		'EnumAbstractDecl', 'FnDecl', 'TypedefDecl', 'afterMultilineDecl'
+		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl', 'EnumAbstractDecl',
+		'FnDecl', 'TypedefDecl', 'afterMultilineDecl'
 	))
 	@:fmt(blankLinesAfterCtorIfTailLeafNull('decl', 'Conditional', 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock'))
 	@:fmt(blankLinesBeforeCtorIfPrevNot(
-		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl',
-		'EnumAbstractDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional', 'beforeMultilineDecl'
+		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl', 'EnumAbstractDecl',
+		'FnDecl', 'TypedefDecl', '|', 'Conditional', 'beforeMultilineDecl'
 	))
 	@:fmt(blankLinesBetweenSameCtorIfNot(
 		'decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl',

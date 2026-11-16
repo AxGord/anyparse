@@ -31,9 +31,9 @@ using anyparse.macro.MetaInspect;
  * `_eregByRule` accumulator, and it calls NO member that stayed behind -
  * so its bundle carries two data fields and not one callback.
  */
-@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering,
-	anyparse.macro.OperatorLoopLowering, anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering,
-	anyparse.macro.StarLoopLowering, anyparse.macro.StructFieldTrailLowering, anyparse.macro.TriviaSlotNames)
+@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering, anyparse.macro.OperatorLoopLowering,
+	anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering, anyparse.macro.StarLoopLowering,
+	anyparse.macro.StructFieldTrailLowering, anyparse.macro.TriviaSlotNames)
 final class TerminalParseLowering {
 
 	private static function collectEregs(tc: TerminalCtx, typePath: String): Array<GeneratedRule.EregSpec> {

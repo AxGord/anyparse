@@ -853,8 +853,8 @@ class Lowering {
 	 * `lit.sepBlockEnded`.
 	 */
 	private function lowerStarBlockEndedBranch(
-		branch: ShapeNode, leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr,
-		ctorCall: Expr, sepCharCode: Int, sepText: String
+		branch: ShapeNode, leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr,
+		sepCharCode: Int, sepText: String
 	): Expr {
 		final predicateName: Null<String> = branch.annotations[AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE];
 		final accumRefForPred: Expr = macro _items;

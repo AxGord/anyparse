@@ -28,8 +28,7 @@ class RefusalAssertIgnoresMessageCheckTest extends Test {
 	@:killer('M-REFUSAL-ASSERT-BINDER-READ-IGNORED')
 	public function testAnArmReadingTheRefusalIsLeftAlone(): Void {
 		Assert.equals(
-			0,
-			violationsOf('case Err(message):\n\t\t\t\tAssert.isTrue(message.indexOf(\'refused\') != -1);\n\t\t\t\tAssert.pass();').length
+			0, violationsOf('case Err(message):\n\t\t\t\tAssert.isTrue(message.indexOf(\'refused\') != -1);\n\t\t\t\tAssert.pass();').length
 		);
 	}
 

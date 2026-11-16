@@ -555,8 +555,8 @@ final class CallGraphFacts {
 	 * own — a reference when `deferred` — and, for an instance call, an override edge to each member it may dispatch to.
 	 */
 	private static function callEdges(
-		g: CallGraph, node: FnNode, c: CallFact, target: String, owner: String, name: String, id: String, span: Null<Span>,
-		view: FactsView, deferred: Bool
+		g: CallGraph, node: FnNode, c: CallFact, target: String, owner: String, name: String, id: String, span: Null<Span>, view: FactsView,
+		deferred: Bool
 	): Void {
 		final instance: Bool = c.access == 'FInstance' || c.access == 'FClosure' || c.access == FIELD_VALUE;
 		final dispatch: Null<String> = instance ? dispatchType(c.receiver, owner, view) : null;

@@ -1130,8 +1130,8 @@ final class FieldInitAtDeclaration extends RuleBase implements NotedFix {
 	 * an unparsed `#if` region spelling it, counts as one: either may hold any occurrence at all.
 	 */
 	private static function readObservableInScope(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, scope: Array<{ file: String, source: String }>,
-		file: String, name: String, fieldFrom: Int
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, scope: Array<{ file: String, source: String }>, file: String,
+		name: String, fieldFrom: Int
 	): Bool {
 		final shape: RefShape = plugin.refShape();
 		final occurrenceKinds: Array<String> = [

@@ -467,9 +467,8 @@ final class ParseDispatchLowering {
 	private static function isInertInit(e: Null<Expr>): Bool {
 		if (e == null) return true;
 		return switch e.expr {
-			case EConst(CIdent('null' | 'true' | 'false')), EConst(CInt(_, _)), EConst(CFloat(_, _)), EConst(CString(_, _)),
-				EArrayDecl([]), EField({ expr: EConst(CIdent('ctx')) }, 'pos'),
-				ECall({ expr: EConst(CIdent('collectTrivia' | 'skipWsAndStash')) }, _):
+			case EConst(CIdent('null' | 'true' | 'false')), EConst(CInt(_, _)), EConst(CFloat(_, _)), EConst(CString(_, _)), EArrayDecl([]),
+				EField({ expr: EConst(CIdent('ctx')) }, 'pos'), ECall({ expr: EConst(CIdent('collectTrivia' | 'skipWsAndStash')) }, _):
 				true;
 			case _: false;
 		};

@@ -1123,9 +1123,9 @@ final class MoveMember {
 	 * field on the source type — `via.m()`, `g.via.m()`. Returns an error message, or null.
 	 */
 	private static function collectCallerRewires(
-		prep: MovePrep, viaField: Null<String>, scaffold: Bool, keepBare: Bool, scaffoldFields: Array<ScaffoldField>,
-		plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
-		movedTextEdits: Array<{ span: Span, text: String }>, outsideCallersOf: Map<String, Int>, advisoryExtras: Array<String>
+		prep: MovePrep, viaField: Null<String>, scaffold: Bool, keepBare: Bool, scaffoldFields: Array<ScaffoldField>, plugin: GrammarPlugin,
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, movedTextEdits: Array<{ span: Span, text: String }>,
+		outsideCallersOf: Map<String, Int>, advisoryExtras: Array<String>
 	): Null<String> {
 		final bareHits: Array<BareHit> = collectBareCallerHits(prep, plugin);
 		final staticError: Null<String> = rewireStaticCallers(

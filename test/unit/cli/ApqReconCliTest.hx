@@ -228,8 +228,7 @@ class ApqReconCliTest extends Test {
 
 	public function testReconReplaceWithoutPredictStripIsUsageError(): Void {
 		Assert.equals(
-			2, Cli.run(['recon', '--replace', 'x', '--with', 'y', '/some/dir']),
-			'--replace/--with outside --predict-strip is a usage error'
+			2, Cli.run(['recon', '--replace', 'x', '--with', 'y', '/some/dir']), '--replace/--with outside --predict-strip is a usage error'
 		);
 	}
 
@@ -568,8 +567,7 @@ class ApqReconCliTest extends Test {
 
 	public function testReconNoTargetClusterRequiresPredictRelax(): Void {
 		Assert.equals(
-			2, Cli.run(['recon', '--no-target-cluster', 'foo', '/some/dir']),
-			'--no-target-cluster without --predict-relax is a usage error'
+			2, Cli.run(['recon', '--no-target-cluster', 'foo', '/some/dir']), '--no-target-cluster without --predict-relax is a usage error'
 		);
 	}
 

@@ -35,9 +35,9 @@ using anyparse.macro.MetaInspect;
  * naming vocabulary, which is why it needed a bundle and why the earlier
  * purity split could not take it.
  */
-@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering,
-	anyparse.macro.OperatorLoopLowering, anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering,
-	anyparse.macro.StarLoopLowering, anyparse.macro.StructFieldTrailLowering, anyparse.macro.TriviaSlotNames)
+@:access(anyparse.macro.BinaryParseLowering, anyparse.macro.KwBranchLowering, anyparse.macro.Lowering, anyparse.macro.OperatorLoopLowering,
+	anyparse.macro.ParseDispatchLowering, anyparse.macro.SpanArgLowering, anyparse.macro.StarLoopLowering,
+	anyparse.macro.StructFieldTrailLowering, anyparse.macro.TriviaSlotNames)
 final class PrattPostfixLowering {
 
 	/**

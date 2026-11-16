@@ -1766,8 +1766,7 @@ class CallGraphTest extends Test {
 		Assert.same(['sys.thread.Lock.wait'], targets(g, 'F.list'), 'an iterator() return read where it is declared');
 		Assert.same([], targets(g, 'H.arr'), 'a guarded import binds the name elsewhere on some build');
 		Assert.same(
-			['sys.thread.Lock.wait'],
-			targets(g, 'W.arr'), 'a wildcard of a package the tables cannot list, no declaration bearing the name'
+			['sys.thread.Lock.wait'], targets(g, 'W.arr'), 'a wildcard of a package the tables cannot list, no declaration bearing the name'
 		);
 		Assert.same(['Lock.wait'], targets(own, 'D.own'), 'a List the module declares');
 		Assert.same(['sys.thread.Lock.wait'], targets(indexed, 'X.arr'), 'the std\'s own Array, indexed as a library');

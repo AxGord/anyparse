@@ -603,8 +603,8 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 * false only in the one position that can absorb one — and is re-derived per child.
 	 */
 	private static function walk(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, out: Array<Match>,
-		shielded: Bool, tailArg: Bool
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, out: Array<Match>, shielded: Bool,
+		tailArg: Bool
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.arrowKinds.contains(node.kind)) {
@@ -613,8 +613,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 		}
 		for (i => child in node.children)
 			walk(
-				child, source, comments, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded),
-				isTrailingCallArg(node, i, s)
+				child, source, comments, s, out, IfExpressionChain.childShielded(node, i, s.shield, shielded), isTrailingCallArg(node, i, s)
 			);
 	}
 

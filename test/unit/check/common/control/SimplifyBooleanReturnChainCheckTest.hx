@@ -196,8 +196,7 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 	@:pin('guard')
 	public function testStrandedNullTestWithCommentNotReduced(): Void {
 		Assert.equals(
-			'',
-			reduce('{ if (s == null) return true;\n// why\nif (t == null) return true; if (t.length == 0) return true; return false; }')
+			'', reduce('{ if (s == null) return true;\n// why\nif (t == null) return true; if (t.length == 0) return true; return false; }')
 		);
 	}
 
