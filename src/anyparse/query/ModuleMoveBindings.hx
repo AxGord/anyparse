@@ -27,6 +27,16 @@ typedef BindingDrift = {
 	/** The import path that gives the name its old meaning back (`pkg.Mod` / `pkg.Mod.Sub`), or null when none can. */
 	final repair: Null<String>;
 
+	/**
+	 * Where the name is written inside a metadata argument (offsets in the text after the move), when this drift is of
+	 * those sites; empty for a drift of code. The macro reads such an argument in another module, so an import of the
+	 * file does not reach it and `repair` is written in full at each site instead.
+	 */
+	final metaAt: Array<Int>;
+
+	/** Where those same sites were written before the move, in step with `metaAt`. */
+	final metaWas: Array<Int>;
+
 }
 
 /** One qualified sub-type spelling (`Mod.Sub`) whose module-path reading a relocation changed in one file. */
@@ -72,6 +82,18 @@ private typedef FileSides = {
 /** What a simple name means in one file: a comparable key, and the one declaration it binds when it binds exactly one. */
 private typedef Meaning = { final key: String; final single: Null<ResolvedType>; }
 
+/** The two indexes and the two files a name's meaning is compared between, with the relocated module paths (old -> new). */
+private typedef MeaningSides = {
+	final pre: SymbolIndex;
+	final post: SymbolIndex;
+	final before: FileInfo;
+	final after: FileInfo;
+	final mapped: (String) -> String;
+	final projectTypes: Map<String, String>;
+}
+
+/** One written occurrence of a probed name: the name and where it starts. */
+private typedef Occurrence = { name: String, at: Int }
 /**
  * The proof a module relocation owes: every simple type name a moved module or one of its readers writes MEANS the same
  * declaration after the move as before — read through the resolution index's own reading of a bare name
@@ -119,7 +141,7 @@ final class ModuleMoveBindings {
 	 */
 	public static function drifts(
 		pre: SymbolIndex, post: SymbolIndex, probes: Array<BindingProbe>, renamed: Map<String, String>, plugin: GrammarPlugin,
-		textBefore: Map<String, String>, textAfter: Map<String, String>
+		textBefore: Map<String, String>, textAfter: Map<String, String>, respelled: Map<String, Array<Int>>
 	): Array<BindingDrift> {
 		final preFiles: Map<String, FileInfo> = [for (fi in pre.allFiles()) fi.file => fi];
 		final postFiles: Map<String, FileInfo> = [for (fi in post.allFiles()) fi.file => fi];
@@ -129,35 +151,30 @@ final class ModuleMoveBindings {
 		for (probe in probes) {
 			final before: Null<FileInfo> = preFiles[probe.before];
 			final after: Null<FileInfo> = postFiles[probe.after];
-			final was: Array<{ name: String, at: Int }> = occurrencesIn(textBefore[probe.before], probe.names, plugin);
-			final now: Array<{ name: String, at: Int }> = occurrencesIn(textAfter[probe.after], probe.names, plugin);
+			final metaBefore: Array<Span> = metaArgSpans(textBefore[probe.before], plugin);
+			final metaAfter: Array<Span> = metaArgSpans(textAfter[probe.after], plugin);
+			final wasAll: Array<Occurrence> = occurrencesIn(textBefore[probe.before], probe.names, plugin);
+			final nowAll: Array<Occurrence> = occurrencesIn(textAfter[probe.after], probe.names, plugin);
+			final was: Array<Occurrence> = wasAll.filter(o -> !within(o.at, metaBefore));
+			final now: Array<Occurrence> = nowAll.filter(o -> !within(o.at, metaAfter));
 			if (before == null || after == null || was.length != now.length) {
-				out.push({
-					file: probe.after,
-					name: '',
-					before: 'its names',
-					after: 'a text this check cannot line up',
-					repair: null
-				});
+				out.push(unaligned(probe.after, 'its names'));
 				continue;
 			}
 			final seen: Array<String> = [];
 			final byPath: Array<Int> = modulePathSites(pre, before, textBefore[probe.before], plugin);
 			final asValue: Array<Int> = valueBoundSites(textBefore[probe.before], probe.names, plugin);
+			final sides: MeaningSides = meaningSides(pre, post, before, after, mapped, projectTypes);
 			for (i => use in was) if (!byPath.contains(use.at) && !asValue.contains(use.at)) {
-				final then: Meaning = meaning(pre, before, use.name, use.at, mapped);
-				final nowMeaning: Meaning = meaning(post, after, use.name, now[i].at, module -> module);
-				final readable: Bool = then.key != UNKNOWN || !projectTypes.exists(use.name);
-				if ((then.key == nowMeaning.key && readable) || seen.contains(use.name)) continue;
+				final d: Null<BindingDrift> = changedMeaning(sides, probe.after, use, now[i].at);
+				if (d == null || seen.contains(use.name)) continue;
 				seen.push(use.name);
-				out.push({
-					file: probe.after,
-					name: use.name,
-					before: then.key,
-					after: nowMeaning.key,
-					repair: repairOf(then.single, mapped)
-				});
+				out.push(d);
 			}
+			final written: Array<Int> = respelled[probe.after] ?? [];
+			final wasMeta: Array<Occurrence> = wasAll.filter(o -> within(o.at, metaBefore) && !written.contains(o.at));
+			final nowMeta: Array<Occurrence> = nowAll.filter(o -> within(o.at, metaAfter));
+			for (d in metaDrifts(sides, probe.after, wasMeta, nowMeta, byPath.concat(asValue))) out.push(d);
 		}
 		return out;
 	}
@@ -297,7 +314,7 @@ final class ModuleMoveBindings {
 	 * The name `o` qualifies when `o` starts a qualified spelling `o.name.Sub` of `text` — `Sub` an identifier right after the
 	 * dot, upper-initial under a grammar whose type names are (`upper`) — else ''.
 	 */
-	private static function subTypeAfter(text: String, o: { name: String, at: Int }, upper: Bool): String {
+	private static function subTypeAfter(text: String, o: Occurrence, upper: Bool): String {
 		final dot: Int = o.at + o.name.length;
 		if (dot >= text.length || text.fastCodeAt(dot) != '.'.code) return '';
 		var end: Int = dot + 1;
@@ -367,9 +384,7 @@ final class ModuleMoveBindings {
 	}
 
 	/** The occurrences of `names` written bare in code — interpolation holes included — in `text` (none for a missing text). */
-	private static function occurrencesIn(
-		text: Null<String>, names: Array<String>, plugin: GrammarPlugin
-	): Array<{ name: String, at: Int }> {
+	private static function occurrencesIn(text: Null<String>, names: Array<String>, plugin: GrammarPlugin): Array<Occurrence> {
 		if (text == null) return [];
 		final upper: Bool = plugin.refShape().typeNamesUpperInitial == true;
 		return ModulePathTokens.bareNames(text, ModulePathTokens.inertSpans(text, plugin), upper).filter(o -> names.contains(o.name));
@@ -414,6 +429,102 @@ final class ModuleMoveBindings {
 			for (c in node.children) walk(c);
 		}
 		walk(tree);
+		return out;
+	}
+
+	/**
+	 * The drift of `use` (written at `nowAt` after the move) when its name binds something else there than before, or when
+	 * the index cannot read it before and a moved project type could be the one it binds; null when its meaning is kept.
+	 */
+	private static function changedMeaning(sides: MeaningSides, file: String, use: Occurrence, nowAt: Int): Null<BindingDrift> {
+		final then: Meaning = meaning(sides.pre, sides.before, use.name, use.at, sides.mapped);
+		final nowMeaning: Meaning = meaning(sides.post, sides.after, use.name, nowAt, module -> module);
+		final readable: Bool = then.key != UNKNOWN || !sides.projectTypes.exists(use.name);
+		return then.key == nowMeaning.key && readable ? null : {
+			file: file,
+			name: use.name,
+			before: then.key,
+			after: nowMeaning.key,
+			repair: repairOf(then.single, sides.mapped),
+			metaAt: [],
+			metaWas: []
+		};
+	}
+
+	/**
+	 * The span of every argument of a metadata node in `text` — where a name is read by a macro in another module, so an
+	 * import of the file does not give it a meaning there.
+	 */
+	private static function metaArgSpans(text: Null<String>, plugin: GrammarPlugin): Array<Span> {
+		final tree: Null<QueryNode> = text == null ? null : ParseGate.parseOrNull(plugin, text);
+		final kinds: Array<String> = plugin.metaShape().metaKinds;
+		final out: Array<Span> = [];
+		if (tree == null) return out;
+		final stack: Array<QueryNode> = [tree];
+		while (stack.length > 0) {
+			final node: QueryNode = stack.pop() ?? tree;
+			for (c in node.children) stack.push(c);
+			if (!kinds.contains(node.kind)) continue;
+			for (c in node.children) {
+				final span: Null<Span> = c.span;
+				if (span != null) out.push(span);
+			}
+		}
+		return out;
+	}
+
+	private static function within(at: Int, spans: Array<Span>): Bool {
+		return spans.exists(s -> at >= s.from && at < s.to);
+	}
+
+	private static function meaningSides(
+		pre: SymbolIndex, post: SymbolIndex, before: FileInfo, after: FileInfo, mapped: (String) -> String,
+		projectTypes: Map<String, String>
+	): MeaningSides {
+		return {
+			pre: pre,
+			post: post,
+			before: before,
+			after: after,
+			mapped: mapped,
+			projectTypes: projectTypes
+		};
+	}
+
+	private static function unaligned(file: String, names: String): BindingDrift {
+		return {
+			file: file,
+			name: '',
+			before: names,
+			after: 'a text this check cannot line up',
+			repair: null,
+			metaAt: [],
+			metaWas: []
+		};
+	}
+
+	/**
+	 * The drifts of the names written inside metadata arguments, one per name, each with every site it drifted at
+	 * (`unread` are the sites a name is not read at). `was` omits the sites an earlier round respelled in full, so what is
+	 * left in it lines up with `now` and keeps being asked after a repair; a count that differs refuses.
+	 */
+	private static function metaDrifts(
+		sides: MeaningSides, file: String, was: Array<Occurrence>, now: Array<Occurrence>, unread: Array<Int>
+	): Array<BindingDrift> {
+		if (was.length != now.length) return [unaligned(file, 'its names in metadata arguments')];
+		final out: Array<BindingDrift> = [];
+		final byName: Map<String, BindingDrift> = [];
+		for (i => use in was) if (!unread.contains(use.at)) {
+			final d: Null<BindingDrift> = changedMeaning(sides, file, use, now[i].at);
+			if (d == null) continue;
+			final known: BindingDrift = byName[use.name] ?? d;
+			known.metaAt.push(now[i].at);
+			known.metaWas.push(use.at);
+			if (known == d) {
+				byName[use.name] = d;
+				out.push(d);
+			}
+		}
 		return out;
 	}
 

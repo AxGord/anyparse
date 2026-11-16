@@ -14636,8 +14636,8 @@
 		{
 			"name": "M-MODMOVE-UNREADABLE-ACCEPTED",
 			"type": "anyparse.query.ModuleMoveBindings",
-			"method": "drifts",
-			"find": "then.key != UNKNOWN || !projectTypes.exists(use.name)",
+			"method": "changedMeaning",
+			"find": "then.key != UNKNOWN || !sides.projectTypes.exists(use.name)",
 			"replace": "true",
 			"note": "a name the index cannot read on either side is taken to keep its meaning, even where a moved project type could be the one it binds"
 		},
@@ -17161,6 +17161,27 @@
 			"find": "LexicalRegions.commentIntersects(memberFrom, leadGap.to, regions)",
 			"replace": "false",
 			"note": "a comment between the declaration start and the accessor clause is not seen, so the clause is deleted beside it"
+		},
+		{
+			"name": "M-MOVE-META-ARG-READ-AS-CODE",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "metaArgSpans",
+			"force": "[]",
+			"note": "no argument of a metadata is told from code, so a moved type named only in one gets an import the macro reading it in another module cannot see"
+		},
+		{
+			"name": "M-MOVE-CODE-READ-AS-META-ARG",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "within",
+			"force": "true",
+			"note": "every written name reads as sitting in a metadata argument, so a reference in code is respelled in full and gets no import"
+		},
+		{
+			"name": "M-MOVE-META-ARG-NEVER-RE-ASKED",
+			"type": "anyparse.query.ModuleMoveBindings",
+			"method": "metaDrifts",
+			"force": "[]",
+			"note": "a name written in a metadata argument is never asked whether its meaning moved, so the import a move adds for code that shares the file rebinds a bare sub-type there unnoticed"
 		}
 	]
 }

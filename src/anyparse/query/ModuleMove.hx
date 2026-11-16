@@ -504,16 +504,20 @@ final class ModuleMove {
 		final renamed: Map<String, String> = [for (p in planned) p.rename.oldPath => p.rename.newPath];
 		final before: Map<String, String> = [for (e in files) e.file => e.source];
 		final post: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
-		final first: Array<BindingDrift> = driftsIn(post, files, texts, newPathOf, probes, pre, renamed, plugin, before);
+		final first: Array<BindingDrift> = driftsIn(post, files, texts, newPathOf, probes, pre, renamed, plugin, before, []);
 		final reasons: Array<String> = [for (d in first) if (d.repair == null) describeDrift(d)];
 		final lost: Map<String, Array<String>> = [];
 		for (r in usingRefusals(planned, pre, post, lost, texts, plugin)) reasons.push(r);
 		if (reasons.length > 0) return Left(reasons);
 		if (first.length == 0 && !lost.keys().hasNext()) return Right(true);
+		final inMeta: Array<String> = writeMetaPaths(texts, first, newPathOf, plugin);
+		if (inMeta.length > 0) return Left(inMeta);
 		final unwritten: Null<String> = writeRepairs(texts, repairsByFile(first), lost, newPathOf, post, plugin, imports);
 		if (unwritten != null) return Left([unwritten]);
 		final again: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
-		final second: Array<String> = driftsIn(again, files, texts, newPathOf, probes, pre, renamed, plugin, before).map(describeDrift);
+		final second: Array<String> = driftsIn(
+			again, files, texts, newPathOf, probes, pre, renamed, plugin, before, respelledSites(first)
+		).map(describeDrift);
 		for (r in usingRefusals(planned, pre, again, [], texts, plugin)) second.push(r);
 		return second.length == 0 ? Right(true) : Left(second);
 	}
@@ -557,10 +561,11 @@ final class ModuleMove {
 	/** The drifts of `probes` between `pre` and `post`, the index of the tree `texts` describe now. */
 	private static function driftsIn(
 		post: SymbolIndex, files: Array<{ file: String, source: String }>, texts: Map<String, String>, newPathOf: Map<String, String>,
-		probes: Array<BindingProbe>, pre: SymbolIndex, renamed: Map<String, String>, plugin: GrammarPlugin, before: Map<String, String>
+		probes: Array<BindingProbe>, pre: SymbolIndex, renamed: Map<String, String>, plugin: GrammarPlugin, before: Map<String, String>,
+		respelled: Map<String, Array<Int>>
 	): Array<BindingDrift> {
 		final after: Map<String, String> = [for (e in files) newPathOf[e.file] ?? e.file => texts[e.file] ?? e.source];
-		return ModuleMoveBindings.drifts(pre, post, probes, renamed, plugin, before, after);
+		return ModuleMoveBindings.drifts(pre, post, probes, renamed, plugin, before, after, respelled);
 	}
 
 	/**
@@ -944,7 +949,7 @@ final class ModuleMove {
 	/** The repair imports of `drifts`, per file, each once. */
 	private static function repairsByFile(drifts: Array<BindingDrift>): Map<String, Array<String>> {
 		final out: Map<String, Array<String>> = [];
-		for (d in drifts) {
+		for (d in drifts) if (d.metaAt.length == 0) {
 			final paths: Array<String> = out[d.file] ?? [];
 			final repair: String = d.repair ?? '';
 			if (!paths.contains(repair)) paths.push(repair);
@@ -1056,6 +1061,34 @@ final class ModuleMove {
 		final leaving: Array<String> = planned.map(p -> p.move.from);
 		final out: Array<String> = [for (fi in pre.allFiles()) if (!leaving.contains(fi.file)) fi.module];
 		for (p in planned) out.push(p.rename.newPath);
+		return out;
+	}
+
+	/**
+	 * Writes each name that drifted inside a metadata argument in full (`BindingDrift.repair`) at every such site, and
+	 * gives the file no import for it: the macro reads the argument where the generated code is built, in another module.
+	 * Returns the reasons a file's own declarations make the full path unreadable.
+	 */
+	private static function writeMetaPaths(
+		texts: Map<String, String>, drifts: Array<BindingDrift>, newPathOf: Map<String, String>, plugin: GrammarPlugin
+	): Array<String> {
+		final oldPathOf: Map<String, String> = [for (old => now in newPathOf) now => old];
+		final edits: Map<String, Array<TextEdit>> = [];
+		for (d in drifts) {
+			final key: String = oldPathOf[d.file] ?? d.file;
+			final list: Array<TextEdit> = edits[key] ?? [];
+			for (at in d.metaAt) list.push({ span: new Span(at, at + d.name.length), text: d.repair ?? '' });
+			edits[key] = list;
+		}
+		return [
+			for (file => list in edits) if (list.length > 0) for (r in writeFullPaths(file, list, texts, plugin)) r
+		];
+	}
+
+	/** Where each file (by its new path) had a name written in full in a metadata argument, as it was spelled before the move. */
+	private static function respelledSites(drifts: Array<BindingDrift>): Map<String, Array<Int>> {
+		final out: Map<String, Array<Int>> = [];
+		for (d in drifts) out[d.file] = (out[d.file] ?? []).concat(d.metaWas);
 		return out;
 	}
 

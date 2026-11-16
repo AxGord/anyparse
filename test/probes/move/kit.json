@@ -2889,6 +2889,35 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "MM1",
+			"note": "a metadata argument naming a sub-type bare beside a mover respelled in full: the import the code needs would rebind the sub-type, so the move refuses",
+			"argv": [
+				"hxq",
+				"move",
+				"src/p/Mover.hx",
+				"--to",
+				"src/q",
+				"--write"
+			],
+			"files": {
+				"apq.json": "{\"move\":{\"scope\":[\"src\"]}}\n",
+				"src/p/Mover.hx": "package p;\n\nclass Mover {\n\tpublic static function f():Int {\n\t\treturn 1;\n\t}\n}\n\nclass Sub {\n\tpublic static function h():Int {\n\t\treturn 2;\n\t}\n}\n",
+				"src/p/Sub.hx": "package p;\n\nclass Sub {\n\tpublic static function make():Int {\n\t\treturn 3;\n\t}\n}\n",
+				"src/p/Priv.hx": "package p;\n\n@:fmt(preWrite(Mover.f), other(Sub.make))\nclass Priv {\n\tpublic static function g():Int {\n\t\treturn Mover.f();\n\t}\n}\n",
+				"main/Main.hx": "class Main { static function main() { p.Priv.g(); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "7275859871b1d989",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }
