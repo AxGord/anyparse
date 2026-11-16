@@ -1784,6 +1784,22 @@
 			"find": "if (LexicalRegions.commentIntersects(prevEnd, annotationSpan.from, regions())) return false;",
 			"replace": "",
 			"note": "a comment between a no-param function's `)` and its annotation no longer hides the annotation, so the Void proof reads it past the comment"
+		},
+		{
+			"name": "M-LEADING-RUN-FROM-ZERO",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "leadingRuns",
+			"find": "from: runFrom",
+			"replace": "from: 0",
+			"note": "every run claims to start at the first child, so a reader slicing the siblings before the run keeps none of the header"
+		},
+		{
+			"name": "M-LEADING-RUN-TO-FIRST-ENTRY",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "leadingRuns",
+			"find": "to: i",
+			"replace": "to: runFrom",
+			"note": "the run ends where it starts, so a reader locating the declaration a run prefixes by its child index never finds it"
 		}
 	]
 }

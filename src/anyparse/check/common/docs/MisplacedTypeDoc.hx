@@ -195,32 +195,21 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 	 * exactly one top-level type.
 	 */
 	private static function headerOf(tree: QueryNode, seams: Seams): Null<Header> {
-		var runStart: Int = -1;
-		var runIndex: Int = -1;
-		var found: Null<Header> = null;
-		for (i in 0...tree.children.length) {
-			final child: QueryNode = tree.children[i];
-			if (seams.typeDecls.contains(child.kind)) {
-				if (found != null) return null;
-				final span: Null<Span> = child.span;
-				if (span == null) return null;
-				found = {
-					decls: tree.children.slice(0, runIndex >= 0 ? runIndex : i),
-					anchor: runStart >= 0 ? runStart : span.from,
-					name: CheckScan.typeDeclName(child, seams.nameHosts)
-				};
-			} else if (seams.isRunEntry(child)) {
-				final span: Null<Span> = child.span;
-				if (runStart < 0 && span != null) {
-					runStart = span.from;
-					runIndex = i;
-				}
-				continue;
-			}
-			runStart = -1;
-			runIndex = -1;
+		var declIndex: Int = -1;
+		for (i in 0...tree.children.length) if (seams.typeDecls.contains(tree.children[i].kind)) {
+			if (declIndex >= 0) return null;
+			declIndex = i;
 		}
-		return found;
+		if (declIndex < 0) return null;
+		final decl: QueryNode = tree.children[declIndex];
+		final span: Null<Span> = decl.span;
+		if (span == null) return null;
+		final run: Null<LeadingRun> = CheckScan.leadingRuns(tree, [], seams.isRunEntry).find(r -> r.to == declIndex);
+		return {
+			decls: tree.children.slice(0, run != null ? run.from : declIndex),
+			anchor: run != null ? run.span.from : span.from,
+			name: CheckScan.typeDeclName(decl, seams.nameHosts)
+		};
 	}
 
 	/**

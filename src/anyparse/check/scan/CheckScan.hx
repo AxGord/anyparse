@@ -768,14 +768,24 @@ final class CheckScan {
 			if (node == null) break;
 			var runStart: Int = -1;
 			var entries: Array<QueryNode> = [];
-			for (child in node.children) {
+			var runFrom: Int = -1;
+			for (i in 0...node.children.length) {
+				final child: QueryNode = node.children[i];
 				final span: Null<Span> = child.span;
 				if (span != null && isRunEntry(child)) {
-					if (runStart < 0) runStart = span.from;
+					if (runStart < 0) {
+						runStart = span.from;
+						runFrom = i;
+					}
 					entries.push(child);
 					continue;
 				}
-				if (span != null && runStart >= 0) runs.push({ span: new Span(runStart, span.from), entries: entries });
+				if (span != null && runStart >= 0) runs.push({
+					span: new Span(runStart, span.from),
+					entries: entries,
+					from: runFrom,
+					to: i
+				});
 				runStart = -1;
 				entries = [];
 				if (descend.contains(child.kind)) pending.push(child);
@@ -1083,6 +1093,12 @@ typedef NegationSeams = {
 
 /**
  * A declaration's leading run as `CheckScan.leadingRuns` reads it: the span from the run's first entry to the
- * declaration's start, and the run's entries in source order.
+ * declaration's start, the run's entries in source order, and the half-open range of child indices
+ * `from`...`to` the entries occupy under their parent (`to` is the index of the declaration they prefix).
  */
-typedef LeadingRun = { final span: Span; final entries: Array<QueryNode>; };
+typedef LeadingRun = {
+	final span: Span;
+	final entries: Array<QueryNode>;
+	final from: Int;
+	final to: Int;
+};
