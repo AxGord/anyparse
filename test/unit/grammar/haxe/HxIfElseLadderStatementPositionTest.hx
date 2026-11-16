@@ -45,12 +45,21 @@ final class HxIfElseLadderStatementPositionTest extends Test {
 	];
 	private static final VALUE_CASE_SOURCE: Array<String> = ['var x = switch k { case 1: if (c) a() else b(); default: 2; };'];
 	private static final VALUE_CASE_KEPT: Array<String> = ['var x = switch k {', '\tcase 1: if (c) a() else b();', '\tdefault: 2;', '};'];
-	private static final VALUE_SITE_SOURCE: Array<String> = ['switch k {', '\tcase 1: final r = { if (a) 10; else 20; };', '}'];
+	private static final VALUE_SITE_SOURCE: Array<String> = [
+		'switch k {',
+		'\tcase 1: final r = { if (a) 10; else 20; };',
+		'\tcase 2: final s = { if (a) f(); else g(); };',
+		'}'
+	];
 	private static final VALUE_SITE_KEPT: Array<String> = [
 		'switch k {',
 		'\tcase 1:',
 		'\t\tfinal r = {',
 		'\t\t\tif (a) 10; else 20;',
+		'\t\t};',
+		'\tcase 2:',
+		'\t\tfinal s = {',
+		'\t\t\tif (a) f(); else g();',
 		'\t\t};',
 		'}'
 	];
@@ -111,7 +120,10 @@ final class HxIfElseLadderStatementPositionTest extends Test {
 		for (config in [DEFAULTS, SAME, FIT_LINE]) Assert.equals(fn(VALUE_CASE_KEPT), write(VALUE_CASE_SOURCE, config));
 	}
 
-	/** A block that is a variable's value is a value again inside a statement-case tail: its tail `if` stays inline. */
+	/**
+	 * A block that is a variable's value is a value again inside a statement-case tail: its tail `if` stays inline, plain
+	 * value branches and calls alike (only the calls reach the ladder when the frame survives, since a plain chain never ladders).
+	 */
 	@:pin('control')
 	@:killer('M-STATEMENT-FRAME-SURVIVES-VALUE-SITE')
 	public function testAValueSiteInsideACaseTailKeepsItsLayout(): Void {
