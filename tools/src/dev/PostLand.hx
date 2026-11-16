@@ -434,11 +434,17 @@ final class PostLand {
 	 * the threads it reports through the function it is given (none when it holds none the pool granted).
 	 */
 	public static function timed(cache: String, name: String, body: (Int -> Void) -> Outcome): Outcome {
+		final at: Float = Date.now().getTime();
 		final started: Float = Timer.stamp();
 		final cpuBefore: Null<Float> = CpuMeter.reading();
 		var threads: Null<Int> = null;
 		final outcome: Outcome = body(held -> threads = held);
-		final row: LedgerRow = { row: name, phase: DIRECTORY, wallMs: (Timer.stamp() - started) * MS_PER_SECOND };
+		final row: LedgerRow = {
+			row: name,
+			phase: DIRECTORY,
+			wallMs: (Timer.stamp() - started) * MS_PER_SECOND,
+			at: at
+		};
 		final cpuAfter: Null<Float> = CpuMeter.reading();
 		if (cpuBefore != null && cpuAfter != null) row.cpuS = cpuAfter - cpuBefore;
 		if (threads != null) row.threads = threads;
@@ -504,7 +510,10 @@ final class PostLand {
 
 	private static function judge(repo: String, sha: String, cache: String, work: String, tree: String): Outcome {
 		final mode: LeaseMode = phaseMode();
-		final built: Outcome = timed(cache, BUILD_ROW, _ -> Binaries.compileWith(tree, Path.join([work, 'build.log']), [], mode));
+		final built: Outcome = timed(cache, BUILD_ROW, granted -> {
+			if (mode.match(Own(_, _))) granted(Binaries.HXMLS.length);
+			return Binaries.compileWith(tree, Path.join([work, 'build.log']), [], mode);
+		});
 		switch built {
 			case Failed(why):
 				return Failed('the build of $sha failed: $why');

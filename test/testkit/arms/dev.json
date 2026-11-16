@@ -3190,6 +3190,14 @@
 			"find": "return Battery.branchThreads(rows, quick) ?? Probe.GATE_THREADS;",
 			"replace": "return Probe.GATE_THREADS;",
 			"note": "the kit probes run on the gate's two processes whatever their branch leases, so a battery runs a thread more than it holds from the shared pool"
+		},
+		{
+			"name": "M-POSTLAND-PHASE-ROW-AT",
+			"type": "dev.PostLand",
+			"method": "timed",
+			"find": "at: at",
+			"replace": "at: 0.0",
+			"note": "a phase's ledger row carries no time, so dev exec-ledger --since drops it"
 		}
 	]
 }
