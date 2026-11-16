@@ -34,7 +34,10 @@ typedef GateRecord = {
 	var tests: Int;
 	var assertions: Int;
 
-	/** How many test classes an impact-selected suite ran, or null when the suite ran every class. */
+	/**
+	 * How many test classes an impact-selected suite selected, whether it ran them or kept them from an earlier check's
+	 * pass (`SuiteReuse`), or null when the suite ran every class.
+	 */
 	@:optional
 	var impact: Null<Int>;
 
@@ -48,5 +51,12 @@ typedef GateRecord = {
 	 */
 	@:optional
 	var timings: Null<Array<String>>;
+
+	/**
+	 * The test classes whose pass the record's tree holds when its suite ran only the classes its change reaches: those it ran
+	 * and those it kept from an earlier record (`SuiteReuse`); null when the suite ran every class.
+	 */
+	@:optional
+	var vouched: Null<Array<String>>;
 
 }

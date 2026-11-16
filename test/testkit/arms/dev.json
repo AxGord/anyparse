@@ -3198,6 +3198,83 @@
 			"find": "at: at",
 			"replace": "at: 0.0",
 			"note": "a phase's ledger row carries no time, so dev exec-ledger --since drops it"
+		},
+		{
+			"name": "M-SUITE-REUSE-REACH-BLIND",
+			"type": "dev.SuiteReuse",
+			"method": "keeps",
+			"find": "!reached.contains(name)",
+			"replace": "true",
+			"note": "a class the change since the record reaches keeps the record pass, so a re-gate after a fix skips the very classes the fix moved"
+		},
+		{
+			"name": "M-SUITE-REUSE-VOUCHED-BLIND",
+			"type": "dev.SuiteReuse",
+			"method": "keeps",
+			"find": "(record.impact == null || (record.vouched ?? []).contains(name))",
+			"replace": "true",
+			"note": "an impact record keeps the pass of classes its suite never ran, so a class newly selected since rides on a pass nobody measured"
+		},
+		{
+			"name": "M-SUITE-REUSE-CORPUS-SNAPSHOT-BLIND",
+			"type": "dev.SuiteReuse",
+			"method": "keeps",
+			"find": "(name != ShardPlan.CORPUS_CLASS || record.sweep != null)",
+			"replace": "true",
+			"note": "the corpus class keeps its pass with no snapshot to put back, so the corpus row of a re-gate reads none and skips"
+		},
+		{
+			"name": "M-SUITE-REUSE-WHOLE-REACHES-NOTHING",
+			"type": "dev.SuiteReuse",
+			"method": "reachedIn",
+			"force": "[]",
+			"note": "a change that reaches every class reads as reaching none, so a re-gate after a macro or runtime fix keeps every class"
+		},
+		{
+			"name": "M-SUITE-REUSE-TOOLCHAIN-BLIND",
+			"type": "dev.SuiteReuse",
+			"method": "refusal",
+			"find": "record.toolchain != facts.toolchain",
+			"replace": "false",
+			"note": "a record built by another compiler still vouches, so a compiler switch keeps passes of binaries never built by it"
+		},
+		{
+			"name": "M-SUITE-REUSE-VOUCHES-ALWAYS",
+			"type": "dev.SuiteReuse",
+			"method": "vouches",
+			"force": "true",
+			"note": "a failed, waived or moved-tree suite vouches, so a later check keeps classes that never passed on the recorded tree"
+		},
+		{
+			"name": "M-SUITE-REUSE-GONE-TREE-UNCHANGED",
+			"type": "dev.SuiteReuse",
+			"method": "changedSince",
+			"force": "[]",
+			"note": "a recorded tree git no longer has reads as no change, so every vouched class keeps its pass whatever moved"
+		},
+		{
+			"name": "M-SUITE-REUSE-SNAPSHOT-NOT-BACK",
+			"type": "dev.SuiteReuse",
+			"method": "plan",
+			"find": "File.copy(sweep, Path.join([tree, GateTree.SWEEP_SNAPSHOT]))",
+			"replace": "{}",
+			"note": "a kept corpus class leaves no snapshot in the tree, so the corpus row of the re-gate finds none"
+		},
+		{
+			"name": "M-SUITE-REUSE-NOTHING-RECORDED",
+			"type": "dev.SuiteReuse",
+			"method": "keep",
+			"find": "GateReuse.write(Path.join([logs, FILE]), record);",
+			"replace": "{}",
+			"note": "a vouching check leaves no record, so the next check of the worktree keeps nothing and runs every selected class"
+		},
+		{
+			"name": "M-SUITE-REUSE-UNVOUCHED-OVERWRITES",
+			"type": "dev.SuiteReuse",
+			"method": "keep",
+			"find": "!vouches(record, held) || ",
+			"replace": "false || ",
+			"note": "a check whose suite did not vouch replaces the standing record, so a later check keeps classes from a failed run"
 		}
 	]
 }

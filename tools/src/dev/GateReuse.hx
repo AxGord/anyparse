@@ -171,20 +171,24 @@ final class GateReuse {
 			'battery: reused gate ${GateTree.short(record.tree)} for ${taken.join(', ')}';
 	}
 
-	/** Drops the record and the snapshot an earlier check of `gate` left, so only the record of the check now running can be reused. */
+	/**
+	 * Drops the record, the snapshot and the vouched classes an earlier check of `gate` left, so only the check now running
+	 * leaves them.
+	 */
 	public static function retire(gate: GateTree): Void {
-		for (name in [FILE, SWEEP]) if (FileSystem.exists(gate.log(name))) FileSystem.deleteFile(gate.log(name));
+		for (name in [FILE, SWEEP, SuiteReuse.CLASSES]) if (FileSystem.exists(gate.log(name))) FileSystem.deleteFile(gate.log(name));
 	}
 
 	/**
-	 * Leaves the verdict of `gate`'s check over `started`, the tree its
-	 * build compiled, in its logs, where a land of that tree finds it.
+	 * Leaves the verdict of `gate`'s check over `started`, the tree its build compiled, in its logs, where a land of that tree
+	 * finds it, and hands it to `SuiteReuse.keep`, where a later check of the same worktree finds the classes it vouched for.
 	 */
 	public static function keep(gate: GateTree, readings: Map<String, Int>, started: String): Void {
 		final sweep: String = gate.log(SWEEP);
-		write(gate.log(FILE), {
+		final ended: String = treeOf(gate.tree);
+		final record: GateRecord = {
 			tree: started,
-			passed: heldTree(gate.summary.passed(), started, treeOf(gate.tree)),
+			passed: heldTree(gate.summary.passed(), started, ended),
 			toolchain: BaseEngine.toolchain(),
 			node: nodeVersion(),
 			fork: forkState(),
@@ -195,7 +199,9 @@ final class GateReuse {
 			impact: readings[IMPACT],
 			sweep: FileSystem.exists(sweep) ? sweep : null,
 			timings: timingsOf(gate.summary.steps(), Date.now().getTime())
-		});
+		};
+		write(gate.log(FILE), record);
+		SuiteReuse.keep(gate.tree, gate.options.logs, record, started == ended);
 	}
 
 	/**

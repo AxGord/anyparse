@@ -43,14 +43,14 @@ final class GateTree {
 	/** The file names the formatter reads its options from, in any folder. */
 	public static final FORMATTER_CONFIGS: Array<String> = ['hxformat.json', '.hxformat.json'];
 
+	/** The snapshot the suite's corpus class writes in a tree, relative to it. */
+	public static final SWEEP_SNAPSHOT: String = 'bin/.last-sweep.json';
+
 	/** How long a quoted error may grow in a report row. */
 	private static inline final QUOTE_WIDTH: Int = 150;
 
 	/** The characters of a commit or a digest a report row spells. */
 	private static inline final SHORT_HASH: Int = 9;
-
-	/** The snapshot the suite's corpus class writes in a tree, relative to it. */
-	private static final SWEEP_SNAPSHOT: String = 'bin/.last-sweep.json';
 
 	/** Where the corpus class rotates the previous snapshot to before each write, relative to the tree. */
 	private static final SWEEP_PREVIOUS: String = 'bin/.prev-sweep.json';

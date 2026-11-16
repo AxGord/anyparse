@@ -7,7 +7,10 @@ import dev.ArmRegistry.ArmRegistryError;
 import dev.GateArms.ArmPlan;
 import dev.GateTree.GateOptions;
 import dev.Shard.Tally;
+import dev.SuiteImpact.DeclaredTypes;
+import dev.SuiteImpact.ImpactSource;
 import dev.SuiteImpact.SuiteScope;
+import dev.SuiteReuse.SuiteSplit;
 import dev.XconfigFmt.XconfigStand;
 import devkit.Args;
 import devkit.Branches;
@@ -397,7 +400,11 @@ final class SliceGate {
 	 */
 	private function suiteOutcome(): Outcome {
 		GateTree.clearSnapshotIn(_gate.tree);
-		final scope: SuiteScope = SuiteImpact.ofTree(_gate.tree, _gate.base);
+		final sources: Array<ImpactSource> = SuiteImpact.sourcesOf(_gate.tree);
+		final entries: Map<String, String> = SuiteImpact.entriesOf(_gate.tree);
+		final declared: DeclaredTypes = SuiteImpact.declaredTypes(sources);
+		final scopeOf: Array<String> -> SuiteScope = touched -> SuiteImpact.scope(sources, entries, touched, declared);
+		final scope: SuiteScope = scopeOf(SuiteImpact.touchedSince(_gate.tree, _gate.base));
 		final only: Null<Array<String>> = switch scope {
 			case Selected(classes), Trimmed(_, classes, _): classes;
 			case WholeSuite(_): null;
@@ -411,6 +418,13 @@ final class SliceGate {
 		_selected = only;
 		if (only != null) _readings[GateReuse.IMPACT] = only.length;
 		if (only != null && only.length == 0) return Skipped('impact — no test class depends on the change');
+		final split: SuiteSplit = SuiteReuse.ofGate(_gate, only, scopeOf);
+		final kept: String = SuiteReuse.note(split);
+		if (SuiteReuse.keptEvery(split)) {
+			SuiteReuse.ran(_gate.options.logs, only);
+			_gate.summary.detail('$mode$kept');
+			return Passed;
+		}
 		final lines: Array<String> = [];
 		var totals: Null<Tally> = null;
 		final shards: Int = _gate.options.threads ?? Shard.DEFAULT_SHARDS;
@@ -427,7 +441,7 @@ final class SliceGate {
 			print: line -> lines.push(line),
 			warn: line -> lines.push(line),
 			counted: sum -> totals = sum,
-			only: only
+			only: split.run
 		});
 		File.saveContent(_gate.log('suite.log'), lines.join('\n') + '\n');
 		final sum: Null<Tally> = totals;
@@ -440,9 +454,12 @@ final class SliceGate {
 		_readings['assertions'] = sum.assertions;
 		final delta: String = BaseSuite.deltaNote(_gate, _mode, sum, status, only);
 		_gate.summary.detail(GateTree.clip(
-			'${sum.tests} tests / ${sum.assertions} assertions / ${sum.failures}F / ${sum.errors}E$delta, $shards shard(s); $mode'
+			'${sum.tests} tests / ${sum.assertions} assertions / ${sum.failures}F / ${sum.errors}E$delta, $shards shard(s); $mode$kept'
 		));
-		if (status == 0) return Passed;
+		if (status == 0) {
+			SuiteReuse.ran(_gate.options.logs, only);
+			return Passed;
+		}
 		_gate.summary.excerpt(GateExcerpt.suite(lines));
 		final verdict: String = lines.find(l -> l.startsWith('suite-shard: FAILED')) ?? 'dev shard exited $status';
 		final locus: Null<String> = lines.find(l -> ~/^  shard \d+ /.match(l));
