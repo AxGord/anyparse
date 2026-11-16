@@ -165,7 +165,7 @@
 			"name": "M-UNUSED-VALUES-UNLISTED-DELETED",
 			"type": "anyparse.check.common.imports.UnusedImport",
 			"method": "valuesKeepAlive",
-			"find": "if (!membersByPath.exists(imp.raw) || (typeValues != null && fieldValues != null)) return false;",
+			"find": "if (!membersByPath.exists(imp.raw)) return false;",
 			"replace": "return false;",
 			"note": "a known module whose constructors cannot be listed is deleted on its type names alone"
 		},
@@ -483,6 +483,22 @@
 			"find": "UsingSites.membersByModule(projectIndex ?? index)",
 			"replace": "UsingSites.membersByModule(resolveIndex)",
 			"note": "a using on a library module read as its own statics alone is declared unused and deleted, though a library's extension surface reaches past them"
+		},
+		{
+			"name": "M-UNUSED-ALIAS-UNLISTED-KEPT",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "valuesKeepAlive",
+			"find": "listed ?? bindings.valuesSeen(imp.raw);",
+			"replace": "listed;",
+			"note": "a library module holding a typedef to a target the scope cannot resolve reads as unlisted, so its unused import stays an Info the oracle is never asked about"
+		},
+		{
+			"name": "M-UNUSED-ALIAS-TARGET-SAFE",
+			"type": "anyparse.check.common.imports.UnusedImport",
+			"method": "valuesKeepAlive",
+			"find": "'unused import \\'${imp.raw}\\' $MSG_ORACLE_ONLY'",
+			"replace": "'unused import \\'${imp.raw}\\''",
+			"note": "an import whose module aliases a type outside the scope is a SAFE deletion, so --no-oracle --fix removes the statement that binds a bare constructor of that type and the build breaks"
 		}
 	]
 }

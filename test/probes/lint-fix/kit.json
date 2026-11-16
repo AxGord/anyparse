@@ -2678,6 +2678,51 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "UI1",
+			"note": "unused-import of a library module whose typedef aliases an enum outside the resolution scope, kept alive only by a bare constructor of that enum: the safe --fix must leave it",
+			"argv": [
+				"hxq",
+				"lint",
+				"src/pkg/C.hx",
+				"--rule",
+				"unused-import",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"lib/ext/lib/Widget.hx": "package ext.lib;\n\nclass Widget {}\n\ntypedef WidgetMode = ext.Mode;\n",
+				"ext/ext/Mode.hx": "package ext;\n\nenum Mode {\n\tFast;\n\tSlow;\n}\n",
+				"src/pkg/C.hx": "package pkg;\n\nimport ext.lib.Widget;\n\nclass C {\n\tpublic static function main(): Void {\n\t\tfinal m = Fast;\n\t\ttrace(m);\n\t}\n}\n",
+				"apq.json": "{\n\t\"resolutionRoots\": [\"src\", \"lib\"]\n}\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					"src",
+					"-cp",
+					"lib",
+					"-cp",
+					"ext",
+					"-main",
+					"pkg.C",
+					"--interp"
+				],
+				"run": true
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"sameRun": [
+					true
+				]
+			}
 		}
 	]
 }

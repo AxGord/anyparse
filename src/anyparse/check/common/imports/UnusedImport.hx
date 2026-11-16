@@ -1,5 +1,7 @@
 package anyparse.check.common.imports;
 
+import anyparse.check.Check.RiskyArm;
+import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.Check.ScopeDependent;
 import anyparse.check.scan.UsingSites;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -122,7 +124,7 @@ private typedef ImportEvidence = {
  * and a deletion inside a conditional region would be unsafe).
  */
 @:nullSafety(Strict)
-final class UnusedImport extends RuleBase implements ScopeDependent {
+final class UnusedImport extends RuleBase implements ScopeDependent implements RiskyArm {
 
 	/**
 	 * The half of a `not in lint scope` message that is the GUARD's sentence rather than the
@@ -173,9 +175,19 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 		+ 'leaves the emptied line behind as a second blank';
 
 	/** Why an import whose value names cannot be listed is never deleted. */
-	private static final DECLINE_VALUES_UNLISTED: String = '$MSG_VALUES_UNLISTED — a module the index knows declares an enum carrying a '
-		+ 'build macro, a typedef whose target does not resolve, or a source that does not parse, so a bare constructor or module-level '
-		+ 'field of it could be the reference that keeps the import alive';
+	private static final DECLINE_VALUES_UNLISTED: String = '$MSG_VALUES_UNLISTED — a module the index knows declares an enum or abstract '
+		+ 'a build macro shapes, so a bare constructor of it could be the reference that keeps the import alive';
+
+	/**
+	 * The marker of the risky arm's findings: a module whose values were listed only by reading an unresolved typedef target as
+	 * binding none. Haxe brings that target's constructors into bare scope, so only the compiler can prove the import dead.
+	 */
+	private static final MSG_ORACLE_ONLY: String =
+		'(a typedef of its module aliases a type outside the scope, whose constructors may be in use: the fix needs the compiler oracle)';
+
+	/** Why the safe arm leaves a risky-arm finding to the oracle. */
+	private static final DECLINE_ORACLE_ONLY: String = 'a typedef of the module aliases a type the resolution scope does not hold, and '
+		+ 'its bare constructors would be bound through this import, so only a compile can prove the deletion safe';
 
 	public function new() {
 		super('unused-import', 'import whose bound name is never referenced in the file', RuleCategory.Imports);
@@ -220,10 +232,35 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) if (v.severity == Severity.Warning) {
+			if (oracleOnly(v)) {
+				v.declineReason = DECLINE_ORACLE_ONLY;
+				continue;
+			}
 			final span: Null<Span> = v.span;
 			if (span != null) edits.push({ span: span, text: '' });
 		}
 		return edits;
+	}
+
+	public function riskyArmFindings(violations: Array<Violation>): Array<Violation> {
+		return violations.filter(v -> v.severity == Severity.Warning && oracleOnly(v));
+	}
+
+	/** The risky arm deletes the statement, exactly as the safe arm does; the verifier's compile is what earns it. */
+	public function riskyFix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [for (v in violations) if (v.span != null) { span: v.span, text: '' }];
+	}
+
+	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
+		return [];
+	}
+
+	public function riskyCrossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<RiskyCrossFileEdit> {
+		return [];
 	}
 
 	/**
@@ -268,6 +305,10 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 				scan.source, name, 0, scan.source.length, scan.excluded, scan.commentRegions, scan.matchMask
 			)
 		);
+	}
+
+	private static inline function oracleOnly(v: Violation): Bool {
+		return v.message.endsWith(MSG_ORACLE_ONLY);
 	}
 
 	/**
@@ -519,19 +560,26 @@ final class UnusedImport extends RuleBase implements ScopeDependent {
 	/**
 	 * Whether the VALUE names the plain import `imp` binds settle its verdict: true when one of them is
 	 * referenced bare in the file, and true — after recording an `Info` — when the module is known
-	 * but a value set of it cannot be listed (`ImportBindings`: an enum carrying a build macro, a typedef
-	 * whose target does not resolve, a module source that does not parse), since no reference test can
-	 * then prove the import dead. An import the index never saw is left to the scope arm.
+	 * but a value set of it cannot be listed because a build macro shapes an enum or abstract of it (`ImportBindings.valuesSeen`).
+	 * A typedef whose target does not resolve still binds that target's constructors, so an import unlisted only by one is
+	 * reported for the risky arm: the safe fix declines it and only the oracle's compile deletes it. An import the index never
+	 * saw is left to the scope arm.
 	 */
 	private static function valuesKeepAlive(
 		out: Array<Violation>, file: String, imp: ImportInfo, scans: Array<FileScan>, bindings: ImportBindings,
 		membersByPath: Map<String, Array<String>>
 	): Bool {
 		final binding: Null<ImportBinding> = bindings.ofImport(imp.raw);
-		final typeValues: Null<Array<String>> = binding?.typeValues;
+		final listed: Null<Array<String>> = binding?.typeValues;
+		final typeValues: Null<Array<String>> = listed ?? bindings.valuesSeen(imp.raw);
 		final fieldValues: Null<Array<String>> = binding?.fieldValues;
 		for (names in [typeValues, fieldValues]) if (names != null && names.exists(name -> referenced(scans, name))) return true;
-		if (!membersByPath.exists(imp.raw) || (typeValues != null && fieldValues != null)) return false;
+		if (!membersByPath.exists(imp.raw)) return false;
+		if (typeValues != null && fieldValues != null) {
+			if (listed != null) return false;
+			out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\' $MSG_ORACLE_ONLY'));
+			return true;
+		}
 		out.push(make(file, imp, Severity.Info, 'import \'${imp.raw}\': $MSG_VALUES_UNLISTED', DECLINE_VALUES_UNLISTED));
 		return true;
 	}
