@@ -128,6 +128,7 @@
 	"prefer-index-access",
 	"prefer-inline",
 	"prefer-interpolation",
+	"prefer-intersection-type",
 	"prefer-is-operator",
 	"prefer-keyvalue-loop",
 	"prefer-lambda-expression-body",

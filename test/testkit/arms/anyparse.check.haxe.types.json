@@ -48,6 +48,62 @@
 			"method": "minLanguageVersion",
 			"force": "'4.0'",
 			"note": "a project declaring a language older than the operator is told to write it"
+		},
+		{
+			"name": "M-PIT-JOIN-FIRST",
+			"type": "anyparse.check.haxe.types.PreferIntersectionType",
+			"method": "siteOf",
+			"find": "types.join(INTERSECTION)",
+			"replace": "types[0]",
+			"note": "only the first extension is kept, so `{ > A, > B, }` becomes `A`"
+		},
+		{
+			"name": "M-PIT-LEAD-KEPT",
+			"type": "anyparse.check.haxe.types.PreferIntersectionType",
+			"method": "siteOf",
+			"find": "written.substr(EXTENSION_LEAD.length).trim()",
+			"replace": "written.trim()",
+			"note": "the clause keeps its `>` lead, so the rewritten type reads `> A`"
+		},
+		{
+			"name": "M-PIT-NO-TERMINATOR",
+			"type": "anyparse.check.haxe.types.PreferIntersectionType",
+			"method": "siteOf",
+			"find": "(tail == '' ? TYPEDEF_TERMINATOR : '')",
+			"replace": "''",
+			"note": "a typedef written without `;` keeps none, and `typedef C = A & B` does not parse"
+		},
+		{
+			"name": "M-PIT-ANY-MEMBER",
+			"type": "anyparse.check.haxe.types.PreferIntersectionType",
+			"method": "siteOf",
+			"find": "if (member.kind != EXTENSION_KIND) return null;",
+			"replace": "",
+			"note": "an own field or annotation no longer keeps the structure, and is rewritten as if it were a type"
+		},
+		{
+			"name": "M-PIT-COMMENT-IGNORED",
+			"type": "anyparse.check.haxe.types.PreferIntersectionType",
+			"method": "siteOf",
+			"find": "if (LexicalRegions.commentIntersects(span.from, span.to, regions)) return null;",
+			"replace": "",
+			"note": "a comment inside the body is dropped by the rewrite"
+		},
+		{
+			"name": "M-PIT-TAIL-IGNORED",
+			"type": "anyparse.check.haxe.types.PreferIntersectionType",
+			"method": "siteOf",
+			"find": "if (tail != '' && tail != TYPEDEF_TERMINATOR) return null;",
+			"replace": "",
+			"note": "a structure that is only part of the typedef type (a constraint, an intersection operand) is rewritten"
+		},
+		{
+			"name": "M-PIT-ANY-STRUCTURE",
+			"type": "anyparse.check.haxe.types.PreferIntersectionType",
+			"method": "collectSites",
+			"find": "node.kind == seams.aliasKind && ",
+			"replace": "",
+			"note": "a field, parameter or return structure is rewritten into a type the grammar cannot read there"
 		}
 	]
 }

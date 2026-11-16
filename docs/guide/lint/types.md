@@ -102,6 +102,14 @@ A project that names its bit-set type, `"map-as-set": { "enabled": true, "bits":
 
 Like `prefer-compare-function`, a bit-set finding, and a growing-set finding under `set`, is silent in a file whose `compilerOracle` build cannot read the named module (the array advice needs no module and stays reported).
 
+## `prefer-intersection-type`
+
+a typedef whose whole type is a structure holding nothing but `> T` extension clauses, replaceable with the intersection it says — `typedef C = { > A, > B, };` → `typedef C = A & B;`, three clauses → `A & B & C`, a single `{ > A, }` → the plain alias `typedef C = A;`; `Info`, `--fix` rewrites it, `RiskyFix` (verified under a `compilerOracle`, report-only without one). Each clause's type is carried over as written (type arguments and qualified paths included), and a typedef written without its `;` gains one, which the intersection form requires. Silent: a structure with an own field, an annotation or an `#if` region beside the clauses, any comment inside the body, and every structure that is not a typedef's whole type — a field, parameter or return type (the grammar reads `A & B` only on a typedef's right-hand side and as a type argument), a type-parameter constraint, an operand followed by more of the type. The extensions are not resolved: `>` and `&` agree only where each `T` is a structure type, so a class, an abstract or a type parameter is rejected by the compiler and the file is reverted
+
+```haxe
+typedef Rect = { > Point, > Size, };   // --fix: typedef Rect = Point & Size;
+```
+
 ## `prefer-is-operator`
 
 A two-argument `Std.isOfType(x, T)` whose second argument names a type, replaceable with the

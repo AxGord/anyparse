@@ -236,6 +236,7 @@ import anyparse.check.haxe.members.StaticInitOrder;
 import anyparse.check.haxe.members.UnusedEnumAbstractValue;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
 import anyparse.check.haxe.types.AvoidHaxeJson;
+import anyparse.check.haxe.types.PreferIntersectionType;
 import anyparse.check.haxe.types.PreferIsOperator;
 import anyparse.check.haxe.types.PreferMapType;
 import anyparse.core.PhaseTimings;
@@ -332,6 +333,7 @@ final class Linter {
 			new IdentityMap(),
 			new PreferSinglePass(),
 			new PreferMapType(),
+			new PreferIntersectionType(),
 			// Ahead of `fold-adjacent-string-literals` (registered near the top, above) in
 			// READING order only — not load-bearing, `lint --fix` iterates to a fixed point
 			// either way: this rule builds the `+` chain a run of `+=` statements folds into,
