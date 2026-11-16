@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.TokenSpans;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -139,7 +140,9 @@ final class CtorFieldFold {
 		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, [declSpan]);
 		final decl: FoldableDecl = base.decl;
 		final ctor: QueryNode = base.ctor;
-		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, base.container, ctor, base.field, shape);
+		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(
+			source, plugin.lexicalRegions(source), base.container, ctor, base.field, shape
+		);
 		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
 		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
 		if (
@@ -261,7 +264,9 @@ final class CtorFieldFold {
 		final decl: FoldableDecl = base.decl;
 		final ctor: QueryNode = base.ctor;
 		if (holdsConditionalRegion(ctor, shape) || holdsConditionalRegion(base.field, shape)) return null;
-		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(source, base.container, ctor, base.field, shape);
+		final init: Null<ConditionalCtorInit> = soleConditionalCtorFieldInit(
+			source, plugin.lexicalRegions(source), base.container, ctor, base.field, shape
+		);
 		if (init == null) return null;
 		final guardFrom: Int = init.ifStmt.from;
 		if (!guardReachedIntact(source, ctor, decl.name, guardFrom, shape)) return null;
@@ -363,9 +368,9 @@ final class CtorFieldFold {
 	 * OTHER shape is not matched here — the caller's whole-file write scan rejects it.
 	 */
 	private static inline function soleGuardedCtorFieldInit(
-		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+		source: String, regions: Array<LexRegion>, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<GuardedCtorInit> {
-		return soleMatchedCtorIf(source, container, ctor, field, shape, guardedFieldAssign);
+		return soleMatchedCtorIf(source, regions, container, ctor, field, shape, guardedFieldAssign);
 	}
 
 	/**
@@ -376,9 +381,9 @@ final class CtorFieldFold {
 	 * it once the assignment ahead of it has moved out.
 	 */
 	private static inline function soleConditionalCtorFieldInit(
-		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+		source: String, regions: Array<LexRegion>, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
 	): Null<ConditionalCtorInit> {
-		return soleMatchedCtorIf(source, container, ctor, field, shape, conditionalFieldAssign);
+		return soleMatchedCtorIf(source, regions, container, ctor, field, shape, conditionalFieldAssign);
 	}
 
 	/**
@@ -497,7 +502,8 @@ final class CtorFieldFold {
 	 * bytes the assignment ends with, so the rewritten statement keeps them verbatim.
 	 */
 	private static function guardedFieldAssign(
-		source: String, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
+		source: String, regions: Array<LexRegion>, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode,
+		shape: RefShape
 	): Null<GuardedCtorInit> {
 		final stmtSpan: Null<Span> = stmt.span;
 		final param: Null<String> = nullGuardParamName(stmt, shape);
@@ -509,7 +515,7 @@ final class CtorFieldFold {
 		final value: QueryNode = parts.assign.children[1];
 		return if (targetSpan == null || value.kind != shape.identKind || value.name != param)
 			null
-		else if (!statementCommentFree(source, stmtSpan, targetSpan))
+		else if (!statementCommentFree(regions, stmtSpan, targetSpan))
 			null
 		else if (CtorFieldWrite.ctorTargetIsField(parts.target, fieldFrom, fieldName, container, shape))
 			{
@@ -617,9 +623,9 @@ final class CtorFieldFold {
 	 * this runs the condition is proven to be exactly `<ident> != null` (or `null != <ident>`) and the tail is the
 	 * statement terminator, so no string literal can occupy either region.
 	 */
-	private static function statementCommentFree(source: String, stmt: Span, target: Span): Bool {
-		return !SourceComments.hasCommentMarker(source, stmt.from, target.from)
-			&& !SourceComments.hasCommentMarker(source, target.to, stmt.to);
+	private static function statementCommentFree(regions: Array<LexRegion>, stmt: Span, target: Span): Bool {
+		return !LexicalRegions.commentIntersects(stmt.from, target.from, regions)
+			&& !LexicalRegions.commentIntersects(target.to, stmt.to, regions);
 	}
 
 	/**
@@ -661,7 +667,8 @@ final class CtorFieldFold {
 	 * copied verbatim, up to the end of the replaced region.
 	 */
 	private static function conditionalFieldAssign(
-		source: String, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
+		source: String, regions: Array<LexRegion>, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode,
+		shape: RefShape
 	): Null<ConditionalCtorInit> {
 		final stmtSpan: Null<Span> = stmt.span;
 		if (stmt.children.length != 2 || stmtSpan == null) return null;
@@ -683,7 +690,7 @@ final class CtorFieldFold {
 			null
 		else if (OccurrenceScan.referencedInRange(source, fieldName, valueSpan.from, valueSpan.to, []))
 			null
-		else if (foldRegionCommentFree(source, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
+		else if (foldRegionCommentFree(regions, stmtSpan, condSpan, targetSpan, valueSpan, sole ? stmtSpan.to : firstSpan.to))
 			{
 				ifStmt: stmtSpan,
 				assignStmt: firstSpan,
@@ -720,12 +727,12 @@ final class CtorFieldFold {
 	 * statement alone when the `if` survives and only that statement is cut out of its branch.
 	 */
 	private static function foldRegionCommentFree(
-		source: String, stmt: Span, cond: Span, target: Span, value: Span, rebuiltEnd: Int
+		regions: Array<LexRegion>, stmt: Span, cond: Span, target: Span, value: Span, rebuiltEnd: Int
 	): Bool {
-		return !SourceComments.hasCommentMarker(source, stmt.from, cond.from)
-			&& !SourceComments.hasCommentMarker(source, cond.to, target.from)
-			&& !SourceComments.hasCommentMarker(source, target.to, value.from)
-			&& !SourceComments.hasCommentMarker(source, value.to, rebuiltEnd);
+		return !LexicalRegions.commentIntersects(stmt.from, cond.from, regions)
+			&& !LexicalRegions.commentIntersects(cond.to, target.from, regions)
+			&& !LexicalRegions.commentIntersects(target.to, value.from, regions)
+			&& !LexicalRegions.commentIntersects(value.to, rebuiltEnd, regions);
 	}
 
 	/**
@@ -767,8 +774,8 @@ final class CtorFieldFold {
 	 * differ only in WHICH `if` shape they recognise, and that difference is the `matcher` argument.
 	 */
 	private static function soleMatchedCtorIf<T>(
-		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape,
-		matcher: (String, QueryNode, Int, String, QueryNode, RefShape) -> Null<T>
+		source: String, regions: Array<LexRegion>, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape,
+		matcher: (String, Array<LexRegion>, QueryNode, Int, String, QueryNode, RefShape) -> Null<T>
 	): Null<T> {
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		final fieldSpan: Null<Span> = field.span;
@@ -777,7 +784,7 @@ final class CtorFieldFold {
 		if (fieldSpan == null || fieldName == null || body == null) return null;
 		var match: Null<T> = null;
 		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
-			final found: Null<T> = matcher(source, stmt, fieldSpan.from, fieldName, container, shape);
+			final found: Null<T> = matcher(source, regions, stmt, fieldSpan.from, fieldName, container, shape);
 			if (found == null) continue;
 			if (match != null) return null;
 			match = found;

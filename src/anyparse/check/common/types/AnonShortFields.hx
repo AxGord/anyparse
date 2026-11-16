@@ -3,7 +3,6 @@ package anyparse.check.common.types;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.query.LexicalRegions;
-import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
@@ -118,11 +117,6 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 		return CheckScan.hasDocBefore(source, docEnds, at);
 	}
 
-	/** Whether a comment sits in `[from, to)`, the leading run the fix replaces. */
-	private static inline function commentIn(source: String, from: Int, to: Int): Bool {
-		return SourceComments.hasCommentMarker(source, from, to);
-	}
-
 	private static function buildSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final anon: Null<String> = shape.anonTypeKind;
@@ -224,7 +218,8 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 		if (accessors().exists(declSpan.from) || !bareTail(source, typeSpan.to, fieldSpan.to)) return false;
 		final lexedFile: Lexed = lexed();
 		if (LexicalRegions.commentOpensIn(declSpan.from, typeSpan.from, lexedFile.regions)) return false;
-		if (commentIn(source, runFrom, declSpan.from) || docAbove(source, lexedFile.docEnds, runFrom)) return false;
+		if (LexicalRegions.commentIntersects(runFrom, declSpan.from, lexedFile.regions) || docAbove(source, lexedFile.docEnds, runFrom))
+			return false;
 		edits.push({ span: new Span(runFrom, declSpan.from), text: optionalMeta && !optionalDecl ? OPTIONAL_MARK : '' });
 		final wanted: String = last ? '' : FIELD_SEPARATOR;
 		if (source.substring(typeSpan.to, fieldSpan.to) != wanted) edits.push({ span: new Span(typeSpan.to, fieldSpan.to), text: wanted });

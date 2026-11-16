@@ -17153,6 +17153,14 @@
 			"find": "TreePath.withSpan(rewrite.module.newTree, located) != null",
 			"replace": "true",
 			"note": "a replace whose edit belonged to one node is rebuilt onto one half of it when the rewrite split that node, instead of the arm being named"
+		},
+		{
+			"name": "M-ACCESSOR-REMOVAL-COMMENT-IGNORED",
+			"type": "anyparse.query.AccessorClause",
+			"method": "removalSpan",
+			"find": "LexicalRegions.commentIntersects(memberFrom, leadGap.to, regions)",
+			"replace": "false",
+			"note": "a comment between the declaration start and the accessor clause is not seen, so the clause is deleted beside it"
 		}
 	]
 }

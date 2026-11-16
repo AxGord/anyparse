@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 /**
@@ -93,8 +94,8 @@ final class AccessorClause {
 	 * `[end of the token before the `(`, past close paren)`. Null when a comment sits anywhere from `memberFrom` (the
 	 * declaration's start) to the `(`, where the deleted bytes would sit next to it.
 	 */
-	public function removalSpan(source: String, memberFrom: Int): Null<Span> {
-		return SourceComments.hasCommentMarker(source, memberFrom, leadGap.to) ? null : new Span(leadGap.from, span.to);
+	public function removalSpan(regions: Array<LexRegion>, memberFrom: Int): Null<Span> {
+		return LexicalRegions.commentIntersects(memberFrom, leadGap.to, regions) ? null : new Span(leadGap.from, span.to);
 	}
 
 	/**

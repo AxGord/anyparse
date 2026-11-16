@@ -328,7 +328,9 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			final t: MemberTables = memberTables(cls, RunScan.accessorClausesOf(plugin, source), branch, shape);
 			for (prop in t.properties) if (prop.span.from == span.from) {
 				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
-				final c = classifyProperty(cls, source, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
+				final c = classifyProperty(
+					cls, source, v.file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape, plugin
+				);
 				// The self-backed arm deletes nothing outside the owner, so no other file can need an edit.
 				if (c == null || c.inlineGetter != null || c.selfBacked) return null;
 				if (accessorReachedOutside(subtypeIndex, owner, c.deletedAccessors, plugin)) return null;
@@ -417,7 +419,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		final owner: String = className;
 		final t: MemberTables = memberTables(cls, RunScan.accessorClausesOf(plugin, source), branch, shape);
 		for (prop in t.properties) if (!subtypeBlocks(subtypeIndex, className, prop.name)) {
-			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
+			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape, plugin);
 			if (c == null) continue;
 			// Every member the collapse DELETES: the accessors, plus the backing field on the bridged
 			// arm. The self-backed arm deletes no field — the property IS the storage — so its
@@ -505,7 +507,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		for (prop in t.properties) if (
 			wanted.contains('${prop.span.from}:${prop.span.to}') && !subtypeBlocks(index, className, prop.name)
 		) {
-			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape);
+			final c = classifyProperty(cls, source, file, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass, shape, plugin);
 			if (c == null) continue;
 			if (backingFieldReachedOutside(index, className, c.field, c.selfBacked, c.inlineGetter, plugin)) continue;
 			if (c.inlineGetter == null && accessorReachedOutside(index, className, c.deletedAccessors, plugin)) continue;
@@ -780,7 +782,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			isOverride: Bool,
 			isInline: Bool
 		}>,
-		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int, shape: RefShape
+		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int, shape: RefShape, plugin: GrammarPlugin
 	): Null<{
 		field: String,
 		fieldNode: QueryNode,
@@ -834,7 +836,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		// the inline arm keeps the getter, so a required interface accessor is never removed.
 		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index, file, shape)) return null;
 		// A comment between the declaration's start and the clause leaves the head unproven, so no span is offered for either arm.
-		final removal: Null<Span> = prop.clause.removalSpan(source, prop.span.from);
+		final removal: Null<Span> = prop.clause.removalSpan(plugin.lexicalRegions(source), prop.span.from);
 		final removesClause: Bool = raw.clauseText == '' && raw.inlineGetter == null;
 		final clauseSpan: Null<Span> = removal == null || removesClause ? removal : prop.clause.parenSpan();
 		final metaSpan: Null<Span> = selfBacked ? prop.isVarMeta?.span : null;

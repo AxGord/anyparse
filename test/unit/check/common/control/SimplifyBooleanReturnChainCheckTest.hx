@@ -230,6 +230,11 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		Assert.equals('return a || b;', reduce('{ // lead\nif (a) return true; if (b) return true; return false; // tail\n}'));
 	}
 
+	/** A `//` spelled inside a string literal of a condition is no comment: the chain still reduces, the literal kept verbatim. */
+	public function testCommentMarkerInAStringLiteralStillReduces(): Void {
+		Assert.equals("return s == 'http://x' || b;", reduce("{ if (s == 'http://x') return true; if (b) return true; return false; }"));
+	}
+
 	private function violations(body: String): Array<Violation> {
 		final src: String =
 			'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int, s: String, t: String, y: Float): Dynamic ${body} }';

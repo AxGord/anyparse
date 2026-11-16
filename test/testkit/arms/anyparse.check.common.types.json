@@ -436,9 +436,9 @@
 		{
 			"name": "M-ANON-SHORT-RUN-COMMENT",
 			"type": "anyparse.check.common.types.AnonShortFields",
-			"method": "commentIn",
-			"find": "return SourceComments.hasCommentMarker(source, from, to);",
-			"replace": "return false;",
+			"method": "longFieldEdits",
+			"find": "LexicalRegions.commentIntersects(runFrom, declSpan.from, lexedFile.regions) ||",
+			"replace": "false ||",
 			"note": "a comment inside the leading run the fix replaces is deleted with it"
 		},
 		{

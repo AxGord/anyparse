@@ -7,7 +7,6 @@ import anyparse.query.BoolExprShape;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ParenGuard;
-import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
 
@@ -147,10 +146,10 @@ final class NegatedCondition {
 	}
 
 	/** Whether rebuilding `cond` as `kept`'s source alone would drop a comment (one outside `kept`). */
-	public static function dropsComment(cond: QueryNode, kept: QueryNode, source: String): Bool {
+	public static function dropsComment(cond: QueryNode, kept: QueryNode, regions: Array<LexRegion>): Bool {
 		final condSpan: Null<Span> = cond.span;
 		final keptSpan: Null<Span> = kept.span;
-		return condSpan == null || (keptSpan == null || commentOutside(source, condSpan, keptSpan));
+		return condSpan == null || (keptSpan == null || commentOutside(regions, condSpan, keptSpan));
 	}
 
 	/**
@@ -160,7 +159,7 @@ final class NegatedCondition {
 	public static function positive(cond: QueryNode, elseArm: QueryNode, site: Null<InversionSite>): Null<QueryNode> {
 		if (site == null) return null;
 		final kept: Null<QueryNode> = invertibleOperand(cond, elseArm, site);
-		return kept == null || dropsComment(cond, kept, site.source) ? null : kept;
+		return kept == null || dropsComment(cond, kept, site.regions()) ? null : kept;
 	}
 
 	/**
@@ -175,7 +174,7 @@ final class NegatedCondition {
 		if (kept != null && keptSpan != null)
 			return {
 				condition: site.source.substring(keptSpan.from, keptSpan.to),
-				dropsComment: dropsComment(cond, kept, site.source),
+				dropsComment: dropsComment(cond, kept, site.regions()),
 				defaultLast: false
 			};
 		final turned: Null<String> = defaultLastCondition(cond, thenArm, elseArm, site);
@@ -323,9 +322,9 @@ final class NegatedCondition {
 	}
 
 	/** Whether a comment lies in `outer` before or after `inner` — the part of `outer` a rebuild as `inner` drops. */
-	private static function commentOutside(source: String, outer: Span, inner: Span): Bool {
-		return SourceComments.hasCommentMarker(source, outer.from, inner.from)
-			|| SourceComments.hasCommentMarker(source, inner.to, outer.to);
+	private static function commentOutside(regions: Array<LexRegion>, outer: Span, inner: Span): Bool {
+		return LexicalRegions.commentIntersects(outer.from, inner.from, regions)
+			|| LexicalRegions.commentIntersects(inner.to, outer.to, regions);
 	}
 
 }

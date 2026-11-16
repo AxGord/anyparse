@@ -2,7 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.SourceComments;
+import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -76,12 +76,13 @@ final class SimplifyBooleanReturnChain extends RuleBase {
 				final types: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(
 					source, plugin, tree, violations[0].file, index
 				);
+				final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 				return RunScan.spanEdits(violations, (v, span) -> {
 					final chain: Null<Chain> = bySpan['${span.from}:${span.to}'];
 					if (chain == null) return null;
 					// The edit regenerates the WHOLE span from the conditions alone, so a comment anywhere in it - between two
 					// guards, between a guard's condition and its return, in a condition's operator glue - would be dropped.
-					if (SourceComments.hasCommentMarker(source, span.from, span.to)) {
+					if (LexicalRegions.commentIntersects(span.from, span.to, regions)) {
 						v.declineReason = COMMENT_DECLINE;
 						return null;
 					}

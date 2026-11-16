@@ -2608,6 +2608,45 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "SB-STRING-MARKER",
+			"note": "simplify-boolean-return-chain: a `//` inside a string literal of a guard condition is no comment, so the chain is reduced (a string-blind scan refused it)",
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"-main",
+					"Main",
+					"--interp"
+				],
+				"run": true
+			},
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"simplify-boolean-return-chain",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function f(s:String, b:Bool):Bool {\n\t\tif (s == 'http://x') return true;\n\t\tif (b) return true;\n\t\treturn false;\n\t}\n\n\tstatic function main() {\n\t\tSys.println(f('http://x', false));\n\t\tSys.println(f('a', true));\n\t\tSys.println(f('a', false));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b10297dec8a084f0",
+				"files": "81d401b6b8a73aed",
+				"compiles": [
+					true
+				],
+				"sameRun": [
+					true
+				]
+			}
 		}
 	]
 }

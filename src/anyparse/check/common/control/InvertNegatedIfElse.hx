@@ -6,10 +6,9 @@ import anyparse.check.common.control.NegatedCondition.InversionSite;
 import anyparse.check.common.control.NegatedCondition.Swap;
 import anyparse.check.scan.RegionTerminator;
 import anyparse.query.ElementSpan;
-import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParenGuard;
-import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -194,10 +193,10 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 		final thenSpan: Null<Span> = tight(thenBranch, scan);
 		final elseSpan: Null<Span> = tight(elseBranch, scan);
 		if (swap == null || condSpan == null || thenSpan == null || elseSpan == null) return Skip;
-		final source: String = scan.site.source;
+		final regions: Array<LexRegion> = scan.regions();
 		return swap.dropsComment
-			|| SourceComments.hasCommentMarker(source, condSpan.to, thenSpan.from)
-			|| SourceComments.hasCommentMarker(source, thenSpan.to, elseSpan.from)
+			|| LexicalRegions.commentIntersects(condSpan.to, thenSpan.from, regions)
+			|| LexicalRegions.commentIntersects(thenSpan.to, elseSpan.from, regions)
 			? CommentBlocked(swap)
 			: Fixable(swap);
 	}

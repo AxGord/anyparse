@@ -230,7 +230,7 @@
 			"name": "M-NEGCOND-COMMENT-BEFORE-KEPT",
 			"type": "anyparse.check.common.control.NegatedCondition",
 			"method": "commentOutside",
-			"find": "return SourceComments.hasCommentMarker(source, outer.from, inner.from)",
+			"find": "return LexicalRegions.commentIntersects(outer.from, inner.from, regions)",
 			"replace": "return false",
 			"note": "a comment between the `!` and its operand is not seen, and the positive rebuild drops it"
 		},
@@ -246,7 +246,7 @@
 			"name": "M-NEGCOND-COMMENT-WHOLE-COND",
 			"type": "anyparse.check.common.control.NegatedCondition",
 			"method": "commentOutside",
-			"force": "SourceComments.hasCommentMarker(source, outer.from, outer.to)",
+			"force": "LexicalRegions.commentIntersects(outer.from, outer.to, regions)",
 			"note": "a comment INSIDE the kept operand blocks the inversion too, though it travels verbatim"
 		},
 		{
@@ -356,7 +356,7 @@
 			"name": "M-RETURN-CHAIN-COMMENT-ADMITTED",
 			"type": "anyparse.check.common.control.SimplifyBooleanReturnChain",
 			"method": "fix",
-			"find": "if (SourceComments.hasCommentMarker(source, span.from, span.to)) {",
+			"find": "if (LexicalRegions.commentIntersects(span.from, span.to, regions)) {",
 			"replace": "if (false) {",
 			"note": "the flat guard-chain rewrite drops a comment inside the chain"
 		},
