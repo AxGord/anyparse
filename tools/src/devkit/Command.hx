@@ -77,6 +77,11 @@ final class Command {
 		return check().lines();
 	}
 
+	/** The milliseconds after which a run of this command is killed (counted from the grant of a lease), 0 for no limit. */
+	public inline function limit(): Int {
+		return _timeout;
+	}
+
 	/** This command run in `dir`. */
 	public function at(dir: String): Command {
 		return new Command(argv, dir, _env, _timeout, _input, _upstream, _tethered, _guard);

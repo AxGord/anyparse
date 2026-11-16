@@ -38,7 +38,7 @@ final class PostLand {
 	private static inline final RUNNING: String = 'running';
 	private static inline final RED: String = 'red';
 	private static inline final SHARD_TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
-	private static inline final HXCPP_TIMEOUT_MS: Int = 30 * 60 * 1000;
+	private static inline final PHASE_TIMEOUT_MS: Int = 30 * 60 * 1000;
 	private static inline final MS_PER_SECOND: Float = 1000;
 
 	/**
@@ -81,6 +81,7 @@ final class PostLand {
 	private static final LINT_MARK: String = 'post-land lint started';
 
 	private static final LINT_START: String = 'echo "$LINT_MARK" >&2; exec "$$@"';
+
 
 	/** The end of the totals line of `dev shard`: its elapsed seconds and the shards it ran on. */
 	private static final SPAN: EReg = ~/ in (\d+(?:\.\d+)?)s across (\d+) shards ---/;
@@ -320,10 +321,11 @@ final class PostLand {
 
 	/**
 	 * `command`, the whole lint, behind a lease of one thread. The lint is not one single-threaded process: its compiler-oracle
-	 * builds fan out by the threads the lease grants (`WF_THREADS`), so the lease caps that fan-out at one compile at a time.
+	 * builds fan out by the threads the lease grants (`WF_THREADS`), so the lease caps that fan-out at one compile at a time. The lint
+	 * is bounded from its grant by `PHASE_TIMEOUT_MS`: the driver's default bound for a leased job sits at what an honest whole lint takes.
 	 */
 	public static function lintLeased(mode: LeaseMode, command: Command, label: String): Command {
-		return Lease.take(mode, command, { min: LINT_THREADS, max: LINT_THREADS, priority: 0 }, label);
+		return Lease.take(mode, command.timeout(PHASE_TIMEOUT_MS), { min: LINT_THREADS, max: LINT_THREADS, priority: 0 }, label);
 	}
 
 	/** What `launch` left in `dir` for `sha`: the script copy always, the log unless `keepLog`. */
@@ -368,10 +370,10 @@ final class PostLand {
 			GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)).under(['sh', '-c', LINT_START, 'sh']),
 			'post-land-lint $sha'
 		).run();
-		final started: Int = lint.err.indexOf(LINT_MARK);
-		if (started < 0) return NotRun('the whole lint of $sha never started: ${endOf(lint)}');
+		final own: Null<Result> = afterStart(lint);
+		if (own == null) return NotRun('the whole lint of $sha never started: ${endOf(lint)}');
 		if (!lint.out.trim().startsWith('['))
-			return Failed('the whole lint of $sha printed no report: ${sinceStart(lint, started + LINT_MARK.length).firstError()}');
+			return Failed('the whole lint of $sha printed no report (${endOf(lint)}): ${own.firstError()}');
 		final snapshot: String = Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-anyparse.json']);
 		final truth: String = '$snapshot.truth';
 		File.saveContent(truth, lint.out);
@@ -413,7 +415,7 @@ final class PostLand {
 		final build: Command = Command.of(['sh', '-c', script, 'sh'])
 			.at(tree)
 			.env('HXCPP_COMPILE_CACHE', Path.join([cache, HXCPP_CACHE]))
-			.timeout(HXCPP_TIMEOUT_MS);
+			.timeout(PHASE_TIMEOUT_MS);
 		return Lease.take(mode, build, { min: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS, priority: 0 }, 'post-land-hxcpp');
 	}
 
@@ -619,15 +621,24 @@ final class PostLand {
 		return hxcppRow(Land.mergedPaths(tree), () -> hxcppBuild(tree, cache, Lease.ofEnvironment(), _ -> {}));
 	}
 
-	/** `lint` with only the stderr text from offset `from` on: the program's own, after the lease wrapper's waiting text. */
-	private static function sinceStart(lint: Result, from: Int): Result {
-		return new Result(lint.command, {
-			status: lint.status,
-			out: lint.out,
-			err: lint.err.substr(from),
-			failure: lint.failure,
-			overflowed: false
-		});
+	/**
+	 * `lint` with only the stderr text its own program wrote, after the lease wrapper's waiting text, or null when the start mark is
+	 * not there: the lint never started. A line the process driver appends for a process left behind quotes that process's command
+	 * line, which holds the mark too, so only the text before the first such line is searched.
+	 */
+	private static function afterStart(lint: Result): Null<Result> {
+		final noted: EReg = ~/^orphan (?:left running|held output): /m;
+		final head: String = noted.match(lint.err) ? lint.err.substr(0, noted.matchedPos().pos) : lint.err;
+		final started: Int = head.indexOf(LINT_MARK);
+		return started < 0
+			? null
+			: new Result(lint.command, {
+				status: lint.status,
+				out: lint.out,
+				err: lint.err.substr(started + LINT_MARK.length),
+				failure: lint.failure,
+				overflowed: false
+			});
 	}
 
 	/**

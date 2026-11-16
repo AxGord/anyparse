@@ -100,4 +100,13 @@ final class PostLandLeaseTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-POSTLAND-LINT-UNBOUNDED-BY-DEFAULT')
+	public function testTheWholeLintIsBoundedFromItsGrantAboveTheDriversDefaultForALeasedJob(): Void {
+		final lint: Command = Command.of(['hxq', 'lint']);
+		final tenMinutes: Int = 10 * 60 * 1000;
+		Assert.isTrue(PostLand.lintLeased(Own('/p/scripts/wf-run', 10), lint, 'post-land-lint 0123abcd').limit() > tenMinutes);
+		Assert.isTrue(PostLand.lintLeased(Unpooled, lint, 'post-land-lint 0123abcd').limit() > tenMinutes);
+	}
+
 }

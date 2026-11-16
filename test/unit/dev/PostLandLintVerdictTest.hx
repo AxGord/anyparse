@@ -85,7 +85,7 @@ final class PostLandLintVerdictTest extends Test {
 	}
 
 	/** A tree whose `bin/hxq` runs `script` for the lint. */
-	private static function tree(dir: TempDir, script: String): String {
+	public static function tree(dir: TempDir, script: String): String {
 		final root: String = dir.file('tree');
 		sys.FileSystem.createDirectory(root);
 		sys.FileSystem.createDirectory('$root/bin');
