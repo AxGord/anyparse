@@ -1808,6 +1808,38 @@
 			"find": "if (open >= from && open < to) out.push",
 			"replace": "if (open >= from) out.push",
 			"note": "a comment past the end of the gap is read as the gap's own, so a run's comments take in what follows its last statement"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-PATH-MATCH",
+			"type": "anyparse.check.scan.LoopScan",
+			"method": "isCollection",
+			"find": "prefixLength(node, path, s) == path.length",
+			"replace": "false",
+			"note": "a path receiver never matches its own index reads, so no path loop is reported or fixed"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-PATH-PREFIX-REBIND",
+			"type": "anyparse.check.scan.LoopScan",
+			"method": "pathUseScan",
+			"find": "isMemberReadOff(node, parent, grandParent, s)",
+			"replace": "true",
+			"note": "a body assigning a path root or prefix is admitted, so the rewritten loop iterates the array the header read while the body reads another"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-SELF-ALIAS",
+			"type": "anyparse.check.scan.LoopScan",
+			"method": "pathUseScan",
+			"find": "node.kind != s.identKind || node.name != path[1] || path[0] != s.shape.selfReferenceText",
+			"replace": "true",
+			"note": "a bare items in a this.items loop body is not seen as the same storage, so a push through it grows the iterated array"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-PATH-TYPE",
+			"type": "anyparse.check.scan.LoopScan",
+			"method": "receiverTypeSource",
+			"find": ": f.pathTypes(node)",
+			"replace": ": null",
+			"note": "a path is never typed, so a String path is reported with advice that does not compile"
 		}
 	]
 }

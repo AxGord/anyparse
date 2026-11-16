@@ -8,7 +8,6 @@ import anyparse.check.scan.LoopScan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 
 /**
  * Flags an INDEXED `for` whose index is never anything but an index into the collection it
@@ -23,9 +22,8 @@ import anyparse.query.TypeInfoProvider;
  *
  * ## Soundness gates (all required for a flag)
  *
- * - **`X` is a bare identifier.** A path receiver (`this.items`) is skipped for the reason the
- *   sibling states: the type resolution behind the rewrite reads a BINDING's annotation.
- * - **`X`'s length cannot move** (`LoopScan.usedOnlyAsStableCollection`). `0...X.length`
+ * - **`X` is a bare identifier or a plain field path** (`tree.children`, `this.items`).
+ * - **`X`'s length cannot move** (`LoopScan.usedOnlyAsStablePath`; for a path, no segment is re-bound). `0...X.length`
  *   evaluates its bound once while `for (v in X)` re-asks the iterator every step, so a body
  *   that appends to `X` would turn a terminating loop into a runaway one.
  * - **Every read of `i` is an `X[i]`**, and there is at least one — `LoopScan.countReads` equal
@@ -74,10 +72,7 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return RunScan.collectWith(files, plugin, LoopScan.intervalSeamsOf(plugin.refShape()), (entry, tree, s, violations) -> {
-			walk(tree, LoopScan.fileScanOf(tree, entry.source, typed?.declaredTypeSources(entry.source), plugin, s), entry.file, violations);
-		});
+		return ElementLoopRewrite.runScans(files, plugin, (f, file, out) -> walk(f.root, f, file, out));
 	}
 
 	/**
@@ -86,11 +81,8 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 	 * every span, so a braced and an unbraced body take the same edits.
 	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		final file: String = violations.length > 0 ? violations[0].file : '';
-		final gate: ReachGate = ElementLoopRewrite.gateFor(plugin, file, source, violations, RULE_ID);
-		return RunScan.walkedEdits(
-			plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations,
-			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), wanted, out, gate)
+		return ElementLoopRewrite.fixScans(
+			source, violations, plugin, index, RULE_ID, (f, wanted, out, gate) -> fixWalk(f.root, f, wanted, out, gate)
 		);
 	}
 
@@ -128,7 +120,7 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}'))
-			ElementLoopRewrite.gatedEdits(buildEdits(m, f.regions()), gate, m.header, m.forSpan, m.decline, out);
+			ElementLoopRewrite.gatedEdits(buildEdits(m, f.regions()), gate, m.header, f, m.forSpan, m.decline, out);
 		for (c in node.children) fixWalk(c, f, wanted, out, gate);
 	}
 
@@ -144,9 +136,9 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 		final core: LoopSeams = f.seams.core;
 		final h: Null<IndexedLoopHeader> = LoopScan.indexedHeaderOf(forNode, f.source, LENGTH_MEMBER, f.seams);
 		if (h == null) return null;
-		final reads: Array<QueryNode> = LoopScan.collectIndexReads(h.body, h.collection, h.index, core);
+		final reads: Array<QueryNode> = LoopScan.collectIndexReads(h.body, h.path, h.index, core);
 		if (reads.length == 0 || LoopScan.countReads(h.body, h.index, core) != reads.length) return null;
-		if (claimedByKeyValueLoop(h.body, h.collection, h.index, reads.length, core)) return null;
+		if (claimedByKeyValueLoop(h.body, h.path, h.index, reads.length, core)) return null;
 		if (!ElementLoopRewrite.bodyAdmitsElementLoop(h, f.source, LENGTH_MEMBER, core)) return null;
 		final forSpan: Null<Span> = forNode.span;
 		final iterableSpan: Null<Span> = h.iterable.span;
@@ -168,12 +160,12 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 		// excluded. `f.inert` keeps a comment and a non-interpolating literal from counting as a use;
 		// a literal that CAN interpolate stays visible, because its bytes can be a real read.
 		if (OccurrenceScan.referencedInRange(f.source, h.index, bodySpan.from, bodySpan.to, indexSpans, f.inert)) return null;
-		final collectionTypeSource: Null<String> = LoopScan.identTypeSource(h.sizeReceiver, f.root, f.types, core);
+		final collectionTypeSource: Null<String> = LoopScan.receiverTypeSource(h.sizeReceiver, f);
 		// A container that RESOLVES to something else has no value iteration to offer — `String`
 		// is the one that stings, since it carries a `length` — so the message would be advice
 		// that does not compile; only an UNRESOLVED one keeps the report-only tolerance.
 		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE) return null;
-		final binder: BinderChoice = ElementLoopRewrite.binderFor(f, forNode, h.index, h.collection, bodySpan, 'the loop body');
+		final binder: BinderChoice = ElementLoopRewrite.binderFor(f, forNode, h.index, h.leaf, bodySpan, 'the loop body');
 		return {
 			forSpan: forSpan,
 			iterableSpan: iterableSpan,
@@ -199,7 +191,7 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 	 * them.
 	 */
 	private static function claimedByKeyValueLoop(
-		body: QueryNode, collection: String, index: String, indexReads: Int, core: LoopSeams
+		body: QueryNode, collection: Array<String>, index: String, indexReads: Int, core: LoopSeams
 	): Bool {
 		return body.children.length >= MIN_KEY_VALUE_STATEMENTS
 			&& indexReads == CONSUMED_INDEX_READS

@@ -39,9 +39,15 @@ class LoopScanTest extends Test {
 		Assert.isNull(headerOf('for (i in 0...items.size) use(items[i]);'));
 	}
 
-	public function testIndexedHeaderRejectsPathReceiver(): Void {
-		// The rewrite gate reads a BINDING's annotation, which a path has none of.
-		Assert.isNull(headerOf('for (i in 0...a.b.length) use(a.b[i]);'));
+	public function testIndexedHeaderReadsPathReceiver(): Void {
+		final h: Null<IndexedLoopHeader> = headerOf('for (i in 0...a.bs.length) use(a.bs[i]);');
+		Assert.equals('a.bs', h?.collection);
+		Assert.equals('bs', h?.leaf);
+		Assert.equals('a,bs', h?.path.join(','));
+		// a path rooted at the index reads the loop's own binder, never the collection it counted
+		Assert.isNull(headerOf('for (a in 0...a.bs.length) use(a.bs[a]);'));
+		// a call link evaluates per read, so it is no path
+		Assert.isNull(headerOf('for (i in 0...f().bs.length) use(f().bs[i]);'));
 	}
 
 	public function testIndexedHeaderRejectsCollectionNamedLikeIndex(): Void {
@@ -79,7 +85,7 @@ class LoopScanTest extends Test {
 	public function testCollectIndexReadsReturnsTheNodesItCounts(): Void {
 		final nodes: Array<QueryNode> = indexReadsOf('use(items[i], other[i], items[k]);', 'items', 'i');
 		Assert.equals(1, nodes.length);
-		Assert.equals(1, LoopScan.countIndexReads(bodyOf('use(items[i], other[i], items[k]);'), 'items', 'i', seams().core));
+		Assert.equals(1, LoopScan.countIndexReads(bodyOf('use(items[i], other[i], items[k]);'), ['items'], 'i', seams().core));
 		Assert.equals('i', nodes[0].children[1].name);
 	}
 
@@ -144,7 +150,7 @@ class LoopScanTest extends Test {
 	}
 
 	private function indexReadsOf(statements: String, collection: String, index: String): Array<QueryNode> {
-		return LoopScan.collectIndexReads(bodyOf(statements), collection, index, seams().core);
+		return LoopScan.collectIndexReads(bodyOf(statements), [collection], index, seams().core);
 	}
 
 	private function bindsIn(statements: String, name: String): Bool {

@@ -5,7 +5,6 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.common.loops.ElementLoopRewrite.BinderChoice;
 import anyparse.check.common.loops.ElementLoopRewrite.ReachGate;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.common.naming.ShadowingLocal;
@@ -29,20 +28,20 @@ using StringTools;
  *
  * ## The shape it accepts
  *
- * A `for` whose iterable is exactly `0...X.length` for a bare identifier `X`, whose body is a
+ * A `for` whose iterable is exactly `0...X.length` for a bare identifier or plain field path `X`, whose body is a
  * braced block of at least two statements, and whose FIRST statement is a single-variable local
  * declaration (`var` or `final`, with or without a type annotation) initialised by exactly `X[i]`.
  *
  * ## Soundness gates (all required for a flag)
  *
- * - **`X` is a bare identifier.** A path receiver (`this.items`, `a.b`) is skipped: the type
- *   resolution behind the rewrite gate reads a BINDING's annotation, and a check's `run` has no
- *   `SymbolIndex` to walk a path with. A bare identifier that binds to a FIELD does resolve and
- *   IS accepted.
+ * - **`X` is a bare identifier or a plain field path.** A bare identifier's type is its binding's
+ *   annotation (one that binds to a FIELD resolves too); a path's (`tree.children`, `this.items`) is
+ *   its last member's, walked through the run's `SymbolIndex` (`LoopScan.lazyPathTypes`).
  * - **`X`'s length cannot move.** `0...X.length` evaluates the bound ONCE; `for (i => v in X)`
  *   re-asks the iterator every step, so a body that appends to `X` would turn a terminating loop
  *   into a runaway one. Every mention of `X` in the body must therefore be a `length` read or an
- *   index READ — see `LoopScan.usedOnlyAsStableCollection`. That scan is BODY-LOCAL; what the body
+ *   index READ, and every mention of a path's prefix a member read off it, so no segment is re-bound —
+ *   see `LoopScan.usedOnlyAsStablePath`. That scan is BODY-LOCAL; what the body
  *   RUNS — calls, constructors, the getters and setters of the properties it touches — is asked of
  *   `MemberReach` by the fix (`ElementLoopRewrite.reachDecline`), which must prove that no such code
  *   changes `X` through any alias, or leaves the finding report-only.
@@ -53,11 +52,11 @@ using StringTools;
  *   needs no separate write gate — a write target is not one of the two positions the
  *   stable-collection scan admits.)
  * - **No statement-position re-declaration.** No statement after the consumed declaration
- *   re-declares `i`, `v` or `X` as a local `var` / `final`. Binders of OTHER kinds — a `catch`
+ *   re-declares `i`, `v` or `X` (a path's root) as a local `var` / `final`. Binders of OTHER kinds — a `catch`
  *   variable, a lambda parameter, a case-pattern capture, a nested loop binder — are NOT scanned,
  *   and do not need to be: each of them shadows the moved header binding exactly as it shadowed
  *   the block-scoped declaration.
- * - **Distinct names.** `i`, `v` and `X` must be three different names (`for (i => i in i)` is
+ * - **Distinct names.** `i`, `v` and every segment of `X` must be different names (`for (i => i in i)` is
  *   not a rewrite, it is a collision).
  * - **No closure gate is needed.** Unlike its sibling `dead-binder-counter-loop`, this rewrite
  *   re-scopes nothing: a block-scoped `final v` and a Haxe loop binder are both fresh per
@@ -66,7 +65,7 @@ using StringTools;
  * ## Rewrite gate (report-only when it fails)
  *
  * A container that RESOLVES to something other than `Array` is not reported at all — the message
- * names a form that would not compile for it. An UNRESOLVED `X` (unannotated, a path, a plugin
+ * names a form that would not compile for it. An UNRESOLVED `X` (unannotated, a path no index types, a plugin
  * without `TypeInfoProvider`) still reports, and there the FIX additionally needs the element
  * type provable, because it DROPS the declaration and with it any `:Type` annotation: `X`'s
  * binding must be declared `Array<E>` and the annotation — when the declaration carries one —
@@ -127,10 +126,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return RunScan.collectWith(files, plugin, LoopScan.intervalSeamsOf(plugin.refShape()), (entry, tree, s, violations) -> {
-			walk(tree, LoopScan.fileScanOf(tree, entry.source, typed?.declaredTypeSources(entry.source), plugin, s), entry.file, violations);
-		});
+		return ElementLoopRewrite.runScans(files, plugin, (f, file, out) -> walk(f.root, f, file, out));
 	}
 
 	/**
@@ -140,11 +136,8 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	 * the replaced region.
 	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		final file: String = violations.length > 0 ? violations[0].file : '';
-		final gate: ReachGate = ElementLoopRewrite.gateFor(plugin, file, source, violations, RULE_ID);
-		return RunScan.walkedEdits(
-			plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations,
-			(tree, types, s, wanted, out) -> fixWalk(tree, LoopScan.fileScanOf(tree, source, types, plugin, s), wanted, out, gate)
+		return ElementLoopRewrite.fixScans(
+			source, violations, plugin, index, RULE_ID, (f, wanted, out, gate) -> fixWalk(f.root, f, wanted, out, gate)
 		);
 	}
 
@@ -170,7 +163,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Match> = analyze(node, f);
 		if (m != null && wanted.contains('${m.forSpan.from}:${m.forSpan.to}')) {
-			final decline: Null<String> = openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header);
+			final decline: Null<String> = openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header, f);
 			if (decline == null)
 				out.push(buildEdit(m));
 			else
@@ -178,7 +171,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		}
 		final r: Null<ReadsMatch> = m == null ? analyzeReads(node, f) : null;
 		if (r != null && wanted.contains('${r.forSpan.from}:${r.forSpan.to}'))
-			ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.regions()), gate, r.header, r.forSpan, r.decline, out);
+			ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.regions()), gate, r.header, f, r.forSpan, r.decline, out);
 		for (c in node.children) fixWalk(c, f, wanted, out, gate);
 	}
 
@@ -188,7 +181,7 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	 * and `fixWalk` (rewrite) so both see one decision.
 	 */
 	private static function analyze(forNode: QueryNode, f: LoopFileScan): Null<Match> {
-		final root: QueryNode = f.root;
+
 		final source: String = f.source;
 		final types: Null<Map<Int, String>> = f.types;
 		final s: IntervalLoopSeams = f.seams;
@@ -197,15 +190,15 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		if (h == null) return null;
 		final decl: QueryNode = h.body.children[0];
 		final valueVar: Null<String> = LoopScan.singleLocalDeclName(decl, core.localDeclKinds, core);
-		if (valueVar == null || valueVar == h.index || valueVar == h.collection) return null;
+		if (valueVar == null || valueVar == h.index || h.path.contains(valueVar)) return null;
 		final init: QueryNode = decl.children[0];
-		if (!LoopScan.isIndexAccessOf(init, h.collection, core)) return null;
+		if (!LoopScan.isIndexAccessOf(init, h.path, core)) return null;
 		if (LoopScan.bareIdentName(init.children[1], core) != h.index) return null;
-		if (!bodyAdmitsRewrite(h.body, h.index, valueVar, h.collection, core)) return null;
+		if (!bodyAdmitsRewrite(h, source, valueVar, core)) return null;
 		final forSpan: Null<Span> = forNode.span;
 		final declSpan: Null<Span> = decl.span;
 		if (forSpan == null || declSpan == null) return null;
-		final collectionTypeSource: Null<String> = LoopScan.identTypeSource(h.sizeReceiver, root, types, core);
+		final collectionTypeSource: Null<String> = LoopScan.receiverTypeSource(h.sizeReceiver, f);
 		// A container that RESOLVES to something other than `Array` has no key-value iteration to
 		// offer, so the message would be advice that does not compile; only an UNRESOLVED one keeps
 		// the report-only tolerance, where the suggestion is a lead rather than a claim.
@@ -236,21 +229,23 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	/**
 	 * Whether the body tolerates the rewrite: nothing writes the key, the value or the collection;
 	 * the collection is only read in length-preserving positions; exactly one `X[i]` (the consumed
-	 * one) exists; and no statement after the consumed declaration re-declares any of the three.
+	 * one) exists; no statement after the consumed declaration re-declares any of the three; and the
+	 * element-loop gates hold, so neither the body nor a closure it calls re-binds the path's root.
 	 */
-	private static function bodyAdmitsRewrite(
-		body: QueryNode, keyVar: String, valueVar: String, collection: String, core: LoopSeams
-	): Bool {
+	private static function bodyAdmitsRewrite(h: IndexedLoopHeader, source: String, valueVar: String, core: LoopSeams): Bool {
+		final body: QueryNode = h.body;
+		final keyVar: String = h.index;
+		final collection: Array<String> = h.path;
 		if (LoopScan.countWrites(body, keyVar, core) != 0) return false;
 		if (LoopScan.countWrites(body, valueVar, core) != 0) return false;
 		if (LoopScan.countIndexReads(body, collection, keyVar, core) != CONSUMED_INDEX_READS) return false;
-		if (!LoopScan.usedOnlyAsStableCollection(body, collection, LENGTH_MEMBER, core)) return false;
+		if (!ElementLoopRewrite.bodyAdmitsElementLoop(h, source, LENGTH_MEMBER, core)) return false;
 		for (i in 1...body.children.length) {
 			final stmt: QueryNode = body.children[i];
 			if (
 				LoopScan.declares(stmt, keyVar, core)
 				|| LoopScan.declares(stmt, valueVar, core)
-				|| LoopScan.declares(stmt, collection, core)
+				|| LoopScan.declares(stmt, collection[0], core)
 			)
 				return false;
 		}
@@ -291,8 +286,8 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 	private static function analyzeReads(forNode: QueryNode, f: LoopFileScan): Null<ReadsMatch> {
 		final core: LoopSeams = f.seams.core;
 		final h: Null<IndexedLoopHeader> = LoopScan.indexedHeaderOf(forNode, f.source, LENGTH_MEMBER, f.seams);
-		if (h == null || LoopScan.opensWithIndexBinding(h.body, h.collection, h.index, core)) return null;
-		final reads: Array<QueryNode> = LoopScan.collectIndexReads(h.body, h.collection, h.index, core);
+		if (h == null || LoopScan.opensWithIndexBinding(h.body, h.path, h.index, core)) return null;
+		final reads: Array<QueryNode> = LoopScan.collectIndexReads(h.body, h.path, h.index, core);
 		if (reads.length == 0) return null;
 		if (LoopScan.countReads(h.body, h.index, core) == reads.length) return null;
 		if (LoopScan.countWrites(h.body, h.index, core) != 0) return null;
@@ -301,9 +296,9 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 		final iterableSpan: Null<Span> = h.iterable.span;
 		final readSpans: Null<Array<Span>> = spansOf(reads);
 		if (forSpan == null || iterableSpan == null || readSpans == null) return null;
-		final collectionTypeSource: Null<String> = LoopScan.identTypeSource(h.sizeReceiver, f.root, f.types, core);
+		final collectionTypeSource: Null<String> = LoopScan.receiverTypeSource(h.sizeReceiver, f);
 		if (collectionTypeSource != null && NominalTypes.outerNominalOf(collectionTypeSource, f.typeSyntax) != ARRAY_TYPE) return null;
-		final binder: BinderChoice = binderOf(f, forNode, forSpan, h.index, h.collection);
+		final binder: BinderChoice = binderOf(f, forNode, forSpan, h.index, h.leaf);
 		return {
 			forSpan: forSpan,
 			iterableSpan: iterableSpan,

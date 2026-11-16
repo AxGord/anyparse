@@ -2,9 +2,14 @@ package anyparse.check.common.loops;
 
 import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.LoopScan;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TreePath;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 
 using StringTools;
 
@@ -41,6 +46,12 @@ final class ElementLoopRewrite {
 
 	/** The ending every other plural takes. */
 	private static final PLURAL_S: String = 's';
+
+	/** The irregular plural `children` without its first letter, so `Children` inside a camelCase name matches too. */
+	private static final CHILDREN_PLURAL: String = 'hildren';
+
+	/** What `CHILDREN_PLURAL` drops to name one child. */
+	private static final PLURAL_REN: String = 'ren';
 
 	/** The private-member prefix a derived binder drops. */
 	private static final UNDERSCORE: String = '_';
@@ -166,9 +177,10 @@ final class ElementLoopRewrite {
 	 * is asked only when every cheaper gate passed.
 	 */
 	public static function gatedEdits(
-		built: Array<FixEdit>, gate: ReachGate, header: IndexedLoopHeader, forSpan: Span, prior: Null<String>, out: Array<FixEdit>
+		built: Array<FixEdit>, gate: ReachGate, header: IndexedLoopHeader, f: LoopFileScan, forSpan: Span, prior: Null<String>,
+		out: Array<FixEdit>
 	): Void {
-		final reach: Null<String> = built.length == 0 ? null : reachDecline(gate.reachOf(), gate.file, header);
+		final reach: Null<String> = built.length == 0 ? null : reachDecline(gate.reachOf(), gate.file, header, f);
 		final edits: Array<FixEdit> = reach == null ? built : [];
 		if (edits.length == 0) declineAt(gate.violations, gate.rule, forSpan, prior ?? reach ?? COMMENT_DECLINE);
 		for (e in edits) out.push(e);
@@ -181,16 +193,39 @@ final class ElementLoopRewrite {
 	 * does not. The body is the entry REGION, so everything it runs counts — calls, constructors, the
 	 * accessors of the properties it touches, and whatever the language runs implicitly — as far as the
 	 * call graph and `MemberReach`'s whitelist of modelled constructs can show; what they cannot show refuses.
+	 *
+	 * A PATH `a.b.c` is asked one question per link, since code that re-binds any of them hands the loop
+	 * another collection: a local root as `mayMutateNamed` asks it, a field root and each inner member whether
+	 * anything WRITES it, the last member whether anything changes the array it holds. A member is asked under
+	 * the type its prefix resolves to (`f.pathTypes`), the enclosing type for a self-reference or field root;
+	 * a prefix whose type is unresolved refuses.
 	 */
-	public static function reachDecline(reach: MemberReach, file: String, h: IndexedLoopHeader): Null<String> {
+	public static function reachDecline(reach: MemberReach, file: String, h: IndexedLoopHeader, f: LoopFileScan): Null<String> {
 		final at: Null<Span> = h.sizeReceiver.span;
 		final region: Null<Span> = h.body.span;
 		if (at == null || region == null) return SELF_CALL_DECLINE;
-		final result: ReachResult = reach.mayMutateNamed(file, h.collection, at, region);
-		return switch result {
-			case Proven: null;
-			case _: '$SELF_CALL_DECLINE: ${reach.explain(result)}';
-		};
+		final segments: Int = h.path.length;
+		if (segments == 1) return reachVerdict(reach, reach.mayMutateNamed(file, h.collection, at, region));
+		final links: Array<QueryNode> = [h.sizeReceiver];
+		while (links.length < segments) links.unshift(links[0].children[0]);
+		final selfRooted: Bool = h.path[0] == f.seams.core.shape.selfReferenceText;
+		final rootSpan: Null<Span> = links[0].span;
+		if (!selfRooted) {
+			if (rootSpan == null) return SELF_CALL_DECLINE;
+			final rootVerdict: Null<String> = rootDecline(reach, file, h.path[0], rootSpan, region, f);
+			if (rootVerdict != null) return rootVerdict;
+		}
+		for (k in 1...segments) {
+			final owner: Null<String> = selfRooted && k == 1
+				? TypeResolver.enclosingTypeDeclAt(f.root, region.from)?.name
+				: linkOwner(links[k - 1], f);
+			final member: Null<MemberRef> = owner == null ? null : { owner: owner, name: h.path[k], site: links[k].span };
+			if (member == null) return '$SELF_CALL_DECLINE: the type holding `${h.path[k]}` is not resolved';
+			final access: ReachAccess = k == segments - 1 ? Mutate : Write;
+			final verdict: Null<String> = reachVerdict(reach, reach.mayReach(Region(file, region), member, access));
+			if (verdict != null) return verdict;
+		}
+		return null;
 	}
 
 	/**
@@ -227,10 +262,61 @@ final class ElementLoopRewrite {
 	 * closure reads `X[i]` when it RUNS, a binder holds the element of the iteration that made it.
 	 */
 	public static function bodyAdmitsElementLoop(h: IndexedLoopHeader, source: String, sizeMember: String, core: LoopSeams): Bool {
-		return LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core)
+		return LoopScan.usedOnlyAsStablePath(h.body, h.path, sizeMember, core)
 			&& !LoopScan.bindsName(h.body, h.index, core)
-			&& !LoopScan.bindsName(h.body, h.collection, core)
-			&& !LoopScan.capturedByClosure(h.body, source, h.collection, core);
+			&& !LoopScan.bindsName(h.body, h.path[0], core)
+			&& !LoopScan.capturedByClosure(h.body, source, capturableName(h, core), core);
+	}
+
+	/**
+	 * The `run` both element-loop rules share: `visit` is handed each parsed file's `LoopFileScan`, whose path types
+	 * resolve through one index over `files`, built on the first path a gate asks about.
+	 */
+	public static function runScans(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, visit: (LoopFileScan, String, Array<Violation>) -> Void
+	): Array<Violation> {
+		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
+		return RunScan.collectWith(files, plugin, LoopScan.intervalSeamsOf(plugin.refShape()), (entry, tree, s, violations) -> {
+			final pathTypes: (QueryNode) -> Null<String> = LoopScan.lazyPathTypes(entry.source, plugin, tree, entry.file, symbols);
+			final types: Null<Map<Int, String>> = typed?.declaredTypeSources(entry.source);
+			visit(LoopScan.fileScanOf(tree, entry.source, types, plugin, s, pathTypes), entry.file, violations);
+		});
+	}
+
+	/**
+	 * The `fix` both element-loop rules share: `visit` is handed the file's `LoopFileScan` (path types through `index`,
+	 * or the resolution or one-file index when the caller holds none), the wanted finding keys, the edit sink and the
+	 * reach gate of `rule`.
+	 */
+	public static function fixScans(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, index: Null<SymbolIndex>, rule: String,
+		visit: (LoopFileScan, Array<String>, Array<FixEdit>, ReachGate) -> Void
+	): Array<FixEdit> {
+		final file: String = violations.length > 0 ? violations[0].file : '';
+		final gate: ReachGate = gateFor(plugin, file, source, violations, rule);
+		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index);
+		return
+			RunScan.walkedEdits(plugin, source, LoopScan.intervalSeamsOf(plugin.refShape()), violations, (tree, types, s, wanted, out) -> {
+				final pathTypes: (QueryNode) -> Null<String> = LoopScan.lazyPathTypes(source, plugin, tree, file, symbols);
+				visit(LoopScan.fileScanOf(tree, source, types, plugin, s, pathTypes), wanted, out, gate);
+			});
+	}
+
+	/**
+	 * The name a closure reaching `h`'s collection must spell: the path's root, or under a self-reference root the first
+	 * member, which a closure may also read bare.
+	 */
+	private static inline function capturableName(h: IndexedLoopHeader, core: LoopSeams): String {
+		return h.path.length > 1 && h.path[0] == core.shape.selfReferenceText ? h.path[1] : h.path[0];
+	}
+
+	/** `null` when `result` proves the collection unchanged, else the reach decline naming why not. */
+	private static inline function reachVerdict(reach: MemberReach, result: ReachResult): Null<String> {
+		return switch result {
+			case Proven: null;
+			case _: '$SELF_CALL_DECLINE: ${reach.explain(result)}';
+		};
 	}
 
 	/**
@@ -245,6 +331,12 @@ final class ElementLoopRewrite {
 	private static inline function endsWord(name: String, end: Int): Bool {
 		final next: Int = end < name.length ? name.fastCodeAt(end) : -1;
 		return next < 'a'.code || next > 'z'.code;
+	}
+
+	/** The simple nominal of the type the path prefix `link` resolves to, or null when it is unresolved. */
+	private static function linkOwner(link: QueryNode, f: LoopFileScan): Null<String> {
+		final written: Null<String> = LoopScan.receiverTypeSource(link, f);
+		return written == null ? null : NominalTypes.outerNominalOf(written, f.typeSyntax);
 	}
 
 	/**
@@ -263,6 +355,8 @@ final class ElementLoopRewrite {
 			else
 				stem + SINGULAR_Y;
 		}
+		// the one irregular plural tree code meets everywhere (`children`, `subChildren`), lower case after its first letter
+		if (name.endsWith(CHILDREN_PLURAL)) return name.substring(0, name.length - PLURAL_REN.length);
 		for (suffix in SIBILANT_PLURALS) if (name.endsWith(suffix)) return name.substring(0, name.length - PLURAL_ES.length);
 		for (suffix in SINGULAR_ENDINGS) if (name.endsWith(suffix)) return null;
 		if (!name.endsWith(PLURAL_S)) return null;
@@ -286,7 +380,7 @@ final class ElementLoopRewrite {
 		if (f.seams.core.opaqueKinds.contains(node.kind)) return false;
 		if (node != loop && nests(node, loop)) {
 			final h: Null<IndexedLoopHeader> = LoopScan.indexedHeaderOf(node, f.source, LENGTH_MEMBER, f.seams);
-			if (h != null && elementNameOf(h.collection) == candidate) return true;
+			if (h != null && elementNameOf(h.leaf) == candidate) return true;
 		}
 		return node.children.exists(c -> nestingLoopDerives(c, loop, candidate, f));
 	}
@@ -296,6 +390,30 @@ final class ElementLoopRewrite {
 		final sa: Null<Span> = a.span;
 		final sb: Null<Span> = b.span;
 		return sa != null && sb != null && ((sa.from <= sb.from && sb.to <= sa.to) || (sb.from <= sa.from && sa.to <= sb.to));
+	}
+
+	/**
+	 * Why code the loop body `region` runs may re-bind the path root `name` read at `at`, or null when it cannot. A local
+	 * or parameter is re-bound only by an assignment in the text of its own scope, closures there included, so none may
+	 * be there; what the object it holds may undergo is the member questions' to answer. A field of the enclosing type
+	 * is asked whether anything writes it.
+	 */
+	private static function rootDecline(
+		reach: MemberReach, file: String, name: String, at: Span, region: Span, f: LoopFileScan
+	): Null<String> {
+		final shape: RefShape = f.seams.core.shape;
+		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, at, f.root, shape);
+		if (binding != null && !(shape.fieldDeclKinds ?? []).contains(binding.kind)) {
+			final scope: Null<QueryNode> = TreePath.parentOf(f.root, binding);
+			return scope != null && LoopScan.countWrites(scope, name, f.seams.core) == 0
+				? null
+				: '$SELF_CALL_DECLINE: `$name` is assigned in its scope';
+		}
+		final owner: Null<String> = TypeResolver.enclosingTypeDeclAt(f.root, region.from)?.name;
+		final member: Null<MemberRef> = owner == null ? null : { owner: owner, name: name, site: at };
+		return member == null
+			? '$SELF_CALL_DECLINE: `$name` belongs to no type the analysis can name'
+			: reachVerdict(reach, reach.mayReach(Region(file, region), member, Write));
 	}
 
 }

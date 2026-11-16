@@ -62,7 +62,7 @@
 			"name": "M-ELEMENT-LOOP-UNSTABLE",
 			"type": "anyparse.check.common.loops.ElementLoopRewrite",
 			"method": "bodyAdmitsElementLoop",
-			"find": "return LoopScan.usedOnlyAsStableCollection(h.body, h.collection, sizeMember, core)\n\t\t\t&&",
+			"find": "return LoopScan.usedOnlyAsStablePath(h.body, h.path, sizeMember, core)\n\t\t\t&&",
 			"replace": "return true &&",
 			"note": "a write to X[i] or a push onto X no longer declines, so an element-loop rewrite assigns to a copy or follows the growth a bounded range ignored"
 		},
@@ -70,7 +70,7 @@
 			"name": "M-ELEMENT-LOOP-REBIND",
 			"type": "anyparse.check.common.loops.ElementLoopRewrite",
 			"method": "bodyAdmitsElementLoop",
-			"find": ["!LoopScan.bindsName(h.body, h.index, core)", "!LoopScan.bindsName(h.body, h.collection, core)"],
+			"find": ["!LoopScan.bindsName(h.body, h.index, core)", "!LoopScan.bindsName(h.body, h.path[0], core)"],
 			"replace": ["true", "true"],
 			"note": "an X[i] under a nested binder of i is re-spelled as the outer element, and a body reaching the collection as this.X is rewritten"
 		},
@@ -78,7 +78,7 @@
 			"name": "M-ELEMENT-LOOP-CLOSURE",
 			"type": "anyparse.check.common.loops.ElementLoopRewrite",
 			"method": "bodyAdmitsElementLoop",
-			"find": "&& !LoopScan.capturedByClosure(h.body, source, h.collection, core);",
+			"find": "&& !LoopScan.capturedByClosure(h.body, source, capturableName(h, core), core);",
 			"replace": "&& true;",
 			"note": "an X[i] read inside a closure becomes the binder, so a closure run after the loop sees the element of its iteration instead of the slot as it is then"
 		},
@@ -126,7 +126,7 @@
 			"name": "M-KV-OPENER-SELF-CALL",
 			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
 			"method": "fixWalk",
-			"find": "openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header)",
+			"find": "openerDecline(m, f) ?? ElementLoopRewrite.reachDecline(gate.reachOf(), gate.file, m.header, f)",
 			"replace": "openerDecline(m, f)",
 			"note": "the opener arm never asks the body's reach, so a callee that grows the collection runs on under the key-value iterator"
 		},
@@ -134,7 +134,7 @@
 			"name": "M-VALUE-LOOP-SELF-CALL",
 			"type": "anyparse.check.common.loops.PreferValueLoop",
 			"method": "fixWalk",
-			"find": "ElementLoopRewrite.gatedEdits(buildEdits(m, f.regions()), gate, m.header, m.forSpan, m.decline, out);",
+			"find": "ElementLoopRewrite.gatedEdits(buildEdits(m, f.regions()), gate, m.header, f, m.forSpan, m.decline, out);",
 			"replace": "for (e in buildEdits(m, f.regions())) out.push(e);",
 			"note": "the value-loop fix never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the collection, changes what the loop reads"
 		},
@@ -150,7 +150,7 @@
 			"name": "M-KV-NOOPENER-OPENER-CLAIM",
 			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
 			"method": "analyzeReads",
-			"find": "if (h == null || LoopScan.opensWithIndexBinding(h.body, h.collection, h.index, core)) return null;",
+			"find": "if (h == null || LoopScan.opensWithIndexBinding(h.body, h.path, h.index, core)) return null;",
 			"replace": "if (h == null) return null;",
 			"note": "a body opening with final v = X[i] that the opener arm declined is picked up by the no-opener arm, which renames the opener initializer into final v = v-binder"
 		},
@@ -166,7 +166,7 @@
 			"name": "M-KV-NOOPENER-SELF-CALL",
 			"type": "anyparse.check.common.loops.PreferKeyValueLoop",
 			"method": "fixWalk",
-			"find": "ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.regions()), gate, r.header, r.forSpan, r.decline, out);",
+			"find": "ElementLoopRewrite.gatedEdits(buildReadEdits(r, f.regions()), gate, r.header, f, r.forSpan, r.decline, out);",
 			"replace": "for (e in buildReadEdits(r, f.regions())) out.push(e);",
 			"note": "the no-opener arm never asks the body's reach, so a callee that replaces X[i] after the binder was read, or grows the field, changes what the loop reads"
 		},
@@ -775,6 +775,44 @@
 			"method": "annotationBaseName",
 			"force": "source.substring(from, to).split(':')[1]",
 			"note": "the annotation is read off the raw head text, so a colon inside a comment of the head reads as a type annotation and the value local is not reused"
+		},
+		{
+			"name": "M-SINGULAR-CHILDREN",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "singularOfEnding",
+			"find": "name.endsWith(CHILDREN_PLURAL)",
+			"replace": "false",
+			"note": "children has no singular, so a loop over tree.children names no binder and is report-only"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-SELF-OWNER",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "reachDecline",
+			"find": "selfRooted && k == 1",
+			"replace": "false",
+			"note": "a this.X path asks its first member under the type of this, which no binding annotates, so every self path fix is withheld"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-PATH-REACH",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "reachDecline",
+			"find": [
+				"if (rootVerdict != null) return rootVerdict;",
+				"if (verdict != null) return verdict;"
+			],
+			"replace": [
+				"if (false) return rootVerdict;",
+				"if (false) return verdict;"
+			],
+			"note": "a path loop whose body runs code growing the array is fixed, so the element iterator follows growth the bounded range ignored"
+		},
+		{
+			"name": "M-ELEMENT-LOOP-ROOT-ASSIGNED",
+			"type": "anyparse.check.common.loops.ElementLoopRewrite",
+			"method": "rootDecline",
+			"find": "LoopScan.countWrites(scope, name, f.seams.core) == 0",
+			"replace": "true",
+			"note": "a path root parameter assigned elsewhere in its scope, by a closure the body calls, no longer refuses, so the rewritten loop iterates an array the body no longer reads"
 		}
 	]
 }

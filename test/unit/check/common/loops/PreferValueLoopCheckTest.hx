@@ -74,9 +74,11 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
-	public function testPathReceiverNotFlagged(): Void {
-		// The type gate resolves a BINDING's annotation, which a path has none of.
-		Assert.equals(0, violations(wrapFn('for (i in 0...a.b.length) use(a.b[i]);')).length);
+	public function testUnresolvedPathReceiverReportedOnly(): Void {
+		// `a` binds nothing, so the path's type is unknown: the advice stands, the rewrite waits for a type.
+		final src: String = wrapFn('for (i in 0...a.bs.length) use(a.bs[i]);');
+		Assert.equals('this indexed loop can be for (b in a.bs)', violations(src)[0].message);
+		assertFixRefused(src);
 	}
 
 	public function testCollectionMutatedNotFlagged(): Void {
@@ -454,7 +456,7 @@ class PreferValueLoopCheckTest extends Test {
 			['nodesPosition', 'nodePosition'],
 			['useHTTPSList', null],
 			['statusList', null],
-			['childrenByName', null]
+			['childrenByName', 'childByName']
 		];
 		for (c in cases) Assert.equals(c[1], ElementLoopRewrite.singularOf(c[0] ?? ''), 'singularOf(${c[0]})');
 	}

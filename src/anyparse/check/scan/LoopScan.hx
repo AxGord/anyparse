@@ -4,9 +4,11 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
+import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
+import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
 
@@ -114,6 +116,45 @@ final class LoopScan {
 	 */
 	public static inline function hasForShape(operands: Array<QueryNode>): Bool {
 		return operands.length == FOR_CHILD_COUNT;
+	}
+
+	/**
+	 * `usedOnlyAsStableCollection` for the collection `path`. A one-segment path is that scan. A longer one also holds
+	 * every PREFIX still: each mention of one (`a`, `a.b` of `a.b.c`) only reads a member off it, never is written,
+	 * called with, or handed on, so no segment is re-bound in the body; and under a self-reference root a bare mention of
+	 * the first member (`items` for `this.items`), the same storage under another spelling, refuses.
+	 */
+	public static function usedOnlyAsStablePath(node: QueryNode, path: Array<String>, sizeMember: String, s: LoopSeams): Bool {
+		return path.length == 1
+			? stableUseScan(node, null, null, path[0], sizeMember, s)
+			: pathUseScan(node, null, null, path, sizeMember, s);
+	}
+
+	/**
+	 * The declared type source of the receiver `node` (a collection, or a prefix of a path one), or null when it is
+	 * unresolved: a bare identifier's binding annotation (`identTypeSource`), a path's member type through `f.pathTypes`.
+	 */
+	public static function receiverTypeSource(node: QueryNode, f: LoopFileScan): Null<String> {
+		return node.kind == f.seams.core.identKind ? identTypeSource(node, f.root, f.types, f.seams.core) : f.pathTypes(node);
+	}
+
+	/**
+	 * The written type of an expression through `CheckScan.typeSourceResolver` over `symbols`, the resolver (and the
+	 * index) built on the first ask only, so a file whose loops all fail a cheaper gate builds neither.
+	 */
+	public static function lazyPathTypes(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, symbols: () -> Null<SymbolIndex>
+	): (QueryNode) -> Null<String> {
+		var built: Bool = false;
+		var resolver: Null<(QueryNode) -> Null<String>> = null;
+		return node -> {
+			if (!built) {
+				built = true;
+				resolver = CheckScan.typeSourceResolver(source, plugin, tree, file, symbols());
+			}
+			final resolve: Null<(QueryNode) -> Null<String>> = resolver;
+			return resolve == null ? null : resolve(node);
+		};
 	}
 
 	/**
@@ -285,15 +326,15 @@ final class LoopScan {
 	 * `index`, in document order — the occurrences a value-loop rewrite re-spells as the value
 	 * binder, and the ones a key-value rewrite would have to rename.
 	 */
-	public static function collectIndexReads(node: QueryNode, name: String, index: String, s: LoopSeams): Array<QueryNode> {
+	public static function collectIndexReads(node: QueryNode, path: Array<String>, index: String, s: LoopSeams): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
-		collectIndexReadsInto(node, name, index, s, out);
+		collectIndexReadsInto(node, path, index, s, out);
 		return out;
 	}
 
 	/** How many `collectIndexReads` finds — the same walk where only the count is wanted. */
-	public static function countIndexReads(node: QueryNode, name: String, index: String, s: LoopSeams): Int {
-		return collectIndexReads(node, name, index, s).length;
+	public static function countIndexReads(node: QueryNode, path: Array<String>, index: String, s: LoopSeams): Int {
+		return collectIndexReads(node, path, index, s).length;
 	}
 
 	/**
@@ -336,7 +377,9 @@ final class LoopScan {
 
 	/**
 	 * The header every indexed-loop rewrite matches — a single-binder `for` over exactly
-	 * `0...X.<sizeMember>` for a bare identifier `X` — or null when the loop is anything else.
+	 * `0...X.<sizeMember>` for a bare identifier or a plain field path `X` (`a.b`, `this.items`) —
+	 * or null when the loop is anything else. A path whose root is the index is no match: the
+	 * loop's binder shadows it.
 	 * `sizeMember` is the CALLER's language token, which is what keeps this grammar-agnostic.
 	 *
 	 * The BODY comes back unexamined: what each rule demands of it is that rule's own claim, and
@@ -355,28 +398,50 @@ final class LoopScan {
 		if (iterable.kind != s.intervalKind || iterable.children.length != INTERVAL_CHILD_COUNT) return null;
 		if (!isZeroLiteral(iterable.children[0], source, core)) return null;
 		final upper: QueryNode = iterable.children[1];
-		final collection: Null<String> = memberReadReceiver(upper, sizeMember, core);
-		return collection == null || collection == index ? null : {
+		final path: Null<Array<String>> = memberReadPath(upper, sizeMember, core);
+		return path == null || path[0] == index ? null : {
 			index: index,
-			collection: collection,
+			collection: path.join('.'),
+			path: path,
+			leaf: path[path.length - 1],
 			sizeReceiver: upper.children[0],
 			iterable: iterable,
 			body: forBody(forNode.children)
 		};
 	}
 
-	/** Whether `node` is an index access whose receiver is the bare identifier `name`. */
-	public static function isIndexAccessOf(node: QueryNode, name: String, s: LoopSeams): Bool {
+	/** Whether `node` is an index access whose receiver is the collection `path` (`isCollection`). */
+	public static function isIndexAccessOf(node: QueryNode, path: Array<String>, s: LoopSeams): Bool {
 		return node.kind == s.indexAccessKind
 			&& node.children.length == INDEX_ACCESS_CHILD_COUNT
-			&& bareIdentName(node.children[0], s) == name;
+			&& isCollection(node.children[0], path, s);
 	}
 
-	/** The receiver name of a plain `<ident>.<member>` read, or null when `node` is not one. */
-	public static function memberReadReceiver(node: QueryNode, member: String, s: LoopSeams): Null<String> {
+	/**
+	 * Whether `node` denotes the collection `path`: the bare identifier of a one-segment path, else the
+	 * same plain field chain compared segment by segment, so `a?.b` (another evaluation) is never `a.b`.
+	 */
+	public static function isCollection(node: QueryNode, path: Array<String>, s: LoopSeams): Bool {
+		return path.length == 1 ? bareIdentName(node, s) == path[0] : prefixLength(node, path, s) == path.length;
+	}
+
+	/** The receiver path of a plain `<path>.<member>` read, or null when `node` is not one. */
+	public static function memberReadPath(node: QueryNode, member: String, s: LoopSeams): Null<Array<String>> {
 		return node.kind != s.fieldAccessKind || node.name != member || !NodeShape.hasFieldAccessShape(node)
 			? null
-			: bareIdentName(node.children[0], s);
+			: NominalTypes.pathOf(node.children[0], s.identKind, s.fieldAccessKind);
+	}
+
+	/**
+	 * How many leading segments of `path` the plain field chain `node` spells, or 0 when `node` is no
+	 * chain or not a prefix of `path`: `a` and `a.b` are prefixes of `a.b.c`, `a.x` and `b` are not.
+	 */
+	public static function prefixLength(node: QueryNode, path: Array<String>, s: LoopSeams): Int {
+		if (node.kind != s.identKind && node.kind != s.fieldAccessKind) return 0;
+		final spelled: Null<Array<String>> = NominalTypes.pathOf(node, s.identKind, s.fieldAccessKind);
+		if (spelled == null || spelled.length > path.length) return 0;
+		for (i in 0...spelled.length) if (spelled[i] != path[i]) return 0;
+		return spelled.length;
 	}
 
 	/**
@@ -501,7 +566,8 @@ final class LoopScan {
 
 	/** Bundle the per-FILE facts every gate reads, so the walks carry one argument instead of five. */
 	public static function fileScanOf(
-		tree: QueryNode, source: String, types: Null<Map<Int, String>>, plugin: GrammarPlugin, seams: IntervalLoopSeams
+		tree: QueryNode, source: String, types: Null<Map<Int, String>>, plugin: GrammarPlugin, seams: IntervalLoopSeams,
+		?pathTypes: (QueryNode) -> Null<String>
 	): LoopFileScan {
 		return {
 			root: tree,
@@ -510,7 +576,8 @@ final class LoopScan {
 			inert: OccurrenceScan.inertMask(source, plugin),
 			regions: ElementSpan.lazyRegions(source, plugin),
 			seams: seams,
-			typeSyntax: plugin.typeSyntax
+			typeSyntax: plugin.typeSyntax,
+			pathTypes: pathTypes ?? (_ -> null)
 		};
 	}
 
@@ -519,7 +586,7 @@ final class LoopScan {
 	 * declaration initialised by exactly that access. The one shape `prefer-keyvalue-loop`'s opener
 	 * arm consumes, read by both rules so neither can drift from the other's idea of it.
 	 */
-	public static function opensWithIndexBinding(body: QueryNode, collection: String, index: String, s: LoopSeams): Bool {
+	public static function opensWithIndexBinding(body: QueryNode, collection: Array<String>, index: String, s: LoopSeams): Bool {
 		if (body.kind != s.blockStmtKind || body.children.length == 0) return false;
 		final decl: QueryNode = body.children[0];
 		if (singleLocalDeclName(decl, s.localDeclKinds, s) == null) return false;
@@ -539,10 +606,36 @@ final class LoopScan {
 	}
 
 	/** Recursive body of `collectIndexReads`, appending in document order so the caller needs no sort. */
-	private static function collectIndexReadsInto(node: QueryNode, name: String, index: String, s: LoopSeams, out: Array<QueryNode>): Void {
+	private static function collectIndexReadsInto(
+		node: QueryNode, path: Array<String>, index: String, s: LoopSeams, out: Array<QueryNode>
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
-		if (isIndexAccessOf(node, name, s) && bareIdentName(node.children[1], s) == index) out.push(node);
-		for (c in node.children) collectIndexReadsInto(c, name, index, s, out);
+		if (isIndexAccessOf(node, path, s) && bareIdentName(node.children[1], s) == index) out.push(node);
+		for (c in node.children) collectIndexReadsInto(c, path, index, s, out);
+	}
+
+	/** Recursive body of `usedOnlyAsStablePath` for a path of two or more segments. */
+	private static function pathUseScan(
+		node: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, path: Array<String>, sizeMember: String, s: LoopSeams
+	): Bool {
+		if (s.opaqueKinds.contains(node.kind)) return true;
+		final spelled: Int = prefixLength(node, path, s);
+		final admitted: Bool = if (spelled == path.length)
+			isStablePosition(node, parent, grandParent, sizeMember, s)
+		else if (spelled > 0)
+			isMemberReadOff(node, parent, grandParent, s)
+		else
+			node.kind != s.identKind || node.name != path[1] || path[0] != s.shape.selfReferenceText;
+		return admitted && node.children.foreach(c -> pathUseScan(c, node, parent, path, sizeMember, s));
+	}
+
+	/** Whether `node` is the receiver of a member read (`node.m`, also through `?.` / `!.`) that is not itself written. */
+	private static function isMemberReadOff(node: QueryNode, parent: Null<QueryNode>, grandParent: Null<QueryNode>, s: LoopSeams): Bool {
+		return parent != null
+			&& s.accessKinds.contains(parent.kind)
+			&& NodeShape.hasFieldAccessShape(parent)
+			&& parent.children[0] == node
+			&& !isWriteTarget(parent, grandParent, s);
 	}
 
 	/** Recursive body of `usedOnlyAsStableCollection`, carrying the two ancestors a position verdict needs. */
@@ -650,10 +743,15 @@ typedef IntervalLoopSeams = { var core: LoopSeams; var intervalKind: String; }
  * What `indexedHeaderOf` proved about a `for (i in 0...X.size)` header: the two names, the
  * receiver whose declared type the rewrite gate reads, and the two nodes whose spans a header
  * splice needs. `body` is the loop's body node, carried through unexamined.
+ *
+ * `collection` is the receiver as the rewrite spells it: `path` (root first, one segment for a bare
+ * identifier) joined by `.`, and `leaf` is its last segment, the name an element binder derives from.
  */
 typedef IndexedLoopHeader = {
 	var index: String;
 	var collection: String;
+	var path: Array<String>;
+	var leaf: String;
 	var sizeReceiver: QueryNode;
 	var iterable: QueryNode;
 	var body: QueryNode;
@@ -693,5 +791,8 @@ typedef LoopFileScan = {
 
 	/** `GrammarPlugin.typeSyntax` — how a gate reads a declared type's arguments. */
 	var typeSyntax: TypeSyntaxReader;
+
+	/** The written type of a path receiver (`lazyPathTypes`), null when unresolved; always null when the caller passes none. */
+	var pathTypes: (QueryNode) -> Null<String>;
 
 }
