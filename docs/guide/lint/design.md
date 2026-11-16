@@ -167,21 +167,52 @@ marker, with no new rule.
 
 Without `marker` the rule does nothing. Every static function of the project sources (`resolutionRoots` joined to the
 report) carrying that annotation is a template: its block body is a structural pattern (the `apq search` engine) whose
-parameters are holes, and so are the locals its top-level statements declare — a site may name them anything, and the
-local's written type is not part of the pattern. A marked function is no template, and is named once on stderr, when its
-body returns, breaks or continues (a site would leave its own function), declares a local below its top level, reads a
-name that is neither a parameter nor such a local (a site may bind it to something else), or never reads a parameter.
+parameters are holes, and so are the locals it declares — a site may name them anything, and the local's written type
+is not part of the pattern. A local below the top level and a loop binder are scoped to the copy. A marked function is
+no template, and is named once on stderr, when its body breaks, continues or returns early (a site would leave its own
+function), reads a name that is neither a parameter nor such a local (a site may bind it to something else), declares a
+local over a hole, or never reads a parameter.
+
+A body ENDING in a value return keeps its other value returns: the copy ends the site's function at each of them, so
+the site runs through its closing return and the fix is that return around the call. A FUNCTION parameter is one the
+body only calls, once, with locals of its own as the arguments; the call is the hole, and the site's expression in its
+place becomes a lambda of the names the site binds those locals to:
+
+```haxe
+@:preferHelper
+public static function findMap<T, R>(xs: Iterable<T>, f: T -> Null<R>): Null<R> {
+	for (x in xs) {
+		final y: Null<R> = f(x);
+		if (y != null) return y;
+	}
+	return null;
+}
+
+for (c in node.children) {             // ->  return Arrays.findMap(node.children, c -> resolve(c.name));
+	final found = resolve(c.name);
+	if (found != null) return found;
+}
+return null;
+```
+
+A body that also reads its function parameter as a value, or holds a function of its own while it returns, is no
+template.
 
 A site is the body's statements, adjacent and in order — a statement between them is no match. It is declined when the
-code after it still reads one of its locals (the call no longer declares it) or an argument does, when any hole binds
+code after it still reads one of its locals (the call no longer declares it) or an argument does, when a value hole binds
 an impure value (the call evaluates each argument once and before the body: the copy at each read, after the body's own
-effects), when a comment sits in the replaced bytes or trails its last line, and inside the helper's own body. Still
-matched: a pure hole read after a body effect it observes (`xs.push(a); xs.push(b)` with `b` = `xs.length`).
+effects), when a hole the body reads after an effect, or inside a loop repeating one, binds anything but a plain value
+(`xs.push(a); xs.push(b)` with `b` = `xs.length`: the copy reads the length after the first push), when a comment sits in
+the replaced bytes or trails its last line, and inside the helper's own body. A lambda's body runs where the copy's
+expression ran, so it need not be pure; it may read no local of the copy but its own parameters. That covers effects,
+not jumps: a site whose lambda body holds a `return` (the copy's leaves the site's function, the lambda's only the
+lambda), or a `break` / `continue` whose loop is outside it, is declined — `return` compiles inside a lambda, so the
+oracle would keep the changed behaviour.
 
-The fix is `RiskyFix`: nothing proves the site's values have the helper's parameter types, and a method the pattern
-matches by name may belong to another type, so `--fix` applies it only under `compilerOracle` and reverts a file whose
-build breaks; without an oracle the finding is report-only. The helper's type is spelled as the file can see it, and the
-import it needs rides on the call.
+The fix is `RiskyFix`: nothing proves the site's values have the helper's parameter types, a method the pattern matches
+by name may belong to another type, and a lambda loses the null narrowing a guard gave its body in the copy, so `--fix`
+applies it only under `compilerOracle` and reverts an edit whose build breaks; without an oracle the finding is
+report-only. The helper's type is spelled as the file can see it, and the import it needs rides on the call.
 
 ## `refusal-assert-ignores-message`
 

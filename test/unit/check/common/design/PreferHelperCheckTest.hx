@@ -26,7 +26,20 @@ class PreferHelperCheckTest extends Test {
 		+ '\tpublic static function cap(xs:Array<Int>):Void {\n\t\txs.push(LIMIT);\n\t}\n\n\t@:preferHelper\n'
 		+ '\tpublic static function pushFirst<T>(xs:Array<T>, x:T):Void {\n\t\tif (xs.length > 0) return;\n\t\txs.push(x);\n\t}\n}\n';
 
+	/**
+	 * Marked helpers over a function or a closing return: a descent returning the first answer of a function parameter, two
+	 * pushes whose second value is read after the first push, and a body that also reads its function parameter as a value.
+	 */
+	private static final ARRAYS: String = 'package util;\n\nclass Arrays {\n\t@:preferHelper\n'
+		+ '\tpublic static function findMap<T, R>(xs:Iterable<T>, f:T->Null<R>):Null<R> {\n\t\tfor (x in xs) {\n'
+		+ '\t\t\tfinal y:Null<R> = f(x);\n\t\t\tif (y != null) return y;\n\t\t}\n\t\treturn null;\n\t}\n\n\t@:preferHelper\n'
+		+ '\tpublic static function pushTwo<T>(xs:Array<T>, a:T, b:T):Void {\n\t\txs.push(a);\n\t\txs.push(b);\n\t}\n\n\t@:preferHelper\n'
+		+ '\tpublic static function pushDouble(xs:Array<Int>, a:Int):Void {\n\t\txs.push(a + a);\n\t}\n\n\t@:preferHelper\n\tpublic static '
+		+ 'function each<T>(xs:Array<T>, f:T->Void, fs:Array<T->Void>):Void {\n\t\tfor (x in xs) f(x);\n\t\tfs.push(f);\n\t}\n}\n';
+
 	private static final CONFIG: String = '{"rules":{"prefer-helper":{"marker":"@:preferHelper"}}}';
+	private static final DESCENT: String =
+		'for (c in xs) {\n\t\t\tfinal found = name(c);\n\t\t\tif (found != null) return found;\n\t\t}\n\t\treturn null;';
 	private static final PUSH: String = 'final ys = m[k] ?? [];\n\t\tys.push(v);\n\t\tm[k] = ys;';
 
 	@:pin('control')
@@ -67,16 +80,20 @@ class PreferHelperCheckTest extends Test {
 		Assert.equals(0, violationsOf(user('$PUSH\n\t\tx = ys.length;')).length);
 	}
 
-	/** `m[key()]` runs `key()` twice in the copy and once in the call. */
-	@:pin('control')
-	@:killer('M-PREFER-HELPER-NO-PURITY')
+	/**
+	 * `m[key()]` runs `key()` twice in the copy and once in the call. Held twice: `k` is also read after the body's first
+	 * effect, so the late-hole gate declines it as well.
+	 */
+	@:pin('guard')
 	public function testAnImpureHoleReadTwiceDeclines(): Void {
 		Assert.equals(0, violationsOf(user('final ys = m[key()] ?? [];\n\t\tys.push(v);\n\t\tm[key()] = ys;')).length);
 	}
 
-	/** The call would run `key()` before the body's first statement reads `m[k]`, where the copy runs it after. */
-	@:pin('control')
-	@:killer('M-PREFER-HELPER-NO-PURITY')
+	/**
+	 * The call would run `key()` before the body's first statement reads `m[k]`, where the copy runs it after. Held twice:
+	 * `v` is read after the body's first effect, so the late-hole gate declines it as well.
+	 */
+	@:pin('guard')
 	public function testAHoleReadOnceThatBindsAnImpureValueDeclines(): Void {
 		Assert.equals(0, violationsOf(user('final ys = m[k] ?? [];\n\t\tys.push(key().length);\n\t\tm[k] = ys;')).length);
 	}
@@ -119,10 +136,105 @@ class PreferHelperCheckTest extends Test {
 		Assert.equals(0, violationsOf(user('x = v;')).length);
 	}
 
+	/** The loop's call of the function parameter is the hole: the site's expression in its place becomes a lambda. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-NO-LAMBDA')
+	public function testAFindMapDescentBecomesAReturnOfTheHelperCall(): Void {
+		final vs: Array<Violation> = violationsOf(finder(DESCENT));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('util.Arrays.findMap(xs, f)') != -1, vs[0].message);
+		final out: String = fixResultOf(finder(DESCENT));
+		Assert.isTrue(out.indexOf('\t\treturn Arrays.findMap(xs, c -> name(c));\n\t}') != -1, out);
+		Assert.isTrue(out.indexOf('import util.Arrays;\n') != -1, out);
+	}
+
+	/** A second statement before the return, or a closing return of another value, is no copy of the descent. */
+	@:pin('guard')
+	public function testANearMissOfTheDescentDeclines(): Void {
+		Assert.equals(
+			0,
+			violationsOf(finder(
+				'for (c in xs) {\n\t\t\tfinal a = c + 1;\n\t\t\tfinal f = name(a);\n\t\t\tif (f != null) return f;\n\t\t}\n\t\treturn null;'
+			)).length
+		);
+		Assert.equals(
+			0,
+			violationsOf(finder('for (c in xs) {\n\t\t\tfinal f = name(c);\n\t\t\tif (f != null) return f;\n\t\t}\n\t\treturn \'\';'))
+				.length
+		);
+	}
+
+	/** `b` is read after the first push: the copy reads `xs.length` there, the call before it, so only a plain value may bind it. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-LATE-PLAIN')
+	public function testALateHoleBindsAPlainValueOnly(): Void {
+		Assert.equals(0, violationsOf(finder('xs.push(v);\n\t\txs.push(xs.length);\n\t\treturn null;')).length);
+		Assert.equals('Arrays.pushTwo(xs, xs.length, v);', onlyEditText(finder('xs.push(xs.length);\n\t\txs.push(v);\n\t\treturn null;')));
+		Assert.equals('Arrays.pushTwo(xs, v, 1);', onlyEditText(finder('xs.push(v);\n\t\txs.push(1);\n\t\treturn null;')));
+	}
+
+	/** `a` is read twice before the push: the copy runs `n()` twice, the call once, so only a pure value may bind it. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-NO-PURITY')
+	public function testAnImpureHoleReadTwiceBeforeAnyEffectDeclines(): Void {
+		Assert.equals(0, violationsOf(finder('xs.push(n() + n());\n\t\treturn null;')).length);
+		Assert.equals('Arrays.pushDouble(xs, v);', onlyEditText(finder('xs.push(v + v);\n\t\treturn null;')));
+	}
+
+	/** A function parameter is a hole only where the body calls it; one it also reads as a value makes no template. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-MIXED-READ')
+	public function testAFunctionParameterReadAsAValueIsNoTemplate(): Void {
+		final notes: Array<ConfigNote> = [];
+		Assert.equals(0, violationsOf(finder('return null;'), null, notes).length);
+		final said: String = notes.map(n -> n.message).join('');
+		Assert.isTrue(said.indexOf('util.Arrays.each is no template: it reads f other than by calling it') != -1, said);
+	}
+
+	/** The copy's `return` inside the call's expression leaves the site's function; in the lambda it would leave only the lambda. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-LAMBDA-JUMP')
+	public function testALambdaHoleHoldingAReturnDeclines(): Void {
+		Assert.equals(
+			0,
+			violationsOf(finder(
+				'for (c in xs) {\n\t\t\tfinal found = switch c {\n\t\t\t\tcase 0: return null;\n\t\t\t\tcase _: name(c);\n\t\t\t}\n'
+				+ '\t\t\tif (found != null) return found;\n\t\t}\n\t\treturn null;'
+			)).length
+		);
+	}
+
+	/** A helper ending in a value return that holds a function of its own is no template: that function's return leaves it alone. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-NESTED-FUNCTION')
+	public function testAReturningHelperHoldingAFunctionIsNoTemplate(): Void {
+		final helpers: String = 'package util;\n\nclass Groups {\n\t@:preferHelper\n'
+			+ '\tpublic static function firstPlus(xs:Array<Int>, v:Int):Int {\n'
+			+ '\t\tfinal plus = function(x:Int):Int {\n\t\t\treturn x + v;\n\t\t};\n\t\treturn plus(xs[0]);\n\t}\n}\n';
+		final notes: Array<ConfigNote> = [];
+		Assert.equals(0, violationsOf(user('xs.push(x);', helpers), null, notes).length);
+		final said: String = notes.map(n -> n.message).join('');
+		Assert.isTrue(
+			said.indexOf('util.Groups.firstPlus is no template: it holds a function, whose return would leave that function') != -1, said
+		);
+	}
+
 	public function testNoMarkerIsInert(): Void {
 		Assert.equals(0, violationsOf(user(PUSH), '{}').length);
 		Assert.equals('needs-config', new PreferHelper().skipReason('app/User.hx', LintConfig.parse('{}')));
 		Assert.isNull(new PreferHelper().skipReason('app/User.hx', LintConfig.parse(CONFIG)));
+	}
+
+	/** A finder whose body is `body`, with the function and closing-return helpers and a std `Array` its reads resolve to. */
+	private function finder(body: String): Array<{ file: String, source: String }> {
+		final source: String = 'package app;\n\nclass Finder {\n\tpublic function new() {}\n\n'
+			+ '\tfunction g(xs:Array<Int>, v:Int):Null<String> {\n\t\t$body\n\t}\n\n\tfunction name(c:Int):Null<String> {'
+			+ '\n\t\treturn c > 1 ? \'n\' : null;\n\t}\n\n\tfunction n():Int {\n\t\treturn 1;\n\t}\n}\n';
+		return [
+			{ file: 'app/Finder.hx', source: source },
+			{ file: 'util/Arrays.hx', source: ARRAYS },
+			{ file: 'Array.hx', source: 'extern class Array<T> { var length(default, null):Int; function push(x:T):Int; }' }
+		];
 	}
 
 	/** The fixture set: the user file first (its findings are the ones fixed), then the helpers. */

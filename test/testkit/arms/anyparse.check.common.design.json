@@ -1207,7 +1207,7 @@
 		{
 			"name": "M-PREFER-HELPER-NO-PURITY",
 			"type": "anyparse.check.common.design.PreferHelper",
-			"method": "siteOf",
+			"method": "argOf",
 			"find": "if (!PurityScan.isPure(bound, ctx.purity)) return null;",
 			"replace": "",
 			"note": "a hole may bind a call, which the copy runs at each read, after the body effects before it, and the helper call once and first"
@@ -1223,7 +1223,7 @@
 		{
 			"name": "M-PREFER-HELPER-FOREIGN-NAME",
 			"type": "anyparse.check.common.design.PreferHelper",
-			"method": "scanBody",
+			"method": "readHole",
 			"find": "if (name == null || !scan.holes.contains(name)) {",
 			"replace": "if (name == null) {",
 			"note": "a name the body reads that is no parameter or top-level local becomes a hole, so a site binding it to anything else is fixed to a call that reads the helper's own"
@@ -1231,18 +1231,57 @@
 		{
 			"name": "M-PREFER-HELPER-EARLY-EXIT",
 			"type": "anyparse.check.common.design.PreferHelper",
-			"method": "scanBody",
-			"find": "if (seams.jumpKinds.contains(node.kind)) {",
-			"replace": "if (false) {",
+			"method": "refusalOf",
+			"find": "if (scan.jumps.contains(node.kind))",
+			"replace": "if (false)",
 			"note": "a body that returns early is a template, so a copy that returns from its own function is fixed to a call that only returns from the helper"
 		},
 		{
 			"name": "M-PREFER-HELPER-ARG-READS-LOCAL",
 			"type": "anyparse.check.common.design.PreferHelper",
-			"method": "siteOf",
-			"find": "if (bound == null || at == null || mentions(bound, localNames, ctx.seams)) return null;",
-			"replace": "if (bound == null || at == null) return null;",
+			"method": "argOf",
+			"find": "if (mentions(bound, copyNames, ctx.seams)) return null;",
+			"replace": "",
 			"note": "an argument reading the copy's own local is kept, so the call reads a name it no longer declares"
+		},
+		{
+			"name": "M-PREFER-HELPER-NO-LAMBDA",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "lambdaText",
+			"force": "null",
+			"note": "no site expression becomes a lambda any more, so a copy of a helper taking a function is neither reported nor fixed"
+		},
+		{
+			"name": "M-PREFER-HELPER-LATE-PLAIN",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "argOf",
+			"find": "return template.late.contains(param) && !PurityScan.isPlainValue(bound, ctx.purity) ? null : text;",
+			"replace": "return text;",
+			"note": "a hole the body reads after an effect may bind a field read, which the copy reads after that effect and the call before the body"
+		},
+		{
+			"name": "M-PREFER-HELPER-MIXED-READ",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "usageProblem",
+			"find": "if (mixed != null) return 'it reads $mixed other than by calling it';",
+			"replace": "",
+			"note": "a function parameter the body also reads as a value is a template, so its value read is a hole no site's call hole agrees with"
+		},
+		{
+			"name": "M-PREFER-HELPER-LAMBDA-JUMP",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "argOf",
+			"find": "if (LoopScan.escapesIteration(bound, ctx.seams.escapes, false)) return null;",
+			"replace": "",
+			"note": "a lambda hole binding that holds a return leaves only the lambda, not the site function the copy left"
+		},
+		{
+			"name": "M-PREFER-HELPER-NESTED-FUNCTION",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "refusalOf",
+			"find": "scan.exits && seams.functionKinds.contains(node.kind)",
+			"replace": "false",
+			"note": "a helper ending in a value return may hold a function, whose own return would leave that function and not the body"
 		}
 	]
 }

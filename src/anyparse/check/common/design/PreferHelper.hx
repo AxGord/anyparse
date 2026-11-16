@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.PurityScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
@@ -11,52 +12,55 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.Matcher;
 import anyparse.query.ParseGate;
 import anyparse.query.Pattern;
+import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
+import anyparse.util.Arrays;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 using anyparse.util.Strings;
 
 /**
  * The one answer to "which statement fragments of a tree are an inlined copy of an opted-in template helper's body, and
- * may be replaced by a call to it". A helper opts in by carrying the annotation the project names in `apq.json`:
- *
- *     "prefer-helper": { "marker": "@:preferHelper" }
- *
- * Every static function of the resolution scope carrying it is a TEMPLATE: its body, with each parameter turned into a
- * hole, is a structural pattern (`Matcher`, the `apq search` engine), and a run of statements anywhere that matches it is
- * reported and fixed to a call of the helper. A new helper is found everywhere it applies with no new rule. `Info`.
+ * may be replaced by a call to it". A helper opts in by carrying the annotation `apq.json` names
+ * (`"prefer-helper": { "marker": "@:preferHelper" }`); every static function of the resolution scope carrying it is a
+ * TEMPLATE, its body a structural pattern (`Matcher`) whose parameters and locals are holes, and a run of statements
+ * matching it is reported and fixed to a call of the helper. A new helper needs no new rule. `Info`. The user contract
+ * with examples: docs/guide/lint/design.md § prefer-helper.
  *
  * ## What a template is
  *
- * A static function whose block body reads nothing but its parameters and the locals its own top-level statements
- * declare. A local is a hole too, bound to whatever name the site declares, and its written type is not part of the
- * pattern, so `final xs = …` and `final xs: Array<String> = …` both match. A body that leaves the function early (a
- * return, a break, a continue), declares a local below its top level, reads any other name (which a site may bind to
- * something else), or never reads one of its parameters is no template, and is named once on stderr.
+ * A static function whose block body reads nothing but its parameters and the locals it declares; a local binds whatever
+ * name the site declares, its written type aside, and one below the top level or a loop binder is scoped to the copy. A
+ * body that leaves its function early, reads any other name, shadows a hole or never reads a parameter is no template,
+ * named once on stderr. A body ENDING in a value return keeps its other value returns: the site runs through its closing
+ * return, and the fix is that return spelled around the call. A FUNCTION PARAMETER is one the body only calls, once, with
+ * locals of its own as the arguments: that call is the hole, and the site's expression there becomes a lambda of the names
+ * the site binds those locals to (`resolve(c.name)` → `c -> resolve(c.name)`), spelled as the plugin parses one.
  *
  * ## What a site must be
  *
- * - **The statements themselves**, adjacent, in the body's order — a statement between them is no match.
- * - **No local of the copy is read after it.** The call no longer declares it, so a later read of `xs` would bind to
- *   nothing; such a site is no finding. No argument may read one of those locals either.
- * - **Every hole binds a pure expression** (`PurityScan.isPure`): the call evaluates each argument once and first, the
- *   copy at each read, so an impure value would run a different number of times or ahead of the body's own effects.
- * - **No comment in the replaced bytes**, a trailing comment on the last line included: the call would drop it.
+ * - **The statements themselves**, adjacent, in the body's order, with no comment in the replaced bytes or trailing them.
+ * - **No local of the copy is read after it**, nor by an argument: the call no longer declares it.
+ * - **Every value hole binds a pure expression** (`PurityScan.isPure`): the call evaluates each argument once and first.
+ * - **A late hole binds a plain value** (`PurityScan.isPlainValue`): one the body reads after an effect, or in a loop
+ *   repeating one, the copy reads after that effect and the call before the body (`xs.push(a); xs.push(b)`, `b` =
+ *   `xs.length`). A lambda runs where the copy's expression ran, so it need not be pure, and reads no copy local but its own.
+ * - **A lambda holds no jump that leaves it**: the copy's `return` leaves the site's function, the lambda's only the
+ *   lambda, and a `break` or `continue` needs its loop inside the binding. Running where the copy ran covers effects only.
  * - **Not the helper's own body.**
- *
- * Open: a pure hole read after a body effect it observes (`xs.push(a); xs.push(b)`, `b` = `xs.length`) still matches,
- * and the call reads `b` first; only an argument naming one of the copy's own locals is declined.
  *
  * ## The fix is risky
  *
- * Nothing here proves the call typechecks (the site's values must have the helper's parameter types, a name matched
- * literally may belong to another type), so the check is a `RiskyFix`: `--fix` applies it only under a compiler oracle,
- * reverting a file whose build breaks, else report-only. `TypeRefPrinter` spells the helper's type and adds its import.
+ * Nothing proves the call typechecks (the site's values must have the helper's parameter types, a name matched literally
+ * may belong to another type, a lambda loses the null narrowing its body had in the copy), so the check is a `RiskyFix`:
+ * `--fix` applies it only under a compiler oracle, reverting an edit whose build breaks, else report-only.
+ * `TypeRefPrinter` spells the helper's type and adds its import.
  *
- * Grammar-agnostic: `identKind`, `paramKinds`, `blockBodyKind`, `localDeclKinds`, `controlExitKinds` and their kin over the
+ * Grammar-agnostic: the ident, parameter, body, local, binder, loop, call, return and lambda kinds of `RefShape` over the
  * plugin's own `parsePattern`; a plugin without `paramKinds`, `blockBodyKind` or `controlExitKinds` makes it a no-op.
  */
 @:nullSafety(Strict)
@@ -134,11 +138,7 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final out: Array<FixEdit> = [
 			for (site in sitesIn(file, source, templatesOf(marker, resolved, plugin, seams), resolved, seams, plugin))
-				if (wanted.contains('${site.span.from}:${site.span.to}'))
-					{
-						span: site.span,
-						text: '${printer.print(site.template.typePath).text}.${site.template.member}(${site.args.join(', ')});'
-					}
+				if (wanted.contains('${site.span.from}:${site.span.to}')) { span: site.span, text: callText(site, printer) }
 		];
 		// The import rides on a rewrite: a file where every site declined gets no edit at all.
 		if (out.length > 0) for (edit in printer.pendingImportEdits()) out.push({ span: edit.span, text: edit.text });
@@ -165,6 +165,13 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		return out;
 	}
 
+	/** The helper call replacing `site`: a statement, or the helper's own closing return spelled around it. */
+	private static function callText(site: Site, printer: TypeRefPrinter): String {
+		final call: String = '${printer.print(site.template.typePath).text}.${site.template.member}(${site.args.join(', ')})';
+		final exit: Null<Exit> = site.template.exit;
+		return exit == null ? '$call;' : exit.head + call + exit.tail;
+	}
+
 	/** `member`'s body as a template, or null with the reason in `problems`. */
 	private static function templateOf(
 		file: String, typePath: String, member: MemberInfo, index: SymbolIndex, plugin: GrammarPlugin, seams: Seams, problems: Array<String>
@@ -173,41 +180,105 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		final root: Null<QueryNode> = source == null ? null : ParseGate.parseOrNull(plugin, source);
 		final decl: Null<QueryNode> = root == null ? null : declAt(root, member);
 		final declSpan: Null<Span> = decl?.span;
-		if (source == null || decl == null || declSpan == null) {
+		if (source == null || root == null || decl == null || declSpan == null) {
 			problems.push('its declaration cannot be read');
 			return null;
 		}
 		final params: Array<String> = [for (c in decl.children) if (seams.paramKinds.contains(c.kind)) c.name ?? ''];
 		final stmts: Array<QueryNode> = decl.children.find(c -> c.kind == seams.blockBodyKind)?.children ?? [];
 		final locals: Array<String> = [for (s in stmts) if (seams.localDeclKinds.contains(s.kind)) s.name ?? ''];
-		final scan: BodyScan = {
-			holes: params.concat(locals),
-			reads: [],
-			idents: [],
-			problem: null
-		};
-		for (s in stmts) scanBody(s, true, seams, scan);
-		final unread: Null<String> = params.find(p -> !scan.reads.exists(p));
-		final problem: Null<String> = stmts.length == 0
-			? 'it has no block body'
-			: scan.problem ?? (unread == null ? null : 'it never reads $unread');
+		final exit: Null<Exit> = stmts.length == 0 ? null : exitOf(source, stmts[stmts.length - 1], seams);
+		final scan: BodyScan = scanOf(stmts, params, locals, exit != null, seams);
+		final problem: Null<String> = stmts.length == 0 ? 'it has no block body' : scan.problem ?? usageProblem(params, scan, seams);
 		if (problem != null) {
 			problems.push(problem);
 			return null;
 		}
-		final pattern: Null<Pattern> = patternOf(source, stmts, scan.idents, locals, plugin, seams);
+		final pattern: Null<Pattern> = patternOf(source, stmts, scan.idents, locals.concat(scan.nested), plugin, seams);
 		if (pattern != null) return {
 			helper: '$typePath.${member.name}',
 			typePath: typePath,
 			member: member.name,
 			params: params,
 			locals: locals,
+			nested: scan.nested,
+			calls: scan.calls,
+			late: lateParams(stmts, scan, PurityScan.contextOf(plugin, source, root, index, file), seams),
+			exit: exit,
 			pattern: pattern,
 			file: file,
 			span: declSpan
 		};
 		problems.push('its body is no pattern');
 		return null;
+	}
+
+	/** What the body `stmts` reads and declares; `exits` when it ends in a value return, which keeps its value returns. */
+	private static function scanOf(
+		stmts: Array<QueryNode>, params: Array<String>, locals: Array<String>, exits: Bool, seams: Seams
+	): BodyScan {
+		final scan: BodyScan = {
+			params: params,
+			holes: params.concat(locals),
+			nested: [],
+			reads: [],
+			readsAt: [],
+			calls: [],
+			idents: [],
+			jumps: exits ? seams.jumpKinds.filter(k -> !seams.valueReturnKinds.contains(k)) : seams.jumpKinds,
+			exits: exits,
+			problem: null
+		};
+		for (s in stmts) scanBody(s, true, null, seams, scan);
+		return scan;
+	}
+
+	/** Why the parameters `scan` saw read make the body no template, or null. */
+	private static function usageProblem(params: Array<String>, scan: BodyScan, seams: Seams): Null<String> {
+		final unread: Null<String> = params.find(p -> !scan.reads.exists(p) && !scan.calls.exists(p));
+		if (unread != null) return 'it never reads $unread';
+		final mixed: Null<String> = params.find(p -> scan.reads.exists(p) && scan.calls.exists(p));
+		if (mixed != null) return 'it reads $mixed other than by calling it';
+		return scan.calls.keys().hasNext() && seams.lambdaKinds.length == 0 ? 'its grammar has no lambda to pass a function' : null;
+	}
+
+	/**
+	 * The value parameters a read of which may come after a body effect: the copy reads such a hole after that effect, the
+	 * call before the body, so only a value no effect can change may bind it. With no purity context every one is late.
+	 */
+	private static function lateParams(stmts: Array<QueryNode>, scan: BodyScan, purity: Null<PurityCtx>, seams: Seams): Array<String> {
+		var effect: Null<Int> = null;
+		if (purity != null) for (s in stmts) if (effect == null) effect = firstEffect(s, purity, seams);
+		final out: Array<String> = [];
+		for (p in scan.params) if (!scan.calls.exists(p)) {
+			final reads: Array<Int> = scan.readsAt[p] ?? [];
+			if (purity == null || (effect != null && reads.exists(at -> at >= effect))) out.push(p);
+		}
+		return out;
+	}
+
+	/**
+	 * Where the first effect under `node` has run: the end of the first impure node no impure child explains, or null. A call
+	 * runs its effect after its callee's receiver and its arguments, so a method read in callee position is no effect.
+	 */
+	private static function firstEffect(node: QueryNode, purity: PurityCtx, seams: Seams): Null<Int> {
+		if (PurityScan.isPure(node, purity)) return null;
+		final call: Bool = node.kind == seams.callKind && node.children.length > 0;
+		final parts: Array<QueryNode> = call ? node.children[0].children.concat(node.children.slice(1)) : node.children;
+		for (c in parts) {
+			final at: Null<Int> = firstEffect(c, purity, seams);
+			if (at != null) return at;
+		}
+		return node.span?.to ?? 0;
+	}
+
+	/** The spelling around the value of `last` when it is a value return: a site's copy then ends its own function. */
+	private static function exitOf(source: String, last: QueryNode, seams: Seams): Null<Exit> {
+		final at: Null<Span> = last.span;
+		final value: Null<Span> = last.children.length == 1 ? last.children[0].span : null;
+		return last.kind != seams.returnKind || at == null || value == null
+			? null
+			: { head: source.substring(at.from, value.from), tail: source.substring(value.to, at.to) };
 	}
 
 	/**
@@ -223,46 +294,97 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		return parsed == null
 			? null
 			: new Pattern(
-				namedLocals(parsed.root, locals, seams.localDeclKinds), parsed.category, text, parsed.kindEquivalence,
-				parsed.ignoredMetavars, parsed.identKind
+				namedLocals(parsed.root, locals, seams.localDeclKinds.concat(seams.iterationBinderKinds).concat(seams.valueBinderKinds)),
+				parsed.category, text, parsed.kindEquivalence, parsed.ignoredMetavars, parsed.identKind
 			);
 	}
 
 	/** The declaration node `member` was indexed from. */
 	private static function declAt(node: QueryNode, member: MemberInfo): Null<QueryNode> {
-		if (node.kind == member.kind && node.name == member.name && node.span?.from == member.declFrom) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = declAt(c, member);
-			if (found != null) return found;
-		}
-		return null;
+		return node.kind == member.kind && node.name == member.name && node.span?.from == member.declFrom
+			? node
+			: Arrays.findMap(node.children, c -> declAt(c, member));
 	}
 
-	/** Record in `scan` every hole read under `node` and the first reason the body is no template. */
-	private static function scanBody(node: QueryNode, top: Bool, seams: Seams, scan: BodyScan): Void {
+	/**
+	 * Record in `scan` every hole read under `node` and the first reason the body is no template. `loopEnd` is the end of
+	 * the outermost loop that repeats `node`, where its reads count as made: a later iteration reads after every effect in
+	 * the loop. A loop's iterable runs once, so it is read where it stands.
+	 */
+	private static function scanBody(node: QueryNode, top: Bool, loopEnd: Null<Int>, seams: Seams, scan: BodyScan): Void {
+		if (scan.problem != null) return;
+		scan.problem = refusalOf(node, top, seams, scan);
 		if (scan.problem != null) return;
 		final name: Null<String> = node.name;
-		if (seams.jumpKinds.contains(node.kind)) {
-			scan.problem = 'it leaves the function early (${node.kind}), which a site would do from its own function';
-			return;
+		final binder: Bool = seams.iterationBinderKinds.contains(node.kind);
+		final declares: Bool = binder || seams.valueBinderKinds.contains(node.kind) || (!top && seams.localDeclKinds.contains(node.kind));
+		if (declares && !declare(name, scan)) return;
+		if (node.kind == seams.callKind && callHole(node, seams, scan)) return;
+		if (node.kind == seams.identKind && !readHole(node, loopEnd, scan)) return;
+		final repeated: Null<Int> = seams.loopKinds.contains(node.kind) ? loopEnd ?? node.span?.to : loopEnd;
+		final iterable: Null<QueryNode> = binder ? node.children.find(c -> !seams.valueBinderKinds.contains(c.kind)) : null;
+		for (c in node.children) scanBody(c, false, c == iterable ? loopEnd : repeated, seams, scan);
+	}
+
+	/** Record the read `ident` of a hole made at `loopEnd` or where it stands; false with the problem when it names none. */
+	private static function readHole(ident: QueryNode, loopEnd: Null<Int>, scan: BodyScan): Bool {
+		final name: Null<String> = ident.name;
+		if (name == null || !scan.holes.contains(name)) {
+			scan.problem = 'it reads ${name ?? 'a name'}, which a site may bind to something else';
+			return false;
 		}
-		if (!top && (seams.localDeclKinds.contains(node.kind) || seams.localContinuationKinds.contains(node.kind))) {
-			scan.problem = 'it declares a local below its top level';
-			return;
+		scan.reads[name] = (scan.reads[name] ?? 0) + 1;
+		Groups.push(scan.readsAt, name, loopEnd ?? ident.span?.from ?? 0);
+		scan.idents.push(ident);
+		return true;
+	}
+
+	/** Why `node` alone makes the body no template, or null. */
+	private static function refusalOf(node: QueryNode, top: Bool, seams: Seams, scan: BodyScan): Null<String> {
+		if (scan.jumps.contains(node.kind))
+			return 'it leaves the function early (${node.kind}), which a site would do from its own function';
+		if (scan.exits && seams.functionKinds.contains(node.kind))
+			return 'it holds a function, whose return would leave that function and not the body';
+		if (!top && seams.localContinuationKinds.contains(node.kind)) return 'it declares a local below its top level';
+		return node.kind == seams.interpIdentKind ? 'it reads ${node.name ?? 'a name'} inside a string' : null;
+	}
+
+	/** Make `name` a hole of a local below the body's top level; false with the problem when it shadows a hole. */
+	private static function declare(name: Null<String>, scan: BodyScan): Bool {
+		if (name == null || (scan.holes.contains(name) && !scan.nested.contains(name))) {
+			scan.problem = 'it declares ${name ?? 'a local'} over a parameter or a local of its own';
+			return false;
 		}
-		if (node.kind == seams.interpIdentKind) {
-			scan.problem = 'it reads ${name ?? 'a name'} inside a string';
-			return;
+		if (!scan.nested.contains(name)) {
+			scan.holes.push(name);
+			scan.nested.push(name);
 		}
-		if (node.kind == seams.identKind) {
-			if (name == null || !scan.holes.contains(name)) {
-				scan.problem = 'it reads ${name ?? 'a name'}, which a site may bind to something else';
-				return;
-			}
-			scan.reads[name] = (scan.reads[name] ?? 0) + 1;
-			scan.idents.push(node);
+		return true;
+	}
+
+	/**
+	 * Whether `call` calls a parameter with locals of the body's own as its arguments: the whole call is then the hole of that
+	 * parameter, and a site's expression in its place becomes a lambda of those locals. One such call per parameter.
+	 */
+	private static function callHole(call: QueryNode, seams: Seams, scan: BodyScan): Bool {
+		final callee: Null<QueryNode> = call.children[0];
+		final param: Null<String> = callee?.name;
+		if (callee == null || callee.kind != seams.identKind || param == null) return false;
+		if (!scan.params.contains(param)) return false;
+		final args: Array<String> = [];
+		for (a in call.children.slice(1)) {
+			final arg: Null<String> = a.name;
+			if (a.kind != seams.identKind || arg == null) return false;
+			if (!scan.nested.contains(arg) || args.contains(arg)) return false;
+			args.push(arg);
 		}
-		for (c in node.children) scanBody(c, false, seams, scan);
+		if (scan.calls.exists(param)) {
+			scan.problem = 'it calls $param more than once';
+			return true;
+		}
+		scan.calls[param] = args;
+		scan.idents.push(new QueryNode(seams.identKind, param, [], call.span));
+		return true;
 	}
 
 	/** The source of `stmts` with every hole read spelled as the metavariable of its name. */
@@ -314,7 +436,8 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			root: root,
 			purity: purity,
 			regions: ElementSpan.lazyRegions(source, plugin),
-			seams: seams
+			seams: seams,
+			plugin: plugin
 		};
 		final found: Array<Site> = [];
 		for (template in templates) for (m in Matcher.search(template.pattern, root)) {
@@ -336,19 +459,15 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		final span: Span = m.span;
 		if (ctx.file == template.file && span.from >= template.span.from && span.to <= template.span.to) return null;
 		if (LexicalRegions.commentIntersects(span.from, ctx.source.lineEnd(span.to), ctx.regions())) return null;
-		final localNames: Array<String> = [];
-		for (local in template.locals) {
-			final name: Null<String> = m.bindings[local]?.name;
-			if (name == null) return null;
-			localNames.push(name);
-		}
+		final localNames: Array<String> = boundNames(m, template.locals);
+		final nestedNames: Array<String> = boundNames(m, template.nested);
+		if (localNames.length < template.locals.length || nestedNames.length < template.nested.length) return null;
+		final copyNames: Array<String> = localNames.concat(nestedNames);
 		final args: Array<String> = [];
 		for (param in template.params) {
-			final bound: Null<QueryNode> = m.bindings[param];
-			final at: Null<Span> = bound?.span;
-			if (bound == null || at == null || mentions(bound, localNames, ctx.seams)) return null;
-			if (!PurityScan.isPure(bound, ctx.purity)) return null;
-			args.push(ctx.source.substring(at.from, at.to));
+			final arg: Null<String> = argOf(m, template, param, copyNames, ctx);
+			if (arg == null) return null;
+			args.push(arg);
 		}
 		if (localNames.length > 0) {
 			final run: Array<QueryNode> = m.node.kind == Pattern.SEQUENCE_KIND ? m.node.children : [m.node];
@@ -358,18 +477,50 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		return { span: span, template: template, args: args };
 	}
 
+	/** The call's argument for `param`, or null when its binding is no value the call may take in place of the copy's. */
+	private static function argOf(m: Match, template: Template, param: String, copyNames: Array<String>, ctx: SiteCtx): Null<String> {
+		final bound: Null<QueryNode> = m.bindings[param];
+		final at: Null<Span> = bound?.span;
+		if (bound == null || at == null) return null;
+		final text: String = ctx.source.substring(at.from, at.to);
+		final lambda: Null<Array<String>> = template.calls[param];
+		if (lambda != null) {
+			if (LoopScan.escapesIteration(bound, ctx.seams.escapes, false)) return null;
+			final lambdaNames: Array<String> = boundNames(m, lambda);
+			return mentions(bound, copyNames.filter(n -> !lambdaNames.contains(n)), ctx.seams) ? null : lambdaText(lambdaNames, text, ctx);
+		}
+		if (mentions(bound, copyNames, ctx.seams)) return null;
+		if (!PurityScan.isPure(bound, ctx.purity)) return null;
+		return template.late.contains(param) && !PurityScan.isPlainValue(bound, ctx.purity) ? null : text;
+	}
+
+	/** The names `m` binds the name holes `holes` to, skipping one it leaves unbound. */
+	private static function boundNames(m: Match, holes: Array<String>): Array<String> {
+		return [
+			for (h in holes) {
+				final name: Null<String> = m.bindings[h]?.name;
+				if (name != null) name;
+			}
+		];
+	}
+
+	/**
+	 * `body` as a lambda of `params`, spelled as the plugin parses one, or null when it does not. The copy evaluates the body
+	 * at each call of the parameter, and so does the helper through the lambda, so an impure body is no reason to decline.
+	 * That holds for effects, not for jumps: `argOf` declines a body holding one that leaves it (`LoopScan.escapesIteration`).
+	 */
+	private static function lambdaText(params: Array<String>, body: String, ctx: SiteCtx): Null<String> {
+		final text: String = '${params.length == 1 ? params[0] : '(${params.join(', ')})'} -> $body';
+		final parsed: Null<Pattern> = try ctx.plugin.parsePattern(text) catch (exception: Exception) null;
+		return parsed != null && ctx.seams.lambdaKinds.contains(parsed.root.kind) ? text : null;
+	}
+
 	/** The statements after `last` in the child list holding `first`, or null when no node holds it. */
 	private static function siblingsAfter(node: QueryNode, first: QueryNode, last: QueryNode): Null<Array<QueryNode>> {
 		final at: Int = node.children.indexOf(first);
-		if (at != -1) {
-			final end: Int = node.children.indexOf(last);
-			return end < at ? null : node.children.slice(end + 1);
-		}
-		for (c in node.children) {
-			final found: Null<Array<QueryNode>> = siblingsAfter(c, first, last);
-			if (found != null) return found;
-		}
-		return null;
+		if (at == -1) return Arrays.findMap(node.children, c -> siblingsAfter(c, first, last));
+		final end: Int = node.children.indexOf(last);
+		return end < at ? null : node.children.slice(end + 1);
 	}
 
 	/** Whether `node` reads any of `names`, as an identifier or inside a string. */
@@ -386,13 +537,16 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		final exits: Null<Array<String>> = shape.controlExitKinds;
 		if (paramKinds.length == 0 || blockBodyKind == null || exits == null) return null;
 		final throws: Array<String> = shape.throwKinds ?? [];
-		final jumps: Array<String> = exits.filter(k -> !throws.contains(k));
-		for (k in [
-			shape.breakStatementKind,
-			shape.continueStatementKind,
-			shape.breakExpressionKind,
-			shape.continueExpressionKind
-		]) if (k != null) jumps.push(k);
+		final loopJumps: Array<String> = [
+			for (k in [
+				shape.breakStatementKind,
+				shape.continueStatementKind,
+				shape.breakExpressionKind,
+				shape.continueExpressionKind
+			]) if (k != null) k
+		];
+		final hardExits: Array<String> = exits.filter(k -> !throws.contains(k) && !loopJumps.contains(k));
+		final jumps: Array<String> = hardExits.concat(loopJumps);
 		return {
 			identKind: shape.identKind,
 			interpIdentKind: shape.stringInterpIdentKind,
@@ -400,7 +554,23 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			blockBodyKind: blockBodyKind,
 			localDeclKinds: shape.localDeclKinds ?? [],
 			localContinuationKinds: shape.localDeclContinuationKinds ?? [],
-			jumpKinds: jumps
+			jumpKinds: jumps,
+			iterationBinderKinds: shape.iterationBindingKinds ?? [],
+			valueBinderKinds: shape.iterationValueBinderKinds ?? [],
+			loopKinds: ShapeVocab.loopKinds(shape),
+			callKind: shape.callKind,
+			returnKind: shape.returnStatementKind,
+			valueReturnKinds: shape.valueReturnKinds ?? [],
+			functionKinds: ShapeVocab.nestedFunctionKinds(shape),
+			lambdaKinds: shape.lambdaKinds ?? [],
+			escapes: {
+				loopKinds: shape.loopStatementKinds ?? [],
+				doWhileKinds: shape.doWhileLoopKinds ?? [],
+				opaqueKinds: shape.opaqueKinds ?? [],
+				nestedScopeKinds: LoopScan.nestedScopeKinds(shape),
+				hardExitKinds: hardExits,
+				loopJumpKinds: loopJumps
+			}
 		};
 	}
 
@@ -421,6 +591,18 @@ private typedef Template = {
 
 	/** The names the body's top-level statements declare. */
 	final locals: Array<String>;
+
+	/** The names the body declares below its top level, loop binders included: scoped to the copy, never read after it. */
+	final nested: Array<String>;
+
+	/** Each function parameter, the body's one call of it the hole: the locals that call passes, the lambda's parameters. */
+	final calls: Map<String, Array<String>>;
+
+	/** The value parameters a read of which may follow a body effect: a site binds each to a plain value only. */
+	final late: Array<String>;
+
+	/** The spelling around the closing return's value, when the body ends in one: the call then ends the site's function. */
+	final exit: Null<Exit>;
 	final pattern: Pattern;
 
 	/** Where the helper is declared: its own body is never a site. */
@@ -429,15 +611,29 @@ private typedef Template = {
 
 }
 
+/** The text before and after the value of a template's closing return. */
+private typedef Exit = { final head: String; final tail: String; }
 /** One matched copy: the replaced statements and the call's argument texts. */
 private typedef Site = { final span: Span; final template: Template; final args: Array<String>; }
 
 /** What `scanBody` learns of a helper's body. */
 private typedef BodyScan = {
+
+	final params: Array<String>;
 	final holes: Array<String>;
+	final nested: Array<String>;
 	final reads: Map<String, Int>;
+
+	/** Each value parameter's reads, a read a loop repeats placed at that loop's end. */
+	final readsAt: Map<String, Array<Int>>;
+	final calls: Map<String, Array<String>>;
 	final idents: Array<QueryNode>;
+
+	/** The control exits that refuse the body: a body ending in a value return keeps its value returns. */
+	final jumps: Array<String>;
+	final exits: Bool;
 	var problem: Null<String>;
+
 }
 
 /** The file one site search runs over. */
@@ -448,6 +644,7 @@ private typedef SiteCtx = {
 	final purity: PurityCtx;
 	final regions: () -> Array<LexRegion>;
 	final seams: Seams;
+	final plugin: GrammarPlugin;
 }
 
 private typedef Seams = {
@@ -461,5 +658,19 @@ private typedef Seams = {
 
 	/** The control exits a site would take from its OWN function: every exit but a throw, plus break and continue. */
 	final jumpKinds: Array<String>;
+	final iterationBinderKinds: Array<String>;
+	final valueBinderKinds: Array<String>;
+	final loopKinds: Array<String>;
+	final callKind: Null<String>;
+	final returnKind: Null<String>;
+	final valueReturnKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final lambdaKinds: Array<String>;
+
+	/**
+	 * The jumps a lambda hole's binding may not hold: in the lambda a `return` leaves the
+	 * lambda, a `break` or `continue` no loop of the binding encloses has none to bind to.
+	 */
+	final escapes: LoopJumpSeams;
 
 }
