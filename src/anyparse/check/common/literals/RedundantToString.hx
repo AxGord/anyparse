@@ -5,6 +5,7 @@ import anyparse.check.FactsOracle;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.OracleProviders;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
@@ -175,6 +176,7 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 			binder: OperandBinder.forFile(plugin, file, source, tree, index),
 			root: tree,
 			source: source,
+			regions: plugin.lexicalRegions(source),
 			seams: seams,
 			declaredTypes: provider == null ? [] : provider.declaredTypes(source),
 			nullity: DeclaredNullity.of(
@@ -255,8 +257,9 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 			if (arm == Concat && !classDeclared && !compiled)
 				return 'the receiver type is not a class, so a `+` operator overload could make this something other than concatenation';
 		}
-		final removed: String = ctx.source.substring(recvSpan.to, callSpan.to);
-		return removed.indexOf('//') != -1 || removed.indexOf('/*') != -1 ? 'a comment sits inside the text the fix would remove' : null;
+		return LexicalRegions.commentIntersects(recvSpan.to, callSpan.to, ctx.regions)
+			? 'a comment sits inside the text the fix would remove'
+			: null;
 	}
 
 	/** Which stringifying context `node` sits in, or null when it sits in none. */
@@ -619,6 +622,9 @@ private typedef Ctx = {
 
 	final root: QueryNode;
 	final source: String;
+
+	/** The file's lexical regions: where a comment marker is a comment and where it is string text. */
+	final regions: Array<LexRegion>;
 	final seams: Seams;
 	final declaredTypes: Map<Int, String>;
 

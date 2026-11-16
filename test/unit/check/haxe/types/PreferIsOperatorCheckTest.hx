@@ -107,8 +107,14 @@ class PreferIsOperatorCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-ISOP-COMMENT-DROPPED')
 	public function testACommentInTheCallIsLeftAlone(): Void {
-		final src: String = '${TYPES}class C {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn Std.isOfType(v, /* the base */ Base);\n\t}\n}';
-		Assert.equals(0, CheckFixture.violations(new PreferIsOperator(), src).length);
+		for (call in [
+			'Std.isOfType(v, /* the base */ Base)',
+			'Std.isOfType(/* v */ v, Base)',
+			'Std.isOfType(v, Base // end\n\t\t)'
+		]) {
+			final src: String = '${TYPES}class C {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn $call;\n\t}\n}';
+			Assert.equals(0, CheckFixture.violations(new PreferIsOperator(), src).length, call);
+		}
 	}
 
 	/** An annotation argument and a reification are read as syntax, where the call and the operator are different code. */

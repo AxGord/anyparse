@@ -3,6 +3,7 @@ package anyparse.check.haxe.types;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.ParenGuard;
 import anyparse.query.SymbolIndex;
 import anyparse.query.ValueDoors;
@@ -39,6 +40,7 @@ final class PreferIsOperator extends HaxeRule implements VersionGated {
 				shape: plugin.refShape(),
 				seams: seams,
 				plugin: plugin,
+				regions: plugin.lexicalRegions(entry.source),
 				index: index
 			};
 			walk(tree, proof, violations);
@@ -54,9 +56,10 @@ final class PreferIsOperator extends HaxeRule implements VersionGated {
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, seamsOf(plugin), (_, seams) -> {
 			final guarded: Array<GuardedEdit> = [];
+			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 			CheckScan.applyBySpan(plugin, source, violations, [seams.callKind], (node, span) -> {
 				final args: Null<CallArgs> = argsOf(node, seams);
-				final edit: Null<GuardedEdit> = args == null ? null : rewrite(span, args, source, seams);
+				final edit: Null<GuardedEdit> = args == null ? null : rewrite(span, args, source, regions, seams);
 				if (edit != null) guarded.push(edit);
 				return null;
 			});
@@ -79,7 +82,7 @@ final class PreferIsOperator extends HaxeRule implements VersionGated {
 		if (seams.opaqueKinds.contains(node.kind) || seams.metaKinds.contains(node.kind)) return;
 		final args: Null<CallArgs> = argsOf(node, seams);
 		final span: Null<Span> = node.span;
-		if (args != null && span != null && rewrite(span, args, proof.source, seams) != null && proven(args, proof)) {
+		if (args != null && span != null && rewrite(span, args, proof.source, proof.regions, seams) != null && proven(args, proof)) {
 			out.push({
 				file: proof.file,
 				span: span,
@@ -108,16 +111,18 @@ final class PreferIsOperator extends HaxeRule implements VersionGated {
 	 * null when an argument has no span, the type argument is not a bare name, or a comment sits in the call outside its
 	 * arguments, which the rewrite would drop.
 	 */
-	private static function rewrite(span: Span, args: CallArgs, source: String, seams: Seams): Null<GuardedEdit> {
+	private static function rewrite(
+		span: Span, args: CallArgs, source: String, regions: Array<LexRegion>, seams: Seams
+	): Null<GuardedEdit> {
 		final value: Null<Span> = args.value.span;
 		final type: Null<Span> = args.type.span;
 		if (value == null || type == null || args.type.kind != seams.identKind) return null;
-		final gaps: Array<String> = [
-			source.substring(span.from, value.from),
-			source.substring(value.to, type.from),
-			source.substring(type.to, span.to)
-		];
-		if (gaps.exists(gap -> gap.indexOf('//') != -1 || gap.indexOf('/*') != -1)) return null;
+		if (
+			LexicalRegions.commentIntersects(span.from, value.from, regions)
+			|| LexicalRegions.commentIntersects(value.to, type.from, regions)
+			|| LexicalRegions.commentIntersects(type.to, span.to, regions)
+		)
+			return null;
 		final valueText: String = source.substring(value.from, value.to).trim();
 		final text: String = '$valueText ${seams.keyword} ${source.substring(type.from, type.to).trim()}';
 		return { span: span, text: text, holes: [new Span(0, valueText.length)] };
@@ -209,5 +214,6 @@ private typedef Proof = {
 	final shape: RefShape;
 	final seams: Seams;
 	final plugin: GrammarPlugin;
+	final regions: Array<LexRegion>;
 	final index: () -> Null<SymbolIndex>;
 };

@@ -224,6 +224,14 @@
 			"find": "!current.contains(settled.groups[k])",
 			"replace": "true",
 			"note": "a boundary the source already had is asked too, so a pair that cannot merge (a trigraph cut) and stays on one line is refused as a no-gain split and the fold drops its own edit"
+		},
+		{
+			"name": "M-TOSTRING-COMMENT-IN-REMOVED",
+			"type": "anyparse.check.common.literals.RedundantToString",
+			"method": "blockerFor",
+			"find": "return LexicalRegions.commentIntersects(recvSpan.to, callSpan.to, ctx.regions)",
+			"replace": "return false",
+			"note": "a comment between the receiver and the call's end is deleted by the fix"
 		}
 	]
 }

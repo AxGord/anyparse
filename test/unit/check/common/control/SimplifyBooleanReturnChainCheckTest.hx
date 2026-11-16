@@ -230,6 +230,8 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 	}
 
 	/** A `//` spelled inside a string literal of a condition is no comment: the chain still reduces, the literal kept verbatim. */
+	@:pin('control')
+	@:killer('M-RETURN-CHAIN-STRING-BLIND')
 	public function testCommentMarkerInAStringLiteralStillReduces(): Void {
 		Assert.equals("return s == 'http://x' || b;", reduce("{ if (s == 'http://x') return true; if (b) return true; return false; }"));
 	}

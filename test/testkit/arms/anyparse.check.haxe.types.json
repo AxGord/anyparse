@@ -30,8 +30,16 @@
 			"name": "M-ISOP-COMMENT-DROPPED",
 			"type": "anyparse.check.haxe.types.PreferIsOperator",
 			"method": "rewrite",
-			"find": "if (gaps.exists(gap -> gap.indexOf('//') != -1 || gap.indexOf('/*') != -1)) return null;",
-			"replace": "",
+			"find": [
+				"LexicalRegions.commentIntersects(span.from, value.from, regions)",
+				"LexicalRegions.commentIntersects(value.to, type.from, regions)",
+				"LexicalRegions.commentIntersects(type.to, span.to, regions)"
+			],
+			"replace": [
+				"false",
+				"false",
+				"false"
+			],
 			"note": "a comment between the call's arguments is deleted by the rewrite"
 		},
 		{

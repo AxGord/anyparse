@@ -279,6 +279,8 @@ class RedundantToStringCheckTest extends Test {
 		Assert.equals(0, violations("class C { function f() { final s:String = '${Env.toString()}'; } }").length);
 	}
 
+	@:pin('control')
+	@:killer('M-TOSTRING-COMMENT-IN-REMOVED')
 	public function testCommentInRemovedTextSuppressesFix(): Void {
 		final src: String =
 			'$DECL_K@:nullSafety(Strict) class C { function f(s:String, x:K) { final r:String = s + x /* keep */ .toString(); } }';
@@ -332,6 +334,15 @@ class RedundantToStringCheckTest extends Test {
 			+ "@:nullSafety(Strict) class C { function f(s:Src) { final r:String = '${s.get().toString()}'; } }";
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
+	}
+
+	/** A comment marker spelled inside a string literal of the receiver is no comment: the site stays fixable. */
+	@:pin('guard')
+	public function testCommentMarkerInAReceiverStringLiteralStaysFixable(): Void {
+		final src: String = "class M { public function new(a:String) {} public function toString():String return 'm'; } "
+			+ "@:nullSafety(Strict) class C { function f(s:String) { final r:String = s + new M('//').toString(); } }";
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
 	}
 
 	private function violations(src: String): Array<Violation> {
