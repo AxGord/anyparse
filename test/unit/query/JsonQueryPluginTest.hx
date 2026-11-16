@@ -57,10 +57,10 @@ class JsonQueryPluginTest extends Test {
 	public function testEveryDeclaredKindIsProjected(): Void {
 		final shape: RefShape = _plugin.refShape();
 		final projected: Array<String> = _plugin.projectedKinds();
-		final declared: Array<String> =
-			[shape.arrayLiteralKind ?? '', shape.objectLiteralKind ?? ''].concat(shape.commaContainerKinds ?? [])
-				.concat(shape.delimitedContainerKinds ?? [])
-				.concat(shape.stringLiteralKinds ?? []);
+		final declared: Array<String> = [shape.arrayLiteralKind ?? '', shape.objectLiteralKind ?? '']
+			.concat(shape.commaContainerKinds ?? [])
+			.concat(shape.delimitedContainerKinds ?? [])
+			.concat(shape.stringLiteralKinds ?? []);
 		for (kind in declared) Assert.isTrue(projected.contains(kind), '$kind is projected');
 		Assert.isTrue(projected.contains('Member'), 'the entry kind is projected');
 	}

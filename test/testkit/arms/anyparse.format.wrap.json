@@ -625,6 +625,14 @@
 			"find": "case TypeParamItemCountLargerThan: typeParamItemCount >= cond.value;",
 			"replace": "case TypeParamItemCountLargerThan: false;",
 			"note": "the typeParamItemCount condition never holds, so four items with a generic one stay on one line"
+		},
+		{
+			"name": "M-CHAIN-PATH-HEAD-SEAM",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "layout",
+			"find": "!firstDotIsSeam && segments.length >= 2",
+			"replace": "false",
+			"note": "a path head's first link breaks away from it like the others, stranding the head alone on its line"
 		}
 	]
 }

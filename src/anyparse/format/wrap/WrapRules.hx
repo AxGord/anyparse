@@ -29,7 +29,7 @@ typedef WrapRules = {
 	var defaultAdditionalIndent: Int;
 
 	/**
-	 * Does this cascade count a `.` as a chain item only when it follows a `)`?
+	 * Does this cascade count a `.` as a chain item only when it follows a `)` (or an array literal head)?
 	 * `MethodChainEmit.emit` then keeps a non-item first segment glued to the head
 	 * even under a break shape that would otherwise strand it, so `Actuate.tween(…)`
 	 * stays whole.

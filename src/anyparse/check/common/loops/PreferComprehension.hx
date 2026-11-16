@@ -935,7 +935,8 @@ final class PreferComprehension extends RuleBase {
 	 * proof of purity.
 	 */
 	private static function readPureKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [shape.identKind].concat(shape.numericLiteralKinds ?? [])
+		final out: Array<String> = [shape.identKind]
+			.concat(shape.numericLiteralKinds ?? [])
 			.concat(shape.stringLiteralKinds ?? [])
 			.concat(shape.atomExprKinds ?? [])
 			.concat(shape.structureFieldHostKinds ?? [])
@@ -972,7 +973,8 @@ final class PreferComprehension extends RuleBase {
 	 * eager but NOT pure, so deriving one list from the other would force a wrong answer on one side.
 	 */
 	private static function readEagerKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = [shape.identKind].concat(shape.numericLiteralKinds ?? [])
+		final out: Array<String> = [shape.identKind]
+			.concat(shape.numericLiteralKinds ?? [])
 			.concat(shape.stringLiteralKinds ?? [])
 			.concat(shape.atomExprKinds ?? [])
 			.concat(shape.atomChainKinds ?? [])

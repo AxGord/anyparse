@@ -323,7 +323,8 @@ final class GateLint {
 	/** The arguments of a `lint --all --format json` of `scope`, with the compiler oracle unless `oracle` is false. */
 	public static function lintArgs(scope: Array<String>, oracle: Bool, ?rules: Array<String>): Array<String> {
 		final only: Array<String> = [for (id in rules ?? []) for (arg in ['--rule', id]) arg];
-		return ['lint'].concat(scope)
+		return ['lint']
+			.concat(scope)
 			.concat(['--all', '--format', 'json'])
 			.concat(only)
 			.concat(oracle ? [] : ['--no-oracle']);

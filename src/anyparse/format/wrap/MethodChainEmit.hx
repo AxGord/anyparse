@@ -34,11 +34,13 @@ import anyparse.format.IndentChar;
  * an explicitly configurable mode, no longer as a default.
  *
  * Which `.` counts as a link is `WrapRules.chainItemsAfterCloseParenOnly`'s
- * question, and that field's doc owns the contract. `headEndsWithCall` carries the
- * structural fact behind it from the macro walk — the innermost segment's operand IS
- * a Call ctor — never from the receiver's rendered text, so a head that is not a
- * call keeps its first segment glued and `Actuate.tween(…)` stays whole instead of
- * stranding a two-token receiver on a line of its own.
+ * question, and that field's doc owns the contract. `firstDotIsSeam` carries the
+ * structural fact behind it from the macro walk — the innermost segment's operand is
+ * a Call ctor or an array literal / comprehension — never from the receiver's rendered
+ * text, so a path head keeps its first segment glued and `Actuate.tween(…)` stays whole
+ * instead of stranding a two-token receiver on a line of its own, while a bracketed
+ * literal head leaves its first link a seam so the glued link cannot overflow the head
+ * line into its own argument parens.
  */
 class MethodChainEmit {
 
@@ -51,11 +53,11 @@ class MethodChainEmit {
 	 */
 	public static function emit(
 		receiver: Doc, segments: Array<Doc>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
-		segCallLeadingBreak: Bool = false, headEndsWithCall: Bool = true
+		segCallLeadingBreak: Bool = false, firstDotIsSeam: Bool = true
 	): Doc {
 		if (segments.length == 0) return WrapBoundary(receiver);
 		function laidOut(parts: Array<Doc>, committed: Int): Doc {
-			return layout(parts[0], parts.slice(1), opt, rules, nestSuppress, segCallLeadingBreak, headEndsWithCall, committed);
+			return layout(parts[0], parts.slice(1), opt, rules, nestSuppress, segCallLeadingBreak, firstDotIsSeam, committed);
 		}
 		final parts: Array<Doc> = [receiver].concat(segments);
 		final plain: Doc = laidOut(parts, -1);
@@ -109,7 +111,7 @@ class MethodChainEmit {
 	 */
 	private static function layout(
 		receiver: Doc, segments: Array<Doc>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool, segCallLeadingBreak: Bool,
-		headEndsWithCall: Bool, committed: Int
+		firstDotIsSeam: Bool, committed: Int
 	): Doc {
 
 		// ω-chain-comment-forced-break: a method-chain segment (or the
@@ -192,16 +194,16 @@ class MethodChainEmit {
 		function shapeAt(mode: WrapMode): Doc {
 			// ω-methodchain-all-or-nothing / isDotAfterPClose: the policy breaks
 			// EVERY chain item onto its own line, and a `.` is a chain item only
-			// when it follows a `)` (fork `MarkWrapping.isDotAfterPClose`). For a
-			// head that is not a call — a bare ident (`Actuate`), a field path, an
-			// array access — the dot before segment 0 is not a chain boundary at
+			// when it follows a `)` (fork `MarkWrapping.isDotAfterPClose`) or an
+			// array literal head. For a head that is neither — a bare ident
+			// (`Actuate`), a field path, an array access — the dot before segment 0 is not a chain boundary at
 			// all, so that segment belongs to the HEAD and stays glued to it. The
 			// break shape for such a chain is exactly `OnePerLineAfterFirst`.
 			// Without this the policy strands a two-token receiver alone on a line
 			// (`Actuate` above `.tween(…)`), which is heavier reading than the
 			// glued head the policy set out to fix.
 			final policyItems: Bool = rules.chainItemsAfterCloseParenOnly == true;
-			final effective: WrapMode = mode == OnePerLine && policyItems && !headEndsWithCall && segments.length >= 2
+			final effective: WrapMode = mode == OnePerLine && policyItems && !firstDotIsSeam && segments.length >= 2
 				? OnePerLineAfterFirst
 				: mode;
 			return hasCommentBreak

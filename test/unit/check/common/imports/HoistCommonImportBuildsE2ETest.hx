@@ -127,7 +127,8 @@ class HoistCommonImportBuildsE2ETest extends Test {
 
 	/** The hoists a `hoist-common-import` lint of `dir` reports, as `<module>:<statement>` sorted, and what it said on stderr. */
 	private static function lint(dir: String, noOracle: Bool): LintOutcome {
-		final args: Array<String> = ['lint', '--rule', 'hoist-common-import', '--flat'].concat(noOracle ? ['--no-oracle'] : [])
+		final args: Array<String> = ['lint', '--rule', 'hoist-common-import', '--flat']
+			.concat(noOracle ? ['--no-oracle'] : [])
 			.concat([dir]);
 		var err: String = '';
 		final out: String = CliFixture.captureStdout(() -> err = CliFixture.captureStderr(Cli.run.bind(args)));

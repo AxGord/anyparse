@@ -114,12 +114,15 @@ final class WriterChainLowering {
 				var _cursor = value;
 				var _receiver = value;
 				var _hasCallPrev: Bool = false;
-				// ω-methodchain-all-or-nothing / isDotAfterPClose: did the dot that
-				// leads the INNERMOST collected segment follow a `)`? The walk runs
-				// right-to-left, so the last write is that segment's answer. `false`
-				// means the segment is not a chain item at all (fork
-				// `MarkWrapping.isDotAfterPClose`) and belongs to the head, which
-				// `MethodChainEmit.emit` renders by keeping it glued.
+				// ω-methodchain-all-or-nothing / isDotAfterPClose: is the dot that
+				// leads the INNERMOST collected segment a seam — it follows a `)`, or
+				// an array literal / comprehension head? The walk runs right-to-left,
+				// so the last write is that segment's answer. `false` means the segment
+				// is not a chain item (fork `MarkWrapping.isDotAfterPClose`) and belongs
+				// to the head, which `MethodChainEmit.emit` renders by keeping it
+				// glued. A bracketed literal head is a seam on purpose: gluing the
+				// first link to its `]` overflows the head line into the link's
+				// argument parens.
 				var _seg0AfterCall: Bool = false;
 				// ω-keep-chain-receiver-comment: the inner-most FieldAccess carries
 				// its operand's dot-gap trailing comment in the synth
@@ -142,6 +145,9 @@ final class WriterChainLowering {
 									case Call(_, _, _, _, _):
 										_hasCallPrev = true;
 										_seg0AfterCall = true;
+									case ArrayExpr(_):
+										_seg0AfterCall = true;
+										if (_opTrail != null) _recTrail = _opTrail;
 									case _:
 										_seg0AfterCall = false;
 										if (_opTrail != null) _recTrail = _opTrail;
@@ -173,6 +179,9 @@ final class WriterChainLowering {
 							case Call(_, _, _, _, _):
 								_hasCallPrev = true;
 								_seg0AfterCall = true;
+							case ArrayExpr(_):
+								_seg0AfterCall = true;
+								if (_opTrail != null) _recTrail = _opTrail;
 							case _:
 								_seg0AfterCall = false;
 								if (_opTrail != null) _recTrail = _opTrail;
@@ -247,8 +256,8 @@ final class WriterChainLowering {
 				var _receiver = value;
 				var _hasCallPrev: Bool = false;
 				// ω-methodchain-all-or-nothing / isDotAfterPClose (plain-mode twin of
-				// the trivia walk's tracker): did the innermost collected segment's
-				// dot follow a `)`?
+				// the trivia walk's tracker): is the innermost collected segment's
+				// dot a seam (a `)` or an array literal head before it)?
 				var _seg0AfterCall: Bool = false;
 				while (true) switch _cursor {
 					case Call(_op, _args):
@@ -260,6 +269,8 @@ final class WriterChainLowering {
 								switch _prev {
 									case Call(_, _):
 										_hasCallPrev = true;
+										_seg0AfterCall = true;
+									case ArrayExpr(_):
 										_seg0AfterCall = true;
 									case _:
 										_seg0AfterCall = false;
@@ -281,6 +292,8 @@ final class WriterChainLowering {
 						switch _prev {
 							case Call(_, _):
 								_hasCallPrev = true;
+								_seg0AfterCall = true;
+							case ArrayExpr(_):
 								_seg0AfterCall = true;
 							case _:
 								_seg0AfterCall = false;

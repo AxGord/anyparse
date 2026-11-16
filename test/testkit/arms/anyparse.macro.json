@@ -3489,6 +3489,38 @@
 			"find": "if (branch.hasMeta(QUERY_TRANSPARENT_META)) return {",
 			"replace": "if (false) return {",
 			"note": "a `@:queryTransparent` ctor projects a node of its own again, so a type parameter bound reads as `(TypeBound (Named Foo))` instead of its type"
+		},
+		{
+			"name": "M-CHAIN-ARRAY-HEAD-GLUED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "wrapChainTriviaBody",
+			"find": "_segs.unshift(_segDoc);\nswitch _prev {\ncase Call(_, _, _, _, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = true;",
+			"replace": "_segs.unshift(_segDoc);\nswitch _prev {\ncase Call(_, _, _, _, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = false;",
+			"note": "an array literal or comprehension head is not a seam, so the first link glues to its closing bracket and breaks inside its own argument parens"
+		},
+		{
+			"name": "M-CHAIN-ARRAY-HEAD-GLUED-PLAIN",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "wrapChainPlainBody",
+			"find": "_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));\nswitch _prev {\ncase Call(_, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = true;",
+			"replace": "_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));\nswitch _prev {\ncase Call(_, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = false;",
+			"note": "the plain writer's chain walk glues an array literal head's first link the same way"
+		},
+		{
+			"name": "M-CHAIN-ARRAY-FIELD-HEAD-GLUED",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "wrapChainTriviaBody",
+			"find": "_segs.unshift(_dt('.' + _fld));\nswitch _prev {\ncase Call(_, _, _, _, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = true;",
+			"replace": "_segs.unshift(_dt('.' + _fld));\nswitch _prev {\ncase Call(_, _, _, _, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = false;",
+			"note": "a bare field access leading the first link after an array literal or comprehension head glues to the head instead of breaking below it"
+		},
+		{
+			"name": "M-CHAIN-ARRAY-FIELD-HEAD-GLUED-PLAIN",
+			"type": "anyparse.macro.WriterChainLowering",
+			"method": "wrapChainPlainBody",
+			"find": "_segs.unshift(_dt('.' + _fld));\nswitch _prev {\ncase Call(_, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = true;",
+			"replace": "_segs.unshift(_dt('.' + _fld));\nswitch _prev {\ncase Call(_, _):\n_hasCallPrev = true;\n_seg0AfterCall = true;\ncase ArrayExpr(_):\n_seg0AfterCall = false;",
+			"note": "the plain writer's chain walk glues a bare-field-led first link to an array literal head the same way"
 		}
 	]
 }

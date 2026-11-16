@@ -110,7 +110,8 @@ final class LandFmtRaceTest extends Test {
 			'',
 			'=== fmt ===',
 			'apq fmt --list: ${files.length} of 99 file(s) would be rewritten'
-		].concat(files)
+		]
+			.concat(files)
 			.concat([
 				'apq fmt --verify: 0 of 20 reformatted file(s) changed more than whitespace',
 				'',

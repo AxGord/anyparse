@@ -185,9 +185,8 @@ final class RuleScopeTest extends Test {
 	}
 
 	private static function registry(classes: Array<String>): ImpactSource {
-		final lines: Array<String> = ['package anyparse.check;', ''].concat(
-			classes.map(name -> 'import anyparse.check.common.imports.$name;')
-		)
+		final lines: Array<String> = ['package anyparse.check;', '']
+			.concat(classes.map(name -> 'import anyparse.check.common.imports.$name;'))
 			.concat([
 				'',
 				'final class Linter {',

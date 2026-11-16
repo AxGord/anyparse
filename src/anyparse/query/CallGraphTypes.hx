@@ -89,7 +89,8 @@ final class CallGraphTypes {
 		_fieldKinds = shape.fieldDeclKinds ?? [];
 		_functionKinds = shape.functionKinds ?? [];
 		_interfaceKinds = shape.interfaceDeclKinds ?? [];
-		_valueTypeNames = [for (t in (shape.literalTypeNames ?? []).iterator()) t].concat(shape.nonNullableTypeNames ?? [])
+		_valueTypeNames = [for (t in (shape.literalTypeNames ?? []).iterator()) t]
+			.concat(shape.nonNullableTypeNames ?? [])
 			.concat(shape.arrayTypeNames ?? []);
 		_aliasingKinds = shape.aliasingDeclKinds ?? [];
 		imports = new CallGraphImports(shape.execution?.enumConstructorKinds ?? [], isStatic, heldFile);

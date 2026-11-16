@@ -238,7 +238,8 @@ final class ReachDefinesProbe {
 			return null;
 		}
 		// `early` ahead of `--each`, so it is the first initialization macro of the arm, ahead of every one the hxml declares
-		final args: Array<String> = ['-v'].concat(CompilerOracle.defineFlags(oracle.defines))
+		final args: Array<String> = ['-v']
+			.concat(CompilerOracle.defineFlags(oracle.defines))
 			.concat(['-cp', dir, MACRO_FLAG, '$MACRO_CLASS.early()']);
 		for (d in rider?.defines ?? []) {
 			args.push(MACRO_FLAG);

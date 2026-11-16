@@ -45,7 +45,8 @@ final class HxTypeSyntax {
 				node(
 					span,
 					Conditional(
-						[type(c.type)].concat([for (e in c.elseifs) type(e.type)])
+						[type(c.type)]
+							.concat([for (e in c.elseifs) type(e.type)])
 							.concat(c.elseClause == null ? [] : [type(c.elseClause.type)])
 					)
 				);

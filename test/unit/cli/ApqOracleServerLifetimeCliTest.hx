@@ -86,7 +86,8 @@ class ApqOracleServerLifetimeCliTest extends Test {
 			{ name: 'apq.json', source: '{"compilerOracle": "build.hxml", "rules": {"explicit-local-type": {"enabled": true}}}' }
 		]);
 		final rules: Array<String> = server == Display ? ['--rule', 'explicit-local-type'] : [];
-		final args: Array<String> = [sys.FileSystem.absolutePath(engine), 'lint', '--lang', 'haxe', '--fix'].concat(rules)
+		final args: Array<String> = [sys.FileSystem.absolutePath(engine), 'lint', '--lang', 'haxe', '--fix']
+			.concat(rules)
 			.concat(['Main.hx']);
 		final env: haxe.DynamicAccess<String> = js.Syntax.code('Object.assign({}, process.env)');
 		if (server == Display) env['NO_FACTS'] = '1';
