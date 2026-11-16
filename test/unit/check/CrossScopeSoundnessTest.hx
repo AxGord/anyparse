@@ -487,6 +487,11 @@ class CrossScopeSoundnessTest extends Test {
 		'report:unused-public-member@string-catch'
 	];
 
+	/** Several tests compare the same (files, placement) answers; they are read-only values, computed once per run. */
+	private static final EDIT_MEMO: Map<String, Map<String, Array<String>>> = [];
+
+	private static final FINDING_MEMO: Map<String, Array<String>> = [];
+
 	/** No check writes into the declaring file an edit the same two files, both reported, refuse. */
 	@:pin('control')
 	@:killer('M-REFLECTION-REPORT-INDEX-DELETE')
@@ -854,12 +859,17 @@ class CrossScopeSoundnessTest extends Test {
 	private function findingKeys(
 		report: Array<SourceFile>, reach: Array<SourceFile>, placement: String = ROOTS_AND_LIBRARY
 	): Array<String> {
+		final key: String = scopeKey(report, reach, placement, '');
+		final memo: Null<Array<String>> = FINDING_MEMO[key];
+		if (memo != null) return memo;
 		final plugin: CachingGrammarPlugin = scoped(report, reach, placement);
-		return [
+		final keys: Array<String> = [
 			for (check in Linter.builtins())
 				for (v in CheckFixture.violationsIn(check, report, plugin))
 					if (v.file == DECL_FILE) '${v.rule}|${v.severity}|${v.span?.from}'
 		];
+		FINDING_MEMO[key] = keys;
+		return keys;
 	}
 
 	/**
@@ -882,15 +892,20 @@ class CrossScopeSoundnessTest extends Test {
 	private function editsByRule(
 		report: Array<SourceFile>, reach: Array<SourceFile>, declSource: String, placement: String = ROOTS_AND_LIBRARY
 	): Map<String, Array<String>> {
+		final key: String = scopeKey(report, reach, placement, declSource);
+		final memo: Null<Map<String, Array<String>>> = EDIT_MEMO[key];
+		if (memo != null) return memo;
 		final plugin: CachingGrammarPlugin = scoped(report, reach, placement);
 		final index: SymbolIndex = CheckFixture.index(report, plugin);
 		final out: Map<String, Array<String>> = [];
+
 		for (check in Linter.builtins()) {
 			final vs: Array<Violation> = CheckFixture.violationsIn(check, report, plugin).filter(v -> v.file == DECL_FILE);
 			if (vs.length == 0) continue;
 			final edits: Array<{ span: Span, text: String }> = check.fix(declSource, vs, plugin, index);
 			out[check.id()] = edits.map(edit -> '${edit.span.from}:${edit.span.to}:${edit.text}');
 		}
+		EDIT_MEMO[key] = out;
 		return out;
 	}
 
@@ -987,6 +1002,11 @@ class CrossScopeSoundnessTest extends Test {
 	private static function withUnreadableToken(source: String): String {
 		final bodyStart: Int = source.indexOf('{') + 1;
 		return '${source.substring(0, bodyStart)}\n\n\t?? ?? ??\n${source.substring(bodyStart)}';
+	}
+
+	private static function scopeKey(report: Array<SourceFile>, reach: Array<SourceFile>, placement: String, declSource: String): String {
+		final files: (Array<SourceFile>) -> String = fs -> fs.map(f -> '${f.file}\n${f.source}').join('\u0001');
+		return [placement, declSource, files(report), files(reach)].join('\u0000');
 	}
 
 }
