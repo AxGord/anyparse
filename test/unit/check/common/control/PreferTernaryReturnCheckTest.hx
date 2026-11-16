@@ -183,7 +183,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f(c:Bool, x:Int):Bool {\n\t\tif (c) return true;\n\t\treturn x > 0;\n\t}\n}');
 		Assert.equals(1, es.length);
-		Assert.equals('return c ? true : x > 0;', es[0].text);
+		Assert.equals('return c || x > 0;', es[0].text);
 	}
 
 	/** Both branches boolean literals (`? true : false`) still collapses (simplify then reduces to `c`). */
@@ -280,7 +280,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}');
 		Assert.equals(1, es.length);
-		Assert.equals('return c ? true : g();', es[0].text);
+		Assert.equals('return c || g();', es[0].text);
 	}
 
 	/** The motivating shape: a null guard with a `false` default and a method-call tail. */
@@ -289,7 +289,7 @@ class PreferTernaryReturnCheckTest extends Test {
 			'class C {\n\tfunction f():Bool {\n\t\tif (xs == null) return false;\n\t\treturn xs.foreach(p);\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
-		Assert.equals('return xs == null ? false : xs.foreach(p);', es[0].text);
+		Assert.equals('return xs != null && xs.foreach(p);', es[0].text);
 	}
 
 	/** `Null<Bool>` gives no such guarantee — a nullable declared return type stays refused. */
@@ -387,7 +387,7 @@ class PreferTernaryReturnCheckTest extends Test {
 			'class C {\n\tfunction f(c:Bool, d:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn !d && g();\n\t}\n}'
 		);
 		Assert.equals(1, es.length);
-		Assert.equals('return c ? true : !d && g();', es[0].text);
+		Assert.equals('return c || (!d && g());', es[0].text);
 	}
 
 	/**

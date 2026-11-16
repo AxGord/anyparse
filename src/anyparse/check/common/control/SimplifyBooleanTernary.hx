@@ -10,11 +10,10 @@ import anyparse.query.TypeResolver;
  * `cond ? false : x` / `cond ? x : true` style expression that reduces to plain
  * boolean logic (`!cond && x` / `!cond || x`). `Severity.Info` with an autofix.
  *
- * Composes with `prefer-ternary-return` through the `--fix` fixed-point loop: that
- * check turns an `if (cond) return false; return x;` guard into
- * `return cond ? false : x;`, and this one then reduces it to
- * `return !cond && x;` — so a boolean-returning guard chain collapses all the way
- * to a single flat boolean `return`, with no `if` and no ternary left.
+ * `prefer-ternary-return` turns an `if (cond) return false; return x;` guard into
+ * `return !cond && x;` itself, asking `reduce` for the text, so a boolean-returning guard chain
+ * collapses to a single flat boolean `return` in one edit; a pair carrying a comment still
+ * takes the ternary form first and this check reduces it on the next pass.
  *
  * ## It owns a boolean-reducible CHAIN HEAD
  *
@@ -99,9 +98,24 @@ final class SimplifyBooleanTernary extends RuleBase {
 		node: QueryNode, source: String, ternaryKind: String, support: BooleanLogicSupport, shape: RefShape, retType: Null<String>,
 		isReturnValue: Bool
 	): Bool {
-		return node.kind == ternaryKind
-			&& !condGuarded(node, shape)
-			&& support.simplifyBooleanTernary(node, source, null, boolReturnLicence(node, source, shape, retType, isReturnValue)) != null;
+		return node.kind == ternaryKind && reduce(node, source, shape, support, retType, isReturnValue) != null;
+	}
+
+	/**
+	 * The one answer to "what boolean expression does this ternary reduce to, if this check may
+	 * reduce it": the text the seam writes, or null when the condition is null-narrowing guarded
+	 * or the seam declines. `claims` asks it for the yes/no and `prefer-ternary-return` asks it
+	 * to write the reduced form directly, so the text a pair collapses to is the text this
+	 * check would have rewritten its ternary to. `types` only decides whether a negated ordered
+	 * comparison flips or stays wrapped.
+	 */
+	public static function reduce(
+		node: QueryNode, source: String, shape: RefShape, support: BooleanLogicSupport, retType: Null<String>, isReturnValue: Bool,
+		?types: (QueryNode) -> Null<String>
+	): Null<String> {
+		return condGuarded(node, shape)
+			? null
+			: support.simplifyBooleanTernary(node, source, types, boolReturnLicence(node, source, shape, retType, isReturnValue));
 	}
 
 	/**

@@ -3,10 +3,13 @@ package anyparse.check.common.control;
 import anyparse.check.Check.CarryingEdit;
 import anyparse.check.Check.CarryingFix;
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.NegatedCondition.InversionSeams;
 import anyparse.check.common.control.NegatedCondition.InversionSite;
+import anyparse.check.common.expressions.MixedLogicalParens;
 import anyparse.query.BoolExprShape;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -55,6 +58,8 @@ using StringTools;
  * condition (comparison, `&&` / `||`, `??`, call, identifier) is emitted bare, per the user's no-redundant-parens
  * preference. The return values are copied verbatim. A condition whose top-level node is a built-in `!`
  * is emitted POSITIVE, the two values swapped (`NegatedCondition`; `buildEdit` names the one exception).
+ * A pair with a boolean-literal branch is written as the logical expression `SimplifyBooleanTernary.reduce` gives,
+ * parenthesized for `mixed-logical-parens` when it is on, so one pass leaves nothing for either rule.
  * `RefactorSupport.dropContainedEdits` keeps edits non-overlapping. Needs
  * `ControlFlowSupport` and `RefShape.returnStatementKind`; either unset makes
  * the check report-only / a no-op.
@@ -130,7 +135,13 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		final negation: Null<InversionSeams> = NegatedCondition.readSeams(plugin, [{ file: file, source: source }], _resolveConfig, index);
 		final site: Null<InversionSite> = NegatedCondition.siteOf(negation, file, source, tree, () -> regions);
-		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), regions, plugin, site);
+		final rebuild: Rebuild = {
+			regions: regions,
+			plugin: plugin,
+			site: site,
+			boolean: booleanForm(source, tree, file, plugin, _resolveConfig, seams.shape, index)
+		};
+		collectFixes(tree, source, seams, null, flagged, edits, SourceComments.collectCommentTokens(regions), rebuild);
 		final kept: Array<{ span: Span, text: String }> = CanonicalEdit.dropContainedEdits(
 			edits.map(edit -> { span: edit.span, text: edit.text })
 		);
@@ -176,7 +187,7 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 	/** Mirror `walk` — including its `retType` rebinding: collect one replacement edit per flagged `if`/`return` pair. */
 	private static function collectFixes(
 		node: QueryNode, source: String, s: Seams, retType: Null<String>, flagged: Array<String>, edits: Array<CarryingEdit>,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, regions: Array<LexRegion>, plugin: GrammarPlugin, site: Null<InversionSite>
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, rebuild: Rebuild
 	): Void {
 		final childRetType: Null<String> = childReturnType(node, source, s, retType);
 		if (s.support.blockKinds().contains(node.kind)) {
@@ -186,11 +197,11 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 				if (match == null) continue;
 				final ifSpan: Null<Span> = match.ifNode.span;
 				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
-				final edit: Null<CarryingEdit> = buildEdit(match, source, regions, plugin, site);
+				final edit: Null<CarryingEdit> = buildEdit(match, source, rebuild);
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments, regions, plugin, site);
+		for (c in node.children) collectFixes(c, source, s, childRetType, flagged, edits, comments, rebuild);
 	}
 
 	/**
@@ -277,7 +288,8 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 				condition: ifNode.children[0],
 				thenValue: thenValue,
 				elseValue: elseValue,
-				nextReturn: next
+				nextReturn: next,
+				retType: retType
 			};
 	}
 
@@ -303,18 +315,25 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 	 * form — that comment rides the `?` value, and the swap would move the value it describes into
 	 * the `:` slot, where a line comment glued before the `;` would comment the terminator out.
 	 */
-	private static function buildEdit(
-		match: TernaryMatch, source: String, regions: Array<LexRegion>, plugin: GrammarPlugin, site: Null<InversionSite>
-	): Null<CarryingEdit> {
+	private static function buildEdit(match: TernaryMatch, source: String, rebuild: Rebuild): Null<CarryingEdit> {
 		final ifSpan: Null<Span> = match.ifNode.span;
 		final condSpan: Null<Span> = match.condition.span;
 		final thenSpan: Null<Span> = match.thenValue.span;
 		final elseSpan: Null<Span> = match.elseValue.span;
 		final nextSpan: Null<Span> = match.nextReturn.span;
 		if (ifSpan == null || condSpan == null || thenSpan == null || elseSpan == null || nextSpan == null) return null;
-		final split: PreservedComments = preservedComments(source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan], regions);
+		final whole: Span = new Span(ifSpan.from, nextSpan.to);
+		final split: PreservedComments = preservedComments(
+			source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan], rebuild.regions
+		);
+		// A boolean-literal branch is written as the logical expression `simplify-boolean-ternary` would
+		// turn the ternary into, so the pair is at a fixed point after this one edit. It quotes nothing
+		// verbatim, which is only honest when no comment stood in the region to be re-placed.
+		final commentFree: Bool = split.hoisted == '' && split.branchTrailing == null;
+		final reduced: Null<String> = commentFree ? reducedReturn(match, source, whole, rebuild) : null;
+		if (reduced != null) return { span: whole, text: reduced, carried: [] };
 		final positive: Null<Span> = split.branchTrailing == null
-			? NegatedCondition.positive(match.condition, match.elseValue, site)?.span
+			? NegatedCondition.positive(match.condition, match.elseValue, rebuild.site)?.span
 			: null;
 		// The three ranges the replacement quotes byte for byte, in the order it puts them in: the
 		// condition (its positive operand when inverted), the `?` value, the `:` value.
@@ -332,7 +351,6 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 		final text: String = split.branchTrailing == null
 			? '$head$condition ? $first : $second;'
 			: '$head$condition\n? $first ${split.branchTrailing}\n: $second;';
-		final whole: Span = new Span(ifSpan.from, nextSpan.to);
 		// The condition is a `ParenGuard` hole: it gains a pair exactly where it would bind across
 		// `?` bare (a ternary, an assignment, an arrow lambda, `in`). Swapped values are holes too:
 		// each now stands in the other's slot, and the parse round-trip proves it re-reads as itself.
@@ -343,7 +361,9 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 			holes.push(new Span(firstFrom, firstFrom + first.length));
 			holes.push(new Span(secondFrom, secondFrom + second.length));
 		}
-		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(source, [{ span: whole, text: text, holes: holes }], plugin);
+		final guarded: Array<{ span: Span, text: String }> = ParenGuard.guard(
+			source, [{ span: whole, text: text, holes: holes }], rebuild.plugin
+		);
 		// The guard can put parentheses AROUND a quoted range; the source text is still inside the
 		// result, which is the whole of what a verbatim carry claims.
 		return { span: whole, text: guarded[0].text, carried: carried };
@@ -530,6 +550,80 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 			&& values.exists(span -> token.from >= span.to && source.substring(span.to, token.from).indexOf('\n') < 0);
 	}
 
+	/**
+	 * The `BooleanForm` of `file`, or null when the grammar has no ternary kind or boolean-logic seam. The type probe is built on
+	 * first use: a file with no boolean-literal pair never pays for it.
+	 */
+	private static function booleanForm(
+		source: String, tree: QueryNode, file: String, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>, shape: RefShape,
+		index: Null<SymbolIndex>
+	): Null<BooleanForm> {
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		final support: Null<BooleanLogicSupport> = plugin.booleanLogicSupport();
+		if (file == '' || ternaryKind == null || support == null) return null;
+		final config: LintConfig = LintConfig.resolveWith(resolve, file);
+		if (!Linter.enabledBy(config, new SimplifyBooleanTernary())) return null;
+		var probe: Null<(QueryNode) -> Null<String>> = null;
+		var probed: Bool = false;
+		return {
+			file: file,
+			shape: shape,
+			ternaryKind: ternaryKind,
+			support: support,
+			types: node -> {
+				if (!probed) {
+					probed = true;
+					probe = CheckScan.typeNominalResolver(source, plugin, tree, file, index);
+				}
+				final resolved: Null<(QueryNode) -> Null<String>> = probe;
+				return resolved == null ? null : resolved(node);
+			},
+			quoted: ReificationScan.quotationSpans(tree, plugin),
+			parens: Linter.enabledBy(config, new MixedLogicalParens())
+		};
+	}
+
+	/**
+	 * `return <logical expression>;` for a pair with a boolean-literal branch, or null when neither branch is one or
+	 * `simplify-boolean-ternary` would not reduce the ternary this pair collapses to. The values are the ORIGINAL then and else
+	 * (the seam negates the condition itself), and the ternary is the function's direct returned value, so it is licensed by
+	 * the declared return type.
+	 */
+	private static function reducedReturn(match: TernaryMatch, source: String, whole: Span, rebuild: Rebuild): Null<String> {
+		final form: Null<BooleanForm> = rebuild.boolean;
+		if (form == null || ReificationScan.insideAny(form.quoted, whole)) return null;
+		final boolLitKind: Null<String> = form.shape.boolLitKind;
+		if (boolLitKind == null || (match.thenValue.kind != boolLitKind && match.elseValue.kind != boolLitKind)) return null;
+		final ternary: QueryNode = new QueryNode(form.ternaryKind, null, [match.condition, match.thenValue, match.elseValue], whole);
+		final expression: Null<String> = SimplifyBooleanTernary.reduce(
+			ternary, source, form.shape, form.support, match.retType, true, form.types
+		);
+		if (expression == null) return null;
+		final text: String = 'return $expression;';
+		return form.parens ? parenthesizeMixed(source, whole, text, form.file, rebuild.plugin) : text;
+	}
+
+	/**
+	 * `text` (the replacement of `whole`) with the groups `mixed-logical-parens` flags inside it parenthesized: the rule's own
+	 * run and fix over the spliced file, so the pair it writes is already what that rule would leave. An unparseable splice
+	 * flags nothing and the text stays as it is.
+	 */
+	private static function parenthesizeMixed(source: String, whole: Span, text: String, file: String, plugin: GrammarPlugin): String {
+		final spliced: String = source.substring(0, whole.from) + text + source.substring(whole.to);
+		final rule: MixedLogicalParens = new MixedLogicalParens();
+		final inside: Array<Violation> = [
+			for (found in rule.run([{ file: file, source: spliced }], plugin)) {
+				final span: Null<Span> = found.span;
+				if (span != null && span.from >= whole.from && span.to <= whole.from + text.length) found;
+			}
+		];
+		final edits: Array<FixEdit> = rule.fix(spliced, inside, plugin);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = text;
+		for (edit in edits) out = out.substring(0, edit.span.from - whole.from) + edit.text + out.substring(edit.span.to - whole.from);
+		return out;
+	}
+
 }
 
 /** The resolved seams `PreferTernaryReturn` reads in both `run` and `fix`. */
@@ -557,4 +651,27 @@ private typedef TernaryMatch = {
 	var thenValue: QueryNode;
 	var elseValue: QueryNode;
 	var nextReturn: QueryNode;
+	var retType: Null<String>;
+};
+
+/** What `buildEdit` needs beyond the match: the lexical regions, the grammar, the negation site and the boolean-form seams. */
+private typedef Rebuild = {
+	final regions: Array<LexRegion>;
+	final plugin: GrammarPlugin;
+	final site: Null<InversionSite>;
+	final boolean: Null<BooleanForm>;
+};
+
+/**
+ * The seams that write a boolean-literal pair as its logical expression: the ternary kind and boolean-logic engine
+ * `simplify-boolean-ternary` reduces with, the lazily-built type probe, and whether `mixed-logical-parens` is on.
+ */
+private typedef BooleanForm = {
+	final file: String;
+	final shape: RefShape;
+	final ternaryKind: String;
+	final support: BooleanLogicSupport;
+	final types: (QueryNode) -> Null<String>;
+	final quoted: Array<Span>;
+	final parens: Bool;
 };

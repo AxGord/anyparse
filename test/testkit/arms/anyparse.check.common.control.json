@@ -435,8 +435,8 @@
 			"name": "M-PTR-KEEP-DEFAULT-THEN-ARM",
 			"type": "anyparse.check.common.control.PreferTernaryReturn",
 			"method": "buildEdit",
-			"find": "match.condition, match.elseValue, site",
-			"replace": "match.condition, match.thenValue, site",
+			"find": "match.condition, match.elseValue, rebuild.site",
+			"replace": "match.condition, match.thenValue, rebuild.site",
 			"note": "prefer-ternary-return asks the gate about the guard value: `if (!a) return x; return null;` becomes `return a ? null : x;` under the option"
 		},
 		{
@@ -1472,6 +1472,62 @@
 			"find": "SourceComments.collectCommentTokens(plugin.lexicalRegions(source))",
 			"replace": "[]",
 			"note": "the arrow-body claim stops asking whether the ternary rebuild drops a comment, so a comment-refused plain-value if body loses the braces finding too and the site is reported by neither rule"
+		},
+		{
+			"name": "M-PTR-REDUCE-OFF",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "reducedReturn",
+			"find": "if (expression == null) return null;",
+			"replace": "return null;",
+			"note": "a pair with a boolean-literal branch is written as the ternary again, which simplify-boolean-ternary then rewrites on a later pass"
+		},
+		{
+			"name": "M-PTR-PARENS-OFF",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "reducedReturn",
+			"find": "return form.parens ? parenthesizeMixed(source, whole, text, form.file, rebuild.plugin) : text;",
+			"replace": "return text;",
+			"note": "the written `&&` group inside an `||` stays bare although mixed-logical-parens is on, so that rule has an edit left"
+		},
+		{
+			"name": "M-PTR-PARENS-FORCED",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "booleanForm",
+			"find": "parens: Linter.enabledBy(config, new MixedLogicalParens())",
+			"replace": "parens: true",
+			"note": "the pair is parenthesized in a project that left mixed-logical-parens off"
+		},
+		{
+			"name": "M-PTR-COMMENT-DROPPED",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "buildEdit",
+			"find": "commentFree ? reducedReturn(match, source, whole, rebuild) : null",
+			"replace": "reducedReturn(match, source, whole, rebuild)",
+			"note": "a comment standing in the folded region is dropped by the boolean form, which quotes nothing"
+		},
+		{
+			"name": "M-PTR-SBT-GATE-OFF",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "booleanForm",
+			"find": "if (!Linter.enabledBy(config, new SimplifyBooleanTernary())) return null;",
+			"replace": "",
+			"note": "the reduced form is written in a project that turned simplify-boolean-ternary off, a rewrite no enabled rule makes"
+		},
+		{
+			"name": "M-PTR-QUOTED-REDUCED",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "reducedReturn",
+			"find": " || ReificationScan.insideAny(form.quoted, whole)",
+			"replace": "",
+			"note": "a pair inside a macro quotation is rewritten to logical operators, reified data its owner rule never touches"
+		},
+		{
+			"name": "M-PTR-TYPES-BLIND",
+			"type": "anyparse.check.common.control.PreferTernaryReturn",
+			"method": "booleanForm",
+			"find": "return resolved == null ? null : resolved(node);",
+			"replace": "return null;",
+			"note": "the type probe answers nothing, so an Int comparison keeps its negation wrap instead of flipping"
 		}
 	]
 }

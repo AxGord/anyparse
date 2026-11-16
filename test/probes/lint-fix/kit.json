@@ -2647,6 +2647,37 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "F-PTR-ONEPASS",
+			"note": "prefer-ternary-return on a pair with a boolean-literal branch writes `c || x` in the one pass: the fixed point, not the ternary simplify-boolean-ternary rewrites next",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-ternary-return",
+				"--fix",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function f(c:Bool, x:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn x;\n\t}\n\n\tstatic function main() {\n\t\tfor (c in [true, false]) for (x in [true, false]) Sys.println(f(c, x));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "cb6485d79370b9da",
+				"files": "893a5e0b42bb0a34",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

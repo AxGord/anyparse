@@ -103,8 +103,16 @@ final class ReificationScan {
 	}
 
 	/** Whether `span` sits inside one of `regions` — containing one does not count, only being contained by it. */
-	private static function insideAny(regions: Array<Span>, span: Span): Bool {
+	public static function insideAny(regions: Array<Span>, span: Span): Bool {
 		return regions.exists(region -> region.from <= span.from && span.to <= region.to);
+	}
+
+	/** The spans of every quotation in the already-parsed `tree`; empty when the grammar has no reification construct. */
+	public static function quotationSpans(tree: QueryNode, plugin: GrammarPlugin): Array<Span> {
+		final opaqueKinds: Array<String> = plugin.refShape().opaqueKinds ?? [];
+		final out: Array<Span> = [];
+		if (opaqueKinds.length > 0) collectSpans(tree, opaqueKinds, out);
+		return out;
 	}
 
 	/** `file`'s quotation spans, computed on first ask and memoised in `cache` for the rest of the run. */
