@@ -353,8 +353,6 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	/** The closing brace the de-brace deletes from the block's last line — see `interiorSurvives`. */
 	private static final BLOCK_CLOSE: String = '}';
 
-	private static final LINE_COMMENT: String = '//';
-
 	public function new() {
 		super(
 			RULE_ID,
@@ -443,7 +441,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 		final head: String = trimmedAt(before, divergence);
 		final collapsedHead: String = trimmedAt(after, divergence);
 		return collapsedHead.length > head.length
-			|| (headOnlyLostItsBrace(head, collapsedHead) && interiorSurvives(before, after, divergence));
+			|| (headOnlyLostItsBrace(head, collapsedHead) && interiorSurvives(plugin, before, after, divergence));
 	}
 
 	/**
@@ -466,7 +464,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 * The value arms are exempt by construction: they return earlier, because their whole point
 	 * is to pull content UP onto the head line.
 	 */
-	private static function interiorSurvives(before: Array<String>, after: Array<String>, divergence: Int): Bool {
+	private static function interiorSurvives(plugin: GrammarPlugin, before: Array<String>, after: Array<String>, divergence: Int): Bool {
 		// A pure de-brace deletes two TOKENS, not lines: the `{` leaves the head line and the `}`
 		// leaves the closing one, and nothing in between moves. So it preserves the line count,
 		// and a different count is already proof that something else re-flowed. (The caller has
@@ -483,7 +481,7 @@ final class PreferLambdaExpressionBody extends RuleBase {
 			final was: String = trimmedAt(before, i);
 			final now: String = trimmedAt(after, i);
 			if (now == was) continue;
-			if (i != lastInterior || now != withoutTerminator(was)) return false;
+			if (i != lastInterior || now != withoutTerminator(plugin, was)) return false;
 		}
 		final closer: String = trimmedAt(before, beforeEnd - 1);
 		final brace: Int = closer.indexOf(BLOCK_CLOSE);
@@ -496,15 +494,23 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	 * `line` with the one trailing `;` the emitted body drops — see `interiorSurvives`. A line
 	 * that does not end on `;` comes back unchanged, so the comparison there stays exact.
 	 */
-	private static function withoutTerminator(line: String): String {
-		final comment: Int = line.indexOf(LINE_COMMENT);
-		if (comment < 0) return line.endsWith(';') ? line.substr(0, line.length - 1) : line;
-		// A trailing comment rides ALONG with the statement (`f(); // why` re-emits as
+	private static function withoutTerminator(plugin: GrammarPlugin, line: String): String {
+		// A trailing comment run rides ALONG with the statement (`f(); // why` re-emits as
 		// `f() // why`), so the `;` to drop is the one closing the CODE, not the one closing
-		// the line. A `//` inside a string literal only ever costs a refusal: the code part
-		// then does not end in `;` and the line comes back unchanged.
-		final code: String = line.substring(0, comment).rtrim();
-		return code.endsWith(';') ? '${code.substr(0, code.length - 1)} ${line.substr(comment)}' : line;
+		// the line. The run is read off the lexer's comments, so a `//` inside a string literal
+		// opens none and a block comment inside the code is not part of it.
+		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(line));
+		var runStart: Int = line.rtrim().length;
+		var i: Int = comments.length - 1;
+		while (i >= 0 && (comments[i].to >= runStart || line.substring(comments[i].to, runStart).trim() == '')) {
+			runStart = comments[i].from;
+			i--;
+		}
+		final code: String = line.substring(0, runStart).rtrim();
+		if (!code.endsWith(';')) return line;
+		return runStart == line.rtrim().length
+			? code.substr(0, code.length - 1)
+			: '${code.substr(0, code.length - 1)} ${line.substr(runStart)}';
 	}
 
 	/**

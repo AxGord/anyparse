@@ -1800,6 +1800,14 @@
 			"find": "to: i",
 			"replace": "to: runFrom",
 			"note": "the run ends where it starts, so a reader locating the declaration a run prefixes by its child index never finds it"
+		},
+		{
+			"name": "M-TAILSCAN-GAP-UNCLIPPED",
+			"type": "anyparse.check.scan.TailScan",
+			"method": "collectComments",
+			"find": "if (open >= from && open < to) out.push",
+			"replace": "if (open >= from) out.push",
+			"note": "a comment past the end of the gap is read as the gap's own, so a run's comments take in what follows its last statement"
 		}
 	]
 }

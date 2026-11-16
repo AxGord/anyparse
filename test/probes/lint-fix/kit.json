@@ -2723,6 +2723,86 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PLEB-STRING-MARKER",
+			"note": "prefer-lambda-expression-body: a `//` inside a string literal on the last interior line of a de-braced lambda is no comment, so the collapse is reported (a string-blind scan refused it) (under the project hxformat.json: the writer must reach the de-brace path)",
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"-main",
+					"Main",
+					"--interp"
+				],
+				"run": true
+			},
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-lambda-expression-body",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic final a: String = \"x\";\n\n\tstatic function waitToken(cb:Bool->Void):Void {\n\t\tcb(true);\n\t}\n\n\tstatic function doRequest():Void {\n\t\tSys.println(\"request\");\n\t}\n\n\tstatic function tokenError(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function main() {\n\t\twaitToken(success -> {\n\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n\t\t\t\ttokenError(\"a//b\");\n\t\t});\n\t}\n}\n",
+				"apq.json": "{}\n",
+				"hxformat.json": "{\n\t\"indentation\": {\n\t\t\"character\": \"tab\",\n\t\t\"tabWidth\": 4,\n\t\t\"trailingWhitespace\": false,\n\t\t\"alignInlineSwitchCaseBody\": true\n\t},\n\t\"comments\": {\n\t\t\"blockCommentBodyIndent\": \"verbatim\"\n\t},\n\t\"emptyLines\": {\n\t\t\"maxAnywhereInFile\": 2,\n\t\t\"afterLeftCurly\": \"keep\",\n\t\t\"beforeRightCurly\": \"keep\",\n\t\t\"beforeDocCommentEmptyLines\": \"one\",\n\t\t\"metadataCountsAsDocComment\": true,\n\t\t\"classEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"abstractEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"interfaceEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"externClassEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"macroClassEmptyLines\": {\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0\n\t\t},\n\t\t\"enumEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"typedefEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"enumAbstractEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenVars\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t}\n\t},\n\t\"wrapping\": {\n\t\t\"maxLineLength\": 140,\n\t\t\"functionSignature\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 100}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"methodChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"itemsAfterCloseParenOnly\": true,\n\t\t\t\"rules\": [\n\t\t\t\t{\"conditions\": [{\"cond\": \"lineLength >= n\", \"value\": 160}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 3}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 80}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"anyItemLength >= n\", \"value\": 30}, {\"cond\": \"itemCount >= n\", \"value\": 4}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount >= n\", \"value\": 7}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"onePerLine\"}\n\t\t\t]\n\t\t},\n\t\t\"ternaryMultilineBranch\": \"break\",\n\t\t\"opBoolChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"onePerLineAfterFirst\", \"location\": \"beforeLast\"}\n\t\t\t]\n\t\t},\n\t\t\"callParameter\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}, {\"cond\": \"totalItemLength <= n\", \"value\": 100}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"expressionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"conditionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t},\n\t\"whitespace\": {\n\t\t\"addLineCommentSpace\": true,\n\t\t\"colonPolicy\": \"after\",\n\t\t\"typeHintColonPolicy\": \"after\",\n\t\t\"typeCheckColonPolicy\": \"after\",\n\t\t\"functionTypeHaxe3Policy\": \"around\",\n\t\t\"functionTypeHaxe4Policy\": \"around\",\n\t\t\"arrowFunctionsPolicy\": \"around\",\n\t\t\"ifPolicy\": \"around\",\n\t\t\"forPolicy\": \"around\",\n\t\t\"whilePolicy\": \"around\",\n\t\t\"switchPolicy\": \"around\",\n\t\t\"binopPolicy\": \"around\",\n\t\t\"intervalPolicy\": \"around\",\n\t\t\"bracesConfig\": {\n\t\t\t\"objectLiteralBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\",\n\t\t\t\t\"arrowBodyOpenPad\": true\n\t\t\t},\n\t\t\t\"anonTypeBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"singleStatementBraces\": \"symmetric\"\n\t\t},\n\t\t\"parenConfig\": {\n\t\t\t\"callParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"funcParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"conditionParens\": {\n\t\t\t\t\"openingPolicy\": \"before\",\n\t\t\t\t\"closingPolicy\": \"after\"\n\t\t\t},\n\t\t\t\"anonFuncParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t}\n\t\t}\n\t},\n\t\"lineEnds\": {\n\t\t\"emptyCurly\": \"noBreak\"\n\t},\n\t\"sameLine\": {\n\t\t\"ifBody\": \"fitLine\",\n\t\t\"forBody\": \"fitLine\",\n\t\t\"whileBody\": \"fitLine\",\n\t\t\"functionBody\": \"fitLine\",\n\t\t\"returnBody\": \"fitLine\",\n\t\t\"returnBodySingleLine\": \"fitLine\",\n\t\t\"expressionIf\": \"next\"\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "646bbc94fbed4109",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"sameRun": [
+					true
+				]
+			}
+		},
+		{
+			"name": "PLEB-BLOCK-COMMENT-IN-CODE",
+			"note": "prefer-lambda-expression-body: a block comment inside the code of the last interior line is not the trailing comment run, so the collapse is still reported (under the project hxformat.json: the writer must reach the de-brace path)",
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"-main",
+					"Main",
+					"--interp"
+				],
+				"run": true
+			},
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-lambda-expression-body",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic final a: String = \"x\";\n\n\tstatic function waitToken(cb:Bool->Void):Void {\n\t\tcb(true);\n\t}\n\n\tstatic function doRequest():Void {\n\t\tSys.println(\"request\");\n\t}\n\n\tstatic function tokenError(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function main() {\n\t\twaitToken(success -> {\n\t\t\tif (success)\n\t\t\t\tdoRequest();\n\t\t\telse\n\t\t\t\ttokenError(a /* x */);\n\t\t});\n\t}\n}\n",
+				"apq.json": "{}\n",
+				"hxformat.json": "{\n\t\"indentation\": {\n\t\t\"character\": \"tab\",\n\t\t\"tabWidth\": 4,\n\t\t\"trailingWhitespace\": false,\n\t\t\"alignInlineSwitchCaseBody\": true\n\t},\n\t\"comments\": {\n\t\t\"blockCommentBodyIndent\": \"verbatim\"\n\t},\n\t\"emptyLines\": {\n\t\t\"maxAnywhereInFile\": 2,\n\t\t\"afterLeftCurly\": \"keep\",\n\t\t\"beforeRightCurly\": \"keep\",\n\t\t\"beforeDocCommentEmptyLines\": \"one\",\n\t\t\"metadataCountsAsDocComment\": true,\n\t\t\"classEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"abstractEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"interfaceEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"externClassEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"macroClassEmptyLines\": {\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0\n\t\t},\n\t\t\"enumEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"typedefEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"enumAbstractEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenVars\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t}\n\t},\n\t\"wrapping\": {\n\t\t\"maxLineLength\": 140,\n\t\t\"functionSignature\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 100}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"methodChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"itemsAfterCloseParenOnly\": true,\n\t\t\t\"rules\": [\n\t\t\t\t{\"conditions\": [{\"cond\": \"lineLength >= n\", \"value\": 160}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 3}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 80}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"anyItemLength >= n\", \"value\": 30}, {\"cond\": \"itemCount >= n\", \"value\": 4}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount >= n\", \"value\": 7}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"onePerLine\"}\n\t\t\t]\n\t\t},\n\t\t\"ternaryMultilineBranch\": \"break\",\n\t\t\"opBoolChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"onePerLineAfterFirst\", \"location\": \"beforeLast\"}\n\t\t\t]\n\t\t},\n\t\t\"callParameter\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}, {\"cond\": \"totalItemLength <= n\", \"value\": 100}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"expressionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"conditionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t},\n\t\"whitespace\": {\n\t\t\"addLineCommentSpace\": true,\n\t\t\"colonPolicy\": \"after\",\n\t\t\"typeHintColonPolicy\": \"after\",\n\t\t\"typeCheckColonPolicy\": \"after\",\n\t\t\"functionTypeHaxe3Policy\": \"around\",\n\t\t\"functionTypeHaxe4Policy\": \"around\",\n\t\t\"arrowFunctionsPolicy\": \"around\",\n\t\t\"ifPolicy\": \"around\",\n\t\t\"forPolicy\": \"around\",\n\t\t\"whilePolicy\": \"around\",\n\t\t\"switchPolicy\": \"around\",\n\t\t\"binopPolicy\": \"around\",\n\t\t\"intervalPolicy\": \"around\",\n\t\t\"bracesConfig\": {\n\t\t\t\"objectLiteralBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\",\n\t\t\t\t\"arrowBodyOpenPad\": true\n\t\t\t},\n\t\t\t\"anonTypeBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"singleStatementBraces\": \"symmetric\"\n\t\t},\n\t\t\"parenConfig\": {\n\t\t\t\"callParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"funcParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"conditionParens\": {\n\t\t\t\t\"openingPolicy\": \"before\",\n\t\t\t\t\"closingPolicy\": \"after\"\n\t\t\t},\n\t\t\t\"anonFuncParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t}\n\t\t}\n\t},\n\t\"lineEnds\": {\n\t\t\"emptyCurly\": \"noBreak\"\n\t},\n\t\"sameLine\": {\n\t\t\"ifBody\": \"fitLine\",\n\t\t\"forBody\": \"fitLine\",\n\t\t\"whileBody\": \"fitLine\",\n\t\t\"functionBody\": \"fitLine\",\n\t\t\"returnBody\": \"fitLine\",\n\t\t\"returnBodySingleLine\": \"fitLine\",\n\t\t\"expressionIf\": \"next\"\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "646bbc94fbed4109",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"sameRun": [
+					true
+				]
+			}
 		}
 	]
 }

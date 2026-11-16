@@ -470,6 +470,22 @@
 			"find": "&& !PreferTernaryExpression.claimsArrowBody(plugin, source, node)",
 			"replace": "&& true",
 			"note": "lambda-branching-body-braces stops deferring to prefer-ternary-expression, so a plain-value arrow if body is told to take braces on the span the ternary rewrites"
+		},
+		{
+			"name": "M-LAMBDA-STRING-SLASHES-ARE-COMMENT",
+			"type": "anyparse.check.common.expressions.PreferLambdaExpressionBody",
+			"method": "withoutTerminator",
+			"find": "final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(line));",
+			"replace": "final comments: Array<CommentTok> = line.indexOf('//') < 0 ? [] : [{ from: line.indexOf('//'), to: line.length, isLine: true }];",
+			"note": "the first `//` of a rendered line opens a comment even inside a string literal, so a lambda whose last interior line holds `\"a//b\"` is refused"
+		},
+		{
+			"name": "M-LAMBDA-FIRST-COMMENT-CUTS-CODE",
+			"type": "anyparse.check.common.expressions.PreferLambdaExpressionBody",
+			"method": "withoutTerminator",
+			"find": "final code: String = line.substring(0, runStart).rtrim();",
+			"replace": "final code: String = line.substring(0, comments.length == 0 ? runStart : comments[0].from).rtrim();",
+			"note": "the code ends where the line's FIRST comment opens, so a block comment inside the code hides its `;` and the collapse is refused"
 		}
 	]
 }

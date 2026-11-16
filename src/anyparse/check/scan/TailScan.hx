@@ -5,6 +5,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CondDirectives;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
 import anyparse.query.TreePath;
@@ -153,16 +154,16 @@ final class TailScan {
 
 	/**
 	 * The comments in the trivia gaps of a statement run: before its first statement (from
-	 * `prevEnd`) and between consecutive ones. Every scanned range is pure trivia, so there
-	 * is no string-literal to mistake a marker for.
+	 * `prevEnd`) and between consecutive ones, as the lexer's comment regions read them
+	 * (`regions` are the source's own).
 	 */
-	public static function runComments(source: String, stmts: Array<QueryNode>, prevEnd: Int): Array<String> {
+	public static function runComments(source: String, regions: Array<LexRegion>, stmts: Array<QueryNode>, prevEnd: Int): Array<String> {
 		final out: Array<String> = [];
 		var from: Int = prevEnd;
 		for (s in stmts) {
 			final span: Null<Span> = s.span;
 			if (span == null) return out;
-			collectComments(source, from, span.from, out);
+			collectComments(source, regions, from, span.from, out);
 			from = span.to;
 		}
 		return out;
@@ -284,23 +285,11 @@ final class TailScan {
 		}
 	}
 
-	/** Append every line comment (`//` to end of line) and block comment in `[from, to)` to `out`, trimmed. */
-	private static function collectComments(source: String, from: Int, to: Int, out: Array<String>): Void {
-		var i: Int = from;
-		while (i < to - 1) switch source.substr(i, 2) {
-			case '//':
-				var end: Int = i + 2;
-				while (end < to && source.fastCodeAt(end) != '\n'.code) end++;
-				out.push(source.substring(i, end).trim());
-				i = end;
-			case '/*':
-				final close: Int = source.indexOf('*/', i + 2);
-				final end: Int = close == -1 || close + 2 > to ? to : close + 2;
-				out.push(source.substring(i, end).trim());
-				i = end;
-			case _:
-				i++;
-		}
+	/** Append every comment the lexer found opening in `[from, to)` to `out`, trimmed and clipped to `to`. */
+	private static function collectComments(source: String, regions: Array<LexRegion>, from: Int, to: Int, out: Array<String>): Void {
+		LexicalRegions.eachComment(regions, (open, close) -> {
+			if (open >= from && open < to) out.push(source.substring(open, close < to ? close : to).trim());
+		});
 	}
 
 }

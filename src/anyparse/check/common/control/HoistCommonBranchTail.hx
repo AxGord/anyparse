@@ -201,7 +201,7 @@ final class HoistCommonBranchTail extends RuleBase {
 			final block: Null<Span> = branch.span;
 			if (prev == null) return [];
 			if (block == null) return [];
-			if (TailScan.runComments(source, lists[i].slice(kept), prev.to).length != 0) return [];
+			if (TailScan.runComments(source, lexicalRegions(), lists[i].slice(kept), prev.to).length != 0) return [];
 			if (LexicalRegions.commentIntersects(lasts[i].to, block.to, lexicalRegions())) return [];
 			edits.push({ span: new Span(prev.to, lasts[i].to), text: '' });
 		}

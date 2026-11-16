@@ -339,8 +339,8 @@ final class TailMerge extends RuleBase {
 		source: String, regions: () -> Array<LexRegion>, tail: Array<QueryNode>, fallStmts: Array<QueryNode>, tailPrevEnd: Int,
 		fallPrevEnd: Int, blockEnd: Int
 	): Bool {
-		final removedComments: Array<String> = TailScan.runComments(source, tail, tailPrevEnd);
-		final fallComments: Array<String> = TailScan.runComments(source, fallStmts, fallPrevEnd);
+		final removedComments: Array<String> = TailScan.runComments(source, regions(), tail, tailPrevEnd);
+		final fallComments: Array<String> = TailScan.runComments(source, regions(), fallStmts, fallPrevEnd);
 		for (c in removedComments) if (!fallComments.contains(c)) return false;
 		final lastTail: Null<Span> = tail[tail.length - 1].span;
 		return lastTail != null && !LexicalRegions.commentIntersects(lastTail.to, blockEnd, regions());
