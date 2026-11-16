@@ -130,7 +130,11 @@ final class PrattPostfixLowering {
 			final opText: String = getOperatorText(branch);
 			final branchBody: Expr = buildPrattBranchBody(oc, branch, typePath, simple, skipCall);
 			final matchFnName: String = endsWithWordChar(opText) ? 'matchKw' : 'matchLit';
-			final matchCall: Expr = { expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{opText}]), pos: Context.currentPos() };
+			var matchCall: Expr = { expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{opText}]), pos: Context.currentPos() };
+			// `@:notFollowedBy` excludes the operator when a longer token starting with it comes next
+			// (a type `&` before an expression `&&`); the peek runs first so nothing is consumed.
+			final excluded: Null<Array<String>> = branch.annotations[AnnotationKeys.PRATT_NOT_FOLLOWED_BY];
+			if (excluded != null) for (tail in excluded) matchCall = macro !peekLit(ctx, $v{opText + tail}) && $matchCall;
 			opChain = macro if ($matchCall)
 				$branchBody
 			else

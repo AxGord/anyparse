@@ -38,6 +38,11 @@ using Lambda;
  *    operator and `prec + 1` for a left-associative one; written into
  *    `pratt.rightPrec` either way.
  *
+ *  - `@:notFollowedBy("&")` — beside an `@:infix`, the operator does not
+ *    match when the source continues with the literal plus one of these
+ *    texts, so a type operator `&` leaves the first `&` of an outer `&&`
+ *    alone. Written into `pratt.notFollowedBy` as an `Array<String>`.
+ *
  * The strategy is annotate-only. It writes `pratt.op`, `pratt.prec`,
  * and `pratt.assoc` onto the branch `ShapeNode` and returns `null`
  * from `lower`. `Lowering` detects the presence of any `pratt.prec`
@@ -76,7 +81,7 @@ class Pratt implements Strategy {
 	public var name(default, null): String = 'Pratt';
 	public var runsAfter(default, null): Array<String> = [];
 	public var runsBefore(default, null): Array<String> = [];
-	public var ownedMeta(default, null): Array<String> = [':infix'];
+	public var ownedMeta(default, null): Array<String> = [':infix', ':notFollowedBy'];
 	public var runtimeContribution(default, null): RuntimeContrib = { ctxFields: [], helpers: [], cacheKeyContributors: [] };
 
 	public function new() {}
@@ -136,10 +141,26 @@ class Pratt implements Strategy {
 			node.annotations[AnnotationKeys.PRATT_ASSOC] = assocValue;
 			node.annotations[AnnotationKeys.PRATT_RIGHT_PREC] = rightPrecValue;
 		}
+		for (entry in meta) if (entry.name == ':notFollowedBy') annotateNotFollowedBy(node, entry);
 	}
 
 	public function lower(node: ShapeNode, ctx: LoweringCtx): Null<CoreIR> {
 		return null;
+	}
+
+	/** Reads one `@:notFollowedBy` entry; refused off an `@:infix`, repeated, or without a non-empty tail. */
+	private static function annotateNotFollowedBy(node: ShapeNode, entry: MetadataEntry): Void {
+		if (!node.annotations.exists(AnnotationKeys.PRATT_OP)) Context.fatalError('@:notFollowedBy belongs beside an @:infix', entry.pos);
+		if (node.annotations.exists(AnnotationKeys.PRATT_NOT_FOLLOWED_BY))
+			Context.fatalError('@:notFollowedBy appears once per branch; list every tail in one entry', entry.pos);
+		if (entry.params.length == 0) Context.fatalError('@:notFollowedBy expects at least one string literal', entry.pos);
+		node.annotations[AnnotationKeys.PRATT_NOT_FOLLOWED_BY] = [
+			for (p in entry.params)
+				switch p.expr {
+					case EConst(CString(s, _)) if (s != ''): s;
+					case _: Context.fatalError('@:notFollowedBy arguments must be non-empty string literals', p.pos);
+				}
+		];
 	}
 
 }

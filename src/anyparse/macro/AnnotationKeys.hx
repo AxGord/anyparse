@@ -18,6 +18,7 @@ final class AnnotationKeys {
 	public static final PRATT_ASSOC: String = 'pratt.assoc';
 	public static final PRATT_RIGHT_PREC: String = 'pratt.rightPrec';
 	public static final PRATT_OP: String = 'pratt.op';
+	public static final PRATT_NOT_FOLLOWED_BY: String = 'pratt.notFollowedBy';
 	public static final TRIVIA_STAR_COLLECTS: String = 'trivia.starCollects';
 	public static final TRIVIA_BEARING: String = 'trivia.bearing';
 	public static final PRATT_PREC: String = 'pratt.prec';

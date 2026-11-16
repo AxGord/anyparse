@@ -3553,6 +3553,14 @@
 			"find": "WriterBraceSymmetryLowering.chainBareBranchTest(bs, sibling, args)",
 			"replace": "null",
 			"note": "the link mark reads the chain as parsed, so a { single; } head the writer de-braces reads as braced and the link's switch stays glued on the first pass"
+		},
+		{
+			"name": "M-PRATT-NOT-FOLLOWED-BY-IGNORED",
+			"type": "anyparse.macro.PrattPostfixLowering",
+			"method": "lowerPrattLoop",
+			"find": "if (excluded != null) for (tail in excluded) matchCall = macro !peekLit(ctx, $v{opText + tail}) && $matchCall;",
+			"replace": "",
+			"note": "the exclusion is dropped, so a type `&` takes the first `&` of `&&` and the wrapper never sees its lead"
 		}
 	]
 }
