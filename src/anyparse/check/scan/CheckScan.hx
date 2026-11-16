@@ -293,7 +293,8 @@ final class CheckScan {
 			condKind: shape.conditionalMemberKind,
 			spliceKinds: shape.spliceKinds ?? [],
 			exprStmtKind: shape.exprStatementKind,
-			annotationKinds: shape.prefixAnnotationKinds ?? []
+			annotationKinds: shape.prefixAnnotationKinds ?? [],
+			regions: ElementSpan.lazyRegions(source, plugin)
 		};
 		final parents: Map<QueryNode, QueryNode> = [];
 		fillParents(tree, parents);
@@ -827,7 +828,7 @@ final class CheckScan {
 			return ifShapeEdit(parent, alwaysTrue, parents, frames, source, seams);
 		final wantKind: String = alwaysTrue ? seams.andKind : seams.orKind;
 		return wantKind != '' && parent.kind == wantKind && homogeneousChain(parent, wantKind, parents, seams)
-			? dropOperandEdit(parent, node, source)
+			? dropOperandEdit(parent, node, seams.regions)
 			: null;
 	}
 
@@ -850,10 +851,11 @@ final class CheckScan {
 		// An always-true guard keeps only the body — refuse if a comment sits in the removed
 		// `if (…)` header or trailing region (comments inside the body are preserved).
 		if (alwaysTrue)
-			return hasCommentMarker(source, ns.from, bs.from) || hasCommentMarker(source, bs.to, ns.to)
+			return LexicalRegions.commentIntersects(ns.from, bs.from, seams.regions())
+				|| LexicalRegions.commentIntersects(bs.to, ns.to, seams.regions())
 				? null
 				: { span: ns, text: keptBodyText(body, bs, ifParent, frames, source, seams) };
-		if (hasCommentMarker(source, ns.from, ns.to)) return null;
+		if (LexicalRegions.commentIntersects(ns.from, ns.to, seams.regions())) return null;
 		final inBlock: Bool = ifParent != null && seams.blockKinds.contains(ifParent.kind);
 		// A collapsed-away `if` is a PURE deletion like a member removal, so it gives back its
 		// flanking blank line the same way; the `{}` arm replaces rather than deletes and must not.
@@ -869,7 +871,9 @@ final class CheckScan {
 	 * (`x && `). The surviving operand's source (its parentheses included) is
 	 * untouched. Refuses when a comment sits in the removed operator / operand region.
 	 */
-	private static function dropOperandEdit(chain: QueryNode, operand: QueryNode, source: String): Null<{ span: Span, text: String }> {
+	private static function dropOperandEdit(
+		chain: QueryNode, operand: QueryNode, regions: () -> Array<LexRegion>
+	): Null<{ span: Span, text: String }> {
 		if (chain.children.length != 2) return null;
 		final left: QueryNode = chain.children[0];
 		final right: QueryNode = chain.children[1];
@@ -884,7 +888,7 @@ final class CheckScan {
 			new Span(ls.from, rs.from)
 		else
 			null;
-		return drop == null || hasCommentMarker(source, drop.from, drop.to) ? null : { span: drop, text: '' };
+		return drop == null || LexicalRegions.commentIntersects(drop.from, drop.to, regions()) ? null : { span: drop, text: '' };
 	}
 
 	/**
@@ -1048,6 +1052,7 @@ private typedef CondSimplifySeams = {
 	final spliceKinds: Array<String>;
 	final exprStmtKind: Null<String>;
 	final annotationKinds: Array<String>;
+	final regions: () -> Array<LexRegion>;
 };
 
 /**

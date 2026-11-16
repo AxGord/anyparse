@@ -1752,6 +1752,30 @@
 			"method": "regionHoldsComment",
 			"force": "false",
 			"note": "no dropped region holds a comment, so a rewrite takes a real comment between the kept spans with it"
+		},
+		{
+			"name": "M-IF-SHAPE-DROPPED-ANY-TEXT",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "ifShapeEdit",
+			"find": "if (LexicalRegions.commentIntersects(ns.from, ns.to, seams.regions())) return null;",
+			"replace": "if (true) return null;",
+			"note": "every deleted `if` reads as holding a comment, so a `//` spelled inside a string literal of its body refuses the deletion again"
+		},
+		{
+			"name": "M-IF-SHAPE-DROPPED-NEVER",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "ifShapeEdit",
+			"find": "if (LexicalRegions.commentIntersects(ns.from, ns.to, seams.regions())) return null;",
+			"replace": "if (false) return null;",
+			"note": "no deleted `if` holds a comment, so the deletion takes a real comment of its body with it"
+		},
+		{
+			"name": "M-OPERAND-DROP-NEVER",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "dropOperandEdit",
+			"find": "LexicalRegions.commentIntersects(drop.from, drop.to, regions())",
+			"replace": "false",
+			"note": "no dropped operand holds a comment, so dropping `&& x` takes a real comment between the operands with it"
 		}
 	]
 }
