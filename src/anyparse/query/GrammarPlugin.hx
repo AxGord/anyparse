@@ -3192,6 +3192,15 @@ final class RefShape {
 	public var typeValueTypeNames: Null<Map<String, String>>;
 
 	/**
+	 * The word a configuration names each top-level type-declaration kind by, keyed by the kind
+	 * `RefactorSupport.typeDeclOf` reports (Haxe `TypedefDecl` -> `typedef`, a `final class` under
+	 * `ClassDecl` -> `class`). Several kinds may share one word. `module-type-order` reads its
+	 * `kindOrder` option through it, so a configuration spells what a reader of the source sees and
+	 * never a node kind. Optional; unset leaves every declaration unranked by kind.
+	 */
+	public var typeDeclKindWords: Null<Map<String, String>>;
+
+	/**
 	 * Maps a container type's SIMPLE name to the index of the type parameter that
 	 * its index-access `x[k]` yields (Haxe `Map<K, V>` → 1, `Array<T>` → 0).
 	 * `FieldWriteIndex` uses it to resolve the receiver of a

@@ -1278,6 +1278,78 @@
 			"find": "LexicalRegions.commentIntersects(lineFrom, lineTo, regions)",
 			"replace": "trimmed.indexOf(\"//\") >= 0",
 			"note": "a string-blind marker scan pins a block whose directive line holds a // inside a string"
+		},
+		{
+			"name": "M-MTO-MAIN-LAST-UNREAD",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "breakReason",
+			"find": "main == MAIN_LAST ?",
+			"replace": "main == MAIN_ANY ?",
+			"note": "the default mainType last stops placing the main type after the others, so a secondary type written after it is no longer reported"
+		},
+		{
+			"name": "M-MTO-MAIN-FIRST-PLACED-LAST",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "canonicalOrder",
+			"find": "case MAIN_FIRST: 0;",
+			"replace": "case MAIN_FIRST: others.length;",
+			"note": "the fix under mainType first puts the main type last, so the reported module is left as it was"
+		},
+		{
+			"name": "M-MTO-DOC-LEFT-BEHIND",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "slotSpan",
+			"find": "return ElementSpan.docExtendedSpan(source, ElementSpan.lineClosingCommentSpan(source, owned, regions), regions());",
+			"replace": "return ElementSpan.lineClosingCommentSpan(source, owned, regions);",
+			"note": "a slot stops at the declaration's metadata, so its doc comment stays behind in the gap and the documented type is no longer moved"
+		},
+		{
+			"name": "M-MTO-GUARDED-MOVES",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "typesOf",
+			"find": "slot: guarded || !withSlots ? null",
+			"replace": "slot: !withSlots ? null",
+			"note": "a declaration under #if gets a slot like a top-level one, so the refusal no longer names it"
+		},
+		{
+			"name": "M-MTO-STRAY-GAP-IGNORED",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "fix",
+			"find": "if (stray != null)",
+			"replace": "if (stray == -1)",
+			"note": "a comment no declaration owns between two slots is permuted along with them and lands beside the wrong type"
+		},
+		{
+			"name": "M-MTO-KIND-RANK-UNREAD",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "breakReason",
+			"find": "return earlier.rank > later.rank ?",
+			"replace": "return earlier.rank < 0 ?",
+			"note": "the kindOrder option stops ranking the secondary types, so a typedef after an enum is not reported"
+		},
+		{
+			"name": "M-MTO-KIND-WORDS-UNREAD",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "typesOf",
+			"find": "words[decl.kind] ?? decl.kind",
+			"replace": "decl.kind",
+			"note": "the kind order compares node kinds instead of the grammar's declaration words, so a configured typedef matches nothing"
+		},
+		{
+			"name": "M-MTO-MAIN-ANY-PLACED-LAST",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "canonicalOrder",
+			"find": "case MAIN_ANY: types.indexOf(mains[0]);",
+			"replace": "case MAIN_ANY: others.length;",
+			"note": "the fix under mainType any moves the main type last, though the option asked to leave it where it is"
+		},
+		{
+			"name": "M-MTO-UNLISTED-RANKS-FIRST",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "typesOf",
+			"find": "rank: listed < 0 ? kindOrder.length : listed",
+			"replace": "rank: listed < 0 ? -1 : listed",
+			"note": "a kind kindOrder does not list ranks before every listed one, so an enum ahead of a listed typedef is accepted"
 		}
 	]
 }

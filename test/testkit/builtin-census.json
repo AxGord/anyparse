@@ -90,6 +90,7 @@
 	"missing-visibility",
 	"mixed-logical-parens",
 	"modifier-order",
+	"module-type-order",
 	"naming",
 	"narrow-local-scope",
 	"no-underscore-prefix",

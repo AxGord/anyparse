@@ -2803,6 +2803,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "MTO-MAIN-LAST",
+			"note": "module-type-order: a typedef written after the main type moves above it under the default mainType last (an engine without the rule answers unknown rule)",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"module-type-order",
+				"--no-oracle",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tSys.println(\"x\");\n\t}\n}\n\ntypedef T = Int;\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5ab487f9581a92b6",
+				"files": "1b7717835f9b20c5",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

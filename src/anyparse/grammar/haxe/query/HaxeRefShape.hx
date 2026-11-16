@@ -1302,6 +1302,16 @@ final class HaxeRefShape {
 			'InterfaceDecl' => 'Class',
 			'EnumDecl' => 'Enum'
 		];
+		// An `enum abstract` is an abstract by its declaration keyword, so it ranks with the abstracts.
+		table.typeDeclKindWords = [
+			'ClassDecl' => 'class',
+			'AbstractClassDecl' => 'class',
+			'InterfaceDecl' => 'interface',
+			'EnumDecl' => 'enum',
+			'EnumAbstractDecl' => 'abstract',
+			'AbstractDecl' => 'abstract',
+			'TypedefDecl' => 'typedef'
+		];
 		table.indexedElementTypeParams = ['Map' => 1, 'Array' => 0, 'Vector' => 0];
 		// Haxe iteration semantics: `Array<T>` / `haxe.ds.Vector<T>` / `List<T>` yield `T`;
 		// `Iterable<T>` yields `T` through the `iterator():Iterator<T>` it declares, and an

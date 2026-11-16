@@ -148,6 +148,7 @@ import anyparse.check.common.members.InlineConstant;
 import anyparse.check.common.members.MemberOrder;
 import anyparse.check.common.members.MissingVisibility;
 import anyparse.check.common.members.ModifierOrder;
+import anyparse.check.common.members.ModuleTypeOrder;
 import anyparse.check.common.members.OptionalParamShorthand;
 import anyparse.check.common.members.OrphanAccessor;
 import anyparse.check.common.members.OverriddenInline;
@@ -445,6 +446,7 @@ final class Linter {
 			new MissingVisibility(),
 			new ModifierOrder(),
 			new MemberOrder(),
+			new ModuleTypeOrder(),
 			new FragmentedDocComment(),
 			new ExplicitType(),
 			new PreferFinalField(),
