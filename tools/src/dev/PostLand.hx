@@ -74,6 +74,14 @@ final class PostLand {
 
 	private static final THREADS_LINE: EReg = ~/^post-land threads: (\d+)$/m;
 
+	/**
+	 * The line the whole lint's own wrapper prints to stderr once its lease is granted and the lint is about to start: what stands
+	 * before it is the lease wrapper's waiting text, and without it the lint never started.
+	 */
+	private static final LINT_MARK: String = 'post-land lint started';
+
+	private static final LINT_START: String = 'echo "$LINT_MARK" >&2; exec "$$@"';
+
 	/** The end of the totals line of `dev shard`: its elapsed seconds and the shards it ran on. */
 	private static final SPAN: EReg = ~/ in (\d+(?:\.\d+)?)s across (\d+) shards ---/;
 
@@ -261,9 +269,10 @@ final class PostLand {
 	 * a red run keeps it, since the `red` record names it.
 	 */
 	public static function settle(cache: String, sha: String, verdict: Outcome): Void {
-		remove(recordOf(cache, sha, RUNNING));
+		final unrun: Bool = verdict.match(NotRun(_));
+		if (!unrun) remove(recordOf(cache, sha, RUNNING));
 		remove(fileOf(cache, sha, PID));
-		release(directory(cache), sha, verdict.match(Failed(_)));
+		release(directory(cache), sha, unrun || verdict.match(Failed(_)));
 		switch verdict {
 			case Failed(why):
 				File.saveContent(recordOf(cache, sha), '$why — ${fileOf(cache, sha, LOG)}\n');
@@ -355,9 +364,14 @@ final class PostLand {
 	 */
 	public static function wholeLint(repo: String, sha: String, cache: String, tree: String, mode: LeaseMode = Unpooled): Outcome {
 		final lint: Result = lintLeased(
-			mode, GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)), 'post-land-lint $sha'
+			mode,
+			GateTree.shim(tree, tree, ['lint', '--format', 'json', '--all'].concat(LintScope.ROOTS)).under(['sh', '-c', LINT_START, 'sh']),
+			'post-land-lint $sha'
 		).run();
-		if (!lint.out.trim().startsWith('[')) return Failed('the whole lint of $sha printed no report: ${lint.firstError()}');
+		final started: Int = lint.err.indexOf(LINT_MARK);
+		if (started < 0) return NotRun('the whole lint of $sha never started: ${endOf(lint)}');
+		if (!lint.out.trim().startsWith('['))
+			return Failed('the whole lint of $sha printed no report: ${sinceStart(lint, started + LINT_MARK.length).firstError()}');
 		final snapshot: String = Path.join([cache, '${Battery.keyOf(repo, sha) ?? sha}-anyparse.json']);
 		final truth: String = '$snapshot.truth';
 		File.saveContent(truth, lint.out);
@@ -452,6 +466,14 @@ final class PostLand {
 		return outcome;
 	}
 
+	/**
+	 * The verdict of a whole-suite run from its whole-lint row `linted` (never `Failed` here) and its hxcpp row `compiled`: a red
+	 * hxcpp build is red whatever the lint did, and a lint that never started leaves the run without a verdict rather than green.
+	 */
+	public static function runVerdict(linted: Outcome, compiled: Outcome): Outcome {
+		return !compiled.match(Failed(_)) && linted.match(NotRun(_)) ? linted : compiled;
+	}
+
 	private static inline function recordOf(cache: String, sha: String, state: String = RED): String {
 		return fileOf(cache, sha, state);
 	}
@@ -502,6 +524,9 @@ final class PostLand {
 			case Failed(why):
 				Sys.println('post-land: $sha RED — $why');
 				return 1;
+			case NotRun(why):
+				Sys.println('post-land: $sha NOT RUN — $why (a later land runs it again, or `post-land clear $sha`)');
+				return 1;
 			case _:
 				Sys.println('post-land: $sha green');
 				return 0;
@@ -525,9 +550,11 @@ final class PostLand {
 			if (mode.match(Own(_, _))) granted(LINT_THREADS);
 			return wholeLint(repo, sha, cache, tree, mode);
 		});
-		return linted.match(Failed(_))
-			? linted
-			: hxcppRow(Land.mergedPaths(tree), () -> timed(cache, HXCPP_ROW, granted -> hxcppBuild(tree, cache, mode, granted)));
+		if (linted.match(Failed(_))) return linted;
+		final compiled: Outcome = hxcppRow(
+			Land.mergedPaths(tree), () -> timed(cache, HXCPP_ROW, granted -> hxcppBuild(tree, cache, mode, granted))
+		);
+		return runVerdict(linted, compiled);
 	}
 
 	/**
@@ -590,6 +617,26 @@ final class PostLand {
 	/** The hxcpp row of a run that holds a lease of its own, or whose caller does. */
 	private static function hxcppHeld(tree: String, cache: String): Outcome {
 		return hxcppRow(Land.mergedPaths(tree), () -> hxcppBuild(tree, cache, Lease.ofEnvironment(), _ -> {}));
+	}
+
+	/** `lint` with only the stderr text from offset `from` on: the program's own, after the lease wrapper's waiting text. */
+	private static function sinceStart(lint: Result, from: Int): Result {
+		return new Result(lint.command, {
+			status: lint.status,
+			out: lint.out,
+			err: lint.err.substr(from),
+			failure: lint.failure,
+			overflowed: false
+		});
+	}
+
+	/**
+	 * How the command of `lint` ended, from its own status and `failure` alone: a lease wrapper that ended without granting printed
+	 * only waiting text, whose holder list names other commands and says nothing of why it ended.
+	 */
+	private static function endOf(lint: Result): String {
+		final status: String = lint.status == null ? 'ended by a signal' : 'exited ${lint.status}';
+		return lint.failure == '' ? status : '$status, ${lint.failure}';
 	}
 
 }

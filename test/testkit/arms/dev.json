@@ -3307,6 +3307,54 @@
 			"find": "if (FileSystem.exists(granted)) FileSystem.deleteFile(granted);",
 			"replace": "",
 			"note": "an announcement keeps the progress an earlier run left, so a branch not yet granted its lease reads as granted"
+		},
+		{
+			"name": "M-POSTLAND-LINT-NEVER-STARTED",
+			"type": "dev.PostLand",
+			"method": "wholeLint",
+			"find": "if (started < 0)",
+			"replace": "if (started < -1)",
+			"note": "a lint still waiting for its lease is judged by its output like a lint that ran, so a wait line becomes a red record"
+		},
+		{
+			"name": "M-POSTLAND-LINT-NO-START-MARK",
+			"type": "dev.PostLand",
+			"method": "wholeLint",
+			"find": ".under(['sh', '-c', LINT_START, 'sh'])",
+			"replace": "",
+			"note": "the lint prints no start line, so a lint that ran after waiting for its lease reads as one that never started"
+		},
+		{
+			"name": "M-POSTLAND-LINT-OWN-ERROR",
+			"type": "dev.PostLand",
+			"method": "wholeLint",
+			"find": "sinceStart(lint, started + LINT_MARK.length).firstError()",
+			"replace": "lint.firstError()",
+			"note": "a lint that ran and broke is explained by the lease wrappers waiting text instead of its own error"
+		},
+		{
+			"name": "M-POSTLAND-SETTLE-NOT-RUN",
+			"type": "dev.PostLand",
+			"method": "settle",
+			"find": "if (!unrun) remove(recordOf(cache, sha, RUNNING));",
+			"replace": "remove(recordOf(cache, sha, RUNNING));",
+			"note": "a run whose lint never started drops its running record, so no later land runs it again and nothing shows it was never judged"
+		},
+		{
+			"name": "M-POSTLAND-RUN-VERDICT",
+			"type": "dev.PostLand",
+			"method": "runVerdict",
+			"find": "!compiled.match(Failed(_)) && linted.match(NotRun(_)) ? linted : compiled",
+			"replace": "compiled",
+			"note": "a run whose lint never started ends green or skipped, so the missing lint verdict is never recorded"
+		},
+		{
+			"name": "M-POSTLAND-LINT-NEVER-STARTED-REASON",
+			"type": "dev.PostLand",
+			"method": "wholeLint",
+			"find": "never started: ${endOf(lint)}",
+			"replace": "never started: ${lint.firstError()}",
+			"note": "the reason a lint never started is picked from the waiting text, so it names another lease holder instead of how the lease wrapper ended"
 		}
 	]
 }
