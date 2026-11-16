@@ -97,36 +97,37 @@ final class RegistryFragmentFollow {
 			plugin: plugin,
 			exists: exists
 		};
-		for (i in 0...record.finds.length) if (applies(record, i, module, after[0], plugin)) {
-			requalify(record, i, rewrite, before[0], edits, notes);
-		} else {
-			final find: StringSlot = record.finds[i];
-			final replace: Null<StringSlot> = replaceOf(record, i);
-			final cut: Null<Span> = Patch.cutSpan(module.source, module.tree, before[0], find.value, plugin);
-			if (cut == null) {
-				notes.push('arm ${record.name}: its find occurs on neither side of the rewrite — re-aim it');
-				continue;
+		for (i in 0...record.finds.length)
+			if (applies(record, i, module, after[0], plugin)) {
+				requalify(record, i, rewrite, before[0], edits, notes);
+			} else {
+				final find: StringSlot = record.finds[i];
+				final replace: Null<StringSlot> = replaceOf(record, i);
+				final cut: Null<Span> = Patch.cutSpan(module.source, module.tree, before[0], find.value, plugin);
+				if (cut == null) {
+					notes.push('arm ${record.name}: its find occurs on neither side of the rewrite — re-aim it');
+					continue;
+				}
+				if (maps.length == 0 || cut.from < oldSpan.from || cut.to > oldSpan.to) {
+					notes.push('arm ${record.name}: its find cannot be aligned across the rewrite — re-aim it');
+					continue;
+				}
+				final written: String = module.source.substring(cut.from, cut.to);
+				final carried: Null<Carried> = carry(rewrite, find.value, replace?.value, written, cut.from - oldSpan.from);
+				if (carried == null) {
+					notes.push('arm ${record.name}: no re-spelling of its cut applies to the rewritten source — re-aim it');
+					continue;
+				}
+				final newReplace: Null<String> = carried.replace;
+				// An arm whose find equals its replace cuts nothing and breaks the build; naming it beats writing it.
+				if (cutsNothing(find.value, replace?.value, carried)) {
+					notes.push('arm ${record.name}: following the rewrite would leave its find equal to its replace — re-aim it by hand');
+					continue;
+				}
+				if (carried.find != find.value) edits.push(TypePathRegistries.respell(find, carried.find));
+				if (replace != null && newReplace != null && newReplace != replace.value)
+					edits.push(TypePathRegistries.respell(replace, newReplace));
 			}
-			if (maps.length == 0 || cut.from < oldSpan.from || cut.to > oldSpan.to) {
-				notes.push('arm ${record.name}: its find cannot be aligned across the rewrite — re-aim it');
-				continue;
-			}
-			final written: String = module.source.substring(cut.from, cut.to);
-			final carried: Null<Carried> = carry(rewrite, find.value, replace?.value, written, cut.from - oldSpan.from);
-			if (carried == null) {
-				notes.push('arm ${record.name}: no re-spelling of its cut applies to the rewritten source — re-aim it');
-				continue;
-			}
-			final newReplace: Null<String> = carried.replace;
-			// An arm whose find equals its replace cuts nothing and breaks the build; naming it beats writing it.
-			if (cutsNothing(find.value, replace?.value, carried)) {
-				notes.push('arm ${record.name}: following the rewrite would leave its find equal to its replace — re-aim it by hand');
-				continue;
-			}
-			if (carried.find != find.value) edits.push(TypePathRegistries.respell(find, carried.find));
-			if (replace != null && newReplace != null && newReplace != replace.value)
-				edits.push(TypePathRegistries.respell(replace, newReplace));
-		}
 	}
 
 	/**

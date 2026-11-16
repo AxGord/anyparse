@@ -78,10 +78,11 @@ final class Meta {
 				bestFrom = ns.from;
 			}
 		}
-		for (s in siblings) if (shape.declHostKinds.contains(s.kind))
-			consider(s);
-		else
-			for (c in s.children) if (shape.declHostKinds.contains(c.kind)) consider(c);
+		for (s in siblings)
+			if (shape.declHostKinds.contains(s.kind))
+				consider(s);
+			else
+				for (c in s.children) if (shape.declHostKinds.contains(c.kind)) consider(c);
 		return best;
 	}
 

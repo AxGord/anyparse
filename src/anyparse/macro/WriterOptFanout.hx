@@ -1520,10 +1520,11 @@ final class WriterOptFanout {
 					for (_r in r.rules) {
 						var _wantsFit: Bool = false;
 						final _conds: Array<anyparse.format.wrap.WrapCondition> = [];
-						for (_c in _r.conditions) if (_c.cond == anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength)
-							_wantsFit = _wantsFit || _c.value == 0;
-						else
-							_conds.push(_c);
+						for (_c in _r.conditions)
+							if (_c.cond == anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength)
+								_wantsFit = _wantsFit || _c.value == 0;
+							else
+								_conds.push(_c);
 						if (!_wantsFit) _rules.push({ conditions: _conds, mode: mode, location: _r.location });
 					}
 					return { rules: _rules, defaultMode: mode, defaultLocation: r.defaultLocation };

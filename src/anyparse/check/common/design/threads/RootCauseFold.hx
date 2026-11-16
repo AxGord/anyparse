@@ -145,10 +145,11 @@ final class RootCauseFold {
 			for (i in 0...warned.length) if (state[i] == Open && (pick < 0 || _depth[i] < _depth[pick])) pick = i;
 			state[pick] = Kept;
 		}
-		for (i => h in warned) if (state[i] == Folded)
-			turn(h, reasons[i], i, doing)
-		else
-			noteUnnamed(h, reasons[i], i, doing);
+		for (i => h in warned)
+			if (state[i] == Folded)
+				turn(h, reasons[i], i, doing)
+			else
+				noteUnnamed(h, reasons[i], i, doing);
 		noteInfoCovers();
 	}
 

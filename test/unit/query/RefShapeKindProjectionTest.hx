@@ -1538,10 +1538,11 @@ final class RefShapeKindProjectionTest extends Test {
 	/** The fields of `shape`, a group's (`GROUP_FIELDS`) in place of the group itself. */
 	private static function fieldsOf(shape: RefShape): Array<String> {
 		final out: Array<String> = [];
-		for (field in Reflect.fields(shape)) if (GROUP_FIELDS.contains(field))
-			for (inner in Reflect.fields(Reflect.field(shape, field))) out.push(inner);
-		else
-			out.push(field);
+		for (field in Reflect.fields(shape))
+			if (GROUP_FIELDS.contains(field))
+				for (inner in Reflect.fields(Reflect.field(shape, field))) out.push(inner);
+			else
+				out.push(field);
 		return out;
 	}
 

@@ -277,10 +277,11 @@ final class FixtureCompileCache {
 		if (request.cmd != 'haxe' || !request.args.exists(a -> PROBE_MACROS.exists(p -> a.indexOf(p) >= 0))) return null;
 		final env: DynamicAccess<String> = processEnv();
 		final overrides: Null<DynamicAccess<Null<String>>> = request.env;
-		if (overrides != null) for (name => value in overrides) if (value == null)
-			env.remove(name)
-		else
-			env[name] = value;
+		if (overrides != null) for (name => value in overrides)
+			if (value == null)
+				env.remove(name)
+			else
+				env[name] = value;
 		final compile: Null<CompilePlan> = plan(request.cwd ?? Node.process.cwd(), request.args);
 		final before: Null<Array<Map<String, String>>> = compile == null ? null : trees(compile.roots);
 		if (compile == null || before == null) return null;

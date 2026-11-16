@@ -992,10 +992,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	private static function flattenConditionals(children: Array<QueryNode>): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
-		for (c in children) if (c.kind == 'Conditional')
-			for (g in flattenConditionals(c.children)) out.push(g);
-		else
-			out.push(c);
+		for (c in children)
+			if (c.kind == 'Conditional')
+				for (g in flattenConditionals(c.children)) out.push(g);
+			else
+				out.push(c);
 		return out;
 	}
 

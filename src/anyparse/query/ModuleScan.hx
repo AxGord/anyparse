@@ -80,12 +80,13 @@ final class ModuleScan {
 		final regionKind: Null<String> = shape.conditionalMemberKind;
 		if (regionKind == null) return null;
 		var region: Null<QueryNode> = null;
-		for (child in tree.children) if (child.kind == regionKind) {
-			if (region != null) return null;
-			region = child;
-		} else if (RefactorSupport.typeDeclOf(child) != null) {
-			return null;
-		}
+		for (child in tree.children)
+			if (child.kind == regionKind) {
+				if (region != null) return null;
+				region = child;
+			} else if (RefactorSupport.typeDeclOf(child) != null) {
+				return null;
+			}
 		final guard: Null<QueryNode> = region;
 		return guard != null
 			&& regionDeclaresType(guard, regionKind)
@@ -303,10 +304,11 @@ final class ModuleScan {
 	private static function collectGuardedImports(
 		node: QueryNode, guarded: Bool, region: Null<Span>, scopeOf: QueryNode -> Null<Span>, out: Array<GuardedImport>
 	): Void {
-		for (c in node.children) if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl')
-			collectGuardedImports(c, true, scopeOf(c), scopeOf, out);
-		else if (guarded && IMPORT_DECL_KINDS.contains(c.kind))
-			out.push({ decl: c, region: region });
+		for (c in node.children)
+			if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl')
+				collectGuardedImports(c, true, scopeOf(c), scopeOf, out);
+			else if (guarded && IMPORT_DECL_KINDS.contains(c.kind))
+				out.push({ decl: c, region: region });
 	}
 
 	/** Whether `node` declares a type directly, or inside a region nested in it — `guardedBodyRegion`'s coverage gate. */

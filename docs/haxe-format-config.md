@@ -332,7 +332,7 @@ applies.
 | `elseSwitch` | same/next/keep | `keep` | keyword placement for a nested `switch` inside an `else`, the `elseIf` twin for the other keyword-headed branch — see "Three keys with a position trap" below and its field doc |
 | `fitLineIfWithElse` | bool | `false` | a value-`if` (`expressionIf: fitLine`) with an `else`: `false` moves its then-branch off the head, `true` keeps `fitLine`. A statement `if` ignores it: an `if` with an `else` and a brace-less branch is always a ladder, each brace-less body on its own line |
 | `fitLineBodyGlue` | bool | `false` | when a `fitLine` construct body (`if`/`for`/`while`) does not fit the header line AND the next line would not rescue it either (its flat width still exceeds the continuation indent), stay glued to the header and break inside the body instead of moving down a line and an indent step; also reaches an arrow-lambda body that is itself a parenthesised expression. Neither this knob nor `fitLine` itself decides whether a body parked inside a LAMBDA item is counted in the enclosing line's width — that is a separate mechanism, see "A `fitLine` body parked inside a lambda item" below |
-| `loopBodyIfElseNext` | bool | `false` | see the dedicated section below and its field doc |
+| `loopBodyIfElseNext` | bool | `true` | see the dedicated section below and its field doc |
 | `conditionalExprFit` | bool | `false` | break an expression-scope `#if … #end` region at its directive seams, the way an `if`/`else if`/`else` chain breaks, when the glued form does not fit the line; off (default) keeps the layout purely source-driven |
 | `ifElseSemicolonNextLine` | bool | **`true`** | when the statement-`if` then-branch is a bare (non-block) statement ending in `;` and the branch carries an `else`, put that `else` on the next line instead of gluing it after the `;` (`if (c) foo();` / `else bar();` rather than `if (c) foo(); else bar();`). Consumed by `WriterFieldSepLowering` through the `@:fmt(semicolonNextLineElse)` flag on `HxIfStmt.elseBody`. Trivia-mode only: the plain (Fast) writer canonicalises `;` presence, so this knob is inert there and the flag-based separator is used instead; it also never fires in expression position (`opt._inExprPosition`), which is `sameLineExpressionElse`'s job. Note the default is `true`, unlike every other bare-Bool `sameLine` knob in this table, which default `false` |
 | `expressionIfWithBlocks` | bool | `false` | collapses a `BlockExpr` branch body's CONTENTS onto one line regardless of width (`{ … }` survives, its interior flattens); glues nothing and never moves `else` — see the closing paragraph of the `expressionIfWithBrackets` section below for the distinction |
@@ -502,7 +502,7 @@ Traps:
 
 ## `sameLine.loopBodyIfElseNext` — the one loop body whose `else` has nothing to pair with
 
-**`sameLine.loopBodyIfElseNext: true | false`** (default `false`) breaks a `for` / `while` /
+**`sameLine.loopBodyIfElseNext: true | false`** (default `true`; `false` keeps the glue) breaks a `for` / `while` /
 `do … while` header away from a body that is an `if` carrying an `else`, putting the whole
 `if`/`else` on the next line one indent step in. A `Bool`, like its `sameLine` neighbours
 (`fitLineIfWithElse`, `fitLineBodyGlue`, `expressionIfWithBlocks`, `expressionIfFit`,
@@ -515,7 +515,7 @@ It reaches EVERY placement, because it is a substitution on the placement VALUE 
 layout: for this one body shape the writer reads `next` where the config said `fitLine`, `same` or
 `keep`, before any layout is chosen. One variable at a time:
 
-| `forBody` | knob off (or absent) | knob on |
+| `forBody` | knob off (`false`) | knob on (default, so also absent) |
 |---|---|---|
 | `fitLine` | glued | **broken out** |
 | `same`    | glued | **broken out** |
@@ -528,7 +528,7 @@ key existed. `next` already breaks every loop body, the guard idiom included, wh
 key exists to avoid.
 
 ```jsonc
-"sameLine": { "forBody": "fitLine", "whileBody": "fitLine", "loopBodyIfElseNext": true }
+"sameLine": { "forBody": "fitLine", "whileBody": "fitLine", "loopBodyIfElseNext": false }
 ```
 
 Off — the `}` and the `else` sit at the LOOP's indent, so the `else` reads as a branch of the `for`:

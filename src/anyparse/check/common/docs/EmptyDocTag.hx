@@ -212,20 +212,21 @@ final class EmptyDocTag extends RuleBase {
 		for (i in content + 1...last) mark[i] = true;
 		final spans: Array<Span> = [];
 		var i: Int = 0;
-		while (i < lines.length) if (mark[i]) {
-			var j: Int = i;
-			while (j + 1 < lines.length && mark[j + 1]) j++;
-			// A marked last line is never gutter-only: the reset above clears that case and the fill excludes `last`.
-			if (j == last) {
-				if (j > i) spans.push(lineRunSpan(source, lines, i, j - 1));
-				spans.push(new Span(contentFrom(source, lines[j]), lines[j].to));
+		while (i < lines.length)
+			if (mark[i]) {
+				var j: Int = i;
+				while (j + 1 < lines.length && mark[j + 1]) j++;
+				// A marked last line is never gutter-only: the reset above clears that case and the fill excludes `last`.
+				if (j == last) {
+					if (j > i) spans.push(lineRunSpan(source, lines, i, j - 1));
+					spans.push(new Span(contentFrom(source, lines[j]), lines[j].to));
+				} else {
+					spans.push(lineRunSpan(source, lines, i, j));
+				}
+				i = j + 1;
 			} else {
-				spans.push(lineRunSpan(source, lines, i, j));
+				i++;
 			}
-			i = j + 1;
-		} else {
-			i++;
-		}
 		return spans;
 	}
 

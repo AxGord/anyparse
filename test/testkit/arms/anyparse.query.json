@@ -2290,7 +2290,7 @@
 			"name": "M-REACH-IMPLICIT-ADMIT",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];\n\t\t\t// a member the facts name the typed owner of is that type's, not every type's of its simple name\n\t\t\tfinal owned: Array<OwnedId> = [];\n\t\t\tfor (at in site.implicit) for (o in _g.ownedIdsAt(g, at)) if (o.owner == null)\n\t\t\t\timplicit.push(o.id)\n\t\t\telse\n\t\t\t\towned.push(o);",
+			"find": "final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];\n\t\t\t// a member the facts name the typed owner of is that type's, not every type's of its simple name\n\t\t\tfinal owned: Array<OwnedId> = [];\n\t\t\tfor (at in site.implicit) for (o in _g.ownedIdsAt(g, at))\n\t\t\t\tif (o.owner == null)\n\t\t\t\t\timplicit.push(o.id)\n\t\t\t\telse\n\t\t\t\t\towned.push(o);",
 			"replace": "final implicit: Array<String> = [];\n\t\t\tfinal owned: Array<OwnedId> = [];",
 			"note": "an implicitly-called function that grows the member is never admitted from the entry"
 		},
@@ -8940,8 +8940,8 @@
 			"name": "M-FACTS-MADE-FROM-ALL",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "invalidate",
-			"find": "\tfor (made in _madeFrom[key] ?? []) if (made.startsWith(NODE_ENTRY))\n\t\t_nodeCache.remove(made.substr(NODE_ENTRY.length))\n\telse\n\t\t_builtCache.remove(made.substr(BUILT_ENTRY.length));",
-			"replace": "\t_nodeCache.clear();\n\t_builtCache.clear();",
+			"find": "\t\tfor (made in _madeFrom[key] ?? [])\n\t\t\tif (made.startsWith(NODE_ENTRY))\n\t\t\t\t_nodeCache.remove(made.substr(NODE_ENTRY.length))\n\t\t\telse\n\t\t\t\t_builtCache.remove(made.substr(BUILT_ENTRY.length));",
+			"replace": "\t\t_nodeCache.clear();\n\t_builtCache.clear();",
 			"note": "a rewrite of any file drops every made node, so each --fix pass makes the whole table again"
 		},
 		{

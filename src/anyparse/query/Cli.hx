@@ -302,20 +302,19 @@ final class Cli {
 		var verify: Bool = writes;
 		var forced: Bool = false;
 		final rest: Array<String> = [];
-		for (a in RegistryFollowCommand.withoutOptOut(
-			args.slice(1), takesFix, ledger
-		)) if (a == '--exit-on-empty' || a == '--require-match') {
-			requireMatch = true;
-		} else if (takesFix && a == '--fix') {
-			postWriteFix = true;
-		} else if (writes && a == WriteVerification.OPT_OUT) {
-			verify = false;
-		} else if (writes && a == WriteVerification.OPT_IN) {
-			forced = true;
-			if (ownVerify) rest.push(a);
-		} else {
-			rest.push(a);
-		}
+		for (a in RegistryFollowCommand.withoutOptOut(args.slice(1), takesFix, ledger))
+			if (a == '--exit-on-empty' || a == '--require-match') {
+				requireMatch = true;
+			} else if (takesFix && a == '--fix') {
+				postWriteFix = true;
+			} else if (writes && a == WriteVerification.OPT_OUT) {
+				verify = false;
+			} else if (writes && a == WriteVerification.OPT_IN) {
+				forced = true;
+				if (ownVerify) rest.push(a);
+			} else {
+				rest.push(a);
+			}
 		final unknown: Null<String> = registered.flags().unknownFlag(rest);
 		if (unknown != null) throw new UsageFailure('unknown option "$unknown" — `apq $cmd --help` lists its options');
 		// The process entry names no default grammar: an argv with no `--lang` runs once per grammar its files, its stdin

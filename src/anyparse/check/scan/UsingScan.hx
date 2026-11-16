@@ -493,10 +493,11 @@ final class UsingScan {
 					if (t.name == path.substr(dot + 1) && !t.isMain) out.push({ path: path, type: t, file: fi });
 		}
 		final info: Null<FileInfo> = file == null ? null : index.fileInfo(file);
-		if (dot < 0 && info != null) for (d in index.refs.names.bind(path, info) ?? []) if (d.type.isMain)
-			wholeModule(d.file)
-		else
-			out.push({ path: ModuleScan.pathOfDecl(d.file, d.type), type: d.type, file: d.file });
+		if (dot < 0 && info != null) for (d in index.refs.names.bind(path, info) ?? [])
+			if (d.type.isMain)
+				wholeModule(d.file)
+			else
+				out.push({ path: ModuleScan.pathOfDecl(d.file, d.type), type: d.type, file: d.file });
 		return out.length == 0 ? null : out;
 	}
 

@@ -464,12 +464,11 @@ final class MoveSymbol {
 		if (importEdit == null || edits.guardedEdits.length == 0) return edits;
 		final kept: Array<{ span: Span, text: String }> = [];
 		var text: String = importEdit.text;
-		for (edit in edits.guardedEdits) if (
-			edit.text != '' && edit.span.from == importEdit.span.from && edit.span.to == importEdit.span.to
-		)
-			text += edit.text;
-		else
-			kept.push(edit);
+		for (edit in edits.guardedEdits)
+			if (edit.text != '' && edit.span.from == importEdit.span.from && edit.span.to == importEdit.span.to)
+				text += edit.text;
+			else
+				kept.push(edit);
 		return {
 			usingEdit: edits.usingEdit,
 			importEdit: { span: importEdit.span, text: text },

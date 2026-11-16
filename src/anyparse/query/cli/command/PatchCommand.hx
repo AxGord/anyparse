@@ -207,10 +207,11 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 	private static function splitPatchPayload(payload: String, sep: String): Null<Array<{ oldText: String, newText: String }>> {
 		final lines: Array<String> = payload.split('\n');
 		final sections: Array<Array<String>> = [[]];
-		for (l in lines) if (l.trim() == sep)
-			sections.push([]);
-		else
-			sections[sections.length - 1].push(l);
+		for (l in lines)
+			if (l.trim() == sep)
+				sections.push([]);
+			else
+				sections[sections.length - 1].push(l);
 		return sections.length < 2 || sections.length % 2 != 0 ? null : [
 			for (i in 0...(sections.length >> 1)) { oldText: sections[i * 2].join('\n'), newText: sections[i * 2 + 1].join('\n') }
 		];

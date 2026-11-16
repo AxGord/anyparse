@@ -129,11 +129,12 @@ final class JsonProf {
 
 	private static function factsBytes(lines: Array<String>): Int {
 		var seen: Int = 0;
-		for (line in lines) if (line.startsWith(NODE_LINE)) {
-			if (FactNodeRecordParser.parseWith(new Parser(new StringInput(line))).id != '') seen++;
-		} else if (line.startsWith('{"k":"type"') && FactTypeRecordParser.parseWith(new Parser(new StringInput(line))).id != '') {
-			seen++;
-		}
+		for (line in lines)
+			if (line.startsWith(NODE_LINE)) {
+				if (FactNodeRecordParser.parseWith(new Parser(new StringInput(line))).id != '') seen++;
+			} else if (line.startsWith('{"k":"type"') && FactTypeRecordParser.parseWith(new Parser(new StringInput(line))).id != '') {
+				seen++;
+			}
 		return seen;
 	}
 

@@ -205,10 +205,11 @@ final class DeclarationDelta {
 					for (k in (i < context ? 0 : i - context) ... (i + context + 1 > rows.length ? rows.length : i + context + 1))
 						near[k] = true;
 		final out: Array<String> = [];
-		for (i => row in rows) if (near[i])
-			out.push(row)
-		else if (i == 0 || near[i - 1])
-			out.push(ELIDED);
+		for (i => row in rows)
+			if (near[i])
+				out.push(row)
+			else if (i == 0 || near[i - 1])
+				out.push(ELIDED);
 		return out;
 	}
 

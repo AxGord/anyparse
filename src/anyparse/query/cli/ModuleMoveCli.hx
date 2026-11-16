@@ -235,10 +235,11 @@ final class ModuleMoveCli {
 	private static function write(changes: Array<MoveChange>, removed: Array<String>): Void {
 		final restore: Array<{ path: String, content: String }> = [];
 		final created: Array<String> = [];
-		for (c in changes) if (ConfigFinder.fileExists(c.file))
-			restore.push({ path: c.file, content: CliIo.readFile(c.file) });
-		else
-			created.push(c.file);
+		for (c in changes)
+			if (ConfigFinder.fileExists(c.file))
+				restore.push({ path: c.file, content: CliIo.readFile(c.file) });
+			else
+				created.push(c.file);
 		for (r in removed) restore.push({ path: r, content: CliIo.readFile(r) });
 		final dirs: Array<String> = missingDirectories(created);
 		CliIo.writeFiles(changes.map(c -> { path: c.file, content: c.newSource }));

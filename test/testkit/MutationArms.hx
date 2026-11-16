@@ -177,10 +177,11 @@ final class MutationArms {
 			});
 		}
 		final seen: Array<String> = [];
-		for (arm in arms) if (seen.contains(arm.name))
-			errors.push('"${arm.name}" is declared more than once — two arms under one name make the name useless');
-		else
-			seen.push(arm.name);
+		for (arm in arms)
+			if (seen.contains(arm.name))
+				errors.push('"${arm.name}" is declared more than once — two arms under one name make the name useless');
+			else
+				seen.push(arm.name);
 		return { arms: arms, errors: errors };
 	}
 
@@ -379,10 +380,11 @@ final class MutationArms {
 		final raw: Null<Array<Any>> = items(entry, key);
 		if (raw == null) return null;
 		final out: Array<String> = [];
-		for (item in raw) if (item is String)
-			out.push((item: String));
-		else
-			return null;
+		for (item in raw)
+			if (item is String)
+				out.push((item: String));
+			else
+				return null;
 		return out;
 	}
 

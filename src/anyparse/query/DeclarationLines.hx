@@ -53,10 +53,11 @@ final class DeclarationLines {
 		}
 		final owned: Array<Array<String>> = [for (_ in units) []];
 		final rest: Array<String> = [];
-		for (line => holder in owner) if (holder < 0)
-			rest.push(text[line])
-		else
-			owned[holder].push(text[line]);
+		for (line => holder in owner)
+			if (holder < 0)
+				rest.push(text[line])
+			else
+				owned[holder].push(text[line]);
 		return {
 			source: source,
 			tree: tree,

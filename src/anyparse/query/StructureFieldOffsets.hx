@@ -185,15 +185,17 @@ final class StructureFieldOffsets {
 				});
 			final isSwitch: Bool = switchKinds.contains(node.kind) && node.children.length > 0;
 			final nextHead: Bool = head && !structuralKinds.contains(node.kind);
-			for (child in node.children) if (isSwitch && child.kind == shape.caseBranchKind) {
-				final patterns: Array<QueryNode> = CasePatterns.patternRun(child, shape);
-				for (part in child.children) if (patterns.contains(part))
-					visit(part, node.children[0], true)
-				else
-					visit(part, null, false);
-			} else {
-				visit(child, subject, nextHead);
-			}
+			for (child in node.children)
+				if (isSwitch && child.kind == shape.caseBranchKind) {
+					final patterns: Array<QueryNode> = CasePatterns.patternRun(child, shape);
+					for (part in child.children)
+						if (patterns.contains(part))
+							visit(part, node.children[0], true)
+						else
+							visit(part, null, false);
+				} else {
+					visit(child, subject, nextHead);
+				}
 		}
 		visit(tree, null, false);
 		return out;
@@ -203,10 +205,11 @@ final class StructureFieldOffsets {
 	private static function literalFields(literal: QueryNode, shape: RefShape): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
 		function collect(host: QueryNode): Void {
-			for (child in host.children) if (child.kind == shape.objectFieldKind)
-				out.push(child)
-			else if (child.kind == shape.conditionalMemberKind)
-				collect(child);
+			for (child in host.children)
+				if (child.kind == shape.objectFieldKind)
+					out.push(child)
+				else if (child.kind == shape.conditionalMemberKind)
+					collect(child);
 		}
 		collect(literal);
 		return out;

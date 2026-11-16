@@ -369,14 +369,15 @@ final class HxModuleWriteOptions {
 	 * which asks whether the `if` BEING placed has an `else` sibling of its own,
 	 * and is deliberately not widened to loops.
 	 *
-	 * Default `false` is fork parity. Fed by `sameLine.loopBodyIfElseNext`;
+	 * Default `true`: an `if` with an `else` under a loop header is a ladder in every config, as it is elsewhere
+	 * (`false` keeps the glue). Fed by `sameLine.loopBodyIfElseNext`;
 	 * consumed by `WriterBodyPolicyLowering.buildBodyCoreWrap`, which substitutes
 	 * `BodyPolicy.Next` for whatever placement the config chose, at each of the
 	 * three fields carrying `@:fmt(loopBodyIfElseNext(...))` — so `Same`, `Keep`
 	 * and `FitLine` all obey it; gating the `FitLine` LAYOUT alone left a config
 	 * on `same` / `keep` unable to decline the defect the key names.
 	 */
-	public var loopBodyIfElseNext: Bool = false;
+	public var loopBodyIfElseNext: Bool = true;
 
 	/**
 	 * ω-cond-expr-fit: break an expression-scope `#if … #end` region at its

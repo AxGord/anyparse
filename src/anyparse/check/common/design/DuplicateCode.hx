@@ -392,17 +392,18 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 	private static function renumber(text: String, names: Array<String>): String {
 		final parts: Array<String> = text.split(HOLE);
 		final buf: StringBuf = new StringBuf();
-		for (i => part in parts) if (i % 2 == 0) {
-			buf.add(part);
-		} else {
-			final name: String = part;
-			var index: Int = names.indexOf(name);
-			if (index < 0) {
-				index = names.length;
-				names.push(name);
+		for (i => part in parts)
+			if (i % 2 == 0) {
+				buf.add(part);
+			} else {
+				final name: String = part;
+				var index: Int = names.indexOf(name);
+				if (index < 0) {
+					index = names.length;
+					names.push(name);
+				}
+				buf.add('$$$index');
 			}
-			buf.add('$$$index');
-		}
 		return buf.toString();
 	}
 

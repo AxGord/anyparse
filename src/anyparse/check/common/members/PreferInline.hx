@@ -659,12 +659,13 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 			if (name == null) return;
 			final mods: Array<String> = [];
 			final metas: Array<String> = [];
-			for (mod in run) if (metaKinds.contains(mod.kind)) {
-				final nm: Null<String> = mod.name;
-				if (nm != null) metas.push(nm);
-			} else {
-				mods.push(mod.kind);
-			}
+			for (mod in run)
+				if (metaKinds.contains(mod.kind)) {
+					final nm: Null<String> = mod.name;
+					if (nm != null) metas.push(nm);
+				} else {
+					mods.push(mod.kind);
+				}
 			cb(name, member, mods, metas);
 		});
 	}

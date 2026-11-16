@@ -2079,10 +2079,11 @@ private class OperatorGate {
 		final blockKind: Null<String> = _seams.stringInterpBlockKind;
 		final identKind: Null<String> = _seams.stringInterpIdentKind;
 		final out: Array<QueryNode> = [];
-		for (child in literal.children) if (blockKind != null && child.kind == blockKind)
-			out.push(child.children.length == 1 ? child.children[0] : child)
-		else if (identKind != null && child.kind == identKind)
-			out.push(child);
+		for (child in literal.children)
+			if (blockKind != null && child.kind == blockKind)
+				out.push(child.children.length == 1 ? child.children[0] : child)
+			else if (identKind != null && child.kind == identKind)
+				out.push(child);
 		return out;
 	}
 

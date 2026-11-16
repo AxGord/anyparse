@@ -197,10 +197,11 @@ final class TypingService {
 			case OutOfIndex(_):
 				return Unreadable;
 			case InIndex(decls):
-				for (d in decls) if (members.declaringMember(d, sub) != null)
-					member = true;
-				else if (!members.declarationLacksMember(d, sub))
-					return Unreadable;
+				for (d in decls)
+					if (members.declaringMember(d, sub) != null)
+						member = true;
+					else if (!members.declarationLacksMember(d, sub))
+						return Unreadable;
 		}
 		return member ? AsMember : ByModulePath;
 	}

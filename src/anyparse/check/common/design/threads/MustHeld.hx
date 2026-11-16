@@ -349,12 +349,13 @@ final class MustHeld {
 		final keysOf: Map<String, Array<Int>> = [];
 		for (id => node in _graph.nodes) {
 			final unknown: Bool = enteredUnknown(id, node, inertRef, unresolvedNames, seedable);
-			for (s in _states.statesOf(id)) if (unknown) {
-				_entry['$id|${s.valuation}'] = [];
-			} else {
-				keysOf[id] = (keysOf[id] ?? []).concat([keys.length]);
-				keys.push({ id: id, valuation: s.valuation });
-			}
+			for (s in _states.statesOf(id))
+				if (unknown) {
+					_entry['$id|${s.valuation}'] = [];
+				} else {
+					keysOf[id] = (keysOf[id] ?? []).concat([keys.length]);
+					keys.push({ id: id, valuation: s.valuation });
+				}
 		}
 		// a worklist: a state is met again only when a caller's entry moved
 		final queue: Array<Int> = [for (i in 0...keys.length) i];

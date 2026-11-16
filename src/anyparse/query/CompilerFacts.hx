@@ -611,10 +611,11 @@ final class CompilerFacts {
 		_stale[key] = true;
 		_sources.remove(key);
 		_indexes.remove(key);
-		for (made in _madeFrom[key] ?? []) if (made.startsWith(NODE_ENTRY))
-			_nodeCache.remove(made.substr(NODE_ENTRY.length))
-		else
-			_builtCache.remove(made.substr(BUILT_ENTRY.length));
+		for (made in _madeFrom[key] ?? [])
+			if (made.startsWith(NODE_ENTRY))
+				_nodeCache.remove(made.substr(NODE_ENTRY.length))
+			else
+				_builtCache.remove(made.substr(BUILT_ENTRY.length));
 		_madeFrom.remove(key);
 	}
 

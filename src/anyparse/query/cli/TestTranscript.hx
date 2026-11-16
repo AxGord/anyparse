@@ -284,17 +284,18 @@ final class TestTranscript {
 		final names: Array<String> = [];
 		var pending: String = '';
 		var current: String = '';
-		for (line in lines) if (classRe.match(line)) {
-			pending = line;
-		} else if (rowRe.match(line)) {
-			if (pending.length > 0) {
-				current = pending;
+		for (line in lines)
+			if (classRe.match(line)) {
+				pending = line;
+			} else if (rowRe.match(line)) {
+				if (pending.length > 0) {
+					current = pending;
+					pending = '';
+				}
+				if (!okRe.match(line)) names.push('$current.${rowRe.matched(1)}');
+			} else {
 				pending = '';
 			}
-			if (!okRe.match(line)) names.push('$current.${rowRe.matched(1)}');
-		} else {
-			pending = '';
-		}
 		return names;
 	}
 

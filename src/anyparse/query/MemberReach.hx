@@ -1932,10 +1932,11 @@ final class MemberReach {
 			final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];
 			// a member the facts name the typed owner of is that type's, not every type's of its simple name
 			final owned: Array<OwnedId> = [];
-			for (at in site.implicit) for (o in _g.ownedIdsAt(g, at)) if (o.owner == null)
-				implicit.push(o.id)
-			else
-				owned.push(o);
+			for (at in site.implicit) for (o in _g.ownedIdsAt(g, at))
+				if (o.owner == null)
+					implicit.push(o.id)
+				else
+					owned.push(o);
 			// a conversion of a type whose text the index does not hold is no candidate the index holds (`ReachGraph.unheldInPlay`)
 			final converted: Null<String> = site.always ? _g.unheldInPlay([], true) : null;
 			if (converted != null)
