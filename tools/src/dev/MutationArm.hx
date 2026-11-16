@@ -11,6 +11,7 @@ import anyparse.util.Compare;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.Excerpt;
 import devkit.Pool;
 import devkit.Result;
 import devkit.TmpLifecycle;
@@ -38,14 +39,17 @@ final class MutationArm {
 	/** The verdict word of a row for an arm whose cut did not render: it is not a track, so no tally counts it. */
 	public static inline final APPLY_FAIL: String = 'APPLY-FAIL';
 
-	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under. */
-	private static inline final WORK_PREFIX: String = 'anyparse-mutarm';
-
 	/** The most rows of one file a render batch takes at once, so the file most arms cut does not hold one batch for the rest. */
 	private static inline final RENDER_CHUNK: Int = 16;
 
-	/** The address kind of an arm that names none: a method. */
-	private static inline final DEFAULT_KIND: String = 'FnMember';
+	/**
+	 * The most rows one render batch takes, however few threads the lease gives: a batch is killed at `RENDER_TIMEOUT_MS`, and one
+	 * batch of a whole registry outlasts it on a loaded machine, taking every row it had not reached down with it.
+	 */
+	private static inline final RENDER_BATCH_ROWS: Int = 250;
+
+	/** The lines of a failed batch's log a refusal repeats. */
+	private static inline final BATCH_LOG_LINES: Int = 12;
 
 	/** What one render batch may take before it is killed. */
 	private static inline final RENDER_TIMEOUT_MS: Int = 60 * 60 * 1000;
@@ -55,6 +59,12 @@ final class MutationArm {
 
 	/** The width of an `APPLY-FAIL` row's name column, as a verdict row's. */
 	private static inline final NAME_WIDTH: Int = 20;
+
+	/** The prefix `devkit.TmpLifecycle` claims this tool's work directory under. */
+	private static final WORK_PREFIX: String = 'anyparse-mutarm';
+
+	/** The address kind of an arm that names none: a method. */
+	private static final DEFAULT_KIND: String = 'FnMember';
 
 	/** The classpath roots `test-js.hxml` declares, in its order: an arm's type is looked up under each. */
 	private static final ROOTS: Array<String> = ['src', 'test', 'tools/src'];
@@ -286,6 +296,41 @@ final class MutationArm {
 		};
 	}
 
+	/**
+	 * Every batch file of `files` run through `apq patch --batch` in `gen`, at most `size` at once, each one's log kept beside it as
+	 * `<file>.log`. A batch that did not exit 0 (killed at `timeoutMs`, a signal, a crash) is run once more alone: its rows are then
+	 * not read as cuts that did not apply. Answers the refusal naming the
+	 * first batch that failed twice, or null when every batch ran to its end.
+	 */
+	public static function applyBatches(apq: String, files: Array<String>, gen: String, size: Int, timeoutMs: Int): Null<Array<String>> {
+		final batch: String -> Command = file -> cmd('node $apq patch --lang haxe --batch $file').at(gen).timeout(timeoutMs);
+		final first: Array<Result> = Pool.of(Std.int(Math.max(1, Math.min(size, files.length)))).map(files, batch);
+		var lost: Null<Array<String>> = null;
+		for (b => file in files) {
+			final again: Null<Result> = first[b].ok || lost != null ? null : batch(file).run();
+			final last: Result = again ?? first[b];
+			final log: String = again == null ? batchLog(first[b]) : 'first run:\n${batchLog(first[b])}\nsecond run:\n${batchLog(last)}';
+			File.saveContent('$file.log', log);
+			if (lost != null || last.ok) continue;
+			final why: String = last.failure == '' ? 'exited ${last.status}' : last.failure;
+			lost = ['render batch $file failed twice ($why); its log is $file.log:'].concat(Excerpt.tail(batchLog(last), BATCH_LOG_LINES));
+		}
+		return lost;
+	}
+
+	/**
+	 * How many render batches `rows` render rows are dealt into on a lease of
+	 * `threads`: one a thread, and more when a batch would outgrow `RENDER_BATCH_ROWS`.
+	 */
+	public static function batchCount(rows: Int, threads: Int): Int {
+		return Std.int(Math.max(threads, Math.ceil(rows / RENDER_BATCH_ROWS)));
+	}
+
+	/** What a batch run printed, as its log keeps it. */
+	private static inline function batchLog(result: Result): String {
+		return result.out + result.err + result.failure;
+	}
+
 	/** Render every arm of `job`, write the manifest, and run it through `dev mutation-check`; answers the exit status. */
 	private static function run(job: ArmJob): Int {
 		final dirs: TmpLifecycle = TmpLifecycle.fromEnv();
@@ -310,7 +355,8 @@ final class MutationArm {
 		Sys.putEnv('APQ_NO_CONFIG_WARN', '1');
 		final cores: Int = PoolLease.threads() ?? js.node.Os.cpus().length;
 		final cuts: Map<String, ArmCut> = cuts(ArmRegistry.merged(job.registry), job.names, job.registry);
-		final targets: Map<String, ArmTarget> = render(job, cuts, gen, workroot, cores);
+		final targets: Null<Map<String, ArmTarget>> = render(job, cuts, gen, workroot, cores);
+		if (targets == null) return 2;
 		final split: RenderSplit = splitRendered(job.names, cuts, targets);
 		final applyFail: Array<String> = split.failed;
 		final rendered: Array<String> = split.rendered;
@@ -352,7 +398,7 @@ final class MutationArm {
 	 */
 	private static function render(
 		job: ArmJob, cuts: Map<String, ArmCut>, gen: String, workroot: String, cores: Int
-	): Map<String, ArmTarget> {
+	): Null<Map<String, ArmTarget>> {
 		final targets: Map<String, ArmTarget> = [];
 		for (name in job.names) switch cuts[name] {
 			case Find(type, method, kind, payload):
@@ -378,12 +424,14 @@ final class MutationArm {
 				].join('\t');
 			}
 		];
-		final batches: Array<Array<String>> = deal(rows, cores, RENDER_CHUNK);
+		final batches: Array<Array<String>> = deal(rows, batchCount(rows.length, cores), RENDER_CHUNK);
 		final files: Array<String> = [for (b => _ in batches) Path.join([workroot, 'render-batch.$b'])];
 		for (b => batch in batches) File.saveContent(files[b], batch.map(row -> '$row\n').join(''));
-		final applied: Array<Result> = Pool.of(Std.int(Math.max(1, files.length)))
-			.map(files, file -> cmd('node ${job.apq} patch --lang haxe --batch $file').at(gen).timeout(RENDER_TIMEOUT_MS));
-		for (b => result in applied) File.saveContent('${files[b]}.log', result.out + result.err + result.failure);
+		final lost: Null<Array<String>> = applyBatches(job.apq, files, gen, cores, RENDER_TIMEOUT_MS);
+		if (lost != null) {
+			say(lost);
+			return null;
+		}
 		final diffs: Array<Result> = Pool.of(cores).map(live, name -> {
 			final file: String = targets[name]?.file ?? '';
 			cmd('diff -u --label a/$file --label b/$file ${Path.join([gen, file])} ${Path.join([workroot, '$name.new'])}');

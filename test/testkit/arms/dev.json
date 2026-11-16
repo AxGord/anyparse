@@ -2937,6 +2937,61 @@
 			"find": "args.option('--ledger')",
 			"replace": "null",
 			"note": "dev battery --ledger is read as no file, so the battery writes its rows to the shared ledger and the land never sees them"
+		},
+		{
+			"name": "M-ARM-RENDER-BATCH-DEATH-IGNORED",
+			"type": "dev.MutationArm",
+			"method": "applyBatches",
+			"find": "first[b].ok || lost != null ? null : batch(file).run()",
+			"replace": "null",
+			"note": "a render batch that died or timed out is not run again, so a sweep under a loaded pool loses the arms of one slow batch"
+		},
+		{
+			"name": "M-ARM-RENDER-RERUN-AFTER-LOSS",
+			"type": "dev.MutationArm",
+			"method": "applyBatches",
+			"find": "first[b].ok || lost != null ? null : batch(file).run()",
+			"replace": "first[b].ok ? null : batch(file).run()",
+			"note": "every failed batch is run again though the run is already refused, so many timed-out batches outlast the sweep's own timeout and hide the batch-naming refusal"
+		},
+		{
+			"name": "M-ARM-RENDER-BATCH-LOSS-SILENT",
+			"type": "dev.MutationArm",
+			"method": "applyBatches",
+			"find": "if (lost != null || last.ok) continue;",
+			"replace": "if (lost != null || last.ok || true) continue;",
+			"note": "a batch that failed twice is not reported, so its arms read as cuts that did not apply and the sweep passes over them"
+		},
+		{
+			"name": "M-ARM-RENDER-BATCH-LOG-LOST",
+			"type": "dev.MutationArm",
+			"method": "applyBatches",
+			"find": "File.saveContent('$file.log', log);",
+			"replace": "if (log == '') File.saveContent('$file.log', log);",
+			"note": "a failed batch's log is not written, so what killed it goes with the work root"
+		},
+		{
+			"name": "M-ARM-RENDER-BATCHES-UNCAPPED",
+			"type": "dev.MutationArm",
+			"method": "applyBatches",
+			"find": "Math.min(size, files.length)",
+			"replace": "files.length",
+			"note": "every render batch starts at once whatever the lease gives, so a one-thread lease runs as many engines as the machine's cores"
+		},
+		{
+			"name": "M-ARM-RENDER-BATCH-ROWS-UNBOUNDED",
+			"type": "dev.MutationArm",
+			"method": "batchCount",
+			"force": "threads",
+			"note": "a one-thread lease deals the whole registry into one batch, which a loaded pool kills at its timeout with most of its rows unrendered"
+		},
+		{
+			"name": "M-ARM-RENDER-LOST-BATCH-ANSWERS-ROWS",
+			"type": "dev.MutationArm",
+			"method": "execute",
+			"find": "if (targets == null) return 2;",
+			"replace": "if (targets == null) return 1;",
+			"note": "a lost render batch ends the run as a verdict-less failure no longer, so it reads as a run with arms that did not apply"
 		}
 	]
 }

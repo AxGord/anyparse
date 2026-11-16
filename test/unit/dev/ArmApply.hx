@@ -20,12 +20,16 @@ final class ArmApply {
 
 	/** The exit status of `dev mutation-arm` with `args` over the scratch repo `repo`, which is committed first. */
 	public static function run(repo: String, args: Array<String>): Int {
+		return runOn(Path.join([Path.directory(FileSystem.fullPath(js.Node.__filename)), 'apq.js']), repo, args);
+	}
+
+	/** As `run`, with the engine `engine` pinned in `HXQ_BIN` instead of the one beside the test binary. */
+	public static function runOn(engine: String, repo: String, args: Array<String>): Int {
 		if (!FileSystem.exists(Path.join([repo, '.git']))) {
 			cmd('git -C $repo init --quiet').check();
 			cmd('git -C $repo add -A').check();
 			cmd('git -C $repo -c user.name=t -c user.email=t@t commit --quiet -m fixture').check();
 		}
-		final engine: String = Path.join([Path.directory(FileSystem.fullPath(js.Node.__filename)), 'apq.js']);
 		// null puts the variable back UNSET: an empty value would name no engine for a later test in the same process
 		final pinned: Null<String> = Sys.getEnv('HXQ_BIN');
 		Sys.putEnv('HXQ_BIN', engine);
