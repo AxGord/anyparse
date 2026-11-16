@@ -16,6 +16,9 @@ final class BatteryBranch {
 	/** What a branch may run before it is killed: a wedged run, not a slow one. */
 	private static inline final TIMEOUT_MS: Int = 3 * 60 * 60 * 1000;
 
+	/** The battery row that runs every probe kit. */
+	private static final KITS_ROW: String = 'kit probes';
+
 	/** The ledger file `dev battery --ledger <file>` names for its rows, or null for the blast cache's. */
 	public static inline function ledgerOf(args: Args): Null<String> {
 		return args.option('--ledger');
@@ -63,6 +66,15 @@ final class BatteryBranch {
 			granted ?? planned
 		else
 			1;
+	}
+
+	/**
+	 * The processes the kit probes run on among `branches`: the threads the branch holding them leases (`Battery.branchThreads`),
+	 * so a battery runs no kit process its pool lease does not hold.
+	 */
+	public static function kitThreads(branches: Array<Array<String>>, quick: Bool): Int {
+		for (rows in branches) if (rows.contains(KITS_ROW)) return Battery.branchThreads(rows, quick) ?? Probe.GATE_THREADS;
+		return Probe.GATE_THREADS;
 	}
 
 }

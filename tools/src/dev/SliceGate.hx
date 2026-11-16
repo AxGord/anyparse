@@ -253,7 +253,8 @@ final class SliceGate {
 				() ->
 					KitsRow.reached(_gate.touched)
 						? KitsRow.outcome(
-							_gate.tree, _gate.summary, lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n')
+							_gate.tree, Probe.GATE_THREADS, _gate.summary,
+							lines -> File.saveContent(_gate.log('kits.log'), lines.join('\n') + '\n')
 						)
 						: Skipped('neither the engine nor a kit changed');
 			case 'typer probes':

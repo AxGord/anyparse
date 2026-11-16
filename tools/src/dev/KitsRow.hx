@@ -14,15 +14,15 @@ using Lambda;
 final class KitsRow {
 
 	/**
-	 * `Probe.checkAll` over `repo` as an outcome, its reading a detail of `summary`;
+	 * `Probe.checkAll` over `repo` on `threads` processes (the ones its caller holds) as an outcome, its reading a detail of `summary`;
 	 * on a failure `show` gets every report line and `failedRows` the rows that failed (`Probe.checkAll`'s `rows`).
 	 * The failure names the areas and how to acknowledge an intended change.
 	 */
 	public static function outcome(
-		repo: String, summary: Summary, show: Array<String> -> Void, ?failedRows: Array<String> -> Void
+		repo: String, threads: Int, summary: Summary, show: Array<String> -> Void, ?failedRows: Array<String> -> Void
 	): Outcome {
 		if (Probe.areas(repo).length == 0) return Skipped('no kit under ${Probe.KITS}');
-		final report: KitsReport = Probe.checkAll(repo);
+		final report: KitsReport = Probe.checkAll(repo, threads);
 		summary.detail('${report.areas} kit(s), ${report.invocations} invocations');
 		if (report.failing == 0) return Passed;
 		show(report.lines);

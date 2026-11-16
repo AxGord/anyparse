@@ -78,14 +78,6 @@ final class Battery {
 	private static final CORPUS_ROW: String = 'corpus';
 	private static final SUITE_ROW: String = 'suite';
 
-	/** The branches, all at once, each running its steps in order: a step reads what the one before it wrote. */
-	private static final BRANCHES: Array<Array<String>> = [
-		[SUITE_ROW, CORPUS_ROW],
-		['fmt', 'fmt xconfig', 'fmt squash'],
-		['typer probes', 'jvm probe'],
-		['oracle', 'lint', 'blast', 'kit probes']
-	];
-
 	private final _summary: Summary = new Summary();
 	private final _readings: Map<String, Int> = [];
 	private final _plan: BatteryPlan;
@@ -129,18 +121,20 @@ final class Battery {
 		}
 		File.saveContent(workFile('plan.json'), BatteryPlanWriter.write(_plan, JsonFormat.instance.compactWriteOptions));
 		Sys.println(
-			'battery: running suite→corpus ∥ fmt ∥ jvm ∥ oracle→lint concurrently — output replays in a fixed order once they join'
+			'battery: running suite→corpus ∥ fmt ∥ typer→jvm→kits ∥ oracle→lint concurrently — output replays in a fixed order once they '
+			+ 'join'
 		);
 		final parallel: Float = Timer.stamp();
 		final command: Array<String> -> Command = rows ->
 			BatteryBranch.command(_plan, self, workFile('plan.json'), rows, branchReport(rows));
-		final order: Array<String> = [for (rows in BRANCHES) for (row in rows) row];
+		final all: Array<Array<String>> = branches();
+		final order: Array<String> = rowNames();
 		final leased: Array<String> -> Command = Branches.leased(
-			_mode, BRANCHES, rows -> branchThreads(rows, _plan.quick), command, 'battery ${_plan.head}', LeaseHistory.under(_plan.cache)
+			_mode, all, rows -> branchThreads(rows, _plan.quick), command, 'battery ${_plan.head}', LeaseHistory.under(_plan.cache)
 		);
-		for (name => value in Branches.run(_plan.run, BRANCHES, order, leased, branchReport, _summary)) _readings[name] = value;
+		for (name => value in Branches.run(_plan.run, all, order, leased, branchReport, _summary)) _readings[name] = value;
 		final span: Float = Timer.stamp() - parallel;
-		for (rows in BRANCHES) {
+		for (rows in all) {
 			final log: String = '${branchReport(rows)}.log';
 			if (FileSystem.exists(log)) Sys.print(File.getContent(log));
 		}
@@ -185,7 +179,8 @@ final class Battery {
 			case 'kit probes': () -> {
 				var failed: Array<String> = [];
 				final outcome: Outcome = KitsRow.outcome(
-					_plan.repo, _summary, lines -> Sys.println(lines.join('\n')), rows -> failed = rows
+					_plan.repo, BatteryBranch.kitThreads(branches(), _plan.quick), _summary, lines -> Sys.println(lines.join('\n')),
+					rows -> failed = rows
 				);
 				return RedOnBase.after(outcome, () -> RedOnBase.kits(RedOnBase.requestFor(_plan, 'kits', _mode), failed));
 			};
@@ -521,12 +516,26 @@ final class Battery {
 
 	/** The threads every branch but the suite's holds while the battery runs — what a held lease's suite leaves them. */
 	public static inline function lightThreads(): Int {
-		return Branches.light(BRANCHES, rows -> branchThreads(rows, true));
+		return Branches.light(branches(), rows -> branchThreads(rows, true));
 	}
 
 	/** The snapshot of HEAD's first parent in `repo`, or null at a root commit. */
 	public static inline function defaultBase(repo: String): Null<String> {
 		return keyOf(repo, 'HEAD^');
+	}
+
+	/**
+	 * The branches, all at once, each running its steps in order: a step reads what the one before it wrote. The kit probes read
+	 * nothing of the oracle's branch, so they run beside it rather than after its lint, the longest row of a battery that runs no
+	 * whole suite.
+	 */
+	public static function branches(): Array<Array<String>> {
+		return [
+			[SUITE_ROW, CORPUS_ROW],
+			['fmt', 'fmt xconfig', 'fmt squash'],
+			['typer probes', 'jvm probe', 'kit probes'],
+			['oracle', 'lint', 'blast']
+		];
 	}
 
 	public static function main(argv: Array<String>): Int {
@@ -609,7 +618,7 @@ final class Battery {
 
 	/** Every row the battery reports, by the name `--allow` takes. */
 	public static function rowNames(): Array<String> {
-		return [for (rows in BRANCHES) for (row in rows) row];
+		return [for (rows in branches()) for (row in rows) row];
 	}
 
 	/**
@@ -767,8 +776,8 @@ final class Battery {
 
 	/**
 	 * The threads the branch running `rows` holds: null for the quick suite's, which takes what the others leave, and one for a full
-	 * run's, whose one shard is the monolith run (`BatteryBranch.suiteShards`); the two
-	 * lints of the lint branch, which also run its kit probes (`Probe.GATE_THREADS`, the same two); one for each other.
+	 * run's, whose one shard is the monolith run (`BatteryBranch.suiteShards`); two for the oracle branch, its project lint beside
+	 * the client's; one for each other, the probes branch included, whose kit probes run on that one (`BatteryBranch.kitThreads`).
 	 */
 	public static function branchThreads(rows: Array<String>, quick: Bool): Null<Int> {
 		return switch rows[0] {

@@ -164,7 +164,7 @@ final class RedOnBaseRerunTest extends Test {
 			final repo: String = kitsRepo(dir, tree);
 			File.saveContent(Path.join([repo, 'engine.built']), 'built');
 			var handed: Array<String> = [];
-			final outcome: Outcome = KitsRow.outcome(repo, new Summary(), _ -> {}, rows -> handed = rows);
+			final outcome: Outcome = KitsRow.outcome(repo, Probe.GATE_THREADS, new Summary(), _ -> {}, rows -> handed = rows);
 			Assert.same(['alpha #1 two'], handed);
 			Assert.isTrue(outcome.match(Failed(_)));
 		});

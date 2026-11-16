@@ -30,7 +30,7 @@ final class KitsRowTest extends Test {
 
 	public function testATreeWithoutKitsSkipsTheRow(): Void {
 		TempDir.with(dir -> {
-			final outcome: Outcome = KitsRow.outcome(dir.file(''), new Summary(), _ -> Assert.fail('nothing to show'));
+			final outcome: Outcome = KitsRow.outcome(dir.file(''), 1, new Summary(), _ -> Assert.fail('nothing to show'));
 			Assert.isTrue(outcome.match(Skipped(_)), '$outcome');
 		});
 	}

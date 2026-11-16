@@ -108,4 +108,15 @@ final class BatteryBranchTest extends Test {
 		Assert.equals(1, Battery.branchThreads(['fmt'], true));
 	}
 
+	/** A battery runs no kit process its pool lease does not hold: the kit row runs on the threads its branch leases. */
+	@:pin('control')
+	@:killer('M-BATTERY-KITS-THREADS-UNHELD')
+	public function testTheKitProbesRunOnTheThreadsTheirBranchHolds(): Void {
+		final probes: Array<String> = Battery.branches().filter(rows -> rows.contains('kit probes'))[0] ?? [];
+		for (quick in [false, true])
+			Assert.equals(Battery.branchThreads(probes, quick), BatteryBranch.kitThreads(Battery.branches(), quick));
+		Assert.equals(1, BatteryBranch.kitThreads(Battery.branches(), false), 'the probes branch holds one thread');
+		Assert.equals(2, BatteryBranch.kitThreads([['oracle', 'lint', 'kit probes']], false), 'kits in the oracle branch run on its two');
+	}
+
 }

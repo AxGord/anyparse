@@ -3174,6 +3174,22 @@
 			"find": " || words.contains('--no-output')",
 			"replace": "",
 			"note": "a typecheck is never taken from the stamp, so the battery typechecks recon.hxml again on the content its land already typechecked"
+		},
+		{
+			"name": "M-BATTERY-KITS-AFTER-LINT",
+			"type": "dev.Battery",
+			"method": "branches",
+			"find": "'jvm probe', 'kit probes'",
+			"replace": "'jvm probe'",
+			"note": "the kit probes leave the probes branch, so a battery that runs no whole suite waits for them behind the lint"
+		},
+		{
+			"name": "M-BATTERY-KITS-THREADS-UNHELD",
+			"type": "dev.BatteryBranch",
+			"method": "kitThreads",
+			"find": "return Battery.branchThreads(rows, quick) ?? Probe.GATE_THREADS;",
+			"replace": "return Probe.GATE_THREADS;",
+			"note": "the kit probes run on the gate's two processes whatever their branch leases, so a battery runs a thread more than it holds from the shared pool"
 		}
 	]
 }

@@ -865,13 +865,13 @@ The checks read like a sequence, but their dependencies are far sparser than the
 build ──┬─ suite ── corpus          build = apq.js + test.js + a recon typecheck
         │                           corpus reads the snapshot the suite wrote
         ├─ fmt
-        ├─ typer probes ── jvm probe   the jvm probe only when the core moved
-        └─ oracle ── lint ── blast ── kit probes
+        ├─ typer probes ── jvm probe ── kit probes   the jvm probe only when the core moved
+        └─ oracle ── lint ── blast
                                     lint reuses the oracle's verdict; blast diffs lint's own output;
                                     kit probes runs every test/probes kit on the built engine
 ```
 
-`kit probes` ends the oracle branch (it holds the same two threads, so the suite keeps its shards) and runs `Probe.checkAll`: every kit of `test/probes/` with its compile checks, strict (§ "Review probe kits"), so main's kits pass on main; a deviating row fails the landing until the slice that changed the answer re-records it. The failure names the `dev probe <area> --record --compile` command of each failed area; a moved known-defect row also needs its `knownDefect` field deleted by hand, since `--record` keeps every other field.
+`kit probes` reads nothing of the oracle branch, so it ends the probes branch rather than waiting behind lint, the longest row of a battery whose suite is not the whole monolith, and runs its kits on that branch's one leased thread (`BatteryBranch.kitThreads`; the slice gate's `kits` row keeps `Probe.GATE_THREADS`); it runs `Probe.checkAll`: every kit of `test/probes/` with its compile checks, strict (§ "Review probe kits"), so main's kits pass on main; a deviating row fails the landing until the slice that changed the answer re-records it. The failure names the `dev probe <area> --record --compile` command of each failed area; a moved known-defect row also needs its `knownDefect` field deleted by hand, since `--record` keeps every other field.
 
 `typer probes` runs `dev typer-conformance probes` over `tools/typer-facts/`: one compiled project per directory, each a set of shapes no census tree holds, typed by the compiler (the facts hook) and by the typer; a DIFFERENT answer exits 1, and so does a project whose run read nothing (a configuration dropped — a type error, no `haxe` to launch —, no file compiled, no case scored: `TyperConformance.probeRefusal`). The slice gate runs the same row (`TyperProbesRow`, which the battery calls too) whenever the engine, `tools/typer-facts/` or the harness moved, so a slice that moves the typer fails its own gate, and a land takes the gate's reading over for the tree it judged. A new shape the typer got wrong goes there as a probe, with the review that found it — not into a unit test alone, which pins what the typer says rather than what the compiler says. The corpus sits outside `test/` because test discovery types every module under the test classpath, and a probe project is a program of its own (its own `-main`, packages that would collide).
 

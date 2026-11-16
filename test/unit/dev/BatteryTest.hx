@@ -387,6 +387,14 @@ final class BatteryTest extends Test {
 		});
 	}
 
+	@:pin('control')
+	@:killer('M-BATTERY-KITS-AFTER-LINT')
+	public function testTheKitProbesRunBesideTheOraclesBranchNotAfterItsLint(): Void {
+		final holding: String -> Array<String> = row -> Battery.branches().filter(rows -> rows.contains(row))[0] ?? [];
+		Assert.same(['oracle', 'lint', 'blast'], holding('lint'), 'the oracle\'s branch holds only the rows that read its verdict');
+		Assert.isTrue(holding('kit probes').contains('jvm probe'), 'the kits join the probes\' branch');
+	}
+
 	private static function git(repo: String, words: Array<String>): Void {
 		cmd('git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false -C $repo $words').run().check();
 	}
