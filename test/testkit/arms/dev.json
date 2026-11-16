@@ -357,7 +357,7 @@
 			"name": "M-GATE-BRANCH-OWN-LEASE",
 			"type": "dev.SliceGate",
 			"method": "leaseModeOf",
-			"find": "rows == null ? Lease.ofEnvironment() : Unpooled",
+			"find": "rows == null || GateLint.leasesItsOwn(rows.split(',')) ? Lease.ofEnvironment() : Unpooled",
 			"replace": "Lease.ofEnvironment()",
 			"note": "a gate's branch inside a workflow asks the pool for its own threads although its gate already leased them, so the branch's build and suite take a second lease or wait behind their own gate"
 		},
@@ -3379,6 +3379,28 @@
 			"find": "FileIdentity.realPath(tree)",
 			"replace": "tree",
 			"note": "the stamp keys the tree by the spelling the caller used, so a battery naming the candidate through its real path never takes the build its land made under the symlinked one"
+		},
+		{
+			"name": "M-GATE-INFRA4-BRANCH-LEASED",
+			"type": "dev.GateLint",
+			"method": "leasesItsOwn",
+			"force": "false",
+			"note": "the infra4 branch takes a lease for its whole process again, so the threads it holds sit idle while it waits for the base lint and checks the base out"
+		},
+		{
+			"name": "M-GATE-INFRA4-LINT-UNLEASED",
+			"type": "dev.GateLint",
+			"method": "infraLint",
+			"force": "command",
+			"note": "the infra4 row lints unleased in a branch that holds no lease, so its lints run on threads the pool never granted"
+		},
+		{
+			"name": "M-GATE-INFRA4-LINT-PRIORITY-DROPPED",
+			"type": "dev.GateLint",
+			"method": "infraLint",
+			"find": ", priority: Lease.ahead() }",
+			"replace": " }",
+			"note": "the infra4 row's lints queue at the gate's own priority instead of one step ahead, so they wait behind the leases of the run that started the gate"
 		}
 	]
 }

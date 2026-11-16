@@ -10,6 +10,7 @@ import anyparse.util.Compare;
 import dev.BaseBranch.BaseGot;
 import devkit.Command;
 import devkit.Excerpt;
+import devkit.Lease;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
@@ -30,6 +31,9 @@ using StringTools;
 @:nullSafety(Strict)
 final class GateLint {
 
+	/** The threads one lint of the infra4 row is leased: a process per tree, as `SliceGate.demandOf` counts the row. */
+	private static inline final INFRA_LINT_THREADS: Int = 1;
+
 	/** The report of the lint row's touched files in the tree, and of the same files at the base, in the logs. */
 	private static final TOUCHED_REPORT: String = 'lint-touched.json';
 
@@ -48,17 +52,22 @@ final class GateLint {
 	/** Whether the lint row's lints run with the compiler oracle: the gate's do, `dev lint-new --no-oracle` is the cheap approximation. */
 	private final _oracle: Bool;
 
-	public function new(gate: GateTree, oracle: Bool = true) {
+	/** Where the infra4 row's lints take their threads: under `Own` each takes a lease of its own (`infraLint`). */
+	private final _mode: LeaseMode;
+
+	public function new(gate: GateTree, oracle: Bool = true, ?mode: LeaseMode) {
 		_gate = gate;
 		_engine = engineSources(gate);
 		_oracle = oracle;
+		_mode = mode ?? Unpooled;
 	}
 
 	/** The infra4 row of `--baseline`: the base engine's lint of every infra tree, all at once. */
 	public function infraBaseline(): Outcome {
 		final snapshots: Array<InfraSnapshot> = _gate.infraSnapshots();
 		if (snapshots.length == 0) return Skipped('no --infra-tree');
-		final runs: Array<Result> = Pool.of(snapshots.length).map(snapshots, s -> lintCommand(s.tree, ['.'], false, s.snapshot));
+		final runs: Array<Result> = Pool.of(snapshots.length)
+			.map(snapshots, s -> infraLint(lintCommand(s.tree, ['.'], false, s.snapshot), Path.withoutDirectory(s.tree)));
 		for (i => snapshot in snapshots) switch saveLint(runs[i], snapshot.tree, snapshot.snapshot) {
 			case Passed:
 			case other:
@@ -194,8 +203,13 @@ final class GateLint {
 		final misses: Array<Int> = [for (i => report in reports) if (report == null) i];
 		final runs: Array<Result> = misses.length == 0
 			? []
-			: Pool.of(misses.length)
-				.map(misses, i -> lintCommand(trees[i].tree, trees[i].scope, trees[i].oracle, _gate.log('infra-now-$i.json'), rules));
+			: Pool.of(misses.length).map(
+				misses,
+				i ->
+					infraLint(
+						lintCommand(trees[i].tree, trees[i].scope, trees[i].oracle, _gate.log('infra-now-$i.json'), rules), trees[i].name
+					)
+			);
 		for (j => i in misses) {
 			final now: String = _gate.log('infra-now-$i.json');
 			final linted: Outcome = saveLint(runs[j], trees[i].tree, now);
@@ -238,6 +252,15 @@ final class GateLint {
 	 */
 	private function lintCommand(dir: String, scope: Array<String>, oracle: Bool, out: String, ?rules: Array<String>): Command {
 		return _gate.hxqLogged(dir, lintArgs(scope, oracle, rules), errLogOf(out));
+	}
+
+	/**
+	 * `command`, the infra4 row's lint of the tree `name`, under a pool lease of its own when the row's mode is `Own`: its branch
+	 * runs unleased (`leasesItsOwn`), so only the lints hold threads, each from its grant to its end.
+	 */
+	private function infraLint(command: Command, name: String): Command {
+		final ask: Ask = { min: INFRA_LINT_THREADS, max: INFRA_LINT_THREADS, priority: Lease.ahead() };
+		return Lease.take(_mode, command, ask, 'slice-gate ${Path.withoutDirectory(_gate.tree)} infra4 $name');
 	}
 
 	/** `hxq lint-diff` of two snapshots, its report kept as `name` in the logs. */
@@ -397,6 +420,14 @@ final class GateLint {
 			first: first.trim(),
 			rows: GateExcerpt.lintRows(diff.out, true)
 		};
+	}
+
+	/**
+	 * Whether the branch running `rows` takes no lease for its process and leases its heavy commands itself (`infraLint`):
+	 * infra4's lints come only after a wait for the base lint and a checkout of the base, which would hold their threads idle.
+	 */
+	public static function leasesItsOwn(rows: Array<String>): Bool {
+		return rows[0] == 'infra4';
 	}
 
 	/** The file the standard error of the lint reporting to `out` goes to. */

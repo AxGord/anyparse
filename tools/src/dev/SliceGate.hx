@@ -126,7 +126,7 @@ final class SliceGate {
 
 	private function new(options: GateOptions, mode: LeaseMode) {
 		_gate = new GateTree(options);
-		_lint = new GateLint(_gate);
+		_lint = new GateLint(_gate, true, mode);
 		_mode = mode;
 	}
 
@@ -283,18 +283,21 @@ final class SliceGate {
 
 	/**
 	 * Run `branches` at once as `--rows` processes of `self`, their rows in `order`: under a held lease the heavy rows take
-	 * what the lease leaves beside the others' `demand`, and without one each branch takes its own lease of the pool.
+	 * what the lease leaves beside the others' `demand`, and without one each branch takes its own lease of the pool, but one that
+	 * `GateLint.leasesItsOwn` starts unleased, its `demand` still left to it out of the heavy rows' share.
 	 */
 	private function fanOut(self: String, branches: Array<Array<String>>, order: Array<String>): Void {
 		final threads: Null<Int> = switch _mode {
 			case Held(held): Branches.perHeavy(held, branches, demand);
 			case _: null;
 		};
+		final command: Array<String> -> Command = branchCommand(self, threads);
 		final leased: Array<String> -> Command = Branches.leased(
-			_mode, branches, demand, branchCommand(self, threads), 'slice-gate ${Path.withoutDirectory(_gate.tree)}',
+			_mode, branches, demand, command, 'slice-gate ${Path.withoutDirectory(_gate.tree)}',
 			LeaseHistory.under(Land.cacheDir(Sys.getEnv))
 		);
-		for (name => value in Branches.run(_gate.options.run, branches, order, leased, branchReport, _gate.summary))
+		final started: Array<String> -> Command = rows -> GateLint.leasesItsOwn(rows) ? command(rows) : leased(rows);
+		for (name => value in Branches.run(_gate.options.run, branches, order, started, branchReport, _gate.summary))
 			_readings[name] = value;
 	}
 
@@ -751,10 +754,11 @@ final class SliceGate {
 
 	/**
 	 * The lease mode of a run: a `--rows` branch (`rows` given) runs inside the lease its gate took for it, or none, and never
-	 * asks the pool itself; the gate reads its environment.
+	 * asks the pool itself, but one that `GateLint.leasesItsOwn` reads its environment as the gate does: inside the gate's held
+	 * lease it stays there, and a gate that holds none started it unleased, so its heavy commands ask the pool.
 	 */
 	public static function leaseModeOf(rows: Null<String>): LeaseMode {
-		return rows == null ? Lease.ofEnvironment() : Unpooled;
+		return rows == null || GateLint.leasesItsOwn(rows.split(',')) ? Lease.ofEnvironment() : Unpooled;
 	}
 
 	/**
