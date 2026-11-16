@@ -2918,6 +2918,96 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "SW1",
+			"note": "a member moved INTO the module its own `import a.Names.*;` points at keeps reading the destination main type own static bare: no rebind, no self-import",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/a/Src.hx",
+				"label",
+				"--to",
+				"Names",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/a/Names.hx": "package a;\n\nclass Names {\n\tpublic static function packOf(s:String):String return s + \"-A\";\n}\n",
+				"src/a/Src.hx": "package a;\n\nimport a.Names.*;\n\nclass Src {\n\tpublic static function label(s:String):String return packOf(s);\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(a.Names.label(\"x\")); } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "310b48865c1635d9",
+				"files": "6c6dc7cd62e849b1",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "SW2",
+			"note": "a member moved into a SUB-type of that module cannot read the main type static bare: the move refuses",
+			"argv": [
+				"hxq",
+				"move-member",
+				"src/a/Src.hx",
+				"label",
+				"--to",
+				"Other",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/a/Names.hx": "package a;\n\nclass Names {\n\tpublic static function packOf(s:String):String return s + \"-A\";\n}\n\nclass Other {\n\tpublic static function x():Int return 1;\n}\n",
+				"src/a/Src.hx": "package a;\n\nimport a.Names.*;\n\nclass Src {\n\tpublic static function label(s:String):String return packOf(s);\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(a.Src.label(\"x\")); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "285d2e9766a2395a",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "SW3",
+			"note": "a type moved into that module lands as a sub-type that cannot read the main type static bare: the move refuses",
+			"argv": [
+				"hxq",
+				"move",
+				"src/a/Src.hx",
+				"--select",
+				"ClassDecl:Src",
+				"src/a/Names.hx",
+				"--scope",
+				"src",
+				"--write"
+			],
+			"files": {
+				"src/a/Names.hx": "package a;\n\nclass Names {\n\tpublic static function packOf(s:String):String return s + \"-A\";\n}\n",
+				"src/a/Src.hx": "package a;\n\nimport a.Names.*;\n\nclass Src {\n\tpublic static function label(s:String):String return packOf(s);\n}\n",
+				"main/Main.hx": "class Main { static function main() { trace(a.Src.label(\"x\")); } }\n"
+			},
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "fd3f83cc09c21571",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

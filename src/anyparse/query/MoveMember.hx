@@ -950,7 +950,8 @@ final class MoveMember {
 		final decls: Array<{ span: Span, name: String }> = prep.moved.map(m -> { span: m.group.groupSpan, name: prep.srcTypeName })
 			.concat(extraDecls ?? []);
 		for (d in decls) switch DependencyCarry.dependencyImportLinesToCarry(
-			prep.srcSource, d.span, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape, d.name, travelling
+			prep.srcSource, d.span, prep.srcInfo, prep.destInfo, prep.destSource, prep.index, plugin, typeRefShape, d.name,
+			prep.destTypeName, travelling
 		) {
 			case CarryErr(message):
 				return message;

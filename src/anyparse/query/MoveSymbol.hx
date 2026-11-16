@@ -204,7 +204,7 @@ final class MoveSymbol {
 		);
 		if (fqnErr != null) return Err(fqnErr);
 		final carried: Array<String> = switch DependencyCarry.dependencyImportLinesToCarry(
-			cursorSource, declSpan, cursorInfo, destInfo, destSource, index, plugin, typeRefShape, typeName
+			cursorSource, declSpan, cursorInfo, destInfo, destSource, index, plugin, typeRefShape, typeName, null
 		) {
 			case CarryErr(message): return Err(message);
 			case CarryOk(lines): lines;

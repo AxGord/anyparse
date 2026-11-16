@@ -80,7 +80,7 @@ final class DependencyCarry {
 	 */
 	public static function dependencyImportLinesToCarry(
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destSource: String, index: SymbolIndex,
-		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String, ?travelling: Array<String>
+		plugin: GrammarPlugin, typeRefShape: TypeRefShape, typeName: String, destTypeName: Null<String>, ?travelling: Array<String>
 	): CarryResult {
 		// The type-ref projection and the grammar shape are built ONCE here and threaded down: the
 		// dependency walk and the `using` carry both read them, and a plugin without a parse cache (which
@@ -167,7 +167,7 @@ final class DependencyCarry {
 			if (!carried.contains(line)) carried.push(line);
 		}
 		final wildRefusal: Null<String> = foldWildcardCarry(
-			source, declSpan, cursorInfo, destInfo, files, plugin, carried, guarded, cursorDirectives
+			source, declSpan, cursorInfo, destInfo, destTypeName, files, plugin, carried, guarded, cursorDirectives
 		);
 		if (wildRefusal != null) return CarryErr(wildRefusal);
 		for (group in guarded) carried.push(GuardedImportCarry.blockText(group.condition, group.lines, shape));
@@ -1046,8 +1046,9 @@ final class DependencyCarry {
 	 * way the carried line is seated one of the two files changes meaning.
 	 */
 	private static function foldWildcardCarry(
-		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, files: Array<FileInfo>, plugin: GrammarPlugin,
-		carried: Array<String>, guarded: Array<{ condition: String, lines: Array<String> }>, directives: Null<Array<CondDirective>>
+		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, destTypeName: Null<String>, files: Array<FileInfo>,
+		plugin: GrammarPlugin, carried: Array<String>, guarded: Array<{ condition: String, lines: Array<String> }>,
+		directives: Null<Array<CondDirective>>
 	): Null<String> {
 		final shape: RefShape = plugin.refShape();
 		final providers: Array<WildProvider> = wildcardStaticProviders(cursorInfo, files, shape);
@@ -1059,7 +1060,9 @@ final class DependencyCarry {
 		var scanned: Null<Array<CondDirective>> = directives;
 		for (provider in providers) {
 			final wanted: Array<String> = provider.names.filter(name -> free.contains(name));
-			if (wanted.length == 0) continue;
+			// The destination type IS the wildcard's holder: a name it declares is the very declaration the moved body reads, not a
+			// rebind, and the destination must not import itself. Any other type of that module cannot see the holder's statics bare.
+			if (wanted.length == 0 || landsInHolder(provider, destInfo, destTypeName)) continue;
 			// Asked BEFORE the already-present skip: a destination that declares the name shadows the
 			// moved body whether or not anything is carried, so a statement already standing there is
 			// no reason to stay silent about it.
@@ -1243,6 +1246,11 @@ final class DependencyCarry {
 	private static function holdsWildcard(info: FileInfo, raw: String): Bool {
 		final spells: (ImportInfo) -> Bool = imp -> !imp.guarded && imp.kind == ImportKind.Wild && imp.raw == raw;
 		return info.imports.exists(spells) || info.ambientImports.exists(group -> group.imports.exists(spells));
+	}
+
+	/** Whether `destTypeName` is the MAIN type of the module `provider`'s wildcard points at — the owner of the statics it binds. */
+	private static function landsInHolder(provider: WildProvider, destInfo: FileInfo, destTypeName: Null<String>): Bool {
+		return provider.module == destInfo.module && destInfo.types.exists(t -> t.isMain && t.name == destTypeName);
 	}
 
 }

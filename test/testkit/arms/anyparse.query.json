@@ -17182,6 +17182,22 @@
 			"method": "metaDrifts",
 			"force": "[]",
 			"note": "a name written in a metadata argument is never asked whether its meaning moved, so the import a move adds for code that shares the file rebinds a bare sub-type there unnoticed"
+		},
+		{
+			"name": "M-WILDCARD-SELF-MODULE-ASKED",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "foldWildcardCarry",
+			"find": "if (wanted.length == 0 || landsInHolder(provider, destInfo, destTypeName)) continue;",
+			"replace": "if (wanted.length == 0) continue;",
+			"note": "a wildcard whose module is the destination itself is priced like a foreign one, so its own member reads as a rebind and the move is refused"
+		},
+		{
+			"name": "M-WILDCARD-SELF-MODULE-ANY-TYPE",
+			"type": "anyparse.query.DependencyCarry",
+			"method": "landsInHolder",
+			"find": "provider.module == destInfo.module && destInfo.types.exists(t -> t.isMain && t.name == destTypeName)",
+			"replace": "provider.module == destInfo.module",
+			"note": "any type of the wildcard's module counts as its holder, so a sub-type or a moved-in type reads the main type's statics bare and the written code does not compile"
 		}
 	]
 }
