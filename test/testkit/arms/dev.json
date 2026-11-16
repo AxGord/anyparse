@@ -3016,6 +3016,30 @@
 			"find": "return ownLease ? null : lease;",
 			"replace": "return null;",
 			"note": "the span row of a battery under its caller's lease records no threads, so the lease it held for the whole run is missing from the ledger"
+		},
+		{
+			"name": "M-BATTERYBRANCH-OWN-LEASE-SHARDS",
+			"type": "dev.BatteryBranch",
+			"method": "suiteShards",
+			"find": "if (!ownLease)",
+			"replace": "if (true)",
+			"note": "a suite under its own lease runs the shards it planned, so the threads its lease granted sit idle or the shards outnumber them"
+		},
+		{
+			"name": "M-BATTERYBRANCH-FULL-SHARDS",
+			"type": "dev.BatteryBranch",
+			"method": "suiteShards",
+			"find": "else if (quick)",
+			"replace": "else if (true)",
+			"note": "a full battery under its own lease takes the lease's shards, so its suite adds a monolith run beside them and the land waits for both"
+		},
+		{
+			"name": "M-BATTERY-FULL-SUITE-HOLDS-ONE",
+			"type": "dev.Battery",
+			"method": "branchThreads",
+			"find": "case SUITE_ROW: quick ? null : 1;",
+			"replace": "case SUITE_ROW: null;",
+			"note": "a full battery's one-shard suite asks the pool for a flexible lease, so it holds threads its monolith run cannot use"
 		}
 	]
 }

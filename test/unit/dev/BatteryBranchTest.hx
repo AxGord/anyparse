@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.Battery;
 import dev.BatteryBranch;
 import dev.BatteryPlan;
 import devkit.Args;
@@ -78,6 +79,33 @@ final class BatteryBranchTest extends Test {
 		Assert.equals(8, BatteryBranch.spanHeld(false, 8));
 		Assert.isNull(BatteryBranch.spanHeld(true, 2));
 		Assert.isNull(BatteryBranch.spanHeld(false, null));
+	}
+
+	/** Under its own lease the suite runs as many shards as the lease granted, whatever was planned. */
+	@:pin('control')
+	@:killer('M-BATTERYBRANCH-OWN-LEASE-SHARDS')
+	public function testTheSuiteOfAnOwnLeaseTakesTheShardsItWasGranted(): Void {
+		Assert.equals(6, BatteryBranch.suiteShards(true, true, 6, 2));
+		Assert.equals(2, BatteryBranch.suiteShards(true, true, null, 2));
+		Assert.equals(2, BatteryBranch.suiteShards(false, true, 6, 2));
+	}
+
+	/** A full battery keeps its one shard, the monolith run itself, so a lease-free land adds no second monolith run. */
+	@:pin('control')
+	@:killer('M-BATTERYBRANCH-FULL-SHARDS')
+	public function testAFullSuiteUnderAnOwnLeaseRunsOnOneShard(): Void {
+		Assert.equals(1, BatteryBranch.suiteShards(true, false, 6, 4));
+		Assert.equals(4, BatteryBranch.suiteShards(false, false, 6, 4));
+	}
+
+	/** The quick suite's branch is the flexible one; a full run's holds one thread, as its one shard needs no more. */
+	@:pin('control')
+	@:killer('M-BATTERY-FULL-SUITE-HOLDS-ONE')
+	public function testTheSuiteBranchHoldsOneThreadOnAFullRun(): Void {
+		Assert.isNull(Battery.branchThreads(['suite', 'corpus'], true));
+		Assert.equals(1, Battery.branchThreads(['suite', 'corpus'], false));
+		Assert.equals(2, Battery.branchThreads(['oracle', 'lint'], false));
+		Assert.equals(1, Battery.branchThreads(['fmt'], true));
 	}
 
 }

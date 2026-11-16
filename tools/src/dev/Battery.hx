@@ -136,7 +136,7 @@ final class Battery {
 			BatteryBranch.command(_plan, self, workFile('plan.json'), rows, branchReport(rows));
 		final order: Array<String> = [for (rows in BRANCHES) for (row in rows) row];
 		final leased: Array<String> -> Command = Branches.leased(
-			_mode, BRANCHES, branchThreads, command, 'battery ${_plan.head}', LeaseHistory.under(_plan.cache)
+			_mode, BRANCHES, rows -> branchThreads(rows, _plan.quick), command, 'battery ${_plan.head}', LeaseHistory.under(_plan.cache)
 		);
 		for (name => value in Branches.run(_plan.run, BRANCHES, order, leased, branchReport, _summary)) _readings[name] = value;
 		final span: Float = Timer.stamp() - parallel;
@@ -162,7 +162,7 @@ final class Battery {
 		}
 		BatteryBranch.carryThreads(_summary.steps(), rows, BatteryBranch.branchHeld(_plan.ownLease, PoolLease.threads()));
 		Branches.leave(branchReport(rows), _plan.run, _summary, _readings);
-		if (_plan.ownLease && branchThreads(rows) == null)
+		if (_plan.ownLease && branchThreads(rows, _plan.quick) == null)
 			Branches.record(LeaseHistory.under(_plan.cache), 'battery ${_plan.head}', rows, PoolLease.threads(), _summary);
 		return 0;
 	}
@@ -259,7 +259,7 @@ final class Battery {
 		final status: Int = Shard.run({
 			repo: _plan.repo,
 			testJs: Path.join([_plan.repo, 'bin/test.js']),
-			shards: _plan.ownLease ? PoolLease.threads() ?? _plan.shards : _plan.shards,
+			shards: BatteryBranch.suiteShards(_plan.ownLease, _plan.quick, PoolLease.threads(), _plan.shards),
 			verify: !_plan.quick,
 			expect: null,
 			planOnly: false,
@@ -479,7 +479,7 @@ final class Battery {
 		final status: Int = Shard.run({
 			repo: _plan.repo,
 			testJs: Path.join([_plan.repo, 'bin/test.js']),
-			shards: _plan.ownLease ? PoolLease.threads() ?? _plan.shards : _plan.shards,
+			shards: BatteryBranch.suiteShards(_plan.ownLease, true, PoolLease.threads(), _plan.shards),
 			verify: false,
 			expect: null,
 			planOnly: false,
@@ -521,7 +521,7 @@ final class Battery {
 
 	/** The threads every branch but the suite's holds while the battery runs — what a held lease's suite leaves them. */
 	public static inline function lightThreads(): Int {
-		return Branches.light(BRANCHES, branchThreads);
+		return Branches.light(BRANCHES, rows -> branchThreads(rows, true));
 	}
 
 	/** The snapshot of HEAD's first parent in `repo`, or null at a root commit. */
@@ -766,12 +766,13 @@ final class Battery {
 	}
 
 	/**
-	 * The threads the branch running `rows` holds: null for the suite's, which takes what the others leave; the two
+	 * The threads the branch running `rows` holds: null for the quick suite's, which takes what the others leave, and one for a full
+	 * run's, whose one shard is the monolith run (`BatteryBranch.suiteShards`); the two
 	 * lints of the lint branch, which also run its kit probes (`Probe.GATE_THREADS`, the same two); one for each other.
 	 */
-	private static function branchThreads(rows: Array<String>): Null<Int> {
+	public static function branchThreads(rows: Array<String>, quick: Bool): Null<Int> {
 		return switch rows[0] {
-			case SUITE_ROW: null;
+			case SUITE_ROW: quick ? null : 1;
 			case 'oracle': 2;
 
 			case _: 1;

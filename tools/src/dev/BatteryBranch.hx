@@ -51,4 +51,18 @@ final class BatteryBranch {
 		return ownLease ? null : lease;
 	}
 
+	/**
+	 * The shards the suite runs: under its own lease the threads that lease granted, but a full run (not `quick`) keeps one shard,
+	 * the monolith run itself, as it does under a held lease; otherwise the planned count. The impact suite, which never runs the
+	 * monolith, asks as a quick one.
+	 */
+	public static function suiteShards(ownLease: Bool, quick: Bool, granted: Null<Int>, planned: Int): Int {
+		return if (!ownLease)
+			planned
+		else if (quick)
+			granted ?? planned
+		else
+			1;
+	}
+
 }
