@@ -357,7 +357,7 @@ final class GuardReturn extends RuleBase {
 		// looking for a value `return`, and every tail-position block would pay for that walk
 		// even when its last statement is not an `if` at all.
 		final solo: Null<Candidate> = gatedCandidate(block, stmts[stmts.length - 1], null, s, source, regions, scopeNames);
-		return solo != null && returnsNothing(tailFn, s, source) ? solo : null;
+		return solo != null && returnsNothing(tailFn, s, source, regions) ? solo : null;
 	}
 
 	/**
@@ -421,10 +421,10 @@ final class GuardReturn extends RuleBase {
 	 * A constructor qualifies through the inference branch - it carries no return-type child
 	 * and no value return, and a bare `return;` is legal in one.
 	 */
-	private static function returnsNothing(fn: QueryNode, s: Seams, source: String): Bool {
+	private static function returnsNothing(fn: QueryNode, s: Seams, source: String, regions: () -> Array<LexRegion>): Bool {
 		final body: Null<QueryNode> = fn.children.find(c -> c.kind == s.blockBodyKind);
 		if (body == null) return false;
-		final declared: Null<String> = CheckScan.returnAnnotationText(fn, s.shape, source);
+		final declared: Null<String> = CheckScan.returnAnnotationText(fn, s.shape, source, regions);
 		return declared == null
 			? !MemberKinds.subtreeContainsKindStopping(body, s.valueReturnKinds, s.returnScopeStop)
 			: declared == s.voidTypeName;

@@ -95,7 +95,7 @@ final class ExpectedType {
 	 * WHOLE right-hand side is the cast, or a call-argument slot.
 	 */
 	public static function expectedTypeSource(
-		site: CastSite, root: QueryNode, types: FileTypes, resolutionIndex: () -> SymbolIndex
+		site: CastSite, root: QueryNode, types: FileTypes, resolutionIndex: () -> SymbolIndex, regions: () -> Array<LexRegion>
 	): Null<String> {
 		final shape: RefShape = types.shape;
 		final castNode: QueryNode = site.node;
@@ -106,7 +106,7 @@ final class ExpectedType {
 		return if (declKinds.contains(parent.kind) && isFirstChild)
 			declAnnotation(parent, castNode, types.declaredTypeSources)
 		else if ((shape.valueReturnKinds ?? []).contains(parent.kind) && isFirstChild)
-			enclosingFn == null ? null : CheckScan.returnAnnotationText(enclosingFn, shape, types.source)
+			enclosingFn == null ? null : CheckScan.returnAnnotationText(enclosingFn, shape, types.source, regions)
 		else if (parent.kind == shape.assignKind && NodeShape.hasAssignShape(parent) && parent.children[1] == castNode)
 			assignTargetAnnotation(parent.children[0], site.enclosingContainer, root, types)
 		else if (parent.kind == shape.callKind)

@@ -109,7 +109,7 @@ final class RedundantCastType extends RuleBase implements DefaultOff {
 		final targetSource: String = rawTarget;
 		if (ExpectedType.isNullableWrapper(targetSource, types)) return null;
 		if (deletedRegionHasComment(scan.regions(), site.span, operandSpan)) return null;
-		final expected: Null<String> = ExpectedType.expectedTypeSource(site, scan.root, types, scan.resolutionIndex);
+		final expected: Null<String> = ExpectedType.expectedTypeSource(site, scan.root, types, scan.resolutionIndex, scan.regions);
 		return expected != null && TypeResolver.sameTypeSource(expected, targetSource, types.importMap) ? targetSource : null;
 	}
 

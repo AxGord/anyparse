@@ -520,7 +520,9 @@ final class CheckScan {
 	 * sibling node outside the function span. A parameter's own annotation nests UNDER the
 	 * parameter node, never as a direct child of the function, so it is never a candidate.
 	 */
-	public static function returnAnnotationText(fn: QueryNode, shape: RefShape, source: String): Null<String> {
+	public static function returnAnnotationText(
+		fn: QueryNode, shape: RefShape, source: String, regions: () -> Array<LexRegion>
+	): Null<String> {
 		final fnSpan: Null<Span> = fn.span;
 		if (fnSpan == null) return null;
 		final paramsEnd: Int = lastParamEnd(fn, shape.paramKinds ?? []);
@@ -530,7 +532,7 @@ final class CheckScan {
 		for (child in fn.children) {
 			final childSpan: Null<Span> = child.span;
 			if (childSpan == null) return null;
-			if (annotationKinds.contains(child.kind) && afterParamList(childSpan, prevEnd, paramsEnd, source)) {
+			if (annotationKinds.contains(child.kind) && afterParamList(childSpan, prevEnd, paramsEnd, source, regions)) {
 				if (found != null) return null;
 				found = childSpan;
 			}
@@ -969,9 +971,11 @@ final class CheckScan {
 	 * starts at `prevEnd` rather than at the function's start, and a comment in the window refuses
 	 * outright rather than letting a `)` inside it stand in for the parameter list.
 	 */
-	private static function afterParamList(annotationSpan: Span, prevEnd: Int, lastParamEnd: Int, source: String): Bool {
+	private static function afterParamList(
+		annotationSpan: Span, prevEnd: Int, lastParamEnd: Int, source: String, regions: () -> Array<LexRegion>
+	): Bool {
 		if (lastParamEnd >= 0) return annotationSpan.from > lastParamEnd;
-		if (CheckScan.hasCommentMarker(source, prevEnd, annotationSpan.from)) return false;
+		if (LexicalRegions.commentIntersects(prevEnd, annotationSpan.from, regions())) return false;
 		final close: Int = source.indexOf(')', prevEnd);
 		return close != -1 && close < annotationSpan.from;
 	}

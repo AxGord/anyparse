@@ -612,6 +612,21 @@ class GuardReturnCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A comment between a no-param function's `)` and its annotation makes the annotation unreadable, so the
+	 * Void proof falls back to inference, which sees the value `return` and refuses.
+	 */
+	@:killer('M-ANNOTATION-WINDOW-COMMENT-IGNORED')
+	@:pin('control')
+	public function testCommentBeforeNoParamAnnotationRefuses(): Void {
+		Assert.equals(0, vSource(noParamAnnotated(' /* c */ ')).length);
+	}
+
+	/** Without the comment the annotation proves Void and the pair is flagged. */
+	public function testNoParamAnnotationProvesVoid(): Void {
+		Assert.equals(1, vSource(noParamAnnotated(' ')).length);
+	}
+
 	/** The member-path fixture the resolution tests share: `res.count > 0` wrapping a two-statement branch. */
 	private inline function memberPathSource(): String {
 		return typedMemberPathSource('Res');
@@ -735,6 +750,12 @@ class GuardReturnCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
+	}
+
+	private function noParamAnnotated(window: String): String {
+		return
+			'class C {\n\tvar flag:Bool;\n\tvar other:Bool;\n\n\tfunction m()${window}: Void {\n\t\tif (flag) return 1;\n\t\tthrow \'no\';'
+				+ '\n\t\tif (other) {\n\t\t\tp(1);\n\t\t\tq(1);\n\t\t}\n\t}\n}\n';
 	}
 
 }
