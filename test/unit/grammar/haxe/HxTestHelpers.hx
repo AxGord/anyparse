@@ -43,6 +43,7 @@ import anyparse.grammar.haxe.lit.HxIdentLit;
 import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.grammar.haxe.types.HxArrowFnType;
 import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeParamBound;
 import anyparse.grammar.haxe.types.HxTypeRef;
 import haxe.Exception;
 import utest.Assert;
@@ -548,6 +549,14 @@ class HxTestHelpers extends Test {
 			case Positional(type): type;
 			case NamedParam(_): throw 'expected HxArrowParam.Positional, got NamedParam';
 			case OptionalNamedParam(_): throw 'expected HxArrowParam.Positional, got OptionalNamedParam';
+		};
+	}
+
+	/** The single type a type parameter's constraint holds; null when it has none or holds a parenthesised list. */
+	private function boundType(b: Null<HxTypeParamBound>): Null<HxType> {
+		return switch b {
+			case TypeBound(type): type;
+			case null, ParenBounds(_): null;
 		};
 	}
 

@@ -516,12 +516,8 @@ class SymbolIndexSliceTest extends Test {
 	 * substituting path walk reads — so a phantom or shifted entry resolves a member to the wrong
 	 * type. The shape worth naming is the STRUCTURAL constraint `<T:{a:Int, b:Int}>`: its comma is
 	 * not a parameter separator, and a brace-blind segmentation read it as a second parameter
-	 * named after the structure's second field.
-	 *
-	 * Two forms are absent on purpose, both because the grammar refuses them outright (a file
-	 * carrying either is skipped by the index, so no scan ever sees it): the Haxe 3 paren
-	 * multi-constraint `<T:(A, B)>` — `<T:A & B>` is its modern spelling and is pinned here — and
-	 * metadata on a parameter, `<@:const N>`.
+	 * named after the structure's second field. The Haxe 3 paren multi-constraint `<T:(A, B)>` has
+	 * the same trap: its comma separates two bounds of one parameter.
 	 */
 	public function testHeaderTypeParamNames(): Void {
 		assertHeaderParams('class Plain {}', 0, []);
@@ -532,6 +528,8 @@ class SymbolIndexSliceTest extends Test {
 		assertHeaderParams('class Struct<T:{a:Int, b:Int}> {}', 1, ['T']);
 		assertHeaderParams('class Nested<T:Array<Int>, K> {}', 2, ['T', 'K']);
 		assertHeaderParams('class Fn<T:Int->Void> {}', 1, ['T']);
+		assertHeaderParams('class Paren<T:(A, B), K> {}', 2, ['T', 'K']);
+		assertHeaderParams('class Meta<@:const N, T> {}', 2, ['N', 'T']);
 	}
 
 	/**

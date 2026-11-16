@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  * run (`<@:const N>`) is the same `@:trivia @:tryparse` Star `HxVarDecl.meta` is, kept inline before the name; a comment
  * after the constraint's `:` or the default's `=` lands in that field's `AfterLead` slot (`@:fmt(captureAfterLead)`).
  * Fields:
- * `name:HxIdentLit`, an optional `@:lead(':')` `Ref` to `HxType` for the first constraint, a
+ * `name:HxIdentLit`, an optional `@:lead(':')` `Ref` to `HxTypeParamBound` for the first constraint, a
  * bare `@:trivia @:tryparse` Star of `HxIntersectionClause` for the `& Type` tail
  * (structurally identical to `HxTypedefDecl.intersections` — `&` is scoped to this clause
  * rather than `HxType` for the reason given in `HxIntersectionClause`), and an optional
@@ -23,8 +23,8 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  * the next token is not `&` (the `=` lead, the `,` outer sep or the `>` outer trail), so a
  * single- or no-constraint param adds no output.
  *
- * The deprecated Haxe 3 parenthesised multi-bound form `<T:(A, B)>` is a distinct construct
- * and stays a follow-up.
+ * The deprecated Haxe 3 parenthesised multi-bound form `<T:(A, B)>` is the `HxTypeParamBound.ParenBounds` alternative
+ * of the constraint slot: the optional `:` lead commits with no backtracking, so the slot itself is the alternation.
  *
  * The colon between name and constraint is spaced by `@:fmt(space('typeParamConstraintColon', 'lead'))` — `:` is
  * in `HaxeFormat.tightLeads`, so `None` emits `<T:Foo>`; an absent key makes the loader copy `typeHintColon` into it.
@@ -46,7 +46,7 @@ typedef HxTypeParamDecl = {
 	@:optional
 	@:fmt(space('typeParamConstraintColon', 'lead'), captureAfterLead)
 	@:lead(':')
-	var constraint: Null<HxType>;
+	var constraint: Null<HxTypeParamBound>;
 
 	@:trivia
 	@:tryparse

@@ -83,6 +83,33 @@
 			"find": "@:fmt(typeParamDefaultEquals, captureAfterLead)",
 			"replace": "@:fmt(typeParamDefaultEquals)",
 			"note": "the default has no AfterLead slot, so a comment after its `=` is dropped and the writer round trip refuses the file"
+		},
+		{
+			"name": "M-TYPEPARAM-PAREN-BOUNDS-SEP",
+			"type": "anyparse.grammar.haxe.types.HxTypeParamBound",
+			"method": "ParenBounds",
+			"kind": "ParamCtor",
+			"find": "@:sep(',')",
+			"replace": "@:sep(';')",
+			"note": "the parenthesised constraint list no longer reads a comma, so `<T:(A, B)>` is unexpected input again"
+		},
+		{
+			"name": "M-TYPEPARAM-PAREN-BOUNDS-COMMENT-OFF",
+			"type": "anyparse.grammar.haxe.types.HxTypeParamBound",
+			"method": "ParenBounds",
+			"kind": "ParamCtor",
+			"find": "@:trivia\n\t@:lead('(')",
+			"replace": "@:lead('(')",
+			"note": "the parenthesised constraint list carries no trivia, so a comment inside it is dropped and the writer round trip refuses the file"
+		},
+		{
+			"name": "M-TYPEPARAM-PAREN-BOUNDS-FIRST",
+			"type": "anyparse.grammar.haxe.types.HxTypeParamBound",
+			"method": "HxTypeParamBound",
+			"kind": "EnumDecl",
+			"find": "TypeBound(type: HxType);\n\n\t@:queryTransparent\n\t@:trivia\n\t@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\tParenBounds(types: Array<HxType>);",
+			"replace": "@:trivia\n\t@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\tParenBounds(types: Array<HxType>);\n\n\t@:queryTransparent\n\tTypeBound(type: HxType);",
+			"note": "the list is tried before the single type, so a function type `(A, B) -> C` after the colon reads as a list and its arrow is unexpected input"
 		}
 	]
 }

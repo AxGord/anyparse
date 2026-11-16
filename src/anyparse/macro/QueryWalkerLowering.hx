@@ -113,6 +113,13 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private static final QUERY_TARGET_META: String = ':queryTarget';
 
 	/**
+	 * Grammar opt-in on an `Alt` ctor: the ctor projects no node of its own, its operands' nodes go to the node above it,
+	 * as an unspanned `Seq`'s do. Haxe tags `HxTypeParamBound`'s ctors, so a type parameter's constraint reads as its
+	 * types whichever alternative spelled it.
+	 */
+	private static final QUERY_TRANSPARENT_META: String = ':queryTransparent';
+
+	/**
 	 * Grammar opt-in on a `type` field — or on any other field holding the one type a
 	 * node is ABOUT, such as an abstract's underlying type: project it into the ENCLOSING
 	 * addressable node's `QueryNode.type` SLOT, leaving that node's children exactly as they were.
@@ -408,6 +415,13 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
+		if (branch.hasMeta(QUERY_TRANSPARENT_META)) return {
+			values: [pattern],
+			expr: block([
+				for (i in 0...branch.children.length)
+					for (e in descend(branch.children[i], ident(argNames[i]), 'into', TYPE_OUT_PARAM, 0)) e
+			])
+		};
 
 		final body: Array<Expr> = [
 			(macro final _children: Array<anyparse.query.QueryNode> = []),
@@ -885,7 +899,8 @@ class QueryWalkerLowering extends PairedShapeLowering {
 			if (node == null) continue;
 			switch node.kind {
 				case Alt:
-					for (branch in node.children) visit(branch, branch.annotations[AnnotationKeys.BASE_CTOR]);
+					for (branch in node.children) if (!branch.hasMeta(QUERY_TRANSPARENT_META))
+						visit(branch, branch.annotations[AnnotationKeys.BASE_CTOR]);
 				case Seq:
 					if (isSpanned(node)) visit(node, node.readMetaString(PairedShapeLowering.SPANNED_META));
 				case _:

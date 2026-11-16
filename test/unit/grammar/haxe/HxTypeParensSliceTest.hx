@@ -81,8 +81,8 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 		Assert.equals(1, ast.typeParams.length);
 		final tp: HxTypeParamDecl = ast.typeParams[0];
 		Assert.equals('S', (tp.name: String));
-		Assert.notNull(tp.constraint);
-		final inner: HxType = expectParensType(tp.constraint);
+		Assert.notNull(boundType(tp.constraint));
+		final inner: HxType = expectParensType(boundType(tp.constraint));
 		Assert.equals('pack.sub.Type', (expectNamedType(inner).name: String));
 	}
 
@@ -91,8 +91,8 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo<S:(pack.sub.Type)=pack.sub.TypeImpl> {}');
 		final tp: HxTypeParamDecl = ast.typeParams[0];
 		Assert.equals('S', (tp.name: String));
-		Assert.notNull(tp.constraint);
-		Assert.equals('pack.sub.Type', (expectNamedType(expectParensType(tp.constraint)).name: String));
+		Assert.notNull(boundType(tp.constraint));
+		Assert.equals('pack.sub.Type', (expectNamedType(expectParensType(boundType(tp.constraint))).name: String));
 		Assert.notNull(tp.defaultValue);
 		Assert.equals('pack.sub.TypeImpl', (expectNamedType(tp.defaultValue).name: String));
 	}

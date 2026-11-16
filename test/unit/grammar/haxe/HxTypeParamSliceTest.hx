@@ -344,7 +344,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar<T>():T {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.isNull(tps[0].constraint);
+		Assert.isNull(boundType(tps[0].constraint));
 	}
 
 	public function testConstraintNamedType(): Void {
@@ -353,7 +353,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		final c: HxTypeRef = expectNamedType(tps[0].constraint);
+		final c: HxTypeRef = expectNamedType(boundType(tps[0].constraint));
 		Assert.equals('Iterable', (c.name: String));
 		Assert.isNull(c.params);
 	}
@@ -365,7 +365,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		final c: Null<HxType> = tps[0].constraint;
+		final c: Null<HxType> = boundType(tps[0].constraint);
 		Assert.notNull(c);
 		switch c {
 			case Anon(_):
@@ -381,9 +381,9 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(2, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.equals('Iterable', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Iterable', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		Assert.equals('U', (tps[1].name: String));
-		Assert.isNull(tps[1].constraint);
+		Assert.isNull(boundType(tps[1].constraint));
 	}
 
 	public function testConstraintMixedHeadBareTailConstrained(): Void {
@@ -392,9 +392,9 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(2, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.isNull(tps[0].constraint);
+		Assert.isNull(boundType(tps[0].constraint));
 		Assert.equals('U', (tps[1].name: String));
-		Assert.equals('Iterable', (expectNamedType(tps[1].constraint).name: String));
+		Assert.equals('Iterable', (expectNamedType(boundType(tps[1].constraint)).name: String));
 	}
 
 	public function testConstraintWhitespaceTolerance(): Void {
@@ -403,7 +403,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.equals('Iterable', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Iterable', (expectNamedType(boundType(tps[0].constraint)).name: String));
 	}
 
 	// --- Slice 9: multi-bound constraint `<T:A & B>` (constraintMore Star) ---
@@ -412,7 +412,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:Iterable>():T {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('Iterable', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Iterable', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		Assert.equals(0, tps[0].constraintMore.length);
 	}
 
@@ -422,7 +422,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		final more: Array<HxIntersectionClause> = tps[0].constraintMore;
 		Assert.equals(1, more.length);
 		Assert.equals('Bar', (expectNamedType(more[0].type).name: String));
@@ -432,7 +432,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:A & B & C>():Void {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('A', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('A', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		final more: Array<HxIntersectionClause> = tps[0].constraintMore;
 		Assert.equals(2, more.length);
 		Assert.equals('B', (expectNamedType(more[0].type).name: String));
@@ -448,10 +448,10 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(2, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.isNull(tps[0].constraint);
+		Assert.isNull(boundType(tps[0].constraint));
 		Assert.equals(0, tps[0].constraintMore.length);
 		Assert.equals('O', (tps[1].name: String));
-		final c: Null<HxType> = tps[1].constraint;
+		final c: Null<HxType> = boundType(tps[1].constraint);
 		Assert.notNull(c);
 		switch c {
 			case Anon(_):
@@ -469,7 +469,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final tps: Null<Array<HxTypeParamDecl>> = ast.typeParams;
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
-		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		Assert.equals(1, tps[0].constraintMore.length);
 		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name: String));
 	}
@@ -480,7 +480,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:Foo & Bar = Baz>():Void {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		Assert.equals(1, tps[0].constraintMore.length);
 		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name: String));
 		Assert.equals('Baz', (expectNamedType(tps[0].defaultValue).name: String));
@@ -490,7 +490,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar < T : Foo & Bar > ():Void {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('Foo', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		Assert.equals(1, tps[0].constraintMore.length);
 		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name: String));
 	}
@@ -538,7 +538,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.isNull(tps[0].constraint);
+		Assert.isNull(boundType(tps[0].constraint));
 		final d: HxTypeRef = expectNamedType(tps[0].defaultValue);
 		Assert.equals('Int', (d.name: String));
 		Assert.isNull(d.params);
@@ -560,7 +560,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.equals('Iterable', (expectNamedType(tps[0].constraint).name: String));
+		Assert.equals('Iterable', (expectNamedType(boundType(tps[0].constraint)).name: String));
 		final d: HxTypeRef = expectNamedType(tps[0].defaultValue);
 		Assert.equals('Array', (d.name: String));
 		final dParams: Null<Array<HxTypeArg>> = d.params;

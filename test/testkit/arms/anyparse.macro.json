@@ -3465,6 +3465,30 @@
 			"find": "&& !opt._inElseIfBranch",
 			"replace": "",
 			"note": "an else-if link of plain values decides for itself, so a chain whose head calls renders half-laddered"
+		},
+		{
+			"name": "M-SPANINFO-BOUND-ALT",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "constraintCollect",
+			"find": "altBoundsPush(firstRule, ident('_cf'))",
+			"replace": "null",
+			"note": "a constraint slot that is an alternation contributes no bound, so neither `T:Foo` nor `T:(A, B)` reaches typeParamConstraints"
+		},
+		{
+			"name": "M-SPANINFO-BOUND-ALT-LIST",
+			"type": "anyparse.macro.SpanInfoLowering",
+			"method": "altBoundsPush",
+			"find": "arg.kind == Star ? arg.children[0] : arg;",
+			"replace": "arg.kind == Star ? null : arg;",
+			"note": "a list operand of the constraint alternation is skipped, so `T:(A, B)` keeps no bound while `T:Foo` still does"
+		},
+		{
+			"name": "M-QUERY-TRANSPARENT-CTOR",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "walkCase",
+			"find": "if (branch.hasMeta(QUERY_TRANSPARENT_META)) return {",
+			"replace": "if (false) return {",
+			"note": "a `@:queryTransparent` ctor projects a node of its own again, so a type parameter bound reads as `(TypeBound (Named Foo))` instead of its type"
 		}
 	]
 }

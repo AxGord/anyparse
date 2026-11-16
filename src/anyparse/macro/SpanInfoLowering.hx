@@ -30,6 +30,8 @@ import haxe.macro.Expr;
  */
 class SpanInfoLowering extends PairedShapeLowering {
 
+	private static final BOUNDS_LOCAL: String = '_bounds';
+
 	/** The `HxType` ctor that names a nominal type; its first operand carries the name. */
 	private static final NAMED_CTOR: String = 'Named';
 
@@ -308,25 +310,62 @@ class SpanInfoLowering extends PairedShapeLowering {
 
 	/**
 	 * The pushes of a type-parameter declaration's bound sources onto `_bounds`: the `constraint` and, per clause
-	 * of `constraintMore`, the clause's `type`, each as the verbatim source its own span covers. A slot whose rule
-	 * has no span helper — a grammar shaped otherwise — contributes nothing.
+	 * of `constraintMore`, the clause's `type`, each as the verbatim source its own span covers; a `constraint` that is an
+	 * alternation contributes its ctors' operands (`altBoundsPush`). A slot whose rule has no span helper — a grammar
+	 * shaped otherwise — contributes nothing.
 	 */
 	private function constraintCollect(node: ShapeNode): Expr {
 		final out: Array<Expr> = [];
 		final first: Null<ShapeNode> = seqField(node, CONSTRAINT_FIELD);
 		final firstRule: Null<String> = first == null ? null : refOf(first);
-		if (first != null && firstRule != null && _nominalRules.contains(firstRule))
-			out.push(guardOptional(first, field(ident('v'), CONSTRAINT_FIELD), '_cf', sourcePush(firstRule, ident('_cf'), '_bounds')));
+		final firstPush: Null<Expr> = if (firstRule == null)
+			null
+		else if (_nominalRules.contains(firstRule))
+			sourcePush(firstRule, ident('_cf'), BOUNDS_LOCAL)
+		else
+			altBoundsPush(firstRule, ident('_cf'));
+		if (first != null && firstPush != null) out.push(guardOptional(first, field(ident('v'), CONSTRAINT_FIELD), '_cf', firstPush));
 		final more: Null<ShapeNode> = seqField(node, CONSTRAINT_MORE_FIELD);
 		final clauseRule: Null<String> = more == null || more.kind != Star || more.children.length == 0 ? null : refOf(more.children[0]);
 		final clause: Null<ShapeNode> = clauseRule == null ? null : _shape.rules.get(clauseRule);
 		final clauseType: Null<ShapeNode> = clause == null ? null : seqField(clause, TYPE_FIELD);
 		final clauseTypeRule: Null<String> = clauseType == null ? null : refOf(clauseType);
 		if (clauseType != null && clauseTypeRule != null && _nominalRules.contains(clauseTypeRule) && !isOptional(clauseType)) {
-			final push: Expr = sourcePush(clauseTypeRule, field(ident('_cm'), TYPE_FIELD), '_bounds');
+			final push: Expr = sourcePush(clauseTypeRule, field(ident('_cm'), TYPE_FIELD), BOUNDS_LOCAL);
 			out.push(macro for (_cm in $e{field(ident('v'), CONSTRAINT_MORE_FIELD)}) $push);
 		}
 		return block(out);
+	}
+
+	/**
+	 * The pushes onto `_bounds` of an alternation slot's bounds, or null when `rule` is no `Alt`: per ctor, each operand
+	 * whose rule has a span helper, and each element of a Star of them, in written order — so a slot that is a single
+	 * type or a list of types reads the same way.
+	 */
+	private function altBoundsPush(rule: String, value: Expr): Null<Expr> {
+		final alt: Null<ShapeNode> = _shape.rules.get(rule);
+		if (alt == null || alt.kind != Alt) return null;
+		final cases: Array<Case> = [];
+		for (branch in alt.children) {
+			final argNames: Array<String> = [];
+			final body: Array<Expr> = [];
+			for (i in 0...branch.children.length) {
+				final arg: ShapeNode = branch.children[i];
+				final operand: Null<ShapeNode> = arg.kind == Star ? arg.children[0] : arg;
+				final ref: Null<String> = operand == null ? null : refOf(operand);
+				if (ref == null || !_nominalRules.contains(ref)) {
+					argNames.push('_');
+					continue;
+				}
+				final local: String = '_ab$i';
+				argNames.push(local);
+				body.push(arg.kind == Star ? macro for (_abe in $i{local}) $e{sourcePush(ref, ident('_abe'), BOUNDS_LOCAL)} : sourcePush(
+					ref, ident(local), BOUNDS_LOCAL
+				));
+			}
+			cases.push({ values: [ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), argNames)], expr: block(body) });
+		}
+		return { expr: ESwitch(value, cases, null), pos: Context.currentPos() };
 	}
 
 	/**
