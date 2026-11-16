@@ -3128,6 +3128,52 @@
 			"find": "echo \"$THREADS_MARK$${WF_THREADS:-}\"",
 			"replace": "echo \"$THREADS_MARK$${WF_NO_THREADS:-}\"",
 			"note": "the build command prints no grant after its mark, so the read-back finds none"
+		},
+		{
+			"name": "M-BUILD-STAMP-NEVER-HELD",
+			"type": "dev.BuildStamp",
+			"method": "holds",
+			"force": "false",
+			"note": "no build line is ever taken from the stamp, so a battery over the tree its land just built compiles all three binaries again"
+		},
+		{
+			"name": "M-BUILD-STAMP-CONTENT-BLIND",
+			"type": "dev.BuildStamp",
+			"method": "keyOf",
+			"find": "[content, fingerprint].concat(words)",
+			"replace": "[fingerprint].concat(words)",
+			"note": "the key reads only the compile fingerprint, so a changed file that is not a Haxe source (a JSON a macro reads) leaves the old binaries taken"
+		},
+		{
+			"name": "M-BUILD-STAMP-BINARIES-BLIND",
+			"type": "dev.BuildStamp",
+			"method": "binariesOf",
+			"force": "\"\"",
+			"note": "the binaries are not digested, so a hand build or a copy over a binary leaves a marker that takes the wrong binary"
+		},
+		{
+			"name": "M-BUILD-STAMP-RED-STAMPED",
+			"type": "dev.Binaries",
+			"method": "compileBuilds",
+			"find": "runs[pending.indexOf(i)].ok",
+			"replace": "true",
+			"note": "a line that compiled red is stamped, so the next build of the same content answers Passed on a tree that does not compile"
+		},
+		{
+			"name": "M-BUILD-STAMP-MOVED-CONTENT-STAMPED",
+			"type": "dev.BuildStamp",
+			"method": "record",
+			"find": " || contentOf(_tree) != content",
+			"replace": "",
+			"note": "a compile during which the content moved is stamped under the content it started on, so binaries that may be the build of the other are taken"
+		},
+		{
+			"name": "M-BUILD-STAMP-TYPECHECK-NEVER-HELD",
+			"type": "dev.Binaries",
+			"method": "reusable",
+			"find": " || words.contains('--no-output')",
+			"replace": "",
+			"note": "a typecheck is never taken from the stamp, so the battery typechecks recon.hxml again on the content its land already typechecked"
 		}
 	]
 }

@@ -25,6 +25,9 @@ final class Binaries {
 	/** The codegen flag every real build of the tree carries and no typecheck leaf does: what turns a typecheck into the shipped build. */
 	public static final CODEGEN: Array<String> = ['-D', 'analyzer-optimize'];
 
+	/** What a build log says for a build line the tree's binaries already are the build of (`BuildStamp`), never run again. */
+	public static final CURRENT: String = 'current — the binaries are this content\'s build already, not compiled again';
+
 	/**
 	 * The typecheck leaf the compiler oracle declares for a build leaf `hxml` (`x.hxml` is `x-check.hxml`): the same flags
 	 * without the codegen flag `-D analyzer-optimize`, which only a real build carries.
@@ -50,7 +53,9 @@ final class Binaries {
 	 * Run each of `builds` (a haxe command line) in `tree`, every transcript written to `log`. A build the project declares as a
 	 * plain `compilerOracle` configuration runs with `-v`, and its green is kept as that configuration's verdict
 	 * (`OracleCache.storeIfUnchanged`), so a lint or a battery over the same content does not compile it again. The
-	 * configuration a build leaf stands for may be the leaf itself or its `checkOf` typecheck leaf.
+	 * configuration a build leaf stands for may be the leaf itself or its `checkOf` typecheck leaf. A `reusable` line whose
+	 * binaries the tree already holds for its content as it stands (`BuildStamp`) is not run again: a land's build stands for
+	 * the battery's over the same candidate.
 	 */
 	public static function compileBuilds(tree: String, log: String, builds: Array<Array<String>>, mode: LeaseMode): Outcome {
 		final declared: Array<OracleConfig> = plainOracles(tree);
@@ -60,24 +65,35 @@ final class Binaries {
 			)
 		);
 		final read: Map<String, String> = [];
+		final stamp: BuildStamp = BuildStamp.of(tree, hxml -> OracleCache.fingerprint(hxml, tree, null, read));
+		final pending: Array<Int> = [for (i => words in builds) if (!(reusable(words) && stamp.holds(words))) i];
 		final fingerprints: Array<Null<String>> = oracles.map(
 			oracle -> oracle == null ? null : OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, read)
 		);
-		final runs: Array<Result> = Pool.of(builds.length).map([for (i in 0...builds.length) i], i -> {
-			final words: Array<String> = oracles[i] == null ? builds[i] : ['-v'].concat(builds[i]);
-			return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
-		});
+		final runs: Array<Result> = pending.length == 0
+			? []
+			: Pool.of(pending.length).map(pending, i -> {
+				final words: Array<String> = oracles[i] == null ? builds[i] : ['-v'].concat(builds[i]);
+				return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
+			});
 		// a -v compile prints a line per parsed file and per macro on stdout: it stays out of the log and of the error a failure quotes
-		final quiet: Array<Result> = [for (i => run in runs) oracles[i] == null ? run : run.errorsOnly()];
-		File.saveContent(log, quiet.map(run -> run.out + run.err).join('\n'));
+		final quiet: Array<Result> = [for (k => run in runs) oracles[pending[k]] == null ? run : run.errorsOnly()];
+		final held: Array<String> = [
+			for (i => words in builds) if (!pending.contains(i)) 'haxe ${words.join(' ')}: $CURRENT'
+		];
+		File.saveContent(log, held.concat(quiet.map(run -> run.out + run.err)).join('\n'));
 		final after: Map<String, String> = [];
-		for (i => oracle in oracles) {
-			final fingerprint: Null<String> = fingerprints[i];
-			if (oracle != null && fingerprint != null && runs[i].ok)
+		for (k => run in runs) {
+			final oracle: Null<OracleConfig> = oracles[pending[k]];
+			final fingerprint: Null<String> = fingerprints[pending[k]];
+			if (oracle != null && fingerprint != null && run.ok)
 				OracleCache.storeIfUnchanged(
-					oracle.hxml, oracle.dir, fingerprint, Confirmed, oracle.defines, after, OracleCoverage.parsedPaths(runs[i].out)
+					oracle.hxml, oracle.dir, fingerprint, Confirmed, oracle.defines, after, OracleCoverage.parsedPaths(run.out)
 				);
 		}
+		stamp.record([
+			for (i => words in builds) if (reusable(words) && (!pending.contains(i) || runs[pending.indexOf(i)].ok)) words
+		]);
 		final failed: Null<Result> = quiet.find(run -> !run.ok);
 		return failed == null ? Passed : Failed('${failed.command}: ${failed.firstError()}');
 	}
@@ -99,6 +115,14 @@ final class Binaries {
 				)
 					oracle
 		];
+	}
+
+	/**
+	 * Whether a green build line may be taken from `BuildStamp` instead of run: one of `HXMLS` as it stands, whose binary is an
+	 * ignored `bin/*.js` the stamp digests, or a typecheck, which writes nothing.
+	 */
+	private static function reusable(words: Array<String>): Bool {
+		return (words.length == 1 && HXMLS.contains(words[0])) || words.contains('--no-output');
 	}
 
 }
