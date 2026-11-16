@@ -717,9 +717,8 @@ final class MemberKinds {
 		if (precedingModifiers(member, host, runKinds).exists(m -> m.kind == publicKind)) return true;
 		final publicMetaNames: Array<String> = shape.publicDefaultMetaNames ?? [];
 		final externKind: Null<String> = shape.externModifierKind;
-		return precedingModifiers(
-			declared, outer, runKinds
-		).exists(m -> m.kind == externKind || (m.name != null && publicMetaNames.contains(m.name)));
+		return precedingModifiers(declared, outer, runKinds)
+			.exists(m -> m.kind == externKind || (m.name != null && publicMetaNames.contains(m.name)));
 	}
 
 	/**

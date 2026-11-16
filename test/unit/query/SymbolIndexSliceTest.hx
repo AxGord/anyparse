@@ -363,9 +363,8 @@ class SymbolIndexSliceTest extends Test {
 	 */
 	public function testAnonStructureInTypeHeaderIsNotAMember(): Void {
 		final source: String = 'package pkg;\nclass Hdr<T:{ var z:Int; }> extends Base<{ var e:Int; }> {\n\tpublic var real:Int = 0;\n}\n';
-		final hdr: TypeDeclInfo = fileInfoOf(
-			SymbolIndex.build([{ file: 'src/pkg/Hdr.hx', source: source }], plugin()), 'src/pkg/Hdr.hx'
-		).types[0];
+		final hdr: TypeDeclInfo = fileInfoOf(SymbolIndex.build([{ file: 'src/pkg/Hdr.hx', source: source }], plugin()), 'src/pkg/Hdr.hx')
+			.types[0];
 
 		Assert.isTrue(hdr.members.exists(m -> m.name == 'real'));
 		Assert.isFalse(hdr.members.exists(m -> m.name == 'z'));
@@ -375,9 +374,8 @@ class SymbolIndexSliceTest extends Test {
 	/** Control for the header rule: a typedef's own `Anon` IS its member list. */
 	public function testTypedefAnonFieldsAreMembers(): Void {
 		final source: String = 'package pkg;\ntypedef Td = { var x:Int; final y:String; }\n';
-		final td: TypeDeclInfo = fileInfoOf(
-			SymbolIndex.build([{ file: 'src/pkg/Td.hx', source: source }], plugin()), 'src/pkg/Td.hx'
-		).types[0];
+		final td: TypeDeclInfo = fileInfoOf(SymbolIndex.build([{ file: 'src/pkg/Td.hx', source: source }], plugin()), 'src/pkg/Td.hx')
+			.types[0];
 
 		Assert.isTrue(td.members.exists(m -> m.name == 'x'));
 		Assert.isTrue(td.members.exists(m -> m.name == 'y'));
@@ -788,9 +786,8 @@ class SymbolIndexSliceTest extends Test {
 	 */
 	public function testEnumAbstractValueFlags(): Void {
 		final source: String = 'package pkg;\nenum abstract Ea(Int) {\n\tfinal P = 0;\n\tvar Q = 1;\n}\n';
-		final ea: TypeDeclInfo = fileInfoOf(
-			SymbolIndex.build([{ file: 'src/pkg/Ea.hx', source: source }], plugin()), 'src/pkg/Ea.hx'
-		).types[0];
+		final ea: TypeDeclInfo = fileInfoOf(SymbolIndex.build([{ file: 'src/pkg/Ea.hx', source: source }], plugin()), 'src/pkg/Ea.hx')
+			.types[0];
 
 		Assert.equals('EnumAbstractDecl', ea.kind);
 		assertFlags(memberOf(ea, 'P'), 'FinalMember', false, false, false);

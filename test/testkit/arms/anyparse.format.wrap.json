@@ -625,6 +625,14 @@
 			"find": "(appendTrailingComma ? sep.length : 0) + ",
 			"replace": "",
 			"note": "a fillLine parameter list whose last row with its kept trailing comma and close paren is one column past the limit keeps its last parameter on the row"
+		},
+		{
+			"name": "M-CHAIN-BREAKABLE-HEAD-GLUED",
+			"type": "anyparse.format.wrap.MethodChainEmit",
+			"method": "layout",
+			"find": "return IfFullLineExceeds(opt.lineWidth, IfFirstLineExceeds(opt.lineWidth, glued, seams), glued);",
+			"replace": "return glued;",
+			"note": "the receiver stays outside the chain width decision, so a breakable head wraps its own arguments and the tail glues to its close"
 		}
 	]
 }

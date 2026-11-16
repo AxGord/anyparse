@@ -158,9 +158,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final named: CompareFunctions = compareFunctionsOf(file, plugin, seams, scope);
 		if (named.problems.length > 0) return [];
 		final wanted: Array<String> = sites.map(v -> spanKey(v.span));
-		final fixed: Array<Match> = matches(
-			tree, file, source, seams, plugin, scope, named
-		).filter(m -> m.noFix == null && wanted.contains(spanKey(m.span)));
+		final fixed: Array<Match> = matches(tree, file, source, seams, plugin, scope, named)
+			.filter(m -> m.noFix == null && wanted.contains(spanKey(m.span)));
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
 			file, source, tree, RunScan.typeInfoOf(plugin)?.importMap(source, file) ?? [], plugin, scope()
 		);

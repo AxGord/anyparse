@@ -90,17 +90,13 @@ final class MoveDeclaration {
 				registries: objects(section, 'registries', ['file', 'keys', 'byPackage', 'members']).map(r -> registry(r, at)),
 				sortedLists: [
 					for (list in objects(section, 'sortedLists', ['parts']))
-						objects(
-							list, 'parts', ['file', 'select']
-						)
+						objects(list, 'parts', ['file', 'select'])
 							.map(part -> {
 								file: at(string(part, 'sortedLists.parts', 'file')),
 								select: string(part, 'sortedLists.parts', 'select')
 							})
 				],
-				mirrors: objects(
-					section, 'mirrors', ['source', 'test', 'suffixes']
-				)
+				mirrors: objects(section, 'mirrors', ['source', 'test', 'suffixes'])
 					.map(m -> {
 						source: at(string(m, 'mirrors', 'source')),
 						test: at(string(m, 'mirrors', 'test')),

@@ -270,11 +270,13 @@ final class LintScore {
 
 	/** One table row of `render`. */
 	private static function row(b: LintScoreBucket): Array<String> {
-		return [b.family, '${b.findings}', '${b.keys}'].concat([for (v in VERDICTS) '${b.matched[v] ?? 0}']).concat([
-			'${b.unlabelled}',
-			ratio(b.precision),
-			b.recallEntries == 0 ? '-' : '${b.recallHit}/${b.recallEntries}'
-		]);
+		return [b.family, '${b.findings}', '${b.keys}']
+			.concat([for (v in VERDICTS) '${b.matched[v] ?? 0}'])
+			.concat([
+				'${b.unlabelled}',
+				ratio(b.precision),
+				b.recallEntries == 0 ? '-' : '${b.recallHit}/${b.recallEntries}'
+			]);
 	}
 
 	/** A ratio rounded to two decimals, trailing zeros dropped (`0.5`, `0.67`, `1`); `-` for none (a zero denominator). */

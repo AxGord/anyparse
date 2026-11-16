@@ -515,9 +515,8 @@ final class ModuleMove {
 		final unwritten: Null<String> = writeRepairs(texts, repairsByFile(first), lost, newPathOf, post, plugin, imports);
 		if (unwritten != null) return Left([unwritten]);
 		final again: SymbolIndex = postIndex(files, library, texts, newPathOf, plugin);
-		final second: Array<String> = driftsIn(
-			again, files, texts, newPathOf, probes, pre, renamed, plugin, before, respelledSites(first)
-		).map(describeDrift);
+		final second: Array<String> = driftsIn(again, files, texts, newPathOf, probes, pre, renamed, plugin, before, respelledSites(first))
+			.map(describeDrift);
 		for (r in usingRefusals(planned, pre, again, [], texts, plugin)) second.push(r);
 		return second.length == 0 ? Right(true) : Left(second);
 	}

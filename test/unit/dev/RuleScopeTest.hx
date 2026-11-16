@@ -47,9 +47,8 @@ final class RuleScopeTest extends Test {
 	}
 
 	public function testAnIdInAConstantOfTheFileIsRead(): Void {
-		final text: String = rule(
-			'Alpha', 'RULE_ID'
-		).text.replace('{\n\tpublic', "{\n\tprivate static inline final RULE_ID: String = 'alpha';\n\tpublic");
+		final text: String = rule('Alpha', 'RULE_ID')
+			.text.replace('{\n\tpublic', "{\n\tprivate static inline final RULE_ID: String = 'alpha';\n\tpublic");
 		Assert.same(['alpha'], RuleScope.idsOf(withText(tree(['Alpha']), 'Alpha', text), [at('Alpha')], null));
 	}
 

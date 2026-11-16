@@ -231,7 +231,22 @@ class MethodChainEmit {
 		// wrapped the receiver too and measured it FLAT, so a chain riding a
 		// multi-line call's `)` read as 180+ columns and dot-broke although its
 		// tail had a whole line free.
-		return WrapBoundary(Concat([receiver, tail]));
+		final glued: Doc = WrapBoundary(Concat([receiver, tail]));
+		// A head wider than the line can never stay flat; offering it would only blur the enclosing walkers' natural first line.
+		if (
+			hasCommentBreak
+			|| isTextAtom(receiver)
+			|| DocMeasure.hasForcedBreak(receiver)
+			|| DocMeasure.hasOptHardline(receiver)
+			|| DocMeasure.flatTokenWidth(receiver) >= opt.lineWidth
+		)
+			return glued;
+		final breakMode: WrapMode = evalAt(true, []);
+		if (breakMode == evalAt(false, [])) return glued;
+		// A breakable head would otherwise take the line first with its own wrap and leave the tail glued to its close;
+		// the chain line breaks its seams, not its head's arguments, whenever the flat head's first line fits.
+		final seams: Doc = WrapBoundary(Concat([HardFlatten(receiver), shapeAt(breakMode)]));
+		return IfFullLineExceeds(opt.lineWidth, IfFirstLineExceeds(opt.lineWidth, glued, seams), glued);
 	}
 
 	/**

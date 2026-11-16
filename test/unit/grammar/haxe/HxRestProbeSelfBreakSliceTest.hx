@@ -153,15 +153,15 @@ final class HxRestProbeSelfBreakSliceTest extends Test {
 	}
 
 	/**
-	 * A method-chain link opens on the width of its whole line, the group's flat content
-	 * included, so it is no break point for the group: the call before it still opens.
+	 * A method-chain link opens on the width of its whole line; when the call head
+	 * fits flat on that line the chain breaks at its seam and the call stays whole.
 	 */
 	@:pin('control')
-	@:killer('M-RESTPROBE-FULL-LINE')
-	public function testCallStillBreaksBeforeAChainLink(): Void {
+	@:killer('M-CHAIN-BREAKABLE-HEAD-GLUED')
+	public function testChainLinkBreaksBeforeAFittingCallHead(): Void {
 		final args: String = "'If this item is deleted, sessions will not work. Are you sure you want to delete the item {value}?', 10227";
 		Assert.equals(
-			fn('message = t(\n\t\t\t$args\n\t\t).findAndReplaceValue(\'<b>file</b>\');'),
+			fn('message = t($args)\n\t\t\t.findAndReplaceValue(\'<b>file</b>\');'),
 			write(fn('message = t($args).findAndReplaceValue(\'<b>file</b>\');'))
 		);
 	}

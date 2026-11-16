@@ -326,9 +326,8 @@ class OperandBindingTest extends Test {
 			+ '\t\treturn \'$${h.get().toString()}x\';\n\t}\n\n}\n';
 		final all: Map<String, String> = files.copy();
 		all['u/Use.hx'] = use;
-		return violationsAt(
-			new RedundantToString(), all, 'h.get().toString()'
-		).exists(v -> v.message.indexOf('not provably non-null') == -1);
+		return violationsAt(new RedundantToString(), all, 'h.get().toString()')
+			.exists(v -> v.message.indexOf('not provably non-null') == -1);
 	}
 
 	/**

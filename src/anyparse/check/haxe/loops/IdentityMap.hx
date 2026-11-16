@@ -78,10 +78,8 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 		return CheckScan.applyTextMatches(
 			plugin, source, violations,
 			(tree, text) ->
-				matches(tree, file, text, seams, plugin, PreferBind.coveringIndex([{
-					file: file,
-					source: source
-				}], plugin, index)).map(m -> m.edit)
+				matches(tree, file, text, seams, plugin, PreferBind.coveringIndex([{ file: file, source: source }], plugin, index))
+					.map(m -> m.edit)
 		);
 	}
 

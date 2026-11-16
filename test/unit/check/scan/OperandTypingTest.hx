@@ -289,9 +289,9 @@ class OperandTypingTest extends Test {
 		// The ambient chain is read from DISK beside the module, so this fixture is a real tree.
 		final root: String = CliFixture.writeTree('apq_operand_resolve', [{ name: 'import.hx', source: 'using HasTools;\n' }]);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final tree: Array<{ file: String, source: String }> = [has, shadow, use(
-				'', '', '!h.any'
-			)].concat(DECLS).map(f -> { file: '$root/${f.file}', source: f.source });
+			final tree: Array<{ file: String, source: String }> = [has, shadow, use('', '', '!h.any')]
+				.concat(DECLS)
+				.map(f -> { file: '$root/${f.file}', source: f.source });
 			for (f in tree) sys.io.File.saveContent(f.file, f.source);
 			Assert.isFalse(inverts(tree, '$root/'));
 		});

@@ -1264,11 +1264,9 @@ final class WriterRefFieldLowering {
 			flagSwitch;
 		} else {
 			final listCases: Array<Case> = fitValueListCases(listPatterns, optFlag, blockLayoutExpr, inlineLayoutExpr);
-			final shapeCases: Array<Case> = [{
-				values: blockPatterns,
-				expr: blockLayoutExpr,
-				guard: null
-			}].concat(listCases).concat([{ values: [macro _], expr: flagSwitch, guard: null }]);
+			final shapeCases: Array<Case> = [{ values: blockPatterns, expr: blockLayoutExpr, guard: null }]
+				.concat(listCases)
+				.concat([{ values: [macro _], expr: flagSwitch, guard: null }]);
 			{ expr: ESwitch(bodyAccess, shapeCases, null), pos: Context.currentPos() };
 		};
 		// `_dn(_cols, …)` in the Next branch needs a per-call `_cols` binding —

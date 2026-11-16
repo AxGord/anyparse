@@ -669,9 +669,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function metaInRun(
 		node: QueryNode, ancestors: Array<QueryNode>, target: NamingCategory, ?metaName: String, ?except: String
 	): Bool {
-		return leadingRun(
-			node, ancestors, target
-		).exists(sibling -> isMetaKind(sibling.kind) && (metaName == null ? sibling.name != except : sibling.name == metaName));
+		return leadingRun(node, ancestors, target)
+			.exists(sibling -> isMetaKind(sibling.kind) && (metaName == null ? sibling.name != except : sibling.name == metaName));
 	}
 
 	/**

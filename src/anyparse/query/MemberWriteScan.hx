@@ -44,9 +44,7 @@ import anyparse.runtime.Span;
 final class MemberWriteScan {
 
 	public static inline function subtypeMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
-		return scopeOf(
-			index, plugin
-		)
+		return scopeOf(index, plugin)
 			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares, _) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span, plugin)
@@ -65,9 +63,7 @@ final class MemberWriteScan {
 	public static inline function subtypeWriteReaches(
 		owner: String, name: String, index: SymbolIndex, writeIndex: FieldWriteIndex, plugin: GrammarPlugin
 	): Bool {
-		return scopeOf(
-			index, plugin
-		)
+		return scopeOf(index, plugin)
 			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares, _) ->
@@ -95,9 +91,7 @@ final class MemberWriteScan {
 	public static inline function subtypeMayReference(
 		owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin, ?apart: String
 	): Bool {
-		return scopeOf(
-			index, plugin
-		)
+		return scopeOf(index, plugin)
 			.subtypes.subtypeDeclMatches(
 				owner, name,
 				(subtype, src, span, redeclares, file) ->

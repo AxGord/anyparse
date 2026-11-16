@@ -363,14 +363,12 @@ final class RegistryFragmentFollow {
 		final now: String = rewrite.now;
 		final ends: Array<Int> = prefix == 0
 			? [newFrom]
-			: cutBoundaries(
-				rewrite.maps, from + startOf(fit, prefix, writtenLength), now.length, false
-			).filter(p -> p >= newFrom && p <= newTo);
+			: cutBoundaries(rewrite.maps, from + startOf(fit, prefix, writtenLength), now.length, false)
+				.filter(p -> p >= newFrom && p <= newTo);
 		final tails: Array<Int> = suffix == 0
 			? [newTo]
-			: cutBoundaries(
-				rewrite.maps, from + startOf(fit, find.length - suffix, writtenLength), now.length, true
-			).filter(p -> p >= newFrom && p <= newTo);
+			: cutBoundaries(rewrite.maps, from + startOf(fit, find.length - suffix, writtenLength), now.length, true)
+				.filter(p -> p >= newFrom && p <= newTo);
 		tails.reverse();
 		final out: Array<String> = [];
 		var refused: Bool = false;

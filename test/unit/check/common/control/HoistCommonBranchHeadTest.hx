@@ -352,8 +352,8 @@ class HoistCommonBranchHeadTest extends Test {
 		Assert.equals(1, violations(TYPES + receiverRead('u:P', 'u.x')).length);
 		Assert.equals(
 			1,
-			violations('${TYPES}class Array<T> { public var length(default, null):Int; } '
-			+ receiverRead('u:Array<Int>', 'u.length')).length
+			violations('${TYPES}class Array<T> { public var length(default, null):Int; } ' + receiverRead('u:Array<Int>', 'u.length'))
+				.length
 		);
 	}
 

@@ -184,9 +184,8 @@ class PairedShapeLowering {
 	 * happens to have imported.
 	 */
 	private function ctorPattern(rule: String, ctor: String, argNames: Array<String>): Expr {
-		final path: Array<String> = synthPackOf(
-			_shape.root, SPANS_SUBPACK
-		).concat([SYNTH_MODULE_LEAF, simpleName(rule) + PAIRED_SUFFIX, ctor]);
+		final path: Array<String> = synthPackOf(_shape.root, SPANS_SUBPACK)
+			.concat([SYNTH_MODULE_LEAF, simpleName(rule) + PAIRED_SUFFIX, ctor]);
 		final args: Array<Expr> = [for (n in argNames) ident(n)];
 		args.push(ident(SPAN_FIELD));
 		return { expr: ECall(haxe.macro.MacroStringTools.toFieldExpr(path), args), pos: Context.currentPos() };

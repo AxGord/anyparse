@@ -191,9 +191,8 @@ final class ExtractMethod {
 		final block: Null<QueryNode> = TreePath.parentOf(tree, sel.stmts[0]);
 		final blockSpan: Null<Span> = block?.span;
 		final scope: QueryNode = blockSpan == null ? tree : BinderScan.enclosingFunctionSubtree(tree, blockSpan.from, shape);
-		final boundNames: Array<String> = collectLocalDecls(
-			sel.stmts, TypeResolver.blockScopedValueDeclarationKinds(shape)
-		).map(d -> d.name);
+		final boundNames: Array<String> = collectLocalDecls(sel.stmts, TypeResolver.blockScopedValueDeclarationKinds(shape))
+			.map(d -> d.name);
 		for (nm in boundNames) {
 			// Same question, asked of a region with no nodes: whether a name the range binds is
 			// read after it cannot be decided when an unparsed conditional region may hold that read.

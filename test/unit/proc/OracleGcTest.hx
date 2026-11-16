@@ -98,9 +98,9 @@ final class OracleGcTest extends Test {
 		}, () -> {
 			for (v => value in env) Sys.putEnv(v, value);
 			final jobs: Array<SpawnJob> = [{ args: args, cwd: dir }, { args: args, cwd: dir }];
-			runs = [ProcessSpawn.run(
-				args, dir, BUFFER
-			)].concat(ProcessSpawn.runAll(jobs, BUFFER, 2)).concat(ProcessSpawn.startAll(jobs, BUFFER, 2).await());
+			runs = [ProcessSpawn.run(args, dir, BUFFER)]
+				.concat(ProcessSpawn.runAll(jobs, BUFFER, 2))
+				.concat(ProcessSpawn.startAll(jobs, BUFFER, 2).await());
 		});
 		if (runs[0].status == 0) return runs.map(r -> r.out.trim());
 		Assert.pass('haxe unavailable — skipped (${runs[0].failure}${runs[0].err})');

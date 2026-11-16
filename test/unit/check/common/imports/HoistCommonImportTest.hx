@@ -292,9 +292,7 @@ class HoistCommonImportTest extends Test {
 	@:pin('control')
 	@:killer('M-HOIST-USINGS-SOURCE-ORDER')
 	public function testHoistedUsingsKeepTheirSourceOrder(): Void {
-		final tree: Array<TreeFile> = usingTree(
-			'qqz.Sqqwwee', 'using qqz.Rqqwwee;\n'
-		)
+		final tree: Array<TreeFile> = usingTree('qqz.Sqqwwee', 'using qqz.Rqqwwee;\n')
 			.map(file ->
 				file.name == 'apq.json'
 					? {

@@ -320,14 +320,6 @@
 			"note": "a rest-aware group predicts the rest from its flat-layout column, so a trailing list that breaks only because the group stayed flat is taken as a break of its own and the group stays flat over it"
 		},
 		{
-			"name": "M-RESTPROBE-FULL-LINE",
-			"type": "anyparse.core.Renderer",
-			"method": "siblingRestStep",
-			"find": "if (onPath && !sibling.groupAsker):",
-			"replace": "if (onPath):",
-			"note": "a later full-line probe ends a rest-aware group's line too, so a call stays flat and its chain link breaks, opening only because the call did not"
-		},
-		{
 			"name": "M-REST-FORCEFLAT-FRAME-INEXACT",
 			"type": "anyparse.core.Renderer",
 			"method": "flatTokenWidthOfRestStack",

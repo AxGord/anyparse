@@ -129,9 +129,8 @@ class OwnedTypesCheckTest extends Test {
 	public function testATypeGlobOwnsSubTypesAcrossPackages(): Void {
 		final deep: FixtureFile = { file: 'a/deep/Deep.hx', source: 'package a.deep;\n\nclass Deep {}\n\ntypedef Shape = {x: Int};\n' };
 		final user: String = 'package b;\n\nimport a.deep.Deep;\nimport a.deep.Deep.Shape;\n\nclass User {\n\tvar s: Shape;\n}\n';
-		final vs: Array<Violation> = collected(
-			[{ file: 'b/User.hx', source: user }, deep], TYPE_CONFIG.replace('a.Owned', 'a.**')
-		).filter(v -> v.file == 'b/User.hx');
+		final vs: Array<Violation> = collected([{ file: 'b/User.hx', source: user }, deep], TYPE_CONFIG.replace('a.Owned', 'a.**'))
+			.filter(v -> v.file == 'b/User.hx');
 		Assert.same(
 			['3 a.deep.Deep', '4 a.deep.Deep.Shape', '7 a.deep.Deep.Shape'],
 			vs.map(v -> '${lineOf(user, v.span?.from ?? 0)} ${v.message.split(' ')[0]}')
@@ -330,9 +329,8 @@ class OwnedTypesCheckTest extends Test {
 
 	/** The 1-based line of every finding in `user`, the fixture project holding `extra` beside it. */
 	private static function linesWith(user: String, extra: Array<FixtureFile>, config: String): Array<Int> {
-		final vs: Array<Violation> = collected([{ file: 'b/User.hx', source: user }].concat(
-			extra
-		), config).filter(v -> v.file == 'b/User.hx');
+		final vs: Array<Violation> = collected([{ file: 'b/User.hx', source: user }].concat(extra), config)
+			.filter(v -> v.file == 'b/User.hx');
 		return vs.map(v -> lineOf(user, v.span?.from ?? 0));
 	}
 
