@@ -4,6 +4,7 @@ import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.NameTarget;
 import anyparse.query.TypeNameBinding.NameTargets;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -73,7 +74,7 @@ final class CallGraphImports {
 		final out: Array<String> = [];
 		for (index in _indexes) for (d in index.typing.members.memberDeclarationsOf(typeName, member)) {
 			final key: String = CallGraphNames.normalizePath(d.file.file);
-			if (!out.contains(key)) out.push(key);
+			Groups.pushUnique(out, key);
 		}
 		return out;
 	}
@@ -102,8 +103,7 @@ final class CallGraphImports {
 		final out: Array<String> = [];
 		for (index in _indexes)
 			for (decl in index.refs.mayDenote(name, null))
-				for (path in TypeNameBinding.namingPaths(decl))
-					if (!out.contains(path)) out.push(path);
+				for (path in TypeNameBinding.namingPaths(decl)) Groups.pushUnique(out, path);
 		_paths[name] = out;
 		return out;
 	}
@@ -153,7 +153,7 @@ final class CallGraphImports {
 		final keyed: Array<String> = [];
 		for (w in written) {
 			final key: String = typeOf(w.file, w.path);
-			if (!keyed.contains(key)) keyed.push(key);
+			Groups.pushUnique(keyed, key);
 		}
 		return keyed.length == 1 ? keyed[0] : simple;
 	}
@@ -183,7 +183,7 @@ final class CallGraphImports {
 		final out: Array<String> = bound == null ? [] : [keyOf(bound, false)];
 		for (t in maybeOf(targets)) {
 			final key: String = keyOf(t, false);
-			if (!out.contains(key)) out.push(key);
+			Groups.pushUnique(out, key);
 		}
 		return out;
 	}
@@ -234,7 +234,7 @@ final class CallGraphImports {
 	 */
 	public function alternateTypesIn(files: Array<String>, type: String): Array<String> {
 		final out: Array<String> = [];
-		for (f in files) for (alternate in alternateTypes(f, type)) if (!out.contains(alternate)) out.push(alternate);
+		for (f in files) for (alternate in alternateTypes(f, type)) Groups.pushUnique(out, alternate);
 		return out;
 	}
 

@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -82,7 +83,7 @@ final class TypeTraits {
 			i++;
 			for (f in _files) for (t in f.types) if (t.name == name) {
 				if (t.hasRtti) return true;
-				for (s in t.supertypes) if (!seen.contains(s)) seen.push(s);
+				for (s in t.supertypes) Groups.pushUnique(seen, s);
 			}
 		}
 		return false;

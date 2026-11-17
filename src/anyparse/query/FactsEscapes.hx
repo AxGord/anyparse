@@ -9,6 +9,7 @@ import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
 import anyparse.query.FactsTypeTree;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -463,8 +464,8 @@ final class FactsEscapes {
 		while (!seen.contains(currentId)) {
 			seen.push(currentId);
 			final name: String = _view.graphType(currentId);
-			if (!_out.contains(name)) _out.push(name);
-			if (!_typed.contains(currentId)) _typed.push(currentId);
+			Groups.pushUnique(_out, name);
+			Groups.pushUnique(_typed, currentId);
 			for (f in currentFact.fields) if (f.kinds.exists(k -> k.startsWith('var(')) && !within(f.types, currentBound)) return false;
 			final sup: Null<String> = currentFact.superClass;
 			if (sup == null) break;

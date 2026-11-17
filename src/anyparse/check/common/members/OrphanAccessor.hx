@@ -8,6 +8,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 
 /**
  * Flags a `get_X` / `set_X` method that no property slot ever reaches — the accessor half of a
@@ -342,7 +343,7 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		final unreadable: Array<String> = scopeIndex.text.skippedFilesMentioning([name, wantGetter
 			? CheckScan.GET_PREFIX
 			: CheckScan.SET_PREFIX]);
-		for (file in scopeIndex.text.skippedFilesMentioning([prop], ownerFile)) if (!unreadable.contains(file)) unreadable.push(file);
+		for (file in scopeIndex.text.skippedFilesMentioning([prop], ownerFile)) Groups.pushUnique(unreadable, file);
 		return unreadable.length == 0
 			? null
 			: 'the deletion is unproven: ${unreadable.length} file(s) in scope did not parse, and their text cannot be shown free of a '

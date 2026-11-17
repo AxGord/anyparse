@@ -9,6 +9,7 @@ import anyparse.query.CallGraph;
 import anyparse.query.Glob;
 import anyparse.query.OracleProviders;
 import anyparse.query.ReachLiveness;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 using StringTools;
@@ -127,7 +128,7 @@ final class LibraryBodies {
 		final configs: Array<LintConfig> = [];
 		for (f in files) {
 			final config: LintConfig = LintConfig.resolveWith(resolve, f.file);
-			if (!configs.contains(config)) configs.push(config);
+			Groups.pushUnique(configs, config);
 		}
 		var chosen: Null<{ config: LintConfig, options: ThreadSafetyOptions, entry: String }> = null;
 		for (config in configs) {
@@ -231,7 +232,7 @@ final class LibraryBodies {
 		for (id in positive.builtin.concat(positive.natives)) sinkIds[id] = true;
 		for (pattern in options.nonBlocking) for (id in graph.matchIds(pattern)) if (sinkIds.exists(id) && !configured.contains(id)) {
 			sinkIds.remove(id);
-			if (!waivers.contains(pattern)) waivers.push(pattern);
+			Groups.pushUnique(waivers, pattern);
 		}
 		return sinkIds;
 	}
@@ -278,7 +279,7 @@ final class LibraryBodies {
 			if (member != null) {
 				runs.push(member);
 				// a constructor builds exactly its type; any other member of a library type may dispatch to an override
-				if (owner == call.type && name != 'new') for (o in graph.virtualTargets(owner, name)) if (!runs.contains(o)) runs.push(o);
+				if (owner == call.type && name != 'new') for (o in graph.virtualTargets(owner, name)) Groups.pushUnique(runs, o);
 				if (name == 'new' && graph.nodes.exists('$owner.<init>')) runs.push('$owner.<init>');
 				break;
 			}

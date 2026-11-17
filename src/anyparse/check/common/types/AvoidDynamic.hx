@@ -21,6 +21,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
+import anyparse.util.Groups;
 
 /**
  * Flags a raw `Dynamic` in a DECLARED type position — a field type, a function
@@ -548,7 +549,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 	/** The distinct values of `xs`, order-preserving. */
 	private static function distinct(xs: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (x in xs) if (!out.contains(x)) out.push(x);
+		for (x in xs) Groups.pushUnique(out, x);
 		return out;
 	}
 

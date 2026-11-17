@@ -11,6 +11,7 @@ import anyparse.query.format.json.FactTypeFieldRecord;
 import anyparse.query.format.json.FactTypeRecord;
 import anyparse.query.format.json.FactTypeRecordParser;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -566,6 +567,16 @@ final class CompilerFacts {
 		return _types.keys();
 	}
 
+	/** Every type `id` extends or implements, directly or not, over the whole typed set; by id, without type arguments. */
+	public inline function supertypesOf(id: String): Array<String> {
+		return FactMerge.closure(_supers, id);
+	}
+
+	/** Every typed type that extends or implements `id`, directly or not; by id. */
+	public inline function subtypesOf(id: String): Array<String> {
+		return FactMerge.closure(_subs, id);
+	}
+
 	/**
 	 * Whether every configuration asked contributed to the table, and at least one did: a configuration missing from it could
 	 * type a declaration differently, so an answer resting on what every build agrees on, or on what none typed, needs this.
@@ -656,7 +667,7 @@ final class CompilerFacts {
 	/** The configurations (indexes into `configurations`) that typed the node `id`; empty when none did. */
 	public function buildsTyping(id: String): Array<Int> {
 		final out: Array<Int> = [];
-		for (line in _nodeLines[id] ?? []) for (b in line.builds) if (!out.contains(b)) out.push(b);
+		for (line in _nodeLines[id] ?? []) for (b in line.builds) Groups.pushUnique(out, b);
 		return out;
 	}
 
@@ -689,9 +700,7 @@ final class CompilerFacts {
 				// a nested function's id carries its offset after the field's: `<field id>@<min>`
 				if (dot <= 0 || id.indexOf('@', dot) >= 0) continue;
 				final owner: String = id.substr(0, dot);
-				final ids: Array<String> = built[owner] ?? [];
-				ids.push(id);
-				built[owner] = ids;
+				Groups.push(built, owner, id);
 			}
 			_byOwner = built;
 			byOwner = built;
@@ -809,16 +818,6 @@ final class CompilerFacts {
 		return [
 			for (h in _typeHomes[id] ?? []) { file: h.home, at: position(h.home, h.p, []), builds: h.builds.copy() }
 		];
-	}
-
-	/** Every type `id` extends or implements, directly or not, over the whole typed set; by id, without type arguments. */
-	public function supertypesOf(id: String): Array<String> {
-		return FactMerge.closure(_supers, id);
-	}
-
-	/** Every typed type that extends or implements `id`, directly or not; by id. */
-	public function subtypesOf(id: String): Array<String> {
-		return FactMerge.closure(_subs, id);
 	}
 
 	/** Add one configuration's facts; a dump that is not a complete facts file joins `dropped` instead. */
@@ -1070,10 +1069,10 @@ final class CompilerFacts {
 	private function link(child: String, parent: String): Void {
 		final up: Array<String> = _supers[child] ?? [];
 		_supers[child] = up;
-		if (!up.contains(parent)) up.push(parent);
+		Groups.pushUnique(up, parent);
 		final down: Array<String> = _subs[parent] ?? [];
 		_subs[parent] = down;
-		if (!down.contains(child)) down.push(child);
+		Groups.pushUnique(down, child);
 	}
 
 	private function same(at: Null<FactPos>, file: String, span: Span): Bool {
@@ -1112,11 +1111,7 @@ final class CompilerFacts {
 			throw exception;
 		};
 		_reading = null;
-		for (file in reading.keys()) {
-			final list: Array<String> = _madeFrom[file] ?? [];
-			list.push(entry);
-			_madeFrom[file] = list;
-		}
+		for (file in reading.keys()) Groups.push(_madeFrom, file, entry);
 		return made;
 	}
 

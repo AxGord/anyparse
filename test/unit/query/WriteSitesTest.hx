@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.WriteSites;
+import anyparse.util.Arrays;
 
 /**
  * `WriteSites`: every write a tree performs, with the storage it writes as a path the binder names, the paths an
@@ -76,12 +77,7 @@ class WriteSitesTest extends Test {
 	}
 
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = firstOfKind(c, kind);
-			if (hit != null) return hit;
-		}
-		return null;
+		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
 	}
 
 }

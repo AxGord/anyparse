@@ -5,6 +5,7 @@ import anyparse.query.MoveMember.MovePrep;
 import anyparse.query.MoveMember.MovedMember;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import haxe.Exception;
 
 using Lambda;
@@ -92,11 +93,7 @@ final class MoveMemberReceivers {
 						+ verdict;
 				}
 			}
-			for (c in node.children) {
-				final error: Null<String> = walk(c);
-				if (error != null) return error;
-			}
-			return null;
+			return Arrays.findMap(node.children, walk);
 		}
 		return walk(tree);
 	}

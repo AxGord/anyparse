@@ -23,6 +23,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 /**
@@ -863,9 +864,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			final scope: Array<{ file: String, source: String }> = sources == null ? [] : sources.report.concat(sources.library.entries());
 			for (entry in scope) {
 				final key: String = Path.withoutDirectory(entry.file);
-				final same: Array<{ file: String, source: String }> = built[key] ?? [];
-				same.push(entry);
-				built[key] = same;
+				Groups.push(built, key, entry);
 			}
 			_scopeByFileName = built;
 			named = built;

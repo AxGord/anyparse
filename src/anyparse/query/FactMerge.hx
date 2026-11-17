@@ -5,6 +5,7 @@ import anyparse.query.CompilerFacts.FactPos;
 import anyparse.query.CompilerFacts.FactSignature;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.TypeFact;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -83,7 +84,7 @@ final class FactMerge {
 
 	/** Add to `into` each of `from` it does not hold yet. */
 	public static function absent<T>(into: Array<T>, from: Array<T>): Void {
-		for (x in from) if (!into.contains(x)) into.push(x);
+		for (x in from) Groups.pushUnique(into, x);
 	}
 
 	/** Whether two parameter lists name the same parameters in the same order. */

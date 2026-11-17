@@ -9,6 +9,7 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Arrays;
 
 using StringTools;
 
@@ -296,12 +297,9 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 
 	/** The one `<iterator>.next()` call in `node`'s subtree, or null when the subtree holds none. */
 	private static function findProtocolCall(node: QueryNode, iterator: String, s: Seams): Null<QueryNode> {
-		if (protocolReceiver(node, NEXT_METHOD, s) == iterator) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = findProtocolCall(c, iterator, s);
-			if (found != null) return found;
-		}
-		return null;
+		return protocolReceiver(node, NEXT_METHOD, s) == iterator
+			? node
+			: Arrays.findMap(node.children, c -> findProtocolCall(c, iterator, s));
 	}
 
 	/**

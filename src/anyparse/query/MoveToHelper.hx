@@ -13,6 +13,7 @@ import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import haxe.ds.Either;
 
 using Lambda;
@@ -314,12 +315,7 @@ final class MoveToHelper {
 		if (prep.moved.exists(m -> m.name == paramName)) return 'a moved member is itself named "$paramName"';
 		final accessKinds: Array<String> = ShapeVocab.memberAccessKinds(prep.shape);
 		function walk(node: QueryNode): Null<QueryNode> {
-			if (node.name == paramName && !accessKinds.contains(node.kind)) return node;
-			for (c in node.children) {
-				final found: Null<QueryNode> = walk(c);
-				if (found != null) return found;
-			}
-			return null;
+			return node.name == paramName && !accessKinds.contains(node.kind) ? node : Arrays.findMap(node.children, walk);
 		}
 		for (m in prep.moved) {
 			final found: Null<QueryNode> = walk(m.group.member);

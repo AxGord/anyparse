@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import anyparse.util.Compare;
 
 using anyparse.util.Strings;
@@ -465,12 +466,9 @@ final class PatternStar {
 		// (`Matcher.unifyChildren`), so `new $T<...>(...)` carries one in each.
 		final kids: Array<QueryNode> = node.children;
 		final split: Int = node.typeArgCount;
-		if (stars(kids, 0, split) > 1 || stars(kids, split, kids.length) > 1) return TWO_STARS_REFUSAL;
-		for (c in node.children) {
-			final message: Null<String> = checkNode(c);
-			if (message != null) return message;
-		}
-		return null;
+		return stars(kids, 0, split) > 1 || stars(kids, split, kids.length) > 1
+			? TWO_STARS_REFUSAL
+			: Arrays.findMap(node.children, checkNode);
 	}
 
 	/** How many stars `children[from, to)` holds. */

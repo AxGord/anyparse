@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import haxe.Exception;
 
 /**
@@ -106,11 +107,7 @@ final class BodySlotGuard {
 		final hit: Null<String> = kinds.contains(node.kind) ? emptiedChild(node, source, edits, proved, plugin) : null;
 		if (hit != null) return hit;
 		final inner: Bool = statementSlot(node, kinds, blocks, proved);
-		for (child in node.children) {
-			final deeper: Null<String> = scan(child, source, edits, kinds, blocks, inner, plugin);
-			if (deeper != null) return deeper;
-		}
-		return null;
+		return Arrays.findMap(node.children, child -> scan(child, source, edits, kinds, blocks, inner, plugin));
 	}
 
 	/**
@@ -297,11 +294,7 @@ final class BodySlotGuard {
 			}
 		}
 		final inner: Bool = statementSlot(node, at.kinds, at.blocks, statementPosition);
-		for (child in node.children) {
-			final deeper: Null<String> = reached(child, inner, at);
-			if (deeper != null) return deeper;
-		}
-		return null;
+		return Arrays.findMap(node.children, child -> reached(child, inner, at));
 	}
 
 	/**

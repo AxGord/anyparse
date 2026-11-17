@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.query.QueryNode;
 import anyparse.query.ShardFilter;
 import anyparse.query.ShardPlan;
+import anyparse.util.Groups;
 import testkit.TestRegistry;
 
 using Lambda;
@@ -506,7 +507,7 @@ class ShardPlanTest extends Test {
 
 	private function distinct(input: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (name in input) if (!out.contains(name)) out.push(name);
+		for (name in input) Groups.pushUnique(out, name);
 		return out;
 	}
 

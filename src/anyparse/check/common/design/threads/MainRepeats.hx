@@ -4,6 +4,7 @@ import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.BoundedRepeats.BoundedRepeat;
 import anyparse.check.common.design.threads.CallRepetition.BoundedWay;
 import anyparse.query.CallGraph;
+import anyparse.util.Groups;
 
 /** A repeating call up the main thread's way to a call, and the functions from its target down to the call's own. */
 typedef RepeatOwner = {
@@ -118,7 +119,7 @@ final class MainRepeats {
 		while (qi < walk.queue.length) {
 			final at: { id: String, valuation: String } = walk.queue[qi++];
 			final way: BoundedWay = walk.ways[key(at.id, at.valuation)] ?? CallRepetition.UNBOUNDED;
-			for (b in way.entries) if (!bounded.contains(b)) bounded.push(b);
+			for (b in way.entries) Groups.pushUnique(bounded, b);
 			if (_states.assumed.exists(at.id) && !runsOnceAtStart(at.id) && !assumed.contains(at.id)) assumed.push(at.id);
 			for (e in _graph.inEdges(at.id)) if (e.kind != Contains && _runs(e)) climbEdge(walk, e, at, way);
 		}

@@ -20,6 +20,7 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.TypePathRegistries.TypePathMove;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.ds.ArraySort;
 import haxe.ds.Either;
@@ -951,7 +952,7 @@ final class ModuleMove {
 		for (d in drifts) if (d.metaAt.length == 0) {
 			final paths: Array<String> = out[d.file] ?? [];
 			final repair: String = d.repair ?? '';
-			if (!paths.contains(repair)) paths.push(repair);
+			Groups.pushUnique(paths, repair);
 			out[d.file] = paths;
 		}
 		return out;

@@ -7,6 +7,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
@@ -412,7 +413,7 @@ class BuildMacroMetaSeamTest extends Test {
 			if (raw.indexOf("'@:") < 0 && raw.indexOf('"@:') < 0) continue;
 			for (tag in metaTagLiterals(raw)) if (!OWN_GRAMMAR_TAGS.contains(tag)) {
 				final key: String = '$path $tag';
-				if (!seen.contains(key)) seen.push(key);
+				Groups.pushUnique(seen, key);
 				Assert.isTrue(
 					(ACCOUNTED_TAGS[path] ?? []).contains(tag),
 					'$path spells the target-language tag $tag - ask the grammar for it (see RefShape), '

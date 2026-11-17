@@ -6,6 +6,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -102,7 +103,7 @@ final class RawSourceScan {
 		for (fi in files) for (t in fi.types) {
 			final paths: Array<String> = _typePathsByName[t.name] ?? [];
 			final path: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
-			if (!paths.contains(path)) paths.push(path);
+			Groups.pushUnique(paths, path);
 			_typePathsByName[t.name] = paths;
 			_declaredPaths[path] = true;
 		}

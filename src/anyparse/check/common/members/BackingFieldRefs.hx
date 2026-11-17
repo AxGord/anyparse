@@ -8,6 +8,7 @@ import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 
 /**
  * Who ELSE touches the backing field — every reference outside the accessor pair the
@@ -225,7 +226,7 @@ final class BackingFieldRefs {
 	 */
 	private static function affectedSubtypeFiles(owner: String, field: String, index: SymbolIndex): Array<String> {
 		final out: Array<String> = index.subtypes.subtypeFiles(owner);
-		for (file in index.text.privilegedFiles(owner, field)) if (!out.contains(file)) out.push(file);
+		for (file in index.text.privilegedFiles(owner, field)) Groups.pushUnique(out, file);
 		return out;
 	}
 

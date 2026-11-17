@@ -3,6 +3,7 @@ package anyparse.check.scan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
+import anyparse.util.Groups;
 
 /**
  * The compiler-free half of `lint --fix`'s revert net: whether an edit set would leave a local
@@ -136,7 +137,7 @@ final class DefiniteAssignmentGuard {
 
 	/** Record `name` as definitely assigned, deduplicated. */
 	private static inline function mark(assigned: Array<String>, name: String): Void {
-		if (!assigned.contains(name)) assigned.push(name);
+		Groups.pushUnique(assigned, name);
 	}
 
 	/** Append every finding of ONE function unit's body to `out`. */

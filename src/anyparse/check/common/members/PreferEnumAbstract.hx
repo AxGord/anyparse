@@ -9,6 +9,7 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 
 /**
  * Suggests grouping a set of related `static final` integer constants into an
@@ -420,7 +421,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		});
 		if (groups.length == 0) return;
 		final names: Array<String> = [];
-		for (g in groups) for (n in g.members) if (!names.contains(n)) names.push(n);
+		for (g in groups) for (n in g.members) Groups.pushUnique(names, n);
 		final sinks: Map<String, Array<String>> = [];
 		computeSinks(tree, source, names, cfg, sinks, -1);
 		for (g in groups) if (interchangeable(g.members, sinks)) out.push({
@@ -715,8 +716,8 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		final cur: Null<Array<String>> = out[sink];
 		if (cur == null)
 			out[sink] = [name];
-		else if (!cur.contains(name))
-			cur.push(name);
+		else
+			Groups.pushUnique(cur, name);
 	}
 
 	/** Verbatim source of `node`, or empty when unspanned. */

@@ -1,5 +1,6 @@
 package unit;
 
+import anyparse.util.Groups;
 import testkit.TestRegistry;
 import utest.Assert;
 import utest.Test;
@@ -64,7 +65,7 @@ class TestDiscoveryParityTest extends Test {
 	public function testNoClassIsRegisteredTwice(): Void {
 		final names: Array<String> = TestRegistry.classNames();
 		final seen: Array<String> = [];
-		for (name in names) if (!seen.contains(name)) seen.push(name);
+		for (name in names) Groups.pushUnique(seen, name);
 		Assert.equals(names.length, seen.length, 'a duplicate registration makes utest throw at run start');
 	}
 

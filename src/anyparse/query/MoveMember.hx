@@ -16,6 +16,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import anyparse.util.Groups;
 import haxe.ds.Either;
 
@@ -1272,19 +1273,13 @@ final class MoveMember {
 		];
 		function walk(node: QueryNode): Null<QueryNode> {
 			final from: Int = node.span?.from ?? -1;
-			if (
-				from >= 0
+			return from >= 0
 				&& identKinds.contains(node.kind)
 				&& names.contains(node.name ?? '')
 				&& !keptAt.contains(from)
 				&& !insideAnyCut(prep, from)
-			)
-				return node;
-			for (c in node.children) {
-				final found: Null<QueryNode> = walk(c);
-				if (found != null) return found;
-			}
-			return null;
+				? node
+				: Arrays.findMap(node.children, c -> walk(c));
 		}
 		return walk(prep.srcTree);
 	}

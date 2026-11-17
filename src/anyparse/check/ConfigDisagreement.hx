@@ -5,6 +5,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.OracleProvider;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 
 /**
  * The sentences a lint RUN owes its reader about the SET of `apq.json` documents its scope spans —
@@ -205,7 +206,7 @@ final class ConfigDisagreement {
 			final own: String = signature(LintConfig.resolveWith(resolve, path));
 			if (own == applied) continue;
 			disagreeing++;
-			if (!others.contains(own)) others.push(own);
+			Groups.pushUnique(others, own);
 		}
 		return disagreeing == 0
 			? null

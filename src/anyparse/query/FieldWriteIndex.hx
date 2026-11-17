@@ -6,6 +6,7 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 using Lambda;
@@ -387,7 +388,7 @@ final class FieldWriteIndex {
 		final symbols: SymbolIndex = index ?? IndexScope.report(files, plugin);
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
 		final builtinNames: Array<String> = [];
-		for (v in literalTypes) if (!builtinNames.contains(v)) builtinNames.push(v);
+		for (v in literalTypes) Groups.pushUnique(builtinNames, v);
 		final unwrapNames: Array<String> = shape.nullableReturnMarkerTypes ?? [];
 		final rejectNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
 		final typeParams: Map<String, Array<String>> = [];
@@ -761,7 +762,7 @@ final class FieldWriteIndex {
 		seen.push(typeName);
 		for (d in declsNamedIn(index, typeName)) {
 			for (m in d.members) if (m.name == member) {
-				if (!out.contains(typeName)) out.push(typeName);
+				Groups.pushUnique(out, typeName);
 				break;
 			}
 			for (sup in d.supertypes) collectDeclaringSupertypes(index, sup, member, seen, out);
@@ -787,7 +788,7 @@ final class FieldWriteIndex {
 		if (cur == null)
 			map[owner] = params;
 		else
-			for (p in params) if (!cur.contains(p)) cur.push(p);
+			for (p in params) Groups.pushUnique(cur, p);
 	}
 
 	/** `paths` as a membership set — null (no partition supplied) is the empty set, where nothing is third-party. */

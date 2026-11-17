@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Arrays;
 import haxe.Exception;
 
 using Lambda;
@@ -620,22 +621,16 @@ class NominalTypesTest extends Test {
 
 	/** The value the expression body of the function `fn` under `node` returns. */
 	private static function returnedBy(node: QueryNode, fn: String): Null<QueryNode> {
-		if (node.kind == 'FnMember' && node.name == fn) {
-			// an expression body returns its expression; a block, what its own `return` does, else the first one nested in it
-			final body: Null<QueryNode> = node.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
-			final ret: Null<QueryNode> = if (body == null)
-				null
-			else if (body.kind == 'ExprBody')
-				body.children[0]
-			else
-				body.children.find(c -> c.kind == 'ReturnStmt') ?? nestedReturn(body);
-			return ret?.children[0];
-		}
-		for (c in node.children) {
-			final hit: Null<QueryNode> = returnedBy(c, fn);
-			if (hit != null) return hit;
-		}
-		return null;
+		if (node.kind != 'FnMember' || node.name != fn) return Arrays.findMap(node.children, c -> returnedBy(c, fn));
+		// an expression body returns its expression; a block, what its own `return` does, else the first one nested in it
+		final body: Null<QueryNode> = node.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
+		final ret: Null<QueryNode> = if (body == null)
+			null
+		else if (body.kind == 'ExprBody')
+			body.children[0]
+		else
+			body.children.find(c -> c.kind == 'ReturnStmt') ?? nestedReturn(body);
+		return ret?.children[0];
 	}
 
 	/** What `NominalTypes.writtenConstruction` reads off the construction the function `fn` of `text` returns. */
@@ -646,11 +641,7 @@ class NominalTypesTest extends Test {
 
 	/** The first `return` statement nested in `node`, in document order. */
 	private static function nestedReturn(node: QueryNode): Null<QueryNode> {
-		for (c in node.children) {
-			final hit: Null<QueryNode> = c.kind == 'ReturnStmt' ? c : nestedReturn(c);
-			if (hit != null) return hit;
-		}
-		return null;
+		return Arrays.findMap(node.children, c -> c.kind == 'ReturnStmt' ? c : nestedReturn(c));
 	}
 
 }

@@ -5,6 +5,7 @@ import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 
 /**
  * Flags a class / abstract member declared without an explicit `public` or
@@ -426,7 +427,7 @@ final class MissingVisibility extends RuleBase {
 	 */
 	private static function modifierRunKinds(shape: RefShape, meta: MetaShape): Array<String> {
 		final out: Array<String> = CheckScan.modifierKinds(shape);
-		for (k in meta.metaKinds) if (!out.contains(k)) out.push(k);
+		for (k in meta.metaKinds) Groups.pushUnique(out, k);
 		return out;
 	}
 

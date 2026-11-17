@@ -4,6 +4,7 @@ import anyparse.ds.Set;
 import anyparse.query.PackageDocumentCarry.RegistryDocument;
 import anyparse.query.format.json.ArmRecordText;
 import anyparse.query.format.json.MutationArmRegistryJsonParser;
+import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.ds.Either;
 import haxe.io.Path;
@@ -59,7 +60,7 @@ final class ArmRecords {
 				case Right(source):
 					sources[document] = source;
 			}
-			if (!touched.contains(document)) touched.push(document);
+			Groups.pushUnique(touched, document);
 		}
 		return Right(touched.map(document -> { file: Path.join([directory, document]), source: sources[document] ?? '' }));
 	}

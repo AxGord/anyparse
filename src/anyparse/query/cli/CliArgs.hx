@@ -5,6 +5,7 @@ import anyparse.grammar.mermaid.MermaidQueryPlugin;
 import anyparse.macro.GrammarDiscovery;
 import anyparse.query.merge.StructuralMerge.MergeShape;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 /**
  * The argument door of the `apq` CLI: everything that turns argv and the path
@@ -439,7 +440,7 @@ final class CliArgs {
 		for (spec in specs) {
 			final hits: Array<String> = [for (ext in extensions) for (p in Glob.expand(spec, ext)) p];
 			if (hits.length == 0) unmatched.push(spec);
-			for (p in hits) if (!paths.contains(p)) paths.push(p);
+			for (p in hits) Groups.pushUnique(paths, p);
 		}
 		final singleFile: Bool = specs.length == 1 && paths.length == 1 && paths[0] == specs[0];
 		return { paths: paths, singleFile: singleFile, unmatched: unmatched };

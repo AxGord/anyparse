@@ -7,6 +7,7 @@ import anyparse.query.CallGraphNames.DeclaredParams;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.ValueNameBinding.ImportedStatics;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -56,7 +57,7 @@ final class CallGraphKeys {
 		_tree = tree;
 		_functionKinds = functionKinds ?? [];
 		_typeParams = provider == null ? [] : provider.typeParamNames(source);
-		for (names in _typeParams) for (n in names) if (!_paramNames.contains(n)) _paramNames.push(n);
+		for (names in _typeParams) for (n in names) Groups.pushUnique(_paramNames, n);
 		final writtenSources: Map<Int, String> = provider == null ? [] : provider.declaredTypeSources(source);
 		for (at => written in writtenSources) typeSources[at] = keyed(written, at);
 	}
@@ -161,7 +162,7 @@ final class CallGraphKeys {
 		final keyed: Array<String> = [];
 		for (f in files) {
 			final key: String = keyedIn(imports, f, typeSyntax, source, unkeyed);
-			if (!keyed.contains(key)) keyed.push(key);
+			Groups.pushUnique(keyed, key);
 		}
 		return keyed.length == 0 ? [source] : keyed;
 	}
@@ -191,7 +192,7 @@ final class CallGraphKeys {
 			final written: Null<String> = d.written;
 			if (written == null) return null;
 			final key: String = keyedIn(imports, d.file, typeSyntax, written, unkeyed);
-			if (!keyed.contains(key)) keyed.push(key);
+			Groups.pushUnique(keyed, key);
 		}
 		return firstOf(typeSyntax, keyed, apart);
 	}

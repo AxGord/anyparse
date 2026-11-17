@@ -20,6 +20,7 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.query.UnchangedLocal;
+import anyparse.util.Arrays;
 
 /**
  * ETA-REDUCTION: flags a lambda whose whole body is ONE call that forwards the lambda's own
@@ -816,19 +817,13 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 
 	private static function hostNode(node: QueryNode, type: TypeDeclInfo, seams: Seams): Null<QueryNode> {
 		final span: Null<Span> = node.span;
-		if (
-			seams.typeHostKinds.contains(node.kind)
+		return seams.typeHostKinds.contains(node.kind)
 			&& node.name == type.name
 			&& span != null
 			&& span.from < type.span.to
 			&& type.span.from < span.to
-		)
-			return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = hostNode(c, type, seams);
-			if (found != null) return found;
-		}
-		return null;
+			? node
+			: Arrays.findMap(node.children, c -> hostNode(c, type, seams));
 	}
 
 	/**

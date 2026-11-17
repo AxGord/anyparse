@@ -20,6 +20,7 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.util.Arrays;
 
 using anyparse.util.Strings;
 
@@ -789,13 +790,9 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 	 */
 	private static function memberNamed(node: QueryNode, typeSpan: Span, method: String, functions: Array<String>): Null<QueryNode> {
 		final span: Null<Span> = node.span;
-		if (functions.contains(node.kind) && node.name == method && span != null && span.from >= typeSpan.from && span.to <= typeSpan.to)
-			return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = memberNamed(c, typeSpan, method, functions);
-			if (hit != null) return hit;
-		}
-		return null;
+		return functions.contains(node.kind) && node.name == method && span != null && span.from >= typeSpan.from && span.to <= typeSpan.to
+			? node
+			: Arrays.findMap(node.children, c -> memberNamed(c, typeSpan, method, functions));
 	}
 
 	/**

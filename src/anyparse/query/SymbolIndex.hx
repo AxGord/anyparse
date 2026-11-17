@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -943,7 +944,7 @@ final class SymbolIndex {
 			final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
 			if (type == null) continue;
 			final path: String = ModuleScan.pathOfDecl(file, type);
-			if (!out.contains(path)) out.push(path);
+			Groups.pushUnique(out, path);
 		}
 		return out;
 	}
@@ -1106,6 +1107,33 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * The dotted MODULE PATH an import statement names — `imp.raw` for every kind except
+	 * `Alias`, whose `raw` is the ALIAS the statement binds and whose path lives in
+	 * `aliasTarget`, the node's `target` slot. Null only for an alias node that carries no target. Distinct from
+	 * `importPathOf`, which answers about a TYPE: the path some other file would import it by.
+	 *
+	 * That null is read in OPPOSITE directions by the consumers: comparing it to a path makes
+	 * `filesImportingModule` omit the file and `MoveSymbol`s cross-package gate refuse (both withhold),
+	 * while `MoveSymbol`s importer loop then leaves that file unrepointed and `duplicate-import`s `?? raw`
+	 * fallback keys two such aliases alike. The grammar's alias declaration always fills the slot (its
+	 * `@:queryTarget` field is mandatory), so only a node a plugin builds by hand can reach it.
+	 *
+	 * The one seat of the MODULE-PATH question — not of every question about an import. A rule
+	 * asking about the BOUND NAME (`unused-import`, `redundant-import`) is right to read `raw`,
+	 * which for an alias is exactly the name it binds; those are deliberately left alone. What
+	 * reading `raw` cannot answer is "which module does this statement name", and every consumer
+	 * that asked it that way got it wrong differently: `filesImportingModule` did not list
+	 * an alias importer at all, `MoveSymbol` left it unrepointed and separately mistook its
+	 * own statement for a fully-qualified code reference, and `duplicate-import` keyed both
+	 * branches of `#if js import p.A as U; #else import p.B as U; #end` as one import and
+	 * deleted the second — while its own doc says two imports are duplicates only when the
+	 * module PATH matches, which is exactly what `raw` is not here.
+	 */
+	public static inline function pathImportedBy(imp: ImportInfo): Null<String> {
+		return imp.kind == ImportKind.Alias ? imp.aliasTarget : imp.raw;
+	}
+
+	/**
 	 * Parse every `(file, source)` entry through `plugin.parseFile` and
 	 * build the index. A file whose parse throws is recorded in
 	 * `skippedFiles()` and EXCLUDED from the index — `build` never
@@ -1143,33 +1171,6 @@ final class SymbolIndex {
 			if (segment.length > 0 && SourceText.isUpperInitial(segment)) return out.join('.');
 		}
 		return path;
-	}
-
-	/**
-	 * The dotted MODULE PATH an import statement names — `imp.raw` for every kind except
-	 * `Alias`, whose `raw` is the ALIAS the statement binds and whose path lives in
-	 * `aliasTarget`, the node's `target` slot. Null only for an alias node that carries no target. Distinct from
-	 * `importPathOf`, which answers about a TYPE: the path some other file would import it by.
-	 *
-	 * That null is read in OPPOSITE directions by the consumers: comparing it to a path makes
-	 * `filesImportingModule` omit the file and `MoveSymbol`s cross-package gate refuse (both withhold),
-	 * while `MoveSymbol`s importer loop then leaves that file unrepointed and `duplicate-import`s `?? raw`
-	 * fallback keys two such aliases alike. The grammar's alias declaration always fills the slot (its
-	 * `@:queryTarget` field is mandatory), so only a node a plugin builds by hand can reach it.
-	 *
-	 * The one seat of the MODULE-PATH question — not of every question about an import. A rule
-	 * asking about the BOUND NAME (`unused-import`, `redundant-import`) is right to read `raw`,
-	 * which for an alias is exactly the name it binds; those are deliberately left alone. What
-	 * reading `raw` cannot answer is "which module does this statement name", and every consumer
-	 * that asked it that way got it wrong differently: `filesImportingModule` did not list
-	 * an alias importer at all, `MoveSymbol` left it unrepointed and separately mistook its
-	 * own statement for a fully-qualified code reference, and `duplicate-import` keyed both
-	 * branches of `#if js import p.A as U; #else import p.B as U; #end` as one import and
-	 * deleted the second — while its own doc says two imports are duplicates only when the
-	 * module PATH matches, which is exactly what `raw` is not here.
-	 */
-	public static function pathImportedBy(imp: ImportInfo): Null<String> {
-		return imp.kind == ImportKind.Alias ? imp.aliasTarget : imp.raw;
 	}
 
 	/**

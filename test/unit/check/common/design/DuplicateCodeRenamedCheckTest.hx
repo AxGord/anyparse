@@ -8,6 +8,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
+import anyparse.util.Arrays;
 
 /**
  * The `duplicate-code-renamed` check: three or more consecutive statements repeated with their
@@ -460,12 +461,7 @@ class DuplicateCodeRenamedCheckTest extends Test {
 		if (support == null || tree == null) throw 'the fixture must parse under a grammar with a block seam';
 		final blockKinds: Array<String> = support.blockKinds();
 		function firstBlock(node: QueryNode): Null<QueryNode> {
-			if (blockKinds.contains(node.kind)) return node;
-			for (child in node.children) {
-				final found: Null<QueryNode> = firstBlock(child);
-				if (found != null) return found;
-			}
-			return null;
+			return blockKinds.contains(node.kind) ? node : Arrays.findMap(node.children, firstBlock);
 		}
 		final block: Null<QueryNode> = firstBlock(tree);
 		if (block == null) throw 'the fixture holds no block';

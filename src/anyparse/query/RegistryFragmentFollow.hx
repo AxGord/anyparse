@@ -8,6 +8,7 @@ import anyparse.query.TypePathRegistries.MemberRecord;
 import anyparse.query.TypePathRegistries.RegistryEdit;
 import anyparse.query.TypePathRegistries.StringSlot;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 using anyparse.util.Strings;
@@ -64,6 +65,11 @@ final class RegistryFragmentFollow {
 				followRecord(record, member.value, module, plugin, exists, edits, notes);
 		}
 		return { text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits), count: edits.length, notes: notes };
+	}
+
+	/** Whether the carried spelling would turn an arm that cut something into one whose find equals its replace. */
+	private static inline function cutsNothing(find: String, replace: Null<String>, carried: Carried): Bool {
+		return replace != null && find != replace && carried.find == (carried.replace ?? replace);
 	}
 
 	private static function followRecord(
@@ -217,11 +223,6 @@ final class RegistryFragmentFollow {
 	/** The replace paired with `record`'s `i`-th find; none when the record's finds and replaces do not pair up. */
 	private static function replaceOf(record: MemberRecord, i: Int): Null<StringSlot> {
 		return record.replaces.length == record.finds.length ? record.replaces[i] : null;
-	}
-
-	/** Whether the carried spelling would turn an arm that cut something into one whose find equals its replace. */
-	private static function cutsNothing(find: String, replace: Null<String>, carried: Carried): Bool {
-		return replace != null && find != replace && carried.find == (carried.replace ?? replace);
 	}
 
 	/** Where a cut starting at `at` now starts: text the rewrite put at the boundary stays outside the cut. */
@@ -425,7 +426,7 @@ final class RegistryFragmentFollow {
 			final replaced: Bool = edge >= 0 && edge < map.length && map[edge] < 0;
 			final wide: Int = isStart ? endOf(map, at) : startOf(map, at, end);
 			final candidates: Array<Int> = replaced ? [wide] : [startOf(map, at, end), endOf(map, at)];
-			for (p in candidates) if (!out.contains(p)) out.push(p);
+			for (p in candidates) Groups.pushUnique(out, p);
 		}
 		out.sort((a, b) -> a - b);
 		return out;

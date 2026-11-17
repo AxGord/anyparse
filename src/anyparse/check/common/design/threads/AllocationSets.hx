@@ -5,6 +5,7 @@ import anyparse.query.CallGraphNames;
 import anyparse.query.CondRegionScan;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex.MemberInfo;
+import anyparse.util.Groups;
 
 /**
  * The classes a dispatched call's receiver may be an instance of, where the code says: the running object's (handed
@@ -102,7 +103,7 @@ final class AllocationSets {
 			if (values == null)
 				sealed = false;
 			else
-				for (v in values) if (!found.contains(v)) found.push(v);
+				for (v in values) Groups.pushUnique(found, v);
 		}
 		final answer: Null<Array<String>> = !sealed || found.length == 0 ? null : found;
 		_fields[field] = answer;
@@ -197,7 +198,7 @@ final class AllocationSets {
 		for (p in parts) {
 			final inner: Null<Array<String>> = constructed(p, file);
 			if (inner == null) return null;
-			for (c in inner) if (!out.contains(c)) out.push(c);
+			for (c in inner) Groups.pushUnique(out, c);
 		}
 		return out;
 	}

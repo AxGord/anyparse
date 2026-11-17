@@ -4,6 +4,7 @@ import anyparse.check.common.design.ThreadSafety.FindingFamily;
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.query.CallGraph;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 
 /**
  * One way a thread can be in a function: entered on `ctx` under `valuation` (`EdgeConditions`) holding the locks `held`
@@ -410,7 +411,7 @@ final class LockOrder {
 
 	private static function add(into: Map<String, Array<String>>, key: String, lock: String): Void {
 		final known: Array<String> = into[key] ?? [];
-		if (!known.contains(lock)) known.push(lock);
+		Groups.pushUnique(known, lock);
 		into[key] = known;
 	}
 

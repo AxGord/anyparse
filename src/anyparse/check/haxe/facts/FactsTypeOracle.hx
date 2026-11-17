@@ -15,6 +15,7 @@ import anyparse.query.FactsTypeTree;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndexHost;
+import anyparse.util.Groups;
 
 using StringTools;
 
@@ -126,7 +127,7 @@ final class FactsTypeOracle implements FactsOracle {
 					case _: null;
 				};
 				if (result == null) return Declined(FactsDecline.NoFact);
-				if (!types.contains(result)) types.push(result);
+				Groups.pushUnique(types, result);
 			}
 			return agreed(types, scopeOf(nodes[0]), FactsDecline.NoFact);
 		});

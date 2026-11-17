@@ -2,6 +2,7 @@ package anyparse.check.common.design.threads;
 
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphNames;
+import anyparse.util.Groups;
 
 /**
  * The sinks every reporting `thread-safety` chain starts from, with no configuration: the grammar's blocking library
@@ -89,10 +90,10 @@ final class PositiveSinks {
 					+ ' — kept: a call of the library one the graph cannot tell apart from it resolves there'
 				);
 			final removed: Array<String> = [for (id in hit) if (!shadowing.contains(id)) id];
-			for (id in removed) if (!out.contains(id)) out.push(id);
+			for (id in removed) Groups.pushUnique(out, id);
 			// what the run's notice counts
 			if ((removed.length > 0 || walked?.waives(pattern) == true) && !_removers.contains(pattern)) _removers.push(pattern);
-			for (id in removed) if (!_removed.contains(id)) _removed.push(id);
+			for (id in removed) Groups.pushUnique(_removed, id);
 		}
 		return out;
 	}

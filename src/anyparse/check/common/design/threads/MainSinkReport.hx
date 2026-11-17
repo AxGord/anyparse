@@ -10,6 +10,7 @@ import anyparse.check.common.design.threads.LockTaint.BlockingTrail;
 import anyparse.check.common.design.threads.MainRepeats.MainClimb;
 import anyparse.check.common.design.threads.MainRepeats.RepeatOwner;
 import anyparse.query.CallGraph;
+import anyparse.util.Groups;
 
 /** A repeating call's finding (a), with the short sinks below it it names and the main-thread path to it. */
 private typedef OwnedFinding = { final finding: Violation; var sinks: Array<String>; final path: Array<String>; }
@@ -166,7 +167,7 @@ final class MainSinkReport {
 				mergeRepeats(kept, d.finding);
 				for (k => v in reportedBy) if (v == d.finding) reportedBy[k] = kept;
 				final subject: String = d.finding.data?.subject ?? d.edge.to;
-				if (!named.contains(subject)) named.push(subject);
+				Groups.pushUnique(named, subject);
 			}
 			if (named.length > 0) kept.message += ' — with ${named.map(n -> '"$n"').join(', ')} on the same way, reported here';
 		}
@@ -211,9 +212,7 @@ final class MainSinkReport {
 				t.finding.message += writes.unsealedNote(t.edge.receiverField, null) ?? '';
 				continue;
 			}
-			final list: Array<{ edge: CallEdge, finding: Violation }> = byLock[lock] ?? [];
-			list.push(t);
-			byLock[lock] = list;
+			Groups.push(byLock, lock, t);
 		}
 		for (lock => list in byLock) if (list.length > 1) {
 			final rank: ({ edge: CallEdge, finding: Violation }) -> String = t ->
@@ -308,7 +307,7 @@ final class MainSinkReport {
 			if (by == member) continue;
 			final finding: Violation = reportRepeater(graph, r, sinks, repeats, states, owners.owned, violations);
 			if (!owners.moved.exists(siteKey(edge))) owners.moved[siteKey(edge)] = finding;
-			if (!elsewhere.contains(by)) elsewhere.push(by);
+			Groups.pushUnique(elsewhere, by);
 		}
 		final own: Bool = long || assumed.length > 0 || repeaters.exists(r -> ThreadSafety.memberOf(graph, r.edge.from) == member);
 		final note: String = if (inSink)

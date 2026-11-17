@@ -4,6 +4,7 @@ import anyparse.check.common.design.threads.LockSites.BlindCall;
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.check.common.design.threads.LockTaint.BlockingTrail;
 import anyparse.query.CallGraph;
+import anyparse.util.Groups;
 
 /** Why `thread-safety` deems a lock long (`LongLockExplain`): a closed set. */
 enum abstract LongLockKind(String) to String {
@@ -130,7 +131,7 @@ final class LongLockExplain {
 		final order: Array<String> = long.copy();
 		function add(lock: String, reason: LongLockReason): Void {
 			byLock[lock] = distinct((byLock[lock] ?? []).concat([reason]));
-			if (!order.contains(lock)) order.push(lock);
+			Groups.pushUnique(order, lock);
 		}
 		for (c in crossings(sites)) add(c.lock, siteReason(Crossing, c.edge, []));
 		for (a in acquires) {

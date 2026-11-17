@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.MemberKinds;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 
 /**
  * `CallSites` — the completeness PROOF the signature-rewriting operations rest on, pinned
@@ -188,12 +189,7 @@ class CallSitesTest extends Test {
 
 	/** The first node of `kind` in pre-order, or null. */
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = firstOfKind(c, kind);
-			if (hit != null) return hit;
-		}
-		return null;
+		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
 	}
 
 }

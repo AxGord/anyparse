@@ -6,6 +6,8 @@ import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.ImportSpelling.ImportSpelled;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 using Lambda;
@@ -328,12 +330,9 @@ final class NewFile {
 	}
 
 	private static function findInterface(node: QueryNode, name: String): Null<QueryNode> {
-		if (node.kind == 'InterfaceDecl' && node.name == name) return node;
-		for (child in node.children) {
-			final found: Null<QueryNode> = findInterface(child, name);
-			if (found != null) return found;
-		}
-		return null;
+		return node.kind == 'InterfaceDecl' && node.name == name
+			? node
+			: Arrays.findMap(node.children, child -> findInterface(child, name));
 	}
 
 	/**
@@ -405,7 +404,7 @@ final class NewFile {
 	/** Order-preserving de-duplication of import lines. */
 	private static function dedup(lines: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (line in lines) if (!out.contains(line)) out.push(line);
+		for (line in lines) Groups.pushUnique(out, line);
 		return out;
 	}
 
@@ -433,13 +432,9 @@ final class NewFile {
 
 	/** Why `spec` has no typedef spelling: an `@@ members` block or a `--field` that is no plain struct field, or null. */
 	private static function typedefError(spec: NewFileSpec): Null<String> {
-		if ((spec.bodiesRaw ?? '').indexOf('@@ $MEMBERS_SECTION') >= 0)
-			return 'a typedef takes its fields from --field, not from an @@ members block';
-		for (field in spec.fields) {
-			final error: Null<String> = structFieldError(field);
-			if (error != null) return error;
-		}
-		return null;
+		return (spec.bodiesRaw ?? '').indexOf('@@ $MEMBERS_SECTION') >= 0
+			? 'a typedef takes its fields from --field, not from an @@ members block'
+			: Arrays.findMap(spec.fields, structFieldError);
 	}
 
 	/**

@@ -29,6 +29,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -605,7 +606,7 @@ final class FactsView {
 		for (sub in overriders(type, name)) {
 			final graphed: String = graphType(sub);
 			final id: String = g.ownMember(graphed, name) ?? g.externalNode(graphed, name);
-			if (!out.contains(id)) out.push(id);
+			Groups.pushUnique(out, id);
 		}
 		return out;
 	}
@@ -907,7 +908,7 @@ final class FactsView {
 					final base: String = CompilerFacts.baseId(target);
 					final names: Array<String> = built[base] ?? [];
 					final name: String = graphType(id);
-					if (!names.contains(name)) names.push(name);
+					Groups.pushUnique(names, name);
 					built[base] = names;
 				}
 			}
@@ -924,9 +925,7 @@ final class FactsView {
 		final out: Map<String, Array<String>> = [];
 		for (id in _table.typeIds()) {
 			final simple: String = graphType(id);
-			final list: Array<String> = out[simple] ?? [];
-			list.push(id);
-			out[simple] = list;
+			Groups.push(out, simple, id);
 		}
 		_bySimpleName = out;
 		return out;
@@ -1305,7 +1304,7 @@ final class FactsView {
 		final declared: Array<String> = [];
 		for (fi in _scope.index.allFiles()) for (t in fi.types) if (t.name == type && !CallGraphNames.selfAlias(t)) {
 			final named: String = declaredId(fi, t);
-			if (!declared.contains(named)) declared.push(named);
+			Groups.pushUnique(declared, named);
 		}
 		return declared;
 	}
@@ -1677,6 +1676,11 @@ final class FactsView {
 		return FactSites.placed(n, at);
 	}
 
+	/** Whether `node` is a pseudo-node running its type's field initializers (`CallGraph.INIT_NAME`, `STATIC_INIT_NAME`). */
+	public static inline function initializerNode(node: FnNode): Bool {
+		return node.span == null && (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
+	}
+
 	/**
 	 * The `Reflect`/`Type` members whose bodies were spliced into `n` (`reflection-inlined`): every method a fact of that
 	 * code lies in the declared code of (`reflection-from:`, `TypedFactsWalk`) and every one an `inlined` call of the node
@@ -1705,11 +1709,6 @@ final class FactsView {
 				out.push(target);
 		}
 		return out;
-	}
-
-	/** Whether `node` is a pseudo-node running its type's field initializers (`CallGraph.INIT_NAME`, `STATIC_INIT_NAME`). */
-	public static function initializerNode(node: FnNode): Bool {
-		return node.span == null && (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 
 	/**

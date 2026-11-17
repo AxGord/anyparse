@@ -5,6 +5,7 @@ import anyparse.query.CondRegionLiveness.DefineFacts;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -164,7 +165,7 @@ final class ReachLiveness {
 			var at: Int = 0;
 			while (FLAG.matchSub(text, at)) {
 				final flag: String = FLAG.matched(0);
-				if (!flags.contains(flag)) flags.push(flag);
+				Groups.pushUnique(flags, flag);
 				final pos: { pos: Int, len: Int } = FLAG.matchedPos();
 				at = pos.pos + pos.len;
 			}

@@ -2835,6 +2835,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PH-IMPORT-RIDES-ON-REWRITE",
+			"note": "prefer-helper's only rewrite (a findMap whose lambda loses the narrowing of o) is rejected by the oracle: the import it needed must go with it, leaving the file untouched",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-helper",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "@:nullSafety(Loose)\nclass Main {\n\tvar o:Null<String> = 'x';\n\n\tfunction new() {}\n\n\tfunction upper(xs:Array<Int>):Null<String> {\n\t\tif (o == null) return null;\n\t\tfor (c in xs) {\n\t\t\tfinal f = c > 1 ? o.toUpperCase() : null;\n\t\t\tif (f != null) return f;\n\t\t}\n\t\treturn null;\n\t}\n\n\tstatic function main():Void {\n\t\tSys.println(new Main().upper([1, 2]));\n\t}\n}\n",
+				"util/Arrays.hx": "package util;\n\nclass Arrays {\n\t@:preferHelper\n\tpublic static function findMap<T, R>(xs:Iterable<T>, f:T->Null<R>):Null<R> {\n\t\tfor (x in xs) {\n\t\t\tfinal y:Null<R> = f(x);\n\t\t\tif (y != null) return y;\n\t\t}\n\t\treturn null;\n\t}\n}\n",
+				"check.hxml": "-cp .\n-main Main\n--interp\n",
+				"apq.json": "{\"compilerOracle\":\"check.hxml\",\"resolutionRoots\":[\".\"],\"rules\":{\"prefer-helper\":{\"marker\":\"@:preferHelper\"}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "8f8f892729715428",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

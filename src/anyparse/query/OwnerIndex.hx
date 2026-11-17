@@ -5,6 +5,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 /** One declaration `OwnerIndex` ranks: a type or one of its members, with what its doc comment says. */
 typedef OwnerEntry = {
@@ -181,9 +182,7 @@ final class OwnerIndex {
 		this.entries = entries;
 		for (position => entry in entries) for (term in distinct(entry.nameTerms.concat(entry.questionTerms).concat(entry.docTerms))) {
 			_documentFrequency[term] = (_documentFrequency[term] ?? 0) + 1;
-			final posting: Array<Int> = _postings[term] ?? [];
-			posting.push(position);
-			_postings[term] = posting;
+			Groups.push(_postings, term, position);
 		}
 	}
 
@@ -467,7 +466,7 @@ final class OwnerIndex {
 
 	private static function distinct(items: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (item in items) if (!out.contains(item)) out.push(item);
+		for (item in items) Groups.pushUnique(out, item);
 		return out;
 	}
 

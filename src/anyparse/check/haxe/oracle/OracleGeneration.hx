@@ -12,6 +12,7 @@ import anyparse.proc.ProcessSpawn;
 import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.PreparedOracles;
+import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -638,7 +639,7 @@ final class OracleGeneration {
 			paths.push(path);
 			collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
 		}
-		for (lib in refs.libs) if (!names.contains(lib)) names.push(lib);
+		for (lib in refs.libs) Groups.pushUnique(names, lib);
 		for (classPath in refs.classPaths) {
 			final dir: String = absolute(cwd, classPath);
 			if (dir == root || dir.startsWith('$root/')) continue;
@@ -710,7 +711,7 @@ final class OracleGeneration {
 	}
 
 	private static inline function addOnce(paths: Array<String>, path: String): Void {
-		if (!paths.contains(path)) paths.push(path);
+		Groups.pushUnique(paths, path);
 	}
 	#end
 

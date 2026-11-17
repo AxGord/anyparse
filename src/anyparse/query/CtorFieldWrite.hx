@@ -5,6 +5,7 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import haxe.Exception;
 
 using anyparse.util.Strings;
@@ -658,6 +659,15 @@ final class CtorFieldWrite {
 	}
 
 	/**
+	 * The kinds that host a deferred body — every nested function (`ShapeVocab.nestedFunctionKinds`): a lambda, a local
+	 * `function`, a local `inline function` and a named function expression, inside each of which Haxe 4.3.7 rejects a
+	 * `final` field write (`This expression cannot be accessed for writing`, verified on `--interp`).
+	 */
+	private static inline function closureHostKinds(shape: RefShape): Array<String> {
+		return ShapeVocab.nestedFunctionKinds(shape);
+	}
+
+	/**
 	 * Whether a top-level constructor statement of `kind` ALWAYS COMPLETES NORMALLY — control
 	 * reaches the statement after it, whatever the statement does internally. Membership only:
 	 * the KIND is what is decided here, never the subtree, which is `ctorPrefixUnconditional`'s
@@ -698,15 +708,6 @@ final class CtorFieldWrite {
 			out.push({ assign: node, inClosure: enclosed });
 		for (child in node.children)
 			collectCtorFieldWrites(child, fieldFrom, fieldName, container, shape, assignKind, closures, enclosed, out);
-	}
-
-	/**
-	 * The kinds that host a deferred body — every nested function (`ShapeVocab.nestedFunctionKinds`): a lambda, a local
-	 * `function`, a local `inline function` and a named function expression, inside each of which Haxe 4.3.7 rejects a
-	 * `final` field write (`This expression cannot be accessed for writing`, verified on `--interp`).
-	 */
-	private static function closureHostKinds(shape: RefShape): Array<String> {
-		return ShapeVocab.nestedFunctionKinds(shape);
 	}
 
 	/**
@@ -756,11 +757,7 @@ final class CtorFieldWrite {
 			final field: Null<QueryNode> = found;
 			if (field != null) return { container: node, field: field };
 		}
-		for (child in node.children) {
-			final hit: Null<{ container: QueryNode, field: QueryNode }> = findFieldContainer(child, fieldFrom, classLike, fields);
-			if (hit != null) return hit;
-		}
-		return null;
+		return Arrays.findMap(node.children, child -> findFieldContainer(child, fieldFrom, classLike, fields));
 	}
 
 	/**

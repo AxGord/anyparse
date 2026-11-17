@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -273,8 +274,7 @@ final class MemberBranchScan {
 		eachRegion(seams, container, region -> {
 			final members: Array<QueryNode> = regionMembers(region, isMember);
 			if (members.length == 0 || members.exists(m -> !deleting.contains(m))) return;
-			for (m in members) if (!refused.contains(m))
-				refused.push(m);
+			for (m in members) Groups.pushUnique(refused, m);
 		});
 		return deleting.filter(m -> !refused.contains(m));
 	}

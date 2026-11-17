@@ -7,6 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefsCache;
 import anyparse.query.TypeInfoProvider;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -161,7 +162,7 @@ final class NullFlowReplayTest extends Test {
 		final collected: Array<String> = [];
 		RefsCache.collectNames(tree, collected);
 		final names: Array<String> = [];
-		for (name in collected) if (!names.contains(name)) names.push(name);
+		for (name in collected) Groups.pushUnique(names, name);
 		names.sort(Compare.compareString);
 		final out: Array<String> = [];
 		NullFlow.analyze(tree, shape, source, (node, facts) -> {

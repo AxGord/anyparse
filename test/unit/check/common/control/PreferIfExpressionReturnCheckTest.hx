@@ -6,6 +6,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.QueryNode;
 import anyparse.query.SourceComments;
+import anyparse.util.Arrays;
 import haxe.Exception;
 
 using Lambda;
@@ -670,12 +671,7 @@ class PreferIfExpressionReturnCheckTest extends Test {
 
 	/** The first `if` STATEMENT in document order, or null. */
 	private function firstIf(node: QueryNode, ifKinds: Array<String>): Null<QueryNode> {
-		if (ifKinds.contains(node.kind)) return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = firstIf(c, ifKinds);
-			if (hit != null) return hit;
-		}
-		return null;
+		return ifKinds.contains(node.kind) ? node : Arrays.findMap(node.children, c -> firstIf(c, ifKinds));
 	}
 
 }

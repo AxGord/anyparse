@@ -14,6 +14,7 @@ import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.query.OracleProvider.UsableCoverage;
 import anyparse.query.OracleProviders;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -236,7 +237,7 @@ final class FixVerifierCrossFile {
 			}
 			if (!covered) return null;
 		}
-		for (config in judge.usable.unknown) if (!out.contains(config)) out.push(config);
+		for (config in judge.usable.unknown) Groups.pushUnique(out, config);
 		return out;
 	}
 

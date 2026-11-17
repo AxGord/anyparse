@@ -17,6 +17,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.util.Groups;
 
 /**
  * Flags a private field that is only a per-call SCRATCH value of one method — every read and write of
@@ -499,7 +500,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	private static function valueTypesOf(shape: RefShape): Array<String> {
 		final out: Array<String> = present(shape.nonNullableTypeNames).copy();
 		final literals: Map<String, String> = shape.literalTypeNames ?? [];
-		for (t in literals) if (!out.contains(t)) out.push(t);
+		for (t in literals) Groups.pushUnique(out, t);
 		return out;
 	}
 

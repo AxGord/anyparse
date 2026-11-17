@@ -3,6 +3,7 @@ package anyparse.check.common.design;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 /**
@@ -185,7 +186,7 @@ final class RuleDeclaration {
 			return null;
 		}
 		final distinct: Array<String> = [];
-		for (n in declaredFields) if (!distinct.contains(n)) distinct.push(n);
+		for (n in declaredFields) Groups.pushUnique(distinct, n);
 		if (distinct.length != declaredFields.length) {
 			problems.push('$label ("$declaredType") names a field twice — dropped');
 			return null;

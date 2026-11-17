@@ -4,6 +4,7 @@ import anyparse.check.FailerBisect;
 import anyparse.check.LintConfig.OracleConfig;
 import anyparse.query.OracleProvider.OracleExclusion;
 import anyparse.query.OracleProvider.OracleOutcome;
+import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -589,7 +590,7 @@ final class LintFixSafePass {
 		if (!green(text)) return null;
 		for (i in failers) if (green(seat.replay(file, keptRules.concat([rules[i]])))) return null;
 		final dropped: Array<String> = failers.map(i -> rules[i]);
-		for (rule in later) if (!dropped.contains(rule)) dropped.push(rule);
+		for (rule in later) Groups.pushUnique(dropped, rule);
 		return {
 			file: file,
 			rules: dropped,

@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import anyparse.util.Compare;
 import haxe.crypto.Md5;
 import haxe.ds.Either;
@@ -243,12 +244,9 @@ final class MoveElements {
 
 	/** The array literal starting at `from` in `tree`, or null. */
 	private static function arrayStartingAt(tree: QueryNode, from: Int, arrayKind: Null<String>): Null<QueryNode> {
-		if (tree.kind == arrayKind && tree.span?.from == from) return tree;
-		for (child in tree.children) {
-			final hit: Null<QueryNode> = arrayStartingAt(child, from, arrayKind);
-			if (hit != null) return hit;
-		}
-		return null;
+		return tree.kind == arrayKind && tree.span?.from == from
+			? tree
+			: Arrays.findMap(tree.children, child -> arrayStartingAt(child, from, arrayKind));
 	}
 
 	/** Whether `a` and `b` hold the same strings in the same order. */

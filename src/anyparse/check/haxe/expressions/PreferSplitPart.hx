@@ -158,12 +158,11 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		final texts: Array<String> = fixed.map(c ->
 			'${printer.printTypeExpr(path, c.span.from)}.${c.member}(${c.receiver}, ${c.delimiter})'
 		);
-		final imports: Array<PendingImportEdit> = printer.pendingImportEdits();
-		final groupOf: Map<String, Int> = [];
-		for (group => edit in imports) for (imported in edit.paths) groupOf[imported] = group;
-		final edits: Array<GroupedEdit> = [for (i => c in fixed) { span: c.span, text: texts[i], group: groupOf[path] }];
-		for (group => edit in imports) edits.push({ span: edit.span, text: edit.text, group: group });
-		return edits;
+		final imports: ImportGroups = printer.importGroups();
+		final edits: Array<GroupedEdit> = [
+			for (i => c in fixed) { span: c.span, text: texts[i], group: imports.groupOf(path) }
+		];
+		return edits.concat(imports.edits);
 	}
 
 	private function toolsOf(file: String, plugin: GrammarPlugin, s: Seams, index: () -> Null<SymbolIndex>): Tools {

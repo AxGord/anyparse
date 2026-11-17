@@ -164,17 +164,11 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			file, source, tree, RunScan.typeInfoOf(plugin)?.importMap(source, file) ?? [], plugin, scope()
 		);
 		final texts: Array<String> = fixed.map(replacementOf.bind(_, printer));
-		final imports: Array<PendingImportEdit> = printer.pendingImportEdits();
-		final groupOf: Map<String, Int> = [];
-		for (group => edit in imports) for (path in edit.paths) groupOf[path] = group;
+		final imports: ImportGroups = printer.importGroups();
 		final edits: Array<GroupedEdit> = [
-			for (i => m in fixed) {
-				final path: Null<String> = m.compare?.typePath;
-				{ span: m.replaced, text: texts[i], group: path == null ? null : groupOf[path] };
-			}
+			for (i => m in fixed) { span: m.replaced, text: texts[i], group: imports.groupOf(m.compare?.typePath) }
 		];
-		for (group => edit in imports) edits.push({ span: edit.span, text: edit.text, group: group });
-		return edits;
+		return edits.concat(imports.edits);
 	}
 
 	public function supersedes(): Array<String> {

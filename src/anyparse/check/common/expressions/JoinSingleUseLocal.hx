@@ -12,6 +12,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.util.Groups;
 
 /**
  * Flags a redundant intermediate local: an IMMUTABLE single-variable declaration whose
@@ -258,7 +259,7 @@ final class JoinSingleUseLocal extends RuleBase {
 	 */
 	private static function deferringKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = ShapeVocab.functionLikeKinds(shape);
-		for (k in shape.opaqueKinds ?? []) if (!out.contains(k)) out.push(k);
+		for (k in shape.opaqueKinds ?? []) Groups.pushUnique(out, k);
 		return out;
 	}
 
@@ -268,7 +269,7 @@ final class JoinSingleUseLocal extends RuleBase {
 	 */
 	private static function barrierKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = deferringKinds(shape);
-		for (k in ShapeVocab.loopKinds(shape)) if (!out.contains(k)) out.push(k);
+		for (k in ShapeVocab.loopKinds(shape)) Groups.pushUnique(out, k);
 		return out;
 	}
 

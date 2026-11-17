@@ -2311,7 +2311,7 @@
 			"name": "M-TS-WAIVE-OFF",
 			"type": "anyparse.check.common.design.threads.PositiveSinks",
 			"method": "waived",
-			"find": "for (id in removed) if (!out.contains(id)) out.push(id);",
+			"find": "for (id in removed) Groups.pushUnique(out, id);",
 			"replace": "",
 			"note": "a nonBlocking entry waives nothing"
 		},
@@ -3036,7 +3036,7 @@
 			"name": "M-TS-STORED-MEMBER-TYPE",
 			"type": "anyparse.check.common.design.threads.FieldWrites",
 			"method": "storesLock",
-			"find": "fields == null || fields.length == 0 ? [null] : fields.map(f -> _values.memberTypeOf(f))",
+			"find": "fields == null || fields.length == 0 ? [null] : fields.map(_values.memberTypeOf)",
 			"replace": "[null]",
 			"note": "what a write stores costs every lock member, whatever its type (R3 M4)"
 		},
@@ -3380,7 +3380,7 @@
 			"name": "M-TS-MAKES-RESOLVED",
 			"type": "anyparse.check.common.design.threads.ReflectiveReach",
 			"method": "namedTypes",
-			"find": "for (key in keysOf(file, written)) for (t in [key, aliased(key)]) if (!out.contains(t)) out.push(t);",
+			"find": "for (key in keysOf(file, written)) for (t in [key, aliased(key)]) Groups.pushUnique(out, t);",
 			"replace": "",
 			"note": "a name made under an import alias or a typedef alias of the class makes none of it (review R3 H1)"
 		},

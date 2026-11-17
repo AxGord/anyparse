@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import haxe.Exception;
 
 /**
@@ -542,11 +543,7 @@ final class ParenGuard {
 			if (trimmedFrom(text, own) == span.from && trimmedTo(text, own) == span.to) return node;
 			if (own.from > span.from || own.to < span.to) return null;
 		}
-		for (child in node.children) {
-			final hit: Null<QueryNode> = nodeAtSpan(text, child, span);
-			if (hit != null) return hit;
-		}
-		return null;
+		return Arrays.findMap(node.children, child -> nodeAtSpan(text, child, span));
 	}
 
 	private static function trimmedFrom(text: String, span: Span): Int {

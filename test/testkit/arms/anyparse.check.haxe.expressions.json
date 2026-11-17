@@ -285,8 +285,8 @@
 			"name": "M-RCMP-IMPORT-LOST",
 			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "fixGrouped",
-			"find": "edits.push({ span: edit.span, text: edit.text, group: group });",
-			"replace": "edits.push({ span: edit.span, text: '', group: group });",
+			"find": "return edits.concat(imports.edits);",
+			"replace": "return edits;",
 			"note": "the fix writes the short name of the function and no import of its type, so the file stops compiling"
 		},
 		{
@@ -396,8 +396,8 @@
 			"name": "M-SPLITP-IMPORT-LOST",
 			"type": "anyparse.check.haxe.expressions.PreferSplitPart",
 			"method": "fixGrouped",
-			"find": "edits.push({ span: edit.span, text: edit.text, group: group });",
-			"replace": "edits.push({ span: edit.span, text: '', group: group });",
+			"find": "return edits.concat(imports.edits);",
+			"replace": "return edits;",
 			"note": "the fix writes the short name of the utility and no import of its class, so the file stops compiling"
 		},
 		{

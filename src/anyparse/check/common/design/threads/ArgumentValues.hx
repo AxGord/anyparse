@@ -15,6 +15,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 
 using StringTools;
 
@@ -278,7 +279,7 @@ final class ArgumentValues {
 				: valueOf(arg, call, keepStrings);
 			final part: Null<Array<String>> = atomsOf(value);
 			if (part == null) return UNKNOWN;
-			for (a in part) if (!atoms.contains(a)) atoms.push(a);
+			for (a in part) Groups.pushUnique(atoms, a);
 		}
 		return spell(atoms, keepStrings);
 	}
@@ -291,7 +292,7 @@ final class ArgumentValues {
 		final kept: Array<String> = [];
 		for (a in atoms) {
 			final atom: String = keepStrings || stringOf(a) == null ? a : NON_NULL;
-			if (!kept.contains(atom)) kept.push(atom);
+			Groups.pushUnique(kept, atom);
 		}
 		if (kept.length == 0) return UNKNOWN;
 		if (kept.length == 1 && stringOf(kept[0]) == null) return kept[0];

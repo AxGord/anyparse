@@ -1282,6 +1282,22 @@
 			"find": "scan.exits && seams.functionKinds.contains(node.kind)",
 			"replace": "false",
 			"note": "a helper ending in a value return may hold a function, whose own return would leave that function and not the body"
+		},
+		{
+			"name": "M-PREFER-HELPER-IMPORT-UNGROUPED",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "fixGrouped",
+			"find": "group: imports.groupOf(site.template.typePath)",
+			"replace": "group: null",
+			"note": "a rewrite and the import it needs are bisected apart, so a reverted rewrite can leave its import behind unused"
+		},
+		{
+			"name": "M-PREFER-HELPER-IMPORTED-GROUPED",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "fixGrouped",
+			"find": "group: imports.groupOf(site.template.typePath)",
+			"replace": "group: imports.groupOf(site.template.typePath) ?? 0",
+			"note": "a rewrite that needs no import is tied into one group with the file's others, so one rejected rewrite reverts them all"
 		}
 	]
 }

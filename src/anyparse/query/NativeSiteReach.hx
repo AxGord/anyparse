@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
 import anyparse.query.FactsTypeTree;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -80,8 +81,8 @@ final class NativeSiteReach {
 		if (types == null) return true;
 		if (source == null || _view.unchecked().byType(t))
 			into.types = null
-		else if (!types.contains(source))
-			types.push(source);
+		else
+			Groups.pushUnique(types, source);
 		return true;
 	}
 

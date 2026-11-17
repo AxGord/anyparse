@@ -20,6 +20,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 /** The shape, the declared types, the index and the chain context `NominalTypes` reads an expression's type through. */
@@ -485,7 +486,7 @@ final class CheckScan {
 		final declared: Null<Array<String>> = shape.modifierKinds;
 		if (declared != null) return declared.copy();
 		final out: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
-		for (m in shape.visibilityModifierKinds ?? []) if (!out.contains(m)) out.push(m);
+		for (m in shape.visibilityModifierKinds ?? []) Groups.pushUnique(out, m);
 		for (kind in [
 			shape.externModifierKind,
 			shape.dynamicModifierKind,

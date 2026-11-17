@@ -25,6 +25,7 @@ import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -337,7 +338,7 @@ final class LintFixDriver {
 		// `SymbolIndexHost.resolutionIndex()`. Both rebuild per pass over this pass's sources.
 		final index: SymbolIndex = PhaseTimings.measure('pass report index', IndexScope.report.bind(files, cached));
 		final resolutionFiles: Null<Array<{ file: String, source: String }>> = PhaseTimings.measure(
-			'pass resolution files', () -> cached.resolutionFiles()
+			'pass resolution files', cached.resolutionFiles
 		);
 		if (resolutionFiles != null) PhaseTimings.time('pass resolution index', () -> cached.rebuildResolutionIndex(resolutionFiles));
 		// The `--range` window is applied HERE, on the pass's own sources, and nowhere else in
@@ -623,8 +624,8 @@ final class LintFixDriver {
 			if (held != null) files.remove(held);
 			final queued: Null<{ file: String, source: String }> = nextActive.find(entry -> entry.file == path);
 			if (queued != null) nextActive.remove(queued);
-			if (!touchedThisPass.contains(path)) touchedThisPass.push(path);
-			if (!changedFiles.contains(path)) changedFiles.push(path);
+			Groups.pushUnique(touchedThisPass, path);
+			Groups.pushUnique(changedFiles, path);
 			countEdits(editsOf, path, 1);
 			removed.push(path);
 		}
@@ -1354,7 +1355,7 @@ final class LintFixDriver {
 		// into files the verified phases never touched.
 		final rewritten: Array<String> = changedSince(files, verifiedOf).map(entry -> entry.file).concat(goneSince(files, verifiedOf));
 		if (rewritten.length == 0) return quiet;
-		for (f in rewritten) if (!changedFiles.contains(f)) changedFiles.push(f);
+		for (f in rewritten) Groups.pushUnique(changedFiles, f);
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracle, oracles, created, trail);
 		// What the round KEPT: a file its net reverted is back at the verified bytes, so neither it nor its edits are counted —
 		// bar the edits a file the net only split kept.

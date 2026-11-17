@@ -12,6 +12,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 
 using Lambda;
 
@@ -188,12 +189,9 @@ final class NullGuardedCode {
 	/** The identifier `condition` tests is not null, alone or as an operand of an `&&`, or null. */
 	private function testedNotNull(condition: QueryNode): Null<QueryNode> {
 		final direct: Null<QueryNode> = comparedWithNull(condition, _shape.notEqKind);
-		if (direct != null || condition.kind != _shape.logicalAndKind) return direct;
-		for (c in condition.children) {
-			final inner: Null<QueryNode> = testedNotNull(unwrap(c));
-			if (inner != null) return inner;
-		}
-		return null;
+		return direct != null || condition.kind != _shape.logicalAndKind
+			? direct
+			: Arrays.findMap(condition.children, c -> testedNotNull(unwrap(c)));
 	}
 
 	/** The identifier `condition`, a comparison of the kind `kind`, compares with the null literal, or null. */

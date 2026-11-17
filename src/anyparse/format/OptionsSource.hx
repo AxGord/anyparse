@@ -1,5 +1,6 @@
 package anyparse.format;
 
+import anyparse.util.Groups;
 import haxe.Exception;
 
 using StringTools;
@@ -34,7 +35,7 @@ final class OptionsSource {
 			final spelled: String = spell(knob.shape, now, needed);
 			if (spelled == spell(knob.shape, was, [])) continue;
 			out.push({ name: knob.name, source: spelled });
-			for (path in needed) if (!imports.contains(path)) imports.push(path);
+			for (path in needed) Groups.pushUnique(imports, path);
 		}
 		return out;
 	}
@@ -49,7 +50,7 @@ final class OptionsSource {
 				return quote(Std.string(value));
 			case Constants(type, from, names):
 				for (c in names) if (c.value == value) {
-					if (!imports.contains(from)) imports.push(from);
+					Groups.pushUnique(imports, from);
 					return '$type.${c.name}';
 				}
 				throw new Exception('$type: no constant holds $value');

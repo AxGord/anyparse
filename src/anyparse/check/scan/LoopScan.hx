@@ -11,6 +11,7 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
+import anyparse.util.Groups;
 
 /**
  * The subtree scans the COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens
@@ -507,7 +508,7 @@ final class LoopScan {
 			shape.functionKinds ?? [],
 			shape.lambdaKinds ?? [],
 			shape.localFunctionKinds ?? []
-		]) for (k in grp) if (!out.contains(k)) out.push(k);
+		]) for (k in grp) Groups.pushUnique(out, k);
 		return out;
 	}
 

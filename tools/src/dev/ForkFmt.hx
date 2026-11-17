@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Groups;
 import devkit.Command;
 import devkit.Result;
 import devkit.Summary;
@@ -33,7 +34,7 @@ final class ForkFmt {
 		final shown: Array<String> = lines.filter(line -> line.indexOf(VERIFY_LINE) >= 0);
 		final why: Array<String> = [];
 		if (text.indexOf(DIVERGED) >= 0) {
-			for (line in lines) if (!shown.contains(line)) shown.push(line);
+			for (line in lines) Groups.pushUnique(shown, line);
 			why.push('fmt --verify found a non-whitespace divergence in $src');
 		}
 		if (text.indexOf(ONE_PASS) >= 0) {

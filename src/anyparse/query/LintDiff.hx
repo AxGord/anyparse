@@ -5,6 +5,7 @@ import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintReportJson;
 import anyparse.query.format.json.LintReportJsonParser;
 import anyparse.runtime.ParseError;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 /**
@@ -116,11 +117,7 @@ final class LintDiff {
 			final message: String = normalizeMessage(f.rule, f.message, root, identities);
 			final data: Null<LintFindingDataJson> = f.data;
 			final key: String = keyFor(file, f.rule, f.severity, message, data);
-			if (data != null) {
-				final known: Array<String> = messages[key] ?? [];
-				known.push(message);
-				messages[key] = known;
-			}
+			if (data != null) Groups.push(messages, key, message);
 			final seen: Null<Int> = counts[key];
 			if (seen == null) {
 				order.push(key);
@@ -419,7 +416,7 @@ final class LintDiff {
 			for (e in entries) {
 				final name: String = key(e);
 				into[name] = (into[name] ?? 0) + e.count;
-				if (!names.contains(name)) names.push(name);
+				Groups.pushUnique(names, name);
 			}
 		}
 		fold(added, addedBy);

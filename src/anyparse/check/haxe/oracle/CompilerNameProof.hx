@@ -10,6 +10,7 @@ import anyparse.query.FileIdentity;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.OracleProvider.NameProof;
 import anyparse.query.OracleProvider.UsableCoverage;
+import anyparse.util.Groups;
 
 /**
  * The compiler's answer to `NameOracle`: each configuration's warm server in the run's pool
@@ -53,7 +54,7 @@ final class CompilerNameProof implements NameProof {
 		if (usable.stop != null) return [for (_ in sites) false];
 		final asked: Array<Array<OracleConfig>> = sites.map(site -> compiling(usable, file, before, site.before, plugin));
 		final configs: Array<OracleConfig> = [];
-		for (row in asked) for (config in row) if (!configs.contains(config)) configs.push(config);
+		for (row in asked) for (config in row) Groups.pushUnique(configs, config);
 		// the sites each configuration is asked about, by index into `sites`; its answers come in pairs, before then after
 		final sitesOf: Array<Array<Int>> = [for (config in configs) [for (j => row in asked) if (row.contains(config)) j]];
 		final answers: Array<Null<Array<Null<TypeReplyPosition>>>> = positionsOf(

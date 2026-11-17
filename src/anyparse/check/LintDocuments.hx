@@ -8,6 +8,7 @@ import anyparse.check.config.ApqLintConfigParser;
 import anyparse.check.config.OwnedTypesDeclaration;
 import anyparse.grammar.json.JValue;
 import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -175,7 +176,7 @@ final class LintDocuments {
 		final configs: Array<LintConfig> = [];
 		for (file in files) {
 			final config: LintConfig = resolve(file);
-			if (!configs.contains(config)) configs.push(config);
+			Groups.pushUnique(configs, config);
 		}
 		return configs;
 	}

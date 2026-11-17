@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -122,7 +123,7 @@ final class ValueCarriers {
 		final out: Array<String> = [nominal];
 		for (s in _scope.index.subtypes.subtypeNames(nominal)) {
 			if (!complete(s)) return null;
-			if (!out.contains(s)) out.push(s);
+			Groups.pushUnique(out, s);
 		}
 		return out;
 	}

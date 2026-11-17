@@ -5,6 +5,7 @@ import anyparse.check.common.design.ThreadSafety.FindingFamily;
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.query.CallGraph;
 import anyparse.query.SourceText;
+import anyparse.util.Groups;
 
 /** The calls a hold finding names, the taint that found them, and what its message adds (`HoldGrade.grade`). */
 typedef GradedHold = {
@@ -189,7 +190,7 @@ final class HoldGrade {
 			final end: Null<CallEdge> = judges.long.blockingTrail(a, c.edge, held)?.end;
 			final by: Null<String> = end == null ? null : judges.reported[MainSinkReport.siteKey(end)]?.data?.member;
 			if (by == null) return null;
-			if (!members.contains(by)) members.push(by);
+			Groups.pushUnique(members, by);
 		}
 		return members.length == 0 ? null : members.join(', ');
 	}

@@ -12,6 +12,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeInfoProvider;
+import anyparse.util.Groups;
 
 using StringTools;
 
@@ -300,7 +301,7 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 			}
 			final twice: String =
 				'$RULE_ID: two grants name "${grant.name}" — one ceiling per type, so both are refused and the type keeps its finding';
-			if (!problems.contains(twice)) problems.push(twice);
+			Groups.pushUnique(problems, twice);
 		}
 		return { granted: granted, problems: problems };
 	}

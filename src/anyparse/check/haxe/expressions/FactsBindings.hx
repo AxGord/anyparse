@@ -2,6 +2,7 @@ package anyparse.check.haxe.expressions;
 
 import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.query.CasePatterns;
+import anyparse.util.Arrays;
 
 /**
  * Which bindings the compiler typed the moment it bound them, read off its facts (`FactsTypeOracle`): a binding no later
@@ -48,11 +49,7 @@ final class FactsBindings {
 				.idents.find(i -> i.role == PatternRole.Capture && i.node.span?.from == at.from);
 			if (ident != null) return ident.site;
 		}
-		for (child in node.children) {
-			final found: Null<PatternSite> = captureSite(child, at, shape);
-			if (found != null) return found;
-		}
-		return null;
+		return Arrays.findMap(node.children, child -> captureSite(child, at, shape));
 	}
 
 	/** Whether the single-binder loop `loop` of `file` iterates a call with a closed result (`FactsTypeOracle.callResultClosed`). */

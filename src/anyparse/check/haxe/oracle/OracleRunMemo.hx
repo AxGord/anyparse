@@ -5,7 +5,9 @@ import anyparse.core.ContentHash;
 import anyparse.proc.ProcessRun;
 import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachConfiguration;
+import anyparse.util.Arrays;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 
 /**
  * What the compiler already answered in THIS run, so a compile of a tree the run has already compiled is not paid twice.
@@ -160,20 +162,15 @@ final class OracleRunMemo implements OracleRunScope {
 			final file: String = FileIdentity.canonical(base, path);
 			roots.exists(dir -> file.startsWith(dir));
 		});
-		if (inside) {
-			if (!_seen.contains(config)) _seen.push(config);
-		} else {
+		if (inside)
+			Groups.pushUnique(_seen, config);
+		else
 			_blind.push(config);
-		}
 	}
 
 	/** The memo the configurations of `oracles` carry, or null when none does — every configuration outside a lint run. */
 	public static function of(oracles: Array<OracleConfig>): Null<OracleRunMemo> {
-		for (oracle in oracles) {
-			final memo: Null<OracleRunMemo> = Std.downcast(oracle.runs, OracleRunMemo);
-			if (memo != null) return memo;
-		}
-		return null;
+		return Arrays.findMap(oracles, oracle -> Std.downcast(oracle.runs, OracleRunMemo));
 	}
 
 	/** `oracles` carrying `memo`, every other field as it was — the configurations one run compiles with. */

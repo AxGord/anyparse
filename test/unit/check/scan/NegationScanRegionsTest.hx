@@ -6,6 +6,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;
+import anyparse.util.Arrays;
 
 /**
  * `NegationScan` read through real lexical regions: a `//` spelled inside a string operand is not a comment, so
@@ -63,12 +64,7 @@ class NegationScanRegionsTest extends Test {
 
 	private function find(n: QueryNode, from: Int, to: Int): Null<QueryNode> {
 		final s: Null<Span> = n.span;
-		if (s != null && s.from == from && s.to == to) return n;
-		for (c in n.children) {
-			final hit: Null<QueryNode> = find(c, from, to);
-			if (hit != null) return hit;
-		}
-		return null;
+		return s != null && s.from == from && s.to == to ? n : Arrays.findMap(n.children, c -> find(c, from, to));
 	}
 
 }

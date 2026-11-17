@@ -5,6 +5,7 @@ import anyparse.check.common.unused.UnusedLocal;
 import anyparse.grammar.haxe.lit.HxStringEscape;
 import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.QueryNode;
+import anyparse.util.Arrays;
 import unit.CheckFixture;
 import utest.Assert;
 import utest.Test;
@@ -220,12 +221,7 @@ final class HxStringEscapeTest extends Test {
 
 	/** The first node of `kind` in `node`'s subtree, depth-first, or null. */
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = firstOfKind(c, kind);
-			if (found != null) return found;
-		}
-		return null;
+		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
 	}
 
 }

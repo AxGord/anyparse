@@ -8,6 +8,7 @@ import anyparse.proc.ProcessSpawn;
 import anyparse.query.ArmTypePath;
 import anyparse.query.LexicalRegions;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -604,7 +605,7 @@ final class MutationArm {
 
 	private static function add(table: Map<String, Array<String>>, key: String, value: String): Void {
 		final list: Array<String> = table[key] ?? [];
-		if (!list.contains(value)) list.push(value);
+		Groups.pushUnique(list, value);
 		table[key] = list;
 	}
 

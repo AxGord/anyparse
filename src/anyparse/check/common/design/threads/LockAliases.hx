@@ -7,6 +7,7 @@ import anyparse.query.NominalTypes;
 import anyparse.query.SourceText;
 import anyparse.query.TreePath;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.util.Groups;
 
 using StringTools;
 
@@ -117,7 +118,7 @@ final class LockAliases {
 		final sources: Array<String> = [];
 		for (a in _candidates) {
 			final name: String = LockSites.memberName(a.source);
-			if (!sources.contains(name)) sources.push(name);
+			Groups.pushUnique(sources, name);
 		}
 		return sources;
 	}
@@ -259,7 +260,7 @@ final class LockAliases {
 	private function familyOf(type: String): Array<String> {
 		final family: Array<String> = [type];
 		var i: Int = 0;
-		while (i < family.length) for (sub in _graph.types.subtypesOf(family[i++])) if (!family.contains(sub)) family.push(sub);
+		while (i < family.length) for (sub in _graph.types.subtypesOf(family[i++])) Groups.pushUnique(family, sub);
 		return family;
 	}
 

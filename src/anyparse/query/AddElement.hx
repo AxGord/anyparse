@@ -8,6 +8,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import haxe.ds.Either;
 
 using Lambda;
@@ -604,12 +605,7 @@ final class AddElement {
 
 	/** The node of `kind` starting at `from` in `tree`, or null. */
 	private static function nodeAt(tree: QueryNode, from: Int, kind: String): Null<QueryNode> {
-		if (tree.kind == kind && tree.span?.from == from) return tree;
-		for (c in tree.children) {
-			final hit: Null<QueryNode> = nodeAt(c, from, kind);
-			if (hit != null) return hit;
-		}
-		return null;
+		return tree.kind == kind && tree.span?.from == from ? tree : Arrays.findMap(tree.children, c -> nodeAt(c, from, kind));
 	}
 
 	/** `node` as a sorted-list entry — its sort key, span and source text — or null when it is no constant string (`sortKeyOf`). */

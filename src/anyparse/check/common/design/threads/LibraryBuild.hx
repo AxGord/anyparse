@@ -4,6 +4,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.HaxelibResolver;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 using StringTools;
@@ -164,7 +165,7 @@ final class LibraryBuild {
 		final eq: Int = spec.indexOf('=');
 		final name: String = (eq < 0 ? spec : spec.substring(0, eq)).replace('-', '_');
 		if (name == '') return;
-		if (!defined.contains(name)) defined.push(name);
+		Groups.pushUnique(defined, name);
 		if (eq >= 0) values[name] = spec.substring(eq + 1);
 	}
 

@@ -7,6 +7,7 @@ import anyparse.query.Cli.TestSummaryResult;
 import anyparse.query.MutationVerdict;
 import anyparse.query.cli.TestTranscript;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 import dev.MutationCheck.TrackRow;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -292,7 +293,7 @@ final class MutationSlot {
 			else
 				null;
 			if (cls == null) return null;
-			if (!classes.contains(cls)) classes.push(cls);
+			Groups.pushUnique(classes, cls);
 		}
 		if (classes.length == 0) return null;
 		classes.sort(Compare.compareString);

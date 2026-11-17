@@ -14,6 +14,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 
 /**
  * Flags a RIGHT-NESTED ternary chain of three or more values already written in value
@@ -343,7 +344,7 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 		if (ternaryKind == null || hostKinds.length == 0) return null;
 		final ifExpressionKinds: Array<String> = shape.ifExpressionKinds ?? [];
 		final chainKinds: Array<String> = ifExpressionKinds.copy();
-		if (!chainKinds.contains(ternaryKind)) chainKinds.push(ternaryKind);
+		Groups.pushUnique(chainKinds, ternaryKind);
 		return {
 			ternaryKind: ternaryKind,
 			chainKinds: chainKinds,

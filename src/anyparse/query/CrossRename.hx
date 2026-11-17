@@ -7,6 +7,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.ScopeFiles.ParsedFile;
 import anyparse.query.ScopeFiles.ScopeParse;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using anyparse.util.Strings;
 
@@ -371,7 +372,7 @@ final class CrossRename {
 		final roots: Array<String> = [];
 		for (path in qualified) {
 			final root: String = path.split('.')[0];
-			if (!roots.contains(root)) roots.push(root);
+			Groups.pushUnique(roots, root);
 		}
 		final grantMetas: Array<String> = [AllowGrants.TAG];
 		final access: Null<String> = refShape.takesPrivateAccessMetaName;

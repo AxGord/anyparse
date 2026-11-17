@@ -18,6 +18,7 @@ import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeNameBinding;
+import anyparse.util.Groups;
 import haxe.ds.ArraySort;
 import haxe.io.Path;
 
@@ -388,7 +389,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 					census.byKey[key] = statement;
 					census.keys.push(key);
 				}
-				if (!held.contains(key)) held.push(key);
+				Groups.pushUnique(held, key);
 				if (removable(info, statement, ctx)) noteSpeller(census, key, file, imp.span);
 			}
 			for (key in held) census.holders[key] = (census.holders[key] ?? 0) + 1;
@@ -457,7 +458,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			if (next == null) continue;
 			for (file => text in next) {
 				textOf[file] = text;
-				if (!readers.contains(file)) readers.push(file);
+				Groups.pushUnique(readers, file);
 			}
 			final spans: Array<Span> = leaving[plan.site] ?? [];
 			spans.push(plan.span);
@@ -586,7 +587,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			final ladder: Array<String> = plugin.ambientImportSites(info.file, info.pkg);
 			if (ladder.length == 0) continue;
 			ladderOf[info.file] = ladder;
-			for (site in ladder) if (!order.contains(site)) order.push(site);
+			for (site in ladder) Groups.pushUnique(order, site);
 		}
 		final governedAt: Map<String, Array<String>> = [];
 		for (site in order) {
@@ -878,8 +879,8 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 				final held: Null<Array<Int>> = out[path];
 				if (held == null)
 					out[path] = [i]
-				else if (!held.contains(i))
-					held.push(i);
+				else
+					Groups.pushUnique(held, i);
 			}
 		}
 		return out;

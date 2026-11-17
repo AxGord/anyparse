@@ -12,6 +12,7 @@ import anyparse.query.OracleProvider.ConfigCoverage;
 import anyparse.query.OracleProvider.OracleCoverageMemo;
 import anyparse.query.OracleProvider.OracleExclusion;
 import anyparse.query.OracleProvider.UsableCoverage;
+import anyparse.util.Groups;
 import haxe.io.Path;
 import sys.FileSystem;
 
@@ -419,7 +420,7 @@ final class OracleCoverage implements CompiledSet {
 			// Non-empty by construction: the line is already trimmed and starts with the
 			// prefix's trailing space, so what follows cannot be blank.
 			final path: String = line.substr(PARSED_PREFIX.length);
-			if (!paths.contains(path)) paths.push(path);
+			Groups.pushUnique(paths, path);
 		}
 		return paths;
 	}

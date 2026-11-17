@@ -5,6 +5,7 @@ using Lambda;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 /**
  * The grammar's MEMBER vocabulary and the walk that reaches members. Which projected node
@@ -353,7 +354,7 @@ final class MemberKinds {
 	 */
 	public static function parenFreeRootKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = atomicRootKinds(shape);
-		for (kind in shape.maximalPrecedenceRootKinds ?? []) if (!out.contains(kind)) out.push(kind);
+		for (kind in shape.maximalPrecedenceRootKinds ?? []) Groups.pushUnique(out, kind);
 		return out;
 	}
 

@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 
 using Lambda;
 
@@ -414,21 +415,11 @@ class CondBranchSplitTest extends Test {
 
 	/** The first `ClassDecl` named `name` under `node` — the anchor for the structural-sharing identity checks. */
 	private static function namedClass(node: QueryNode, name: String): Null<QueryNode> {
-		if (node.kind == 'ClassDecl' && node.name == name) return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = namedClass(c, name);
-			if (hit != null) return hit;
-		}
-		return null;
+		return node.kind == 'ClassDecl' && node.name == name ? node : Arrays.findMap(node.children, c -> namedClass(c, name));
 	}
 
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = firstOfKind(c, kind);
-			if (hit != null) return hit;
-		}
-		return null;
+		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
 	}
 
 	private static function countOfKind(node: QueryNode, kind: String): Int {

@@ -4290,7 +4290,7 @@
 			"name": "M-FACTS-HIERARCHY",
 			"type": "anyparse.query.CompilerFacts",
 			"method": "link",
-			"find": "if (!down.contains(child)) down.push(child);",
+			"find": "Groups.pushUnique(down, child);",
 			"replace": "",
 			"note": "no subtype edge is recorded"
 		},
@@ -4369,7 +4369,7 @@
 			"name": "M-FACTS-REACH-OVERRIDES",
 			"type": "anyparse.query.CallGraphFacts",
 			"method": "virtualEdges",
-			"find": "for (v in view.overrides(g, dispatch, name)) if (!targets.contains(v)) targets.push(v);",
+			"find": "for (v in view.overrides(g, dispatch, name)) Groups.pushUnique(targets, v);",
 			"replace": "",
 			"note": "an instance call dispatches only to the overrides the name-based hierarchy holds, so one it cannot see through an alias declared per #if branch is never walked"
 		},
@@ -6486,7 +6486,7 @@
 			"name": "M-GRAPH-REFLECT-SUPERTYPES",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "for (id in objects) for (sup in facts.supertypesOf(id)) if (!typed.contains(sup)) typed.push(sup);",
+			"find": "for (id in objects) for (sup in facts.supertypesOf(id)) Groups.pushUnique(typed, sup);",
 			"replace": "",
 			"note": "an object reflection acts on carries no member its type inherits"
 		},
@@ -7035,7 +7035,7 @@
 			"name": "M-VALUE-ARG-SUPERTYPES",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "invokedWith",
-			"find": "final callers: Array<String> = hierarchy.copy();\n\t\tfor (h in hierarchy) for (s in table.supertypesOf(h)) if (!callers.contains(s)) callers.push(s);",
+			"find": "final callers: Array<String> = hierarchy.copy();\n\t\tfor (h in hierarchy) for (s in table.supertypesOf(h)) Groups.pushUnique(callers, s);",
 			"replace": "final callers: Array<String> = [owner];",
 			"note": "a call of the supertype's member a method overrides invokes no override"
 		},
@@ -7195,7 +7195,7 @@
 			"name": "M-VALUE-TYPE-FLOWS",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "typedAs",
-			"find": "while (i < out.length) for (to in flows[out[i++]] ?? []) if (!out.contains(to)) out.push(to);",
+			"find": "while (i < out.length) for (to in flows[out[i++]] ?? []) Groups.pushUnique(out, to);",
 			"replace": "",
 			"note": "a function value is held only as its own type, whatever flows carry it into"
 		},
@@ -7219,7 +7219,7 @@
 			"name": "M-VALUE-TYPE-BIND",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "valueTypes",
-			"find": "for (own in ids) for (t in callers[own] ?? []) if (!texts.contains(t)) texts.push(t);",
+			"find": "for (own in ids) for (t in callers[own] ?? []) Groups.pushUnique(texts, t);",
 			"replace": "",
 			"note": "a `.bind` closure of a method is taken to be of the method's own type"
 		},
@@ -7379,7 +7379,7 @@
 			"name": "M-REFLECTED-HOLDERS-INHERITED",
 			"type": "anyparse.query.ReachGraph",
 			"method": "reflectedMembers",
-			"find": "for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);",
+			"find": "for (id in held) for (sup in facts.supertypesOf(id)) Groups.pushUnique(owners, sup);",
 			"replace": "",
 			"note": "an object of a declared class runs only the methods its own class declares, none it inherits"
 		},
@@ -7667,8 +7667,8 @@
 			"name": "M-GUARDED-AND",
 			"type": "anyparse.query.NullGuardedCode",
 			"method": "testedNotNull",
-			"find": "if (direct != null || condition.kind != _shape.logicalAndKind) return direct;",
-			"replace": "return direct;",
+			"find": "Arrays.findMap(condition.children, c -> testedNotNull(unwrap(c)))",
+			"replace": "null",
 			"note": "(precision) a not-null test inside an `&&` decides nothing"
 		},
 		{
@@ -8804,8 +8804,8 @@
 			"name": "M-VALUE-INVOKED-SUBTYPE-SUPERS",
 			"type": "anyparse.query.FunctionValueTypes",
 			"method": "invokedWith",
-			"find": "for (h in hierarchy) for (s in table.supertypesOf(h)) if (!callers.contains(s)) callers.push(s);",
-			"replace": "for (s in table.supertypesOf(owner)) if (!callers.contains(s)) callers.push(s);",
+			"find": "for (h in hierarchy) for (s in table.supertypesOf(h)) Groups.pushUnique(callers, s);",
+			"replace": "for (s in table.supertypesOf(owner)) Groups.pushUnique(callers, s);",
 			"note": "a typed call naming an interface only a subclass implements is taken to run another method"
 		},
 		{
@@ -10424,8 +10424,8 @@
 			"name": "M-VOCAB-UNION-DUPLICATES",
 			"type": "anyparse.query.ShapeVocab",
 			"method": "union",
-			"find": "if (g != null) for (k in g) if (!out.contains(k)) out.push(k);",
-			"replace": "if (g != null) for (k in g) out.push(k);",
+			"find": "for (k in g) Groups.pushUnique(out, k);",
+			"replace": "for (k in g) out.push(k);",
 			"note": "a kind two seams both name is answered twice, so every derived set carries a duplicate where the grammar's seams overlap"
 		},
 		{
@@ -10581,8 +10581,8 @@
 			"name": "M-STAR-ONE-PER-LIST",
 			"type": "anyparse.query.Pattern",
 			"method": "checkNode",
-			"find": "if (stars(kids, 0, split) > 1 || stars(kids, split, kids.length) > 1) return TWO_STARS_REFUSAL;",
-			"replace": "if (stars(kids, 0, kids.length) > 1) return TWO_STARS_REFUSAL;",
+			"find": "stars(kids, 0, split) > 1 || stars(kids, split, kids.length) > 1",
+			"replace": "stars(kids, 0, kids.length) > 1",
 			"note": "`new $T<...>(...)` is refused again although its two stars sit in two runs"
 		},
 		{
@@ -10765,8 +10765,8 @@
 			"name": "M-KEEP-BARE-CLASH-BLIND",
 			"type": "anyparse.query.MoveMember",
 			"method": "keepBareClash",
-			"find": "return node;",
-			"replace": "return null;",
+			"find": "? node",
+			"replace": "? null",
 			"note": "an identifier of the source spelling another destination static is not seen, and the wildcard may rebind it"
 		},
 		{

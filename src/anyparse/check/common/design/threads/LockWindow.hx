@@ -2,6 +2,7 @@ package anyparse.check.common.design.threads;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ShapeVocab;
+import anyparse.util.Groups;
 
 /** What one lock acquisition holds along the paths of the function body it sits in. */
 typedef HeldWindow = {
@@ -144,8 +145,8 @@ final class LockWindow {
 			reset(acquireFrom, releaseFroms, raisingFroms);
 			if (sequence(fn.children, false) == true) _leaks = true;
 			leaks = leaks || _leaks;
-			for (n in _held) if (!held.contains(n)) held.push(n);
-			for (n in _escapes) if (!escapes.contains(n)) escapes.push(n);
+			for (n in _held) Groups.pushUnique(held, n);
+			for (n in _escapes) Groups.pushUnique(escapes, n);
 		}
 		_decided = [];
 		return { held: held, leaks: leaks, escapes: escapes };
@@ -327,7 +328,7 @@ final class LockWindow {
 			frame.raised = true;
 			if (CatchTypes.anyCatches(frame.catches, thrown, _shape, _exhaustive?.index())) return true;
 		}
-		if (!_escapes.contains(node)) _escapes.push(node);
+		Groups.pushUnique(_escapes, node);
 		return false;
 	}
 

@@ -10,6 +10,7 @@ import anyparse.query.OracleProvider.DisplayTypeOracle;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 /**
@@ -467,8 +468,8 @@ final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayT
 		return file.startsWith(prefix) ? file.substring(prefix.length) : file;
 	}
 
-	private static function addForm(out: Array<String>, p: String): Void {
-		if (!out.contains(p)) out.push(p);
+	private static inline function addForm(out: Array<String>, p: String): Void {
+		Groups.pushUnique(out, p);
 	}
 
 	/** `file` resolved against the process cwd (node-normalised, NOT symlink-followed), or `file` on failure. */

@@ -3,6 +3,8 @@ package anyparse.check.common.design;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.PurityScan;
@@ -64,7 +66,7 @@ using anyparse.util.Strings;
  * plugin's own `parsePattern`; a plugin without `paramKinds`, `blockBodyKind` or `controlExitKinds` makes it a no-op.
  */
 @:nullSafety(Strict)
-final class PreferHelper extends RuleBase implements ConfigAware implements FileGated implements RiskyFix {
+final class PreferHelper extends RuleBase implements ConfigAware implements FileGated implements RiskyFix implements GroupedFix {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-helper';
@@ -122,6 +124,16 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 	 * ones a violation names into the helper call, with the import the call needs riding on them.
 	 */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return fixGrouped(source, violations, plugin, index).map(edit -> { span: edit.span, text: edit.text });
+	}
+
+	/**
+	 * Each rewrite shares a group with the import its helper's type needs, so the verifier's bisect never keeps an import
+	 * whose every rewrite it reverted.
+	 */
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit> {
 		if (violations.length == 0) return [];
 		final file: String = RunScan.oneFile(violations, RULE_ID);
 		final seams: Null<Seams> = readSeams(plugin);
@@ -136,13 +148,18 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			file, source, root, provider == null ? [] : provider.importMap(source, file), plugin, resolved
 		);
 		final wanted: Array<String> = RunScan.spanKeys(violations);
-		final out: Array<FixEdit> = [
+		final sites: Array<Site> = [
 			for (site in sitesIn(file, source, templatesOf(marker, resolved, plugin, seams), resolved, seams, plugin))
-				if (wanted.contains('${site.span.from}:${site.span.to}')) { span: site.span, text: callText(site, printer) }
+				if (wanted.contains('${site.span.from}:${site.span.to}')) site
 		];
 		// The import rides on a rewrite: a file where every site declined gets no edit at all.
-		if (out.length > 0) for (edit in printer.pendingImportEdits()) out.push({ span: edit.span, text: edit.text });
-		return out;
+		if (sites.length == 0) return [];
+		final texts: Array<String> = sites.map(site -> callText(site, printer));
+		final imports: ImportGroups = printer.importGroups();
+		final edits: Array<GroupedEdit> = [
+			for (i => site in sites) { span: site.span, text: texts[i], group: imports.groupOf(site.template.typePath) }
+		];
+		return edits.concat(imports.edits);
 	}
 
 	/** The marker `file`'s config names, or null. */

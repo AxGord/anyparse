@@ -15,6 +15,7 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
 import anyparse.query.OracleProvider;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -124,7 +125,7 @@ final class LintFixVerify {
 					ledgered: false,
 					coverage: verified.coverage
 				};
-				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
+				for (f in verified.applied) Groups.pushUnique(changedFiles, f);
 				ledgerRiskyTallies(ledger, verified, [for (c in riskyChecks) if (c is RiskyArm) c.id()]);
 				// The three clauses in a local, so the sentence above keeps the shape it had: the
 				// declined / excluded / bisect tails are each empty on an ordinary run, and spelled
@@ -739,7 +740,7 @@ final class LintFixVerify {
 		syncAppliedSources(files, candidates, result.applied);
 		var edits: Int = 0;
 		for (f in result.applied) {
-			if (!changedFiles.contains(f)) changedFiles.push(f);
+			Groups.pushUnique(changedFiles, f);
 			edits += editsPerFile[f] ?? 0;
 		}
 		final why: String = result.reverted.length == 0 ? '' : ' (${result.reason})';

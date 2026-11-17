@@ -12,6 +12,7 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -136,7 +137,7 @@ final class StructureFieldOffsets {
 	): Null<String> {
 		final off: Int = OccurrenceScan.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName, regions);
 		if (off < 0) return CrossRenameMember.unlocatableAccess(source, faSpan, memberName);
-		if (!out.contains(off)) out.push(off);
+		Groups.pushUnique(out, off);
 		return null;
 	}
 

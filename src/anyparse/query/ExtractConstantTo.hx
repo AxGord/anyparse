@@ -7,6 +7,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 import haxe.ds.Either;
 
 using anyparse.util.Strings;
@@ -112,12 +113,9 @@ final class ExtractConstantTo {
 	 * array. A type named by `new` or an annotation is not a read (see `firstUnseenType`).
 	 */
 	public static function firstContextRead(node: QueryNode, shape: RefShape): Null<QueryNode> {
-		if (node.kind == shape.identKind || node.kind == shape.stringInterpIdentKind) return node;
-		for (child in node.children) {
-			final hit: Null<QueryNode> = firstContextRead(child, shape);
-			if (hit != null) return hit;
-		}
-		return null;
+		return node.kind == shape.identKind || node.kind == shape.stringInterpIdentKind
+			? node
+			: Arrays.findMap(node.children, child -> firstContextRead(child, shape));
 	}
 
 	/**
@@ -134,12 +132,7 @@ final class ExtractConstantTo {
 		if (namesType && name != null && !name.contains('.') && !StdTypes.declaresToplevel(plugin, name)) return name;
 		final type: Null<QueryNode> = node.type;
 		final fromType: Null<String> = type == null ? null : firstUnseenType(type, plugin);
-		if (fromType != null) return fromType;
-		for (child in node.children) {
-			final hit: Null<String> = firstUnseenType(child, plugin);
-			if (hit != null) return hit;
-		}
-		return null;
+		return fromType ?? Arrays.findMap(node.children, child -> firstUnseenType(child, plugin));
 	}
 
 	/** Whether `node` declares a local or a data field — an address whose INITIALIZER is the expression. */

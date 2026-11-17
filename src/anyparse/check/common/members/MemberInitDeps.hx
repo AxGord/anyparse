@@ -5,6 +5,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.Refs;
+import anyparse.util.Arrays;
 
 /**
  * One member pair whose CURRENT relative order the init phase fixes: `before` must keep running
@@ -172,11 +173,7 @@ final class MemberInitDeps {
 				final found: Null<OrderedMember> = walk(ran.node);
 				if (found != null) return found;
 			}
-			for (c in kids) {
-				final found: Null<OrderedMember> = walk(c);
-				if (found != null) return found;
-			}
-			return null;
+			return Arrays.findMap(kids, walk);
 		}
 		return walk(init);
 	}

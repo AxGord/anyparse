@@ -22,6 +22,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.query.ValueDoors;
+import anyparse.util.Groups;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -447,18 +448,6 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		return [for (k => r in rewrites) if (!same[k]) spanKey(r.site)];
 	}
 
-	/**
-	 * The atomic group a use-site rewrite joins: the bucket of the import edit its short spelling
-	 * needs, or null when the spelling needs no import and the rewrite stands alone. The map-miss arm
-	 * is unreachable for a `planFor` plan — a non-null `importPath` is by construction the canonical
-	 * `print` pushed onto the printer's pending set, and every pending path lands in some bucket — so
-	 * it exists only for a caller that builds a plan itself, and it degrades to the pre-grouping
-	 * per-edit behaviour rather than to anything less safe.
-	 */
-	private static inline function groupOf(byPath: Map<String, Int>, importPath: Null<String>): Null<Int> {
-		return importPath == null ? null : byPath[importPath];
-	}
-
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */
 	private static inline function spanKey(span: Span): String {
 		return '${span.from}:${span.to}';
@@ -474,17 +463,14 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 	 * With no rewrites there are no imports either.
 	 */
 	private static function editsOf(plan: FilePlan, wanted: Array<String>): Array<GroupedEdit> {
-		final importEdits: Array<PendingImportEdit> = plan.printer.pendingImportEdits();
-		final byPath: Map<String, Int> = [];
-		for (group => importEdit in importEdits) for (importPath in importEdit.paths) byPath[importPath] = group;
+		final imports: ImportGroups = plan.printer.importGroups();
 		final edits: Array<GroupedEdit> = [
 			for (path in plan.plans)
 				if (path.proven)
 					for (target in path.targets)
-						if (wanted.contains(spanKey(target))) { span: target, text: path.text, group: groupOf(byPath, path.importPath) }
+						if (wanted.contains(spanKey(target))) { span: target, text: path.text, group: imports.groupOf(path.importPath) }
 		];
-		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
-		return edits;
+		return edits.concat(imports.edits);
 	}
 
 	/** Record `DECLINE_VALUE_UNANSWERED` on each of `violations` whose span is among `refused`. */
@@ -685,7 +671,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		final out: Array<String> = [];
 		for (occurrence in occurrences) {
 			final type: String = resolved[occurrence.path] ?? occurrence.path;
-			if (!out.contains(type)) out.push(type);
+			Groups.pushUnique(out, type);
 		}
 		return out;
 	}

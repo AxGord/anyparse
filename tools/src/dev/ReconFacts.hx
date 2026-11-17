@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Groups;
 import dev.QueueFile.QueueLine;
 import devkit.Args;
 import devkit.Cmd.cmd;
@@ -142,7 +143,7 @@ final class ReconFacts {
 		for (n in names) {
 			final spot: Map<String, String> = spots[n] ?? [];
 			final holding: Array<String> = [];
-			for (path in spot) if (!holding.contains(path)) holding.push(path);
+			for (path in spot) Groups.pushUnique(holding, path);
 			final count: MentionCount = { hits: spot.count(), files: holding.length };
 			counts[n] = count;
 		}

@@ -18,6 +18,8 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -205,7 +207,7 @@ final class ReachGraph {
 					// what the value may hold: an instance field's value, an enum constructor's arguments
 					final held: Array<Null<String>> = if (functionKinds.contains(m.kind)) {
 						final id: String = g.ownMember(t, m.name) ?? placeholder(g, t, m.name);
-						if (!out.contains(id)) out.push(id);
+						Groups.pushUnique(out, id);
 						[];
 					} else if (fieldKinds.contains(m.kind))
 						m.isStatic ? [] : [m.typeSource];
@@ -242,7 +244,7 @@ final class ReachGraph {
 		if (decl.members.exists(m -> m.name == (_scope.shape.constructorName ?? 'new'))) return members;
 		// a class that declares no constructor has a generated one: its initializers, then its superclass's constructor
 		final out: Array<String> = members.copy();
-		for (id in generatedConstructor(g, type)) if (!out.contains(id)) out.push(id);
+		for (id in generatedConstructor(g, type)) Groups.pushUnique(out, id);
 		return out;
 	}
 
@@ -326,11 +328,7 @@ final class ReachGraph {
 				externInline: true
 			});
 		}
-		for (members in described) {
-			final found: Null<String> = facts.implicitUnheldAnywhere(members).find(id -> textlessInPlay(facts, id));
-			if (found != null) return found;
-		}
-		return null;
+		return Arrays.findMap(described, members -> facts.implicitUnheldAnywhere(members).find(id -> textlessInPlay(facts, id)));
 	}
 
 	/**
@@ -520,7 +518,7 @@ final class ReachGraph {
 		final paths: Array<String> = [];
 		for (d in copies) {
 			final path: String = TypeNameBinding.canonicalPath(d);
-			if (!paths.contains(path)) paths.push(path);
+			Groups.pushUnique(paths, path);
 		}
 		if (paths.length != 1) return false;
 		final folded: Array<String> = g.declarationsOf(node.id).map(d -> CallGraphNames.normalizePath(d.file));
@@ -734,12 +732,12 @@ final class ReachGraph {
 		if (found == null) return null;
 		final objects: Array<String> = found;
 		final typed: Array<String> = objects.copy();
-		for (id in objects) for (sup in facts.supertypesOf(id)) if (!typed.contains(sup)) typed.push(sup);
+		for (id in objects) for (sup in facts.supertypesOf(id)) Groups.pushUnique(typed, sup);
 		// a method other than an accessor is obtained off an object of a class the project declares (`reflectiveMethodHolders`),
 		// each by its own name, and is one of that class or of a class it extends; an accessor runs off an object of any class
 		final held: Array<String> = methodValues(facts).declaredHolders(objects);
 		final owners: Array<String> = held.copy();
-		for (id in held) for (sup in facts.supertypesOf(id)) if (!owners.contains(sup)) owners.push(sup);
+		for (id in held) for (sup in facts.supertypesOf(id)) Groups.pushUnique(owners, sup);
 		return reflectedIds(g, facts, typed, owners);
 	}
 
@@ -918,11 +916,11 @@ final class ReachGraph {
 			if (at.family == Text && library.inertType(t)) continue;
 			final types: Null<Array<String>> = at.exact ? exactTypes(g, t) : runtimeTypes(g, t, at.family);
 			if (types == null) return null;
-			for (x in types) if (!out.contains(x)) out.push(x);
+			for (x in types) Groups.pushUnique(out, x);
 			if (at.family == Iteration) for (x in types) {
 				final more: Null<Array<String>> = iteratorTypes(g, x, iterables, at.family);
 				if (more == null) return null;
-				for (y in more) if (!out.contains(y)) out.push(y);
+				for (y in more) Groups.pushUnique(out, y);
 			}
 		}
 		return out;
@@ -969,7 +967,7 @@ final class ReachGraph {
 		}
 		function noteTyped(ids: Array<String>): Void {
 			final typed: Array<String> = ids.copy();
-			for (v in ids) for (s in facts.supertypesOf(v)) if (!typed.contains(s)) typed.push(s);
+			for (v in ids) for (s in facts.supertypesOf(v)) Groups.pushUnique(typed, s);
 			for (id in typed) note(facts.graphType(id), id);
 		}
 		var escapes: Bool = false;
@@ -1016,7 +1014,7 @@ final class ReachGraph {
 		if (declared.isAnonStruct || (_scope.shape.aliasingDeclKinds ?? []).contains(declared.kind)) return null;
 		final out: Array<String> = [nominal];
 		var i: Int = 0;
-		while (i < out.length) for (s in g.types.supertypesOf(out[i++])) if (!out.contains(s)) out.push(s);
+		while (i < out.length) for (s in g.types.supertypesOf(out[i++])) Groups.pushUnique(out, s);
 		return out;
 	}
 
@@ -1471,7 +1469,7 @@ final class ReachGraph {
 	private function reflectedObjects(facts: FactsView, receivers: Array<ReflectionFact>): Null<Array<String>> {
 		final typed: Array<String> = [];
 		function note(id: String): Void {
-			if (!typed.contains(id)) typed.push(id);
+			Groups.pushUnique(typed, id);
 		}
 		var escapes: Bool = false;
 		for (r in receivers) {
@@ -1512,7 +1510,7 @@ final class ReachGraph {
 		final ids: Array<OwnedId> = [];
 		for (id in typed) {
 			final type: String = facts.graphType(id);
-			if (!types.contains(type)) types.push(type);
+			Groups.pushUnique(types, type);
 			// a type whose text the index does not hold, or holds nothing of, has no node of its own: its namesake's are not
 			// its methods, and a placeholder runs nothing — an extern's method is target code, the native admission's
 			// (`FactsView.externMethod`)

@@ -95,7 +95,7 @@
 			"name": "M-STATICREACH-SUBTYPE-BLIND",
 			"type": "anyparse.check.common.unused.StaticReflectionReach",
 			"method": "chainOf",
-			"find": "for (sub in index.subtypes.subtypeNames(owner, ownerFile)) if (!chain.contains(sub)) chain.push(sub);",
+			"find": "for (sub in index.subtypes.subtypeNames(owner, ownerFile)) Groups.pushUnique(chain, sub);",
 			"replace": "",
 			"note": "a subclass's class value is ignored, although eval and ES6 js expose the inherited static through it"
 		},

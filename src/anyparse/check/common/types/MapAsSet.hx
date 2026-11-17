@@ -13,6 +13,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax;
+import anyparse.util.Arrays;
 
 /**
  * Flags a map declared with boolean values (`Map<K, Bool>`) that is only ever a SET of its keys: every value it stores is
@@ -406,12 +407,9 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 
 	/** The declaration whose span starts at `at`. */
 	private static function declarationAt(node: QueryNode, at: Int, declKinds: Array<String>): Null<QueryNode> {
-		if (declKinds.contains(node.kind) && node.span?.from == at) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = declarationAt(c, at, declKinds);
-			if (found != null) return found;
-		}
-		return null;
+		return declKinds.contains(node.kind) && node.span?.from == at
+			? node
+			: Arrays.findMap(node.children, c -> declarationAt(c, at, declKinds));
 	}
 
 	/** Call `sink` with every declaration of a `declKinds` kind under `node` that carries a name and a span. */

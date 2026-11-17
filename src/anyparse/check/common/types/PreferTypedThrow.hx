@@ -10,6 +10,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
+import anyparse.util.Groups;
 
 using anyparse.util.Strings;
 
@@ -298,7 +299,7 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 		final wrapper: Null<String> = shape.rawThrowWrapperTypePath;
 		if (wrapper != null) {
 			final simple: String = SourceText.lastSegment(wrapper);
-			if (!blocking.contains(simple)) blocking.push(simple);
+			Groups.pushUnique(blocking, simple);
 		}
 		return {
 			throwKinds: throwKinds,

@@ -6,6 +6,8 @@ import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.Selector.SelectorSegment;
 import anyparse.runtime.EditDistance;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 /**
@@ -184,7 +186,7 @@ final class Address {
 		for (kind in kinds) {
 			if (alsoKnown.contains(kind) || projected.contains(kind)) continue;
 			if (equiv != null && projected.contains(equiv.canon(kind))) continue;
-			if (!out.contains(kind)) out.push(kind);
+			Groups.pushUnique(out, kind);
 		}
 		return out;
 	}
@@ -442,12 +444,7 @@ final class Address {
 	/** The first pre-order node whose span equals `span` exactly — a `Match.span` is always some input node's span. */
 	private static function nodeAtSpan(tree: QueryNode, span: Span): Null<QueryNode> {
 		final own: Null<Span> = tree.span;
-		if (own != null && own.from == span.from && own.to == span.to) return tree;
-		for (c in tree.children) {
-			final hit: Null<QueryNode> = nodeAtSpan(c, span);
-			if (hit != null) return hit;
-		}
-		return null;
+		return own != null && own.from == span.from && own.to == span.to ? tree : Arrays.findMap(tree.children, c -> nodeAtSpan(c, span));
 	}
 
 }

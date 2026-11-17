@@ -4,6 +4,7 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
 import anyparse.query.FileIdentity;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 using StringTools;
@@ -198,7 +199,7 @@ final class OracleDeclarationReader {
 			final command: Null<String> = entry.config.generate?.command;
 			if (command == null) continue;
 			final held: Array<String> = claims[trees[i]] ?? [];
-			if (!held.contains(command)) held.push(command);
+			Groups.pushUnique(held, command);
 			claims[trees[i]] = held;
 		}
 		final out: Array<OracleConfig> = [];

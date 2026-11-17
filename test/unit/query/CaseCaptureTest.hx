@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.Rename;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 
 /**
  * A bare lowercase identifier in a `case` pattern CAPTURES: it declares a new binding for the arm
@@ -400,12 +401,7 @@ class CaseCaptureTest extends Test {
 	}
 
 	private static function findKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (child in node.children) {
-			final found: Null<QueryNode> = findKind(child, kind);
-			if (found != null) return found;
-		}
-		return null;
+		return node.kind == kind ? node : Arrays.findMap(node.children, child -> findKind(child, kind));
 	}
 
 	private static function pos(source: String, span: Span): String {

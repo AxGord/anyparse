@@ -10,6 +10,7 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
+import anyparse.util.Arrays;
 
 using StringTools;
 
@@ -530,19 +531,19 @@ final class PreferArrowCallback extends RuleBase {
 			declaredTypeSrc = m.typeSource;
 		}
 		if (declared > 1) return null;
-		if (declared == 1) {
-			final valueTypeSrc: Null<String> = declaredTypeSrc;
-			if (valueTypeSrc == null) return memberParamReturnVoid(ctx, idx, rt, member, argIndex, argCount);
-			final paramType: Null<String> = paramOfFnTypeSource(ctx, valueTypeSrc, argIndex, argCount);
-			return paramType == null ? null : fnTypeReturnVoid(ctx, idx, paramType, rt.file.file, rt.type.typeParamNames, 0);
-		}
-		for (raw in rt.type.supertypesRaw) {
-			final v: Null<Bool> = chainLookup(
-				ctx, idx, idx.resolveTypeRefsFrom(raw, rt.file.file, rt.type.span.from), member, argIndex, argCount, visited, depth + 1
+		if (declared != 1)
+			return Arrays.findMap(
+				rt.type.supertypesRaw,
+				raw ->
+					chainLookup(
+						ctx, idx, idx.resolveTypeRefsFrom(raw, rt.file.file, rt.type.span.from), member, argIndex, argCount, visited,
+						depth + 1
+					)
 			);
-			if (v != null) return v;
-		}
-		return null;
+		final valueTypeSrc: Null<String> = declaredTypeSrc;
+		if (valueTypeSrc == null) return memberParamReturnVoid(ctx, idx, rt, member, argIndex, argCount);
+		final paramType: Null<String> = paramOfFnTypeSource(ctx, valueTypeSrc, argIndex, argCount);
+		return paramType == null ? null : fnTypeReturnVoid(ctx, idx, paramType, rt.file.file, rt.type.typeParamNames, 0);
 	}
 
 	/** Parse `rt`'s declaring file and test `member`'s parameter at `argIndex` for a `Void`-returning function type. */

@@ -10,6 +10,7 @@ import anyparse.check.scan.NullFlow;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 
 /**
  * A parameter with no default that at least two call sites hand the SAME compile-time constant:
@@ -187,9 +188,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 	private static function slices(plan: Plan): Array<CrossFileEdits> {
 		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		inline function add(file: String, edit: { span: Span, text: String }): Void {
-			final edits: Array<{ span: Span, text: String }> = byFile[file] ?? [];
-			edits.push(edit);
-			byFile[file] = edits;
+			Groups.push(byFile, file, edit);
 		}
 		add(plan.declFile, { span: new Span(plan.paramEnd, plan.paramEnd), text: ' = ${plan.constant}' });
 		for (site in plan.sites) add(site.file, { span: new Span(site.cutFrom, site.cutTo), text: '' });
@@ -227,9 +226,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			if (site == null) return;
 			final key: String = '${member.owner}.${member.name}#$last';
 			final byConstant: Map<String, Array<CallSite>> = census[key] ?? [];
-			final sites: Array<CallSite> = byConstant[constant] ?? [];
-			sites.push(site);
-			byConstant[constant] = sites;
+			Groups.push(byConstant, constant, site);
 			census[key] = byConstant;
 		}, seams);
 	}

@@ -4,6 +4,7 @@ import anyparse.grammar.json.JsonFormat;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.DeclarationDelta;
 import anyparse.query.merge.RecordTree;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -123,7 +124,7 @@ final class DataDelta {
 		final out: Array<String> = [];
 		for (entry in object.children) {
 			final key: String = entry.name ?? '';
-			if (!out.contains(key)) out.push(key);
+			Groups.pushUnique(out, key);
 		}
 		return out;
 	}

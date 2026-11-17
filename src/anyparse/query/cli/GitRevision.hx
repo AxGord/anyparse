@@ -2,6 +2,7 @@ package anyparse.query.cli;
 
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 using Lambda;
@@ -134,7 +135,7 @@ final class GitRevision {
 		final roots: Array<String> = [];
 		for (spec in specs) {
 			final root: String = Glob.walkRoot(spec);
-			if (!roots.contains(root)) roots.push(root);
+			Groups.pushUnique(roots, root);
 		}
 		return roots;
 	}

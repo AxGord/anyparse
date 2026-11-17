@@ -7,6 +7,7 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -346,11 +347,7 @@ final class TypeRefIndex {
 					built[t.name] = list;
 					if (!own.contains(t.name)) own.push(t.name);
 				}
-				for (n in own) {
-					final declaring: Array<FileInfo> = _filesByName[n] ?? [];
-					declaring.push(fi);
-					_filesByName[n] = declaring;
-				}
+				for (n in own) Groups.push(_filesByName, n, fi);
 			}
 			_byName = built;
 			table = built;
@@ -409,7 +406,7 @@ final class TypeRefIndex {
 				final simple: String = SourceText.lastSegment(target);
 				if (simple == alias) continue;
 				final bucket: Array<String> = edges[alias] ?? [];
-				if (!bucket.contains(simple)) bucket.push(simple);
+				Groups.pushUnique(bucket, simple);
 				edges[alias] = bucket;
 			}
 		}

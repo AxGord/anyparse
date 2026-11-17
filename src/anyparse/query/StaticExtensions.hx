@@ -11,6 +11,7 @@ import anyparse.query.SymbolIndex.ModuleField;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeNameBinding.ImportPath;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -114,7 +115,7 @@ final class StaticExtensions {
 		for (u in usingsOf(fi)) {
 			final hosts: Null<UsingHosts> = usingHosts(u.raw);
 			final names: Array<String> = hosts == null ? [SourceText.lastSegment(u.raw)] : hosts.types.map(t -> t.type.name);
-			for (n in names) if (!out.contains(n)) out.push(n);
+			for (n in names) Groups.pushUnique(out, n);
 		}
 		return out;
 	}
@@ -150,7 +151,7 @@ final class StaticExtensions {
 			final path: String = usings[k].raw;
 			final hosts: Null<UsingHosts> = usingHosts(path);
 			if (hosts == null) return { path: path, hosts: null };
-			if (hosts.types.exists(h -> _ancestors.builtAtOrAbove(h))) return null;
+			if (hosts.types.exists(_ancestors.builtAtOrAbove)) return null;
 			final declares: Bool = hosts.moduleFields.exists(f -> f.name == method)
 				|| hosts.types.exists(h -> h.type.members.exists(m -> extendsAs(m, method)));
 			if (declares) return { path: path, hosts: hosts.types };

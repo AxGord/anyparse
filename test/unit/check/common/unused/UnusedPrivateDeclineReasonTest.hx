@@ -3,6 +3,7 @@ package unit.check.common.unused;
 import anyparse.check.Severity;
 import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 /**
  * Every gate `unused-private`s autofix declines a member at SAYS which gate it was.
@@ -124,7 +125,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 	 */
 	public function testTheGatesSpeakDistinctSentences(): Void {
 		final said: Array<String> = [];
-		for (gate in GATES) for (reason in declineReasons(gate.files).reasons) if (!said.contains(reason)) said.push(reason);
+		for (gate in GATES) for (reason in declineReasons(gate.files).reasons) Groups.pushUnique(said, reason);
 		Assert.equals(GATES.length, said.length, 'two gates share a sentence: ${said.join(' | ')}');
 	}
 

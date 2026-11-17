@@ -10,6 +10,7 @@ import anyparse.query.NominalTypes;
 import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.util.Groups;
 
 /** What a reflective write's target may be an object of (`ReflectiveReach.placeOf`). */
 typedef Placement = {
@@ -119,7 +120,7 @@ final class ReflectiveReach {
 	public function namedTypes(file: String, written: String): Array<String> {
 		final simple: String = CallGraphNames.lastSegments(written, 1);
 		final out: Array<String> = [simple];
-		for (key in keysOf(file, written)) for (t in [key, aliased(key)]) if (!out.contains(t)) out.push(t);
+		for (key in keysOf(file, written)) for (t in [key, aliased(key)]) Groups.pushUnique(out, t);
 		return out;
 	}
 
@@ -207,7 +208,7 @@ final class ReflectiveReach {
 			if (outer != null && outer == _shape.voidTypeName) continue;
 			final reach: Null<Array<String>> = reachOf(outer);
 			if (reach == null) return null;
-			for (t in reach) if (!out.contains(t)) out.push(t);
+			for (t in reach) Groups.pushUnique(out, t);
 		}
 		return out;
 	}
@@ -252,7 +253,7 @@ final class ReflectiveReach {
 			}
 			final reach: Null<Array<String>> = reachOfSources(forwarded ?? [arg]);
 			if (reach == null) return null;
-			for (t in reach) if (!out.contains(t)) out.push(t);
+			for (t in reach) Groups.pushUnique(out, t);
 		}
 		return free.foreach(neverMade) ? out : null;
 	}
@@ -308,7 +309,7 @@ final class ReflectiveReach {
 			name
 		else
 			null;
-		if (written != null) for (t in namedTypes(file, written)) if (!out.contains(t)) out.push(t);
+		if (written != null) for (t in namedTypes(file, written)) Groups.pushUnique(out, t);
 		if (name != null && node.kind == _shape.newExprKind && unresolvedMade(file, name) && !_unresolvedMade.contains(name))
 			_unresolvedMade.push(name);
 		for (c in node.children) collectMade(file, source, c, node, out);
@@ -480,7 +481,7 @@ final class ReflectiveReach {
 		final out: Array<String> = from.copy();
 		var at: Int = 0;
 		while (at < out.length) {
-			for (t in next(out[at])) if (!out.contains(t)) out.push(t);
+			for (t in next(out[at])) Groups.pushUnique(out, t);
 			at++;
 		}
 		return out;

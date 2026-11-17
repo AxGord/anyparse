@@ -13,6 +13,7 @@ import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.util.Groups;
 
 /** What a reflective write stores in the field it writes (`FieldWriteSite.stored`). */
 enum StoredValue {
@@ -103,7 +104,7 @@ final class ReflectiveValues {
 		_complete = complete;
 		_entries = entries;
 		_methodHolders = methodHolders;
-		for (t in _shape.literalTypeNames ?? []) if (!_basic.contains(t)) _basic.push(t);
+		for (t in _shape.literalTypeNames ?? []) Groups.pushUnique(_basic, t);
 	}
 
 	/**
@@ -450,7 +451,7 @@ final class ReflectiveValues {
 		for (s in sources) {
 			final types: Null<Array<String>> = valueTypes(s.file, s.fn, s.node, typer, visiting);
 			if (types == null) return null;
-			for (t in types) if (!out.contains(t)) out.push(t);
+			for (t in types) Groups.pushUnique(out, t);
 		}
 		return out;
 	}
@@ -561,7 +562,7 @@ final class ReflectiveValues {
 
 	/** Adds `key` to `claims` once. */
 	private static inline function noteClaim(claims: Array<String>, key: String): Void {
-		if (!claims.contains(key)) claims.push(key);
+		Groups.pushUnique(claims, key);
 	}
 
 }

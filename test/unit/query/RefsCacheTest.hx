@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.RefsCache;
+import anyparse.util.Groups;
 
 /**
  * `RefsCache` memoizes `Refs.find` per tree: `CachingGrammarPlugin.refShape`
@@ -80,7 +81,7 @@ class RefsCacheTest extends Test {
 		final names: Array<String> = [];
 		RefsCache.collectNames(tree, names);
 		final seen: Array<String> = [];
-		for (n in names) if (!seen.contains(n)) seen.push(n);
+		for (n in names) Groups.pushUnique(seen, n);
 
 		Assert.isTrue(seen.length > 0, 'fixture must contain at least one name');
 

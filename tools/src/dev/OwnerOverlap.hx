@@ -6,6 +6,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.IndexScope;
 import anyparse.query.OwnerIndex;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 import devkit.Args;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -271,9 +272,7 @@ final class OwnerOverlap {
 		final groups: Map<String, Array<Overlap>> = [];
 		for (o in result.overlaps) {
 			final key: String = OwnerIndex.nameOf(o.owner);
-			final group: Array<Overlap> = groups[key] ?? [];
-			group.push(o);
-			groups[key] = group;
+			Groups.push(groups, key, o);
 		}
 		final keys: Array<String> = [for (key in groups.keys()) key];
 		keys.sort((a, b) -> {

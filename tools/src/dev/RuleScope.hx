@@ -6,6 +6,7 @@ import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 import dev.SuiteImpact.DeclaredTypes;
 import dev.SuiteImpact.ImpactSource;
 import devkit.Args;
@@ -90,7 +91,7 @@ final class RuleScope {
 		for (path in SuiteImpact.reached(sources, touched, [REGISTRY], declared)) if (path.startsWith(ENGINE_DIR) && path != REGISTRY) {
 			final own: Null<Array<String>> = reachedIds(path, texts[path] ?? '', declared.types[path] ?? [], registered, registry);
 			if (own == null) return null;
-			for (id in own) if (!ids.contains(id)) ids.push(id);
+			for (id in own) Groups.pushUnique(ids, id);
 		}
 		final created: Array<String> = touched.map(moduleOf);
 		final registryOk: Bool = !touched.contains(REGISTRY) || gainsOnly(registryDiff, created);
@@ -123,7 +124,7 @@ final class RuleScope {
 		var rest: String = file.text;
 		while (EMITTED.match(rest)) {
 			final emitted: String = EMITTED.matched(1);
-			if (!ids.contains(emitted)) ids.push(emitted);
+			Groups.pushUnique(ids, emitted);
 			rest = EMITTED.matchedRight();
 		}
 		return ids;

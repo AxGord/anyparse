@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.grammar.json.JsonNative;
 import anyparse.grammar.json.JsonProjection;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -46,9 +47,7 @@ final class PackageDocumentCarry {
 					stay.push(record);
 					continue;
 				}
-				final queue: Array<Record> = incoming[target] ?? [];
-				queue.push(record);
-				incoming[target] = queue;
+				Groups.push(incoming, target, record);
 				if (!sender.exists(target)) sender[target] = doc;
 			}
 			doc.kept = stay;

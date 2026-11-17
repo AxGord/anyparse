@@ -11,6 +11,7 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NamingPolicy.PropertyClause;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 import haxe.Exception;
 
 using StringTools;
@@ -796,7 +797,7 @@ final class HaxeNamingSupport implements NamingSupport {
 			if (supers == null) continue;
 			for (s in supers) {
 				if (s == root) return true;
-				if (!seen.contains(s)) seen.push(s);
+				Groups.pushUnique(seen, s);
 			}
 		}
 		return false;

@@ -5,6 +5,7 @@ import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.TypingService.BareBinding;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using anyparse.util.Strings;
 using Lambda;
@@ -27,6 +28,15 @@ typedef PrintedTypeRef = { var text: String; var importPath: Null<String>; }
  * (see `anyparse.check.Check.GroupedFix`); a caller that only splices the edit ignores it.
  */
 typedef PendingImportEdit = { var span: Span; var text: String; var paths: Array<String>; }
+
+/** A `PendingImportEdit` as one unit of the verifier's bisect: `group` is the id every use site needing one of its paths shares. */
+typedef GroupedImportEdit = { final span: Span; final text: String; final group: Null<Int>; }
+
+/**
+ * The import edits of a file with their bisect groups: `edits` in `pendingImportEdits` order, edit `i` in group `i`, and
+ * `groupOf(path)` the group of the edit bringing `path` in, or null when no pending edit does (the reference resolves as written).
+ */
+typedef ImportGroups = { final edits: Array<GroupedImportEdit>; final groupOf: (path: Null<String>) -> Null<Int>; }
 
 @:access(anyparse.query.ModuleScan)
 @:nullSafety(Strict)
@@ -198,7 +208,7 @@ final class TypeRefPrinter {
 			return { text: inScope, importPath: null };
 		}
 		if (typeParamBinds(simple, owned) || !canAddImport(canonical, simple, owned)) return { text: canonical, importPath: null };
-		if (!_pendingImports.contains(canonical)) _pendingImports.push(canonical);
+		Groups.pushUnique(_pendingImports, canonical);
 		return { text: simple, importPath: canonical };
 	}
 
@@ -318,6 +328,23 @@ final class TypeRefPrinter {
 	}
 
 	/**
+	 * The one answer to "which bisect group does a rewrite needing an import path share": `pendingImportEdits`, each edit its
+	 * own group, with the lookup a fixer tags its use-site rewrites through (`anyparse.check.Check.GroupedFix`). Call once,
+	 * after every `print` for the file, as `pendingImportEdits`.
+	 */
+	public function importGroups(): ImportGroups {
+		final pending: Array<PendingImportEdit> = pendingImportEdits();
+		final byPath: Map<String, Int> = [];
+		for (group => edit in pending) for (path in edit.paths) byPath[path] = group;
+		return {
+			edits: [
+				for (group => edit in pending) { span: edit.span, text: edit.text, group: group }
+			],
+			groupOf: path -> path == null ? null : byPath[path]
+		};
+	}
+
+	/**
 	 * Whether THIS module's own top level declares `simple` AND that declaration is `canonical` — the MODULE-LOCAL binding,
 	 * which outranks every import in Haxe's resolution order — read where the printer has no index (with one, the typing
 	 * layer's reading holds it). Asked at two priorities (`visibleNameFor` takes it, `shadowedLocally` exempts the bulk arm on
@@ -391,7 +418,7 @@ final class TypeRefPrinter {
 		if (index != null && plugin != null) {
 			final bindings: ImportBindings = new ImportBindings(() -> index, plugin);
 			final paths: Array<String> = _usingModules.copy();
-			for (path in _importMap) if (!paths.contains(path)) paths.push(path);
+			for (path in _importMap) Groups.pushUnique(paths, path);
 			for (path in paths) {
 				final values: Null<Array<String>> = bindings.valuesSeen(path);
 				final listed: Array<String> = out ?? [];
@@ -399,7 +426,7 @@ final class TypeRefPrinter {
 					out = null;
 					break;
 				}
-				for (name in values) if (!listed.contains(name)) listed.push(name);
+				for (name in values) Groups.pushUnique(listed, name);
 			}
 		}
 		_importedMemberNames = { names: out };

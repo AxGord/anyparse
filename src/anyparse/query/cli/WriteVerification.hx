@@ -7,6 +7,7 @@ import anyparse.query.ExitCode;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.OracleProvider;
 import anyparse.query.cli.WriteJournal.JournalState;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 using Lambda;
@@ -76,7 +77,7 @@ final class WriteVerification {
 		final dirs: Array<String> = [];
 		for (path in paths) {
 			final dir: String = Path.directory(path);
-			if (!dirs.contains(dir)) dirs.push(dir);
+			Groups.pushUnique(dirs, dir);
 		}
 		final compiler: OracleProvider = compilerOf(paths);
 		final out: Array<OracleConfig> = [];

@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.query.QueryNode;
 import anyparse.query.format.Text;
+import anyparse.util.Arrays;
 
 using StringTools;
 
@@ -151,12 +152,7 @@ class LocalTypeAnnotationProjectionTest extends Test {
 	}
 
 	private static function find(node: QueryNode): Null<QueryNode> {
-		if (node.kind == 'VarStmt' || node.kind == 'FinalStmt') return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = find(c);
-			if (hit != null) return hit;
-		}
-		return null;
+		return node.kind == 'VarStmt' || node.kind == 'FinalStmt' ? node : Arrays.findMap(node.children, find);
 	}
 
 	private static function ast(source: String): String return Text.render(new HaxeQueryPlugin().parseFile(source));

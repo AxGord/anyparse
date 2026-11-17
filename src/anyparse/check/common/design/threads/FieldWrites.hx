@@ -12,6 +12,7 @@ import anyparse.query.IndexScope;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Groups;
 
 /** One write of a field-shaped target in a file of the run. */
 typedef FieldWriteSite = {
@@ -233,7 +234,7 @@ final class FieldWrites {
 		for (f in fields) {
 			final name: String = LockSites.memberName(f);
 			final known: Array<String> = _lockFields[name] ?? [];
-			if (!known.contains(f)) known.push(f);
+			Groups.pushUnique(known, f);
 			_lockFields[name] = known;
 		}
 	}
@@ -248,7 +249,7 @@ final class FieldWrites {
 			site.reflective && (site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))
 		) {
 			final at: String = site.fn ?? site.file;
-			if (!out.contains(at)) out.push(at);
+			Groups.pushUnique(out, at);
 		}
 		return out;
 	}
@@ -407,9 +408,7 @@ final class FieldWrites {
 
 	/** Files `site` under the name `name` it writes. */
 	private function push(name: String, site: FieldWriteSite): Void {
-		final list: Array<FieldWriteSite> = _byName[name] ?? [];
-		list.push(site);
-		_byName[name] = list;
+		Groups.push(_byName, name, site);
 	}
 
 	/**
@@ -504,7 +503,7 @@ final class FieldWrites {
 	private function storesLock(site: FieldWriteSite, fields: Null<Array<String>>): Bool {
 		final types: Null<Array<String>> = storedTypes(site);
 		if (types == null) return true;
-		final members: Array<Null<String>> = fields == null || fields.length == 0 ? [null] : fields.map(f -> _values.memberTypeOf(f));
+		final members: Array<Null<String>> = fields == null || fields.length == 0 ? [null] : fields.map(_values.memberTypeOf);
 		return types.exists(t -> members.exists(m -> _values.mayHold(t, m)));
 	}
 

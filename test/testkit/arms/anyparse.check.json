@@ -452,15 +452,15 @@
 			"name": "M-ORACLE-SHADOWED-DROPS-LOST",
 			"type": "anyparse.check.LintConfig",
 			"method": "compilerOracles",
-			"find": "for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);",
-			"replace": "if (nearest == read) for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);",
+			"find": "for (drop in drops) Groups.pushUnique(_drops, drop);",
+			"replace": "if (nearest == read) for (drop in drops) Groups.pushUnique(_drops, drop);",
 			"note": "a dropped compilerOracle entry in a document a nearer one overrides is no longer reported, so the mistake goes unsaid until the nearer document is removed"
 		},
 		{
 			"name": "M-ORACLE-READ-DROPS-LOST",
 			"type": "anyparse.check.LintConfig",
 			"method": "compilerOracles",
-			"find": "for (drop in drops) if (!_drops.contains(drop)) _drops.push(drop);",
+			"find": "for (drop in drops) Groups.pushUnique(_drops, drop);",
 			"replace": "{}",
 			"note": "a read that drops a compilerOracle entry no longer records it on the config, so a malformed declaration degrades in silence"
 		},

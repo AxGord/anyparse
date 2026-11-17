@@ -5,6 +5,7 @@ import anyparse.check.common.design.threads.LockSites.LockGive;
 import anyparse.query.CallGraph;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ShapeVocab;
+import anyparse.util.Groups;
 
 using StringTools;
 
@@ -129,7 +130,7 @@ final class MustHeld {
 		final out: Array<String> = [
 			for (h in _entry['$id|$valuation'] ?? []) if (!givenBack(id, valuation, file, lockOf(h), -1, at, cover)) h
 		];
-		for (h in ownAt(id, valuation, file, at, cover)) if (!out.contains(h)) out.push(h);
+		for (h in ownAt(id, valuation, file, at, cover)) Groups.pushUnique(out, h);
 		return out;
 	}
 
@@ -217,7 +218,7 @@ final class MustHeld {
 			if (lock == null || object == null || end > at) continue;
 			if (!runsBefore(a.edge, valuation, at) || givenBack(id, valuation, file, lock, end, at, cover)) continue;
 			final held: String = lock + ON + object;
-			if (!out.contains(held)) out.push(held);
+			Groups.pushUnique(out, held);
 		}
 		_own[key] = out;
 		return out;

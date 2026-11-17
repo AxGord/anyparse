@@ -5,6 +5,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.Rename;
 import anyparse.runtime.Span;
+import anyparse.util.Arrays;
 
 /**
  * The bare arrow lambda's parameter is a BINDER, not a read of the enclosing scope.
@@ -156,12 +157,7 @@ class ThinArrowParamBindingSliceTest extends Test {
 
 	/** The first node of `kind` in pre-order, or null. */
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (c in node.children) {
-			final hit: Null<QueryNode> = firstOfKind(c, kind);
-			if (hit != null) return hit;
-		}
-		return null;
+		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
 	}
 
 	private static function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {

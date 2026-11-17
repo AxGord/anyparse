@@ -6,6 +6,7 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.ParsedEntry;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -239,7 +240,7 @@ final class CallGraphNodes {
 		g._fileDeclarations[key] = inFile;
 		if (name != null) {
 			final ids: Array<String> = g._byMember[name] ?? [];
-			if (!ids.contains(id)) ids.push(id);
+			Groups.pushUnique(ids, id);
 			g._byMember[name] = ids;
 		}
 		return first;

@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
+import anyparse.util.Groups;
 
 /**
  * Which node kinds BIND a name, which names a construct binds that the scope resolver does not see, and the
@@ -281,7 +282,7 @@ final class BinderScan {
 			for (child in node.children) walk(child);
 		}
 		walk(root);
-		for (name in casePatternCaptures(root, shape)) if (!out.contains(name)) out.push(name);
+		for (name in casePatternCaptures(root, shape)) Groups.pushUnique(out, name);
 		return out;
 	}
 

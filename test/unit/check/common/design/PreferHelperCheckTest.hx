@@ -1,10 +1,13 @@
 package unit.check.common.design;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.GroupedEdit;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.design.PreferHelper;
 import anyparse.query.CanonicalEdit;
+
+using StringTools;
 
 /**
  * The `prefer-helper` check: a run of statements repeating the body of a helper carrying the configured marker, its
@@ -54,6 +57,35 @@ class PreferHelperCheckTest extends Test {
 		Assert.isTrue(out.indexOf('\t\tGroups.push(m, k, v);\n') != -1, out);
 		Assert.isTrue(out.indexOf('import util.Groups;\n') != -1, out);
 		Assert.isTrue(out.indexOf('ys.push') == -1, out);
+	}
+
+	/** The import a rewrite needs shares that rewrite's bisect group, so the oracle's revert of the rewrite takes the import along. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-IMPORT-UNGROUPED')
+	public function testTheImportSharesTheGroupOfItsRewrite(): Void {
+		final edits: Array<GroupedEdit> = groupedEditsOf(user(PUSH));
+		final imports: Array<GroupedEdit> = edits.filter(e -> e.text.indexOf('import ') != -1);
+		final calls: Array<GroupedEdit> = edits.filter(e -> e.text.indexOf('import ') == -1);
+		Assert.equals(1, imports.length);
+		Assert.equals(1, calls.length);
+		if (imports.length != 1 || calls.length != 1) return;
+		Assert.notNull(imports[0].group);
+		Assert.equals(imports[0].group, calls[0].group);
+	}
+
+	/** A rewrite whose helper type the file already imports needs no import edit, so it stays a bisect unit of its own. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-IMPORTED-GROUPED')
+	public function testARewriteOfAnImportedHelperIsItsOwnGroup(): Void {
+		final files: Array<{ file: String, source: String }> = user(PUSH);
+		final imported: Array<{ file: String, source: String }> = [
+			{ file: files[0].file, source: files[0].source.replace('package app;\n', 'package app;\n\nimport util.Groups;\n') }
+		].concat(files.slice(1));
+		final edits: Array<GroupedEdit> = groupedEditsOf(imported);
+		Assert.equals(1, edits.length);
+		if (edits.length != 1) return;
+		Assert.equals('Groups.push(m, k, v);', edits[0].text);
+		Assert.isNull(edits[0].group);
 	}
 
 	public function testAOneStatementCopyBecomesTheHelperCall(): Void {
@@ -261,6 +293,14 @@ class PreferHelperCheckTest extends Test {
 		final rule: PreferHelper = check(config ?? CONFIG);
 		rule.setConfigNotes(notes);
 		return CheckFixture.violationsIn(rule, files, null, resolver(config ?? CONFIG));
+	}
+
+	/** `files[0]`'s own findings fixed through `fixGrouped`, each edit with its bisect group. */
+	private function groupedEditsOf(files: Array<{ file: String, source: String }>): Array<GroupedEdit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final rule: PreferHelper = check(CONFIG);
+		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(CONFIG)).filter(v -> v.file == files[0].file);
+		return own.length == 0 ? [] : rule.fixGrouped(files[0].source, own, plugin, CheckFixture.index(files, plugin));
 	}
 
 	private function editsOf(files: Array<{ file: String, source: String }>): Array<FixEdit> {

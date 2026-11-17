@@ -1,6 +1,7 @@
 package anyparse.query.cli;
 
 import anyparse.query.cli.LanguageDeclaration.ProjectLanguages;
+import anyparse.util.Groups;
 import sys.FileSystem;
 
 using Lambda;
@@ -69,8 +70,8 @@ final class LanguageChoice {
 			final lang: Null<String> = CliArgs.langOfFile(args[i]);
 			if (lang == null)
 				scopes.push(args[i]);
-			else if (!ofFiles.contains(lang))
-				ofFiles.push(lang);
+			else
+				Groups.pushUnique(ofFiles, lang);
 		}
 		// Under a preset a mixed set reads as the preset's grammar, as it did before the preset yielded to extensions.
 		return if (ofFiles.length > 1 && preset == null)

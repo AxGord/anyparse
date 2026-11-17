@@ -2,6 +2,8 @@ package anyparse.macro;
 
 using StringTools;
 
+import anyparse.util.Groups;
+
 /**
  * The exhaustive set of byte codes a match of a `@:re` terminal's pattern can
  * BEGIN with — the fact `ParseDispatchLowering.terminalFirstToken` turns into a
@@ -353,7 +355,7 @@ final class RegexFirstBytes {
 		if (add == null) return false;
 		for (code in add) {
 			if (code > MAX_BYTE) return false;
-			if (!into.contains(code)) into.push(code);
+			Groups.pushUnique(into, code);
 		}
 		return true;
 	}

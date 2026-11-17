@@ -7,6 +7,7 @@ import anyparse.query.ParseGate;
 import anyparse.query.Refs;
 import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;
+import anyparse.util.Groups;
 
 /**
  * The string-keyed BAG arm of `avoid-dynamic`: a `Dynamic` declaration whose every use is a
@@ -361,7 +362,7 @@ final class DynamicBag {
 				hasDynamic = true;
 				continue;
 			}
-			if (!types.contains(ty)) types.push(ty);
+			Groups.pushUnique(types, ty);
 		}
 		return if (hasDynamic)
 			Typeless

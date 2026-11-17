@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Groups;
 import dev.BaseSuite.BaseSuiteRun;
 import dev.Shard.Tally;
 import devkit.Cmd.cmd;
@@ -59,7 +60,7 @@ final class RedOnBase {
 		for (name in failing) {
 			final dot: Int = name.lastIndexOf('.');
 			final cls: String = dot < 0 ? name : name.substr(0, dot);
-			if (!classes.contains(cls)) classes.push(cls);
+			Groups.pushUnique(classes, cls);
 		}
 		return classes;
 	}

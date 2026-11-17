@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
+import anyparse.util.Groups;
 
 using Lambda;
 
@@ -371,7 +372,7 @@ final class CallGraphTypes {
 
 	public static function unionInto(map: Map<String, Array<String>>, key: String, values: Array<String>): Void {
 		final list: Array<String> = map[key] ?? [];
-		for (v in values) if (!list.contains(v)) list.push(v);
+		for (v in values) Groups.pushUnique(list, v);
 		map[key] = list;
 	}
 

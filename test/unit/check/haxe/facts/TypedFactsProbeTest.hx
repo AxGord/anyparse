@@ -5,6 +5,7 @@ import anyparse.check.haxe.facts.TypedFactsProbe;
 import anyparse.query.FactSites;
 import anyparse.query.FactsTypeTree;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 import haxe.io.Path;
 import sys.io.File;
 
@@ -912,7 +913,7 @@ class TypedFactsProbeTest extends Test {
 				final uses: Array<String> = [];
 				for (f in walked) if (f.field == field && !f.write && f.at.span.from == from) {
 					final use: String = f.use + (f.method == null ? '' : ':${f.method}') + (f.held ? '' : '!');
-					if (!uses.contains(use)) uses.push(use);
+					Groups.pushUnique(uses, use);
 				}
 				uses.sort(Compare.compareString);
 				return uses.join(',');

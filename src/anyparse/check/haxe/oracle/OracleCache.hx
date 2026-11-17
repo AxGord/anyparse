@@ -8,6 +8,7 @@ import anyparse.proc.ProcessSpawn;
 import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.util.Compare;
+import anyparse.util.Groups;
 import haxe.io.Path;
 
 /**
@@ -466,12 +467,12 @@ final class OracleCache {
 	): Void {
 		for (classPath in refs.classPaths) {
 			final dir: String = absolute(root, classPath);
-			if (!classPaths.contains(dir)) classPaths.push(dir);
+			Groups.pushUnique(classPaths, dir);
 		}
-		for (lib in refs.libs) if (!libs.contains(lib)) libs.push(lib);
+		for (lib in refs.libs) Groups.pushUnique(libs, lib);
 		for (include in refs.includes) {
 			final next: String = absolute(root, include);
-			if (!queue.contains(next)) queue.push(next);
+			Groups.pushUnique(queue, next);
 		}
 	}
 
