@@ -1,14 +1,11 @@
 package unit.devkit;
 
-import devkit.TempDir;
 import devkit.TmpLifecycle;
 import haxe.io.Path;
 import js.Node;
 import js.node.Fs.Fs;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `TmpLifecycle` — which scratch directories a sweep may take: a claimed name directly under the root, no keep marker,

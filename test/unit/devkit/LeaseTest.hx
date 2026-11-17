@@ -3,14 +3,10 @@ package unit.devkit;
 import devkit.Command;
 import devkit.Lease;
 import devkit.Result;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
-using StringTools;
 using Lambda;
 
 /**

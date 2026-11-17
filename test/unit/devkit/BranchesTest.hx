@@ -6,13 +6,9 @@ import devkit.Lease;
 import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
-using StringTools;
 using Lambda;
 
 /** `devkit.Branches`: a branch report survives its round trip, a lease is shared, and a branch that left no report fails its steps. */

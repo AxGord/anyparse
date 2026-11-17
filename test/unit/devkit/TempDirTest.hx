@@ -1,15 +1,10 @@
 package unit.devkit;
 
 import anyparse.core.TempScratch;
-import devkit.TempDir;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
-
-using StringTools;
 
 /**
  * `TempDir` — a directory of the run's own, stamped the way `devkit.TmpLifecycle` reads an owner, and gone once its

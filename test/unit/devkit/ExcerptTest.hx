@@ -1,10 +1,6 @@
 package unit.devkit;
 
 import devkit.Excerpt;
-import utest.Assert;
-import utest.Test;
-
-using StringTools;
 
 /** `devkit.Excerpt`: the lines a table prints for a failed step are few, short, and say what they left out. */
 @:nullSafety(Strict)

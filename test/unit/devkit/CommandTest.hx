@@ -7,13 +7,8 @@ import devkit.Cmd.cmd;
 import devkit.CommandFailed;
 import devkit.Pool;
 import devkit.Result;
-import devkit.TempDir;
 import haxe.Exception;
 import haxe.Timer;
-import utest.Assert;
-import utest.Test;
-
-using StringTools;
 
 /**
  * `Command.run` — one process through the `ProcessSpawn` driver, its argument vector handed over with no shell in between. The

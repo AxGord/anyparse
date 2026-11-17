@@ -3,12 +3,8 @@ package unit.devkit;
 import devkit.Cmd.cmd;
 import devkit.Pool;
 import devkit.Result;
-import devkit.TempDir;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
-using StringTools;
 
 /**
  * `Pool` — commands as separate processes through `ProcessSpawn.runAll`'s process driver: results in the order given,

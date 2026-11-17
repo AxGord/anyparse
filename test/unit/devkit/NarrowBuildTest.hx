@@ -1,8 +1,6 @@
 package unit.devkit;
 
 import devkit.NarrowBuild;
-import utest.Assert;
-import utest.Test;
 
 /** The define a narrow test build carries: what `dev mutation-check` writes is what the registry reads back. */
 @:nullSafety(Strict)

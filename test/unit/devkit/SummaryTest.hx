@@ -4,13 +4,8 @@ import anyparse.proc.SpawnJob;
 import devkit.CpuMeter;
 import devkit.Excerpt;
 import devkit.Summary;
-import devkit.TempDir;
 import haxe.Exception;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
-
-using StringTools;
 
 /** `Summary` — four outcomes, never two: a step that could not run fails the verdict like a step that failed. */
 @:nullSafety(Strict)

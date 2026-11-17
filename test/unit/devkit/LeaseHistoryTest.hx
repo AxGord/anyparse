@@ -5,14 +5,10 @@ import devkit.Command;
 import devkit.Lease;
 import devkit.LeaseHistory;
 import devkit.Summary;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
-using StringTools;
 
 /**
  * `devkit.LeaseHistory`: the recorded runs of a leased command become the per-size seconds of its next ask, only from sizes run

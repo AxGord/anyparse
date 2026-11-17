@@ -4,12 +4,9 @@ import anyparse.proc.SpawnJob;
 import devkit.Command;
 import devkit.CpuMeter;
 import devkit.Result;
-import devkit.TempDir;
 import haxe.Exception;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `devkit.CpuMeter`: while a meter is active a job a tool starts runs under time(1) and the cpu of the processes that ended is

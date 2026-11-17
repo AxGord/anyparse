@@ -1,12 +1,9 @@
 package unit.devkit;
 
-import devkit.TempDir;
 import devkit.TreeFiles;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /** `TreeFiles` — every file under a directory, sorted, with the caller deciding which directories are entered. */
 @:nullSafety(Strict)

@@ -2,12 +2,9 @@ package unit.devkit;
 
 import anyparse.util.Compare;
 import devkit.FixtureCache;
-import devkit.TempDir;
 import js.node.Fs.Fs;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `FixtureCache` upkeep: the tally a run prints, and which store entries a prune takes — only the store's own kinds of

@@ -5,12 +5,7 @@ import anyparse.proc.SpawnJob;
 import devkit.Command;
 import devkit.Lease;
 import devkit.Result;
-import devkit.TempDir;
 import haxe.io.Path;
-import utest.Assert;
-import utest.Test;
-
-using StringTools;
 
 /**
  * A leased command's `timeout` counts from its lease's grant, not from the start of the `wf-run` that waits for it: a wait

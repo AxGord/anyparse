@@ -1,12 +1,9 @@
 package unit.devkit;
 
 import devkit.Tally;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `Tally` — a count kept as files in a directory, each claim an exclusive create, so a number is never handed out twice

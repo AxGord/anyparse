@@ -3,8 +3,6 @@ package unit.devkit;
 import devkit.Cmd.cmd;
 import devkit.CmdTemplate;
 import devkit.Command;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `Cmd.cmd` — a template read into an argument vector at compile time. What these pin is the reason the macro exists:
