@@ -143,7 +143,7 @@ final class ExtractInterface {
 				text;
 		};
 
-		final incomplete: Array<String> = [for (m in selected) if (m.signature.indexOf(':') < 0) m.name];
+		final incomplete: Array<String> = [ for (m in selected) if (m.signature.indexOf(':') < 0) m.name ];
 		final advisory: String = 'extracted ${selected.length} method(s) into interface "$ifaceName"'
 			+ (incomplete.length > 0 ? '; method(s) without an explicit return type may need annotations: ${incomplete.join(', ')}' : '')
 			+ TypeExtraction.rewritesNotes(ifaceFile, ifaceRewrites, srcFile, srcRewrites);

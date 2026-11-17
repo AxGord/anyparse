@@ -78,7 +78,7 @@ final class GateExcerptTest extends Test {
 
 	public function testARedShardNamesAtMostFiveFailingTests(): Void {
 		Assert.equals('failing: a.A.t1, a.A.t2', Shard.failingLine(['a.A.t1', 'a.A.t2']));
-		Assert.equals('failing: n.1, n.2, n.3, n.4, n.5, … +2 more', Shard.failingLine([for (i in 1...8) 'n.$i']));
+		Assert.equals('failing: n.1, n.2, n.3, n.4, n.5, … +2 more', Shard.failingLine([ for (i in 1...8) 'n.$i' ]));
 	}
 
 }

@@ -115,7 +115,7 @@ final class CallGraphFacts {
 			final found: Null<Array<FactNode>> = view.bodyFacts(g, n, g.declarationsOf(n.id).length);
 			if (found != null) out[n.id] = found;
 		}
-		muted = [for (id in out.keys()) id => true];
+		muted = [ for (id in out.keys()) id => true ];
 		return out;
 	}
 

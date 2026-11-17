@@ -202,7 +202,7 @@ class ApqGetCliTest extends Test {
 			Assert.equals(0, exit, 'process entry, spec $spec');
 			Assert.same(
 				['a.json arms.0', 'b.json arms.0', 'b.json arms.0.nested'],
-				[for (line in out.split('\n')) if (line != '') line.split('$dir/').join('')]
+				[ for (line in out.split('\n')) if (line != '') line.split('$dir/').join('') ]
 			);
 		}
 		CliFixture.removeDir(dir);
@@ -296,7 +296,7 @@ class ApqGetCliTest extends Test {
 		Assert.equals(expectedExit, exit, 'get --where ${clause.join(' ')} exits $expectedExit');
 		Assert.same(
 			expected,
-			[for (line in out.split('\n')) if (line != '') line.split('$dir/').join('')],
+			[ for (line in out.split('\n')) if (line != '') line.split('$dir/').join('') ],
 			'get --where ${clause.join(' ')}'
 		);
 		CliFixture.removeDir(dir);

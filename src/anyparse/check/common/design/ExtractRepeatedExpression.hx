@@ -461,7 +461,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 
 	/** Drop a group whose every occurrence nests inside an equally- or more-frequent larger group's occurrence. */
 	private static function dropSubsumed(groups: Array<Group>): Array<Group> {
-		return [for (g in groups) if (!isSubsumed(g, groups)) g];
+		return [ for (g in groups) if (!isSubsumed(g, groups)) g ];
 	}
 
 	/**

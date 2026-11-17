@@ -121,7 +121,7 @@ final class MutationSchemaBuild {
 			Groups.pushUnique(modules, typed);
 		}
 		modules.sort(Compare.compareString);
-		return [for (m in modules) for (arg in ['--macro', '$m.__mutOn(0)']) arg];
+		return [ for (m in modules) for (arg in ['--macro', '$m.__mutOn(0)']) arg ];
 	}
 
 	/** Compose and build until a build compiles or no culprit is left to drop; answers `ready` or `failed`. */

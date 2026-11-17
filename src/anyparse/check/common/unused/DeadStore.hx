@@ -323,7 +323,7 @@ final class DeadStore extends RuleBase {
 			declTypeChildKinds: shape.declTypeChildKinds ?? [],
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			exitClearKinds: returnKinds,
-			exitTopKinds: [for (k in controlExitKinds) if (!returnKinds.contains(k)) k],
+			exitTopKinds: [ for (k in controlExitKinds) if (!returnKinds.contains(k)) k ],
 			opaqueKinds: shape.opaqueKinds ?? [],
 			metaKinds: metaKinds,
 			nestedFnKinds: nestedFnKinds,

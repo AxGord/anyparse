@@ -302,7 +302,7 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 		final idx: SymbolIndex = index;
 		final shape: RefShape = plugin.refShape();
 		final resolutionIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? idx;
-		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
+		final sourceByFile: Map<String, String> = [ for (f in files) f.file => f.source ];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
 			// The privatize arm owns this finding: the rename steps aside, and the edit comes from `riskyFix`.
@@ -325,11 +325,11 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 	}
 
 	public function riskyArmFindings(violations: Array<Violation>): Array<Violation> {
-		return [for (v in violations) if (privatizedOf(v) != null) v];
+		return [ for (v in violations) if (privatizedOf(v) != null) v ];
 	}
 
 	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
-		return [for (v in violations) if (crossRenamedBy(v)) v];
+		return [ for (v in violations) if (crossRenamedBy(v)) v ];
 	}
 
 	/** The cross-file rename arm (`NamingCrossRename`): one atomic edit set per type / enum value its gates admit. */

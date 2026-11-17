@@ -145,7 +145,7 @@ final class BackingFieldRefs {
 				tree, field, owner, propName, index, src, file == ownerFile, shape
 			);
 			if (refs == null) return null;
-			final excluded: Array<Span> = [for (e in refs.renameEdits) e.span];
+			final excluded: Array<Span> = [ for (e in refs.renameEdits) e.span ];
 			for (s in refs.excludeSpans) excluded.push(s);
 			// A `package` / `import` path is a dotted module path, not a reference to the field —
 			// same reading as `Naming`'s collectors.

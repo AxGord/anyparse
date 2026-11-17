@@ -317,7 +317,7 @@ final class ComposedValues {
 	private static function expectedType(node: QueryNode, expected: Expectation, c: IndexTyping): Null<String> {
 		final shape: RefShape = c.shape;
 		final object: Bool = node.kind == shape.objectLiteralKind;
-		final loops: Array<String> = (shape.iterationBindingKinds ?? []).concat([for (k in [shape.whileExprKind]) if (k != null) k]);
+		final loops: Array<String> = (shape.iterationBindingKinds ?? []).concat([ for (k in [shape.whileExprKind]) if (k != null) k ]);
 		if (!object && node.children.length == 1 && loops.contains(node.children[0].kind)) return null;
 		// a literal of map entries is a map (`haxe.ds.Map`), whatever is expected of it
 		if (!object && node.children.exists(e -> e.kind == shape.mapLiteralEntryKind)) return null;
@@ -388,7 +388,7 @@ final class ComposedValues {
 	private static function writtenFieldType(value: QueryNode, declared: String, file: FileInfo, c: IndexTyping): Null<String> {
 		final shape: RefShape = c.shape;
 		final bare: QueryNode = BoolExprShape.unwrapParens(value, shape.parenKind);
-		final functions: Array<String> = (shape.lambdaKinds ?? []).concat([for (k in [shape.fnExprKind]) if (k != null) k]);
+		final functions: Array<String> = (shape.lambdaKinds ?? []).concat([ for (k in [shape.fnExprKind]) if (k != null) k ]);
 		if (functions.contains(bare.kind)) return c.chain.typeSyntax(declared)?.shape.match(Function(_, _, _)) == true ? declared : null;
 		final typed: Null<String> = TypingService.typeWalk(value, shape, NominalTypes.INDEX_HOST, c);
 		if (typed == null) return null;
@@ -598,7 +598,7 @@ final class ComposedValues {
 		final path: Array<QueryNode> = TreePath.pathAround(c.root, node) ?? [];
 		if (index == null || path.length < 2) return null;
 		final lineage: Array<QueryNode> = path.slice(0, path.length - 1);
-		final indices: Array<Int> = [for (i in 0...lineage.length) lineage[i].children.indexOf(path[i + 1])];
+		final indices: Array<Int> = [ for (i in 0...lineage.length) lineage[i].children.indexOf(path[i + 1]) ];
 		return index.typing.expectations.expectedAt(lineage, indices, lineage.length - 1, host ?? expectationHost(), c);
 	}
 

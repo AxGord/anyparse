@@ -164,7 +164,7 @@ final class PreferFinalField extends RuleBase implements RiskyFix implements Ora
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) if (v.declineReason == null) v.span], plugin);
+		return CtorFieldFold.finalizeFieldEdits(source, [ for (v in violations) if (v.declineReason == null) v.span ], plugin);
 	}
 
 	/**

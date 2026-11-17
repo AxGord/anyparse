@@ -346,7 +346,7 @@ final class SearchCommand implements CliCommand implements LeadingQuery implemen
 	}
 
 	private static function searchExplainHistogram(patternKind: String, kindCounts: Map<String, Int>): Void {
-		final entries: Array<{ k: String, n: Int }> = [for (k => n in kindCounts) { k: k, n: n }];
+		final entries: Array<{ k: String, n: Int }> = [ for (k => n in kindCounts) { k: k, n: n } ];
 		entries.sort((a, b) -> a.n == b.n ? (a.k < b.k ? -1 : 1) : b.n - a.n);
 		final topN: Int = entries.length < 12 ? entries.length : 12; // noqa: magic-number
 		CliIo.stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');

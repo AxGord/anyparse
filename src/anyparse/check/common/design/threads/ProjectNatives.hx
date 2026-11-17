@@ -52,7 +52,7 @@ final class ProjectNatives {
 		final leadKinds: Array<String> = (_shape.modifierKinds ?? []).concat(plugin.metaShape().metaKinds);
 		for (id => node in graph.nodes) if (declaredNative(node, metaNames, leadKinds)) push(id);
 		for (p in execution.nativeCodeCalls ?? []) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true) push(id);
-		final loaders: Array<String> = [for (p in execution.nativeLoaderCalls ?? []) ReachHazards.lastSegments(p, 2)];
+		final loaders: Array<String> = [ for (p in execution.nativeLoaderCalls ?? []) ReachHazards.lastSegments(p, 2) ];
 		if (loaders.length > 0) for (held in graph.heldFiles()) collectLoaded(held.tree, null, loaders);
 		final affix: Null<String> = execution.targetCodeNameAffix;
 		for (u in graph.unresolved) siteNative(u.file, u.span, u.from, affix, u.spliced);

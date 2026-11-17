@@ -64,7 +64,7 @@ final class LintScope {
 				dir = Path.directory(dir);
 			}
 		}
-		final scope: Array<String> = [for (file in files.keys()) if (inRoots(file)) file];
+		final scope: Array<String> = [ for (file in files.keys()) if (inRoots(file)) file ];
 		scope.sort(Reflect.compare);
 		return scope;
 	}
@@ -92,8 +92,8 @@ final class LintScope {
 		final added: Null<Array<JValue>> = recordsOf(fresh);
 		if (added == null) return fresh;
 		if (kept == null) return null;
-		final redone: Map<String, Bool> = [for (file in scope) file => true];
-		final narrow: Map<String, Bool> = [for (id in dependent) id => true];
+		final redone: Map<String, Bool> = [ for (file in scope) file => true ];
+		final narrow: Map<String, Bool> = [ for (id in dependent) id => true ];
 		final isNarrow: JValue -> Bool = record -> narrow.exists(JValueTools.stringAt(record, 'rule') ?? '');
 		final stay: Array<JValue> = kept.filter(record -> {
 			final file: String = JValueTools.stringAt(record, 'file') ?? '';
@@ -154,8 +154,8 @@ final class LintScope {
 	public static function judged(text: String, scope: Array<String>, dependent: Array<String>): String {
 		final records: Null<Array<JValue>> = recordsOf(text);
 		if (records == null) return text;
-		final redone: Map<String, Bool> = [for (file in scope) file => true];
-		final narrow: Map<String, Bool> = [for (id in dependent) id => true];
+		final redone: Map<String, Bool> = [ for (file in scope) file => true ];
+		final narrow: Map<String, Bool> = [ for (id in dependent) id => true ];
 		return JValueWriter.write(
 			JArray(records.filter(record -> !(
 				redone.exists(JValueTools.stringAt(record, 'file') ?? '') && narrow.exists(JValueTools.stringAt(record, 'rule') ?? '')

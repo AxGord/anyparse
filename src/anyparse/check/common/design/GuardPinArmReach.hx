@@ -180,7 +180,7 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 			final decl: Null<QueryNode> = TreePath.withSpan(container, declSpan);
 			if (decl == null) continue;
 			final guarded: QueryNode = decl;
-			final own: Array<String> = [for (k in killers) if (k.decl == declSpan.from) k.arm.name];
+			final own: Array<String> = [ for (k in killers) if (k.decl == declSpan.from) k.arm.name ];
 			final reached: Null<{ decl: Int, arm: ArmTarget }> = killers.find(
 				k ->
 					!own.contains(k.arm.name)

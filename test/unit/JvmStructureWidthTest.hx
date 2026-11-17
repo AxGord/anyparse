@@ -44,7 +44,7 @@ final class JvmStructureWidthTest extends Test {
 	@:pin('guard')
 	public function testNoStructureInTheCompiledTreeOutgrowsAJvmConstructor(): Void {
 		#if (sys || nodejs)
-		final paths: Array<String> = [for (root in ROOTS) for (path in SourceTree.collect(root)) path];
+		final paths: Array<String> = [ for (root in ROOTS) for (path in SourceTree.collect(root)) path ];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final sources: Map<String, String> = [];
 		final trees: Map<String, QueryNode> = [];
@@ -104,12 +104,12 @@ final class JvmStructureWidthTest extends Test {
 
 	/** `count` structure fields `<prefix><i>: <type>`, comma-separated. */
 	private static function fields(prefix: String, type: String, count: Int): String {
-		return [for (i in 0...count) '$prefix$i: $type'].join(', ');
+		return [ for (i in 0...count) '$prefix$i: $type' ].join(', ');
 	}
 
 	/** `count` object-literal fields `<prefix><i>: 0`, comma-separated. */
 	private static function values(prefix: String, count: Int): String {
-		return [for (i in 0...count) '$prefix$i: 0'].join(', ');
+		return [ for (i in 0...count) '$prefix$i: 0' ].join(', ');
 	}
 
 	/** Record the constructor slots of every structure typedef in `tree` by its simple name. */

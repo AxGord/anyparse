@@ -173,7 +173,7 @@ class SpanTypeInfoPinTest extends Test {
 			final span: Null<Span> = node.span;
 			final own: Null<Map<String, Array<String>>> = span == null ? null : bounds[span.from];
 			if (own != null) {
-				final names: Array<String> = [for (name in own.keys()) name];
+				final names: Array<String> = [ for (name in own.keys()) name ];
 				names.sort(Reflect.compare);
 				for (name in names) seen.push('${node.kind}:$name=${(own[name] ?? []).join('|')}');
 			}
@@ -209,7 +209,7 @@ class SpanTypeInfoPinTest extends Test {
 
 	/** A span map as a key-ordered `[from=>value, ...]` string, so a mismatch reads as a diff rather than a count. */
 	private static function render<V>(m: Map<Int, V>): String {
-		final keys: Array<Int> = [for (k in m.keys()) k];
+		final keys: Array<Int> = [ for (k in m.keys()) k ];
 		keys.sort((a, b) -> a - b);
 		return '[${keys.map(k -> '$k=>${m[k]}').join(', ')}]';
 	}

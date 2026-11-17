@@ -69,7 +69,7 @@ final class Binaries {
 		);
 		final read: Map<String, String> = [];
 		final stamp: BuildStamp = BuildStamp.of(real, hxml -> OracleCache.fingerprint(hxml, real, null, read));
-		final pending: Array<Int> = [for (i => words in builds) if (!(reusable(words) && stamp.holds(words))) i];
+		final pending: Array<Int> = [ for (i => words in builds) if (!(reusable(words) && stamp.holds(words))) i ];
 		final fingerprints: Array<Null<String>> = oracles.map(
 			oracle -> oracle == null ? null : OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, read)
 		);
@@ -80,7 +80,7 @@ final class Binaries {
 				return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
 			});
 		// a -v compile prints a line per parsed file and per macro on stdout: it stays out of the log and of the error a failure quotes
-		final quiet: Array<Result> = [for (k => run in runs) oracles[pending[k]] == null ? run : run.errorsOnly()];
+		final quiet: Array<Result> = [ for (k => run in runs) oracles[pending[k]] == null ? run : run.errorsOnly() ];
 		final held: Array<String> = [
 			for (i => words in builds) if (!pending.contains(i)) 'haxe ${words.join(' ')}: $CURRENT'
 		];

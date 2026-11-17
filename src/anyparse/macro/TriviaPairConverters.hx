@@ -173,7 +173,7 @@ final class TriviaPairConverters {
 			final access: Expr = { expr: EField(macro value, fieldName), pos: pos };
 			entries.push({ field: fieldName, expr: shapePairedToRawUnwrap(access, child, pos) });
 		}
-		final structLit: Expr = { expr: EObjectDecl([for (e in entries) { field: e.field, expr: e.expr }]), pos: pos };
+		final structLit: Expr = { expr: EObjectDecl([ for (e in entries) { field: e.field, expr: e.expr } ]), pos: pos };
 		return macro return $structLit;
 	}
 
@@ -351,7 +351,7 @@ final class TriviaPairConverters {
 			if (TriviaPairAltCtor.isStructFieldTrailOpt(child))
 				entries.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro (null: Null<Bool>) });
 		}
-		final structLit: Expr = { expr: EObjectDecl([for (e in entries) { field: e.field, expr: e.expr }]), pos: pos };
+		final structLit: Expr = { expr: EObjectDecl([ for (e in entries) { field: e.field, expr: e.expr } ]), pos: pos };
 		return macro return $structLit;
 	}
 

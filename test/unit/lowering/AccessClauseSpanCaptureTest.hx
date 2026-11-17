@@ -41,7 +41,7 @@ final class AccessClauseSpanCaptureTest extends Test {
 	/** The source text under each clause span, in source order. */
 	private static function clauseTexts(src: String): Array<String> {
 		final clauses: Map<Int, AccessorClause> = new HaxeQueryPlugin().accessorClauses(src);
-		final keys: Array<Int> = [for (k in clauses.keys()) k];
+		final keys: Array<Int> = [ for (k in clauses.keys()) k ];
 		keys.sort((a, b) -> a - b);
 		final out: Array<String> = [];
 		for (k in keys) {
@@ -54,7 +54,7 @@ final class AccessClauseSpanCaptureTest extends Test {
 	/** `name|gap|char at the paren` of each clause, in source order. */
 	private static function gapTexts(src: String): Array<String> {
 		final clauses: Map<Int, AccessorClause> = new HaxeQueryPlugin().accessorClauses(src);
-		final keys: Array<Int> = [for (k in clauses.keys()) k];
+		final keys: Array<Int> = [ for (k in clauses.keys()) k ];
 		keys.sort((a, b) -> a - b);
 		final out: Array<String> = [];
 		for (k in keys) {

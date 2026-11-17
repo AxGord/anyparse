@@ -188,7 +188,7 @@
 			"name": "M-ELIDED-SEP-KEPT",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "chunkFill",
-			"find": "final elided: Bool = [for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k)].contains(true);",
+			"find": "final elided: Bool = [ for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k) ].contains(true);",
 			"replace": "final elided: Bool = false;",
 			"note": "a fill run packs with one uniform separator, so a gap the source left comma-less gains a comma beside the one its region already wrote"
 		},
@@ -633,6 +633,14 @@
 			"find": "return IfFullLineExceeds(opt.lineWidth, IfFirstLineExceeds(opt.lineWidth, glued, seams), glued);",
 			"replace": "return glued;",
 			"note": "the receiver stays outside the chain width decision, so a breakable head wraps its own arguments and the tail glues to its close"
+		},
+		{
+			"name": "M-COMPR-HUG-ABSENT-NEVER",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionBlockHug",
+			"find": "(hug ?? padded)",
+			"replace": "(hug ?? false)",
+			"note": "an absent comprehensionFit no longer follows the bracket padding, so padded brackets stop hugging a sole block body"
 		}
 	]
 }

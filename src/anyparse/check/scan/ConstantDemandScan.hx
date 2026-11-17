@@ -120,14 +120,14 @@ final class ConstantDemandScan {
 			constants: constants,
 
 			paramKinds: shape.paramKinds ?? [],
-			moduleValueKinds: [for (k in shape.moduleValueDeclKinds) if (!functionKinds.contains(k)) k],
+			moduleValueKinds: [ for (k in shape.moduleValueDeclKinds) if (!functionKinds.contains(k)) k ],
 			staticLocalKinds: shape.staticLocalDeclKinds ?? [],
 			staticInitFunctionNames: staticInitFunctionNames,
 			constructorName: shape.constructorName,
 			callKind: shape.callKind,
 			targetCodeCallNames: shape.execution?.targetCodeCallNames ?? [],
 			fieldAccessKind: shape.fieldAccessKind,
-			bareNameKinds: [for (k in [shape.identKind, shape.stringInterpIdentKind]) if (k != null) k]
+			bareNameKinds: [ for (k in [shape.identKind, shape.stringInterpIdentKind]) if (k != null) k ]
 		};
 		final out: DemandOut = { spelled: [], typeMembers: [] };
 		for (entry in ReflectionScan.scopeFiles(files, plugin)) {
@@ -137,7 +137,7 @@ final class ConstantDemandScan {
 		final call: Null<String> = shape.callKind;
 		final alloc: Null<String> = shape.newExprKind;
 		return new ConstantDemandScan(
-			out.spelled, out.typeMembers, [for (kind in [call, alloc]) if (kind != null) kind], staticInitFunctionNames
+			out.spelled, out.typeMembers, [ for (kind in [call, alloc]) if (kind != null) kind ], staticInitFunctionNames
 		);
 	}
 

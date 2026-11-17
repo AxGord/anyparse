@@ -188,7 +188,7 @@ final class OperatorSelection {
 		_files = files;
 		_report = report;
 		final literalTypeNames: Map<String, String> = shape.literalTypeNames ?? [];
-		_literalKinds = [for (kind in literalTypeNames.keys()) kind];
+		_literalKinds = [ for (kind in literalTypeNames.keys()) kind ];
 		_abstractKinds = shape.underlyingThisTypeKinds ?? [];
 		_plainKinds = (shape.classDeclKinds ?? []).concat(shape.interfaceDeclKinds ?? []).concat(shape.runtimeTaggedTypeKinds ?? []);
 		_parenKind = shape.parenKind;

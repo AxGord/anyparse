@@ -120,7 +120,7 @@ class JValueTools {
 		return switch value {
 			case null: null;
 			case JNull: null;
-			case JArray(held): [for (item in held) text(item) ?? ''];
+			case JArray(held): [ for (item in held) text(item) ?? '' ];
 			case scalar: [text(scalar) ?? ''];
 		}
 	}

@@ -296,7 +296,7 @@ private final class EndGraph {
 	 * first only shrinks a set.
 	 */
 	private function dominators(): Array<Array<String>> {
-		final known: Array<Null<Array<String>>> = [for (_ in states) null];
+		final known: Array<Null<Array<String>>> = [ for (_ in states) null ];
 		var moved: Bool = true;
 		while (moved) {
 			moved = false;

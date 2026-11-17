@@ -134,7 +134,7 @@ class DocLengthCheckTest extends Test {
 
 	/** `count` indented copies of `text`, one per line. */
 	private function body(count: Int, text: String): String {
-		return [for (_ in 0...count) '\t$text'].join('\n');
+		return [ for (_ in 0...count) '\t$text' ].join('\n');
 	}
 
 }

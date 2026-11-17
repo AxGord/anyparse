@@ -97,7 +97,7 @@ final class LintWarn {
 
 	/** The `.hx` files of `root` the op wrote: the paths it printed, then the `.hx` words of its command line, deduplicated. */
 	public static function written(wrote: Array<String>, tokens: Array<String>, root: String): Array<String> {
-		final candidates: Array<String> = [for (line in wrote) if (WROTE_PATH.match(line)) WROTE_PATH.matched(2)];
+		final candidates: Array<String> = [ for (line in wrote) if (WROTE_PATH.match(line)) WROTE_PATH.matched(2) ];
 		for (token in tokens) if (isHxWord(token)) candidates.push(beforeLine(unquoted(token)));
 		final files: Array<String> = [];
 		for (candidate in candidates) if (candidate != '') {
@@ -116,7 +116,7 @@ final class LintWarn {
 
 	/** The whitespace-separated words of `command`, as an unquoted shell expansion with globbing off splits them. */
 	public static function words(command: String): Array<String> {
-		return [for (word in ~/[ \t\n]+/g.split(command)) if (word != '') word];
+		return [ for (word in ~/[ \t\n]+/g.split(command)) if (word != '') word ];
 	}
 
 	/** Where the per-session snapshots live: `${XDG_CACHE_HOME:-$HOME/.cache}/hxq/lint-warn`. */
@@ -183,7 +183,7 @@ final class LintWarn {
 			.at(root)
 			.env('APQ_NO_CONFIG_WARN', '1')
 			.run();
-		final found: Array<String> = [for (line in run.lines()) if (FINDING.match(line)) line];
+		final found: Array<String> = [ for (line in run.lines()) if (FINDING.match(line)) line ];
 		if (found.length == 0) return null;
 		final subtracted: Bool = ~/ new of .* finding\(s\)/.match(run.err);
 		final shown: Array<String> = found.slice(0, SHOWN_MAX);

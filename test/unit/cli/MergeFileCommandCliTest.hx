@@ -110,7 +110,7 @@ class MergeFileCommandCliTest extends Test {
 
 	/** Class `C` holding a function per name returning its value, as the writer emits it under its defaults. */
 	private static function module(members: Map<String, String>): String {
-		final names: Array<String> = [for (name in members.keys()) name];
+		final names: Array<String> = [ for (name in members.keys()) name ];
 		names.sort(Compare.compareString);
 		final body: String = names.map(name -> '\tpublic function $name():Int {\n\t\treturn ${members[name]};\n\t}\n').join('\n');
 		final source: String = 'class C {\n$body}\n';

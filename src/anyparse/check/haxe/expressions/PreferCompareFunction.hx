@@ -566,7 +566,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** The kind of the ordered comparison `op` (`lt`, `gt`), by the grammar's own naming. */
 	private static function orderedKind(shape: RefShape, op: String): Null<String> {
 		final ordered: Null<Map<String, String>> = shape.execution?.orderedComparisonOperators;
-		return ordered == null ? null : [for (kind => named in ordered) if (named == op) kind][0];
+		return ordered == null ? null : [ for (kind => named in ordered) if (named == op) kind ][0];
 	}
 
 	/** What a fix writes for `m`: the function alone, the call of it, or the `return` of that call in place of statements. */

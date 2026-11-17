@@ -114,7 +114,7 @@ final class RedundantBraces extends RuleBase implements DefaultOff implements Qu
 			for (found in collect(tree, site)) {
 				final finding: Null<Violation> = violations.find(v -> v.span?.from == found.span.from && v.span?.to == found.span.to);
 				if (finding == null) continue;
-				final own: Array<FixEdit> = [for (block in found.blocks) for (e in unbraceEdits(block, site) ?? []) e];
+				final own: Array<FixEdit> = [ for (block in found.blocks) for (e in unbraceEdits(block, site) ?? []) e ];
 				if (sameAfter(site, found, own))
 					for (e in own) edits.push(e);
 				else

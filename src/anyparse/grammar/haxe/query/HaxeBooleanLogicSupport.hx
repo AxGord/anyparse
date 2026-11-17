@@ -616,7 +616,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	): Operand {
 		final groupAt: Int = strandedGroupStart(names, providers, from);
 		final flatEnd: Int = groupAt < 0 ? negs.length : groupAt;
-		final parts: Array<String> = [for (i in from ... flatEnd) wrap(negs[i], PREC_OR)];
+		final parts: Array<String> = [ for (i in from ... flatEnd) wrap(negs[i], PREC_OR) ];
 		var declined: Bool = false;
 		var notDelta: Int = 0;
 		for (i in from ... flatEnd) {

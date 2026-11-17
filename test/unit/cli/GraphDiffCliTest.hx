@@ -83,9 +83,9 @@ class GraphDiffCliTest extends Test {
 			final doc: CodeGraphJson = CodeGraphJsonParser.parse(
 				CliFixture.inDir(root, ['graph', '.', '--diff', 'HEAD~1', 'HEAD', '--format', 'json'])
 			);
-			Assert.equals('changed', [for (n in doc.nodes) if (n.name == 'p.A.run') n.change].join(','));
-			Assert.equals('removed', [for (n in doc.nodes) if (n.name == 'p.A.gone') n.change].join(','));
-			Assert.equals('3', [for (e in doc.edges) if (e.change == 'changed') '${e.before}'].join(','));
+			Assert.equals('changed', [ for (n in doc.nodes) if (n.name == 'p.A.run') n.change ].join(','));
+			Assert.equals('removed', [ for (n in doc.nodes) if (n.name == 'p.A.gone') n.change ].join(','));
+			Assert.equals('3', [ for (e in doc.edges) if (e.change == 'changed') '${e.before}' ].join(','));
 			final same: CliRun = CliFixture.runIn(root, ['graph', 'p', '--diff', 'HEAD', 'HEAD', '--exit-on-empty']);
 			Assert.equals('0 node(s), 0 edge(s), 0 mutual pair(s)\n', same.out);
 			Assert.notEquals(ExitCode.EXIT_OK, same.code, 'two equal revisions are the empty answer');

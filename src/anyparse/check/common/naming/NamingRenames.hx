@@ -1110,8 +1110,9 @@ final class NamingRenames {
 		final exclusive: Array<Span> = bodyScoped
 			? []
 			: MemberBranchScan.exclusiveSpansAt(shape, source, tree, declFrom, plugin.lexicalRegions.bind(source));
-		final twins: Array<Span> =
-			exclusive.length == 0 ? [] : [for (s in others) if (OccurrenceScan.offsetWithinAny(s.from, exclusive)) s];
+		final twins: Array<Span> = exclusive.length == 0
+			? []
+			: [ for (s in others) if (OccurrenceScan.offsetWithinAny(s.from, exclusive)) s ];
 		final excluded: Array<Span> = covered.concat(others)
 			.concat(ownerBound)
 			.concat(foreign)

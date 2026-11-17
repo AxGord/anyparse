@@ -362,7 +362,7 @@ final class RegexFirstBytes {
 
 	/** The codes `lo`…`hi` inclusive — a character-class range, or one `\d` / `\w` block. */
 	private static function range(lo: Int, hi: Int): Array<Int> {
-		return [for (c in lo ... hi + 1) c];
+		return [ for (c in lo ... hi + 1) c ];
 	}
 
 	/**

@@ -232,7 +232,7 @@ final class Probe {
 		before: Map<String, String>, outcome: Outcome, dir: String, ?shape: String, minLines: Int = 1
 	): Expectation {
 		final written: Array<String> = [];
-		final names: Array<String> = [for (name in outcome.files.keys()) name];
+		final names: Array<String> = [ for (name in outcome.files.keys()) name ];
 		for (name in before.keys()) if (!outcome.files.exists(name)) names.push(name);
 		names.sort(Compare.compareString);
 		for (name in names) {
@@ -508,7 +508,7 @@ final class Probe {
 	}
 
 	private static function withExpectations(rows: JValue, seen: Array<Seen>): JValue {
-		return JArray([for (i => row in JValueTools.items(rows)) withExpectation(row, seen[i].answer)]);
+		return JArray([ for (i => row in JValueTools.items(rows)) withExpectation(row, seen[i].answer) ]);
 	}
 
 	/** The invocation `row` with its `expect` set to `answer`: in place when it holds one, last otherwise. */
@@ -517,7 +517,7 @@ final class Probe {
 			case JObject(entries):
 				final value: JEntry = JValueTools.entry(EXPECT_KEY, expectationValue(answer));
 				final held: Bool = entries.exists(entry -> entry.key == EXPECT_KEY);
-				final replaced: Array<JEntry> = [for (entry in entries) entry.key == EXPECT_KEY ? value : entry];
+				final replaced: Array<JEntry> = [ for (entry in entries) entry.key == EXPECT_KEY ? value : entry ];
 				JObject(held ? replaced : replaced.concat([value]));
 			case _: row;
 		}

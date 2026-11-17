@@ -163,8 +163,8 @@ final class FactsTypeTree {
 			case Unknown: '?';
 			case Parameter(path): '$$$path';
 			case Named(name, args): args.length == 0 ? name : '$name<${args.map(text).join(',')}>';
-			case Function(args, result): '(${[for (a in args) (a.optional ? '?' : '') + text(a.type)].join(',')})->${text(result)}';
-			case Structure(fields): '{${[for (f in fields) (f.optional ? '?' : '') + f.name + ':' + text(f.type)].join(',')}}';
+			case Function(args, result): '(${[ for (a in args) (a.optional ? '?' : '') + text(a.type) ].join(',')})->${text(result)}';
+			case Structure(fields): '{${[ for (f in fields) (f.optional ? '?' : '') + f.name + ':' + text(f.type) ].join(',')}}';
 		};
 	}
 

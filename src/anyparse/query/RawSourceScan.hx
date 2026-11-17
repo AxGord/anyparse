@@ -157,7 +157,7 @@ final class RawSourceScan {
 	 * Deduped, in index order.
 	 */
 	public function privilegedFiles(typeName: String, ?member: String): Array<String> {
-		final out: Array<String> = [for (fi in _files) if (grantsAccessTo(fi, typeName)) fi.file];
+		final out: Array<String> = [ for (fi in _files) if (grantsAccessTo(fi, typeName)) fi.file ];
 		for (file in _waiverFiles) if (!out.contains(file) && (member == null || waiverFileMayReference(file, member))) out.push(file);
 		return out;
 	}

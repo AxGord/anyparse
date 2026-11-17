@@ -258,7 +258,7 @@ final class OracleGeneration {
 			}
 			final mine: Null<Array<String>> = generate.inputs;
 			final theirs: Null<Array<String>> = held.inputs;
-			held.inputs = mine == null || theirs == null ? null : theirs.concat([for (input in mine) if (!theirs.contains(input)) input]);
+			held.inputs = mine == null || theirs == null ? null : theirs.concat([ for (input in mine) if (!theirs.contains(input)) input ]);
 		}
 		return groups;
 	}
@@ -596,7 +596,7 @@ final class OracleGeneration {
 		#if (sys || nodejs)
 		final written: String = try sys.io.File.getContent(recordFile(group)) catch (exception: haxe.Exception) MISSING;
 		final record: Null<GenerationRecord> = try GenerationRecordParser.parse(written) catch (exception: haxe.Exception) null;
-		final paths: Array<String> = group.hxmls.concat(group.inputs ?? []).concat([for (held in record?.implicit ?? []) held.path]);
+		final paths: Array<String> = group.hxmls.concat(group.inputs ?? []).concat([ for (held in record?.implicit ?? []) held.path ]);
 		final epoch: String = try sys.io.File.getContent(epochFile(group)) catch (exception: haxe.Exception) MISSING;
 		return [epoch, written].concat(hashAll(paths, memo).map(hash -> '${hash.path} ${hash.hash}')).join('\n');
 		#else

@@ -121,7 +121,7 @@ final class BitsBuilder {
 			if (!values.contains(value)) values.push(value);
 		}
 		values.sort(Compare.compareInt);
-		final bits: Array<Int> = [for (rank in 0...values.length) rank];
+		final bits: Array<Int> = [ for (rank in 0...values.length) rank ];
 		final dense: Bool = values.length == 0 || values[values.length - 1] == values.length - 1;
 		if (dense) return { bits: bits, bitOfValue: macro (cast value: Int), valueAtIndex: macro cast index };
 		final last: Int = values.length - 1;
@@ -202,7 +202,7 @@ final class BitsBuilder {
 	/** The store of a domain wider than one `Int`: a vector of words that every change replaces, so a copy never shares one. */
 	private static function wide(domain: Domain, valueType: ComplexType, width: Int): Store {
 		final count: Int = ((width - 1) >>> BitWords.SHIFT) + 1;
-		final full: Array<Int> = [for (_ in 0...count) 0];
+		final full: Array<Int> = [ for (_ in 0...count) 0 ];
 		for (bit in domain.bits) full[bit >>> BitWords.SHIFT] |= 1 << (bit & BitWords.LAST);
 		final fullWords: Expr = macro $a{full.map(word -> macro $v{word})};
 		final valueAtIndex: Expr = domain.valueAtIndex;

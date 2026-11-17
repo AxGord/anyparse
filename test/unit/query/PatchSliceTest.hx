@@ -482,7 +482,7 @@ class PatchSliceTest extends Test {
 		final head: String = '/**\n * Class doc.\n */\nclass Foo {\n\tstatic final LIB:String = \'x\';\n\n\t/**\n\t * First doc.\n\t */\n'
 			+ '\tfunction m1():Void {}\n\n\t/**\n\t * Second doc.\n\t */\n\tfunction m2():Void {}\n}\n';
 		for (pad in [1, 5, 10, 15, 20, 23, 24, 25, 26, 30, 40, 60]) {
-			final padding: String = [for (_ in 0...pad) 'x'].join('');
+			final padding: String = [ for (_ in 0...pad) 'x' ].join('');
 			final pairs: Array<{ oldText: String, newText: String }> = [
 				{ oldText: ' * First doc.', newText: ' * First doc.$padding' },
 				{ oldText: ' * Second doc.', newText: ' * Second doc.$padding' }

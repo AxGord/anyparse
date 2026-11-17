@@ -344,7 +344,7 @@ class TypeNameBindingTest extends Test {
 			Assert.pass('no std discovered');
 			return;
 		}
-		final declared: Array<String> = [for (t in types) if (!t.isPrivate) t.name];
+		final declared: Array<String> = [ for (t in types) if (!t.isPrivate) t.name ];
 		final sorted: Array<String> -> String = names -> {
 			final copy: Array<String> = names.copy();
 			copy.sort(Compare.compareString);
@@ -437,7 +437,7 @@ class TypeNameBindingTest extends Test {
 
 	/** The index over `files` (path => source), each path its module's. */
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
-		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
+		final entries: Array<{ file: String, source: String }> = [ for (file => source in files) { file: file, source: source } ];
 		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
 		return CheckFixture.index(entries, new HaxeQueryPlugin());
 	}
@@ -447,7 +447,7 @@ class TypeNameBindingTest extends Test {
 		final fi: Null<FileInfo> = index.fileInfo(from);
 		if (fi == null) throw new Exception('the fixture must index $from');
 		return switch index.refs.names.tierOf(name, fi) {
-			case Bound(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+			case Bound(decls): [ for (d in decls) '${d.file.file}#${d.type.name}' ].join(' | ');
 			case Unknown: 'Unknown';
 			case Free: 'Free';
 		};
@@ -463,7 +463,7 @@ class TypeNameBindingTest extends Test {
 			: [
 				for (t in targets)
 					switch t {
-						case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+						case InIndex(decls): [ for (d in decls) '${d.file.file}#${d.type.name}' ].join(' | ');
 						case OutOfIndex(path): path;
 					}
 			].join(' | ');
@@ -476,7 +476,7 @@ class TypeNameBindingTest extends Test {
 		final found: NameTargets = index.refs.names.bindingsOf(name, fi);
 		function text(t: NameTarget): String {
 			return switch t {
-				case InIndex(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+				case InIndex(decls): [ for (d in decls) '${d.file.file}#${d.type.name}' ].join(' | ');
 				case OutOfIndex(path): path;
 			};
 		}
@@ -500,7 +500,7 @@ class TypeNameBindingTest extends Test {
 		final source: Null<String> = index.sourceOf(from);
 		if (fi == null || source == null) throw new Exception('the fixture must index $from');
 		return switch index.refs.names.tierOf(name, fi, source.indexOf(marker)) {
-			case Bound(decls): [for (d in decls) '${d.file.file}#${d.type.name}'].join(' | ');
+			case Bound(decls): [ for (d in decls) '${d.file.file}#${d.type.name}' ].join(' | ');
 			case Unknown: 'Unknown';
 			case Free: 'Free';
 		};

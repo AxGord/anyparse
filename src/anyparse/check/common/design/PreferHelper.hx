@@ -300,9 +300,9 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			problems.push('its declaration cannot be read');
 			return null;
 		}
-		final params: Array<String> = [for (c in decl.children) if (seams.paramKinds.contains(c.kind)) c.name ?? ''];
+		final params: Array<String> = [ for (c in decl.children) if (seams.paramKinds.contains(c.kind)) c.name ?? '' ];
 		final stmts: Array<QueryNode> = decl.children.find(c -> c.kind == seams.blockBodyKind)?.children ?? [];
-		final locals: Array<String> = [for (s in stmts) if (seams.localDeclKinds.contains(s.kind)) s.name ?? ''];
+		final locals: Array<String> = [ for (s in stmts) if (seams.localDeclKinds.contains(s.kind)) s.name ?? '' ];
 		final exit: Null<Exit> = stmts.length == 0 ? null : exitOf(source, stmts[stmts.length - 1], seams);
 		final scan: BodyScan = scanOf(stmts, params, locals, exit != null, seams);
 		final problem: Null<String> = stmts.length == 0 ? 'it has no block body' : scan.problem ?? usageProblem(params, scan, seams);

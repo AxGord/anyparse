@@ -89,7 +89,7 @@ final class MoveToHelper {
 		final refusal: Null<String> = refusalOf(prep, paramName);
 		if (refusal != null) return Err(refusal);
 		final edits: HelperEdits = MoveToHelperRefs.start(prep, plugin, paramName, helperName);
-		final carriedNames: Array<String> = [for (m in prep.moved) if (!memberNames.contains(m.name)) m.name];
+		final carriedNames: Array<String> = [ for (m in prep.moved) if (!memberNames.contains(m.name)) m.name ];
 		if (carriedNames.length > 0)
 			edits.advisory.push('moved along the private constant(s) ${quoted(carriedNames)}, which only the moved members read');
 		final types: Array<CarriedType> = switch MoveToHelperTypes.carriedTypes(prep, plugin, typeRefShape) {
@@ -342,7 +342,7 @@ final class MoveToHelper {
 			final at: Int = m.group.modifiers.find(mod -> !MemberKinds.META_KINDS.contains(mod.kind))?.span?.from ?? m.span.from;
 			movedTextEdits.push({ span: new Span(at, at), text: 'static ' });
 		}
-		final params: Array<QueryNode> = [for (c in m.group.member.children) if (AddParam.PARAM_KINDS.contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in m.group.member.children) if (AddParam.PARAM_KINDS.contains(c.kind)) c ];
 		final first: Null<Int> = params.length > 0 ? params[0].span?.from : null;
 		final declared: String = '$paramName: ${prep.srcTypeName}';
 		if (first != null) {

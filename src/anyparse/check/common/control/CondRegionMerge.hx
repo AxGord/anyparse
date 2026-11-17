@@ -173,7 +173,7 @@ final class CondRegionMerge extends RuleBase {
 		if (directives.length < 4) return [];
 		final regions: Null<Array<CondRegion>> = regionsOf(directives, shape);
 		if (regions == null) return [];
-		final openedAt: Map<Int, CondRegion> = [for (region in regions) region.open => region];
+		final openedAt: Map<Int, CondRegion> = [ for (region in regions) region.open => region ];
 		final comments: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(source));
 		final paired: Array<Int> = [];
 		final out: Array<MergeSite> = [];

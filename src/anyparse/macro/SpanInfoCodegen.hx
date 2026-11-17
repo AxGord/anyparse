@@ -31,7 +31,7 @@ class SpanInfoCodegen {
 	private static final VOID_CT: ComplexType = TPath({ pack: [], name: 'Void', params: [] });
 
 	public static function emit(result: SpanInfoLowering.SpanInfoResult): Array<Field> {
-		final fields: Array<Field> = [for (fn in result.walks) walkField(fn)];
+		final fields: Array<Field> = [ for (fn in result.walks) walkField(fn) ];
 		for (fn in result.nominals)
 			fields.push(unaryField(fn, NULL_STRING_CT, 'Simple nominal type name carried by a `${fn.typePath}` value.'));
 		for (fn in result.spanOfs) fields.push(unaryField(fn, NULL_SPAN_CT, 'Own span of a `${fn.typePath}` value.'));

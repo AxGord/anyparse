@@ -48,7 +48,7 @@ class LintExplainLongCliTest extends Test {
 		final out: String = lint(SOURCE, ThreadSafetyLongLocksTest.CONFIG, ['--format', 'json', '--explain-long']).out;
 		Assert.isTrue(out.trim().startsWith('{'), 'an envelope, not the bare array');
 		final findings: Array<LintFindingJson> = LintDiff.parseReport(out);
-		final families: Array<String> = [for (f in findings) if (f.file != '') f.data?.family ?? '-'];
+		final families: Array<String> = [ for (f in findings) if (f.file != '') f.data?.family ?? '-' ];
 		families.sort(Reflect.compare);
 		Assert.same(['A', 'A', 'B'], families, 'the two main-thread blocking calls and the hold, each with its data');
 		final reason: Null<JValue> = JValueTools.at(JValueParser.parse(out), 'longLocks.long.0.reasons.0');

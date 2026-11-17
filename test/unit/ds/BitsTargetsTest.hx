@@ -68,7 +68,7 @@ class BitsTargetsTest extends Test {
 
 	/** The declarations `final <prefix><value> = <value>;` for every value from `from` up to, not including, `to`. */
 	private static function fill(prefix: String, from: Int, to: Int): String {
-		return [for (value in from ... to) 'final $prefix$value = $value;'].join(' ');
+		return [ for (value in from ... to) 'final $prefix$value = $value;' ].join(' ');
 	}
 
 	/** A module declaring the test domains and a `Main` whose body is `body`. */

@@ -26,7 +26,7 @@ final class QuotedSemicolonProbe {
 		// A local function: the macro body is typed in the macro context only, so it needs no `#if macro` guard.
 		function printed(code: String): String
 			return haxe.macro.ExprTools.toString(haxe.macro.Context.parse(code, haxe.macro.Context.currentPos()));
-		final out: Array<String> = [for (p in pairs) if (printed(p.kept) != printed(p.deleted)) p.label];
+		final out: Array<String> = [ for (p in pairs) if (printed(p.kept) != printed(p.deleted)) p.label ];
 		// The member `;` below is the kept form under test; the `noqa` keeps the rule's own `--fix` off it.
 		final klass: haxe.macro.Expr.TypeDefinition = macro class X {
 			function f() {}; // noqa: empty-statement

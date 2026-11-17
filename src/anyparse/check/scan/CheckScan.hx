@@ -544,7 +544,7 @@ final class CheckScan {
 	public static function modifierKinds(shape: RefShape): Array<String> {
 		final declared: Null<Array<String>> = shape.modifierKinds;
 		if (declared != null) return declared.copy();
-		final out: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
+		final out: Array<String> = [ for (m in shape.modifierOrderKinds ?? []) m ];
 		for (m in shape.visibilityModifierKinds ?? []) Groups.pushUnique(out, m);
 		for (kind in [
 			shape.externModifierKind,

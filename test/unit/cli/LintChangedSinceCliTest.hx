@@ -210,7 +210,7 @@ class LintChangedSinceCliTest extends Test {
 	/** The standing foldable on line 6, then more statements than the line differ follows, each spelled `line`. */
 	private static function bigSource(line: String): String {
 		return 'package pkg;\n\nclass A {\n\n\tpublic static function main():Void {\n\t\tfinal a:String = $FOLDABLE_A;\n\t\ttrace(a);\n'
-			+ [for (_ in 0...2100) '\t\t$line;\n'].join('')
+			+ [ for (_ in 0...2100) '\t\t$line;\n' ].join('')
 			+ '\t}\n\n}\n';
 	}
 

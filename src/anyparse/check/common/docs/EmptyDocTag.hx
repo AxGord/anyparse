@@ -299,7 +299,7 @@ final class EmptyDocTag extends RuleBase {
 	 * the run, so it and everything past it in that section survive.
 	 */
 	private static function deletableLines(source: String, lines: Array<Span>, doomed: Array<TagSection>): Array<Bool> {
-		final mark: Array<Bool> = [for (_ in lines) false];
+		final mark: Array<Bool> = [ for (_ in lines) false ];
 		for (section in doomed) {
 			var last: Int = section.firstLine;
 			while (last + 1 <= section.lastLine && isGutterLine(source, lines[last + 1])) last++;

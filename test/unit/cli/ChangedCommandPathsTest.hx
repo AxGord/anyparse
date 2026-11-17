@@ -20,7 +20,7 @@ class ChangedCommandPathsTest extends Test {
 	@:pin('guard')
 	public function testNPathsAnswerTheNoPathRunFilteredByThem(): Void {
 		#if nodejs
-		final names: Array<String> = [for (i in 0...COUNT) 'src/f${pad(i)}.hx'];
+		final names: Array<String> = [ for (i in 0...COUNT) 'src/f${pad(i)}.hx' ];
 		final root: String = CliFixture.writeTree(
 			'apq_changed_paths', names.map(n -> { name: n, source: 'class C${n.substr(5, 4)} {}\n' })
 		);

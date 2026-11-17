@@ -175,7 +175,7 @@ final class CallGraphNames {
 		fn: QueryNode, sources: Map<Int, String>, paramKinds: Array<String>, annotationKinds: Array<String>, optionalKind: Null<String>,
 		restKind: Null<String>
 	): DeclaredParams {
-		final params: Array<QueryNode> = [for (c in fn.children) if (paramKinds.contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in fn.children) if (paramKinds.contains(c.kind)) c ];
 		// `?p` and `p = v` alike are skippable; a grammar naming no optional kind may skip any
 		var skippable: Int = 0;
 		while (

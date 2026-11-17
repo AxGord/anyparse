@@ -82,6 +82,44 @@ typedef Tail = Base & {x:Int}
 typedef Callback = (a:Int) -> Void;
 ```
 
+## Padding inside square brackets: `whitespace.bracketConfig`
+
+Four kinds of bracket, each its own `openingPolicy` / `closingPolicy` pair (`none`, `before`, `after`, `onlyBefore`, `onlyAfter`, `around`): `accessBrackets` (index access, `a[i]`), `arrayLiteralBrackets` (`[1, 2]`), `mapLiteralBrackets` (`[k => v]`) and `comprehensionBrackets` (`[for (x in xs) x]`). Every kind is tight by default, and a kind left out stays tight.
+
+```json
+"whitespace": { "bracketConfig": { "comprehensionBrackets": { "openingPolicy": "onlyAfter", "closingPolicy": "onlyBefore" } } }
+```
+
+```haxe
+// comprehensionBrackets padded, the other kinds tight
+final ids = [ for (x in xs) x.id ];
+final a = [1, 2];
+final m = [1 => 2];
+final v = xs[0];
+```
+
+With `wrapping.comprehensionFit` absent, padded comprehension brackets also change the layout (below); set it to `false` to keep the padding whitespace-only.
+
+## A comprehension's layout apart from its padding: `wrapping.comprehensionFit`
+
+`true` lays a comprehension out by width: it stays on one line while the line fits `maxLineLength` (a source that wrapped it reflows), and a sole block body hugs the brackets (`[ for (x in xs) {` … `} ]`). `false` leaves it on the generic array rules, so a multi-line comprehension keeps `[`, `for` and `]` on their own lines. Absent, it follows the comprehension padding: padded brackets (`comprehensionBrackets.openingPolicy: after` / `onlyAfter`, or `sameLine.comprehensionFor: fitLine`) mean `true`, tight brackets mean `false`. `comprehensionFor: fitLine` sets it to `true` when the key is absent. This repository pads its comprehensions with the key at `false`.
+
+```json
+"wrapping": { "comprehensionFit": false },
+"whitespace": { "bracketConfig": { "comprehensionBrackets": { "openingPolicy": "onlyAfter", "closingPolicy": "onlyBefore" } } }
+```
+
+```haxe
+// comprehensionFit: false — padded, the brackets keep their lines
+final a = [
+	for (x in xs) {
+		final y = x + 1;
+		y * 2;
+	}
+];
+final c = [ for (x in xs) x ];
+```
+
 ## A value `try` that does not fit: `sameLine.expressionTryOverflow`
 
 A brace-less value `try` (`final x = try f() catch (e: E) g()`) that fits the line stays on it. One that does not fit breaks at its seams, never inside the first call or the tail, with `sameLine.expressionTry` left at `same`. `next` (the default) puts each body on its own indented line with `catch` at the statement's indent, the shape a value `if` takes under `sameLine.expressionIf: next`:

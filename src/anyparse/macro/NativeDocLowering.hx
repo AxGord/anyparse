@@ -106,7 +106,7 @@ final class NativeDocLowering {
 	/** The values of the string-backed enum abstract at `ref`, null for any other rule. */
 	private function stringEnumOf(ref: String): Null<Array<String>> {
 		final values: Null<Array<{ name: String, value: String }>> = _rules[ref]?.annotations.get('base.stringEnumValues');
-		return values == null ? null : [for (v in values) v.value];
+		return values == null ? null : [ for (v in values) v.value ];
 	}
 
 	/**
@@ -126,7 +126,7 @@ final class NativeDocLowering {
 			final key: String = nameOf('k');
 			final value: String = nameOf('v');
 			final met: String = nameOf('n');
-			final seen: Array<Null<String>> = [for (o in optional) o ? nameOf('s') : null];
+			final seen: Array<Null<String>> = [ for (o in optional) o ? nameOf('s') : null ];
 			final cases: Array<Case> = [
 				for (i => child in node.children) {
 					final flag: Null<String> = seen[i];
@@ -421,7 +421,7 @@ final class NativeDocLowering {
 				else
 					$each
 				: each;
-			return macro [for ($i{item} in $value) ($held: Any)];
+			return macro [ for ($i{item} in $value) ($held: Any) ];
 		}
 		final ref: String = node.annotations[AnnotationKeys.BASE_REF];
 		if (isScalar(ref) || stringEnumOf(ref) != null) return value;

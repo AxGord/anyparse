@@ -103,7 +103,7 @@ final class BinaryChainEmit {
 			flat = Concat([items[i], Text(' '), Text('='), OptSpace(' '), flat]);
 			i--;
 		}
-		final ops: Array<String> = [for (_ in 1...items.length) '='];
+		final ops: Array<String> = [ for (_ in 1...items.length) '=' ];
 		final indentUnit: Int = indentUnitOf(opt);
 		return IfNaturalFirstLineExceeds(opt.lineWidth + 1, shapeFillLine(items, ops, indentUnit, indentUnit, AfterLast), flat);
 	}
@@ -943,7 +943,7 @@ final class BinaryChainEmit {
 				]));
 				acc;
 			case AfterLast:
-				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(trailingOp(ops[i], listSep))])];
+				final acc: Array<Doc> = [ for (i in 0...ops.length) Concat([items[i], Text(trailingOp(ops[i], listSep))]) ];
 				acc.push(items[items.length - 1]);
 				acc;
 		}
@@ -1436,7 +1436,7 @@ final class BinaryChainEmit {
 		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc
 	): Doc {
 		final arm: Null<Doc> = WrapList.renderPivotBreakArm(items[idx]);
-		final hugItems: Array<Doc> = arm == null ? items : [for (i in 0...items.length) i == idx ? arm : items[i]];
+		final hugItems: Array<Doc> = arm == null ? items : [ for (i in 0...items.length) i == idx ? arm : items[i] ];
 		return IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(hugItems, ops));
 	}
 

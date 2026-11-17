@@ -81,7 +81,7 @@ class FixVerifierBisectTest extends Test {
 	public function testManyIndependentFailersFallBack(): Void {
 		// Every edit fails alone — the search fans into both halves at every level and
 		// blows the budget, so it falls back rather than probing ~2N times.
-		final all: Array<Int> = [for (i in 0...8) i];
+		final all: Array<Int> = [ for (i in 0...8) i ];
 		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(8, 6, independentProbe(all), [0]);
 		Assert.isNull(failers);
 	}
@@ -145,7 +145,7 @@ class FixVerifierBisectTest extends Test {
 		Assert.notNull(failers);
 		if (failers == null) return;
 		final safeFailers: Array<Int> = failers;
-		final complement: Array<Int> = [for (i in 0...count) if (!safeFailers.contains(i)) i];
+		final complement: Array<Int> = [ for (i in 0...count) if (!safeFailers.contains(i)) i ];
 		Assert.isTrue(probe(complement), 'the complement of the isolated failers must typecheck');
 	}
 

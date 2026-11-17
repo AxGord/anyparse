@@ -457,7 +457,7 @@ class MoveToHelperSliceTest extends Test {
 	private function capture(result: MoveResult, expected: Array<{ file: String, source: String }>): Void {
 		switch result {
 			case Ok(changes, _):
-				Assert.equals(expected.length, changes.length, 'changed-file count, got ${[for (c in changes) c.file].join(', ')}');
+				Assert.equals(expected.length, changes.length, 'changed-file count, got ${[ for (c in changes) c.file ].join(', ')}');
 				for (e in expected) {
 					final change: Null<MoveChange> = changes.find(c -> c.file == e.file);
 					if (change == null)
@@ -487,7 +487,7 @@ class MoveToHelperSliceTest extends Test {
 	private static function refused(result: MoveResult, reason: String): Void {
 		switch result {
 			case Ok(changes, _):
-				Assert.fail('expected a refusal naming "$reason", got Ok over ${[for (c in changes) c.file].join(', ')}');
+				Assert.fail('expected a refusal naming "$reason", got Ok over ${[ for (c in changes) c.file ].join(', ')}');
 			case Err(message):
 				Assert.isTrue(message.contains(reason), message);
 		}

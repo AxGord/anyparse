@@ -167,7 +167,7 @@ final class HaxeIdentifierCase {
 	private static function camelCore(name: String): Null<String> {
 		var start: Int = 0;
 		while (start < name.length && name.fastCodeAt(start) == '_'.code) start++;
-		final segments: Array<String> = [for (s in name.substr(start).split('_')) if (s.length > 0) smartSegment(s)];
+		final segments: Array<String> = [ for (s in name.substr(start).split('_')) if (s.length > 0) smartSegment(s) ];
 		if (segments.length == 0) return null;
 		final buf: StringBuf = new StringBuf();
 		buf.add(segments[0]);

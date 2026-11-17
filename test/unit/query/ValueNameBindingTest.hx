@@ -27,7 +27,7 @@ class ValueNameBindingTest extends Test {
 			'Main.hx' => 'import a.A.*;\nimport a.A.g as held;\n\nvar x:Int = 1;\nfinal y = 2;\n#if foo\nfunction f() {}\n#end\n\n'
 			+ 'class Main {}\n'
 		]);
-		Assert.equals('x,y,f', [for (f in fileOf(index, 'Main.hx').moduleFields) f.name].join(
+		Assert.equals('x,y,f', [ for (f in fileOf(index, 'Main.hx').moduleFields) f.name ].join(
 			','
 		), 'module-level values only: no type, import or alias');
 		Assert.equals('', statics(index, 'Main.hx', 'x'), 'a module-level var hides the imported static');
@@ -249,7 +249,7 @@ class ValueNameBindingTest extends Test {
 	}
 
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
-		final entries: Array<{ file: String, source: String }> = [for (file => source in files) { file: file, source: source }];
+		final entries: Array<{ file: String, source: String }> = [ for (file => source in files) { file: file, source: source } ];
 		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
 		return CheckFixture.index(entries, new HaxeQueryPlugin());
 	}

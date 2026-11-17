@@ -31,7 +31,7 @@ private final class ZoneMap {
 	private final _zones: Array<Zone>;
 
 	public function new(source: String, scan: InertScan) {
-		final zones: Array<Zone> = [for (_ in 0...source.length) Code];
+		final zones: Array<Zone> = [ for (_ in 0...source.length) Code ];
 		scan(source, (start, end, literal) -> for (i in start ... (end < source.length ? end : source.length))
 			zones[i] = literal ? Literal : Comment);
 		_zones = zones;

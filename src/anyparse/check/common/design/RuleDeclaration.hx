@@ -161,7 +161,7 @@ final class RuleDeclaration {
 	/** One `idioms` entry → its spec, or null with the reason in `problems`. */
 	private static function parseEntry(raw: JValue, label: String, problems: Array<String>): Null<IdiomSpec> {
 		final fields: Array<{ key: String, value: JValue }> = switch raw {
-			case JObject(entries): [for (e in entries) { key: e.key, value: e.value }];
+			case JObject(entries): [ for (e in entries) { key: e.key, value: e.value } ];
 			case _:
 				problems.push('$label is not an object — dropped');
 				return null;

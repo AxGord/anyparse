@@ -264,7 +264,7 @@ class MetadataLineEndFitTest extends Test {
 
 	/** A run of `n` letters, the filler that puts a line at a chosen width. */
 	private static function run(n: Int): String {
-		return [for (_ in 0...n) 'a'].join('');
+		return [ for (_ in 0...n) 'a' ].join('');
 	}
 
 	/** The trivia writer with every metadata knob at `Fit` and the maximum at `MAX_LINE`. */

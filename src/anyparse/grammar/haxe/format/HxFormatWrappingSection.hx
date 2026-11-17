@@ -32,7 +32,9 @@ package anyparse.grammar.haxe.format;
  * `HxFormatWrappingTrailingCommaPolicy`); `ternaryMultilineBranch` (the fork's key and spellings, `"inline"` / `"break"` →
  * `ternaryMultilineBranchInline`, hxq default `break`); and the `Bool` layout policies defaulting to `false` (absent =
  * byte-inert), documented on their `WriteOptions` fields — `ternaryCuddledBraces`, `comprehensionCuddledOpen`
- * (a sole expression-bodied `for` comprehension keeps its head on the `[` line when it fits),
+ * (a sole expression-bodied `for` comprehension keeps its head on the `[` line when it fits), `comprehensionFit`
+ * (anyparse-only; a comprehension takes the fit cascade and a sole block body hugs its brackets; absent follows the
+ * comprehension bracket padding),
  * `methodChainCuddledLinks` (a link after a multi-line predecessor that ends in a dedented `})` starts on that
  * closing line) and `soleItemCuddledBrackets` (a `[…]` holding exactly ONE element that owns a wrap point of
  * its own keeps both brackets cuddled to it).
@@ -51,6 +53,9 @@ typedef HxFormatWrappingSection = {
 
 	@:optional
 	var comprehensionCuddledOpen: Bool;
+
+	@:optional
+	var comprehensionFit: Bool;
 
 	@:optional
 	var methodChainCuddledLinks: Bool;

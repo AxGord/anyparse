@@ -1258,7 +1258,7 @@ final class WriterPrattLowering {
 			// trip is byte-stable from the second pass on. The location is PINNED
 			// rather than taken from the cascade: `AfterLast` emits ` ?` before the
 			// break, which the comment would swallow.
-			final _ternaryBreaks: Null<Array<Bool>> = _forceKeep ? [for (_ in _ops) true] : null;
+			final _ternaryBreaks: Null<Array<Bool>> = _forceKeep ? [ for (_ in _ops) true ] : null;
 			final _ternaryKeepLoc: Null<anyparse.format.wrap.WrappingLocation> = _forceKeep
 				? anyparse.format.wrap.WrappingLocation.BeforeLast
 				: null;
@@ -1321,7 +1321,7 @@ final class WriterPrattLowering {
 				_o < $v{rightPrec} ? _o : $v{rightPrec};
 			};
 		};
-		final args: Array<Expr> = [for (i in 0...arity) tPrec == null && i == 1 ? macro _r : macro _];
+		final args: Array<Expr> = [ for (i in 0...arity) tPrec == null && i == 1 ? macro _r : macro _ ];
 		return { values: [{ expr: ECall(ctorRef, args), pos: pos }], expr: body, guard: null };
 	}
 
@@ -1334,9 +1334,9 @@ final class WriterPrattLowering {
 		if (!keywordAtomOverWholeExpr(branch, typePath)) return null;
 		final none: Int = WriterPrattLowering.OPEN_NONE;
 		final atomWhen: Array<String> = branch.fmtReadStringArgs('atomOperandWhen') ?? [];
-		final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: pos };
+		final listed: Expr = { expr: EArrayDecl([ for (n in atomWhen) macro $v{n} ]), pos: pos };
 		final atomBody: Expr = atomWhen.length == 0 ? macro 0 : macro $listed.contains(Type.enumConstructor(_r)) ? $v{none} : 0;
-		final atomArgs: Array<Expr> = [for (i in 0...arity) i == 0 && atomWhen.length > 0 ? macro _r : macro _];
+		final atomArgs: Array<Expr> = [ for (i in 0...arity) i == 0 && atomWhen.length > 0 ? macro _r : macro _ ];
 		return { values: [{ expr: ECall(ctorRef, atomArgs), pos: pos }], expr: atomBody, guard: null };
 	}
 

@@ -151,7 +151,7 @@ final class SliceStatsTest extends Test {
 			Assert.same(['src/p/A.hx', 'src/p/B.hx'], files);
 			Assert.equals('src/p/B.hx', reading.edges['p.A.f -> p.B.g']);
 			Assert.equals('src/p/B.hx', reading.edges['p.B.g -> p.B.h']);
-			Assert.isFalse(reading.edges.exists('p.A.f -> p.A.f'), [for (k in reading.edges.keys()) k].join(', '));
+			Assert.isFalse(reading.edges.exists('p.A.f -> p.A.f'), [ for (k in reading.edges.keys()) k ].join(', '));
 		});
 	}
 

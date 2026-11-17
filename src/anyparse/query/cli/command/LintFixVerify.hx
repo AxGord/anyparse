@@ -135,7 +135,7 @@ final class LintFixVerify {
 					coverage: verified.coverage
 				};
 				for (f in verified.applied) Groups.pushUnique(changedFiles, f);
-				ledgerRiskyTallies(ledger, verified, [for (c in riskyChecks) if (c is RiskyArm) c.id()]);
+				ledgerRiskyTallies(ledger, verified, [ for (c in riskyChecks) if (c is RiskyArm) c.id() ]);
 				// The three clauses in a local, so the sentence above keeps the shape it had: the
 				// declined / excluded / bisect tails are each empty on an ordinary run, and spelled
 				// inline they push the segment past the line width.
@@ -619,7 +619,7 @@ final class LintFixVerify {
 		final refusals: Array<{ file: String, reason: String, edits: Int }> = [];
 		for (entry in files) {
 			final groups: Array<RuleEdits> = assistedGroups(entry, findingsByCheck, plugin, oracle);
-			final allEdits: Array<{ span: Span, text: String }> = [for (group in groups) for (e in group.edits) e];
+			final allEdits: Array<{ span: Span, text: String }> = [ for (group in groups) for (e in group.edits) e ];
 			if (allEdits.length == 0) continue;
 			final gap: Null<String> = assistedEditsAreVerifiable(current.coverages, excluded, entry, allEdits, plugin);
 			if (gap != null) {
@@ -704,7 +704,7 @@ final class LintFixVerify {
 				total++;
 			}
 			if (total == 0) continue;
-			final reasons: Array<String> = [for (r in counts.keys()) r];
+			final reasons: Array<String> = [ for (r in counts.keys()) r ];
 			reasons.sort((a, b) -> (counts[b] ?? 0) != (counts[a] ?? 0) ? (counts[b] ?? 0) - (counts[a] ?? 0) : Reflect.compare(a, b));
 			lines.push(
 				'apq lint --fix: oracle-assisted ${byCheck.check.id()} DECLINED $total finding(s), ${reasons.length} distinct reason(s)\n'
@@ -881,7 +881,7 @@ final class LintFixVerify {
 		source: String, groups: Array<RuleEdits>, plugin: GrammarPlugin, optsJson: Null<String>, blamed: Array<String>,
 		?split: (RuleEdits) -> Array<RuleEdits>
 	): Null<{ text: String, edits: Int }> {
-		final all: Array<{ span: Span, text: String }> = [for (group in groups) for (e in group.edits) e];
+		final all: Array<{ span: Span, text: String }> = [ for (group in groups) for (e in group.edits) e ];
 		switch CanonicalEdit.canonicalize(source, all, false, plugin, optsJson) {
 			case Ok(text, _):
 				return text == source ? null : { text: text, edits: all.length };
@@ -976,7 +976,7 @@ final class LintFixVerify {
 			if (pass >= maxPasses) reason = 'not converged in $maxPasses passes';
 			revertRemaining(candidates, reverted);
 		}
-		final applied: Array<String> = [for (c in candidates) if (!reverted.contains(c.file)) c.file];
+		final applied: Array<String> = [ for (c in candidates) if (!reverted.contains(c.file)) c.file ];
 		return { applied: applied, reverted: reverted, reason: reason };
 	}
 

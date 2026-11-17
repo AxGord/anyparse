@@ -266,7 +266,7 @@ final class ReachDefinesProbe {
 		oracle: OracleConfig, run: ProcessRun, rider: ProbeRider, grammar: GrammarPlugin, known: Map<String, Bool>
 	): RiddenReading {
 		final lines: Array<String> = run.out.split('\n');
-		final arms: Int = [for (line in lines) if (line.trim().startsWith(DEFINES_PREFIX)) line].length;
+		final arms: Int = [ for (line in lines) if (line.trim().startsWith(DEFINES_PREFIX)) line ].length;
 		final none: RiddenReading = { arms: arms, verbose: null, configuration: null };
 		if (run.failure != '' || run.status != 0 || arms != 1) return none;
 		final kept: Null<Array<String>> = cleared(lines, oracle.dir ?? Sys.getCwd(), rider);
@@ -287,10 +287,10 @@ final class ReachDefinesProbe {
 			}
 		];
 		if (DefineReads.anyReads(configuration.parsed ?? [], added, grammar, known)) return none;
-		configuration.everDefined = [for (d in configuration.everDefined) if (!added.contains(d)) d];
+		configuration.everDefined = [ for (d in configuration.everDefined) if (!added.contains(d)) d ];
 		final verbose: ProcessRun = {
 			status: run.status,
-			out: [for (line in kept) if (!ownLine(line.trim())) line].join('\n'),
+			out: [ for (line in kept) if (!ownLine(line.trim())) line ].join('\n'),
 			err: run.err,
 			failure: run.failure,
 			overflowed: run.overflowed
@@ -312,7 +312,7 @@ final class ReachDefinesProbe {
 
 	/** A batch of `oracles` not started yet: the build of each the run holds, and the probe directories of the rest. */
 	private static function prepared(oracles: Array<OracleConfig>): DefinesProbe {
-		final held: Array<Null<ReachConfiguration>> = OracleRunMemo.of(oracles)?.builds(oracles) ?? [for (_ in oracles) null];
+		final held: Array<Null<ReachConfiguration>> = OracleRunMemo.of(oracles)?.builds(oracles) ?? [ for (_ in oracles) null ];
 		return {
 			oracles: oracles,
 			held: held,
@@ -323,13 +323,13 @@ final class ReachDefinesProbe {
 
 	/** The configurations of `oracles` whose build `held` lacks, in order: the ones a batch compiles. */
 	private static function unheld(oracles: Array<OracleConfig>, held: Array<Null<ReachConfiguration>>): Array<OracleConfig> {
-		return [for (i in 0...oracles.length) if (held[i] == null) oracles[i]];
+		return [ for (i in 0...oracles.length) if (held[i] == null) oracles[i] ];
 	}
 
 	/** Every configuration's probe directory and arguments, or null when any of them cannot be prepared (and none is kept). */
 	private static function prepareAll(oracles: Array<OracleConfig>): Null<Array<{ dir: String, args: Array<String> }>> {
-		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [for (i in 0...oracles.length) prepare(oracles[i], i)];
-		final ready: Array<{ dir: String, args: Array<String> }> = [for (p in prepared) if (p != null) p];
+		final prepared: Array<Null<{ dir: String, args: Array<String> }>> = [ for (i in 0...oracles.length) prepare(oracles[i], i) ];
+		final ready: Array<{ dir: String, args: Array<String> }> = [ for (p in prepared) if (p != null) p ];
 		if (ready.length == oracles.length) return ready;
 		for (p in ready) discard(p.dir);
 		return null;
@@ -340,7 +340,7 @@ final class ReachDefinesProbe {
 		final ready: Null<Array<{ dir: String, args: Array<String> }>> = probe.ready;
 		if (ready == null) return null;
 		final asked: Array<OracleConfig> = unheld(probe.oracles, probe.held);
-		return [for (i in 0...ready.length) { args: ready[i].args, cwd: asked[i].dir }];
+		return [ for (i in 0...ready.length) { args: ready[i].args, cwd: asked[i].dir } ];
 	}
 
 	/**
@@ -509,7 +509,7 @@ final class ReachDefinesProbe {
 	}
 
 	private static function defines(list: String): Array<String> {
-		return [for (d in list.split(';')) if (d.trim() != '') d.trim()];
+		return [ for (d in list.split(';')) if (d.trim() != '') d.trim() ];
 	}
 
 }

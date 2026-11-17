@@ -864,10 +864,10 @@ final class SymbolIndex {
 	 * answer had those files never been in scope. The files' declarations are not parsed again.
 	 */
 	public function without(files: Array<String>): SymbolIndex {
-		final sources: Map<String, String> = [for (file => source in _sources) if (!files.contains(file)) file => source];
-		final thirdParty: Map<String, Bool> = [for (file in _thirdParty.keys()) if (!files.contains(file)) file => true];
+		final sources: Map<String, String> = [ for (file => source in _sources) if (!files.contains(file)) file => source ];
+		final thirdParty: Map<String, Bool> = [ for (file in _thirdParty.keys()) if (!files.contains(file)) file => true ];
 		return new SymbolIndex(
-			[for (fi in _files) if (!files.contains(fi.file)) fi], [for (file in _skipped) if (!files.contains(file)) file],
+			[ for (fi in _files) if (!files.contains(fi.file)) fi ], [ for (file in _skipped) if (!files.contains(file)) file ],
 			sources, _plugin, thirdParty
 		);
 	}
@@ -1154,7 +1154,7 @@ final class SymbolIndex {
 			skipped: Array<String>,
 			sources: Map<String, String>
 		} = SymbolIndexBuilder.extract(files, plugin);
-		final thirdParty: Map<String, Bool> = [for (file in thirdPartyFiles ?? []) file => true];
+		final thirdParty: Map<String, Bool> = [ for (file in thirdPartyFiles ?? []) file => true ];
 		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources, plugin, thirdParty);
 	}
 
@@ -1182,7 +1182,7 @@ final class SymbolIndex {
 	 */
 	public static function publicTypesByModule(index: SymbolIndex): Map<String, Array<String>> {
 		final out: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) out[info.module] = [for (t in info.types) if (!t.isPrivate) t.name];
+		for (info in index.allFiles()) out[info.module] = [ for (t in info.types) if (!t.isPrivate) t.name ];
 		return out;
 	}
 

@@ -544,7 +544,7 @@ final class OperandBinder {
 
 	/** The type names the grammar declares built in — a literal's type or a basic value type — each once. */
 	public static function builtinNamesOf(shape: RefShape): Array<String> {
-		final out: Array<String> = [for (name in shape.literalTypeNames ?? []) name];
+		final out: Array<String> = [ for (name in shape.literalTypeNames ?? []) name ];
 		for (name in shape.nonNullableTypeNames ?? []) Groups.pushUnique(out, name);
 		return out;
 	}

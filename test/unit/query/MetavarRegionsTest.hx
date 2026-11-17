@@ -48,7 +48,7 @@ class MetavarRegionsTest extends Test {
 
 	private static function onlyBound(source: String): String {
 		final counts: Map<String, Int> = Metavar.treeCounts(new HaxeQueryPlugin().parsePattern(source).root);
-		return [for (name => _ in counts) name].join(',');
+		return [ for (name => _ in counts) name ].join(',');
 	}
 
 }

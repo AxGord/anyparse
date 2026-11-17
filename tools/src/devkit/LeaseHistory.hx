@@ -117,7 +117,7 @@ final class LeaseHistory {
 				out[size] = time;
 		}
 		if (!missing) return out;
-		final sizes: Array<Int> = [for (size in known.keys()) size];
+		final sizes: Array<Int> = [ for (size in known.keys()) size ];
 		if (sizes.length < 2) return null;
 		var sx: Float = 0;
 		var st: Float = 0;

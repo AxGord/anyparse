@@ -437,11 +437,11 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 
 	/** Slide over `run` and emit each window an idiom of the receiver's type claims. */
 	private static function matchRun(run: Array<Write>, ctx: Ctx, out: Array<Match>): Void {
-		final candidates: Array<Idiom> = [for (idiom in ctx.idioms) if (idiom.spec.fields.length <= run.length) idiom];
+		final candidates: Array<Idiom> = [ for (idiom in ctx.idioms) if (idiom.spec.fields.length <= run.length) idiom ];
 		if (candidates.length == 0) return;
 		final recvType: Null<ResolvedType> = pathType(run[0].recv, run[0].recvPath, ctx);
 		if (recvType == null) return;
-		final applicable: Array<Idiom> = [for (idiom in candidates) if (receiverMatches(recvType, idiom, ctx.index)) idiom];
+		final applicable: Array<Idiom> = [ for (idiom in candidates) if (receiverMatches(recvType, idiom, ctx.index)) idiom ];
 		var s: Int = 0;
 		while (s < run.length) {
 			var matched: Null<Match> = null;

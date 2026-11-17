@@ -221,7 +221,7 @@ class MemberOrderWriterGapTest extends Test {
 	 * every doc / multi-line policy combination, `fmt`'s output draws no finding.
 	 */
 	public function testFormattedOutputIsAFixedPointOfTheSpacingRule(): Void {
-		final long: String = [for (c in ['a', 'b', 'c']) '\'${c.lpad(c, 50)}\''].join(', ');
+		final long: String = [ for (c in ['a', 'b', 'c']) '\'${c.lpad(c, 50)}\'' ].join(', ');
 		final src: String = 'class C {\n\tvar a:Int = 0;\n\t/** B. */\n\tvar b:Int = 0;\n\tvar c:Array<String> = [$long];\n'
 			+ '\tvar d:Int = 0;\n\t// E.\n\tvar e:Int = 0;\n\t/* F. */\n\tvar f:Int = 0;\n\t@:keep\n\tvar g:Int = 0;\n\tvar '
 			+ 'h:Int = 0;\n\n\tpublic function new() {}\n\t/** M. */\n\tfunction m():Void {}\n\tfunction n():Void {}\n}\n';

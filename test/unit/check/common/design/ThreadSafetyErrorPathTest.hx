@@ -91,10 +91,10 @@ class ThreadSafetyErrorPathTest extends Test {
 		final check: ThreadSafety = new ThreadSafety();
 		check.explainLongLocks(true);
 		final sources: Array<String> = fixture('function save():Void { try { step(); } catch (e:Dynamic) { Report.send(); } }', 'save();');
-		Linter.run([for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }], new HaxeQueryPlugin(), [check]);
+		Linter.run([ for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] } ], new HaxeQueryPlugin(), [check]);
 		CliFixture.removeDir(dir);
 		final reasons: Array<LongLockReason> = check.longLocks?.long.find(l -> l.lock == 'S._m')?.reasons ?? [];
-		Assert.same(['$dir/F3.hx:1'], [for (r in reasons) if (r.errorPath != null) r.errorPath]);
+		Assert.same(['$dir/F3.hx:1'], [ for (r in reasons) if (r.errorPath != null) r.errorPath ]);
 		#else
 		Assert.pass('non-sys target');
 		#end

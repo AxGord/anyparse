@@ -47,7 +47,7 @@ class MemberOrderModifierSpanSliceTest extends Test {
 		final at: Int = src.indexOf('public static final');
 		Assert.isTrue(at > 0, 'fixture holds the following member');
 		final container: QueryNode = containerOf(src);
-		final owners: Array<String> = [for (c in container.children) if (covers(c, at)) c.kind];
+		final owners: Array<String> = [ for (c in container.children) if (covers(c, at)) c.kind ];
 		Assert.equals('Public', owners.join(','), 'the modifier is its own sibling slot, not part of the member above it');
 	}
 

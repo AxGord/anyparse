@@ -575,7 +575,7 @@
 			"name": "M-WILDCARD-REPOINT-NONE",
 			"type": "anyparse.query.MoveMember",
 			"method": "collectWildcardBareEdits",
-			"find": "final statics: Array<String> = [for (m in prep.moved) if (m.isStatic) m.name];",
+			"find": "final statics: Array<String> = [ for (m in prep.moved) if (m.isStatic) m.name ];",
 			"replace": "final statics: Array<String> = [];",
 			"note": "a caller that reached the moved static as a bare name through the source module's own wildcard import is not repointed, and the move reports Ok over a call that no longer resolves"
 		},
@@ -843,8 +843,8 @@
 			"name": "M-MOVE-FQN-ALIAS-RAW",
 			"type": "anyparse.query.MoveSymbol",
 			"method": "qualifiedPathRefusal",
-			"find": "if (SymbolIndex.pathImportedBy(imp) == path) imp.span];",
-			"replace": "if (imp.raw == path) imp.span];",
+			"find": "if (SymbolIndex.pathImportedBy(imp) == path) imp.span ];",
+			"replace": "if (imp.raw == path) imp.span ];",
 			"note": "an alias statement's own span stops being excluded, because `raw` is the ALIAS, so `import p.A.Foo as F;` reads as a fully-qualified code reference and refuses the move"
 		},
 		{
@@ -2361,7 +2361,7 @@
 			"name": "M-REACH-REFLECT-ACCESSOR",
 			"type": "anyparse.query.MemberReach",
 			"method": "walk",
-			"find": "final names: Array<String> = [for (p in _shape.accessorMethodPrefixes ?? []) p + named];",
+			"find": "final names: Array<String> = [ for (p in _shape.accessorMethodPrefixes ?? []) p + named ];",
 			"replace": "final names: Array<String> = [];",
 			"note": "Reflect.setProperty by a literal name admits only the member, not the setter it runs"
 		},
@@ -2851,7 +2851,7 @@
 			"name": "M-GRAPH-UNSUBSTITUTED-PARAM",
 			"type": "anyparse.query.CallGraphEdges",
 			"method": "collect",
-			"find": "CallGraphNames.substituteTypeParams(written, params, [for (_ in params) CallGraph.UNKNOWN_TYPE], g._plugin.typeSyntax);",
+			"find": "CallGraphNames.substituteTypeParams(written, params, [ for (_ in params) CallGraph.UNKNOWN_TYPE ], g._plugin.typeSyntax);",
 			"replace": "written;",
 			"note": "a member type spelling a parameter the receiver gives no argument for resolves to a class of that name"
 		},
@@ -2875,8 +2875,8 @@
 			"name": "M-GRAPH-USING-ALL",
 			"type": "anyparse.query.CallGraphImports",
 			"method": "staticExtensionsOf",
-			"find": "return [for (u in usings) if (_isStatic(u, member)) u];",
-			"replace": "return [for (u in usings) if (_isStatic(u, member)) u].slice(0, 1);",
+			"find": "return [ for (u in usings) if (_isStatic(u, member)) u ];",
+			"replace": "return [ for (u in usings) if (_isStatic(u, member)) u ].slice(0, 1);",
 			"note": "only the first `using` declaring the extension is a target, though the last one wins"
 		},
 		{
@@ -6606,7 +6606,7 @@
 			"name": "M-GRAPH-INIT-RECORD",
 			"type": "anyparse.query.CallGraph",
 			"method": "addFiles",
-			"find": "reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);",
+			"find": "reading.recordInitializers(this, [ for (id in _initFiles.keys()) id ]);",
 			"replace": "",
 			"note": "(precision) a field initializer is read by its syntax, which admits every implicitly-called member"
 		},
@@ -7307,7 +7307,7 @@
 			"name": "M-METHODS-HOLDERS-OWN-NAME",
 			"type": "anyparse.query.FactsMethodValues",
 			"method": "declaredHolders",
-			"find": "[for (id in hierarchy) if (holders.exists(p -> p.match(id))) id]",
+			"find": "[ for (id in hierarchy) if (holders.exists(p -> p.match(id))) id ]",
 			"replace": "hierarchy.exists(id -> holders.exists(p -> p.match(id))) ? hierarchy : []",
 			"note": "a declared class declares its subclasses too, so a computed name obtains the method off an object of a subclass the project left out"
 		},
@@ -9091,7 +9091,7 @@
 			"name": "M-SCORE-UNIQUE-JOINED",
 			"type": "anyparse.query.LintScore",
 			"method": "validate",
-			"find": "final exact: Array<String> = [for (e in truth.entries) keyOf(e.family, e.member, e.subject)];",
+			"find": "final exact: Array<String> = [ for (e in truth.entries) keyOf(e.family, e.member, e.subject) ];",
 			"replace": "final exact: Array<String> = keys;",
 			"note": "two keys whose |-joined spellings collide are refused as one key labelled twice"
 		},
@@ -10448,7 +10448,7 @@
 			"name": "M-BINDER-NAMED-FN-NO-STEP-OUT",
 			"type": "anyparse.query.BinderScan",
 			"method": "bindingHostSubtree",
-			"find": "[for (k in [shape.namedFnExprKind]) if (k != null) k]",
+			"find": "[ for (k in [shape.namedFnExprKind]) if (k != null) k ]",
 			"replace": "[]",
 			"note": "a rename anchored on a named function expression's own name sweeps only that function's body, though the name binds in the enclosing one"
 		},
@@ -10877,7 +10877,7 @@
 			"name": "M-GRAPH-BODY-EXPAND",
 			"type": "anyparse.query.CallGraph",
 			"method": "addEdge",
-			"find": "exact ? [] : [for (body in _bodies[to] ?? []) retargeted(edge, body)]",
+			"find": "exact ? [] : [ for (body in _bodies[to] ?? []) retargeted(edge, body) ]",
 			"replace": "[]",
 			"note": "an edge naming a module-level function reaches its first body only, never another build's"
 		},
@@ -10885,8 +10885,8 @@
 			"name": "M-GRAPH-BODY-EXACT",
 			"type": "anyparse.query.CallGraph",
 			"method": "addEdge",
-			"find": "exact ? [] : [for",
-			"replace": "[for",
+			"find": "exact ? [] : [ for",
+			"replace": "[ for",
 			"note": "an edge a bare use binds to one body per build runs every other body too"
 		},
 		{
@@ -11410,15 +11410,15 @@
 			"name": "M-RETAIN-SOURCES-KEEPS-ALL",
 			"type": "anyparse.query.CachingGrammarPlugin",
 			"method": "staleKeys",
-			"find": "if (!keep.exists(source)) source]",
-			"replace": "if (false) source]",
+			"find": "if (!keep.exists(source)) source ]",
+			"replace": "if (false) source ]",
 			"note": "nothing is ever dropped, so a --fix run keeps every superseded and speculative parse for the rest of the run (the N25 self-fix OOM at the default heap)"
 		},
 		{
 			"name": "M-RETAIN-SOURCES-DROPS-LIVE",
 			"type": "anyparse.query.CachingGrammarPlugin",
 			"method": "retainSources",
-			"find": "final keep: Map<String, Bool> = [for (source in live) source => true];",
+			"find": "final keep: Map<String, Bool> = [ for (source in live) source => true ];",
 			"replace": "final keep: Map<String, Bool> = [];",
 			"note": "the live sources are dropped too, so every pass re-parses every file and an unchanged file loses its tree identity across passes"
 		},
@@ -12655,8 +12655,8 @@
 			"name": "M-NOMINAL-BOUND-SCOPE",
 			"type": "anyparse.query.NominalTypes",
 			"method": "writtenTypeParams",
-			"find": "for (t in fi.types) for (p in t.typeParamNames.concat([for (m in t.members) for (q in m.typeParamNames) q])) p",
-			"replace": "for (t in fi.types) for (p in t.typeParamNames.concat([for (m in t.members) for (q in m.typeParamNames) q])) if (false) p",
+			"find": "for (t in fi.types) for (p in t.typeParamNames.concat([ for (m in t.members) for (q in m.typeParamNames) q ])) p",
+			"replace": "for (t in fi.types) for (p in t.typeParamNames.concat([ for (m in t.members) for (q in m.typeParamNames) q ])) if (false) p",
 			"note": "a binding is completed with no type parameter in scope, so a name a parameter may hold reads as the type"
 		},
 		{
@@ -13399,7 +13399,7 @@
 			"name": "M-CASTS-MEMBERS-LIVE",
 			"type": "anyparse.query.AbstractCasts",
 			"method": "graphWith",
-			"find": "final members: Array<MemberInfo> = [for (b in _builds.of(r)) for (m in membersOf(r, b)) m];",
+			"find": "final members: Array<MemberInfo> = [ for (b in _builds.of(r)) for (m in membersOf(r, b)) m ];",
 			"replace": "final members: Array<MemberInfo> = r.type.members;",
 			"note": "a conversion member only a dead branch declares converts, so `V` takes a `String` no build lets it take"
 		},
@@ -13975,8 +13975,8 @@
 			"name": "M-BOUND-SHADOWED-SUBSTITUTED",
 			"type": "anyparse.query.AncestorTable",
 			"method": "boundType",
-			"find": "if (!own.contains(params[i])) i]",
-			"replace": "i]",
+			"find": "if (!own.contains(params[i])) i ]",
+			"replace": "i ]",
 			"note": "a method's type parameter named like its type's is bound to the receiver's argument, so `shadow<T>(x: T, f: T -> Void)` on a `Box<Item>` given `1` types the lambda's parameter `Item`"
 		},
 		{

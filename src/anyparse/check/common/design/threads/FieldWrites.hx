@@ -289,7 +289,7 @@ final class FieldWrites {
 		final kept: Array<String> = [];
 		sortUnplaced(where, typed, kept);
 		final placed: Array<String> = [];
-		for (list in [_computed].concat([for (sites in _byName) sites])) for (w in list) {
+		for (list in [_computed].concat([ for (sites in _byName) sites ])) for (w in list) {
 			final by: Null<String> = w.placedBy;
 			final entry: String = '${w.fn ?? w.file} ($by)';
 			if (by != null && !placed.contains(entry)) placed.push(entry);
@@ -517,7 +517,7 @@ final class FieldWrites {
 			final typer: (
 				String, Null<String>, QueryNode
 			) -> Null<String> = (file, fn, node) -> typeOf(file, _graph.sourceOf(file) ?? '', fn, node);
-			final all: Array<FieldWriteSite> = [for (sites in _byName) for (s in sites) if (s.reflective && s.reaches == null) s];
+			final all: Array<FieldWriteSite> = [ for (sites in _byName) for (s in sites) if (s.reflective && s.reaches == null) s ];
 			stores = all.concat(unplaced()).map(s -> { site: s, types: _values.typesOf(s.file, s.fn, s.stored, typer) });
 			_stores = stores;
 		}
@@ -536,8 +536,8 @@ final class FieldWrites {
 	 * write naming its field by a literal only there: it costs one member, and only keeping off it is news.
 	 */
 	private function sortUnplaced(where: Array<String>, typed: Array<String>, kept: Array<String>): Void {
-		final locks: Array<String> = [for (fields in _lockFields) for (f in fields) f];
-		final named: Array<FieldWriteSite> = [for (sites in _byName) for (w in sites) if (w.reflective && w.reaches == null) w];
+		final locks: Array<String> = [ for (fields in _lockFields) for (f in fields) f ];
+		final named: Array<FieldWriteSite> = [ for (sites in _byName) for (w in sites) if (w.reflective && w.reaches == null) w ];
 		for (w in unplaced().concat(named)) {
 			final types: Null<Array<String>> = storedTypes(w);
 			final into: Null<Array<String>> = if (types != null && !storesLock(w, locks))

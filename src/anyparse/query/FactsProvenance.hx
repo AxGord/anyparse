@@ -191,9 +191,9 @@ private final class BodyText {
 		final loopKinds: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.iterationBindingKinds ?? []);
 		final constructed: Map<String, String> = shape.execution?.literalConstructions ?? [];
 		final comprehended: Map<String, String> = shape.execution?.comprehensionCalls ?? [];
-		final comprehensionLoops: Array<String> = (shape.iterationBindingKinds ?? []).concat([for (k in [shape.whileExprKind]) if (
+		final comprehensionLoops: Array<String> = (shape.iterationBindingKinds ?? []).concat([ for (k in [shape.whileExprKind]) if (
 			k != null
-		) k]);
+		) k ]);
 		final interpolating: Array<String> = shape.interpolatingStringKinds ?? [];
 		final loops: Array<Span> = [];
 		final literals: Array<{ kind: String, span: Span }> = [];
@@ -555,7 +555,7 @@ final class FactsProvenance {
 	 */
 	private function declaredAlike(typed: TypeFact, f: FieldDeclFact, decl: TypeDeclInfo): Bool {
 		final name: String = _view.graphMember(typed.id, f.name);
-		final found: Array<MemberInfo> = [for (m in decl.members) if (m.name == name) m];
+		final found: Array<MemberInfo> = [ for (m in decl.members) if (m.name == name) m ];
 		if (found.length == 0) return name == constructorName();
 		final variables: Array<String> = _scope.shape.fieldDeclKinds ?? [];
 		return f.kinds.foreach(kind -> {
@@ -582,7 +582,7 @@ final class FactsProvenance {
 		n: FactNode, typed: TypeFact, decl: TypeDeclInfo, key: String, source: String, tree: QueryNode, builds: Array<Int>
 	): Bool {
 		final name: String = _view.graphMember(typed.id, fieldOf(n.id));
-		final declared: Array<MemberInfo> = [for (m in decl.members) if (m.name == name) m];
+		final declared: Array<MemberInfo> = [ for (m in decl.members) if (m.name == name) m ];
 		if (declared.length == 0) return name == constructorName() && madeConstructor(n);
 		final bodies: Array<BodyText> = [];
 		for (m in declared) {
@@ -668,7 +668,7 @@ final class FactsProvenance {
 			}
 		))
 			return false;
-		final written: Array<ExpansionFact> = [for (x in n.expansions) if (expansionWritten(n, x, body, outer)) x];
+		final written: Array<ExpansionFact> = [ for (x in n.expansions) if (expansionWritten(n, x, body, outer)) x ];
 		final inlined: (FactPos) -> Bool = outer ?? (_ -> false);
 		function own(p: FactPos, onText: Bool, ?name: String): Bool {
 			return onText

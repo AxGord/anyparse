@@ -408,7 +408,7 @@ final class MemberBranchScan {
 	 */
 	private static function joinRuns(a: MemberRun, b: MemberRun): MemberRun {
 		return {
-			nodes: a.nodes.concat([for (n in b.nodes) if (!a.nodes.contains(n)) n]),
+			nodes: a.nodes.concat([ for (n in b.nodes) if (!a.nodes.contains(n)) n ]),
 			certain: a.certain && b.certain && a.nodes.length == b.nodes.length && !a.nodes.exists(n -> !b.nodes.contains(n))
 		};
 	}

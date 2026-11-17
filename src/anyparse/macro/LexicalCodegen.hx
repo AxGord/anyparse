@@ -98,7 +98,7 @@ class LexicalCodegen {
 	// -------- public entries --------
 
 	private static function scanField(specs: Array<LexRegionSpec>): Field {
-		final origins: String = [for (spec in specs) spec.origin].join(', ');
+		final origins: String = [ for (spec in specs) spec.origin ].join(', ');
 		final body: Expr = macro return anyparse.query.LexicalRegions.assemble((onRegion, onHole) ->
 			$i{CODE_FN}(source, 0, 0, onRegion, onHole)
 		);
@@ -476,7 +476,7 @@ class LexicalCodegen {
 			$b{steps};
 		});
 		stmts.push(macro return out);
-		final origins: String = [for (terminal in tokens.terminals) terminal.origin].join(', ');
+		final origins: String = [ for (terminal in tokens.terminals) terminal.origin ].join(', ');
 		return {
 			name: 'tokens',
 			doc: ' Every token of `source` that starts in `[from, to)`, as `[from, to)` byte offsets in source order, each at its\n'

@@ -589,7 +589,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 		Assert.equals(1, carrying.length);
 		Assert.equals('return a ? 2 : 1;', carrying[0].text);
-		Assert.equals('a|2|1', [for (s in carrying[0].carried) source.substring(s.from, s.to)].join('|'));
+		Assert.equals('a|2|1', [ for (s in carrying[0].carried) source.substring(s.from, s.to) ].join('|'));
 	}
 
 	/** A comment the positive condition would drop keeps the condition as written. */

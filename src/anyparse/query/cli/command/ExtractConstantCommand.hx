@@ -203,7 +203,8 @@ final class ExtractConstantCommand implements CliCommand {
 					// set: a run that wrote the sites and then could not write the module would
 					// leave every one of them naming a constant that does not exist.
 					RegistryFollowCommand.writeFollowed(
-						OP, [for (c in changes) { path: c.file, content: c.newSource }].concat([{ path: intoPath, content: finalModule }]),
+						OP,
+						[ for (c in changes) { path: c.file, content: c.newSource } ].concat([{ path: intoPath, content: finalModule }]),
 						plugin
 					);
 					CliIo.stderr('apq extract-constant: wrote ${changes.length} file(s), $total occurrence(s); module $verb $intoPath\n');

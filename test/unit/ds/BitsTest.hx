@@ -42,7 +42,7 @@ class BitsTest extends Test {
 		Assert.isTrue(bits.has(Narrow.Top));
 		Assert.isFalse(bits.has(Narrow.Next));
 		Assert.isTrue(bits.remove(Narrow.Top));
-		Assert.same([Narrow.Low], [for (value in bits) value]);
+		Assert.same([Narrow.Low], [ for (value in bits) value ]);
 	}
 
 	/** Bits 0, 31, 32 and 63: each edge of both words. */
@@ -53,7 +53,7 @@ class BitsTest extends Test {
 		Assert.isTrue(bits.remove(Wide.First));
 		Assert.isFalse(bits.has(Wide.First));
 		Assert.isTrue(bits.has(Wide.Last));
-		Assert.same([Wide.Low, Wide.Last, Wide.Top], [for (value in bits) value]);
+		Assert.same([Wide.Low, Wide.Last, Wide.Top], [ for (value in bits) value ]);
 		bits.clear();
 		Assert.isTrue(bits.isEmpty());
 	}
@@ -62,10 +62,10 @@ class BitsTest extends Test {
 	public function testIterationAscendsByBit(): Void {
 		var hues: Bits<Hue> = new Bits<Hue>();
 		for (hue in [Blue, Red, Green]) hues.add(hue);
-		Assert.same([Red, Green, Blue], [for (hue in hues) hue]);
+		Assert.same([Red, Green, Blue], [ for (hue in hues) hue ]);
 		var narrow: Bits<Narrow> = new Bits<Narrow>();
 		for (value in [Narrow.Top, Narrow.Next, Narrow.Low]) narrow.add(value);
-		Assert.same([Narrow.Low, Narrow.Next, Narrow.Top], [for (value in narrow) value]);
+		Assert.same([Narrow.Low, Narrow.Next, Narrow.Top], [ for (value in narrow) value ]);
 		Assert.isFalse(new Bits<Wide>().iterator().hasNext());
 	}
 
@@ -80,13 +80,13 @@ class BitsTest extends Test {
 	public function testUnionAndIntersection(): Void {
 		final left: Bits<Wide> = [Wide.Low, Wide.First];
 		final right: Bits<Wide> = [Wide.First, Wide.Top];
-		Assert.same([Wide.Low, Wide.First, Wide.Top], [for (value in left | right) value]);
-		Assert.same([Wide.First], [for (value in left & right) value]);
+		Assert.same([Wide.Low, Wide.First, Wide.Top], [ for (value in left | right) value ]);
+		Assert.same([Wide.First], [ for (value in left & right) value ]);
 		final warm: Bits<Hue> = [Red, Green];
 		final cool: Bits<Hue> = [Green, Blue];
-		Assert.same([Red, Green, Blue], [for (hue in warm | cool) hue]);
-		Assert.same([Green], [for (hue in warm & cool) hue]);
-		Assert.same([Narrow.Low, Narrow.Top], [for (value in (Narrow.Low: Bits<Narrow>) | Narrow.Top) value]);
+		Assert.same([Red, Green, Blue], [ for (hue in warm | cool) hue ]);
+		Assert.same([Green], [ for (hue in warm & cool) hue ]);
+		Assert.same([Narrow.Low, Narrow.Top], [ for (value in (Narrow.Low: Bits<Narrow>) | Narrow.Top) value ]);
 	}
 
 	/** `~` holds every value of the domain the operand does not, and never a bit no value stands for. */
@@ -94,11 +94,11 @@ class BitsTest extends Test {
 	@:killer('M-DS-BITS-COMPLEMENT')
 	public function testComplementStaysInTheDomain(): Void {
 		final green: Bits<Hue> = Green;
-		Assert.same([Red, Blue], [for (hue in ~green) hue]);
+		Assert.same([Red, Blue], [ for (hue in ~green) hue ]);
 		final flags: Bits<Flag> = [Flag.Two, Flag.Huge];
-		Assert.same([Flag.One, Flag.Four], [for (flag in ~flags) flag]);
+		Assert.same([Flag.One, Flag.Four], [ for (flag in ~flags) flag ]);
 		final narrow: Bits<Narrow> = Narrow.Next;
-		final others: Array<Narrow> = [for (value in ~narrow) value];
+		final others: Array<Narrow> = [ for (value in ~narrow) value ];
 		Assert.equals(Narrow.Top, others[others.length - 1]);
 		Assert.isFalse(others.contains(Narrow.Next));
 		final wide: Bits<Wide> = Wide.Last;
@@ -116,11 +116,11 @@ class BitsTest extends Test {
 		Assert.isTrue(sparse.has(Sparse.Far));
 		Assert.isFalse(sparse.has(Sparse.Zero));
 		sparse.add(Sparse.Zero);
-		Assert.same([Sparse.Zero, Sparse.Far], [for (value in sparse) value]);
+		Assert.same([Sparse.Zero, Sparse.Far], [ for (value in sparse) value ]);
 		var flags: Bits<Flag> = new Bits<Flag>();
 		flags.add(Flag.Huge);
 		flags.add(Flag.Two);
-		Assert.same([Flag.Two, Flag.Huge], [for (flag in flags) flag]);
+		Assert.same([Flag.Two, Flag.Huge], [ for (flag in flags) flag ]);
 		Assert.isFalse(flags.has(Flag.Four));
 	}
 
@@ -155,7 +155,7 @@ class BitsTest extends Test {
 		final palette: Palette = new Palette();
 		palette.hues.add(Red);
 		palette.paint(Blue);
-		Assert.same([Red, Blue], [for (hue in palette.hues) hue]);
+		Assert.same([Red, Blue], [ for (hue in palette.hues) hue ]);
 		palette.wide.add(Wide.Top);
 		Assert.isTrue(palette.wide.has(Wide.Top));
 		final sets: Array<Bits<Hue>> = [new Bits<Hue>()];

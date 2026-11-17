@@ -154,7 +154,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * different answer: a modifier the language documents no position for is unranked
 	 * there and still precedes the declaration it modifies.
 	 */
-	public static final MODIFIER_KINDS: Array<String> = [for (kind in MOD_KIND_TO_NAME.keys()) kind];
+	public static final MODIFIER_KINDS: Array<String> = [ for (kind in MOD_KIND_TO_NAME.keys()) kind ];
 
 	/**
 	 * The `Reflect` statics that address a member BY NAME through a string argument — the

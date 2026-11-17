@@ -209,7 +209,7 @@ final class PreferFinal extends RuleBase {
 	 * within its scope (see `reassignedInScope`).
 	 */
 	private static function writeSpans(name: String, tree: QueryNode, shape: RefShape): Array<Span> {
-		return [for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span];
+		return [ for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span ];
 	}
 
 	/** Whether any reassignment position in `writes` falls within `scope`. */

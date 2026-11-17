@@ -282,7 +282,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		final typeInfo: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final shape: RefShape = plugin.refShape();
 		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
-		final trees: Map<String, QueryNode> = [for (e in parsed) e.file => e.tree];
+		final trees: Map<String, QueryNode> = [ for (e in parsed) e.file => e.tree ];
 		final hosted: Map<String, Null<Map<String, Signature>>> = [];
 		final projectComplete: Bool = RefactorSupport.projectIsComplete(plugin);
 		final violations: Array<Violation> = [];

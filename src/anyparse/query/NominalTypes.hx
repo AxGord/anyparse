@@ -1193,7 +1193,7 @@ final class NominalTypes {
 	 */
 	private static function writtenTypeParams(fi: FileInfo): Array<String> {
 		return [
-			for (t in fi.types) for (p in t.typeParamNames.concat([for (m in t.members) for (q in m.typeParamNames) q])) p
+			for (t in fi.types) for (p in t.typeParamNames.concat([ for (m in t.members) for (q in m.typeParamNames) q ])) p
 		];
 	}
 

@@ -95,7 +95,7 @@ final class ExpectedTypes {
 		_switchKinds = shape.switchKinds ?? [];
 		_tryExprKinds = shape.tryExpressionKinds ?? [];
 		_caseBranchKind = shape.caseBranchKind;
-		_blockKinds = [for (k in [shape.blockStmtKind, shape.exprStatementKind]) if (k != null) k];
+		_blockKinds = [ for (k in [shape.blockStmtKind, shape.exprStatementKind]) if (k != null) k ];
 		_arrayLiteralKind = shape.arrayLiteralKind;
 		_mapEntryKind = shape.mapLiteralEntryKind;
 		_objectFieldKind = shape.objectFieldKind;
@@ -173,7 +173,7 @@ final class ExpectedTypes {
 		if (expected == null) return null;
 		final read: Null<TypeSyntax> = host.read(expected, ctx);
 		return switch (read?.wrapped(['Null']) ?? read)?.shape {
-			case Function(ps, _, _) if (ps.length == count): [for (p in ps) host.part(expected, p.type.text, ctx)];
+			case Function(ps, _, _) if (ps.length == count): [ for (p in ps) host.part(expected, p.type.text, ctx) ];
 			case _: null;
 		};
 	}
@@ -239,7 +239,7 @@ final class ExpectedTypes {
 		final path: Null<Array<QueryNode>> = TreePath.pathTo(root, node);
 		if (path == null) return null;
 		final nodes: Array<QueryNode> = path.slice(0, path.length - 1);
-		return { nodes: nodes, indices: [for (i in 0...nodes.length) nodes[i].children.indexOf(path[i + 1])] };
+		return { nodes: nodes, indices: [ for (i in 0...nodes.length) nodes[i].children.indexOf(path[i + 1]) ] };
 	}
 
 	/** The element a container literal of the type `outer` holds; null for none. */

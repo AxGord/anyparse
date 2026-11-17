@@ -314,7 +314,7 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 				enumAbstractKind: shape.enumAbstractDeclKind,
 				lambdaKinds: shape.lambdaKinds ?? [],
 				paramKinds: shape.paramKinds ?? [],
-				typeArgKinds: [for (k in plugin.typeRefShape().typeRefKinds) if (k != newKind) k],
+				typeArgKinds: [ for (k in plugin.typeRefShape().typeRefKinds) if (k != newKind) k ],
 				opaqueKinds: shape.opaqueKinds ?? [],
 				wrappers: shape.memberTransparentWrapperTypeNames ?? [],
 				selfText: shape.selfReferenceText,
@@ -330,7 +330,7 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 	/** The field kinds of `fieldKinds` that declare an IMMUTABLE field — every one the grammar does not list as mutable. */
 	private static function finalFieldKinds(shape: RefShape, fieldKinds: Array<String>): Array<String> {
 		final mutable: Array<String> = shape.mutableFieldDeclKinds ?? [];
-		return [for (k in fieldKinds) if (!mutable.contains(k)) k];
+		return [ for (k in fieldKinds) if (!mutable.contains(k)) k ];
 	}
 
 	/** Every candidate constant declared in `p`, keyed by its class's identity and its name. */
@@ -404,7 +404,7 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 				parsed: p
 			});
 		} else if (node.kind == seams.newKind) {
-			final args: Array<QueryNode> = [for (c in node.children) if (!seams.typeArgKinds.contains(c.kind)) c];
+			final args: Array<QueryNode> = [ for (c in node.children) if (!seams.typeArgKinds.contains(c.kind)) c ];
 			final typeName: Null<String> = node.name;
 			final key: Null<String> = args.length == 0 ? null : constantKey(args[0], p, candidates, index, seams);
 			if (key != null && typeName != null) record(out, key, {

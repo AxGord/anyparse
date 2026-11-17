@@ -147,7 +147,7 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 		final file: String = violations[0].file;
 		final metrics: Null<LayoutMetrics> = plugin.layoutMetrics(FormatConfigDiscovery.discover(file, _configNotes));
 		if (metrics == null) return [];
-		final wanted: Array<Int> = [for (v in violations) if (v.span != null) (v.span: Span).from];
+		final wanted: Array<Int> = [ for (v in violations) if (v.span != null) (v.span: Span).from ];
 		final wide: Array<WideLine> = classify(source, plugin, metrics);
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -272,7 +272,7 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 	 * A line the reflow hands back byte-identical is one it could not break.
 	 */
 	private static function probeReflow(source: String, unit: CommentTok, wide: Array<WideLine>, metrics: LayoutMetrics): Void {
-		final open: Array<WideLine> = [for (w in wide) if (w.owner.from == unit.from && w.refusal == null) w];
+		final open: Array<WideLine> = [ for (w in wide) if (w.owner.from == unit.from && w.refusal == null) w ];
 		if (open.length == 0) return;
 		final bodySpan: Span = SourceComments.commentBody(source, unit);
 		final body: String = source.substring(bodySpan.from, bodySpan.to);

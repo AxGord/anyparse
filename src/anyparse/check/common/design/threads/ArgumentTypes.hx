@@ -201,7 +201,7 @@ final class ArgumentTypes {
 	private function typeSourceOffsetsOf(file: String, sources: Map<Int, String>): Array<Int> {
 		final known: Null<Array<Int>> = _typeSourceOffsets[file];
 		if (known != null) return known;
-		final offsets: Array<Int> = [for (at in sources.keys()) at];
+		final offsets: Array<Int> = [ for (at in sources.keys()) at ];
 		offsets.sort(Compare.compareInt);
 		_typeSourceOffsets[file] = offsets;
 		return offsets;

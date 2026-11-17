@@ -190,7 +190,7 @@ final class ReachGraph {
 		final built: Null<CallGraph> = _graph;
 		if (built != null) return built;
 		// a project file no build runs (`ReachProject.runsInNoBuild`) holds no function that runs and no touch
-		final running: Array<{ file: String, source: String }> = [for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) f];
+		final running: Array<{ file: String, source: String }> = [ for (f in _scope.files) if (!_scope.runsInNoBuild(f.file)) f ];
 		final g: CallGraph = CallGraph.build(running, _scope.plugin, _scope.index, _scope.facts);
 		_graph = g;
 		return g;
@@ -299,7 +299,7 @@ final class ReachGraph {
 	public function alwaysIds(g: CallGraph): Array<String> {
 		final cached: Null<Array<String>> = _implicit;
 		if (cached != null) return cached;
-		final out: Array<String> = idsOf(g, [for (c in indexImplicit()) if (c.family == Always && counts(c)) c]);
+		final out: Array<String> = idsOf(g, [ for (c in indexImplicit()) if (c.family == Always && counts(c)) c ]);
 		_implicit = out;
 		return out;
 	}
@@ -366,7 +366,7 @@ final class ReachGraph {
 			]);
 			described.push({
 				names: [],
-				metas: [for (m in bare(execution?.implicitCallMetaNames)) if (!excluded.contains(m)) m],
+				metas: [ for (m in bare(execution?.implicitCallMetaNames)) if (!excluded.contains(m)) m ],
 				typeMetas: [],
 				externInline: true
 			});
@@ -393,7 +393,7 @@ final class ReachGraph {
 	 * read may run through the language's implicit channels on a value of any type.
 	 */
 	public function implicitIds(g: CallGraph): Array<String> {
-		return idsOf(g, [for (c in indexImplicit()) if (counts(c)) c]);
+		return idsOf(g, [ for (c in indexImplicit()) if (counts(c)) c ]);
 	}
 
 	/**
@@ -854,7 +854,7 @@ final class ReachGraph {
 		return switch family {
 			// a conversion the target runs calls the target's own method, never an extern's inline one
 			case Text: described(text, [], [], false);
-			case Iteration: described([for (n in execution?.implicitCallNames ?? []) if (!text.contains(n)) n], [], [], true);
+			case Iteration: described([ for (n in execution?.implicitCallNames ?? []) if (!text.contains(n)) n ], [], [], true);
 			case Literal: described([], [], bare(execution?.implicitConstructionTypeMetaNames), true);
 			case Index, Operator(_): described([], bare(execution?.implicitCallMetaNames), [], true);
 		};
@@ -863,7 +863,7 @@ final class ReachGraph {
 	/** `ownedIdsAt`, computed. */
 	private function ownedIdsRead(g: CallGraph, at: ImplicitSite): Array<OwnedId> {
 		final owned: Null<Map<String, Null<Array<String>>>> = ownedTypesAt(g, at);
-		final scope: Null<Array<String>> = owned == null ? typesAt(g, at) : [for (t in owned.keys()) t];
+		final scope: Null<Array<String>> = owned == null ? typesAt(g, at) : [ for (t in owned.keys()) t ];
 		final view: Null<FactsView> = _scope.facts;
 		final out: Array<OwnedId> = [];
 		function add(id: String, owner: Null<String>): Void {
@@ -1031,7 +1031,7 @@ final class ReachGraph {
 		}
 		if (at.family == Iteration) {
 			final iterables: Null<Array<String>> = _scope.shape.execution?.iterableMethodNames;
-			for (x in [for (k in out.keys()) k]) for (name in (_scope.shape.execution?.implicitCallNames ?? [])) {
+			for (x in [ for (k in out.keys()) k ]) for (name in (_scope.shape.execution?.implicitCallNames ?? [])) {
 				final returned: Null<String> = iterables == null || iterables.contains(name)
 					? g.types.memberOnChain(x, name)?.returnNominal
 					: null;
@@ -1079,7 +1079,7 @@ final class ReachGraph {
 		if (values == null) return null;
 		final out: Array<String> = values.copy();
 		// a set beside the list: `out.contains` made the closure quadratic in the value types, every escaped one among them
-		final seen: Map<String, Bool> = [for (t in out) t => true];
+		final seen: Map<String, Bool> = [ for (t in out) t => true ];
 		var i: Int = 0;
 		while (i < out.length) for (s in g.types.supertypesOf(out[i++])) if (!seen.exists(s)) {
 			seen[s] = true;
@@ -1291,9 +1291,9 @@ final class ReachGraph {
 		if (held != null) return held;
 		var everything: Null<Array<String>> = null;
 		final made: AbstractReach = new AbstractReach(
-			signatureWords(), _scope.index, [for (t in (_scope.shape.execution?.literalAbstractTypes ?? []).iterator()) t],
+			signatureWords(), _scope.index, [ for (t in (_scope.shape.execution?.literalAbstractTypes ?? []).iterator()) t ],
 			() -> {
-				final all: Array<String> = everything ?? [for (fi in _scope.index.allFiles()) for (t in fi.types) t.name];
+				final all: Array<String> = everything ?? [ for (fi in _scope.index.allFiles()) for (t in fi.types) t.name ];
 				everything = all;
 				all;
 			},
@@ -1592,7 +1592,7 @@ final class ReachGraph {
 
 	/** Metadata names as the compiler facts spell them (`FieldDeclFact.meta`): without the leading `@`. */
 	private static function bare(metas: Null<Array<String>>): Array<String> {
-		return [for (m in metas ?? []) StringTools.startsWith(m, '@') ? m.substr(1) : m];
+		return [ for (m in metas ?? []) StringTools.startsWith(m, '@') ? m.substr(1) : m ];
 	}
 
 }

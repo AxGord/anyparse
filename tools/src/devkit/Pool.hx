@@ -34,7 +34,7 @@ final class Pool {
 		final pipeline: Null<Command> = commands.find(c -> c.isPipeline());
 		if (pipeline != null) throw new Exception('`$pipeline` is a pipeline, which runs one stage at a time — run it alone');
 		return commands.exists(c -> c.stdinText() != null)
-			? TempDir.with(dir -> answer(commands, [for (i => c in commands) c.job(stdinFile(dir, i, c))]))
+			? TempDir.with(dir -> answer(commands, [ for (i => c in commands) c.job(stdinFile(dir, i, c)) ]))
 			: answer(commands, commands.map(c -> c.job(null)));
 	}
 
@@ -52,7 +52,7 @@ final class Pool {
 				runs.push(run);
 			from += batch;
 		}
-		return [for (i => c in commands) new Result(c.toString(), runs[i])];
+		return [ for (i => c in commands) new Result(c.toString(), runs[i]) ];
 	}
 
 	/** A pool running at most `size` commands at once. */

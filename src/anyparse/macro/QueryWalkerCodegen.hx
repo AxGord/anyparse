@@ -108,7 +108,7 @@ class QueryWalkerCodegen {
 	 * allocates around it.
 	 */
 	private static function kindsField(name: String, kinds: Array<String>, doc: String): Field {
-		final items: Array<Expr> = [for (kind in kinds) { expr: EConst(CString(kind)), pos: Context.currentPos() }];
+		final items: Array<Expr> = [ for (kind in kinds) { expr: EConst(CString(kind)), pos: Context.currentPos() } ];
 		final literal: Expr = { expr: EArrayDecl(items), pos: Context.currentPos() };
 		return {
 			name: name,

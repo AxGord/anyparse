@@ -170,10 +170,10 @@ class D {
 			case Nest(_, inner), BreakCommit(_, inner), LeadingBreak(_, inner), BreakMark(inner, _): flatten(inner);
 			case Group(inner), GroupWithRestProbe(inner): flatten(inner);
 			case BodyGroup(inner): flatten(inner);
-			case Concat(items): Concat([for (i in items) flatten(i)]);
+			case Concat(items): Concat([ for (i in items) flatten(i) ]);
 			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
 				final flatSep: Doc = flatten(sep);
-				Concat(intersperse([for (i in items) flatten(i)], flatSep));
+				Concat(intersperse([ for (i in items) flatten(i) ], flatSep));
 			case OptSpace(s): Text(s);
 			case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline: Empty;
 			case OptSpaceSkipAfterHardline: Text(' ');
@@ -250,10 +250,10 @@ class D {
 			case IfIndentWidthExceeds(fw, n, brk, fl): IfIndentWidthExceeds(fw, n, f(brk), f(fl));
 			case IfGluedFirstLineExceeds(n, bi, brk, fl): IfGluedFirstLineExceeds(n, bi, f(brk), f(fl));
 			case IfTrailingCommentOverflows(n, tw, code, brk, fl): IfTrailingCommentOverflows(n, tw, f(code), f(brk), f(fl));
-			case Concat(items): Concat([for (it in items) f(it)]);
-			case Fill(items, sep, tr): Fill([for (it in items) f(it)], f(sep), tr);
-			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([for (it in items) f(it)], f(sep), tr);
-			case FillBreakAfterWrap(items, sep, tr): FillBreakAfterWrap([for (it in items) f(it)], f(sep), tr);
+			case Concat(items): Concat([ for (it in items) f(it) ]);
+			case Fill(items, sep, tr): Fill([ for (it in items) f(it) ], f(sep), tr);
+			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([ for (it in items) f(it) ], f(sep), tr);
+			case FillBreakAfterWrap(items, sep, tr): FillBreakAfterWrap([ for (it in items) f(it) ], f(sep), tr);
 		};
 	}
 

@@ -161,7 +161,7 @@ final class Branches {
 				};
 			}
 		];
-		final counts: Array<Reading> = [for (name => value in readings) { name: name, value: value }];
+		final counts: Array<Reading> = [ for (name => value in readings) { name: name, value: value } ];
 		return BranchReportJsonWriter.write({
 			run: id,
 			started: started,
@@ -177,7 +177,7 @@ final class Branches {
 			run: parsed.run ?? '',
 			started: parsed.started,
 			steps: parsed.steps.map(stepOf),
-			readings: [for (reading in parsed.readings) reading.name => reading.value]
+			readings: [ for (reading in parsed.readings) reading.name => reading.value ]
 		};
 	}
 

@@ -1043,7 +1043,7 @@ final class ReconCommand implements CliCommand {
 			final hit: Null<ReconCluster> = clusters[wanted];
 			if (hit == null) {
 				CliIo.stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
-				final keyEntries: Array<{ key: String, count: Int }> = [for (k => v in clusters) { key: k, count: v.count }];
+				final keyEntries: Array<{ key: String, count: Int }> = [ for (k => v in clusters) { key: k, count: v.count } ];
 				keyEntries.sort((a, b) -> b.count - a.count);
 				final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
 				if (preview == 0) {
@@ -1057,7 +1057,7 @@ final class ReconCommand implements CliCommand {
 				return EXIT_RUNTIME;
 			}
 			filteredClusters = [wanted => hit];
-			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
+			filteredRecords = [ for (r in records) if (r.clusterKey == wanted) r ];
 		}
 		if (predictStrip)
 			return ReconPredict.runReconPredictStrip(
@@ -1070,7 +1070,7 @@ final class ReconCommand implements CliCommand {
 	}
 
 	private static function printReconHistogram(clusters: Map<String, ReconCluster>, total: Int, topN: Int): Int {
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [for (k => v in clusters) { key: k, cluster: v }];
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [ for (k => v in clusters) { key: k, cluster: v } ];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		final shown: Int = entries.length > topN ? topN : entries.length;
 		CliIo.sysPrint('\n');
@@ -1103,7 +1103,7 @@ final class ReconCommand implements CliCommand {
 	private static function printReconClusterDrill(
 		matches: Map<String, ReconCluster>, totalAcrossSweep: Int, needle: String, records: Array<ReconRecord>, showSource: Bool
 	): Int {
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [for (k => v in matches) { key: k, cluster: v }];
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [ for (k => v in matches) { key: k, cluster: v } ];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		var matched: Int = 0;
 		for (e in entries) matched += e.cluster.count;
@@ -1111,7 +1111,7 @@ final class ReconCommand implements CliCommand {
 		// O(1) per path even in clusters with hundreds of fixtures.
 		// Built once for the drill block regardless of `showSource`
 		// (cost is negligible vs the walk itself).
-		final byPath: Map<String, ReconRecord> = [for (r in records) r.path => r];
+		final byPath: Map<String, ReconRecord> = [ for (r in records) r.path => r ];
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint(
 			'--- cluster drill for "$needle" (${entries.length} cluster${CliIo.plural(entries.length)}, $matched of $totalAcrossSweep'

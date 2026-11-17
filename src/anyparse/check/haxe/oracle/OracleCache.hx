@@ -311,7 +311,7 @@ final class OracleCache {
 		final line: Null<String> = firstLineStartingWith(verboseStdout, 'Classpath:');
 		if (line == null) return [];
 		final payload: String = line.substr('Classpath:'.length);
-		return [for (entry in payload.split(';')) if (entry.trim() != '') entry.trim()];
+		return [ for (entry in payload.split(';')) if (entry.trim() != '') entry.trim() ];
 	}
 
 	/**
@@ -340,9 +340,9 @@ final class OracleCache {
 		#if (sys || nodejs)
 		if (parsed == null || parsed.length == 0) return false;
 		final read: Array<String> = parsed.map(path -> FileIdentity.canonical(root, path));
-		if ([for (path in read) if (!hashed.exists(path)) path].length == 0) return true;
-		final resolved: Map<String, String> = [for (path => hash in hashed) FileIdentity.canonical(root, path) => hash];
-		return [for (path in read) if (!resolved.exists(path)) path].length == 0;
+		if ([ for (path in read) if (!hashed.exists(path)) path ].length == 0) return true;
+		final resolved: Map<String, String> = [ for (path => hash in hashed) FileIdentity.canonical(root, path) => hash ];
+		return [ for (path in read) if (!resolved.exists(path)) path ].length == 0;
 		#else
 		return false;
 		#end
@@ -491,7 +491,7 @@ final class OracleCache {
 		mergeDir(files, root, false, memo, walks);
 		for (dir in chain.classPaths) mergeDir(files, dir, false, memo, walks);
 		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true, memo, walks);
-		final fileLines: Array<String> = [for (path => hash in files) '$path $hash'];
+		final fileLines: Array<String> = [ for (path => hash in files) '$path $hash' ];
 		fileLines.sort(Compare.compareString);
 		return [FORMAT_TAG, probe.defines, 'oracle-defines ${defines.join(' ')}'].concat(chain.lines).concat(fileLines);
 	}

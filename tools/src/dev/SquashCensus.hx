@@ -173,8 +173,8 @@ final class SquashCensus {
 	 */
 	public static function verdict(report: SquashReport, expected: Array<String>, label: String): SquashVerdict {
 		final moved: Array<String> = XconfigFmt.setMoves(expected, report.differs);
-		final grown: Array<String> = [for (move in moved) if (move.startsWith('+ ')) move.substr(2)];
-		final agree: Array<String> = [for (move in moved) if (move.startsWith('- ')) move.substr(2)];
+		final grown: Array<String> = [ for (move in moved) if (move.startsWith('+ ')) move.substr(2) ];
+		final agree: Array<String> = [ for (move in moved) if (move.startsWith('- ')) move.substr(2) ];
 		final unparsed: Int = report.rows.fold((row, n) -> n + row.unparsed, 0);
 		final why: Array<String> = [];
 		final detail: Array<String> = [];
@@ -199,7 +199,7 @@ final class SquashCensus {
 		final own: SquashVerdict = verdict(census(hxq, repo, GateTree.TREE_SCOPE, Path.join([scratch, 'repo'])), SQUASH_DIFFERS, 'squash');
 		if (fork == null || fork == '' || !FileSystem.exists(Path.join([fork, 'src']))) return own;
 		final corpus: SquashVerdict = verdict(census(hxq, fork, ['src'], Path.join([scratch, 'fork'])), FORK_DIFFERS, 'squash fork');
-		final failures: Array<String> = [for (v in [own, corpus]) if (v.failure != null) v.failure];
+		final failures: Array<String> = [ for (v in [own, corpus]) if (v.failure != null) v.failure ];
 		return { failure: failures.length == 0 ? null : failures.join('; '), detail: own.detail.concat(corpus.detail) };
 	}
 

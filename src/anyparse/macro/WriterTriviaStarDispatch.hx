@@ -578,7 +578,7 @@ final class WriterTriviaStarDispatch {
 				'@:fmt($meta) names its $width knob(s), optionally followed by a flag and the $width it switches to, got $knobs',
 				Context.currentPos()
 			);
-		final own: Array<Expr> = [for (i in 0...width) knobRead(knobs[i])];
+		final own: Array<Expr> = [ for (i in 0...width) knobRead(knobs[i]) ];
 		if (knobs.length == width) return own;
 		final flag: Expr = macro $p{['opt', knobs[width]]};
 		return [

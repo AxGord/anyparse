@@ -56,7 +56,7 @@ final class JsonProjection {
 
 	/** Parse `source` and project it. Throws the parser's `ParseError` on a document that does not parse. */
 	public static function parse(source: String): QueryNode {
-		return new QueryNode(DOCUMENT, null, [for (value in JsonQueryWalker.walk(source, false)) tight(value, source)]);
+		return new QueryNode(DOCUMENT, null, [ for (value in JsonQueryWalker.walk(source, false)) tight(value, source) ]);
 	}
 
 	/** `node`'s span; every projected node but the synthetic root carries one. */

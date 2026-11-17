@@ -256,7 +256,7 @@ class Codegen {
 	}
 
 	private static function buildSkipWsBody(patterns: Array<FormatReader.CommentPattern>): Expr {
-		final commentStmts: Array<Expr> = [for (p in patterns) commentSkipBlock(p)];
+		final commentStmts: Array<Expr> = [ for (p in patterns) commentSkipBlock(p) ];
 		// 0xFEFF is the UTF-8 BOM codepoint, treated as invisible
 		// horizontal whitespace anywhere in the input. Real-world editors
 		// emit it at the file head; tolerating it inline costs nothing.
@@ -302,7 +302,7 @@ class Codegen {
 	 * leading-of-next-thing — orphan trivia rather than data loss.
 	 */
 	private static function skipWsAndStashField(formatInfo: FormatReader.FormatInfo): Field {
-		final commentStmts: Array<Expr> = [for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p)];
+		final commentStmts: Array<Expr> = [ for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p) ];
 		final body: Expr = macro while (ctx.pos < ctx.input.length) {
 			final c: Int = ctx.input.charCodeAt(ctx.pos);
 			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == $v{BOM}) {
@@ -686,7 +686,7 @@ class Codegen {
 	 * handler.
 	 */
 	private static function collectTriviaField(formatInfo: FormatReader.FormatInfo): Field {
-		final commentStmts: Array<Expr> = [for (p in formatInfo.commentPatterns) commentCaptureBlock(p)];
+		final commentStmts: Array<Expr> = [ for (p in formatInfo.commentPatterns) commentCaptureBlock(p) ];
 		final body: Expr = macro {
 			var _blankBefore: Bool = false;
 			// ω-blank2: extra blank lines (beyond the first) preceding the
@@ -792,7 +792,7 @@ class Codegen {
 	 * leading capture. Returns the comment body (delimiters stripped) or `null`.
 	 */
 	private static function collectTrailingField(formatInfo: FormatReader.FormatInfo): Field {
-		final attempts: Array<Expr> = [for (p in formatInfo.commentPatterns) trailingAttemptBlock(p)];
+		final attempts: Array<Expr> = [ for (p in formatInfo.commentPatterns) trailingAttemptBlock(p) ];
 		final body: Expr = macro {
 			final _savedPos: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
@@ -1155,7 +1155,7 @@ class Codegen {
 	 * `collectTrailing` because their writer helpers deliberately normalise to line style.
 	 */
 	private static function collectTrailingFullField(formatInfo: FormatReader.FormatInfo): Field {
-		return trailingFullField('collectTrailingFull', [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, Refused)]);
+		return trailingFullField('collectTrailingFull', [ for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, Refused) ]);
 	}
 
 	/**
@@ -1168,7 +1168,7 @@ class Codegen {
 	private static function collectTrailingRunOnField(formatInfo: FormatReader.FormatInfo): Field {
 		return trailingFullField(
 			'collectTrailingRunOn',
-			[for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, EndingItsLine)]
+			[ for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, EndingItsLine) ]
 		);
 	}
 
@@ -1178,7 +1178,7 @@ class Codegen {
 	 * whatever follows its closer, since the delimiter leads no code a comment could lead instead.
 	 */
 	private static function collectTrailingAfterOpenField(formatInfo: FormatReader.FormatInfo): Field {
-		return trailingFullField('collectTrailingAfterOpen', [for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, Always)]);
+		return trailingFullField('collectTrailingAfterOpen', [ for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, Always) ]);
 	}
 
 	/**

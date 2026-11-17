@@ -166,7 +166,7 @@ final class EdgeConditions {
 			list.push(fact);
 			byParam[fact.param] = list;
 		}
-		return { mask: mask, params: [for (param => facts in byParam) { param: param, facts: facts }] };
+		return { mask: mask, params: [ for (param => facts in byParam) { param: param, facts: facts } ] };
 	}
 
 	/** What the conditions around the call site of `edge` fix there (cached per site). */

@@ -81,7 +81,7 @@ final class RegistryFragmentFollow {
 		if (before.length != 1 || after.length != 1) {
 			// A member that took its name in this rewrite (a rename whose registry record was renamed beside it) has no old
 			// side to align, and nothing to carry while every find still cuts it as written.
-			if (after.length == 1 && [for (i in 0...record.finds.length) applies(record, i, module, after[0], plugin)].foreach(a -> a))
+			if (after.length == 1 && [ for (i in 0...record.finds.length) applies(record, i, module, after[0], plugin) ].foreach(a -> a))
 				return;
 			notes.push('arm ${record.name}: "${record.type}#$member" is not one declaration on both sides of the rewrite — re-aim it');
 			return;
@@ -199,8 +199,8 @@ final class RegistryFragmentFollow {
 	private static function alignment(old: Array<String>, now: Array<String>): Null<Array<Int>> {
 		final script: Null<LineEdits> = LineDiff.edits(old, now, MAX_EDITS);
 		if (script == null) return null;
-		final inserted: Map<Int, Bool> = [for (i in script.inserted) i => true];
-		final deleted: Map<Int, Bool> = [for (d in script.deleted) d.line => true];
+		final inserted: Map<Int, Bool> = [ for (i in script.inserted) i => true ];
+		final deleted: Map<Int, Bool> = [ for (d in script.deleted) d.line => true ];
 		final map: Array<Int> = [];
 		var j: Int = 0;
 		for (i in 0...old.length) {

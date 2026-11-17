@@ -280,7 +280,7 @@ class EnumCtorRenameTest extends Test {
 	private static function refused(result: CrossRenameResult, reason: String): Void {
 		switch result {
 			case Ok(changes, _):
-				Assert.fail('expected a refusal naming "$reason", got Ok over ${[for (c in changes) c.file].join(', ')}');
+				Assert.fail('expected a refusal naming "$reason", got Ok over ${[ for (c in changes) c.file ].join(', ')}');
 			case Err(message):
 				Assert.isTrue(message.contains(reason), message);
 		}

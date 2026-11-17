@@ -311,7 +311,7 @@ class BuiltinFixClassCensusTest extends Test {
 
 	/** The ids of every builtin matching `predicate`, sorted — the census's declared column. */
 	private function idsImplementing(predicate: (Check) -> Bool): Array<String> {
-		final ids: Array<String> = [for (check in Linter.builtins()) if (predicate(check)) check.id()];
+		final ids: Array<String> = [ for (check in Linter.builtins()) if (predicate(check)) check.id() ];
 		ids.sort(Compare.compareString);
 		return ids;
 	}
@@ -353,7 +353,7 @@ class BuiltinFixClassCensusTest extends Test {
 
 	/** The members of `left` that `right` lacks, in `left`'s order. */
 	private static function difference(left: Array<String>, right: Array<String>): Array<String> {
-		return [for (name in left) if (!right.contains(name)) name];
+		return [ for (name in left) if (!right.contains(name)) name ];
 	}
 
 }

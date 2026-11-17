@@ -44,8 +44,8 @@ final class NullDereference extends RuleBase implements NoAutofix {
 		final shape: RefShape = plugin.refShape();
 		// Field-shaped receivers must be the node's sole child; index/call receivers
 		// are the first of several (index expression / call arguments follow).
-		final soleChildKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
-		final firstChildKinds: Array<String> = [for (k in [shape.indexAccessKind, shape.callKind]) if (k != null) k];
+		final soleChildKinds: Array<String> = [ for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k ];
+		final firstChildKinds: Array<String> = [ for (k in [shape.indexAccessKind, shape.callKind]) if (k != null) k ];
 		return soleChildKinds.length == 0 && firstChildKinds.length == 0
 			? []
 			: RunScan.collectWith(files, plugin, shape.identKind, (entry, tree, ident, violations) -> {

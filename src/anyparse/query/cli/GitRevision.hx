@@ -156,7 +156,7 @@ final class GitRevision {
 		final there: Array<String> = segments(FileIdentity.realPath(spec));
 		var common: Int = 0;
 		while (common < here.length && common < there.length && here[common] == there[common]) common++;
-		final parts: Array<String> = [for (_ in common ... here.length) '..'].concat(there.slice(common));
+		final parts: Array<String> = [ for (_ in common ... here.length) '..' ].concat(there.slice(common));
 		return parts.length == 0 ? '.' : parts.join('/');
 	}
 

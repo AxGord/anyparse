@@ -659,7 +659,7 @@ class PreferStaticExtensionFactsTest extends Test {
 		];
 		for (name => text in extra ?? []) written.push({ name: name, source: text });
 		final dir: String = CliFixture.writeTree('pse_facts', written);
-		final oracles: Array<OracleConfig> = [for (d in configurations) { hxml: 'build.hxml', dir: dir, defines: d }];
+		final oracles: Array<OracleConfig> = [ for (d in configurations) { hxml: 'build.hxml', dir: dir, defines: d } ];
 		if (!CompilerOracle.typecheck('build.hxml', dir).match(Confirmed)) {
 			CliFixture.removeDir(dir);
 			Assert.pass('haxe unavailable — skipped');
@@ -668,7 +668,7 @@ class PreferStaticExtensionFactsTest extends Test {
 		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
 		if (facts == null || facts.configurations.length != configurations.length) {
 			CliFixture.removeDir(dir);
-			Assert.fail('the fixture compiled but left no facts: ${[for (d in facts?.dropped ?? []) d.reason]}');
+			Assert.fail('the fixture compiled but left no facts: ${[ for (d in facts?.dropped ?? []) d.reason ]}');
 			return null;
 		}
 		final text: String = source ?? MAIN;

@@ -828,7 +828,7 @@ final class ParseDispatchLowering {
 	 */
 	private static function branchGuardExpr(first: BranchFirstToken, byteLocal: String, wordLocal: String): Null<Expr> {
 		return switch first {
-			case FirstKw(words): orChain([for (word in words) macro $i{wordLocal} == $v{word}]);
+			case FirstKw(words): orChain([ for (word in words) macro $i{wordLocal} == $v{word} ]);
 			case FirstLit(codes): orChain(byteSetTerms(byteLocal, codes));
 			case Unknown: null;
 		};
@@ -910,7 +910,7 @@ final class ParseDispatchLowering {
 			) if (loName == local && hiName == local):
 				final from: Null<Int> = Std.parseInt(lo);
 				final to: Null<Int> = Std.parseInt(hi);
-				from == null || to == null || to < from ? null : [for (c in from ... to + 1) c];
+				from == null || to == null || to < from ? null : [ for (c in from ... to + 1) c ];
 			case _: null;
 		};
 	}

@@ -34,7 +34,7 @@ class TransformCodegen {
 		defineVisitTypedef(visitTypePath, result.hooks);
 		final visitCT: ComplexType = pathToComplexType(visitTypePath);
 
-		final fields: Array<Field> = [for (fn in result.fns) transformField(fn, visitCT)];
+		final fields: Array<Field> = [ for (fn in result.fns) transformField(fn, visitCT) ];
 		fields.push(publicTransformField(result, visitCT));
 		return fields;
 	}

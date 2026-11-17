@@ -1369,7 +1369,7 @@ final class RefShapeKindProjectionTest extends Test {
 				final value: Any = fieldOf(shape, field);
 				if (!Std.isOfType(value, StringMap)) continue;
 				maps++;
-				final keys: Array<String> = [for (key in (cast value: StringMap<Any>).keys()) key];
+				final keys: Array<String> = [ for (key in (cast value: StringMap<Any>).keys()) key ];
 				final hits: Int = keys.filter(key -> projected.contains(key)).length;
 				if (hits != 0 && hits != keys.length) mixed.push('$field ($hits of ${keys.length} keys projected)');
 			}

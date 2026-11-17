@@ -80,7 +80,7 @@ final class DeclarationLines {
 			offset += line.length + 1;
 		}
 		final comment: Array<Bool> = commentLines(plugin.lexicalRegions(source), text, starts, index);
-		final owner: Array<Int> = [for (_ in text) -1];
+		final owner: Array<Int> = [ for (_ in text) -1 ];
 		for (i => unit in units) for (line in unit.first ... unit.last + 1) if (owner[line] == unit.parent) owner[line] = i;
 		// a line above a declaration that nothing else holds is the declaration's while it is a blank, a comment or an
 		// annotation; a line of code punctuation — a closing brace — ends the run
@@ -92,7 +92,7 @@ final class DeclarationLines {
 				line--;
 			}
 		}
-		final owned: Array<Array<String>> = [for (_ in units) []];
+		final owned: Array<Array<String>> = [ for (_ in units) [] ];
 		final rest: Array<String> = [];
 		for (line => holder in owner)
 			if (holder < 0)
@@ -127,7 +127,7 @@ final class DeclarationLines {
 	private static function commentLines(
 		regions: Array<LexRegion>, text: Array<String>, starts: Array<Int>, index: LineIndex
 	): Array<Bool> {
-		final out: Array<Bool> = [for (_ in text) false];
+		final out: Array<Bool> = [ for (_ in text) false ];
 		for (region in regions) if (region.kind == LexRegionKind.LineComment || region.kind == LexRegionKind.BlockComment) {
 			final last: Int = index.lineColAt(region.to > region.from ? region.to - 1 : region.from).line - 1;
 			for (line in index.lineColAt(region.from).line - 1...last + 1) {

@@ -225,7 +225,7 @@ final class MutationArmTest extends Test {
 			FileSystem.createDirectory(Path.join([repo, 'test/testkit/arms']));
 			// the `hxq` a run starts out of the repo it cuts: the engine the run pins
 			File.saveContent(Path.join([repo, 'bin/hxq']), 'cmd=$$1; shift; exec node "$$HXQ_BIN" "$$cmd" --lang-default haxe "$$@"\n');
-			final body: String = [for (i in 0...200) '\t\tfinal s$i:String = "{";'].join('\n');
+			final body: String = [ for (i in 0...200) '\t\tfinal s$i:String = "{";' ].join('\n');
 			File.saveContent(
 				Path.join([repo, 'src/a/B.hx']),
 				'package a;\n\nclass B {\n\n\tpublic static function f():Int {\n$body\n\t\treturn 1;\n\t}\n\n}\n'

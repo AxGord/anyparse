@@ -357,7 +357,7 @@ final class WriterCtorPatternLowering {
 		return if (arity == 0) {
 			ctorRef;
 		} else {
-			final args: Array<Expr> = [for (_ in 0...arity) macro _];
+			final args: Array<Expr> = [ for (_ in 0...arity) macro _ ];
 			{ expr: ECall(ctorRef, args), pos: Context.currentPos() };
 		};
 	}
@@ -403,7 +403,7 @@ final class WriterCtorPatternLowering {
 			return if (arity == 0) {
 				ctorRef;
 			} else {
-				final args: Array<Expr> = [for (_ in 0...arity) macro _];
+				final args: Array<Expr> = [ for (_ in 0...arity) macro _ ];
 				{ expr: ECall(ctorRef, args), pos: Context.currentPos() };
 			};
 		}

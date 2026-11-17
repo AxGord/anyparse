@@ -116,7 +116,7 @@ final class ValueCarriers {
 		if (escaped == null) return null;
 		final out: Array<String> = declared.copy();
 		// a set beside the list: `out.contains` made this quadratic in the escaped types (44 of the client's 533 `--fix` seconds)
-		final seen: Map<String, Bool> = [for (t in out) t => true];
+		final seen: Map<String, Bool> = [ for (t in out) t => true ];
 		for (t in escaped) if (!seen.exists(t)) {
 			seen[t] = true;
 			out.push(t);
@@ -168,7 +168,7 @@ final class ValueCarriers {
 		);
 		if (nominal == null) return false;
 		final names: Array<String> =
-			[for (t in (_scope.shape.literalTypeNames ?? []).iterator()) t].concat(_scope.shape.nonNullableTypeNames ?? []);
+			[ for (t in (_scope.shape.literalTypeNames ?? []).iterator()) t ].concat(_scope.shape.nonNullableTypeNames ?? []);
 		return names.contains(nominal);
 	}
 

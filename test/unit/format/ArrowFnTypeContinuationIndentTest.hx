@@ -141,7 +141,7 @@ final class ArrowFnTypeContinuationIndentTest extends Test {
 	/** The wrapped line must start with `$head` and its continuation sit at `$tabs` tabs. */
 	private function assertContinues(src: String, head: String, tabs: Int, plain: Bool = false): Void {
 		final out: String = plain ? writePlain(src) : write(src);
-		final indent: String = [for (_ in 0...tabs) '\t'].join('');
+		final indent: String = [ for (_ in 0...tabs) '\t' ].join('');
 		Assert.isTrue(out.indexOf('$head\n$indent$REST') != -1, 'continuation must sit at $tabs tab(s): <$out>');
 	}
 

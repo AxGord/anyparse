@@ -334,7 +334,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 			final matrixComputeExpr: Expr = _plan.arrayMatrixWrap()
 				? macro {
 					if (opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap && !_requiresHardline) {
-						final _rowStart: Array<Bool> = [for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore];
+						final _rowStart: Array<Bool> = [ for (_mi in 0..._arr.length) _mi == 0 || _arr[_mi].newlineBefore ];
 						final _mcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 						final _grid: Null<anyparse.core.Doc> = anyparse.format.wrap.MatrixWrap.tryLayout(
 							_docs, _rowStart, opt.arrayMatrixWrap, $v{_openText}, $v{_closeText}, $v{_sepText},
@@ -407,7 +407,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 				}
 
 				// ω-comprehension-fitline: a for/while comprehension under
-				// comprehensionFor:fitLine (padded brackets) is fit-driven. Use the fit
+				// `opt.comprehensionFit` (absent: padded brackets, the comprehensionFor:fitLine coupling) is fit-driven. Use the fit
 				// cascade instead of the generic arrayWrap fixed thresholds (which break the
 				// sole for-expr item past ~80 chars regardless of maxLineLength), AND drop
 				// source-multiline-keep so an already-wrapped but fitting comprehension
@@ -425,7 +425,8 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 				final _isComprehension: Bool = $v{_plan.reflowSourceMultiline()}
 					&& _arr.length > 0
 					&& anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_arr[0]);
-				final _comprehensionFit: Bool = _isComprehension && opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After;
+				final _comprehensionFit: Bool = _isComprehension
+					&& (opt.comprehensionFit ?? (opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After));
 				final _effRules: anyparse.format.wrap.WrapRules = _comprehensionFit
 					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
 					: $rulesExpr;
@@ -459,6 +460,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 
 						flatTrailingComma: ${_trail.flatTrailingCommaExpr},
 						comprehensionFitMeasure: _comprehensionFit,
+						comprehensionBlockHug: opt.comprehensionFit,
 						comprehensionBodyMeasure: _isComprehension,
 						complexItemKinds: _complexKinds,
 						containerItemKinds: _containerKinds,

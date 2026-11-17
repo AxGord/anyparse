@@ -222,7 +222,7 @@ final class CodeGraph {
 
 	/** Every node, ordered by id. */
 	public function nodes(): Array<GraphNode> {
-		final all: Array<GraphNode> = [for (n in _nodes) n];
+		final all: Array<GraphNode> = [ for (n in _nodes) n ];
 		all.sort((a, b) -> Compare.compareString(a.id, b.id));
 		return all;
 	}
@@ -247,7 +247,7 @@ final class CodeGraph {
 
 	/** Every edge, ordered by source, then target, then kind. */
 	public function edges(): Array<GraphEdge> {
-		final all: Array<GraphEdge> = [for (e in _edges) e];
+		final all: Array<GraphEdge> = [ for (e in _edges) e ];
 		all.sort((a, b) ->
 			if (a.from != b.from)
 				Compare.compareString(a.from, b.from)

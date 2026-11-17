@@ -93,7 +93,7 @@ final class CallGraphTypes {
 		_fieldKinds = shape.fieldDeclKinds ?? [];
 		_functionKinds = shape.functionKinds ?? [];
 		_interfaceKinds = shape.interfaceDeclKinds ?? [];
-		_valueTypeNames = [for (t in (shape.literalTypeNames ?? []).iterator()) t]
+		_valueTypeNames = [ for (t in (shape.literalTypeNames ?? []).iterator()) t ]
 			.concat(shape.nonNullableTypeNames ?? [])
 			.concat(shape.arrayTypeNames ?? []);
 		_aliasingKinds = shape.aliasingDeclKinds ?? [];
@@ -345,7 +345,7 @@ final class CallGraphTypes {
 			signatures: [],
 			typeSource: agreed(a.typeSource, b.typeSource),
 			firstParamTypeSource: agreed(a.firstParamTypeSource, b.firstParamTypeSource),
-			paramTypeSources: [for (i in 0...arity) agreed(paramAt(a, i), paramAt(b, i))],
+			paramTypeSources: [ for (i in 0...arity) agreed(paramAt(a, i), paramAt(b, i)) ],
 			// two parameter lists that skip or rest differently bind a call differently: none is skipped by position
 			paramSkippableFrom: a.paramRest == b.paramRest ? Std.int(Math.min(a.paramSkippableFrom, b.paramSkippableFrom)) : 0,
 			paramRest: a.paramRest && b.paramRest,
@@ -391,7 +391,7 @@ final class CallGraphTypes {
 
 	/** Every entry of `a`, then each of `b` it lacks. */
 	private static function union(a: Array<String>, b: Array<String>): Array<String> {
-		return a.concat([for (x in b) if (!a.contains(x)) x]);
+		return a.concat([ for (x in b) if (!a.contains(x)) x ]);
 	}
 
 }

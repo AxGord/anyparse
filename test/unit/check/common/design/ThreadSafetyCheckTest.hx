@@ -104,7 +104,7 @@ class ThreadSafetyCheckTest extends Test {
 				'class A { private final _m:Mut; function work():Void { _m.lock(); File.saveContent(1, 2); _m.unlock(); } }',
 				'class Mut { public function lock():Void {} public function unlock():Void {} }'
 			]);
-		final held: Array<Violation> = [for (v in vs) if (v.message.indexOf('holds') != -1) v];
+		final held: Array<Violation> = [ for (v in vs) if (v.message.indexOf('holds') != -1) v ];
 		Assert.equals(1, held.length);
 		Assert.isTrue(held[0].message.indexOf('A._m') != -1);
 		Assert.isTrue(held[0].message.indexOf('File.saveContent') != -1);
@@ -120,7 +120,7 @@ class ThreadSafetyCheckTest extends Test {
 				'class A { private final _m:Mut; function work():Void { _m.lock(); _m.unlock(); File.saveContent(1, 2); } }',
 				'class Mut { public function lock():Void {} public function unlock():Void {} }'
 			]);
-		Assert.equals(0, [for (v in vs) if (v.message.indexOf('holds') != -1) v].length);
+		Assert.equals(0, [ for (v in vs) if (v.message.indexOf('holds') != -1) v ].length);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -162,9 +162,9 @@ class ThreadSafetyCheckTest extends Test {
 			'class A { private final _a:Mut; private final _b:Mut; $nested function s():Void { _b.lock(); Sys.sleep(1); _b.unlock(); } }',
 			mut
 		]);
-		Assert.equals(1, [for (v in long) if (v.message.indexOf('"A.w" holds') != -1) v].length);
+		Assert.equals(1, [ for (v in long) if (v.message.indexOf('"A.w" holds') != -1) v ].length);
 		final short: Array<Violation> = violations(config, ['class A { private final _a:Mut; private final _b:Mut; $nested }', mut]);
-		Assert.equals(0, [for (v in short) if (v.message.indexOf('holds') != -1) v].length);
+		Assert.equals(0, [ for (v in short) if (v.message.indexOf('holds') != -1) v ].length);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -966,8 +966,8 @@ class ThreadSafetyCheckTest extends Test {
 					+ ' public static function main():Void { Ui.on(shutdown); Ui.on(peek); } }'
 				]
 			);
-		Assert.same([], [for (v in fixture('')) if (v.data?.family == 'B') v.message]);
-		Assert.same(['A.flush'], [for (v in fixture('flush();')) if (v.data?.family == 'B') v.data?.member], 'a loud path runs it too');
+		Assert.same([], [ for (v in fixture('')) if (v.data?.family == 'B') v.message ]);
+		Assert.same(['A.flush'], [ for (v in fixture('flush();')) if (v.data?.family == 'B') v.data?.member ], 'a loud path runs it too');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -1108,7 +1108,7 @@ class ThreadSafetyCheckTest extends Test {
 	@:killer('M-TS-EVIDENCE-UNCAPPED')
 	public function testAHoldIsOneFindingListingItsBlockingCalls(): Void {
 		#if (sys || nodejs)
-		final names: Array<String> = [for (i in 0...9) 'f$i'];
+		final names: Array<String> = [ for (i in 0...9) 'f$i' ];
 		Assert.same(
 			[
 				'"A.main" holds "A.m" across 11 calls that can block: Sys.sleep; '

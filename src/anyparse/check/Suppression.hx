@@ -57,7 +57,7 @@ final class Suppression {
 	public static function silencer(
 		files: Array<{ file: String, source: String }>, lexicalRegions: (String) -> Array<LexRegion>
 	): (Violation) -> Bool {
-		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
+		final sourceByFile: Map<String, String> = [ for (f in files) f.file => f.source ];
 		// Scanned LAZILY, per file that actually carries a finding. `Linter.collect` applies
 		// this gate once PER CHECK, and the fix paths hand it the whole tree — scanning every
 		// source's comments up front there costs one full-tree comment pass per risky rule.

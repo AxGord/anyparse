@@ -20,7 +20,7 @@ final class RunTestsPipeTest extends Test {
 	public function testAPipedTranscriptOutlivesTheExitThatEndsIt(): Void {
 		TempDir.with(dir -> {
 			final input: String = dir.file('transcript');
-			final text: String = [for (i in 0...20000) 'line $i of a transcript longer than any pipe buffer'].join('\n');
+			final text: String = [ for (i in 0...20000) 'line $i of a transcript longer than any pipe buffer' ].join('\n');
 			File.saveContent(input, text);
 			// the process driver reads the child over a pipe, which a transcript longer than the pipe's buffer must outlive
 			final ran: Result = Command.of([js.Node.process.execPath, js.Node.__filename])

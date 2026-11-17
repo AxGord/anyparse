@@ -695,7 +695,7 @@ final class WriterCascadeLowering {
 						Context.currentPos()
 					);
 				matched.push(ctorName);
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				final binders: Array<Expr> = [ for (i in 0...arity) i == 0 ? macro _v0 : macro _ ];
 				patterns.push({ pattern: { expr: ECall(ctorIdent, binders), pos: pos }, isMatch: true, isTransparent: false });
 			} else if (isTransparent) {
 				if (arity < 1)
@@ -705,10 +705,10 @@ final class WriterCascadeLowering {
 						Context.currentPos()
 					);
 				transparentMatched.push(ctorName);
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				final binders: Array<Expr> = [ for (i in 0...arity) i == 0 ? macro _v0 : macro _ ];
 				patterns.push({ pattern: { expr: ECall(ctorIdent, binders), pos: pos }, isMatch: false, isTransparent: true });
 			} else {
-				final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos };
+				final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [ for (_ in 0...arity) macro _ ]), pos: pos };
 				patterns.push({ pattern: pattern, isMatch: false, isTransparent: false });
 			}
 		}
@@ -746,7 +746,7 @@ final class WriterCascadeLowering {
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
 			return arity == 0
 				? ctorIdent
-				: { expr: ECall(ctorIdent, [for (i in 0...arity) bindInner && i == 0 ? macro _inner : macro _]), pos: pos };
+				: { expr: ECall(ctorIdent, [ for (i in 0...arity) bindInner && i == 0 ? macro _inner : macro _ ]), pos: pos };
 		}
 		// Nested classify cases for the look-through switch. The look-through
 		// is deliberately FUNCTION-ONLY: an inner `fnCtor` member yields kind
@@ -856,7 +856,7 @@ final class WriterCascadeLowering {
 	 */
 	private static function transitionPattern(ctorIdent: Expr, arity: Int, bindFirst: Bool, pos: Position): Expr {
 		if (arity == 0) return ctorIdent;
-		final binders: Array<Expr> = [for (i in 0...arity) bindFirst && i == 0 ? macro _v0 : macro _];
+		final binders: Array<Expr> = [ for (i in 0...arity) bindFirst && i == 0 ? macro _v0 : macro _ ];
 		return { expr: ECall(ctorIdent, binders), pos: pos };
 	}
 

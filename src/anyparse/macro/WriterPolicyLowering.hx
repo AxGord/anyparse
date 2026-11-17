@@ -516,7 +516,7 @@ final class WriterPolicyLowering {
 		if (names == null || names.length == 0) return null;
 		if (argNames.length == 0) return null;
 		final operandAccess: Expr = macro $i{argNames[0]};
-		final ctorEquals: Array<Expr> = [for (n in names) macro _ctor == $v{n}];
+		final ctorEquals: Array<Expr> = [ for (n in names) macro _ctor == $v{n} ];
 		var matchExpr: Expr = ctorEquals[0];
 		for (i in 1...ctorEquals.length) {
 			final next: Expr = ctorEquals[i];
@@ -528,7 +528,7 @@ final class WriterPolicyLowering {
 		final descend: Expr = leftOperandCtors.length == 0
 			? macro false
 			: {
-				expr: ESwitch(macro _c, [{ values: [for (n in leftOperandCtors) macro $v{n}], expr: macro true }], macro false),
+				expr: ESwitch(macro _c, [{ values: [ for (n in leftOperandCtors) macro $v{n} ], expr: macro true }], macro false),
 				pos: Context.currentPos()
 			};
 		return macro {

@@ -299,7 +299,7 @@ class ShardPlanTest extends Test {
 		Assert.equals('0,1,2', heavy.map(r -> r.part).join(','));
 		for (r in rows) if (r.cls != 'unit.HeavyTest') Assert.equals(1, r.parts);
 		// each slice weighs a third of the class: weighed whole, the three would leave every light class to shard 0
-		Assert.isTrue(distinct([for (r in rows) if (r.cls.indexOf('unit.Gen') == 0) '${r.shard}']).length > 1);
+		Assert.isTrue(distinct([ for (r in rows) if (r.cls.indexOf('unit.Gen') == 0) '${r.shard}' ]).length > 1);
 		Assert.stringContains('unit.HeavyTest#1/3', ShardPlan.renderLines(rows));
 		Assert.stringContains('unit.HeavyTest#2/3', ShardPlan.renderFilters(rows, 4));
 	}
@@ -325,7 +325,7 @@ class ShardPlanTest extends Test {
 	@:killer('M-SHARD-SPLIT-STICKY')
 	public function testAPinnedClassIsNeverSliced(): Void {
 		final listed: Array<String> = ShardPlan.STICKY_CLASSES.concat(generated(12).map(n -> 'unit.$n'));
-		final measured: Map<String, ClassWeight> = [for (s in ShardPlan.STICKY_CLASSES) s => { ms: 9000, tests: 20 }];
+		final measured: Map<String, ClassWeight> = [ for (s in ShardPlan.STICKY_CLASSES) s => { ms: 9000, tests: 20 } ];
 		final rows: Array<ShardPlacement> = unwrap(ShardPlan.planClasses(listed, 4, 'a list', measured));
 		for (s in ShardPlan.STICKY_CLASSES) Assert.equals(1, rows.filter(r -> r.cls == s).length);
 	}
@@ -494,7 +494,7 @@ class ShardPlanTest extends Test {
 
 	/** `Gen00Test` … — same length, so none is a substring of another. */
 	private function generated(count: Int): Array<String> {
-		return [for (i in 0...count) 'Gen${i < 10 ? '0$i' : '$i'}Test'];
+		return [ for (i in 0...count) 'Gen${i < 10 ? '0$i' : '$i'}Test' ];
 	}
 
 	private function names(placements: Array<ShardPlacement>): Array<String> {
@@ -502,7 +502,7 @@ class ShardPlanTest extends Test {
 	}
 
 	private function counts(placements: Array<ShardPlacement>, shards: Int): Array<Int> {
-		return [for (s in 0...shards) placements.count(p -> p.shard == s)];
+		return [ for (s in 0...shards) placements.count(p -> p.shard == s) ];
 	}
 
 	private function distinct(input: Array<String>): Array<String> {

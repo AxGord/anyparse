@@ -132,7 +132,7 @@ final class EnumCtorRefs {
 		final froms: Array<Int> = edits.map(e -> e.span.from);
 		froms.sort((a, b) -> a - b);
 		final delta: Int = newName.length - (edits[0].span.to - edits[0].span.from);
-		final moved: Array<Int> = [for (i => from in froms) from + i * delta];
+		final moved: Array<Int> = [ for (i => from in froms) from + i * delta ];
 		final hit: Null<RefHit> = Refs.find(newName, newTree, refShape)
 			.find(h -> isBoundRead(h) && moved.exists(m -> m >= h.span.from && m < h.span.to));
 		if (hit == null) return null;
@@ -232,8 +232,8 @@ final class EnumCtorRefs {
 	private static function bareSpellings(entry: ParsedFile, ctor: String, refShape: RefShape): Array<{ offset: Int, host: Null<String> }> {
 		final out: Array<{ offset: Int, host: Null<String> }> = [];
 		if (SourceText.identTokenOffset(entry.source, new Span(0, entry.source.length), ctor) < 0) return out;
-		final bound: Array<Int> = [for (h in Refs.find(ctor, entry.tree, refShape)) if (isBoundRead(h)) h.span.from];
-		final identKinds: Array<String> = [for (k in [refShape.identKind, refShape.stringInterpIdentKind]) if (k != null) k];
+		final bound: Array<Int> = [ for (h in Refs.find(ctor, entry.tree, refShape)) if (isBoundRead(h)) h.span.from ];
+		final identKinds: Array<String> = [ for (k in [refShape.identKind, refShape.stringInterpIdentKind]) if (k != null) k ];
 		function walk(node: QueryNode, host: Null<String>): Void {
 			final owner: Null<String> = RefactorSupport.typeDeclOf(node)?.name ?? host;
 			final span: Null<Span> = node.span;

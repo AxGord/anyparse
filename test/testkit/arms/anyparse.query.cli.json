@@ -346,8 +346,8 @@
 			"name": "M-WRITE-VERIFY-RED-BEFORE-JUDGES",
 			"type": "anyparse.query.cli.WriteVerification",
 			"method": "putBackIfBroken",
-			"find": "if (confirmed(before[k])) r]",
-			"replace": "r]",
+			"find": "if (confirmed(before[k])) r ]",
+			"replace": "r ]",
 			"note": "a build red before the write counts as broken by it, so a write into a project that never compiled is always put back"
 		},
 		{

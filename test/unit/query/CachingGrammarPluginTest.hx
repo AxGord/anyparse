@@ -274,7 +274,7 @@ class CachingGrammarPluginTest extends Test {
 
 	/** Every entry of a map as one sorted string - two maps hold the same entries iff these match. */
 	private static function mapDigest<K, V>(map: Map<K, V>): String {
-		final rows: Array<String> = [for (k => v in map) '$k=$v'];
+		final rows: Array<String> = [ for (k => v in map) '$k=$v' ];
 		rows.sort(Reflect.compare);
 		return rows.join(';');
 	}

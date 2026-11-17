@@ -108,14 +108,14 @@ class FmtFlagOwnershipTest extends Test {
 			return;
 		}
 		final recorded: Map<String, Array<String>> = readRecord(path);
-		final modules: Array<String> = [for (module in named.keys()) module];
+		final modules: Array<String> = [ for (module in named.keys()) module ];
 		for (module in recorded.keys()) Groups.pushUnique(modules, module);
 		modules.sort(Compare.compareString);
 		for (module in modules) {
 			final actual: Array<String> = named[module] ?? [];
 			final expected: Array<String> = recorded[module] ?? [];
-			final added: Array<String> = [for (flag in actual) if (!expected.contains(flag)) flag];
-			final lost: Array<String> = [for (flag in expected) if (!actual.contains(flag)) flag];
+			final added: Array<String> = [ for (flag in actual) if (!expected.contains(flag)) flag ];
+			final lost: Array<String> = [ for (flag in expected) if (!actual.contains(flag)) flag ];
 			Assert.isTrue(
 				added.length == 0 && lost.length == 0,
 				'$MACRO_DIR/$module.hx: names [${added.join(', ')}] that $RECORD_FILE lacks, '
@@ -241,7 +241,7 @@ class FmtFlagOwnershipTest extends Test {
 	}
 
 	private static function renderRecord(named: Map<String, Array<String>>): String {
-		final modules: Array<String> = [for (module in named.keys()) module];
+		final modules: Array<String> = [ for (module in named.keys()) module ];
 		modules.sort(Compare.compareString);
 		final blocks: Array<String> = [];
 		for (module in modules) {

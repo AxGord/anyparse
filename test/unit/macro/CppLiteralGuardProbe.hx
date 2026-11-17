@@ -52,7 +52,7 @@ final class CppLiteralGuardProbe {
 				}
 		];
 		final printer: Printer = new Printer();
-		final text: String = [for (field in fields) printer.printField(field)].join('\n');
+		final text: String = [ for (field in fields) printer.printField(field) ].join('\n');
 		return macro { text: $v{text}, stranded: $v{stranded} };
 	}
 

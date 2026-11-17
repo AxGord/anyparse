@@ -39,7 +39,7 @@ class CallGraphFormatCliTest extends Test {
 				Cli.run(['reach', '--from', 'Alpha.run', '--to', 'Gamma.tick', root, '--format', 'json'])
 			);
 			final doc: CodeGraphJson = CodeGraphJsonParser.parse(out);
-			Assert.equals('pkg.a.Alpha.run,pkg.b.Gamma.tick', [for (n in doc.nodes) if (n.focus) n.name].join(','));
+			Assert.equals('pkg.a.Alpha.run,pkg.b.Gamma.tick', [ for (n in doc.nodes) if (n.focus) n.name ].join(','));
 			Assert.equals(2, doc.edges.length);
 		});
 		#else

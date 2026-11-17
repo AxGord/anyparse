@@ -191,7 +191,7 @@ final class PreferFinalPublicField extends RuleBase implements RiskyFix implemen
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return CtorFieldFold.finalizeFieldEdits(source, [for (v in violations) if (v.declineReason == null) v.span], plugin);
+		return CtorFieldFold.finalizeFieldEdits(source, [ for (v in violations) if (v.declineReason == null) v.span ], plugin);
 	}
 
 	/** The finding's message for the arm that proved the public field `name` single-assignment. */

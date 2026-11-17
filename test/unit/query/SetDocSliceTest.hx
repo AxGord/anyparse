@@ -159,7 +159,7 @@ class SetDocSliceTest extends Test {
 		// Locate the declaration structurally — `reformat` reflows lines both
 		// before AND after the target, so a line-delta formula lands elsewhere.
 		final lines: Array<String> = once.split('\n');
-		final fnLine: Int = [for (i in 0...lines.length) if (lines[i].contains('function f')) i + 1][0];
+		final fnLine: Int = [ for (i in 0...lines.length) if (lines[i].contains('function f')) i + 1 ][0];
 		final res: EditResult = SetDoc.setDoc(once, fnLine, 2, 'Returns one.', true, new HaxeQueryPlugin());
 		Assert.isTrue(errMessage(res).contains('no change'));
 	}

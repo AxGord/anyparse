@@ -84,7 +84,7 @@ class TriviaAnalysis {
 		// Multiple Stars on the same branch would need a named-arg form
 		// (`@:trivia(stmts)`), which no current grammar requires.
 		if (node.kind == Seq && hasTrivia(node.annotations[AnnotationKeys.BASE_META])) {
-			final stars: Array<ShapeNode> = [for (c in node.children) if (c.kind == Star) c];
+			final stars: Array<ShapeNode> = [ for (c in node.children) if (c.kind == Star) c ];
 			if (stars.length == 1) stars[0].annotations.set(AnnotationKeys.TRIVIA_STAR_COLLECTS, true);
 		}
 		for (child in node.children) markStarsWithTrivia(child);

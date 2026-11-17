@@ -1134,7 +1134,7 @@ class UnusedPrivateCheckTest extends Test {
 
 	/** The private-constructor findings of a run over `files`. */
 	private function ctorFindings(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return [for (v in violations(files)) if (v.message.contains('constructor')) v];
+		return [ for (v in violations(files)) if (v.message.contains('constructor')) v ];
 	}
 
 }

@@ -131,7 +131,7 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 			final calls: Array<String> = config.stringListOption(RULE_ID, 'ignoreCallArguments') ?? [];
 			final exempt: MagicNumberExempt = {
 				values: base.concat(ignore),
-				calls: [for (c in calls) if (c != '') c.split('.')],
+				calls: [ for (c in calls) if (c != '') c.split('.') ],
 				tables: config.boolOption(RULE_ID, 'literalTables') ?? false,
 				source: entry.source
 			};

@@ -151,7 +151,7 @@ final class ParseDiskCache {
 		final nameIndex: Int = ints[at + NAME];
 		final spanFrom: Int = ints[at + SPAN_FROM];
 		final targetIndex: Int = ints[at + TARGET];
-		final children: Array<QueryNode> = [for (_ in 0...ints[at + CHILD_COUNT]) readNode(from, cursor)];
+		final children: Array<QueryNode> = [ for (_ in 0...ints[at + CHILD_COUNT]) readNode(from, cursor) ];
 		final type: Null<QueryNode> = ints[at + HAS_TYPE] == 1 ? readNode(from, cursor) : null;
 		return new QueryNode(
 			from.strings[ints[at + KIND]], nameIndex < 0 ? null : from.strings[nameIndex], children,

@@ -39,7 +39,7 @@ final class LiteralTables {
 			support: support,
 			arrayLiteralKind: shape.arrayLiteralKind ?? '',
 			mapEntryKind: shape.mapLiteralEntryKind ?? '',
-			literalKinds: literals == null ? [] : [for (kind in literals.keys()) kind],
+			literalKinds: literals == null ? [] : [ for (kind in literals.keys()) kind ],
 			negationKind: shape.negationKind ?? '',
 			numericKinds: shape.numericLiteralKinds ?? [],
 			switchKinds: shape.switchKinds ?? [],

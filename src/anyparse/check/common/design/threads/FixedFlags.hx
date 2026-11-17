@@ -24,7 +24,7 @@ final class FixedFlags {
 		if (params.length == 0) return [];
 		final tests: Map<String, Int> = [];
 		scan(fn, ifKinds, params, tests, shape);
-		final out: Array<String> = [for (p in params) if ((tests[p] ?? 0) >= 2) p];
+		final out: Array<String> = [ for (p in params) if ((tests[p] ?? 0) >= 2) p ];
 		return out.slice(0, MAX_FLAGS);
 	}
 

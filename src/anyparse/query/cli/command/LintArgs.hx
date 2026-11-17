@@ -59,7 +59,7 @@ final class LintArgs {
 	 */
 	public static function partitionChecks(checks: Array<Check>, oracleConfigured: Bool): CheckPartition {
 		final relaxableNoOracle: (Check) -> Bool = c -> !oracleConfigured && c is OracleRelaxable;
-		final safeChecks: Array<Check> = [for (c in checks) if (!(c is RiskyFix) || relaxableNoOracle(c)) c];
+		final safeChecks: Array<Check> = [ for (c in checks) if (!(c is RiskyFix) || relaxableNoOracle(c)) c ];
 		final fullScopeIds: Array<String> = [
 			'unused-private',
 			'prefer-final-field',
@@ -176,8 +176,8 @@ final class LintArgs {
 				for (c in checks) if ((c is RiskyFix && !relaxableNoOracle(c)) || (oracleConfigured && c is RiskyArm)) c
 			],
 			safe: safeChecks,
-			activeScope: [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c],
-			fullScope: [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c]
+			activeScope: [ for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c ],
+			fullScope: [ for (c in safeChecks) if (fullScopeIds.contains(c.id())) c ]
 		};
 	}
 

@@ -176,7 +176,7 @@ class AstPredLowering {
 
 	/** One switch Case matching each of `ctors` (all-wildcard patterns) with a shared body. */
 	private function caseOf(rule: String, ctors: Array<String>, body: Expr): Case {
-		return { values: [for (c in ctors) pat(rule, c)], expr: body, guard: null };
+		return { values: [ for (c in ctors) pat(rule, c) ], expr: body, guard: null };
 	}
 
 	/** One switch Case matching a single ctor with operand bindings. */
@@ -191,7 +191,7 @@ class AstPredLowering {
 	 * the same type across all `ctors`).
 	 */
 	private function caseBindMulti(rule: String, ctors: Array<String>, binds: Map<Int, String>, body: Expr): Case {
-		return { values: [for (c in ctors) pat(rule, c, binds)], expr: body, guard: null };
+		return { values: [ for (c in ctors) pat(rule, c, binds) ], expr: body, guard: null };
 	}
 
 	/** `switch (<subject>) { <cases…>; case _: <dflt>; }` over a non-null enum value. */

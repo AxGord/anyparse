@@ -70,7 +70,7 @@ class GraphJsonTest extends Test {
 		final text: String = GraphJson.write(graph);
 		Assert.equals(2, text.split('"mutual":true').length - 1);
 		Assert.equals(-1, text.indexOf('"mutual":false'));
-		Assert.equals('true,true,null', [for (e in CodeGraphJsonParser.parse(text).edges) '${e.mutual}'].join(','));
+		Assert.equals('true,true,null', [ for (e in CodeGraphJsonParser.parse(text).edges) '${e.mutual}' ].join(','));
 	}
 
 }

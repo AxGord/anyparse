@@ -43,7 +43,7 @@ final class WriteJournal {
 
 	/** Every recorded path whose text now differs from what it held before the run. */
 	public function changed(): Array<String> {
-		return [for (entry in _entries) if (read(entry.path) != entry.original) entry.path];
+		return [ for (entry in _entries) if (read(entry.path) != entry.original) entry.path ];
 	}
 
 	/** Whether the run created a file or deleted one — a change to the module set, not only to a module's text. */
@@ -78,7 +78,7 @@ final class WriteJournal {
 
 	/** Write each of `states` — a path whose content is null is deleted. */
 	public function replay(states: Array<JournalState>): Void {
-		CliIo.writeFiles([for (s in states) if (s.content != null) { path: s.path, content: s.content }]);
+		CliIo.writeFiles([ for (s in states) if (s.content != null) { path: s.path, content: s.content } ]);
 		for (s in states) if (s.content == null) CliIo.deletePath(s.path);
 	}
 

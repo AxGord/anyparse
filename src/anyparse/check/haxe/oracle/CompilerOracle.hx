@@ -70,8 +70,8 @@ final class CompilerOracle {
 		oracles: Array<OracleConfig>, stopAfterFailure: Bool, verbose: Bool = false
 	): Array<Null<OracleOutcome>> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
-		if (memo != null) return [for (r in remembered(memo, oracles, stopAfterFailure, verbose)) r.outcome];
-		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
+		if (memo != null) return [ for (r in remembered(memo, oracles, stopAfterFailure, verbose)) r.outcome ];
+		final asked: Array<OracleConfig> = [ for (oracle in oracles) if (oracle.unavailable == null) oracle ];
 		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (oracle in asked) { args: oracleArgs(oracle.hxml, oracle.defines), cwd: oracle.dir }
 		], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure);
@@ -102,10 +102,10 @@ final class CompilerOracle {
 	): Array<OracleReading> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		if (memo != null) return remembered(memo, oracles, stopAfterFailure, true);
-		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
+		final asked: Array<OracleConfig> = [ for (oracle in oracles) if (oracle.unavailable == null) oracle ];
 		final bound: Int = parallel ?? ProcessSpawn.parallelism();
 		final runs: Array<ProcessRun> = ProcessSpawn.runAll(
-			[for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir }], ORACLE_BUFFER, bound, stopAfterFailure
+			[ for (oracle in asked) { args: argsOf(oracle, true), cwd: oracle.dir } ], ORACLE_BUFFER, bound, stopAfterFailure
 		);
 		final plain: Map<Int, ProcessRun> = plainRetries(asked, runs, bound, decisive);
 		for (run in runs) if (run.unstarted != true) invocations++;
@@ -255,8 +255,8 @@ final class CompilerOracle {
 			}
 		];
 		final decided: Int = stopAfterFailure ? firstHeldFailure(oracles, out) : oracles.length;
-		final compiled: Array<Int> = [for (i in 0...oracles.length) if (out[i] == null && i < decided) i];
-		final asked: Array<OracleConfig> = [for (i in compiled) oracles[i]];
+		final compiled: Array<Int> = [ for (i in 0...oracles.length) if (out[i] == null && i < decided) i ];
+		final asked: Array<OracleConfig> = [ for (i in compiled) oracles[i] ];
 		final runs: Array<ProcessRun> = compileAsked(memo, asked, stopAfterFailure, verbose);
 		final plain: Map<Int, ProcessRun> = verbose ? plainRetries(asked, runs) : [];
 		for (run in runs) if (run.unstarted != true) invocations++;
@@ -273,7 +273,7 @@ final class CompilerOracle {
 			}
 			if (verbose && answered(runs[k])) parsed[i] = OracleCoverage.parsedPaths(runs[k].out);
 		}
-		return [for (i in 0...oracles.length) { outcome: out[i], parsed: parsed[i] }];
+		return [ for (i in 0...oracles.length) { outcome: out[i], parsed: parsed[i] } ];
 	}
 
 	/**
@@ -287,11 +287,11 @@ final class CompilerOracle {
 			for (k in 0...runs.length) if (answered(runs[k]) && runs[k].status != 0 && decided(runs[k], decisive) == null) k
 		];
 		final plain: Array<ProcessRun> = ProcessSpawn.runAll(
-			[for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir }],
+			[ for (k in retried) { args: argsOf(asked[k], false), cwd: asked[k].dir } ],
 			ORACLE_BUFFER, parallel ?? ProcessSpawn.parallelism(), false
 		);
 		invocations += plain.length;
-		return [for (j in 0...retried.length) retried[j] => plain[j]];
+		return [ for (j in 0...retried.length) retried[j] => plain[j] ];
 	}
 
 	/**
@@ -318,7 +318,7 @@ final class CompilerOracle {
 	): Array<ProcessRun> {
 		return verbose
 			? ProcessSpawn.runAll(
-				[for (o in asked) { args: argsOf(o, verbose), cwd: o.dir }], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure
+				[ for (o in asked) { args: argsOf(o, verbose), cwd: o.dir } ], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure
 			)
 			: warmFirst(memo, asked, stopAfterFailure);
 	}
@@ -340,18 +340,18 @@ final class CompilerOracle {
 			? ProcessSpawn.startAll([{ args: argsOf(asked[0], false), cwd: asked[0].dir }], ORACLE_BUFFER, 1)
 			: null;
 		final warm: Array<Null<ProcessRun>> = memo.servers.compile(asked);
-		final cold: Array<Int> = [for (k in 0...asked.length) if (warm[k]?.status != 0) k];
+		final cold: Array<Int> = [ for (k in 0...asked.length) if (warm[k]?.status != 0) k ];
 		final first: Null<ProcessRun> = speculated != null && cold.length > 0 && cold[0] == 0 ? speculated.await()[0] : null;
 		if (first == null) speculated?.cancel();
 		final failedFirst: Bool = first != null && first.failure == '' && first.status != null && first.status != 0;
 		final rest: Array<Int> = first == null ? cold : cold.slice(1);
 		final restRuns: Array<ProcessRun> = failedFirst
-			? [for (_ in rest) unstartedRun()]
+			? [ for (_ in rest) unstartedRun() ]
 			: ProcessSpawn.runAll(
-				[for (k in rest) { args: argsOf(asked[k], false), cwd: asked[k].dir }],
+				[ for (k in rest) { args: argsOf(asked[k], false), cwd: asked[k].dir } ],
 				ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure
 			);
-		return [for (k in 0...asked.length) runOf(k, warm[k], rest, restRuns, first)];
+		return [ for (k in 0...asked.length) runOf(k, warm[k], rest, restRuns, first) ];
 	}
 
 	/**

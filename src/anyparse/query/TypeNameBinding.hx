@@ -762,7 +762,7 @@ final class TypeNameBinding {
 		if (rootLength < 0 || dirs.slice(rootLength).join('/') != segments.join('/')) return true;
 		final root: String = dirs.slice(0, rootLength).join('/');
 		final moduleFile: String = '$typeName.${Path.extension(file)}';
-		return [for (depth in fromDepth ... segments.length + 1) depth].exists(depth ->
+		return [ for (depth in fromDepth ... segments.length + 1) depth ].exists(depth ->
 			FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile])))
 		);
 	}

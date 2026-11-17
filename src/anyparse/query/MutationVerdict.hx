@@ -157,7 +157,7 @@ class MutationVerdict {
 			firstFailure: ran.map(result -> result.firstFailure).find(locus -> locus != null),
 			header: ran.length == 0 ? results[0].header : header,
 			noTests: ran.length == 0,
-			failureNames: [for (result in ran) for (name in result.failureNames) name],
+			failureNames: [ for (result in ran) for (name in result.failureNames) name ],
 			counted: results.foreach(result -> result.counted)
 		};
 	}

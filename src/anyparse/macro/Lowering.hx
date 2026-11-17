@@ -250,7 +250,7 @@ class Lowering {
 		// / `isTriviaBearing`), so the inverse map the emitted-body check
 		// needs to resolve a leading `parseXxx(ctx)` back to its rule is
 		// built here, once, rather than inside the static checker.
-		final fnToRule: Map<String, String> = [for (typePath in _shape.rules.keys()) parseFnName(typePath) => typePath];
+		final fnToRule: Map<String, String> = [ for (typePath in _shape.rules.keys()) parseFnName(typePath) => typePath ];
 		for (typePath => node in _shape.rules) {
 			final entryFn: String = parseFnName(typePath);
 			for (rule in lowerRule(typePath, node)) {
@@ -268,7 +268,7 @@ class Lowering {
 		final outlined: Array<GeneratedRule> = BranchOutlining.outline(rules);
 		// After span instrumentation: the memo shell returns a value the raw
 		// rule already built, so it must not gain a second span argument.
-		return _memoFns.length == 0 ? outlined : [for (rule in outlined) for (r in memoize(rule)) r];
+		return _memoFns.length == 0 ? outlined : [ for (rule in outlined) for (r in memoize(rule)) r ];
 	}
 
 	/**
@@ -1184,7 +1184,7 @@ class Lowering {
 		final atomWhen: Null<Array<String>> = branch.fmtReadStringArgs('atomOperandWhen');
 		if (atomWhen == null) return wholeCall;
 		final coreCall: Expr = { expr: ECall(macro $i{'${parseFnName(refName)}AtomCore'}, [macro ctx]), pos: Context.currentPos() };
-		final listed: Expr = { expr: EArrayDecl([for (n in atomWhen) macro $v{n}]), pos: Context.currentPos() };
+		final listed: Expr = { expr: EArrayDecl([ for (n in atomWhen) macro $v{n} ]), pos: Context.currentPos() };
 		return macro {
 			final _atomStart: Int = ctx.pos;
 			var _operand = null;

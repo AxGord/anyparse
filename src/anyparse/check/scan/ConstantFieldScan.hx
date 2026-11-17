@@ -106,7 +106,7 @@ final class ConstantFieldScan {
 			|| literalKinds.length == 0
 		)
 			return null;
-		final finalFieldKinds: Array<String> = [for (k in fieldKinds) if (!mutable.contains(k)) k];
+		final finalFieldKinds: Array<String> = [ for (k in fieldKinds) if (!mutable.contains(k)) k ];
 		return finalFieldKinds.length == 0 ? null : {
 			containers: containers,
 			classLikeContainers: MemberKinds.classLikeContainerKinds(shape),

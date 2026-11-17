@@ -130,7 +130,7 @@ final class ArgumentValues {
 
 	/** The valuation of `id` that knows nothing: every tracked parameter unknown. */
 	public function unknown(id: String): String {
-		return [for (_ in tracked(id)) UNKNOWN].join('');
+		return [ for (_ in tracked(id)) UNKNOWN ].join('');
 	}
 
 	/**
@@ -211,7 +211,7 @@ final class ArgumentValues {
 		final args: Null<Array<QueryNode>> = argumentsAt(edge);
 		final callee: Null<QueryNode> = _trees.ofId(edge.to);
 		if (args == null || callee == null) return unknownValuation;
-		final params: Array<QueryNode> = [for (c in callee.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in callee.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c ];
 		final calleeFile: String = _graph.node(edge.to)?.file ?? '';
 		final known: Null<{ final runs: Null<Array<Array<Int>>>; }> = _runs.get(edge);
 		final runs: Null<Array<Array<Int>>> = known != null ? known.runs : bindings(edge, args, callee, params, calleeFile);

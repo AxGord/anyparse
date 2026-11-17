@@ -109,7 +109,7 @@ final class StoredValues {
 			final fields: Null<Array<StoredField>> = handedFields(e);
 			if (fields != null) handed.push({ edge: e, fields: fields });
 		}
-		index([for (h in handed) for (f in h.fields) f.name]);
+		index([ for (h in handed) for (f in h.fields) f.name ]);
 		for (h in handed) {
 			final calls: Null<Array<FieldCall>> = callsOf(h.fields, []);
 			if (calls == null) continue;
@@ -157,7 +157,7 @@ final class StoredValues {
 		final node: Null<FnNode> = _graph.node(id);
 		final type: Null<String> = node?.typeName;
 		if (fn == null || node == null || type == null) return null;
-		final params: Array<QueryNode> = [for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c ];
 		if (at < 0 || params.length != count || params.exists(p -> p.kind == _shape.restParamKind)) return null;
 		final name: Null<String> = params[at].name;
 		if (name == null) return null;
@@ -269,7 +269,7 @@ final class StoredValues {
 	/** The arguments of the `new` expression `made`: its children but the type it names and that type's parameters. */
 	private function argumentsOf(made: QueryNode): Array<QueryNode> {
 		final types: Array<String> = _shape.typeAnnotationKinds ?? [];
-		return [for (c in made.children) if (!types.contains(c.kind)) c];
+		return [ for (c in made.children) if (!types.contains(c.kind)) c ];
 	}
 
 	/** Whether `id` is a project constructor of one declaration, its body held. */

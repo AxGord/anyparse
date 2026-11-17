@@ -108,7 +108,7 @@ class ThreadSafetyOptionsTest extends Test {
 	/** The config lines a run of `sources` (`SOURCES` by default) under the `thread-safety` options `options` alone says, sorted. */
 	private static function saidAlone(options: String, ?sources: Array<String>): Array<String> {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations('{"rules":{"thread-safety":{$options}}}', sources ?? [SOURCES]);
-		final out: Array<String> = [for (v in found) if (v.file == '') v.message];
+		final out: Array<String> = [ for (v in found) if (v.file == '') v.message ];
 		out.sort(Reflect.compare);
 		return out;
 	}
@@ -118,7 +118,7 @@ class ThreadSafetyOptionsTest extends Test {
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
 			'{"rules":{"thread-safety":{"sinks":["Sys.sleep","Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],$options}}}', [SOURCES]
 		);
-		final out: Array<String> = [for (v in found) if (v.file == '') v.message];
+		final out: Array<String> = [ for (v in found) if (v.file == '') v.message ];
 		out.sort(Reflect.compare);
 		return out;
 	}

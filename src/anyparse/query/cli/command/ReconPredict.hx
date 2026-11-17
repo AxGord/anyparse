@@ -956,7 +956,7 @@ final class ReconPredict {
 		}
 		final regexMode: Bool = compiledRegex != null;
 		final regexes: Array<EReg> = compiledRegex ?? [];
-		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
+		final patternHits: Array<Int> = [ for (_ in 0...patterns.length) 0 ];
 		var stripped: String = original;
 		var fileHits: Int = 0;
 		for (idx in 0...patterns.length) {
@@ -1027,7 +1027,7 @@ final class ReconPredict {
 		var unblockCount: Int = 0;
 		var stillFailCount: Int = 0;
 		var noMatchCount: Int = 0;
-		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
+		final patternHits: Array<Int> = [ for (_ in 0...patterns.length) 0 ];
 		for (r in records) {
 			var stripped: String = r.source;
 			var fileHits: Int = 0;

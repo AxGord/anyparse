@@ -266,7 +266,7 @@ final class OwnerOverlap {
 			final dir: String = Path.directory(o.entry.file);
 			perDir[dir] = (perDir[dir] ?? 0) + 1;
 		}
-		final dirs: Array<String> = [for (dir in perDir.keys()) dir];
+		final dirs: Array<String> = [ for (dir in perDir.keys()) dir ];
 		dirs.sort(Compare.compareString);
 		for (dir in dirs) lines.push('  $dir\t${perDir[dir] ?? 0}');
 		final groups: Map<String, Array<Overlap>> = [];
@@ -274,7 +274,7 @@ final class OwnerOverlap {
 			final key: String = OwnerIndex.nameOf(o.owner);
 			Groups.push(groups, key, o);
 		}
-		final keys: Array<String> = [for (key in groups.keys()) key];
+		final keys: Array<String> = [ for (key in groups.keys()) key ];
 		keys.sort((a, b) -> {
 			final size: Int = (groups[b] ?? []).length - (groups[a] ?? []).length;
 			return size != 0 ? size : Compare.compareString(a, b);

@@ -394,7 +394,7 @@ final class ElementSpan {
 		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
 		// containment test `lint --fix` uses to keep an edit set atomic, and it already carries which
 		// geometries survive `applyEdits`' right-to-left splice.
-		final kept: Array<{ span: Span, text: String }> = [for (i => edit in edits) if (!CanonicalEdit.isContainedEdit(edits, i)) edit];
+		final kept: Array<{ span: Span, text: String }> = [ for (i => edit in edits) if (!CanonicalEdit.isContainedEdit(edits, i)) edit ];
 		final ordered: Array<{ span: Span, text: String }> = kept.copy();
 		ordered.sort((a, b) -> a.span.from - b.span.from);
 		// What is left must be disjoint. Node spans never partially overlap, but a span widened to

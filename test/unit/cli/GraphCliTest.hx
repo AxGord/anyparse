@@ -79,7 +79,7 @@ class GraphCliTest extends Test {
 				'json'
 			]));
 			final doc: CodeGraphJson = CodeGraphJsonParser.parse(out);
-			Assert.equals('pkg.a.Alpha.run', [for (n in doc.nodes) if (n.focus) n.name].join(','));
+			Assert.equals('pkg.a.Alpha.run', [ for (n in doc.nodes) if (n.focus) n.name ].join(','));
 			Assert.equals('', doc.edges.map(e -> e.from).join(','), 'radius 0 keeps the focus alone, its own recursion aside');
 			final wider: CodeGraphJson = CodeGraphJsonParser.parse(
 				CliFixture.captureStdout(() -> Cli.run(['graph', root, '--level', 'member', '--focus', 'Alpha.run', '--format', 'json']))
@@ -260,7 +260,7 @@ class GraphCliTest extends Test {
 			])));
 			Assert.equals(0, code);
 			final doc: CodeGraphJson = CodeGraphJsonParser.parse(out);
-			Assert.equals('pkg.a.Alpha.run', [for (n in doc.nodes) if (n.focus) n.name].join(','));
+			Assert.equals('pkg.a.Alpha.run', [ for (n in doc.nodes) if (n.focus) n.name ].join(','));
 			Assert.isTrue(err.indexOf('named "Nowhere"') >= 0, err);
 		});
 		#else

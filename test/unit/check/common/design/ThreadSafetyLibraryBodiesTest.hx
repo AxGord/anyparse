@@ -195,7 +195,7 @@ class ThreadSafetyLibraryBodiesTest extends Test {
 		]);
 		final found: Array<Violation> = Linter.run([{ file: '$dir/F0.hx', source: project }], new HaxeQueryPlugin(), [new ThreadSafety()]);
 		CliFixture.removeDir(dir);
-		final said: Array<String> = [for (v in found) if (v.file == '') v.message];
+		final said: Array<String> = [ for (v in found) if (v.file == '') v.message ];
 		Assert.isTrue(
 			said.exists(m -> m.indexOf('the library "-lib no_such_haxelib_fx2"') >= 0 && m.indexOf('does not resolve') >= 0),
 			said.join('\n')

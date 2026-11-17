@@ -101,7 +101,7 @@ final class MoveToHelperCommand implements CliCommand {
 				CliIo.stderr('apq move-to-helper: $message\n');
 				return EXIT_RUNTIME;
 			case Ok(raw, advisory):
-				final created: Array<String> = [for (c in raw) if (!scopeFiles.exists(e -> e.file == c.file)) c.file];
+				final created: Array<String> = [ for (c in raw) if (!scopeFiles.exists(e -> e.file == c.file)) c.file ];
 				final changes: Array<MoveChange> = [
 					for (c in raw)
 						created.contains(c.file)

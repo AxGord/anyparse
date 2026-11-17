@@ -113,7 +113,7 @@ class TypedFactsProbeTest extends Test {
 			'Main.hx' => 'class Main {\n\tstatic function main() { var s:haxe.CallStack = haxe.CallStack.callStack(); s.subtract(s); }\n}\n'
 		], null, '-cp .\n-main Main\n--interp\n');
 		final subtract: Null<FactNode> = scratch.facts?.node('haxe._CallStack.CallStack_Impl_.subtract');
-		Assert.notNull(subtract, 'dropped: ${[for (d in scratch.facts?.dropped ?? []) d.reason]}');
+		Assert.notNull(subtract, 'dropped: ${[ for (d in scratch.facts?.dropped ?? []) d.reason ]}');
 		Assert.isFalse(subtract?.incomplete.contains('macro-expansion') ?? true, 'marks: ${subtract?.incomplete}');
 		scratch.remove();
 	}
@@ -335,7 +335,7 @@ class TypedFactsProbeTest extends Test {
 		Assert.equals(2, facts?.configurations.length);
 		Assert.notNull(facts?.node('Main.only'));
 		Assert.isTrue(facts?.node('Main.main')?.calls.exists(c -> c.target == 'Main.only') ?? false, 'a call one configuration compiles');
-		final types: Array<String> = [for (v in facts?.node('Main.main')?.vars ?? []) if (v.name == 'v') v.type];
+		final types: Array<String> = [ for (v in facts?.node('Main.main')?.vars ?? []) if (v.name == 'v') v.type ];
 		Assert.isTrue(types.contains('Int') && types.contains('String'), 'types: $types');
 		scratch.remove();
 	}
@@ -466,7 +466,7 @@ class TypedFactsProbeTest extends Test {
 		);
 		Assert.isTrue(main?.calls.exists(c -> c.access == 'fieldValue' && c.target == 'Main.stored') ?? false, 'a call of a field value');
 		Assert.isTrue(main?.incomplete.contains('reflection-inlined') ?? false, 'an inlined Reflect call left no mark');
-		final values: Array<String> = [for (r in main?.reflection ?? []) if (r.isValue) r.target];
+		final values: Array<String> = [ for (r in main?.reflection ?? []) if (r.isValue) r.target ];
 		Assert.isTrue(values.contains('Reflect.field') && values.contains('Reflect'), 'values: $values');
 		Assert.isTrue(main?.flows.exists(f -> f.via == 'var' && f.from == 'Main') ?? false, 'an untyped value lost its declared type');
 		Assert.isTrue(main?.natives.exists(n -> n.kind == 'ident' && n.name == 'window') ?? false, 'a native identifier read');
@@ -485,7 +485,7 @@ class TypedFactsProbeTest extends Test {
 			+ '\toverload static function ov(s:String):Void {}\n\tstatic function main() { ov(1); ov("x"); }\n}\n';
 		final scratch: Scratch = compile(['Main.hx' => source], null, '-cp .\n-main Main\n--jvm out.jar\n');
 		final facts: Null<CompilerFacts> = scratch.facts;
-		Assert.equals(1, facts?.node('Main.ov~1')?.overloadIndex, 'dropped: ${[for (d in facts?.dropped ?? []) d.reason]}');
+		Assert.equals(1, facts?.node('Main.ov~1')?.overloadIndex, 'dropped: ${[ for (d in facts?.dropped ?? []) d.reason ]}');
 		final chosen: Array<Null<String>> = [
 			for (c in facts?.node('Main.main')?.calls ?? []) if (c.target == 'Main.ov') c.signature
 		];
@@ -520,7 +520,7 @@ class TypedFactsProbeTest extends Test {
 		final facts: Null<CompilerFacts> = scratch.facts;
 		final file: String = scratch.path('Main.hx');
 		final node: Null<FactNode> = facts?.node('Main.main');
-		final inlined: Array<Null<String>> = [for (c in node?.calls ?? []) if (c.access == 'inlined') c.target];
+		final inlined: Array<Null<String>> = [ for (c in node?.calls ?? []) if (c.access == 'inlined') c.target ];
 		Assert.isTrue(inlined.contains('Lib.wrap') && inlined.contains('Main.same'), 'inlined: $inlined');
 		Assert.isTrue(node?.incomplete.contains('inline-site-unknown') ?? false, 'the splice left no mark');
 		Assert.isTrue(node?.incomplete.contains('macro-expansion') ?? false, 'the macro expansion left no mark');
@@ -529,7 +529,7 @@ class TypedFactsProbeTest extends Test {
 		final whole: Null<FactPos> = node?.at;
 		final all: Array<CallFact> = whole == null ? [] : facts?.callsIn(file, whole.span) ?? [];
 		Assert.isTrue(all.exists(c -> c.target == 'Main.hook'), 'the whole caller does not hold the spliced call');
-		final spliced: Array<String> = [for (id in node?.fns ?? []) if (facts?.node(id)?.inlinedFrom == 'Main.main') id];
+		final spliced: Array<String> = [ for (id in node?.fns ?? []) if (facts?.node(id)?.inlinedFrom == 'Main.main') id ];
 		Assert.equals(2, spliced.length);
 		for (name in ['Main.hx', 'Lib.hx'])
 			Assert.isFalse(
@@ -673,7 +673,7 @@ class TypedFactsProbeTest extends Test {
 		final facts: Null<CompilerFacts> = TypedFactsProbe.probeAll(oracles);
 		Assert.equals(1, facts?.configurations.length);
 		// each configuration that contributed nothing is named, with why: the run reports it rather than going quiet
-		final reasons: Array<String> = [for (d in facts?.dropped ?? []) d.reason];
+		final reasons: Array<String> = [ for (d in facts?.dropped ?? []) d.reason ];
 		Assert.equals(2, reasons.length);
 		Assert.isTrue(reasons.contains('generation failed'), 'reasons: $reasons');
 		Assert.isTrue(reasons.exists(r -> r.startsWith('the compile failed')), 'reasons: $reasons');
@@ -930,7 +930,8 @@ class TypedFactsProbeTest extends Test {
 		Assert.notNull(node);
 		if (node != null) {
 			// the store from the nested function is a fact of that function's own node
-			final walked: Array<FieldFact> = node.fields.concat([for (id in node.fns) for (f in scratch.facts?.node(id)?.fields ?? []) f]);
+			final walked: Array<FieldFact> =
+				node.fields.concat([ for (id in node.fns) for (f in scratch.facts?.node(id)?.fields ?? []) f ]);
 			function usesAt(field: String, at: String): String {
 				final from: Int = source.indexOf(at) + at.indexOf(field);
 				final uses: Array<String> = [];
@@ -953,10 +954,10 @@ class TypedFactsProbeTest extends Test {
 	}
 
 	private static function compile(files: Map<String, String>, ?configurations: Array<Array<String>>, build: String = BUILD): Scratch {
-		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
+		final entries: Array<{ name: String, source: String }> = [ for (name => text in files) { name: name, source: text } ];
 		entries.push({ name: 'build.hxml', source: build });
 		final dir: String = CliFixture.writeTree('typed_facts', entries);
-		final oracles: Array<OracleConfig> = [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }];
+		final oracles: Array<OracleConfig> = [ for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d } ];
 		return new Scratch(dir, TypedFactsProbe.probeAll(oracles));
 	}
 

@@ -245,7 +245,7 @@ final class CliWalk {
 	 * about every failure, exactly as a single-query run does.
 	 */
 	public static function skipsFor(query: String, prefiltered: Bool, skips: Array<QuerySkip>): Array<SkipEntry> {
-		return prefiltered ? [for (s in skips) if (s.source.indexOf(query) >= 0) s.entry] : skips.map(s -> s.entry);
+		return prefiltered ? [ for (s in skips) if (s.source.indexOf(query) >= 0) s.entry ] : skips.map(s -> s.entry);
 	}
 
 	/**
@@ -362,7 +362,7 @@ final class CliWalk {
 	 * (a `--select` segment kind against the grammar's projected set) cannot reach this package.
 	 */
 	public static function findFuzzy(query: String, pool: Map<String, Bool>): Array<String> {
-		return EditDistance.closest(query, [for (cand in pool.keys()) cand]);
+		return EditDistance.closest(query, [ for (cand in pool.keys()) cand ]);
 	}
 
 	/**

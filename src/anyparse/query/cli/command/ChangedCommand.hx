@@ -100,7 +100,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 			for (name in names) CliIo.sysPrint('$name\n');
 			return ExitCode.EXIT_OK;
 		}
-		final classes: Array<String> = [for (label => count in tally) '$label $count'];
+		final classes: Array<String> = [ for (label => count in tally) '$label $count' ];
 		classes.sort(Compare.compareString);
 		CliIo.sysPrint('changed against ${opts.ref}: ${entries.length} file(s)${classes.length == 0 ? '' : ' — ' + classes.join(', ')}\n');
 		for (block in report) CliIo.sysPrint(block);
@@ -318,7 +318,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 	 * A failed run reports nothing.
 	 */
 	private static function unmatchedBy(specs: Array<String>, entries: Array<ChangedPath>, range: Array<String>): Array<String> {
-		final listed: Array<String> = [for (entry in entries) for (path in [entry.path, entry.basePath]) path];
+		final listed: Array<String> = [ for (entry in entries) for (path in [entry.path, entry.basePath]) path ];
 		return specs.filter(spec -> {
 			if (listed.contains(spec)) return false;
 			final alone: ProcessRun = GitRevision.diffNameStatus(range, [spec]);

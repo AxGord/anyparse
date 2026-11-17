@@ -227,8 +227,8 @@ final class LibraryBodies {
 	private static function sinksOf(
 		graph: CallGraph, positive: PositiveSinks, options: ThreadSafetyOptions, waivers: Array<String>
 	): Map<String, Bool> {
-		final configured: Array<String> = [for (p in options.list('sinks')) for (id in graph.matchIds(p)) id];
-		final sinkIds: Map<String, Bool> = [for (id in configured) id => true];
+		final configured: Array<String> = [ for (p in options.list('sinks')) for (id in graph.matchIds(p)) id ];
+		final sinkIds: Map<String, Bool> = [ for (id in configured) id => true ];
 		for (id in positive.builtin.concat(positive.natives)) sinkIds[id] = true;
 		for (pattern in options.nonBlocking) for (id in graph.matchIds(pattern)) if (sinkIds.exists(id) && !configured.contains(id)) {
 			sinkIds.remove(id);
@@ -242,11 +242,11 @@ final class LibraryBodies {
 	 * `options` lists) -> its first hop on a shortest way to one.
 	 */
 	private static function hopsTo(graph: CallGraph, sinkIds: Map<String, Bool>, options: ThreadSafetyOptions): Map<String, String> {
-		final away: Array<String> = [for (key in AWAY_KEYS) for (p in options.list(key)) p];
-		final awayIds: Map<String, Bool> = [for (p in away) for (id in graph.matchIds(p)) id => true];
-		final awayNames: Array<String> = [for (p in away) if (p.indexOf('.') < 0) p];
+		final away: Array<String> = [ for (key in AWAY_KEYS) for (p in options.list(key)) p ];
+		final awayIds: Map<String, Bool> = [ for (p in away) for (id in graph.matchIds(p)) id => true ];
+		final awayNames: Array<String> = [ for (p in away) if (p.indexOf('.') < 0) p ];
 		final next: Map<String, String> = [];
-		final queue: Array<String> = [for (id in sinkIds.keys()) id];
+		final queue: Array<String> = [ for (id in sinkIds.keys()) id ];
 		var qi: Int = 0;
 		while (qi < queue.length) {
 			final at: String = queue[qi++];

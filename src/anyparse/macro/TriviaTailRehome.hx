@@ -130,7 +130,7 @@ final class TriviaTailRehome {
 		final def: Null<TypeDefinition> = paired.find(d -> d.name == name);
 		if (def == null) throw 'TriviaTailRehome: no paired definition for $origName';
 		return switch def.kind {
-			case TDAlias(TAnonymous(fields)): [for (f in fields) f.name];
+			case TDAlias(TAnonymous(fields)): [ for (f in fields) f.name ];
 			case _: throw 'TriviaTailRehome: $name is not an anonymous structure';
 		};
 	}
@@ -236,7 +236,7 @@ final class TriviaTailRehome {
 		final pos: Position = Context.currentPos();
 		final argNames: Array<String> = ctorArgNames(branch, synthPack);
 		if (argNames.length == 0) return null;
-		final binders: Array<String> = [for (i in 0...argNames.length) '_v$i'];
+		final binders: Array<String> = [ for (i in 0...argNames.length) '_v$i' ];
 		final ctorName: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final ctorPath: Array<String> = synthPack.concat([
 			SYNTH_MODULE_LEAF,
@@ -245,7 +245,7 @@ final class TriviaTailRehome {
 		]);
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
 		inline function rebuild(index: Int, with: Expr): Expr {
-			return { expr: ECall(ctorRef, [for (i in 0...binders.length) i == index ? with : macro $i{binders[i]}]), pos: pos };
+			return { expr: ECall(ctorRef, [ for (i in 0...binders.length) i == index ? with : macro $i{binders[i]} ]), pos: pos };
 		}
 		final body: Null<Expr> = switch altTail(branch, argNames) {
 			case Slot(index):
@@ -262,7 +262,7 @@ final class TriviaTailRehome {
 			case None: null;
 		};
 		if (body == null) return null;
-		final pattern: Expr = { expr: ECall(ctorRef, [for (b in binders) macro $i{b}]), pos: pos };
+		final pattern: Expr = { expr: ECall(ctorRef, [ for (b in binders) macro $i{b} ]), pos: pos };
 		return { values: [pattern], expr: body, guard: null };
 	}
 
@@ -285,7 +285,7 @@ final class TriviaTailRehome {
 	/** The paired ctor's positional argument names, read off the definition the synth pass emits — never recounted. */
 	private static function ctorArgNames(branch: ShapeNode, synthPack: Array<String>): Array<String> {
 		return switch TriviaPairAltCtor.buildEnumCtor(branch, Context.currentPos(), synthPack).kind {
-			case FFun(f): [for (a in f.args) a.name];
+			case FFun(f): [ for (a in f.args) a.name ];
 			case _: [];
 		};
 	}

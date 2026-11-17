@@ -244,7 +244,7 @@ final class FactsMethodValues {
 	 */
 	public function declaredHolders(hierarchy: Array<String>): Array<String> {
 		final holders: Null<Array<EReg>> = _holders;
-		return holders == null ? hierarchy : [for (id in hierarchy) if (holders.exists(p -> p.match(id))) id];
+		return holders == null ? hierarchy : [ for (id in hierarchy) if (holders.exists(p -> p.match(id))) id ];
 	}
 
 	/** Why any method's value may be obtained (see the type doc), or null. */

@@ -128,7 +128,7 @@ final class LibraryBuild {
 		for (rawLine in text.split('\n')) {
 			final line: String = rawLine.trim();
 			if (line == '' || line.startsWith('#')) continue;
-			final words: Array<String> = [for (w in line.replace('\t', ' ').split(' ')) if (w != '') w];
+			final words: Array<String> = [ for (w in line.replace('\t', ' ').split(' ')) if (w != '') w ];
 			var i: Int = 0;
 			while (i < words.length) {
 				final word: String = words[i];

@@ -358,7 +358,7 @@ final class CallGraphKeys {
 						if (at <= last && (params[at] ?? '').trim() == p) argType(call.children[j]);
 					}
 				];
-				final shifted: Bool = [for (i in shiftsFrom ... params.length) params[i]].exists(t -> (t ?? '').trim() == p);
+				final shifted: Bool = [ for (i in shiftsFrom ... params.length) params[i] ].exists(t -> (t ?? '').trim() == p);
 				!shifted && passed.length > 0 && !passed.exists(a -> a != passed[0])
 					? passed[0] ?? CallGraph.UNKNOWN_TYPE
 					: CallGraph.UNKNOWN_TYPE;
@@ -412,7 +412,7 @@ final class CallGraphKeys {
 				out = written;
 				rest = read.rest;
 			} else if (
-				read.rest != rest || written.length != held.length || [for (i in 0...held.length) held[i] == written[i]].contains(false)
+				read.rest != rest || written.length != held.length || [ for (i in 0...held.length) held[i] == written[i] ].contains(false)
 			) {
 				return null;
 			}

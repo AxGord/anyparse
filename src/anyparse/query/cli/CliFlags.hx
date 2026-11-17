@@ -122,7 +122,7 @@ final class CliFlags {
 
 	/** The indices of `args` that are positionals: not a flag, not a flag's value, not the separator. */
 	public function positionals(args: Array<String>): Array<Int> {
-		return [for (arg in scan(args).args) if (arg.flag == null) arg.index];
+		return [ for (arg in scan(args).args) if (arg.flag == null) arg.index ];
 	}
 
 	/** The first `--word` in `args` this spec does not declare, or null; a flag's value is never one. */

@@ -143,13 +143,13 @@ final class NamingCrossRename {
 			for (v in violations) RenameRefusal.note(v, NO_PROJECT);
 			return out;
 		}
-		final project: Map<String, String> = [for (entry in complete) entry.file => entry.source];
+		final project: Map<String, String> = [ for (entry in complete) entry.file => entry.source ];
 		// The run's own files win: the verifier hands over what is on disk NOW, after earlier risky edits.
 		for (entry in files) project[entry.file] = entry.source;
 		final report: SymbolIndex = IndexScope.report(files, plugin);
 		final ctx: Context = {
 			files: files,
-			project: [for (file => source in project) { file: file, source: source }],
+			project: [ for (file => source in project) { file: file, source: source } ],
 			plugin: plugin,
 			support: support,
 			shape: plugin.refShape(),

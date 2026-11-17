@@ -105,7 +105,7 @@ final class MemberInitDeps {
 			for (m in members) for (g in members) if (initReadsSibling(m, g, source)) constraintOf(m, g, SiblingRead)
 		];
 		final unsafe: Array<String> = CheckScan.mutationKinds(shape);
-		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
+		final fields: Array<OrderedMember> = [ for (m in members) if (m.isField) m ];
 		for (f in fields)
 			if (sideEffecting(f, unsafe, shape, source, movableArglessNew))
 				for (g in fields)

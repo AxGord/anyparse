@@ -52,9 +52,9 @@ class EditJournalTest extends Test {
 	@:killer('M-JOURNAL-SHIFT')
 	public function testManyEditsStillMapExactly(): Void {
 		// no diff to give up on: six hundred edits shift the last line by exactly their sum
-		final lines: Array<String> = [for (i in 0...600) 'x$i'];
+		final lines: Array<String> = [ for (i in 0...600) 'x$i' ];
 		final before: String = lines.join('\n') + '\ntail\n';
-		final after: String = [for (i in 0...600) 'yy$i'].join('\n') + '\ntail\n';
+		final after: String = [ for (i in 0...600) 'yy$i' ].join('\n') + '\ntail\n';
 		final edits: Array<{ span: Span, text: String }> = [];
 		var at: Int = 0;
 		for (l in lines) {

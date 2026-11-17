@@ -89,7 +89,7 @@ private final class ImpactGraph {
 			final next: Null<PendingModule> = _pending.pop();
 			if (next != null) spread(next.module, next.at);
 		}
-		final out: Array<String> = [for (i => _ in _via) _paths[i]];
+		final out: Array<String> = [ for (i => _ in _via) _paths[i] ];
 		out.sort(Compare.compareString);
 		return out;
 	}
@@ -168,7 +168,7 @@ private final class ImpactGraph {
 	private function wordsOf(i: Int): Map<String, Bool> {
 		final known: Null<Map<String, Bool>> = _words[i];
 		if (known != null) return known;
-		final words: Map<String, Bool> = [for (word in matchesOf(WORD, _texts[i], 0)) word => true];
+		final words: Map<String, Bool> = [ for (word in matchesOf(WORD, _texts[i], 0)) word => true ];
 		_words[i] = words;
 		return words;
 	}
@@ -648,7 +648,9 @@ final class SuiteImpact {
 			sources.map(source -> { file: source.path, source: source.text }), new CachingGrammarPlugin(new HaxeQueryPlugin())
 		);
 		return {
-			types: [for (info in index.allFiles()) info.file => [for (type in info.types) type.name]],
+			types: [
+				for (info in index.allFiles()) info.file => [ for (type in info.types) type.name ]
+			],
 			unparsed: index.skippedFiles()
 		};
 	}
@@ -778,7 +780,7 @@ final class SuiteImpact {
 	/** The paths of `repo`'s `git diff` over `range` (a base, or a base and a tip), a renamed one by both its names. */
 	private static function changedIn(repo: String, range: Array<String>): Array<String> {
 		final changed: ChangedPaths = GateTree.changedPaths(GateTree.gitIn(repo, ['diff', '--name-status', '-M'].concat(range)));
-		return changed.paths.concat([for (old in changed.moved) old]);
+		return changed.paths.concat([ for (old in changed.moved) old ]);
 	}
 
 	private static function classTime(classes: Array<String>, measured: Map<String, ClassWeight>): Float {
@@ -859,7 +861,7 @@ final class SuiteImpact {
 	 * generated reaches.
 	 */
 	private static function sinkedGraph(sources: Array<ImpactSource>, entries: Map<String, String>, types: DeclaredTypes): ImpactGraph {
-		final sinks: Array<String> = [for (source in sources) if (isGenerated(source.path)) source.path];
+		final sinks: Array<String> = [ for (source in sources) if (isGenerated(source.path)) source.path ];
 		return new ImpactGraph(sources, entries, types, sinks);
 	}
 

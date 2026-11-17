@@ -179,7 +179,7 @@ final class ElemChainEmitTest extends Test {
 
 	@:pin('guard')
 	public function testManyCommentedAlternativesFinish(): Void {
-		final label: String = [for (i in 0...40) '"a$i" /* c */'].join(' | ');
+		final label: String = [ for (i in 0...40) '"a$i" /* c */' ].join(' | ');
 		Assert.stringContains('"a39"', rewrite(caseOf(label), NARROW));
 	}
 

@@ -38,7 +38,7 @@ final class PoolTest extends Test {
 	private final _node: String = js.Node.process.execPath;
 
 	public function testResultsComeBackInTheOrderGiven(): Void {
-		final items: Array<String> = [for (i in 0...7) 'item $i'];
+		final items: Array<String> = [ for (i in 0...7) 'item $i' ];
 		final results: Array<Result> = Pool.of(3).map(items, item -> cmd('$_node -e $PRINT_ARG -- $item'));
 		Assert.same(items, results.map(r -> r.out));
 		Assert.isTrue(results.foreach(r -> r.ok));
@@ -48,7 +48,7 @@ final class PoolTest extends Test {
 	public function testCommandsRunAtTheSameTime(): Void {
 		TempDir.with(dir -> {
 			final results: Array<Result> = Pool.of(4)
-				.map([for (i in 0...4) 'job$i'], me -> cmd('$_node -e $RENDEZVOUS -- ${dir.path} $me 4'));
+				.map([ for (i in 0...4) 'job$i' ], me -> cmd('$_node -e $RENDEZVOUS -- ${dir.path} $me 4'));
 			Assert.same([0, 0, 0, 0], results.map(r -> r.status));
 		});
 	}
@@ -72,7 +72,7 @@ final class PoolTest extends Test {
 
 	/** More commands than one driver run carries still come back, every one, in order. */
 	public function testCommandsBeyondOneDriverRun(): Void {
-		final items: Array<String> = [for (i in 0...20) '$i'];
+		final items: Array<String> = [ for (i in 0...20) '$i' ];
 		Assert.same(items, Pool.of(2).map(items, item -> cmd('$_node -e $PRINT_ARG -- $item')).map(r -> r.out));
 	}
 

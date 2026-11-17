@@ -57,7 +57,7 @@ final class GrammarDiscovery {
 		final claims: Array<PluginClaim> = [];
 		for (module in pluginModules(Context.getClassPath())) {
 			final plugin: ClassType = pluginClass(module);
-			rows.push(entry(macro $p{module.split('.')}, [for (field in plugin.statics.get()) field.name]));
+			rows.push(entry(macro $p{module.split('.')}, [ for (field in plugin.statics.get()) field.name ]));
 			claims.push({ module: module, lang: literal(module, plugin, 'LANG')[0], extensions: literal(module, plugin, 'EXTENSIONS') });
 		}
 		final problem: Null<String> = clash(claims);
@@ -69,7 +69,7 @@ final class GrammarDiscovery {
 	public static function pluginModules(roots: Array<String>): Array<String> {
 		final seen: Map<String, Bool> = [];
 		for (root in roots) if (root != '' && FileSystem.isDirectory(root)) collect(root, [], seen);
-		final found: Array<String> = [for (module in seen.keys()) module];
+		final found: Array<String> = [ for (module in seen.keys()) module ];
 		found.sort(Compare.compareString);
 		return found;
 	}
@@ -164,7 +164,7 @@ final class GrammarDiscovery {
 				+ ' $PLUGIN_INTERFACE — implement it, or rename the module',
 				plugin.pos
 			);
-		final statics: Array<String> = [for (field in plugin.statics.get()) field.name];
+		final statics: Array<String> = [ for (field in plugin.statics.get()) field.name ];
 		for (name in REQUIRED_STATICS) if (!statics.contains(name))
 			Context.error('grammar plugin $module declares no static $name, which its CLI registry row reads', plugin.pos);
 		return plugin;

@@ -99,7 +99,7 @@ final class FlowBuilder {
 		_source = source;
 		_comments = SourceComments.collectCommentRegions(regions);
 		_chart = new FlowGraph(name);
-		_blocks = [for (kind in [shape.blockStmtKind, shape.blockBodyKind]) if (kind != null) kind];
+		_blocks = [ for (kind in [shape.blockStmtKind, shape.blockBodyKind]) if (kind != null) kind ];
 		_declarations = (shape.localDeclKinds ?? []).concat(ShapeVocab.localFunctionScopeKinds(shape));
 		register(_blocks, Block);
 		register(ShapeVocab.ifKinds(shape), Branch);

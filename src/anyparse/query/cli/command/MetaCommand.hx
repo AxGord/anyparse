@@ -68,7 +68,7 @@ final class MetaCommand implements CliCommand implements LeadingQueryCount {
 
 	/** The annotation, when the first positional is written with its `@` sigil; `--on` may leave it out. */
 	public function leadingQueryCount(args: Array<String>): Int {
-		return leadsWithAnnotation([for (i in flags().positionals(args)) args[i]]) ? 1 : 0;
+		return leadsWithAnnotation([ for (i in flags().positionals(args)) args[i] ]) ? 1 : 0;
 	}
 
 	private static inline function metaParseExit(code: Int): MetaOpts {

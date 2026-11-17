@@ -458,7 +458,7 @@ final class LambdaLoopScan {
 		// those calls out, and neither the extension call nor a second, unguarded declaration
 		// resolves the way the author's guard says it should.
 		final scope: UsingScope = UsingScan.usingScopeAt(
-			header, LAMBDA_MODULE, [for (i in 0...rewrites.length) if (extensionForm[i]) rewrites[i].span.from]
+			header, LAMBDA_MODULE, [ for (i in 0...rewrites.length) if (extensionForm[i]) rewrites[i].span.from ]
 		);
 		if (scope == UsingScope.Guarded) {
 			for (violation in violations) violation.declineReason = UsingScan.guardedUsingDecline(LAMBDA_MODULE);

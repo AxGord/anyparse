@@ -104,7 +104,7 @@ final class LintFixSafeTrail {
 		final first: Null<SafeFixStep> = firstStep(culprit.file);
 		return first == null
 			? 0
-			: LintFixDriver.contributedEdits([for (group in first.groups) if (culprit.keptRules.contains(group.rule)) group]).length;
+			: LintFixDriver.contributedEdits([ for (group in first.groups) if (culprit.keptRules.contains(group.rule)) group ]).length;
 	}
 
 	/**
@@ -190,7 +190,7 @@ final class LintFixSafeTrail {
 	private function replay(file: String, rules: Array<String>): Null<String> {
 		final first: Null<SafeFixStep> = firstStep(file);
 		if (first == null) return null;
-		final groups: Array<RuleEdits> = [for (group in first.groups) if (rules.contains(group.rule)) group];
+		final groups: Array<RuleEdits> = [ for (group in first.groups) if (rules.contains(group.rule)) group ];
 		if (groups.length == 0) return null;
 		final text: Null<String> = _replayer(file, first.base, groups);
 		return text == first.base ? null : text;
@@ -210,8 +210,8 @@ final class LintFixSafeTrail {
 			final culprit: Null<SafeCulprit> = culprits.find(c -> c.file == file);
 			return culprit == null ? fixedOf[file] : culprit.kept ?? originalOf[file];
 		}
-		final whole: Array<String> = [for (culprit in culprits) if (culprit.kept == null) culprit.file];
-		final rest: Array<String> = [for (file in changed) if (!whole.contains(file)) file];
+		final whole: Array<String> = [ for (culprit in culprits) if (culprit.kept == null) culprit.file ];
+		final rest: Array<String> = [ for (file in changed) if (!whole.contains(file)) file ];
 		place(rest, target);
 		for (file in rest) hold(files, created, originalOf, file, target(file));
 		restore(whole);
@@ -236,7 +236,7 @@ final class LintFixSafeTrail {
 	public static function noteLanded(
 		trail: Null<LintFixSafeTrail>, file: String, base: String, groups: Array<RuleEdits>, landed: Int
 	): Void {
-		if (trail != null && landed > 0) trail.noteStep(file, base, [for (group in groups) if (LintFixDriver.contributes(group)) group]);
+		if (trail != null && landed > 0) trail.noteStep(file, base, [ for (group in groups) if (LintFixDriver.contributes(group)) group ]);
 	}
 
 	/**

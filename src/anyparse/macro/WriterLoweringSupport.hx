@@ -494,7 +494,7 @@ final class WriterLoweringSupport {
 			final _gapAfter: Null<String> = $afterKw;
 			final _gapLeading: Array<String> = $kwLeading;
 			final _gapCm: Array<String> = _gapAfter == null ? _gapLeading : [_gapAfter].concat(_gapLeading);
-			_gapCm.length == 0 ? _de() : _dc([for (_c in _gapCm) trailingCommentDocGuarded(_c, opt)]);
+			_gapCm.length == 0 ? _de() : _dc([ for (_c in _gapCm) trailingCommentDocGuarded(_c, opt) ]);
 		};
 	}
 

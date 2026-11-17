@@ -56,7 +56,7 @@ class RunTests {
 		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
 		final filters: Array<ShardToken> = filterEnv == null
 			? []
-			: [for (f in filterEnv.split(',')) if (f.trim() != '') ShardFilter.parse(f.trim())];
+			: [ for (f in filterEnv.split(',')) if (f.trim() != '') ShardFilter.parse(f.trim()) ];
 		function addCase(testCase: utest.Test): Void {
 			if (filters.length == 0) {
 				runner.addCase(testCase);
@@ -213,7 +213,7 @@ class RunTests {
 			last = now;
 		});
 		runner.onComplete.add(_ -> {
-			final classes: Array<String> = [for (cls in millis.keys()) cls];
+			final classes: Array<String> = [ for (cls in millis.keys()) cls ];
 			classes.sort((a, b) -> Reflect.compare(millis[b], millis[a]));
 			sys.io.File.saveContent(path, classes.map(cls -> '${Math.round(millis[cls] ?? 0.0)}\t${counts[cls]}\t$cls\n').join(''));
 		});

@@ -49,7 +49,7 @@ final class UnreachableCatch extends RuleBase {
 			final importMap: Map<String, String> = typed.importMap(entry.source, entry.file);
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
-				final clauses: Array<QueryNode> = [for (c in node.children) if (c.kind == kind) c];
+				final clauses: Array<QueryNode> = [ for (c in node.children) if (c.kind == kind) c ];
 				if (clauses.length >= 2) checkClauses(clauses, entry, catchAll, importMap, index, violations);
 				for (c in node.children) walk(c);
 			}

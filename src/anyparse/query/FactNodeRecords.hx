@@ -75,7 +75,7 @@ final class FactNodeRecords {
 			generated: record.gen ?? false,
 			inlinedFrom: record.inl,
 			overloadIndex: record.ov ?? 0,
-			params: [for (p in record.params ?? []) { name: p.n, type: p.t }],
+			params: [ for (p in record.params ?? []) { name: p.n, type: p.t } ],
 			keptParams: (record.pk ?? []).copy(),
 			paramUses: paramUsesOf(record),
 			variants: [],
@@ -240,7 +240,7 @@ final class FactNodeRecords {
 			(v, where) -> ({ name: v.n, type: v.t, at: where }: VarFact), node.vars
 		);
 		FactMerge.collect(
-			record.reads, r -> place([for (i in 0...r.length - 2) readInt(r[i])]), readText, fresh.bind('read'),
+			record.reads, r -> place([ for (i in 0...r.length - 2) readInt(r[i]) ]), readText, fresh.bind('read'),
 			(r, where) -> ({ type: readString(r[r.length - 2]), name: readString(r[r.length - 1]), at: where }: LocalReadFact), node.reads
 		);
 	}
@@ -295,7 +295,7 @@ final class FactNodeRecords {
 	private static function paramUsesOf(record: FactNodeRecord): Null<Array<Array<ParamUse>>> {
 		final recorded: Null<Array<Array<FactUseRecord>>> = record.pu;
 		return recorded == null || recorded.length != (record.params ?? []).length ? null : [
-			for (uses in recorded) [for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) }]
+			for (uses in recorded) [ for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) } ]
 		];
 	}
 

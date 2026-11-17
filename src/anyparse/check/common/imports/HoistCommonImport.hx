@@ -596,7 +596,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			final names: Array<String> = governance.files;
 			if (names.length > 0 && names.foreach(name -> infoOf.exists(name))) governedAt[site] = names;
 		}
-		final sites: Array<String> = [for (site in order) if (governedAt.exists(site)) site];
+		final sites: Array<String> = [ for (site in order) if (governedAt.exists(site)) site ];
 		// SHALLOWEST first, by governed COUNT: a site below another governs a SUBSET of its modules, so
 		// the count orders the containment with no path arithmetic. Weighing the widest position first
 		// is what makes a statement land as HIGH as its share reaches while a nested position takes
@@ -824,7 +824,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			final info: Null<FileInfo> = ctx.infoOf[file];
 			if (info == null) return false;
 			if (classpathOf(origin) == classpathOf(originOf(info))) continue;
-			final held: Array<ImportInfo> = info.imports.concat([for (group in info.ambientImports) for (imp in group.imports) imp]);
+			final held: Array<ImportInfo> = info.imports.concat([ for (group in info.ambientImports) for (imp in group.imports) imp ]);
 			if (!held.exists(imp -> !imp.guarded && (statementKeyOf(imp) == key || resolvesInto(imp, origin, resolve)))) return false;
 		}
 		return true;

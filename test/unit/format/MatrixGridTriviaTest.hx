@@ -148,7 +148,7 @@ class MatrixGridTriviaTest extends Test {
 		final source: String = 'class C {\n\tstatic final L:Array<Int> = [\n\t\tcompute(1, 2), compute(2, 2), compute(3, 2), compute(4, '
 			+ '2), compute(5, 2),\n\t\tcompute(6, 2), compute(7, 2), compute(8, 2)\n\t];\n}\n';
 		final expected: String = 'class C {\n\tstatic final L:Array<Int> = [\n'
-			+ [for (i in 1...9) '\t\tcompute($i, 2)' + (i < 8 ? ',' : '')].join('\n')
+			+ [ for (i in 1...9) '\t\tcompute($i, 2)' + (i < 8 ? ',' : '') ].join('\n')
 			+ '\n\t];\n}\n';
 		Assert.equals(expected, write(source, NO_ALIGN_JSON));
 	}

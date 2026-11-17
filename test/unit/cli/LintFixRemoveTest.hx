@@ -58,7 +58,7 @@ private class LoadBearingRemove implements Check implements CrossFileFix {
 	public function crossFileFix(
 		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<Array<CrossFileEdits>> {
-		return [for (v in violations) [{ file: v.file, edits: [], remove: true }]];
+		return [ for (v in violations) [{ file: v.file, edits: [], remove: true }] ];
 	}
 
 }

@@ -65,7 +65,7 @@ final class ReachBuildsCache {
 		final record: ReachBuildsRecord = {
 			format: FORMAT_TAG,
 			key: key.key,
-			stats: [for (file => stat in stats) [file, stat]],
+			stats: [ for (file => stat in stats) [file, stat] ],
 			configurations: configurations.map(recordOf),
 			library: builds.library.map(f -> { file: f.file, hash: ContentHash.md5(f.source) })
 		};
@@ -172,7 +172,7 @@ final class ReachBuildsCache {
 			name: c.name,
 			defined: c.defined,
 			everDefined: c.everDefined,
-			values: [for (name => value in c.values) [name, value]],
+			values: [ for (name => value in c.values) [name, value] ],
 			compiled: c.compiled,
 			types: c.types.map(t -> { name: t.name, file: t.file })
 		};

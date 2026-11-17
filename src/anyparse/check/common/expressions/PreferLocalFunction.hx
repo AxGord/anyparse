@@ -435,7 +435,7 @@ final class PreferLocalFunction extends RuleBase {
 		if (annotation == null) return { survives: true, returnsVoid: false, signature: null };
 		final signature: Null<FnSignature> = switch s.typeSyntax(source.substring(annotation.from, annotation.to))?.shape {
 			case Function([{ type: { text: only } }], ret, true) if (only == s.voidTypeName): { params: [], ret: ret.text };
-			case Function(params, ret, _): { params: [for (p in params) { optional: p.optional, type: p.type.text }], ret: ret.text };
+			case Function(params, ret, _): { params: [ for (p in params) { optional: p.optional, type: p.type.text } ], ret: ret.text };
 			case _: null;
 		};
 		return { survives: signature != null, returnsVoid: signature != null && signature.ret == s.voidTypeName, signature: signature };

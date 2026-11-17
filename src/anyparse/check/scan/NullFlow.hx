@@ -1581,15 +1581,15 @@ final class NullFlow {
 
 	/** The facts holding on both `a` and `b` — a name keeps a polarity after a join only if it held it on both arms. */
 	private static function intersect(a: FlowState, b: FlowState): FlowState {
-		final nonNull: Array<String> = [for (n in a.nonNull) if (b.nonNull.contains(n)) n];
+		final nonNull: Array<String> = [ for (n in a.nonNull) if (b.nonNull.contains(n)) n ];
 		return {
 			nonNull: nonNull,
 			unseen: unseenAfterJoin(nonNull, a, b),
-			known: [for (n in a.known) if (b.known.contains(n)) n],
-			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n],
-			predicates: [for (p in a.predicates) if (b.predicates.exists(samePredicate.bind(p))) p],
-			aliases: [for (x in a.aliases) if (b.aliases.exists(sameAlias.bind(x))) x],
-			present: [for (e in a.present) if (b.present.exists(samePresent.bind(e))) e]
+			known: [ for (n in a.known) if (b.known.contains(n)) n ],
+			maybe: [ for (n in a.maybe) if (b.maybe.contains(n)) n ],
+			predicates: [ for (p in a.predicates) if (b.predicates.exists(samePredicate.bind(p))) p ],
+			aliases: [ for (x in a.aliases) if (b.aliases.exists(sameAlias.bind(x))) x ],
+			present: [ for (e in a.present) if (b.present.exists(samePresent.bind(e))) e ]
 		};
 	}
 
@@ -1690,14 +1690,14 @@ final class NullFlow {
 
 	/** The `nonNull` names `state` proves visibly. */
 	private static function visibleIn(state: FlowState): Array<String> {
-		return [for (n in state.nonNull) if (!state.unseen.contains(n)) n];
+		return [ for (n in state.nonNull) if (!state.unseen.contains(n)) n ];
 	}
 
 	/** The names visible in `state` that `node` writes nowhere — what survives a construct the compiler does not follow into. */
 	private static function visibleUnwritten(state: FlowState, node: QueryNode, ctx: FlowCtx): Array<String> {
 		final written: Array<String> = [];
 		collectWrites(node, written, ctx);
-		return [for (n in visibleIn(state)) if (!written.contains(n)) n];
+		return [ for (n in visibleIn(state)) if (!written.contains(n)) n ];
 	}
 
 	/** Mark unseen every `nonNull` name of `state` outside `kept`: a construct keeps a name visible only when its rule names it. */
@@ -1713,7 +1713,7 @@ final class NullFlow {
 
 	/** The joined `nonNull` names either arm proved only invisibly — a join is visible only where both arms were. */
 	private static function unseenAfterJoin(nonNull: Array<String>, a: FlowState, b: FlowState): Array<String> {
-		return [for (n in nonNull) if (a.unseen.contains(n) || b.unseen.contains(n)) n];
+		return [ for (n in nonNull) if (a.unseen.contains(n) || b.unseen.contains(n)) n ];
 	}
 
 	/**
@@ -1724,9 +1724,9 @@ final class NullFlow {
 	 * does NOT invalidate — a guard preserves aliases and predicates.
 	 */
 	private static function killAuxFacts(state: FlowState, name: String): Void {
-		if (state.predicates.length > 0) state.predicates = [for (p in state.predicates) if (p.bool != name && p.target != name) p];
-		if (state.aliases.length > 0) state.aliases = [for (a in state.aliases) if (a.a != name && a.b != name) a];
-		if (state.present.length > 0) state.present = [for (e in state.present) if (!e.names.contains(name)) e];
+		if (state.predicates.length > 0) state.predicates = [ for (p in state.predicates) if (p.bool != name && p.target != name) p ];
+		if (state.aliases.length > 0) state.aliases = [ for (a in state.aliases) if (a.a != name && a.b != name) a ];
+		if (state.present.length > 0) state.present = [ for (e in state.present) if (!e.names.contains(name)) e ];
 	}
 
 	/**

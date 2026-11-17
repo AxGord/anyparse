@@ -108,7 +108,7 @@ class OracleBatchRevertReasonTest extends Test {
 		#if (sys || nodejs)
 		final dir: String = makeDir(8);
 		final result = LintFixVerify.verifyOracleBatch(
-			batch(dir, 8), oracles(dir), canned([for (k in 0...8) Rejected('$dir/f$k.hx:1: characters 1-2 : boom')])
+			batch(dir, 8), oracles(dir), canned([ for (k in 0...8) Rejected('$dir/f$k.hx:1: characters 1-2 : boom') ])
 		);
 		Assert.equals('not converged in 6 passes', result.reason);
 		Assert.equals(8, result.reverted.length);
@@ -144,7 +144,7 @@ class OracleBatchRevertReasonTest extends Test {
 	}
 
 	private static function makeDir(n: Int): String {
-		return CliFixture.writeDir('orbatch', [for (k in 0...n) { name: 'f$k.hx', source: 'before $k\n' }]);
+		return CliFixture.writeDir('orbatch', [ for (k in 0...n) { name: 'f$k.hx', source: 'before $k\n' } ]);
 	}
 	#end
 

@@ -131,7 +131,7 @@ final class Engine {
 			final kids: Array<QueryNode> = all.map(truncateChildrenAt.bind(_, maxChildren));
 			return new QueryNode(node.kind, node.name, kids, node.span);
 		}
-		final kept: Array<QueryNode> = [for (i in 0...maxChildren) truncateChildrenAt(all[i], maxChildren)];
+		final kept: Array<QueryNode> = [ for (i in 0...maxChildren) truncateChildrenAt(all[i], maxChildren) ];
 		final omitted: Int = all.length - maxChildren;
 		kept.push(new QueryNode('...', '$omitted more', []));
 		return new QueryNode(node.kind, node.name, kept, node.span);

@@ -225,7 +225,7 @@ final class FixVerifierCrossFile {
 			if (texts != null) for (file => text in texts) for (entry in judge.files) if (entry.file == file) entry.source = text;
 			return Kept(indices.map(i -> judge.sets[i]));
 		}
-		final all: Array<Int> = [for (i in 0...n) i];
+		final all: Array<Int> = [ for (i in 0...n) i ];
 		final settled: Null<ComponentVerdict> = wholeVerdict(attempt(all), n);
 		if (settled != null) {
 			if (settled.match(Kept(_))) return keep(all);
@@ -236,7 +236,7 @@ final class FixVerifierCrossFile {
 		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(
 			n, FailerBisect.searchBudget(n), indices -> attempt(indices)?.match(Confirmed) == true, spent
 		);
-		final safe: Array<Int> = failers == null ? [] : [for (i in all) if (!failers.contains(i)) i];
+		final safe: Array<Int> = failers == null ? [] : [ for (i in all) if (!failers.contains(i)) i ];
 		if (safe.length > 0 && attempt(safe)?.match(Confirmed) == true) return keep(safe);
 		restore();
 		return Reverted(OracleRejected);

@@ -638,7 +638,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function thirdPartyFiles(): Array<String> {
 		final sources: Null<ResolutionSources> = scopeSources();
 		if (sources == null) return [];
-		final roots: Map<String, Bool> = [for (entry in sources.projectRoots) entry.file => true];
+		final roots: Map<String, Bool> = [ for (entry in sources.projectRoots) entry.file => true ];
 		return [
 			for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file
 		];
@@ -899,7 +899,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * The resolution library lives in the process-scoped `SharedParseTier` and is not touched.
 	 */
 	public function retainSources(live: Array<String>): Void {
-		final keep: Map<String, Bool> = [for (source in live) source => true];
+		final keep: Map<String, Bool> = [ for (source in live) source => true ];
 		final dropped: Array<QueryNode> = [];
 		for (cache in [_parseCache, _typeRefCache, _branchAwareCache]) for (source in staleKeys(cache, keep)) {
 			final tree: Null<QueryNode> = cache[source];
@@ -1131,7 +1131,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	/** The keys of `cache` that `keep` does not hold — collected first, so the caller may remove while it walks them. */
 	private static function staleKeys<T>(cache: Map<String, T>, keep: Map<String, Bool>): Array<String> {
-		return [for (source in cache.keys()) if (!keep.exists(source)) source];
+		return [ for (source in cache.keys()) if (!keep.exists(source)) source ];
 	}
 
 }

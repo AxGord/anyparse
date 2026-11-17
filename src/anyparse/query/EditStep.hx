@@ -75,7 +75,7 @@ final class EditStep {
 	}
 
 	private static function solidPositions(text: String): Array<Int> {
-		return [for (i in 0...text.length) if (!text.isSpace(i)) i];
+		return [ for (i in 0...text.length) if (!text.isSpace(i)) i ];
 	}
 
 	/** The index in `positions` of the first position at or after `at`, or -1. */

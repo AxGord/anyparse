@@ -21,7 +21,7 @@ final class GraphDiff {
 	 * nodes holding it, and every edge that changed or touches a changed node; an edge between unchanged nodes is left out.
 	 */
 	public static function compare(before: CodeGraph, after: CodeGraph, changed: Array<String>): CodeGraph {
-		final names: Map<String, Bool> = [for (name in changed) name => true];
+		final names: Map<String, Bool> = [ for (name in changed) name => true ];
 		// node id -> how it differs, null when it does not
 		final status: Map<String, Null<GraphChange>> = [];
 		for (graph in [before, after]) for (n in graph.nodes()) if (!status.exists(n.id)) status[n.id] = changeOf(n, before, after, names);
@@ -29,7 +29,7 @@ final class GraphDiff {
 		for (id => change in status) if (change != null) copy(before, after, out, id, status);
 		final earlier: Map<String, GraphEdge> = foldedEdges(before, status);
 		final later: Map<String, GraphEdge> = foldedEdges(after, status);
-		final keys: Array<String> = [for (key in earlier.keys()) key];
+		final keys: Array<String> = [ for (key in earlier.keys()) key ];
 		for (key in later.keys()) if (!earlier.exists(key)) keys.push(key);
 		for (key in keys) {
 			final was: Null<GraphEdge> = earlier[key];

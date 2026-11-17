@@ -215,7 +215,7 @@ final class TypedFactsMacro {
 		final printer: haxe.macro.Printer = new haxe.macro.Printer();
 		for (g in _generics[name] ?? []) if (writes(written, g)) {
 			final id: String = typeId(g.pack, g.name);
-			final key: String = id + '<' + [for (t in written.params ?? []) printer.printTypeParam(t)].join(',') + '>';
+			final key: String = id + '<' + [ for (t in written.params ?? []) printer.printTypeParam(t) ].join(',') + '>';
 			if (!_genericBuilds.exists(key)) _genericBuilds[key] = resolvedClass(g, written.params ?? [], p);
 			if (_genericBuilds[key] == built.toString()) return id;
 		}
@@ -277,8 +277,8 @@ final class TypedFactsMacro {
 				final a: AbstractType = r.get();
 				final extra: Array<String> = [
 					',"under":' + q(typeString(a.type, 0)),
-					',"from":' + typeList([for (f in a.from) f.t]),
-					',"to":' + typeList([for (f in a.to) f.t])
+					',"from":' + typeList([ for (f in a.from) f.t ]),
+					',"to":' + typeList([ for (f in a.to) f.t ])
 				];
 				final impl: Null<Ref<ClassType>> = a.impl;
 				if (impl != null) extra.push(',"impl":' + q(impl.toString()));
@@ -291,7 +291,7 @@ final class TypedFactsMacro {
 		final extra: Array<String> = [];
 		final sup: Null<{ t: Ref<ClassType>, params: Array<Type> }> = c.superClass;
 		if (sup != null) extra.push(',"sup":' + q(instString(sup.t, sup.params, 0)));
-		if (c.interfaces.length > 0) extra.push(',"ifaces":' + arr([for (i in c.interfaces) q(instString(i.t, i.params, 0))]));
+		if (c.interfaces.length > 0) extra.push(',"ifaces":' + arr([ for (i in c.interfaces) q(instString(i.t, i.params, 0)) ]));
 		final kind: String = switch c.kind {
 			case KAbstractImpl(a):
 				extra.push(',"abs":' + q(a.toString()));
@@ -305,11 +305,11 @@ final class TypedFactsMacro {
 		};
 		final genericCopy: Bool = c.kind.match(KGenericInstance(_, _));
 		final home: String = fileOf(c.pos);
-		final members: Array<{ f: ClassField, s: Bool }> = [for (f in c.fields.get()) { f: f, s: false }];
+		final members: Array<{ f: ClassField, s: Bool }> = [ for (f in c.fields.get()) { f: f, s: false } ];
 		for (f in c.statics.get()) members.push({ f: f, s: true });
 		final ctor: Null<Ref<ClassField>> = c.constructor;
 		if (ctor != null) members.push({ f: ctor.get(), s: false });
-		extra.push(',"fields":' + arr([for (m in members) fieldRecord(m.f, m.s, home)]));
+		extra.push(',"fields":' + arr([ for (m in members) fieldRecord(m.f, m.s, home) ]));
 		typeLine(c.pack, c.name, kind, c.pos, c.params, c.meta.get(), c.isExtern, extra);
 		for (m in members) {
 			final nodeKind: String = switch m.f.kind {
@@ -378,7 +378,7 @@ final class TypedFactsMacro {
 		noteHome(home);
 		final out: StringBuf = new StringBuf();
 		out.add('{"k":"type","id":${q(typeId(pack, name))},"f":${q(home)},"p":${pos(p, home)},"kind":"$kind","pack":${q(pack.join('.'))}');
-		if (params.length > 0) out.add(',"params":' + arr([for (tp in params) q(tp.name)]));
+		if (params.length > 0) out.add(',"params":' + arr([ for (tp in params) q(tp.name) ]));
 		out.add(metaList(meta));
 		if (isExtern) out.add(',"ext":true');
 		for (e in extra) out.add(e);
@@ -391,7 +391,7 @@ final class TypedFactsMacro {
 	 * target may print another.
 	 */
 	private function printedAliases(): Void {
-		var pending: Array<String> = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
+		var pending: Array<String> = [ for (key => r in printedTypedefs) if (!printed(key, r)) key ];
 		while (pending.length > 0) {
 			for (key in pending) {
 				final r: Null<Ref<DefType>> = printedTypedefs[key];
@@ -402,7 +402,7 @@ final class TypedFactsMacro {
 					d.pack, d.name, FactKinds.TYPEDEF, d.pos, d.params, d.meta.get(), d.isExtern, [',"target":' + q(typeString(d.type, 0))]
 				);
 			}
-			pending = [for (key => r in printedTypedefs) if (!printed(key, r)) key];
+			pending = [ for (key => r in printedTypedefs) if (!printed(key, r)) key ];
 		}
 	}
 
@@ -570,7 +570,7 @@ final class TypedFactsMacro {
 						case _: 'null';
 					}
 		];
-		return ',"meta":' + arr([for (m in meta) q(m.name)]) + (builds.length == 0 ? '' : ',"builds":' + arr(builds)) + (
+		return ',"meta":' + arr([ for (m in meta) q(m.name) ]) + (builds.length == 0 ? '' : ',"builds":' + arr(builds)) + (
 			code.length == 0 ? '' : ',"code":' + arr(code)
 		);
 	}

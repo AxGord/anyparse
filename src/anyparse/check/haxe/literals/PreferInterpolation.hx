@@ -207,7 +207,7 @@ final class PreferInterpolation extends HaxeRule {
 	): Array<{ span: Span, text: String }> {
 		final matches: Null<Array<ScanMatch>> = scanSource('', source, plugin, true, true, () -> null, null);
 		if (matches == null) return [];
-		final byKey: Map<String, ScanMatch> = [for (m in matches) '${m.span.from}:${m.span.to}' => m];
+		final byKey: Map<String, ScanMatch> = [ for (m in matches) '${m.span.from}:${m.span.to}' => m ];
 		// A macro argument's refusal is a property of the finding's ANCESTRY and of a cross-file index, neither of which a
 		// one-file `fix` holds: `run` decided it, and the finding carries the decision.
 		final fixable: Array<Violation> = violations.filter(v -> v.message.indexOf(MacroGate.SYNTAX_REFUSAL) == -1);

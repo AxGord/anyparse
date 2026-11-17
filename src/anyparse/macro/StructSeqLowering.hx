@@ -495,7 +495,7 @@ final class StructSeqLowering {
 				// schema's own field list beside it, and a boundary that
 				// knows where the input came from can say so. A consumer
 				// that never reads `ctx.unknownFields` sees nothing.
-				final knownNames: Expr = { expr: EArrayDecl([for (c in switchCases) c.values[0]]), pos: Context.currentPos() };
+				final knownNames: Expr = { expr: EArrayDecl([ for (c in switchCases) c.values[0] ]), pos: Context.currentPos() };
 				macro {
 					ctx.recordUnknownField(_key, _keyPos, $knownNames);
 					$i{anyFn}(ctx);

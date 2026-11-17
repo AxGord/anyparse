@@ -335,7 +335,7 @@ final class CallRepetition {
 				counter++;
 				stack.push(id);
 				onStack.add(id);
-				frames.push({ id: id, edges: [for (e in _graph.outEdges(id)) if (e.kind.isInvocation()) e], next: 0 });
+				frames.push({ id: id, edges: [ for (e in _graph.outEdges(id)) if (e.kind.isInvocation()) e ], next: 0 });
 			}
 			open(root);
 			while (frames.length > 0) {
@@ -490,7 +490,7 @@ final class CallRepetition {
 	/** `member` and every function defined in its code (`ThreadSafety.memberOf`). */
 	private function functionsOf(member: String): Array<String> {
 		if (_members.length == 0) for (id => _ in _graph.nodes) _members.push({ id: id, member: ThreadSafety.memberOf(_graph, id) });
-		return [for (m in _members) if (m.member == member) m.id];
+		return [ for (m in _members) if (m.member == member) m.id ];
 	}
 
 	private function note(text: String): Void {

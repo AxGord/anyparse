@@ -1325,7 +1325,7 @@ final class DependencyCarry {
 	 */
 	private static function moduleMemberNames(files: Array<FileInfo>, module: String): Null<Array<String>> {
 		final info: Null<FileInfo> = files.find(f -> f.module == module);
-		return info == null ? null : [for (t in info.types) for (m in t.members) m.name];
+		return info == null ? null : [ for (t in info.types) for (m in t.members) m.name ];
 	}
 
 	/** Whether `info`'s file, or an `import.hx` above it, already declares the wildcard `import <raw>;`. */

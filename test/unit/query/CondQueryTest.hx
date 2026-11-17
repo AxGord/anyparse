@@ -129,22 +129,22 @@ class CondQueryTest extends Test {
 	public function testARawExpressionSpliceIsFlaggedAndKeepsItsBytes(): Void {
 		final found: Array<CondRegion> = regionsOf(RAW, 'nodejs');
 		Assert.equals(1, found.length);
-		Assert.same([true, true], [for (branch in found[0].branches) branch.raw]);
-		Assert.same(['1;', '2;'], [for (branch in found[0].branches) text(RAW, branch.body).trim()]);
+		Assert.same([true, true], [ for (branch in found[0].branches) branch.raw ]);
+		Assert.same(['1;', '2;'], [ for (branch in found[0].branches) text(RAW, branch.body).trim() ]);
 		Assert.same([[], []], [
 			for (branch in found[0].branches) CondQuery.namesIn(new HaxeQueryPlugin().parseFile(RAW), branch.body, SHAPE)
 		]);
 		// …and a region the tree DOES model is not flagged, so the flag is about this shape and not
 		// about every region.
-		Assert.same([false, false, false], [for (branch in regionsOf(FLAT, 'nodejs')[0].branches) branch.raw]);
+		Assert.same([false, false, false], [ for (branch in regionsOf(FLAT, 'nodejs')[0].branches) branch.raw ]);
 	}
 
 	/** Without a tree — a file the grammar cannot parse — every non-blank body is raw, and the bodies are still exact. */
 	public function testWithoutATreeEveryNonBlankBodyIsRaw(): Void {
 		final found: Array<CondRegion> = regionsOf(FLAT, 'nodejs', false);
 		Assert.equals(1, found.length);
-		Assert.same([true, true, true], [for (branch in found[0].branches) branch.raw]);
-		Assert.same(['a();', 'b();', 'c();'], [for (branch in found[0].branches) text(FLAT, branch.body).trim()]);
+		Assert.same([true, true, true], [ for (branch in found[0].branches) branch.raw ]);
+		Assert.same(['a();', 'b();', 'c();'], [ for (branch in found[0].branches) text(FLAT, branch.body).trim() ]);
 	}
 
 	/** A blank branch is not raw: an empty `#if` arm has no interior to lose. */
@@ -152,7 +152,7 @@ class CondQueryTest extends Test {
 		final src: String = fn('#if nodejs\n\t\t#else\n\t\ta();\n\t\t#end');
 		final found: Array<CondRegion> = regionsOf(src, 'nodejs');
 		Assert.equals(1, found.length);
-		Assert.same([false, false], [for (branch in found[0].branches) branch.raw]);
+		Assert.same([false, false], [ for (branch in found[0].branches) branch.raw ]);
 	}
 
 	/**
@@ -174,8 +174,8 @@ class CondQueryTest extends Test {
 		]);
 		final tight: String = fn('#if nodejs a#else b#end');
 		final found: Array<CondRegion> = regionsOf(tight, 'nodejs', false);
-		Assert.same([true, true], [for (branch in found[0].branches) branch.raw]);
-		Assert.same([' a', ' b'], [for (branch in found[0].branches) text(tight, branch.body)]);
+		Assert.same([true, true], [ for (branch in found[0].branches) branch.raw ]);
+		Assert.same([' a', ' b'], [ for (branch in found[0].branches) text(tight, branch.body) ]);
 	}
 
 	/**
@@ -189,9 +189,9 @@ class CondQueryTest extends Test {
 		// The `#elseif` naming the define is MAYBE, not live: it is taken only when `other` is
 		// false, and an unlisted flag is never proved false. The `#else` after it IS dead, because
 		// the define's own branch would have been taken first whenever it is reached at all.
-		Assert.same([null, null, false], [for (branch in found[0].branches) branch.live]);
+		Assert.same([null, null, false], [ for (branch in found[0].branches) branch.live ]);
 		// The straight case: the define's own first branch is live and everything after it dead.
-		Assert.same([true, false, false], [for (branch in regionsOf(FLAT, 'nodejs')[0].branches) branch.live]);
+		Assert.same([true, false, false], [ for (branch in regionsOf(FLAT, 'nodejs')[0].branches) branch.live ]);
 	}
 
 	/**

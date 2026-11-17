@@ -616,6 +616,30 @@
 			"find": "if (semiTypedef != null) opt.typedefSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semiTypedef);",
 			"replace": "",
 			"note": "`whitespace.typedefSemicolon` is read and ignored, so every value behaves as `preserve`"
+		},
+		{
+			"name": "M-COMPR-FIT-KEY-IGNORED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWrappingScalars",
+			"find": "if (section.comprehensionFit != null) opt.comprehensionFit = section.comprehensionFit;",
+			"replace": "if (section.comprehensionFit != null) {}",
+			"note": "wrapping.comprehensionFit is read and dropped, so padding alone hugs and fits again"
+		},
+		{
+			"name": "M-COMPR-PAD-OPEN-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyBracketConfig",
+			"find": "if (compr.openingPolicy != null) opt.comprehensionBracketsOpen = HaxeFormatValues.whitespaceToRuntime(compr.openingPolicy);",
+			"replace": "if (compr.openingPolicy != null) {}",
+			"note": "comprehensionBrackets.openingPolicy is dropped, so a comprehension loses its opening pad"
+		},
+		{
+			"name": "M-COMPR-FIT-FITLINE-OVERRIDES",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyComprehensionForPadding",
+			"find": "if (opt.comprehensionFit == null) opt.comprehensionFit = true;",
+			"replace": "opt.comprehensionFit = true;",
+			"note": "comprehensionFor: fitLine overwrites an explicit wrapping.comprehensionFit: false, so a padded block-body comprehension hugs again"
 		}
 	]
 }

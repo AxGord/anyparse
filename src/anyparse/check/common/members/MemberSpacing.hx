@@ -296,7 +296,7 @@ final class MemberSpacing {
 
 	/** The inter-slot text holding exactly `blanks` blank lines (before the next slot's indentation). */
 	private static function separatorOf(blanks: Int): String {
-		return blanks == 1 ? GROUP_SEPARATOR : [for (_ in 0...blanks + 1) '\n'].join('');
+		return blanks == 1 ? GROUP_SEPARATOR : [ for (_ in 0...blanks + 1) '\n' ].join('');
 	}
 
 	/**

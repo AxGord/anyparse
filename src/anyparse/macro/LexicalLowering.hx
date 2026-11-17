@@ -236,7 +236,7 @@ class LexicalLowering {
 	): LexTokenSpec {
 		final ws: String = formatInfo.whitespace;
 		return {
-			whitespace: [for (k in 0...ws.length) ws.fastCodeAt(k)],
+			whitespace: [ for (k in 0...ws.length) ws.fastCodeAt(k) ],
 			literals: tokenLiterals(shape, directives),
 			terminals: tokenTerminals(shape)
 		};
@@ -255,7 +255,7 @@ class LexicalLowering {
 			if (entry.params.length != 3)
 				Context.fatalError('@:condDirectives expects an opener, an array of branch keywords and a closer', entry.pos);
 			final branches: Array<String> = switch entry.params[1].expr {
-				case EArrayDecl(values): [for (v in values) keywordOf(v)];
+				case EArrayDecl(values): [ for (v in values) keywordOf(v) ];
 				case _: fail('@:condDirectives branch keywords must be an array of string literals', entry.params[1].pos);
 			};
 			return { open: keywordOf(entry.params[0]), branches: branches, close: keywordOf(entry.params[2]) };
@@ -275,7 +275,7 @@ class LexicalLowering {
 		final keywords: Array<Null<String>> = [directives.open, directives.close];
 		for (keyword in directives.branches) keywords.push(keyword);
 		for (keyword in keywords) if (keyword != null && keyword != '') seen[keyword] = true;
-		final out: Array<String> = [for (text in seen.keys()) text];
+		final out: Array<String> = [ for (text in seen.keys()) text ];
 		out.sort((a: String, b: String) -> a.length != b.length ? b.length - a.length : Compare.compareString(a, b));
 		return out;
 	}
@@ -310,7 +310,7 @@ class LexicalLowering {
 
 	/** The names of `shape`'s rules in byte order — map iteration order is not specified, and the emitted walk must be byte-stable. */
 	private static function sortedRuleNames(shape: ShapeBuilder.ShapeResult): Array<String> {
-		final names: Array<String> = [for (name in shape.rules.keys()) name];
+		final names: Array<String> = [ for (name in shape.rules.keys()) name ];
 		names.sort(Compare.compareString);
 		return names;
 	}
@@ -320,7 +320,7 @@ class LexicalLowering {
 		return switch Context.getType(typePath) {
 			case TAbstract(ref, _):
 				final impl: Null<Ref<ClassType>> = ref.get().impl;
-				impl == null ? [] : [for (f in impl.get().statics.get()) f.name];
+				impl == null ? [] : [ for (f in impl.get().statics.get()) f.name ];
 			case _: [];
 		};
 	}

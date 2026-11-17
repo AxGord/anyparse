@@ -100,7 +100,7 @@ class CallGraphTest extends Test {
 		]);
 		Assert.equals(1, edges(g, 'A.viaField', 'Worker.run', Call).length);
 		Assert.equals(1, edges(g, 'A.viaCall', 'Worker.run', Call).length);
-		Assert.equals(0, [for (u in g.unresolved) if (u.reason.match(UnresolvedReceiver(_))) u].length);
+		Assert.equals(0, [ for (u in g.unresolved) if (u.reason.match(UnresolvedReceiver(_))) u ].length);
 	}
 
 	public function testChainedCallReceiversResolveStepByStep(): Void {
@@ -118,7 +118,7 @@ class CallGraphTest extends Test {
 			'class Worker { public function run():Void {} }'
 		]);
 		Assert.equals(0, edges(loose, 'A.a', 'Worker.run', Call).length);
-		Assert.equals(1, [for (u in loose.unresolved) if (u.reason.match(UnresolvedReceiver(_))) u].length);
+		Assert.equals(1, [ for (u in loose.unresolved) if (u.reason.match(UnresolvedReceiver(_))) u ].length);
 	}
 
 	public function testNullableReturnReceiverStaysUnresolved(): Void {
@@ -129,7 +129,7 @@ class CallGraphTest extends Test {
 			'class Worker { public function run():Void {} }'
 		]);
 		Assert.equals(0, edges(g, 'A.a', 'Worker.run', Call).length);
-		Assert.equals(1, [for (u in g.unresolved) if (u.reason.match(UnresolvedReceiver(_))) u].length);
+		Assert.equals(1, [ for (u in g.unresolved) if (u.reason.match(UnresolvedReceiver(_))) u ].length);
 	}
 
 	public function testNullWrappedReceiverUnwraps(): Void {
@@ -225,7 +225,7 @@ class CallGraphTest extends Test {
 			'class A { function a():Void Runner.create(() -> work()); function work():Void {} }',
 			'class Runner { public static function create(fn:()->Void):Void {} }'
 		]);
-		final refs: Array<CallEdge> = [for (e in g.outEdges('A.a')) if (e.kind == Ref) e];
+		final refs: Array<CallEdge> = [ for (e in g.outEdges('A.a')) if (e.kind == Ref) e ];
 		Assert.equals(1, refs.length);
 		Assert.equals('Runner.create', refs[0].via);
 		Assert.equals(1, edges(g, refs[0].to, 'A.work', Call).length);
@@ -309,7 +309,7 @@ class CallGraphTest extends Test {
 			+ ' static function g():Void new Lock(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call || e.kind == New) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call || e.kind == New) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -358,7 +358,7 @@ class CallGraphTest extends Test {
 			'class Base { public function new() {} }'
 		]);
 		Assert.equals(1, edges(g, 'Sub.new', 'Base.new', Call).length);
-		Assert.equals(0, [for (u in g.unresolved) if (u.reason.match(UnboundName('super'))) u].length);
+		Assert.equals(0, [ for (u in g.unresolved) if (u.reason.match(UnboundName('super'))) u ].length);
 	}
 
 	public function testMacroReificationNotWalked(): Void {
@@ -384,7 +384,7 @@ class CallGraphTest extends Test {
 		final g: CallGraph = graphOf([
 			'class A { var cb:() -> Void; function a(d:Dynamic, u):Void { cb(); this.cb(); d.run(); u.go(); nope(); } }'
 		]);
-		final reasons: Array<String> = [for (u in g.unresolved) if (u.from == 'A.a') Std.string(u.reason)];
+		final reasons: Array<String> = [ for (u in g.unresolved) if (u.from == 'A.a') Std.string(u.reason) ];
 		reasons.sort(Reflect.compare);
 		Assert.equals(
 			'DynamicReceiver(run),FunctionValue(cb),FunctionValue(cb),UnboundName(nope),UnresolvedReceiver(go)', reasons.join(',')
@@ -442,7 +442,7 @@ class CallGraphTest extends Test {
 			+ 'function c():Void { var arr = [h]; var l = () -> 1; } function h():Void {} }'
 		]);
 		for (from in ['A.a', 'A.b', 'A.c']) Assert.equals(1, edges(g, from, 'A.h', Ref).length, from);
-		Assert.equals(1, [for (e in g.outEdges('A.c')) if (e.kind == Ref && e.to.indexOf('#') >= 0) e].length);
+		Assert.equals(1, [ for (e in g.outEdges('A.c')) if (e.kind == Ref && e.to.indexOf('#') >= 0) e ].length);
 	}
 
 	@:pin('control')
@@ -509,7 +509,7 @@ class CallGraphTest extends Test {
 			'private typedef Alias = Under; abstract Wrap(Alias) { public function callsUnder():Void this.foo(); }'
 		]);
 		Assert.equals(1, edges(g, 'Wrap.callsUnder', 'Under.foo', Call).length);
-		Assert.equals(0, [for (u in g.unresolved) if (u.from == 'Wrap.callsUnder') u].length);
+		Assert.equals(0, [ for (u in g.unresolved) if (u.from == 'Wrap.callsUnder') u ].length);
 	}
 
 	@:pin('control')
@@ -686,7 +686,7 @@ class CallGraphTest extends Test {
 		];
 		final g: CallGraph = CallGraph.build(files, plugin);
 		Assert.equals(0, edges(g, 'C.new', 'P.new', Call).length);
-		Assert.equals(1, [for (u in g.unresolved) if (u.from == 'C.new') u].length);
+		Assert.equals(1, [ for (u in g.unresolved) if (u.from == 'C.new') u ].length);
 	}
 
 	@:pin('control')
@@ -879,7 +879,7 @@ class CallGraphTest extends Test {
 			{ file: 'Gen.hx', source: '@:build(M.b()) class Gen {}' },
 			{ file: 'B.hx', source: 'import Gen.*; class B { function b():Void grow(); }' }
 		], plugin);
-		Assert.equals('UnboundName(grow)', [for (u in built.unresolved) if (u.from == 'B.b') Std.string(u.reason)].join(','));
+		Assert.equals('UnboundName(grow)', [ for (u in built.unresolved) if (u.from == 'B.b') Std.string(u.reason) ].join(','));
 	}
 
 	@:pin('control')
@@ -1032,7 +1032,7 @@ class CallGraphTest extends Test {
 			'enum E { Some(v:Int); }',
 			'class A { function a():Void { Some(1); Imported(); } }'
 		]);
-		final names: Array<String> = [for (u in g.unresolved) if (u.from == 'A.a') Std.string(u.reason)];
+		final names: Array<String> = [ for (u in g.unresolved) if (u.from == 'A.a') Std.string(u.reason) ];
 		Assert.equals('UnboundName(Imported)', names.join(','));
 	}
 
@@ -1043,7 +1043,7 @@ class CallGraphTest extends Test {
 			'enum E { Load; } class A { function a():Void Load(); }',
 			'class Util { public static function Load():Void {} }'
 		]);
-		Assert.equals(1, [for (u in g.unresolved) if (u.from == 'A.a') u].length);
+		Assert.equals(1, [ for (u in g.unresolved) if (u.from == 'A.a') u ].length);
 	}
 
 	@:pin('control')
@@ -1103,7 +1103,7 @@ class CallGraphTest extends Test {
 			'package u; import sys.thread.Lock; class R { static function field():Void U.lock.wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1154,7 +1154,7 @@ class CallGraphTest extends Test {
 			'package app; import utils.Mutex; class M { static function lib(b:MBox<Mutex>):Void b.v.release(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1182,7 +1182,7 @@ class CallGraphTest extends Test {
 		}
 		final guarded: String = 'package app; #if sys import sys.thread.Lock; #end class G { static function f(l:Lock):Void l.wait(); }';
 		function targets(g: CallGraph): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges('G.f')) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges('G.f')) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1415,7 +1415,7 @@ class CallGraphTest extends Test {
 			}
 		], new HaxeQueryPlugin());
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1454,7 +1454,7 @@ class CallGraphTest extends Test {
 			'package app; import app.A.lock as held; class Q { static function field():Void held.wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			return [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 		}
 		Assert.same(['Lock.wait'], targets('M.field'), 'a module-level final of the name: its type');
 		Assert.same(['Lock.wait', 'sys.thread.Lock.wait'], targets('N.field'), 'one inside a conditional region: the import elsewhere');
@@ -1510,7 +1510,7 @@ class CallGraphTest extends Test {
 			+ ' #if a class FarIn extends lib.Base { function field():Void cb(); } #end'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1526,7 +1526,7 @@ class CallGraphTest extends Test {
 		Assert.same([], targets('Calls.field'), 'every build compiling the call declares the value: no import binds it');
 		Assert.same(['B.cb'], targets('CallsOut.field'), 'the builds without it call the imported static');
 		function reasons(from: String): Array<String> {
-			return [for (u in g.unresolved) if (u.from == from) Std.string(u.reason)];
+			return [ for (u in g.unresolved) if (u.from == from) Std.string(u.reason) ];
 		}
 		Assert.same(['FunctionValue(cb)'], reasons('CallsOut.field'), 'and the others the value');
 		Assert.same(['B.cb'], targets('Far.field'), 'a supertype the index does not hold may declare it: the import, by name');
@@ -1565,7 +1565,7 @@ class CallGraphTest extends Test {
 			'package app; import app.A.*; class X extends lib.Unseen { static function field():Void lock.wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1602,7 +1602,7 @@ class CallGraphTest extends Test {
 			+ ' static function w(x:W<utils.Lock>):Void x.wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			return [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 		}
 		Assert.same(['sys.thread.Lock.wait'], targets('C.h'), 'the underlying type the abstract\'s own file imports');
 		Assert.same(['sys.thread.Lock.wait'], targets('C.ha'), 'an alias the abstract\'s file declares, seen through');
@@ -1631,7 +1631,7 @@ class CallGraphTest extends Test {
 			+ ' static function local():Void { final l = A.get(); l.wait(); } static function dyn(d:Dynamic):Void d().wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1683,7 +1683,7 @@ class CallGraphTest extends Test {
 			+ ' static function gen():Void for (l in A.gen) l.wait(); static function box():Void for (l in A.box) l.wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			return [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			return [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 		}
 		Assert.same(['sys.thread.Lock.wait'], targets('C.arr'), 'an array element, its type read where the array was declared');
 		Assert.same(['sys.thread.Lock.wait'], targets('C.values'), 'a map yields its values');
@@ -1756,7 +1756,7 @@ class CallGraphTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final indexed: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(std), plugin));
 		function targets(graph: CallGraph, from: String): Array<String> {
-			return [for (e in graph.outEdges(from)) if (e.kind == Call) e.to];
+			return [ for (e in graph.outEdges(from)) if (e.kind == Call) e.to ];
 		}
 		Assert.same(['sys.thread.Lock.wait'], targets(g, 'C.list'), 'an imported project List yields what its iterator() says');
 		Assert.same([], targets(g, 'C.index'), 'an imported project Vector indexed is no std vector');
@@ -1877,7 +1877,7 @@ class CallGraphTest extends Test {
 			+ 'utils.Lock().wait(); static function generic():Void new Box(new utils.Lock()).get().wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -1894,7 +1894,7 @@ class CallGraphTest extends Test {
 	}
 
 	private function edges(g: CallGraph, from: String, to: String, kind: EdgeKind): Array<CallEdge> {
-		return [for (e in g.outEdges(from)) if (e.to == to && e.kind == kind) e];
+		return [ for (e in g.outEdges(from)) if (e.to == to && e.kind == kind) e ];
 	}
 
 }

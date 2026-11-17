@@ -292,7 +292,7 @@ final class CasePatterns {
 		}
 		walk(root);
 		if (ctors.length != 1) return false;
-		final params: Array<QueryNode> = [for (c in ctors[0].children) if (paramKinds.contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in ctors[0].children) if (paramKinds.contains(c.kind)) c ];
 		return index < params.length && typeRulesOutConstants(params[index].type, root, shape);
 	}
 

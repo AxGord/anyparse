@@ -181,7 +181,7 @@ final class OperandCallees {
 		if (m.hasOverloadMeta && signature == null) return null;
 		final written: Null<CallSignature> = signature == m.signatures[0] ? null : signature;
 		final typeParams: Array<String> = written == null ? m.typeParamNames : written.typeParamNames;
-		final kept: Map<String, Located> = [for (k => v in bindings) if (!typeParams.contains(k)) k => v];
+		final kept: Map<String, Located> = [ for (k => v in bindings) if (!typeParams.contains(k)) k => v ];
 		if (written == null) for (k => v in own) kept[k] = v;
 		return {
 			params: written == null
@@ -205,7 +205,7 @@ final class OperandCallees {
 	): Null<CallSignature> {
 		final calls: CallSelection = binder._index.typing.calls;
 		final candidates: Null<CallCandidates> = calls.candidates(declared, declared.members[0].isStatic);
-		final passed: Array<CallArgument> = [for (_ in 0...shift) Untyped].concat(
+		final passed: Array<CallArgument> = [ for (_ in 0...shift) Untyped ].concat(
 			args.map(a -> a.kind == binder._shape.nullLiteralKind ? NullValue : Untyped)
 		);
 		return candidates == null ? null : calls.select(candidates, passed)?.signature;

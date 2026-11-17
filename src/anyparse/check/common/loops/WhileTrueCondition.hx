@@ -359,7 +359,7 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 		final breakSpan: Null<Span> = arms.breakNode.span;
 		if (breakSpan == null) return null;
 		final runFrom: Null<Span> = arms.lift.length == 0 ? null : arms.lift[0].span;
-		final kept: Array<Span> = [for (span in emitted) if (span != null) span];
+		final kept: Array<Span> = [ for (span in emitted) if (span != null) span ];
 		if (runFrom != null) kept.push(new Span(runFrom.from, breakSpan.from));
 		final hoisted: Null<Span> = runFrom == null ? null : hoistableComment(breakSpan, loopSpan, ctx);
 		if (hoisted != null) kept.push(hoisted);

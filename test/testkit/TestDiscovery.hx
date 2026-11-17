@@ -253,7 +253,7 @@ class TestDiscovery {
 	private static function consider(c: ClassType, census: TestCensus, arms: Array<MutationArm>): Void {
 		if (c.isExtern || c.isInterface) return;
 		final fq: String = qualified(c);
-		final statics: Array<String> = [for (f in c.statics.get()) if (isFixtureMethod(f)) f.name];
+		final statics: Array<String> = [ for (f in c.statics.get()) if (isFixtureMethod(f)) f.name ];
 		if (!isUtestCase(c)) {
 			for (f in c.fields.get()) if (isFixtureMethod(f)) census.dead.push('$fq#${f.name} :: the class does not implement utest.ITest');
 			for (name in statics) census.dead.push('$fq#$name :: the class does not implement utest.ITest');
@@ -361,8 +361,8 @@ class TestDiscovery {
 		final fq: String = qualified(c);
 		for (f in c.fields.get()) if (isFixtureMethod(f)) {
 			final roles: Array<MetadataEntry> = f.meta.extract(PIN_META);
-			final killers: Array<String> = [for (entry in f.meta.extract(KILLER_META)) for (arg in metaArgs(entry)) arg];
-			final roleNames: Array<String> = [for (entry in roles) for (arg in metaArgs(entry)) arg];
+			final killers: Array<String> = [ for (entry in f.meta.extract(KILLER_META)) for (arg in metaArgs(entry)) arg ];
+			final roleNames: Array<String> = [ for (entry in roles) for (arg in metaArgs(entry)) arg ];
 			final unrecorded: Array<String> = ProseClaims.unrecorded(f.doc, roleNames, killers);
 			if (unrecorded.length > 0) census.claims.push(ProseClaims.render('$fq#${f.name}', unrecorded));
 			if (roles.length == 0) {

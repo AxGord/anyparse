@@ -238,7 +238,7 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 		for (entry in files) if (sourceHasBlockingCatch(entry.source, seams.blockingCatchTypes)) return true;
 		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
 		if (index == null) return false;
-		final scanned: Map<String, Bool> = [for (entry in files) entry.file => true];
+		final scanned: Map<String, Bool> = [ for (entry in files) entry.file => true ];
 		// A source the index could not PARSE never enters `allFiles` — but this gate never wanted a
 		// parse. `sourceHasBlockingCatch` is a text scan and the builder RETAINS a skipped file's raw
 		// source, so the clause question is asked of it exactly as of every other file. The `null`

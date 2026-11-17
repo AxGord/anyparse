@@ -215,7 +215,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	private static function rewrites(source: String, plugin: GrammarPlugin, seams: Seams): Array<DocCommentRewrite> {
 		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		if (comments.length == 0) return [];
-		final owned: Array<CommentTok> = [for (tok in comments) if (ownsItsLine(source, tok)) tok];
+		final owned: Array<CommentTok> = [ for (tok in comments) if (ownsItsLine(source, tok)) tok ];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final anchors: Map<Int, Anchor> = [];
@@ -331,7 +331,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 			final tally: Map<Int, Int> = soleInSection(source, anchors, stops, anchor, indent) ? docs : headings;
 			tally[anchor.owner] = (tally[anchor.owner] ?? 0) + 1;
 		}
-		return [for (owner => count in headings) if (count > (docs[owner] ?? 0)) owner];
+		return [ for (owner => count in headings) if (count > (docs[owner] ?? 0)) owner ];
 	}
 
 	/** Gate 1: a line comment with nothing but whitespace before it (its close is the line end by construction). */

@@ -93,7 +93,7 @@ class NativeDoorTest extends Test {
 		Assert.isNull(DoorRawRecordParser.parseNative(text));
 		switch DoorRawRecordParser.parse(text).raw {
 			case JObject(entries):
-				Assert.equals('b,a', [for (e in entries) (e.key: String)].join(','));
+				Assert.equals('b,a', [ for (e in entries) (e.key: String) ].join(','));
 			case _:
 				Assert.fail('the raw part is no object');
 		}

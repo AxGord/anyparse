@@ -1341,7 +1341,7 @@ final class OracleGenerationTest extends Test {
 	/** How many times the fixture's command ran. */
 	private static function runs(dir: String): Int {
 		final path: String = '$dir/runs.txt';
-		return FileSystem.exists(path) ? [for (line in File.getContent(path).split('\n')) if (line != '') line].length : 0;
+		return FileSystem.exists(path) ? [ for (line in File.getContent(path).split('\n')) if (line != '') line ].length : 0;
 	}
 
 	/** A configuration whose `command` writes `hxml` (a file name) in `dir`, with no inputs. */

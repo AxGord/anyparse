@@ -55,7 +55,7 @@ final class ProcessProbe {
 		final found: Array<Int> = [];
 		var front: Array<Int> = [root];
 		while (front.length > 0) {
-			final next: Array<Int> = [for (r in rows) if (front.contains(r.ppid)) r.pid];
+			final next: Array<Int> = [ for (r in rows) if (front.contains(r.ppid)) r.pid ];
 			for (r in rows) if (front.contains(r.ppid) && r.command.indexOf(fragment) >= 0) found.push(r.pid);
 			front = next;
 		}

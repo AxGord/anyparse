@@ -93,7 +93,7 @@ final class ReadOnlyWriteRouteCensusTest extends Test {
 		final unlisted: Array<String> = [
 			for (type => found in hits) if (!SANCTIONED.exists(type)) '$type: ${found.join(', ')}'
 		];
-		final stale: Array<String> = [for (type in SANCTIONED.keys()) if (!hits.exists(type)) type];
+		final stale: Array<String> = [ for (type in SANCTIONED.keys()) if (!hits.exists(type)) type ];
 		unlisted.sort(anyparse.util.Compare.compareString);
 		stale.sort(anyparse.util.Compare.compareString);
 		Assert.isTrue(paths.length > 100, 'the sweep reaches the commands: ${paths.length} files');

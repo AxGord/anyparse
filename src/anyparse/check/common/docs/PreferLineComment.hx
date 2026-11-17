@@ -136,7 +136,7 @@ final class PreferLineComment extends RuleBase implements DefaultOff {
 	private static function rewrites(source: String, plugin: GrammarPlugin, kinds: LineCommentKinds): Array<LineCommentRewrite> {
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		final comments: Array<CommentTok> = SourceComments.collectCommentTokens(regions);
-		final blocks: Array<CommentTok> = [for (tok in comments) if (!tok.isLine) tok];
+		final blocks: Array<CommentTok> = [ for (tok in comments) if (!tok.isLine) tok ];
 		if (blocks.length == 0) return [];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];

@@ -153,7 +153,7 @@ final class ScrubGuardTest extends Test {
 				'tools/Gen.cfg'
 			].join('\n'));
 			cmd('git -C $root add a.md shared/Common.hx').check();
-			final privates: Array<PathIndex> = [for (tree in [one, two]) new PathIndex(ScrubGuard.privateFiles(tree))];
+			final privates: Array<PathIndex> = [ for (tree in [one, two]) new PathIndex(ScrubGuard.privateFiles(tree)) ];
 			Assert.same([
 				'a.md:1: private root 1',
 				'a.md:1: private root 1',

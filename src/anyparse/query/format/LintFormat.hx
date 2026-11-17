@@ -353,7 +353,7 @@ final class LintFormat {
 	/** The distinct severity labels of `group`, most severe first, joined by `/`. */
 	private static function severitiesOf(group: Array<Violation>): String {
 		final levels: Array<Severity> = [Severity.Error, Severity.Warning, Severity.Info];
-		return [for (level in levels) if (group.exists(v -> v.severity == level)) level.label()].join('/');
+		return [ for (level in levels) if (group.exists(v -> v.severity == level)) level.label() ].join('/');
 	}
 
 	/**

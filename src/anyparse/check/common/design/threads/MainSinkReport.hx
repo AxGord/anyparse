@@ -118,7 +118,7 @@ final class MainSinkReport {
 	 * it reports no sink call, so a hold long only by one stays.
 	 */
 	private static function dropSilenced(reportedBy: Map<String, Violation>, suppressed: (Violation) -> Bool): Void {
-		for (k in [for (k => v in reportedBy) if (suppressed(v)) k]) reportedBy.remove(k);
+		for (k in [ for (k => v in reportedBy) if (suppressed(v)) k ]) reportedBy.remove(k);
 	}
 
 	/** Records in `reportedBy` the warning that reports the sink call `edge`: its own `finding`, or the owner's it `moved` to. */
@@ -183,7 +183,7 @@ final class MainSinkReport {
 		while (grew) {
 			grew = false;
 			for (id => _ in graph.nodes) if (!inside.exists(id)) {
-				final ins: Array<CallEdge> = [for (e in graph.inEdges(id)) if (e.kind != Contains && runs(e)) e];
+				final ins: Array<CallEdge> = [ for (e in graph.inEdges(id)) if (e.kind != Contains && runs(e)) e ];
 				if (ins.length == 0 || !ins.foreach(e -> inside.exists(e.from) || taints.listsOf(e.file).sinkIds.contains(e.from)))
 					continue;
 				inside[id] = true;
@@ -459,7 +459,7 @@ final class MainSinkReport {
 		final known: Null<OwnedFinding> = owned[key];
 		if (known != null) {
 			if ((edge.span?.from ?? 0) < (known.finding.span?.from ?? 0)) known.finding.span = edge.span;
-			known.sinks = known.sinks.concat([for (t in sinks) if (!known.sinks.contains(t)) t]);
+			known.sinks = known.sinks.concat([ for (t in sinks) if (!known.sinks.contains(t)) t ]);
 			fill(known);
 			return known.finding;
 		}

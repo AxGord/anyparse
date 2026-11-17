@@ -144,28 +144,28 @@ final class OracleServerPool {
 	public function positionsIn(
 		oracles: Array<OracleConfig>, file: String, asks: Array<Array<PositionAsk>>
 	): Array<Null<Array<Null<TypeReplyPosition>>>> {
-		final out: Array<Null<Array<Null<TypeReplyPosition>>>> = [for (_ in oracles) null];
+		final out: Array<Null<Array<Null<TypeReplyPosition>>>> = [ for (_ in oracles) null ];
 		#if nodejs
-		final held: Array<Int> = [for (i in 0...oracles.length) if (_servers.exists(keyOf(oracles[i]))) i];
+		final held: Array<Int> = [ for (i in 0...oracles.length) if (_servers.exists(keyOf(oracles[i]))) i ];
 		if (held.length == 0) return out;
 		_warming?.await();
 		final now: Map<String, Null<String>> = texts();
 		for (i in held) renew(oracles[i], now);
-		final asked: Array<Int> = [for (i in held) if (_servers.exists(keyOf(oracles[i]))) i];
+		final asked: Array<Int> = [ for (i in held) if (_servers.exists(keyOf(oracles[i]))) i ];
 		final unheard: Array<Int> = invalidate(oracles, asked, now, [file]);
 		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
 		for (i in unheard) end(oracles[i]);
 		final requests: Array<PositionRequest> = [];
 		final owners: Array<{ oracle: Int, ask: Int }> = [];
-		for (owner in interleaved([for (i in asked) if (!unheard.contains(i)) i], asks)) {
+		for (owner in interleaved([ for (i in asked) if (!unheard.contains(i)) i ], asks)) {
 			final server: Null<PoolServer> = _servers[keyOf(oracles[owner.oracle])];
 			if (server == null) continue;
 			// every ask about `file` is answered from the text handed in, so the next compile re-reads its disk bytes
-			server.seen = [for (path => text in now) if (path != file) path => text];
+			server.seen = [ for (path => text in now) if (path != file) path => text ];
 			server.reread = [file];
 			requests.push(requestOf(server.port, oracles[owner.oracle], asks[owner.oracle][owner.ask]));
 			owners.push(owner);
-			out[owner.oracle] ??= [for (_ in asks[owner.oracle]) null];
+			out[owner.oracle] ??= [ for (_ in asks[owner.oracle]) null ];
 		}
 		final answers: Array<Null<TypeReplyPosition>> = CompilerDisplayOracle.positionsOver(file, requests);
 		for (k => owner in owners) {
@@ -215,7 +215,7 @@ final class OracleServerPool {
 
 	/** `compile`, untimed. */
 	private function compileTimed(oracles: Array<OracleConfig>): Array<Null<ProcessRun>> {
-		final out: Array<Null<ProcessRun>> = [for (_ in oracles) null];
+		final out: Array<Null<ProcessRun>> = [ for (_ in oracles) null ];
 		#if nodejs
 		if (!_servers.keys().hasNext()) return out;
 		_warming?.await();
@@ -228,7 +228,7 @@ final class OracleServerPool {
 		final unheard: Array<Int> = invalidate(oracles, asked, now, []);
 		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
 		for (i in unheard) end(oracles[i]);
-		final compiled: Array<Int> = [for (i in asked) if (!unheard.contains(i)) i];
+		final compiled: Array<Int> = [ for (i in asked) if (!unheard.contains(i)) i ];
 		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (i in compiled) {
 				final server: Null<PoolServer> = _servers[keyOf(oracles[i])];
@@ -310,7 +310,7 @@ final class OracleServerPool {
 
 	/** `CompilerServer.freePort` over `taken` and the ports the pool's own servers listen on. */
 	private function freePort(taken: Array<Int>): Null<Int> {
-		return CompilerServer.freePort(taken.concat([for (server in _servers) server.port]), _candidate);
+		return CompilerServer.freePort(taken.concat([ for (server in _servers) server.port ]), _candidate);
 	}
 
 	/**
@@ -353,7 +353,7 @@ final class OracleServerPool {
 
 	/** The paths whose text in `now` is not the one in `seen` — a path in only one of them included. */
 	private static function moved(seen: Map<String, Null<String>>, now: Map<String, Null<String>>): Array<String> {
-		final out: Array<String> = [for (path => text in now) if (!seen.exists(path) || seen[path] != text) path];
+		final out: Array<String> = [ for (path => text in now) if (!seen.exists(path) || seen[path] != text) path ];
 		for (path in seen.keys()) if (!now.exists(path)) out.push(path);
 		return out;
 	}
@@ -392,7 +392,7 @@ final class OracleServerPool {
 		if (run.status == null || run.status == 0) return false;
 		final errors: String = run.out + run.err;
 		return LintFixSafePass.errorFiles(errors).length > 0
-			&& ![for (path in now.keys()) path].exists(path -> LintFixSafePass.blames(errors, path));
+			&& ![ for (path in now.keys()) path ].exists(path -> LintFixSafePass.blames(errors, path));
 	}
 
 	/** Whether `run` never reached a server: the client's own refusal, which is no verdict. */

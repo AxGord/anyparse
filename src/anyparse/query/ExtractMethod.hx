@@ -270,7 +270,7 @@ final class ExtractMethod {
 		function walk(node: QueryNode): Void {
 			if (result != null) return;
 			if (BLOCK_KINDS.contains(node.kind)) {
-				final stmts: Array<QueryNode> = [for (c in node.children) if (isStatement(c.kind)) c];
+				final stmts: Array<QueryNode> = [ for (c in node.children) if (isStatement(c.kind)) c ];
 				final si: Int = indexStartingAt(stmts, startOffset);
 				if (si >= 0) {
 					final ei: Int = indexContaining(stmts, si, endOffset);

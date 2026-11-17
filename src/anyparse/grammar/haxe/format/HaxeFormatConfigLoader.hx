@@ -513,6 +513,7 @@ final class HaxeFormatConfigLoader {
 		}
 		if (section.trailingComma != null) opt.trailingComma = HaxeFormatValues.trailingCommaRemovalToRuntime(section.trailingComma);
 		if (section.comprehensionCuddledOpen != null) opt.comprehensionCuddledOpen = section.comprehensionCuddledOpen;
+		if (section.comprehensionFit != null) opt.comprehensionFit = section.comprehensionFit;
 		if (section.methodChainCuddledLinks != null) opt.methodChainCuddledLinks = section.methodChainCuddledLinks;
 		if (section.soleItemCuddledBrackets != null) opt.soleItemCuddledBrackets = section.soleItemCuddledBrackets;
 		if (section.ternaryCuddledBraces != null) opt.ternaryCuddledBraces = section.ternaryCuddledBraces;
@@ -1104,10 +1105,10 @@ final class HaxeFormatConfigLoader {
 		// the body goes on its own; every other value (an unsupported `keep` reads as absent) defers to `forBody`.
 		final comprehensionFor: Null<HxFormatBodyPolicy> = section.comprehensionFor;
 		opt.comprehensionObjectLitGlue = section.forBody == HxFormatBodyPolicy.FitLine && comprehensionFor != HxFormatBodyPolicy.Next;
-		// `comprehensionFor: fitLine` is the fork's trigger for padded
-		// comprehension brackets; every other value (incl. the `same`
-		// default) leaves the `bracketConfig` / default policy in place.
+		// `comprehensionFor: fitLine` is the fork's trigger for padded comprehension brackets AND the fit-driven layout;
+		// every other value (incl. the `same` default) leaves the `bracketConfig` / default policy in place.
 		if (section.comprehensionFor != HxFormatBodyPolicy.FitLine) return;
+		if (opt.comprehensionFit == null) opt.comprehensionFit = true;
 		opt.comprehensionBracketsOpen = WhitespacePolicy.After;
 		opt.comprehensionBracketsClose = WhitespacePolicy.Before;
 	}

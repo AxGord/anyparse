@@ -174,7 +174,7 @@ final class Unification {
 		return graph == null
 			? MayFit
 			: agreed([
-				for (b in graph.branches) !b.transitive && !allowCast ? Misfits : anyOf([for (t in side(b)) through(b, t)])
+				for (b in graph.branches) !b.transitive && !allowCast ? Misfits : anyOf([ for (t in side(b)) through(b, t) ])
 			]);
 	}
 
@@ -339,7 +339,7 @@ final class Unification {
 			case Dyn: '*';
 			case Open: '?';
 			case Param(name): '<$name';
-			case Applied(r, args): '${r.file.file}@${r.type.span.from}<${[for (a in args) endKey(a)].join(',')}>';
+			case Applied(r, args): '${r.file.file}@${r.type.span.from}<${[ for (a in args) endKey(a) ].join(',')}>';
 		};
 	}
 

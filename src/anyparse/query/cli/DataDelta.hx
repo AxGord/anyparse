@@ -161,8 +161,8 @@ final class DataDelta {
 		old: QueryNode, now: QueryNode, was: Array<QueryNode>, is: Array<QueryNode>, versions: Versions
 	): Array<Int> {
 		final shape: RefShape = versions.shape;
-		final partner: Array<Int> = [for (_ in is) -1];
-		final taken: Array<Bool> = [for (_ in was) false];
+		final partner: Array<Int> = [ for (_ in is) -1 ];
+		final taken: Array<Bool> = [ for (_ in was) false ];
 		pairEqual(
 			was.map(element -> DataPath.json(element, versions.base, shape)),
 			is.map(element -> DataPath.json(element, versions.now, shape)), partner, taken
@@ -185,8 +185,8 @@ final class DataDelta {
 		final was: Array<QueryNode> = old.children.map(DataPath.valueOf.bind(_, shape));
 		final is: Array<QueryNode> = now.children.map(DataPath.valueOf.bind(_, shape));
 		final partner: Array<Int> = counterparts(old, now, was, is, versions);
-		final taken: Array<Bool> = [for (j in 0...was.length) partner.contains(j)];
-		final leftOld: Array<Int> = [for (j in 0...was.length) if (!taken[j] && !isContainer(was[j], shape)) j];
+		final taken: Array<Bool> = [ for (j in 0...was.length) partner.contains(j) ];
+		final leftOld: Array<Int> = [ for (j in 0...was.length) if (!taken[j] && !isContainer(was[j], shape)) j ];
 		var next: Int = 0;
 		if (reordered(partner)) out.push(orderChange(path, ARRAY_ORDER));
 		for (i => element in is) {
@@ -321,9 +321,9 @@ final class DataDelta {
 	 * only the unpaired elements are numbered among their repeats, so two versions number the same leftovers alike.
 	 */
 	private static function remainingKeys(source: String, items: Array<QueryNode>, paired: Array<Bool>): Array<String> {
-		final keys: Array<String> = RecordTree.identities(source, [for (i => item in items) if (!paired[i]) item], '');
+		final keys: Array<String> = RecordTree.identities(source, [ for (i => item in items) if (!paired[i]) item ], '');
 		var next: Int = 0;
-		return [for (i in 0...items.length) paired[i] ? '' : keys[next++]];
+		return [ for (i in 0...items.length) paired[i] ? '' : keys[next++] ];
 	}
 
 }

@@ -290,7 +290,7 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 		name: String, declSpan: Span, init: QueryNode, region: Span, value: UnitValue, leafTotal: Int, root: QueryNode, source: String,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
 	): Null<Match> {
-		final writes: Array<Span> = [for (h in Refs.find(name, root, s.shape)) if (h.kind == RefKind.Write) h.span];
+		final writes: Array<Span> = [ for (h in Refs.find(name, root, s.shape)) if (h.kind == RefKind.Write) h.span ];
 		final inside: Int = writes.count(w -> w.from >= region.from && w.from < region.to);
 		if (inside != leafTotal) return null;
 		// A write that OUTLIVES the run keeps the local mutable -- the shape the single-construct

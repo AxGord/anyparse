@@ -84,7 +84,7 @@ final class ThreadStates {
 
 	/** Every state of `id` the walk reached: each valuation of its tracked parameters, with the contexts it runs it on. */
 	public function statesOf(id: String): Array<{ valuation: String, ctx: Int }> {
-		return [for (state in _byNode[id] ?? []) { valuation: state.valuation, ctx: state.ctx }];
+		return [ for (state in _byNode[id] ?? []) { valuation: state.valuation, ctx: state.ctx } ];
 	}
 
 	/**

@@ -214,7 +214,7 @@ final class ParityTest extends Test {
 			final outcomes: Array<Outcome> = TempDir.with(work ->
 				Parity.side(tree, engine(dir.file('e.js'), 'A'), [invocation], work, 1, false)
 			);
-			final names: Array<String> = [for (name in outcomes[0].files.keys()) name];
+			final names: Array<String> = [ for (name in outcomes[0].files.keys()) name ];
 			names.sort(Compare.compareString);
 			Assert.same(['a.hx', 'log', 'out.txt'], names);
 		});

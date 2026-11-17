@@ -109,7 +109,7 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 	public function sameDeclarations(
 		file: String, before: String, after: String, sites: Array<NameSite>, edits: Array<{ span: Span, text: String }>
 	): Array<Bool> {
-		return [for (_ in sites) false];
+		return [ for (_ in sites) false ];
 	}
 
 	public function oracleKey(oracle: OracleConfig): String {

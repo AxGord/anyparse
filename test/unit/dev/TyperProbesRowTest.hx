@@ -18,14 +18,14 @@ final class TyperProbesRowTest extends Test {
 	@:killer('M-TYPERROW-SHOWS-TAIL')
 	public function testAFailedRunShowsTheDifferentProbesNotTheTail(): Void {
 		final shown: Array<String> = [];
-		final outcome: Outcome = ran(1, 'DIFFERENT a.hx:1\n' + [for (i in 0...30) 'noise $i'].join('\n'), shown);
+		final outcome: Outcome = ran(1, 'DIFFERENT a.hx:1\n' + [ for (i in 0...30) 'noise $i' ].join('\n'), shown);
 		Assert.isTrue(outcome.match(Failed(_)), '$outcome');
 		Assert.same(['DIFFERENT a.hx:1'], shown.join('\n').split('\n'));
 	}
 
 	public function testAFailureNamingNoProbeShowsTheTailOfTheRun(): Void {
 		final shown: Array<String> = [];
-		final outcome: Outcome = ran(1, [for (i in 0...30) 'line $i'].join('\n'), shown);
+		final outcome: Outcome = ran(1, [ for (i in 0...30) 'line $i' ].join('\n'), shown);
 		Assert.isTrue(outcome.match(Failed(_)), '$outcome');
 		Assert.stringContains('line 29', shown.join('\n'));
 		Assert.isFalse(shown.join('\n').contains('line 3\n'), 'only the tail');

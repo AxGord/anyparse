@@ -133,7 +133,7 @@ class AnonTypeDupCheckTest extends Test {
 
 	public function testRegisteredInBuiltinsAndOffByDefault(): Void {
 		Assert.notNull(Linter.byId('anon-type-dup'));
-		final files: Array<{ file: String, source: String }> = [for (i in 0...3) { file: 'a$i.hx', source: SHAPE }];
+		final files: Array<{ file: String, source: String }> = [ for (i in 0...3) { file: 'a$i.hx', source: SHAPE } ];
 		final config: LintConfig = LintConfig.parse('{}');
 		final off: Array<Violation> = Linter.run(files, new HaxeQueryPlugin(), null, _ -> config, true);
 		Assert.equals(0, off.filter(v -> v.rule == 'anon-type-dup').length, 'a new rule is OFF until a project opts in');
@@ -161,7 +161,7 @@ class AnonTypeDupCheckTest extends Test {
 
 	/** No autofix — the typedef's name is a human's choice. */
 	public function testNoFixEdits(): Void {
-		final files: Array<{ file: String, source: String }> = [for (i in 0...3) { file: 'a$i.hx', source: SHAPE }];
+		final files: Array<{ file: String, source: String }> = [ for (i in 0...3) { file: 'a$i.hx', source: SHAPE } ];
 		final check: AnonTypeDup = new AnonTypeDup();
 		Assert.isTrue(CheckFixture.violationsIn(check, files).length > 0);
 		for (f in files) Assert.equals(0, CheckFixture.fixRun(check, files, f.file).edits.length);
@@ -172,8 +172,8 @@ class AnonTypeDupCheckTest extends Test {
 		// populations, so one new anonymous structure anywhere re-keyed every finding the rule
 		// had. Pinned against messages `run` produced, as `Check.VolatileMessage` requires.
 		final check: AnonTypeDup = new AnonTypeDup();
-		final three: String = CheckFixture.violationsIn(check, [for (i in 0...3) { file: 'a$i.hx', source: SHAPE }])[0].message;
-		final four: String = CheckFixture.violationsIn(check, [for (i in 0...4) { file: 'a$i.hx', source: SHAPE }])[0].message;
+		final three: String = CheckFixture.violationsIn(check, [ for (i in 0...3) { file: 'a$i.hx', source: SHAPE } ])[0].message;
+		final four: String = CheckFixture.violationsIn(check, [ for (i in 0...4) { file: 'a$i.hx', source: SHAPE } ])[0].message;
 		Assert.isTrue(three.contains('written 3 times across 3 files'), three);
 		Assert.notEquals(three, four);
 		final identity: String = check.messageIdentity(three);
@@ -231,7 +231,7 @@ class AnonTypeDupCheckTest extends Test {
 	}
 
 	private function violations(sources: Array<String>): Array<Violation> {
-		return CheckFixture.violationsIn(new AnonTypeDup(), [for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] }]);
+		return CheckFixture.violationsIn(new AnonTypeDup(), [ for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] } ]);
 	}
 
 }

@@ -144,7 +144,7 @@ final class LandProse {
 	 * shares it (a shared basename would name the survivor as often as the casualty).
 	 */
 	public static function needles(gone: Vanished, surviving: Array<String>): Array<String> {
-		final kept: Map<String, Bool> = [for (path in surviving) Path.withoutDirectory(path) => true];
+		final kept: Map<String, Bool> = [ for (path in surviving) Path.withoutDirectory(path) => true ];
 		final names: Array<String> = gone.files.concat(gone.dirs);
 		for (file in gone.files) {
 			final base: String = Path.withoutDirectory(file);

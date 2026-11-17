@@ -1178,7 +1178,7 @@ final class MoveSymbol {
 
 		// Source text lookup for every scope file (the index keeps only
 		// structural info, not the raw bytes).
-		final sourceOf: Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
+		final sourceOf: Map<String, String> = [ for (entry in scopeFiles) entry.file => entry.source ];
 		final cursorSource: Null<String> = sourceOf[cursorFile];
 		if (cursorSource == null) return PErr('cursor file $cursorFile is not in the scope file set');
 
@@ -1370,7 +1370,7 @@ final class MoveSymbol {
 				// `raw` here and the statement's own `p.Thing` reads as a fully-qualified CODE reference,
 				// refusing a move over a file that only ever names the type through the alias, with a
 				// message telling its author to add the import they already wrote.
-				final own: Array<Span> = [for (imp in info.imports) if (SymbolIndex.pathImportedBy(imp) == path) imp.span];
+				final own: Array<Span> = [ for (imp in info.imports) if (SymbolIndex.pathImportedBy(imp) == path) imp.span ];
 				final comments: Array<Span> = SourceComments.collectCommentRegions(lexicalRegions(source));
 				if (NameMentionScan.qualifiedPathMention(source, path, own, comments) >= 0)
 					return '"$file" references "$path" by its fully-qualified path — the move changes that path and '

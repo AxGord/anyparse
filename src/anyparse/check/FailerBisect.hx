@@ -38,7 +38,7 @@ final class FailerBisect {
 	 */
 	public static function isolateFailers(count: Int, budget: Int, probe: Array<Int> -> Bool, spent: Array<Int>): Null<Array<Int>> {
 		spent[0] = 0;
-		return try bisectRec([for (i in 0...count) i], probe, budget, spent) catch (_: BudgetExceeded) null;
+		return try bisectRec([ for (i in 0...count) i ], probe, budget, spent) catch (_: BudgetExceeded) null;
 	}
 
 	/** Smallest `k` with `2^k >= n` (the integer ceil of log2), for `n >= 1`. */

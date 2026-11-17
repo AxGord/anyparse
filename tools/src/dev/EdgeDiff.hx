@@ -87,8 +87,8 @@ final class EdgeDiff {
 
 	/** The files of `libs` that are not also a file of `project`, by identity, so paths that do not resolve never merge into one. */
 	public static function libraryOnly(project: Array<SourceFile>, libs: Array<SourceFile>): Array<SourceFile> {
-		final held: Map<String, Bool> = [for (f in project) FileIdentity.realPath(f.file) => true];
-		return [for (f in libs) if (!held.exists(FileIdentity.realPath(f.file))) f];
+		final held: Map<String, Bool> = [ for (f in project) FileIdentity.realPath(f.file) => true ];
+		return [ for (f in libs) if (!held.exists(FileIdentity.realPath(f.file))) f ];
 	}
 
 	/** The libraries and the standard library the project in `config` resolves against, its own files left out. */

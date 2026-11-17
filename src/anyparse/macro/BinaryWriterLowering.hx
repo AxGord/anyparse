@@ -29,7 +29,7 @@ class BinaryWriterLowering {
 	}
 
 	public function generate(): Array<WriterLowering.WriterRule> {
-		return [for (typePath => node in _shape.rules) lowerRule(typePath, node)];
+		return [ for (typePath => node in _shape.rules) lowerRule(typePath, node) ];
 	}
 
 	private function lowerRule(typePath: String, node: ShapeNode): WriterLowering.WriterRule {

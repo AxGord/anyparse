@@ -32,8 +32,8 @@ final class MoveToHelperArms {
 		armsJson: String, changes: Array<MoveChange>, srcTypeName: String, helperName: String, plugin: GrammarPlugin
 	): Array<String> {
 		final members: Map<String, Map<String, Array<String>>> = membersByType(changes, plugin);
-		final srcFqn: Null<String> = [for (fqn in members.keys()) fqn].find(fqn -> lastSegment(fqn) == srcTypeName);
-		final helperFqn: Null<String> = [for (fqn in members.keys()) fqn].find(fqn -> lastSegment(fqn) == helperName);
+		final srcFqn: Null<String> = [ for (fqn in members.keys()) fqn ].find(fqn -> lastSegment(fqn) == srcTypeName);
+		final helperFqn: Null<String> = [ for (fqn in members.keys()) fqn ].find(fqn -> lastSegment(fqn) == helperName);
 		final out: Array<String> = [];
 		for (arm in MutationArmRegistryJsonParser.parse(armsJson).arms) if (
 			(arm.kind ?? 'FnMember') == 'FnMember' && members.exists(arm.type)

@@ -196,7 +196,7 @@
 			"name": "M-TS-DEAD-HOLDS-KEPT",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "run",
-			"find": "final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];",
+			"find": "final acquires: Array<LockAcquire> = [ for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a ];",
 			"replace": "final acquires: Array<LockAcquire> = sites.acquires;",
 			"note": "a hold in a function no thread runs is reported, and makes its lock long"
 		},
@@ -828,8 +828,8 @@
 			"name": "M-OVERSIZED-CONST-COUNTED",
 			"type": "anyparse.check.common.design.OversizedType",
 			"method": "checkType",
-			"find": "final names: Array<String> = [for (i => m in all) if (!constant[i]) m.node.name ?? ''];",
-			"replace": "final names: Array<String> = [for (i => m in all) m.node.name ?? ''];",
+			"find": "final names: Array<String> = [ for (i => m in all) if (!constant[i]) m.node.name ?? '' ];",
+			"replace": "final names: Array<String> = [ for (i => m in all) m.node.name ?? '' ];",
 			"note": "the constants count toward the member total again"
 		},
 		{

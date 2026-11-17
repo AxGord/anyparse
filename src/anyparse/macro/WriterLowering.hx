@@ -1582,7 +1582,7 @@ class WriterLowering {
 			final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			final children: Array<ShapeNode> = branch.children;
 			final extraArgs: Int = branchExtraArgs(branch);
-			final argNames: Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
+			final argNames: Array<String> = [ for (i in 0...children.length + extraArgs) '_v$i' ];
 
 			// Build pattern
 			final ctorPath: Array<String> = ruleCtorPath(typePath, ctor);
@@ -1590,7 +1590,7 @@ class WriterLowering {
 			final pattern: Expr = if (children.length == 0) {
 				ctorRef;
 			} else {
-				final argExprs: Array<Expr> = [for (name in argNames) macro $i{name}];
+				final argExprs: Array<Expr> = [ for (name in argNames) macro $i{name} ];
 				{ expr: ECall(ctorRef, argExprs), pos: Context.currentPos() };
 			};
 
@@ -1821,7 +1821,7 @@ class WriterLowering {
 			? macro null
 			: macro {
 				final _segArgOpt = $segArgOpt;
-				[for (_a in _args) $writeIdent(_a, _segArgOpt, -1)];
+				[ for (_a in _args) $writeIdent(_a, _segArgOpt, -1) ];
 			};
 		// Receiver renders at the postfix precedence so a binop /
 		// ternary receiver gets parenthesised — `(a + b).foo().bar()`
@@ -2039,7 +2039,7 @@ class WriterLowering {
 		};
 		final entrySep: String = _formatInfo.entrySep;
 		return macro {
-			final _items: Array<anyparse.core.Doc> = [for (_e in $valueAccess) $element];
+			final _items: Array<anyparse.core.Doc> = [ for (_e in $valueAccess) $element ];
 			sepList($v{seqOpen}, $v{seqClose}, $v{entrySep}, _items, opt, false, _de(), _de(), false, false);
 		};
 	}

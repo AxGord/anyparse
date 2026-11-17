@@ -699,6 +699,10 @@ final class HxModuleWriteOptions {
 	public var mapLiteralBracketsClose: WhitespacePolicy = WhitespacePolicy.None;
 	public var comprehensionBracketsOpen: WhitespacePolicy = WhitespacePolicy.None;
 	public var comprehensionBracketsClose: WhitespacePolicy = WhitespacePolicy.None;
+	// A comprehension's list takes the fit cascade (a fitting source-multiline layout reflows) and a sole block body hugs
+	// its brackets. Null follows the comprehension padding, the fork's coupling: the fit cascade an `After` opening pad, the
+	// hug any opening pad. Fed by `wrapping.comprehensionFit`, which decouples the layout from `whitespace.bracketConfig`.
+	public var comprehensionFit: Null<Bool> = null;
 	public var callParensInsideOpen: WhitespacePolicy = WhitespacePolicy.None;
 	public var callParensInsideClose: WhitespacePolicy = WhitespacePolicy.None;
 	// ω-condition-parens: per-condition-paren INNER pad, fed by

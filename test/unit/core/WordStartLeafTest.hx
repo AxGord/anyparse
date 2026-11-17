@@ -90,7 +90,7 @@ class WordStartLeafTest extends Test {
 			collect(doc, new DocIdentityMap(), bad);
 		}
 		Assert.isTrue(files > 100, 'the sweep must cover a tree, saw $files files');
-		final shown: Array<String> = [for (k in bad.keys()) k];
+		final shown: Array<String> = [ for (k in bad.keys()) k ];
 		shown.sort(anyparse.util.Compare.compareString);
 		Assert.equals(
 			0, shown.length, 'leaves whose tag disagrees with their bytes (${shown.length}):\n  ${shown.slice(0, REPORTED).join('\n  ')}'

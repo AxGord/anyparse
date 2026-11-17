@@ -43,7 +43,7 @@ final class HeldTrees {
 	public function pathTo(file: String, span: Span): Array<QueryNode> {
 		var trees: Null<Map<String, QueryNode>> = _treeOf;
 		if (trees == null) {
-			final built: Map<String, QueryNode> = [for (held in files()) held.file => held.tree];
+			final built: Map<String, QueryNode> = [ for (held in files()) held.file => held.tree ];
 			_treeOf = built;
 			trees = built;
 		}

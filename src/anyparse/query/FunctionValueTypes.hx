@@ -198,7 +198,7 @@ final class FunctionValueTypes {
 	 */
 	public function admitted(g: CallGraph, candidates: Array<String>, called: String, at: Null<FactPos>): Array<String> {
 		final values: Null<Array<FactPos>> = at == null || !_view.truth ? null : argumentValues(at);
-		return values == null ? [for (id in candidates) if (mayRun(g, id, called)) id] : writtenAt(g, candidates, values);
+		return values == null ? [ for (id in candidates) if (mayRun(g, id, called)) id ] : writtenAt(g, candidates, values);
 	}
 
 	/**
@@ -614,7 +614,7 @@ final class FunctionValueTypes {
 		final made: Null<QueryNode> = read == null ? null : nodeAt(read.tree, at.span, shape.newExprKind, false);
 		if (made == null) return null;
 		final types: Array<String> = shape.typeAnnotationKinds ?? [];
-		final args: Array<QueryNode> = [for (c in made.children) if (!types.contains(c.kind)) c];
+		final args: Array<QueryNode> = [ for (c in made.children) if (!types.contains(c.kind)) c ];
 		final skipped: Int = count - args.length;
 		if (skipped < 0) return null;
 		final out: Array<FactPos> = [];
@@ -901,7 +901,7 @@ final class FunctionValueTypes {
 		var found: Null<{ fn: QueryNode, index: Int, count: Int }> = null;
 		function walk(node: QueryNode): Void {
 			if (found != null) return;
-			final params: Array<QueryNode> = [for (c in node.children) if (kinds.contains(c.kind)) c];
+			final params: Array<QueryNode> = [ for (c in node.children) if (kinds.contains(c.kind)) c ];
 			final index: Int = params.indexOf(param);
 			if (index >= 0) {
 				found = { fn: node, index: index, count: params.length };

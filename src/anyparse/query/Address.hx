@@ -650,7 +650,7 @@ final class Address {
 		final enclosing: Array<QueryNode> = (TreePath.pathTo(tree, innermost) ?? [innermost]).filter(n -> n.span != null);
 		enclosing.reverse();
 		final shown: Int = enclosing.length < CANDIDATE_LIMIT ? enclosing.length : CANDIDATE_LIMIT;
-		final lines: Array<String> = [for (i in 0...shown) '  ${candidateLabel(index, source, enclosing[i])}'];
+		final lines: Array<String> = [ for (i in 0...shown) '  ${candidateLabel(index, source, enclosing[i])}' ];
 		final more: String = enclosing.length > shown ? '\n  … ${enclosing.length - shown} more' : '';
 		return 'no node starts on line $line — address one of the nodes enclosing it (innermost first) with --select, '
 			+ 'or give <line>:<col> of the node to take:\n'
@@ -747,7 +747,7 @@ final class Address {
 		collectNamed(tree, name, plugin.metaShape().declHostKinds, found);
 		if (found.length == 0) return '';
 		final shown: Int = found.length < KIND_HINT_LIMIT ? found.length : KIND_HINT_LIMIT;
-		final kinds: Array<String> = [for (i in 0...shown) describeNode(source, found[i])];
+		final kinds: Array<String> = [ for (i in 0...shown) describeNode(source, found[i]) ];
 		final more: String = found.length > shown ? ', …' : '';
 		return '"$name" exists as ${kinds.join(', ')}$more; try --select "${found[0].kind}:$name"';
 	}
@@ -772,7 +772,7 @@ final class Address {
 		// The index is built HERE and not by the caller: an ambiguity is the rare path, and every
 		// resolve would otherwise pay for a whole-tree index that the single-match answer discards.
 		final index: AddressIndex = describerFor(tree, equiv);
-		final lines: Array<String> = [for (i in 0...shown) '  #${i + 1} ${candidateLabel(index, source, nodes[i])}'];
+		final lines: Array<String> = [ for (i in 0...shown) '  #${i + 1} ${candidateLabel(index, source, nodes[i])}' ];
 		final more: String = nodes.length > shown ? '\n  … ${nodes.length - shown} more' : '';
 		return Err('$what matched ${nodes.length} nodes — narrow it or pick one with --nth <k>:\n' + lines.join('\n') + more);
 	}

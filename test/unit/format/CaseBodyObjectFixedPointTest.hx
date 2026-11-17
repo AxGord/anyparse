@@ -36,7 +36,7 @@ class CaseBodyObjectFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-CASE-BODY-LITERAL-OFFER-OFF')
 	public function testPlainItemLiteralSettlesInOneWrite(): Void {
-		final longName: String = [for (_ in 0...47) 'x'].join('');
+		final longName: String = [ for (_ in 0...47) 'x' ].join('');
 		assertOneWrite(
 			'cfg.zips.push({path: xml.innerData$longName, file: xml.att.file, rm: xml.isTrue(\'rm\'), log: !xml.isFalse(\'log\')});',
 			'case \'zip\': cfg.zips.push({\n\t\t\t\tpath: xml.innerData$longName,\n'

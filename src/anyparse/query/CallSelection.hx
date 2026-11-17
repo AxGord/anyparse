@@ -304,7 +304,7 @@ final class CallSelection {
 	 * `Proper` the one that may, when it is the only one. Null otherwise.
 	 */
 	public static function chosen(kind: OverloadKind, verdicts: Array<ArgumentFit>): Null<Int> {
-		final open: Array<Int> = [for (i in 0...verdicts.length) if (verdicts[i] != Misfits) i];
+		final open: Array<Int> = [ for (i in 0...verdicts.length) if (verdicts[i] != Misfits) i ];
 		if (open.length == 0) return null;
 		if (kind == Proper) return open.length == 1 ? open[0] : null;
 		return verdicts[open[0]] == Fits || open.length == 1 ? open[0] : null;

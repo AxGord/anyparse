@@ -104,7 +104,7 @@ final class ExtractSuperclassCommand implements CliCommand {
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
-					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.writeFiles([ for (c in changes) { path: c.file, content: c.newSource } ]);
 					CliIo.stderr('apq extract-superclass: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) CliIo.sysPrint('${c.file}: ${c.file == superFile ? 'created' : 'updated'}\n');

@@ -43,7 +43,7 @@ class SetTest extends Test {
 	public function testIterationVisitsEveryKeyOnce(): Void {
 		final set: Set<String> = new Set<String>();
 		for (key in ['x', 'y', 'z', 'x']) set.add(key);
-		final seen: Array<String> = [for (key in set) key];
+		final seen: Array<String> = [ for (key in set) key ];
 		seen.sort(Reflect.compare);
 		Assert.same(['x', 'y', 'z'], seen);
 		Assert.isFalse(new Set<String>().iterator().hasNext());

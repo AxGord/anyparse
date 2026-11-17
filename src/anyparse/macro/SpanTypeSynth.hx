@@ -89,7 +89,7 @@ class SpanTypeSynth {
 		final pos: Position = Context.currentPos();
 		return switch origNode.kind {
 			case Seq:
-				final fields: Array<Field> = [for (child in origNode.children) buildStructField(child, pos, synthPack)];
+				final fields: Array<Field> = [ for (child in origNode.children) buildStructField(child, pos, synthPack) ];
 				final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
 				if (PairedShapeLowering.carriesSpan(origNode)) fields.push({
 					name: SPAN_FIELD_NAME,
@@ -124,7 +124,7 @@ class SpanTypeSynth {
 					fields: []
 				};
 			case Alt:
-				final fields: Array<Field> = [for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack)];
+				final fields: Array<Field> = [ for (branch in origNode.children) buildEnumCtor(branch, pos, synthPack) ];
 				{
 					pos: pos,
 					pack: synthPack,

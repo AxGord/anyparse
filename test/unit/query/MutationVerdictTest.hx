@@ -173,7 +173,7 @@ class MutationVerdictTest extends Test {
 		inline function merged(raws: Array<String>, expectCsv: String): MutationVerdictResult {
 			return MutationVerdict.classify(
 				MutationVerdict.merge(raws.map(TestTranscript.parseTestSummary)),
-				[for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()]
+				[ for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim() ]
 			);
 		}
 		final survived: MutationVerdictResult = merged([green, none, green], 'unit.SampleTest.testTwo');
@@ -186,7 +186,7 @@ class MutationVerdictTest extends Test {
 	}
 
 	private function classify(raw: String, expectCsv: String): MutationVerdictResult {
-		final expected: Array<String> = [for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim()];
+		final expected: Array<String> = [ for (part in expectCsv.split(',')) if (part.trim().length > 0) part.trim() ];
 		return MutationVerdict.classify(TestTranscript.parseTestSummary(raw), expected);
 	}
 

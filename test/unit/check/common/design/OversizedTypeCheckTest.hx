@@ -44,7 +44,7 @@ class OversizedTypeCheckTest extends Test {
 
 	public function testOverLineLimitFlagged(): Void {
 		// One member, but the type body spans > 2000 lines.
-		final blanks: String = [for (_ in 0...2001) '\n'].join('');
+		final blanks: String = [ for (_ in 0...2001) '\n' ].join('');
 		final vs: Array<Violation> = violations('class C {\n$blanks\tvar x:Int;\n}');
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('2004 lines (max 2000)'));
@@ -52,7 +52,7 @@ class OversizedTypeCheckTest extends Test {
 
 	public function testLineBoundaryNotFlagged(): Void {
 		// Exactly 2000 lines == max -> quiet.
-		final blanks: String = [for (_ in 0...1997) '\n'].join('');
+		final blanks: String = [ for (_ in 0...1997) '\n' ].join('');
 		Assert.equals(0, violations('class C {\n$blanks\tvar x:Int;\n}').length);
 	}
 
@@ -122,7 +122,7 @@ class OversizedTypeCheckTest extends Test {
 	 * message `run` PRODUCED, never a hand-written one — that is the whole point of the case.
 	 */
 	public function testMessageIdentityMasksBothItsOwnMeasurementsAndKeepsTheThresholds(): Void {
-		final blanks: String = [for (_ in 0...2001) '\n'].join('');
+		final blanks: String = [ for (_ in 0...2001) '\n' ].join('');
 		final check: OversizedType = new OversizedType();
 		final message: String = CheckFixture.violations(check, classWithMembers(51).replace('\n}', '$blanks\n}'))[0].message;
 		Assert.isTrue(message.contains('51 members (max 50)'), 'the message states both measurements');
@@ -237,7 +237,7 @@ class OversizedTypeCheckTest extends Test {
 		final entry: String = 'C <= 60 members / 70 lines: one algorithm';
 		Assert.equals(0, granted([entry], classWithMembers(51), LINES_50).length, 'within both ceilings');
 		final vs: Array<Violation> = granted(
-			[entry], classWithMembers(51).replace('\n}', '${[for (_ in 0...20) '\n'].join('')}\n}'), LINES_50
+			[entry], classWithMembers(51).replace('\n}', '${[ for (_ in 0...20) '\n' ].join('')}\n}'), LINES_50
 		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("has 73 lines (max 70) — beyond its grant 'C <= 60 members / 70 lines'"), vs[0].message);
@@ -459,7 +459,7 @@ class OversizedTypeCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-OVERSIZED-CONST-COUNTED')
 	public function testAConstantTableIsNotReported(): Void {
-		final consts: Array<String> = [for (i in 0...60) '\tpublic static inline final C$i:UInt = 0x${i.hex(6)};'];
+		final consts: Array<String> = [ for (i in 0...60) '\tpublic static inline final C$i:UInt = 0x${i.hex(6)};' ];
 		Assert.equals(0, violations('class C {\n${consts.join('\n')}\n\tpublic function new() {}\n}').length);
 	}
 
@@ -551,7 +551,7 @@ class OversizedTypeCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-OVERSIZED-CONST-COUNTED')
 	public function testAMixedTypeKeepsItsBehaviourCount(): Void {
-		final consts: String = [for (i in 0...30) '\tstatic inline final K$i = $i;'].join('\n');
+		final consts: String = [ for (i in 0...30) '\tstatic inline final K$i = $i;' ].join('\n');
 		final vs: Array<Violation> = violations(classWithMembers(51).replace('class C {', 'class C {\n$consts'));
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("type 'C' has 51 members (max 50)"), vs[0].message);
@@ -588,7 +588,7 @@ class OversizedTypeCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-OVERSIZED-CONST-SHARED-LINE')
 	public function testALineAConstantSharesWithBehaviourCounts(): Void {
-		final methods: String = [for (i in 0...48) '\tfunction m$i():Void {}'].join('\n');
+		final methods: String = [ for (i in 0...48) '\tfunction m$i():Void {}' ].join('\n');
 		final src: String = 'class C {\n$methods\n\tstatic inline final K = 1; function g():Void {}\n}';
 		final vs: Array<Violation> = granted([], src, LINES_50);
 		Assert.equals(1, vs.length);
@@ -653,21 +653,21 @@ class OversizedTypeCheckTest extends Test {
 
 	/** An interface named `I` declaring `n` methods `m0`… — the contract a fixture's members are dictated by. */
 	private static function ifaceWithMethods(n: Int): String {
-		return 'interface I {\n' + [for (i in 0...n) '\tfunction m$i():Void;'].join('\n') + '\n}';
+		return 'interface I {\n' + [ for (i in 0...n) '\tfunction m$i():Void;' ].join('\n') + '\n}';
 	}
 
 	/** A class named `C` with `methods` methods `m0`… and `fields` fields of its own, implementing `I` or not. */
 	private static function implementor(methods: Int, fields: Int, implementsIface: Bool): String {
 		return 'class C${implementsIface ? ' implements I' : ''} {\n'
-			+ [for (i in 0...methods) '\tpublic function m$i():Void {}'].join('\n')
+			+ [ for (i in 0...methods) '\tpublic function m$i():Void {}' ].join('\n')
 			+ '\n'
-			+ [for (i in 0...fields) '\tvar v$i:Int;'].join('\n')
+			+ [ for (i in 0...fields) '\tvar v$i:Int;' ].join('\n')
 			+ '\n}';
 	}
 
 	/** A parseable class named `C` with exactly `n` field members, one per line. */
 	private static function classWithMembers(n: Int): String {
-		return 'class C {\n' + [for (i in 0...n) '\tvar v$i:Int;'].join('\n') + '\n}';
+		return 'class C {\n' + [ for (i in 0...n) '\tvar v$i:Int;' ].join('\n') + '\n}';
 	}
 
 	/** `n` methods in ONE blob: each calls the next two, wrapping, so hub extraction cannot cut it. */
@@ -700,7 +700,7 @@ class OversizedTypeCheckTest extends Test {
 
 	/** An `@:enum abstract` named `C` with exactly 50 methods — AT the member limit — and `value` declared after them. */
 	private static function enumAtLimit(value: String): String {
-		final methods: String = [for (i in 0...50) '\tpublic function m$i():Int { return this; }'].join('\n');
+		final methods: String = [ for (i in 0...50) '\tpublic function m$i():Int { return this; }' ].join('\n');
 		return '@:enum abstract C(Int) {\n$methods\n\t$value\n}';
 	}
 
@@ -709,7 +709,7 @@ class OversizedTypeCheckTest extends Test {
 		final consts: String = [
 			for (i in 0...60) '\t/** Constant $i. */\n\tpublic static inline final K$i:Int = $i;'
 		].join('\n');
-		final fns: String = [for (i in 0...methods) '\n\tfunction m$i():Void {}'].join('');
+		final fns: String = [ for (i in 0...methods) '\n\tfunction m$i():Void {}' ].join('');
 		return 'class C {\n$consts$fns\n\tpublic function new() {}\n}';
 	}
 

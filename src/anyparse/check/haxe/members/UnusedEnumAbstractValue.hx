@@ -156,7 +156,7 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 		out: Array<Violation>, type: TypeDeclInfo, entry: ScopeFile, tree: QueryNode, ctx: Ctx, fixing: Bool
 	): Void {
 		final reads: Null<EnumValueReads> = ctx.facts?.enumValueReads(entry.file, type.name);
-		final values: Array<MemberInfo> = [for (m in type.members) if (isValue(m, ctx)) m];
+		final values: Array<MemberInfo> = [ for (m in type.members) if (isValue(m, ctx)) m ];
 		for (i => m in values) if (!m.guarded && !ctx.pins.exists(pin -> m.metaNames.contains(pin))) {
 			final node: Null<QueryNode> = memberAt(tree, m.declFrom, ctx.memberKinds);
 			final span: Null<Span> = node?.span;
@@ -272,7 +272,7 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 		final sources: Map<String, String> = [];
 		for (entry in RefactorSupport.resolutionProjectSourcesOf(plugin) ?? []) sources[entry.file] = entry.source;
 		for (entry in files) sources[entry.file] = entry.source;
-		return [for (file => source in sources) { file: file, source: source }];
+		return [ for (file => source in sources) { file: file, source: source } ];
 	}
 
 	/** The member declaration of `kinds` starting at `from` in `tree`. */

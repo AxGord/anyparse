@@ -39,7 +39,7 @@ final class DecisionTest extends Test {
 	@:pin('control')
 	@:killer('M-DECISION-NO-LENGTH-LIMIT')
 	public function testRefusesATextOverTheLimit(): Void {
-		final longest: String = [for (_ in 0...Decision.MAX_TEXT) 'x'].join('');
+		final longest: String = [ for (_ in 0...Decision.MAX_TEXT) 'x' ].join('');
 		Assert.isNull(Decision.problem(longest, 'S-1'));
 		refused(['--slice', 'S-1', '${longest}y']);
 		Assert.notNull(Decision.entryProblem('- ${longest}y → S-1'));

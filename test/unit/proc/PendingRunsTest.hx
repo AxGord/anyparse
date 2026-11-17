@@ -54,7 +54,7 @@ final class PendingRunsTest extends Test {
 		final before: Array<String> = pendingDirs();
 		final pending: PendingRuns = ProcessSpawn.startAll([{ args: [], cwd: dir, shell: 'sleep 1' }], BUFFER, 1);
 		Sleep.pause(500);
-		final made: Array<String> = [for (d in pendingDirs()) if (!before.contains(d)) d];
+		final made: Array<String> = [ for (d in pendingDirs()) if (!before.contains(d)) d ];
 		Assert.equals(1, made.length, 'one directory for the batch');
 		final own: String = haxe.io.Path.join([anyparse.core.TempScratch.root(), made[0] ?? '']);
 		final mode: Int = (js.Syntax.code('require("fs").statSync({0}).mode', own): Int) & 511;

@@ -419,7 +419,7 @@ final class LintCommand implements CliCommand {
 		// A MAP, not an array: the library always carries the std files, so a linear `contains` over
 		// the report would be one string compare per (report x library) pair, for a lookup that is
 		// answered in one hash.
-		final reportPaths: Map<String, Bool> = [for (f in files) FileIdentity.realPath(f.file) => true];
+		final reportPaths: Map<String, Bool> = [ for (f in files) FileIdentity.realPath(f.file) => true ];
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
 		var declaredLibrary: Null<Array<{ file: String, source: String }>> = null;

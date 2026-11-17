@@ -134,7 +134,7 @@ final class ProbeTest extends Test {
 			final kit: Kit = Probe.load(kitFile);
 			Assert.same([true, false], kit.cases[0].expect?.compiles, 'haxe ran once per define set on the written fixture');
 			final again: Array<Seen> = Probe.observe(tree, a, kit, true, 2, false);
-			Assert.same([[], [], []], [for (i => row in again) Probe.deviations(kit.cases[i].expect, row, true)]);
+			Assert.same([[], [], []], [ for (i => row in again) Probe.deviations(kit.cases[i].expect, row, true) ]);
 			Assert.isTrue(kit.cases[2].expect?.onePass == true && kit.cases[2].expect?.commentsKept == true, 'A formats to a fixed point');
 			final other: Array<Seen> = Probe.observe(tree, b, kit, true, 2, false);
 			Assert.equals(1, Probe.deviations(kit.cases[0].expect, other[0], true).length, 'only what B writes differs');

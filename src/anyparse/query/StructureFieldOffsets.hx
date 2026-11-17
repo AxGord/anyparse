@@ -290,7 +290,7 @@ final class StructureFieldOffsets {
 
 	/** Every type parameter the file declares: a written `T` of one names no declaration, and can hold the structure through its bound. */
 	private static function fileTypeParams(source: String, provider: TypeInfoProvider): Array<String> {
-		return [for (names in provider.typeParamNames(source)) for (name in names) name];
+		return [ for (names in provider.typeParamNames(source)) for (name in names) name ];
 	}
 
 	/** Every access of the member name, through whichever access operator the grammar spells it with. */

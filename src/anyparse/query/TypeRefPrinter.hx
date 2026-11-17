@@ -320,7 +320,7 @@ final class TypeRefPrinter {
 				bucket.paths.sort((a, b) -> ImportOrder.compare(bucket.anchor.order, a, b));
 				{
 					span: new Span(bucket.anchor.offset, bucket.anchor.offset),
-					text: bucket.anchor.lead + [for (path in bucket.paths) 'import $path;\n'].join('') + bucket.anchor.trail,
+					text: bucket.anchor.lead + [ for (path in bucket.paths) 'import $path;\n' ].join('') + bucket.anchor.trail,
 					paths: bucket.paths
 				};
 			}

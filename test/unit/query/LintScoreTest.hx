@@ -303,11 +303,11 @@ class LintScoreTest extends Test {
 		final entries: Array<String> = [
 			for (i => v in LintScore.VERDICTS) entry('A', 'A.m$i', 'S.f', v, v == 'dup-of' ? ', "dupOf": "A|A.m0|S.f"' : '')
 		];
-		final result: LintScoreResult = score(entries, [for (i in 0...LintScore.VERDICTS.length) finding('A', 'A.m$i', 'S.f')]);
+		final result: LintScoreResult = score(entries, [ for (i in 0...LintScore.VERDICTS.length) finding('A', 'A.m$i', 'S.f') ]);
 		final matched: Null<JValue> = JValueTools.at(JValueParser.parse(LintScore.json(result)), 'overall.matched');
 		switch matched {
 			case JObject(counts):
-				Assert.equals(LintScore.VERDICTS.join(','), [for (c in counts) c.key].join(','));
+				Assert.equals(LintScore.VERDICTS.join(','), [ for (c in counts) c.key ].join(','));
 				Assert.equals(LintScore.VERDICTS.map(_ -> '1').join(','), [
 					for (c in counts)
 						switch c.value {

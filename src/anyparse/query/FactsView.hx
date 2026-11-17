@@ -524,10 +524,10 @@ final class FactsView {
 		if (!truth || !faceted(g, file, span, node)) return null;
 		final constructor: String = _scope.shape.constructorName ?? 'new';
 		function handedTo(n: FactNode): Array<HandFact> {
-			return [for (h in n.handed) if (targets.contains(h.target)) h];
+			return [ for (h in n.handed) if (targets.contains(h.target)) h ];
 		}
 		function callsOf(n: FactNode): Array<CallFact> {
-			return [for (c in n.calls) if (targets.contains(c.target ?? '')) c];
+			return [ for (c in n.calls) if (targets.contains(c.target ?? '')) c ];
 		}
 		function constructionsOf(n: FactNode): Array<NewFact> {
 			return [
@@ -694,7 +694,7 @@ final class FactsView {
 		final root: Null<String> = rootOf(id);
 		final declared: Array<IndexedDeclaration> = declarationsNamed()[graphType(id)] ?? [];
 		final types: Array<String> = root == null || root == id ? [id] : [id, root];
-		final homes: Array<String> = [for (t in types) for (h in _table.typeHomes(t)) h.file];
+		final homes: Array<String> = [ for (t in types) for (h in _table.typeHomes(t)) h.file ];
 		final held: Bool = declared.exists(d -> homes.contains(d.key) || (!d.read && types.contains(d.id)));
 		final answer: Bool = _table.type(id)?.kind != FactKinds.TYPEDEF && declared.length > 0 && !held;
 		_unheld[id] = answer;
@@ -766,7 +766,7 @@ final class FactsView {
 		final key: String = '${members.names.join(',')}|${members.metas.join(',')}|${members.typeMetas.join(',')}|${members.externInline}';
 		final known: Null<Array<String>> = _implicitUnheldAnywhere[key];
 		if (known != null) return known;
-		final found: Array<String> = [for (id in _table.typeIds()) if (implicitUnheld(id, members)) id];
+		final found: Array<String> = [ for (id in _table.typeIds()) if (implicitUnheld(id, members)) id ];
 		_implicitUnheldAnywhere[key] = found;
 		return found;
 	}
@@ -837,7 +837,7 @@ final class FactsView {
 	public function indexedFile(key: String): Null<FileInfo> {
 		var byKey: Null<Map<String, FileInfo>> = _byKey;
 		if (byKey == null) {
-			final built: Map<String, FileInfo> = [for (fi in _scope.index.allFiles()) _table.keyOf(fi.file) => fi];
+			final built: Map<String, FileInfo> = [ for (fi in _scope.index.allFiles()) _table.keyOf(fi.file) => fi ];
 			_byKey = built;
 			byKey = built;
 		}
@@ -1102,7 +1102,7 @@ final class FactsView {
 	/** The typed types of the graph type `type` standing for the type `owner` is written as (`rootOf`, `standsFor`). */
 	public function standingFor(type: String, owner: String): Array<String> {
 		final root: Null<String> = rootOf(owner);
-		return root == null ? [] : [for (id in bySimpleName()[type] ?? []) if (standsFor(id, root)) id];
+		return root == null ? [] : [ for (id in bySimpleName()[type] ?? []) if (standsFor(id, root)) id ];
 	}
 
 	/**
@@ -1212,10 +1212,10 @@ final class FactsView {
 		if (truth && !unchecked().convertsSomewhere()) return [];
 		final flows: Null<Array<FlowFact>> = _table.within(file, span, n -> n.flows, f -> f.at, truth, harmless);
 		final writes: Null<Array<ReflectionFact>> = _table.within(
-			file, span, n -> [for (r in n.reflection) if (FIELD_WRITES.contains(r.target)) r], r -> r.at, truth, harmless
+			file, span, n -> [ for (r in n.reflection) if (FIELD_WRITES.contains(r.target)) r ], r -> r.at, truth, harmless
 		);
 		final fields: Null<Array<FieldFact>> = _table.within(
-			file, span, n -> [for (f in n.fields) if (f.write && f.owner == null && catchAll(f.receiver)) f], f -> f.at, truth, harmless
+			file, span, n -> [ for (f in n.fields) if (f.write && f.owner == null && catchAll(f.receiver)) f ], f -> f.at, truth, harmless
 		);
 		if (flows == null || writes == null || fields == null) return null;
 		final out: Array<ImplicitSite> = [];
@@ -1535,7 +1535,7 @@ final class FactsView {
 		final info: Null<TypeDeclInfo> = text.info;
 		// a declaration the index does not hold is read whole
 		if (info == null) return !conditional(text.file, text.source, text.span);
-		final found: Array<MemberInfo> = [for (m in info.members) if (m.name == name) m];
+		final found: Array<MemberInfo> = [ for (m in info.members) if (m.name == name) m ];
 		// an accessor the index does not list is its property's: `get_x` of `x(get, …)`
 		final property: Null<String> = accessorProperty(name);
 		if (found.length == 0 && property != null) for (m in info.members) if (m.name == property) found.push(m);
@@ -1623,7 +1623,7 @@ final class FactsView {
 	private function project(id: String): Bool {
 		var keys: Null<Map<String, Bool>> = _projectKeys;
 		if (keys == null) {
-			final built: Map<String, Bool> = [for (f in _scope.files) _table.keyOf(f.file) => true];
+			final built: Map<String, Bool> = [ for (f in _scope.files) _table.keyOf(f.file) => true ];
 			_projectKeys = built;
 			keys = built;
 		}

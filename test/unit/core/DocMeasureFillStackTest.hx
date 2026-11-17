@@ -20,7 +20,7 @@ final class DocMeasureFillStackTest extends Test {
 		final stack: Array<Doc> = [Text('below')];
 		DocMeasure.pushFillReversed(stack, [Text('a'), Text('b'), Text('c')], Text(','));
 		Assert.same(['below', 'c', ',', 'b', ',', 'a'], stack.map(label));
-		Assert.same(['a', ',', 'b', ',', 'c', 'below'], [for (i in 0...stack.length) label(stack[stack.length - 1 - i])]);
+		Assert.same(['a', ',', 'b', ',', 'c', 'below'], [ for (i in 0...stack.length) label(stack[stack.length - 1 - i]) ]);
 	}
 
 	public function testASingleItemOrNonePushesNoSeparator(): Void {

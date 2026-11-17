@@ -247,12 +247,12 @@ final class TypedFactsProbe {
 					reason: oracles[i].unavailable ?? 'its probe directory could not be written'
 				});
 		}
-		final inputs: Array<Null<String>> = memo == null ? [] : memo.fingerprints([for (a in asked) a.oracle]);
+		final inputs: Array<Null<String>> = memo == null ? [] : memo.fingerprints([ for (a in asked) a.oracle ]);
 		final ahead: Array<Int> = memo == null ? [] : [
 			for (k in 0...asked.length) if (asked[k].rider == null && wanted(memo, asked[k].oracle, inputs[k])) k
 		];
-		final baselines: Array<OracleConfig> = [for (k in ahead) asked[k].oracle];
-		final runs: PendingRuns = ProcessSpawn.startAll([for (a in asked) { args: a.args, cwd: a.oracle.dir }].concat([
+		final baselines: Array<OracleConfig> = [ for (k in ahead) asked[k].oracle ];
+		final runs: PendingRuns = ProcessSpawn.startAll([ for (a in asked) { args: a.args, cwd: a.oracle.dir } ].concat([
 			for (b in baselines) { args: OracleCoverage.probeArgs(b.hxml, b.defines), cwd: b.dir }
 		]), carried ? ReachDefinesProbe.BUFFER : BUFFER, ProcessSpawn.parallelism());
 		return {
@@ -261,7 +261,7 @@ final class TypedFactsProbe {
 			inputs: inputs,
 			memo: memo,
 			baselines: baselines,
-			before: [for (k in ahead) inputs[k]],
+			before: [ for (k in ahead) inputs[k] ],
 			runs: runs
 		};
 		#else
@@ -360,9 +360,9 @@ final class TypedFactsProbe {
 	 */
 	private static function fileRidden(memo: OracleRunMemo, probe: FactsProbe, runs: Array<ProcessRun>): Array<Int> {
 		final grammar: Null<GrammarPlugin> = memo.grammar;
-		final ridden: Array<Int> = [for (i in 0...probe.asked.length) if (probe.asked[i].rider != null) i];
+		final ridden: Array<Int> = [ for (i in 0...probe.asked.length) if (probe.asked[i].rider != null) i ];
 		if (grammar == null || ridden.length == 0) return [];
-		final after: Array<Null<String>> = memo.fingerprints([for (i in ridden) probe.asked[i].oracle]);
+		final after: Array<Null<String>> = memo.fingerprints([ for (i in ridden) probe.asked[i].oracle ]);
 		final known: Map<String, Bool> = [];
 		final again: Array<Int> = [];
 		for (k => i in ridden) {

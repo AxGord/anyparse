@@ -461,7 +461,7 @@ final class CompilerServer {
 	 * path that cannot be stat'ed counts as just-written, the conservative direction.
 	 */
 	private static function staleFiles(paths: Array<String>, compiledAt: Int): Array<String> {
-		return [for (p in paths) if (modifiedSecond(p) >= compiledAt) p];
+		return [ for (p in paths) if (modifiedSecond(p) >= compiledAt) p ];
 	}
 
 	/** `path`'s modification time in whole seconds, or now when it cannot be stat'ed. */

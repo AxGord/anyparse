@@ -35,7 +35,7 @@ final class LambdaParameters {
 		if (!index.typing.expectations.isLambda(lambda) || param.kind == c.shape.optionalParamKind || param.children.length > 0)
 			return null;
 		final lineage: Array<QueryNode> = path.slice(0, path.length - 2);
-		final indices: Array<Int> = [for (i in 0...lineage.length) lineage[i].children.indexOf(path[i + 1])];
+		final indices: Array<Int> = [ for (i in 0...lineage.length) lineage[i].children.indexOf(path[i + 1]) ];
 		final kinds: Array<String> = c.shape.paramKinds ?? [];
 		final position: Int = lambda.children.filter(p -> kinds.contains(p.kind)).indexOf(param);
 		final types: Null<Array<Expectation>> = index.typing.expectations.lambdaParamTypes(

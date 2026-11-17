@@ -118,7 +118,7 @@ final class SliceGateTest extends Test {
 			final wfRun: String = Path.join([root, 'scripts/wf-run']);
 			sys.io.File.saveContent(wfRun, FAKE_WF_RUN);
 			js.Syntax.code("require('fs').chmodSync({0}, 0o755)", wfRun);
-			final saved: Map<String, String> = [for (v in ['WF_PLUGIN_ROOT', 'WF_THREADS']) v => Sys.getEnv(v) ?? ''];
+			final saved: Map<String, String> = [ for (v in ['WF_PLUGIN_ROOT', 'WF_THREADS']) v => Sys.getEnv(v) ?? '' ];
 			var branch: LeaseMode = Unpooled;
 			var gate: LeaseMode = Unpooled;
 			CliFixture.always(() -> for (v => value in saved) Sys.putEnv(v, value), () -> {

@@ -238,7 +238,7 @@ final class MainRepeats {
 			: {
 				turns: Math.max(way.turns, known.turns),
 				cost: Math.max(way.cost, known.cost),
-				entries: known.entries.concat([for (e in way.entries) if (!known.entries.contains(e)) e])
+				entries: known.entries.concat([ for (e in way.entries) if (!known.entries.contains(e)) e ])
 			};
 	}
 

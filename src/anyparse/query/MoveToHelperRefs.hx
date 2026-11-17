@@ -94,7 +94,7 @@ final class MoveToHelperRefs {
 			editsByFile: [],
 			movedTextEdits: [],
 			callerFiles: [],
-			outsideCallersOf: [for (m in prep.moved) m.name => 0],
+			outsideCallersOf: [ for (m in prep.moved) m.name => 0 ],
 			accessMembers: [],
 			advisory: []
 		};

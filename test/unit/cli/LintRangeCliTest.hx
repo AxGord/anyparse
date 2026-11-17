@@ -317,7 +317,7 @@ class LintRangeCliTest extends Test {
 		final after: String = 'class C {\n\tvar a = 10;\n\tvar b = 2;\n\tvar c = 30;\n}\n';
 		Assert.isNull(CliEdit.changedCodeWindows(before, after, new HaxeQueryPlugin(), 1));
 		final found: Null<LintRange> = CliEdit.changedCodeWindows(before, after, new HaxeQueryPlugin(), 100);
-		Assert.equals('2:2,4:4', found == null ? null : [for (w in found) '${w.from}:${w.to}'].join(','));
+		Assert.equals('2:2,4:4', found == null ? null : [ for (w in found) '${w.from}:${w.to}' ].join(','));
 	}
 
 	#if (sys || nodejs)

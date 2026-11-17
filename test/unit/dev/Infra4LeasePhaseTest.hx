@@ -79,7 +79,7 @@ final class Infra4LeasePhaseTest extends Test {
 	public function testTheInfra4BranchAsksThePoolOnlyWhenItsGateHeldNoLease(): Void {
 		TempDir.with(dir -> {
 			final wfRun: String = fakeWfRun(dir, SliceGateTest.FAKE_WF_RUN);
-			final saved: Map<String, String> = [for (v in ['WF_PLUGIN_ROOT', 'WF_THREADS']) v => Sys.getEnv(v) ?? ''];
+			final saved: Map<String, String> = [ for (v in ['WF_PLUGIN_ROOT', 'WF_THREADS']) v => Sys.getEnv(v) ?? '' ];
 			final modes: Array<LeaseMode> = [];
 			CliFixture.always(() -> for (v => value in saved) Sys.putEnv(v, value), () -> {
 				Sys.putEnv('WF_PLUGIN_ROOT', Path.directory(Path.directory(wfRun)));

@@ -419,7 +419,7 @@ final class LintDiff {
 
 	/** A pool over `t`: what `compare` and `LintBaseline.added` spend occurrences from, `t` itself left untouched. */
 	public static function pool(t: LintDiffTally): LintDiffPool {
-		return { tally: t, counts: t.counts.copy(), messages: [for (key => ms in t.messages) key => ms.copy()] };
+		return { tally: t, counts: t.counts.copy(), messages: [ for (key => ms in t.messages) key => ms.copy() ] };
 	}
 
 	/**
@@ -638,7 +638,7 @@ final class LintDiff {
 	private static function spendAcrossSides(old: LintDiffPool, fresh: LintDiffPool, key: String): Void {
 		final row: LintDiffRow = rowOf(fresh.tally, key);
 		final left: Int = fresh.counts[key] ?? 0;
-		final carried: Array<String> = row.identity ? (fresh.messages[key] ?? []).copy() : [for (_ in 0...left) row.message];
+		final carried: Array<String> = row.identity ? (fresh.messages[key] ?? []).copy() : [ for (_ in 0...left) row.message ];
 		for (m in carried) if ((fresh.counts[key] ?? 0) > 0 && spendAcross(old, row.file, row.rule, row.severity, m, row.identity))
 			spendOwn(fresh, key, m);
 	}

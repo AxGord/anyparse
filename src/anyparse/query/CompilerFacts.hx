@@ -892,7 +892,7 @@ final class CompilerFacts {
 		final from: Int = index.toCodepoint(span.from);
 		final to: Int = index.toCodepoint(span.to);
 		final meets: (NodeRange) -> Bool = touching == true ? r -> r.min < to && from < r.max : r -> r.min <= from && to <= r.max;
-		final ranges: Array<NodeRange> = [for (r in _nodeFiles[home] ?? []) if (meets(r)) r];
+		final ranges: Array<NodeRange> = [ for (r in _nodeFiles[home] ?? []) if (meets(r)) r ];
 		ranges.sort((a, b) -> a.min != b.min ? a.min - b.min : b.max - a.max);
 		final out: Array<FactNode> = [];
 		for (r in ranges) {
@@ -954,7 +954,7 @@ final class CompilerFacts {
 		// a local the compiler declares at the range holds a value there: the text's (`a?.b()`, `a ?? b`) or an inlined
 		// call's parameter the text is handed to, of that parameter's type — so it may type the range beside a site of the
 		// text's own, never alone
-		final held: Array<String> = [for (v in n.vars) if (same(v.at, file, span)) v.name];
+		final held: Array<String> = [ for (v in n.vars) if (same(v.at, file, span)) v.name ];
 		var own: Bool = false;
 		for (site in FactText.typedSites(n, FactText.bare(text))) {
 			final at: Null<FactPos> = site.at;
@@ -997,7 +997,9 @@ final class CompilerFacts {
 		final key: String = '$id@$home';
 		if (_builtCache.exists(key)) return _builtCache[key];
 		// a line homed here first: the node is placed where the first line places it
-		final kept: Array<NodeLine> = [for (l in lines) if (l.home == home) l].concat([for (l in lines) if (l.home != home && own(l)) l]);
+		final kept: Array<NodeLine> = [ for (l in lines) if (l.home == home) l ].concat([ for (l in lines) if (
+			l.home != home && own(l)
+		) l ]);
 		final made: Null<FactNode> = kept.length == 0 ? null : materializeAs(BUILT_ENTRY + key, id, kept);
 		_builtCache[key] = made;
 		return made;
@@ -1053,7 +1055,7 @@ final class CompilerFacts {
 			isExtern: record.ext ?? false,
 			superClass: record.sup,
 			interfaces: record.ifaces ?? [],
-			fields: [for (f in record.fields ?? []) declaredField(f)],
+			fields: [ for (f in record.fields ?? []) declaredField(f) ],
 			genericOf: record.of,
 			builds: record.builds ?? [],
 			implementation: record.impl,
@@ -1061,7 +1063,7 @@ final class CompilerFacts {
 			alike: true,
 			targets: record.target == null ? [] : [record.target],
 			underlying: record.under == null ? [] : [record.under],
-			constructors: [for (c in record.ctors ?? []) { name: c.n, type: c.t }]
+			constructors: [ for (c in record.ctors ?? []) { name: c.n, type: c.t } ]
 		};
 		final known: Null<TypeFact> = _types[record.id];
 		if (known == null)
@@ -1160,7 +1162,7 @@ final class CompilerFacts {
 	private function mergeRecord(
 		id: String, node: FactNode, record: FactNodeRecord, home: String, paths: Array<Null<String>>, seen: Map<String, Bool>
 	): Void {
-		FactMerge.variant(node.variants, record.t, [for (p in record.params ?? []) { name: p.n, type: p.t }]);
+		FactMerge.variant(node.variants, record.t, [ for (p in record.params ?? []) { name: p.n, type: p.t } ]);
 		for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
 
 		// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so. A

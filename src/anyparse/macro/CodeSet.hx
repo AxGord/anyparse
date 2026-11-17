@@ -76,7 +76,7 @@ final class CodeSet {
 
 	/** The set of `pairs`, a flat list of inclusive `lo, hi` bounds in any order. */
 	public static function of(pairs: Array<Int>): CodeSet {
-		final given: Array<CodeRange> = [for (i in 0...pairs.length >> 1) { lo: pairs[i << 1], hi: pairs[(i << 1) + 1] }];
+		final given: Array<CodeRange> = [ for (i in 0...pairs.length >> 1) { lo: pairs[i << 1], hi: pairs[(i << 1) + 1] } ];
 		given.sort((a: CodeRange, b: CodeRange) -> a.lo - b.lo);
 		final merged: Array<CodeRange> = [];
 		for (range in given) {

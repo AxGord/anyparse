@@ -385,7 +385,7 @@ final class ReflectiveReach {
 		if (value.kind != _shape.identKind || name == null || at == null || tree == null) return null;
 		final from: Null<Int> = TypeResolver.resolveBindingFrom(name, at, tree, _shape);
 		final mutable: Array<String> = (_shape.mutableLocalDeclKinds ?? []).concat(_shape.localDeclContinuationKinds ?? []);
-		final finals: Array<String> = [for (k in _shape.localDeclKinds ?? []) if (!mutable.contains(k)) k];
+		final finals: Array<String> = [ for (k in _shape.localDeclKinds ?? []) if (!mutable.contains(k)) k ];
 		final decl: Null<QueryNode> = from == null ? null : holderOf(tree, from, n -> n.span?.from == from && finals.contains(n.kind));
 		final init: Null<QueryNode> = decl == null || decl.children.length == 0 ? null : decl.children[decl.children.length - 1];
 		return init == null ? null : BoolExprShape.unwrapParens(init, _shape.parenKind);

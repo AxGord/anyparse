@@ -84,7 +84,7 @@ final class SummaryTest extends Test {
 
 	public function testAnExcerptIsCutToTheTablesBound(): Void {
 		final summary: Summary = new Summary();
-		summary.add('lint', Failed('30 new'), 0, '', [for (i in 0...30) 'row $i']);
+		summary.add('lint', Failed('30 new'), 0, '', [ for (i in 0...30) 'row $i' ]);
 		final shown: Array<String> = summary.excerpts().split('\n');
 		Assert.equals(1 + Excerpt.MAX_LINES, shown.length);
 		Assert.equals('  … 21 more', shown[shown.length - 1]);

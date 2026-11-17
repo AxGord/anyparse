@@ -153,9 +153,9 @@ final class WriterCtorBlankLowering {
 			transition: Array<WriterLowering.TransitionAcrossInfo>
 		} = buildCtorBlankInfos(cb, elemRefName, betweenCtorAllArgs, transitionAcrossAllArgs, transparentByClassifier);
 		final headCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAtHeadIfCtor');
-		final headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo> = [for (args in headCtorAllArgs) buildHeadCtorBlankInfo(
+		final headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo> = [ for (args in headCtorAllArgs) buildHeadCtorBlankInfo(
 			cb, elemRefName, args
-		)];
+		) ];
 		// NB: the trivia-multiline override is intentionally NOT threaded into
 		// `blankLinesBetweenSameCtorIfNot` (betweenSingleLineTypes, inverted).
 		// That rule's blank between two single-line type pairs is OWNED by it
@@ -382,11 +382,11 @@ final class WriterCtorBlankLowering {
 						+ 'first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity $arity',
 						Context.currentPos()
 					);
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				final binders: Array<Expr> = [ for (i in 0...arity) i == 0 ? macro _v0 : macro _ ];
 				final pattern: Expr = { expr: ECall(ctorIdent, binders), pos: pos };
 				cases.push({ values: [pattern], guard: null, expr: macro 1 });
 			} else {
-				final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos };
+				final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [ for (_ in 0...arity) macro _ ]), pos: pos };
 				cases.push({ values: [pattern], guard: null, expr: macro 0 });
 			}
 		}
@@ -747,7 +747,7 @@ final class WriterCtorBlankLowering {
 					);
 				transparentMatched.push(ctorName);
 				patterns.push(
-					{ pattern: { expr: ECall(ctorIdent, [for (i in 0...arity) i == 0 ? macro _v0 : macro _]), pos: pos }, subset: 3 }
+					{ pattern: { expr: ECall(ctorIdent, [ for (i in 0...arity) i == 0 ? macro _v0 : macro _ ]), pos: pos }, subset: 3 }
 				);
 			} else {
 				patterns.push({ pattern: transitionPattern(ctorIdent, arity, false, pos), subset: 0 });
@@ -846,7 +846,7 @@ final class WriterCtorBlankLowering {
 			// "Not enough arguments" at the generated switch.
 			final arity: Int = branch.children.length + cb.branchSynthExtraArity(enumRuleName, branch);
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos };
+			final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [ for (_ in 0...arity) macro _ ]), pos: pos };
 			final isMatch: Bool = ctorNames.indexOf(ctorName) >= 0;
 			if (isMatch) matched.push(ctorName);
 			final kindExpr: Expr = if (!isMatch)
@@ -860,7 +860,7 @@ final class WriterCtorBlankLowering {
 			// (non-predicated) and zero-arg ctors keep the original wildcard
 			// pattern.
 			final patternFinal: Expr = if (isMatch && predicateName != null && arity >= 1) {
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				final binders: Array<Expr> = [ for (i in 0...arity) i == 0 ? macro _v0 : macro _ ];
 				{ expr: ECall(ctorIdent, binders), pos: pos };
 			} else {
 				pattern;
@@ -1142,12 +1142,12 @@ final class WriterCtorBlankLowering {
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
 			final tagged: Bool = ctorBranchHasFlag(branch, 'multilineCtor');
 			final pattern: Expr = if (tagged && arity >= 1) {
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v : macro _];
+				final binders: Array<Expr> = [ for (i in 0...arity) i == 0 ? macro _v : macro _ ];
 				{ expr: ECall(ctorIdent, binders), pos: pos };
 			} else if (arity == 0) {
 				ctorIdent;
 			} else {
-				{ expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]), pos: pos };
+				{ expr: ECall(ctorIdent, [ for (_ in 0...arity) macro _ ]), pos: pos };
 			};
 			final body: Expr = if (tagged) {
 				anyTagged = true;

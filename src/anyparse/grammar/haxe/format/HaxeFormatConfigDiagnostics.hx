@@ -231,7 +231,7 @@ final class HaxeFormatConfigDiagnostics {
 			section.expressionWrapping,
 			section.implementsExtends
 		];
-		return [for (cascade in all) if (cascade != null) cascade];
+		return [ for (cascade in all) if (cascade != null) cascade ];
 	}
 
 	/**

@@ -161,8 +161,8 @@ final class Parity {
 		final changed: Array<String> = [
 			for (name => text in base.files) if (tip.files.exists(name) && tip.files[name] != text) name
 		];
-		final onlyBase: Array<String> = [for (name in base.files.keys()) if (!tip.files.exists(name)) name];
-		final onlyTip: Array<String> = [for (name in tip.files.keys()) if (!base.files.exists(name)) name];
+		final onlyBase: Array<String> = [ for (name in base.files.keys()) if (!tip.files.exists(name)) name ];
+		final onlyTip: Array<String> = [ for (name in tip.files.keys()) if (!base.files.exists(name)) name ];
 		for (group in [
 			{ label: 'files differ', names: changed },
 			{ label: 'only base wrote', names: onlyBase },
@@ -394,7 +394,7 @@ final class Parity {
 		final shares: Array<Array<Int>> = [];
 		var from: Int = 0;
 		while (from < invocations.length) {
-			shares.push([for (i in from ... Std.int(Math.min(from + size, invocations.length))) i]);
+			shares.push([ for (i in from ... Std.int(Math.min(from + size, invocations.length))) i ]);
 			from += size;
 		}
 		final commands: Array<Command> = [

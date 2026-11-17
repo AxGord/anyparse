@@ -57,7 +57,7 @@ final class RegexScanPlanTest extends Test {
 
 	/** The terminals a document is mostly made of compile to a scan; the ones the plan cannot prove stay on the regex. */
 	public function testTheHotTerminalsScan(): Void {
-		final scanned: Map<String, Bool> = [for (m in shipped()) m.name => m.scan != null];
+		final scanned: Map<String, Bool> = [ for (m in shipped()) m.name => m.scan != null ];
 		for (name in [
 			'JStringLit',
 			'JNumberLit',

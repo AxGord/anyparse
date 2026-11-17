@@ -230,7 +230,7 @@ final class LintConfig {
 		?oracleDeclarations: Array<OracleDeclared>
 	) {
 		_switches = switches ?? [
-			{ rules: [for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true], categories: [] }
+			{ rules: [ for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true ], categories: [] }
 		];
 		_ownedTypes = ownedTypes ?? [];
 		_reportSummaryThreshold = reportSummaryThreshold;
@@ -475,7 +475,7 @@ final class LintConfig {
 	public function optionKeys(id: String): Array<String> {
 		final rule: Null<RuleConfig> = _rules[id];
 		if (rule == null) return [];
-		final keys: Array<String> = [for (key in rule.props.keys()) key];
+		final keys: Array<String> = [ for (key in rule.props.keys()) key ];
 		keys.sort(Compare.compareString);
 		return keys;
 	}
@@ -551,9 +551,9 @@ final class LintConfig {
 	 * to override one option for itself (a command-line flag) without touching any `apq.json` or sharing state between runs.
 	 */
 	public function withIntOption(id: String, key: String, value: Int): LintConfig {
-		final rules: Map<String, RuleConfig> = [for (ruleId => rule in _rules) ruleId => rule];
+		final rules: Map<String, RuleConfig> = [ for (ruleId => rule in _rules) ruleId => rule ];
 		final current: Null<RuleConfig> = rules[id];
-		final props: Map<String, JValue> = current == null ? [] : [for (name => prop in current.props) name => prop];
+		final props: Map<String, JValue> = current == null ? [] : [ for (name => prop in current.props) name => prop ];
 		props[key] = JNumber(value);
 		rules[id] = { enabled: current?.enabled, severity: current?.severity, props: props };
 		return new LintConfig(

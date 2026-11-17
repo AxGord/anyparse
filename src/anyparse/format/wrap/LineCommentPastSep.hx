@@ -35,7 +35,7 @@ class LineCommentPastSep {
 			if (moved == null) continue;
 			if (outItems == null) {
 				outItems = items.copy();
-				outFlags = [for (j in 0...items.length) flags != null && j < flags.length && flags[j]];
+				outFlags = [ for (j in 0...items.length) flags != null && j < flags.length && flags[j] ];
 			}
 			outItems[i] = moved;
 			outFlags[i + 1] = true;

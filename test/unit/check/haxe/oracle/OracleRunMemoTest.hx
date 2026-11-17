@@ -124,12 +124,12 @@ final class OracleRunMemoTest extends Test {
 		final oracles: Array<OracleConfig> = remembering(dir);
 		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
 		pool?.start(oracles);
-		final ports: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final ports: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		Assert.equals(1, ports.length, 'one server started');
 		final servers: Array<Int> = [
 			for (port in ports) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
 		];
-		final driver: Null<Int> = pool == null ? null : [for (batch in pool._batches) batch._pid][0];
+		final driver: Null<Int> = pool == null ? null : [ for (batch in pool._batches) batch._pid ][0];
 		Assert.isTrue(servers.length > 0, 'the server runs');
 		Assert.notNull(driver, 'the servers have a driver');
 		if (driver != null) Assert.equals(0, ProcessProbe.outlivingKilledDriver(driver, servers).length, 'the server outlived its driver');
@@ -162,7 +162,7 @@ final class OracleRunMemoTest extends Test {
 			Sys.putEnv('APQ_ORACLE_PARALLEL', '1');
 			pool?.start(oracles);
 		});
-		final servers: Int = pool == null ? 0 : [for (_ in pool._servers) 1].length;
+		final servers: Int = pool == null ? 0 : [ for (_ in pool._servers) 1 ].length;
 		Assert.equals(
 			Std.int(Math.min(2, ProcessSpawn.resident())), servers, 'a compile budget of one started no server for two configurations'
 		);
@@ -219,7 +219,7 @@ final class OracleRunMemoTest extends Test {
 		if (dir == null) return;
 		final main: String = '$dir/Main.hx';
 		final save: (String, String) -> Void = sys.io.File.saveContent;
-		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx'];
+		final pads: Array<String> = [ for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx' ];
 		for (pad in pads) save(pad, 'a');
 		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
 			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
@@ -227,7 +227,7 @@ final class OracleRunMemoTest extends Test {
 		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
 		pool?.start(oracles);
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first server compiles the first text');
-		final first: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final first: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		final replaced: Array<Int> = [
 			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
 		];
@@ -237,7 +237,7 @@ final class OracleRunMemoTest extends Test {
 		js.node.Fs.utimesSync(main, stamp, stamp);
 		final status: Null<Int> = pool?.compile(oracles)[0]?.status;
 		Assert.isTrue(status != null && status != 0, 'the drifted configuration did not answer the text it holds now');
-		final second: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final second: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		Assert.equals(1, second.length, 'the drifted configuration keeps a server');
 		Assert.equals(
 			0, second.filter(port -> first.contains(port)).length, 'the drifted server was invalidated path by path, not replaced'
@@ -307,7 +307,7 @@ final class OracleRunMemoTest extends Test {
 		if (dir == null) return;
 		final main: String = '$dir/Main.hx';
 		final save: (String, String) -> Void = sys.io.File.saveContent;
-		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx'];
+		final pads: Array<String> = [ for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx' ];
 		for (pad in pads) save(pad, 'a');
 		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
 			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
@@ -315,13 +315,13 @@ final class OracleRunMemoTest extends Test {
 		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
 		pool?.start(oracles);
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first server compiles the first text');
-		final first: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final first: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		final replaced: Array<Int> = [
 			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
 		];
 		for (pad in pads) save(pad, 'b');
 		pool?.positionIn(oracles[0], main, GOOD, GOOD.indexOf('trace'));
-		final second: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final second: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		Assert.equals(1, second.length, 'the drifted configuration keeps a server');
 		Assert.equals(
 			0, second.filter(port -> first.contains(port)).length, 'the drifted server was invalidated path by path, not replaced'
@@ -484,14 +484,14 @@ final class OracleRunMemoTest extends Test {
 		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
 		pool?.start(oracles);
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first compile is green');
-		final first: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final first: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		final running: Array<Int> = [
 			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
 		];
 		Assert.equals(1, first.length, 'a server came up');
 		pool?.positionIn(oracles[0], main, GOOD, GOOD.indexOf('trace'));
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the compile after the position round is green');
-		final second: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final second: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		Assert.same(first, second, 'the module the position round dropped is invalidated, not a reason to replace the server');
 		Assert.isTrue(
 			running.length > 0 && running.filter(ProcessProbe.alive).length == running.length, 'the first server is still running'
@@ -570,17 +570,17 @@ final class OracleRunMemoTest extends Test {
 		final dir: Null<String> = scratch(USES_OTHER, BUILD);
 		if (dir == null) return;
 		final main: String = '$dir/Main.hx';
-		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx'];
+		final pads: Array<String> = [ for (k in 0...OracleServerPool.RESTART_AT + 1) '$dir/pad$k.hx' ];
 		for (pad in pads) rewrite(pad, 'a', null);
 		final oracles: Array<OracleConfig> = OracleRunMemo.attach(
 			[{ hxml: 'build.hxml', dir: dir, defines: [] }], new OracleRunMemo(false, () -> [main].concat(pads))
 		);
 		final pool: Null<OracleServerPool> = OracleRunMemo.of(oracles)?.servers;
 		if (pool != null) skipAfterRedOutside(dir, oracles, pool);
-		final before: Array<Int> = pool == null ? [] : [for (server in pool._servers) server.port];
+		final before: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		for (pad in pads) rewrite(pad, 'b', null);
 		Assert.isNull(pool?.compile(oracles)[0], 'a skipped configuration is not compiled warm');
-		Assert.same(before, pool == null ? [] : [for (server in pool._servers) server.port], 'the skipped server was replaced');
+		Assert.same(before, pool == null ? [] : [ for (server in pool._servers) server.port ], 'the skipped server was replaced');
 		Assert.equals(1, before.length, 'the skipped configuration keeps a server');
 		pool?.stop();
 		CliFixture.removeDir(dir);

@@ -168,7 +168,7 @@ final class LintDocuments {
 		}
 		final declaredCategories: Null<Map<String, JValue>> = config.categories;
 		final switches: RuleSwitches = {
-			rules: [for (id => rule in rules) id => rule.enabled == true],
+			rules: [ for (id => rule in rules) id => rule.enabled == true ],
 			categories: declaredCategories == null ? [] : parseCategories(declaredCategories, drops)
 		};
 		final declaredOracle: Null<JValue> = config.compilerOracle;

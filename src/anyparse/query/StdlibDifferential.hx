@@ -261,7 +261,7 @@ final class StdlibDifferential {
 		final buf: StringBuf = new StringBuf();
 		final arity: Int = candidate.params.length;
 		buf.add('using StringTools;\n\nclass ${PROBE_CLASS} {\n\n');
-		buf.add('\tstatic final live: Array<Bool> = [${[for (_ in maps) 'true'].join(', ')}];\n\n');
+		buf.add('\tstatic final live: Array<Bool> = [${[ for (_ in maps) 'true' ].join(', ')}];\n\n');
 		buf.add('\tstatic var inputs: Int = 0;\n\n');
 		buf.add("\tstatic var constant: String = '';\n\n");
 		buf.add('\tstatic var varying: Bool = false;\n\n');
@@ -271,7 +271,7 @@ final class StdlibDifferential {
 			final values: Array<String> = grid(candidate, candidate.params[slot].type);
 			buf.add('${tabs(slot + 2)}for (a$slot in [${values.join(', ')}]) {\n');
 		}
-		final args: String = [for (slot in 0...arity) 'a$slot'].join(', ');
+		final args: String = [ for (slot in 0...arity) 'a$slot' ].join(', ');
 		final body: String = tabs(arity + 2);
 		buf.add('${body}inputs++;\n');
 		buf.add('${body}final base: String = __apqEval(() -> ${candidate.name}($args));\n');

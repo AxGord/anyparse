@@ -182,7 +182,7 @@ final class LintFixLedger {
 		// SUBTRACTION and the four buckets cannot fail to sum to the rule set, which is the one
 		// property the printed line asks its reader to check. It also counts a `notAsked` id that is
 		// not in `ruleIds` at all as neither — `notAsked.length` would have counted it.
-		final asked: Array<String> = [for (id in ruleIds) if (!notAsked.contains(id)) id];
+		final asked: Array<String> = [ for (id in ruleIds) if (!notAsked.contains(id)) id ];
 		final never: Int = ruleIds.length - asked.length;
 		final exercised: Array<String> = [];
 		var reportedOnly: Int = 0;
@@ -245,7 +245,7 @@ final class LintFixLedger {
 		// footer that names them as absent would contradict the row three lines above it. A
 		// `RiskyArm` rule is never absent either way: it runs in the safe loop as well, whose row
 		// counts its arm's findings as hand-off declines until the risky phase answers for them.
-		final riskyIds: Array<String> = riskyLedgered ? [] : [for (c in risky) if (!(c is RiskyArm)) c.id()];
+		final riskyIds: Array<String> = riskyLedgered ? [] : [ for (c in risky) if (!(c is RiskyArm)) c.id() ];
 		riskyIds.sort(anyparse.util.Compare.compareString);
 		final oracleIds: Array<String> = oracleAssisted.map(c -> c.id());
 		final reasons: Map<String, String> = [
@@ -253,7 +253,7 @@ final class LintFixLedger {
 		];
 		// Read off the check objects rather than passed in: the caller has no list of them, and a rule
 		// that gains the seam without touching `Cli` would otherwise keep the wrong verdict silently.
-		final crossFileIds: Array<String> = [for (c in checks) if (c is CrossFileFix) c.id()];
+		final crossFileIds: Array<String> = [ for (c in checks) if (c is CrossFileFix) c.id() ];
 		final lines: Array<String> = unfixedFixLedger(ledger, reasons, oracleIds, riskyIds, crossFileIds);
 		for (line in exerciseCensus(ledger, checks.map(c -> c.id()), riskyIds)) lines.push(line);
 		return lines;

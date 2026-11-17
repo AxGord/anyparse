@@ -137,7 +137,7 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 			'{"call":"FileIO.readAndProcess","main":["2"]},{"main":[1]},{"call":"FileIO.run","main":[1.5],"why":"x"},7',
 			'public static function main():Void FileIO.readAndProcess("p", decode, done);'
 		);
-		final said: Array<String> = [for (v in found) if (v.file == '') v.message];
+		final said: Array<String> = [ for (v in found) if (v.file == '') v.message ];
 		said.sort(Reflect.compare);
 		Assert.same([
 			'option "spawns" ignored 1 value(s) that are not strings or objects',
@@ -158,7 +158,7 @@ class ThreadSafetySpawnArgumentsTest extends Test {
 			'"FileIO.run",{"call":"FileIO.readAndProcess","main":[2],"evidence":"onDone is posted to the main thread"}',
 			'public static function main():Void FileIO.readAndProcess("p", decode, done);'
 		);
-		Assert.same([], [for (v in found) if (v.file == '') v.message]);
+		Assert.same([], [ for (v in found) if (v.file == '') v.message ]);
 		#else
 		Assert.pass('non-sys target');
 		#end

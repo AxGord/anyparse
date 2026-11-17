@@ -114,7 +114,7 @@ class TransformLowering {
 	 * typedef, and the public `transform` entry rooted on `shape.root`.
 	 */
 	public function generate(): TransformResult {
-		final ruleNames: Array<String> = [for (name in _shape.rules.keys()) name];
+		final ruleNames: Array<String> = [ for (name in _shape.rules.keys()) name ];
 		// Deterministic order — keep generated field order stable across
 		// compiles regardless of Map iteration order.
 		ruleNames.sort((a: String, b: String) -> if (a < b)
@@ -163,7 +163,7 @@ class TransformLowering {
 				// A top-level `Array<X>` rule (rare, but the shape model
 				// allows it) — map each element through its rebuild.
 				final perElem: Expr = rebuildExpr(node.children[0], macro _e);
-				macro [for (_e in node) $perElem];
+				macro [ for (_e in node) $perElem ];
 			case Ref:
 				// A typedef that is a bare alias to another rule.
 				rebuildCore(node, macro node);
@@ -203,7 +203,7 @@ class TransformLowering {
 	 * case is emitted.
 	 */
 	private function lowerAlt(node: ShapeNode, typePath: String): Expr {
-		final cases: Array<Case> = [for (branch in node.children) lowerBranch(branch, typePath)];
+		final cases: Array<Case> = [ for (branch in node.children) lowerBranch(branch, typePath) ];
 		return { expr: ESwitch(macro node, cases, null), pos: Context.currentPos() };
 	}
 
@@ -221,8 +221,8 @@ class TransformLowering {
 			return { values: [ctorRef], expr: ctorRef };
 		}
 
-		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
-		final pattern: Expr = { expr: ECall(ctorRef, [for (name in argNames) macro $i{name}]), pos: Context.currentPos() };
+		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
+		final pattern: Expr = { expr: ECall(ctorRef, [ for (name in argNames) macro $i{name} ]), pos: Context.currentPos() };
 		final rebuiltArgs: Array<Expr> = [
 			for (i in 0...branch.children.length) rebuildExpr(branch.children[i], macro $i{argNames[i]})
 		];
@@ -270,7 +270,7 @@ class TransformLowering {
 				case Star:
 					// Array<X>: map each element through the element rebuild.
 					final perElem: Expr = rebuildExpr(node.children[0], macro _e);
-					macro [for (_e in $valueExpr) $perElem];
+					macro [ for (_e in $valueExpr) $perElem ];
 				case Seq: rebuildStruct(node, valueExpr);
 				case Alt, Opt, Terminal:
 					// A direct anonymous Alt/Opt/Terminal child reaching a

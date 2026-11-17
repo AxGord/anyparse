@@ -101,7 +101,7 @@ class ProfTop {
 			self[key] = (self.exists(key) ? self[key] : 0.0) + delta;
 			total += delta;
 		}
-		final rows: Array<{ label: String, us: Float }> = [for (key => us in self) { label: key, us: us }];
+		final rows: Array<{ label: String, us: Float }> = [ for (key => us in self) { label: key, us: us } ];
 		// a tie is broken by label: the rows come out of a map, whose order is the target's
 		rows.sort((a, b) -> if (b.us > a.us)
 			1

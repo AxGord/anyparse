@@ -417,7 +417,7 @@ class HxFormatterCorpusTest extends Test {
 
 	private static function printParseReasons(label: String, reasons: Map<String, Int>): Void {
 		#if (sys || nodejs)
-		final entries: Array<{ reason: String, count: Int }> = [for (r => c in reasons) { reason: r, count: c }];
+		final entries: Array<{ reason: String, count: Int }> = [ for (r => c in reasons) { reason: r, count: c } ];
 		entries.sort((a, b) -> b.count - a.count);
 		Sys.println('$label skip-parse reasons:');
 		for (entry in entries) Sys.println('  ${entry.count}× ${entry.reason}');

@@ -251,7 +251,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 			final owner: Null<QueryNode> = ownerDeclOf(tree, member);
 			final held: Array<String> = RefactorSupport.accessGrantsOn(tree, member, s.grant)
 				.concat(owner == null ? [] : RefactorSupport.accessGrantsOn(tree, owner, s.grant));
-			final missing: Array<String> = [for (path in grants.paths[i]) if (!held.contains(path)) '${s.grant}($path)'];
+			final missing: Array<String> = [ for (path in grants.paths[i]) if (!held.contains(path)) '${s.grant}($path)' ];
 			final edit: Null<FixEdit> = missing.length == 0 ? null : AddMeta.entriesEdit(source, tree, member, missing);
 			if (edit != null) edits.push(edit);
 		}

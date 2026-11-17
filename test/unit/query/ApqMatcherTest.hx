@@ -521,7 +521,7 @@ class Y {
 		final matches: Array<Match> = Matcher.search(plugin.parsePattern("new $T(...)"), tree);
 		Assert.equals(4, matches.length);
 		for (m in matches) {
-			final keys: Array<String> = [for (k in m.bindings.keys()) k];
+			final keys: Array<String> = [ for (k in m.bindings.keys()) k ];
 			keys.sort(Reflect.compare);
 			Assert.equals('T', keys.join(','), 'only the name metavar binds - got ${keys.join(',')}');
 		}

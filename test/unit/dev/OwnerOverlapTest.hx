@@ -178,7 +178,7 @@ final class OwnerOverlapTest extends Test {
 			overlaps: [weak, strong]
 		});
 		Assert.equals(1, lines.filter(l -> l.startsWith('owner ')).length);
-		final at: Int = [for (i in 0...lines.length) if (lines[i].startsWith('owner Counter.lineOf')) i][0];
+		final at: Int = [ for (i in 0...lines.length) if (lines[i].startsWith('owner Counter.lineOf')) i ][0];
 		Assert.stringContains('[high 0.9] Scanner.lineNumber', lines[at + 1]);
 		Assert.stringContains('[high 0.7] Cursor.row', lines[at + 2]);
 	}
@@ -222,7 +222,7 @@ final class OwnerOverlapTest extends Test {
 
 	private static function ownersOf(sources: Array<String>): OwnerIndex {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final files: Array<{ file: String, source: String }> = [for (i => source in sources) { file: 'src/f$i.hx', source: source }];
+		final files: Array<{ file: String, source: String }> = [ for (i => source in sources) { file: 'src/f$i.hx', source: source } ];
 		return OwnerIndex.build(IndexScope.over(files, plugin), plugin);
 	}
 

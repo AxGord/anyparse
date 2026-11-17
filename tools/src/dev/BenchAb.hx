@@ -54,7 +54,7 @@ final class BenchAb {
 		final nice: Int = js.Syntax.code("require('os').getPriority()");
 		final clock: String = DateTools.format(Date.now(), '%H:%M:%S');
 		Sys.println('# config=$config mode=$mode target=$target rounds=$rounds reps=$reps nice=$nice $clock');
-		final times: Map<String, Array<Float>> = [for (arm in arms) arm.label => []];
+		final times: Map<String, Array<Float>> = [ for (arm in arms) arm.label => [] ];
 		for (round in 1...rounds + 1) for (arm in arms) {
 			final armMode: String = arm.mode ?? mode;
 			final run: Command = arm.binary.endsWith('.js')

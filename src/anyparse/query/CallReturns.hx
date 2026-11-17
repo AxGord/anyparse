@@ -232,7 +232,7 @@ final class CallReturns {
 		final index: Null<SymbolIndex> = c.index;
 		final span: Null<Span> = node.span;
 		final args: Array<QueryNode> = node.children.slice(1);
-		if (index == null || span == null) return [for (_ in args) Untyped];
+		if (index == null || span == null) return [ for (_ in args) Untyped ];
 		final site: Span = span;
 		final owner: Null<TypeDeclInfo> = fi.types.find(t -> t.span.from <= site.from && site.to <= t.span.to);
 		final key: DeclarationKey = DeclarationKey.ofSite(

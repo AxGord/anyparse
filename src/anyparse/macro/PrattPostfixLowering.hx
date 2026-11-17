@@ -158,7 +158,7 @@ final class PrattPostfixLowering {
 		// Pratt tier — the postfix tier's `#if` splice dispatch re-probes
 		// from the position this loop exits at). Drives the conditional
 		// no-match position restore in `buildPrattLoopExpr`.
-		final wordOps: Array<String> = [for (op in collectAllOps(node)) if (endsWithWordChar(op)) op];
+		final wordOps: Array<String> = [ for (op in collectAllOps(node)) if (endsWithWordChar(op)) op ];
 		return buildPrattLoopExpr(oc, returnCT, atomCall, opChain, wordOps);
 	}
 
@@ -320,7 +320,7 @@ final class PrattPostfixLowering {
 		final opTrailCapture: Expr = wantOpTrail
 			? macro final _opTrailComment: Null<String> = collectTrailingFull(ctx)
 			: macro final _opTrailComment: Null<String> = null;
-		final postfixWordOps: Array<String> = [for (op in collectAllOps(node)) if (endsWithWordChar(op)) op];
+		final postfixWordOps: Array<String> = [ for (op in collectAllOps(node)) if (endsWithWordChar(op)) op ];
 		return buildPostfixLoopExpr(oc, returnCT, coreCall, opTrailCapture, opChain, postfixWordOps);
 	}
 

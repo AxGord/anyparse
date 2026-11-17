@@ -179,8 +179,8 @@ class RenameTypedefFieldCliTest extends Test {
 	/** `path` spelled relative to the working directory, climbing to the root first. */
 	private static function relative(path: String): String {
 		final cwd: String = FileSystem.absolutePath(Sys.getCwd());
-		final depth: Int = [for (segment in cwd.split('/')) if (segment != '') segment].length;
-		return [for (_ in 0...depth) '..'].join('/') + FileSystem.absolutePath(path);
+		final depth: Int = [ for (segment in cwd.split('/')) if (segment != '') segment ].length;
+		return [ for (_ in 0...depth) '..' ].join('/') + FileSystem.absolutePath(path);
 	}
 	#end
 

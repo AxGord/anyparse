@@ -864,7 +864,7 @@ final class Linter {
 	private static function gatedPerFile(
 		found: Array<Violation>, checks: Array<Check>, resolveConfig: (String) -> LintConfig, applyEnablement: Bool
 	): Array<Violation> {
-		final byId: Map<String, Check> = [for (c in checks) c.id() => c];
+		final byId: Map<String, Check> = [ for (c in checks) c.id() => c ];
 		return found.filter(violation -> {
 			final config: LintConfig = resolveConfig(violation.file);
 			final check: Null<Check> = byId[violation.rule];

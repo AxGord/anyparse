@@ -139,7 +139,7 @@ final class SetModifier {
 		final shape: RefShape = plugin.refShape();
 		final modifierKinds: Array<String> = CheckScan.modifierKinds(shape);
 		final vocabulary: Array<String> = modifierKinds.map(kind -> kind.toLowerCase());
-		final visibility: Array<String> = [for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase()];
+		final visibility: Array<String> = [ for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase() ];
 		final invalid: Null<String> = validate(changes, vocabulary, visibility);
 		if (invalid != null) return Err(invalid);
 
@@ -391,7 +391,7 @@ final class SetModifier {
 			change -> !change.startsWith('-') && (change.startsWith('+') ? change.substr(1) : change) == publicName
 		);
 		if (!adds || !isModuleLevel(tree, decl, shape)) return null;
-		final visibility: Array<String> = [for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase()];
+		final visibility: Array<String> = [ for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase() ];
 		final held: Null<String> = current.find(name -> name != publicName && visibility.contains(name));
 		return 'is at MODULE level, where "$publicName" has no spelling at all — Haxe rejects it on every module-level kind. ' + (
 			held == null

@@ -187,7 +187,7 @@ final class GateArms {
 	/** The paths a `hxq changed` report `text` classes as `layout`, a moved file by the path it has now. */
 	public static function layoutOf(text: String): Array<String> {
 		final row: EReg = ~/^\S+ (.+?)(?:  <- .+)?  layout$/;
-		return [for (line in text.split('\n')) if (row.match(line)) row.matched(1)];
+		return [ for (line in text.split('\n')) if (row.match(line)) row.matched(1) ];
 	}
 
 	/**
@@ -293,7 +293,7 @@ final class GateArms {
 	private static function changedReport(gate: GateTree, base: String, touched: Array<String>): String {
 		final files: Array<String> = touched.filter(f -> f.endsWith('.hx'));
 		if (files.length == 0) return '';
-		final shown: Array<String> = [for (file in files) for (arg in ['--diff', file]) arg];
+		final shown: Array<String> = [ for (file in files) for (arg in ['--diff', file]) arg ];
 		final report: Result = gate.hxq(gate.tree, ['changed', base].concat(shown)).timeout(PLAN_TIMEOUT_MS).run();
 		return report.ok ? report.out : '';
 	}
@@ -493,7 +493,7 @@ final class GateArms {
 					node.name
 		];
 		if (seeds.length == 0) return [];
-		final focus: Array<String> = [for (seed in seeds) for (arg in ['--focus', seed]) arg];
+		final focus: Array<String> = [ for (seed in seeds) for (arg in ['--focus', seed]) arg ];
 		final around: CodeGraphJson = CodeGraphJsonParser.parse(
 			gate.hxq(gate.tree, ['graph', '--level', 'member', '--edges', 'calls', '--radius', '1'].concat(focus).concat(GRAPH_SCOPE))
 				.timeout(PLAN_TIMEOUT_MS)

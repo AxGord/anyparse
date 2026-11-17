@@ -369,7 +369,7 @@ final class FixVerifier {
 		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true, ?narrow: (Array<Violation>) -> Array<Violation>
 	): FixVerifyResult {
 		final names: NameProof = OracleProviders.of(plugin).nameProof();
-		final aware: Array<NameOracleAware> = [for (check in riskyChecks) if (check is NameOracleAware) cast check];
+		final aware: Array<NameOracleAware> = [ for (check in riskyChecks) if (check is NameOracleAware) cast check ];
 		for (check in aware) check.setNameOracle(names);
 		final result: FixVerifyResult = verifyWith(
 			names, files, riskyChecks, plugin, oracles, write, optsByFile, coverage, resolveConfig, applyEnablement, narrow
@@ -860,7 +860,7 @@ final class FixVerifier {
 			return Partial(0, edits.length, spawnsBeforeConfirm, refusal == null ? OracleRejected : NotCanonical(refusal));
 		}
 		final failerUnits: Array<Int> = failers;
-		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
+		final keptUnits: Array<Int> = [ for (u in 0...n) if (!failerUnits.contains(u)) u ];
 		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
 		return switch CanonicalEdit.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
@@ -945,7 +945,7 @@ final class FixVerifier {
 		final outcome: OracleOutcome = OracleProviders.of(plugin).typecheckAll(configs, false);
 		if (outcome.match(Confirmed)) {
 			for (candidate in candidates) candidate.entry.source = candidate.fullText;
-			return [for (_ in candidates) Applied];
+			return [ for (_ in candidates) Applied ];
 		}
 		// every file is back at its own text before any is judged again, else a later confirm would read a tree still
 		// carrying another file's unkept candidate
@@ -1018,7 +1018,7 @@ final class FixVerifier {
 			if (!CanonicalEdit.canonicalize(entry.source, editsOfUnits(edits, units, kept), false, plugin, opts).match(Ok(_))) kept.pop();
 		}
 		if (kept.length == 0 || kept.length == units.length) return whole;
-		final flat: Array<Int> = [for (u in kept) for (i in units[u]) i];
+		final flat: Array<Int> = [ for (u in kept) for (i in units[u]) i ];
 		flat.sort((a, b) -> a - b);
 		final keptEdits: Array<GroupedEdit> = flat.map(i -> edits[i]);
 		final refused: Int = edits.length - keptEdits.length;
@@ -1072,7 +1072,7 @@ final class FixVerifier {
 	private static function editsOfUnits(
 		edits: Array<GroupedEdit>, units: Array<Array<Int>>, unitIndices: Array<Int>
 	): Array<{ span: Span, text: String }> {
-		final flat: Array<Int> = [for (u in unitIndices) for (i in units[u]) i];
+		final flat: Array<Int> = [ for (u in unitIndices) for (i in units[u]) i ];
 		flat.sort((a, b) -> a - b);
 		return flat.map(i -> { span: edits[i].span, text: edits[i].text });
 	}

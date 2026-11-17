@@ -138,7 +138,7 @@ class FactKindsTest extends Test {
 	@:pin('control')
 	@:killer('M-FACTKINDS-REFLECTION-TYPE')
 	public function testTheReflectionClassesAreTheOnesTheProbeMarks(): Void {
-		final targets: Array<String> = [for (r in _facts?.node('Main.main')?.reflection ?? []) r.target];
+		final targets: Array<String> = [ for (r in _facts?.node('Main.main')?.reflection ?? []) r.target ];
 		for (cls in FactKinds.REFLECTION_CLASSES)
 			Assert.isTrue(targets.exists(t -> t.startsWith('$cls.')), 'no reflection fact of `$cls`: $targets');
 	}

@@ -107,12 +107,12 @@ final class ShapeVocab {
 	/** The METHOD members of a type body — `memberDeclKinds` without the field forms (`fieldDeclKinds`). */
 	public static function methodDeclKinds(shape: RefShape): Array<String> {
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
-		return [for (k in shape.memberDeclKinds ?? []) if (!fields.contains(k)) k];
+		return [ for (k in shape.memberDeclKinds ?? []) if (!fields.contains(k)) k ];
 	}
 
 	/** The parameters that bind ONE argument each — `paramKinds` without the variadic `restParamKind`. */
 	public static function singleParamKinds(shape: RefShape): Array<String> {
-		return [for (k in shape.paramKinds ?? []) if (k != shape.restParamKind) k];
+		return [ for (k in shape.paramKinds ?? []) if (k != shape.restParamKind) k ];
 	}
 
 	/**

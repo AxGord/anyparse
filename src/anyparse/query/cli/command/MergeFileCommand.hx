@@ -153,7 +153,7 @@ final class MergeFileCommand implements CliCommand implements LanguageFree {
 	public static function linesMerged(base: String, ours: String, theirs: String): Null<String> {
 		final dir: String = TempScratch.slot('apq-merge-lines');
 		if (!FileSystem.exists(dir)) FileSystem.createDirectory(dir);
-		final files: Array<String> = [for (name in ['base', 'ours', 'theirs']) Path.join([dir, name])];
+		final files: Array<String> = [ for (name in ['base', 'ours', 'theirs']) Path.join([dir, name]) ];
 		File.saveContent(files[0], base);
 		File.saveContent(files[1], ours);
 		File.saveContent(files[2], theirs);

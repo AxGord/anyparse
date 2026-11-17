@@ -429,7 +429,7 @@ final class TypingService {
 	 * (`RefShape.stringLiteralKinds`, `literalTypeNames`); null when they disagree.
 	 */
 	public static function stringType(shape: RefShape): Null<String> {
-		final names: Array<String> = [for (k in shape.stringLiteralKinds ?? []) shape.literalTypeNames?.get(k) ?? ''];
+		final names: Array<String> = [ for (k in shape.stringLiteralKinds ?? []) shape.literalTypeNames?.get(k) ?? '' ];
 		return names.length == 0 || names.contains('') || names.filter(n -> n != names[0]).length > 0 ? null : names[0];
 	}
 

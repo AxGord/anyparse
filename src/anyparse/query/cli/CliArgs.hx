@@ -343,7 +343,7 @@ final class CliArgs {
 	 * definition sources are.
 	 */
 	public static function expandAnyGrammar(specs: Array<String>): ExpandedInputs {
-		return expandEach(specs, [for (entry in grammars()) for (extension in entry.extensions) extension]);
+		return expandEach(specs, [ for (entry in grammars()) for (extension in entry.extensions) extension ]);
 	}
 
 	/** The files grammar `lang` reads, named for a diagnostic by their extensions: `.hx files`, `.json files`. */
@@ -503,7 +503,7 @@ final class CliArgs {
 		final paths: Array<String> = [];
 		final unmatched: Array<String> = [];
 		for (spec in specs) {
-			final hits: Array<String> = [for (ext in extensions) for (p in Glob.expand(spec, ext)) p];
+			final hits: Array<String> = [ for (ext in extensions) for (p in Glob.expand(spec, ext)) p ];
 			if (hits.length == 0) unmatched.push(spec);
 			for (p in hits) Groups.pushUnique(paths, p);
 		}

@@ -13,13 +13,13 @@ final class ExcerptTest extends Test {
 	}
 
 	public function testAnErrorlessLogAnswersItsLastLines(): Void {
-		final lines: Array<String> = [for (i in 0...15) 'line $i'];
+		final lines: Array<String> = [ for (i in 0...15) 'line $i' ];
 		Assert.same(lines.slice(5), Excerpt.errors(lines.join('\n') + '\n\n'));
 		Assert.same(['line 13', 'line 14'], Excerpt.tail(lines.join('\n'), 2));
 	}
 
 	public function testALongExcerptEndsInTheCountOfWhatItLeftOut(): Void {
-		final lines: Array<String> = [for (i in 0...25) 'row $i'];
+		final lines: Array<String> = [ for (i in 0...25) 'row $i' ];
 		final cut: Array<String> = Excerpt.cut(lines);
 		Assert.equals(Excerpt.MAX_LINES, cut.length);
 		Assert.equals('row 8', cut[Excerpt.MAX_LINES - 2]);

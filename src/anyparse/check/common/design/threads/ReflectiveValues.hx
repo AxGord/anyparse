@@ -429,7 +429,7 @@ final class ReflectiveValues {
 		id: String, decl: QueryNode, param: QueryNode, writes: Writes, typer: (String, Null<String>, QueryNode) -> Null<String>,
 		visiting: Array<String>
 	): Null<Array<String>> {
-		final params: Array<QueryNode> = [for (c in decl.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in decl.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c ];
 		final index: Int = params.indexOf(param);
 		if (params.slice(0, index + 1).exists(p -> p.kind == _shape.restParamKind)) return null;
 		final annotations: Array<String> = _shape.typeAnnotationKinds ?? [];

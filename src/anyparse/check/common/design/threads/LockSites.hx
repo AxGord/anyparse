@@ -167,7 +167,7 @@ private class WrapperOps {
 	 * there is one: a dispatch may run another override, taking nothing.
 	 */
 	public static function plainCallsOnly(graph: CallGraph, id: String): Bool {
-		final into: Array<CallEdge> = [for (e in graph.inEdges(id)) if (e.kind.isInvocation()) e];
+		final into: Array<CallEdge> = [ for (e in graph.inEdges(id)) if (e.kind.isInvocation()) e ];
 		return into.length > 0 && into.foreach(e -> e.kind == Call);
 	}
 
@@ -287,7 +287,7 @@ final class LockSites {
 		collectUnsealed(files, plugin, [
 			for (t in takes.concat(gives)) if (t.edge.receiverField != null) t.edge.receiverField
 		], writes);
-		final unresolved: Array<String> = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
+		final unresolved: Array<String> = [ for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n ];
 		for (site in inferWrappers(takes, gives, pairIds, unresolved)) (site.wrapper.takes ? takes : gives).push(site.call);
 		for (take in takes) {
 			final lock: Null<String> = lockOf(take.edge);
@@ -407,7 +407,7 @@ final class LockSites {
 			edge: edge,
 			pair: pair,
 			lock: lock,
-			window: [for (e in held) if (e.kind.isInvocation() || e.kind == Ref) e],
+			window: [ for (e in held) if (e.kind.isInvocation() || e.kind == Ref) e ],
 			leaks: leaks,
 			blind: traced == null || unresolved.length > 0,
 			untraced: traced == null,
@@ -529,7 +529,7 @@ final class LockSites {
 		for (lock in aliases.rewritten) _rewrittenLocks.push(lock);
 		for (name => found in breaking) if (found.exists(o -> !aliases.accounts(o))) _unsealed.push(name);
 		// a reflective write names its field at run time: no `new` or hand-off it stores is in sight
-		writes.markLockMembers(fields.concat([for (target => source in aliases.targets) for (f in [target, source]) f]));
+		writes.markLockMembers(fields.concat([ for (target => source in aliases.targets) for (f in [target, source]) f ]));
 		for (name in walked) if (!_unsealed.contains(name) && writes.reflectivelyWritten(name)) _unsealed.push(name);
 	}
 
@@ -671,8 +671,8 @@ final class LockSites {
 				_siteSelf[key] = site.wrapper.self;
 			}
 			final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = WrapperOps.opsByFunction(
-				takes.concat([for (site in sites) if (site.wrapper.takes) site.call]),
-				gives.concat([for (site in sites) if (!site.wrapper.takes) site.call])
+				takes.concat([ for (site in sites) if (site.wrapper.takes) site.call ]),
+				gives.concat([ for (site in sites) if (!site.wrapper.takes) site.call ])
 			);
 			final next: Map<String, LockWrapper> = [];
 			for (id => list in ops) if (list.length == 1 && mayWrap(id, pairIds, unresolved)) {
@@ -682,7 +682,7 @@ final class LockSites {
 			dropUncovered(next);
 			if (WrapperOps.sameWrappers(next, wrappers)) {
 				_wrappers = wrappers;
-				return [for (site in sites) site];
+				return [ for (site in sites) site ];
 			}
 			wrappers = next;
 		}
@@ -743,7 +743,7 @@ final class LockSites {
 		while (dropped) {
 			dropped = false;
 			final sites: Map<String, { call: LockCall, wrapper: LockWrapper }> = wrapperSites(wrappers);
-			for (id in [for (k in wrappers.keys()) k]) {
+			for (id in [ for (k in wrappers.keys()) k ]) {
 				final into: Array<CallEdge> = _graph.inEdges(id);
 				final covered: Bool = into.length > 0
 					&& into.foreach(e -> (e.kind == Call || e.kind == Virtual) && sites.exists(siteKey(e) ?? ''));

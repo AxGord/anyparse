@@ -197,7 +197,7 @@ final class ModuleMoveCli {
 			CliIo.stderr('apq move: --verify needs a "compilerOracle" in apq.json — nothing written\n');
 			return EXIT_RUNTIME;
 		}
-		final originalOf: Map<String, String> = [for (e in scopeFiles) e.file => e.source];
+		final originalOf: Map<String, String> = [ for (e in scopeFiles) e.file => e.source ];
 		for (m in outcome.moves) originalOf[m.to] = originalOf[m.from] ?? '';
 		final canonical: Array<MoveChange> = outcome.changes.map(canonicalOf.bind(_, originalOf, plugin, ext, ledger));
 		write(canonical, outcome.removed);

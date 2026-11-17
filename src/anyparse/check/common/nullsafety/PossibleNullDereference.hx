@@ -81,7 +81,7 @@ final class PossibleNullDereference extends RuleBase implements NoAutofix {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		final identKind: Null<String> = shape.identKind;
-		final derefKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
+		final derefKinds: Array<String> = [ for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k ];
 		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape);
 		if (identKind == null || derefKinds.length == 0 || cfg == null) return [];
 		final cfgValue: NullableSourceCfg = cfg;

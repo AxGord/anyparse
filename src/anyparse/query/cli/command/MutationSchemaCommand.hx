@@ -101,7 +101,7 @@ final class MutationSchemaCommand implements CliCommand {
 		final plugin: GrammarPlugin = CliArgs.pickPlugin('haxe');
 		final placed: Map<Int, String> = [];
 		for (file in files) try {
-			composeFile(plugin, file, [for (row in rows) if (row.file == file) row.arm], placed);
+			composeFile(plugin, file, [ for (row in rows) if (row.file == file) row.arm ], placed);
 		} catch (exception: Exception) {
 			CliIo.stderr('apq mutation-schema: $file: ${exception.message}\n');
 			return EXIT_RUNTIME;

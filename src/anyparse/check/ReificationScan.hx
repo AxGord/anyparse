@@ -66,7 +66,7 @@ final class ReificationScan {
 		final opaqueKinds: Array<String> = plugin.refShape().opaqueKinds ?? [];
 		if (opaqueKinds.length == 0 || violations.length == 0) return violations;
 		final exempt: Array<String> = exemptRules ?? [];
-		final sourceByFile: Map<String, String> = [for (entry in files) entry.file => entry.source];
+		final sourceByFile: Map<String, String> = [ for (entry in files) entry.file => entry.source ];
 		final spansByFile: Map<String, Array<Span>> = [];
 		final kept: Array<Violation> = [];
 		for (violation in violations) {
@@ -86,7 +86,7 @@ final class ReificationScan {
 	 * carry it, which is what makes the gate's cost one `contains` per finding.
 	 */
 	public static function exemptIdsOf(checks: Array<Check>): Array<String> {
-		return [for (check in checks) if (check is QuotationAware) check.id()];
+		return [ for (check in checks) if (check is QuotationAware) check.id() ];
 	}
 
 	/**

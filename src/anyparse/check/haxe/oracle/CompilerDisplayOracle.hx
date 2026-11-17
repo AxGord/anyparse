@@ -182,7 +182,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayT
 	 */
 	public static function positionsOver(file: String, requests: Array<PositionRequest>): Array<Null<TypeReplyPosition>> {
 		invocations += requests.length;
-		final out: Array<Null<TypeReplyPosition>> = [for (_ in requests) null];
+		final out: Array<Null<TypeReplyPosition>> = [ for (_ in requests) null ];
 		#if nodejs
 		if (requests.length == 0) return out;
 		final dir: Null<String> = try
@@ -196,7 +196,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayT
 			return out;
 		}
 		final forms: Array<Array<String>> = requests.map(request -> displayForms(file, request.cwd));
-		var asking: Array<Int> = [for (i in 0...requests.length) i];
+		var asking: Array<Int> = [ for (i in 0...requests.length) i ];
 		var form: Int = 0;
 		while (asking.length > 0) {
 			final replies: Array<ProcessRun> = ProcessSpawn.runAll(

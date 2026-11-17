@@ -217,7 +217,7 @@ final class MutationSlot {
 	 * expectation is matched there exactly when it is matched in the filtered run.
 	 */
 	public static function killerTokens(expected: String): String {
-		return [for (e in expected.split(',')) if (e.trim() != '') 'test:${e.ltrim()}'.rtrim()].join(',');
+		return [ for (e in expected.split(',')) if (e.trim() != '') 'test:${e.ltrim()}'.rtrim() ].join(',');
 	}
 
 	/**
@@ -241,12 +241,12 @@ final class MutationSlot {
 	public static function fallbackTokens(filter: String, slices: Int): Null<Array<String>> {
 		return filter == '' || filter == 'ALL' || filter.indexOf('#') >= 0 || filter.indexOf('test:') >= 0
 			? null
-			: [for (i in 0...slices) filter.split(',').map(cls -> '$cls#$i/$slices').join(',')];
+			: [ for (i in 0...slices) filter.split(',').map(cls -> '$cls#$i/$slices').join(',') ];
 	}
 
 	/** The transcripts `logs` — the slices of one run when there are several — classified against `expected`. */
 	public static function classify(expected: String, logs: Array<String>): Classified {
-		final want: Array<String> = [for (e in expected.split(',')) if (e.trim() != '') e.trim()];
+		final want: Array<String> = [ for (e in expected.split(',')) if (e.trim() != '') e.trim() ];
 		final parsed: Array<TestSummaryResult> = logs.map(log -> TestTranscript.parseTestSummary(File.getContent(log)));
 		final result: MutationVerdictResult = MutationVerdict.classify(
 			parsed.length == 1 ? parsed[0] : MutationVerdict.merge(parsed), want
@@ -486,7 +486,7 @@ final class MutationSlot {
 			}
 			final slices: Null<Array<String>> = fallbackTokens(row.filter, envInt('APQ_MUTATION_FALLBACK_SLICES', FALLBACK_SLICES));
 			if (slices != null) {
-				final logs: Array<String> = [for (i in 0...slices.length) '$log.slice$i'];
+				final logs: Array<String> = [ for (i in 0...slices.length) '$log.slice$i' ];
 				for (i => run in Pool.of(slices.length).map(slices, suite)) saveLog(logs[i], run);
 				final sliced: Null<Classified> = classifyOrNull(row.expected, logs);
 				// one transcript to open, the slices in order

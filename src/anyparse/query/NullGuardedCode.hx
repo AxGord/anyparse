@@ -165,7 +165,7 @@ final class NullGuardedCode {
 		if (span == null || tree == null) return false;
 		var spans: Null<Array<Span>> = _dead[file];
 		if (spans == null) {
-			spans = [for (g in guardedBranches(tree)) if (nullOnly(g.param)) g.branch];
+			spans = [ for (g in guardedBranches(tree)) if (nullOnly(g.param)) g.branch ];
 			_dead[file] = spans;
 		}
 		return spans.exists(d -> span.from >= d.from && span.to <= d.to);
@@ -240,7 +240,7 @@ final class NullGuardedCode {
 			final span: Null<Span> = node.span;
 			if (isFunction && !nested && name != null && span != null && (_shape.functionKinds ?? []).contains(node.kind)) {
 				final type: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, span.from)?.name;
-				final own: Array<QueryNode> = [for (c in node.children) if (kinds.contains(c.kind)) c];
+				final own: Array<QueryNode> = [ for (c in node.children) if (kinds.contains(c.kind)) c ];
 				final method: String = name;
 				if (type != null) {
 					final typeName: String = type;
@@ -401,7 +401,7 @@ final class NullGuardedCode {
 		final fn: Null<QueryNode> = enclosingFunction(read.tree, node.at.span);
 		final fnSpan: Null<Span> = fn?.span;
 		if (fn == null || fnSpan == null) return false;
-		final params: Array<QueryNode> = [for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c ];
 		return params.length == count && params[index].name == name && readsNeverCall(node, read.tree, fn, params[index], name, depth);
 	}
 

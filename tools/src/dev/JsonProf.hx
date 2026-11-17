@@ -179,7 +179,7 @@ final class JsonProf {
 	}
 
 	private static function storedSample(): StoredTree {
-		return { strings: ['Node', 'name'], ints: [for (i in 0...STORED_NODES) i % STORED_SPREAD] };
+		return { strings: ['Node', 'name'], ints: [ for (i in 0...STORED_NODES) i % STORED_SPREAD ] };
 	}
 
 	private static function storedParseStd(text: String): Int {

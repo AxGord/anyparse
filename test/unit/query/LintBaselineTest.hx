@@ -142,7 +142,7 @@ class LintBaselineTest extends Test {
 	@:pin('control')
 	@:killer('M-BASELINE-ONE-PASS')
 	public function testTheBaselineSpendsLikeTheDiffInAnyOrder(): Void {
-		final old: LintDiffTally = snapshot([for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m)]);
+		final old: LintDiffTally = snapshot([ for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m) ]);
 		Assert.equals(
 			0,
 			delta([

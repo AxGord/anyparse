@@ -17,7 +17,7 @@ class GraphViewTest extends Test {
 		graph.addEdge(CodeGraph.idOf(Type, 'p.a.A'), CodeGraph.idOf(Member, 'p.a.A.m2'), Ref);
 		final lifted: CodeGraph = GraphView.lift(graph, Type);
 		Assert.equals('p.a.A -> p.b.B call 3|p.a.A -> p.b.B new 1|p.b.B -> String ref 1', edges(lifted));
-		Assert.equals('p.a.A', [for (n in lifted.nodes()) if (n.focus) n.name].join(','), 'a member focused focuses its type');
+		Assert.equals('p.a.A', [ for (n in lifted.nodes()) if (n.focus) n.name ].join(','), 'a member focused focuses its type');
 		Assert.equals('String,p.a,p.b,p.a.A,p.b.B', names(lifted));
 	}
 
@@ -77,7 +77,7 @@ class GraphViewTest extends Test {
 		final b: String = CodeGraph.idOf(Package, 'b');
 		final one: CodeGraph = GraphView.filter(chain(), filter(1, [b], false, false, 1));
 		Assert.equals('a -> b import 1|b -> c import 1', edges(one));
-		Assert.equals('b', [for (n in one.nodes()) if (n.focus) n.name].join(','));
+		Assert.equals('b', [ for (n in one.nodes()) if (n.focus) n.name ].join(','));
 		final none: CodeGraph = GraphView.filter(chain(), filter(1, [b], false, false, 0));
 		Assert.equals('', edges(none));
 		Assert.equals('b', names(none), 'a focus node stays with no edge drawn');

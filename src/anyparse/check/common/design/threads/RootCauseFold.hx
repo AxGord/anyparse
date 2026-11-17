@@ -289,7 +289,7 @@ final class RootCauseFold {
 		final parts: Array<String> = [];
 		for (r in reasons) switch r {
 			case Waits(lock):
-				parts.push('waiting for $lock, held long by ${named([for (m in _makers[lock] ?? []) memberOf(_holds[m])])}');
+				parts.push('waiting for $lock, held long by ${named([ for (m in _makers[lock] ?? []) memberOf(_holds[m]) ])}');
 			case Site(key, _, mayRepeat, way, _):
 				parts.push('work ${named([
 for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d.at])
@@ -298,7 +298,7 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 		}
 		finding.severity = Severity.Info;
 		// two reasons (two ways to one sink, two sinks) may name the same holds: each part is said once
-		finding.message += ' — long only through ${[for (k => p in parts) if (parts.indexOf(p) == k) p].join('; ')}, reported there';
+		finding.message += ' — long only through ${[ for (k => p in parts) if (parts.indexOf(p) == k) p ].join('; ')}, reported there';
 	}
 
 	/**

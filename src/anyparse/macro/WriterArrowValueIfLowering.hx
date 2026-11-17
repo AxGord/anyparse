@@ -288,7 +288,7 @@ final class WriterArrowValueIfLowering {
 			final arity: Int = branch.children.length + ac.branchSynthExtraArity(bodyTypePath, branch);
 			if (arity == 0) return null;
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ac.ruleCtorPath(bodyTypePath, branchCtor));
-			final ctorArgs: Array<Expr> = [macro $i{captureName}].concat([for (_ in 1...arity) macro _]);
+			final ctorArgs: Array<Expr> = [macro $i{captureName}].concat([ for (_ in 1...arity) macro _ ]);
 			return { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
 		}
 		return null;
@@ -360,7 +360,7 @@ final class WriterArrowValueIfLowering {
 			if (trailIndex < 0) continue;
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ac.ruleCtorPath(refPath, branch.annotations.get(AnnotationKeys.BASE_CTOR)));
 			final arity: Int = branch.children.length + TriviaPairConverters.countAltExtras(branch);
-			final args: Array<Expr> = [for (i in 0...arity) i == trailIndex ? macro _aifValueTrail : macro _];
+			final args: Array<Expr> = [ for (i in 0...arity) i == trailIndex ? macro _aifValueTrail : macro _ ];
 			cases.push({ values: [{ expr: ECall(ctorRef, args), pos: pos }], expr: macro _aifValueTrail == null, guard: null });
 		}
 		if (cases.length == 0) return macro true;

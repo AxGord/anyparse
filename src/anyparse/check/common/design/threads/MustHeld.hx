@@ -87,7 +87,7 @@ private final class BodyFacts {
 			else
 				[c];
 			if (values.length > 1 && ++open > KNOWN_UNKNOWNS) return [valuation];
-			runs = [for (r in runs) for (v in values) r + v];
+			runs = [ for (r in runs) for (v in values) r + v ];
 		}
 		return runs;
 	}
@@ -551,8 +551,8 @@ final class MustHeld {
 				}
 		}
 		// a worklist: a state is met again only when a caller's entry moved
-		final queue: Array<Int> = [for (i in 0...keys.length) i];
-		final queued: Array<Bool> = [for (_ in keys) true];
+		final queue: Array<Int> = [ for (i in 0...keys.length) i ];
+		final queued: Array<Bool> = [ for (_ in keys) true ];
 		final bound: Int = keys.length * PASSES;
 		var qi: Int = 0;
 		while (qi < queue.length) {

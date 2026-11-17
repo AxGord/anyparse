@@ -314,7 +314,7 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 		final expected: String = source.replace('\tfinal B = 2;\n\t// pair\n\tfinal C = 3;\n', '\tfinal B = 2;\n')
 			.replace('\t// group\n\tfinal D = 4;\n', '\t// group\n');
 		Assert.equals(expected, fixed.fixed['Main.hx']);
-		final declined: Array<String> = [for (v in fixed.found) if (v.declineReason != null) v.message.split('`')[1]];
+		final declined: Array<String> = [ for (v in fixed.found) if (v.declineReason != null) v.message.split('`')[1] ];
 		declined.sort(Compare.compareString);
 		Assert.same(['Auto.Q', 'Num.M'], declined);
 		final off: Null<Outcome> = lint(['Main.hx' => source], [[]]);
@@ -347,7 +347,7 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 		files: Map<String, String>, configurations: Array<Array<String>>, fix: Bool = false, facts: Bool = true
 	): Null<Outcome> {
 		#if (sys || nodejs)
-		final written: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
+		final written: Array<{ name: String, source: String }> = [ for (name => text in files) { name: name, source: text } ];
 		written.push({ name: 'build.hxml', source: BUILD });
 		final dir: String = CliFixture.writeTree('eav_facts', written);
 		var table: Null<CompilerFacts> = null;
@@ -357,22 +357,22 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 				Assert.pass('haxe unavailable — skipped');
 				return null;
 			}
-			final oracles: Array<OracleConfig> = [for (d in configurations) {
+			final oracles: Array<OracleConfig> = [ for (d in configurations) {
 				hxml: 'build.hxml',
 				dir: dir,
 				defines: d
-			}]; // noqa: prefer-map
+			} ]; // noqa: prefer-map
 			table = TypedFactsProbe.probeAll(oracles);
 			if (table == null || table.configurations.length != configurations.length) {
 				CliFixture.removeDir(dir);
-				Assert.fail('the fixture compiled but left no facts: ${[for (d in table?.dropped ?? []) d.reason]}');
+				Assert.fail('the fixture compiled but left no facts: ${[ for (d in table?.dropped ?? []) d.reason ]}');
 				return null;
 			}
 		}
-		final sources: Array<{ file: String, source: String }> = [for (name => text in files) {
+		final sources: Array<{ file: String, source: String }> = [ for (name => text in files) {
 			file: Path.join([dir, name]),
 			source: text
-		}];
+		} ];
 		final held: Null<CompilerFacts> = table;
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope({

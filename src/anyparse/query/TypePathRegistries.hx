@@ -186,7 +186,7 @@ final class TypePathRegistries {
 	/** Every string at `path[i..]` under `node`, arrays transparent. */
 	private static function valuesAt(node: Null<JValue>, path: Array<String>, i: Int): Array<String> {
 		return switch node {
-			case JArray(items): [for (item in items) for (v in valuesAt(item, path, i)) v];
+			case JArray(items): [ for (item in items) for (v in valuesAt(item, path, i)) v ];
 			case JString(text): i == path.length ? [text] : [];
 			case JObject(_) if (i < path.length): valuesAt(JValueTools.field(node, path[i]), path, i + 1);
 			case _: [];

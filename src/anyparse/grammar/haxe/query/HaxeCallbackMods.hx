@@ -40,7 +40,7 @@ final class HaxeCallbackMods {
 		_nested = ShapeVocab.nestedFunctionKinds(shape);
 		final bare: Map<Int, String> = [];
 		collect(tree, null, null, bare);
-		final hits: Map<String, Array<RefHit>> = Refs.findMulti([for (name in bare) name], tree, shape);
+		final hits: Map<String, Array<RefHit>> = Refs.findMulti([ for (name in bare) name ], tree, shape);
 		for (name => found in hits) for (hit in found) {
 			final target: Null<QueryNode> = hit.bindingNode;
 			if (

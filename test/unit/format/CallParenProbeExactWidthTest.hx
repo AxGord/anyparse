@@ -32,7 +32,7 @@ final class CallParenProbeExactWidthTest extends Test {
 	}
 
 	private static function letters(n: Int): String {
-		return [for (_ in 0...n) 'a'].join('');
+		return [ for (_ in 0...n) 'a' ].join('');
 	}
 
 	private static function statement(s: String): String {

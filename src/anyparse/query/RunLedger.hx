@@ -34,7 +34,7 @@ final class RunLedger {
 	/** Every key said under `topic` in this run. */
 	public function keysOf(topic: String): Array<String> {
 		final prefix: String = entryOf(topic, '');
-		return [for (entry in _said) if (entry.startsWith(prefix)) entry.substr(prefix.length)];
+		return [ for (entry in _said) if (entry.startsWith(prefix)) entry.substr(prefix.length) ];
 	}
 
 	/** Record `key` under `topic` as said, for a run option read back with `said` and never asked with `first`. */

@@ -186,7 +186,7 @@ final class MemberRegistryRename {
 			}
 			final verdicts: Array<Bool> = inSource.map(at -> isEdited(module, cut.from + at));
 			for (k => at in inFind) if (verdicts[k]) edits.push(TypePathRegistries.spliceOf(find, at, at + old.length, rename.newName));
-			final rewritten: String = spliced(find.value, [for (k => at in inFind) if (verdicts[k]) at], old, rename.newName);
+			final rewritten: String = spliced(find.value, [ for (k => at in inFind) if (verdicts[k]) at ], old, rename.newName);
 			if (newTargets.length != 1 || Patch.cutSpan(module.newSource, module.newTree, newTargets[0], rewritten, plugin) == null)
 				notes.push('arm ${record.name}: its find no longer occurs in "${record.type}#$newMember" — re-aim it');
 			if (record.replaces.length != record.finds.length) continue;

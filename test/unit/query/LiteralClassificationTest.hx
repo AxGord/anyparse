@@ -146,7 +146,7 @@ class LiteralClassificationTest extends Test {
 		final undeclared: Array<String> = HaxeQueryWalker.projectedKinds()
 			.filter(kind -> !declared.contains(kind) && RETIRED_LITERAL_SUFFIXES.exists(suffix -> kind.endsWith(suffix)));
 		Assert.isTrue(undeclared.length > 0, 'the refutation needs at least one kind the convention admits and the shape does not');
-		final safe: Array<String> = [for (kind in undeclared) if (MemberKinds.isSafeKind(kind, SHAPE)) kind];
+		final safe: Array<String> = [ for (kind in undeclared) if (MemberKinds.isSafeKind(kind, SHAPE)) kind ];
 		Assert.equals('', safe.join(', '), 'kind(s) named like a literal that MemberKinds.isSafeKind admits anyway: [${safe.join(', ')}]');
 	}
 

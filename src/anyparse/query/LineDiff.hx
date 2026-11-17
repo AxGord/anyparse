@@ -45,7 +45,7 @@ final class LineDiff {
 		final n: Int = a.length;
 		final m: Int = b.length;
 		final offset: Int = n + m + 1;
-		final v: Array<Int> = [for (_ in 0...2 * offset + 1) 0];
+		final v: Array<Int> = [ for (_ in 0...2 * offset + 1) 0 ];
 		final trace: Array<Array<Int>> = [];
 		for (d in 0...n + m + 1) {
 			if (d > maxEdits) return null;
@@ -63,7 +63,7 @@ final class LineDiff {
 				if (x >= n && y >= m) reached = true;
 				k += 2;
 			}
-			trace.push([for (j in -d ... d + 1) v[offset + j]]);
+			trace.push([ for (j in -d ... d + 1) v[offset + j] ]);
 			if (reached) return backtrack(trace, n, m);
 		}
 		return null;

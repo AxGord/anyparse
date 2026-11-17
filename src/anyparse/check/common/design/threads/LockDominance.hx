@@ -162,7 +162,7 @@ final class LockDominance {
 	private function solveDominators(longAt: (LockAcquire) -> Null<Array<Int>>): Bool {
 		final found: Map<String, Array<String>> = [];
 		// a multi-lock helper's give is its caller's release, never a release of a hold begun elsewhere
-		final broken: Array<String> = [for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock];
+		final broken: Array<String> = [ for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock ];
 		for (a in _holds) {
 			final lock: String = a.lock ?? '';
 			if (lock == '' || a.uncontended || _sites.helpers.contains(a.edge.from) || broken.contains(lock)) continue;
@@ -178,7 +178,7 @@ final class LockDominance {
 			found[lock] = (known == null ? held : known.filter(l -> held.contains(l))).filter(excludes);
 		}
 		var changed: Bool = false;
-		for (lock in [for (l in found.keys()) l].concat(broken)) {
+		for (lock in [ for (l in found.keys()) l ].concat(broken)) {
 			final next: Array<String> = broken.contains(lock) ? [] : found[lock] ?? [];
 			next.sort(Compare.compareString);
 			if ((dominators[lock] ?? []).join('\n') != next.join('\n')) changed = true;

@@ -241,7 +241,7 @@ final class TypedFactsWalk {
 				if (kept.length > 0) _header += ',"pk":[${kept.join(',')}]';
 				// a function's body is never its value: a returned value is the operand of a `return`
 				walkAs(f.expr, Statement);
-				final handed: Array<String> = [for (a in f.args) '[' + [for (u in aliasUses(a.v.id)) '{$u}'].join(',') + ']'];
+				final handed: Array<String> = [ for (a in f.args) '[' + [ for (u in aliasUses(a.v.id)) '{$u}' ].join(',') + ']' ];
 				_header += ',"pu":[${handed.join(',')}]';
 			case _:
 				walk(e);
@@ -258,7 +258,7 @@ final class TypedFactsWalk {
 		final localName: Null<String> = _name;
 		if (localName != null) out.add(',"name":${q(localName)}');
 		out.add(_header);
-		if (_incomplete.length > 0) out.add(',"inc":${TypedFactsTypeStrings.arr([for (i in _incomplete) q(i)])}');
+		if (_incomplete.length > 0) out.add(',"inc":${TypedFactsTypeStrings.arr([ for (i in _incomplete) q(i) ])}');
 		for (category in CATEGORIES) {
 			final list: Null<Array<String>> = _facts[category];
 			if (list != null) out.add(',"$category":${TypedFactsTypeStrings.arr(list)}');
@@ -738,7 +738,7 @@ final class TypedFactsWalk {
 			case TBlock(exprs):
 				// every statement but the last is discarded; the last is the block's own value. Each statement's range is
 				// read once for the block: `between` asks every other one's, per statement not of the body's own code
-				final ranges: Array<{ min: Int, max: Int, file: String }> = [for (x in exprs) Context.getPosInfos(x.pos)];
+				final ranges: Array<{ min: Int, max: Int, file: String }> = [ for (x in exprs) Context.getPosInfos(x.pos) ];
 				for (i in 0...exprs.length) {
 					_block = e.pos;
 					final site: { min: Int, max: Int } = _site;
@@ -1114,7 +1114,7 @@ final class TypedFactsWalk {
 	private function handedText(args: Array<TypedExpr>): String {
 		final leaves: Array<TypedExpr> = [];
 		for (a in args) TypedFactsShapes.collectLeaves(a, leaves);
-		return leaves.length == 0 ? '' : ',"h":[${[for (leaf in leaves) q(sourceType(leaf))].join(',')}]';
+		return leaves.length == 0 ? '' : ',"h":[${[ for (leaf in leaves) q(sourceType(leaf)) ].join(',')}]';
 	}
 
 	/**

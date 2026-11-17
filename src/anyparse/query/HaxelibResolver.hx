@@ -105,7 +105,7 @@ final class HaxelibResolver {
 	/** PURE: the roots a multi-name `haxelib libpath` printed, one per line, or null when there is no answer or not `count` of them. */
 	public static function rootsFrom(libpathOutput: Null<String>, count: Int): Null<Array<String>> {
 		if (libpathOutput == null) return null;
-		final lines: Array<String> = [for (line in libpathOutput.split('\n')) if (line.trim() != '') line.trim()];
+		final lines: Array<String> = [ for (line in libpathOutput.split('\n')) if (line.trim() != '') line.trim() ];
 		return lines.length != count ? null : lines;
 	}
 

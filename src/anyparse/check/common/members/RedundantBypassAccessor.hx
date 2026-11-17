@@ -81,7 +81,7 @@ final class RedundantBypassAccessor extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, context(plugin), (tree, ctx) -> {
-			final flagged: Array<String> = [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}'];
+			final flagged: Array<String> = [ for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}' ];
 			final edits: Array<{ span: Span, text: String }> = [];
 			collectEdits(tree, flagged, edits, ctx.metaKinds);
 			return edits;

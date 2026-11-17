@@ -314,7 +314,7 @@ final class OracleCoverage implements CompiledSet {
 			return oracles.map(
 				oracle -> oracle.unavailable == null ? probe(oracle.hxml, oracle.dir, oracle.defines) : unknown(oracle.unavailable ?? '')
 			);
-		final asked: Array<OracleConfig> = [for (oracle in oracles) if (oracle.unavailable == null) oracle];
+		final asked: Array<OracleConfig> = [ for (oracle in oracles) if (oracle.unavailable == null) oracle ];
 		final runs: Array<ProcessRun> = remembered(asked);
 		final out: Array<OracleCoverage> = [];
 		var next: Int = 0;
@@ -324,7 +324,7 @@ final class OracleCoverage implements CompiledSet {
 		}
 		return out;
 		#else
-		return [for (_ in oracles) unknown(UNSUPPORTED_TARGET)];
+		return [ for (_ in oracles) unknown(UNSUPPORTED_TARGET) ];
 		#end
 	}
 
@@ -585,9 +585,9 @@ final class OracleCoverage implements CompiledSet {
 		if (tokens.length == 0) return unknown('`haxe -v` named no parsed source file');
 		final arms: Array<CompiledArm> = [
 			for (arm in parseArms(result.out)) {
-				files: [for (token in arm.files) FileIdentity.canonical(root, token)],
+				files: [ for (token in arm.files) FileIdentity.canonical(root, token) ],
 				defines: arm.defines,
-				classPaths: [for (token in arm.classPaths) FileIdentity.canonical(root, token)]
+				classPaths: [ for (token in arm.classPaths) FileIdentity.canonical(root, token) ]
 			}
 		];
 		return new OracleCoverage(tokens.map(token -> FileIdentity.canonical(root, token)), arms, '');
@@ -608,9 +608,9 @@ final class OracleCoverage implements CompiledSet {
 	/** `remembered`, untimed. */
 	private static function rememberedTimed(asked: Array<OracleConfig>): Array<ProcessRun> {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(asked);
-		final before: Array<Null<String>> = memo == null ? [for (_ in asked) null] : memo.fingerprints(asked);
-		final held: Array<Null<ProcessRun>> = [for (i in 0...asked.length) memo?.run(asked[i], true, before[i])];
-		final spawned: Array<Int> = [for (i in 0...asked.length) if (held[i] == null) i];
+		final before: Array<Null<String>> = memo == null ? [ for (_ in asked) null ] : memo.fingerprints(asked);
+		final held: Array<Null<ProcessRun>> = [ for (i in 0...asked.length) memo?.run(asked[i], true, before[i]) ];
+		final spawned: Array<Int> = [ for (i in 0...asked.length) if (held[i] == null) i ];
 		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
 			for (i in spawned) { args: probeArgs(asked[i].hxml, asked[i].defines), cwd: asked[i].dir ?? Sys.getCwd() }
 		], PROBE_BUFFER, ProcessSpawn.parallelism());

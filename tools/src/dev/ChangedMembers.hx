@@ -133,7 +133,7 @@ final class ChangedMembers {
 		}
 		final old: Array<String> = codeOf(before);
 		final now: Array<String> = codeOf(after);
-		return old.length == now.length && [for (i in 0...old.length) old[i] == now[i]].foreach(same -> same);
+		return old.length == now.length && [ for (i in 0...old.length) old[i] == now[i] ].foreach(same -> same);
 	}
 
 	/**

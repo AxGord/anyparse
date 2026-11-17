@@ -63,7 +63,7 @@ final class QueueFile {
 			if (!FIELD.match(row)) continue;
 			final key: String = FIELD.matched(1);
 			final value: String = FIELD.matched(2).trim();
-			final body: Array<String> = [while (index < rows.length && !FIELD.match(rows[index])) rows[index++]];
+			final body: Array<String> = [ while (index < rows.length && !FIELD.match(rows[index])) rows[index++] ];
 			if (key == 'notes')
 				readNotes(body, notes)
 			else

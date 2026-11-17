@@ -120,7 +120,7 @@ final class AncestorTable {
 		if (complete == null) return null;
 		final passed: Null<Array<String>> = params.length == 0 ? [] : boundArguments(start, host, args);
 		// a type parameter of the member shadows the declaring type's of its name
-		final visible: Array<Int> = [for (i in 0...params.length) if (!own.contains(params[i])) i];
+		final visible: Array<Int> = [ for (i in 0...params.length) if (!own.contains(params[i])) i ];
 		return if (passed != null && passed.length >= params.length)
 			CallGraphNames.substituteTypeParams(complete, visible.map(i -> params[i]), visible.map(i -> passed[i]), _typeSyntax)
 		else if (CallGraphNames.mentionsTypeName(complete, visible.map(i -> params[i]), _typeSyntax))
@@ -201,7 +201,7 @@ final class AncestorTable {
 				final d: TypeSyntax = all[order];
 				final decl: Null<ResolvedType> = _refs.resolveTypeRef(path, from, at);
 				if (decl == null || args.length >= decl.type.typeParamNames.length || decl.type.name == _bareType) continue;
-				final filled: Null<Array<String>> = withDefaults(decl, [for (a in args) a.text]);
+				final filled: Null<Array<String>> = withDefaults(decl, [ for (a in args) a.text ]);
 				final key: String = _refs.seenKey(decl);
 				final unspellable: Bool = !d.text.startsWith(path) || (args.length > 0 && !d.text.endsWith('>'));
 				// a name a type parameter may hold there is that parameter or this type: which one is not read here

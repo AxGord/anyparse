@@ -625,7 +625,7 @@ final class SliceGate {
 		final baseline: Null<Baseline> = _gate.baseline;
 		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
 		if (baseline.frozen.length == 0) return Skipped('none recorded at --baseline');
-		final moved: Array<String> = [for (f in baseline.frozen) if (GateTree.diffDigest(f.dir) != f.digest) f.dir];
+		final moved: Array<String> = [ for (f in baseline.frozen) if (GateTree.diffDigest(f.dir) != f.digest) f.dir ];
 		_gate.summary.detail(baseline.frozen.map(f -> '${Path.withoutDirectory(f.dir)} ${GateTree.short(f.digest)} unchanged').join(', '));
 		return moved.length == 0 ? Passed : Failed('the git diff of ${moved.join(', ')} changed since the baseline');
 	}
@@ -634,7 +634,7 @@ final class SliceGate {
 	private function listings(): Map<String, Array<String>> {
 		final runs: Array<Result> = Pool.of(LISTINGS.length)
 			.map(LISTINGS, name -> cmd('node bin/test.js --list-$name').at(_gate.tree).env('HXQ_BIN', _gate.apq()));
-		return [for (i => name in LISTINGS) name => runs[i].check().lines()];
+		return [ for (i => name in LISTINGS) name => runs[i].check().lines() ];
 	}
 
 	/**

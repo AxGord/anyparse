@@ -269,9 +269,8 @@ final class FixtureCompileCache {
 			if (taken == 0) return null;
 			i += taken;
 		}
-		final probe: Bool = Lambda.exists(
-			[for (k in 1...args.length) if (args[k - 1] == '--macro') args[k]], m -> PROBE_MACROS.exists(p -> m.indexOf(p) >= 0)
-		);
+		final macros: Array<String> = [ for (k in 1...args.length) if (args[k - 1] == '--macro') args[k] ];
+		final probe: Bool = macros.exists(m -> PROBE_MACROS.exists(p -> m.indexOf(p) >= 0));
 		if (!probe || !args.contains('--no-output')) return null;
 		// a root inside another is walked twice, and a compile running beside this one would write into both
 		for (a in roots) for (b in roots) if (a != b && a.startsWith('$b/')) return null;
@@ -484,7 +483,7 @@ final class FixtureCompileCache {
 	): String {
 		final described: Array<Array<String>> = [
 			for (files in contents) {
-				final names: Array<String> = [for (name in files.keys()) name];
+				final names: Array<String> = [ for (name in files.keys()) name ];
 				names.sort(Reflect.compare);
 				names.map(name -> '$name\t${files[name]}');
 			}

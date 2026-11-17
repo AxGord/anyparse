@@ -62,7 +62,7 @@ final class OracleServerPortTest extends Test {
 		final held: Int = unusedPort();
 		var candidate: Int = unusedPort();
 		final root: String = oneModule();
-		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$root/pad$k.hx'];
+		final pads: Array<String> = [ for (k in 0...OracleServerPool.RESTART_AT + 1) '$root/pad$k.hx' ];
 		for (pad in pads) sys.io.File.saveContent(pad, 'a');
 		final config: OracleConfig = { hxml: 'build.hxml', dir: root, defines: [] };
 		final pool: OracleServerPool = new OracleServerPool(() -> pads, () -> candidate);
@@ -414,7 +414,7 @@ final class OracleServerPortTest extends Test {
 		candidate: () -> Int, body: (pool: OracleServerPool, config: OracleConfig, drift: () -> Void, root: String) -> Void
 	): Void {
 		final root: String = oneModule();
-		final pads: Array<String> = [for (k in 0...OracleServerPool.RESTART_AT + 1) '$root/pad$k.hx'];
+		final pads: Array<String> = [ for (k in 0...OracleServerPool.RESTART_AT + 1) '$root/pad$k.hx' ];
 		for (pad in pads) sys.io.File.saveContent(pad, 'a');
 		final config: OracleConfig = { hxml: 'build.hxml', dir: root, defines: [] };
 		final pool: OracleServerPool = new OracleServerPool(() -> pads, candidate);

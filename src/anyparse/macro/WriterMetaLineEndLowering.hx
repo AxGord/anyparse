@@ -119,7 +119,7 @@ final class WriterMetaLineEndLowering {
 				Context.fatalError(
 					'WriterLowering: @:fmt(metaLineEndIfCtor) expects (sibling, optField, Ctor, ...) over one sibling on $typePath', pos
 				);
-			final patterns: Array<Expr> = [for (i in 2...arm.length) ctorPattern(ctx, refName, arm[i])];
+			final patterns: Array<Expr> = [ for (i in 2...arm.length) ctorPattern(ctx, refName, arm[i]) ];
 			cases.push({ values: patterns, expr: WriterLoweringSupport.optFieldAccess(arm[1]), guard: null });
 		}
 		final access: Expr = subject ?? { expr: EField(macro value, sibling), pos: pos };

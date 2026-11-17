@@ -110,8 +110,8 @@ final class WriteVerification {
 			for (a in after) if (confirmed(a) && (sources.length == 0 || sources.exists(s -> parsedBy(a, s)))) a.oracle.hxml
 		];
 		// only a build that typechecks the written tree can judge a module named to it
-		final judges: Array<OracleConfig> = [for (a in after) if (confirmed(a)) a.oracle];
-		final unreached: Array<String> = [for (s in sources) if (!after.exists(a -> parsedBy(a, s))) s];
+		final judges: Array<OracleConfig> = [ for (a in after) if (confirmed(a)) a.oracle ];
+		final unreached: Array<String> = [ for (s in sources) if (!after.exists(a -> parsedBy(a, s))) s ];
 		if (
 			judges.length > 0
 			&& unreached.length > 0
@@ -139,7 +139,7 @@ final class WriteVerification {
 				{
 					oracle: oracle,
 					outcome: readings[i].outcome,
-					parsed: [for (path in readings[i].parsed ?? []) FileIdentity.canonical(base, path)]
+					parsed: [ for (path in readings[i].parsed ?? []) FileIdentity.canonical(base, path) ]
 				};
 			}
 		];
@@ -207,9 +207,9 @@ final class WriteVerification {
 	private static function putBackIfBroken(
 		op: String, journal: WriteJournal, compiler: OracleProvider, after: Array<BuildAnswer>, parallel: Int, created: Array<String>
 	): Bool {
-		final red: Array<BuildAnswer> = [for (a in after) if (a.outcome?.match(Rejected(_)) == true) a];
+		final red: Array<BuildAnswer> = [ for (a in after) if (a.outcome?.match(Rejected(_)) == true) a ];
 		if (red.length == 0) return false;
-		final blamed: Array<BuildAnswer> = [for (a in red) if (blames(a, created)) a];
+		final blamed: Array<BuildAnswer> = [ for (a in red) if (blames(a, created)) a ];
 		final written: Array<JournalState> = journal.current();
 		journal.rollback();
 		if (blamed.length > 0) {
@@ -217,7 +217,7 @@ final class WriteVerification {
 			return true;
 		}
 		final before: Array<BuildAnswer> = compile(compiler, red.map(r -> r.oracle), parallel, []);
-		final broken: Array<BuildAnswer> = [for (k => r in red) if (confirmed(before[k])) r];
+		final broken: Array<BuildAnswer> = [ for (k => r in red) if (confirmed(before[k])) r ];
 		if (broken.length > 0) {
 			putBack(op, broken, 'the write breaks ${names(broken)}, which typechecked before it');
 			return true;
@@ -239,7 +239,7 @@ final class WriteVerification {
 		final created: Array<String> = createdAmong(journal, unreached);
 		final named: Array<BuildAnswer> = compile(compiler, naming(oracles, unreached), parallel, created);
 		for (file in unreached) {
-			final holders: Array<BuildAnswer> = [for (a in named) if (parsedBy(a, file)) a];
+			final holders: Array<BuildAnswer> = [ for (a in named) if (parsedBy(a, file)) a ];
 			final green: Array<BuildAnswer> = holders.filter(confirmed);
 			if (holders.length == 0) {
 				CliIo.stderr('apq $op: unverified — $file is compiled by no configured build\n');
@@ -268,7 +268,7 @@ final class WriteVerification {
 	/** The files of `sources` that did not exist before the run. */
 	private static function createdAmong(journal: WriteJournal, sources: Array<String>): Array<String> {
 		final before: Array<JournalState> = journal.originals();
-		return [for (s in sources) if (before.exists(o -> o.path == s && o.content == null)) s];
+		return [ for (s in sources) if (before.exists(o -> o.path == s && o.content == null)) s ];
 	}
 
 	/** The sources a build's explicit class paths hold: what a compile of it can be told apart by, without running one. */
@@ -353,7 +353,7 @@ final class WriteVerification {
 	 */
 	private static function holding(oracles: Array<OracleConfig>, files: Array<String>): Array<OracleConfig> {
 		final compiler: OracleProvider = compilerOf(files);
-		final held: Array<OracleConfig> = [for (oracle in oracles) if (holdsAny(compiler, oracle, files)) oracle];
+		final held: Array<OracleConfig> = [ for (oracle in oracles) if (holdsAny(compiler, oracle, files)) oracle ];
 		return held.length > 0 ? held : oracles;
 	}
 

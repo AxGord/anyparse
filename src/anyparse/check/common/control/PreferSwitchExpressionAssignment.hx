@@ -345,7 +345,7 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 
 	/** The reassignment positions of `name` in `tree` — a `Write` hit's own span, the exact scan `prefer-final` uses. */
 	private static function writeSpans(name: String, tree: QueryNode, shape: RefShape): Array<Span> {
-		return [for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span];
+		return [ for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span ];
 	}
 
 

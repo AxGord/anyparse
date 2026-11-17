@@ -192,7 +192,7 @@ private final class FileTyper {
 		final container: QueryNode = inside;
 		var ending: Null<QueryNode> = null;
 		visitUnder(container, n -> if (n != container && n.span != null && n.span.to == at) ending = n);
-		final statements: Array<String> = [for (k in [_shape.blockStmtKind, _shape.exprStatementKind]) if (k != null) k];
+		final statements: Array<String> = [ for (k in [_shape.blockStmtKind, _shape.exprStatementKind]) if (k != null) k ];
 		if (ending != null) return statements.contains(container.kind) ? ending : null;
 		return container.kind == _shape.newExprKind ? null : container;
 	}
@@ -1119,7 +1119,7 @@ private final class Report {
 	}
 
 	private static function sortedKeys<V>(map: Map<String, V>): Array<String> {
-		final keys: Array<String> = [for (k in map.keys()) k];
+		final keys: Array<String> = [ for (k in map.keys()) k ];
 		keys.sort(Compare.compareString);
 		return keys;
 	}
@@ -1537,7 +1537,7 @@ final class TyperConformance {
 		// A dev main holds no ledger: its config notes go to stderr.
 		ConfigNotes.warn(notes);
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final sources: Map<String, String> = [for (f in project) FileIdentity.realPath(f.file) => f.source];
+		final sources: Map<String, String> = [ for (f in project) FileIdentity.realPath(f.file) => f.source ];
 		final oracle: Null<FactsTypeOracle> = switch TypedFactsProbe.probeAll(OracleGeneration.prepare(asked).oracles) {
 			case null: null;
 			case table: new FactsTypeOracle(table, key -> sources[key], null, plugin);

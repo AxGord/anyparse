@@ -177,7 +177,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		final bodies: Array<String> = shape.functionBodyKinds ?? [];
-		final functions: Array<String> = [for (k in members) if (!fields.contains(k)) k];
+		final functions: Array<String> = [ for (k in members) if (!fields.contains(k)) k ];
 		if (functions.length == 0 || bodies.length == 0 || violations.length == 0) return [];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -187,7 +187,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 			file: violations[0].file,
 			bodies: bodies,
 			params: shape.paramKinds ?? [],
-			flagged: [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}' => v],
+			flagged: [ for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}' => v ],
 			printer: printer,
 			oracle: oracle,
 			regions: plugin.lexicalRegions(source),
@@ -222,7 +222,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final enumAbstract: Null<String> = shape.enumAbstractDeclKind;
 		// Function hosts are the member kinds that are not fields; a missing fields
 		// or functions set leaves the check with nothing useful to do.
-		final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
+		final functions: Array<String> = [ for (k in memberKinds) if (!fields.contains(k)) k ];
 		return fields.length == 0 || functions.length == 0
 			? []
 			: RunScan.collect(files, plugin, (entry, tree, violations) -> {
@@ -259,7 +259,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 				final edits: Array<{ span: Span, text: String }> = [];
 				collectInitializerEdits(tree, source, violations, shape, plugin, fixable, edits);
 				final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
-				final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
+				final functions: Array<String> = [ for (k in memberKinds) if (!fields.contains(k)) k ];
 				collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
 				collectInheritedParamEdits(tree, source, violations, plugin, index, functions, params, edits);
 				collectMacroReturnEdits(tree, source, violations, plugin, index, functions, memberKinds, edits);
@@ -355,7 +355,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 	private static function functionOracleEdits(s: ReturnSeams, fn: QueryNode): Array<{ span: Span, text: String }> {
 		final out: Array<{ span: Span, text: String }> = [];
 		pushEdit(out, returnEdit(s, fn));
-		final own: Array<QueryNode> = [for (c in fn.children) if (s.params.contains(c.kind)) c];
+		final own: Array<QueryNode> = [ for (c in fn.children) if (s.params.contains(c.kind)) c ];
 		for (index in 0...own.length) pushEdit(out, paramOracleEdit(s, fn, own[index], index));
 		return out;
 	}
@@ -763,7 +763,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		function visit(node: QueryNode): Void {
 			final name: Null<String> = node.name;
 			if (functions.contains(node.kind) && name != null && name != 'new') {
-				final own: Array<QueryNode> = [for (c in node.children) if (params.contains(c.kind)) c];
+				final own: Array<QueryNode> = [ for (c in node.children) if (params.contains(c.kind)) c ];
 				final owner: Null<TypeDeclInfo> = enclosingType(tree, owners, node.span);
 				if (owner != null) for (i in 0...own.length) paramEdit(seams, owner, name, own, i, source, edits, flagged);
 			}
@@ -851,7 +851,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		if (tree == null) return null;
 		final fn: Null<QueryNode> = memberNamed(tree, typeSpan, method, s.functions);
 		if (fn == null) return null;
-		final own: Array<QueryNode> = [for (c in fn.children) if (s.params.contains(c.kind)) c];
+		final own: Array<QueryNode> = [ for (c in fn.children) if (s.params.contains(c.kind)) c ];
 		if (paramIndex >= own.length || own[paramIndex].kind != paramKind) return null;
 		final span: Null<Span> = own[paramIndex].span;
 		return span == null ? null : provider.declaredTypeSources(src)[span.from];

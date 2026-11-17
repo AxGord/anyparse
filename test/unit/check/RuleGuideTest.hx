@@ -21,7 +21,7 @@ class RuleGuideTest extends Test {
 		expectedPages.sort(Reflect.compare);
 		Assert.same(expectedPages, pages, 'one page per category and no other');
 		for (category in RuleCategory.ALL) {
-			final expected: Array<String> = [for (c in Linter.builtins()) if (c.category() == category) c.id()];
+			final expected: Array<String> = [ for (c in Linter.builtins()) if (c.category() == category) c.id() ];
 			expected.sort(Reflect.compare);
 			final lines: Array<String> = sys.io.File.getContent('$dir/$category.md').split('\n');
 			final headings: Array<String> = lines.filter(l -> l.startsWith('## '));

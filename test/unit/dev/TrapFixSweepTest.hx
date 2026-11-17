@@ -39,7 +39,7 @@ final class TrapFixSweepTest extends Test {
 			TrapFixSweep.verdictOf(true, true, true, true, false),
 			TrapFixSweep.verdictOf(true, true, true, true, true)
 		]);
-		Assert.same([false, true, true, false], [for (v in ['SKIPPED', 'BROKE', 'CHANGED', 'SAME']) TrapFixSweep.fails(v)]);
+		Assert.same([false, true, true, false], [ for (v in ['SKIPPED', 'BROKE', 'CHANGED', 'SAME']) TrapFixSweep.fails(v) ]);
 	}
 
 	public function testTheEditCountIsReadOffTheFixTranscript(): Void {

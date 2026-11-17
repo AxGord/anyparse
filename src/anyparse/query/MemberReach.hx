@@ -776,7 +776,7 @@ final class MemberReach {
 		final g: CallGraph = graph();
 		final from: Null<String> = g.functionAt(file, at.from);
 		if (from == null) return null;
-		final sited: Array<CallEdge> = [for (e in g.outEdges(from)) if (e.file == file && sameSpan(e.span, at)) e];
+		final sited: Array<CallEdge> = [ for (e in g.outEdges(from)) if (e.file == file && sameSpan(e.span, at)) e ];
 		// a faceted body records the site twice, its syntax's edge and its facts', both to the one function
 		return if (sited.length == 0 || !sited.foreach(e -> e.kind == Call && e.to == sited[0].to))
 			null
@@ -953,8 +953,8 @@ final class MemberReach {
 					splicedInto(g, file, [span]), [span]
 				);
 			case Calls(file, sites):
-				final starts: Array<Int> = [for (s in sites) if (s.span != null) s.span.from];
-				final spans: Array<Span> = [for (s in sites) if (s.span != null) s.span];
+				final starts: Array<Int> = [ for (s in sites) if (s.span != null) s.span.from ];
+				final spans: Array<Span> = [ for (s in sites) if (s.span != null) s.span ];
 				seedsWhere(
 					g, file, null, s -> s != null && starts.contains(s.from) && isLive(g, file, s), splicedInto(g, file, spans), spans
 				);
@@ -1060,7 +1060,7 @@ final class MemberReach {
 	private function entryHazards(g: CallGraph, entry: ReachEntry): Array<{ file: String, hazard: ReachHazard }> {
 		return switch entry {
 			case Region(file, span): hazardsOf(g, file, [span]);
-			case Calls(file, sites): hazardsOf(g, file, [for (s in sites) if (s.span != null) s.span]);
+			case Calls(file, sites): hazardsOf(g, file, [ for (s in sites) if (s.span != null) s.span ]);
 		};
 	}
 
@@ -1149,22 +1149,22 @@ final class MemberReach {
 
 	/** The edges out of node `id` that run code — lexical containment aside — at a site some configuration compiles. */
 	private function liveEdges(g: CallGraph, id: String): Array<CallEdge> {
-		return [for (e in g.outEdges(id)) if (e.kind != Contains && isLive(g, e.file, e.span)) e];
+		return [ for (e in g.outEdges(id)) if (e.kind != Contains && isLive(g, e.file, e.span)) e ];
 	}
 
 	private function liveUnresolved(g: CallGraph, id: String): Array<UnresolvedCall> {
-		return [for (u in _g.unresolvedFrom(g, id)) if (isLive(g, u.file, u.span)) u];
+		return [ for (u in _g.unresolvedFrom(g, id)) if (isLive(g, u.file, u.span)) u ];
 	}
 
 	private function liveAccess(g: CallGraph, id: String): Array<UnresolvedAccess> {
-		return [for (a in _g.accessFrom(g, id)) if (isLive(g, a.file, a.span)) a];
+		return [ for (a in _g.accessFrom(g, id)) if (isLive(g, a.file, a.span)) a ];
 	}
 
 	/** The implicit-call sites inside the entry itself — the whole region, or each call site's own subtree. */
 	private function entrySites(g: CallGraph, entry: ReachEntry): Array<ImplicitSite> {
 		return switch entry {
 			case Region(file, span): sitesOf(g, file, [span]);
-			case Calls(file, sites): sitesOf(g, file, [for (s in sites) if (s.span != null) s.span]);
+			case Calls(file, sites): sitesOf(g, file, [ for (s in sites) if (s.span != null) s.span ]);
 		};
 	}
 
@@ -1199,7 +1199,7 @@ final class MemberReach {
 	 * node `node` reads it, when given.
 	 */
 	private function declaredSites(g: CallGraph, declared: Array<Occurrence>, ?node: String): Array<ImplicitSite> {
-		return [for (d in declared) for (at in sitesOf(g, d.file, [d.span], node)) at];
+		return [ for (d in declared) for (at in sitesOf(g, d.file, [d.span], node)) at ];
 	}
 
 	/**
@@ -1223,7 +1223,10 @@ final class MemberReach {
 			}
 			final typed: Null<TruthSites> = sites == null
 				? null
-				: { natives: [for (n in sites.natives) if (kept(n.at)) n], reflection: [for (r in sites.reflection) if (kept(r.at)) r] };
+				: {
+					natives: [ for (n in sites.natives) if (kept(n.at)) n ],
+					reflection: [ for (r in sites.reflection) if (kept(r.at)) r ]
+				};
 			final hazards: Array<ReachHazard> = typed == null ? syntactic : _hazards.underTruth(syntactic, typed, read.tree);
 			for (h in hazards) out.push({ file: file, hazard: h });
 		}
@@ -1937,7 +1940,7 @@ final class MemberReach {
 				if (written.length == 0) return null;
 				for (id in written) Groups.pushUnique(toRead, id);
 			}
-			final seen: Map<String, Bool> = [for (id in toRead) id => true];
+			final seen: Map<String, Bool> = [ for (id in toRead) id => true ];
 			final out: Array<ImplicitSite> = [];
 			var i: Int = 0;
 			while (i < toRead.length) {
@@ -2003,7 +2006,7 @@ final class MemberReach {
 			}
 			final ids: Array<String> = site.values ? held ?? typed() : [];
 			// a set beside the list: a site admitting the whole closure made `ids.contains` quadratic
-			final have: Map<String, Bool> = [for (id in ids) id => true];
+			final have: Map<String, Bool> = [ for (id in ids) id => true ];
 			function admit(id: String): Void {
 				if (have.exists(id)) return;
 				have[id] = true;
@@ -2224,7 +2227,7 @@ final class MemberReach {
 		}
 		// an access of the member by its own name in library code — project code's are touches of the scan already
 		var libraryTouchAt: Null<{ from: String, file: String, span: Span }> = null;
-		final ownNames: Array<String> = [for (p in _shape.accessorMethodPrefixes ?? []) p + member.name].concat([member.name]);
+		final ownNames: Array<String> = [ for (p in _shape.accessorMethodPrefixes ?? []) p + member.name ].concat([member.name]);
 		function libraryTouch(from: String, file: String, span: Span, relation: CarryRelation): Void {
 			switch relation {
 				case Carries:
@@ -2244,7 +2247,7 @@ final class MemberReach {
 							libraryTouch(
 								from, entry.file, h.span, receiverRelation(g, entry.file, _hazards.reflectiveReceiverOf(h.node), member)
 							);
-						final names: Array<String> = [for (p in _shape.accessorMethodPrefixes ?? []) p + named];
+						final names: Array<String> = [ for (p in _shape.accessorMethodPrefixes ?? []) p + named ];
 						names.push(named);
 						admit(site(from, entry.file, h.span, 'reflection', names, false));
 					case ReflectiveName(null):
@@ -2721,7 +2724,7 @@ final class MemberReach {
 		final view: Null<FactsView> = _scope.facts;
 		if (view == null || !view.truth || caller == null) return null;
 		final facts: FactsView = view;
-		final targets: Array<String> = [for (id in facts.bySimpleName()[type] ?? []) '$id.$name'];
+		final targets: Array<String> = [ for (id in facts.bySimpleName()[type] ?? []) '$id.$name' ];
 		final declared: Array<FnDeclaration> = g.declarationsOf(caller);
 		if (targets.length == 0 || declared.length == 0) return null;
 		final handed: Array<Null<String>> = [];
@@ -2780,7 +2783,7 @@ final class MemberReach {
 	/** The element type of a value typed `type` when that is the built-in array type written with it (`Array<T>`), else null. */
 	private function elementType(type: String): Null<String> {
 		return NominalTypes.elementTypeSourceOf(
-			type, [for (name in _shape.arrayTypeNames ?? []) name => 0],
+			type, [ for (name in _shape.arrayTypeNames ?? []) name => 0 ],
 			_shape.memberTransparentWrapperTypeNames ?? [], _scope.plugin.typeSyntax
 		);
 	}
@@ -3115,7 +3118,7 @@ final class MemberReach {
 	private static function entrySpans(entry: ReachEntry): Array<Span> {
 		return switch entry {
 			case Region(_, span): [span];
-			case Calls(_, sites): [for (s in sites) if (s.span != null) s.span];
+			case Calls(_, sites): [ for (s in sites) if (s.span != null) s.span ];
 		};
 	}
 
@@ -3162,8 +3165,8 @@ final class MemberReach {
 		project: Array<{ file: String, source: String }>, builds: ReachBuilds, plugin: GrammarPlugin
 	): SymbolIndex {
 		final cwd: String = Sys.getCwd();
-		final projectPaths: Map<String, Bool> = [for (f in project) FileIdentity.canonical(cwd, f.file) => true];
-		final library: Array<{ file: String, source: String }> = [for (f in builds.library) if (!projectPaths.exists(f.file)) f];
+		final projectPaths: Map<String, Bool> = [ for (f in project) FileIdentity.canonical(cwd, f.file) => true ];
+		final library: Array<{ file: String, source: String }> = [ for (f in builds.library) if (!projectPaths.exists(f.file)) f ];
 		return IndexScope.over(project.concat(library), plugin, library.map(f -> f.file));
 	}
 
@@ -3273,7 +3276,7 @@ final class MemberReach {
 		final compiled: ReachBuilds = builds;
 		final index: SymbolIndex = compiledIndex(project, compiled, plugin);
 		return new MemberReach(
-			plugin, [for (f in project) f],
+			plugin, [ for (f in project) f ],
 			index, scopeKnown, MAX_LIBRARY_FILES, MAX_VISITED, compiled.configurations, declaresEveryType.bind(compiled, index),
 			FactsView.over(host.compilerFacts()), compiled.reflectiveClasses, compiled.reflectiveMethodHolders
 		);
@@ -3296,7 +3299,7 @@ final class MemberReach {
 	 */
 	private static function declaresEveryType(builds: ReachBuilds, index: SymbolIndex): Bool {
 		final cwd: String = Sys.getCwd();
-		final byPath: Map<String, FileInfo> = [for (fi in index.allFiles()) FileIdentity.canonical(cwd, fi.file) => fi];
+		final byPath: Map<String, FileInfo> = [ for (fi in index.allFiles()) FileIdentity.canonical(cwd, fi.file) => fi ];
 		for (c in builds.configurations) for (t in c.types) {
 			final declaring: Null<FileInfo> = byPath[t.file];
 			if (declaring == null || !declaring.types.exists(d -> d.name == t.name)) return false;

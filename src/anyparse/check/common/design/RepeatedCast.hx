@@ -186,12 +186,12 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 			chains: new StableChain(tree, shape, locals, TypeInfoMemo.declaredTypeSources(typeInfo, source), symbols, file),
 			units: ShapeVocab.functionLikeKinds(shape),
 			blockKinds: (plugin.controlFlowSupport()?.blockKinds() ?? []).concat(
-				[for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k]
+				[ for (k in [shape.caseBranchKind, shape.defaultBranchKind]) if (k != null) k ]
 			),
 			loopKinds: ShapeVocab.loopKinds(shape),
 			inOrderKinds: inOrderKinds(shape, shortCircuit),
 			conditionKinds: branching.concat(shortCircuit),
-			exclusiveKinds: branching.concat([for (k in [shape.ternaryKind]) if (k != null) k]),
+			exclusiveKinds: branching.concat([ for (k in [shape.ternaryKind]) if (k != null) k ]),
 			castTargets: TypeInfoMemo.castTargetSources(typeInfo, source),
 			purity: () -> {
 				if (!purityRead) {
@@ -271,7 +271,7 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 			group.sort((a, b) -> a.span.from - b.span.from);
 			for (home in homes(top, group, scan)) for (run in runsOf(home.unit, home.occ, scan)) {
 				final least: Int = run[0].checked ? scan.minChecked : scan.minUnchecked;
-				final most: Int = BranchPaths.mostOnOnePath([for (c in run) BranchPaths.of(home.unit, c.node, scan.exclusiveKinds)]);
+				final most: Int = BranchPaths.mostOnOnePath([ for (c in run) BranchPaths.of(home.unit, c.node, scan.exclusiveKinds) ]);
 				if (most >= least) found.push(finding(home.unit, run, most, scan));
 			}
 		}
@@ -424,7 +424,7 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 				shape.uncheckedCastKind
 			]) if (k != null) k
 		])
-			.concat([for (k in shape.pureOperatorKinds ?? []) if (!shortCircuit.contains(k)) k]);
+			.concat([ for (k in shape.pureOperatorKinds ?? []) if (!shortCircuit.contains(k)) k ]);
 	}
 
 	/**

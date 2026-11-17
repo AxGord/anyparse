@@ -207,7 +207,10 @@ class SpanInfoLowering extends PairedShapeLowering {
 	private function lowerSpanInfo(rule: String, node: ShapeNode): Expr {
 		return switch node.kind {
 			case Alt:
-				{ expr: ESwitch(ident('v'), [for (branch in node.children) spanInfoCase(rule, branch)], null), pos: Context.currentPos() };
+				{
+					expr: ESwitch(ident('v'), [ for (branch in node.children) spanInfoCase(rule, branch) ], null),
+					pos: Context.currentPos()
+				};
 			case Seq: lowerSpanInfoSeq(node);
 			case Star: block(recurse(node.children[0], ident('v'), ident('cur'), 0));
 			case Ref: block(recurse(node, ident('v'), ident('cur'), 0));
@@ -217,7 +220,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 
 	/** `case Ctor(_a0, ..., _span):` - the ctor's span becomes the threaded span for everything below it. */
 	private function spanInfoCase(rule: String, branch: ShapeNode): Case {
-		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
+		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
 		final pattern: Expr = ctorPattern(rule, branch.annotations[AnnotationKeys.BASE_CTOR], argNames);
 		final body: Array<Expr> = [
 			for (i in 0...branch.children.length)
@@ -472,9 +475,9 @@ class SpanInfoLowering extends PairedShapeLowering {
 		final cases: Array<Case> = [];
 		for (branch in node.children) {
 			final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
-			final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
+			final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
 			if (ctor != NAMED_CTOR) {
-				cases.push({ values: [ctorPattern(rule, ctor, [for (_ in argNames) '_'])], expr: macro {} });
+				cases.push({ values: [ctorPattern(rule, ctor, [ for (_ in argNames) '_' ])], expr: macro {} });
 				continue;
 			}
 			final candidates: Array<Expr> = [];
@@ -483,7 +486,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 				if (n != null) candidates.push(n);
 			}
 			if (candidates.length == 0) {
-				cases.push({ values: [ctorPattern(rule, ctor, [for (_ in argNames) '_'])], expr: macro {} });
+				cases.push({ values: [ctorPattern(rule, ctor, [ for (_ in argNames) '_' ])], expr: macro {} });
 				continue;
 			}
 			var picked: Expr = macro null;
@@ -528,7 +531,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 		final cases: Array<Case> = [
 			for (branch in node.children) {
 				values: [
-					ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), [for (_ in 0...branch.children.length) '_'])
+					ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), [ for (_ in 0...branch.children.length) '_' ])
 				],
 				expr: macro return _span
 			}

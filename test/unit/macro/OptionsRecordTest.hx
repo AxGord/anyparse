@@ -154,12 +154,12 @@ class OptionsRecordTest extends Test {
 	}
 
 	private static function structOptions(knobs: Int, type: String): String {
-		final fields: String = [for (i in 0...knobs) 'k$i: $type'].join(', ');
+		final fields: String = [ for (i in 0...knobs) 'k$i: $type' ].join(', ');
 		return 'typedef Opts = anyparse.format.WriteOptions & { gap: anyparse.format.WhitespacePolicy, $fields };\n';
 	}
 
 	private static function classOptions(knobs: Int, extra: String): String {
-		final lines: Array<String> = [for (i in 0...knobs) 'public var k$i: Int = 0;'];
+		final lines: Array<String> = [ for (i in 0...knobs) 'public var k$i: Int = 0;' ];
 		final fields: String = BASE_FIELDS + lines.join('\n') + extra;
 		return '@:build(anyparse.macro.Build.buildOptionsRecord()) final class Opts {\n$fields\n}\n';
 	}

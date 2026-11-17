@@ -57,8 +57,8 @@ final class BaselineWarm {
 	 * has any.
 	 */
 	public static function variants(recipe: WarmRecipe): Array<Array<String>> {
-		final frozen: Array<String> = [for (dir in recipe.frozen) for (word in ['--frozen', dir]) word];
-		final infra: Array<String> = [for (dir in recipe.infra) for (word in ['--infra-tree', dir]) word];
+		final frozen: Array<String> = [ for (dir in recipe.frozen) for (word in ['--frozen', dir]) word ];
+		final infra: Array<String> = [ for (dir in recipe.infra) for (word in ['--infra-tree', dir]) word ];
 		return recipe.infra.length == 0 ? [frozen] : [frozen.concat(infra), frozen];
 	}
 

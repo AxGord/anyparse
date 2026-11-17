@@ -1203,7 +1203,7 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	private function declineReasonsIn(dir: String, src: String): Array<String> {
 		final run: { edits: Int, findings: Array<Violation> } = fixedFindingsIn(dir, src);
 		Assert.equals(0, run.edits, 'every rename is refused');
-		return [for (v in run.findings) v.declineReason ?? ''];
+		return [ for (v in run.findings) v.declineReason ?? '' ];
 	}
 
 	#if (sys || nodejs)

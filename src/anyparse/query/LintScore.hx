@@ -150,10 +150,10 @@ final class LintScore {
 				{ name: 'commit', value: truth.commit }
 			]) if (field.value == '') '"${field.name}" must be non-empty'
 		];
-		final keys: Array<String> = [for (e in truth.entries) dupKeyOf(e)];
+		final keys: Array<String> = [ for (e in truth.entries) dupKeyOf(e) ];
 		for (i => e in truth.entries) for (error in entryErrors(e, keys[i], keys)) errors.push('entry $i (${keys[i]}): $error');
 		// uniqueness on the length-prefixed key: `|` may sit inside a part, so the joined spelling can collide
-		final exact: Array<String> = [for (e in truth.entries) keyOf(e.family, e.member, e.subject)];
+		final exact: Array<String> = [ for (e in truth.entries) keyOf(e.family, e.member, e.subject) ];
 		for (i => key in exact) if (exact.indexOf(key) != i) errors.push('entry $i (${keys[i]}): the key is labelled twice');
 		return errors;
 	}
@@ -173,8 +173,8 @@ final class LintScore {
 					: 'the report holds ${ofRule.length} finding(s) of rule "${truth.rule}", none at ${minimum ?? ''} or above'
 			);
 		final keys: Array<LintScoreKey> = keysOf(scored);
-		final found: Map<String, LintScoreKey> = [for (k in keys) keyOf(k.family, k.member, k.subject) => k];
-		final entryOf: Map<String, LintTruthEntryJson> = [for (e in truth.entries) keyOf(e.family, e.member, e.subject) => e];
+		final found: Map<String, LintScoreKey> = [ for (k in keys) keyOf(k.family, k.member, k.subject) => k ];
+		final entryOf: Map<String, LintTruthEntryJson> = [ for (e in truth.entries) keyOf(e.family, e.member, e.subject) => e ];
 		final families: Array<String> = [];
 		for (k in keys) if (!families.contains(k.family)) families.push(k.family);
 		for (e in truth.entries) if (!families.contains(e.family)) families.push(e.family);
@@ -191,8 +191,8 @@ final class LintScore {
 					bucket(family, keys.filter(k -> k.family == family), truth.entries.filter(e -> e.family == family), entryOf, hit)
 			],
 			overall: bucket(ALL, keys, truth.entries, entryOf, hit),
-			lost: [for (e in truth.entries) if (isRecall(e) && !hit(e)) e],
-			unlabelled: [for (k in keys) if (!entryOf.exists(keyOf(k.family, k.member, k.subject))) k]
+			lost: [ for (e in truth.entries) if (isRecall(e) && !hit(e)) e ],
+			unlabelled: [ for (k in keys) if (!entryOf.exists(keyOf(k.family, k.member, k.subject))) k ]
 		};
 	}
 
@@ -218,11 +218,11 @@ final class LintScore {
 				+ ' ${o.keys} key(s), ${o.findings - o.keys} duplicate(s), ${result.excluded} below the severity'
 		];
 		final header: Array<String> = ['family', 'findings', 'keys'].concat(VERDICTS).concat(['unlabelled', 'precision', 'recall']);
-		final rows: Array<Array<String>> = [header].concat([for (b in result.families.concat([o])) row(b)]);
+		final rows: Array<Array<String>> = [header].concat([ for (b in result.families.concat([o])) row(b) ]);
 		final widths: Array<Int> = [
 			for (c in 0...header.length) rows.fold((r, w) -> r[c].length > w ? r[c].length : w, 0)
 		];
-		for (r in rows) lines.push([for (c in 0...r.length) r[c].rpad(' ', widths[c])].join('  ').rtrim());
+		for (r in rows) lines.push([ for (c in 0...r.length) r[c].rpad(' ', widths[c]) ].join('  ').rtrim());
 		lines.push('lost recall: ${result.lost.length}');
 		for (e in result.lost) lines.push('  ${e.family}  ${e.member}  ${e.subject}  [${e.verdict}]');
 		final unlabelled: Int = result.unlabelled.length;
@@ -242,7 +242,7 @@ final class LintScore {
 			severity: result.severity,
 			excluded: result.excluded,
 			overall: bucketRecord(result.overall),
-			families: [for (b in result.families) bucketRecord(b)],
+			families: [ for (b in result.families) bucketRecord(b) ],
 			lost: [
 				for (e in result.lost) {
 					family: e.family,
@@ -271,7 +271,7 @@ final class LintScore {
 	/** One table row of `render`. */
 	private static function row(b: LintScoreBucket): Array<String> {
 		return [b.family, '${b.findings}', '${b.keys}']
-			.concat([for (v in VERDICTS) '${b.matched[v] ?? 0}'])
+			.concat([ for (v in VERDICTS) '${b.matched[v] ?? 0}' ])
 			.concat([
 				'${b.unlabelled}',
 				ratio(b.precision),
@@ -398,7 +398,7 @@ final class LintScore {
 		family: String, keys: Array<LintScoreKey>, entries: Array<LintTruthEntryJson>, entryOf: Map<String, LintTruthEntryJson>,
 		hit: (LintTruthEntryJson) -> Bool
 	): LintScoreBucket {
-		final matched: Map<String, Int> = [for (v in VERDICTS) v => 0];
+		final matched: Map<String, Int> = [ for (v in VERDICTS) v => 0 ];
 		var unlabelled: Int = 0;
 		var findings: Int = 0;
 		for (k in keys) {

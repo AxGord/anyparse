@@ -131,7 +131,7 @@ final class LockAliases {
 	public function settle(breaking: Map<String, Array<Occurrence>>): Void {
 		var live: Array<LockAlias> = _candidates;
 		while (true) {
-			final keys: Array<String> = [for (a in live) for (k in a.keys) k];
+			final keys: Array<String> = [ for (a in live) for (k in a.keys) k ];
 			final aliased: Array<String> = live.map(a -> a.target);
 			function accounted(member: String): Bool {
 				return (breaking[LockSites.memberName(member)] ?? []).foreach(o -> keys.contains(occurrenceKey(o.file, o.node)));

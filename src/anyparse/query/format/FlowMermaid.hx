@@ -41,7 +41,7 @@ final class FlowMermaid {
 				]
 			}));
 		}
-		final thrown: Array<String> = [for (n in graph.nodes()) if (n.kind == Throw) n.id];
+		final thrown: Array<String> = [ for (n in graph.nodes()) if (n.kind == Throw) n.id ];
 		if (thrown.length > 0) {
 			statements.push(ClassDef({ names: THROW_CLASS, styles: THROW_STYLE }));
 			statements.push(Class({ nodes: thrown.join(','), className: THROW_CLASS }));

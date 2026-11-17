@@ -137,7 +137,7 @@ class HxWrapConditionVocabularyTest extends Test {
 	 */
 	public function testChainEqualItemLengthsMeasuresBareOperands(): Void {
 		final config: String = cascade('opBoolChain', 'onePerLineAfterFirst', '{"cond": "equalItemLengths", "value": 1}');
-		final decls: String = [for (n in ['aaaa', 'bbbb', 'cccc', 'dddd', 'e']) '\tstatic var $n:Bool;'].join('\n\n');
+		final decls: String = [ for (n in ['aaaa', 'bbbb', 'cccc', 'dddd', 'e']) '\tstatic var $n:Bool;' ].join('\n\n');
 		final eq: String = 'var eq = aaaa || bbbb || cccc || dddd;';
 		final flatNe: String = 'var ne = aaaa || bbbb || cccc || e;';
 		final brokenNe: String = 'var ne = aaaa ||\n\t\t\tbbbb ||\n\t\t\tcccc ||\n\t\t\te;';

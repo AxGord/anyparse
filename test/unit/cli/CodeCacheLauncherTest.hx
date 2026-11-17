@@ -192,7 +192,7 @@ final class CodeCacheLauncherTest extends Test {
 		withLauncher((launcher, dir) -> {
 			final binary: String = dir.file('apq.js');
 			File.saveContent(binary, probeSource(dir.path, 'C'));
-			final calls: String = [for (_ in 0...8) 'node "$launcher" "$binary" &'].join(' ');
+			final calls: String = [ for (_ in 0...8) 'node "$launcher" "$binary" &' ].join(' ');
 			ChildProcess.spawnSync('sh', ['-c', '$calls wait']);
 			Assert.isTrue(node([launcher, binary]).stderr.contains('apq-launch: code cache hit'));
 			Assert.equals(0, FileSystem.readDirectory(dir.path).filter(name -> name.endsWith('.tmp')).length);

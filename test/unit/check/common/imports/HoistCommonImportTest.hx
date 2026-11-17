@@ -809,7 +809,7 @@ class HoistCommonImportTest extends Test {
 				for (edit in part.edits) source = source.substring(0, edit.span.from) + edit.text + source.substr(edit.span.to);
 				byName[name] = source;
 			}
-			out = [for (name => source in byName) { name: name, source: source }];
+			out = [ for (name => source in byName) { name: name, source: source } ];
 		});
 		return out;
 		#else

@@ -176,7 +176,7 @@ final class SimplifyBooleanReturnChain extends RuleBase {
 		final firstSpan: Null<Span> = kids[i].span;
 		final lastSpan: Null<Span> = kids[j].span;
 		if (firstSpan == null || lastSpan == null) return null;
-		final conds: Array<QueryNode> = [for (k in i ... j) kids[k].children[0]];
+		final conds: Array<QueryNode> = [ for (k in i ... j) kids[k].children[0] ];
 		final lits: Array<QueryNode> = [];
 		for (k in i ... j) {
 			final ret: Null<QueryNode> = boolReturnOf(kids[k].children[1], c);

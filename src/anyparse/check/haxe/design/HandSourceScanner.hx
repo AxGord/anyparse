@@ -150,7 +150,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	/** The `allow` keys of `config`: path fragments, each carrying its reason as the value. */
 	private static function allowedPaths(config: LintConfig): Array<String> {
 		return switch config.jsonOption(RULE_ID, ALLOW_KEY) {
-			case JObject(entries): [for (entry in entries) entry.key];
+			case JObject(entries): [ for (entry in entries) entry.key ];
 			case _: [];
 		};
 	}
@@ -174,7 +174,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 			notKind: shape.notKind,
 			assignKind: shape.assignKind,
 			addAssignKind: shape.addAssignKind,
-			incrementKinds: [for (kind in [shape.postIncrKind, shape.preIncrKind]) if (kind != null) kind],
+			incrementKinds: [ for (kind in [shape.postIncrKind, shape.preIncrKind]) if (kind != null) kind ],
 			parenKind: shape.parenKind,
 			comparedHostKinds: (shape.equalityKinds ?? []).concat([
 				for (kind in [shape.plainCasePatternKind, shape.orPatternKind]) if (kind != null) kind

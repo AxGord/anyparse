@@ -423,7 +423,7 @@ class PrivateAccessFormParityTest extends Test {
 			final id: String = check.id();
 			final vs: Array<Violation> = CheckFixture.violationsIn(check, files, plugin);
 			final mine: Array<Violation> = vs.filter(v -> v.file == DECL_FILE);
-			final spans: Array<Span> = mine.length > 0 ? [for (e in check.fix(decl, mine, plugin, index)) e.span] : [];
+			final spans: Array<Span> = mine.length > 0 ? [ for (e in check.fix(decl, mine, plugin, index)) e.span ] : [];
 			final cross: Null<CrossFileFix> = check is CrossFileFix ? cast check : null;
 			var reach: Int = 0;
 			if (cross != null) for (rename in cross.crossFileFix(files, vs, plugin, index)) for (slice in rename) {

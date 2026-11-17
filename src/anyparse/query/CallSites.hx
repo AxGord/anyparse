@@ -217,7 +217,7 @@ final class CallSites {
 	 */
 	private static function positionalParamKinds(shape: RefShape): Array<String> {
 		final rest: Null<String> = shape.restParamKind;
-		return [for (kind in shape.paramKinds ?? []) if (kind != rest) kind];
+		return [ for (kind in shape.paramKinds ?? []) if (kind != rest) kind ];
 	}
 
 	/**

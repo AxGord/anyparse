@@ -312,7 +312,7 @@ final class CondDirectives {
 	/** The directives of `directives` that START inside `[from, to)`, in source order. */
 	public static function startingIn(directives: Array<CondDirective>, from: Int, to: Int): Array<CondDirective> {
 		var i: Int = lowerBound(directives, from);
-		return [while (i < directives.length && directives[i].span.from < to) directives[i++]];
+		return [ while (i < directives.length && directives[i].span.from < to) directives[i++] ];
 	}
 
 	/** The directive that starts exactly at `at`, or null. */

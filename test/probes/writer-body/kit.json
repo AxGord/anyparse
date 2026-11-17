@@ -94,7 +94,11 @@
 		"fill-exact-width/A.hx": "class A {\n\n\tstatic final w139:Array<String> = ['2DBtn1', '2DBtn2', '2DBtn3', '2DBtn4', '2DBtn5', '2DBtn6', '2DBtn7', '2DBtn8', '2DBtn9', '2DBtn10', '2DBtn11', '2DBtn12', '2DBtn1'];\n\n\tstatic final w140:Array<String> = ['2DBtn1', '2DBtn2', '2DBtn3', '2DBtn4', '2DBtn5', '2DBtn6', '2DBtn7', '2DBtn8', '2DBtn9', '2DBtn10', '2DBtn11', '2DBtn12', '2DBtn13'];\n\n\tstatic final w141:Array<String> = ['2DBtn1', '2DBtn2', '2DBtn3', '2DBtn4', '2DBtn5', '2DBtn6', '2DBtn7', '2DBtn8', '2DBtn9', '2DBtn10', '2DBtn11', '2DBtn12', '2DBtn130'];\n\n}\n",
 		"fill-exact-width/hxformat.json": "{\"indentation\":{\"character\":\"tab\",\"tabWidth\":4,\"trailingWhitespace\":false,\"alignInlineSwitchCaseBody\":true},\"emptyLines\":{\"maxAnywhereInFile\":1,\"afterBlocks\":\"remove\",\"afterLeftCurly\":\"remove\",\"beforeRightCurly\":\"remove\",\"classEmptyLines\":{\"beginType\":1,\"endType\":1},\"externClassEmptyLines\":{\"beginType\":1,\"endType\":1},\"interfaceEmptyLines\":{\"beginType\":1,\"endType\":1},\"abstractEmptyLines\":{\"beginType\":1,\"endType\":1},\"enumEmptyLines\":{\"betweenFields\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"},\"typedefEmptyLines\":{\"betweenFields\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"one\"},\"enumAbstractEmptyLines\":{\"abstractRulesUnlessValueList\":true,\"betweenVars\":0,\"existingBetweenFields\":\"remove\",\"beginType\":0,\"endType\":0,\"beginTypeIfDocComments\":1,\"endTypeIfDocComments\":1,\"afterFieldsWithDocComments\":\"none\"},\"beforeDocCommentEmptyLines\":\"one\",\"uniformStatementBlanks\":\"collapse\",\"aroundMultilineFields\":1},\"wrapping\":{\"comprehensionCuddledOpen\":true,\"methodChainCuddledLinks\":true,\"trailingComma\":\"remove\",\"arrayMatrixWrap\":\"matrixWrapNoAlign\",\"functionSignature\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"totalItemLength <= n\",\"value\":100},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1}],\"type\":\"noWrap\"}]},\"maxLineLength\":140,\"anonType\":{\"defaultWrap\":\"ignore\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"packedOrOnePerLine\"}]},\"callParameter\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"itemCount >= n\",\"value\":2},{\"cond\":\"hasMultilineLambdaItems\",\"value\":1},{\"cond\":\"complexItemCount >= n\",\"value\":1}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"itemCount >= n\",\"value\":2},{\"cond\":\"hasMultilineLambdaItems\",\"value\":1},{\"cond\":\"hasContainerItems\",\"value\":1}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":1},{\"cond\":\"totalItemLength <= n\",\"value\":100}],\"type\":\"noWrap\"}]},\"opBoolChain\":{\"defaultWrap\":\"noWrap\",\"rules\":[{\"conditions\":[{\"cond\":\"itemCount <= n\",\"value\":3},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"totalItemLength <= n\",\"value\":120},{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"fillLine\",\"location\":\"beforeLast\"}]},\"expressionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]},\"opAddSubChain\":{\"defaultWrap\":\"noWrap\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"fillLine\",\"location\":\"beforeLast\"}]},\"conditionWrapping\":{\"defaultWrap\":\"fillLineWithLeadingBreak\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"}]},\"objectLiteral\":{\"defaultWrap\":\"ignore\",\"rules\":[{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"packedOrOnePerLine\"}]},\"arrayWrap\":{\"defaultWrap\":\"ignore\",\"rules\":[{\"conditions\":[{\"cond\":\"complexItemCount >= n\",\"value\":2},{\"cond\":\"totalItemLength >= n\",\"value\":100}],\"type\":\"onePerLine\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":0}],\"type\":\"noWrap\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1},{\"cond\":\"allItemLengths <= n\",\"value\":20}],\"type\":\"fillLineWithLeadingBreak\"},{\"conditions\":[{\"cond\":\"exceedsMaxLineLength\",\"value\":1}],\"type\":\"packedOrOnePerLine\"}]},\"soleItemCuddledBrackets\":true},\"whitespace\":{\"addLineCommentSpace\":false,\"normalizeLineCommentIndent\":true,\"commaPolicy\":\"after\",\"ifPolicy\":\"around\",\"forPolicy\":\"around\",\"whilePolicy\":\"around\",\"switchPolicy\":\"around\",\"catchPolicy\":\"around\",\"arrowFunctionsPolicy\":\"around\",\"functionTypeHaxe3Policy\":\"none\",\"functionTypeHaxe4Policy\":\"none\",\"binopPolicy\":\"around\",\"intervalPolicy\":\"around\",\"openingBracketPolicy\":\"none\",\"closingBracketPolicy\":\"none\",\"bracesConfig\":{\"objectLiteralBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\",\"arrowBodyOpenPad\":true,\"arrowBodyReflow\":true},\"anonTypeBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\"},\"typedefBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\"},\"blockBraces\":{\"openingPolicy\":\"around\",\"closingPolicy\":\"before\"},\"unknownBraces\":{\"openingPolicy\":\"after\",\"closingPolicy\":\"before\"},\"singleStatementBraces\":\"remove\"},\"parenConfig\":{\"callParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"funcParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"conditionParens\":{\"openingPolicy\":\"before\",\"closingPolicy\":\"after\"},\"anonFuncParamParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"forLoopParens\":{\"openingPolicy\":\"before\",\"closingPolicy\":\"after\"},\"expressionParens\":{\"openingPolicy\":\"none\",\"closingPolicy\":\"none\"},\"switchSubjectParens\":\"remove\"},\"optionalSemicolon\":\"always\",\"semicolonBeforeElse\":\"never\"},\"lineEnds\":{\"emptyCurly\":\"noBreak\",\"metadataType\":\"fit\",\"metadataFunction\":\"fit\",\"metadataVar\":\"fit\",\"metadataOther\":\"fit\"},\"comments\":{\"blockCommentStyle\":\"javadoc\",\"trailingCommentOverflow\":\"above\"},\"sameLine\":{\"caseBody\":\"fitLine\",\"caseSiblings\":\"anyBreak\",\"expressionCase\":\"fitLine\",\"ifBody\":\"fitLine\",\"forBody\":\"fitLine\",\"whileBody\":\"fitLine\",\"functionBody\":\"fitLine\",\"tryBody\":\"fitLine\",\"catchBody\":\"fitLine\",\"expressionIf\":\"next\",\"expressionIfFit\":true,\"expressionIfFitMaxBranches\":2,\"expressionIfArrowBodyReflow\":true,\"elseIfCommentReflow\":true,\"fitLineBodyGlue\":true,\"conditionalExprFit\":true,\"comprehensionFor\":\"fitLine\"}}",
 		"typedef-semi-never/Q.hx": "typedef A = {a:Int};\n\ntypedef B = {b:Int};\nclass K {}\n",
-		"typedef-semi-never/hxformat.json": "{\"indentation\":{\"character\":\"tab\"},\"whitespace\":{\"typedefSemicolon\":\"never\"}}"
+		"typedef-semi-never/hxformat.json": "{\"indentation\":{\"character\":\"tab\"},\"whitespace\":{\"typedefSemicolon\":\"never\"}}",
+		"compr-fit-absent/Probe.hx": "class Probe {\n\tstatic function f(xs:Array<Int>):Array<Int> {\n\t\tfinal a = [\n\t\t\tfor (x in xs) {\n\t\t\t\tfinal y = x + 1;\n\t\t\t\ty * 2;\n\t\t\t}\n\t\t];\n\t\tfinal b = [\n\t\t\tfor (x in xs)\n\t\t\t\tif (x > 0) x\n\t\t];\n\t\tfinal c = [for (x in xs) x];\n\t\treturn a.concat(b).concat(c);\n\t}\n}\n",
+		"compr-fit-absent/hxformat.json": "{\"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}",
+		"compr-fit-off/Probe.hx": "class Probe {\n\tstatic function f(xs:Array<Int>):Array<Int> {\n\t\tfinal a = [\n\t\t\tfor (x in xs) {\n\t\t\t\tfinal y = x + 1;\n\t\t\t\ty * 2;\n\t\t\t}\n\t\t];\n\t\tfinal b = [\n\t\t\tfor (x in xs)\n\t\t\t\tif (x > 0) x\n\t\t];\n\t\tfinal c = [for (x in xs) x];\n\t\treturn a.concat(b).concat(c);\n\t}\n}\n",
+		"compr-fit-off/hxformat.json": "{\"wrapping\": {\"comprehensionFit\": false}, \"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}"
 	},
 	"invocations": [
 		{
@@ -1035,6 +1039,42 @@
 			"expect": {
 				"exit": 0,
 				"out": "0f3f33c41538baa6",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "compr-fit-absent/Probe.hx",
+			"note": "padded comprehension brackets with wrapping.comprehensionFit absent: a sole block body hugs `[ for (x in xs) {` … `} ]`, the layout a padding-only config always had",
+			"fixpoint": "compr-fit-absent/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"compr-fit-absent/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "f16137911356a83d",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "compr-fit-off/Probe.hx",
+			"note": "padded comprehension brackets with wrapping.comprehensionFit false: a multi-line block-body comprehension keeps `[` / `for` / `]` on their own lines, a flat one is padded",
+			"fixpoint": "compr-fit-off/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"compr-fit-off/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "185d861e32d46a11",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

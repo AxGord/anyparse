@@ -165,7 +165,7 @@ final class Summary {
 
 	/** The names of the steps that failed or could not run, in run order. */
 	public function unfit(): Array<String> {
-		return [for (step in _steps) if (!step.outcome.match(Passed | Skipped(_))) step.name];
+		return [ for (step in _steps) if (!step.outcome.match(Passed | Skipped(_))) step.name ];
 	}
 
 	/** One aligned row per step: name, outcome, seconds, and the reason when there is one. */

@@ -26,7 +26,7 @@ final class InOrder {
 			link.push(before);
 			if (best < 0 || run[k] > run[best]) best = k;
 		}
-		final inRun: Array<Bool> = [for (_ in order) false];
+		final inRun: Array<Bool> = [ for (_ in order) false ];
 		while (best >= 0) {
 			inRun[best] = true;
 			best = link[best];

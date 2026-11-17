@@ -1063,8 +1063,8 @@
 			"name": "M-TS-HELPER-DOM-CROSSING",
 			"type": "anyparse.check.common.design.threads.LockDominance",
 			"method": "solveDominators",
-			"find": "[for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock]",
-			"replace": "[for (c in _sites.crossing) c.lock]",
+			"find": "[ for (c in _sites.crossing) if (!_sites.helpers.contains(c.edge.from)) c.lock ]",
+			"replace": "[ for (c in _sites.crossing) c.lock ]",
 			"note": "a helper twin's give breaks every dominance of its locks"
 		},
 		{
@@ -1657,7 +1657,7 @@
 			"name": "M-TS-SITE-GROW",
 			"type": "anyparse.check.common.design.threads.MainSinkReport",
 			"method": "reportRepeater",
-			"find": "known.sinks = known.sinks.concat([for (t in sinks) if (!known.sinks.contains(t)) t]);",
+			"find": "known.sinks = known.sinks.concat([ for (t in sinks) if (!known.sinks.contains(t)) t ]);",
 			"replace": "",
 			"note": "a repeating site's warning names only the first short sink found below it"
 		},
@@ -3044,7 +3044,7 @@
 			"name": "M-TS-STORED-MARKED",
 			"type": "anyparse.check.common.design.threads.LockSites",
 			"method": "collectUnsealed",
-			"find": "writes.markLockMembers(fields.concat([for (target => source in aliases.targets) for (f in [target, source]) f]));",
+			"find": "writes.markLockMembers(fields.concat([ for (target => source in aliases.targets) for (f in [target, source]) f ]));",
 			"replace": "",
 			"note": "the lock members are not marked, so what a write stores costs every one, whatever its type (R3 M4)"
 		},
@@ -3092,7 +3092,7 @@
 			"name": "M-TS-FOLD-PARTS-ONCE",
 			"type": "anyparse.check.common.design.threads.RootCauseFold",
 			"method": "turn",
-			"find": "[for (k => p in parts) if (parts.indexOf(p) == k) p].join('; ')",
+			"find": "[ for (k => p in parts) if (parts.indexOf(p) == k) p ].join('; ')",
 			"replace": "parts.join('; ')",
 			"note": "a folded finding names the same covering holds once per reason: two ways to one sink say it twice"
 		},
@@ -3188,7 +3188,7 @@
 			"name": "M-TS-REPORTED-SUPPRESSED",
 			"type": "anyparse.check.common.design.threads.MainSinkReport",
 			"method": "dropSilenced",
-			"find": "for (k in [for (k => v in reportedBy) if (suppressed(v)) k]) reportedBy.remove(k);",
+			"find": "for (k in [ for (k => v in reportedBy) if (suppressed(v)) k ]) reportedBy.remove(k);",
 			"replace": "",
 			"note": "a silenced finding (a) still reports the work a main-only hold spans"
 		},
@@ -3204,7 +3204,7 @@
 			"name": "M-TS-SHADOWING-KEPT",
 			"type": "anyparse.check.common.design.threads.PositiveSinks",
 			"method": "waived",
-			"find": "final removed: Array<String> = [for (id in hit) if (!shadowing.contains(id)) id];",
+			"find": "final removed: Array<String> = [ for (id in hit) if (!shadowing.contains(id)) id ];",
 			"replace": "final removed: Array<String> = hit;",
 			"note": "a waiver of a project native named like a library call removes it, though a library call may resolve to it"
 		},
@@ -3252,7 +3252,7 @@
 			"name": "M-TS-PLACE-FRESH-MUTABLE",
 			"type": "anyparse.check.common.design.threads.ReflectiveReach",
 			"method": "finalInitializer",
-			"find": "final finals: Array<String> = [for (k in _shape.localDeclKinds ?? []) if (!mutable.contains(k)) k];",
+			"find": "final finals: Array<String> = [ for (k in _shape.localDeclKinds ?? []) if (!mutable.contains(k)) k ];",
 			"replace": "final finals: Array<String> = _shape.localDeclKinds ?? [];",
 			"note": "a var bound to a fresh structure is taken to hold it for good"
 		},

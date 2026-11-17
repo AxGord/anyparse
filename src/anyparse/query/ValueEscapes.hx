@@ -323,7 +323,7 @@ final class ValueEscapes {
 			for (k in shape.functionKinds ?? []) if (!(shape.localFunctionKinds ?? []).contains(k)) k
 		];
 		final functions: Array<String> = ShapeVocab.functionLikeKinds(shape);
-		final assignKinds: Array<String> = [for (k in [shape.assignKind, shape.nullCoalAssignKind]) if (k != null) k];
+		final assignKinds: Array<String> = [ for (k in [shape.assignKind, shape.nullCoalAssignKind]) if (k != null) k ];
 		// a lambda whose body is an expression yields it; a `function` lambda returns only through `return`
 		final arrowKinds: Array<String> = [
 			for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k
@@ -334,8 +334,8 @@ final class ValueEscapes {
 			.concat(shape.localFunctionKinds ?? [])
 			.concat(shape.valueReturnKinds ?? [])
 			.concat(shape.throwKinds ?? [])
-			.concat([for (k in [shape.voidReturnKind]) if (k != null) k]);
-		final statementKinds: Array<String> = silentKinds.concat([for (k in [shape.exprStatementKind]) if (k != null) k]);
+			.concat([ for (k in [shape.voidReturnKind]) if (k != null) k ]);
+		final statementKinds: Array<String> = silentKinds.concat([ for (k in [shape.exprStatementKind]) if (k != null) k ]);
 		final edges: Map<String, Array<CallEdge>> = [];
 		for (e in g.edges) {
 			final at: Null<Span> = e.span;

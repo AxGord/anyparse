@@ -142,9 +142,9 @@ class LexicalRegionsTest extends Test {
 		Assert.equals(2, holes.length);
 		if (holes.length != 2) return;
 		Assert.equals("${\"x\"}", source.substring(holes[0].from, holes[0].to));
-		Assert.equals('\"x\"', [for (r in holes[0].regions) source.substring(r.from, r.to)].join('|'));
+		Assert.equals('\"x\"', [ for (r in holes[0].regions) source.substring(r.from, r.to) ].join('|'));
 		Assert.equals("${/*c*/'${y}'}", source.substring(holes[1].from, holes[1].to));
-		Assert.equals("/*c*/|'${y}'", [for (r in holes[1].regions) source.substring(r.from, r.to)].join('|'));
+		Assert.equals("/*c*/|'${y}'", [ for (r in holes[1].regions) source.substring(r.from, r.to) ].join('|'));
 		final inner: Array<LexHole> = holes[1].regions[holes[1].regions.length - 1].holes ?? [];
 		Assert.equals("${y}", inner.map(h -> source.substring(h.from, h.to)).join('|'));
 		Assert.isNull(regions[1].holes, 'a double-quoted literal has no hole');
@@ -164,7 +164,7 @@ class LexicalRegionsTest extends Test {
 		Assert.isNull(regions[0].holes);
 		final holes: Array<LexHole> = regions[1].holes ?? [];
 		Assert.equals("${x /* k */}", holes.map(h -> source.substring(h.from, h.to)).join('|'));
-		Assert.equals('/* k */', [for (h in holes) for (r in h.regions) source.substring(r.from, r.to)].join('|'));
+		Assert.equals('/* k */', [ for (h in holes) for (r in h.regions) source.substring(r.from, r.to) ].join('|'));
 		for (region in regions) Assert.isTrue(nestsWithin(region), 'every hole within its literal: ${dump(source, regions)}');
 	}
 

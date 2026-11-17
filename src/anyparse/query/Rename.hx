@@ -209,7 +209,7 @@ final class Rename {
 		final actual: Array<Int> = renameOccurrences(rewritten, newTree, newCursor, shape).map(occ -> occ.from);
 		actual.sort((a, b) -> a - b);
 		if (actual.length == expected.length && actual.foreach(off -> expected.contains(off))) return [];
-		final out: Array<Capture> = [for (off in actual) if (!expected.contains(off)) { offset: off, extra: true }];
+		final out: Array<Capture> = [ for (off in actual) if (!expected.contains(off)) { offset: off, extra: true } ];
 		for (off in expected) if (!actual.contains(off)) out.push({ offset: off, extra: false });
 		return out;
 	}

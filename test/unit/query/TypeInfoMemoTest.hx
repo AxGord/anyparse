@@ -22,21 +22,21 @@ class TypeInfoMemoTest extends Test {
 		final casts: () -> Map<Int, String> = TypeInfoMemo.castTargetSources(provider, SOURCE);
 		final first: Map<Int, String> = casts();
 		Assert.equals(first, casts());
-		Assert.isTrue([for (k in first.keys()) k].length > 0);
-		Assert.isTrue([for (v in first) v].contains('String'));
+		Assert.isTrue([ for (k in first.keys()) k ].length > 0);
+		Assert.isTrue([ for (v in first) v ].contains('String'));
 	}
 
 	public function testDeclaredTypeSourcesMatchTheResolverEntryPoint(): Void {
 		final provider: TypeInfoProvider = _plugin;
 		final direct: Map<Int, String> = TypeInfoMemo.declaredTypeSources(provider, SOURCE)();
 		final viaResolver: Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(_plugin, SOURCE)();
-		Assert.same([for (k => v in direct) '$k=$v'], [for (k => v in viaResolver) '$k=$v']);
-		Assert.isTrue([for (v in direct) v].contains('String'));
+		Assert.same([ for (k => v in direct) '$k=$v' ], [ for (k => v in viaResolver) '$k=$v' ]);
+		Assert.isTrue([ for (v in direct) v ].contains('String'));
 	}
 
 	public function testANullProviderAnswersTheEmptyMap(): Void {
-		Assert.equals(0, [for (k in TypeInfoMemo.castTargetSources(null, SOURCE)().keys()) k].length);
-		Assert.equals(0, [for (k in TypeInfoMemo.declaredTypeSources(null, SOURCE)().keys()) k].length);
+		Assert.equals(0, [ for (k in TypeInfoMemo.castTargetSources(null, SOURCE)().keys()) k ].length);
+		Assert.equals(0, [ for (k in TypeInfoMemo.declaredTypeSources(null, SOURCE)().keys()) k ].length);
 	}
 
 }

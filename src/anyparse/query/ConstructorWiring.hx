@@ -93,8 +93,8 @@ final class ConstructorWiring {
 	/** Forget the runs recorded at sites of `file` and the edges wired from them or from one of the `removed` nodes. */
 	public function removeFile(file: String, removed: Map<String, Bool>): Void {
 		final wiredBefore: Array<CtorRun> = _runs.slice(0, _wiredRuns);
-		final kept: Array<CtorRun> = [for (r in _runs) if (CallGraphNames.normalizePath(r.file) != file) r];
-		_wiredRuns = [for (r in wiredBefore) if (CallGraphNames.normalizePath(r.file) != file) r].length;
+		final kept: Array<CtorRun> = [ for (r in _runs) if (CallGraphNames.normalizePath(r.file) != file) r ];
+		_wiredRuns = [ for (r in wiredBefore) if (CallGraphNames.normalizePath(r.file) != file) r ].length;
 		_runs.resize(0);
 		for (r in kept) _runs.push(r);
 		for (key in [

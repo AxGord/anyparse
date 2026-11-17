@@ -226,7 +226,7 @@ final class LintFixDriver {
 		// the compiler facts (the display server only when the run has none), the edited files are
 		// re-typechecked, and any that break the build are reverted to report-only
 		// (verifyOracleBatch). No oracle / no such check → inert.
-		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
+		final oracleAssisted: Array<Check> = [ for (c in checks) if (c is OracleAssisted) c ];
 		final oa: AssistedOutcome = PhaseTimings.measure(
 			'fix oracle-assisted',
 			() ->
@@ -670,7 +670,7 @@ final class LintFixDriver {
 	 */
 	private static function crossFileComponents(renames: Array<Array<CrossFileEdits>>): Array<Array<Array<CrossFileEdits>>> {
 		final n: Int = renames.length;
-		final parent: Array<Int> = [for (i in 0...n) i];
+		final parent: Array<Int> = [ for (i in 0...n) i ];
 		function find(x: Int): Int {
 			var r: Int = x;
 			while (parent[r] != r) r = parent[r];
@@ -865,7 +865,7 @@ final class LintFixDriver {
 
 	/** The disjoint edit set `groups` currently contribute, in check order — recomputed, so a refusal recorded later shrinks it. */
 	public static function contributedEdits(groups: Array<RuleEdits>): Array<{ span: Span, text: String }> {
-		return CanonicalEdit.dropContainedEdits([for (group in groups) if (contributes(group)) for (e in group.edits) e]);
+		return CanonicalEdit.dropContainedEdits([ for (group in groups) if (contributes(group)) for (e in group.edits) e ]);
 	}
 
 	/**
@@ -1285,7 +1285,7 @@ final class LintFixDriver {
 	private static function changedSince(
 		files: Array<{ file: String, source: String }>, snapshot: Map<String, String>
 	): Array<{ file: String, source: String }> {
-		return [for (entry in files) if (entry.source != snapshot[entry.file]) entry];
+		return [ for (entry in files) if (entry.source != snapshot[entry.file]) entry ];
 	}
 
 	/** Every path `snapshot` holds that `files` no longer does — a file the run DELETED since the snapshot was taken. */
@@ -1531,7 +1531,7 @@ final class LintFixDriver {
 		final nowLines: Array<String> = now.split('\n');
 		final edits: Null<LineEdits> = before == null ? null : LineDiff.edits(before.split('\n'), nowLines, RESIDUE_MAX_EDITS);
 		final lines: Map<Int, Bool> = [];
-		for (i in (edits == null ? [for (n in 0...nowLines.length) n] : edits.inserted)) lines[i + 1] = true;
+		for (i in (edits == null ? [ for (n in 0...nowLines.length) n ] : edits.inserted)) lines[i + 1] = true;
 		return lines;
 	}
 
@@ -1568,7 +1568,7 @@ final class LintFixDriver {
 
 	/** The text of each of `notes` that `said` has not yet heard for `rule`, marking them said. */
 	public static function freshNoteLines(said: RunLedger, rule: String, notes: Array<FixNote>): Array<String> {
-		return [for (note in notes) if (said.first('fix-note:$rule', note.key)) note.text];
+		return [ for (note in notes) if (said.first('fix-note:$rule', note.key)) note.text ];
 	}
 
 	/**

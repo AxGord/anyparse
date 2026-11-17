@@ -381,8 +381,8 @@
 			"name": "M-PFF-MACRO-FIXED",
 			"type": "anyparse.check.common.members.PreferFinalField",
 			"method": "fix",
-			"find": "[for (v in violations) if (v.declineReason == null) v.span]",
-			"replace": "[for (v in violations) v.span]",
+			"find": "[ for (v in violations) if (v.declineReason == null) v.span ]",
+			"replace": "[ for (v in violations) v.span ]",
 			"note": "a declined macro-built owner's field is finalized without a compiler oracle, which a builder assigning it outside the constructor breaks"
 		},
 		{
@@ -405,8 +405,8 @@
 			"name": "M-PFPF-MACRO-FIXED",
 			"type": "anyparse.check.common.members.PreferFinalPublicField",
 			"method": "fix",
-			"find": "[for (v in violations) if (v.declineReason == null) v.span]",
-			"replace": "[for (v in violations) v.span]",
+			"find": "[ for (v in violations) if (v.declineReason == null) v.span ]",
+			"replace": "[ for (v in violations) v.span ]",
 			"note": "a declined macro-built owner's public field is finalized without a compiler oracle"
 		},
 		{

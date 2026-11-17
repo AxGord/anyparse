@@ -515,7 +515,7 @@ final class CallGraph {
 
 	/** Every file the graph holds, with its text and its tree. */
 	public function heldFiles(): Array<{ file: String, source: String, tree: QueryNode }> {
-		return [for (e in _entries) { file: e.file, source: e.source, tree: e.tree }];
+		return [ for (e in _entries) { file: e.file, source: e.source, tree: e.tree } ];
 	}
 
 	/** The source of `file`, or null when the graph does not hold it. */
@@ -558,7 +558,7 @@ final class CallGraph {
 			names.push(name);
 			for (prefix in _shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) names.push(name.substr(prefix.length));
 		}
-		return [for (a in unresolvedAccess) if (names.contains(a.member)) a];
+		return [ for (a in unresolvedAccess) if (names.contains(a.member)) a ];
 	}
 
 	/**
@@ -624,7 +624,7 @@ final class CallGraph {
 		for (p in parsed) CallGraphNodes.collect(this, p);
 		final reading: Null<CallGraphFacts> = facts;
 		// a method a build macro made has no declaration to collect: the facts make its node (`CallGraphFacts.adopt`)
-		final adopted: Array<String> = reading == null ? [] : [for (p in parsed) for (id in reading.adopt(this, p.file)) id];
+		final adopted: Array<String> = reading == null ? [] : [ for (p in parsed) for (id in reading.adopt(this, p.file)) id ];
 		_dispatchMemo = [];
 		try {
 			for (p in parsed) {
@@ -641,7 +641,7 @@ final class CallGraph {
 		if (reading != null) {
 			reading.recordAdopted(this, adopted);
 			// the field initializers of every type read so far, which the facts read whole once its files are in
-			reading.recordInitializers(this, [for (id in _initFiles.keys()) id]);
+			reading.recordInitializers(this, [ for (id in _initFiles.keys()) id ]);
 		}
 		_wiring.markGrownChains(_grownTypes);
 		_wiring.wire((from, to, kind, file, span) -> addEdge(from, to, kind, null, file, span));
@@ -659,7 +659,7 @@ final class CallGraph {
 		_entries.remove(key);
 		final removed: Map<String, Bool> = nodesLeavingWith(key);
 		// a body's edges from other files are copies of the function's, made again when the file is read again
-		final bodies: Array<String> = [for (ids in _bodies) for (id in ids) if (removed.exists(id)) id];
+		final bodies: Array<String> = [ for (ids in _bodies) for (id in ids) if (removed.exists(id)) id ];
 		_fileNodes.remove(key);
 		_fileDeclarations.remove(key);
 		forgetDeclarationsIn(key);
@@ -744,7 +744,7 @@ final class CallGraph {
 	 * declarations go with it.
 	 */
 	private function nodesLeavingWith(key: String): Map<String, Bool> {
-		final removed: Map<String, Bool> = [for (n in _fileNodes[key] ?? []) n.id => true];
+		final removed: Map<String, Bool> = [ for (n in _fileNodes[key] ?? []) n.id => true ];
 		final reading: Null<CallGraphFacts> = facts;
 		if (reading != null) for (variant => read in reading.qualified) if (
 			removed.exists(read.node) || declarationsOf(variant).exists(d -> CallGraphNames.normalizePath(d.file) == key)
@@ -760,8 +760,8 @@ final class CallGraph {
 	 * the initializers of a file read again are recorded again (`CallGraphFacts.recordInitializers`).
 	 */
 	private function forgetDeclarationsIn(key: String): Void {
-		for (id in [for (id in _declarations.keys()) id]) {
-			final kept: Array<FnDeclaration> = [for (d in declarationsOf(id)) if (CallGraphNames.normalizePath(d.file) != key) d];
+		for (id in [ for (id in _declarations.keys()) id ]) {
+			final kept: Array<FnDeclaration> = [ for (d in declarationsOf(id)) if (CallGraphNames.normalizePath(d.file) != key) d ];
 			if (kept.length == 0)
 				_declarations.remove(id)
 			else
@@ -769,7 +769,7 @@ final class CallGraph {
 		}
 		for (id => files in _initFiles) {
 			if (files.exists(f -> CallGraphNames.normalizePath(f) == key)) facts?.faceted.remove(id);
-			_initFiles[id] = [for (f in files) if (CallGraphNames.normalizePath(f) != key) f];
+			_initFiles[id] = [ for (f in files) if (CallGraphNames.normalizePath(f) != key) f ];
 		}
 	}
 
@@ -780,9 +780,9 @@ final class CallGraph {
 			_facts.forget(id);
 		}
 		facts?.forget(file, removed);
-		for (table in _members) for (member in [for (m => id in table) if (removed.exists(id)) m]) table.remove(member);
-		for (name => ids in _byMember) _byMember[name] = [for (id in ids) if (!removed.exists(id)) id];
-		for (id in [for (id in _bodies.keys()) id]) if (removed.exists(id)) _bodies.remove(id);
+		for (table in _members) for (member in [ for (m => id in table) if (removed.exists(id)) m ]) table.remove(member);
+		for (name => ids in _byMember) _byMember[name] = [ for (id in ids) if (!removed.exists(id)) id ];
+		for (id in [ for (id in _bodies.keys()) id ]) if (removed.exists(id)) _bodies.remove(id);
 	}
 
 	/**
@@ -814,10 +814,10 @@ final class CallGraph {
 		_out.clear();
 		_in.clear();
 		for (e in kept) indexEdge(e);
-		final calls: Array<UnresolvedCall> = [for (u in unresolved) if (CallGraphNames.normalizePath(u.file) != key) u];
+		final calls: Array<UnresolvedCall> = [ for (u in unresolved) if (CallGraphNames.normalizePath(u.file) != key) u ];
 		unresolved.resize(0);
 		for (u in calls) unresolved.push(u);
-		final accesses: Array<UnresolvedAccess> = [for (a in unresolvedAccess) if (CallGraphNames.normalizePath(a.file) != key) a];
+		final accesses: Array<UnresolvedAccess> = [ for (a in unresolvedAccess) if (CallGraphNames.normalizePath(a.file) != key) a ];
 		unresolvedAccess.resize(0);
 		for (a in accesses) unresolvedAccess.push(a);
 		_wiring.removeFile(key, removed);
@@ -889,7 +889,7 @@ final class CallGraph {
 		if (argument != null) edge.argument = argument;
 		// a faceted function's syntax still records every edge it names, which the facts only add to — unless they are the
 		// truth: then its edge at a site they type is dropped (`CallGraphFacts.holdsBack`)
-		for (e in [edge].concat(exact ? [] : [for (body in _bodies[to] ?? []) retargeted(edge, body)])) if (facts?.holdsBack(e) != true)
+		for (e in [edge].concat(exact ? [] : [ for (body in _bodies[to] ?? []) retargeted(edge, body) ])) if (facts?.holdsBack(e) != true)
 			indexEdge(e);
 	}
 

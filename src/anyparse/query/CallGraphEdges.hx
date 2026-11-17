@@ -385,7 +385,7 @@ final class CallGraphEdges {
 			if (inherited == null || viewParams.length == 0 || viewType == currentType) return inherited;
 			final bound: Array<String> = valueArgs != null && valueArgs.length >= viewParams.length
 				? valueArgs
-				: [for (_ in viewParams) CallGraph.UNKNOWN_TYPE];
+				: [ for (_ in viewParams) CallGraph.UNKNOWN_TYPE ];
 			return inherited.map(a -> CallGraphNames.substituteTypeParams(a, viewParams, bound, g._plugin.typeSyntax));
 		}
 
@@ -423,7 +423,7 @@ final class CallGraphEdges {
 			else if (owner == currentType)
 				written
 			else
-				CallGraphNames.substituteTypeParams(written, params, [for (_ in params) CallGraph.UNKNOWN_TYPE], g._plugin.typeSyntax);
+				CallGraphNames.substituteTypeParams(written, params, [ for (_ in params) CallGraph.UNKNOWN_TYPE ], g._plugin.typeSyntax);
 		}
 
 		/** `member`'s written type on `receiverType`'s chain as a value written `receiverSource` sees it (`throughParams`). */
@@ -1338,7 +1338,7 @@ final class CallGraphEdges {
 		 * or an assignment's type — one of the same arity.
 		 */
 		function typeLambdaParams(lambda: QueryNode, currentType: Null<String>): Void {
-			final params: Array<QueryNode> = [for (c in lambda.children) if (paramKinds.contains(c.kind)) c];
+			final params: Array<QueryNode> = [ for (c in lambda.children) if (paramKinds.contains(c.kind)) c ];
 			final bare: Array<QueryNode> = [
 				for (p in params) if (p.span != null && !typeSources.exists(p.span?.from ?? -1)) p
 			];

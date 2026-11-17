@@ -269,7 +269,7 @@ class LintFixSafeBisectTest extends Test {
 	/** One `lint --fix` over every module of the fixture, with the oracle, the import rules, the `drops` and `extra`. */
 	private static function fix(root: String, extra: Array<String>, drops: Array<Check>, src: Bool = false): FixRun {
 		final ids: Array<String> = ['duplicate-import', 'unused-import', 'import-order'].concat(extra);
-		final checks: Array<Check> = [for (check in Linter.builtins()) if (ids.contains(check.id())) check].concat(drops);
+		final checks: Array<Check> = [ for (check in Linter.builtins()) if (ids.contains(check.id())) check ].concat(drops);
 		final files: Array<{ file: String, source: String }> = [
 			for (name in [
 				'p/Holder.hx',

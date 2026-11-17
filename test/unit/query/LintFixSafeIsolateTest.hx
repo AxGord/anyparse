@@ -37,7 +37,7 @@ class LintFixSafeIsolateTest extends Test {
 		);
 		switch outcome {
 			case Bisected(culprits, spent):
-				Assert.same(['/p/C.hx'], [for (culprit in culprits) culprit.file]);
+				Assert.same(['/p/C.hx'], [ for (culprit in culprits) culprit.file ]);
 				Assert.isNull(culprits[0].kept, 'a file that cannot be split goes back whole');
 				Assert.same(['rule-of-/p/C.hx'], culprits[0].rules);
 				Assert.equals(probes, spent);
@@ -56,7 +56,7 @@ class LintFixSafeIsolateTest extends Test {
 		);
 		switch outcome {
 			case Bisected(culprits, _):
-				Assert.same(['/p/B.hx', '/p/D.hx'], [for (culprit in culprits) culprit.file]);
+				Assert.same(['/p/B.hx', '/p/D.hx'], [ for (culprit in culprits) culprit.file ]);
 			case other:
 				Assert.fail('expected Bisected, got $other');
 		}
@@ -144,7 +144,7 @@ class LintFixSafeIsolateTest extends Test {
 	@:pin('control')
 	@:killer('M-SAFE-BISECT-NO-FALLBACK')
 	public function testABisectionThatCannotIsolateFallsBackToTheWholeWave(): Void {
-		final changed: Array<String> = [for (i in 0...200) '/p/F$i.hx'];
+		final changed: Array<String> = [ for (i in 0...200) '/p/F$i.hx' ];
 		var probes: Int = 0;
 		final outcome: SafePassNarrowing = LintFixSafePass.isolate(
 			SURRENDER, changed, [], seat((keep, _) -> {
@@ -186,7 +186,7 @@ class LintFixSafeIsolateTest extends Test {
 	@:pin('control')
 	@:killer('M-SAFE-INTERACTION-PINNED')
 	public function testAnInteractionAcrossTheHalvesIsPinnedOnNeitherSide(): Void {
-		final changed: Array<String> = [for (i in 0...200) '/p/F$i.hx'];
+		final changed: Array<String> = [ for (i in 0...200) '/p/F$i.hx' ];
 		var probes: Int = 0;
 		final outcome: SafePassNarrowing = LintFixSafePass.isolate(SURRENDER, changed, [], {
 			probe: (keep, partial) -> {
@@ -217,13 +217,13 @@ class LintFixSafeIsolateTest extends Test {
 	@:pin('control')
 	@:killer('M-SAFE-PROBES-UNCAPPED')
 	public function testTheIsolationStopsAtTheRunBudget(): Void {
-		final blamed: Array<String> = [for (i in 0...40) '/p/F$i.hx'];
+		final blamed: Array<String> = [ for (i in 0...40) '/p/F$i.hx' ];
 		var probes: Int = 0;
 		final outcome: SafePassNarrowing = LintFixSafePass.isolate(Narrowed(blamed, 1), ['/p/A.hx'].concat(blamed), [], {
 			probe: (keep, partial) -> {
 				probes++;
 				final poisoned: Bool = keep.exists(file -> file != '/p/A.hx')
-					|| [for (text in partial) text].exists(text -> text.contains('r2'));
+					|| [ for (text in partial) text ].exists(text -> text.contains('r2'));
 				return poisoned ? OracleOutcome.Rejected(ERRORS) : OracleOutcome.Confirmed;
 			},
 			splitRules: _ -> ['r1', 'r2', 'r3'],
@@ -279,7 +279,7 @@ class LintFixSafeIsolateTest extends Test {
 	@:pin('control')
 	@:killer('M-SAFE-BISECT-OWN-BUDGET')
 	public function testTwoCulpritsInOppositeHalvesOfALargeWaveAreBothIsolated(): Void {
-		final changed: Array<String> = [for (i in 0...200) '/p/F$i.hx'];
+		final changed: Array<String> = [ for (i in 0...200) '/p/F$i.hx' ];
 		final culprits: Array<String> = ['/p/F99.hx', '/p/F100.hx'];
 		var probes: Int = 0;
 		final outcome: SafePassNarrowing = LintFixSafePass.isolate(
@@ -290,7 +290,7 @@ class LintFixSafeIsolateTest extends Test {
 		);
 		switch outcome {
 			case Bisected(cut, spent):
-				Assert.same(culprits, [for (culprit in cut) culprit.file]);
+				Assert.same(culprits, [ for (culprit in cut) culprit.file ]);
 				Assert.equals(probes, spent);
 			case other:
 				Assert.fail('expected Bisected, got $other');

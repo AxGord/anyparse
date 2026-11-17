@@ -38,7 +38,7 @@ class ReachBuildsCacheTest extends Test {
 	};
 	private static final GEN_DEFINING: String =
 		'class Extra {\n\tpublic static function init():Void\n\t\thaxe.macro.Compiler.define(\'flash\', \'1\');\n}\n';
-	private static final DEEP_PACKAGE: String = [for (_ in 0...33) 'a'].join('.');
+	private static final DEEP_PACKAGE: String = [ for (_ in 0...33) 'a' ].join('.');
 	#end
 
 	/**

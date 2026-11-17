@@ -361,7 +361,7 @@ final class OracleCacheTest extends Test {
 			{ name: 'a.hxml', source: '-cp .\n-cp $ext\n-main Good\n' },
 			{ name: 'b.hxml', source: '-cp .\n-cp sub\n-main Good\n' }
 		]);
-		final alone: Array<Null<String>> = [for (h in ['b.hxml', 'a.hxml']) OracleCache.fingerprint(h, dir)];
+		final alone: Array<Null<String>> = [ for (h in ['b.hxml', 'a.hxml']) OracleCache.fingerprint(h, dir) ];
 		if (alone[0] == null) {
 			Assert.pass('no fingerprint on this host — skipped');
 		} else {

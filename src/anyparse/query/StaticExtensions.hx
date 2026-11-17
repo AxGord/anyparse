@@ -217,7 +217,7 @@ final class StaticExtensions {
 		if (!_members.declarationLacksMember(receiver, name)) return null;
 		final own: ExtensionStep = typeStep(receiver, receiver, name, []);
 		if (own != Passed) return bound(own);
-		final ambient: Array<ImportInfo> = [for (group in fi.ambientImports) for (u in reversedUsings(group.imports)) u];
+		final ambient: Array<ImportInfo> = [ for (group in fi.ambientImports) for (u in reversedUsings(group.imports)) u ];
 		for (u in reversedUsings(fi.imports).concat(ambient)) {
 			final step: ExtensionStep = pathStep(u.raw, receiver, name);
 			if (step != Passed) return u.guarded ? null : bound(step);

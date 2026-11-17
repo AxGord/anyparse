@@ -97,7 +97,7 @@ final class LanguageChoice {
 		final positionals: Array<Int> = command.flags().positionals(args);
 		if (command is LeadingQueryCount) {
 			final texts: Int = cast(command, LeadingQueryCount).leadingQueryCount(args);
-			return [for (n => i in positionals) if (n >= texts) i];
+			return [ for (n => i in positionals) if (n >= texts) i ];
 		}
 		if (!(command is LeadingQuery)) return positionals;
 		final separator: Int = CliArgs.nameSeparatorIndex(args);
@@ -138,7 +138,7 @@ final class LanguageChoice {
 	private static function ownFiles(
 		lang: String, args: Array<String>, files: Array<Int>, held: Null<Map<String, Array<String>>>
 	): Array<String> {
-		return [for (i => arg in args) if (!files.contains(i) || owns(lang, arg, held)) arg];
+		return [ for (i => arg in args) if (!files.contains(i) || owns(lang, arg, held)) arg ];
 	}
 
 	/**

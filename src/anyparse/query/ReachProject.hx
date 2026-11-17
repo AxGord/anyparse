@@ -75,7 +75,7 @@ final class ReachProject {
 	 */
 	public function readThrough(view: Null<FactsView>): Void {
 		facts = view;
-		final idle: Array<String> = [for (f in files) if (runsInNoBuild(f.file)) f.file];
+		final idle: Array<String> = [ for (f in files) if (runsInNoBuild(f.file)) f.file ];
 		if (idle.length > 0) index = index.without(idle);
 	}
 

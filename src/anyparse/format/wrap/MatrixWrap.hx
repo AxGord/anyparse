@@ -82,14 +82,14 @@ final class MatrixWrap {
 	 */
 	public static function cellPads(items: Array<Doc>, lineRun: Int, mode: ArrayMatrixWrap): Array<Int> {
 		final n: Int = items.length;
-		if (mode != MatrixWrapWithAlign) return [for (_ in 0...n) 0];
-		final widths: Array<Int> = [for (i in 0...n) DocMeasure.flatTokenWidth(items[i])];
-		final maxCols: Array<Int> = [for (_ in 0...lineRun) 0];
+		if (mode != MatrixWrapWithAlign) return [ for (_ in 0...n) 0 ];
+		final widths: Array<Int> = [ for (i in 0...n) DocMeasure.flatTokenWidth(items[i]) ];
+		final maxCols: Array<Int> = [ for (_ in 0...lineRun) 0 ];
 		for (i in 0...n) {
 			final c: Int = i % lineRun;
 			if (widths[i] > maxCols[c]) maxCols[c] = widths[i];
 		}
-		return [for (i in 0...n) maxCols[i % lineRun] - widths[i]];
+		return [ for (i in 0...n) maxCols[i % lineRun] - widths[i] ];
 	}
 
 	/**

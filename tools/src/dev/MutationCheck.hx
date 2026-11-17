@@ -234,7 +234,7 @@ final class MutationCheck {
 		var runSeconds: Float = 0;
 		var killers: Int = 0;
 		for (record in records) {
-			final cells: Array<String> = [for (cell in ~/\s+/g.split(record.trim())) if (cell != '') cell];
+			final cells: Array<String> = [ for (cell in ~/\s+/g.split(record.trim())) if (cell != '') cell ];
 			if (cells.length <= BUILD_CELL) continue;
 			final kind: String = cells[KIND_CELL];
 			count[kind] = (count[kind] ?? 0) + 1;
@@ -247,7 +247,7 @@ final class MutationCheck {
 		}
 		if (!count.keys().hasNext()) return null;
 		final kinds: Array<String> = BUILD_KINDS.filter(k -> count.exists(k))
-			.concat([for (k in count.keys()) if (!BUILD_KINDS.contains(k)) k]);
+			.concat([ for (k in count.keys()) if (!BUILD_KINDS.contains(k)) k ]);
 		final builds: String = kinds.map(k -> ' $k builds ${count[k]} (mean ${Math.round((seconds[k] ?? 0) / (count[k] ?? 1))}s),')
 			.join('');
 		final killerNote: String = killers > 0 ? ', $killers answered killer-first' : '';
@@ -393,7 +393,7 @@ final class MutationCheck {
 	private static function duplicates(names: Array<String>): Array<String> {
 		final seen: Map<String, Int> = [];
 		for (name in names) seen[name] = (seen[name] ?? 0) + 1;
-		final twice: Array<String> = [for (name => n in seen) if (n > 1) name];
+		final twice: Array<String> = [ for (name => n in seen) if (n > 1) name ];
 		twice.sort(Compare.compareString);
 		return twice;
 	}

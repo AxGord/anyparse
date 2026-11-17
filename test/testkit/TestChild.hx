@@ -41,7 +41,7 @@ class TestChild {
 		final input: String = sys.io.File.getContent(Sys.getEnv('APQ_TEST_CHILD_INPUT') ?? '');
 		switch role {
 			case 'prepare':
-				final configs: Array<OracleConfig> = [for (c in TestChildDocumentParser.parse(input).configs ?? []) oracleConfig(c)];
+				final configs: Array<OracleConfig> = [ for (c in TestChildDocumentParser.parse(input).configs ?? []) oracleConfig(c) ];
 				final ready: Array<OracleConfig> = OracleGeneration.prepare(configs).oracles;
 				OracleGeneration.release(ready);
 				final unavailable: Array<JValue> = [

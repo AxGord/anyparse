@@ -611,7 +611,7 @@ final class MemberKinds {
 	 */
 	public static function classLikeContainerKinds(shape: RefShape): Array<String> {
 		final all: Array<String> = shape.visibilityContainerKinds ?? [];
-		return [for (k in all) if (k != 'AbstractDecl' && k != 'EnumAbstractDecl') k];
+		return [ for (k in all) if (k != 'AbstractDecl' && k != 'EnumAbstractDecl') k ];
 	}
 
 	/**

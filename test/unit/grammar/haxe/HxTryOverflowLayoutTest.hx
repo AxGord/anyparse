@@ -49,7 +49,7 @@ final class HxTryOverflowLayoutTest extends Test {
 
 	@:pin('guard')
 	public function testAStatementBelowATryLaysOutAsOutsideATry(): Void {
-		final cells: Array<String> = [for (c in ['a', 'b', 'c', 'd', 'e']) c.lpad('x', 16)];
+		final cells: Array<String> = [ for (c in ['a', 'b', 'c', 'd', 'e']) c.lpad('x', 16) ];
 		final stmt: String = 'if (foo([${cells.join(', ')}])) x();';
 		final src: String = inClass([
 			'final a: Int = try run(function() { $stmt }) catch (e: Any) null;',
@@ -143,7 +143,7 @@ final class HxTryOverflowLayoutTest extends Test {
 
 	@:pin('guard')
 	public function testAWideArrayIsAFixedPointInOnePass(): Void {
-		final wide: String = '[' + [for (i in 0...9) 'xxxxxxxxxxxxxx$i'].join(', ') + ']';
+		final wide: String = '[' + [ for (i in 0...9) 'xxxxxxxxxxxxxx$i' ].join(', ') + ']';
 		for (stmt in [
 			'final a: Int = try run($wide) catch (e: Any) null;',
 			'final a: Int = try run(first, $wide) catch (e: Any) null;',
@@ -237,7 +237,7 @@ final class HxTryOverflowLayoutTest extends Test {
 	}
 
 	private static function filler(length: Int): String {
-		return [for (_ in 0...length) 'a'].join('');
+		return [ for (_ in 0...length) 'a' ].join('');
 	}
 
 	private static function inClass(stmt: String): String {

@@ -21,7 +21,7 @@ final class Excerpt {
 
 	/** The non-blank lines of `text`, trailing whitespace removed. */
 	public static function linesOf(text: String): Array<String> {
-		return [for (line in text.split('\n')) if (line.trim() != '') line.rtrim()];
+		return [ for (line in text.split('\n')) if (line.trim() != '') line.rtrim() ];
 	}
 
 	/** The last `count` non-blank lines of `text`. */

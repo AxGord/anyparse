@@ -666,7 +666,7 @@ final class MoveFamilyCaptureTest extends Test {
 	private function capture(result: MoveResult, expected: Array<{ file: String, source: String }>): Void {
 		switch result {
 			case Ok(changes, _):
-				final got: String = [for (c in changes) c.file].join(', ');
+				final got: String = [ for (c in changes) c.file ].join(', ');
 				Assert.equals(expected.length, changes.length, 'changed-file count, got $got');
 				for (e in expected) {
 					final change: Null<MoveChange> = changes.find(c -> c.file == e.file);

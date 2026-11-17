@@ -199,7 +199,7 @@ final class UsingScan {
 		// The element nullability is LOAD-BEARING and must not be "cleaned up" by filtering the
 		// nulls out: an unlocatable region would then leave `regions` empty and the verdict would
 		// flip from `Guarded` to `Absent` — from refusing to splicing a second `using`.
-		final regions: Array<Null<Span>> = [for (g in header.guardedUsings) if (bindsModule(g.decl.name, module)) g.region];
+		final regions: Array<Null<Span>> = [ for (g in header.guardedUsings) if (bindsModule(g.decl.name, module)) g.region ];
 		if (regions.length == 0) return UsingScope.Absent;
 		// Ask BEFORE the loop, which passes vacuously on an empty array and would answer `InScope`.
 		if (offsets.length == 0) return UsingScope.Guarded;

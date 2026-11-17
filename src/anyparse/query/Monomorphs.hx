@@ -111,7 +111,7 @@ final class Monomorphs {
 		return switch [a, b] {
 			case [Mono(x), Mono(y)]: find(x) == find(y);
 			case [Of(x, xs, _), Of(y, ys, _)]:
-				AbstractCasts.same(x, y) && xs.length == ys.length && [for (i in 0...xs.length) i].foreach(i -> same(xs[i], ys[i]));
+				AbstractCasts.same(x, y) && xs.length == ys.length && [ for (i in 0...xs.length) i ].foreach(i -> same(xs[i], ys[i]));
 			case _: false;
 		};
 	}
@@ -137,7 +137,7 @@ final class Monomorphs {
 	public static function cellsOf(term: TypeTerm): Array<Int> {
 		return switch term {
 			case Mono(id): [id];
-			case Of(_, args, _): [for (a in args) for (m in cellsOf(a)) m];
+			case Of(_, args, _): [ for (a in args) for (m in cellsOf(a)) m ];
 			case Opaque(_, monos): monos.copy();
 		};
 	}

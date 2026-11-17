@@ -140,7 +140,7 @@ final class ExtractInterfaceCommand implements CliCommand {
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
-					CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }]);
+					CliIo.writeFiles([ for (c in changes) { path: c.file, content: c.newSource } ]);
 					CliIo.stderr('apq extract-interface: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) CliIo.sysPrint('${c.file}: ${c.file == ifaceFile ? 'created' : 'updated'}\n');

@@ -191,7 +191,7 @@ final class ParenGuard {
 		// Fast path: the raw splice is already faithful everywhere. The same
 		// probe also names the sites that are NOT, so the needy set costs no
 		// parse of its own.
-		final bare: Null<Array<Bool>> = faithful(probe, [for (_ in sites) false]);
+		final bare: Null<Array<Bool>> = faithful(probe, [ for (_ in sites) false ]);
 		if (bare != null && !bare.contains(false)) return plain;
 
 		// A raw splice that does not parse AT ALL is today's loud failure
@@ -200,7 +200,7 @@ final class ParenGuard {
 		// minimisation take back what it can. `a is C` spliced into `$A < 5`
 		// reads `C < 5` as a type parameter and is unparseable; `(a is C) < 5`
 		// is the rewrite the user asked for.
-		final wrap: Array<Bool> = bare == null ? allLegal.copy() : [for (i in 0...sites.length) allLegal[i] && !bare[i]];
+		final wrap: Array<Bool> = bare == null ? allLegal.copy() : [ for (i in 0...sites.length) allLegal[i] && !bare[i] ];
 		var mask: Null<Array<Bool>> = wrap.contains(true) ? faithful(probe, wrap) : bare;
 		if (mask == null) return plain;
 		mask = repair(probe, wrap, mask);
@@ -309,7 +309,7 @@ final class ParenGuard {
 	private static function minimize(probe: Probe, wrap: Array<Bool>, initial: Array<Bool>): Array<Bool> {
 		final perEdit: Map<Int, Int> = [];
 		for (i in 0...wrap.length) if (wrap[i]) perEdit[probe.sites[i].edit] = (perEdit[probe.sites[i].edit] ?? 0) + 1;
-		final order: Array<Int> = [for (i in 0...probe.sites.length) i];
+		final order: Array<Int> = [ for (i in 0...probe.sites.length) i ];
 		order.sort((a, b) -> probe.sites[b].position - probe.sites[a].position);
 		var best: Array<Bool> = wrap;
 		var mask: Array<Bool> = initial;
@@ -366,10 +366,10 @@ final class ParenGuard {
 	 * `canonicalize`, which re-derives the same text.
 	 */
 	private static function buildVariant(source: String, edits: Array<GuardedEdit>, wrap: Array<Bool>, delims: ParenDelimiters): Variant {
-		final order: Array<Int> = [for (e in 0...edits.length) e];
+		final order: Array<Int> = [ for (e in 0...edits.length) e ];
 		order.sort((a, b) -> edits[a].span.from - edits[b].span.from);
 		final sites: Array<Site> = enumerateSites(edits);
-		final spans: Array<Null<Span>> = [for (_ in sites) null];
+		final spans: Array<Null<Span>> = [ for (_ in sites) null ];
 		final pairs: Map<String, Bool> = [];
 		final openLen: Int = delims.open.length;
 		final out: StringBuf = new StringBuf();

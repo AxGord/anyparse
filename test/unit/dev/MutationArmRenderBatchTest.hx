@@ -56,7 +56,7 @@ final class MutationArmRenderBatchTest extends Test {
 		TempDir.with(dir -> {
 			final trace: String = dir.file('trace');
 			final stub: String = stubIn(dir, 'fs.appendFileSync("$trace", "S"); setTimeout(() => fs.appendFileSync("$trace", "E"), 400);');
-			final files: Array<String> = [for (i in 0...3) batchFile(dir, '$i')];
+			final files: Array<String> = [ for (i in 0...3) batchFile(dir, '$i') ];
 			Assert.isNull(MutationArm.applyBatches(stub, files, dir.file('repo'), 1, 60000));
 			Assert.equals('SESESE', File.getContent(trace));
 		});
@@ -108,7 +108,7 @@ final class MutationArmRenderBatchTest extends Test {
 		TempDir.with(dir -> {
 			final trace: String = dir.file('trace');
 			final stub: String = stubIn(dir, 'fs.appendFileSync("$trace", "S"); process.exit(1);');
-			final files: Array<String> = [for (i in 0...2) batchFile(dir, '$i')];
+			final files: Array<String> = [ for (i in 0...2) batchFile(dir, '$i') ];
 			Assert.notNull(MutationArm.applyBatches(stub, files, dir.file('repo'), 1, TIMEOUT_MS));
 			Assert.equals('SSS', File.getContent(trace), 'both first runs and the one rerun of the first batch');
 		});

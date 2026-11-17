@@ -428,7 +428,7 @@ class MemberReachFactsTest extends Test {
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ Gen.calm(); /*>*/ }\n\t}\n}\n';
 		final hub: String = plain ? '' : '--macro addGlobalMetadata("", "@:build(Mac.hub())")\n';
 		// in build order: the first build's copy is where its facts place a node first
-		final names: Array<String> = [for (b in ['a', 'b']) ownDirs ? 'gen/$b/build_$b.hxml' : 'build_$b.hxml'];
+		final names: Array<String> = [ for (b in ['a', 'b']) ownDirs ? 'gen/$b/build_$b.hxml' : 'build_$b.hxml' ];
 		final hxmls: Map<String, String> = [];
 		for (b in ['a', 'b']) {
 			if (ownDirs)
@@ -437,7 +437,7 @@ class MemberReachFactsTest extends Test {
 				hxmls['build_$b.hxml'] = '-cp .\n-cp gen/$b\n-main Main\n--js out_$b.js\n$hub';
 		}
 		final library: Map<String, String> = [];
-		final unindexed: Map<String, String> = [for (name => text in hxmls) name => text];
+		final unindexed: Map<String, String> = [ for (name => text in hxmls) name => text ];
 		for (name => text in copies) {
 			if ((unread ?? []).contains(name))
 				unindexed['gen/$name/Gen.hx'] = text
@@ -3635,7 +3635,7 @@ class MemberReachFactsTest extends Test {
 		function calls(fixture: Map<String, String>, ?build: String, ?unindexed: Map<String, String>, listed: Bool): Array<String> {
 			return withReach(fixture, both, true, false, build, null, unindexed, listed, (reach, dir) -> {
 				final facts: Array<FactNode> = reach.graph().facts?.faceted['Grid.run'] ?? [];
-				[for (n in facts) for (c in n.calls) c.target ?? ''];
+				[ for (n in facts) for (c in n.calls) c.target ?? '' ];
 			});
 		}
 		for (read in [calls(branches, true), calls(files, PER_BUILD_CLASSPATH, picker, true)])
@@ -3837,7 +3837,7 @@ class MemberReachFactsTest extends Test {
 				+ (pushes ? ' Push.one(); ' : '')
 				+ '}\n}\n'
 				+ 'class Push {\n\tpublic static function one():Void Main.items.push(1);\n}\n';
-			final members: String = [for (m in bDeclares) '\tpublic static function $m():Void {}\n'].join('');
+			final members: String = [ for (m in bDeclares) '\tpublic static function $m():Void {}\n' ].join('');
 			final files: Map<String, String> = [
 				'Main.hx' => '$LOOP_HEAD\tstatic function main() {\n\t\ta.Grid.go();\n\t\tb.Grid.n++;\n\t}\n}\n',
 				'a/Grid.hx' => grid,
@@ -4322,7 +4322,7 @@ class MemberReachFactsTest extends Test {
 			'touch -',
 			'touch -',
 			'- escape'
-		], [for (k in known) verdict(k.split(' ')[0], k.split(' ')[1])]);
+		], [ for (k in known) verdict(k.split(' ')[0], k.split(' ')[1]) ]);
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\tsum(items);\n\t}\n\n\tstatic function calm():Void {}\n\n\tstatic function sum(a:Array<Int>):Int {\n'
 			+ '\t\tvar n:Int = 0;\n\t\tfor (x in a) n += x;\n\t\treturn n + a.length + a[0];\n\t}\n}\n';
@@ -4842,7 +4842,7 @@ class MemberReachFactsTest extends Test {
 		// the parts it joins, whatever their files, so the range starts in
 		// `Map.hx` and ends in `Util.hx` only then, as in the client corpus
 		final doc: String = '/**\n\t * '
-			+ [for (_ in 0...70) 'The enum value of the box a key maps to, converted.'].join('\n\t * ')
+			+ [ for (_ in 0...70) 'The enum value of the box a key maps to, converted.' ].join('\n\t * ')
 			+ '\n\t */\n\t';
 		final files: Map<String, String> = utilWith(
 			'${doc}public static function other(m:Map<String, Box>, k:String):String return \'x $${m[k].e}\';', ['Box.hx' => box]
@@ -5475,13 +5475,14 @@ class MemberReachFactsTest extends Test {
 		question: (MemberReach, String) -> T, ?declared: Map<String, String>, ?reflective: Array<String>, ?holders: Array<String>,
 		?hxmls: Array<String>
 	): T {
-		final entries: Array<{ name: String, source: String }> = [for (name => text in files) { name: name, source: text }];
+		final entries: Array<{ name: String, source: String }> = [ for (name => text in files) { name: name, source: text } ];
 		for (name => text in library ?? []) entries.push({ name: name, source: text });
 		for (name => text in unindexed ?? []) entries.push({ name: name, source: text });
 		entries.push({ name: 'build.hxml', source: build ?? BUILD });
 		final dir: String = CliFixture.writeTree('reach_facts', entries);
-		final oracles: Array<OracleConfig> =
-			hxmls == null ? [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }] : [
+		final oracles: Array<OracleConfig> = hxmls == null
+			? [ for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d } ]
+			: [
 				for (h in hxmls) {
 					hxml: Path.withoutDirectory(h),
 					dir: Path.directory(h) == '' ? dir : Path.join([dir, Path.directory(h)]),
@@ -5491,16 +5492,16 @@ class MemberReachFactsTest extends Test {
 		final facts: Null<CompilerFacts> = withFacts ? TypedFactsProbe.probeAll(oracles) : null;
 		final edit: Null<CompilerFacts -> Void> = factsEdit;
 		if (facts != null && edit != null) edit(facts);
-		lastDropped = facts == null ? [] : [for (d in facts.dropped) '${d.name}: ${d.reason}'];
+		lastDropped = facts == null ? [] : [ for (d in facts.dropped) '${d.name}: ${d.reason}' ];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final project: Array<{ file: String, source: String }> = [for (name => text in files) {
+		final project: Array<{ file: String, source: String }> = [ for (name => text in files) {
 			file: Path.join([dir, name]),
 			source: text
-		}];
+		} ];
 		final libraries: Array<{ file: String, source: String }> = [
 			for (name => text in library ?? []) { file: Path.join([dir, name]), source: text }
 		];
-		final std: Array<{ file: String, source: String }> = [for (name => text in STD_STAND_INS) { file: name, source: text }];
+		final std: Array<{ file: String, source: String }> = [ for (name => text in STD_STAND_INS) { file: name, source: text } ];
 		for (name => text in declared ?? []) std.push({ file: name, source: text });
 		final index: SymbolIndex = CheckFixture.index(project.concat(libraries).concat(std), plugin);
 		// the builds as a run probes them: every define each one sees, the target's and the compiler's included

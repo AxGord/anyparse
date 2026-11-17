@@ -180,7 +180,7 @@ final class LibraryCalls {
 			_scope.plugin.typeSyntax
 		);
 		final values: Array<String> =
-			[for (t in (_scope.shape.literalTypeNames ?? []).iterator()) t].concat(_scope.shape.nonNullableTypeNames ?? []);
+			[ for (t in (_scope.shape.literalTypeNames ?? []).iterator()) t ].concat(_scope.shape.nonNullableTypeNames ?? []);
 		return _scope.plugin.typeSyntax(typeSource)?.holdsFunction() != true && nominal != null && values.contains(nominal);
 	}
 

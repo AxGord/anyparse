@@ -154,7 +154,7 @@ final class ImportBindings {
 	public function boundByType(type: TypeDeclInfo, file: FileInfo): Array<String> {
 		final bare: Array<String> = _plugin.refShape().bareConstructorTypeKinds ?? [];
 		final values: Null<Array<String>> = bare.contains(type.kind) || type.isEnumAbstract ? typeValuesOf(type, file, [], true) : null;
-		return [type.name].concat(values ?? [for (m in type.members) if (MemberKinds.isEnumConstructorKind(m.kind)) m.name]);
+		return [type.name].concat(values ?? [ for (m in type.members) if (MemberKinds.isEnumConstructorKind(m.kind)) m.name ]);
 	}
 
 	/**
@@ -190,7 +190,7 @@ final class ImportBindings {
 			typeValues: typeValuesOf(r.type, r.file, [], unseenAsNone),
 			fieldValues: []
 		};
-		final ownerFields: Array<String> = [for (file in filesOf(owner)) for (name in moduleFieldsOf(file)) name];
+		final ownerFields: Array<String> = [ for (file in filesOf(owner)) for (name in moduleFieldsOf(file)) name ];
 		final owners: Array<TypeDeclInfo> = typesNamed(owner);
 		final member: Bool = ownerFields.contains(leaf)
 			|| (owners.length > 0 && owners.foreach(t -> t.members.exists(m -> m.name == leaf)));
@@ -245,7 +245,7 @@ final class ImportBindings {
 			types: [],
 			wildcardTypes: [],
 			typeValues: [],
-			fieldValues: [for (m in type.members) if (!statics || m.isStatic) m.name]
+			fieldValues: [ for (m in type.members) if (!statics || m.isStatic) m.name ]
 		};
 	}
 
@@ -268,7 +268,7 @@ final class ImportBindings {
 		if (!abstracts.contains(type.kind)) return type.members.map(m -> m.name);
 		if (!type.isEnumAbstract) return [];
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
-		return [for (m in type.members) if (!m.isStatic && fields.contains(m.kind)) m.name];
+		return [ for (m in type.members) if (!m.isStatic && fields.contains(m.kind)) m.name ];
 	}
 
 	/**
@@ -344,7 +344,7 @@ final class ImportBindings {
 		final fields: Null<Array<String>> = binding?.fieldValues;
 		return binding == null || values == null || fields == null
 			? null
-			: [for (name in binding.types.concat(values).concat(fields)) if (name != keep) name];
+			: [ for (name in binding.types.concat(values).concat(fields)) if (name != keep) name ];
 	}
 
 	/**
@@ -398,7 +398,7 @@ final class ImportBindings {
 
 	/** The union of `a` and `b`, null when either cannot be listed. */
 	private static function union(a: Null<Array<String>>, b: Null<Array<String>>): Null<Array<String>> {
-		return a == null || b == null ? null : a.concat([for (name in b) if (!a.contains(name)) name]);
+		return a == null || b == null ? null : a.concat([ for (name in b) if (!a.contains(name)) name ]);
 	}
 
 }

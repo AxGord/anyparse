@@ -47,7 +47,7 @@ final class PositiveSinks {
 		final execution: Null<ExecutionShape> = plugin.refShape().execution;
 		// a type every member of which blocks is the pattern naming them all
 		final calls: Array<String> = (execution?.blockingLibraryCalls ?? []).concat(
-			[for (t in execution?.blockingLibraryTypes ?? []) '$t.*']
+			[ for (t in execution?.blockingLibraryTypes ?? []) '$t.*' ]
 		);
 		final ids: Array<String> = [];
 		for (p in calls) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true && !ids.contains(id)) ids.push(id);
@@ -89,7 +89,7 @@ final class PositiveSinks {
 					'nonBlocking entry "$pattern" names the project native "$id", which bears the name of a blocking library call'
 					+ ' — kept: a call of the library one the graph cannot tell apart from it resolves there'
 				);
-			final removed: Array<String> = [for (id in hit) if (!shadowing.contains(id)) id];
+			final removed: Array<String> = [ for (id in hit) if (!shadowing.contains(id)) id ];
 			for (id in removed) Groups.pushUnique(out, id);
 			// what the run's notice counts
 			if ((removed.length > 0 || walked?.waives(pattern) == true) && !_removers.contains(pattern)) _removers.push(pattern);

@@ -68,7 +68,9 @@ final class MoveCommand implements CliCommand {
 				// Only the WRITE path consumes `newSource`; a preview prints file names and a
 				// count, so canonicalising there would pay two writer passes per changed file
 				// for nothing observable.
-				final changes: Array<MoveChange> = write ? [for (c in rawChanges) canonicalMoveChange(cmd, c, plugin, ledger)] : rawChanges;
+				final changes: Array<MoveChange> = write
+					? [ for (c in rawChanges) canonicalMoveChange(cmd, c, plugin, ledger) ]
+					: rawChanges;
 				if (write) {
 					RegistryFollowCommand.writeFollowed(cmd, changes.map(c -> { path: c.file, content: c.newSource }), plugin);
 					CliIo.stderr('apq $cmd: wrote ${changes.length} file(s)\n');

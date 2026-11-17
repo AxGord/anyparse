@@ -131,7 +131,7 @@ final class ProcessSpawnAnswerTest extends Test {
 		#if nodejs
 		final count: Int = 4000;
 		withModule((log, _) -> {
-			final runs: Array<ProcessRun> = ProcessSpawn.runAll([for (_ in 0...count) { args: ['--version'] }], ROOMY, 4);
+			final runs: Array<ProcessRun> = ProcessSpawn.runAll([ for (_ in 0...count) { args: ['--version'] } ], ROOMY, 4);
 			Assert.equals(count, runs.length);
 			Assert.equals(count, runs.filter(run -> run.status == 7 && run.failure == '').length);
 		});

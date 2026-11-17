@@ -1735,8 +1735,8 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		// rendered width is not monotone in the segment count (a differently-quoted segment
 		// can flip a group's render mode and SHRINK it). Both passes need one consistent
 		// target to preserve, which this is.
-		final lastFit: Array<Int> = [for (_ in 0...count + 1) 0];
-		final minCount: Array<Int> = [for (_ in 0...count + 1) 0];
+		final lastFit: Array<Int> = [ for (_ in 0...count + 1) 0 ];
+		final minCount: Array<Int> = [ for (_ in 0...count + 1) 0 ];
 		var i: Int = count - 1;
 		while (i >= 0) {
 			var last: Int = i + 1;

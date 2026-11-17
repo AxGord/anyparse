@@ -229,7 +229,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		// in a configured resolution library reaches the index too), falling back to the report
 		// index when no resolution scope is configured.
 		final subtypeIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
-		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
+		final sourceByFile: Map<String, String> = [ for (f in files) f.file => f.source ];
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
@@ -318,7 +318,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		if (violations.length == 0 || index == null) return [];
 		final idx: SymbolIndex = index;
 		final subtypeIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? idx;
-		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
+		final sourceByFile: Map<String, String> = [ for (f in files) f.file => f.source ];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
 			final rename: Null<Array<CrossFileEdits>> = crossFileCollapseFor(v, sourceByFile, idx, subtypeIndex, plugin);

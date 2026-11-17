@@ -308,7 +308,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
 		final mutableKinds: Array<String> = shape.mutableFieldDeclKinds ?? [];
 		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
-		final constKinds: Array<String> = [for (k in fieldKinds) if (!mutableKinds.contains(k)) k];
+		final constKinds: Array<String> = [ for (k in fieldKinds) if (!mutableKinds.contains(k)) k ];
 		final staticKind: Null<String> = shape.staticModifierKind;
 		final numericKinds: Array<String> = shape.numericLiteralKinds ?? [];
 		if (staticKind == null || containerKinds.length == 0 || constKinds.length == 0 || numericKinds.length == 0) return null;
@@ -369,7 +369,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		if (candidates.length == 0) return candidates;
 		final names: Array<String> = [];
 		for (c in candidates) if (!names.contains(c.name)) names.push(c.name);
-		final mentioning: Array<{ file: String, source: String }> = [for (entry in files) if (mentionsAny(entry.source, names)) entry];
+		final mentioning: Array<{ file: String, source: String }> = [ for (entry in files) if (mentionsAny(entry.source, names)) entry ];
 		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(mentioning, plugin);
 		return [
 			for (c in candidates)

@@ -275,7 +275,7 @@ final class BatteryTest extends Test {
 				[{ name: 'suite', outcome: 'skipped' }, { name: 'corpus', outcome: 'passed' }],
 				report.steps.map(s -> { name: s.name, outcome: s.outcome })
 			);
-			final readings: Map<String, Int> = [for (r in report.readings) r.name => r.value];
+			final readings: Map<String, Int> = [ for (r in report.readings) r.name => r.value ];
 			Assert.equals(7, readings['tests'], 'the next base\'s suite counts are the gate\'s');
 			Assert.equals(3, readings['sweep-pass'], 'and its corpus counts are read off the gate\'s snapshot');
 		});

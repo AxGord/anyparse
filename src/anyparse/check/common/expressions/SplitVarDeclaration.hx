@@ -257,7 +257,7 @@ final class SplitVarDeclaration extends RuleBase {
 		var node: QueryNode = stmt;
 		var previous: Int = stmtSpan.from;
 		while (true) {
-			final more: Array<QueryNode> = [for (c in node.children) if (s.continuationKinds.contains(c.kind)) c];
+			final more: Array<QueryNode> = [ for (c in node.children) if (s.continuationKinds.contains(c.kind)) c ];
 			if (more.length == 0) break;
 			if (more.length > 1) return null;
 			final span: Null<Span> = more[0].span;

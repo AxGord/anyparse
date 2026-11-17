@@ -661,10 +661,10 @@ final class ProcessSpawn {
 	 */
 	public static function gcParams(declared: Null<String>, inherited: Null<String>): Null<String> {
 		final asked: String = declared == null || declared.trim() == '' ? DEFAULT_GC : declared.trim();
-		final own: Array<String> = asked == GC_OFF ? [] : [for (p in asked.split(',')) if (p.trim() != '') p.trim()];
+		final own: Array<String> = asked == GC_OFF ? [] : [ for (p in asked.split(',')) if (p.trim() != '') p.trim() ];
 		final kept: String = inherited == null ? '' : inherited.trim();
-		final taken: Array<String> = [for (p in kept.split(',')) if (p.trim() != '') paramName(p)];
-		final added: Array<String> = [for (p in own) if (!taken.contains(paramName(p))) p];
+		final taken: Array<String> = [ for (p in kept.split(',')) if (p.trim() != '') paramName(p) ];
+		final added: Array<String> = [ for (p in own) if (!taken.contains(paramName(p))) p ];
 		final all: Array<String> = (kept == '' ? [] : [kept]).concat(added);
 		return all.length == 0 ? null : all.join(',');
 	}

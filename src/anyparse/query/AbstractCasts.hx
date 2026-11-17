@@ -150,7 +150,9 @@ final class AbstractCasts {
 	public function coreGraph(name: String): Null<CastGraph> {
 		final core: Null<CoreValueTypes> = _core;
 		return core == null || !core.names.contains(name) || core.classNames.contains(name) ? null : {
-			branches: [{ from: [], to: [for (w in core.widens[name] ?? []) Core(w)], transitive: true }],
+			branches: [
+				{ from: [], to: [ for (w in core.widens[name] ?? []) Core(w) ], transitive: true }
+			],
 			fromFields: [],
 			toFields: [],
 			fieldsComplete: true
@@ -318,14 +320,14 @@ final class AbstractCasts {
 		if (!_abstractKinds.contains(r.type.kind) || clauses == null) return null;
 		if (clauses.exists(c -> c.typeSelected) || _handUnified.contains(SymbolIndex.typePath(r))) return null;
 		final branches: Array<CastBranch> = [
-			for (c in clauses) { from: [for (t in c.from) clauseEnd(t)], to: [for (t in c.to) clauseEnd(t)], transitive: c.transitive }
+			for (c in clauses) { from: [ for (t in c.from) clauseEnd(t) ], to: [ for (t in c.to) clauseEnd(t) ], transitive: c.transitive }
 		];
 		// a member of a type two branches declare may be another branch's; one under `#if` another build's
 		final single: Bool = clauses.length == 1;
 		final certain: MemberInfo -> Bool = m -> single && !m.guarded;
 		final fromFields: Array<CastField> = [];
 		final toFields: Array<CastField> = [];
-		final members: Array<MemberInfo> = [for (b in _builds.of(r)) for (m in membersOf(r, b)) m];
+		final members: Array<MemberInfo> = [ for (b in _builds.of(r)) for (m in membersOf(r, b)) m ];
 		for (m in members) if (MemberKinds.FN_DECL_KINDS.contains(m.kind)) {
 			if (_fromMeta != null && m.metaNames.contains(_fromMeta) && m.isStatic)
 				fromFields.push({ end: inwardEnd(m, r), certain: certain(m) });
@@ -397,7 +399,7 @@ final class AbstractCasts {
 		return switch [a, b] {
 			case [Declared(x), Declared(y)]: AncestorTable.same(x, y);
 			case [Applied(x, xs), Applied(y, ys)]:
-				AncestorTable.same(x, y) && xs.length == ys.length && [for (i in 0...xs.length) i].foreach(i -> same(xs[i], ys[i]));
+				AncestorTable.same(x, y) && xs.length == ys.length && [ for (i in 0...xs.length) i ].foreach(i -> same(xs[i], ys[i]));
 			case [Core(x), Core(y)]: x == y;
 			case [Dyn, Dyn]: true;
 			case _: false;

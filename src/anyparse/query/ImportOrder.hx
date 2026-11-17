@@ -423,7 +423,7 @@ final class ImportOrder {
 		if (gate == null) return runsOf(source, slotsOf(root));
 		final slots: Array<ImportSlot> = slotsOf(root).concat(slotsOfKind(root, ModuleScan.WILDCARD_IMPORT_KIND));
 		slots.sort((a, b) -> a.from - b.from);
-		return [for (run in runsOf(source, slots)) for (piece in gate.split(run)) piece];
+		return [ for (run in runsOf(source, slots)) for (piece in gate.split(run)) piece ];
 	}
 
 	/**
@@ -500,7 +500,7 @@ final class ImportOrder {
 	 * order is what Haxe reads in reverse, so these must not reach `compare` / `orderOf` / `slotIn`.
 	 */
 	public static function linesOfKinds(source: String, root: QueryNode, kinds: Array<String>): Null<Array<ImportLine>> {
-		final slots: Array<ImportSlot> = [for (kind in kinds) for (slot in slotsOfKind(root, kind)) slot];
+		final slots: Array<ImportSlot> = [ for (kind in kinds) for (slot in slotsOfKind(root, kind)) slot ];
 		slots.sort((a, b) -> a.from - b.from);
 		final out: Array<ImportLine> = [];
 		for (slot in slots) {

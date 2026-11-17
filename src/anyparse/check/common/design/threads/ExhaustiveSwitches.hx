@@ -274,7 +274,7 @@ final class ExhaustiveSwitches {
 		if (e.kind == _shape.ternaryKind && e.children.length == 3)
 			return valueOnly(e.children[1], values) && valueOnly(e.children[2], values);
 		if (!(_shape.switchKinds ?? []).contains(e.kind)) return false;
-		final branches: Array<QueryNode> = [for (b in e.children.slice(1)) b];
+		final branches: Array<QueryNode> = [ for (b in e.children.slice(1)) b ];
 		return branches.length > 0 && branches.foreach(b -> b.children.length > 0 && valueOnly(b.children[b.children.length - 1], values));
 	}
 
@@ -491,7 +491,7 @@ final class ExhaustiveSwitches {
 	 * then holds null. A function nothing calls hands nothing.
 	 */
 	private function callersPassValues(fn: QueryNode, param: QueryNode, file: String, closed: ClosedAbstract): Bool {
-		final params: Array<QueryNode> = [for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in fn.children) if ((_shape.paramKinds ?? []).contains(c.kind)) c ];
 		final index: Int = params.indexOf(param);
 		final id: Null<String> = _trees.functionOf(file, fn);
 		if (index < 0 || id == null) return false;
@@ -526,7 +526,7 @@ final class ExhaustiveSwitches {
 		final values: Null<Array<QueryNode>> = if (site.kind == _shape.callKind && site.children.length > 0)
 			ArgumentValues.receiverPassesNothing(_graph, _shape, site, edge.to) ? site.children.slice(1) : null
 		else if (site.kind == _shape.newExprKind)
-			[for (c in site.children) if (!_typeKinds.contains(c.kind)) c]
+			[ for (c in site.children) if (!_typeKinds.contains(c.kind)) c ]
 		else if (parent != null && parent.kind == _shape.assignKind && parent.children.length == 2 && parent.children[0] == site)
 			[parent.children[1]]
 		else

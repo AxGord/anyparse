@@ -118,7 +118,7 @@ class PairedShapeLowering {
 
 	/** Rule names in a deterministic order, so generated field order does not follow Map iteration order. */
 	private function sortedRuleNames(): Array<String> {
-		final names: Array<String> = [for (name in _shape.rules.keys()) name];
+		final names: Array<String> = [ for (name in _shape.rules.keys()) name ];
 		names.sort((a: String, b: String) -> if (a < b)
 			-1
 		else if (a > b)
@@ -186,7 +186,7 @@ class PairedShapeLowering {
 	private function ctorPattern(rule: String, ctor: String, argNames: Array<String>): Expr {
 		final path: Array<String> = synthPackOf(_shape.root, SPANS_SUBPACK)
 			.concat([SYNTH_MODULE_LEAF, simpleName(rule) + PAIRED_SUFFIX, ctor]);
-		final args: Array<Expr> = [for (n in argNames) ident(n)];
+		final args: Array<Expr> = [ for (n in argNames) ident(n) ];
 		args.push(ident(SPAN_FIELD));
 		return { expr: ECall(haxe.macro.MacroStringTools.toFieldExpr(path), args), pos: Context.currentPos() };
 	}

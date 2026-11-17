@@ -278,7 +278,7 @@ final class ModuleScan {
 	 * name binding a different type in one build configuration.
 	 */
 	private static function bulkImportDecls(root: QueryNode, guarded: Array<QueryNode>): Array<QueryNode> {
-		final out: Array<QueryNode> = [for (c in root.children) if (BULK_IMPORT_KINDS.contains(c.kind)) c];
+		final out: Array<QueryNode> = [ for (c in root.children) if (BULK_IMPORT_KINDS.contains(c.kind)) c ];
 		for (c in guarded) if (BULK_IMPORT_KINDS.contains(c.kind)) out.push(c);
 		return out;
 	}

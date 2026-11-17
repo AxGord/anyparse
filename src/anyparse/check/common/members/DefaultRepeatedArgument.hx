@@ -273,7 +273,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 		}
 		add(plan.declFile, { span: new Span(plan.paramEnd, plan.paramEnd), text: ' = ${plan.constant}' });
 		for (site in plan.sites) add(site.file, { span: new Span(site.cutFrom, site.cutTo), text: '' });
-		return [for (file => edits in byFile) { file: file, edits: edits }];
+		return [ for (file => edits in byFile) { file: file, edits: edits } ];
 	}
 
 	// ---- census ----------------------------------------------------------------------------
@@ -292,7 +292,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 					if (!provenNonNull(call.children[i], owner, entry, scope, seams)) nullable['$called#${i - 1}'] = true;
 			final member: Null<MemberInfo> = resolveCallee(call, callees, scope);
 			if (member == null) return;
-			final args: Array<QueryNode> = [for (i in 1...call.children.length) call.children[i]];
+			final args: Array<QueryNode> = [ for (i in 1...call.children.length) call.children[i] ];
 			// Only the LAST argument is a candidate: Haxe binds arguments by position, so cutting any
 			// earlier one slides every argument after it into the slot before — `d(K.T, 1)` becomes
 			// `d(1)` — which compiles whenever the types agree and is a different call.
@@ -474,7 +474,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			file: entry.file,
 			owner: owner,
 			name: name,
-			params: [for (c in decl.children) if (seams.paramKinds.contains(c.kind)) c],
+			params: [ for (c in decl.children) if (seams.paramKinds.contains(c.kind)) c ],
 			isStatic: staticKind != null && run.contains(staticKind),
 			plain: !blocked
 			&& name != seams.constructorName

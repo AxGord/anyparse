@@ -131,7 +131,7 @@ final class CallGraphImports {
 	public function staticExtensionsOf(file: String, member: String): Array<String> {
 		final held: Null<HeldFile> = _held(file);
 		final usings: Array<String> = held == null ? [] : held.index.typing.extensions.usingTypes(held.info);
-		return [for (u in usings) if (_isStatic(u, member)) u];
+		return [ for (u in usings) if (_isStatic(u, member)) u ];
 	}
 
 	/**

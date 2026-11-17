@@ -82,7 +82,7 @@ final class RuleScopeTest extends Test {
 	}
 
 	public function testMoreRulesThanTheCapRunAll(): Void {
-		final names: Array<String> = [for (i in 0...60) 'R$i'];
+		final names: Array<String> = [ for (i in 0...60) 'R$i' ];
 		final sources: Array<ImpactSource> = names.map(name ->
 			rule(name, quoted(name.toLowerCase()), 'anyparse.check.scan.Walk', 'Walk.go()')
 		)

@@ -32,7 +32,7 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 	@:killer('M-DEFAULT-ARRAY-IGNORE')
 	public function testASourceBrokenArrayLiteralCollapses(): Void {
 		Assert.equals('class C {\n\tstatic var a = [1, 2];\n}', write('class C {\n\tstatic var a = [\n\t\t1,\n\t\t2\n\t];\n}'));
-		final cells: Array<String> = [for (i in 1...4) 'aaaaaaaaaaaaaaaaaaaaaaaaa$i'];
+		final cells: Array<String> = [ for (i in 1...4) 'aaaaaaaaaaaaaaaaaaaaaaaaa$i' ];
 		Assert.equals(
 			'class C {\n\tstatic var a = [${cells.join(', ')}];\n}',
 			write('class C {\n\tstatic var a = [\n\t\t${cells.join(',\n\t\t')}\n\t];\n}')
@@ -47,7 +47,7 @@ final class HxListLayoutByWidthDefaultTest extends Test {
 			"class C {\n\tstatic var m = ['a' => 1, 'b' => 2];\n}",
 			write("class C {\n\tstatic var m = [\n\t\t'a' => 1,\n\t\t'b' => 2\n\t];\n}")
 		);
-		final pairs: Array<String> = [for (i in 1...4) '\'aaaaaaaaaaaaaaaaaaa$i\' => $i'];
+		final pairs: Array<String> = [ for (i in 1...4) '\'aaaaaaaaaaaaaaaaaaa$i\' => $i' ];
 		Assert.equals(
 			'class C {\n\tstatic var m = [${pairs.join(', ')}];\n}',
 			write('class C {\n\tstatic var m = [\n\t\t${pairs.join(',\n\t\t')}\n\t];\n}')

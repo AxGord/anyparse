@@ -162,7 +162,7 @@ class ComplexityCheckTest extends Test {
 		// A flat 30-way dispatcher — each case a single call — is ONE decision (which
 		// arm is taken), not 30. Under the old per-case count it scored 31 and flagged;
 		// the cognitive-switch count scores it 2, so a command dispatcher is not a false hotspot.
-		final arms: String = [for (i in 0...30) '\t\t\tcase $i: run$i();'].join('\n');
+		final arms: String = [ for (i in 0...30) '\t\t\tcase $i: run$i();' ].join('\n');
 		final src: String = 'class C {\n\tfunction dispatch(x:Int):Void {\n\t\tswitch x {\n$arms\n\t\t\tcase _: none();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
@@ -171,7 +171,7 @@ class ComplexityCheckTest extends Test {
 		// The switch is +1, but branches INSIDE a case body still count via recursion — a
 		// switch whose arm carries a 20-`&&` chain scores 22 and stays flagged, so the
 		// exemption removes only case-count inflation, never real branching.
-		final chain: String = [for (_ in 0...21) 'a'].join(' && ');
+		final chain: String = [ for (_ in 0...21) 'a' ].join(' && ');
 		final src: String = 'class C {\n\tfunction f(a:Bool):Bool {\n\t\tswitch a {\n\t\t\tcase true: return $chain;\n'
 			+ '\t\t\tcase _: return false;\n\t\t}\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
@@ -185,7 +185,7 @@ class ComplexityCheckTest extends Test {
 		// by KIND, not by "has a case child", so that wrapper is NOT counted as a second
 		// switch. 18 `&&` + this switch scores exactly 20 (not flagged); the old wrapper
 		// double-count would have tipped it to 21 (flagged).
-		final chain: String = [for (_ in 0...19) 'a'].join(' && ');
+		final chain: String = [ for (_ in 0...19) 'a' ].join(' && ');
 		final src: String = 'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = $chain;\n\t\tswitch x {\n\t\t\t#if debug\n'
 			+ '\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
@@ -232,7 +232,7 @@ class ComplexityCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-VOCAB-WHILE-EXPR-NOT-BRANCH')
 	public function testWhileExpressionCounted(): Void {
-		final chain: String = [for (_ in 0...20) 'a'].join(' && ');
+		final chain: String = [ for (_ in 0...20) 'a' ].join(' && ');
 		for (loop in [
 			'while (a) a = false;',
 			'final g = () -> while (a) a = false;',
@@ -250,7 +250,7 @@ class ComplexityCheckTest extends Test {
 
 	/** A one-method class whose body chains `n` `&&` operands — score `n + 1`. */
 	private static function chained(n: Int): String {
-		return 'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn ' + [for (_ in 0...n + 1) 'a'].join(' && ') + ';\n\t}\n}';
+		return 'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn ' + [ for (_ in 0...n + 1) 'a' ].join(' && ') + ';\n\t}\n}';
 	}
 
 }

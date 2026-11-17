@@ -46,7 +46,7 @@ final class TokenSpans {
 	 * A region never counts, so a name inside a string or a comment is not a token of it.
 	 */
 	public static function wordOffsets(spans: Array<TokenSpan>, source: String, name: String): Array<Int> {
-		return [for (span in spans) if (spellsWord(span, source, name)) span.from];
+		return [ for (span in spans) if (spellsWord(span, source, name)) span.from ];
 	}
 
 	/**

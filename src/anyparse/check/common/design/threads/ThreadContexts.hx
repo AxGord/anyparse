@@ -45,7 +45,7 @@ final class ThreadContexts {
 	) {
 		this.byFile = byFile;
 		final listsOf: (String) -> ChainLists = ThreadSafety.listsOfFile.bind(byFile);
-		unresolvedNames = [for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n];
+		unresolvedNames = [ for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n ];
 		final sealedSlots: Array<String> = deriveStoredCalls(graph, unresolvedNames);
 		trees = new FunctionTrees(graph, plugin);
 		conditions = new EdgeConditions(
@@ -181,7 +181,7 @@ final class ThreadContexts {
 	 */
 	private static function deriveStoredCalls(graph: CallGraph, unresolvedNames: Array<String>): Array<String> {
 		final sealed: Array<String> = [];
-		final stores: Array<CallEdge> = [for (e in graph.edges) if (e.kind == Ref && e.storedInto != null) e];
+		final stores: Array<CallEdge> = [ for (e in graph.edges) if (e.kind == Ref && e.storedInto != null) e ];
 		for (store in stores) {
 			final slotId: String = store.storedInto ?? '';
 			final slot: Null<FnNode> = graph.node(slotId);

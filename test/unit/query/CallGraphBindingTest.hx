@@ -23,7 +23,7 @@ class CallGraphBindingTest extends Test {
 			'package app; class Mine extends sys.thread.Lock { public function new() super(); }',
 			'package app; class U { static function run(m:Mine):Void m.wait(); }'
 		]);
-		final out: Array<String> = [for (e in g.outEdges('U.run')) if (e.kind == Call) e.to];
+		final out: Array<String> = [ for (e in g.outEdges('U.run')) if (e.kind == Call) e.to ];
 		Assert.same(['Mine.wait'], out, 'a placeholder on the type, never the project namesake\'s method');
 	}
 
@@ -42,7 +42,7 @@ class CallGraphBindingTest extends Test {
 			+ ' function g<T:Foo>(x:T) return new Bar(); g(f).run(); } static function n(f:Foo):Void b(f).run(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -70,7 +70,7 @@ class CallGraphBindingTest extends Test {
 		}
 		final lock: String = 'package utils; class Lock { public function new() {} public function wait():Bool return true; }';
 		function targets(g: CallGraph, from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -122,7 +122,7 @@ class CallGraphBindingTest extends Test {
 			+ ' function helper():Void { go(); only(); } function take(f:()->Void):Void {} function hands():Void take(go);'
 		]);
 		function targets(from: String, kind: EdgeKind): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == kind) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == kind) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
@@ -141,7 +141,7 @@ class CallGraphBindingTest extends Test {
 			'package app; class R extends N { override public function m():Void {} }',
 			'package app; class U { static function run(t:T):Void t.m(); }'
 		]);
-		final out: Array<String> = [for (e in g.outEdges('U.run')) if (e.kind == Virtual) e.to];
+		final out: Array<String> = [ for (e in g.outEdges('U.run')) if (e.kind == Virtual) e.to ];
 		Assert.same(['R.m'], out, 'the override of a class extending the alias');
 	}
 
@@ -187,14 +187,14 @@ class CallGraphBindingTest extends Test {
 		g.addFiles([files[main]]);
 		g.addFiles([files[main + 1]]);
 		function targets(from: String, kind: EdgeKind = Call): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == kind) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == kind) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}
 		Assert.same(['Lock.wait'], targets('Main.f'), 'the #if a body runs its own code');
 		Assert.same(['Other.wait'], targets('Main.f@2'), 'the #elseif b body is a node of its own');
 		Assert.same(['B.f', 'Main.f', 'Main.f@2'], targets('Main.viaModule'), 'module-level code: each body, and the import');
-		Assert.same([], [for (u in g.unresolved) if (u.from == 'Main.viaModule') u.reason], 'nothing unresolved there');
+		Assert.same([], [ for (u in g.unresolved) if (u.from == 'Main.viaModule') u.reason ], 'nothing unresolved there');
 		Assert.same(['B.f', 'Main.f', 'Main.f@2'], targets('Main.call'), 'the main class sees no member f: the module\'s');
 		Assert.same(['Main.f'], targets('InA.call'), 'a use in #if a binds the #if a body');
 		Assert.same(['B.f', 'Main.f@2'], targets('NotA.call'), 'its #else: the #elseif body, or the import');
@@ -204,7 +204,7 @@ class CallGraphBindingTest extends Test {
 		Assert.same(['Main.g'], targets('Main.viaG'), 'the build declaring a function runs its body');
 		Assert.same(
 			['FunctionValue(g)'],
-			[for (u in g.unresolved) if (u.from == 'Main.viaG') Std.string(u.reason)],
+			[ for (u in g.unresolved) if (u.from == 'Main.viaG') Std.string(u.reason) ],
 			'the other runs the value its var holds'
 		);
 		Assert.same(['Lock.wait', 'Main.make'], targets('Typed.call'), 'a call of the one function a use binds is of its return type');
@@ -232,7 +232,7 @@ class CallGraphBindingTest extends Test {
 		]);
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final g: CallGraph = CallGraph.build(files, plugin, SymbolIndex.build(files, plugin));
-		final virtual: Array<String> = [for (e in g.outEdges('User.call')) if (e.kind == Virtual) e.to];
+		final virtual: Array<String> = [ for (e in g.outEdges('User.call')) if (e.kind == Virtual) e.to ];
 		virtual.sort(Reflect.compare);
 		Assert.same(['Sub.m', 'Sub.n'], virtual, 'each call its own override');
 		Assert.same(['Sub.m'], g.virtualTargets('Base', 'm'));

@@ -587,7 +587,7 @@ final class SymbolIndexBuilder {
 	private static function forwardedArgsOf(meta: QueryNode, shape: RefShape, pending: Null<Array<String>>): Null<Array<String>> {
 		return meta.name != shape.forwardingDeclMetaName || meta.children.length == 0
 			? pending
-			: [for (c in meta.children) if (c.name != null) c.name ?? ''];
+			: [ for (c in meta.children) if (c.name != null) c.name ?? '' ];
 	}
 
 	/**
@@ -692,7 +692,7 @@ final class SymbolIndexBuilder {
 		final all: Null<Array<String>> = shape.visibilityModifierKinds;
 		if (all == null) return [];
 		final publicKind: Null<String> = shape.publicModifierKind;
-		return [for (kind in all) if (kind != publicKind) kind];
+		return [ for (kind in all) if (kind != publicKind) kind ];
 	}
 
 	/**
@@ -946,7 +946,7 @@ final class SymbolIndexBuilder {
 
 	/** Every entry of `a`, then each of `b` it lacks. */
 	private static function union(a: Array<String>, b: Array<String>): Array<String> {
-		return a.concat([for (x in b) if (!a.contains(x)) x]);
+		return a.concat([ for (x in b) if (!a.contains(x)) x ]);
 	}
 
 	/**
@@ -1220,7 +1220,7 @@ final class SymbolIndexBuilder {
 		});
 		final out: Array<Reification> = [];
 		for (typeName => names in byType) {
-			final spelled: Array<String> = [for (name in names.keys()) name];
+			final spelled: Array<String> = [ for (name in names.keys()) name ];
 			spelled.sort(Compare.compareString);
 			out.push({ typeName: typeName, names: spelled });
 		}

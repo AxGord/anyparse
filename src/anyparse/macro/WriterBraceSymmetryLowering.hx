@@ -113,7 +113,7 @@ final class WriterBraceSymmetryLowering {
 		// `$a{…}` in a call-argument position SPLICES its elements as separate arguments — build the
 		// array literal itself, so the callee receives ONE `Array<String>`.
 		final skipArray: Expr = {
-			expr: EArrayDecl([for (c in args.slice(VALUE_BRACE_SYMMETRY_MIN_ARGS)) macro $v{c}]),
+			expr: EArrayDecl([ for (c in args.slice(VALUE_BRACE_SYMMETRY_MIN_ARGS)) macro $v{c} ]),
 			pos: Context.currentPos()
 		};
 		final blockCtor: String = args[1];

@@ -118,7 +118,7 @@ final class HxArrowBlockIfOverflowSliceTest extends Test {
 	}
 
 	private static function padding(width: Int): String {
-		return [for (_ in 0...width) 'x'].join('');
+		return [ for (_ in 0...width) 'x' ].join('');
 	}
 
 	private static function blockIfArrow(pad: Int): String {

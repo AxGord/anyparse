@@ -3569,6 +3569,14 @@
 			"find": "args.length == 2 ? args[1] : 'optionalSemicolon'",
 			"replace": "'optionalSemicolon'",
 			"note": "the typedef `;` follows `optionalSemicolon` instead of its own key, so `optionalSemicolon: always` writes it after a structure that `typedefSemicolon: never` asked to drop"
+		},
+		{
+			"name": "M-COMPR-FIT-CASCADE-PADDING-ONLY",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepNoTriviaBranch",
+			"find": "(opt.comprehensionFit ?? (opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After))",
+			"replace": "(opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After)",
+			"note": "the fit cascade keys on the padding again, so comprehensionFit: false still reflows a padded comprehension by fit"
 		}
 	]
 }

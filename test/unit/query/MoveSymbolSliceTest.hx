@@ -2820,7 +2820,7 @@ class MoveSymbolSliceTest extends Test {
 			case Ok(changes, _):
 				// The whole changed set, not just the absence of one file: an assertion that only says
 				// "Reader is missing" also passes for a move that stopped writing anything at all.
-				final touched: Array<String> = [for (c in changes) c.file];
+				final touched: Array<String> = [ for (c in changes) c.file ];
 				touched.sort(Reflect.compare);
 				Assert.equals('a/Thing.hx,b/Holder.hx', touched.join(','), 'the file whose only mention is a comment is untouched');
 			case Err(message):

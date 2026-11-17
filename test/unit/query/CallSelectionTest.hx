@@ -41,7 +41,7 @@ class CallSelectionTest extends Test {
 	public function testAFunctionsSignaturesAreItsOwnThenEachAnnotations(): Void {
 		final f: MemberInfo = member('f')[0];
 		Assert.equals(3, f.signatures.length);
-		Assert.same(['Int'], [for (p in f.signatures[0].params) p.type], 'its own first');
+		Assert.same(['Int'], [ for (p in f.signatures[0].params) p.type ], 'its own first');
 		Assert.equals('Void', f.signatures[0].returnSource);
 		final first: CallSignature = f.signatures[1];
 		Assert.same(['String', 'Int', 'Float'], first.params.map(p -> p.type), 'then the annotations in written order');
@@ -50,7 +50,7 @@ class CallSelectionTest extends Test {
 		Assert.same(['T'], first.typeParamNames);
 		Assert.equals(FIXTURE.indexOf('function<T:Int>'), first.at, 'written at the annotation\'s function');
 		Assert.equals('Int -> Void', f.signatures[2].returnSource, 'a function type returned, trimmed');
-		Assert.same([ParamForm.Rest], [for (p in member('r')[0].signatures[0].params) p.form], 'the rest parameter');
+		Assert.same([ParamForm.Rest], [ for (p in member('r')[0].signatures[0].params) p.form ], 'the rest parameter');
 		final p: Null<ResolvedType> = index().refs.findDeclaredType('p/O.hx', 'P');
 		final g: Null<MemberInfo> = p?.type.members.find(m -> m.name == 'g');
 		Assert.isNull(g?.signatures[0].returnSource, 'no return type, though `<T:Int>` writes a type beside it');

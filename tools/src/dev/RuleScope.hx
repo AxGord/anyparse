@@ -84,7 +84,7 @@ final class RuleScope {
 		if (touched.length == 0 || touched.exists(path -> !path.startsWith(CHECK_DIR))) return null;
 		final declared: DeclaredTypes = SuiteImpact.declaredTypes(sources);
 		if (declared.unparsed.exists(path -> path.startsWith(ENGINE_DIR))) return null;
-		final texts: Map<String, String> = [for (s in sources) s.path => s.text];
+		final texts: Map<String, String> = [ for (s in sources) s.path => s.text ];
 		final registered: Array<String> = registeredIn(sources);
 		final registry: String = registryRest(texts[REGISTRY] ?? '');
 		final ids: Array<String> = [];

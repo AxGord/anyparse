@@ -159,7 +159,7 @@ final class LockReleasers {
 		final give: CallEdge = given.edge;
 		final id: String = give.from;
 		final at: Int = give.span?.from ?? -1;
-		final takes: Array<LockAcquire> = [for (a in _holds) if (a.edge.from == id && a.lock == lock) a];
+		final takes: Array<LockAcquire> = [ for (a in _holds) if (a.edge.from == id && a.lock == lock) a ];
 		final others: Array<CallEdge> = [
 			for (g in _sites.gives) if (g.edge.from == id && g.lock == lock && g.edge != give) g.edge
 		];

@@ -100,7 +100,7 @@ final class GateReuse {
 
 	/** The names of the steps that passed; a skipped row measured nothing, so it covers nothing. */
 	public static function passedRows(steps: Array<Step>): Array<String> {
-		return [for (step in steps) if (step.outcome.match(Passed)) step.name];
+		return [ for (step in steps) if (step.outcome.match(Passed)) step.name ];
 	}
 
 	/** The tree id of `rev` in `repo`. */

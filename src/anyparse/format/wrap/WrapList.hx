@@ -144,6 +144,14 @@ typedef WrapListOptions = {
 	var ?comprehensionFitMeasure: Bool;
 
 	/**
+	 * ω-comprehension-block-hug: whether a sole block-body comprehension hugs its brackets
+	 * (`[ for (…) {` … `} ]`). Absent follows the bracket padding, the fork's
+	 * `comprehensionFor: fitLine` coupling; an explicit value lets a config pad the
+	 * brackets and still keep `[` / `]` on their own lines.
+	 */
+	var ?comprehensionBlockHug: Bool;
+
+	/**
 	 * ω-comprehension-body-measure: this list is a `for`/`while` array comprehension,
 	 * whatever cascade resolves it. Carries the `groupifyInlineBodies` half of
 	 * `comprehensionFitMeasure` — and only that half — to the comprehensions the fit
@@ -161,7 +169,7 @@ typedef WrapListOptions = {
 	 * parity answer.
 	 *
 	 * The split is a strict WIDENING, and one line at the caller is why:
-	 * `_comprehensionFit = _isComprehension && opt.comprehensionBracketsOpen == After`. So
+	 * `_comprehensionFit = _isComprehension && (opt.comprehensionFit ?? padded)`. So
 	 * `comprehensionFitMeasure` cannot hold where this one does not, and no comprehension
 	 * that already had the re-tag can lose it. The rest-probe half stays with
 	 * `comprehensionFitMeasure` alone — it answers for the fit cascade's single
@@ -236,6 +244,7 @@ private typedef ResolvedWrapListOptions = {
 	final sepBeforeFlags: Null<Array<Bool>>;
 	final flatTrailingComma: Bool;
 	final comprehensionFitMeasure: Bool;
+	final comprehensionBlockHug: Null<Bool>;
 	final comprehensionBodyMeasure: Bool;
 	final complexItemKinds: Null<Array<Int>>;
 	final containerItemKinds: Null<Array<Null<Array<Int>>>>;
@@ -1907,7 +1916,7 @@ class WrapList {
 				// Re-bound: Strict does not carry a loop-mutated `var`'s narrowing
 				// into the comprehension below.
 				final arm: Null<Doc> = found;
-				return arm == null ? null : Concat([for (i in 0...parts.length) i == idx ? arm : parts[i]]);
+				return arm == null ? null : Concat([ for (i in 0...parts.length) i == idx ? arm : parts[i] ]);
 			case _:
 				return null;
 		}
@@ -2082,6 +2091,9 @@ class WrapList {
 		// from `emit` for the same reason as the knob above. Default `false` keeps
 		// every non-threaded caller byte-identical.
 		soleItemCuddledBrackets: Bool = false,
+		// ω-comprehension-block-hug: the list's `comprehensionBlockHug` axis; null
+		// (every non-threaded caller) follows the bracket padding as before.
+		?comprehensionBlockHug: Bool,
 		// ω-complex-item-count (D2): the per-element AST classification, read by
 		// the fill-mode CHUNK policy in `shapeFillLine` / `shapeFillLineWith
 		// LeadingBreak`. Forwarded through `shapeMultiArgCollection` because its
@@ -2119,7 +2131,7 @@ class WrapList {
 			: replaceArrowMarker(items[last], (_, _, fl) -> WrapBoundary(fl));
 		final braceLedIdx: Int = flatLast == null ? -1 : last;
 		final list: Array<Doc> = flatLast == null ? items : items.slice(0, last).concat([flatLast]);
-		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(open, close, list, openInside, closeInside);
+		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(comprehensionBlockHug, open, close, list, openInside, closeInside);
 		if (comprBlockHug != null) return comprBlockHug;
 		final comprCuddledOpen: Null<Doc> = shapeComprehensionCuddledOpen(
 			comprehensionCuddledOpen, mode, open, close, sep, list, openInside, cols, appendTrailingComma, trailBreak, sepBeforeFlags,
@@ -2608,7 +2620,7 @@ class WrapList {
 		// break nothing decided and the next pass reads it back differently.
 		final fitArm: Null<Doc> = thresholdArm != null ? null : renderPivotBreakArm(items[collIdx], true);
 		final collArm: Null<Doc> = thresholdArm ?? fitArm;
-		final glueItems: Array<Doc> = collArm == null ? items : [for (i in 0...items.length) i == collIdx ? collArm : items[i]];
+		final glueItems: Array<Doc> = collArm == null ? items : [ for (i in 0...items.length) i == collIdx ? collArm : items[i] ];
 		final glueShape: Doc = multiArgBlockLambdaGlueShape(
 			open, close, sep, glueItems, openInside, closeInside, sepBeforeFlags, flatTrailingComma
 		);
@@ -2834,7 +2846,7 @@ class WrapList {
 			case _:
 		}
 		if (opIdx < 0) return null;
-		final headParts: Array<Doc> = [for (i in 0...opIdx + 1) arr[i]];
+		final headParts: Array<Doc> = [ for (i in 0...opIdx + 1) arr[i] ];
 		// Body = everything after the operator, skipping a single leading OptSpace
 		// (the `_dop(' ')` post-arrow space the Pratt codegen emits).
 		final bodyParts: Array<Doc> = [];
@@ -3347,7 +3359,7 @@ class WrapList {
 		items: Array<Doc>, from: Int, to: Int, sep: String, softSep: Doc, sepBeforeFlags: Null<Array<Bool>>, tailReserve: Int,
 		make: (Array<Doc>, Doc, Int) -> Doc
 	): Doc {
-		final elided: Bool = [for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k)].contains(true);
+		final elided: Bool = [ for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k) ].contains(true);
 		final fillItems: Array<Doc> = elided ? [
 			for (k in from ... to) k + 1 < to && !skipSepBefore(sepBeforeFlags, k + 1) ? Concat([items[k], Text(sep)]) : items[k]
 		] : items.slice(from, to);
@@ -3699,7 +3711,7 @@ class WrapList {
 			items[0];
 		else if (
 			hasChunkOwnLine(items, complexItemKinds)
-			|| [for (i in 1...items.length) regionAfterElidedSep(items, i, sepBeforeFlags)].contains(true)
+			|| [ for (i in 1...items.length) regionAfterElidedSep(items, i, sepBeforeFlags) ].contains(true)
 		)
 			chunkedFill(sep, items, softSep, tailReserve, complexItemKinds, sepBeforeFlags);
 		else
@@ -4098,20 +4110,18 @@ class WrapList {
 	 * ω-comprehension-block-hug: a single-element array whose element is a
 	 * block-body `for` / `while` comprehension keeps `[ for (...) {` glued on
 	 * the head line (block body indents underneath, `} ]` closes) instead of
-	 * leading-breaking the `[`. Fires ONLY when the comprehension brackets are
-	 * PADDED (`openInside`/`closeInside` non-empty) — the runtime signal that
-	 * `sameLine.comprehensionFor == fitLine` (fork's coupling); under `same`
-	 * the brackets are tight and this returns null (no hug), preserving the
-	 * unpadded house-style layout.
+	 * leading-breaking the `[`. `hug` decides; null follows the PADDED brackets
+	 * (`openInside` non-empty), the runtime signal of the fork's
+	 * `sameLine.comprehensionFor: fitLine` coupling, so tight brackets never hug.
 	 */
 	private static function shapeComprehensionBlockHug(
-		open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc
+		hug: Null<Bool>, open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc
 	): Null<Doc> {
 		final padded: Bool = switch openInside {
 			case Empty: false;
 			case _: true;
 		};
-		return padded && items.length == 1 && isBlockBodyComprehensionItem(items[0])
+		return (hug ?? padded) && items.length == 1 && isBlockBodyComprehensionItem(items[0])
 			? Concat([
 				DelimiterLeaf.leaf(open),
 				openInside,
@@ -4384,7 +4394,7 @@ class WrapList {
 			case CollapseChainProbe(inner): CollapseChainProbe(groupifyShared(inner, memo));
 			case ConditionalMarkerZero(inner): ConditionalMarkerZero(groupifyShared(inner, memo));
 			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(groupifyShared(inner, memo));
-			case Concat(items): Concat([for (it in items) groupifyShared(it, memo)]);
+			case Concat(items): Concat([ for (it in items) groupifyShared(it, memo) ]);
 			case IfBreak(b, f): IfBreak(groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfWidthExceeds(n, b, f): IfWidthExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfFirstLineExceeds(n, b, f): IfFirstLineExceeds(n, groupifyShared(b, memo), groupifyShared(f, memo));
@@ -4415,11 +4425,11 @@ class WrapList {
 			case IfGluedFirstLineExceeds(n, bi, b, f): IfGluedFirstLineExceeds(n, bi, groupifyShared(b, memo), groupifyShared(f, memo));
 			case IfTrailingCommentOverflows(n, tw, c, b, f):
 				IfTrailingCommentOverflows(n, tw, groupifyShared(c, memo), groupifyShared(b, memo), groupifyShared(f, memo));
-			case Fill(items, sep, tr): Fill([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
+			case Fill(items, sep, tr): Fill([ for (it in items) groupifyShared(it, memo) ], groupifyShared(sep, memo), tr);
 			case FillWithRestProbe(items, sep, tr):
-				FillWithRestProbe([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
+				FillWithRestProbe([ for (it in items) groupifyShared(it, memo) ], groupifyShared(sep, memo), tr);
 			case FillBreakAfterWrap(items, sep, tr):
-				FillBreakAfterWrap([for (it in items) groupifyShared(it, memo)], groupifyShared(sep, memo), tr);
+				FillBreakAfterWrap([ for (it in items) groupifyShared(it, memo) ], groupifyShared(sep, memo), tr);
 		};
 		if (shared) memo.done.set(d, out);
 		return out;
@@ -4446,6 +4456,7 @@ class WrapList {
 
 			flatTrailingComma: axes.flatTrailingComma ?? false,
 			comprehensionFitMeasure: axes.comprehensionFitMeasure ?? false,
+			comprehensionBlockHug: axes.comprehensionBlockHug,
 			comprehensionBodyMeasure: axes.comprehensionBodyMeasure ?? false,
 			complexItemKinds: axes.complexItemKinds,
 			containerItemKinds: axes.containerItemKinds,
@@ -4485,6 +4496,7 @@ class WrapList {
 
 		final flatTrailingComma: Bool = axes.flatTrailingComma;
 		final comprehensionFitMeasure: Bool = axes.comprehensionFitMeasure;
+		final comprehensionBlockHug: Null<Bool> = axes.comprehensionBlockHug;
 		final comprehensionBodyMeasure: Bool = axes.comprehensionBodyMeasure;
 		final complexItemKinds: Null<Array<Int>> = axes.complexItemKinds;
 		final trailBreakDoc: Doc = axes.trailBreakDoc;
@@ -4607,7 +4619,8 @@ class WrapList {
 		function shapeAt(mode: WrapMode, lead: Doc): Doc {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
-				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets, chunkKinds
+				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets,
+				comprehensionBlockHug, chunkKinds
 			);
 			return prependLead(body, lead);
 		}

@@ -47,7 +47,7 @@ class GraphMermaidTest extends Test {
 		}
 		final read: Array<MmdLabel> = [];
 		collectLabels(MermaidParser.parse(GraphMermaid.write(graph)), read);
-		final expected: Array<MmdLabel> = [for (label in LABELS) for (_ in 0...2) Plain(label)];
+		final expected: Array<MmdLabel> = [ for (label in LABELS) for (_ in 0...2) Plain(label) ];
 		Assert.equals(MermaidAst.dump(expected), MermaidAst.dump(read));
 	}
 

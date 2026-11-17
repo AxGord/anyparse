@@ -261,7 +261,7 @@ final class ProcessSpawnTest extends Test {
 	@:pin('control')
 	@:killer('M-DRIVER-BOUND-IGNORES-ROUNDS')
 	public function testTheDriverBoundScalesWithTheJobs(): Void {
-		final short: Array<SpawnJob> = [for (_ in 0...3) { args: [], cwd: null, timeout: 1000 }];
+		final short: Array<SpawnJob> = [ for (_ in 0...3) { args: [], cwd: null, timeout: 1000 } ];
 		Assert.equals(2000, ProcessSpawn.driverBound(short, 1) - ProcessSpawn.driverBound(short, 3));
 		final open: Array<SpawnJob> = [{ args: [], cwd: null }];
 		Assert.isTrue(ProcessSpawn.driverBound(open, 1) > ProcessSpawn.driverBound([{ args: [], cwd: null, timeout: 60000 }], 1));

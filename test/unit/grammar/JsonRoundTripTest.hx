@@ -135,10 +135,10 @@ class JsonRoundTripTest extends Test {
 			case 3: JString(randomString(rng));
 			case 4:
 				final len: Int = rng.nextInt(4);
-				JArray([for (_ in 0...len) randomValue(rng, depth - 1)]);
+				JArray([ for (_ in 0...len) randomValue(rng, depth - 1) ]);
 			case 5:
 				final len: Int = rng.nextInt(4);
-				JObject([for (i in 0...len) { key: 'k$i', value: randomValue(rng, depth - 1) }]);
+				JObject([ for (i in 0...len) { key: 'k$i', value: randomValue(rng, depth - 1) } ]);
 			case _: JNull;
 		};
 	}

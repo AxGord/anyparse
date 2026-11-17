@@ -30,7 +30,7 @@ class EnumCtorRegionArmRenameTest extends Test {
 	public function testAnArmInsideARegionUnderAnUnprovenSubjectRefuses(): Void {
 		switch run(user('Dynamic')) {
 			case Ok(changes, _):
-				Assert.fail('expected a refusal, got Ok over ${[for (c in changes) c.file].join(', ')}');
+				Assert.fail('expected a refusal, got Ok over ${[ for (c in changes) c.file ].join(', ')}');
 			case Err(message):
 				Assert.isTrue(message.contains('is not proven to be the constructor'), message);
 		}
@@ -44,7 +44,7 @@ class EnumCtorRegionArmRenameTest extends Test {
 			+ '\t\t\t#end\n\t\t\tcase _: 1;\n\t\t}\n\t}\n}\n';
 		switch run(source) {
 			case Ok(changes, _):
-				Assert.fail('expected a refusal, got Ok over ${[for (c in changes) c.file].join(', ')}');
+				Assert.fail('expected a refusal, got Ok over ${[ for (c in changes) c.file ].join(', ')}');
 			case Err(message):
 				Assert.isTrue(message.contains('is not proven to be the constructor'), message);
 		}

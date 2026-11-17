@@ -322,7 +322,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			for (at in span.from ... span.to) if (source.fastCodeAt(at) == '\n'.code) lines++;
 			return lines;
 		}
-		final extent: Array<Int> = [for (m in members) extentOf(m.span)];
+		final extent: Array<Int> = [ for (m in members) extentOf(m.span) ];
 		var total: Int = 0;
 		for (n in extent) total += n;
 		// `sorted` is a permutation of `members`, so a common subsequence of the two is exactly an
@@ -551,9 +551,9 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static function constrainedSort(
 		members: Array<OrderedMember>, plan: SortPlan, constraints: Array<InitOrderConstraint>
 	): Array<OrderedMember> {
-		final indegree: Array<Int> = [for (_ in members) 0];
+		final indegree: Array<Int> = [ for (_ in members) 0 ];
 		for (c in constraints) indegree[c.after.index]++;
-		final taken: Array<Bool> = [for (_ in members) false];
+		final taken: Array<Bool> = [ for (_ in members) false ];
 		final out: Array<OrderedMember> = [];
 		while (out.length < members.length) {
 			var best: Int = -1;
@@ -611,7 +611,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static function initPin(
 		canonical: Array<OrderedMember>, sorted: Array<OrderedMember>, reported: OrderedMember, constraints: Array<InitOrderConstraint>
 	): Null<InitOrderConstraint> {
-		final at: Array<Int> = [for (_ in sorted) 0];
+		final at: Array<Int> = [ for (_ in sorted) 0 ];
 		for (i in 0...sorted.length) at[sorted[i].index] = i;
 		final violated: Null<InitOrderConstraint> = constraints.find(c -> at[c.after.index] < at[c.before.index]);
 		return if (violated != null)
@@ -655,7 +655,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	private static function conditionalRegionsCovered(
 		members: Array<OrderedMember>, source: String, regions: Array<LexRegion>, directives: Array<CondDirective>
 	): Bool {
-		final conditional: Array<OrderedMember> = [for (m in members) if (m.condition != null) m];
+		final conditional: Array<OrderedMember> = [ for (m in members) if (m.condition != null) m ];
 		return conditional.length == 0 || (
 			regionContentCovered(conditional, members, source, regions, directives)
 			&& uncoveredIsDirectiveOnly(
@@ -1134,8 +1134,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		if (index == null) return true;
 		final owner: Null<String> = container.name;
 		if (owner == null || !index.traits.transitivelyCarriesBuildMacro(owner, file)) return true;
-		final before: Array<Int> = [for (m in members) if (m.hasMeta) m.index];
-		final after: Array<Int> = [for (m in sorted) if (m.hasMeta) m.index];
+		final before: Array<Int> = [ for (m in members) if (m.hasMeta) m.index ];
+		final after: Array<Int> = [ for (m in sorted) if (m.hasMeta) m.index ];
 		return before.join(',') == after.join(',');
 	}
 

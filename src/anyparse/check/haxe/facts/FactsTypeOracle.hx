@@ -215,7 +215,7 @@ final class FactsTypeOracle implements FactsOracle {
 		final id: Null<String> = typeIdAt(file, expr, true) ?? (paren == null ? null : typeIdAt(file, paren, true));
 		final declared: Null<TypeFact> = id == null ? null : facts.type(id);
 		final shape: RefShape = _plugin.refShape();
-		final builtins: Array<String> = [for (name in shape.literalTypeNames ?? []) name].concat(shape.nonNullableTypeNames ?? []);
+		final builtins: Array<String> = [ for (name in shape.literalTypeNames ?? []) name ].concat(shape.nonNullableTypeNames ?? []);
 		return id != null
 			&& (builtins.contains(id) || (declared != null && declared.alike && FactKinds.NOMINAL_KINDS.contains(declared.kind)))
 			? SourceText.lastSegment(id)
@@ -499,7 +499,7 @@ final class FactsTypeOracle implements FactsOracle {
 	 * nested functions, inlined copies and macro-placed bodies are not the member's own.
 	 */
 	private function memberFunctions(site: FactsSite, at: Span, name: String): Array<FactNode> {
-		final owners: Array<String> = [for (t in typesIn(site)) if (within(at, t.span)) t.id];
+		final owners: Array<String> = [ for (t in typesIn(site)) if (within(at, t.span)) t.id ];
 		return [
 			for (n in site.facts.nodesIn(site.file))
 				if (
@@ -563,7 +563,7 @@ final class FactsTypeOracle implements FactsOracle {
 	): Null<FactsTypeOracle> {
 		final facts: Null<CompilerFacts> = runFacts(plugin);
 		if (facts == null) return null;
-		final current: Map<String, String> = [for (entry in files) entry.file => entry.source];
+		final current: Map<String, String> = [ for (entry in files) entry.file => entry.source ];
 		return new FactsTypeOracle(facts, file -> current[file], journalOf(plugin), plugin, fallback);
 	}
 

@@ -300,8 +300,8 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 		final all: Array<MemberAt> = membersOf(type, cfg);
 		final extent: Int = lineExtent(source, span);
 		// Leaving the constants out only ever LOWERS both measurements, so a type within both limits is never classified.
-		final constant: Array<Bool> = all.length > maxMembers || extent > maxLines ? cfg.constants(all) : [for (_ in all) false];
-		final names: Array<String> = [for (i => m in all) if (!constant[i]) m.node.name ?? ''];
+		final constant: Array<Bool> = all.length > maxMembers || extent > maxLines ? cfg.constants(all) : [ for (_ in all) false ];
+		final names: Array<String> = [ for (i => m in all) if (!constant[i]) m.node.name ?? '' ];
 		final members: Int = names.length;
 		final lines: Int = extent - constantLines(source, span.from, all, constant);
 		final over: Array<String> = [];
@@ -560,7 +560,7 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 		return members -> {
 			final built: Null<ConstantKit> = kit ?? constantKit(plugin, source, tree);
 			kit = built;
-			built == null ? [for (_ in members) false] : constantFlags(members, source, built);
+			built == null ? [ for (_ in members) false ] : constantFlags(members, source, built);
 		};
 	}
 
@@ -584,7 +584,7 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	 * on a pass that adds none — so a reference cycle stays out.
 	 */
 	private static function constantFlags(members: Array<MemberAt>, source: String, kit: ConstantKit): Array<Bool> {
-		final flags: Array<Bool> = [for (_ in members) false];
+		final flags: Array<Bool> = [ for (_ in members) false ];
 		final isConstantName: (String) -> Bool = name -> namesOnlyConstants(members, flags, name);
 		var grew: Bool = true;
 		while (grew) {

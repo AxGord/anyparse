@@ -19,10 +19,10 @@ class MemberGraphBuilderTest extends Test {
 	@:pin('control')
 	public function testChainsFoldLambdasIntoTheirMember(): Void {
 		final graph: CodeGraph = MemberGraphBuilder.chains(GraphFixture.calls(), ['Alpha.run'], 3, true, null);
-		Assert.equals('', [for (n in graph.nodes()) if (n.name.indexOf('#') >= 0) n.name].join(','), 'no lambda node');
+		Assert.equals('', [ for (n in graph.nodes()) if (n.name.indexOf('#') >= 0) n.name ].join(','), 'no lambda node');
 		Assert.isTrue(edges(graph).contains('pkg.a.Alpha.step -call-> pkg.b.Beta.make x1'));
 		Assert.isTrue(edges(graph).contains('pkg.a.Alpha.run -call-> pkg.a.Alpha.step x2'));
-		Assert.equals('pkg.a.Alpha.run', [for (n in graph.nodes()) if (n.focus) n.name].join(','));
+		Assert.equals('pkg.a.Alpha.run', [ for (n in graph.nodes()) if (n.focus) n.name ].join(','));
 	}
 
 	/** Each member sits in its type and the type in its package; an edge inside a member is dropped, its lambda's call is its own. */
@@ -81,7 +81,7 @@ class MemberGraphBuilderTest extends Test {
 		final calls: CallGraph = GraphFixture.calls();
 		final graph: CodeGraph = MemberGraphBuilder.paths(calls, Reach.paths(calls, ['Alpha.run'], ['Gamma.tick'], 10, [Call]));
 		Assert.equals('pkg.a.Alpha.run -call-> pkg.b.Beta.work x1|pkg.b.Beta.work -call-> pkg.b.Gamma.tick x1', edges(graph).join('|'));
-		Assert.equals('pkg.a.Alpha.run,pkg.b.Gamma.tick', [for (n in graph.nodes()) if (n.focus) n.name].join(','));
+		Assert.equals('pkg.a.Alpha.run,pkg.b.Gamma.tick', [ for (n in graph.nodes()) if (n.focus) n.name ].join(','));
 	}
 
 	/** `clusters` groups the members by component under their type, with the hubs in a group of their own. */
@@ -101,7 +101,7 @@ class MemberGraphBuilderTest extends Test {
 		final graph: CodeGraph = MemberGraphBuilder.clusters(calls, report);
 		final byParent: Map<String, Array<GraphNode>> = graph.nodesByParent();
 		final groups: Array<String> = [
-			for (g in graph.nodes()) if (g.level == Group) '${g.label}: ${[for (n in byParent[g.id] ?? []) n.label].join(',')}'
+			for (g in graph.nodes()) if (g.level == Group) '${g.label}: ${[ for (n in byParent[g.id] ?? []) n.label ].join(',')}'
 		];
 		Assert.equals('component 1: a,b|component 2: c,d|hubs: log', groups.join('|'));
 		Assert.isTrue(edges(graph).contains('A.a -call-> A.log x1'));

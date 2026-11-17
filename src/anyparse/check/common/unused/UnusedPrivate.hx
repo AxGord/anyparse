@@ -755,7 +755,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	): Void {
 		final shape: RefShape = plugin.refShape();
 		final build: Array<Int> = AnnotatedDeclScan.typeStartsAny(plugin, tree, shape.typeBuildMacroMetaNames);
-		final abstractClassKinds: Array<String> = [for (k in shape.classDeclKinds ?? []) if (k != shape.plainClassDeclKind) k];
+		final abstractClassKinds: Array<String> = [ for (k in shape.classDeclKinds ?? []) if (k != shape.plainClassDeclKind) k ];
 		forEachClassDecl(tree, shape, (classNode, name, siblings, index) -> {
 			// An abstract class is never instantiated by definition and its private
 			// empty ctor is the subclass-only idiom — `new` stays for `super()`.

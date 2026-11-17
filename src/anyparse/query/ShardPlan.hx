@@ -472,7 +472,7 @@ final class ShardPlan {
 		}
 		entries.sort(compareEntries);
 
-		final load: Array<Int> = [for (_ in 0...shards) 0];
+		final load: Array<Int> = [ for (_ in 0...shards) 0 ];
 		final out: Array<ShardPlacement> = [];
 		for (entry in entries) {
 			var target: Int = 0;
@@ -551,9 +551,9 @@ final class ShardPlan {
 			slices[p.cls] = seen;
 			counts[p.cls] = p.parts;
 		}
-		final placed: Array<String> = [for (cls => seen in slices) if (seen.length == (counts[cls] ?? 0)) cls];
+		final placed: Array<String> = [ for (cls => seen in slices) if (seen.length == (counts[cls] ?? 0)) cls ];
 		placed.sort(compareNames);
-		if (placed.length != expected.length || placed.length != [for (cls in slices.keys()) cls].length)
+		if (placed.length != expected.length || placed.length != [ for (cls in slices.keys()) cls ].length)
 			return '${TAG}PARITY FAIL — ${expected.length} registered classes, ${placed.length} placed whole or in every slice';
 		for (i in 0...expected.length) if (placed[i] != expected[i])
 			return '${TAG}PARITY FAIL — the shard plan does not cover the registered class list (${expected[i]} vs ${placed[i]})';

@@ -661,7 +661,7 @@ final class AstCommand implements CliCommand implements StdinDocument {
 		// `Did you mean: ParamCtor?` without re-reading the long
 		// `Kinds present here:` list. Silent when nothing close.
 		final firstKind: String = extractFirstKindToken(selectExpr);
-		final presentMap: Map<String, Bool> = [for (k in present) k => true];
+		final presentMap: Map<String, Bool> = [ for (k in present) k => true ];
 		final suggestions: Array<String> = firstKind.length > 0 ? CliWalk.findFuzzy(firstKind, presentMap) : [];
 		final fuzzyLine: String = suggestions.length > 0 ? ' Did you mean: ${suggestions.join(', ')}?' : '';
 		// Cross-project hint: when the first kind token starts uppercase

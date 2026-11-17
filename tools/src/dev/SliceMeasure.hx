@@ -95,7 +95,7 @@ final class SliceMeasure {
 	 * runs without the compiler oracle, which would build a revision the tool never built.
 	 */
 	private function clonesOf(copy: String): Int {
-		final roots: Array<String> = [for (root in _roots) if (FileSystem.exists(Path.join([copy, root]))) root];
+		final roots: Array<String> = [ for (root in _roots) if (FileSystem.exists(Path.join([copy, root]))) root ];
 		if (roots.length == 0) return 0;
 		var count: Int = 0;
 		for (rule in CLONE_RULES) {
@@ -125,7 +125,7 @@ final class SliceMeasure {
 	 * where they land — a module `before` already held, one the slice added, or outside the roots.
 	 */
 	public static function share(before: EdgeReading, after: EdgeReading): EdgeShare {
-		final held: Map<String, Bool> = [for (f in before.files) f => true];
+		final held: Map<String, Bool> = [ for (f in before.files) f => true ];
 		final out: EdgeShare = { added: 0, existing: 0, fresh: 0 };
 		for (key => target in after.edges) if (!before.edges.exists(key)) {
 			out.added++;
@@ -166,13 +166,13 @@ final class SliceMeasure {
 
 	private static function encodeEdges(reading: EdgeReading): String {
 		return EdgeReadingJsonWriter.write(
-			{ files: reading.files, edges: [for (key => target in reading.edges) [key, target]] }, JsonFormat.instance.compactWriteOptions
+			{ files: reading.files, edges: [ for (key => target in reading.edges) [key, target] ] }, JsonFormat.instance.compactWriteOptions
 		);
 	}
 
 	private static function decodeEdges(text: String): EdgeReading {
 		final parsed: EdgeReadingJson = EdgeReadingJsonParser.parse(text);
-		return { files: parsed.files, edges: [for (pair in parsed.edges) pair[0] => pair[1]] };
+		return { files: parsed.files, edges: [ for (pair in parsed.edges) pair[0] => pair[1] ] };
 	}
 
 }

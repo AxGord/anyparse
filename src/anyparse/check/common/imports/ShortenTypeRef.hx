@@ -445,7 +445,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 			});
 		}
 		final same: Array<Bool> = oracle.sameDeclarations(file, source, after, sites, spliced);
-		return [for (k => r in rewrites) if (!same[k]) spanKey(r.site)];
+		return [ for (k => r in rewrites) if (!same[k]) spanKey(r.site) ];
 	}
 
 	/** A span as the key `fix` matches a re-derived occurrence against the violation it was reported as. */
@@ -577,7 +577,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 			final importable: Bool = proven && runtimeUses > 0 && survivingUses >= options.importMinUses;
 			// `owned` is WHOLE-file too: the freeness exemption has to cover every byte range the file still spells as this
 			// path, suppressed ones included, or a suppressed occurrence's own last segment would veto the import.
-			final owned: Null<Array<Span>> = importable ? [for (o in occurrences) if (resolved[o.path] == path) o.span] : null;
+			final owned: Null<Array<Span>> = importable ? [ for (o in occurrences) if (resolved[o.path] == path) o.span ] : null;
 			final printed: PrintedTypeRef = printer.print(path, owned);
 			final mine: Array<Occurrence> = guardedTakes(printed, context) ? eligible : unguarded;
 			final kept: Array<Span> = keptTargets(printed.text, mine, context, index, file);
@@ -626,7 +626,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 
 	/** The spans of `kept` that belong to a VALUE site of `mine`. */
 	private static function valueSpans(mine: Array<Occurrence>, kept: Array<Span>): Array<Span> {
-		return [for (o in mine) if (o.valueSite != null && kept.contains(o.span)) o.span];
+		return [ for (o in mine) if (o.valueSite != null && kept.contains(o.span)) o.span ];
 	}
 
 	/**

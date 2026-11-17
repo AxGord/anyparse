@@ -238,7 +238,7 @@ final class CliRegistry {
 	public static function nearest(name: String): Array<String> {
 		// `findFuzzy` takes the pool as a Map because its walker callers hold one; the values
 		// carry nothing.
-		final pool: Map<String, Bool> = [for (c in commands()) c.name() => true];
+		final pool: Map<String, Bool> = [ for (c in commands()) c.name() => true ];
 		final direct: Array<String> = CliWalk.findFuzzy(name, pool);
 		return direct.length > 0 || !name.endsWith('s') ? direct : CliWalk.findFuzzy(name.substr(0, name.length - 1), pool);
 	}

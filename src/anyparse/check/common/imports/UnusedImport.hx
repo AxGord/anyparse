@@ -250,7 +250,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent implements R
 	public function riskyFix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [for (v in violations) if (v.span != null) { span: v.span, text: '' }];
+		return [ for (v in violations) if (v.span != null) { span: v.span, text: '' } ];
 	}
 
 	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
@@ -351,7 +351,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent implements R
 			source: source,
 			excluded: imports.map(imp -> imp.span).concat(comments),
 			commentRegions: comments,
-			matchMask: [for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to)],
+			matchMask: [ for (r in regions) if (r.kind == LexRegionKind.RegexLit) new Span(r.from, r.to) ],
 			sites: new UsingSites(source, plugin, file, index)
 		};
 	}
@@ -405,7 +405,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent implements R
 		// a secondary type / bare enum constructor stays live.
 		final resolveIndex: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
 		final moduleTypes: Map<String, Array<String>> = [];
-		for (info in resolveIndex.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
+		for (info in resolveIndex.allFiles()) moduleTypes[info.module] = [ for (t in info.types) t.name ];
 		final membersByPath: Map<String, Array<String>> = membersByImportPath(resolveIndex);
 		final projectFiles: Null<Array<{ file: String, source: String }>> = RefactorSupport.resolutionProjectSourcesOf(plugin);
 		final projectIndex: Null<SymbolIndex> = projectFiles == null ? null : IndexScope.over(projectFiles, plugin);
@@ -613,7 +613,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent implements R
 	/** Member names keyed by importable path (`module` for a main type, `module.Type` for a sub-module type). */
 	private static function membersByImportPath(index: SymbolIndex): Map<String, Array<String>> {
 		final map: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) for (t in info.types) map[ModuleScan.pathOfDecl(info, t)] = [for (m in t.members) m.name];
+		for (info in index.allFiles()) for (t in info.types) map[ModuleScan.pathOfDecl(info, t)] = [ for (m in t.members) m.name ];
 		return map;
 	}
 

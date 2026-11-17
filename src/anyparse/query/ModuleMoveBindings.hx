@@ -117,7 +117,7 @@ final class ModuleMoveBindings {
 	 */
 	public static function attachVirtualAmbient(index: SymbolIndex, plugin: GrammarPlugin): Void {
 		final files: Array<FileInfo> = index.allFiles();
-		final byFile: Map<String, FileInfo> = [for (fi in files) fi.file => fi];
+		final byFile: Map<String, FileInfo> = [ for (fi in files) fi.file => fi ];
 		for (fi in files) if (!ConfigFinder.fileExists(fi.file)) {
 			final groups: Array<AmbientImportGroup> = [];
 			var bounded: Bool = true;
@@ -143,8 +143,8 @@ final class ModuleMoveBindings {
 		pre: SymbolIndex, post: SymbolIndex, probes: Array<BindingProbe>, renamed: Map<String, String>, plugin: GrammarPlugin,
 		textBefore: Map<String, String>, textAfter: Map<String, String>, respelled: Map<String, Array<Int>>
 	): Array<BindingDrift> {
-		final preFiles: Map<String, FileInfo> = [for (fi in pre.allFiles()) fi.file => fi];
-		final postFiles: Map<String, FileInfo> = [for (fi in post.allFiles()) fi.file => fi];
+		final preFiles: Map<String, FileInfo> = [ for (fi in pre.allFiles()) fi.file => fi ];
+		final postFiles: Map<String, FileInfo> = [ for (fi in post.allFiles()) fi.file => fi ];
 		final mapped: (String) -> String = module -> renamed[module] ?? module;
 		final projectTypes: Map<String, String> = projectTypeModules(pre);
 		final out: Array<BindingDrift> = [];
@@ -200,8 +200,8 @@ final class ModuleMoveBindings {
 			plugin: plugin,
 			projectTypes: projectTypeModules(pre)
 		};
-		final preFiles: Map<String, FileInfo> = [for (fi in pre.allFiles()) fi.file => fi];
-		final postFiles: Map<String, FileInfo> = [for (fi in post.allFiles()) fi.file => fi];
+		final preFiles: Map<String, FileInfo> = [ for (fi in pre.allFiles()) fi.file => fi ];
+		final postFiles: Map<String, FileInfo> = [ for (fi in post.allFiles()) fi.file => fi ];
 		for (f in files) {
 			final moved: Bool = f.before != f.after;
 			final kept: (SubTypeSpelling) -> Bool = s -> moved || relocated.contains(s.head);

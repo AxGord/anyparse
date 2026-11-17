@@ -675,8 +675,8 @@ class MemberReachTest extends Test {
 		final base: String = 'class Base { public function new() {} public function go():Void {} }';
 		function run(complete: Bool, project: Array<String>, library: Array<String>): ReachResult {
 			final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-			final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
-			final libs: Array<{ file: String, source: String }> = [for (i in 0...library.length) { file: 'L$i.hx', source: library[i] }];
+			final files: Array<{ file: String, source: String }> = [ for (i in 0...project.length) { file: 'F$i.hx', source: project[i] } ];
+			final libs: Array<{ file: String, source: String }> = [ for (i in 0...library.length) { file: 'L$i.hx', source: library[i] } ];
 			libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
 			return new MemberReach(
 				plugin, files, CheckFixture.index(files.concat(libs), plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED,
@@ -2286,7 +2286,7 @@ class MemberReachTest extends Test {
 				'class Boot {\n\tstatic var hook = $fn {\n\t\tfunction create(config:Dynamic):Void {}\n'
 				+ '\t};\n\n\tpublic static function create(config:Dynamic):Void {}\n}\n'
 			);
-			final holders: Array<String> = [for (p in scan.memberParams(tree)) '${p.type}.${p.method}#${p.index}'];
+			final holders: Array<String> = [ for (p in scan.memberParams(tree)) '${p.type}.${p.method}#${p.index}' ];
 			Assert.equals('Boot.create#0', holders.join(', '), fn);
 		}
 	}
@@ -2320,7 +2320,7 @@ class MemberReachTest extends Test {
 		project: Array<String>, library: Null<Array<String>>, configurations: Array<ReachConfiguration>
 	): ReachResult {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
+		final files: Array<{ file: String, source: String }> = [ for (i in 0...project.length) { file: 'F$i.hx', source: project[i] } ];
 		final libs: Array<{ file: String, source: String }> = [
 			for (i in 0...(library ?? []).length) { file: 'L$i.hx', source: (library ?? [])[i] }
 		];
@@ -2349,7 +2349,7 @@ class MemberReachTest extends Test {
 
 	private function reachOf(project: Array<String>, library: Null<Array<String>>, scopeKnown: Bool): MemberReach {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final files: Array<{ file: String, source: String }> = [for (i in 0...project.length) { file: 'F$i.hx', source: project[i] }];
+		final files: Array<{ file: String, source: String }> = [ for (i in 0...project.length) { file: 'F$i.hx', source: project[i] } ];
 		final libs: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(library ?? []);
 		libs.push({ file: QueryTestHelpers.stdPath('Array.hx'), source: STD_ARRAY });
 		return new MemberReach(
@@ -2409,7 +2409,7 @@ class MemberReachTest extends Test {
 	private static function assertReachedAt(result: ReachResult, last: String): Void {
 		switch result {
 			case Reached(path):
-				Assert.isTrue(path.length > 0 && path[path.length - 1].to == last, [for (s in path) '${s.from}->${s.to}:${s.kind}'].join(
+				Assert.isTrue(path.length > 0 && path[path.length - 1].to == last, [ for (s in path) '${s.from}->${s.to}:${s.kind}' ].join(
 					' '
 				));
 			case _:

@@ -624,7 +624,7 @@ final class Battery {
 
 	/** Every row the battery reports, by the name `--allow` takes. */
 	public static function rowNames(): Array<String> {
-		return [for (rows in branches()) for (row in rows) row];
+		return [ for (rows in branches()) for (row in rows) row ];
 	}
 
 	/**

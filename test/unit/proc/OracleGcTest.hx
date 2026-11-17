@@ -90,7 +90,7 @@ final class OracleGcTest extends Test {
 	private function probe(env: Map<String, String>): Null<Array<String>> {
 		final dir: String = CliFixture.writeDir('oraclegc', [{ name: 'Main.hx', source: MAIN }]);
 		final args: Array<String> = ['-cp', dir, '--run', 'Main'];
-		final saved: Map<String, String> = [for (v in VARIABLES) v => Sys.getEnv(v) ?? ''];
+		final saved: Map<String, String> = [ for (v in VARIABLES) v => Sys.getEnv(v) ?? '' ];
 		var runs: Array<ProcessRun> = [];
 		CliFixture.always(() -> {
 			for (v => value in saved) Sys.putEnv(v, value);

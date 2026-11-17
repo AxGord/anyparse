@@ -97,7 +97,7 @@ final class TypeExtraction {
 			for (c in node.children) walk(c);
 		}
 		for (root in roots) walk(root);
-		return [for (k in found.keys()) k];
+		return [ for (k in found.keys()) k ];
 	}
 
 	/**

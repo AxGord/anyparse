@@ -178,7 +178,7 @@ final class FactsEscapes {
 		else if (bound == null)
 			[]
 		else
-			[for (t in bound) t];
+			[ for (t in bound) t ];
 	}
 
 	/**
@@ -501,7 +501,7 @@ final class FactsEscapes {
 	 * declaration naming nothing the builds typed, a misspelling or a class long gone.
 	 */
 	public static function unmatchedGlobs(table: CompilerFacts, globs: Array<String>): Array<String> {
-		return [for (g in globs) if (declaredClasses(table, [g]).length == 0) g];
+		return [ for (g in globs) if (declaredClasses(table, [g]).length == 0) g ];
 	}
 
 	/** The arguments `args` of the typed type `id` (`fact`), by the path a type parameter of it is spelled with (`$id.T`). */
@@ -515,9 +515,9 @@ final class FactsEscapes {
 	public static function substitute(t: FactsType, bound: Map<String, FactsType>): FactsType {
 		return switch t {
 			case Parameter(path): bound[path] ?? t;
-			case Named(name, args): Named(name, [for (a in args) substitute(a, bound)]);
+			case Named(name, args): Named(name, [ for (a in args) substitute(a, bound) ]);
 			case Function(args, result):
-				Function([for (a in args) { optional: a.optional, type: substitute(a.type, bound) }], substitute(result, bound));
+				Function([ for (a in args) { optional: a.optional, type: substitute(a.type, bound) } ], substitute(result, bound));
 			case Structure(fields): Structure([
 				for (f in fields) { optional: f.optional, name: f.name, type: substitute(f.type, bound) }
 			]);
@@ -530,7 +530,7 @@ final class FactsEscapes {
 	 * one is an object.
 	 */
 	public static function inertIds(shape: RefShape): Array<String> {
-		final out: Array<String> = [for (t in (shape.literalTypeNames ?? []).iterator()) t].concat(shape.nonNullableTypeNames ?? []);
+		final out: Array<String> = [ for (t in (shape.literalTypeNames ?? []).iterator()) t ].concat(shape.nonNullableTypeNames ?? []);
 		out.push(shape.voidTypeName ?? 'Void');
 		return out;
 	}

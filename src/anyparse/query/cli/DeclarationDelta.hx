@@ -198,7 +198,7 @@ final class DeclarationDelta {
 	 */
 	public static function hunk(before: Array<String>, after: Array<String>, ?context: Int): Array<String> {
 		final rows: Array<String> = editRows(before, after);
-		final near: Array<Bool> = [for (_ in rows) context == null];
+		final near: Array<Bool> = [ for (_ in rows) context == null ];
 		if (context != null)
 			for (i => row in rows)
 				if (!row.startsWith(UNCHANGED_MARK))
@@ -237,7 +237,7 @@ final class DeclarationDelta {
 	private static function editRows(before: Array<String>, after: Array<String>): Array<String> {
 		final edits: Null<LineEdits> = LineDiff.edits(before, after, MAX_LINE_EDITS);
 		if (edits == null) return before.map(line -> '- $line').concat(after.map(line -> '+ $line'));
-		final inserted: Map<Int, Bool> = [for (index in edits.inserted) index => true];
+		final inserted: Map<Int, Bool> = [ for (index in edits.inserted) index => true ];
 		final rows: Array<String> = [];
 		var next: Int = 0;
 		for (index in 0...after.length + 1) {
@@ -291,7 +291,7 @@ final class DeclarationDelta {
 		final out: Array<DeclarationChange> = [];
 		var edits: Int = 0;
 		final partner: Array<Int> = matchUnits(before, after);
-		final matched: Array<Bool> = [for (_ in before.units) false];
+		final matched: Array<Bool> = [ for (_ in before.units) false ];
 		final moved: Array<Bool> = movedUnits(after, partner);
 		final nowAddress: AddressIndex = Address.describerFor(after.tree, plugin.selectKindEquivalence());
 		final baseAddress: AddressIndex = Address.describerFor(before.tree, plugin.selectKindEquivalence());
@@ -345,7 +345,7 @@ final class DeclarationDelta {
 	 * outside a longest run whose counterparts keep their order in `before` — the fewest that explain the reorder.
 	 */
 	private static function movedUnits(after: FileVersion, partner: Array<Int>): Array<Bool> {
-		final moved: Array<Bool> = [for (_ in after.units) false];
+		final moved: Array<Bool> = [ for (_ in after.units) false ];
 		final siblings: Map<Int, Array<Int>> = [];
 		for (i => unit in after.units) if (!unit.header && partner[i] >= 0) {
 			final group: Null<Array<Int>> = siblings[unit.parent];
@@ -364,8 +364,8 @@ final class DeclarationDelta {
 	 * and the rest pair up in order, so one inserted record leaves every other matched to itself.
 	 */
 	private static function matchUnits(before: FileVersion, after: FileVersion): Array<Int> {
-		final partner: Array<Int> = [for (_ in after.units) -1];
-		final taken: Array<Bool> = [for (_ in before.units) false];
+		final partner: Array<Int> = [ for (_ in after.units) -1 ];
+		final taken: Array<Bool> = [ for (_ in before.units) false ];
 		final byKey: Map<String, Array<Int>> = [];
 		for (i => unit in before.units) {
 			final bucket: Null<Array<Int>> = byKey[unit.key];

@@ -239,7 +239,7 @@ final class ApqCountSummaryCliTest extends Test {
 	#if (sys || nodejs)
 	/** A temp directory holding `drifted` + `canonical` + `unparseable` `.hx` files. */
 	private static function fixtureDir(prefix: String, drifted: Int, canonical: Int, unparseable: Int): String {
-		final files: Array<{ name: String, source: String }> = [for (i in 0...drifted) { name: 'D$i.hx', source: DRIFTED }];
+		final files: Array<{ name: String, source: String }> = [ for (i in 0...drifted) { name: 'D$i.hx', source: DRIFTED } ];
 		for (i in 0...canonical) files.push({ name: 'C$i.hx', source: CANONICAL });
 		for (i in 0...unparseable) files.push({ name: 'U$i.hx', source: UNPARSEABLE });
 		return CliFixture.writeDir(prefix, files);

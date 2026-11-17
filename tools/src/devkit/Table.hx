@@ -12,7 +12,7 @@ final class Table {
 	/** `cells` under `header` as aligned text lines, trailing blanks trimmed. */
 	public static function render(header: Array<String>, cells: Array<Array<String>>): String {
 		final all: Array<Array<String>> = [header].concat(cells);
-		final widths: Array<Int> = [for (_ in header) 0];
+		final widths: Array<Int> = [ for (_ in header) 0 ];
 		for (row in all) for (i => cell in row) if (cell.length > widths[i]) widths[i] = cell.length;
 		return [
 			for (row in all)

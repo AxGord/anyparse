@@ -244,15 +244,15 @@ class RegexFirstBytesTest extends Test {
 	}
 
 	private static function digits(): Array<Int> {
-		return [for (c in '0'.code ... '9'.code + 1) c];
+		return [ for (c in '0'.code ... '9'.code + 1) c ];
 	}
 
 	private static function upper(): Array<Int> {
-		return [for (c in 'A'.code ... 'Z'.code + 1) c];
+		return [ for (c in 'A'.code ... 'Z'.code + 1) c ];
 	}
 
 	private static function lower(): Array<Int> {
-		return [for (c in 'a'.code ... 'z'.code + 1) c];
+		return [ for (c in 'a'.code ... 'z'.code + 1) c ];
 	}
 
 	private static function identStarts(): Array<Int> {

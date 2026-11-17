@@ -37,7 +37,7 @@ final class StaticInitOrder extends HaxeRule implements NoAutofix {
 		final shape: RefShape = plugin.refShape();
 		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
-		final deferred: Array<String> = (shape.lambdaKinds ?? []).concat([for (k in [shape.namedFnExprKind]) if (k != null) k]);
+		final deferred: Array<String> = (shape.lambdaKinds ?? []).concat([ for (k in [shape.namedFnExprKind]) if (k != null) k ]);
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			final reported: Set<Int> = new Set<Int>();
 			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);

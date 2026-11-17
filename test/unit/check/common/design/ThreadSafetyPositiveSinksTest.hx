@@ -500,7 +500,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 
 	/** The config lines of `found`, sorted. */
 	private static function said(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [for (v in found) if (v.file == '') v.message];
+		final out: Array<String> = [ for (v in found) if (v.file == '') v.message ];
 		out.sort(Reflect.compare);
 		return out;
 	}

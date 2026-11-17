@@ -53,7 +53,7 @@ class ReachDefinesProbeTest extends Test {
 			+ 'APQ-REACH-FINAL-VALUE ["w","2"]\nAPQ-REACH-FINAL-VALUE ["late","1"]\n';
 		final read: Null<ReachConfiguration> = ReachDefinesProbe.parse('b.hxml', transcript);
 		Assert.notNull(read);
-		if (read != null) Assert.equals('v=4.307', [for (k => v in read.values) '$k=$v'].join(','));
+		if (read != null) Assert.equals('v=4.307', [ for (k => v in read.values) '$k=$v' ].join(','));
 		Assert.isNull(ReachDefinesProbe.parse('broken.hxml', '${transcript}APQ-REACH-FINAL-VALUE ["v"]\n'));
 	}
 

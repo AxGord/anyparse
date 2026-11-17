@@ -216,7 +216,7 @@ final class TokenReport {
 			row.cost += costOf(turn);
 			rows[turn.model] = row;
 		}
-		return costliestFirst([for (row in rows) row]);
+		return costliestFirst([ for (row in rows) row ]);
 	}
 
 	private static function sliceCosts(agents: Array<AgentReading>, landed: Null<Array<String>>): Array<SliceCost> {
@@ -239,7 +239,7 @@ final class TokenReport {
 			}
 			rows[key] = row;
 		}
-		return costliestFirst([for (row in rows) row]);
+		return costliestFirst([ for (row in rows) row ]);
 	}
 
 	private static function landedSummary(slices: Array<SliceCost>): LandedSummary {
@@ -314,7 +314,7 @@ final class TokenReport {
 
 	/** The entries `pick` takes from every agent, in agent order. */
 	private static function gather(agents: Array<AgentReading>, pick: AgentReading -> Array<String>): Array<String> {
-		return [for (agent in agents) for (entry in pick(agent)) entry];
+		return [ for (agent in agents) for (entry in pick(agent)) entry ];
 	}
 
 	/** `value` rounded to a ten-thousandth of a dollar. */

@@ -277,7 +277,7 @@ final class FixVerifierBatchE2ETest extends Test {
 		final result: FixVerifyResult = verify(dir, sources, new TestRiskyLiteralRewrite('"x"'));
 		Assert.isTrue(result.baseline.match(Confirmed), 'the oracle baseline must confirm — else these negatives are vacuous');
 		Assert.equals('[$dir/A.hx,$dir/B.hx,$dir/D.hx]', Std.string(result.applied));
-		Assert.equals('[$dir/C.hx]', Std.string([for (r in result.reverted) r.file]));
+		Assert.equals('[$dir/C.hx]', Std.string([ for (r in result.reverted) r.file ]));
 		Assert.equals(sources[2], File.getContent('$dir/C.hx'), 'the failing file is byte-identical to its input');
 		Assert.equals('[4,2,2,1,1]', Std.string(result.rounds), 'the whole set, its two halves, then the files of the rejected half alone');
 		CliFixture.removeDir(dir);
@@ -330,15 +330,15 @@ final class FixVerifierBatchE2ETest extends Test {
 	private static function fixture(sources: Array<String>, ?main: String): String {
 		return CliFixture.writeDir(
 			'fixverifbatch',
-			[for (i => source in sources) {
+			[ for (i => source in sources) {
 				name: '${NAMES[i]}.hx',
 				source: source
-			}].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }])
+			} ].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }])
 		);
 	}
 
 	private static function verify(dir: String, sources: Array<String>, check: Check): FixVerifyResult {
-		final files: Array<FileText> = [for (i => source in sources) { file: '$dir/${NAMES[i]}.hx', source: source }];
+		final files: Array<FileText> = [ for (i => source in sources) { file: '$dir/${NAMES[i]}.hx', source: source } ];
 		return FixVerifier.verify(files, [check], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent);
 	}
 

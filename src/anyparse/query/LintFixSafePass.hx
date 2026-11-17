@@ -141,7 +141,7 @@ private class IsolationProbes {
 	 * text, sorted — a partial text equal to the round's bytes is the kept file.
 	 */
 	private function keyOf(keep: Array<String>, partial: Map<String, String>): String {
-		final parts: Array<String> = [for (file in keep) if (!partial.exists(file)) '$file\n='];
+		final parts: Array<String> = [ for (file in keep) if (!partial.exists(file)) '$file\n=' ];
 		for (file => text in partial) parts.push(text == _seat.fixed(file) ? '$file\n=' : '$file\n:$text');
 		parts.sort(Reflect.compare);
 		return parts.join('\n\n');
@@ -375,7 +375,7 @@ final class LintFixSafePass {
 	public static function revertNotice(narrowing: SafePassNarrowing, changed: Int, errors: String): String {
 		return switch narrowing {
 			case Narrowed(reverted, probes):
-				final rolled: String = [for (file in reverted) 'apq lint --fix: safe-fix REVERTED $file\n'].join('');
+				final rolled: String = [ for (file in reverted) 'apq lint --fix: safe-fix REVERTED $file\n' ].join('');
 				'apq lint --fix: the safe fixes broke a build that was green — REVERTED ${reverted.length} of $changed'
 					+ ' file(s), KEPT the other ${changed - reverted.length} on disk ($probes extra typecheck(s) to attribute)\n'
 					+ '$rolled${compilerLines(errors)}';
@@ -445,7 +445,7 @@ final class LintFixSafePass {
 			case WholeWave(_): null;
 			case Bisected(_): return narrowing;
 		};
-		if (narrowed != null) known.push({ keep: [for (file in changed) if (!narrowed.contains(file)) file], green: true });
+		if (narrowed != null) known.push({ keep: [ for (file in changed) if (!narrowed.contains(file)) file ], green: true });
 		final probes: IsolationProbes = new IsolationProbes(seat, cap, known);
 		final spentBefore: Int = switch narrowing {
 			case Narrowed(_, spent): spent;
@@ -461,7 +461,7 @@ final class LintFixSafePass {
 				final kept: Null<String> = culprit.kept;
 				if (kept != null) partial[culprit.file] = kept;
 			}
-			if (!probes.green([for (file in changed) if (!culprits.exists(c -> c.file == file)) file], partial))
+			if (!probes.green([ for (file in changed) if (!culprits.exists(c -> c.file == file)) file ], partial))
 				throw new IsolationStop('the cut the isolation settled on does not typecheck');
 			settledNarrowing(narrowing, culprits, changed, spentBefore + probes.spent);
 		} catch (exception: IsolationStop) {
@@ -549,7 +549,7 @@ final class LintFixSafePass {
 		final units: Array<Array<String>> = unitsOf(changed, coupled);
 		if (units.length < 2) return units;
 		function keepOf(indices: Array<Int>): Array<String> {
-			return [for (i in indices) for (file in units[i]) file];
+			return [ for (i in indices) for (file in units[i]) file ];
 		}
 		final budget: Int = probes.left();
 		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(
@@ -560,7 +560,7 @@ final class LintFixSafePass {
 				'bisecting the ${units.length} written unit(s) isolated no culprit within the $budget typecheck(s) left of the run budget'
 					+ ' — raise it with --fix-probes <n>'
 			);
-		final kept: Array<Int> = [for (i in 0...units.length) if (!failers.contains(i)) i];
+		final kept: Array<Int> = [ for (i in 0...units.length) if (!failers.contains(i)) i ];
 		if (kept.length == 0) return units;
 		if (!probes.green(keepOf(kept), [])) throw new IsolationStop('the files the bisection kept still do not typecheck together');
 		// A unit is named only once its OWN addition turns the kept tree red: when both halves of a block typecheck alone the
@@ -617,7 +617,7 @@ final class LintFixSafePass {
 	private static function splitAll(
 		units: Array<Array<String>>, changed: Array<String>, seat: SafeBisectSeat, probes: IsolationProbes
 	): Array<SafeCulprit> {
-		final keep: Array<String> = [for (file in changed) if (!units.exists(unit -> unit.contains(file))) file];
+		final keep: Array<String> = [ for (file in changed) if (!units.exists(unit -> unit.contains(file))) file ];
 		final partial: Map<String, String> = [];
 		final culprits: Array<SafeCulprit> = [];
 		for (unit in units) {
@@ -682,7 +682,7 @@ final class LintFixSafePass {
 			rules.length, FailerBisect.searchBudget(rules.length), indices -> green(seat.replay(file, indices.map(i -> rules[i]))), [0]
 		);
 		if (failers == null) return null;
-		final keptRules: Array<String> = [for (i in 0...rules.length) if (!failers.contains(i)) rules[i]];
+		final keptRules: Array<String> = [ for (i in 0...rules.length) if (!failers.contains(i)) rules[i] ];
 		final text: Null<String> = keptRules.length == 0 ? null : seat.replay(file, keptRules);
 		if (!green(text)) return null;
 		for (i in failers) if (green(seat.replay(file, keptRules.concat([rules[i]])))) return null;

@@ -282,8 +282,8 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			new ExhaustiveSwitches(graph, plugin, writes, seedable), writes
 		);
 		// a hold whose take no thread runs holds nothing: a function nothing invokes, a take a condition rules out
-		final acquires: Array<LockAcquire> = [for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a];
-		final helperHolds: Array<LockAcquire> = [for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a];
+		final acquires: Array<LockAcquire> = [ for (a in sites.acquires) if (states.edgeContext(a.edge) != 0) a ];
+		final helperHolds: Array<LockAcquire> = [ for (a in sites.helperHolds) if (states.edgeContext(a.edge) != 0) a ];
 		final judged: Array<LockAcquire> = HoldGrade.judged(acquires, helperHolds);
 		// the locks whose take blocks at all: held across any blocking call, short ones included
 		final blocking: Array<String> = [];
@@ -541,18 +541,18 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			repeatBudgetMs: options.repeatBudgetMs,
 			sinkIds: sinkIds,
 			shortSinkIds: matchAll(graph, shortSinks),
-			shortNames: [for (p in shortSinks) if (p.indexOf('.') < 0) p],
+			shortNames: [ for (p in shortSinks) if (p.indexOf('.') < 0) p ],
 			iterateIds: matchAll(graph, iterates),
-			iterateNames: [for (p in iterates) if (p.indexOf('.') < 0) p],
+			iterateNames: [ for (p in iterates) if (p.indexOf('.') < 0) p ],
 			registerIds: matchAll(graph, registers),
-			registerNames: [for (p in registers) if (p.indexOf('.') < 0) p],
+			registerNames: [ for (p in registers) if (p.indexOf('.') < 0) p ],
 			registerMemberIds: matchAll(graph, dotted(registers)),
 			// a bare name speaks for the runtime's calls only (`CallRepetition.runsOnce`), never a project member of that name
 			runsOnceIds: matchAll(graph, dotted(runsOnce)),
-			runsOnceNames: [for (p in runsOnce) if (p.indexOf('.') < 0) p],
+			runsOnceNames: [ for (p in runsOnce) if (p.indexOf('.') < 0) p ],
 			sharedIds: matchAll(graph, option('sharedLocks')),
 			nonThrowingIds: matchAll(graph, nonThrowing),
-			nonThrowingNames: [for (p in nonThrowing) if (p.indexOf('.') < 0) p],
+			nonThrowingNames: [ for (p in nonThrowing) if (p.indexOf('.') < 0) p ],
 			spawnIds: matchAll(graph, option('spawns')),
 			mainArguments: mainArguments(graph, options),
 			marshalIds: matchAll(graph, option('marshals')),
@@ -560,7 +560,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			reentrantIds: matchAll(graph, option('reentrantLocks')),
 			throwerIds: matchAll(graph, option('throwers')),
 			neverInvokeIds: matchAll(graph, neverInvokes),
-			neverInvokeNames: [for (p in neverInvokes) if (p.indexOf('.') < 0) p],
+			neverInvokeNames: [ for (p in neverInvokes) if (p.indexOf('.') < 0) p ],
 			mainCheckIds: matchAll(graph, mainChecks.concat(mainChecks.map(getterOf.bind(_, accessorPrefixes)))),
 			closedWorld: closedWorld,
 			lockPairs: lockPairs,
@@ -586,7 +586,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 
 	/** The `Type.member` entries of `patterns` — each naming its type —, a bare member name left out. */
 	private static function dotted(patterns: Array<String>): Array<String> {
-		return [for (p in patterns) if (p.indexOf('.') >= 0) p];
+		return [ for (p in patterns) if (p.indexOf('.') >= 0) p ];
 	}
 
 	/** Each call target a `spawns` object entry of `options` names in `graph` -> the union of the `main` positions naming it. */
@@ -740,7 +740,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		nestHolds(reported, covers, judged.suppressed);
 		foldEnclosed(reported, judged.enclosed, covers, judged.suppressed);
 		// a multi-lock helper's give is its caller's release, as `solveLongLocks` reads it: it makes no lock long
-		final crossing: Array<String> = [for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) c.lock];
+		final crossing: Array<String> = [ for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) c.lock ];
 		new RootCauseFold(crossing, covers, judged.suppressed).fold(folds);
 	}
 
@@ -754,7 +754,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		reported: Array<WarnedHold>, enclosed: (LockAcquire) -> Bool, covers: Array<{ finding: Violation, by: Array<Violation> }>,
 		suppressed: (Violation) -> Bool
 	): Void {
-		final warned: Array<WarnedHold> = [for (r in reported) if (r.finding.severity == Severity.Warning) r];
+		final warned: Array<WarnedHold> = [ for (r in reported) if (r.finding.severity == Severity.Warning) r ];
 		for (r in warned) if (enclosed(r.hold)) {
 			final fn: String = r.hold.edge.from;
 			final around: Array<WarnedHold> = warned.filter(

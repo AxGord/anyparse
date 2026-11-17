@@ -208,7 +208,7 @@ final class Metavar {
 	public static function ignoredNames(substituted: String, tree: QueryNode): Array<String> {
 		final written: Map<String, Int> = placeholderCounts(substituted);
 		final kept: Map<String, Int> = treeCounts(tree);
-		final out: Array<String> = [for (name => count in written) if (count > kept[name] ?? 0) name];
+		final out: Array<String> = [ for (name => count in written) if (count > kept[name] ?? 0) name ];
 		out.sort(Compare.compareString);
 		return out;
 	}

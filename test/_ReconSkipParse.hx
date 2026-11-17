@@ -127,7 +127,7 @@ final class _ReconSkipParse { // noqa: naming
 		// `expected="…"` (almost always `//`) is dropped: the parser's
 		// expected-terminator carousel is uninformative; the locus IS
 		// the construct the parser couldn't consume.
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [for (k => v in clusters) { key: k, cluster: v }];
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [ for (k => v in clusters) { key: k, cluster: v } ];
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		final shown: Int = entries.length > topN ? topN : entries.length;
 		Sys.println('');

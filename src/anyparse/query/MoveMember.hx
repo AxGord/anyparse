@@ -286,7 +286,7 @@ final class MoveMember {
 			advisoryExtras.push('--closure pulled in ${prep.closureAdded.length} instance member(s): ${quoted(prep.closureAdded)}');
 		if (prep.fieldsAdded.length > 0)
 			advisoryExtras.push('moved along field(s) ${quoted(prep.fieldsAdded)}, which only the moved members read or write');
-		final outsideCallersOf: Map<String, Int> = [for (m in prep.moved) m.name => 0];
+		final outsideCallersOf: Map<String, Int> = [ for (m in prep.moved) m.name => 0 ];
 		for (m in prep.moved) if (m.isStatic)
 			outsideCallersOf[m.name] = collectQualifiedEdits(prep, m, editsByFile, movedTextEdits, callerFilesNeedingImport);
 		collectWildcardBareEdits(prep, editsByFile, callerFilesNeedingImport, outsideCallersOf);
@@ -515,7 +515,7 @@ final class MoveMember {
 		// cannot edit rather than one it cannot prove things about.
 		final skipped: Null<String> = ScopeFiles.unparsedRefusal('move', index.skippedFiles());
 		if (skipped != null) return PErr(skipped);
-		final sourceOf: Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
+		final sourceOf: Map<String, String> = [ for (entry in scopeFiles) entry.file => entry.source ];
 		final srcSource: Null<String> = sourceOf[srcFile];
 		if (srcSource == null) return PErr('source file $srcFile is not in the scope file set');
 		final trees: Map<String, QueryNode> = [];
@@ -538,7 +538,7 @@ final class MoveMember {
 			? []
 			: ownedFieldClosure(srcDecl, srcTree, srcSource, called, destHit.decl, destSource, trees, plugin);
 		final effectiveNames: Array<String> = called.concat(fieldsAdded);
-		final closureAdded: Array<String> = [for (name in called) if (!memberNames.contains(name)) name];
+		final closureAdded: Array<String> = [ for (name in called) if (!memberNames.contains(name)) name ];
 		final moved: Array<MovedMember> = [];
 		final memberError: Null<String> = resolveMovedMembers(
 			srcDecl, destHit.decl, srcSource, srcTypeName, destTypeName, effectiveNames, moved, destSource, plugin.refShape(),
@@ -740,7 +740,7 @@ final class MoveMember {
 		prep: MovePrep, editsByFile: Map<String, Array<{ span: Span, text: String }>>, callerFilesNeedingImport: Array<String>,
 		outsideCallersOf: Map<String, Int>
 	): Void {
-		final statics: Array<String> = [for (m in prep.moved) if (m.isStatic) m.name];
+		final statics: Array<String> = [ for (m in prep.moved) if (m.isStatic) m.name ];
 		if (statics.length == 0) return;
 		final files: Array<FileInfo> = prep.index.allFiles();
 		for (file => tree in prep.trees) if (file != prep.srcFile) {

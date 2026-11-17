@@ -216,7 +216,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 			shape.namedFnExprKind,
 			shape.mapLiteralEntryKind
 		];
-		final leaving: Array<String> = [for (k in single) if (k != null) k];
+		final leaving: Array<String> = [ for (k in single) if (k != null) k ];
 		final lists: Array<Null<Array<String>>> = [
 			blockKinds,
 			comprehension.iterationKinds,

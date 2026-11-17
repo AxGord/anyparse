@@ -163,7 +163,7 @@ final class NegatedCondition {
 		if (declaredNot == null) return null;
 		final notKind: String = declaredNot;
 		final negation: NegationSeams = NegationScan.negationSeams(shape);
-		final equality: Array<String> = [for (k in [negation.eqKind, negation.notEqKind]) if (k != null) k];
+		final equality: Array<String> = [ for (k in [negation.eqKind, negation.notEqKind]) if (k != null) k ];
 		return {
 			notKind: notKind,
 			parenKind: shape.parenKind,

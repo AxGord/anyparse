@@ -117,8 +117,8 @@ final class GateLint {
 		final files: Array<String> = _gate.touched.filter(f -> f.endsWith('.hx'));
 		if (files.length == 0) return Skipped('no .hx touched');
 		final atBase: Array<String> = _gate.git(['ls-tree', '-r', '--name-only', _gate.base]).split('\n');
-		final pathsNow: Map<String, String> = [for (f in files) if (atBase.contains(_gate.baseOf(f))) _gate.baseOf(f) => f];
-		final scope: Array<String> = [for (path in pathsNow.keys()) path];
+		final pathsNow: Map<String, String> = [ for (f in files) if (atBase.contains(_gate.baseOf(f))) _gate.baseOf(f) => f ];
+		final scope: Array<String> = [ for (path in pathsNow.keys()) path ];
 		scope.sort(Compare.compareString);
 		final key: Null<String> = cacheKey('base ${_gate.base}${_oracle ? '' : ' no-oracle'}', scope);
 		final cached: Null<String> = scope.length == 0 ? '[]' : cachedWithRejections(key);
@@ -130,7 +130,7 @@ final class GateLint {
 		File.saveContent(old, rebased(File.getContent(old), pathsNow));
 		final moved: LintMove = lintDiff(old, _gate.log(TOUCHED_REPORT), 'lint-touched.txt');
 		final notes: Array<String> = ['${moved.added} new on ${files.length} file(s)'];
-		final renamed: Int = [for (base => now in pathsNow) if (base != now) now].length;
+		final renamed: Int = [ for (base => now in pathsNow) if (base != now) now ].length;
 		if (renamed > 0) notes.push('$renamed moved');
 		if (cached != null && scope.length > 0) notes.push('base lint reused');
 		_gate.summary.detail(notes.join(', '));
@@ -232,7 +232,7 @@ final class GateLint {
 			snapshot: s.snapshot
 		}));
 		final reports: Array<Null<String>> = trees.map(t -> cachedLint(t.key));
-		final misses: Array<Int> = [for (i => report in reports) if (report == null) i];
+		final misses: Array<Int> = [ for (i => report in reports) if (report == null) i ];
 		final runs: Array<Result> = misses.length == 0
 			? []
 			: Pool.of(misses.length).map(
@@ -374,12 +374,12 @@ final class GateLint {
 	 * A report with nothing to rename is answered as it is.
 	 */
 	public static function rebased(report: String, pathsNow: Map<String, String>): String {
-		if ([for (base => now in pathsNow) if (base != now) now].length == 0) return report;
+		if ([ for (base => now in pathsNow) if (base != now) now ].length == 0) return report;
 		final renames: Array<ModuleRename> = moduleRenames(pathsNow);
 		return switch JValueParser.parse(report) {
 			case JArray(records):
 				JValueWriter.write(
-					JArray([for (record in records) rebasedRecord(record, pathsNow, renames)]), JsonFormat.instance.expandedWriteOptions
+					JArray([ for (record in records) rebasedRecord(record, pathsNow, renames) ]), JsonFormat.instance.expandedWriteOptions
 				);
 			case _: report;
 		}
@@ -387,7 +387,7 @@ final class GateLint {
 
 	/** The arguments of a `lint --all --format json` of `scope`, with the compiler oracle unless `oracle` is false. */
 	public static function lintArgs(scope: Array<String>, oracle: Bool, ?rules: Array<String>): Array<String> {
-		final only: Array<String> = [for (id in rules ?? []) for (arg in ['--rule', id]) arg];
+		final only: Array<String> = [ for (id in rules ?? []) for (arg in ['--rule', id]) arg ];
 		return ['lint']
 			.concat(scope)
 			.concat(['--all', '--format', 'json'])

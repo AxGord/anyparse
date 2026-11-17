@@ -62,7 +62,7 @@ class RunScanTest extends Test {
 		final out: Array<Violation> = RunScan.collectTyped([GOOD_A, BAD, GOOD_C], _plugin, (entry, tree, typed, index, out) -> {
 			seen.push(entry.file);
 			Assert.isTrue(index.declaresTypeInScope('A', entry.file));
-			Assert.isTrue([for (k in typed.declaredTypes(entry.source).keys()) k].length == 0);
+			Assert.isTrue([ for (k in typed.declaredTypes(entry.source).keys()) k ].length == 0);
 			out.push(violation(entry.file));
 		});
 		Assert.same(['A.hx', 'C.hx'], seen);

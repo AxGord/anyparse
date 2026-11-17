@@ -47,7 +47,7 @@ final class UnresolvedTypeName extends RuleBase implements NoAutofix {
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
 			if (info == null) return;
 			final written: FileInfo = info;
-			final declared: Array<String> = [for (params in provider.typeParamNames(entry.source)) for (p in params) p];
+			final declared: Array<String> = [ for (params in provider.typeParamNames(entry.source)) for (p in params) p ];
 			function walk(node: QueryNode): Void {
 				if (opaqueKinds.contains(node.kind)) return;
 				final name: Null<String> = node.name;

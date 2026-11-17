@@ -297,7 +297,7 @@ final class StripCommand implements CliCommand {
 		final cluster: Null<ReconCluster> = walk.clusters[key];
 		if (cluster == null) {
 			CliIo.stderr('apq strip: --from-cluster "$key" matched no cluster key (exact match).\n');
-			final keyEntries: Array<{ key: String, count: Int }> = [for (k => v in walk.clusters) { key: k, count: v.count }];
+			final keyEntries: Array<{ key: String, count: Int }> = [ for (k => v in walk.clusters) { key: k, count: v.count } ];
 			keyEntries.sort((a, b) -> b.count - a.count);
 			final preview: Int = keyEntries.length > ReconCommand.CLUSTER_PREVIEW_LIMIT
 				? ReconCommand.CLUSTER_PREVIEW_LIMIT
@@ -514,7 +514,7 @@ final class StripCommand implements CliCommand {
 		// --dry-run: track per-pattern match totals across all files so a
 		// pattern that matched 0 occurrences ANYWHERE surfaces as a typo,
 		// even when other patterns in the same call did match.
-		final patternHits: Array<Int> = o.dryRun ? [for (_ in 0...o.patterns.length) 0] : [];
+		final patternHits: Array<Int> = o.dryRun ? [ for (_ in 0...o.patterns.length) 0 ] : [];
 		// Narrow `Null<Array<EReg>>` to `Array<EReg>` in one place — the
 		// inline `(compiledRegex : Array<EReg>)` cast does not satisfy
 		// strict null safety. Empty fallback keeps the regex-mode-off

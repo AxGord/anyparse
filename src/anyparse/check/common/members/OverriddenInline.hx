@@ -36,7 +36,7 @@ final class OverriddenInline extends RuleBase {
 		final local: Array<FileInfo> = IndexScope.report(files, plugin).allFiles();
 		if (!local.exists(fi -> fi.types.exists(t -> t.members.exists(m -> isInlineMethod(m, fieldKinds) || isOverride(m))))) return [];
 		final index: SymbolIndex = IndexScope.resolution(files, plugin);
-		final sources: Map<String, String> = [for (f in files) f.file => f.source];
+		final sources: Map<String, String> = [ for (f in files) f.file => f.source ];
 		final out: Array<Violation> = [];
 		for (fi in index.allFiles()) {
 			final source: Null<String> = sources[fi.file];

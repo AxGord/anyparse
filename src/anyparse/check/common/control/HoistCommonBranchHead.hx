@@ -122,8 +122,8 @@ final class HoistCommonBranchHead extends RuleBase {
 		final chainSpan: Null<Span> = chain.span;
 		if (chainSpan == null) return null;
 		if (TailScan.hasConditionalCompilation(directives, chainSpan.from, chainSpan.to)) return null;
-		final lists: Array<Array<QueryNode>> = [for (b in branches) TailScan.statementsOf(b, seams)];
-		final conds: Array<QueryNode> = [for (link in BranchChain.linksFrom(chain, seams.ifKinds)) link.children[0]];
+		final lists: Array<Array<QueryNode>> = [ for (b in branches) TailScan.statementsOf(b, seams) ];
+		final conds: Array<QueryNode> = [ for (link in BranchChain.linksFrom(chain, seams.ifKinds)) link.children[0] ];
 		final count: Int = HeadScan.admissibleLength(lists, conds, site.following, source, seams, context);
 		if (count < 1 || lists.foreach(l -> l.length == count)) return null;
 		final firsts: Array<Span> = [];

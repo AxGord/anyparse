@@ -209,7 +209,7 @@ final class JoinBranchCall extends RuleBase {
 		final ctx: Null<Ctx> = contextOf(plugin, source, seams, IndexScope.lazySymbolIndex(files, plugin, index), violations[0].file);
 		if (ctx == null) return [];
 		final edits: Array<{ span: Span, text: String }> =
-			CheckScan.applyBySpan(plugin, source, violations, [for (kind in seams.byKind.keys()) kind], (node, span) -> {
+			CheckScan.applyBySpan(plugin, source, violations, [ for (kind in seams.byKind.keys()) kind ], (node, span) -> {
 				final pos: Null<IfPosition> = positionOf(node, ctx.seams);
 				// The index was built from `byKind`'s own keys, so every node reaching here has one.
 				if (pos == null) throw new Exception('join-branch-call: no claimed position for indexed kind ${node.kind}');

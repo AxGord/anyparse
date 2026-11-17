@@ -62,7 +62,7 @@ final class HaxeInferencePolicy implements InferencePolicy {
 
 	/** One cell per type parameter the signature of `k` declares. */
 	public function callCells(k: CallCandidate, monos: Monomorphs): Map<String, Int> {
-		return [for (name in k.signature.typeParamNames) name => monos.fresh()];
+		return [ for (name in k.signature.typeParamNames) name => monos.fresh() ];
 	}
 
 	/**
@@ -78,7 +78,7 @@ final class HaxeInferencePolicy implements InferencePolicy {
 		};
 		if (cell != null) return Mono(cell);
 		return switch shape {
-			case Nominal(path, args): Of(headOf(path, file, at), [for (a in args) termOf(a.text, file, at, cells)], written);
+			case Nominal(path, args): Of(headOf(path, file, at), [ for (a in args) termOf(a.text, file, at, cells) ], written);
 			case _: Opaque(written, [
 				for (name => id in cells) if (CallGraphNames.mentionsTypeName(written, [name], _typeSyntax)) id
 			]);

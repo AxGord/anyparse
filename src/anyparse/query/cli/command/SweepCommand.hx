@@ -336,7 +336,7 @@ final class SweepCommand implements CliCommand {
 		final allPaths: Map<String, Bool> = [];
 		for (k in cur.keys()) allPaths[k] = true;
 		for (k in prev.keys()) allPaths[k] = true;
-		final sorted: Array<String> = [for (k in allPaths.keys()) k];
+		final sorted: Array<String> = [ for (k in allPaths.keys()) k ];
 		sorted.sort(Compare.compareString);
 		final transitions: Map<String, Int> = [];
 		var changed: Int = 0;
@@ -349,7 +349,7 @@ final class SweepCommand implements CliCommand {
 			transitions[moved.key] = (transitions[moved.key] ?? 0) + 1;
 			CliIo.sysPrint('${moved.line}\n');
 		}
-		final breakdown: Array<String> = [for (k => v in transitions) '$k: $v'];
+		final breakdown: Array<String> = [ for (k => v in transitions) '$k: $v' ];
 		breakdown.sort(Compare.compareString);
 		CliIo.sysPrint(
 			changed == 0

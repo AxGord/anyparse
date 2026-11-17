@@ -1408,7 +1408,7 @@
 			"name": "M-EXTRACT-CONSTANT-INTO-FOLLOWS-REGISTRY",
 			"type": "anyparse.query.cli.command.ExtractConstantCommand",
 			"method": "runExtractConstantInto",
-			"find": "RegistryFollowCommand.writeFollowed(\n\tOP, [for (c in changes) { path: c.file, content: c.newSource }].concat([{ path: intoPath, content: finalModule }]),\n\tplugin\n);",
+			"find": "RegistryFollowCommand.writeFollowed(\n\t\t\t\t\t\tOP,\n\t\t\t\t\t\t[ for (c in changes) { path: c.file, content: c.newSource } ].concat([{ path: intoPath, content: finalModule }]),\n\t\t\t\t\t\tplugin\n\t\t\t\t\t);",
 			"replace": "CliIo.writeFiles([for (c in changes) { path: c.file, content: c.newSource }].concat([{ path: intoPath, content: finalModule }]));",
 			"note": "extract-constant --into no longer carries the registry fragments of the members whose literal it replaced"
 		},

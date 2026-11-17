@@ -36,7 +36,7 @@ final class TerminalScanLowering {
 	private static function steps(node: ScanNode, fail: Expr, depth: Int): Array<Expr> {
 		return switch node {
 			case Chars(set): [charsStep(set, fail, depth)];
-			case Seq(items): [for (item in items) for (step in steps(item, fail, depth)) step];
+			case Seq(items): [ for (item in items) for (step in steps(item, fail, depth)) step ];
 			case Alt(branches): [altStep(branches, fail, depth)];
 			case Repeat(body, min, many):
 				final out: Array<Expr> = min > 0 ? steps(body, fail, depth) : [];

@@ -883,7 +883,7 @@ final class LandTest extends Test {
 	}
 
 	public function testTheTrailerNamesTheFirstFilesAndCountsTheRest(): Void {
-		final files: Array<Edit> = [for (i in 0...10) { path: 'src/F$i.hx', content: 'ugly\n' }];
+		final files: Array<Edit> = [ for (i in 0...10) { path: 'src/F$i.hx', content: 'ugly\n' } ];
 		final run: Landing = landing(() -> Passed, 'b.txt', null, null, { onSide: files, format: rewriting('layout', Passed) });
 		Assert.equals(0, run.status, run.output);
 		Assert.isTrue(
@@ -1360,7 +1360,7 @@ final class LandTest extends Test {
 			},
 			changes: (tree, base, files) ->
 				'changed against $base: ${files.length} file(s) — $classes ${files.length}\n'
-					+ [for (file in files) 'M $file  $classes\n'].join(''),
+					+ [ for (file in files) 'M $file  $classes\n' ].join(''),
 			settled: (tree, files) -> settled
 		};
 	}

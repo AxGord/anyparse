@@ -415,7 +415,7 @@ final class CanonicalEdit {
 	 * the outer deletion already subsumes it. Equal spans keep the earliest index.
 	 */
 	public static function dropContainedEdits(edits: Array<{ span: Span, text: String }>): Array<{ span: Span, text: String }> {
-		return [for (i in 0...edits.length) if (!isContainedEdit(edits, i)) edits[i]];
+		return [ for (i in 0...edits.length) if (!isContainedEdit(edits, i)) edits[i] ];
 	}
 
 	/**

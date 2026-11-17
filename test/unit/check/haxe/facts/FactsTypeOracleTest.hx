@@ -162,7 +162,7 @@ class FactsTypeOracleTest extends Test {
 		// the compiler counts each emoji as one position, a Span as two: read unconverted, the offsets of a site past a dozen of
 		// them land wholly before the declaration that holds it, where one emoji would leave them inside it
 		final wide: Int = 12;
-		final head: String = '// ' + [for (_ in 0...wide) '\u{1F600}'].join('') + ' é\n';
+		final head: String = '// ' + [ for (_ in 0...wide) '\u{1F600}' ].join('') + ' é\n';
 		final source: String = head + SRC;
 		final shift: Int = head.length - wide;
 		final facts: CompilerFacts = CompilerFacts.build(
@@ -356,7 +356,7 @@ class FactsTypeOracleTest extends Test {
 
 	private static function table(dumps: Array<String>): CompilerFacts {
 		return CompilerFacts.build(
-			[for (i in 0...dumps.length) { name: 'c$i', text: dumps[i], file: path -> path }],
+			[ for (i in 0...dumps.length) { name: 'c$i', text: dumps[i], file: path -> path } ],
 			file -> file == 'A.hx' ? SRC : null, file -> file
 		);
 	}

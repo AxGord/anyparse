@@ -53,8 +53,8 @@ class Probe {
 		takeAny({ a: 1 });
 		takeD({ a: 1, b: [1, 2] });
 		takeD([{ a: 1 }, { a: 2 }]);
-		takeD([for (i in 0...3) i]);
-		takeArrF([for (i in 0...3) i]);
+		takeD([ for (i in 0...3) i ]);
+		takeArrF([ for (i in 0...3) i ]);
 		takeArrF([1, 2]);
 		takeNA([1, 2]);
 		takeG({ a: 1 });

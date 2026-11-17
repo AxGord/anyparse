@@ -308,7 +308,7 @@ final class CliEdit {
 		if (edits == null) return null;
 		final oldTrivia: Array<Bool> = triviaLines(before, old, plugin.lexicalRegions(before));
 		final nowTrivia: Array<Bool> = triviaLines(after, now, plugin.lexicalRegions(after));
-		final lines: Array<Int> = [for (i in edits.inserted) if (!nowTrivia[i]) i];
+		final lines: Array<Int> = [ for (i in edits.inserted) if (!nowTrivia[i]) i ];
 		for (gone in edits.deleted) if (!oldTrivia[gone.line]) lines.push(gone.before < now.length ? gone.before : now.length - 1);
 		lines.sort((a, b) -> a - b);
 		final windows: LintRange = [];
@@ -400,7 +400,7 @@ final class CliEdit {
 			'--fix',
 			'--no-oracle',
 			'--range',
-			[for (w in windows) '${w.from}:${w.to}'].join(',')
+			[ for (w in windows) '${w.from}:${w.to}' ].join(',')
 		], ledger);
 	}
 

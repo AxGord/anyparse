@@ -28,7 +28,7 @@ class ThreadSafetyFindingDataTest extends Test {
 		Assert.equals('A', data.family);
 		Assert.equals('A.f${hops - 1}', data.member);
 		Assert.equals('Sys.sleep', data.subject);
-		Assert.same([for (i in 0...hops) 'A.f$i'].concat(['Sys.sleep']), data.chain);
+		Assert.same([ for (i in 0...hops) 'A.f$i' ].concat(['Sys.sleep']), data.chain);
 		Assert.stringContains('...', found[0].message, 'the text still caps the chain it shows');
 		#else
 		Assert.pass('non-sys target');
@@ -82,7 +82,7 @@ class ThreadSafetyFindingDataTest extends Test {
 			'class A { static function one():Void Sys.sleep(1); static function each(n:Int):Void for (i in 0...n) Sys.sleep(1); static '
 			+ 'function once():Void Sys.sleep(2); public static function main():Void { for (p in [1, 2]) one(); each(3); once(); } }'
 		]);
-		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning') v];
+		final warned: Array<Violation> = [ for (v in found) if (v.severity.label() == 'warning') v ];
 		warned.sort((a, b) -> Reflect.compare(a.data?.member, b.data?.member));
 		Assert.same(['A.each', 'A.once', 'A.one'], warned.map(v -> v.data?.member), 'one warning per call, at the call');
 		Assert.same([
@@ -115,7 +115,7 @@ class ThreadSafetyFindingDataTest extends Test {
 			+ ' static function p(xs:Array<String>, ys:Array<String>):Void { Lambda.iter(xs, x -> h(x)); Lambda.iter(ys, y -> g(y)); }'
 			+ ' public static function main():Void p(["x"], ["y"]); }'
 		]);
-		final subjects: Array<String> = [for (v in iters) if (v.severity.label() == 'warning') v.data?.subject ?? ''];
+		final subjects: Array<String> = [ for (v in iters) if (v.severity.label() == 'warning') v.data?.subject ?? '' ];
 		subjects.sort(Reflect.compare);
 		Assert.same(['Lambda.iter', 'Lambda.iter #2'], subjects, 'two values handed on');
 		final fetched: Array<Violation> = ThreadSafetyCheckTest.violations(config, [
@@ -144,7 +144,7 @@ class ThreadSafetyFindingDataTest extends Test {
 				'class A { static function two(n:Int):Void { Sys.sleep(1); for (i in 0...n) Disk.read(); }'
 				+ ' public static function main():Void two(3); }'
 			]);
-		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning') v];
+		final warned: Array<Violation> = [ for (v in found) if (v.severity.label() == 'warning') v ];
 		Assert.same(['Sys.sleep'], warned.map(v -> v.data?.subject));
 		Assert.same([[{ member: 'A.two', at: 'for (i in 0...n)' }]], warned.map(v -> v.data?.repeatedBy));
 		#else
@@ -173,7 +173,7 @@ class ThreadSafetyFindingDataTest extends Test {
 					+ ' public static function main():Void { Runner.create(work); get(); reboot(); } }'
 				]
 			);
-		final warned: Array<Violation> = [for (v in found) if (v.severity.label() == 'warning' && v.data?.family == 'A') v];
+		final warned: Array<Violation> = [ for (v in found) if (v.severity.label() == 'warning' && v.data?.family == 'A') v ];
 		Assert.same(['S.get'], warned.map(v -> v.data?.member));
 		Assert.same([[{ member: 'S.reboot', at: 'for (i in 0...3)' }]], warned.map(v -> v.data?.repeatedBy));
 		Assert.isTrue(warned[0]?.message.endsWith(' — repeated by S.reboot') == true, warned[0]?.message);

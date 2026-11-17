@@ -70,7 +70,7 @@ final class LintBaseline {
 			spent[i] = LintDiff.spendAcross(
 				pool, LintDiff.normalizePath(v.file, root), v.rule, v.severity.label(), messages[i], v.data != null
 			);
-		return [for (i => v in all) if (!spent[i]) v];
+		return [ for (i => v in all) if (!spent[i]) v ];
 	}
 
 }

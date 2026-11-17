@@ -109,7 +109,7 @@ final class OracleRunMemo implements OracleRunScope {
 	 * compiled that input of with the builds' probe, or cannot answer from here (`run`).
 	 */
 	public function builds(oracles: Array<OracleConfig>): Array<Null<ReachConfiguration>> {
-		if (!_builds.keys().hasNext()) return [for (_ in oracles) null];
+		if (!_builds.keys().hasNext()) return [ for (_ in oracles) null ];
 		final now: Array<Null<String>> = fingerprints(oracles);
 		return [
 			for (i in 0...oracles.length) {

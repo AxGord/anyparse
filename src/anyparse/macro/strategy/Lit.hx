@@ -101,7 +101,7 @@ class Lit implements Strategy {
 	// -------- helpers --------
 
 	private static function collectStrings(params: Array<Expr>): Array<String> {
-		return [for (p in params) stringOrFail(p, ':lit')];
+		return [ for (p in params) stringOrFail(p, ':lit') ];
 	}
 
 	private static function singleString(params: Array<Expr>, tag: String): String {

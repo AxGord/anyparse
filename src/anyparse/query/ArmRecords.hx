@@ -42,7 +42,7 @@ final class ArmRecords {
 				return Left('${doc.file} does not read as an arm registry: ${exception.message}');
 			for (name in names) taken.add(name);
 		}
-		final sources: Map<String, String> = [for (doc in existing) Path.withoutDirectory(doc.file) => doc.source];
+		final sources: Map<String, String> = [ for (doc in existing) Path.withoutDirectory(doc.file) => doc.source ];
 		final touched: Array<String> = [];
 		for (json in records) {
 			final record: ArmRecord = switch ArmRecordText.read(json) {

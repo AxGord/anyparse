@@ -730,7 +730,7 @@ final class FieldWriteIndex {
 			case Nominal(path, args) if (args.length > 0 && unwrapNames.contains(path)):
 				return null;
 			case Nominal(path, args):
-				return { name: SourceText.lastSegment(path), path: path, args: [for (a in args) a.text] };
+				return { name: SourceText.lastSegment(path), path: path, args: [ for (a in args) a.text ] };
 			case _:
 				return null;
 		}

@@ -226,7 +226,7 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 			inert: OccurrenceScan.inertRegions(source, regions),
 			comments: SourceComments.collectCommentRegions(regions),
 			regions: regions,
-			strings: [for (r in regions) if (r.kind == StringLit) new Span(r.from, r.to)],
+			strings: [ for (r in regions) if (r.kind == StringLit) new Span(r.from, r.to) ],
 			fieldNames: OccurrenceScan.structureFieldNameSpans(tree, source, s.shape),
 			patterns: patterns,
 			fold: plugin.stringFoldSupport(),

@@ -103,7 +103,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 			return;
 		}
 		Assert.isTrue(claimed.exists('${span.from}:${span.to}'), 'the claim set holds the reported span');
-		Assert.equals(1, [for (k in claimed.keys()) k].length, 'and holds nothing else');
+		Assert.equals(1, [ for (k in claimed.keys()) k ].length, 'and holds nothing else');
 	}
 
 	/**
@@ -117,7 +117,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		final claimed: Null<Map<String, Bool>> = claimsOf(source);
 		if (claimed == null) return;
 		Assert.equals(0, CheckFixture.violations(new SimplifyBooleanTernary(), source).length);
-		Assert.equals(0, [for (k in claimed.keys()) k].length);
+		Assert.equals(0, [ for (k in claimed.keys()) k ].length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

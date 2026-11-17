@@ -87,7 +87,7 @@ final class CallGraphNodes {
 				// what the declarations say is the node's where they all say it: a name any of them declares a type parameter is one
 				final params: Array<String> = typeParams[span.from] ?? [];
 				final held: Array<String> = g._facts.typeParams[id] ?? [];
-				final declaredParams: Array<String> = held.concat([for (p in params) if (!held.contains(p)) p]);
+				final declaredParams: Array<String> = held.concat([ for (p in params) if (!held.contains(p)) p ]);
 				if (declaredParams.length > 0) g._facts.typeParams[id] = declaredParams;
 				final bounded: Null<Map<String, Array<String>>> = bounds[span.from];
 				if (first && bounded != null)

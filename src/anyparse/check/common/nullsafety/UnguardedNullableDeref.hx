@@ -89,8 +89,8 @@ final class UnguardedNullableDeref extends RuleBase implements NoAutofix {
 		final ident: String = identKind;
 		// Field-shaped receivers must be the node's sole child; index / call receivers
 		// are the first of several (index expression / call arguments follow).
-		final soleChildKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
-		final firstChildKinds: Array<String> = [for (k in [shape.indexAccessKind, shape.callKind]) if (k != null) k];
+		final soleChildKinds: Array<String> = [ for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k ];
+		final firstChildKinds: Array<String> = [ for (k in [shape.indexAccessKind, shape.callKind]) if (k != null) k ];
 		if (soleChildKinds.length == 0 && firstChildKinds.length == 0) return [];
 		final built: Null<NullableSourceCfg> = NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? []);
 		if (built == null) return [];

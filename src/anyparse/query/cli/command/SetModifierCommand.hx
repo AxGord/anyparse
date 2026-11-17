@@ -131,7 +131,7 @@ final class SetModifierCommand implements CliCommand {
 		// the modifier vocabulary is how `overload` and `abstract` stayed unmentioned while the
 		// grammar projected them.
 		final shape: RefShape = CliArgs.pickPlugin('haxe').refShape();
-		final visibility: Array<String> = [for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase()];
+		final visibility: Array<String> = [ for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase() ];
 		final booleans: Array<String> = [
 			for (kind in CheckScan.modifierKinds(shape)) if (!visibility.contains(kind.toLowerCase())) kind.toLowerCase()
 		];

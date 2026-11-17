@@ -117,7 +117,7 @@ final class AddParam {
 		if (paramName == null) return Err('cannot read a parameter name from "$paramText"');
 		final newName: String = paramName;
 
-		final params: Array<QueryNode> = [for (c in fnNode.children) if (PARAM_KINDS.contains(c.kind)) c];
+		final params: Array<QueryNode> = [ for (c in fnNode.children) if (PARAM_KINDS.contains(c.kind)) c ];
 		if (params.exists(p -> p.name == newName)) return Err('"$newName" is already a parameter');
 
 		final insertOffset: Int = params.length > 0

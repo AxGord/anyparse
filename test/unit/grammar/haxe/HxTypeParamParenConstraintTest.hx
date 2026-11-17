@@ -72,7 +72,7 @@ final class HxTypeParamParenConstraintTest extends Test {
 			final span: Null<Span> = node.span;
 			final own: Null<Map<String, Array<String>>> = span == null ? null : bounds[span.from];
 			if (own != null) {
-				final names: Array<String> = [for (name in own.keys()) name];
+				final names: Array<String> = [ for (name in own.keys()) name ];
 				names.sort(Compare.compareString);
 				for (name in names) seen.push('${node.kind}:$name=${(own[name] ?? []).join('|')}');
 			}

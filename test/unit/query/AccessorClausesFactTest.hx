@@ -38,7 +38,7 @@ class AccessorClausesFactTest extends Test {
 	public function testAOneSlotClauseCarriesNoClause(): Void {
 		final src: String = 'class P {\n\tvar x(get): Int;\n}';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.equals(1, [for (_ in plugin.propertyAccessors(src).keys()) 1].length);
+		Assert.equals(1, [ for (_ in plugin.propertyAccessors(src).keys()) 1 ].length);
 		Assert.same([], clausesByMember(src, plugin.accessorClauses(src)));
 	}
 

@@ -475,7 +475,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private function lowerWalk(rule: String, node: ShapeNode): Expr {
 		return switch node.kind {
 			case Alt:
-				{ expr: ESwitch(ident('v'), [for (branch in node.children) walkCase(rule, branch)], null), pos: Context.currentPos() };
+				{ expr: ESwitch(ident('v'), [ for (branch in node.children) walkCase(rule, branch) ], null), pos: Context.currentPos() };
 			case Seq: lowerWalkSeq(rule, node);
 			case Star: block(descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0).length == 0 ? [] : [macro for (_e0 in v) $e{block(
 				descend(node.children[0], ident('_e0'), 'into', TYPE_OUT_PARAM, 0)
@@ -492,7 +492,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private function walkCase(rule: String, branch: ShapeNode): Case {
 		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
-		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
+		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
 		if (branch.hasMeta(QUERY_TRANSPARENT_META)) return {
 			values: [pattern],
@@ -602,7 +602,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final refsAware: Expr = if (ref == null || !altHasCtor(ref, ANON_CTOR)) {
 			skipArm;
 		} else {
-			final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [for (_ in 0...ctorArity(ref, ANON_CTOR)) '_']);
+			final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [ for (_ in 0...ctorArity(ref, ANON_CTOR)) '_' ]);
 			{
 				expr: ESwitch(value, [{ values: [anonPattern], expr: walkArm }, { values: [macro _], expr: skipArm }], null),
 				pos: Context.currentPos()
@@ -726,7 +726,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		return switch node.kind {
 			case Seq: lowerNameSeq(node);
 			case Alt:
-				final cases: Array<Case> = [for (branch in node.children) nameCase(rule, branch)];
+				final cases: Array<Case> = [ for (branch in node.children) nameCase(rule, branch) ];
 				block([
 					{ expr: ESwitch(ident('v'), cases, null), pos: Context.currentPos() },
 					macro return null
@@ -799,8 +799,8 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	/** `case Ctor(...): return <first non-null arg name>;` for a wrapper ctor, `case Ctor(...):` (fall to null) otherwise. */
 	private function nameCase(rule: String, branch: ShapeNode): Case {
 		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
-		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
-		final pattern: Expr = ctorPattern(rule, ctor, NAME_UNWRAP_CTORS.contains(ctor) ? argNames : [for (_ in argNames) '_']);
+		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
+		final pattern: Expr = ctorPattern(rule, ctor, NAME_UNWRAP_CTORS.contains(ctor) ? argNames : [ for (_ in argNames) '_' ]);
 		if (!NAME_UNWRAP_CTORS.contains(ctor)) return { values: [pattern], expr: macro {} };
 		final nameExpr: Expr = firstNonNullName([
 			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
@@ -823,7 +823,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private function lowerTypeRefs(rule: String, node: ShapeNode): Expr {
 		return switch node.kind {
 			case Alt:
-				{ expr: ESwitch(ident('v'), [for (branch in node.children) typeRefsCase(rule, branch)], null), pos: Context.currentPos() };
+				{
+					expr: ESwitch(ident('v'), [ for (branch in node.children) typeRefsCase(rule, branch) ], null),
+					pos: Context.currentPos()
+				};
 			case Seq:
 				// `_s` is the span the recursion passes down; outside an Alt ctor
 				// there is no own span, so the caller's fallback carries through.
@@ -856,7 +859,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 */
 	private function typeRefsCase(rule: String, branch: ShapeNode): Case {
 		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
-		final argNames: Array<String> = [for (i in 0...branch.children.length) '_a$i'];
+		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
 
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
 		final body: Array<Expr> = [];
@@ -1030,7 +1033,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	private function ambiguousProjectedKinds(): Array<String> {
 		final counts: Map<String, Int> = [];
 		eachProjectedKind((_, kind) -> if (kind != null) counts[kind] = (counts[kind] ?? 0) + 1);
-		final out: Array<String> = [for (kind => n in counts) if (n > 1) kind];
+		final out: Array<String> = [ for (kind => n in counts) if (n > 1) kind ];
 		out.sort(Reflect.compare);
 		return out;
 	}

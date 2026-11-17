@@ -207,7 +207,7 @@ final class MutationArm {
 	/** Every arm name the registry `text` declares, in registry order. */
 	public static function armNames(text: String): Array<String> {
 		final table: ArmTable = ArmTableParser.parse(text);
-		return [for (arm in table.arms ?? []) arm.name];
+		return [ for (arm in table.arms ?? []) arm.name ];
 	}
 
 	/**
@@ -233,7 +233,7 @@ final class MutationArm {
 				continue;
 			}
 			final finds: Array<String> = JValueTools.strings(arm.find) ?? [];
-			final replaces: Array<String> = JValueTools.strings(arm.replace) ?? [for (_ in finds) ''];
+			final replaces: Array<String> = JValueTools.strings(arm.replace) ?? [ for (_ in finds) '' ];
 			if (finds.length == 0 || finds.length != replaces.length) {
 				out[name] = Unrenderable(
 					'"$name" declares ${finds.length} find fragment(s) against ${replaces.length} replace(s)'
@@ -241,7 +241,7 @@ final class MutationArm {
 				);
 				continue;
 			}
-			final sections: Array<String> = [for (i in 0...finds.length) for (s in [finds[i], replaces[i]]) s];
+			final sections: Array<String> = [ for (i in 0...finds.length) for (s in [finds[i], replaces[i]]) s ];
 			out[name] = Find(arm.type, arm.method, kind, sections.join('\n====\n') + '\n');
 		}
 		return out;
@@ -315,12 +315,12 @@ final class MutationArm {
 			}
 			byFile[file]?.push(row);
 		}
-		final rank: Map<String, Int> = [for (i => f in files) f => i];
+		final rank: Map<String, Int> = [ for (i => f in files) f => i ];
 		files.sort((a, b) -> {
 			final more: Int = (byFile[b]?.length ?? 0) - (byFile[a]?.length ?? 0);
 			more != 0 ? more : (rank[a] ?? 0) - (rank[b] ?? 0);
 		});
-		final dealt: Array<Array<String>> = [for (_ in 0...Std.int(Math.max(1, batches))) []];
+		final dealt: Array<Array<String>> = [ for (_ in 0...Std.int(Math.max(1, batches))) [] ];
 		for (file in files) {
 			final own: Array<String> = byFile[file] ?? [];
 			var start: Int = 0;
@@ -487,7 +487,7 @@ final class MutationArm {
 			}
 		];
 		final batches: Array<Array<String>> = deal(rows, batchCount(rows.length, cores), RENDER_CHUNK);
-		final files: Array<String> = [for (b => _ in batches) Path.join([workroot, 'render-batch.$b'])];
+		final files: Array<String> = [ for (b => _ in batches) Path.join([workroot, 'render-batch.$b']) ];
 		for (b => batch in batches) File.saveContent(files[b], batch.map(row -> '$row\n').join(''));
 		final lost: Null<Array<String>> = applyBatches(job.apq, files, gen, cores, RENDER_TIMEOUT_MS);
 		if (lost != null) {
@@ -605,7 +605,7 @@ final class MutationArm {
 	 */
 	private static function snapshot(repo: String): Null<String> {
 		final status: Array<String> = cmd('git -C $repo status --porcelain').lines();
-		final untracked: Array<String> = [for (line in status) if (line.startsWith('?? ')) line.substr(3)];
+		final untracked: Array<String> = [ for (line in status) if (line.startsWith('?? ')) line.substr(3) ];
 		if (untracked.length > 0) {
 			say([
 				'--working-tree refuses — untracked file(s) would be silently dropped from the snapshot: ${untracked.join(' ')}'

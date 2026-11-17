@@ -271,7 +271,7 @@ final class HxFunctionLambdaBodyWidthSliceTest extends Test {
 
 	/** `n` copies of `ch` — the long bodies these fixtures need without a `StringTools` static call. */
 	private static inline function repeat(ch: String, n: Int): String {
-		return [for (i in 0...n) ch].join('');
+		return [ for (i in 0...n) ch ].join('');
 	}
 
 }

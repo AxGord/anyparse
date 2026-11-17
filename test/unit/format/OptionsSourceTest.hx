@@ -43,7 +43,7 @@ final class OptionsSourceTest extends Test {
 	}
 
 	public function testTheKnobTableNamesTheRecordsFieldsAndKeepsAnOptionalFieldOptional(): Void {
-		final names: Array<String> = [for (k in OptionKnobs.of(HxModuleWriteOptions)) k.name];
+		final names: Array<String> = [ for (k in OptionKnobs.of(HxModuleWriteOptions)) k.name ];
 		Assert.contains('ifBody', names);
 		Assert.contains('lineWidth', names);
 		final wrap: String = OptionsSource.spell(

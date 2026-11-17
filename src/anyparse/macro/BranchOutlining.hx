@@ -211,7 +211,7 @@ final class BranchOutlining {
 		if (!scan.ok) Sys.println('BranchOutlining: ${rule.fnName} keeps a trial inline (${scan.refusal})');
 		#end
 		if (!scan.ok) return mapped;
-		final params: Array<String> = [for (name in scan.captured.keys()) if (name != 'ctx') name];
+		final params: Array<String> = [ for (name in scan.captured.keys()) if (name != 'ctx') name ];
 		params.sort(Reflect.compare);
 		final args: Array<FunctionArg> = [];
 		for (name in params) {
@@ -234,7 +234,7 @@ final class BranchOutlining {
 			return null;
 		};
 		helpers.push(new GeneratedRule(name, nullableCT, helperBody, [], false, args));
-		final callArgs: Array<Expr> = [macro ctx].concat([for (p in params) macro $i{p}]);
+		final callArgs: Array<Expr> = [macro ctx].concat([ for (p in params) macro $i{p} ]);
 		final call: Expr = { expr: ECall(macro $i{name}, callArgs), pos: mapped.pos };
 		return macro {
 			final $ALT_LOCAL: Null<$returnCT> = $call;

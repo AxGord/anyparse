@@ -256,7 +256,7 @@ class WriterTrailingWhitespaceTest extends Test {
 
 	/** Every line of `written`, in order, that ends in a space or a tab. */
 	private static function strandedLines(written: String): Array<String> {
-		return [for (line in written.split('\n')) if (endsInBlank(line)) line];
+		return [ for (line in written.split('\n')) if (endsInBlank(line)) line ];
 	}
 
 	private static function endsInBlank(line: String): Bool {

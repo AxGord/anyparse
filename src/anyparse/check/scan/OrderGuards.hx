@@ -101,11 +101,11 @@ final class OrderGuards {
 			ifKinds: (shape.ifStatementKinds ?? []).concat(shape.ifExpressionKinds ?? []),
 			forKind: shape.forStmtKind,
 			intervalKind: shape.intervalKind,
-			blockKinds: [for (k in [shape.blockStmtKind, shape.blockBodyKind]) if (k != null) k],
+			blockKinds: [ for (k in [shape.blockStmtKind, shape.blockBodyKind]) if (k != null) k ],
 			exitKinds: shape.controlExitKinds ?? [],
 			barrierKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? [])
-				.concat([for (k in [shape.namedFnExprKind]) if (k != null) k]),
-			callKinds: [for (k in [shape.callKind, shape.newExprKind]) if (k != null) k],
+				.concat([ for (k in [shape.namedFnExprKind]) if (k != null) k ]),
+			callKinds: [ for (k in [shape.callKind, shape.newExprKind]) if (k != null) k ],
 			memberKinds: ShapeVocab.memberAccessKinds(shape)
 		};
 	}
@@ -294,7 +294,7 @@ final class OrderGuards {
 	private static function scaled(t: LinearTerm, factor: Int): LinearTerm {
 		return factor == 0
 			? { terms: [], constant: 0 }
-			: { terms: [for (atom => k in t.terms) atom => k * factor], constant: t.constant * factor };
+			: { terms: [ for (atom => k in t.terms) atom => k * factor ], constant: t.constant * factor };
 	}
 
 	/**
@@ -303,7 +303,7 @@ final class OrderGuards {
 	 * effect-free one changes nothing. Only an operand `survivesCalls` refuses can be changed by a call.
 	 */
 	private static function uncalled(bound: Bound, path: Array<QueryNode>, ctx: OrderContext): Bool {
-		if ([for (atom in bound.term.terms.keys()) if (ctx.survivors[atom] != true) atom].length == 0) return true;
+		if ([ for (atom in bound.term.terms.keys()) if (ctx.survivors[atom] != true) atom ].length == 0) return true;
 		for (c in ctx.calls) if (covers(bound, c.span.from) && !path.contains(c.node)) {
 			final within: Null<Span> = c.within;
 			if (within != null && covers(bound, within.from)) continue;

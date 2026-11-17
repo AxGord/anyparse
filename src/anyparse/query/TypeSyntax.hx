@@ -74,7 +74,7 @@ final class TypeSyntax {
 	 */
 	public function argumentTexts(): Null<Array<String>> {
 		return switch shape {
-			case Nominal(_, args): [for (a in args) a.text];
+			case Nominal(_, args): [ for (a in args) a.text ];
 			case _: null;
 		};
 	}
@@ -110,12 +110,12 @@ final class TypeSyntax {
 	public function descendants(): Array<TypeSyntax> {
 		final inner: Array<TypeSyntax> = switch shape {
 			case Nominal(_, args): args;
-			case Function(params, ret, _): [for (p in params) p.type].concat([ret]);
-			case Structure(fields): [for (f in fields) f.type];
+			case Function(params, ret, _): [ for (p in params) p.type ].concat([ret]);
+			case Structure(fields): [ for (f in fields) f.type ];
 			case Intersection(parts), Conditional(parts): parts;
 			case Other: [];
 		};
-		return [this].concat([for (t in inner) for (d in t.descendants()) d]);
+		return [this].concat([ for (t in inner) for (d in t.descendants()) d ]);
 	}
 
 	/** Whether this type is a function type or holds one anywhere inside it (`Array<Int -> Void>`). */
@@ -147,11 +147,11 @@ final class TypeSyntax {
 	public function spellsAs(other: TypeSyntax): Bool {
 		return switch [shape, other.shape] {
 			case [Nominal(p, xs), Nominal(q, ys)]:
-				p == q && xs.length == ys.length && [for (i in 0...xs.length) i].foreach(i -> xs[i].spellsAs(ys[i]));
+				p == q && xs.length == ys.length && [ for (i in 0...xs.length) i ].foreach(i -> xs[i].spellsAs(ys[i]));
 			case [Function(ps, r, _), Function(qs, s, _)]:
 				ps.length == qs.length
 					&& r.spellsAs(s)
-					&& [for (i in 0...ps.length) i].foreach(i -> ps[i].optional == qs[i].optional && ps[i].type.spellsAs(qs[i].type));
+					&& [ for (i in 0...ps.length) i ].foreach(i -> ps[i].optional == qs[i].optional && ps[i].type.spellsAs(qs[i].type));
 			case _: ~/\s+/g.replace(text, '') == ~/\s+/g.replace(other.text, '');
 		};
 	}

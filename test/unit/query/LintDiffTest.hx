@@ -443,10 +443,10 @@ class LintDiffTest extends Test {
 	@:pin('control')
 	@:killer('M-LINTDIFF-FIRST-MESSAGE')
 	public function testAnOldSnapshotPairsEveryMessageOfOneKey(): Void {
-		final old: String = reportOf([for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m)]);
-		final result: LintDiffResult = diff(old, reportOf([for (m in ['m1', 'm2', 'm3']) keyed('warning', 'A', 'A.b', 'S.f', m)]), '');
+		final old: String = reportOf([ for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m) ]);
+		final result: LintDiffResult = diff(old, reportOf([ for (m in ['m1', 'm2', 'm3']) keyed('warning', 'A', 'A.b', 'S.f', m) ]), '');
 		Assert.same([0, 0], [result.addedTotal, result.removedTotal]);
-		final reversed: LintDiffResult = diff(reportOf([for (m in ['m1', 'm2', 'm3']) keyed('warning', 'A', 'A.b', 'S.f', m)]), old, '');
+		final reversed: LintDiffResult = diff(reportOf([ for (m in ['m1', 'm2', 'm3']) keyed('warning', 'A', 'A.b', 'S.f', m) ]), old, '');
 		Assert.same([0, 0], [reversed.addedTotal, reversed.removedTotal], 'and the other way round');
 	}
 

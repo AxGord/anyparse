@@ -78,7 +78,7 @@ final class ListenerSymmetry extends RuleBase {
 		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		final fieldKinds: Array<String> = shape.fieldDeclKinds ?? [];
-		final methodKinds: Array<String> = [for (k in memberKinds) if (!fieldKinds.contains(k)) k];
+		final methodKinds: Array<String> = [ for (k in memberKinds) if (!fieldKinds.contains(k)) k ];
 		if (containerKinds.length == 0 || methodKinds.length == 0) return [];
 		final cfg: ListenerCfg = {
 			containerKinds: containerKinds,

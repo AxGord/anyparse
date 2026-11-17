@@ -78,7 +78,7 @@ final class FillExactWidthTest extends Test {
 	@:pin('control')
 	@:killer('M-FILL-TRAILING-TAIL-RESERVE')
 	public function testFillTrailingCommaParamsPastTheLimitBreaks(): Void {
-		final params: Array<String> = [for (_ in 0...14) param(10)];
+		final params: Array<String> = [ for (_ in 0...14) param(10) ];
 		Assert.equals(
 			lambda([params.slice(0, 7), params.slice(7), [param(11)]]),
 			HxWriteFixture.triviaWrite(lambda([params.concat([param(11)])]), PARAMS_TRAILING)
@@ -140,12 +140,12 @@ final class FillExactWidthTest extends Test {
 
 	/** A string literal of `n` letters. */
 	private static function x(n: Int): String {
-		return "'" + [for (_ in 0...n) 'x'].join('') + "'";
+		return "'" + [ for (_ in 0...n) 'x' ].join('') + "'";
 	}
 
 	/** `n` ten-letter string literals. */
 	private static function xs(n: Int): Array<String> {
-		return [for (_ in 0...n) x(10)];
+		return [ for (_ in 0...n) x(10) ];
 	}
 
 	private static function write(config: String, items: Array<String>): String {
@@ -158,7 +158,7 @@ final class FillExactWidthTest extends Test {
 
 	/** A parameter `x…x:Int` of `n` letters. */
 	private static function param(n: Int): String {
-		return [for (_ in 0...n) 'x'].join('') + ':Int';
+		return [ for (_ in 0...n) 'x' ].join('') + ':Int';
 	}
 
 	/** An arrow lambda whose parameters, each row joined by `, `, end in a trailing `,`. */

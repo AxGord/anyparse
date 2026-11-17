@@ -125,7 +125,7 @@ final class StdResolver {
 	 * set-but-nonexistent path is still skipped by `discover` rather than here. Pure.
 	 */
 	public static function stdEntryOf(value: String, separator: String, holdsStd: (String) -> Bool): Null<String> {
-		final entries: Array<String> = [for (e in value.split(separator)) if (e.trim() != '') StringTools.trim(e)];
+		final entries: Array<String> = [ for (e in value.split(separator)) if (e.trim() != '') StringTools.trim(e) ];
 		if (entries.length <= 1) return entries.length == 0 ? null : entries[0];
 		for (e in entries) if (holdsStd(e)) return e;
 		return null;
@@ -261,7 +261,7 @@ final class StdResolver {
 	 */
 	private static function whichHaxe(): Array<String> {
 		final out: Null<String> = whichAll();
-		return out == null ? [] : [for (line in out.split('\n')) if (line.trim() != '') line.trim()];
+		return out == null ? [] : [ for (line in out.split('\n')) if (line.trim() != '') line.trim() ];
 	}
 
 	private static function whichAll(): Null<String> {

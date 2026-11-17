@@ -1618,7 +1618,7 @@ final class WriterRefFieldLowering {
 			final leadAccess: Expr = beforeLeadingAccess(fieldName);
 			parts.push(macro {
 				final _gapCm: Array<String> = $leadAccess;
-				_gapCm.length == 0 ? _de() : _dc([for (_c in _gapCm) trailingCommentDocGuarded(_c, opt)]);
+				_gapCm.length == 0 ? _de() : _dc([ for (_c in _gapCm) trailingCommentDocGuarded(_c, opt) ]);
 			});
 		}
 		// ω-untyped-keep / ω-fnbody-keep: `@:fmt(bodyPolicyForCtor('<ctor>',

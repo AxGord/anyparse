@@ -145,7 +145,7 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 					for (record in TypePathRegistries.memberRecords(d.members, d.json)) if (record.finds.length > 0) record.type
 				]
 		];
-		final types: Array<String> = [for (list in typesOf) for (t in list) t];
+		final types: Array<String> = [ for (list in typesOf) for (t in list) t ];
 		final modules: Array<RewrittenModule> = [];
 		for (w in changed) {
 			final base: String = RefactorSupport.moduleNameOf(w.path);

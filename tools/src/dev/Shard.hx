@@ -338,7 +338,7 @@ final class Shard {
 		final verdict: Verdict = new Verdict();
 		final started: Float = Timer.stamp();
 		final runs: Array<Result> = Pool.of(shards).map(
-			[for (s in 0...shards) s],
+			[ for (s in 0...shards) s ],
 			s -> callerGc(
 				cmd('node ${job.testJs}')
 					.at(job.repo)
@@ -404,9 +404,9 @@ final class Shard {
 		}
 		final classesFile: String = Path.join([work, 'classes.txt']);
 		File.saveContent(classesFile, listed.out);
-		final registered: Array<String> = [for (line in listed.out.split('\n')) if (line.trim() != '') line.trim()];
+		final registered: Array<String> = [ for (line in listed.out.split('\n')) if (line.trim() != '') line.trim() ];
 		final only: Null<Array<String>> = job.only;
-		final classes: Array<String> = only == null ? registered : [for (name in registered) if (only.contains(name)) name];
+		final classes: Array<String> = only == null ? registered : [ for (name in registered) if (only.contains(name)) name ];
 		if (classes.length == 0) {
 			job.warn('dev shard: none of the ${only?.length ?? 0} classes asked for is registered in ${job.testJs}');
 			return null;
@@ -425,7 +425,7 @@ final class Shard {
 		};
 		File.saveContent(Path.join([work, 'assigned.txt']), ShardPlan.renderLines(placements));
 		final filters: Array<String> = ShardPlan.renderFilters(placements, shards).split('\n').slice(0, shards);
-		final total: Int = [for (p in placements) p.cls => true].count();
+		final total: Int = [ for (p in placements) p.cls => true ].count();
 		// the producer check compares the whole list with the tree; a subset is a choice, not a producer's count
 		final onDisk: Null<Int> = only == null ? testFileCount(Path.join([job.repo, TEST_ROOT])) : null;
 		if (onDisk != null && total != onDisk) {

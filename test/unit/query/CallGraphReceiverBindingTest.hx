@@ -43,7 +43,7 @@ class CallGraphReceiverBindingTest extends Test {
 			}
 		], new HaxeQueryPlugin());
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Compare.compareString);
 			return out;
 		}
@@ -80,7 +80,7 @@ class CallGraphReceiverBindingTest extends Test {
 			+ ' static function proj():Void U.lock.wait(); static function mine():Void M.lock.wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Compare.compareString);
 			return out;
 		}
@@ -203,7 +203,7 @@ class CallGraphReceiverBindingTest extends Test {
 			+ ' static function declared():Void A.maybe().wait(); }'
 		]);
 		function targets(from: String): Array<String> {
-			final out: Array<String> = [for (e in g.outEdges(from)) if (e.kind == Call) e.to];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call) e.to ];
 			out.sort(Compare.compareString);
 			return out;
 		}

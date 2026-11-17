@@ -66,8 +66,8 @@ class ArgumentSlotsTest extends Test {
 	@:pin('control')
 	@:killer('M-SLOTS-OVERFLOW-PARTIAL')
 	public function testTooManyWaysAnswerNone(): Void {
-		final params: Array<SlotParam> = [for (_ in 0...8) opt()];
-		final fits: Array<Array<ArgumentFit>> = [for (_ in 0...4) [for (_ in 0...8) MayFit]];
+		final params: Array<SlotParam> = [ for (_ in 0...8) opt() ];
+		final fits: Array<Array<ArgumentFit>> = [ for (_ in 0...4) [ for (_ in 0...8) MayFit ] ];
 		Assert.isNull(ArgumentSlots.runs(params, fits.length, (a, p) -> fits[a][p]));
 	}
 

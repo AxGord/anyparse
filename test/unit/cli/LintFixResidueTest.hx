@@ -54,7 +54,7 @@ private class Rename implements Check {
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return [for (v in violations) { span: v.span, text: 'BAR' }];
+		return [ for (v in violations) { span: v.span, text: 'BAR' } ];
 	}
 
 	private static function occurrences(source: String): Array<Int> {

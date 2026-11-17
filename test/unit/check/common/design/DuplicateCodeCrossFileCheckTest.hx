@@ -96,8 +96,8 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 			])
 		]);
 		Assert.equals(2, vs.length);
-		final same: Array<Violation> = [for (v in vs) if (v.message.indexOf('cross-file') == -1) v];
-		final cross: Array<Violation> = [for (v in vs) if (v.message.indexOf('cross-file') != -1) v];
+		final same: Array<Violation> = [ for (v in vs) if (v.message.indexOf('cross-file') == -1) v ];
+		final cross: Array<Violation> = [ for (v in vs) if (v.message.indexOf('cross-file') != -1) v ];
 		Assert.equals(1, same.length);
 		Assert.equals('A.hx', same[0].file);
 		Assert.equals(1, cross.length);
@@ -290,7 +290,7 @@ class DuplicateCodeCrossFileCheckTest extends Test {
 
 	public function testDuplicateCodeStillSingleBuiltin(): Void {
 		final ids: Array<String> = CheckFixture.builtinIds();
-		Assert.equals(1, [for (id in ids) if (id == 'duplicate-code') id].length);
+		Assert.equals(1, [ for (id in ids) if (id == 'duplicate-code') id ].length);
 	}
 
 	/**

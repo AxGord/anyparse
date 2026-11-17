@@ -130,7 +130,8 @@
 					"type": "noWrap"
 				}
 			]
-		}
+		},
+		"comprehensionFit": false
 	},
 	"whitespace": {
 		"addLineCommentSpace": true,
@@ -174,6 +175,12 @@
 			"anonFuncParamParens": {
 				"openingPolicy": "none",
 				"closingPolicy": "none"
+			}
+		},
+		"bracketConfig": {
+			"comprehensionBrackets": {
+				"openingPolicy": "onlyAfter",
+				"closingPolicy": "onlyBefore"
 			}
 		}
 	},

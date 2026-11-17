@@ -76,7 +76,7 @@ final class LandProseTest extends Test {
 	}
 
 	public function testTheRowNamesFewHitsAndCountsTheRest(): Void {
-		final hits: Array<String> = [for (index in 1...9) 'f:$index x'];
+		final hits: Array<String> = [ for (index in 1...9) 'f:$index x' ];
 		Assert.equals('8 hit(s): f:1 x; f:2 x; f:3 x; f:4 x; f:5 x; f:6 x; and 2 more', LandProse.reading(hits));
 	}
 
@@ -161,7 +161,7 @@ final class LandProseTest extends Test {
 					+ 'Util.hx is shared\nonly Z.hxx here\n';
 				files['docs/journal/log.md'] = 'mutation-arms.json\n';
 				files['docs/decisions.md'] = 'mutation-arms.json\n';
-				if (odd?.many == true) files['docs/many.md'] = [for (_ in 0...8) 'mutation-arms.json'].join('\n') + '\n';
+				if (odd?.many == true) files['docs/many.md'] = [ for (_ in 0...8) 'mutation-arms.json' ].join('\n') + '\n';
 				files['docs/archive/old.md'] = 'mutation-arms.json\n';
 			}
 			for (path => text in files) {

@@ -58,8 +58,8 @@ final class ImportReach {
 		found: Array<Violation>, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin
 	): Array<Violation> {
 		if (_oracles.length == 0 || !found.exists(v -> v.remedy != null)) return found;
-		final sources: Map<String, String> = [for (entry in files) entry.file => entry.source];
-		return [for (v in found) if (remedyResolves(v, sources[v.file] ?? '', plugin)) v];
+		final sources: Map<String, String> = [ for (entry in files) entry.file => entry.source ];
+		return [ for (v in found) if (remedyResolves(v, sources[v.file] ?? '', plugin)) v ];
 	}
 
 	/** Whether every build that reads `v`'s file resolves its remedy module, or the file imports it itself, or the finding names none. */
@@ -80,7 +80,7 @@ final class ImportReach {
 	private static function importedPaths(source: String, plugin: GrammarPlugin): Array<String> {
 		if (!(plugin is TypeInfoProvider)) return [];
 		final info: TypeInfoProvider = cast plugin;
-		return [for (path in info.importMap(source)) path];
+		return [ for (path in info.importMap(source)) path ];
 	}
 
 }

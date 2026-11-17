@@ -340,9 +340,9 @@ final class CloneCensus {
 		for (k => rule in ['type-2', 'type-1']) {
 			final before: Keyed = keyed(base[k]);
 			final now: Keyed = keyed(later[k]);
-			final removed: Array<Finding> = [for (key in before.keys) if (!now.byKey.exists(key)) only(before.byKey[key])];
-			final added: Array<Finding> = [for (key in now.keys) if (!before.byKey.exists(key)) only(now.byKey[key])];
-			final kept: Array<Finding> = [for (key in now.keys) if (before.byKey.exists(key)) only(now.byKey[key])];
+			final removed: Array<Finding> = [ for (key in before.keys) if (!now.byKey.exists(key)) only(before.byKey[key]) ];
+			final added: Array<Finding> = [ for (key in now.keys) if (!before.byKey.exists(key)) only(now.byKey[key]) ];
+			final kept: Array<Finding> = [ for (key in now.keys) if (before.byKey.exists(key)) only(now.byKey[key]) ];
 			final bare: Finding -> Bool = f -> runs.classify(f).startsWith('bare');
 			final removedBare: Int = removed.filter(bare).length;
 			final keptBare: Int = kept.filter(bare).length;
@@ -447,7 +447,7 @@ final class CloneCensus {
 
 	/** `counts` as Python prints a dict built from its items sorted by key. */
 	private static function pyDict(counts: Map<String, Int>): String {
-		final keys: Array<String> = [for (k in counts.keys()) k];
+		final keys: Array<String> = [ for (k in counts.keys()) k ];
 		keys.sort(Compare.compareString);
 		return '{' + keys.map(k -> '\'$k\': ${counts[k]}').join(', ') + '}';
 	}

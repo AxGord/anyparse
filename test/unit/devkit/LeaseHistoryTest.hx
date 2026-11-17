@@ -88,7 +88,7 @@ final class LeaseHistoryTest extends Test {
 	@:pin('control')
 	@:killer('M-LEASEHISTORY-SERIES-BOUND')
 	public function testACompactionKeepsTheLatestRunsOfEachSeries(): Void {
-		final lines: Array<String> = [for (i in 0...LeaseHistory.RECENT + 5) 'a\t2\t$i'].concat(['b\t2\t1']);
+		final lines: Array<String> = [ for (i in 0...LeaseHistory.RECENT + 5) 'a\t2\t$i' ].concat(['b\t2\t1']);
 		final kept: Array<String> = LeaseHistory.bounded(lines);
 		Assert.equals(LeaseHistory.RECENT + 1, kept.length);
 		Assert.equals('a\t2\t5', kept[0]);

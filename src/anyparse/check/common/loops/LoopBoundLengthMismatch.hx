@@ -332,7 +332,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 				fixedLength: false
 			};
 		if (init.kind != s.newExprKind || !isFixedLengthType(init.name, ctx)) return null;
-		final args: Array<QueryNode> = [for (c in init.children) if (!s.typeArgKinds.contains(c.kind)) c];
+		final args: Array<QueryNode> = [ for (c in init.children) if (!s.typeArgKinds.contains(c.kind)) c ];
 		return args.length != 1 ? null : {
 			name: name,
 			declFrom: span.from,
@@ -721,7 +721,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		final arrayLiteralKind: String = shape.arrayLiteralKind ?? return null;
 		final appendCall: String = shape.execution?.comprehensionCalls?.get(arrayLiteralKind) ?? return null;
 		final mutable: Array<String> = present(shape.mutableFieldDeclKinds);
-		final finalFieldKinds: Array<String> = [for (k in present(shape.fieldDeclKinds)) if (!mutable.contains(k)) k];
+		final finalFieldKinds: Array<String> = [ for (k in present(shape.fieldDeclKinds)) if (!mutable.contains(k)) k ];
 		if (finalFieldKinds.length != 1) return null;
 		final loopKinds: Array<String> = present(shape.iterationBindingKinds);
 		return {

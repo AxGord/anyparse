@@ -430,7 +430,7 @@ final class CondRegionScan {
 	 * which widens the gap rather than narrowing it: the safe direction for a fail-closed gate.
 	 */
 	private static function unmodelledGaps(node: QueryNode, span: Span): Array<Span> {
-		final covered: Array<Span> = [for (c in node.children) if (c.span != null) (c.span: Span)];
+		final covered: Array<Span> = [ for (c in node.children) if (c.span != null) (c.span: Span) ];
 		covered.sort((a, b) -> a.from - b.from);
 		final out: Array<Span> = [];
 		var at: Int = span.from;

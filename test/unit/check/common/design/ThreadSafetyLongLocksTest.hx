@@ -80,7 +80,7 @@ class ThreadSafetyLongLocksTest extends Test {
 			+ ' function work(f:() -> Void, g:() -> Void):Void { _m.acquire(); f(); g(); _m.release(); } }';
 		final lock: Null<LongLock> = longLock(explain([source]), 'A._m');
 		Assert.same([{ kind: 'blind', holder: 'A.work', at: source.indexOf('_m.acquire') }], reasonsOf(lock));
-		Assert.same([['f', 'g']], [for (r in lock?.reasons ?? []) [for (c in r.unresolved) c.name]]);
+		Assert.same([['f', 'g']], [ for (r in lock?.reasons ?? []) [ for (c in r.unresolved) c.name ] ]);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -95,9 +95,9 @@ class ThreadSafetyLongLocksTest extends Test {
 			+ ' function work():Void { _m.acquire(); nap(); _m.release(); } function nap():Void Sys.sleep(1); }';
 		final lock: Null<LongLock> = longLock(explain([source]), 'A._m');
 		Assert.same([{ kind: 'spans-blocking', holder: 'A.work', at: source.indexOf('nap();') }], reasonsOf(lock));
-		Assert.same(['A.nap'], [for (r in lock?.reasons ?? []) r.call]);
-		Assert.same([['A.work', 'A.nap', 'Sys.sleep']], [for (r in lock?.reasons ?? []) r.chain]);
-		Assert.same([null], [for (r in lock?.reasons ?? []) r.via]);
+		Assert.same(['A.nap'], [ for (r in lock?.reasons ?? []) r.call ]);
+		Assert.same([['A.work', 'A.nap', 'Sys.sleep']], [ for (r in lock?.reasons ?? []) r.chain ]);
+		Assert.same([null], [ for (r in lock?.reasons ?? []) r.via ]);
 		Assert.isNull(lock?.aside, 'a lock that spans a blocking call needs no counterfactual');
 		#else
 		Assert.pass('non-sys target');
@@ -158,7 +158,7 @@ class ThreadSafetyLongLocksTest extends Test {
 			+ ' function keep(x:Bool):Void { if (x) _m.acquire(); } function other(o:A):Void { _m.acquire(); o.inner(); _m.release(); }'
 			+ ' public function inner():Void { _m.acquire(); _m.release(); } }';
 		final lock: Null<LongLock> = longLock(explain([source]), 'A._m');
-		Assert.same(['leak'], [for (r in lock?.reasons ?? []) r.kind]);
+		Assert.same(['leak'], [ for (r in lock?.reasons ?? []) r.kind ]);
 		Assert.equals(1, lock?.circular);
 		Assert.same([], lock?.aside, 'nothing but the lock itself holds it long once the leak is set aside');
 		#else
@@ -204,7 +204,7 @@ class ThreadSafetyLongLocksTest extends Test {
 			+ ' function keep(x:Bool):Void { if (x) _m.acquire(); } function both(x:Bool):Void { if (x) _n.acquire(); Sys.sleep(1); } }';
 		final report: LongLockReport = explain([source]);
 		Assert.same([], longLock(report, 'A._m')?.aside, 'the leak was the only reason');
-		Assert.same(['spans-blocking'], [for (r in longLock(report, 'A._n')?.aside ?? []) r.kind]);
+		Assert.same(['spans-blocking'], [ for (r in longLock(report, 'A._n')?.aside ?? []) r.kind ]);
 		// `_n` is long only because its hold takes `_m`: with `_m`'s leak set aside `_n` is short, so `_m`'s hold of `_n` blocks nothing
 		final circular: String = 'class B { final _m:Mutex = new Mutex(); final _n:Mutex = new Mutex(); public function new() {}'
 			+ ' function keep(x:Bool):Void { if (x) _m.acquire(); } function a():Void { _n.acquire(); _m.acquire(); _m.release(); '
@@ -212,7 +212,7 @@ class ThreadSafetyLongLocksTest extends Test {
 		final loop: LongLockReport = explain([circular]);
 		Assert.same(
 			['spans-blocking'],
-			[for (r in longLock(loop, 'B._m')?.reasons ?? []) if (r.via == 'B._n') r.kind],
+			[ for (r in longLock(loop, 'B._m')?.reasons ?? []) if (r.via == 'B._n') r.kind ],
 			'held across a long lock'
 		);
 		Assert.same([], longLock(loop, 'B._m')?.aside, 'the lock it waits for is long only by this one');
@@ -254,7 +254,7 @@ class ThreadSafetyLongLocksTest extends Test {
 			true,
 			'{"rules":{"thread-safety":{"sinks":["Mutex.acquire"],"lockPairs":["Mutex.acquire/release"],"quietRoots":["A.shutdown"]}}}'
 		).report;
-		Assert.same([], [for (l in report?.long ?? []) l.lock]);
+		Assert.same([], [ for (l in report?.long ?? []) l.lock ]);
 		Assert.same(
 			[
 				'A._m @ ${source.indexOf('_m.acquire')} in A.boot quiet=false',
@@ -277,9 +277,9 @@ class ThreadSafetyLongLocksTest extends Test {
 			'class A { final _m:Mutex = new Mutex(); final _n:Mutex = new Mutex(); public function new() {} function keep(x:Bool):Void {'
 				+ ' if (x) _m.acquire(); } function boot():Void { _n.acquire(); _m.acquire(); _m.release(); _n.release(); } }'
 		];
-		final plain: Array<String> = [for (v in run(sources, false, CONFIG).found) v.message];
+		final plain: Array<String> = [ for (v in run(sources, false, CONFIG).found) v.message ];
 		Assert.isTrue(plain.length > 0);
-		Assert.same(plain, [for (v in run(sources, true, CONFIG).found) v.message]);
+		Assert.same(plain, [ for (v in run(sources, true, CONFIG).found) v.message ]);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -323,7 +323,7 @@ class ThreadSafetyLongLocksTest extends Test {
 		final check: ThreadSafety = new ThreadSafety();
 		check.explainLongLocks(explaining);
 		final found: Array<Violation> = Linter.run(
-			[for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }], new HaxeQueryPlugin(), [check]
+			[ for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] } ], new HaxeQueryPlugin(), [check]
 		);
 		CliFixture.removeDir(dir);
 		return { found: found, report: check.longLocks };
@@ -342,7 +342,7 @@ class ThreadSafetyLongLocksTest extends Test {
 
 	/** The calls the `spans-blocking` reasons of `reasons` name, sorted. */
 	private static function sortedCalls(reasons: Array<LongLockReason>): Array<Null<String>> {
-		final calls: Array<Null<String>> = [for (r in reasons) if (r.kind == LongLockKind.SpansBlocking) r.call];
+		final calls: Array<Null<String>> = [ for (r in reasons) if (r.kind == LongLockKind.SpansBlocking) r.call ];
 		calls.sort(Reflect.compare);
 		return calls;
 	}

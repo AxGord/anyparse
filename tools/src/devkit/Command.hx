@@ -283,7 +283,7 @@ final class Command {
 
 	/** `parts` laid end to end: the argument vector of a template, one array per template word. */
 	public static function flat(parts: Array<Array<String>>): Array<String> {
-		return [for (part in parts) for (item in part) item];
+		return [ for (part in parts) for (item in part) item ];
 	}
 
 	/**

@@ -18,8 +18,8 @@ class TypeSyntaxTest extends Test {
 	public function testTheCurriedChainIsOneFunction(): Void {
 		switch PLUGIN.typeSyntax('Int -> ?String -> Void')?.shape {
 			case Function(params, ret, true):
-				Assert.same(['Int', 'String'], [for (p in params) p.type.text]);
-				Assert.same([false, true], [for (p in params) p.optional]);
+				Assert.same(['Int', 'String'], [ for (p in params) p.type.text ]);
+				Assert.same([false, true], [ for (p in params) p.optional ]);
 				Assert.equals('Void', ret.text);
 			case _:
 				Assert.fail('not a curried function');
@@ -49,9 +49,9 @@ class TypeSyntaxTest extends Test {
 	public function testAParameterListIsOneFunctionPerList(): Void {
 		switch PLUGIN.typeSyntax('(a: Int, ?b: Map<K, V>, ?Int) -> (String) -> Bool')?.shape {
 			case Function(params, ret, false):
-				Assert.same(['a', 'b', null], [for (p in params) p.name]);
-				Assert.same([false, true, true], [for (p in params) p.optional]);
-				Assert.same(['Int', 'Map<K, V>', 'Int'], [for (p in params) p.type.text]);
+				Assert.same(['a', 'b', null], [ for (p in params) p.name ]);
+				Assert.same([false, true, true], [ for (p in params) p.optional ]);
+				Assert.same(['Int', 'Map<K, V>', 'Int'], [ for (p in params) p.type.text ]);
 				Assert.equals('(String) -> Bool', ret.text);
 			case _:
 				Assert.fail('not a function');
@@ -67,9 +67,9 @@ class TypeSyntaxTest extends Test {
 	public function testAStructureListsItsTypedFields(): Void {
 		switch PLUGIN.typeSyntax('{ a: Int, ?b: String, var c: Float; function f(): Void; }')?.shape {
 			case Structure(fields):
-				Assert.same(['a', 'b', 'c'], [for (f in fields) f.name]);
-				Assert.same(['Int', 'String', 'Float'], [for (f in fields) f.type.text]);
-				Assert.same([false, true, false], [for (f in fields) f.optional]);
+				Assert.same(['a', 'b', 'c'], [ for (f in fields) f.name ]);
+				Assert.same(['Int', 'String', 'Float'], [ for (f in fields) f.type.text ]);
+				Assert.same([false, true, false], [ for (f in fields) f.optional ]);
 			case _:
 				Assert.fail('not a structure');
 		}
@@ -83,7 +83,7 @@ class TypeSyntaxTest extends Test {
 		Assert.same(['A & B', 'C'], args.map(a -> a.text));
 		switch args[0]?.shape {
 			case Intersection(members):
-				Assert.same(['A', 'B'], [for (m in members) m.text]);
+				Assert.same(['A', 'B'], [ for (m in members) m.text ]);
 			case _:
 				Assert.fail('not an intersection');
 		}
@@ -92,7 +92,7 @@ class TypeSyntaxTest extends Test {
 	public function testAConditionalTypeListsItsBranches(): Void {
 		switch PLUGIN.typeSyntax('#if js Dynamic #elseif cpp Float #else Int #end')?.shape {
 			case Conditional(branches):
-				Assert.same(['Dynamic', 'Float', 'Int'], [for (b in branches) b.text]);
+				Assert.same(['Dynamic', 'Float', 'Int'], [ for (b in branches) b.text ]);
 			case _:
 				Assert.fail('not a conditional type');
 		}

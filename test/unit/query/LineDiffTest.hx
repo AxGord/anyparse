@@ -79,8 +79,8 @@ class LineDiffTest extends Test {
 			return seed % bound;
 		}
 		for (_ in 0...400) {
-			final old: Array<String> = [for (_ in 0...next(9)) String.fromCharCode('a'.code + next(3))];
-			final now: Array<String> = [for (_ in 0...next(9)) String.fromCharCode('a'.code + next(3))];
+			final old: Array<String> = [ for (_ in 0...next(9)) String.fromCharCode('a'.code + next(3)) ];
+			final now: Array<String> = [ for (_ in 0...next(9)) String.fromCharCode('a'.code + next(3)) ];
 			final edits: Null<LineEdits> = LineDiff.edits(old, now, 100);
 			Assert.notNull(edits, '$old -> $now');
 			if (edits == null) return;
@@ -92,7 +92,7 @@ class LineDiffTest extends Test {
 
 	/** The longest common subsequence's length, by the textbook table. */
 	private static function commonLength(a: Array<String>, b: Array<String>): Int {
-		final table: Array<Array<Int>> = [for (_ in 0...a.length + 1) [for (_ in 0...b.length + 1) 0]];
+		final table: Array<Array<Int>> = [ for (_ in 0...a.length + 1) [ for (_ in 0...b.length + 1) 0 ] ];
 		for (i => x in a) for (j => y in b) {
 			final skipOld: Int = table[i][j + 1];
 			final skipNew: Int = table[i + 1][j];

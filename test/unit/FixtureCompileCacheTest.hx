@@ -87,7 +87,7 @@ class FixtureCompileCacheTest extends Test {
 			FixtureCompileCache.run('haxe', 'stamp', cache, first.dir, args(first));
 			final entry: String = Path.join([
 				cache,
-				[for (f in FileSystem.readDirectory(cache)) if (f.endsWith('.json.gz')) f][0]
+				[ for (f in FileSystem.readDirectory(cache)) if (f.endsWith('.json.gz')) f ][0]
 			]);
 			// A live holder: this process. It records and releases the key the first time the waiter probes whether it is
 			// alive, so the record lands while the waiter waits — however slow the machine — and nothing of the holder is
@@ -129,7 +129,7 @@ class FixtureCompileCacheTest extends Test {
 			+ '\t\tSys.println("cwd " + Sys.getCwd());\n'
 		);
 		final cache: String = CliFixture.writeTree('fcc_cache', []);
-		final fixtures: Array<Fixture> = [for (_ in 0...4) fixture(switched)];
+		final fixtures: Array<Fixture> = [ for (_ in 0...4) fixture(switched) ];
 		final before: Null<String> = Sys.getEnv('APQ_MUTANT');
 		CliFixture.always(() -> {
 			Sys.putEnv('APQ_MUTANT', before ?? '');
@@ -278,7 +278,7 @@ class FixtureCompileCacheTest extends Test {
 			+ '\t\tSys.println("cwd " + Sys.getCwd());\n'
 		);
 		final cache: String = CliFixture.writeTree('fcc_cache', []);
-		final fixtures: Array<Fixture> = [for (_ in 0...2) fixture(switched)];
+		final fixtures: Array<Fixture> = [ for (_ in 0...2) fixture(switched) ];
 		final before: Null<String> = Sys.getEnv('APQ_MUTANT');
 		CliFixture.always(() -> {
 			Sys.putEnv('APQ_MUTANT', before ?? '');

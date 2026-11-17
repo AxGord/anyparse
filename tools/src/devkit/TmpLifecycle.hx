@@ -87,7 +87,7 @@ final class TmpLifecycle {
 		if (!FileSystem.exists(file) || FileSystem.isDirectory(file)) return null;
 		final text: String = try File.getContent(file) catch (exception: Exception) '';
 		for (line in text.split('\n')) {
-			final fields: Array<String> = [for (field in ~/[ \t]+/g.split(line.trim())) if (field != '') field];
+			final fields: Array<String> = [ for (field in ~/[ \t]+/g.split(line.trim())) if (field != '') field ];
 			if (fields.length > 1 && fields[0] == 'pid') return fields[1];
 		}
 		return null;

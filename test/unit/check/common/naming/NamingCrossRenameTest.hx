@@ -369,7 +369,7 @@ final class NamingCrossRenameTest extends Test {
 					severity: Severity.Warning,
 					message: name
 				},
-				slices: [for (f in files) { file: f, edits: [] }]
+				slices: [ for (f in files) { file: f, edits: [] } ]
 			};
 		}
 		final a: RiskyCrossFileEdit = set('a', ['f1', 'f2']);

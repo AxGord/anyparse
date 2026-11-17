@@ -335,7 +335,7 @@ class ThreadSafetyDominanceTest extends Test {
 				+ ' public function slow():Void { _outer.acquire(); _inner.acquire(); Sys.sleep(1); _inner.release(); _outer.release(); }'
 				+ ' public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow()); } }'
 		];
-		Linter.run([for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }], new HaxeQueryPlugin(), [check]);
+		Linter.run([ for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] } ], new HaxeQueryPlugin(), [check]);
 		CliFixture.removeDir(dir);
 		// both are held across the sleep: each long hold of either holds the other
 		Assert.same([{ lock: 'D._inner', by: ['D._outer'] }, { lock: 'D._outer', by: ['D._inner'] }], check.longLocks?.dominated);
@@ -425,7 +425,7 @@ class ThreadSafetyDominanceTest extends Test {
 
 	/** How many of the main thread's takes in `quick` are graded short; -1 when the fixture reports fewer than both. */
 	private static function shortQuickTakes(found: Array<Violation>): Int {
-		final takes: Array<Violation> = [for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.quick') v];
+		final takes: Array<Violation> = [ for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.quick') v ];
 		// both of `quick`'s takes reach the main thread: fewer means the fixture said nothing (a parse failure)
 		return takes.length < 2 ? -1 : takes.filter(v -> v.message.indexOf(' — short: ') >= 0).length;
 	}

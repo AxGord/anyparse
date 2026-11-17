@@ -207,7 +207,7 @@ final class TriviaEofLowering {
 		// and the loop keeps its own per-element call.
 		if (c.measuredMultiline) {
 			final measuredElemCall: Expr = c.measuredElemCall;
-			elseBodyParts.push(macro final _elemDocs: Array<anyparse.core.Doc> = [for (_e in _arr) $measuredElemCall]);
+			elseBodyParts.push(macro final _elemDocs: Array<anyparse.core.Doc> = [ for (_e in _arr) $measuredElemCall ]);
 			elseBodyParts.push(macro final _measMulti: Array<Bool> = [
 				for (_d in _elemDocs) {
 					final _w: Int = anyparse.core.DocMeasure.flatTokenWidth(_d);

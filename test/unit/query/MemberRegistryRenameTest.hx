@@ -88,7 +88,7 @@ private class ArmsAfter {
 
 	private static function strings(value: Null<JValue>): Array<String> {
 		return switch value {
-			case JArray(items): [for (item in items) string(item) ?? ''];
+			case JArray(items): [ for (item in items) string(item) ?? '' ];
 			case _: [];
 		};
 	}

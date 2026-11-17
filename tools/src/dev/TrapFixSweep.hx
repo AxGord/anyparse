@@ -65,7 +65,7 @@ final class TrapFixSweep {
 		final repo: String = Repo.resolve(null);
 		final catalog: String = args.option('--catalog') ?? Path.join([repo, DEFAULT_CATALOG]);
 		args.done();
-		final ruleArgs: Array<String> = rules.length == 0 ? ['--all'] : [for (r in rules) for (word in [RULE_FLAG, r]) word];
+		final ruleArgs: Array<String> = rules.length == 0 ? ['--all'] : [ for (r in rules) for (word in [RULE_FLAG, r]) word ];
 		final engine: String = Path.join([repo, 'bin', 'apq.js']);
 		var moved: Int = 0;
 		for (swept in sweep(catalog, engine, ruleArgs)) {

@@ -103,7 +103,7 @@ final class ReachAdmission {
 
 	/** The names the walk admits functions by at an untyped access of `member`: its accessors, and the member itself. */
 	public function accessNames(member: String): Array<String> {
-		final out: Array<String> = [for (p in _scope.shape.accessorMethodPrefixes ?? []) p + member];
+		final out: Array<String> = [ for (p in _scope.shape.accessorMethodPrefixes ?? []) p + member ];
 		out.push(member);
 		return out;
 	}

@@ -557,7 +557,7 @@ final class AddElement {
 	private static function gapEdits(
 		source: String, containerSpan: Span, existing: Array<SortedEntry>, entries: Array<SortedEntry>, plugin: GrammarPlugin
 	): Array<Splice> {
-		final byGap: Array<Array<String>> = [for (_ in 0...existing.length + 1) []];
+		final byGap: Array<Array<String>> = [ for (_ in 0...existing.length + 1) [] ];
 		for (entry in entries) {
 			final at: Int = existing.findIndex(e -> e.key > entry.key);
 			byGap[at < 0 ? existing.length : at].push(entry.text);

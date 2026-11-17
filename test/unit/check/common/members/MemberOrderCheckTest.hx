@@ -1487,7 +1487,7 @@ class MemberOrderCheckTest extends Test {
 	 * occupant, so a slot-difference measure charges the whole class for that one line.
 	 */
 	private function trailingConstant(filler: Int): String {
-		final tail: String = [for (i in 0...filler) '\tprivate function m$i():Void {}'].join('\n');
+		final tail: String = [ for (i in 0...filler) '\tprivate function m$i():Void {}' ].join('\n');
 		return 'class C {\n$tail\n\n\tprivate static inline final GUTTER:Int = 4;\n}\n';
 	}
 
@@ -1497,7 +1497,7 @@ class MemberOrderCheckTest extends Test {
 	 * member of each genuinely changes position — a wholesale permutation under any measure.
 	 */
 	private function interleavedRanks(pairs: Int, body: Int): String {
-		final filler: String = [for (i in 0...body) '\t\tvar v$i:Int = $i;'].join('\n');
+		final filler: String = [ for (i in 0...body) '\t\tvar v$i:Int = $i;' ].join('\n');
 		final members: Array<String> = [
 			for (i in 0...pairs) '\tpublic function m$i():Void {\n$filler\n\t}\n\n\tprivate static function s$i():Void {\n$filler\n\t}'
 		];

@@ -67,7 +67,7 @@ final class TypedFactsTypeStrings {
 			case TDynamic(null): 'Dynamic';
 			case TDynamic(inner): 'Dynamic<${typeString(inner, depth + 1)}>';
 			case TFun(args, ret):
-				'(' + [for (a in args) (a.opt ? '?' : '') + typeString(a.t, depth + 1)].join(',') + ')->' + typeString(ret, depth + 1);
+				'(' + [ for (a in args) (a.opt ? '?' : '') + typeString(a.t, depth + 1) ].join(',') + ')->' + typeString(ret, depth + 1);
 			case TAnonymous(a):
 				final anon: AnonType = a.get();
 				switch anon.status {
@@ -102,11 +102,11 @@ final class TypedFactsTypeStrings {
 	}
 
 	public static function typeList(list: Array<Type>): String {
-		return arr([for (t in list) q(typeString(t, 0))]);
+		return arr([ for (t in list) q(typeString(t, 0)) ]);
 	}
 
 	private static function paramString(params: Array<Type>, depth: Int): String {
-		return params.length == 0 ? '' : '<' + [for (p in params) typeString(p, depth + 1)].join(',') + '>';
+		return params.length == 0 ? '' : '<' + [ for (p in params) typeString(p, depth + 1) ].join(',') + '>';
 	}
 
 }

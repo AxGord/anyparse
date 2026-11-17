@@ -88,7 +88,7 @@ final class Complexity extends RuleBase implements ConfigAware implements NoAuto
 		// count toward the enclosing measured function. Otherwise a block could be
 		// hidden from the metric by wrapping it in a local function. Only top-level /
 		// member functions are measured (and reported) on their own.
-		final measured: Array<String> = [for (k in functionKinds) if (!localFunctionKinds.contains(k)) k];
+		final measured: Array<String> = [ for (k in functionKinds) if (!localFunctionKinds.contains(k)) k ];
 		if (measured.length == 0) return [];
 		final cfg: ComplexityCfg = {
 			functionKinds: measured,

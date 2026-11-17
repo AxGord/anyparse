@@ -63,8 +63,8 @@ class SpawnJobDocumentTest extends Test {
 		ProcessSpawn.dropBatch(batch.dir);
 		switch JValueParser.parse(text) {
 			case JArray([JObject(first), JObject(second)]):
-				Assert.same(['args'], [for (entry in first) (entry.key: String)]);
-				Assert.same(['args'], [for (entry in second) (entry.key: String)]);
+				Assert.same(['args'], [ for (entry in first) (entry.key: String) ]);
+				Assert.same(['args'], [ for (entry in second) (entry.key: String) ]);
 			case _:
 				Assert.fail(text);
 		}

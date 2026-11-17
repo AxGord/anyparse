@@ -331,7 +331,7 @@ class ShortenTypeRefCheckTest extends Test {
 			+ '\t\tg(pkg.deep.Bar.a());\n\t\tg(pkg.deep.Bar.b());\n'
 		);
 		final edits: Array<GroupedEdit> = suppressedEdits(src);
-		final rewriteGroups: Array<Null<Int>> = [for (e in edits) if (e.span.from != e.span.to) e.group];
+		final rewriteGroups: Array<Null<Int>> = [ for (e in edits) if (e.span.from != e.span.to) e.group ];
 		for (e in edits) if (e.span.from == e.span.to)
 			Assert.isTrue(rewriteGroups.contains(e.group), 'import group ${e.group} has no rewrite, edits: $edits');
 		Assert.isTrue(rewriteGroups.length > 0, 'the fixture still produces rewrites, edits: $edits');
@@ -547,7 +547,7 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testTheOracleIsAskedAtTheShortNameOfTheRewrittenText(): Void {
 		final src: String = inClass('', '\t\tg(pkg.deep.Foo.make());\n\t\tg(pkg.deep.Foo.other());\n');
 		final exact: FixedNameOracle = new FixedNameOracle((after, at) -> after.substr(at, 'Foo.'.length) == 'Foo.');
-		final out: String = CanonicalEdit.applyEdits(src, [for (e in askedWith(exact, src).edits) { span: e.span, text: e.text }]);
+		final out: String = CanonicalEdit.applyEdits(src, [ for (e in askedWith(exact, src).edits) { span: e.span, text: e.text } ]);
 		Assert.isTrue(
 			out.indexOf('import pkg.deep.Foo;') != -1 && out.indexOf('g(Foo.make());') != -1, 'confirmed at the short name, got: $out'
 		);
@@ -862,7 +862,7 @@ class ShortenTypeRefCheckTest extends Test {
 		});
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(2, vs.length);
-		Assert.equals(1, [for (v in vs) if (v.message.indexOf('report-only') == -1) v].length, 'exactly one proven half');
+		Assert.equals(1, [ for (v in vs) if (v.message.indexOf('report-only') == -1) v ].length, 'exactly one proven half');
 		Assert.equals('\t\tfinal v:Map<Sub, pkg.deep.Foo> = g();', annotationLine(applyFixWith(src, scoped, report)));
 	}
 

@@ -223,7 +223,7 @@ final class MapKeysLookup extends RuleBase {
 	/** The local-declaration kinds that cannot be reassigned — every `localDeclKinds` entry that is not a mutable one. */
 	private static function immutableLocalDeclKinds(shape: RefShape): Array<String> {
 		final mutable: Array<String> = shape.mutableLocalDeclKinds ?? [];
-		return [for (k in shape.localDeclKinds ?? []) if (!mutable.contains(k)) k];
+		return [ for (k in shape.localDeclKinds ?? []) if (!mutable.contains(k)) k ];
 	}
 
 	/**

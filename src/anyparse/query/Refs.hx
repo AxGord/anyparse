@@ -400,7 +400,7 @@ final class Refs {
 		tree: QueryNode, shape: RefShape, out: Map<String, Array<RefHit>>, ?skipped: Map<String, Int>
 	): Void {
 		final captures: CaptureIndex = new CaptureIndex(tree, shape);
-		final extra: Array<String> = [for (name in captures.subjectNames()) if (!out.exists(name)) name];
+		final extra: Array<String> = [ for (name in captures.subjectNames()) if (!out.exists(name)) name ];
 		for (name in extra) out[name] = [];
 		walkMulti(tree, shape, new ScopeStack(), out, WalkFlags.None, captures, skipped);
 		for (name in extra) out.remove(name);

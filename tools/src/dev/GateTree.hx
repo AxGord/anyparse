@@ -191,7 +191,7 @@ final class GateTree {
 
 	/** The snapshot each `--infra-tree` of a `--baseline` run is linted into. */
 	public function infraSnapshots(): Array<InfraSnapshot> {
-		return [for (i => dir in options.infra) { tree: dir, snapshot: log('infra-$i.json') }];
+		return [ for (i => dir in options.infra) { tree: dir, snapshot: log('infra-$i.json') } ];
 	}
 
 	/**

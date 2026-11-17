@@ -45,7 +45,7 @@ final class QuietLocks {
 	public function sharedOnly(lock: String): Bool {
 		final known: Null<Bool> = _sharedOnly[lock];
 		if (known != null) return known;
-		final takes: Array<LockAcquire> = [for (a in _sites.acquires.concat(_sites.helperHolds)) if (a.lock == lock) a];
+		final takes: Array<LockAcquire> = [ for (a in _sites.acquires.concat(_sites.helperHolds)) if (a.lock == lock) a ];
 		final answer: Bool = takes.length > 0 && takes.foreach(a -> _listsOf(a.edge.file).sharedIds.contains(a.pair.lockId));
 		_sharedOnly[lock] = answer;
 		return answer;
@@ -59,7 +59,7 @@ final class QuietLocks {
 	public function exclusive(lock: String): Bool {
 		final known: Null<Bool> = _exclusive[lock];
 		if (known != null) return known;
-		final takes: Array<LockAcquire> = [for (a in _sites.acquires.concat(_sites.helperHolds)) if (a.lock == lock) a];
+		final takes: Array<LockAcquire> = [ for (a in _sites.acquires.concat(_sites.helperHolds)) if (a.lock == lock) a ];
 		final pair: String = takes.length == 0 ? '' : takes[0].pair.lockId;
 		final type: String = pair.substring(0, pair.lastIndexOf('.') + 1);
 		final answer: Bool = pair != '' && takes.foreach(a -> {

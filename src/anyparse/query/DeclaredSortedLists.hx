@@ -54,8 +54,8 @@ final class DeclaredSortedLists {
 			case [Left(message), _], [_, Left(message)]:
 				return Left(message);
 		}
-		final oldAll: Array<String> = [for (p in was) for (e in p.entries) e.content];
-		final newAll: Array<String> = [for (p in now) for (e in p.entries) e.content];
+		final oldAll: Array<String> = [ for (p in was) for (e in p.entries) e.content ];
+		final newAll: Array<String> = [ for (p in now) for (e in p.entries) e.content ];
 		if (oldAll.join('\n') == newAll.join('\n')) return Right([]);
 		for (i in 1...oldAll.length) if (oldAll[i - 1] > oldAll[i])
 			return Left('sorted list ${describe(parts)} is not sorted before the move ("${oldAll[i - 1]}" precedes "${oldAll[i]}")');
@@ -170,8 +170,8 @@ final class DeclaredSortedLists {
 	 * entry up to the next part's first.
 	 */
 	private static function distribute(was: Array<ReadPart>, now: Array<ReadPart>): Array<Array<ListEntry>> {
-		final bounds: Array<Null<String>> = [for (i => p in was) i > 0 && p.entries.length > 0 ? p.entries[0].content : null];
-		final assigned: Array<Array<ListEntry>> = [for (_ in now) []];
+		final bounds: Array<Null<String>> = [ for (i => p in was) i > 0 && p.entries.length > 0 ? p.entries[0].content : null ];
+		final assigned: Array<Array<ListEntry>> = [ for (_ in now) [] ];
 		for (p in now) for (e in p.entries) {
 			var target: Int = 0;
 			for (i => bound in bounds) if (bound != null && Compare.compareString(bound, e.content) <= 0) target = i;

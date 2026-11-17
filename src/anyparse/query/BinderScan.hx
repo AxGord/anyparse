@@ -77,7 +77,7 @@ final class BinderScan {
 		var cur: QueryNode = stmt;
 		while (true) {
 			if (localDeclKinds.contains(cur.kind) || localDeclExprKinds.contains(cur.kind)) return cur;
-			final payload: Array<QueryNode> = [for (c in cur.children) if (!metaKinds.contains(c.kind)) c];
+			final payload: Array<QueryNode> = [ for (c in cur.children) if (!metaKinds.contains(c.kind)) c ];
 			if (payload.length != 1) return null;
 			cur = payload[0];
 		}
@@ -176,7 +176,7 @@ final class BinderScan {
 	 * key-value loop.
 	 */
 	public static function loopOperands(loop: QueryNode, valueBinderKinds: Array<String>): Array<QueryNode> {
-		return [for (c in loop.children) if (!valueBinderKinds.contains(c.kind)) c];
+		return [ for (c in loop.children) if (!valueBinderKinds.contains(c.kind)) c ];
 	}
 
 	/**
@@ -234,7 +234,7 @@ final class BinderScan {
 		if (host == tree) return cursorHost;
 		// every nested function that DECLARES its name in the parent: a local one, an `inline` one, a named function expression
 		final namedFnKinds: Array<String> = ShapeVocab.localFunctionScopeKinds(shape)
-			.concat([for (k in [shape.namedFnExprKind]) if (k != null) k]);
+			.concat([ for (k in [shape.namedFnExprKind]) if (k != null) k ]);
 		final span: Null<Span> = host.span;
 		if (span == null || span.from != binding || !namedFnKinds.contains(host.kind)) return host;
 		final parentSpan: Null<Span> = TreePath.parentOf(tree, host)?.span;

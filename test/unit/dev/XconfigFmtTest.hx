@@ -117,8 +117,8 @@ final class XconfigFmtTest extends Test {
 	public function testTheFailureLineKeepsBothHalvesAndTheirRemediesWhenClipped(): Void {
 		TempDir.with(dir -> {
 			final long: String = 'src/anyparse/check/common/design/threads/SomeVeryLongRuleNameForTheCensus';
-			final joined: Array<String> = [for (i in 0...4) '$long$i.hx'];
-			final filed: Array<String> = [for (i in 0...3) 'tools/src/dev/devkit/AnotherLongNamedFiledFileNumber$i.hx'];
+			final joined: Array<String> = [ for (i in 0...4) '$long$i.hx' ];
+			final filed: Array<String> = [ for (i in 0...3) 'tools/src/dev/devkit/AnotherLongNamedFiledFileNumber$i.hx' ];
 			final both: XconfigRun = { shown: [], finished: true, onePass: joined };
 			final failure: Null<XconfigFailure> = XconfigFmt.xconfigVerdict(both, filed, []);
 			Assert.notNull(failure);

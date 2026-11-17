@@ -428,7 +428,7 @@ final class TypeRefIndex {
 
 	/** The paths of the `using` statements `fi` itself writes, a guarded one included — the extensions it brings in by name. */
 	public static function usings(fi: FileInfo): Array<String> {
-		return [for (imp in fi.imports) if (imp.kind == ImportKind.Using) imp.raw];
+		return [ for (imp in fi.imports) if (imp.kind == ImportKind.Using) imp.raw ];
 	}
 
 	/** The packages the file's package wildcards (`import p.*;`) name, the `.*` dropped. */
@@ -453,7 +453,7 @@ final class TypeRefIndex {
 	 * static field import among them (`import pkg.Type.member;`).
 	 */
 	public static function plainImports(fi: FileInfo): Array<String> {
-		return [for (imp in fi.imports) if (imp.kind == ImportKind.Import) imp.raw];
+		return [ for (imp in fi.imports) if (imp.kind == ImportKind.Import) imp.raw ];
 	}
 
 	/**
