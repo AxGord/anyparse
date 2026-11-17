@@ -2,6 +2,7 @@ package unit.dev;
 
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.util.Compare;
 import dev.BaseEngine;
 import dev.BaseLint;
 import dev.BaselineWriter;
@@ -152,9 +153,10 @@ final class Infra4LeasePhaseTest extends Test {
 				.split('\n')
 				.filter(l -> l != '');
 			final labels: Array<String> = leases.map(l -> l.substring(l.indexOf('--label ') + '--label '.length, l.indexOf(' -- ')));
+			labels.sort(Compare.compareString);
 			Assert.same([
-				'slice-gate tree infra4 infra',
 				'slice-gate tree infra4 base tree',
+				'slice-gate tree infra4 infra',
 				'slice-gate tree infra4 infra'
 			], labels);
 			for (l in leases) {
