@@ -28,7 +28,7 @@ final class BranchWatch {
 		'fmt' => 10,
 		'lint' => 20,
 		'jvm' => 20,
-		'infra4' => 50,
+		'infra4' => 60,
 		'base-lint' => 20,
 		'scrub' => 10,
 		'artifacts' => 5,

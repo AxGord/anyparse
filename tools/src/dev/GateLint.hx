@@ -34,6 +34,13 @@ final class GateLint {
 	/** The threads one lint of the infra4 row is leased: a process per tree, as `SliceGate.demandOf` counts the row. */
 	private static inline final INFRA_LINT_THREADS: Int = 1;
 
+	/**
+	 * How long one lint of the infra4 row may run from its lease grant before it is killed: above the process driver's default for
+	 * a leased job, which an honest lint of the whole tree reaches on a loaded host. The row's branch limit (`BranchWatch`) covers
+	 * this plus the wait for the base lint.
+	 */
+	private static inline final INFRA_LINT_TIMEOUT_MS: Int = 30 * 60 * 1000;
+
 	/** The report of the lint row's touched files in the tree, and of the same files at the base, in the logs. */
 	private static final TOUCHED_REPORT: String = 'lint-touched.json';
 
@@ -239,7 +246,10 @@ final class GateLint {
 		if (!run.out.trim().startsWith('[')) {
 			final errors: String = errLogOf(out);
 			_gate.summary.excerpt(Excerpt.errors(run.out + (FileSystem.exists(errors) ? File.getContent(errors) : '')));
-			return NotRun('lint of $tree printed no report: ${GateTree.quote(run)} — stderr in $errors');
+			final why: String = run.failure.indexOf('timed out') >= 0
+				? 'timeout at load ${hostLoad()}: lint of $tree outlived its limit'
+				: 'lint of $tree printed no report';
+			return NotRun('$why: ${GateTree.quote(run)} — stderr in $errors');
 		}
 		File.saveContent(out, run.out);
 		return Passed;
@@ -260,7 +270,9 @@ final class GateLint {
 	 */
 	private function infraLint(command: Command, name: String): Command {
 		final ask: Ask = { min: INFRA_LINT_THREADS, max: INFRA_LINT_THREADS, priority: Lease.ahead() };
-		return Lease.take(_mode, command, ask, 'slice-gate ${Path.withoutDirectory(_gate.tree)} infra4 $name');
+		return Lease.take(
+			_mode, command.timeout(INFRA_LINT_TIMEOUT_MS), ask, 'slice-gate ${Path.withoutDirectory(_gate.tree)} infra4 $name'
+		);
 	}
 
 	/** `hxq lint-diff` of two snapshots, its report kept as `name` in the logs. */
@@ -506,6 +518,11 @@ final class GateLint {
 	 */
 	private static function rejectedBy(file: String, root: String): Array<String> {
 		return FileSystem.exists(file) ? rejectedIn(File.getContent(file), [root, FileSystem.fullPath(root)]) : [];
+	}
+
+	/** The one-minute load average of this host, whole: what a lint that outlived its limit was competing with. */
+	private static function hostLoad(): String {
+		return '${Std.int(js.node.Os.loadavg()[0])}';
 	}
 
 }

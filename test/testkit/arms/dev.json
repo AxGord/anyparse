@@ -3403,6 +3403,22 @@
 			"note": "the infra4 row's lints queue at the gate's own priority instead of one step ahead, so they wait behind the leases of the run that started the gate"
 		},
 		{
+			"name": "M-GATE-INFRA4-LINT-UNBOUNDED",
+			"type": "dev.GateLint",
+			"method": "infraLint",
+			"find": "command.timeout(INFRA_LINT_TIMEOUT_MS)",
+			"replace": "command",
+			"note": "the infra4 row's lints name no limit, so a lint under load is killed at the process driver's default from its grant"
+		},
+		{
+			"name": "M-GATE-INFRA4-LINT-TIMEOUT-UNNAMED",
+			"type": "dev.GateLint",
+			"method": "saveLint",
+			"find": "run.failure.indexOf('timed out') >= 0",
+			"replace": "false",
+			"note": "a lint killed at its limit reads as one that printed no report, not as a timeout under load"
+		},
+		{
 			"name": "M-GATE-LINT-CORES-ONE",
 			"type": "dev.GateLint",
 			"method": "coresOf",

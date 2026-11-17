@@ -367,6 +367,7 @@ final class SliceGateTest extends Test {
 		Assert.equals(20 * minute, BranchWatch.idleOf(['corpus']));
 		Assert.equals(10 * minute, BranchWatch.idleOf(['lists', 'fmt', 'scrub', 'artifacts']));
 		Assert.equals(45 * minute, BranchWatch.idleOf(['arms']));
+		Assert.equals(60 * minute, BranchWatch.idleOf(['infra4']));
 		Assert.equals(5 * minute, BranchWatch.idleOf(['lists']));
 		Assert.equals(20 * minute, BranchWatch.idleOf(['no-such-row']));
 	}
