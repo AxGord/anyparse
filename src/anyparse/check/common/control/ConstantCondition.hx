@@ -6,6 +6,19 @@ import anyparse.query.ElementSpan;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
+/** The resolved seams `ConstantCondition` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final boolLitKind: String;
+	final branchKinds: Array<String>;
+	final blockKinds: Array<String>;
+	final emptyStmtKind: Null<String>;
+
+	/** The statement-position `if` kinds: only such an `if` with no taken branch is fixable. */
+	final ifStatementKinds: Array<String>;
+
+};
+
 /**
  * Flags a boolean literal used as the condition of an `if` — `if (true) ...` /
  * `if (false) ...` (SonarLint S1145): the branch is always or never taken, so
@@ -220,16 +233,3 @@ final class ConstantCondition extends RuleBase {
 	}
 
 }
-
-/** The resolved seams `ConstantCondition` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final boolLitKind: String;
-	final branchKinds: Array<String>;
-	final blockKinds: Array<String>;
-	final emptyStmtKind: Null<String>;
-
-	/** The statement-position `if` kinds: only such an `if` with no taken branch is fixable. */
-	final ifStatementKinds: Array<String>;
-
-};

@@ -10,6 +10,198 @@ import anyparse.util.Groups;
 using StringTools;
 
 /**
+ * What `MustHeld` reads off one function's body: what a condition evaluates to under a valuation of its tracked
+ * parameters, every run a valuation may stand for, the local a lock call is made on, and whether a `try` may stop an
+ * exception thrown at a site.
+ */
+@:nullSafety(Strict)
+private final class BodyFacts {
+
+	/** The most parameters a valuation does not know that `runsOf` reads as each value they may hold. */
+	private static inline final KNOWN_UNKNOWNS: Int = 3;
+
+	private final _sites: LockSites;
+	private final _trees: FunctionTrees;
+	private final _values: ArgumentValues;
+	private final _shape: RefShape;
+	private final _tryKinds: Array<String>;
+	private final _ifKinds: Array<String>;
+
+	public function new(
+		sites: LockSites, trees: FunctionTrees, values: ArgumentValues, shape: RefShape,
+		kinds: { tryKinds: Array<String>, ifKinds: Array<String> }
+	) {
+		_sites = sites;
+		_trees = trees;
+		_values = values;
+		_shape = shape;
+		_tryKinds = kinds.tryKinds;
+		_ifKinds = kinds.ifKinds;
+	}
+
+	/** What `cond` evaluates to under `valuation` of `id`'s tracked parameters; null when any part of it is undecided. */
+	public function decided(cond: QueryNode, id: String, valuation: String): Null<Bool> {
+		final kids: Array<QueryNode> = cond.children;
+		final kind: String = cond.kind;
+		if (kind == _shape.parenKind && kids.length == 1) return decided(kids[0], id, valuation);
+		if (kind == _shape.notKind && kids.length == 1) {
+			final inner: Null<Bool> = decided(kids[0], id, valuation);
+			return inner == null ? null : !inner;
+		}
+		if ((kind != _shape.logicalAndKind && kind != _shape.logicalOrKind) || kids.length != 2) return decidedParam(cond, id, valuation);
+		final a: Null<Bool> = decided(kids[0], id, valuation);
+		final b: Null<Bool> = decided(kids[1], id, valuation);
+		final and: Bool = kind == _shape.logicalAndKind;
+		// either side settling the operator settles it; else both sides must be known
+		return if (a == !and || b == !and)
+			!and
+		else if (a != null && b != null)
+			and
+		else
+			null;
+	}
+
+	/**
+	 * Every run of `id` its `valuation` may stand for, each deciding at least as much: a tracked
+	 * parameter some condition reads (`conditionNames`) that it does not know, or knows only to
+	 * be never null, read as true and as false — a bare condition reads a `Bool` — and, when some
+	 * comparison of the body tests it against `null`, as `null` too. A tracked parameter is never written, so a run gives
+	 * it one value throughout. Past `KNOWN_UNKNOWNS` such parameters, `valuation` itself.
+	 */
+	public function runsOf(id: String, valuation: String): Array<String> {
+		final nullTested: Array<String> = nullTestedIn(id);
+		final deciding: Array<String> = conditionNames(id);
+		final tracked: Array<String> = _values.tracked(id);
+		var runs: Array<String> = [''];
+		var open: Int = 0;
+		for (i in 0...valuation.length) {
+			final c: String = valuation.charAt(i);
+			final values: Array<String> = if (i >= tracked.length || !deciding.contains(tracked[i]))
+				[c]
+			else if (c == ArgumentValues.UNKNOWN)
+				[ArgumentValues.TRUE, ArgumentValues.FALSE].concat(
+					i < tracked.length && nullTested.contains(tracked[i]) ? [ArgumentValues.NULL] : []
+				)
+			else if (c == ArgumentValues.NON_NULL)
+				[ArgumentValues.TRUE, ArgumentValues.FALSE]
+			else
+				[c];
+			if (values.length > 1 && ++open > KNOWN_UNKNOWNS) return [valuation];
+			runs = [for (r in runs) for (v in values) r + v];
+		}
+		return runs;
+	}
+
+	/**
+	 * What the lock call `edge` is made on when it is a name its function declares once and never writes (a lock
+	 * wrapper's call, `db.batchLock()`) or a member read off one (`h.b.acquire()`): `<root>` or `<root>.<member>`; null
+	 * for any other receiver.
+	 */
+	public function localRoot(edge: CallEdge): Null<String> {
+		final callee: Null<QueryNode> = _sites.calleeOf(edge);
+		if (callee == null || !_sites.isAccess(callee.kind) || callee.children.length == 0) return null;
+		final receiver: QueryNode = callee.children[0];
+		final member: Null<String> = _sites.isAccess(receiver.kind) ? receiver.name : null;
+		final root: Null<QueryNode> = if (member == null)
+			receiver
+		else if (receiver.children.length > 0)
+			receiver.children[0]
+		else
+			null;
+		final name: Null<String> = root?.name;
+		final fn: Null<QueryNode> = _trees.ofId(edge.from);
+		if (root == null || root.kind != _shape.identKind || name == null || name == _shape.selfReferenceText || fn == null) return null;
+		final declared: Array<QueryNode> = [];
+		BareNames.collectNamed(fn, name, _shape, declared);
+		return if (declared.length != 1 || BareNames.writes(fn, name, _shape))
+			null
+		else if (member == null)
+			name
+		else
+			'$name.$member';
+	}
+
+	/** Whether `site` of `file` sits in the body of a `try`, whose `catch` an exception thrown there may land in. */
+	public function inTryBody(file: String, site: Span): Bool {
+		var node: Null<QueryNode> = _trees.ofFile(file);
+		while (node != null) {
+			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= site.from && c.span.to >= site.to);
+			if (child == null) return false;
+			final body: Null<Span> = child.children.length > 0 ? child.children[0].span : null;
+			if (_tryKinds.contains(child.kind) && body != null && body.from <= site.from && site.to <= body.to) return true;
+			node = child;
+		}
+		return false;
+	}
+
+	/** What a tracked parameter of `id` read bare, or tested against `null`, as `cond` evaluates to under `valuation`. */
+	private function decidedParam(cond: QueryNode, id: String, valuation: String): Null<Bool> {
+		final tracked: Array<String> = _values.tracked(id);
+		final kind: String = cond.kind;
+		final nullTest: Bool = (kind == _shape.eqKind || kind == _shape.notEqKind) && cond.children.length == 2;
+		final read: Null<QueryNode> = if (kind == _shape.identKind)
+			cond
+		else if (nullTest)
+			_values.nullTested(cond)
+		else
+			null;
+		final at: Int = read != null && read.kind == _shape.identKind ? tracked.indexOf(read.name ?? '') : -1;
+		final value: String = at < 0 ? ArgumentValues.UNKNOWN : valuation.charAt(at);
+		if (!nullTest) return switch value {
+			case ArgumentValues.TRUE: true;
+			case ArgumentValues.FALSE: false;
+			case _: null;
+		};
+		final isNull: Null<Bool> = switch value {
+			case ArgumentValues.NULL: true;
+			case ArgumentValues.NON_NULL: false;
+			case _: null;
+		};
+		return isNull == null ? null : isNull == (kind == _shape.eqKind);
+	}
+
+	/**
+	 * The names read in what decides whether code of `id`'s body runs: an `if`'s condition, the left side of `&&` and
+	 * `||` (`EdgeConditions`). A parameter no such place reads decides nothing, whatever it holds.
+	 */
+	private function conditionNames(id: String): Array<String> {
+		final fn: Null<QueryNode> = _trees.ofId(id);
+		final out: Array<String> = [];
+		if (fn == null) return out;
+		function names(node: QueryNode): Void {
+			final name: Null<String> = node.name;
+			if (node.kind == _shape.identKind && name != null && !out.contains(name)) out.push(name);
+			for (c in node.children) names(c);
+		}
+		function walk(node: QueryNode): Void {
+			final deciding: Bool = _ifKinds.contains(node.kind) || node.kind == _shape.logicalAndKind || node.kind == _shape.logicalOrKind;
+			if (deciding && node.children.length > 0) names(node.children[0]);
+			for (c in node.children) walk(c);
+		}
+		walk(fn);
+		return out;
+	}
+
+	/** The names some comparison of `id`'s body tests against `null` (`ArgumentValues.nullTested`). */
+	private function nullTestedIn(id: String): Array<String> {
+		final fn: Null<QueryNode> = _trees.ofId(id);
+		final out: Array<String> = [];
+		if (fn == null) return out;
+		function walk(node: QueryNode): Void {
+			if (node.kind == _shape.eqKind || node.kind == _shape.notEqKind) {
+				final read: Null<QueryNode> = _values.nullTested(node);
+				final name: Null<String> = read?.kind == _shape.identKind ? read?.name : null;
+				if (name != null && !out.contains(name)) out.push(name);
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(fn);
+		return out;
+	}
+
+}
+
+/**
  * The locks a thread certainly holds at a point of a function, under a valuation of its tracked parameters
  * (`EdgeConditions`), each on the object it is held on: `static`, `this`, or the object a path of stable fields read off
  * `this` names (`ObjectPaths`).
@@ -468,198 +660,6 @@ final class MustHeld {
 	/** The object of a must-held entry (`at`). */
 	public static inline function objectOf(held: String): String {
 		return held.substring(held.lastIndexOf(ON) + 1);
-	}
-
-}
-
-/**
- * What `MustHeld` reads off one function's body: what a condition evaluates to under a valuation of its tracked
- * parameters, every run a valuation may stand for, the local a lock call is made on, and whether a `try` may stop an
- * exception thrown at a site.
- */
-@:nullSafety(Strict)
-private final class BodyFacts {
-
-	/** The most parameters a valuation does not know that `runsOf` reads as each value they may hold. */
-	private static inline final KNOWN_UNKNOWNS: Int = 3;
-
-	private final _sites: LockSites;
-	private final _trees: FunctionTrees;
-	private final _values: ArgumentValues;
-	private final _shape: RefShape;
-	private final _tryKinds: Array<String>;
-	private final _ifKinds: Array<String>;
-
-	public function new(
-		sites: LockSites, trees: FunctionTrees, values: ArgumentValues, shape: RefShape,
-		kinds: { tryKinds: Array<String>, ifKinds: Array<String> }
-	) {
-		_sites = sites;
-		_trees = trees;
-		_values = values;
-		_shape = shape;
-		_tryKinds = kinds.tryKinds;
-		_ifKinds = kinds.ifKinds;
-	}
-
-	/** What `cond` evaluates to under `valuation` of `id`'s tracked parameters; null when any part of it is undecided. */
-	public function decided(cond: QueryNode, id: String, valuation: String): Null<Bool> {
-		final kids: Array<QueryNode> = cond.children;
-		final kind: String = cond.kind;
-		if (kind == _shape.parenKind && kids.length == 1) return decided(kids[0], id, valuation);
-		if (kind == _shape.notKind && kids.length == 1) {
-			final inner: Null<Bool> = decided(kids[0], id, valuation);
-			return inner == null ? null : !inner;
-		}
-		if ((kind != _shape.logicalAndKind && kind != _shape.logicalOrKind) || kids.length != 2) return decidedParam(cond, id, valuation);
-		final a: Null<Bool> = decided(kids[0], id, valuation);
-		final b: Null<Bool> = decided(kids[1], id, valuation);
-		final and: Bool = kind == _shape.logicalAndKind;
-		// either side settling the operator settles it; else both sides must be known
-		return if (a == !and || b == !and)
-			!and
-		else if (a != null && b != null)
-			and
-		else
-			null;
-	}
-
-	/**
-	 * Every run of `id` its `valuation` may stand for, each deciding at least as much: a tracked
-	 * parameter some condition reads (`conditionNames`) that it does not know, or knows only to
-	 * be never null, read as true and as false — a bare condition reads a `Bool` — and, when some
-	 * comparison of the body tests it against `null`, as `null` too. A tracked parameter is never written, so a run gives
-	 * it one value throughout. Past `KNOWN_UNKNOWNS` such parameters, `valuation` itself.
-	 */
-	public function runsOf(id: String, valuation: String): Array<String> {
-		final nullTested: Array<String> = nullTestedIn(id);
-		final deciding: Array<String> = conditionNames(id);
-		final tracked: Array<String> = _values.tracked(id);
-		var runs: Array<String> = [''];
-		var open: Int = 0;
-		for (i in 0...valuation.length) {
-			final c: String = valuation.charAt(i);
-			final values: Array<String> = if (i >= tracked.length || !deciding.contains(tracked[i]))
-				[c]
-			else if (c == ArgumentValues.UNKNOWN)
-				[ArgumentValues.TRUE, ArgumentValues.FALSE].concat(
-					i < tracked.length && nullTested.contains(tracked[i]) ? [ArgumentValues.NULL] : []
-				)
-			else if (c == ArgumentValues.NON_NULL)
-				[ArgumentValues.TRUE, ArgumentValues.FALSE]
-			else
-				[c];
-			if (values.length > 1 && ++open > KNOWN_UNKNOWNS) return [valuation];
-			runs = [for (r in runs) for (v in values) r + v];
-		}
-		return runs;
-	}
-
-	/**
-	 * What the lock call `edge` is made on when it is a name its function declares once and never writes (a lock
-	 * wrapper's call, `db.batchLock()`) or a member read off one (`h.b.acquire()`): `<root>` or `<root>.<member>`; null
-	 * for any other receiver.
-	 */
-	public function localRoot(edge: CallEdge): Null<String> {
-		final callee: Null<QueryNode> = _sites.calleeOf(edge);
-		if (callee == null || !_sites.isAccess(callee.kind) || callee.children.length == 0) return null;
-		final receiver: QueryNode = callee.children[0];
-		final member: Null<String> = _sites.isAccess(receiver.kind) ? receiver.name : null;
-		final root: Null<QueryNode> = if (member == null)
-			receiver
-		else if (receiver.children.length > 0)
-			receiver.children[0]
-		else
-			null;
-		final name: Null<String> = root?.name;
-		final fn: Null<QueryNode> = _trees.ofId(edge.from);
-		if (root == null || root.kind != _shape.identKind || name == null || name == _shape.selfReferenceText || fn == null) return null;
-		final declared: Array<QueryNode> = [];
-		BareNames.collectNamed(fn, name, _shape, declared);
-		return if (declared.length != 1 || BareNames.writes(fn, name, _shape))
-			null
-		else if (member == null)
-			name
-		else
-			'$name.$member';
-	}
-
-	/** Whether `site` of `file` sits in the body of a `try`, whose `catch` an exception thrown there may land in. */
-	public function inTryBody(file: String, site: Span): Bool {
-		var node: Null<QueryNode> = _trees.ofFile(file);
-		while (node != null) {
-			final child: Null<QueryNode> = node.children.find(c -> c.span != null && c.span.from <= site.from && c.span.to >= site.to);
-			if (child == null) return false;
-			final body: Null<Span> = child.children.length > 0 ? child.children[0].span : null;
-			if (_tryKinds.contains(child.kind) && body != null && body.from <= site.from && site.to <= body.to) return true;
-			node = child;
-		}
-		return false;
-	}
-
-	/** What a tracked parameter of `id` read bare, or tested against `null`, as `cond` evaluates to under `valuation`. */
-	private function decidedParam(cond: QueryNode, id: String, valuation: String): Null<Bool> {
-		final tracked: Array<String> = _values.tracked(id);
-		final kind: String = cond.kind;
-		final nullTest: Bool = (kind == _shape.eqKind || kind == _shape.notEqKind) && cond.children.length == 2;
-		final read: Null<QueryNode> = if (kind == _shape.identKind)
-			cond
-		else if (nullTest)
-			_values.nullTested(cond)
-		else
-			null;
-		final at: Int = read != null && read.kind == _shape.identKind ? tracked.indexOf(read.name ?? '') : -1;
-		final value: String = at < 0 ? ArgumentValues.UNKNOWN : valuation.charAt(at);
-		if (!nullTest) return switch value {
-			case ArgumentValues.TRUE: true;
-			case ArgumentValues.FALSE: false;
-			case _: null;
-		};
-		final isNull: Null<Bool> = switch value {
-			case ArgumentValues.NULL: true;
-			case ArgumentValues.NON_NULL: false;
-			case _: null;
-		};
-		return isNull == null ? null : isNull == (kind == _shape.eqKind);
-	}
-
-	/**
-	 * The names read in what decides whether code of `id`'s body runs: an `if`'s condition, the left side of `&&` and
-	 * `||` (`EdgeConditions`). A parameter no such place reads decides nothing, whatever it holds.
-	 */
-	private function conditionNames(id: String): Array<String> {
-		final fn: Null<QueryNode> = _trees.ofId(id);
-		final out: Array<String> = [];
-		if (fn == null) return out;
-		function names(node: QueryNode): Void {
-			final name: Null<String> = node.name;
-			if (node.kind == _shape.identKind && name != null && !out.contains(name)) out.push(name);
-			for (c in node.children) names(c);
-		}
-		function walk(node: QueryNode): Void {
-			final deciding: Bool = _ifKinds.contains(node.kind) || node.kind == _shape.logicalAndKind || node.kind == _shape.logicalOrKind;
-			if (deciding && node.children.length > 0) names(node.children[0]);
-			for (c in node.children) walk(c);
-		}
-		walk(fn);
-		return out;
-	}
-
-	/** The names some comparison of `id`'s body tests against `null` (`ArgumentValues.nullTested`). */
-	private function nullTestedIn(id: String): Array<String> {
-		final fn: Null<QueryNode> = _trees.ofId(id);
-		final out: Array<String> = [];
-		if (fn == null) return out;
-		function walk(node: QueryNode): Void {
-			if (node.kind == _shape.eqKind || node.kind == _shape.notEqKind) {
-				final read: Null<QueryNode> = _values.nullTested(node);
-				final name: Null<String> = read?.kind == _shape.identKind ? read?.name : null;
-				if (name != null && !out.contains(name)) out.push(name);
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(fn);
-		return out;
 	}
 
 }

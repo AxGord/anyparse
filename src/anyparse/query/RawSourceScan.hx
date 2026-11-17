@@ -10,6 +10,12 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** A type a grant may name to reach a private member: the owner itself or one of its superclasses. */
+private typedef GrantTarget = { final name: String; final paths: Array<String>; final unresolved: Bool; };
+
+/** The construction kind and the constructor member name a waiver's `new T()` spells. */
+private typedef WaivedConstruction = { final newKind: String; final name: String; };
+
 /**
  * The index's RAW-TEXT side: the questions answered over source BYTES rather than over a parsed
  * tree. Two of them cannot be answered any other way. A file the parser SKIPPED has no tree at all,
@@ -502,9 +508,3 @@ final class RawSourceScan {
 	}
 
 }
-
-/** A type a grant may name to reach a private member: the owner itself or one of its superclasses. */
-private typedef GrantTarget = { final name: String; final paths: Array<String>; final unresolved: Bool; };
-
-/** The construction kind and the constructor member name a waiver's `new T()` spells. */
-private typedef WaivedConstruction = { final newKind: String; final name: String; };

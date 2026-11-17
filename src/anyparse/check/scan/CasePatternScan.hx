@@ -9,6 +9,108 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.query.TypeResolver;
 
+/** One name a case label BINDS, with the edit that turns it into the wildcard. */
+typedef PatternBinder = {
+
+	/** The node that carries the name — its identity is what the mention count subtracts. */
+	final node: QueryNode;
+	final name: String;
+
+	/** Whether the name was written as a BARE identifier (so the spelling assumption carries it) rather than a `var` / `=` capture. */
+	final bare: Bool;
+
+	/** Whether the binder IS the whole pattern — a catch-all, which the top-level position gate covers. */
+	final whole: Bool;
+
+	/** The span to replace, and what with, to unbind the name (`_`, or an empty string that drops an `x = ` capture head). */
+	final editSpan: Span;
+	final editText: String;
+
+};
+
+/** The seam kinds `CasePatternScan` resolves once per run for both case-arm rules. */
+typedef CaseSeams = {
+
+	/** The shape the seams were read from — what `CasePatterns` takes. */
+	final shape: RefShape;
+	final switchKinds: Array<String>;
+	final caseBranchKind: String;
+	final defaultBranchKind: Null<String>;
+	final plainCasePatternKind: String;
+	final wildcardPatternName: String;
+	final identKind: String;
+	final parenKind: String;
+
+	/** Inside a pattern the assignment kind is the `=`-CAPTURE form, whose left slot holds a NAME. */
+	final assignKind: String;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final arrayLiteralKind: Null<String>;
+	final objectLiteralKind: Null<String>;
+	final objectFieldKind: Null<String>;
+	final negationKind: Null<String>;
+	final nullLiteralKind: Null<String>;
+
+	/** A `'$b'` read projects as this, never as `identKind` — the mention count reads both. */
+	final stringInterpIdentKind: Null<String>;
+	final binderKinds: Array<String>;
+
+	/** Pattern kinds that RUN code while matching — an arm holding one is never deleted. */
+	final extractorKinds: Array<String>;
+
+	/** The type kinds whose values the compiler tracks as a closed constructor list. */
+	final constantHostKinds: Array<String>;
+
+	/** The type kinds ALL of whose members resolve unqualified in a pattern — the above plus abstracts and aliases. */
+	final constantMemberHostKinds: Array<String>;
+
+	/** The `static` modifier — a static member resolves unqualified in a pattern from inside its own type. */
+	final staticModifierKind: Null<String>;
+	final conditionalKind: Null<String>;
+	final opaqueKinds: Array<String>;
+
+	/** The pattern leaves that bind nothing and hold no sub-pattern: a dotted path and the literals. */
+	final constantLeafKinds: Array<String>;
+
+	/** The SCOPE kinds `shadowedDeclaration` walks the ancestor chain with. */
+	final scope: ScopeSeams;
+
+};
+
+/** The scope-shaped half of `CaseSeams`, read only by `shadowedDeclaration` and its helpers. */
+typedef ScopeSeams = {
+
+	/** Function-like kinds — the ancestors that own a parameter list and a local scope. */
+	final functionKinds: Array<String>;
+
+	/** Parameter kinds — the declarations a function-like ancestor carries as direct children. */
+	final paramKinds: Array<String>;
+
+	/** Every local BINDING kind: declarations, loop and catch binders, and local functions. */
+	final bindingDeclKinds: Array<String>;
+
+	/** The type kinds that own a member list — the ancestors asked for a field. */
+	final classLikeKinds: Array<String>;
+
+	/** The member kinds a `classLikeKinds` container declares. */
+	final memberDeclKinds: Array<String>;
+
+};
+
+/** What `runContextOf` resolves once for a whole lint run. */
+typedef CaseRunContext = {
+
+	/** Every file that parsed, with its source and tree. */
+	final parsed: Array<{ file: String, source: String, tree: QueryNode }>;
+
+	/** Names a bare pattern identifier must avoid to read as a binder at all. */
+	final constants: Array<String>;
+
+	/** The index over the same file set — the resolution half of `shadowedDeclaration`. */
+	final index: SymbolIndex;
+
+};
+
 /**
  * The case-PATTERN scan the two case-arm rules share — `unused-case-binder` (a
  * pattern binder no guard or body reads) and `redundant-case-body` (an arm whose
@@ -396,105 +498,3 @@ final class CasePatternScan {
 	}
 
 }
-
-/** One name a case label BINDS, with the edit that turns it into the wildcard. */
-typedef PatternBinder = {
-
-	/** The node that carries the name — its identity is what the mention count subtracts. */
-	final node: QueryNode;
-	final name: String;
-
-	/** Whether the name was written as a BARE identifier (so the spelling assumption carries it) rather than a `var` / `=` capture. */
-	final bare: Bool;
-
-	/** Whether the binder IS the whole pattern — a catch-all, which the top-level position gate covers. */
-	final whole: Bool;
-
-	/** The span to replace, and what with, to unbind the name (`_`, or an empty string that drops an `x = ` capture head). */
-	final editSpan: Span;
-	final editText: String;
-
-};
-
-/** The seam kinds `CasePatternScan` resolves once per run for both case-arm rules. */
-typedef CaseSeams = {
-
-	/** The shape the seams were read from — what `CasePatterns` takes. */
-	final shape: RefShape;
-	final switchKinds: Array<String>;
-	final caseBranchKind: String;
-	final defaultBranchKind: Null<String>;
-	final plainCasePatternKind: String;
-	final wildcardPatternName: String;
-	final identKind: String;
-	final parenKind: String;
-
-	/** Inside a pattern the assignment kind is the `=`-CAPTURE form, whose left slot holds a NAME. */
-	final assignKind: String;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final arrayLiteralKind: Null<String>;
-	final objectLiteralKind: Null<String>;
-	final objectFieldKind: Null<String>;
-	final negationKind: Null<String>;
-	final nullLiteralKind: Null<String>;
-
-	/** A `'$b'` read projects as this, never as `identKind` — the mention count reads both. */
-	final stringInterpIdentKind: Null<String>;
-	final binderKinds: Array<String>;
-
-	/** Pattern kinds that RUN code while matching — an arm holding one is never deleted. */
-	final extractorKinds: Array<String>;
-
-	/** The type kinds whose values the compiler tracks as a closed constructor list. */
-	final constantHostKinds: Array<String>;
-
-	/** The type kinds ALL of whose members resolve unqualified in a pattern — the above plus abstracts and aliases. */
-	final constantMemberHostKinds: Array<String>;
-
-	/** The `static` modifier — a static member resolves unqualified in a pattern from inside its own type. */
-	final staticModifierKind: Null<String>;
-	final conditionalKind: Null<String>;
-	final opaqueKinds: Array<String>;
-
-	/** The pattern leaves that bind nothing and hold no sub-pattern: a dotted path and the literals. */
-	final constantLeafKinds: Array<String>;
-
-	/** The SCOPE kinds `shadowedDeclaration` walks the ancestor chain with. */
-	final scope: ScopeSeams;
-
-};
-
-/** The scope-shaped half of `CaseSeams`, read only by `shadowedDeclaration` and its helpers. */
-typedef ScopeSeams = {
-
-	/** Function-like kinds — the ancestors that own a parameter list and a local scope. */
-	final functionKinds: Array<String>;
-
-	/** Parameter kinds — the declarations a function-like ancestor carries as direct children. */
-	final paramKinds: Array<String>;
-
-	/** Every local BINDING kind: declarations, loop and catch binders, and local functions. */
-	final bindingDeclKinds: Array<String>;
-
-	/** The type kinds that own a member list — the ancestors asked for a field. */
-	final classLikeKinds: Array<String>;
-
-	/** The member kinds a `classLikeKinds` container declares. */
-	final memberDeclKinds: Array<String>;
-
-};
-
-/** What `runContextOf` resolves once for a whole lint run. */
-typedef CaseRunContext = {
-
-	/** Every file that parsed, with its source and tree. */
-	final parsed: Array<{ file: String, source: String, tree: QueryNode }>;
-
-	/** Names a bare pattern identifier must avoid to read as a binder at all. */
-	final constants: Array<String>;
-
-	/** The index over the same file set — the resolution half of `shadowedDeclaration`. */
-	final index: SymbolIndex;
-
-};

@@ -4,6 +4,87 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 using StringTools;
 
+private typedef Operand = {
+
+	var src: String;
+	var prec: Precedence;
+
+	/**
+	 * Whether this operand — or anything folded into it — is a rewrite the engine KNOWS how to
+	 * perform but declined (an ordered comparison whose flip is not licensed, see `declinedFlip`).
+	 * Read by `negateConditionDeclinesFlip`, so a caller inverting a condition only to make it
+	 * read better can refuse the site. A wrap the engine could never avoid does not set it.
+	 */
+	var declined: Bool;
+
+	/**
+	 * How many unary `!` operators this operand's emitted form ADDS relative to the verbatim
+	 * source it replaces: `+1` for every `!(…)` wrap the negation had to introduce, `-1` for
+	 * every existing `!` it stripped, `0` for a flip (`==` ↔ `!=`, an ordered comparison) and
+	 * for anything carried verbatim. Nested `!` inside a verbatim operand are NOT counted —
+	 * they survive the rewrite unchanged and cancel on both sides.
+	 *
+	 * Read by `simplifyNegatedCompound` as its WORTH gate: rewriting `!(cond)` into
+	 * `negate(cond)` trades the one outer `!` for `notDelta` further ones, so it pays exactly
+	 * when `notDelta <= 0`. A cost model, not a second inverter — the emitted text always
+	 * comes from `negate` itself, and the counter rides along with it so the two can never
+	 * disagree about which branch was taken.
+	 */
+	var notDelta: Int;
+
+};
+
+/**
+ * One operand of a flat `||` chain a reduction writes (`orLeaves`): its text, the plain identifiers it mentions, those its
+ * bare null test can source a narrowing from (`nullTestIdents`), and those any null comparison inside it names.
+ */
+private typedef OrLeaf = {
+
+	final op: Operand;
+	final names: Array<String>;
+	final providers: Array<String>;
+	final tested: Array<String>;
+
+	/** Where the operand stands in the source: a comment between two operands has no place in a regrouped chain. */
+	final span: Null<Span>;
+
+};
+
+/**
+ * Operator-precedence rank — a higher value binds tighter. A distinct type rather
+ * than a bare `Int` so a precedence can never be confused with an unrelated count;
+ * the two `@:op` forwards give it the `<` / `>=` ordering that `wrap` / `wrapNot`
+ * need (Haxe otherwise forbids ordered comparison on an abstract).
+ */
+private enum abstract Precedence(Int) {
+
+	final PREC_ATOM = 100;
+	final PREC_NOT = 90;
+	// Any binary / type-check operator (is, bitwise, shift, arithmetic, ...) — binds
+	// looser than unary `!`, so `negate` must wrap it `!(...)`, yet tighter than `&&` / `||`,
+	// so a join needs no extra parens. Kinds not listed in `precedence` default to PREC_ATOM;
+	// omitting one here would let `wrapNot` emit a bare `!` that captures only its left operand.
+	final PREC_BINARY = 60;
+	// `??` sits between the binary tier and the comparisons, left-associative: `a ?? b == c` is
+	// `(a ?? b) == c`, so a comparison in a `??` operand needs its parens.
+	final PREC_COALESCE = 55;
+	final PREC_CMP = 50;
+	// `...` sits one tier looser than the comparisons and tighter than `&&`: `a ... b == c` is
+	// `a ... (b == c)`, `a && b ... c` is `a && (b ... c)`.
+	final PREC_INTERVAL = 45;
+	final PREC_AND = 40;
+	final PREC_OR = 30;
+	final PREC_TERNARY = 10;
+	final PREC_ASSIGN = 5;
+
+	@:op(A < B)
+	static function lt(a: Precedence, b: Precedence): Bool;
+
+	@:op(A >= B)
+	static function gte(a: Precedence, b: Precedence): Bool;
+
+}
+
 /**
  * Haxe `BooleanLogicSupport`: reduces a ternary with a boolean-literal branch to an
  * equivalent boolean expression. The four mixed forms collapse via short-circuit `&&` /
@@ -749,86 +830,5 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		else
 			null;
 	}
-
-}
-
-private typedef Operand = {
-
-	var src: String;
-	var prec: Precedence;
-
-	/**
-	 * Whether this operand — or anything folded into it — is a rewrite the engine KNOWS how to
-	 * perform but declined (an ordered comparison whose flip is not licensed, see `declinedFlip`).
-	 * Read by `negateConditionDeclinesFlip`, so a caller inverting a condition only to make it
-	 * read better can refuse the site. A wrap the engine could never avoid does not set it.
-	 */
-	var declined: Bool;
-
-	/**
-	 * How many unary `!` operators this operand's emitted form ADDS relative to the verbatim
-	 * source it replaces: `+1` for every `!(…)` wrap the negation had to introduce, `-1` for
-	 * every existing `!` it stripped, `0` for a flip (`==` ↔ `!=`, an ordered comparison) and
-	 * for anything carried verbatim. Nested `!` inside a verbatim operand are NOT counted —
-	 * they survive the rewrite unchanged and cancel on both sides.
-	 *
-	 * Read by `simplifyNegatedCompound` as its WORTH gate: rewriting `!(cond)` into
-	 * `negate(cond)` trades the one outer `!` for `notDelta` further ones, so it pays exactly
-	 * when `notDelta <= 0`. A cost model, not a second inverter — the emitted text always
-	 * comes from `negate` itself, and the counter rides along with it so the two can never
-	 * disagree about which branch was taken.
-	 */
-	var notDelta: Int;
-
-};
-
-/**
- * One operand of a flat `||` chain a reduction writes (`orLeaves`): its text, the plain identifiers it mentions, those its
- * bare null test can source a narrowing from (`nullTestIdents`), and those any null comparison inside it names.
- */
-private typedef OrLeaf = {
-
-	final op: Operand;
-	final names: Array<String>;
-	final providers: Array<String>;
-	final tested: Array<String>;
-
-	/** Where the operand stands in the source: a comment between two operands has no place in a regrouped chain. */
-	final span: Null<Span>;
-
-};
-
-/**
- * Operator-precedence rank — a higher value binds tighter. A distinct type rather
- * than a bare `Int` so a precedence can never be confused with an unrelated count;
- * the two `@:op` forwards give it the `<` / `>=` ordering that `wrap` / `wrapNot`
- * need (Haxe otherwise forbids ordered comparison on an abstract).
- */
-private enum abstract Precedence(Int) {
-
-	final PREC_ATOM = 100;
-	final PREC_NOT = 90;
-	// Any binary / type-check operator (is, bitwise, shift, arithmetic, ...) — binds
-	// looser than unary `!`, so `negate` must wrap it `!(...)`, yet tighter than `&&` / `||`,
-	// so a join needs no extra parens. Kinds not listed in `precedence` default to PREC_ATOM;
-	// omitting one here would let `wrapNot` emit a bare `!` that captures only its left operand.
-	final PREC_BINARY = 60;
-	// `??` sits between the binary tier and the comparisons, left-associative: `a ?? b == c` is
-	// `(a ?? b) == c`, so a comparison in a `??` operand needs its parens.
-	final PREC_COALESCE = 55;
-	final PREC_CMP = 50;
-	// `...` sits one tier looser than the comparisons and tighter than `&&`: `a ... b == c` is
-	// `a ... (b == c)`, `a && b ... c` is `a && (b ... c)`.
-	final PREC_INTERVAL = 45;
-	final PREC_AND = 40;
-	final PREC_OR = 30;
-	final PREC_TERNARY = 10;
-	final PREC_ASSIGN = 5;
-
-	@:op(A < B)
-	static function lt(a: Precedence, b: Precedence): Bool;
-
-	@:op(A >= B)
-	static function gte(a: Precedence, b: Precedence): Bool;
 
 }

@@ -2,6 +2,46 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 
+/** The ancestors of a node, outermost first, and the child index leading down from each (`ExpectedTypes.lineageOf`). */
+typedef Lineage = { final nodes: Array<QueryNode>; final indices: Array<Int>; }
+
+/**
+ * What `ExpectedTypes` asks a typer, answering in the typer's own currency `W`: the call graph's keyed type source, the
+ * operand binder's written type together with where it is written. `C` is what every question threads through (the call
+ * graph's enclosing type). A question the typer cannot answer soundly answers null — the engine then expects nothing.
+ */
+typedef ExpectationHost<W, C> = {
+
+	/** The type the declaration `holder` (a local or a field) is written with. */
+	final declared: (holder: QueryNode, ctx: C) -> Null<W>;
+
+	/** The type of the assignment target `target`. */
+	final assigned: (target: QueryNode, ctx: C) -> Null<W>;
+
+	/** The return type the function or lambda `fn` declares. */
+	final returned: (fn: QueryNode, ctx: C) -> Null<W>;
+
+	/**
+	 * The type of the parameter the argument `at` of the call or construction `call`, passing `count` arguments, binds —
+	 * the callee's parameter type at an argument position; null where an argument before it may have been skipped, and
+	 * for a callee whose signature the typer cannot read as the one the call selects.
+	 */
+	final argument: (call: QueryNode, at: Int, count: Int, ctx: C) -> Null<W>;
+
+	/** The element an array literal of type `container` holds (a map literal's value). */
+	final element: (container: W, ctx: C) -> Null<W>;
+
+	/** The type of the field `name` of an object literal of type `outer`. */
+	final field: (outer: W, name: String, ctx: C) -> Null<W>;
+
+	/** `written` as the grammar reads a type (`GrammarPlugin.typeSyntax`). */
+	final read: (written: W, ctx: C) -> Null<TypeSyntax>;
+
+	/** The part `text` of the type `of` — a function type's parameter or result — in the same currency. */
+	final part: (of: W, text: String, ctx: C) -> W;
+
+}
+
 /**
  * THE expected-type engine: the type a value is EXPECTED to have where it is written, read off the written types around
  * it — and through it the type an untyped lambda parameter takes, which is the parameter of the function type the lambda
@@ -218,45 +258,5 @@ final class ExpectedTypes {
 		final result: Null<String> = CallGraphNames.functionReturnSource(host.read(written, ctx));
 		return result == null ? null : host.part(written, result, ctx);
 	}
-
-}
-
-/** The ancestors of a node, outermost first, and the child index leading down from each (`ExpectedTypes.lineageOf`). */
-typedef Lineage = { final nodes: Array<QueryNode>; final indices: Array<Int>; }
-
-/**
- * What `ExpectedTypes` asks a typer, answering in the typer's own currency `W`: the call graph's keyed type source, the
- * operand binder's written type together with where it is written. `C` is what every question threads through (the call
- * graph's enclosing type). A question the typer cannot answer soundly answers null — the engine then expects nothing.
- */
-typedef ExpectationHost<W, C> = {
-
-	/** The type the declaration `holder` (a local or a field) is written with. */
-	final declared: (holder: QueryNode, ctx: C) -> Null<W>;
-
-	/** The type of the assignment target `target`. */
-	final assigned: (target: QueryNode, ctx: C) -> Null<W>;
-
-	/** The return type the function or lambda `fn` declares. */
-	final returned: (fn: QueryNode, ctx: C) -> Null<W>;
-
-	/**
-	 * The type of the parameter the argument `at` of the call or construction `call`, passing `count` arguments, binds —
-	 * the callee's parameter type at an argument position; null where an argument before it may have been skipped, and
-	 * for a callee whose signature the typer cannot read as the one the call selects.
-	 */
-	final argument: (call: QueryNode, at: Int, count: Int, ctx: C) -> Null<W>;
-
-	/** The element an array literal of type `container` holds (a map literal's value). */
-	final element: (container: W, ctx: C) -> Null<W>;
-
-	/** The type of the field `name` of an object literal of type `outer`. */
-	final field: (outer: W, name: String, ctx: C) -> Null<W>;
-
-	/** `written` as the grammar reads a type (`GrammarPlugin.typeSyntax`). */
-	final read: (written: W, ctx: C) -> Null<TypeSyntax>;
-
-	/** The part `text` of the type `of` — a function type's parameter or result — in the same currency. */
-	final part: (of: W, text: String, ctx: C) -> W;
 
 }

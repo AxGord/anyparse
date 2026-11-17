@@ -10,6 +10,18 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The resolved kind sets threaded through the walk, built once per run. */
+typedef AnonCtx = {
+	final anonKind: String;
+	final fieldKinds: Array<String>;
+	final optionalFieldKind: Null<String>;
+	final typeRefKinds: Array<String>;
+	final typeDeclKinds: Array<String>;
+};
+
+/** One written-out occurrence of a shape: the file it sits in, its span, and that file's source the report quotes. */
+private typedef Occurrence = { final file: String; final at: Span; final source: String; };
+
 /**
  * Flags an anonymous structure TYPE that is written out three or more times
  * (configurable) across the lint scope — a shape that has earned a name.
@@ -319,15 +331,3 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 	}
 
 }
-
-/** The resolved kind sets threaded through the walk, built once per run. */
-typedef AnonCtx = {
-	final anonKind: String;
-	final fieldKinds: Array<String>;
-	final optionalFieldKind: Null<String>;
-	final typeRefKinds: Array<String>;
-	final typeDeclKinds: Array<String>;
-};
-
-/** One written-out occurrence of a shape: the file it sits in, its span, and that file's source the report quotes. */
-private typedef Occurrence = { final file: String; final at: Span; final source: String; };

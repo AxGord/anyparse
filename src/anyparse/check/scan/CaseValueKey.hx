@@ -2,6 +2,25 @@ package anyparse.check.scan;
 
 import anyparse.query.SymbolIndex;
 
+/** The `RefShape` seams `CaseValueKey` reads, resolved once by `CaseValueKey.seamsOf`. */
+typedef CaseValueSeams = {
+
+	final numericKinds: Array<String>;
+	final boolKind: Null<String>;
+	final nullKind: Null<String>;
+	final negationKind: Null<String>;
+	final stringKinds: Array<String>;
+	final enumAbstractKind: Null<String>;
+	final fieldKinds: Array<String>;
+
+	/** `RefShape.enumAbstractImplicitValues.counting` — the underlying types an uninitialized value counts in. */
+	final countingTypes: Array<String>;
+
+	/** `RefShape.enumAbstractImplicitValues.naming` — the underlying types an uninitialized value is named in. */
+	final namingTypes: Array<String>;
+
+};
+
 /**
  * The VALUE a `case` pattern denotes, as a key two patterns share exactly when the language
  * compares them equal — or null when the value cannot be PROVED. The switch rules (`SwitchChain`,
@@ -196,22 +215,3 @@ final class CaseValueKey {
 	}
 
 }
-
-/** The `RefShape` seams `CaseValueKey` reads, resolved once by `CaseValueKey.seamsOf`. */
-typedef CaseValueSeams = {
-
-	final numericKinds: Array<String>;
-	final boolKind: Null<String>;
-	final nullKind: Null<String>;
-	final negationKind: Null<String>;
-	final stringKinds: Array<String>;
-	final enumAbstractKind: Null<String>;
-	final fieldKinds: Array<String>;
-
-	/** `RefShape.enumAbstractImplicitValues.counting` — the underlying types an uninitialized value counts in. */
-	final countingTypes: Array<String>;
-
-	/** `RefShape.enumAbstractImplicitValues.naming` — the underlying types an uninitialized value is named in. */
-	final namingTypes: Array<String>;
-
-};

@@ -17,6 +17,37 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** One `naming` finding the cheap candidate test admitted, with what the whole-project verdict reads of its file. */
+typedef PrivatizeCandidate = {
+	final file: String;
+	final source: String;
+	final tree: QueryNode;
+	final decl: NamedDecl;
+};
+
+/** One proven privatization: the `public` keyword the edit replaces, and the type nothing outside of reads the member. */
+typedef Privatized = { final keywordSpan: Span; final owner: String; };
+
+/** The whole-run reference evidence, gathered once where the entire file set is in hand. */
+private typedef Evidence = {
+
+	/** Identifier-token occurrence counts over every source in report UNION resolution scope. */
+	final tokens: Map<String, Int>;
+
+	/** The static text FRAGMENTS of every interpolated string in report scope. */
+	final fragments: Array<String>;
+
+	/** The report index. */
+	final index: SymbolIndex;
+
+	/** The resolution index (report UNION libraries), or the report index without a scope. */
+	final wide: SymbolIndex;
+
+};
+
+/** A member found by `memberAt`: its modifier run and whether every build sees that run. */
+private typedef FoundMember = { final run: Array<QueryNode>; final certain: Bool; };
+
 /**
  * `naming`'s PRIVATIZE arm: a PUBLIC member spelled `_x` that nothing outside its own type (and
  * its subtypes - Haxe `private` is visible to them) reads is made `private`, keeping its name, where
@@ -227,34 +258,3 @@ final class NamingPrivatize {
 	}
 
 }
-
-/** One `naming` finding the cheap candidate test admitted, with what the whole-project verdict reads of its file. */
-typedef PrivatizeCandidate = {
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-	final decl: NamedDecl;
-};
-
-/** One proven privatization: the `public` keyword the edit replaces, and the type nothing outside of reads the member. */
-typedef Privatized = { final keywordSpan: Span; final owner: String; };
-
-/** The whole-run reference evidence, gathered once where the entire file set is in hand. */
-private typedef Evidence = {
-
-	/** Identifier-token occurrence counts over every source in report UNION resolution scope. */
-	final tokens: Map<String, Int>;
-
-	/** The static text FRAGMENTS of every interpolated string in report scope. */
-	final fragments: Array<String>;
-
-	/** The report index. */
-	final index: SymbolIndex;
-
-	/** The resolution index (report UNION libraries), or the report index without a scope. */
-	final wide: SymbolIndex;
-
-};
-
-/** A member found by `memberAt`: its modifier run and whether every build sees that run. */
-private typedef FoundMember = { final run: Array<QueryNode>; final certain: Bool; };

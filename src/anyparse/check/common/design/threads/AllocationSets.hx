@@ -7,6 +7,9 @@ import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.util.Groups;
 
+/** The type names one file's imports bind: by an alias, and by a module path's last segment. */
+private typedef FileImports = { final aliases: Array<String>; final named: Array<String>; }
+
 /**
  * The classes a dispatched call's receiver may be an instance of, where the code says: the running object's (handed
  * down a call path), or a field every value of which is a `new` the project writes — a SEALED allocation set. A
@@ -252,6 +255,3 @@ final class AllocationSets {
 	}
 
 }
-
-/** The type names one file's imports bind: by an alias, and by a module path's last segment. */
-private typedef FileImports = { final aliases: Array<String>; final named: Array<String>; }

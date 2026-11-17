@@ -3,6 +3,18 @@ package anyparse.check.scan;
 import anyparse.query.LeafSpans;
 
 /**
+ * One stretch of a rendered span: the bytes `[from, to)` and, when non-null, the text emitted in
+ * their place. A null `text` is a token whose interior is copied verbatim.
+ */
+typedef RenderPart = { var from: Int; var to: Int; var text: Null<String>; }
+
+/**
+ * A stretch of source and the text `renderSpan` emits in its place — the caller's way of blanking
+ * a name out of a comparison key without touching the bytes around it. Spans must not overlap.
+ */
+typedef SpanOverride = { var span: Span; var text: String; }
+
+/**
  * Renders a source span as ONE LINE of display text for a finding's message: a whitespace run
  * BETWEEN tokens collapses to a single space, whitespace INSIDE a token — a string or regex
  * literal's own content — is copied byte for byte, and the ends are trimmed.
@@ -99,15 +111,3 @@ final class SpanRender {
 	}
 
 }
-
-/**
- * One stretch of a rendered span: the bytes `[from, to)` and, when non-null, the text emitted in
- * their place. A null `text` is a token whose interior is copied verbatim.
- */
-typedef RenderPart = { var from: Int; var to: Int; var text: Null<String>; }
-
-/**
- * A stretch of source and the text `renderSpan` emits in its place — the caller's way of blanking
- * a name out of a comparison key without touching the bytes around it. Spans must not overlap.
- */
-typedef SpanOverride = { var span: Span; var text: String; }

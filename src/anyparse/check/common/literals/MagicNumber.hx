@@ -7,6 +7,44 @@ import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
 /**
+ * Resolved kind config for the magic-number walk, built once per run so the
+ * recursion threads one struct instead of a dozen scalars.
+ */
+private typedef MagicNumberCfg = {
+	final numericKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final localDeclKinds: Array<String>;
+	final objectFieldKind: String;
+	final indexAccessKind: String;
+	final comparisonKinds: Array<String>;
+	final fieldAccessKind: String;
+	final identKind: String;
+	final sizeFieldNames: Array<String>;
+	final callKind: String;
+	final parenKind: String;
+	final positionMethodNames: Array<String>;
+	final additiveKinds: Array<String>;
+	final newExprKind: String;
+	final negationKind: String;
+	final constructorName: String;
+	final functionBodyKinds: Array<String>;
+	final valueReturnKinds: Array<String>;
+	final tables: LiteralTableShape;
+};
+
+/**
+ * What exempts a literal in one file: the exempt `values`, the `ignoreCallArguments` entries, each
+ * already split into its dotted segments, whether `literalTables` is on, and the file's `source` (a
+ * table's string data is read through the grammar's string-fold seam, which needs it).
+ */
+private typedef MagicNumberExempt = {
+	final values: Array<Float>;
+	final calls: Array<Array<String>>;
+	final tables: Bool;
+	final source: String;
+};
+
+/**
  * Flags a numeric literal used in executable code whose value is not a small
  * conventional one — a "magic number" the reader cannot interpret without
  * tracing intent. Enforces the project rule that such a literal be extracted
@@ -340,41 +378,3 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 	}
 
 }
-
-/**
- * Resolved kind config for the magic-number walk, built once per run so the
- * recursion threads one struct instead of a dozen scalars.
- */
-private typedef MagicNumberCfg = {
-	final numericKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final localDeclKinds: Array<String>;
-	final objectFieldKind: String;
-	final indexAccessKind: String;
-	final comparisonKinds: Array<String>;
-	final fieldAccessKind: String;
-	final identKind: String;
-	final sizeFieldNames: Array<String>;
-	final callKind: String;
-	final parenKind: String;
-	final positionMethodNames: Array<String>;
-	final additiveKinds: Array<String>;
-	final newExprKind: String;
-	final negationKind: String;
-	final constructorName: String;
-	final functionBodyKinds: Array<String>;
-	final valueReturnKinds: Array<String>;
-	final tables: LiteralTableShape;
-};
-
-/**
- * What exempts a literal in one file: the exempt `values`, the `ignoreCallArguments` entries, each
- * already split into its dotted segments, whether `literalTables` is on, and the file's `source` (a
- * table's string data is read through the grammar's string-fold seam, which needs it).
- */
-private typedef MagicNumberExempt = {
-	final values: Array<Float>;
-	final calls: Array<Array<String>>;
-	final tables: Bool;
-	final source: String;
-};

@@ -4,6 +4,15 @@ import anyparse.grammar.json.JsonFormat;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
+/** What `DataPath.resolve` answers. */
+enum DataLookup {
+	Found(value: QueryNode);
+	Missing(why: String);
+}
+
+/** `apq get --where`'s clause: a record matches when `segments` resolve in it to a value that prints as `value`. */
+typedef WhereClause = { final segments: Array<String>; final value: String; };
+
 /**
  * A dotted key path into a DATA document (`apq get`), walked over the grammar's projected tree with no
  * grammar named: an object is the grammar's `RefShape.objectLiteralKind`, its children entries NAMED by
@@ -170,12 +179,3 @@ final class DataPath {
 	}
 
 }
-
-/** What `DataPath.resolve` answers. */
-enum DataLookup {
-	Found(value: QueryNode);
-	Missing(why: String);
-}
-
-/** `apq get --where`'s clause: a record matches when `segments` resolve in it to a value that prints as `value`. */
-typedef WhereClause = { final segments: Array<String>; final value: String; };

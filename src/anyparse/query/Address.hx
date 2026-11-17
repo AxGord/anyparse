@@ -46,6 +46,376 @@ typedef AddressSpec = {
 }
 
 /**
+ * A pre-order index over ONE parsed tree, shared by every address derived from
+ * it. `describe` probes the tree once per candidate selector, so a report that
+ * addresses every finding of a file used to re-walk that file's tree thousands
+ * of times — on a large source the annotation cost several times the analysis it
+ * annotates. Here those probes are lookups instead: a segment's candidates come
+ * from per-kind and per-kind-and-name groups already held in document order, and
+ * "does this node sit inside that one" is a comparison of pre-order intervals
+ * rather than another walk.
+ *
+ * The index keys on node IDENTITY, so it is bound to the tree it indexed and a
+ * re-parse invalidates it. Reuse therefore stays explicit at the call site
+ * rather than hiding behind a cache that cannot tell a stale tree from a fresh
+ * one.
+ */
+@:nullSafety(Strict)
+final class AddressIndex {
+
+	/**
+	 * Whether every spanned node sits inside its nearest spanned ancestor. That is
+	 * the premise `nodeAt` prunes on, and it is a property of the tree rather than
+	 * of the grammar, so it is measured while indexing instead of assumed: a tree
+	 * that breaks it sends `nodeAt` back to `Engine.at`'s full walk, which makes the
+	 * shortcut output-neutral on any tree rather than only on the ones checked.
+	 *
+	 * Readable because the two paths answer identically by design — so this flag is
+	 * the ONLY observable of which one runs, and a grammar change that quietly
+	 * un-nested real trees would otherwise revert the shortcut with nothing to notice.
+	 */
+	public var nested(default, null): Bool = true;
+
+	/** Nodes per kind-equivalence-canonical kind, in document order — a nameless segment's candidates. */
+	private final _byKind: Map<String, Array<QueryNode>> = [];
+
+	/** Nodes per canonical kind and name — a named segment resolves without scanning its whole kind. */
+	private final _byKindName: Map<String, Array<QueryNode>> = [];
+
+	/** Pre-order rank per node; its presence is also the "does this tree hold the node" test. */
+	private final _ordinalOf: IdentityMap<QueryNode, Int> = new IdentityMap();
+
+	/** Highest pre-order rank inside a node's subtree — with `_ordinalOf` it turns descendancy into a range test. */
+	private final _lastOrdinalOf: IdentityMap<QueryNode, Int> = new IdentityMap();
+
+	/** Each node's parent — the chain `describe` widens along, without a root-down search per step. */
+	private final _parentOf: IdentityMap<QueryNode, QueryNode> = new IdentityMap();
+
+	private final _root: QueryNode;
+	private final _equiv: Null<KindEquivalence>;
+
+	public function new(root: QueryNode, ?equiv: KindEquivalence) {
+		_root = root;
+		_equiv = equiv;
+		indexNode(root, null, null, 0);
+	}
+
+	/** The canonical, edit-stable address of `node` — `Address.describe`'s contract, answered from the index. */
+	public function describe(source: String, node: QueryNode): String {
+		final widened: Null<{ selector: String, unique: Bool }> = widenToUnique(node);
+		if (widened == null) return positionOf(source, node);
+		final selector: String = widened.selector;
+		if (widened.unique) return selector;
+		// Names cannot disambiguate — pick the instance ordinal.
+		final matches: Array<QueryNode> = try resolveSelector(Selector.parse(selector)) catch (exception: Exception) [];
+		final k: Int = matches.indexOf(node);
+		return k >= 0 ? '$selector --nth ${k + 1}' : positionOf(source, node);
+	}
+
+	/**
+	 * The selector that resolves to `node` and to nothing else, or null when NAMES cannot single
+	 * it out — `describe` with its two non-selector answers, the instance ordinal and the
+	 * `<line>:<col>` fallback, reported as an absence instead of rendered.
+	 *
+	 * A caller that offers its result AS A COMMAND needs that distinction, and cannot recover it
+	 * from `describe`'s string: sniffing for a ` --nth ` suffix mistakes a node NAME that spells
+	 * it (a string literal is a named node like any other) for the ordinal form, and nothing in
+	 * the string marks the positional fallback at all — which a `>` inside a name reaches, since
+	 * `Selector.parse` reads it as a child separator and the widened selector then matches
+	 * nothing — the ambiguity listing then offers a bare `<line>:<col>`, which is not a selector.
+	 */
+	public function uniqueSelector(node: QueryNode): Null<String> {
+		final widened: Null<{ selector: String, unique: Bool }> = widenToUnique(node);
+		return widened != null && widened.unique ? widened.selector : null;
+	}
+
+	/**
+	 * The innermost node whose span contains `offset` — `Engine.at`'s answer without
+	 * `Engine.at`'s walk. A report addresses every finding of a file, so locating the
+	 * node was a full pre-order per FINDING while the index it feeds is one per file;
+	 * `Engine.atNested` instead descends only through the children that can hold the
+	 * offset, which is the root-to-node path plus each level's siblings.
+	 *
+	 * All this class contributes is the PREMISE: `atNested` needs every spanned node to
+	 * sit inside its nearest spanned ancestor, and `indexNode` measures exactly that
+	 * while it builds. A tree that breaks it goes to `Engine.at` unchanged, so the
+	 * shortcut is output-neutral on any tree rather than only on the ones checked.
+	 */
+	public function nodeAt(offset: Int): Null<QueryNode> {
+		return nested ? Engine.atNested(_root, offset) : Engine.at(_root, offset);
+	}
+
+	/**
+	 * `node`'s segment with the nearest named ancestors prepended until it resolves uniquely,
+	 * and whether it got there — or null when the node does not belong to the tree indexed here. The
+	 * widest selector TRIED comes back either way, because `describe`'s ordinal form is built on it.
+	 *
+	 * Every step prepends with `>>`, so what the walk can express is "somewhere under a named
+	 * ancestor" — and DEPTH is the one thing it cannot say. That is invisible almost everywhere,
+	 * because a node at a different depth almost always has a named ancestor the other lacks. The
+	 * exception is the ROOT: it is the one ancestor every node shares and the one that is always
+	 * nameless, so a node hanging directly off it has no named ancestor at all and its bare
+	 * segment matches every same-kind node in the file. `--select 'Conditional'` on a file with a
+	 * module-level region and a member-level one was exactly that — ambiguous, with `--nth` the
+	 * only offer, while `module > Conditional` picks the first and no listing spelled it.
+	 *
+	 * So the last attempt anchors at the root with a DIRECT-CHILD combinator. Only for a direct
+	 * child of the root: deeper, the ordinal is genuinely what separates the candidates, and
+	 * prepending a root segment there would neither disambiguate nor be worth the walk (a
+	 * non-descendant segment sends `resolveSelector` to the full `Engine.select`). A failed
+	 * attempt costs the caller nothing — the accumulated `>>` selector is what comes back, so
+	 * `describe`'s ordinal form is unchanged for every node this cannot single out.
+	 */
+	private function widenToUnique(node: QueryNode): Null<{ selector: String, unique: Bool }> {
+		if (!_ordinalOf.exists(node)) return null;
+		var selector: String = segmentOf(node);
+		if (uniquelyResolves(selector, node)) return { selector: selector, unique: true };
+		var ancestor: Null<QueryNode> = _parentOf[node];
+		while (ancestor != null) {
+			final above: QueryNode = ancestor;
+			if (above.name != null) {
+				selector = '${segmentOf(above)} >> $selector';
+				if (uniquelyResolves(selector, node)) return { selector: selector, unique: true };
+			}
+			ancestor = _parentOf[above];
+		}
+		if (_parentOf[node] == _root) {
+			final anchored: String = '${segmentOf(_root)} > $selector';
+			if (uniquelyResolves(anchored, node)) return { selector: anchored, unique: true };
+		}
+		return { selector: selector, unique: false };
+	}
+
+	/**
+	 * Whether `selectorExpr` resolves to exactly `node` — `Engine.select`'s answer, read
+	 * off the index. The question is "exactly one", so a second match already settles it:
+	 * the resolve stops there instead of collecting every sibling of a selector whose whole
+	 * purpose is to be rejected and widened.
+	 */
+	private function uniquelyResolves(selectorExpr: String, node: QueryNode): Bool {
+		final matches: Array<QueryNode> = try resolveSelector(Selector.parse(selectorExpr), 2) catch (exception: Exception) return false;
+		return matches.length == 1 && matches[0] == node;
+	}
+
+	/**
+	 * `Engine.select` for the all-descendant selectors `describe` builds: every
+	 * segment after the first matches at any depth below the previous one, so the
+	 * candidate set narrows step by step from the outermost segment. A direct-child
+	 * (`>`) segment can only appear when a node NAME contains a `>` — a shape this
+	 * narrowing does not model, so it defers to `selectByWalk`.
+	 *
+	 * The result is READ-ONLY: a single-segment selector hands back the index's own
+	 * group rather than a copy.
+	 *
+	 * `limit` (0 = every match) caps the LAST segment only: an earlier segment's matches
+	 * are the next one's search scope, so truncating one there would drop matches rather
+	 * than defer them. It is a cap on the answer, not a change to it — a caller reading
+	 * `length` past the cap must not pass one. Best-effort, too: a single-segment selector
+	 * answers unbounded (its group is the index's own array, which must not be sliced) and
+	 * so does `selectByWalk`. The only caller asks whether the answer is exactly one, and
+	 * that question survives an over-long answer.
+	 */
+	private function resolveSelector(selector: Selector, limit: Int = 0): Array<QueryNode> {
+		final segments: Array<SelectorSegment> = selector.segments;
+		for (i in 1...segments.length) if (!segments[i].descendant) return selectByWalk(selector, segments);
+		var current: Array<QueryNode> = candidatesFor(segments[0]);
+		for (i in 1...segments.length) {
+			if (current.length == 0) return current;
+			current = descendantsOf(current, candidatesFor(segments[i]), i == segments.length - 1 ? limit : 0);
+		}
+		return current;
+	}
+
+	/**
+	 * `Engine.select` for a selector the interval narrowing cannot model. Reached only when a
+	 * node NAME holds a `>`, which `Selector.parse` reads as a direct-child separator — not a
+	 * corner case: a string literal containing `>` is a node like any other, and this repo's
+	 * own sources hold thousands. The walk costs exactly what the index exists to avoid, so ask
+	 * the index first: `candidatesFor` IS a segment's match set, so a segment with an empty
+	 * group matches nothing and the whole selector resolves to nothing however it is walked.
+	 * Output-neutral by construction — it changes only how long the answer takes.
+	 */
+	private function selectByWalk(selector: Selector, segments: Array<SelectorSegment>): Array<QueryNode> {
+		for (segment in segments) if (candidatesFor(segment).length == 0) return [];
+		return Engine.select(_root, selector, _equiv);
+	}
+
+	/** Every node `segment` matches, in document order — the index's own group, never copied. */
+	private function candidatesFor(segment: SelectorSegment): Array<QueryNode> {
+		final equiv: Null<KindEquivalence> = _equiv;
+		final kind: String = equiv == null ? segment.kind : equiv.canon(segment.kind);
+		final name: Null<String> = segment.name;
+		return name == null ? _byKind[kind] ?? [] : _byKindName[groupKey(kind, name)] ?? [];
+	}
+
+	/**
+	 * The members of `group` sitting strictly inside one of `outers`, in document
+	 * order and without repeats. Both lists are document-ordered and subtrees are
+	 * nested or disjoint, so the outers' pre-order intervals sweep `group` left to
+	 * right: each starts at a binary search and stops at the first node past its end.
+	 *
+	 * `limit` (0 = every match) stops the sweep once that many are found. The prefix is
+	 * the same one the unbounded sweep produces, so a bounded call answers "are there at
+	 * least N" without paying for the rest.
+	 */
+	private function descendantsOf(outers: Array<QueryNode>, group: Array<QueryNode>, limit: Int = 0): Array<QueryNode> {
+		final found: Array<QueryNode> = [];
+		var emitted: Int = -1;
+		for (outer in outers) {
+			final first: Null<Int> = _ordinalOf[outer];
+			final last: Null<Int> = _lastOrdinalOf[outer];
+			if (first == null || last == null) throw new Exception('address index: outer ${outer.kind} is not indexed (unreachable)');
+			var i: Int = lowerBound(group, first + 1);
+			if (i <= emitted) i = emitted + 1;
+			while (i < group.length) {
+				final ordinal: Null<Int> = _ordinalOf[group[i]];
+				if (ordinal == null) throw new Exception('address index: candidate ${group[i].kind} is not indexed (unreachable)');
+				if (ordinal > last) break;
+				found.push(group[i]);
+				if (limit > 0 && found.length >= limit) return found;
+				emitted = i;
+				i++;
+			}
+		}
+		return found;
+	}
+
+	/** The first index in the document-ordered `group` whose pre-order rank reaches `ordinal`. */
+	private function lowerBound(group: Array<QueryNode>, ordinal: Int): Int {
+		var lo: Int = 0;
+		var hi: Int = group.length;
+		while (lo < hi) {
+			final mid: Int = (lo + hi) >> 1;
+			final rank: Null<Int> = _ordinalOf[group[mid]];
+			if (rank == null) throw new Exception('address index: candidate ${group[mid].kind} is not indexed (unreachable)');
+			if (rank < ordinal)
+				lo = mid + 1;
+			else
+				hi = mid;
+		}
+		return lo;
+	}
+
+	/**
+	 * Record `node` and its subtree, returning the next free pre-order rank. An
+	 * already-recorded node is skipped whole, so a tree reaching the same node twice
+	 * keeps the FIRST occurrence throughout — its parent, and also its interval, so a
+	 * selector rooted at the SECOND parent would not see it as a descendant.
+	 * Real trees are trees: no node identity is shared in practice.
+	 * Runs after `_equiv` is assigned, and must: it buckets by the CANONICAL kind, so
+	 * an earlier call would group by the raw kind with no error and no failing test.
+	 * `enclosing` is the nearest SPANNED ancestor's span rather than the parent's, so a
+	 * spanless node in between does not hide a grandchild that escapes its grandparent
+	 * — the containment `nodeAt` prunes on is exactly the one measured here. That test
+	 * runs BEFORE the skip, because the skip keeps only the first parent: a node reached
+	 * a second time would otherwise never have its second enclosure checked, and a DAG
+	 * would pass for nested while `nodeAt`'s pruning could no longer reach it.
+	 */
+	private function indexNode(node: QueryNode, parent: Null<QueryNode>, enclosing: Null<Span>, ordinal: Int): Int {
+		final span: Null<Span> = node.span;
+		if (span != null && enclosing != null && (span.from < enclosing.from || span.to > enclosing.to)) nested = false;
+		if (_ordinalOf.exists(node)) return ordinal;
+		_ordinalOf[node] = ordinal;
+		if (parent != null) _parentOf[node] = parent;
+		final equiv: Null<KindEquivalence> = _equiv;
+		final kind: String = equiv == null ? node.kind : equiv.canon(node.kind);
+		bucket(_byKind, kind).push(node);
+		final name: Null<String> = node.name;
+		if (name != null) bucket(_byKindName, groupKey(kind, name)).push(node);
+		final within: Null<Span> = span ?? enclosing;
+		var next: Int = ordinal + 1;
+		for (child in node.children) next = indexNode(child, node, within, next);
+		_lastOrdinalOf[node] = next - 1;
+		return next;
+	}
+
+	/** Kind and name joined into one map key, the same way a selector segment spells the pair. */
+	private static inline function groupKey(kind: String, name: String): String {
+		return '$kind:$name';
+	}
+
+	/** The group for `key`, created on first use. */
+	private static function bucket(buckets: Map<String, Array<QueryNode>>, key: String): Array<QueryNode> {
+		final existing: Null<Array<QueryNode>> = buckets[key];
+		if (existing != null) return existing;
+		final fresh: Array<QueryNode> = [];
+		buckets[key] = fresh;
+		return fresh;
+	}
+
+	/** One selector segment for a node: `Kind` or `Kind:name`. */
+	private static function segmentOf(node: QueryNode): String {
+		final name: Null<String> = node.name;
+		return name != null ? '${node.kind}:$name' : node.kind;
+	}
+
+	/**
+	 * The `<line>:<col>` fallback address. Kept off the main path on purpose:
+	 * `Span.lineCol` counts newlines from byte zero, so deriving it eagerly cost
+	 * one full source scan per address for a string almost every call discards.
+	 */
+	private static function positionOf(source: String, node: QueryNode): String {
+		final span: Null<Span> = node.span;
+		if (span == null) return '?:?';
+		final pos: Position = span.lineCol(source);
+		return '${pos.line}:${pos.col}';
+	}
+
+}
+
+/**
+ * One `AddressIndex` held across consecutive addresses of the SAME tree — the shape the JSON lint
+ * report needs, where findings arrive grouped by file and each one asks for the address of a node
+ * in that file's tree.
+ *
+ * The memo is an INSTANCE field and the instance belongs to the run that made it: nothing here is
+ * process-scoped, and an addresser dropped at the end of a report retains no tree. The slot is
+ * keyed by the tree OBJECT rather than by a path, because the parse cache is keyed by CONTENT and
+ * an index handed a node it never indexed degrades every address to `<line>:<col>` in silence.
+ *
+ * ONE slot is enough because a caller walks a file's findings together; a tree seen again after
+ * another one in between simply rebuilds. `indexBuilds` counts the builds, and it is the ONLY
+ * observable of whether the memo is live — the addresses are identical either way, so a
+ * rebuild-per-address regression is invisible to every other gate. It has been dead once already:
+ * the two captured locals this class replaces were `var`s the report's own closure wrote, an
+ * autofix pass read those writes as dead stores, deleted them and turned the locals `final`, and
+ * every finding paid a whole-tree index from then on, which cost the JSON
+ * report orders of magnitude more than the text one over the same findings.
+ */
+@:nullSafety(Strict)
+final class TreeAddresser {
+
+	/** How many indexes this addresser has built — one per run of consecutive addresses in one tree. */
+	public var indexBuilds(default, null): Int = 0;
+
+	private final _equiv: Null<KindEquivalence>;
+
+	private var _tree: Null<QueryNode> = null;
+	private var _index: Null<AddressIndex> = null;
+
+	public function new(?equiv: KindEquivalence) {
+		_equiv = equiv;
+	}
+
+	/**
+	 * The canonical, edit-stable address of the innermost node of `tree` containing `offset`, or
+	 * null when the tree holds no such node.
+	 */
+	public function addressAt(tree: QueryNode, source: String, offset: Int): Null<String> {
+		var index: Null<AddressIndex> = _index;
+		if (index == null || _tree != tree) {
+			index = Address.describerFor(tree, _equiv);
+			_tree = tree;
+			_index = index;
+			indexBuilds++;
+		}
+		final node: Null<QueryNode> = index.nodeAt(offset);
+		return node == null ? null : index.describe(source, node);
+	}
+
+}
+
+/**
  * The shared target-address resolver of the mutation ops — one place that
  * turns any accepted address form into a byte offset (and node):
  *
@@ -445,376 +815,6 @@ final class Address {
 	private static function nodeAtSpan(tree: QueryNode, span: Span): Null<QueryNode> {
 		final own: Null<Span> = tree.span;
 		return own != null && own.from == span.from && own.to == span.to ? tree : Arrays.findMap(tree.children, c -> nodeAtSpan(c, span));
-	}
-
-}
-
-/**
- * A pre-order index over ONE parsed tree, shared by every address derived from
- * it. `describe` probes the tree once per candidate selector, so a report that
- * addresses every finding of a file used to re-walk that file's tree thousands
- * of times — on a large source the annotation cost several times the analysis it
- * annotates. Here those probes are lookups instead: a segment's candidates come
- * from per-kind and per-kind-and-name groups already held in document order, and
- * "does this node sit inside that one" is a comparison of pre-order intervals
- * rather than another walk.
- *
- * The index keys on node IDENTITY, so it is bound to the tree it indexed and a
- * re-parse invalidates it. Reuse therefore stays explicit at the call site
- * rather than hiding behind a cache that cannot tell a stale tree from a fresh
- * one.
- */
-@:nullSafety(Strict)
-final class AddressIndex {
-
-	/**
-	 * Whether every spanned node sits inside its nearest spanned ancestor. That is
-	 * the premise `nodeAt` prunes on, and it is a property of the tree rather than
-	 * of the grammar, so it is measured while indexing instead of assumed: a tree
-	 * that breaks it sends `nodeAt` back to `Engine.at`'s full walk, which makes the
-	 * shortcut output-neutral on any tree rather than only on the ones checked.
-	 *
-	 * Readable because the two paths answer identically by design — so this flag is
-	 * the ONLY observable of which one runs, and a grammar change that quietly
-	 * un-nested real trees would otherwise revert the shortcut with nothing to notice.
-	 */
-	public var nested(default, null): Bool = true;
-
-	/** Nodes per kind-equivalence-canonical kind, in document order — a nameless segment's candidates. */
-	private final _byKind: Map<String, Array<QueryNode>> = [];
-
-	/** Nodes per canonical kind and name — a named segment resolves without scanning its whole kind. */
-	private final _byKindName: Map<String, Array<QueryNode>> = [];
-
-	/** Pre-order rank per node; its presence is also the "does this tree hold the node" test. */
-	private final _ordinalOf: IdentityMap<QueryNode, Int> = new IdentityMap();
-
-	/** Highest pre-order rank inside a node's subtree — with `_ordinalOf` it turns descendancy into a range test. */
-	private final _lastOrdinalOf: IdentityMap<QueryNode, Int> = new IdentityMap();
-
-	/** Each node's parent — the chain `describe` widens along, without a root-down search per step. */
-	private final _parentOf: IdentityMap<QueryNode, QueryNode> = new IdentityMap();
-
-	private final _root: QueryNode;
-	private final _equiv: Null<KindEquivalence>;
-
-	public function new(root: QueryNode, ?equiv: KindEquivalence) {
-		_root = root;
-		_equiv = equiv;
-		indexNode(root, null, null, 0);
-	}
-
-	/** The canonical, edit-stable address of `node` — `Address.describe`'s contract, answered from the index. */
-	public function describe(source: String, node: QueryNode): String {
-		final widened: Null<{ selector: String, unique: Bool }> = widenToUnique(node);
-		if (widened == null) return positionOf(source, node);
-		final selector: String = widened.selector;
-		if (widened.unique) return selector;
-		// Names cannot disambiguate — pick the instance ordinal.
-		final matches: Array<QueryNode> = try resolveSelector(Selector.parse(selector)) catch (exception: Exception) [];
-		final k: Int = matches.indexOf(node);
-		return k >= 0 ? '$selector --nth ${k + 1}' : positionOf(source, node);
-	}
-
-	/**
-	 * The selector that resolves to `node` and to nothing else, or null when NAMES cannot single
-	 * it out — `describe` with its two non-selector answers, the instance ordinal and the
-	 * `<line>:<col>` fallback, reported as an absence instead of rendered.
-	 *
-	 * A caller that offers its result AS A COMMAND needs that distinction, and cannot recover it
-	 * from `describe`'s string: sniffing for a ` --nth ` suffix mistakes a node NAME that spells
-	 * it (a string literal is a named node like any other) for the ordinal form, and nothing in
-	 * the string marks the positional fallback at all — which a `>` inside a name reaches, since
-	 * `Selector.parse` reads it as a child separator and the widened selector then matches
-	 * nothing — the ambiguity listing then offers a bare `<line>:<col>`, which is not a selector.
-	 */
-	public function uniqueSelector(node: QueryNode): Null<String> {
-		final widened: Null<{ selector: String, unique: Bool }> = widenToUnique(node);
-		return widened != null && widened.unique ? widened.selector : null;
-	}
-
-	/**
-	 * The innermost node whose span contains `offset` — `Engine.at`'s answer without
-	 * `Engine.at`'s walk. A report addresses every finding of a file, so locating the
-	 * node was a full pre-order per FINDING while the index it feeds is one per file;
-	 * `Engine.atNested` instead descends only through the children that can hold the
-	 * offset, which is the root-to-node path plus each level's siblings.
-	 *
-	 * All this class contributes is the PREMISE: `atNested` needs every spanned node to
-	 * sit inside its nearest spanned ancestor, and `indexNode` measures exactly that
-	 * while it builds. A tree that breaks it goes to `Engine.at` unchanged, so the
-	 * shortcut is output-neutral on any tree rather than only on the ones checked.
-	 */
-	public function nodeAt(offset: Int): Null<QueryNode> {
-		return nested ? Engine.atNested(_root, offset) : Engine.at(_root, offset);
-	}
-
-	/**
-	 * `node`'s segment with the nearest named ancestors prepended until it resolves uniquely,
-	 * and whether it got there — or null when the node does not belong to the tree indexed here. The
-	 * widest selector TRIED comes back either way, because `describe`'s ordinal form is built on it.
-	 *
-	 * Every step prepends with `>>`, so what the walk can express is "somewhere under a named
-	 * ancestor" — and DEPTH is the one thing it cannot say. That is invisible almost everywhere,
-	 * because a node at a different depth almost always has a named ancestor the other lacks. The
-	 * exception is the ROOT: it is the one ancestor every node shares and the one that is always
-	 * nameless, so a node hanging directly off it has no named ancestor at all and its bare
-	 * segment matches every same-kind node in the file. `--select 'Conditional'` on a file with a
-	 * module-level region and a member-level one was exactly that — ambiguous, with `--nth` the
-	 * only offer, while `module > Conditional` picks the first and no listing spelled it.
-	 *
-	 * So the last attempt anchors at the root with a DIRECT-CHILD combinator. Only for a direct
-	 * child of the root: deeper, the ordinal is genuinely what separates the candidates, and
-	 * prepending a root segment there would neither disambiguate nor be worth the walk (a
-	 * non-descendant segment sends `resolveSelector` to the full `Engine.select`). A failed
-	 * attempt costs the caller nothing — the accumulated `>>` selector is what comes back, so
-	 * `describe`'s ordinal form is unchanged for every node this cannot single out.
-	 */
-	private function widenToUnique(node: QueryNode): Null<{ selector: String, unique: Bool }> {
-		if (!_ordinalOf.exists(node)) return null;
-		var selector: String = segmentOf(node);
-		if (uniquelyResolves(selector, node)) return { selector: selector, unique: true };
-		var ancestor: Null<QueryNode> = _parentOf[node];
-		while (ancestor != null) {
-			final above: QueryNode = ancestor;
-			if (above.name != null) {
-				selector = '${segmentOf(above)} >> $selector';
-				if (uniquelyResolves(selector, node)) return { selector: selector, unique: true };
-			}
-			ancestor = _parentOf[above];
-		}
-		if (_parentOf[node] == _root) {
-			final anchored: String = '${segmentOf(_root)} > $selector';
-			if (uniquelyResolves(anchored, node)) return { selector: anchored, unique: true };
-		}
-		return { selector: selector, unique: false };
-	}
-
-	/**
-	 * Whether `selectorExpr` resolves to exactly `node` — `Engine.select`'s answer, read
-	 * off the index. The question is "exactly one", so a second match already settles it:
-	 * the resolve stops there instead of collecting every sibling of a selector whose whole
-	 * purpose is to be rejected and widened.
-	 */
-	private function uniquelyResolves(selectorExpr: String, node: QueryNode): Bool {
-		final matches: Array<QueryNode> = try resolveSelector(Selector.parse(selectorExpr), 2) catch (exception: Exception) return false;
-		return matches.length == 1 && matches[0] == node;
-	}
-
-	/**
-	 * `Engine.select` for the all-descendant selectors `describe` builds: every
-	 * segment after the first matches at any depth below the previous one, so the
-	 * candidate set narrows step by step from the outermost segment. A direct-child
-	 * (`>`) segment can only appear when a node NAME contains a `>` — a shape this
-	 * narrowing does not model, so it defers to `selectByWalk`.
-	 *
-	 * The result is READ-ONLY: a single-segment selector hands back the index's own
-	 * group rather than a copy.
-	 *
-	 * `limit` (0 = every match) caps the LAST segment only: an earlier segment's matches
-	 * are the next one's search scope, so truncating one there would drop matches rather
-	 * than defer them. It is a cap on the answer, not a change to it — a caller reading
-	 * `length` past the cap must not pass one. Best-effort, too: a single-segment selector
-	 * answers unbounded (its group is the index's own array, which must not be sliced) and
-	 * so does `selectByWalk`. The only caller asks whether the answer is exactly one, and
-	 * that question survives an over-long answer.
-	 */
-	private function resolveSelector(selector: Selector, limit: Int = 0): Array<QueryNode> {
-		final segments: Array<SelectorSegment> = selector.segments;
-		for (i in 1...segments.length) if (!segments[i].descendant) return selectByWalk(selector, segments);
-		var current: Array<QueryNode> = candidatesFor(segments[0]);
-		for (i in 1...segments.length) {
-			if (current.length == 0) return current;
-			current = descendantsOf(current, candidatesFor(segments[i]), i == segments.length - 1 ? limit : 0);
-		}
-		return current;
-	}
-
-	/**
-	 * `Engine.select` for a selector the interval narrowing cannot model. Reached only when a
-	 * node NAME holds a `>`, which `Selector.parse` reads as a direct-child separator — not a
-	 * corner case: a string literal containing `>` is a node like any other, and this repo's
-	 * own sources hold thousands. The walk costs exactly what the index exists to avoid, so ask
-	 * the index first: `candidatesFor` IS a segment's match set, so a segment with an empty
-	 * group matches nothing and the whole selector resolves to nothing however it is walked.
-	 * Output-neutral by construction — it changes only how long the answer takes.
-	 */
-	private function selectByWalk(selector: Selector, segments: Array<SelectorSegment>): Array<QueryNode> {
-		for (segment in segments) if (candidatesFor(segment).length == 0) return [];
-		return Engine.select(_root, selector, _equiv);
-	}
-
-	/** Every node `segment` matches, in document order — the index's own group, never copied. */
-	private function candidatesFor(segment: SelectorSegment): Array<QueryNode> {
-		final equiv: Null<KindEquivalence> = _equiv;
-		final kind: String = equiv == null ? segment.kind : equiv.canon(segment.kind);
-		final name: Null<String> = segment.name;
-		return name == null ? _byKind[kind] ?? [] : _byKindName[groupKey(kind, name)] ?? [];
-	}
-
-	/**
-	 * The members of `group` sitting strictly inside one of `outers`, in document
-	 * order and without repeats. Both lists are document-ordered and subtrees are
-	 * nested or disjoint, so the outers' pre-order intervals sweep `group` left to
-	 * right: each starts at a binary search and stops at the first node past its end.
-	 *
-	 * `limit` (0 = every match) stops the sweep once that many are found. The prefix is
-	 * the same one the unbounded sweep produces, so a bounded call answers "are there at
-	 * least N" without paying for the rest.
-	 */
-	private function descendantsOf(outers: Array<QueryNode>, group: Array<QueryNode>, limit: Int = 0): Array<QueryNode> {
-		final found: Array<QueryNode> = [];
-		var emitted: Int = -1;
-		for (outer in outers) {
-			final first: Null<Int> = _ordinalOf[outer];
-			final last: Null<Int> = _lastOrdinalOf[outer];
-			if (first == null || last == null) throw new Exception('address index: outer ${outer.kind} is not indexed (unreachable)');
-			var i: Int = lowerBound(group, first + 1);
-			if (i <= emitted) i = emitted + 1;
-			while (i < group.length) {
-				final ordinal: Null<Int> = _ordinalOf[group[i]];
-				if (ordinal == null) throw new Exception('address index: candidate ${group[i].kind} is not indexed (unreachable)');
-				if (ordinal > last) break;
-				found.push(group[i]);
-				if (limit > 0 && found.length >= limit) return found;
-				emitted = i;
-				i++;
-			}
-		}
-		return found;
-	}
-
-	/** The first index in the document-ordered `group` whose pre-order rank reaches `ordinal`. */
-	private function lowerBound(group: Array<QueryNode>, ordinal: Int): Int {
-		var lo: Int = 0;
-		var hi: Int = group.length;
-		while (lo < hi) {
-			final mid: Int = (lo + hi) >> 1;
-			final rank: Null<Int> = _ordinalOf[group[mid]];
-			if (rank == null) throw new Exception('address index: candidate ${group[mid].kind} is not indexed (unreachable)');
-			if (rank < ordinal)
-				lo = mid + 1;
-			else
-				hi = mid;
-		}
-		return lo;
-	}
-
-	/**
-	 * Record `node` and its subtree, returning the next free pre-order rank. An
-	 * already-recorded node is skipped whole, so a tree reaching the same node twice
-	 * keeps the FIRST occurrence throughout — its parent, and also its interval, so a
-	 * selector rooted at the SECOND parent would not see it as a descendant.
-	 * Real trees are trees: no node identity is shared in practice.
-	 * Runs after `_equiv` is assigned, and must: it buckets by the CANONICAL kind, so
-	 * an earlier call would group by the raw kind with no error and no failing test.
-	 * `enclosing` is the nearest SPANNED ancestor's span rather than the parent's, so a
-	 * spanless node in between does not hide a grandchild that escapes its grandparent
-	 * — the containment `nodeAt` prunes on is exactly the one measured here. That test
-	 * runs BEFORE the skip, because the skip keeps only the first parent: a node reached
-	 * a second time would otherwise never have its second enclosure checked, and a DAG
-	 * would pass for nested while `nodeAt`'s pruning could no longer reach it.
-	 */
-	private function indexNode(node: QueryNode, parent: Null<QueryNode>, enclosing: Null<Span>, ordinal: Int): Int {
-		final span: Null<Span> = node.span;
-		if (span != null && enclosing != null && (span.from < enclosing.from || span.to > enclosing.to)) nested = false;
-		if (_ordinalOf.exists(node)) return ordinal;
-		_ordinalOf[node] = ordinal;
-		if (parent != null) _parentOf[node] = parent;
-		final equiv: Null<KindEquivalence> = _equiv;
-		final kind: String = equiv == null ? node.kind : equiv.canon(node.kind);
-		bucket(_byKind, kind).push(node);
-		final name: Null<String> = node.name;
-		if (name != null) bucket(_byKindName, groupKey(kind, name)).push(node);
-		final within: Null<Span> = span ?? enclosing;
-		var next: Int = ordinal + 1;
-		for (child in node.children) next = indexNode(child, node, within, next);
-		_lastOrdinalOf[node] = next - 1;
-		return next;
-	}
-
-	/** Kind and name joined into one map key, the same way a selector segment spells the pair. */
-	private static inline function groupKey(kind: String, name: String): String {
-		return '$kind:$name';
-	}
-
-	/** The group for `key`, created on first use. */
-	private static function bucket(buckets: Map<String, Array<QueryNode>>, key: String): Array<QueryNode> {
-		final existing: Null<Array<QueryNode>> = buckets[key];
-		if (existing != null) return existing;
-		final fresh: Array<QueryNode> = [];
-		buckets[key] = fresh;
-		return fresh;
-	}
-
-	/** One selector segment for a node: `Kind` or `Kind:name`. */
-	private static function segmentOf(node: QueryNode): String {
-		final name: Null<String> = node.name;
-		return name != null ? '${node.kind}:$name' : node.kind;
-	}
-
-	/**
-	 * The `<line>:<col>` fallback address. Kept off the main path on purpose:
-	 * `Span.lineCol` counts newlines from byte zero, so deriving it eagerly cost
-	 * one full source scan per address for a string almost every call discards.
-	 */
-	private static function positionOf(source: String, node: QueryNode): String {
-		final span: Null<Span> = node.span;
-		if (span == null) return '?:?';
-		final pos: Position = span.lineCol(source);
-		return '${pos.line}:${pos.col}';
-	}
-
-}
-
-/**
- * One `AddressIndex` held across consecutive addresses of the SAME tree — the shape the JSON lint
- * report needs, where findings arrive grouped by file and each one asks for the address of a node
- * in that file's tree.
- *
- * The memo is an INSTANCE field and the instance belongs to the run that made it: nothing here is
- * process-scoped, and an addresser dropped at the end of a report retains no tree. The slot is
- * keyed by the tree OBJECT rather than by a path, because the parse cache is keyed by CONTENT and
- * an index handed a node it never indexed degrades every address to `<line>:<col>` in silence.
- *
- * ONE slot is enough because a caller walks a file's findings together; a tree seen again after
- * another one in between simply rebuilds. `indexBuilds` counts the builds, and it is the ONLY
- * observable of whether the memo is live — the addresses are identical either way, so a
- * rebuild-per-address regression is invisible to every other gate. It has been dead once already:
- * the two captured locals this class replaces were `var`s the report's own closure wrote, an
- * autofix pass read those writes as dead stores, deleted them and turned the locals `final`, and
- * every finding paid a whole-tree index from then on, which cost the JSON
- * report orders of magnitude more than the text one over the same findings.
- */
-@:nullSafety(Strict)
-final class TreeAddresser {
-
-	/** How many indexes this addresser has built — one per run of consecutive addresses in one tree. */
-	public var indexBuilds(default, null): Int = 0;
-
-	private final _equiv: Null<KindEquivalence>;
-
-	private var _tree: Null<QueryNode> = null;
-	private var _index: Null<AddressIndex> = null;
-
-	public function new(?equiv: KindEquivalence) {
-		_equiv = equiv;
-	}
-
-	/**
-	 * The canonical, edit-stable address of the innermost node of `tree` containing `offset`, or
-	 * null when the tree holds no such node.
-	 */
-	public function addressAt(tree: QueryNode, source: String, offset: Int): Null<String> {
-		var index: Null<AddressIndex> = _index;
-		if (index == null || _tree != tree) {
-			index = Address.describerFor(tree, _equiv);
-			_tree = tree;
-			_index = index;
-			indexBuilds++;
-		}
-		final node: Null<QueryNode> = index.nodeAt(offset);
-		return node == null ? null : index.describe(source, node);
 	}
 
 }

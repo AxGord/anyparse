@@ -10,6 +10,14 @@ import utest.Test;
 
 using Lambda;
 
+private typedef Usage = {
+	var input: Int;
+	var output: Int;
+	var cacheRead: Int;
+	var write5m: Int;
+	var write1h: Int;
+}
+
 /**
  * `TokenReport`: the price of a turn per model family, the turns that rebuild their whole cache and the idle gap before each,
  * and the sums per tool, model and slice (with the landed ones singled out).
@@ -285,12 +293,4 @@ final class TokenReportTest extends Test {
 		};
 	}
 
-}
-
-private typedef Usage = {
-	var input: Int;
-	var output: Int;
-	var cacheRead: Int;
-	var write5m: Int;
-	var write1h: Int;
 }

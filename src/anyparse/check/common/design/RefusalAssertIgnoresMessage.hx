@@ -9,6 +9,9 @@ import anyparse.check.scan.CasePatternScan;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
+/** The two option lists the rule reads. */
+typedef RefusalOptions = { final refusals: Array<String>; final passes: Array<String>; }
+
 /**
  * Flags a `case` arm that matches a REFUSAL constructor (`Err(_)`) without reading what the refusal carries and then
  * passes (`Assert.pass()`) — an assertion any refusal satisfies, so a call refused for another reason stays green.
@@ -122,6 +125,3 @@ final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware 
 	}
 
 }
-
-/** The two option lists the rule reads. */
-typedef RefusalOptions = { final refusals: Array<String>; final passes: Array<String>; }

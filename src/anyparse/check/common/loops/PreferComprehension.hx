@@ -18,6 +18,98 @@ import anyparse.query.TypeSyntax;
 using anyparse.util.Strings;
 using StringTools;
 
+/** The `RefShape` kinds `PreferComprehension` reads, bundled once so the walkers take one argument. */
+typedef ComprehensionSeams = {
+
+	var forStmtKind: String;
+	var whileStmtKind: Null<String>;
+	var localDeclKinds: Array<String>;
+	var callKind: String;
+	var fieldAccessKind: String;
+	var exprStmtKind: String;
+	var blockStmtKind: String;
+	var identKind: String;
+	var ifKinds: Array<String>;
+	var intervalKind: Null<String>;
+	var assignKind: Null<String>;
+	var opaqueKinds: Array<String>;
+	var interpIdentKind: Null<String>;
+	var valueBinderKinds: Array<String>;
+	var mutableDeclKinds: Array<String>;
+	var continuationKinds: Array<String>;
+	var nullSafeKind: Null<String>;
+	var newExprKind: Null<String>;
+	var parenKind: Null<String>;
+	var arrayLiteralKind: Null<String>;
+	var indexAccessKind: Null<String>;
+	var objectFieldKind: Null<String>;
+	var elementTypeParams: Map<String, Int>;
+
+	/** `GrammarPlugin.typeSyntax` — how an annotation's element type is read. */
+	var typeSyntax: TypeSyntaxReader;
+	var atomKinds: Array<String>;
+	var pureKinds: Array<String>;
+	var eagerKinds: Array<String>;
+
+}
+
+/**
+ * A flagged declaration-plus-loop pair: the span it is REPORTED at (declaration start to loop end,
+ * which is also the key the fix looks its edits up by) and the edits that realise it — one for an
+ * adjacent pair, two for a gapped one.
+ */
+private typedef Match = { var span: Span; var edits: Array<{ span: Span, text: String }>; }
+
+/** Per-file inputs the walkers share: the source, the resolved seams and the file's comment tokens (lexed once). */
+typedef ComprehensionCtx = {
+
+	var source: String;
+	var seams: ComprehensionSeams;
+	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+
+	/** The file's lexical regions: what a comment gate over a span reads, so a `//` inside a string is no comment. */
+	var regions: Array<LexRegion>;
+
+	/** The file's tree and ref shape — the write scan that decides `var` vs `final` needs both. */
+	var tree: QueryNode;
+	var shape: RefShape;
+
+}
+
+/**
+ * Per-match accumulators: nodes the self-reference gate must scan, comment texts to hoist above the
+ * result, and the ARRAY declaration's ELEMENT type — the one thing that can restate a link sitting at
+ * the whole-push-argument position, letting it drop its own annotation.
+ */
+typedef ComprehensionAcc = { var checks: Array<QueryNode>; var hoisted: Array<{ from: Int, text: String }>; var elementType: Null<String>; }
+
+/**
+ * One link of the inlining chain: the declared local, its initializer, the single use the initializer
+ * replaces, and whether that use is the ENTIRE push argument — the one position where the array
+ * declaration's own annotation restates the link's.
+ */
+private typedef ChainLocal = {
+	var name: String;
+	var init: QueryNode;
+	var initSpan: Span;
+	var annotation: Null<String>;
+	var useSpan: Span;
+	var useParent: Null<QueryNode>;
+	var useIndex: Int;
+	var wholeArgument: Bool;
+}
+
+/**
+ * One identifier occurrence found by the chain's use scan, with the slot it would be inlined into and
+ * whether every ancestor down to it is an eager host.
+ */
+private typedef Use = {
+	var node: QueryNode;
+	var parent: Null<QueryNode>;
+	var index: Int;
+	var eager: Bool;
+}
+
 /**
  * Flags an empty-array local declaration followed by a `for` or `while`
  * loop whose only effect is `a.push(<expr>)`, which an array comprehension replaces —
@@ -1055,96 +1147,4 @@ final class PreferComprehension extends RuleBase {
 		return receiver.kind == s.identKind && receiver.name == name ? call.children[1] : null;
 	}
 
-}
-
-/** The `RefShape` kinds `PreferComprehension` reads, bundled once so the walkers take one argument. */
-typedef ComprehensionSeams = {
-
-	var forStmtKind: String;
-	var whileStmtKind: Null<String>;
-	var localDeclKinds: Array<String>;
-	var callKind: String;
-	var fieldAccessKind: String;
-	var exprStmtKind: String;
-	var blockStmtKind: String;
-	var identKind: String;
-	var ifKinds: Array<String>;
-	var intervalKind: Null<String>;
-	var assignKind: Null<String>;
-	var opaqueKinds: Array<String>;
-	var interpIdentKind: Null<String>;
-	var valueBinderKinds: Array<String>;
-	var mutableDeclKinds: Array<String>;
-	var continuationKinds: Array<String>;
-	var nullSafeKind: Null<String>;
-	var newExprKind: Null<String>;
-	var parenKind: Null<String>;
-	var arrayLiteralKind: Null<String>;
-	var indexAccessKind: Null<String>;
-	var objectFieldKind: Null<String>;
-	var elementTypeParams: Map<String, Int>;
-
-	/** `GrammarPlugin.typeSyntax` — how an annotation's element type is read. */
-	var typeSyntax: TypeSyntaxReader;
-	var atomKinds: Array<String>;
-	var pureKinds: Array<String>;
-	var eagerKinds: Array<String>;
-
-}
-
-/**
- * A flagged declaration-plus-loop pair: the span it is REPORTED at (declaration start to loop end,
- * which is also the key the fix looks its edits up by) and the edits that realise it — one for an
- * adjacent pair, two for a gapped one.
- */
-private typedef Match = { var span: Span; var edits: Array<{ span: Span, text: String }>; }
-
-/** Per-file inputs the walkers share: the source, the resolved seams and the file's comment tokens (lexed once). */
-typedef ComprehensionCtx = {
-
-	var source: String;
-	var seams: ComprehensionSeams;
-	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
-
-	/** The file's lexical regions: what a comment gate over a span reads, so a `//` inside a string is no comment. */
-	var regions: Array<LexRegion>;
-
-	/** The file's tree and ref shape — the write scan that decides `var` vs `final` needs both. */
-	var tree: QueryNode;
-	var shape: RefShape;
-
-}
-
-/**
- * Per-match accumulators: nodes the self-reference gate must scan, comment texts to hoist above the
- * result, and the ARRAY declaration's ELEMENT type — the one thing that can restate a link sitting at
- * the whole-push-argument position, letting it drop its own annotation.
- */
-typedef ComprehensionAcc = { var checks: Array<QueryNode>; var hoisted: Array<{ from: Int, text: String }>; var elementType: Null<String>; }
-
-/**
- * One link of the inlining chain: the declared local, its initializer, the single use the initializer
- * replaces, and whether that use is the ENTIRE push argument — the one position where the array
- * declaration's own annotation restates the link's.
- */
-private typedef ChainLocal = {
-	var name: String;
-	var init: QueryNode;
-	var initSpan: Span;
-	var annotation: Null<String>;
-	var useSpan: Span;
-	var useParent: Null<QueryNode>;
-	var useIndex: Int;
-	var wholeArgument: Bool;
-}
-
-/**
- * One identifier occurrence found by the chain's use scan, with the slot it would be inlined into and
- * whether every ancestor down to it is an eager host.
- */
-private typedef Use = {
-	var node: QueryNode;
-	var parent: Null<QueryNode>;
-	var index: Int;
-	var eager: Bool;
 }

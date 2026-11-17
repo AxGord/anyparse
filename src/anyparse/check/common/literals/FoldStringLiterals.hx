@@ -17,6 +17,802 @@ import haxe.Exception;
 
 using anyparse.util.Strings;
 
+/** The seam kinds `FoldStringLiterals` resolves once per run and reads in both passes. */
+private typedef Seams = {
+
+	final support: StringFoldSupport;
+	final concatKind: String;
+
+	/** The operand-run conditional-splice kinds (`RefShape.condOperandRunKinds`). */
+	final condOperandRunKinds: Array<String>;
+	final stringLiteralKinds: Array<String>;
+
+	/**
+	 * The interpolation-BLOCK kind, or null when the grammar has no interpolation. The SPLIT
+	 * direction can turn an expression that sits inside such a block into a bare `+` operand, so
+	 * this is where the operator gate finds the operands a split would create.
+	 */
+	final stringInterpBlockKind: Null<String>;
+
+	/** The `$name` interpolation-FRAGMENT kind — the other operand a split can lift out of a literal. */
+	final stringInterpIdentKind: Null<String>;
+	final opaqueKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final callKind: Null<String>;
+	final fieldAccessKind: Null<String>;
+	final identKind: String;
+
+	/** The `case` PATTERN host kind — a position where a concatenation is not legal syntax. */
+	final patternKind: Null<String>;
+
+	/** The parameter kinds, whose default value must be a compile-time constant. */
+	final paramKinds: Array<String>;
+
+	/** The enum-abstract declaration kind, whose VALUE members are read by their expression shape. */
+	final enumAbstractDeclKind: Null<String>;
+
+	/** The annotation NAME that makes an ordinary abstract an enum abstract — the deprecated spelling a kind test cannot see. */
+	final enumAbstractMetaName: Null<String>;
+
+	/** The conditional-compilation member host, which INHERITS the value region it sits in. */
+	final conditionalKind: Null<String>;
+
+	/** The `inline` modifier sibling — an inlined field's value is a compile-time constant at every use site. */
+	final inlineKind: Null<String>;
+
+	/** Every kind that projects as a leading MODIFIER — what a declaration's modifier RUN is made of. */
+	final modifierKinds: Array<String>;
+
+	/** The function-member kinds — what an enum-abstract declares that IS ordinary code. */
+	final functionKinds: Array<String>;
+
+	/** `concatKind` plus the literal kinds — the node kinds `fix` re-finds a violation's span among. */
+	final candidateKinds: Array<String>;
+
+	/** A function's `{ … }` body (`RefShape.blockBodyKind`), whose statements a candidate may be measured inside alone. */
+	final blockBodyKind: Null<String>;
+
+};
+
+/** One construct flattened for planning: its segments, the SOURCE's own group boundaries, and the span to replace. */
+private typedef Decomposition = {
+
+	final segments: Array<ConcatSegment>;
+	final current: Array<Int>;
+
+	/** The construct NODE's span — what a violation is anchored at, so `fix` can re-find it. */
+	final span: Span;
+
+	/**
+	 * The span the fix REPLACES: the first operand's start to the last one's end. Narrower
+	 * than `span`, because a `+` node's span absorbs the trivia trailing its last operand —
+	 * replacing that would delete a comment ending the construct's line.
+	 */
+	final editSpan: Span;
+
+	/**
+	 * Segment boundaries no group may cross: a comment sits in the gap between the two
+	 * operands they separate. `glue` holds that gap's source verbatim.
+	 */
+	final locked: Array<Int>;
+
+	/** Locked boundary -> the source between its operands (comment, line break, indent, `+`). */
+	final glue: Map<Int, String>;
+
+	/**
+	 * Whether the SOURCE opens with a BARE expression operand — the one shape whose
+	 * plan may keep a bare first group (see `mergeLeadingBares`). Carried from the
+	 * decomposition, which knows it as a fact (`chainDecomposition` emitted a head
+	 * segment), because re-deriving it from the segment list cannot tell a bare
+	 * operand from a single-fragment interpolated literal (`'$x' + …`).
+	 */
+	final startsBare: Bool;
+
+};
+
+/** A construct's canonical form: the span to replace, its replacement text, and the finding message. */
+private typedef PlannedFold = {
+
+	/** The construct NODE's span — the violation's anchor. */
+	final span: Span;
+
+	/** The narrower span the fix replaces — see `Decomposition.editSpan`. */
+	final editSpan: Span;
+	final text: String;
+
+	/** How many `+` operands the plan renders as. */
+	final groups: Int;
+
+	/**
+	 * Whether the plan renders as a COMPILE-TIME CONSTANT — one group, every segment TEXT.
+	 * That is a strictly narrower question than `groups == 1`, and the difference is the whole
+	 * reason this field exists: a lone group holding an expression renders as an INTERPOLATED
+	 * literal, which Haxe desugars back into a `+` chain before anything reads it as syntax.
+	 * `untyped __lua__('local q = $k;')` and `untyped __lua__("local q = " + k + ";")` emit the
+	 * SAME broken `__lua__(Std.string(…) .. Std.string(…))`, and `js.Syntax.code` rejects both with
+	 * "must be a string constant".
+	 */
+	final constant: Bool;
+	final message: String;
+
+};
+
+/**
+ * A `+` chain `claim` accepted: its operands in source order, the offset its source
+ * starts at, and the index of the first operand that is a string literal.
+ */
+private typedef Chain = {
+
+	final operands: Array<QueryNode>;
+	final from: Int;
+
+	/** The offset the LAST operand ends at — the far end of the span the fix replaces. */
+	final to: Int;
+	final firstLiteral: Int;
+
+};
+
+/** A proposed partition and the budget it was filled against — what the writer verification re-fills from. */
+private typedef Plan = { final groups: Array<Int>; final budget: Int; };
+
+/**
+ * One grouping rendered: the joined construct text and the width of its widest single group.
+ */
+private typedef Rendered = { final text: String; final parts: Array<String>; final widest: Int; };
+
+/**
+ * The widest line a candidate's render ADDED, paired with the widest line it
+ * REMOVED — the two numbers the plan gate's strict-improvement test compares. They
+ * are maxima over disjoint sets and need not describe the same line; a line the
+ * render left untouched is in neither, so an over-wide line the edit never reaches
+ * cannot pin both sides equal.
+ */
+private typedef WidthPair = { final written: Int; final original: Int; final added: Array<String>; };
+
+/**
+ * What the back-off settled on: the final boundaries, their rendered text, and the
+ * measured width. A null `width` means the writer DECLINED to render the candidate,
+ * not that it was never asked — every candidate that changes anything is measured.
+ */
+private typedef Settled = {
+	final groups: Array<Int>;
+	final text: String;
+	final parts: Array<String>;
+	final width: Null<WidthPair>;
+};
+
+/**
+ * A candidate's measuring context: the enclosing member wrapped in a synthetic
+ * one-member type, plus that wrapper's own writer rendering as the baseline to diff
+ * against. `head` / `tail` bracket the member, `from` / `to` are its span in the
+ * FILE, so a candidate is spliced by taking the member's source either side of it.
+ */
+private typedef MemberScope = {
+	final head: String;
+	final tail: String;
+	final from: Int;
+	final to: Int;
+	final baseline: Array<String>;
+};
+
+/**
+ * One file's planning context. Owns the two things a candidate is measured against:
+ * the synthetic one-member scope its enclosing MEMBER renders inside (`scopeFor`),
+ * and — as the FALLBACK for a member no scope reproduces — the memoised writer
+ * rendering of the UNCHANGED file, computed on first demand so a file whose every
+ * candidate scopes never pays for it. Per-call, never shared: a `Check` may hold no
+ * state across `run` / `fix`.
+ */
+@:nullSafety(Strict)
+@:access(anyparse.check.common.literals.FoldStringLiterals)
+private class PlanContext {
+
+	/** The synthetic wrapper a member is measured inside — a one-member type at the depth its own type puts it at. */
+	private static final SCOPE_HEAD: String = 'class Scope {\n\t';
+
+	/** The closing half of `SCOPE_HEAD`. */
+	private static final SCOPE_TAIL: String = '\n}\n';
+
+	/** The synthetic wrapper a body STATEMENT is measured inside — a one-statement function, two indents deep like its own. */
+	private static final STATEMENT_SCOPE_HEAD: String = 'class Scope {\n\tfunction scope() {\n\t\t';
+
+	/** The closing half of `STATEMENT_SCOPE_HEAD`. */
+	private static final STATEMENT_SCOPE_TAIL: String = '\n\t}\n}\n';
+
+	public final plugin: GrammarPlugin;
+	public final seams: Seams;
+	public final source: String;
+	public final optsJson: Null<String>;
+	public final metrics: LayoutMetrics;
+
+	/**
+	 * The OPERATOR gate for this file, or null in `fix` — where the decision is not retaken: a
+	 * report-only finding carries it in its own message, exactly as the macro gate does.
+	 */
+	public final operators: Null<OperatorGate>;
+
+	/**
+	 * Member region ("<from>:<to>") -> its scope, or null when it cannot be scoped.
+	 * `Map.exists` distinguishes "not built yet" from "built, unusable". The key
+	 * carries BOTH ends because regions share a start: a declaration and each of the
+	 * modifier nodes on its line all open at the same offset.
+	 */
+	private final _scopes: Map<String, Null<MemberScope>> = [];
+
+	/** Statement region ("<from>:<to>") -> whether its member renders it exactly as it renders alone (`rendersAlone`). */
+	private final _alone: Map<String, Bool> = [];
+
+	private var _originalLines: Null<Array<String>> = null;
+	private var _originalFailed: Bool = false;
+	private var _memberSpans: Null<Array<Span>> = null;
+	private var _statementSpans: Null<Array<Span>> = null;
+	private var _regions: Null<Array<LexRegion>> = null; // noqa: scratch-field
+
+	public function new(
+		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics, operators: Null<OperatorGate>
+	) {
+		this.plugin = plugin;
+		this.seams = seams;
+		this.source = source;
+		this.optsJson = optsJson;
+		this.metrics = metrics;
+		this.operators = operators;
+	}
+
+	/** The writer's rendering of the unchanged file, split into lines; null when the writer declines, remembered so it is asked once. */
+	public function originalLines(): Null<Array<String>> {
+		final cached: Null<Array<String>> = _originalLines;
+		if (cached != null || _originalFailed) return cached;
+		final written: Null<String> = write(source);
+		if (written == null) {
+			_originalFailed = true;
+			return null;
+		}
+		final lines: Array<String> = written.split('\n');
+		_originalLines = lines;
+		return lines;
+	}
+
+	/** `writeRoundTrip` with its documented throwing failure modes folded into null. */
+	public function write(text: String): Null<String> {
+		return try plugin.writeRoundTrip(text, optsJson) catch (exception: Exception) null;
+	}
+
+	/**
+	 * The synthetic one-member module a candidate at `span` may be measured inside,
+	 * or null when nothing reproduces its real context and the caller must splice the
+	 * whole file instead.
+	 *
+	 * The writer decides wrapping per LINE, so a member rendered one indent deep
+	 * inside `class Scope { … }` wraps exactly as it does inside its own type — and
+	 * the round trip costs the member's few dozen lines instead of the file's
+	 * thousands. Two conditions guard that equivalence: the member must be one
+	 * indent deep in the SOURCE too (else the wrapper would re-indent it and every
+	 * width would be off by the difference), and the wrapper must round-trip at all.
+	 * Both answers are memoised per member, since a member usually holds several
+	 * candidates.
+	 *
+	 * One level further down, the same claim lets a body STATEMENT stand in for its
+	 * member (`statementSpans`), when `rendersAlone` shows the member renders it
+	 * exactly as it renders on its own: for a member of thousands of statements that
+	 * is one render of the statement per candidate instead of one of the member.
+	 */
+	public function scopeFor(span: Span): Null<MemberScope> {
+		final member: Null<Span> = memberSpanOf(span);
+		if (member == null) return null;
+		final memberScope: Null<MemberScope> = scopeOf(member, SCOPE_HEAD, SCOPE_TAIL);
+		if (memberScope == null) return null;
+		final statement: Null<Span> = statementSpanOf(span, member);
+		if (statement == null) return memberScope;
+		final statementScope: Null<MemberScope> = scopeOf(statement, STATEMENT_SCOPE_HEAD, STATEMENT_SCOPE_TAIL);
+		return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;
+	}
+
+	/**
+	 * Whether a comment opens inside `[from, to)` of the source — read off the lexical regions, so a `//` or `/*` inside a
+	 * string literal is no comment. Lexed on the first ask only: most files never reach a chain with a candidate operand.
+	 */
+	public function hasCommentIn(from: Int, to: Int): Bool {
+		var regions: Null<Array<LexRegion>> = _regions;
+		if (regions == null) {
+			regions = plugin.lexicalRegions(source);
+			_regions = regions;
+		}
+		return LexicalRegions.commentOpensIn(from, to, regions);
+	}
+
+	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
+	private inline function memberLineStart(pos: Int): Int {
+		return lineStartAtDepth(pos, 1);
+	}
+
+	/**
+	 * `member` wrapped and rendered, or null when the writer declines the wrapper.
+	 */
+	private function buildScope(region: Span, head: String, tail: String): Null<MemberScope> {
+		final written: Null<String> = write(head + source.substring(region.from, region.to) + tail);
+		return written == null ? null : {
+			head: head,
+			tail: tail,
+			from: region.from,
+			to: region.to,
+			baseline: written.split('\n')
+		};
+	}
+
+	/** The SMALLEST member region containing `span`, or null when it sits outside every member. */
+	private function memberSpanOf(span: Span): Null<Span> {
+		var best: Null<Span> = null;
+		for (member in memberSpans())
+			if (member.from <= span.from && span.to <= member.to && (best == null || member.to - member.from < best.to - best.from))
+				best = member;
+		return best;
+	}
+
+	/**
+	 * Every type member's REGION, built once: from the first NON-BLANK character of
+	 * the line its declaration opens on — the synthetic wrapper supplies its own
+	 * indent, and the modifiers the grammar keeps as separate sibling nodes come with
+	 * it — to the END OF THE LINE its declaration closes on.
+	 *
+	 * BOTH ends are line boundaries, and the trailing one is the load-bearing half:
+	 * the region is measured as LINES, so whatever the writer keeps on the member's
+	 * last line has to be inside it. A trailing `// …` sits past the declaration's
+	 * span, and a region cut there measures a merged candidate as fitting while the
+	 * real line runs forty columns past the limit. When the rest of that line holds
+	 * another declaration, it is measured along with this one — which is what the
+	 * writer does to them anyway.
+	 *
+	 * A member is found by INDENT, not by node kind or tree depth — neither is
+	 * portable. A grammar may wrap a declaration in any number of nodes
+	 * (`FinalDecl > ClassForm > …`), so the anchor is the source itself: the children
+	 * of a node that starts at column 0 are members when their own line starts exactly
+	 * one indent deep. That is also precisely the condition `buildScope`'s wrapper
+	 * reproduces.
+	 */
+	private function memberSpans(): Array<Span> {
+		final cached: Null<Array<Span>> = _memberSpans;
+		if (cached != null) return cached;
+		final spans: Array<Span> = [];
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		if (tree != null) collectMembers(tree, spans);
+
+		_memberSpans = spans;
+		return spans;
+	}
+
+	/**
+	 * Push the region of every OUTERMOST node that OPENS one indent deep and stop
+	 * there — everything inside it is deeper still. Modifier siblings yield their own
+	 * short regions alongside the declaration's; `memberSpanOf` picks by containment,
+	 * so they never win.
+	 */
+	private function collectMembers(node: QueryNode, out: Array<Span>): Void {
+		final span: Null<Span> = node.span;
+		if (span != null) {
+			final start: Int = memberLineStart(span.from);
+			if (start != -1) {
+				final end: Int = source.lineEnd(span.to);
+				if (end > start) out.push(new Span(start, end));
+				return;
+			}
+		}
+		for (child in node.children) collectMembers(child, out);
+	}
+
+	/**
+	 * `region` wrapped in `head` / `tail` and rendered (`buildScope`), memoised per wrapper and region: a region
+	 * usually holds several candidates, and a candidate is measured more than once while it settles.
+	 */
+	private function scopeOf(region: Span, head: String, tail: String): Null<MemberScope> {
+		final key: String = '${head.length}:${region.from}:${region.to}';
+		if (_scopes.exists(key)) return _scopes[key];
+		final scope: Null<MemberScope> = buildScope(region, head, tail);
+		_scopes[key] = scope;
+		return scope;
+	}
+
+	/** The region of the body statement of `member` that contains `span`, or null when `span` is in none. */
+	private function statementSpanOf(span: Span, member: Span): Null<Span> {
+		var best: Null<Span> = null;
+		for (statement in statementSpans())
+			if (
+				member.from <= statement.from
+				&& statement.to <= member.to
+				&& statement.from <= span.from
+				&& span.to <= statement.to
+				&& (best == null || statement.to - statement.from < best.to - best.from)
+			)
+				best = statement;
+		return best;
+	}
+
+	/**
+	 * Every STATEMENT region of a function body, built once: a direct child of a `blockBodyKind` node that
+	 * opens TWO indents deep, from the first non-blank character of its line to the end of the line it closes on —
+	 * the member regions' convention, one level down.
+	 *
+	 * Measuring a candidate inside its statement instead of its member is what keeps a member of thousands of
+	 * statements (a generated translation table) from being re-rendered whole for every candidate in it: the writer
+	 * decides a statement's lines from the statement and its depth alone, which is the same claim the member scope
+	 * makes one level up. `scopeFor` takes it only with evidence for this statement: `rendersAlone` finds the lines the
+	 * statement renders to on its own, verbatim, in its member's rendering. A body the source indents short of where
+	 * the writer puts it fails that test, and so does a statement inside a `@formatter:off` region that is not already
+	 * canonical (the member copies its source bytes back, the wrapper formats them).
+	 */
+	private function statementSpans(): Array<Span> {
+		final cached: Null<Array<Span>> = _statementSpans;
+		if (cached != null) return cached;
+		final spans: Array<Span> = [];
+		final bodyKind: Null<String> = seams.blockBodyKind;
+		final tree: Null<QueryNode> = bodyKind == null ? null : ParseGate.parseOrNull(plugin, source);
+		if (tree != null && bodyKind != null) collectStatements(tree, bodyKind, spans);
+		_statementSpans = spans;
+		return spans;
+	}
+
+	/** Push the region of every child of a `bodyKind` node under `node` whose line opens two indents deep. */
+	private function collectStatements(node: QueryNode, bodyKind: String, out: Array<Span>): Void {
+		if (node.kind == bodyKind) for (child in node.children) {
+			final span: Null<Span> = child.span;
+			if (span == null) continue;
+			final start: Int = lineStartAtDepth(span.from, 2);
+			if (start == -1) continue;
+			final end: Int = source.lineEnd(span.to);
+			if (end > start) out.push(new Span(start, end));
+		}
+		for (child in node.children) collectStatements(child, bodyKind, out);
+	}
+
+	/** The first non-blank offset on `pos`'s line when that line opens exactly `depth` indents deep, else -1. */
+	private function lineStartAtDepth(pos: Int, depth: Int): Int {
+		final lineStart: Int = source.lineStart(pos);
+		var indent: Int = lineStart;
+		while (indent < source.length && source.fastCodeAt(indent).isSpaceOrTab()) indent++;
+		return FoldStringLiterals.columnWidth(this, lineStart, indent) == depth * metrics.indentWidth ? indent : -1;
+	}
+
+	/**
+	 * Whether the member's rendering holds the statement's lines exactly as the statement renders on its own: the
+	 * one-statement wrapper rendered back to its own two head and three tail lines, and the lines between them found,
+	 * contiguous and verbatim, in `member`'s baseline. That is the evidence `statementSpans` needs before the statement
+	 * stands in for its member — the measure only ever compares a rendering with its baseline as a multiset of lines,
+	 * so when the statement's lines are the same in both scopes, so is every width the two report. Memoised per
+	 * statement.
+	 */
+	private function rendersAlone(statement: MemberScope, member: MemberScope): Bool {
+		final key: String = '${statement.from}:${statement.to}';
+		final known: Null<Bool> = _alone[key];
+		if (known != null) return known;
+		final answer: Bool = statementLinesIn(statement.baseline, member.baseline);
+		_alone[key] = answer;
+		return answer;
+	}
+
+	/** `rendersAlone`'s test over the two baselines. */
+	private static function statementLinesIn(statement: Array<String>, member: Array<String>): Bool {
+		final head: Array<String> = STATEMENT_SCOPE_HEAD.split('\n');
+		final tail: Array<String> = STATEMENT_SCOPE_TAIL.split('\n');
+		// the wrapper's own lines, the statement's first line excluded from the head and the last from the tail
+		final headLines: Int = head.length - 1;
+		final tailLines: Int = tail.length - 1;
+		if (statement.length <= headLines + tailLines) return false;
+		for (i in 0...headLines) if (statement[i] != head[i]) return false;
+		for (i in 0...tailLines) if (statement[statement.length - tailLines + i] != tail[i + 1]) return false;
+		final inner: Array<String> = statement.slice(headLines, statement.length - tailLines);
+		for (start in 0...member.length - inner.length + 1) {
+			var at: Int = 0;
+			while (at < inner.length && member[start + at] == inner[at]) at++;
+			if (at == inner.length) return true;
+		}
+		return false;
+	}
+
+}
+
+/**
+ * The boundary CLASSES the ladder ranks, best first — `BoundaryRank.of`'s answer, and
+ * the tie-break `FoldStringLiterals.fill` picks a group end with, among the ends that
+ * keep the group count it settled on.
+ */
+private enum abstract BoundaryClass(Int) {
+
+	/**
+	 * Not a text cut — the construct's end, or a boundary this side of the ladder cannot
+	 * attribute to a separator. See `BoundaryRank.of` on why that is a RECONSTRUCTION and not
+	 * a fact the segment list carries.
+	 */
+	final Seam = 0;
+
+	/** An opening bracket a space introduced, or a space run a closing bracket ended. */
+	final BracketBySpace = 1;
+
+	/** Those same two boundaries with a comma where the space was. */
+	final BracketByComma = 2;
+
+	/** A plain space run. */
+	final PlainSpace = 3;
+
+	/** A plain comma. */
+	final PlainComma = 4;
+
+	/**
+	 * WORST, and the only class that is not a preference but a REFUSAL to read the boundary as
+	 * a cut at all: the two shapes a reader never breaks at, because breaking there splits one
+	 * TOKEN rather than separating two pieces of text.
+	 *
+	 * One is a bracket that opens a token: `(PS3)` in a gamepad mapping, an EMPTY `[]` or `{}`
+	 * in a serialized structure. The ladder ranks a bracket a space or comma introduced ABOVE a
+	 * plain space or comma precisely because a bracket usually opens a LIST — but when its
+	 * matching close arrives before any space or comma does, it opened a word instead, and the
+	 * cut lands inside it. The existing "an opening bracket with NEITHER of those before it is
+	 * no cut point at all" reads the character BEFORE the bracket; this reads what follows it.
+	 *
+	 * The other is a boundary with a line-break escape on EACH side of it — a cut INSIDE a blank
+	 * line. The blank line belongs to the paragraph it terminates, so the reader's cut is after
+	 * the run, not in the middle of it; the split `'…\t}\n' + '\n}\n'` is what the middle looks
+	 * like.
+	 *
+	 * It is a demotion rather than a veto because `fill` still needs SOME end when nothing else
+	 * keeps the group count: a cut that reads as noise is worse than one that does not, and
+	 * better than a line the writer cannot wrap at all.
+	 */
+	final TokenSplit = 5;
+
+	/** Ordered comparison, which an `enum abstract` does not forward on its own. */
+	@:op(A < B)
+	private static function lt(a: BoundaryClass, b: BoundaryClass): Bool;
+
+}
+
+/**
+ * How good the cut before segment `j` reads. It is ONLY ever a tie-break among the ends that
+ * keep the group count minimal — never a licence to add a group.
+ *
+ * The class is RECONSTRUCTED from at most two characters of the text left of the boundary, not
+ * read off the segment list, which records no reason for the cut it holds. So `Seam` means
+ * "no separator explains this boundary": the construct's end, a right side that is not text,
+ * a left side that is not text — and, structurally, every operand edge, `${ … }` fragment
+ * boundary and `\n` escape whose left text does not happen to end in a separator. The
+ * heuristic is conservative in one direction only: an operand edge whose left literal DOES
+ * end in one (`'abc ' + 'def'`) reads as the text cut it looks like, `PlainSpace` rather
+ * than `Seam`. That costs a preference, never a wrong cut — the boundary exists either way.
+ *
+ * Everything else ranks a bracket-adjacent cut above a bare one, because a bracket belongs
+ * with whatever introduced it.
+ *
+ * The characters are read RAW, so an escape-spelled one simply does not match and the
+ * boundary reads as a plain one. That is conservative rather than wrong: whether the cut is
+ * LEGAL was already decided in the grammar, which reads the same raw text.
+ */
+@:nullSafety(Strict)
+private class BoundaryRank {
+
+	/** The class of the boundary before `segments[j]`; `j == segments.length` is the construct's end. */
+	public static function of(segments: Array<ConcatSegment>, j: Int): BoundaryClass {
+		if (j == segments.length || !segments[j].match(SegText(_, _))) return Seam;
+		final left: String = leftText(segments, j);
+		final tail: Int = left.length - 1;
+		if (tail < 0) return Seam;
+		final last: Int = left.fastCodeAt(tail);
+		if (splitsBlankLine(left, segments, j)) return TokenSplit;
+		if (isOpen(last)) {
+			final bracket: BoundaryClass = bracketClass(charBefore(left, tail));
+			return bracket != Seam && opensAToken(segments, j, last) ? TokenSplit : bracket;
+		}
+		if (last == ','.code) return isClose(charBefore(left, tail)) ? BracketByComma : PlainComma;
+		if (last != ' '.code) return Seam;
+		var run: Int = tail;
+		while (run > 0 && left.fastCodeAt(run - 1) == ' '.code) run--;
+		return isClose(charBefore(left, run)) ? BracketBySpace : PlainSpace;
+	}
+
+	/** The bracket that closes `open`; `open` is one of the three `isOpen` answers. */
+	private static inline function closerFor(open: Int): Int {
+		return if (open == '('.code)
+			')'.code
+		else if (open == '['.code)
+			']'.code
+		else
+			'}'.code;
+	}
+
+	/**
+	 * An opening bracket's class, decided by the character that INTRODUCED it. Neither means the
+	 * grammar never cut here — a bracket with no space and no comma before it is not a separator
+	 * boundary at all — so the only boundaries that reach this reading are seams.
+	 */
+	private static inline function bracketClass(before: Int): BoundaryClass {
+		return if (before == ' '.code)
+			BracketBySpace
+		else if (before == ','.code)
+			BracketByComma
+		else
+			Seam;
+	}
+
+	/** The character code just left of `at` in `s`, or -1 when `at` is already its start. */
+	private static inline function charBefore(s: String, at: Int): Int {
+		return at <= 0 ? -1 : s.fastCodeAt(at - 1);
+	}
+
+	/** Whether `c` OPENS a bracket pair — the character a separator cut keeps with what introduced it. */
+	private static inline function isOpen(c: Int): Bool {
+		return c == '('.code || c == '['.code || c == '{'.code;
+	}
+
+	/** Whether `c` CLOSES a bracket pair — what makes the separator after it a structural boundary. */
+	private static inline function isClose(c: Int): Bool {
+		return c == ')'.code || c == ']'.code || c == '}'.code;
+	}
+
+	/**
+	 * Whether the bracket the boundary sits behind opens a TOKEN rather than a list: its matching
+	 * close arrives before any space or comma does. `(PS3)` in a gamepad mapping and an empty
+	 * `[]` in a serialized structure both answer yes, and a cut there splits a word for no gain;
+	 * `[{ name : …` and `(typeof x === …` both answer no.
+	 *
+	 * Only the piece the boundary OPENS is scanned. That is deliberate rather than a bound: the
+	 * grammar cuts a piece at every space, comma and line break, so a bracket whose close is not
+	 * in that one piece has a separator between the two, which is the answer either way. The scan
+	 * does count nesting, though — `if (` in `if (text.trim()\n` would otherwise read the inner
+	 * call's `)` as its own and call a whole condition a token.
+	 */
+	private static function opensAToken(segments: Array<ConcatSegment>, j: Int, open: Int): Bool {
+		final close: Int = closerFor(open);
+		switch segments[j] {
+			case SegText(_, raw):
+				var depth: Int = 0;
+				var i: Int = 0;
+				while (i < raw.length) {
+					final c: Int = raw.fastCodeAt(i);
+					if (c == ' '.code || c == ','.code) return false;
+					if (isOpen(c)) {
+						depth++;
+					} else if (isClose(c)) {
+						if (depth == 0) return c == close;
+						depth--;
+					}
+					i++;
+				}
+				return false;
+			case _:
+				return false;
+		}
+	}
+
+	/**
+	 * Whether the boundary falls INSIDE a blank line: a line-break escape on each side of it, so
+	 * the group it opens would begin with the newline that terminates the empty line the group
+	 * before it just started.
+	 *
+	 * This is the one reading that spells an ESCAPE rather than a plain character, and it spells
+	 * the C-family `\n` the same way `HaxeStringFoldSupport` cuts at. A grammar whose line break
+	 * is spelled otherwise simply never matches and keeps the old ranking, which is the
+	 * conservative direction: the boundary is legal either way, only the preference is lost.
+	 */
+	private static function splitsBlankLine(left: String, segments: Array<ConcatSegment>, j: Int): Bool {
+		final tail: Int = left.length - 1;
+		if (tail < 1 || left.fastCodeAt(tail) != 'n'.code || left.fastCodeAt(tail - 1) != '\\'.code) return false;
+		return switch segments[j] {
+			case SegText(_, raw):
+				raw.length >= 2 && raw.fastCodeAt(0) == '\\'.code && raw.fastCodeAt(1) == 'n'.code;
+			case _: false;
+		}
+	}
+
+	/**
+	 * The text immediately left of the boundary at `j`: the run of TEXT segments ending
+	 * there, joined, and only as far back as the ranking can still read.
+	 *
+	 * It reads past `j - 1` at all because the grammar's cut set isolates a lone bracket —
+	 * and, after a `\n` cut, a lone run of spaces — into a piece of its own, so the character
+	 * that INTRODUCED the separator is then the previous piece's last one. A rank that looked
+	 * only at `j - 1` would read the ladder's best class (a bracket a space introduced) as its
+	 * worst. Two characters are always enough to stop: a piece holding its own separator plus
+	 * one more character answers on its own, and an all-space piece long enough to survive
+	 * the bound can only follow a comma or an opening bracket, which rank the same as no
+	 * character at all.
+	 */
+	private static function leftText(segments: Array<ConcatSegment>, j: Int): String {
+		var text: String = '';
+		var k: Int = j - 1;
+		while (k >= 0 && text.length < 2) switch segments[k] {
+			case SegText(_, raw):
+				text = raw + text;
+				k--;
+			case _:
+				break;
+		}
+		return text;
+	}
+
+}
+
+/**
+ * The OPERATOR gate for ONE file: whether the `+` a planned construct re-segments is the
+ * language string concatenation, or an operator one of its operand types declares for itself.
+ *
+ * Per file for the same reason `MacroGate` is. The expensive half — the resolution index and the
+ * overload table over it — is shared across the whole run inside `OperatorSelection`, while the
+ * type resolver is per source; and that resolver is built on FIRST DEMAND, so a file whose
+ * constructs never plan, and every file in a tree where nothing overloads the operator, never
+ * pays for it.
+ *
+ * A null `selection` — a grammar declaring no operator-overload annotation — answers `Builtin`
+ * for everything, which is exactly what this rule assumed before the gate existed.
+ */
+@:nullSafety(Strict)
+private class OperatorGate {
+
+	/**
+	 * What a finding adds when this gate turned it report-only — the reason, spelled as the
+	 * missing proof rather than as a defect, because the site is usually a perfectly ordinary
+	 * concatenation whose operand the rule simply could not type. It lives on the gate so the
+	 * rule's own member count stays under the decomposition threshold.
+	 */
+	public static inline final REFUSAL: String = ', but a type in scope overloads the concatenation operator and an '
+		+ 'operand of this construct cannot be typed, so nothing rules out the merge changing what the operator does';
+
+	/** Why `fix` left a construct the run reported `Unproven` alone: the compiler's facts could not type it either. */
+	public static inline final DECLINE: String = 'a type in scope overloads the concatenation operator, and neither the run nor '
+		+ "the compiler's facts type every operand of this construct";
+
+	private final _selection: Null<OperatorSelection>;
+	private final _seams: Seams;
+	private final _file: String;
+	private final _source: String;
+	private final _tree: QueryNode;
+
+	public function new(selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode) {
+		_selection = selection;
+		_seams = seams;
+		_file = file;
+		_source = source;
+		_tree = tree;
+	}
+
+	/**
+	 * The verdict for the construct rooted at `node`.
+	 *
+	 * `literal` marks the SPLIT direction, whose operands are not the children of a `+` at all: a
+	 * lone string literal has none, and the operands a split would CREATE are the interpolation
+	 * fragments it holds. Asking the merge question there would answer `Builtin` for every split
+	 * and leave the MIRROR of the same defect open — `${dir}pages` split back out into
+	 * `dir + pages` is the path join reappearing, with the value changing the other way.
+	 */
+	public function verdictFor(node: QueryNode, literal: Bool): OperatorVerdict {
+		final selection: Null<OperatorSelection> = _selection;
+		if (selection == null) return Builtin;
+		final kinds: Array<String> = [_seams.concatKind];
+		if (!selection.declared(kinds)) return Builtin;
+		final typing: OperandTyping = selection.typingFor(_file, _source, _tree);
+		return literal ? selection.verdictOfOperands(interpolated(node), kinds, typing) : selection.verdictFor(node, kinds, typing);
+	}
+
+	/**
+	 * The interpolation fragments of a string LITERAL — the operands a split would lift out as
+	 * bare `+` operands. A `${ … }` block contributes the one expression it owns, or itself when
+	 * it owns none (a rescanned escape-spelled block is childless — see
+	 * `RefShape.stringInterpBlockKind`); a `$name` fragment contributes itself and binds like a
+	 * bare read. An empty-handed block binds nothing, so it answers `Unproven` and leaves such a
+	 * split reported without a fix — the conservative direction, and the one place this gate is
+	 * knowingly coarser than it could be.
+	 */
+	private function interpolated(literal: QueryNode): Array<QueryNode> {
+		final blockKind: Null<String> = _seams.stringInterpBlockKind;
+		final identKind: Null<String> = _seams.stringInterpIdentKind;
+		final out: Array<QueryNode> = [];
+		for (child in literal.children)
+			if (blockKind != null && child.kind == blockKind)
+				out.push(child.children.length == 1 ? child.children[0] : child)
+			else if (identKind != null && child.kind == identKind)
+				out.push(child);
+		return out;
+	}
+
+}
+
 /**
  * Canonicalises a string concatenation to the MINIMAL number of `+` segments that
  * fits the file's own `maxLineLength`: adjacent literals and expression operands
@@ -1288,802 +2084,6 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			for (line in width.added) if (line.indexOf(joint) != -1) return true;
 		}
 		return false;
-	}
-
-}
-
-/** The seam kinds `FoldStringLiterals` resolves once per run and reads in both passes. */
-private typedef Seams = {
-
-	final support: StringFoldSupport;
-	final concatKind: String;
-
-	/** The operand-run conditional-splice kinds (`RefShape.condOperandRunKinds`). */
-	final condOperandRunKinds: Array<String>;
-	final stringLiteralKinds: Array<String>;
-
-	/**
-	 * The interpolation-BLOCK kind, or null when the grammar has no interpolation. The SPLIT
-	 * direction can turn an expression that sits inside such a block into a bare `+` operand, so
-	 * this is where the operator gate finds the operands a split would create.
-	 */
-	final stringInterpBlockKind: Null<String>;
-
-	/** The `$name` interpolation-FRAGMENT kind — the other operand a split can lift out of a literal. */
-	final stringInterpIdentKind: Null<String>;
-	final opaqueKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final callKind: Null<String>;
-	final fieldAccessKind: Null<String>;
-	final identKind: String;
-
-	/** The `case` PATTERN host kind — a position where a concatenation is not legal syntax. */
-	final patternKind: Null<String>;
-
-	/** The parameter kinds, whose default value must be a compile-time constant. */
-	final paramKinds: Array<String>;
-
-	/** The enum-abstract declaration kind, whose VALUE members are read by their expression shape. */
-	final enumAbstractDeclKind: Null<String>;
-
-	/** The annotation NAME that makes an ordinary abstract an enum abstract — the deprecated spelling a kind test cannot see. */
-	final enumAbstractMetaName: Null<String>;
-
-	/** The conditional-compilation member host, which INHERITS the value region it sits in. */
-	final conditionalKind: Null<String>;
-
-	/** The `inline` modifier sibling — an inlined field's value is a compile-time constant at every use site. */
-	final inlineKind: Null<String>;
-
-	/** Every kind that projects as a leading MODIFIER — what a declaration's modifier RUN is made of. */
-	final modifierKinds: Array<String>;
-
-	/** The function-member kinds — what an enum-abstract declares that IS ordinary code. */
-	final functionKinds: Array<String>;
-
-	/** `concatKind` plus the literal kinds — the node kinds `fix` re-finds a violation's span among. */
-	final candidateKinds: Array<String>;
-
-	/** A function's `{ … }` body (`RefShape.blockBodyKind`), whose statements a candidate may be measured inside alone. */
-	final blockBodyKind: Null<String>;
-
-};
-
-/** One construct flattened for planning: its segments, the SOURCE's own group boundaries, and the span to replace. */
-private typedef Decomposition = {
-
-	final segments: Array<ConcatSegment>;
-	final current: Array<Int>;
-
-	/** The construct NODE's span — what a violation is anchored at, so `fix` can re-find it. */
-	final span: Span;
-
-	/**
-	 * The span the fix REPLACES: the first operand's start to the last one's end. Narrower
-	 * than `span`, because a `+` node's span absorbs the trivia trailing its last operand —
-	 * replacing that would delete a comment ending the construct's line.
-	 */
-	final editSpan: Span;
-
-	/**
-	 * Segment boundaries no group may cross: a comment sits in the gap between the two
-	 * operands they separate. `glue` holds that gap's source verbatim.
-	 */
-	final locked: Array<Int>;
-
-	/** Locked boundary -> the source between its operands (comment, line break, indent, `+`). */
-	final glue: Map<Int, String>;
-
-	/**
-	 * Whether the SOURCE opens with a BARE expression operand — the one shape whose
-	 * plan may keep a bare first group (see `mergeLeadingBares`). Carried from the
-	 * decomposition, which knows it as a fact (`chainDecomposition` emitted a head
-	 * segment), because re-deriving it from the segment list cannot tell a bare
-	 * operand from a single-fragment interpolated literal (`'$x' + …`).
-	 */
-	final startsBare: Bool;
-
-};
-
-/** A construct's canonical form: the span to replace, its replacement text, and the finding message. */
-private typedef PlannedFold = {
-
-	/** The construct NODE's span — the violation's anchor. */
-	final span: Span;
-
-	/** The narrower span the fix replaces — see `Decomposition.editSpan`. */
-	final editSpan: Span;
-	final text: String;
-
-	/** How many `+` operands the plan renders as. */
-	final groups: Int;
-
-	/**
-	 * Whether the plan renders as a COMPILE-TIME CONSTANT — one group, every segment TEXT.
-	 * That is a strictly narrower question than `groups == 1`, and the difference is the whole
-	 * reason this field exists: a lone group holding an expression renders as an INTERPOLATED
-	 * literal, which Haxe desugars back into a `+` chain before anything reads it as syntax.
-	 * `untyped __lua__('local q = $k;')` and `untyped __lua__("local q = " + k + ";")` emit the
-	 * SAME broken `__lua__(Std.string(…) .. Std.string(…))`, and `js.Syntax.code` rejects both with
-	 * "must be a string constant".
-	 */
-	final constant: Bool;
-	final message: String;
-
-};
-
-/**
- * A `+` chain `claim` accepted: its operands in source order, the offset its source
- * starts at, and the index of the first operand that is a string literal.
- */
-private typedef Chain = {
-
-	final operands: Array<QueryNode>;
-	final from: Int;
-
-	/** The offset the LAST operand ends at — the far end of the span the fix replaces. */
-	final to: Int;
-	final firstLiteral: Int;
-
-};
-
-/** A proposed partition and the budget it was filled against — what the writer verification re-fills from. */
-private typedef Plan = { final groups: Array<Int>; final budget: Int; };
-
-/**
- * One grouping rendered: the joined construct text and the width of its widest single group.
- */
-private typedef Rendered = { final text: String; final parts: Array<String>; final widest: Int; };
-
-/**
- * The widest line a candidate's render ADDED, paired with the widest line it
- * REMOVED — the two numbers the plan gate's strict-improvement test compares. They
- * are maxima over disjoint sets and need not describe the same line; a line the
- * render left untouched is in neither, so an over-wide line the edit never reaches
- * cannot pin both sides equal.
- */
-private typedef WidthPair = { final written: Int; final original: Int; final added: Array<String>; };
-
-/**
- * What the back-off settled on: the final boundaries, their rendered text, and the
- * measured width. A null `width` means the writer DECLINED to render the candidate,
- * not that it was never asked — every candidate that changes anything is measured.
- */
-private typedef Settled = {
-	final groups: Array<Int>;
-	final text: String;
-	final parts: Array<String>;
-	final width: Null<WidthPair>;
-};
-
-/**
- * A candidate's measuring context: the enclosing member wrapped in a synthetic
- * one-member type, plus that wrapper's own writer rendering as the baseline to diff
- * against. `head` / `tail` bracket the member, `from` / `to` are its span in the
- * FILE, so a candidate is spliced by taking the member's source either side of it.
- */
-private typedef MemberScope = {
-	final head: String;
-	final tail: String;
-	final from: Int;
-	final to: Int;
-	final baseline: Array<String>;
-};
-
-/**
- * One file's planning context. Owns the two things a candidate is measured against:
- * the synthetic one-member scope its enclosing MEMBER renders inside (`scopeFor`),
- * and — as the FALLBACK for a member no scope reproduces — the memoised writer
- * rendering of the UNCHANGED file, computed on first demand so a file whose every
- * candidate scopes never pays for it. Per-call, never shared: a `Check` may hold no
- * state across `run` / `fix`.
- */
-@:nullSafety(Strict)
-@:access(anyparse.check.common.literals.FoldStringLiterals)
-private class PlanContext {
-
-	/** The synthetic wrapper a member is measured inside — a one-member type at the depth its own type puts it at. */
-	private static final SCOPE_HEAD: String = 'class Scope {\n\t';
-
-	/** The closing half of `SCOPE_HEAD`. */
-	private static final SCOPE_TAIL: String = '\n}\n';
-
-	/** The synthetic wrapper a body STATEMENT is measured inside — a one-statement function, two indents deep like its own. */
-	private static final STATEMENT_SCOPE_HEAD: String = 'class Scope {\n\tfunction scope() {\n\t\t';
-
-	/** The closing half of `STATEMENT_SCOPE_HEAD`. */
-	private static final STATEMENT_SCOPE_TAIL: String = '\n\t}\n}\n';
-
-	public final plugin: GrammarPlugin;
-	public final seams: Seams;
-	public final source: String;
-	public final optsJson: Null<String>;
-	public final metrics: LayoutMetrics;
-
-	/**
-	 * The OPERATOR gate for this file, or null in `fix` — where the decision is not retaken: a
-	 * report-only finding carries it in its own message, exactly as the macro gate does.
-	 */
-	public final operators: Null<OperatorGate>;
-
-	/**
-	 * Member region ("<from>:<to>") -> its scope, or null when it cannot be scoped.
-	 * `Map.exists` distinguishes "not built yet" from "built, unusable". The key
-	 * carries BOTH ends because regions share a start: a declaration and each of the
-	 * modifier nodes on its line all open at the same offset.
-	 */
-	private final _scopes: Map<String, Null<MemberScope>> = [];
-
-	/** Statement region ("<from>:<to>") -> whether its member renders it exactly as it renders alone (`rendersAlone`). */
-	private final _alone: Map<String, Bool> = [];
-
-	private var _originalLines: Null<Array<String>> = null;
-	private var _originalFailed: Bool = false;
-	private var _memberSpans: Null<Array<Span>> = null;
-	private var _statementSpans: Null<Array<Span>> = null;
-	private var _regions: Null<Array<LexRegion>> = null; // noqa: scratch-field
-
-	public function new(
-		plugin: GrammarPlugin, seams: Seams, source: String, optsJson: Null<String>, metrics: LayoutMetrics, operators: Null<OperatorGate>
-	) {
-		this.plugin = plugin;
-		this.seams = seams;
-		this.source = source;
-		this.optsJson = optsJson;
-		this.metrics = metrics;
-		this.operators = operators;
-	}
-
-	/** The writer's rendering of the unchanged file, split into lines; null when the writer declines, remembered so it is asked once. */
-	public function originalLines(): Null<Array<String>> {
-		final cached: Null<Array<String>> = _originalLines;
-		if (cached != null || _originalFailed) return cached;
-		final written: Null<String> = write(source);
-		if (written == null) {
-			_originalFailed = true;
-			return null;
-		}
-		final lines: Array<String> = written.split('\n');
-		_originalLines = lines;
-		return lines;
-	}
-
-	/** `writeRoundTrip` with its documented throwing failure modes folded into null. */
-	public function write(text: String): Null<String> {
-		return try plugin.writeRoundTrip(text, optsJson) catch (exception: Exception) null;
-	}
-
-	/**
-	 * The synthetic one-member module a candidate at `span` may be measured inside,
-	 * or null when nothing reproduces its real context and the caller must splice the
-	 * whole file instead.
-	 *
-	 * The writer decides wrapping per LINE, so a member rendered one indent deep
-	 * inside `class Scope { … }` wraps exactly as it does inside its own type — and
-	 * the round trip costs the member's few dozen lines instead of the file's
-	 * thousands. Two conditions guard that equivalence: the member must be one
-	 * indent deep in the SOURCE too (else the wrapper would re-indent it and every
-	 * width would be off by the difference), and the wrapper must round-trip at all.
-	 * Both answers are memoised per member, since a member usually holds several
-	 * candidates.
-	 *
-	 * One level further down, the same claim lets a body STATEMENT stand in for its
-	 * member (`statementSpans`), when `rendersAlone` shows the member renders it
-	 * exactly as it renders on its own: for a member of thousands of statements that
-	 * is one render of the statement per candidate instead of one of the member.
-	 */
-	public function scopeFor(span: Span): Null<MemberScope> {
-		final member: Null<Span> = memberSpanOf(span);
-		if (member == null) return null;
-		final memberScope: Null<MemberScope> = scopeOf(member, SCOPE_HEAD, SCOPE_TAIL);
-		if (memberScope == null) return null;
-		final statement: Null<Span> = statementSpanOf(span, member);
-		if (statement == null) return memberScope;
-		final statementScope: Null<MemberScope> = scopeOf(statement, STATEMENT_SCOPE_HEAD, STATEMENT_SCOPE_TAIL);
-		return statementScope != null && rendersAlone(statementScope, memberScope) ? statementScope : memberScope;
-	}
-
-	/**
-	 * Whether a comment opens inside `[from, to)` of the source — read off the lexical regions, so a `//` or `/*` inside a
-	 * string literal is no comment. Lexed on the first ask only: most files never reach a chain with a candidate operand.
-	 */
-	public function hasCommentIn(from: Int, to: Int): Bool {
-		var regions: Null<Array<LexRegion>> = _regions;
-		if (regions == null) {
-			regions = plugin.lexicalRegions(source);
-			_regions = regions;
-		}
-		return LexicalRegions.commentOpensIn(from, to, regions);
-	}
-
-	/** The first non-blank offset on `pos`'s line when that line opens exactly one indent deep, else -1. */
-	private inline function memberLineStart(pos: Int): Int {
-		return lineStartAtDepth(pos, 1);
-	}
-
-	/**
-	 * `member` wrapped and rendered, or null when the writer declines the wrapper.
-	 */
-	private function buildScope(region: Span, head: String, tail: String): Null<MemberScope> {
-		final written: Null<String> = write(head + source.substring(region.from, region.to) + tail);
-		return written == null ? null : {
-			head: head,
-			tail: tail,
-			from: region.from,
-			to: region.to,
-			baseline: written.split('\n')
-		};
-	}
-
-	/** The SMALLEST member region containing `span`, or null when it sits outside every member. */
-	private function memberSpanOf(span: Span): Null<Span> {
-		var best: Null<Span> = null;
-		for (member in memberSpans())
-			if (member.from <= span.from && span.to <= member.to && (best == null || member.to - member.from < best.to - best.from))
-				best = member;
-		return best;
-	}
-
-	/**
-	 * Every type member's REGION, built once: from the first NON-BLANK character of
-	 * the line its declaration opens on — the synthetic wrapper supplies its own
-	 * indent, and the modifiers the grammar keeps as separate sibling nodes come with
-	 * it — to the END OF THE LINE its declaration closes on.
-	 *
-	 * BOTH ends are line boundaries, and the trailing one is the load-bearing half:
-	 * the region is measured as LINES, so whatever the writer keeps on the member's
-	 * last line has to be inside it. A trailing `// …` sits past the declaration's
-	 * span, and a region cut there measures a merged candidate as fitting while the
-	 * real line runs forty columns past the limit. When the rest of that line holds
-	 * another declaration, it is measured along with this one — which is what the
-	 * writer does to them anyway.
-	 *
-	 * A member is found by INDENT, not by node kind or tree depth — neither is
-	 * portable. A grammar may wrap a declaration in any number of nodes
-	 * (`FinalDecl > ClassForm > …`), so the anchor is the source itself: the children
-	 * of a node that starts at column 0 are members when their own line starts exactly
-	 * one indent deep. That is also precisely the condition `buildScope`'s wrapper
-	 * reproduces.
-	 */
-	private function memberSpans(): Array<Span> {
-		final cached: Null<Array<Span>> = _memberSpans;
-		if (cached != null) return cached;
-		final spans: Array<Span> = [];
-		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
-		if (tree != null) collectMembers(tree, spans);
-
-		_memberSpans = spans;
-		return spans;
-	}
-
-	/**
-	 * Push the region of every OUTERMOST node that OPENS one indent deep and stop
-	 * there — everything inside it is deeper still. Modifier siblings yield their own
-	 * short regions alongside the declaration's; `memberSpanOf` picks by containment,
-	 * so they never win.
-	 */
-	private function collectMembers(node: QueryNode, out: Array<Span>): Void {
-		final span: Null<Span> = node.span;
-		if (span != null) {
-			final start: Int = memberLineStart(span.from);
-			if (start != -1) {
-				final end: Int = source.lineEnd(span.to);
-				if (end > start) out.push(new Span(start, end));
-				return;
-			}
-		}
-		for (child in node.children) collectMembers(child, out);
-	}
-
-	/**
-	 * `region` wrapped in `head` / `tail` and rendered (`buildScope`), memoised per wrapper and region: a region
-	 * usually holds several candidates, and a candidate is measured more than once while it settles.
-	 */
-	private function scopeOf(region: Span, head: String, tail: String): Null<MemberScope> {
-		final key: String = '${head.length}:${region.from}:${region.to}';
-		if (_scopes.exists(key)) return _scopes[key];
-		final scope: Null<MemberScope> = buildScope(region, head, tail);
-		_scopes[key] = scope;
-		return scope;
-	}
-
-	/** The region of the body statement of `member` that contains `span`, or null when `span` is in none. */
-	private function statementSpanOf(span: Span, member: Span): Null<Span> {
-		var best: Null<Span> = null;
-		for (statement in statementSpans())
-			if (
-				member.from <= statement.from
-				&& statement.to <= member.to
-				&& statement.from <= span.from
-				&& span.to <= statement.to
-				&& (best == null || statement.to - statement.from < best.to - best.from)
-			)
-				best = statement;
-		return best;
-	}
-
-	/**
-	 * Every STATEMENT region of a function body, built once: a direct child of a `blockBodyKind` node that
-	 * opens TWO indents deep, from the first non-blank character of its line to the end of the line it closes on —
-	 * the member regions' convention, one level down.
-	 *
-	 * Measuring a candidate inside its statement instead of its member is what keeps a member of thousands of
-	 * statements (a generated translation table) from being re-rendered whole for every candidate in it: the writer
-	 * decides a statement's lines from the statement and its depth alone, which is the same claim the member scope
-	 * makes one level up. `scopeFor` takes it only with evidence for this statement: `rendersAlone` finds the lines the
-	 * statement renders to on its own, verbatim, in its member's rendering. A body the source indents short of where
-	 * the writer puts it fails that test, and so does a statement inside a `@formatter:off` region that is not already
-	 * canonical (the member copies its source bytes back, the wrapper formats them).
-	 */
-	private function statementSpans(): Array<Span> {
-		final cached: Null<Array<Span>> = _statementSpans;
-		if (cached != null) return cached;
-		final spans: Array<Span> = [];
-		final bodyKind: Null<String> = seams.blockBodyKind;
-		final tree: Null<QueryNode> = bodyKind == null ? null : ParseGate.parseOrNull(plugin, source);
-		if (tree != null && bodyKind != null) collectStatements(tree, bodyKind, spans);
-		_statementSpans = spans;
-		return spans;
-	}
-
-	/** Push the region of every child of a `bodyKind` node under `node` whose line opens two indents deep. */
-	private function collectStatements(node: QueryNode, bodyKind: String, out: Array<Span>): Void {
-		if (node.kind == bodyKind) for (child in node.children) {
-			final span: Null<Span> = child.span;
-			if (span == null) continue;
-			final start: Int = lineStartAtDepth(span.from, 2);
-			if (start == -1) continue;
-			final end: Int = source.lineEnd(span.to);
-			if (end > start) out.push(new Span(start, end));
-		}
-		for (child in node.children) collectStatements(child, bodyKind, out);
-	}
-
-	/** The first non-blank offset on `pos`'s line when that line opens exactly `depth` indents deep, else -1. */
-	private function lineStartAtDepth(pos: Int, depth: Int): Int {
-		final lineStart: Int = source.lineStart(pos);
-		var indent: Int = lineStart;
-		while (indent < source.length && source.fastCodeAt(indent).isSpaceOrTab()) indent++;
-		return FoldStringLiterals.columnWidth(this, lineStart, indent) == depth * metrics.indentWidth ? indent : -1;
-	}
-
-	/**
-	 * Whether the member's rendering holds the statement's lines exactly as the statement renders on its own: the
-	 * one-statement wrapper rendered back to its own two head and three tail lines, and the lines between them found,
-	 * contiguous and verbatim, in `member`'s baseline. That is the evidence `statementSpans` needs before the statement
-	 * stands in for its member — the measure only ever compares a rendering with its baseline as a multiset of lines,
-	 * so when the statement's lines are the same in both scopes, so is every width the two report. Memoised per
-	 * statement.
-	 */
-	private function rendersAlone(statement: MemberScope, member: MemberScope): Bool {
-		final key: String = '${statement.from}:${statement.to}';
-		final known: Null<Bool> = _alone[key];
-		if (known != null) return known;
-		final answer: Bool = statementLinesIn(statement.baseline, member.baseline);
-		_alone[key] = answer;
-		return answer;
-	}
-
-	/** `rendersAlone`'s test over the two baselines. */
-	private static function statementLinesIn(statement: Array<String>, member: Array<String>): Bool {
-		final head: Array<String> = STATEMENT_SCOPE_HEAD.split('\n');
-		final tail: Array<String> = STATEMENT_SCOPE_TAIL.split('\n');
-		// the wrapper's own lines, the statement's first line excluded from the head and the last from the tail
-		final headLines: Int = head.length - 1;
-		final tailLines: Int = tail.length - 1;
-		if (statement.length <= headLines + tailLines) return false;
-		for (i in 0...headLines) if (statement[i] != head[i]) return false;
-		for (i in 0...tailLines) if (statement[statement.length - tailLines + i] != tail[i + 1]) return false;
-		final inner: Array<String> = statement.slice(headLines, statement.length - tailLines);
-		for (start in 0...member.length - inner.length + 1) {
-			var at: Int = 0;
-			while (at < inner.length && member[start + at] == inner[at]) at++;
-			if (at == inner.length) return true;
-		}
-		return false;
-	}
-
-}
-
-/**
- * The boundary CLASSES the ladder ranks, best first — `BoundaryRank.of`'s answer, and
- * the tie-break `FoldStringLiterals.fill` picks a group end with, among the ends that
- * keep the group count it settled on.
- */
-private enum abstract BoundaryClass(Int) {
-
-	/**
-	 * Not a text cut — the construct's end, or a boundary this side of the ladder cannot
-	 * attribute to a separator. See `BoundaryRank.of` on why that is a RECONSTRUCTION and not
-	 * a fact the segment list carries.
-	 */
-	final Seam = 0;
-
-	/** An opening bracket a space introduced, or a space run a closing bracket ended. */
-	final BracketBySpace = 1;
-
-	/** Those same two boundaries with a comma where the space was. */
-	final BracketByComma = 2;
-
-	/** A plain space run. */
-	final PlainSpace = 3;
-
-	/** A plain comma. */
-	final PlainComma = 4;
-
-	/**
-	 * WORST, and the only class that is not a preference but a REFUSAL to read the boundary as
-	 * a cut at all: the two shapes a reader never breaks at, because breaking there splits one
-	 * TOKEN rather than separating two pieces of text.
-	 *
-	 * One is a bracket that opens a token: `(PS3)` in a gamepad mapping, an EMPTY `[]` or `{}`
-	 * in a serialized structure. The ladder ranks a bracket a space or comma introduced ABOVE a
-	 * plain space or comma precisely because a bracket usually opens a LIST — but when its
-	 * matching close arrives before any space or comma does, it opened a word instead, and the
-	 * cut lands inside it. The existing "an opening bracket with NEITHER of those before it is
-	 * no cut point at all" reads the character BEFORE the bracket; this reads what follows it.
-	 *
-	 * The other is a boundary with a line-break escape on EACH side of it — a cut INSIDE a blank
-	 * line. The blank line belongs to the paragraph it terminates, so the reader's cut is after
-	 * the run, not in the middle of it; the split `'…\t}\n' + '\n}\n'` is what the middle looks
-	 * like.
-	 *
-	 * It is a demotion rather than a veto because `fill` still needs SOME end when nothing else
-	 * keeps the group count: a cut that reads as noise is worse than one that does not, and
-	 * better than a line the writer cannot wrap at all.
-	 */
-	final TokenSplit = 5;
-
-	/** Ordered comparison, which an `enum abstract` does not forward on its own. */
-	@:op(A < B)
-	private static function lt(a: BoundaryClass, b: BoundaryClass): Bool;
-
-}
-
-/**
- * How good the cut before segment `j` reads. It is ONLY ever a tie-break among the ends that
- * keep the group count minimal — never a licence to add a group.
- *
- * The class is RECONSTRUCTED from at most two characters of the text left of the boundary, not
- * read off the segment list, which records no reason for the cut it holds. So `Seam` means
- * "no separator explains this boundary": the construct's end, a right side that is not text,
- * a left side that is not text — and, structurally, every operand edge, `${ … }` fragment
- * boundary and `\n` escape whose left text does not happen to end in a separator. The
- * heuristic is conservative in one direction only: an operand edge whose left literal DOES
- * end in one (`'abc ' + 'def'`) reads as the text cut it looks like, `PlainSpace` rather
- * than `Seam`. That costs a preference, never a wrong cut — the boundary exists either way.
- *
- * Everything else ranks a bracket-adjacent cut above a bare one, because a bracket belongs
- * with whatever introduced it.
- *
- * The characters are read RAW, so an escape-spelled one simply does not match and the
- * boundary reads as a plain one. That is conservative rather than wrong: whether the cut is
- * LEGAL was already decided in the grammar, which reads the same raw text.
- */
-@:nullSafety(Strict)
-private class BoundaryRank {
-
-	/** The class of the boundary before `segments[j]`; `j == segments.length` is the construct's end. */
-	public static function of(segments: Array<ConcatSegment>, j: Int): BoundaryClass {
-		if (j == segments.length || !segments[j].match(SegText(_, _))) return Seam;
-		final left: String = leftText(segments, j);
-		final tail: Int = left.length - 1;
-		if (tail < 0) return Seam;
-		final last: Int = left.fastCodeAt(tail);
-		if (splitsBlankLine(left, segments, j)) return TokenSplit;
-		if (isOpen(last)) {
-			final bracket: BoundaryClass = bracketClass(charBefore(left, tail));
-			return bracket != Seam && opensAToken(segments, j, last) ? TokenSplit : bracket;
-		}
-		if (last == ','.code) return isClose(charBefore(left, tail)) ? BracketByComma : PlainComma;
-		if (last != ' '.code) return Seam;
-		var run: Int = tail;
-		while (run > 0 && left.fastCodeAt(run - 1) == ' '.code) run--;
-		return isClose(charBefore(left, run)) ? BracketBySpace : PlainSpace;
-	}
-
-	/** The bracket that closes `open`; `open` is one of the three `isOpen` answers. */
-	private static inline function closerFor(open: Int): Int {
-		return if (open == '('.code)
-			')'.code
-		else if (open == '['.code)
-			']'.code
-		else
-			'}'.code;
-	}
-
-	/**
-	 * An opening bracket's class, decided by the character that INTRODUCED it. Neither means the
-	 * grammar never cut here — a bracket with no space and no comma before it is not a separator
-	 * boundary at all — so the only boundaries that reach this reading are seams.
-	 */
-	private static inline function bracketClass(before: Int): BoundaryClass {
-		return if (before == ' '.code)
-			BracketBySpace
-		else if (before == ','.code)
-			BracketByComma
-		else
-			Seam;
-	}
-
-	/** The character code just left of `at` in `s`, or -1 when `at` is already its start. */
-	private static inline function charBefore(s: String, at: Int): Int {
-		return at <= 0 ? -1 : s.fastCodeAt(at - 1);
-	}
-
-	/** Whether `c` OPENS a bracket pair — the character a separator cut keeps with what introduced it. */
-	private static inline function isOpen(c: Int): Bool {
-		return c == '('.code || c == '['.code || c == '{'.code;
-	}
-
-	/** Whether `c` CLOSES a bracket pair — what makes the separator after it a structural boundary. */
-	private static inline function isClose(c: Int): Bool {
-		return c == ')'.code || c == ']'.code || c == '}'.code;
-	}
-
-	/**
-	 * Whether the bracket the boundary sits behind opens a TOKEN rather than a list: its matching
-	 * close arrives before any space or comma does. `(PS3)` in a gamepad mapping and an empty
-	 * `[]` in a serialized structure both answer yes, and a cut there splits a word for no gain;
-	 * `[{ name : …` and `(typeof x === …` both answer no.
-	 *
-	 * Only the piece the boundary OPENS is scanned. That is deliberate rather than a bound: the
-	 * grammar cuts a piece at every space, comma and line break, so a bracket whose close is not
-	 * in that one piece has a separator between the two, which is the answer either way. The scan
-	 * does count nesting, though — `if (` in `if (text.trim()\n` would otherwise read the inner
-	 * call's `)` as its own and call a whole condition a token.
-	 */
-	private static function opensAToken(segments: Array<ConcatSegment>, j: Int, open: Int): Bool {
-		final close: Int = closerFor(open);
-		switch segments[j] {
-			case SegText(_, raw):
-				var depth: Int = 0;
-				var i: Int = 0;
-				while (i < raw.length) {
-					final c: Int = raw.fastCodeAt(i);
-					if (c == ' '.code || c == ','.code) return false;
-					if (isOpen(c)) {
-						depth++;
-					} else if (isClose(c)) {
-						if (depth == 0) return c == close;
-						depth--;
-					}
-					i++;
-				}
-				return false;
-			case _:
-				return false;
-		}
-	}
-
-	/**
-	 * Whether the boundary falls INSIDE a blank line: a line-break escape on each side of it, so
-	 * the group it opens would begin with the newline that terminates the empty line the group
-	 * before it just started.
-	 *
-	 * This is the one reading that spells an ESCAPE rather than a plain character, and it spells
-	 * the C-family `\n` the same way `HaxeStringFoldSupport` cuts at. A grammar whose line break
-	 * is spelled otherwise simply never matches and keeps the old ranking, which is the
-	 * conservative direction: the boundary is legal either way, only the preference is lost.
-	 */
-	private static function splitsBlankLine(left: String, segments: Array<ConcatSegment>, j: Int): Bool {
-		final tail: Int = left.length - 1;
-		if (tail < 1 || left.fastCodeAt(tail) != 'n'.code || left.fastCodeAt(tail - 1) != '\\'.code) return false;
-		return switch segments[j] {
-			case SegText(_, raw):
-				raw.length >= 2 && raw.fastCodeAt(0) == '\\'.code && raw.fastCodeAt(1) == 'n'.code;
-			case _: false;
-		}
-	}
-
-	/**
-	 * The text immediately left of the boundary at `j`: the run of TEXT segments ending
-	 * there, joined, and only as far back as the ranking can still read.
-	 *
-	 * It reads past `j - 1` at all because the grammar's cut set isolates a lone bracket —
-	 * and, after a `\n` cut, a lone run of spaces — into a piece of its own, so the character
-	 * that INTRODUCED the separator is then the previous piece's last one. A rank that looked
-	 * only at `j - 1` would read the ladder's best class (a bracket a space introduced) as its
-	 * worst. Two characters are always enough to stop: a piece holding its own separator plus
-	 * one more character answers on its own, and an all-space piece long enough to survive
-	 * the bound can only follow a comma or an opening bracket, which rank the same as no
-	 * character at all.
-	 */
-	private static function leftText(segments: Array<ConcatSegment>, j: Int): String {
-		var text: String = '';
-		var k: Int = j - 1;
-		while (k >= 0 && text.length < 2) switch segments[k] {
-			case SegText(_, raw):
-				text = raw + text;
-				k--;
-			case _:
-				break;
-		}
-		return text;
-	}
-
-}
-
-/**
- * The OPERATOR gate for ONE file: whether the `+` a planned construct re-segments is the
- * language string concatenation, or an operator one of its operand types declares for itself.
- *
- * Per file for the same reason `MacroGate` is. The expensive half — the resolution index and the
- * overload table over it — is shared across the whole run inside `OperatorSelection`, while the
- * type resolver is per source; and that resolver is built on FIRST DEMAND, so a file whose
- * constructs never plan, and every file in a tree where nothing overloads the operator, never
- * pays for it.
- *
- * A null `selection` — a grammar declaring no operator-overload annotation — answers `Builtin`
- * for everything, which is exactly what this rule assumed before the gate existed.
- */
-@:nullSafety(Strict)
-private class OperatorGate {
-
-	/**
-	 * What a finding adds when this gate turned it report-only — the reason, spelled as the
-	 * missing proof rather than as a defect, because the site is usually a perfectly ordinary
-	 * concatenation whose operand the rule simply could not type. It lives on the gate so the
-	 * rule's own member count stays under the decomposition threshold.
-	 */
-	public static inline final REFUSAL: String = ', but a type in scope overloads the concatenation operator and an '
-		+ 'operand of this construct cannot be typed, so nothing rules out the merge changing what the operator does';
-
-	/** Why `fix` left a construct the run reported `Unproven` alone: the compiler's facts could not type it either. */
-	public static inline final DECLINE: String = 'a type in scope overloads the concatenation operator, and neither the run nor '
-		+ "the compiler's facts type every operand of this construct";
-
-	private final _selection: Null<OperatorSelection>;
-	private final _seams: Seams;
-	private final _file: String;
-	private final _source: String;
-	private final _tree: QueryNode;
-
-	public function new(selection: Null<OperatorSelection>, seams: Seams, file: String, source: String, tree: QueryNode) {
-		_selection = selection;
-		_seams = seams;
-		_file = file;
-		_source = source;
-		_tree = tree;
-	}
-
-	/**
-	 * The verdict for the construct rooted at `node`.
-	 *
-	 * `literal` marks the SPLIT direction, whose operands are not the children of a `+` at all: a
-	 * lone string literal has none, and the operands a split would CREATE are the interpolation
-	 * fragments it holds. Asking the merge question there would answer `Builtin` for every split
-	 * and leave the MIRROR of the same defect open — `${dir}pages` split back out into
-	 * `dir + pages` is the path join reappearing, with the value changing the other way.
-	 */
-	public function verdictFor(node: QueryNode, literal: Bool): OperatorVerdict {
-		final selection: Null<OperatorSelection> = _selection;
-		if (selection == null) return Builtin;
-		final kinds: Array<String> = [_seams.concatKind];
-		if (!selection.declared(kinds)) return Builtin;
-		final typing: OperandTyping = selection.typingFor(_file, _source, _tree);
-		return literal ? selection.verdictOfOperands(interpolated(node), kinds, typing) : selection.verdictFor(node, kinds, typing);
-	}
-
-	/**
-	 * The interpolation fragments of a string LITERAL — the operands a split would lift out as
-	 * bare `+` operands. A `${ … }` block contributes the one expression it owns, or itself when
-	 * it owns none (a rescanned escape-spelled block is childless — see
-	 * `RefShape.stringInterpBlockKind`); a `$name` fragment contributes itself and binds like a
-	 * bare read. An empty-handed block binds nothing, so it answers `Unproven` and leaves such a
-	 * split reported without a fix — the conservative direction, and the one place this gate is
-	 * knowingly coarser than it could be.
-	 */
-	private function interpolated(literal: QueryNode): Array<QueryNode> {
-		final blockKind: Null<String> = _seams.stringInterpBlockKind;
-		final identKind: Null<String> = _seams.stringInterpIdentKind;
-		final out: Array<QueryNode> = [];
-		for (child in literal.children)
-			if (blockKind != null && child.kind == blockKind)
-				out.push(child.children.length == 1 ? child.children[0] : child)
-			else if (identKind != null && child.kind == identKind)
-				out.push(child);
-		return out;
 	}
 
 }

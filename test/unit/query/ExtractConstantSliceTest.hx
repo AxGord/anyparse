@@ -6,6 +6,9 @@ import haxe.Exception;
 
 using StringTools;
 
+/** Unpacked `Ok` payload of `ExtractConstant.extractInto`, for the cross-file tests. */
+typedef IntoOk = { changes: Array<{ file: String, newSource: String, count: Int }>, moduleSource: String, created: Bool };
+
 /**
  * `ExtractConstant.extractConstant` — replace a repeated plain
  * single-quoted string literal inside a type with a `private static final`
@@ -298,6 +301,3 @@ class ExtractConstantSliceTest extends Test {
 	}
 
 }
-
-/** Unpacked `Ok` payload of `ExtractConstant.extractInto`, for the cross-file tests. */
-typedef IntoOk = { changes: Array<{ file: String, newSource: String, count: Int }>, moduleSource: String, created: Bool };

@@ -20,6 +20,187 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.util.Groups;
 
 /**
+ * The forward must-assign walk behind `scratch-field`'s dominance proof: `dominated` stays true while
+ * every read of the field (an occurrence in `refs` that is not the target of a plain assignment) is
+ * reached in a state where every path assigned it. Pessimistic by construction — see `ScratchField`.
+ */
+@:nullSafety(Strict)
+private class DominanceWalk {
+
+	/** Whether every read seen so far was dominated by a write. */
+	public var dominated(default, null): Bool = true;
+
+
+	/** How many reads the walk met. */
+	public var reads(default, null): Int = 0;
+
+	/** How many writes the method holds — plain assignments, compound ones and increments alike. */
+	public var writes(default, null): Int = 0;
+
+	private final _refs: Array<QueryNode>;
+	private final _s: Seams;
+
+	public function new(refs: Array<QueryNode>, s: Seams) {
+		_refs = refs;
+		_s = s;
+	}
+
+	/**
+	 * Walk `node` entered with the field assigned (`assigned`) and return whether it is assigned when
+	 * `node` completes normally.
+	 */
+	public function statement(node: QueryNode, assigned: Bool): Bool {
+		final s: Seams = _s;
+		final kids: Array<QueryNode> = node.children;
+		return if (_refs.contains(node))
+			read(assigned);
+		else if (s.closureKinds.contains(node.kind))
+			assigned;
+		else if (s.writeParentKinds.contains(node.kind) && kids.length >= 1 && _refs.contains(kids[0]))
+			write(node, assigned);
+		else if (s.branchKinds.contains(node.kind) && kids.length >= 2)
+			branch(kids, assigned);
+		else if (s.shortCircuitKinds.contains(node.kind) || s.switchKinds.contains(node.kind))
+			conditional(kids, 1, assigned);
+		else if (s.loopKinds.contains(node.kind))
+			conditional(kids, kids.length - 1, assigned);
+		else if (s.doWhileKinds.contains(node.kind) || s.tryKinds.contains(node.kind))
+			conditional(kids, 0, assigned);
+		else
+			sequence(kids, 0, assigned);
+	}
+
+	/** Count a read, which is dominated only when `assigned`. */
+	private function read(assigned: Bool): Bool {
+		reads++;
+		if (!assigned) dominated = false;
+		return assigned;
+	}
+
+	/**
+	 * A write to the field: its value is evaluated first, in the state before the write; a compound
+	 * write (`+=`, `++`) reads the field too, and a plain one assigns it.
+	 */
+	private function write(node: QueryNode, assigned: Bool): Bool {
+		writes++;
+		final plain: Bool = node.kind == _s.assignKind;
+		if (!plain) read(assigned); // noqa: unused-return-value
+		final after: Bool = sequence(node.children, 1, assigned);
+		return plain || after;
+	}
+
+	/** An `if` / ternary: the condition first, then each arm from its state; assigned only when both arms assign. */
+	private function branch(kids: Array<QueryNode>, assigned: Bool): Bool {
+		final afterCond: Bool = statement(kids[0], assigned);
+		final thenState: Bool = statement(kids[1], afterCond);
+		final elseState: Bool = kids.length > 2 ? statement(kids[2], afterCond) : afterCond;
+		return thenState && elseState;
+	}
+
+	/**
+	 * A construct whose first `always` children run unconditionally in order, while the rest may run
+	 * or not: a short-circuit's right operand, a `switch`'s arms, a loop's body after its header. Each of
+	 * the rest is walked from the state after the first part, and none of what it assigns survives. A
+	 * `try` and a `do … while` take `always` 0: an exception or a `break` / `continue` may leave either
+	 * before any write of its body, so even the body that runs first assigns nothing that survives.
+	 */
+	private function conditional(kids: Array<QueryNode>, always: Int, assigned: Bool): Bool {
+		final head: Bool = sequence(kids.slice(0, always), 0, assigned);
+		for (i in always ... kids.length) statement(kids[i], head); // noqa: unused-return-value
+		return head;
+	}
+
+	/** Walk `kids` from index `from` in order, threading the state. */
+	private function sequence(kids: Array<QueryNode>, from: Int, assigned: Bool): Bool {
+		var state: Bool = assigned;
+		for (i in from ... kids.length) state = statement(kids[i], state);
+		return state;
+	}
+
+}
+
+/** The `RefShape` kinds and names `ScratchField` reads, bundled once by `seamsOf`. */
+private typedef Seams = {
+	var identKind: String;
+	var interpIdentKind: Null<String>;
+	var fieldAccessKind: String;
+	var accessKinds: Array<String>;
+	var invocationKinds: Array<String>;
+	var valueTypes: Array<String>;
+	var assignKind: String;
+	var exprStmtKind: String;
+	var writeParentKinds: Array<String>;
+	var containers: Array<String>;
+	var mutableFieldKinds: Array<String>;
+	var functionKinds: Array<String>;
+	var modifierRunKinds: Array<String>;
+	var visibility: Array<String>;
+	var defaultVis: String;
+	var binderKinds: Array<String>;
+	var shelterKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var statementListKinds: Array<String>;
+	var branchKinds: Array<String>;
+	var shortCircuitKinds: Array<String>;
+	var loopKinds: Array<String>;
+	var doWhileKinds: Array<String>;
+	var switchKinds: Array<String>;
+	var tryKinds: Array<String>;
+	var closureKinds: Array<String>;
+	var selfText: Null<String>;
+	var reservedWords: Array<String>;
+	var finalKeyword: String;
+	var varKeyword: String;
+}
+
+/** A field that passed the in-file gates: where it lives, its occurrences in document order, and the fix's plan or why there is none. */
+private typedef Candidate = {
+
+	var owner: String;
+	var name: String;
+	var field: QueryNode;
+	var container: QueryNode;
+	var method: QueryNode;
+	var methodName: String;
+	var refs: Array<QueryNode>;
+	var seams: Seams;
+	var plan: Null<Plan>;
+	var decline: String;
+
+	/**
+	 * Whether an occurrence uses the value other than as a plain read or write of one of its members or
+	 * an argument — a method called on it above all, which may start work that outlives the call.
+	 */
+	var retained: Bool;
+
+}
+
+/** The fix of one candidate: the statement the declaration replaces, the local's name, how many writes, and the re-entry window. */
+private typedef Plan = {
+	var declStmt: QueryNode;
+	var declTarget: QueryNode;
+	var declValue: QueryNode;
+	var localName: String;
+	var writes: Int;
+}
+
+/** Where a field's occurrences live: the one method, its body, the occurrences in document order, and whether one keeps a lifetime. */
+private typedef Occurrences = {
+	var method: QueryNode;
+	var methodName: String;
+	var body: QueryNode;
+	var refs: Array<QueryNode>;
+	var retained: Bool;
+}
+
+/** What a node is to the field a scan follows (`ScratchField.useOf`). */
+private enum NameUse {
+	Occurrence;
+	Foreign;
+	Unrelated;
+}
+
+/**
  * Flags a private field that is only a per-call SCRATCH value of one method — every read and write of
  * it sits in that method, and every read there follows a write of the same call — and turns it into
  * a local of that method. `Info`, with an autofix: the field is deleted and the first write becomes the
@@ -647,185 +828,4 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			'`$method` never stores property `$property`, so this field may be the value it meant to keep there, which a local would hide';
 	}
 
-}
-
-/**
- * The forward must-assign walk behind `scratch-field`'s dominance proof: `dominated` stays true while
- * every read of the field (an occurrence in `refs` that is not the target of a plain assignment) is
- * reached in a state where every path assigned it. Pessimistic by construction — see `ScratchField`.
- */
-@:nullSafety(Strict)
-private class DominanceWalk {
-
-	/** Whether every read seen so far was dominated by a write. */
-	public var dominated(default, null): Bool = true;
-
-
-	/** How many reads the walk met. */
-	public var reads(default, null): Int = 0;
-
-	/** How many writes the method holds — plain assignments, compound ones and increments alike. */
-	public var writes(default, null): Int = 0;
-
-	private final _refs: Array<QueryNode>;
-	private final _s: Seams;
-
-	public function new(refs: Array<QueryNode>, s: Seams) {
-		_refs = refs;
-		_s = s;
-	}
-
-	/**
-	 * Walk `node` entered with the field assigned (`assigned`) and return whether it is assigned when
-	 * `node` completes normally.
-	 */
-	public function statement(node: QueryNode, assigned: Bool): Bool {
-		final s: Seams = _s;
-		final kids: Array<QueryNode> = node.children;
-		return if (_refs.contains(node))
-			read(assigned);
-		else if (s.closureKinds.contains(node.kind))
-			assigned;
-		else if (s.writeParentKinds.contains(node.kind) && kids.length >= 1 && _refs.contains(kids[0]))
-			write(node, assigned);
-		else if (s.branchKinds.contains(node.kind) && kids.length >= 2)
-			branch(kids, assigned);
-		else if (s.shortCircuitKinds.contains(node.kind) || s.switchKinds.contains(node.kind))
-			conditional(kids, 1, assigned);
-		else if (s.loopKinds.contains(node.kind))
-			conditional(kids, kids.length - 1, assigned);
-		else if (s.doWhileKinds.contains(node.kind) || s.tryKinds.contains(node.kind))
-			conditional(kids, 0, assigned);
-		else
-			sequence(kids, 0, assigned);
-	}
-
-	/** Count a read, which is dominated only when `assigned`. */
-	private function read(assigned: Bool): Bool {
-		reads++;
-		if (!assigned) dominated = false;
-		return assigned;
-	}
-
-	/**
-	 * A write to the field: its value is evaluated first, in the state before the write; a compound
-	 * write (`+=`, `++`) reads the field too, and a plain one assigns it.
-	 */
-	private function write(node: QueryNode, assigned: Bool): Bool {
-		writes++;
-		final plain: Bool = node.kind == _s.assignKind;
-		if (!plain) read(assigned); // noqa: unused-return-value
-		final after: Bool = sequence(node.children, 1, assigned);
-		return plain || after;
-	}
-
-	/** An `if` / ternary: the condition first, then each arm from its state; assigned only when both arms assign. */
-	private function branch(kids: Array<QueryNode>, assigned: Bool): Bool {
-		final afterCond: Bool = statement(kids[0], assigned);
-		final thenState: Bool = statement(kids[1], afterCond);
-		final elseState: Bool = kids.length > 2 ? statement(kids[2], afterCond) : afterCond;
-		return thenState && elseState;
-	}
-
-	/**
-	 * A construct whose first `always` children run unconditionally in order, while the rest may run
-	 * or not: a short-circuit's right operand, a `switch`'s arms, a loop's body after its header. Each of
-	 * the rest is walked from the state after the first part, and none of what it assigns survives. A
-	 * `try` and a `do … while` take `always` 0: an exception or a `break` / `continue` may leave either
-	 * before any write of its body, so even the body that runs first assigns nothing that survives.
-	 */
-	private function conditional(kids: Array<QueryNode>, always: Int, assigned: Bool): Bool {
-		final head: Bool = sequence(kids.slice(0, always), 0, assigned);
-		for (i in always ... kids.length) statement(kids[i], head); // noqa: unused-return-value
-		return head;
-	}
-
-	/** Walk `kids` from index `from` in order, threading the state. */
-	private function sequence(kids: Array<QueryNode>, from: Int, assigned: Bool): Bool {
-		var state: Bool = assigned;
-		for (i in from ... kids.length) state = statement(kids[i], state);
-		return state;
-	}
-
-}
-
-/** The `RefShape` kinds and names `ScratchField` reads, bundled once by `seamsOf`. */
-private typedef Seams = {
-	var identKind: String;
-	var interpIdentKind: Null<String>;
-	var fieldAccessKind: String;
-	var accessKinds: Array<String>;
-	var invocationKinds: Array<String>;
-	var valueTypes: Array<String>;
-	var assignKind: String;
-	var exprStmtKind: String;
-	var writeParentKinds: Array<String>;
-	var containers: Array<String>;
-	var mutableFieldKinds: Array<String>;
-	var functionKinds: Array<String>;
-	var modifierRunKinds: Array<String>;
-	var visibility: Array<String>;
-	var defaultVis: String;
-	var binderKinds: Array<String>;
-	var shelterKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var statementListKinds: Array<String>;
-	var branchKinds: Array<String>;
-	var shortCircuitKinds: Array<String>;
-	var loopKinds: Array<String>;
-	var doWhileKinds: Array<String>;
-	var switchKinds: Array<String>;
-	var tryKinds: Array<String>;
-	var closureKinds: Array<String>;
-	var selfText: Null<String>;
-	var reservedWords: Array<String>;
-	var finalKeyword: String;
-	var varKeyword: String;
-}
-
-/** A field that passed the in-file gates: where it lives, its occurrences in document order, and the fix's plan or why there is none. */
-private typedef Candidate = {
-
-	var owner: String;
-	var name: String;
-	var field: QueryNode;
-	var container: QueryNode;
-	var method: QueryNode;
-	var methodName: String;
-	var refs: Array<QueryNode>;
-	var seams: Seams;
-	var plan: Null<Plan>;
-	var decline: String;
-
-	/**
-	 * Whether an occurrence uses the value other than as a plain read or write of one of its members or
-	 * an argument — a method called on it above all, which may start work that outlives the call.
-	 */
-	var retained: Bool;
-
-}
-
-/** The fix of one candidate: the statement the declaration replaces, the local's name, how many writes, and the re-entry window. */
-private typedef Plan = {
-	var declStmt: QueryNode;
-	var declTarget: QueryNode;
-	var declValue: QueryNode;
-	var localName: String;
-	var writes: Int;
-}
-
-/** Where a field's occurrences live: the one method, its body, the occurrences in document order, and whether one keeps a lifetime. */
-private typedef Occurrences = {
-	var method: QueryNode;
-	var methodName: String;
-	var body: QueryNode;
-	var refs: Array<QueryNode>;
-	var retained: Bool;
-}
-
-/** What a node is to the field a scan follows (`ScratchField.useOf`). */
-private enum NameUse {
-	Occurrence;
-	Foreign;
-	Unrelated;
 }

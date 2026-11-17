@@ -9,6 +9,51 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 
 /**
+ * Where a map binding was declared: its owning type when it is a member of one, and whether
+ * that member is public.
+ */
+typedef Decl = { final owner: Null<String>; final exported: Bool; }
+
+/**
+ * The grammar seams the no-null-value census reads.
+ */
+typedef ValueSeams = {
+	final identKind: String;
+	final fieldAccessKind: String;
+	final callKind: String;
+	final indexAccessKind: String;
+	final assignKind: String;
+	final arrayLiteralKind: String;
+	final parenKind: Null<String>;
+	final newExprKind: Null<String>;
+	final mapLiteralEntryKind: Null<String>;
+	final declKinds: Array<String>;
+	final containerKinds: Array<String>;
+	final memberDeclKinds: Array<String>;
+	final publicModifierKind: Null<String>;
+	final paramKinds: Array<String>;
+	final iterationKinds: Array<String>;
+	final writeParentKinds: Array<String>;
+	final typeAnnotationKinds: Array<String>;
+	final nonNullLiteralKinds: Array<String>;
+	final boolLitKind: Null<String>;
+};
+
+/** What the census proves of every value a map can hold (`MapValueScan.proven`). */
+enum MapClaim {
+
+	/** No value is null: every stored value is a literal that cannot be. */
+	NoNullValue;
+
+	/**
+	 * The map is a SET of its keys: every stored value is the literal `true`, and no use reads a value as anything but
+	 * membership.
+	 */
+	KeySet;
+
+}
+
+/**
  * The NO-NULL-VALUE proof `redundant-map-exists` must clear before it will rewrite
  * `m.exists(k) ? m[k] : d` into `m[k] ?? d`.
  *
@@ -323,50 +368,5 @@ final class MapValueScan {
 				value.kind == seams.boolLitKind && value.name == TRUE_LITERAL;
 		};
 	}
-
-}
-
-/**
- * Where a map binding was declared: its owning type when it is a member of one, and whether
- * that member is public.
- */
-typedef Decl = { final owner: Null<String>; final exported: Bool; }
-
-/**
- * The grammar seams the no-null-value census reads.
- */
-typedef ValueSeams = {
-	final identKind: String;
-	final fieldAccessKind: String;
-	final callKind: String;
-	final indexAccessKind: String;
-	final assignKind: String;
-	final arrayLiteralKind: String;
-	final parenKind: Null<String>;
-	final newExprKind: Null<String>;
-	final mapLiteralEntryKind: Null<String>;
-	final declKinds: Array<String>;
-	final containerKinds: Array<String>;
-	final memberDeclKinds: Array<String>;
-	final publicModifierKind: Null<String>;
-	final paramKinds: Array<String>;
-	final iterationKinds: Array<String>;
-	final writeParentKinds: Array<String>;
-	final typeAnnotationKinds: Array<String>;
-	final nonNullLiteralKinds: Array<String>;
-	final boolLitKind: Null<String>;
-};
-
-/** What the census proves of every value a map can hold (`MapValueScan.proven`). */
-enum MapClaim {
-
-	/** No value is null: every stored value is a literal that cannot be. */
-	NoNullValue;
-
-	/**
-	 * The map is a SET of its keys: every stored value is the literal `true`, and no use reads a value as anything but
-	 * membership.
-	 */
-	KeySet;
 
 }

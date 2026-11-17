@@ -7,6 +7,39 @@ import anyparse.util.Arrays;
 import haxe.Exception;
 
 /**
+ * Where a RESULT position came from in the source: `pos` is that source position, and
+ * `editFrom` / `editEnd` are the source span of the edit whose REPLACEMENT text it fell inside —
+ * both -1 when it fell in surviving source text.
+ */
+private typedef Origin = { var pos: Int; var editFrom: Int; var editEnd: Int; };
+
+/**
+ * Everything the result-side walk reads, in one value: the SOURCE tree and text with its comment
+ * regions, the SPLICED text with its own, the edits ascending and pairwise
+ * non-overlapping, every source fixed-slot construct's end by its start, and the fixed-slot kind
+ * vocabulary.
+ *
+ * The two comment maps are the reason this is a struct rather than a parameter list: a node span
+ * carries trailing trivia, the two sides carry DIFFERENT amounts of it, and telling code from
+ * trivia takes the lexical scan of the text the span belongs to.
+ */
+private typedef Reach = {
+
+	var tree: QueryNode;
+	var source: String;
+	var srcComments: Map<Int, Int>;
+	var spliced: String;
+	var outComments: Map<Int, Int>;
+	var disjoint: Array<{ span: Span, text: String }>;
+	var ends: Map<Int, Int>;
+	var kinds: Array<String>;
+
+	/** The plugin's statement-list kinds — a construct whose PARENT is one sits in statement position. */
+	var blocks: Array<String>;
+
+};
+
+/**
  * The structural half of the writer-emit gate: whether an edit set would leave a
  * brace-less construct's body slot EMPTY.
  *
@@ -555,36 +588,3 @@ final class BodySlotGuard {
 	}
 
 }
-
-/**
- * Where a RESULT position came from in the source: `pos` is that source position, and
- * `editFrom` / `editEnd` are the source span of the edit whose REPLACEMENT text it fell inside —
- * both -1 when it fell in surviving source text.
- */
-private typedef Origin = { var pos: Int; var editFrom: Int; var editEnd: Int; };
-
-/**
- * Everything the result-side walk reads, in one value: the SOURCE tree and text with its comment
- * regions, the SPLICED text with its own, the edits ascending and pairwise
- * non-overlapping, every source fixed-slot construct's end by its start, and the fixed-slot kind
- * vocabulary.
- *
- * The two comment maps are the reason this is a struct rather than a parameter list: a node span
- * carries trailing trivia, the two sides carry DIFFERENT amounts of it, and telling code from
- * trivia takes the lexical scan of the text the span belongs to.
- */
-private typedef Reach = {
-
-	var tree: QueryNode;
-	var source: String;
-	var srcComments: Map<Int, Int>;
-	var spliced: String;
-	var outComments: Map<Int, Int>;
-	var disjoint: Array<{ span: Span, text: String }>;
-	var ends: Map<Int, Int>;
-	var kinds: Array<String>;
-
-	/** The plugin's statement-list kinds — a construct whose PARENT is one sits in statement position. */
-	var blocks: Array<String>;
-
-};

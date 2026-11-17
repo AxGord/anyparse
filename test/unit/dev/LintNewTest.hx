@@ -12,6 +12,15 @@ import utest.Test;
 using Lambda;
 using StringTools;
 
+/** A scratch tree of `LintNewTest`: where it is, where its lints report, what its `hxq` was asked, and `dev lint-new` over it. */
+typedef Scratch = {
+	var tree: String;
+	var logs: String;
+	var argsLog: String;
+	var file: String -> String;
+	var lintNew: (Array<String>, Bool) -> Int;
+}
+
 /**
  * `dev.LintNew`: the lint row of the slice gate run alone against a base commit, over a scratch git tree whose `hxq` is a
  * stand-in reporting each `FIXME` comment as a finding and comparing two reports as the engine's multiset does - only a finding
@@ -168,13 +177,4 @@ final class LintNewTest extends Test {
 		};
 	}
 
-}
-
-/** A scratch tree of `LintNewTest`: where it is, where its lints report, what its `hxq` was asked, and `dev lint-new` over it. */
-typedef Scratch = {
-	var tree: String;
-	var logs: String;
-	var argsLog: String;
-	var file: String -> String;
-	var lintNew: (Array<String>, Bool) -> Int;
 }

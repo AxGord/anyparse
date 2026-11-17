@@ -10,6 +10,15 @@ import sys.io.File;
 
 using Lambda;
 
+/** One arm record: its `name` and its source text. */
+typedef ArmRecord = { var key: String; var text: String; }
+
+/**
+ * A version that does not read as the registry: no `arms` array, a record without a string `name`, a name declared twice, or
+ * (in a directory) an arm kept in a document `PackageDocuments.misplacement` rejects.
+ */
+class ArmRegistryError extends Exception {}
+
 /**
  * The reader of the arm registry (`test/testkit/arms`, one document per package) as records keyed by `name`, each with its
  * source text — what the arms row of the slice gate selects from. The documents merge through `apq merge-file`, by records
@@ -110,12 +119,3 @@ final class ArmRegistry {
 	}
 
 }
-
-/** One arm record: its `name` and its source text. */
-typedef ArmRecord = { var key: String; var text: String; }
-
-/**
- * A version that does not read as the registry: no `arms` array, a record without a string `name`, a name declared twice, or
- * (in a directory) an arm kept in a document `PackageDocuments.misplacement` rejects.
- */
-class ArmRegistryError extends Exception {}

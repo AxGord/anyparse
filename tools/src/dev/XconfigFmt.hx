@@ -11,6 +11,19 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** One cross-config run: the lines worth showing, whether it ran to its summary line, and the one-pass set it found. */
+typedef XconfigRun = { var shown: Array<String>; var finished: Bool; var onePass: Array<String>; }
+
+/** A failed cross-config check: the one line a gate row quotes (half and remedy, whatever the file count) and the lines beneath it. */
+typedef XconfigFailure = { var line: String; var detail: Array<String>; }
+
+/** Where the cross-config check of a slice's touched files stands: nothing to check, held, or broken. */
+enum XconfigStand {
+	Skipped;
+	Holds;
+	Breaks(failure: XconfigFailure);
+}
+
 /**
  * The cross-config one-pass set: the one answer to "which files does the writer settle only on a second rewrite under the
  * vendored second config?". The battery runs it over the whole tree and the slice gate over the files a slice touched.
@@ -176,17 +189,4 @@ final class XconfigFmt {
 		return { line: 'xconfig ${parts.join('; ')}', detail: detail };
 	}
 
-}
-
-/** One cross-config run: the lines worth showing, whether it ran to its summary line, and the one-pass set it found. */
-typedef XconfigRun = { var shown: Array<String>; var finished: Bool; var onePass: Array<String>; }
-
-/** A failed cross-config check: the one line a gate row quotes (half and remedy, whatever the file count) and the lines beneath it. */
-typedef XconfigFailure = { var line: String; var detail: Array<String>; }
-
-/** Where the cross-config check of a slice's touched files stands: nothing to check, held, or broken. */
-enum XconfigStand {
-	Skipped;
-	Holds;
-	Breaks(failure: XconfigFailure);
 }

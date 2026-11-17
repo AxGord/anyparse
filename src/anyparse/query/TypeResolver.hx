@@ -10,6 +10,17 @@ import anyparse.util.Groups;
 using Lambda;
 
 /**
+ * One `@:nullSafety` declaration scope (`TypeResolver.collectNullSafetyScopes`): the region from the annotation to
+ * the end of the declaration it annotates, whether it DISABLES null safety, and whether that declaration is a type.
+ */
+typedef NullSafetyScope = {
+	final from: Int;
+	final to: Int;
+	final disabled: Bool;
+	final typeLevel: Bool;
+};
+
+/**
  * Minimal type-aware purity resolution for the analysis layer. Recovers a
  * `recv.field` receiver's declared type — via a `TypeInfoProvider`'s
  * decl-span→type-name map + the `SymbolIndex` — to decide whether the field
@@ -1147,14 +1158,3 @@ final class TypeResolver {
 	}
 
 }
-
-/**
- * One `@:nullSafety` declaration scope (`TypeResolver.collectNullSafetyScopes`): the region from the annotation to
- * the end of the declaration it annotates, whether it DISABLES null safety, and whether that declaration is a type.
- */
-typedef NullSafetyScope = {
-	final from: Int;
-	final to: Int;
-	final disabled: Bool;
-	final typeLevel: Bool;
-};

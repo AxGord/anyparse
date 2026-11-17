@@ -11,6 +11,18 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TokenSpans;
 
+/** The per-file state the container walk threads down to `consider`. */
+private typedef Ctx = {
+	final out: Array<Violation>;
+	final file: String;
+	final source: String;
+	final seams: ConstantFieldSeams;
+	final reflected: ReflectionSurface;
+	final index: SymbolIndex;
+	final plugin: GrammarPlugin;
+	final branch: MemberBranchSeams;
+};
+
 /**
  * Flags an INSTANCE `final` field whose initializer is a pure compile-time literal, and rewrites it
  * to `static final` by inserting the `static` keyword. `Severity.Info` (a per-instance storage
@@ -289,15 +301,3 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The per-file state the container walk threads down to `consider`. */
-private typedef Ctx = {
-	final out: Array<Violation>;
-	final file: String;
-	final source: String;
-	final seams: ConstantFieldSeams;
-	final reflected: ReflectionSurface;
-	final index: SymbolIndex;
-	final plugin: GrammarPlugin;
-	final branch: MemberBranchSeams;
-};

@@ -8,6 +8,9 @@ import haxe.io.Path;
 
 using Lambda;
 
+/** What a fork verify found: the lines worth showing, and one reason per failure (none when it holds). */
+typedef ForkVerdict = { var shown: Array<String>; var why: Array<String>; }
+
 /**
  * The one answer to "does the writer round-trip the fork's tree?": `fmt --verify --one-pass` over the fork's `src`, which is not
  * canonical, so every round trip is exercised. Both failure lines of the battery's fmt row, and the slice gate's when the fmt
@@ -65,6 +68,3 @@ final class ForkFmt {
 	}
 
 }
-
-/** What a fork verify found: the lines worth showing, and one reason per failure (none when it holds). */
-typedef ForkVerdict = { var shown: Array<String>; var why: Array<String>; }

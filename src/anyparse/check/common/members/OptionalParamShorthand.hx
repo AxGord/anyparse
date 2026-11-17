@@ -12,6 +12,133 @@ import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
 
 /**
+ * Grammar seams the redundant-sigil arm's gates read, bundled so `walk` does not carry a
+ * long positional-parameter list. `params` and `functionKinds` back all three arms;
+ * everything else is specific to gates G1-G4 and the constructor / `static` / `override`
+ * exemptions of G2 (see the class doc). The `Null<String>` fields are seams
+ * `nullableDefaultInner` and the two existing arms never needed — an unset one narrows only
+ * the redundant-sigil arm to a no-op, never the two pre-existing arms.
+ */
+private typedef Seams = {
+
+	/** The whole shape, for `TypeResolver.bareFieldOwner` — the one seam reader that needs more than a kind list. */
+	final shape: RefShape;
+	final params: Array<String>;
+	final functionKinds: Array<String>;
+	final supertypeClauseKinds: Array<String>;
+	final noBodyKind: Null<String>;
+	final identKind: Null<String>;
+	final nullLitKind: Null<String>;
+	final switchKinds: Array<String>;
+	final visibilityKinds: Array<String>;
+	final modifierKinds: Array<String>;
+	final overrideModifierKind: Null<String>;
+	final staticModifierKind: Null<String>;
+	final constructorName: Null<String>;
+	final equalityKinds: Array<String>;
+	final assignKind: Null<String>;
+	final localFunctionKinds: Array<String>;
+	final inlineFunctionKinds: Array<String>;
+	final inlineModifierKind: Null<String>;
+	final finalModifierMemberKind: Null<String>;
+
+	/** `RefShape.nullCoalesceKind` — the hoist arm's whole subject; unset makes that arm a no-op. */
+	final nullCoalKind: Null<String>;
+
+	/** The seams the hoist arm's compile-time-constant proof reads — see `constantDefaultText`. */
+	final fieldAccessKind: Null<String>;
+	final fieldDeclKinds: Array<String>;
+	final enumAbstractDeclKind: Null<String>;
+	final constLiteralKinds: Array<String>;
+	final numericKinds: Array<String>;
+	final literalTypeNames: Map<String, String>;
+	final negationKind: Null<String>;
+	final stringFold: Null<StringFoldSupport>;
+
+	/** `GrammarPlugin.typeSyntax` — how the arms that read a type read it. */
+	final typeSyntax: TypeSyntaxReader;
+
+};
+
+/**
+ * One parameter declaration and its context: the node itself, the function that declares it
+ * (`RefShape.functionKinds`), and that function's own parent — the node the supertype-clause
+ * and modifier gates read. Both `fn` fields are null for a parameter no enclosing function
+ * could be found for, which every gated arm treats as a refusal.
+ */
+private typedef ParamSite = { final node: QueryNode; final fn: Null<QueryNode>; final fnParent: Null<QueryNode>; };
+
+/**
+ * One `name ?? <fallback>` the hoist arm collected: the whole coalescing node's span (what the
+ * fix replaces with a bare `name`), the left operand's span (what the completeness scan
+ * excludes), and the fallback node (what the constant proof reads).
+ */
+private typedef CoalescingRead = { final coal: Span; final ident: Span; final fallback: QueryNode; };
+
+/**
+ * An accepted hoist: the type to DECLARE (one `Null<>` layer off), the annotation as WRITTEN
+ * (which the message quotes back, so a reader recognises the parameter), the default's verbatim
+ * text, and the reads to collapse.
+ */
+private typedef HoistPlan = {
+	final typeText: String;
+	final rawType: String;
+	final constText: String;
+	final sites: Array<CoalescingRead>;
+};
+
+/**
+ * The two per-FILE services the constant proof asks for: the file's own parsed `root`, against
+ * which a BARE reference's binding is resolved, and the lazy cross-file `SymbolIndex` a named
+ * constant's modifiers are read from. A pair rather than two parameters because they must
+ * describe the SAME file — a root from one file with an index over another answers
+ * "unprovable" for every bare constant, silently narrowing the arm to literals.
+ */
+private typedef HoistScope = {
+
+	final root: QueryNode;
+	final resolveIndex: () -> Null<SymbolIndex>;
+
+	/**
+	 * The file's comment spans, for the completeness scan's qualifier test — a line comment
+	 * ending in a full stop puts a `.` directly before the next line's first token, and reading
+	 * that as qualification would skip a real reference. Lazy for the same reason the index is:
+	 * a run whose files hold no candidate parameter lexes nothing.
+	 */
+	final commentRegions: () -> Array<Span>;
+
+	/**
+	 * The file's full inert mask (comments, regex, non-interpolating strings), for the
+	 * completeness scan's MATCH test — a parameter name spelled only in a doc comment or an
+	 * unrelated string literal must not read as a real coalescing read. A separate question from
+	 * `commentRegions` above: that one narrows the qualifier test, this one narrows the match
+	 * itself, and conflating them would change the qualifier test's answer too.
+	 */
+	final matchMask: () -> Array<Span>;
+
+};
+
+/**
+ * Which arm owns one parameter — the classification `run` and `fix` MUST agree on, since a
+ * finding reported for one arm and rewritten by another produces a silently wrong signature.
+ * `classify` answers it once and both read the answer; the three are disjoint by construction
+ * (a `null` default, any other default, no default at all), so this is a dispatch and not a
+ * priority.
+ */
+private enum ParamArm {
+
+	/** `name:Null<T> = null` / `name:T = null` / `?name:T = null` -> `?name:T`. */
+	NullDefault(shape: { inner: String, raw: String, opt: Bool });
+
+	/** `?name:T = <non-null default>` -> `name:T = <non-null default>`; gated by G1-G5. */
+	RedundantSigil(rawType: String);
+
+	/** `?name:T` whose every read is `name ?? CONST` -> `name:T = CONST`; gated by G1-G5 and `hoistPlan`. */
+	Hoist(plan: HoistPlan);
+
+}
+
+/**
  * Flags a function parameter written `name:Null<T> = null` or `name:T = null` — a
  * nullable-or-plain type with a `null` default — that the `?` optional-parameter shorthand
  * `?name:T` replaces; an already-optional parameter carrying a redundant `null` default
@@ -879,132 +1006,5 @@ final class OptionalParamShorthand extends RuleBase {
 		for (name in seams.literalTypeNames) if (name == typeText) return literalType == typeText;
 		return true;
 	}
-
-}
-
-/**
- * Grammar seams the redundant-sigil arm's gates read, bundled so `walk` does not carry a
- * long positional-parameter list. `params` and `functionKinds` back all three arms;
- * everything else is specific to gates G1-G4 and the constructor / `static` / `override`
- * exemptions of G2 (see the class doc). The `Null<String>` fields are seams
- * `nullableDefaultInner` and the two existing arms never needed — an unset one narrows only
- * the redundant-sigil arm to a no-op, never the two pre-existing arms.
- */
-private typedef Seams = {
-
-	/** The whole shape, for `TypeResolver.bareFieldOwner` — the one seam reader that needs more than a kind list. */
-	final shape: RefShape;
-	final params: Array<String>;
-	final functionKinds: Array<String>;
-	final supertypeClauseKinds: Array<String>;
-	final noBodyKind: Null<String>;
-	final identKind: Null<String>;
-	final nullLitKind: Null<String>;
-	final switchKinds: Array<String>;
-	final visibilityKinds: Array<String>;
-	final modifierKinds: Array<String>;
-	final overrideModifierKind: Null<String>;
-	final staticModifierKind: Null<String>;
-	final constructorName: Null<String>;
-	final equalityKinds: Array<String>;
-	final assignKind: Null<String>;
-	final localFunctionKinds: Array<String>;
-	final inlineFunctionKinds: Array<String>;
-	final inlineModifierKind: Null<String>;
-	final finalModifierMemberKind: Null<String>;
-
-	/** `RefShape.nullCoalesceKind` — the hoist arm's whole subject; unset makes that arm a no-op. */
-	final nullCoalKind: Null<String>;
-
-	/** The seams the hoist arm's compile-time-constant proof reads — see `constantDefaultText`. */
-	final fieldAccessKind: Null<String>;
-	final fieldDeclKinds: Array<String>;
-	final enumAbstractDeclKind: Null<String>;
-	final constLiteralKinds: Array<String>;
-	final numericKinds: Array<String>;
-	final literalTypeNames: Map<String, String>;
-	final negationKind: Null<String>;
-	final stringFold: Null<StringFoldSupport>;
-
-	/** `GrammarPlugin.typeSyntax` — how the arms that read a type read it. */
-	final typeSyntax: TypeSyntaxReader;
-
-};
-
-/**
- * One parameter declaration and its context: the node itself, the function that declares it
- * (`RefShape.functionKinds`), and that function's own parent — the node the supertype-clause
- * and modifier gates read. Both `fn` fields are null for a parameter no enclosing function
- * could be found for, which every gated arm treats as a refusal.
- */
-private typedef ParamSite = { final node: QueryNode; final fn: Null<QueryNode>; final fnParent: Null<QueryNode>; };
-
-/**
- * One `name ?? <fallback>` the hoist arm collected: the whole coalescing node's span (what the
- * fix replaces with a bare `name`), the left operand's span (what the completeness scan
- * excludes), and the fallback node (what the constant proof reads).
- */
-private typedef CoalescingRead = { final coal: Span; final ident: Span; final fallback: QueryNode; };
-
-/**
- * An accepted hoist: the type to DECLARE (one `Null<>` layer off), the annotation as WRITTEN
- * (which the message quotes back, so a reader recognises the parameter), the default's verbatim
- * text, and the reads to collapse.
- */
-private typedef HoistPlan = {
-	final typeText: String;
-	final rawType: String;
-	final constText: String;
-	final sites: Array<CoalescingRead>;
-};
-
-/**
- * The two per-FILE services the constant proof asks for: the file's own parsed `root`, against
- * which a BARE reference's binding is resolved, and the lazy cross-file `SymbolIndex` a named
- * constant's modifiers are read from. A pair rather than two parameters because they must
- * describe the SAME file — a root from one file with an index over another answers
- * "unprovable" for every bare constant, silently narrowing the arm to literals.
- */
-private typedef HoistScope = {
-
-	final root: QueryNode;
-	final resolveIndex: () -> Null<SymbolIndex>;
-
-	/**
-	 * The file's comment spans, for the completeness scan's qualifier test — a line comment
-	 * ending in a full stop puts a `.` directly before the next line's first token, and reading
-	 * that as qualification would skip a real reference. Lazy for the same reason the index is:
-	 * a run whose files hold no candidate parameter lexes nothing.
-	 */
-	final commentRegions: () -> Array<Span>;
-
-	/**
-	 * The file's full inert mask (comments, regex, non-interpolating strings), for the
-	 * completeness scan's MATCH test — a parameter name spelled only in a doc comment or an
-	 * unrelated string literal must not read as a real coalescing read. A separate question from
-	 * `commentRegions` above: that one narrows the qualifier test, this one narrows the match
-	 * itself, and conflating them would change the qualifier test's answer too.
-	 */
-	final matchMask: () -> Array<Span>;
-
-};
-
-/**
- * Which arm owns one parameter — the classification `run` and `fix` MUST agree on, since a
- * finding reported for one arm and rewritten by another produces a silently wrong signature.
- * `classify` answers it once and both read the answer; the three are disjoint by construction
- * (a `null` default, any other default, no default at all), so this is a dispatch and not a
- * priority.
- */
-private enum ParamArm {
-
-	/** `name:Null<T> = null` / `name:T = null` / `?name:T = null` -> `?name:T`. */
-	NullDefault(shape: { inner: String, raw: String, opt: Bool });
-
-	/** `?name:T = <non-null default>` -> `name:T = <non-null default>`; gated by G1-G5. */
-	RedundantSigil(rawType: String);
-
-	/** `?name:T` whose every read is `name ?? CONST` -> `name:T = CONST`; gated by G1-G5 and `hoistPlan`. */
-	Hoist(plan: HoistPlan);
 
 }

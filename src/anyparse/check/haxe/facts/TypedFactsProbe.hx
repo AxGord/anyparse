@@ -19,6 +19,36 @@ import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.io.Path;
 
 /**
+ * One configuration's facts compile: its probe directory, the file the hook writes, and the compile's arguments — and,
+ * when the define probe's compile carries the hook (`ReachDefinesProbe.ProbeRider`), that probe's directory and the
+ * rider it was given.
+ */
+typedef FactsCompile = {
+	var oracle: OracleConfig;
+	var dir: String;
+	var out: String;
+	var args: Array<String>;
+	var reach: Null<String>;
+	var rider: Null<ProbeRider>;
+}
+
+/**
+ * The facts compiles `TypedFactsProbe.start` left running, and what `finish` needs to read them: the configurations
+ * dropped before any compile, the compiles in job order with the fingerprint each input had when it started (`inputs`,
+ * in a run that remembers), and the baselines compiled after them in the same batch with theirs. `runs` is null on a
+ * target that cannot spawn a compile.
+ */
+typedef FactsProbe = {
+	var dropped: Array<{ name: String, reason: String }>;
+	var asked: Array<FactsCompile>;
+	var inputs: Array<Null<String>>;
+	var memo: Null<OracleRunMemo>;
+	var baselines: Array<OracleConfig>;
+	var before: Array<Null<String>>;
+	var runs: Null<PendingRuns>;
+}
+
+/**
  * What the compiler typed, for every configured compiler oracle: one compile of the configuration's own hxml with the
  * `TypedFactsMacro` hook, which writes the typed tree's facts to a file once typing ended, read into one
  * `CompilerFacts` table. Asked per run and never kept across runs (`docs/decisions.md` records why a cache is unsound);
@@ -455,34 +485,4 @@ final class TypedFactsProbe {
 	}
 	#end
 
-}
-
-/**
- * One configuration's facts compile: its probe directory, the file the hook writes, and the compile's arguments — and,
- * when the define probe's compile carries the hook (`ReachDefinesProbe.ProbeRider`), that probe's directory and the
- * rider it was given.
- */
-typedef FactsCompile = {
-	var oracle: OracleConfig;
-	var dir: String;
-	var out: String;
-	var args: Array<String>;
-	var reach: Null<String>;
-	var rider: Null<ProbeRider>;
-}
-
-/**
- * The facts compiles `TypedFactsProbe.start` left running, and what `finish` needs to read them: the configurations
- * dropped before any compile, the compiles in job order with the fingerprint each input had when it started (`inputs`,
- * in a run that remembers), and the baselines compiled after them in the same batch with theirs. `runs` is null on a
- * target that cannot spawn a compile.
- */
-typedef FactsProbe = {
-	var dropped: Array<{ name: String, reason: String }>;
-	var asked: Array<FactsCompile>;
-	var inputs: Array<Null<String>>;
-	var memo: Null<OracleRunMemo>;
-	var baselines: Array<OracleConfig>;
-	var before: Array<Null<String>>;
-	var runs: Null<PendingRuns>;
 }

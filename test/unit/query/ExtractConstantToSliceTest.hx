@@ -7,6 +7,14 @@ import anyparse.query.ExtractConstantTo;
 using Lambda;
 using StringTools;
 
+/** What a successful move hands back, `dest` empty when it is the source file. */
+private typedef Moved = {
+	final source: String;
+	final dest: String;
+	final destOrNull: Null<String>;
+	final advisories: Array<String>;
+}
+
 /**
  * `ExtractConstantTo.extractTo` — `extract-constant` addressed mode: one expression, or a declaration's initializer,
  * moves into a `static final` of another type, in this module or another, and a qualified reference takes its
@@ -314,12 +322,4 @@ class ExtractConstantToSliceTest extends Test {
 		}
 	}
 
-}
-
-/** What a successful move hands back, `dest` empty when it is the source file. */
-private typedef Moved = {
-	final source: String;
-	final dest: String;
-	final destOrNull: Null<String>;
-	final advisories: Array<String>;
 }

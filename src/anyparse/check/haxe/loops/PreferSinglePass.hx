@@ -13,6 +13,42 @@ import anyparse.query.MemberKinds;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+private enum Pairing {
+	FilterMap;
+	MapMap;
+	FilterFilter;
+	MapFilter;
+}
+
+/** `receiver.<first>(first).<second>(second)` spanning `span`. */
+private typedef Chain = {
+	final span: Span;
+	final receiver: QueryNode;
+	final receiverSpan: Span;
+	final pairing: Pairing;
+	final first: QueryNode;
+	final second: QueryNode;
+}
+
+/** A lambda of one plain parameter and an expression body. */
+private typedef Arrow = { final binder: String; final body: QueryNode; final bodySpan: Span; }
+
+private typedef Finding = { final span: Span; final message: String; final text: Null<String>; }
+
+private typedef Seams = {
+	final callKind: String;
+	final fieldAccessKind: String;
+	final arrayTypeNames: Array<String>;
+	final lambdaKinds: Array<String>;
+	final paramKinds: Array<String>;
+	final optionalParamKind: Null<String>;
+	final restParamKind: Null<String>;
+	final opaqueKinds: Array<String>;
+	final andText: Null<String>;
+	final andLowerKinds: Array<String>;
+	final shape: RefShape;
+}
+
 /**
  * Flags an `Array` method chain that one pass can do — `xs.filter(p).map(f)`, `xs.map(f).map(g)`, `xs.filter(p).filter(q)`
  * and `xs.map(f).filter(p)` — because each call builds an intermediate array and walks it again. `Severity.Info`.
@@ -258,40 +294,4 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 		};
 	}
 
-}
-
-private enum Pairing {
-	FilterMap;
-	MapMap;
-	FilterFilter;
-	MapFilter;
-}
-
-/** `receiver.<first>(first).<second>(second)` spanning `span`. */
-private typedef Chain = {
-	final span: Span;
-	final receiver: QueryNode;
-	final receiverSpan: Span;
-	final pairing: Pairing;
-	final first: QueryNode;
-	final second: QueryNode;
-}
-
-/** A lambda of one plain parameter and an expression body. */
-private typedef Arrow = { final binder: String; final body: QueryNode; final bodySpan: Span; }
-
-private typedef Finding = { final span: Span; final message: String; final text: Null<String>; }
-
-private typedef Seams = {
-	final callKind: String;
-	final fieldAccessKind: String;
-	final arrayTypeNames: Array<String>;
-	final lambdaKinds: Array<String>;
-	final paramKinds: Array<String>;
-	final optionalParamKind: Null<String>;
-	final restParamKind: Null<String>;
-	final opaqueKinds: Array<String>;
-	final andText: Null<String>;
-	final andLowerKinds: Array<String>;
-	final shape: RefShape;
 }

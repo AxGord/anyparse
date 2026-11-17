@@ -10,6 +10,69 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 using Lambda;
 
 /**
+ * The three answers a supertype-closure member walk can give. `Absent` and `Unreachable` are the
+ * two halves the boolean `supertypeDeclaresMember` folds into `false`: one is a proof, the other
+ * is the absence of one.
+ */
+enum abstract SupertypeProof(Int) {
+
+	/** A reachable supertype declares the member. */
+	final Declares = 0;
+
+	/** Every supertype in the closure was reachable and none declares it. */
+	final Absent = 1;
+
+	/** Some supertype link leaves the index, so absence is unproven. */
+	final Unreachable = 2;
+
+}
+
+/** One declaration of a member on a type the index holds (`MemberLookup.memberDeclarationsOf`). */
+typedef MemberDeclaration = {
+
+	/** The declaration of the type declaring the member. */
+	final type: TypeDeclInfo;
+
+	/** The member as that declaration declares it. */
+	final member: MemberInfo;
+
+	/** The file holding the declaration. */
+	final file: FileInfo;
+
+}
+
+/**
+ * Every declaration of one member name on the one type declaring it (`MemberLookup.declaringMember`,
+ * `StaticExtensions.binding`): several only for a member declared in several branches of a `#if`.
+ */
+typedef HostedMembers = {
+
+	/** The member's declarations, as the host declares them. */
+	final members: Array<MemberInfo>;
+
+	/** The declaration of the type declaring them. */
+	final host: ResolvedType;
+
+}
+
+/** One member declaration found in a type's closure, with the declaration of the type that declares it. */
+typedef DeclaredMember = { member: MemberInfo, host: ResolvedType };
+
+/** What a read of a member carries (`MemberLookup.memberRead`): its type, and the declaration writing the member. */
+typedef MemberReading = {
+
+	/** The type the read carries. */
+	final text: String;
+
+	/** The declaration whose file writes the member (its type parameters substituted by the reader's arguments). */
+	final host: ResolvedType;
+
+	/** The member's record in that declaration. */
+	final member: MemberInfo;
+
+}
+
+/**
  * Member lookup on a NAMED type: does it declare `m`, what type does `m` have, what does `m`
  * return, how visible is it — each answered on the type itself and, where the question is about
  * what a VALUE of that type offers, over its inherited closure as well.
@@ -985,68 +1048,5 @@ final class MemberLookup {
 		}
 		return found;
 	}
-
-}
-
-/**
- * The three answers a supertype-closure member walk can give. `Absent` and `Unreachable` are the
- * two halves the boolean `supertypeDeclaresMember` folds into `false`: one is a proof, the other
- * is the absence of one.
- */
-enum abstract SupertypeProof(Int) {
-
-	/** A reachable supertype declares the member. */
-	final Declares = 0;
-
-	/** Every supertype in the closure was reachable and none declares it. */
-	final Absent = 1;
-
-	/** Some supertype link leaves the index, so absence is unproven. */
-	final Unreachable = 2;
-
-}
-
-/** One declaration of a member on a type the index holds (`MemberLookup.memberDeclarationsOf`). */
-typedef MemberDeclaration = {
-
-	/** The declaration of the type declaring the member. */
-	final type: TypeDeclInfo;
-
-	/** The member as that declaration declares it. */
-	final member: MemberInfo;
-
-	/** The file holding the declaration. */
-	final file: FileInfo;
-
-}
-
-/**
- * Every declaration of one member name on the one type declaring it (`MemberLookup.declaringMember`,
- * `StaticExtensions.binding`): several only for a member declared in several branches of a `#if`.
- */
-typedef HostedMembers = {
-
-	/** The member's declarations, as the host declares them. */
-	final members: Array<MemberInfo>;
-
-	/** The declaration of the type declaring them. */
-	final host: ResolvedType;
-
-}
-
-/** One member declaration found in a type's closure, with the declaration of the type that declares it. */
-typedef DeclaredMember = { member: MemberInfo, host: ResolvedType };
-
-/** What a read of a member carries (`MemberLookup.memberRead`): its type, and the declaration writing the member. */
-typedef MemberReading = {
-
-	/** The type the read carries. */
-	final text: String;
-
-	/** The declaration whose file writes the member (its type parameters substituted by the reader's arguments). */
-	final host: ResolvedType;
-
-	/** The member's record in that declaration. */
-	final member: MemberInfo;
 
 }

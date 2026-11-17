@@ -5,6 +5,9 @@ import anyparse.check.common.nullsafety.NullableSource.NullableSourceCfg;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 
+/** Resolved per-run deref-shape constants threaded to `checkDeref`. */
+private typedef Ctx = { var ident: String; var soleChildKinds: Array<String>; var firstChildKinds: Array<String>; };
+
 /**
  * Flags a dereference whose receiver is a local **bound from a nullable source, or declared
  * `Null<T>`** and not null-checked on the path reaching the access — a possible NPE. The
@@ -166,6 +169,3 @@ final class UnguardedNullableDeref extends RuleBase implements NoAutofix {
 	}
 
 }
-
-/** Resolved per-run deref-shape constants threaded to `checkDeref`. */
-private typedef Ctx = { var ident: String; var soleChildKinds: Array<String>; var firstChildKinds: Array<String>; };

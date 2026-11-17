@@ -2,6 +2,9 @@ package anyparse.check.common.types;
 
 import anyparse.query.SymbolIndex;
 
+/** The resolved seams `RedundantCast` reads in both `run` and `fix`. */
+private typedef Seams = { final shape: RefShape; final typedCastKinds: Array<String>; final opaqueKinds: Array<String>; };
+
 /**
  * Flags a typed cast / type-check whose target type already equals its operand's
  * declared type — `cast(x, T)` / `(x : T)` where `x` is declared `T` — so the cast
@@ -97,6 +100,3 @@ final class RedundantCast extends RuleBase {
 	}
 
 }
-
-/** The resolved seams `RedundantCast` reads in both `run` and `fix`. */
-private typedef Seams = { final shape: RefShape; final typedCastKinds: Array<String>; final opaqueKinds: Array<String>; };

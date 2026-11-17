@@ -41,6 +41,12 @@ typedef SquashReport = { final rows: Array<SquashRow>; final newOnePass: Array<S
 
 /** What the battery row says of a census: the failing line (null when it holds) and the lines beneath it, notes of progress included. */
 typedef SquashVerdict = { final failure: Null<String>; final detail: Array<String>; }
+/** What one formatter run over a tree reported: the files it settles only on a second rewrite, and the ones it could not format. */
+private typedef FmtRun = { final onePass: Array<String>; final unparsed: Array<String>; }
+
+/** What `hxFiles` found under a tree: its `.hx` files and the formatter configs inside it, relative to the repo. */
+private typedef Found = { final sources: Array<String>; final configs: Array<String>; }
+
 /**
  * The one answer to "how much of the writer's output depends on where the author broke lines": `dev squash-census [<dir>...]
  * [--repo DIR] [--files]` squashes (`Squash`) every `.hx` of each tree on a COPY, formats the copy and the original copy under the
@@ -263,9 +269,3 @@ final class SquashCensus {
 	}
 
 }
-
-/** What one formatter run over a tree reported: the files it settles only on a second rewrite, and the ones it could not format. */
-private typedef FmtRun = { final onePass: Array<String>; final unparsed: Array<String>; }
-
-/** What `hxFiles` found under a tree: its `.hx` files and the formatter configs inside it, relative to the repo. */
-private typedef Found = { final sources: Array<String>; final configs: Array<String>; }

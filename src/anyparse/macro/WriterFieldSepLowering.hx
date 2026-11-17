@@ -16,6 +16,23 @@ import haxe.macro.MacroStringTools;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the separator builders read, bundled once per
+ * `WriterLowering` instance.
+ *
+ * `ctx` is the trivia gate every source-fidelity branch opens with,
+ * `ctorPat` the ctor-pattern layer these builders switch on, and
+ * `isTriviaBearing` / `writeFnFor` the two naming helpers that stayed
+ * behind. A member here that needs `shape` or the format info directly is
+ * a member that stopped being a separator.
+ */
+typedef FieldSepCtx = {
+	final ctx: LoweringCtx;
+	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final writeFnFor: (refName: String) -> String;
+}
+
+/**
  * Pass 3W - the gap between a struct field and the sibling before it.
  *
  * One question, asked once per field boundary: what `Doc` goes BETWEEN the
@@ -468,22 +485,5 @@ final class WriterFieldSepLowering {
 		return prevAnyStarNonEmpty == null ? macro _dt(' ') : macro $prevAnyStarNonEmpty ? _dt(' ') : _de();
 	}
 
-}
-
-/**
- * The build state the separator builders read, bundled once per
- * `WriterLowering` instance.
- *
- * `ctx` is the trivia gate every source-fidelity branch opens with,
- * `ctorPat` the ctor-pattern layer these builders switch on, and
- * `isTriviaBearing` / `writeFnFor` the two naming helpers that stayed
- * behind. A member here that needs `shape` or the format info directly is
- * a member that stopped being a separator.
- */
-typedef FieldSepCtx = {
-	final ctx: LoweringCtx;
-	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final writeFnFor: (refName: String) -> String;
 }
 #end

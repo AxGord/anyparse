@@ -13,6 +13,53 @@ import haxe.ds.Either;
 using anyparse.util.Strings;
 using Lambda;
 
+/** What `ExtractConstantTo.extractTo` moves and where. */
+typedef ExtractToRequest = {
+
+	final source: String;
+	final sourceFile: String;
+	final address: AddressSpec;
+	final name: String;
+
+	/** The receiving type; null = the destination module's main type (required when there is no `dest`). */
+	final destType: Null<String>;
+
+	/** The destination module, or null when the receiving type is declared in the source file. */
+	final dest: Null<ExtractToModule>;
+
+	/** The caller's assertion that no reader mutates a moved array / object literal. */
+	final shared: Bool;
+
+	/** The constant's type annotation as the caller spells it, overriding the inferred one. */
+	final annotate: Null<String>;
+	final reformat: Bool;
+	final optsJson: Null<String>;
+
+}
+
+/** A destination module of `extract-constant`: its file, its source (null when it is to be created), its package and name. */
+typedef ExtractToModule = {
+	final file: String;
+	final source: Null<String>;
+	final pkg: String;
+	final base: String;
+	final optsJson: Null<String>;
+}
+
+/** The result of `ExtractConstantTo.extractTo`: the new source, the destination module's text (null = the source) and advisories. */
+enum ExtractToResult {
+	Ok(source: String, dest: Null<String>, advisories: Array<String>);
+	Err(message: String);
+}
+
+/** The constant `extractTo` writes. */
+private typedef ConstantMember = {
+	final name: String;
+	final typeText: Null<String>;
+	final value: String;
+	final inlined: Bool;
+}
+
 /**
  * `extract-constant` ADDRESSED mode — move ONE expression into a `static final` of a type that may live in
  * another module or package, and leave a qualified reference behind:
@@ -357,51 +404,4 @@ final class ExtractConstantTo {
 		return null;
 	}
 
-}
-
-/** What `ExtractConstantTo.extractTo` moves and where. */
-typedef ExtractToRequest = {
-
-	final source: String;
-	final sourceFile: String;
-	final address: AddressSpec;
-	final name: String;
-
-	/** The receiving type; null = the destination module's main type (required when there is no `dest`). */
-	final destType: Null<String>;
-
-	/** The destination module, or null when the receiving type is declared in the source file. */
-	final dest: Null<ExtractToModule>;
-
-	/** The caller's assertion that no reader mutates a moved array / object literal. */
-	final shared: Bool;
-
-	/** The constant's type annotation as the caller spells it, overriding the inferred one. */
-	final annotate: Null<String>;
-	final reformat: Bool;
-	final optsJson: Null<String>;
-
-}
-
-/** A destination module of `extract-constant`: its file, its source (null when it is to be created), its package and name. */
-typedef ExtractToModule = {
-	final file: String;
-	final source: Null<String>;
-	final pkg: String;
-	final base: String;
-	final optsJson: Null<String>;
-}
-
-/** The result of `ExtractConstantTo.extractTo`: the new source, the destination module's text (null = the source) and advisories. */
-enum ExtractToResult {
-	Ok(source: String, dest: Null<String>, advisories: Array<String>);
-	Err(message: String);
-}
-
-/** The constant `extractTo` writes. */
-private typedef ConstantMember = {
-	final name: String;
-	final typeText: Null<String>;
-	final value: String;
-	final inlined: Bool;
 }

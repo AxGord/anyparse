@@ -8,6 +8,34 @@ import anyparse.query.ParenGuard;
 import anyparse.query.SymbolIndex;
 import anyparse.query.ValueDoors;
 
+/** The grammar's spellings `PreferIsOperator` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final call: String;
+	final owner: String;
+	final method: String;
+	final keyword: String;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final identKind: String;
+	final opaqueKinds: Array<String>;
+	final metaKinds: Array<String>;
+};
+
+/** The parts of one candidate call. */
+private typedef CallArgs = { final receiver: QueryNode; final value: QueryNode; final type: QueryNode; };
+
+/** What a `run` proof of one file reads. */
+private typedef Proof = {
+	final file: String;
+	final source: String;
+	final root: QueryNode;
+	final shape: RefShape;
+	final seams: Seams;
+	final plugin: GrammarPlugin;
+	final regions: Array<LexRegion>;
+	final index: () -> Null<SymbolIndex>;
+};
+
 /**
  * Flags a two-argument `Std.isOfType(x, T)` whose second argument names a type and rewrites it to the operator it is the
  * sugar of, `x is T` (`RefShape.isExprCall`, `isOperatorText`) — `Severity.Info`, never past a declared `languageVersion`
@@ -189,31 +217,3 @@ final class PreferIsOperator extends HaxeRule implements VersionGated {
 	}
 
 }
-
-/** The grammar's spellings `PreferIsOperator` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final call: String;
-	final owner: String;
-	final method: String;
-	final keyword: String;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final identKind: String;
-	final opaqueKinds: Array<String>;
-	final metaKinds: Array<String>;
-};
-
-/** The parts of one candidate call. */
-private typedef CallArgs = { final receiver: QueryNode; final value: QueryNode; final type: QueryNode; };
-
-/** What a `run` proof of one file reads. */
-private typedef Proof = {
-	final file: String;
-	final source: String;
-	final root: QueryNode;
-	final shape: RefShape;
-	final seams: Seams;
-	final plugin: GrammarPlugin;
-	final regions: Array<LexRegion>;
-	final index: () -> Null<SymbolIndex>;
-};

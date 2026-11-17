@@ -7,6 +7,28 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * A validated inline-method target: the function name, its decl span (deleted
+ * after inlining), the parameter slot nodes and names, the single-return body
+ * expression `E`, the per-parameter substitution counts within `E`, and the
+ * proven-complete set of in-file call sites.
+ */
+private typedef InlineMethodTarget = {
+	final name: String;
+	final declSpan: Span;
+	final params: Array<QueryNode>;
+	final paramNames: Array<String>;
+	final exprBody: QueryNode;
+	final occ: Array<Int>;
+	final callSites: Array<QueryNode>;
+};
+
+/** Resolution outcome of `resolveInlineMethod`: the target or a refusal. */
+private enum InlineMethodPrep {
+	POk(target: InlineMethodTarget);
+	PErr(message: String);
+}
+
+/**
  * Inline a method / function into its call sites — the method analog of
  * `Inline` (inline-variable), and the third refactoring built on the
  * shared call-site machinery (`CallSites`, also driving `ChangeSig` /
@@ -443,26 +465,4 @@ final class InlineMethod {
 		return unparsed != null ? Err(unparsed) : Ok(rewritten);
 	}
 
-}
-
-/**
- * A validated inline-method target: the function name, its decl span (deleted
- * after inlining), the parameter slot nodes and names, the single-return body
- * expression `E`, the per-parameter substitution counts within `E`, and the
- * proven-complete set of in-file call sites.
- */
-private typedef InlineMethodTarget = {
-	final name: String;
-	final declSpan: Span;
-	final params: Array<QueryNode>;
-	final paramNames: Array<String>;
-	final exprBody: QueryNode;
-	final occ: Array<Int>;
-	final callSites: Array<QueryNode>;
-};
-
-/** Resolution outcome of `resolveInlineMethod`: the target or a refusal. */
-private enum InlineMethodPrep {
-	POk(target: InlineMethodTarget);
-	PErr(message: String);
 }

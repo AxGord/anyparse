@@ -10,6 +10,34 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.util.Groups;
 
 /**
+ * The value-type unification verdict for a string-keyed `Dynamic` bag: `Real(T)` when every
+ * written value shares one real type; `Typeless` when the values are themselves `Dynamic` /
+ * `Any` (their common type is `Dynamic`, and the owner rejected `DynamicAccess<Dynamic>` — it
+ * adds nothing over raw `Dynamic`); `Heterogeneous` for two distinct real types; `Undetermined`
+ * when a value's type does not resolve (a compiler oracle is needed) or there are no writes.
+ */
+private enum BagVerdict {
+	Real(t: String);
+	Typeless;
+	Heterogeneous;
+	Undetermined;
+}
+
+/**
+ * One reflect operation on a bag: the call node, the reflect method,
+ * whether it is a direct `Reflect.<m>` call, and the bag operand node.
+ */
+private typedef BagOp = {
+	var call: QueryNode;
+	var method: String;
+	var direct: Bool;
+	var bag: QueryNode;
+};
+
+/** A bag's classified uses: the reflect operations to rewrite, the `setField` value expressions, and whether every use was a bag op. */
+private typedef BagUses = { var ops: Array<BagOp>; var writes: Array<QueryNode>; var ok: Bool; };
+
+/**
  * The string-keyed BAG arm of `avoid-dynamic`: a `Dynamic` declaration whose every use is a
  * `Reflect` field operation is not a typing hole to report and leave alone — it is a map
  * written in the wrong type, and `DynamicAccess<T>` is the same program with the type back.
@@ -534,31 +562,3 @@ final class DynamicBag {
 	}
 
 }
-
-/**
- * The value-type unification verdict for a string-keyed `Dynamic` bag: `Real(T)` when every
- * written value shares one real type; `Typeless` when the values are themselves `Dynamic` /
- * `Any` (their common type is `Dynamic`, and the owner rejected `DynamicAccess<Dynamic>` — it
- * adds nothing over raw `Dynamic`); `Heterogeneous` for two distinct real types; `Undetermined`
- * when a value's type does not resolve (a compiler oracle is needed) or there are no writes.
- */
-private enum BagVerdict {
-	Real(t: String);
-	Typeless;
-	Heterogeneous;
-	Undetermined;
-}
-
-/**
- * One reflect operation on a bag: the call node, the reflect method,
- * whether it is a direct `Reflect.<m>` call, and the bag operand node.
- */
-private typedef BagOp = {
-	var call: QueryNode;
-	var method: String;
-	var direct: Bool;
-	var bag: QueryNode;
-};
-
-/** A bag's classified uses: the reflect operations to rewrite, the `setField` value expressions, and whether every use was a bag op. */
-private typedef BagUses = { var ops: Array<BagOp>; var writes: Array<QueryNode>; var ok: Bool; };

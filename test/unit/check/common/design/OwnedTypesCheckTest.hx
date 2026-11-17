@@ -8,6 +8,9 @@ import anyparse.query.StdResolver;
 
 using StringTools;
 
+/** One source file of a fixture project. */
+private typedef FixtureFile = { file: String, source: String };
+
 /**
  * The `owned-types` check: a mention of a declared type, or a read or call of a declared member, outside the code the
  * `ownedTypes` declaration names as its owner. Each position a type can be written in, each way a member is reached,
@@ -352,6 +355,3 @@ class OwnedTypesCheckTest extends Test {
 	}
 
 }
-
-/** One source file of a fixture project. */
-private typedef FixtureFile = { file: String, source: String };

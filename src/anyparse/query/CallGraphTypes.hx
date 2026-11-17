@@ -9,6 +9,9 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** A file a `CallGraphTypes` holds: the index entry its declarations were read from, and the index answering its names. */
+typedef HeldFile = { final index: SymbolIndex; final info: FileInfo; }
+
 /**
  * The type facts a `CallGraph` resolves against, seeded from a `SymbolIndex` that may be wider than the
  * files the graph holds (a resolution index covering libraries): the supertype and subtype tables, the
@@ -392,6 +395,3 @@ final class CallGraphTypes {
 	}
 
 }
-
-/** A file a `CallGraphTypes` holds: the index entry its declarations were read from, and the index answering its names. */
-typedef HeldFile = { final index: SymbolIndex; final info: FileInfo; }

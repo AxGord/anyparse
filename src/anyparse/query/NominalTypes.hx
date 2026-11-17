@@ -17,6 +17,81 @@ import anyparse.util.Arrays;
 using Lambda;
 
 /**
+ * A receiver path's ROOT, reduced to whichever of the two things a root can BE. EXACTLY one field
+ * is set: `selfTypeName` for the self reference (already resolved to its enclosing declaration's
+ * name, since nothing further can be asked of it), `bindingFrom` for a value, whose declared type
+ * each consumer then reads its own way. Produced only by `NominalTypes.pathRootBinding`, which
+ * answers null rather than an all-null record when the root resolves to neither.
+ */
+private typedef PathRoot = { final selfTypeName: Null<String>; final bindingFrom: Null<Int>; };
+
+/**
+ * Which binder of an iteration node a binding offset landed on: the loop node itself (its own
+ * key-or-element binder, sharing the loop's start offset) or the VALUE binder it carries as a
+ * separate child in a key-value iteration. The two type DIFFERENTLY, so the answer cannot be a
+ * bare node — see `NominalTypes.loopBinderAt`.
+ */
+private typedef LoopBinderHit = { final loop: QueryNode; final isValueBinder: Bool; };
+
+/**
+ * The extra per-file context `NominalTypes.expressionTypeNominal` needs for its DEEP
+ * resolution mode: the WRITTEN form of every `:Type` annotation (a nominal alone cannot carry
+ * type arguments) and the file's source text (the only place a `for` loop's header form is
+ * legible). Passing it is the opt-in — omit it and that function answers exactly what it
+ * always did.
+ *
+ * That opt-in is the whole point of the seam. `NominalTypes.valueTypeNominal`'s other consumers
+ * (`map-keys-lookup`, `prefer-static-extension`) read a resolved nominal as a LICENCE TO ACT,
+ * so extra resolution is the unsafe direction for them; they cannot reach the deep mode BY
+ * CONSTRUCTION, because it lives behind a parameter they do not pass, rather than by a
+ * convention someone must remember.
+ */
+typedef ChainTypeContext = {
+
+	/** Verbatim `:Type` annotation sources, keyed exactly like `declaredTypes` (`TypeInfoProvider.declaredTypeSources`). */
+	final declaredTypeSources: Map<Int, String>;
+
+	/** Source text of the file being probed — the for-binding arm reads the loop HEADER text to refuse the key-value form. */
+	final source: String;
+
+	/**
+	 * The written target type of each ascription and typed cast of the file (`TypeInfoProvider.castTargetSources`), read when
+	 * first asked; unset, the deep mode types no ascription.
+	 */
+	@:optional
+	final castTargetSources: () -> Map<Int, String>;
+
+	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
+	final typeSyntax: TypeSyntaxReader;
+
+}
+
+/** The type a construction writes (`NominalTypes.writtenConstruction`). */
+typedef WrittenConstruction = {
+
+	/** The type's path as written (`pkg.Box`). */
+	final path: String;
+
+	/** The type arguments it writes, each verbatim; empty when the language infers them. */
+	final args: Array<String>;
+
+	/** `path` with its written arguments (`pkg.Box<Int, String>`), the arguments' source kept as written between them. */
+	final text: String;
+
+}
+
+/** What the index host of `TypingService.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */
+typedef IndexTyping = {
+	final root: QueryNode;
+	final shape: RefShape;
+	final declaredTypes: Map<Int, String>;
+	final chain: ChainTypeContext;
+	final index: Null<SymbolIndex>;
+	final file: String;
+	final seen: Array<Int>;
+}
+
+/**
  * Nominal-type resolution over written type SOURCES and the query tree: what type does
  * this expression, this receiver path or this loop binder carry, and what bare type name
  * does that written source reduce to.
@@ -1159,79 +1234,4 @@ final class NominalTypes {
 		return returned == null || typing == null ? null : outerNominalOf(returned, typing.chain.typeSyntax);
 	}
 
-}
-
-/**
- * A receiver path's ROOT, reduced to whichever of the two things a root can BE. EXACTLY one field
- * is set: `selfTypeName` for the self reference (already resolved to its enclosing declaration's
- * name, since nothing further can be asked of it), `bindingFrom` for a value, whose declared type
- * each consumer then reads its own way. Produced only by `NominalTypes.pathRootBinding`, which
- * answers null rather than an all-null record when the root resolves to neither.
- */
-private typedef PathRoot = { final selfTypeName: Null<String>; final bindingFrom: Null<Int>; };
-
-/**
- * Which binder of an iteration node a binding offset landed on: the loop node itself (its own
- * key-or-element binder, sharing the loop's start offset) or the VALUE binder it carries as a
- * separate child in a key-value iteration. The two type DIFFERENTLY, so the answer cannot be a
- * bare node — see `NominalTypes.loopBinderAt`.
- */
-private typedef LoopBinderHit = { final loop: QueryNode; final isValueBinder: Bool; };
-
-/**
- * The extra per-file context `NominalTypes.expressionTypeNominal` needs for its DEEP
- * resolution mode: the WRITTEN form of every `:Type` annotation (a nominal alone cannot carry
- * type arguments) and the file's source text (the only place a `for` loop's header form is
- * legible). Passing it is the opt-in — omit it and that function answers exactly what it
- * always did.
- *
- * That opt-in is the whole point of the seam. `NominalTypes.valueTypeNominal`'s other consumers
- * (`map-keys-lookup`, `prefer-static-extension`) read a resolved nominal as a LICENCE TO ACT,
- * so extra resolution is the unsafe direction for them; they cannot reach the deep mode BY
- * CONSTRUCTION, because it lives behind a parameter they do not pass, rather than by a
- * convention someone must remember.
- */
-typedef ChainTypeContext = {
-
-	/** Verbatim `:Type` annotation sources, keyed exactly like `declaredTypes` (`TypeInfoProvider.declaredTypeSources`). */
-	final declaredTypeSources: Map<Int, String>;
-
-	/** Source text of the file being probed — the for-binding arm reads the loop HEADER text to refuse the key-value form. */
-	final source: String;
-
-	/**
-	 * The written target type of each ascription and typed cast of the file (`TypeInfoProvider.castTargetSources`), read when
-	 * first asked; unset, the deep mode types no ascription.
-	 */
-	@:optional
-	final castTargetSources: () -> Map<Int, String>;
-
-	/** `GrammarPlugin.typeSyntax` — how the deep mode reads a written type's wrapper and arguments. */
-	final typeSyntax: TypeSyntaxReader;
-
-}
-
-/** The type a construction writes (`NominalTypes.writtenConstruction`). */
-typedef WrittenConstruction = {
-
-	/** The type's path as written (`pkg.Box`). */
-	final path: String;
-
-	/** The type arguments it writes, each verbatim; empty when the language infers them. */
-	final args: Array<String>;
-
-	/** `path` with its written arguments (`pkg.Box<Int, String>`), the arguments' source kept as written between them. */
-	final text: String;
-
-}
-
-/** What the index host of `TypingService.typeWalk` reads with: the deep walk's arguments, `seen` its cycle guard. */
-typedef IndexTyping = {
-	final root: QueryNode;
-	final shape: RefShape;
-	final declaredTypes: Map<Int, String>;
-	final chain: ChainTypeContext;
-	final index: Null<SymbolIndex>;
-	final file: String;
-	final seen: Array<Int>;
 }

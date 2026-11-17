@@ -10,6 +10,19 @@ import sys.io.File;
 using StringTools;
 using Lambda;
 
+/** What a branch leaves for the run that started it: its steps, and the counts it read. */
+typedef BranchReport = {
+
+	/** The run whose branch left it; empty in a report that names none. */
+	var run: String;
+
+	/** When the branch process began, in epoch milliseconds; null in a report that names none. */
+	var started: Null<Float>;
+	var steps: Array<Step>;
+	var readings: Map<String, Int>;
+
+}
+
 /**
  * The steps of a tool's run split into branches that run at once, each a process of the tool: a branch records its steps
  * in a `Summary` of its own and leaves them, with any counts it read, as a report file (`leave`); `run` starts every
@@ -307,18 +320,5 @@ final class Branches {
 	private static function seconds(decimal: String): Float {
 		return Std.parseFloat(decimal.replace(',', '.'));
 	}
-
-}
-
-/** What a branch leaves for the run that started it: its steps, and the counts it read. */
-typedef BranchReport = {
-
-	/** The run whose branch left it; empty in a report that names none. */
-	var run: String;
-
-	/** When the branch process began, in epoch milliseconds; null in a report that names none. */
-	var started: Null<Float>;
-	var steps: Array<Step>;
-	var readings: Map<String, Int>;
 
 }

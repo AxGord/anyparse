@@ -11,6 +11,20 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * What a std member is (`StdTypes.memberOf`): the module path of the type it returns
+ * or holds (null when that does not resolve), whether a getter or a setter runs, and
+ * whether it is static or sits under a `#if`.
+ */
+typedef StdMember = {
+	var type: Null<String>;
+	var isFunction: Bool;
+	var hasGetter: Bool;
+	var hasSetter: Bool;
+	var isStatic: Bool;
+	var guarded: Bool;
+}
+
+/**
  * The written member types of the Haxe std core — the toplevel, `haxe/` and `sys/` (`StdResolver.resolutionSpecs`), the
  * library every target shares — read one module at a time when a `CallGraph` asks: what a call of a library function
  * returns, what a library field or property holds. A receiver made by one (`Sys.stdin().readLine()`,
@@ -353,18 +367,4 @@ final class StdTypes {
 		return source == null ? null : try IndexScope.declarationsOf(file, source, plugin) catch (exception: Exception) null;
 	}
 
-}
-
-/**
- * What a std member is (`StdTypes.memberOf`): the module path of the type it returns
- * or holds (null when that does not resolve), whether a getter or a setter runs, and
- * whether it is static or sits under a `#if`.
- */
-typedef StdMember = {
-	var type: Null<String>;
-	var isFunction: Bool;
-	var hasGetter: Bool;
-	var hasSetter: Bool;
-	var isStatic: Bool;
-	var guarded: Bool;
 }

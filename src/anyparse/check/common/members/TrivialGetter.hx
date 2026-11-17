@@ -20,6 +20,33 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+/** What `memberTables` reads off one class body: its private fields, its accessors by name, and its `get` properties. */
+private typedef MemberTables = {
+	privateFieldNodes: Map<String, QueryNode>,
+	getters: Map<String, {
+		node: QueryNode,
+		dyn: Bool,
+		isOverride: Bool,
+		isInline: Bool
+	}>,
+	setters: Map<String, {
+		node: QueryNode,
+		dyn: Bool,
+		isOverride: Bool,
+		isInline: Bool
+	}>,
+	properties: Array<{
+		name: String,
+		node: QueryNode,
+		span: Span,
+		isPublic: Bool,
+		isStatic: Bool,
+		write: String,
+		clause: AccessorClause,
+		isVarMeta: Null<QueryNode>
+	}>
+};
+
 /**
  * Flags a property that only bridges a backing field through trivial accessors, and collapses it
  * to a plainer form. The user's rule: don't hand-write a trivial getter/setter over a backing
@@ -1280,30 +1307,3 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	}
 
 }
-
-/** What `memberTables` reads off one class body: its private fields, its accessors by name, and its `get` properties. */
-private typedef MemberTables = {
-	privateFieldNodes: Map<String, QueryNode>,
-	getters: Map<String, {
-		node: QueryNode,
-		dyn: Bool,
-		isOverride: Bool,
-		isInline: Bool
-	}>,
-	setters: Map<String, {
-		node: QueryNode,
-		dyn: Bool,
-		isOverride: Bool,
-		isInline: Bool
-	}>,
-	properties: Array<{
-		name: String,
-		node: QueryNode,
-		span: Span,
-		isPublic: Bool,
-		isStatic: Bool,
-		write: String,
-		clause: AccessorClause,
-		isVarMeta: Null<QueryNode>
-	}>
-};

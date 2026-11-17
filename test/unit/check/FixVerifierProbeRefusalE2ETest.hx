@@ -20,6 +20,63 @@ import sys.io.File;
 private typedef FakeEdit = { var find: String; var text: String; }
 
 /**
+ * A `Check` + `RiskyFix` stand-in that turns a fixed find/replace TABLE into UNGROUPED
+ * edits, so a scenario can hand `FixVerifier` any dependency shape without inventing a
+ * real rule. Each `find` is unique in the fixture and located from the start, so the
+ * table's order is free — which is what lets a scenario choose where the bisect's
+ * midpoint falls. A `find` the fixture no longer contains is a broken fixture, not a
+ * finding: it throws rather than silently producing fewer edits.
+ */
+@:nullSafety(Strict)
+private class TableFake implements Check implements RiskyFix {
+
+	private static inline final RULE_ID: String = 'table-fake';
+
+	private final _table: Array<FakeEdit>;
+
+	public function new(table: Array<FakeEdit>) {
+		_table = table;
+	}
+
+	public function id(): String {
+		return RULE_ID;
+	}
+
+	public function description(): String {
+		return 'test double: rewrites a fixed literal table';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return [
+			for (entry in files) {
+				file: entry.file,
+				span: null,
+				rule: RULE_ID,
+				severity: Severity.Warning,
+				message: 'test double finding'
+			}
+		];
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [
+			for (entry in _table) {
+				final at: Int = source.indexOf(entry.find);
+				if (at < 0) throw new Exception('the fixture no longer contains ${entry.find}');
+				{ span: new Span(at, at + entry.find.length), text: entry.text };
+			}
+		];
+	}
+
+}
+
+/**
  * End-to-end coverage of the bisect probe that the WRITER refuses — the one arm of
  * `FixVerifier.verifyEntry` a fake probe cannot reach, because it needs a real
  * `canonicalize` refusal on a subset of a set that canonicalises whole.
@@ -406,62 +463,5 @@ final class FixVerifierProbeRefusalE2ETest extends Test {
 		return ok;
 	}
 	#end
-
-}
-
-/**
- * A `Check` + `RiskyFix` stand-in that turns a fixed find/replace TABLE into UNGROUPED
- * edits, so a scenario can hand `FixVerifier` any dependency shape without inventing a
- * real rule. Each `find` is unique in the fixture and located from the start, so the
- * table's order is free — which is what lets a scenario choose where the bisect's
- * midpoint falls. A `find` the fixture no longer contains is a broken fixture, not a
- * finding: it throws rather than silently producing fewer edits.
- */
-@:nullSafety(Strict)
-private class TableFake implements Check implements RiskyFix {
-
-	private static inline final RULE_ID: String = 'table-fake';
-
-	private final _table: Array<FakeEdit>;
-
-	public function new(table: Array<FakeEdit>) {
-		_table = table;
-	}
-
-	public function id(): String {
-		return RULE_ID;
-	}
-
-	public function description(): String {
-		return 'test double: rewrites a fixed literal table';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) {
-				file: entry.file,
-				span: null,
-				rule: RULE_ID,
-				severity: Severity.Warning,
-				message: 'test double finding'
-			}
-		];
-	}
-
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return [
-			for (entry in _table) {
-				final at: Int = source.indexOf(entry.find);
-				if (at < 0) throw new Exception('the fixture no longer contains ${entry.find}');
-				{ span: new Span(at, at + entry.find.length), text: entry.text };
-			}
-		];
-	}
 
 }

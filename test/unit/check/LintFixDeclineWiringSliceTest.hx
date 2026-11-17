@@ -17,6 +17,58 @@ import anyparse.query.cli.command.LintFixVerify;
 import anyparse.runtime.Span;
 
 /**
+ * A `RiskyArm` rule reduced to its ledger contract: its risky arm owns exactly the findings carrying `ARM_HAND_OFF`.
+ * Nothing here is ever run or fixed — the ledger asks only which findings the arm claims.
+ */
+private class ArmCheck implements Check implements RiskyArm {
+
+	public function new() {}
+
+	public function id(): String {
+		return 'arm-rule';
+	}
+
+	public function description(): String {
+		return 'a rule whose risky arm owns some of its findings';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return [];
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	public function riskyArmFindings(violations: Array<Violation>): Array<Violation> {
+		return violations.filter(v -> v.declineReason == LintFixDeclineWiringSliceTest.ARM_HAND_OFF);
+	}
+
+	public function riskyFix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
+		return [];
+	}
+
+	public function riskyCrossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<RiskyCrossFileEdit> {
+		return [];
+	}
+
+}
+
+/**
  * What `lint --fix` SAYS about an edit set the writer-emit gate refused, and about a refusal
  * that lands on a later pass.
  *
@@ -1265,57 +1317,5 @@ class LintFixDeclineWiringSliceTest extends Test {
 		};
 	}
 	#end
-
-}
-
-/**
- * A `RiskyArm` rule reduced to its ledger contract: its risky arm owns exactly the findings carrying `ARM_HAND_OFF`.
- * Nothing here is ever run or fixed — the ledger asks only which findings the arm claims.
- */
-private class ArmCheck implements Check implements RiskyArm {
-
-	public function new() {}
-
-	public function id(): String {
-		return 'arm-rule';
-	}
-
-	public function description(): String {
-		return 'a rule whose risky arm owns some of its findings';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [];
-	}
-
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return [];
-	}
-
-	public function riskyArmFindings(violations: Array<Violation>): Array<Violation> {
-		return violations.filter(v -> v.declineReason == LintFixDeclineWiringSliceTest.ARM_HAND_OFF);
-	}
-
-	public function riskyFix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return [];
-	}
-
-	public function riskyCrossFileFindings(violations: Array<Violation>): Array<Violation> {
-		return [];
-	}
-
-	public function riskyCrossFileFix(
-		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<RiskyCrossFileEdit> {
-		return [];
-	}
 
 }

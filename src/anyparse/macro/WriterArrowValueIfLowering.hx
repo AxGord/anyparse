@@ -12,6 +12,23 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the arrow-value-`if` family reads, bundled once per
+ * `WriterLowering` instance.
+ *
+ * The three function fields are shape-name helpers that stayed in
+ * `WriterLowering` because most of their callers did; handing them over as
+ * fields is what keeps every member here static.
+ */
+typedef ArrowValueIfCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final ctx: LoweringCtx;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final branchSynthExtraArity: (bodyTypePath: String, branch: ShapeNode) -> Int;
+	final writeFnFor: (refName: String) -> String;
+}
+
+/**
  * Pass 3W helpers - the arrow-value-`if` re-flow family.
  *
  * One `@:fmt` feature, whole: `@:fmt(arrowValueIfReflow)` lets a value-`if`
@@ -501,22 +518,5 @@ final class WriterArrowValueIfLowering {
 		};
 	}
 
-}
-
-/**
- * The build state the arrow-value-`if` family reads, bundled once per
- * `WriterLowering` instance.
- *
- * The three function fields are shape-name helpers that stayed in
- * `WriterLowering` because most of their callers did; handing them over as
- * fields is what keeps every member here static.
- */
-typedef ArrowValueIfCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final ctx: LoweringCtx;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
-	final branchSynthExtraArity: (bodyTypePath: String, branch: ShapeNode) -> Int;
-	final writeFnFor: (refName: String) -> String;
 }
 #end

@@ -16,6 +16,20 @@ using StringTools;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state `PrattPostfixLowering` reads, bundled once in
+ * `Lowering`'s constructor. `ctx` is the only owner field the family
+ * touches (always as `ctx.trivia`); the four closures are the naming
+ * vocabulary that stayed in `Lowering`.
+ */
+typedef PrattPostfixCtx = {
+	final ctx: LoweringCtx;
+	final parseFnName: (refName: String) -> String;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final ruleReturnCT: (refName: String) -> ComplexType;
+	final stashNewlineClearExpr: () -> Expr;
+}
+
+/**
  * Pass 3 helpers - the operator-precedence rule shapes.
  *
  * The two loop shapes `Lowering.lowerRule` dispatches on when a rule
@@ -870,19 +884,5 @@ final class PrattPostfixLowering {
 		return matchExpr;
 	}
 
-}
-
-/**
- * The build state `PrattPostfixLowering` reads, bundled once in
- * `Lowering`'s constructor. `ctx` is the only owner field the family
- * touches (always as `ctx.trivia`); the four closures are the naming
- * vocabulary that stayed in `Lowering`.
- */
-typedef PrattPostfixCtx = {
-	final ctx: LoweringCtx;
-	final parseFnName: (refName: String) -> String;
-	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
-	final ruleReturnCT: (refName: String) -> ComplexType;
-	final stashNewlineClearExpr: () -> Expr;
 }
 #end

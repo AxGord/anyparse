@@ -19,6 +19,91 @@ import haxe.Exception;
 using Lambda;
 
 /**
+ * Outcome of the dependency-import carry — the statements the moved code needs at the
+ * destination, or the reason a move must not happen at all.
+ *
+ * The carry needs an error channel because a bound-name COLLISION is not a missing import it can
+ * work around: the destination already binds that simple name to a different module, and every
+ * way of proceeding changes what some existing code means. Emitting the second
+ * binding is the worst of them, because Haxe resolves the last import and says
+ * nothing: `import b.Dep;` carried into a destination holding `import p.Dep;` compiled clean and
+ * silently retyped the destination's own `new Dep()` from `p.Dep` to `b.Dep`.
+ */
+enum CarryResult {
+	CarryOk(lines: Array<String>);
+	CarryErr(message: String);
+}
+
+/**
+ * One binding a file already has for a simple type name: the importable path it resolves to, and
+ * whether that binding is the file's OWN module declaration — the half that decides which side of a
+ * collision would silently change meaning, and therefore what the refusal tells its author to do
+ * about it. Asked of the destination and of the source alike, which is why it is not named for
+ * either.
+ */
+typedef NameBinding = { var path: String; var ownModule: Bool; }
+
+/** What the source means by one dependency, and what a carry writes for it (`DependencyCarry.sourceBindingOf`). */
+private typedef SourceBinding = {
+	final wanted: Null<String>;
+	final statement: Null<ImportInfo>;
+	final ambientFile: Null<String>;
+	final ownSub: Null<String>;
+}
+
+/**
+ * An ambient chain's statement and the file that spells it (`DependencyCarry.ambientProviderOf`) — or a package wildcard
+ * and its ambient file, null for the source's own (`DependencyCarry.typeWildcardProviderOf`).
+ */
+private typedef AmbientProvider = { final statement: ImportInfo; final file: Null<String>; }
+
+/**
+ * A simple name paired with the source span it is written at. Two readings, both needing the span
+ * the bare name loses: a type-POSITION occurrence inside the moved declaration, and the REGION a
+ * function's type parameter shadows that name over.
+ *
+ * A method's `<Dep>` shadows `Dep` only inside that method, so the same name can be a parameter at one
+ * occurrence and a genuine dependency at another in the same declaration — un-pricing it by NAME drops the
+ * dependency from the gate entirely, which a `pick<Dep>` beside a `var d:Dep;` turns into a silent rebind.
+ */
+typedef NameSpan = { var name: String; var span: Span; }
+
+/**
+ * One module-static wildcard of a file (`import pkg.Mod.*;`): the statement, the MODULE its head
+ * names, and the simple names it binds — the main type's statics, an `enum abstract`'s values and
+ * an enum's constructors.
+ *
+ * The names are carried beside the statement because the statement's own text cannot answer for
+ * them: `raw` ends in `*`, so which names a wildcard provides is an INDEX question, asked once per
+ * provider and then read twice — for the moved body's free names and for the destination's own
+ * wildcards, which is where the two answers have to be compared.
+ */
+private typedef WildProvider = {
+
+	var imp: ImportInfo;
+	var module: String;
+	var names: Array<String>;
+
+	/** The `import.hx` that spells the statement, null for the file's own; its `imp.span` addresses THAT file. */
+	var ambientFile: Null<String>;
+
+	/** Rank in the file's resolution order (a higher one wins a shared name): the farthest ambient group first, the file's own last. */
+	var order: Int;
+
+}
+
+/**
+ * One BARE occurrence that a module-static wildcard is the only binder of: the name, the
+ * identifier's own span, and whether it is a braceless `$name` string interpolation.
+ *
+ * The interpolation flag travels because the two spellings take different edits — an ordinary
+ * identifier is qualified by an insert in front of it, a `$name` has to be re-spelled
+ * `${Q.name}` (`MoveMember.qualifyEdit`) — and nothing downstream can recover the flag from the
+ * span alone.
+ */
+typedef WildBareRef = { var name: String; var span: Span; var interpolated: Bool; }
+
+/**
  * Which `import` / `using` statements must travel with a declaration a move takes out of its
  * file, and when carrying one has to be REFUSED instead.
  *
@@ -1255,88 +1340,3 @@ final class DependencyCarry {
 	}
 
 }
-
-/**
- * Outcome of the dependency-import carry — the statements the moved code needs at the
- * destination, or the reason a move must not happen at all.
- *
- * The carry needs an error channel because a bound-name COLLISION is not a missing import it can
- * work around: the destination already binds that simple name to a different module, and every
- * way of proceeding changes what some existing code means. Emitting the second
- * binding is the worst of them, because Haxe resolves the last import and says
- * nothing: `import b.Dep;` carried into a destination holding `import p.Dep;` compiled clean and
- * silently retyped the destination's own `new Dep()` from `p.Dep` to `b.Dep`.
- */
-enum CarryResult {
-	CarryOk(lines: Array<String>);
-	CarryErr(message: String);
-}
-
-/**
- * One binding a file already has for a simple type name: the importable path it resolves to, and
- * whether that binding is the file's OWN module declaration — the half that decides which side of a
- * collision would silently change meaning, and therefore what the refusal tells its author to do
- * about it. Asked of the destination and of the source alike, which is why it is not named for
- * either.
- */
-typedef NameBinding = { var path: String; var ownModule: Bool; }
-
-/** What the source means by one dependency, and what a carry writes for it (`DependencyCarry.sourceBindingOf`). */
-private typedef SourceBinding = {
-	final wanted: Null<String>;
-	final statement: Null<ImportInfo>;
-	final ambientFile: Null<String>;
-	final ownSub: Null<String>;
-}
-
-/**
- * An ambient chain's statement and the file that spells it (`DependencyCarry.ambientProviderOf`) — or a package wildcard
- * and its ambient file, null for the source's own (`DependencyCarry.typeWildcardProviderOf`).
- */
-private typedef AmbientProvider = { final statement: ImportInfo; final file: Null<String>; }
-
-/**
- * A simple name paired with the source span it is written at. Two readings, both needing the span
- * the bare name loses: a type-POSITION occurrence inside the moved declaration, and the REGION a
- * function's type parameter shadows that name over.
- *
- * A method's `<Dep>` shadows `Dep` only inside that method, so the same name can be a parameter at one
- * occurrence and a genuine dependency at another in the same declaration — un-pricing it by NAME drops the
- * dependency from the gate entirely, which a `pick<Dep>` beside a `var d:Dep;` turns into a silent rebind.
- */
-typedef NameSpan = { var name: String; var span: Span; }
-
-/**
- * One module-static wildcard of a file (`import pkg.Mod.*;`): the statement, the MODULE its head
- * names, and the simple names it binds — the main type's statics, an `enum abstract`'s values and
- * an enum's constructors.
- *
- * The names are carried beside the statement because the statement's own text cannot answer for
- * them: `raw` ends in `*`, so which names a wildcard provides is an INDEX question, asked once per
- * provider and then read twice — for the moved body's free names and for the destination's own
- * wildcards, which is where the two answers have to be compared.
- */
-private typedef WildProvider = {
-
-	var imp: ImportInfo;
-	var module: String;
-	var names: Array<String>;
-
-	/** The `import.hx` that spells the statement, null for the file's own; its `imp.span` addresses THAT file. */
-	var ambientFile: Null<String>;
-
-	/** Rank in the file's resolution order (a higher one wins a shared name): the farthest ambient group first, the file's own last. */
-	var order: Int;
-
-}
-
-/**
- * One BARE occurrence that a module-static wildcard is the only binder of: the name, the
- * identifier's own span, and whether it is a braceless `$name` string interpolation.
- *
- * The interpolation flag travels because the two spellings take different edits — an ordinary
- * identifier is qualified by an insert in front of it, a `$name` has to be re-spelled
- * `${Q.name}` (`MoveMember.qualifyEdit`) — and nothing downstream can recover the flag from the
- * span alone.
- */
-typedef WildBareRef = { var name: String; var span: Span; var interpolated: Bool; }

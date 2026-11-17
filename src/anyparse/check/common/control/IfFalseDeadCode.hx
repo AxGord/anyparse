@@ -8,6 +8,35 @@ import anyparse.query.SymbolIndex;
 using anyparse.util.Strings;
 using StringTools;
 
+/** What a run reads of the grammar: the directive vocabulary, and the node kinds that carry no code. */
+private typedef Seams = {
+	final shape: RefShape;
+	final ifKeyword: String;
+	final endKeyword: String;
+	final elseKeywords: Array<String>;
+	final emptyKinds: Array<String>;
+	final emptyContainerKinds: Array<String>;
+};
+
+/** One file's source, its conditional directives, and the offsets its openers start at. */
+private typedef Scan = {
+	final source: String;
+	final seams: Seams;
+	final directives: Array<CondDirective>;
+	final openers: Map<Int, Bool>;
+};
+
+/** A flagged region: its node span, its polarity, and its branches (null for an `#elseif` chain). */
+private typedef Region = { final span: Span; final isTrue: Bool; final eliminated: Null<Branches>; };
+
+/** The `#if` body and the `#else` body (null when there is none) of a region, each with its triviality. */
+private typedef Branches = {
+	final then: Span;
+	final otherwise: Null<Span>;
+	final thenTrivial: Bool;
+	final otherwiseTrivial: Bool;
+};
+
 /**
  * Flags every `#if false … #end` conditional-compilation region — dead code the compiler never sees on any target — and every
  * `#if true … #end` region, the mirror smell: the guard buys nothing since the body compiles on every target regardless.
@@ -235,32 +264,3 @@ final class IfFalseDeadCode extends RuleBase {
 	}
 
 }
-
-/** What a run reads of the grammar: the directive vocabulary, and the node kinds that carry no code. */
-private typedef Seams = {
-	final shape: RefShape;
-	final ifKeyword: String;
-	final endKeyword: String;
-	final elseKeywords: Array<String>;
-	final emptyKinds: Array<String>;
-	final emptyContainerKinds: Array<String>;
-};
-
-/** One file's source, its conditional directives, and the offsets its openers start at. */
-private typedef Scan = {
-	final source: String;
-	final seams: Seams;
-	final directives: Array<CondDirective>;
-	final openers: Map<Int, Bool>;
-};
-
-/** A flagged region: its node span, its polarity, and its branches (null for an `#elseif` chain). */
-private typedef Region = { final span: Span; final isTrue: Bool; final eliminated: Null<Branches>; };
-
-/** The `#if` body and the `#else` body (null when there is none) of a region, each with its triviality. */
-private typedef Branches = {
-	final then: Span;
-	final otherwise: Null<Span>;
-	final thenTrivial: Bool;
-	final otherwiseTrivial: Bool;
-};

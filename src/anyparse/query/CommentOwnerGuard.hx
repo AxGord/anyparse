@@ -7,6 +7,32 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * One comment token as `SourceComments.collectCommentTokens` yields it: its span, and whether it
+ * is a `//` line comment rather than a `/* … *\/` block. Named here because the carry criterion
+ * threads it through three signatures and the structural spelling drowned them.
+ */
+typedef CommentToken = { final from: Int; final to: Int; final isLine: Bool; }
+
+/** One `CommentToken` of the source together with the offset it landed at inside a replacement. */
+typedef PlacedComment = { final token: CommentToken; final at: Int; }
+
+/**
+ * Where the splice put each source comment: `copied` answers for every comment no edit covers,
+ * keyed by its result offset and length; `placed` holds one entry per edit, in source order.
+ */
+typedef CommentAlignment = { final copied: Map<String, Int>; final placed: Array<PlacedEdit>; }
+
+/**
+ * One edit as the splice placed it — where its replacement starts in the result, how long it is,
+ * and the source block of each comment the edit covers, keyed by that comment's full text.
+ *
+ * A text shared by two covered comments from DIFFERENT blocks maps to `-1`. Inside a replacement
+ * the text is all there is to match on, and a queue drawn across the whole file is exactly what
+ * invented refusals on deletions; declining to answer keeps the ambiguity from becoming a verdict.
+ */
+typedef PlacedEdit = { final at: Int; final length: Int; final covered: Map<String, Int>; }
+
+/**
  * The COMMENT-ATTACHMENT half of the writer-emit gate: whether an edit set would leave a
  * comment standing above code it never documented.
  *
@@ -352,29 +378,3 @@ final class CommentOwnerGuard {
 	}
 
 }
-
-/**
- * One comment token as `SourceComments.collectCommentTokens` yields it: its span, and whether it
- * is a `//` line comment rather than a `/* … *\/` block. Named here because the carry criterion
- * threads it through three signatures and the structural spelling drowned them.
- */
-typedef CommentToken = { final from: Int; final to: Int; final isLine: Bool; }
-
-/** One `CommentToken` of the source together with the offset it landed at inside a replacement. */
-typedef PlacedComment = { final token: CommentToken; final at: Int; }
-
-/**
- * Where the splice put each source comment: `copied` answers for every comment no edit covers,
- * keyed by its result offset and length; `placed` holds one entry per edit, in source order.
- */
-typedef CommentAlignment = { final copied: Map<String, Int>; final placed: Array<PlacedEdit>; }
-
-/**
- * One edit as the splice placed it — where its replacement starts in the result, how long it is,
- * and the source block of each comment the edit covers, keyed by that comment's full text.
- *
- * A text shared by two covered comments from DIFFERENT blocks maps to `-1`. Inside a replacement
- * the text is all there is to match on, and a queue drawn across the whole file is exactly what
- * invented refusals on deletions; declining to answer keeps the ambiguity from becoming a verdict.
- */
-typedef PlacedEdit = { final at: Int; final length: Int; final covered: Map<String, Int>; }

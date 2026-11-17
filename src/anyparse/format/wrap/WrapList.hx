@@ -217,6 +217,33 @@ typedef WrapListOptions = {
 }
 
 /**
+ * Every optional `WrapListOptions` axis carried as a concrete value, so the
+ * defaulting lives in `WrapList.resolveAxes` instead of `emit`'s body. `forceMode`
+ * and the two per-element flag arrays stay nullable — absence is their meaningful
+ * state.
+ *
+ * Keep in sync with `WrapListOptions`: a new axis read straight off the raw
+ * options in `emit` would silently bypass the resolve.
+ */
+private typedef ResolvedWrapListOptions = {
+	final appendTrailingComma: Bool;
+	final leadFlat: Doc;
+	final leadBreak: Doc;
+	final forceExceeds: Bool;
+	final forceMode: Null<WrapMode>;
+	final suppressAdditionalIndent: Bool;
+	final groupRestProbe: Bool;
+	final sepBeforeFlags: Null<Array<Bool>>;
+	final flatTrailingComma: Bool;
+	final comprehensionFitMeasure: Bool;
+	final comprehensionBodyMeasure: Bool;
+	final complexItemKinds: Null<Array<Int>>;
+	final containerItemKinds: Null<Array<Null<Array<Int>>>>;
+	final typeParamItemCount: Int;
+	final trailBreakDoc: Doc;
+};
+
+/**
  * Runtime helper that emits a `Doc` for a delimited list whose layout is driven by
  * a `WrapRules` cascade.
  *
@@ -4625,30 +4652,3 @@ class WrapList {
 	}
 
 }
-
-/**
- * Every optional `WrapListOptions` axis carried as a concrete value, so the
- * defaulting lives in `WrapList.resolveAxes` instead of `emit`'s body. `forceMode`
- * and the two per-element flag arrays stay nullable — absence is their meaningful
- * state.
- *
- * Keep in sync with `WrapListOptions`: a new axis read straight off the raw
- * options in `emit` would silently bypass the resolve.
- */
-private typedef ResolvedWrapListOptions = {
-	final appendTrailingComma: Bool;
-	final leadFlat: Doc;
-	final leadBreak: Doc;
-	final forceExceeds: Bool;
-	final forceMode: Null<WrapMode>;
-	final suppressAdditionalIndent: Bool;
-	final groupRestProbe: Bool;
-	final sepBeforeFlags: Null<Array<Bool>>;
-	final flatTrailingComma: Bool;
-	final comprehensionFitMeasure: Bool;
-	final comprehensionBodyMeasure: Bool;
-	final complexItemKinds: Null<Array<Int>>;
-	final containerItemKinds: Null<Array<Null<Array<Int>>>>;
-	final typeParamItemCount: Int;
-	final trailBreakDoc: Doc;
-};

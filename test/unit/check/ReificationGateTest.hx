@@ -13,6 +13,94 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
+ * A test double that reports one finding per identifier named `MARK`. Two copies exist: this one
+ * takes the central gate, `AwareMarkerCheck` declines it. Everything but the marker interface and
+ * the rule id is shared, so a verdict difference between them can only come from the marker.
+ */
+private class PlainMarkerCheck implements Check {
+
+	public function new() {}
+
+	public function id(): String {
+		return 'marker-plain';
+	}
+
+	public function description(): String {
+		return 'a test double flagging every MARK identifier';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return MarkerScan.findings(id(), files, plugin);
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+}
+
+/** `PlainMarkerCheck`'s opted-out twin — the ONLY difference is `QuotationAware`. */
+private class AwareMarkerCheck implements Check implements QuotationAware {
+
+	public function new() {}
+
+	public function id(): String {
+		return 'marker-aware';
+	}
+
+	public function description(): String {
+		return 'a test double flagging every MARK identifier, quotations included';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return MarkerScan.findings(id(), files, plugin);
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return [];
+	}
+
+}
+
+/** The scan both doubles share: one finding per `MARK` identifier, quotations included. */
+private class MarkerScan {
+
+	public static function findings(rule: String, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final out: Array<Violation> = [];
+		for (entry in files) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(out, entry.file, rule, tree);
+		}
+		return out;
+	}
+
+	private static function walk(out: Array<Violation>, file: String, rule: String, node: QueryNode): Void {
+		final span: Null<Span> = node.span;
+		if (node.name == 'MARK' && span != null) out.push({
+			file: file,
+			span: span,
+			rule: rule,
+			severity: Severity.Info,
+			message: 'MARK'
+		});
+		for (child in node.children) walk(out, file, rule, child);
+	}
+
+}
+
+/**
  * The CENTRAL reification gate: a finding whose span sits inside a `macro …` quotation is dropped
  * for EVERY check, at the three points a check's own findings enter the pipeline, and no check has
  * to know about it.
@@ -138,94 +226,6 @@ class ReificationGateTest extends Test {
 	/** `check`'s findings for `source` as `Linter.run` reports them — the altitude the gate lives at. */
 	private function linted(check: Check, source: String): Array<Violation> {
 		return Linter.run(entry(source), new HaxeQueryPlugin(), [check]);
-	}
-
-}
-
-/**
- * A test double that reports one finding per identifier named `MARK`. Two copies exist: this one
- * takes the central gate, `AwareMarkerCheck` declines it. Everything but the marker interface and
- * the rule id is shared, so a verdict difference between them can only come from the marker.
- */
-private class PlainMarkerCheck implements Check {
-
-	public function new() {}
-
-	public function id(): String {
-		return 'marker-plain';
-	}
-
-	public function description(): String {
-		return 'a test double flagging every MARK identifier';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return MarkerScan.findings(id(), files, plugin);
-	}
-
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return [];
-	}
-
-}
-
-/** `PlainMarkerCheck`'s opted-out twin — the ONLY difference is `QuotationAware`. */
-private class AwareMarkerCheck implements Check implements QuotationAware {
-
-	public function new() {}
-
-	public function id(): String {
-		return 'marker-aware';
-	}
-
-	public function description(): String {
-		return 'a test double flagging every MARK identifier, quotations included';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return MarkerScan.findings(id(), files, plugin);
-	}
-
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return [];
-	}
-
-}
-
-/** The scan both doubles share: one finding per `MARK` identifier, quotations included. */
-private class MarkerScan {
-
-	public static function findings(rule: String, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final out: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(out, entry.file, rule, tree);
-		}
-		return out;
-	}
-
-	private static function walk(out: Array<Violation>, file: String, rule: String, node: QueryNode): Void {
-		final span: Null<Span> = node.span;
-		if (node.name == 'MARK' && span != null) out.push({
-			file: file,
-			span: span,
-			rule: rule,
-			severity: Severity.Info,
-			message: 'MARK'
-		});
-		for (child in node.children) walk(out, file, rule, child);
 	}
 
 }

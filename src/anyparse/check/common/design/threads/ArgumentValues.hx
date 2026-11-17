@@ -20,6 +20,22 @@ import anyparse.util.Groups;
 using StringTools;
 
 /**
+ * A string affix guard (`ArgumentValues.stringPredicate`): of the tracked parameter `param`, whether it ends (`suffix`) or
+ * starts with `text`.
+ */
+typedef AffixTest = { final param: Int; final suffix: Bool; final text: String; }
+
+/** One call `ArgumentValues.bind` reads: its edge, arguments, the callee's parameters, and what the caller knows. */
+private typedef CallBinding = {
+	final edge: CallEdge;
+	final args: Array<QueryNode>;
+	final params: Array<QueryNode>;
+	final calleeFile: String;
+	final callerNames: Array<String>;
+	final valuation: String;
+}
+
+/**
  * What a call hands the parameters of the function it calls, as far as `EdgeConditions` reads them: the TRACKED
  * parameters of a function, and the VALUATION a call gives them — one character per tracked parameter, standing for the
  * set of values it may hold there (`atomsOf`): `UNKNOWN`, `TRUE` / `FALSE`, `NULL`, `NON_NULL`, a string a guard of the
@@ -553,20 +569,4 @@ final class ArgumentValues {
 		];
 	}
 
-}
-
-/**
- * A string affix guard (`ArgumentValues.stringPredicate`): of the tracked parameter `param`, whether it ends (`suffix`) or
- * starts with `text`.
- */
-typedef AffixTest = { final param: Int; final suffix: Bool; final text: String; }
-
-/** One call `ArgumentValues.bind` reads: its edge, arguments, the callee's parameters, and what the caller knows. */
-private typedef CallBinding = {
-	final edge: CallEdge;
-	final args: Array<QueryNode>;
-	final params: Array<QueryNode>;
-	final calleeFile: String;
-	final callerNames: Array<String>;
-	final valuation: String;
 }

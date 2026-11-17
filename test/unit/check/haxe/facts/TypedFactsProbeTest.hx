@@ -11,6 +11,29 @@ import sys.io.File;
 
 using Lambda;
 
+/** A scratch directory and the facts of its compile. */
+@:nullSafety(Strict)
+private final class Scratch {
+
+	public final dir: String;
+	public final facts: Null<CompilerFacts>;
+
+	public function new(dir: String, facts: Null<CompilerFacts>) {
+		this.dir = dir;
+		this.facts = facts;
+	}
+
+	/** The absolute path of `name` in the directory. */
+	public function path(name: String): String {
+		return Path.join([dir, name]);
+	}
+
+	public function remove(): Void {
+		CliFixture.removeDir(dir);
+	}
+
+}
+
 /**
  * `TypedFactsProbe` over real compiles: what the compiler puts in the typed tree once typing ended, as the facts
  * record it, and the table's union, absence and position semantics.
@@ -935,29 +958,6 @@ class TypedFactsProbeTest extends Test {
 		final dir: String = CliFixture.writeTree('typed_facts', entries);
 		final oracles: Array<OracleConfig> = [for (d in configurations ?? [[]]) { hxml: 'build.hxml', dir: dir, defines: d }];
 		return new Scratch(dir, TypedFactsProbe.probeAll(oracles));
-	}
-
-}
-
-/** A scratch directory and the facts of its compile. */
-@:nullSafety(Strict)
-private final class Scratch {
-
-	public final dir: String;
-	public final facts: Null<CompilerFacts>;
-
-	public function new(dir: String, facts: Null<CompilerFacts>) {
-		this.dir = dir;
-		this.facts = facts;
-	}
-
-	/** The absolute path of `name` in the directory. */
-	public function path(name: String): String {
-		return Path.join([dir, name]);
-	}
-
-	public function remove(): Void {
-		CliFixture.removeDir(dir);
 	}
 
 }

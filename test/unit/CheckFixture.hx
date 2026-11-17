@@ -15,6 +15,12 @@ import utest.Assert;
 using Lambda;
 
 /**
+ * One `run` + `fix` pass over a fixture, both halves kept: a test reading the decline reasons the
+ * fix wrote needs the very `Violation` objects the edits came from.
+ */
+typedef FixRun = { final violations: Array<Violation>; final edits: Array<FixEdit>; };
+
+/**
  * The one test kit every rule test runs a rule through, the way `lint` runs it.
  *
  * Findings are read through `Linter.collect` — the reification and suppression gates, and the per-file gates when the
@@ -211,9 +217,3 @@ final class CheckFixture {
 	}
 
 }
-
-/**
- * One `run` + `fix` pass over a fixture, both halves kept: a test reading the decline reasons the
- * fix wrote needs the very `Violation` objects the edits came from.
- */
-typedef FixRun = { final violations: Array<Violation>; final edits: Array<FixEdit>; };

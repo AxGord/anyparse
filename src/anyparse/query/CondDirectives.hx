@@ -12,6 +12,56 @@ import anyparse.runtime.Span;
 using anyparse.util.Strings;
 
 /**
+ * One conditional-compilation directive recovered by `CondDirectives.scan`: the `keyword` as the
+ * grammar declares it, the `span` of the whole directive — from its marker character to the end
+ * of its condition, or to the end of the keyword when it carries none — and `condition`, the span
+ * of the condition text alone (null for a keyword that takes none, and for a condition-bearing
+ * keyword whose tail the reader could not delimit).
+ *
+ * The span deliberately stops at the condition rather than at the end of the physical line: an
+ * inline region (`#if sys trace(1); #end`) continues with ordinary code on the same line, and
+ * neither a text search nor a fixer may be handed that as directive text.
+ */
+typedef CondDirective = { final keyword: String; final span: Span; final condition: Null<Span>; };
+
+/**
+ * One TOP-LEVEL conditional region, as `CondDirectives.topLevelBlocks` delimits it: `span` runs
+ * from the `#if` marker to the end of the `#end` keyword, `headerEnd` is where the opening
+ * directive stops and `closeFrom` where the closing one starts — the two offsets that bound the
+ * region's BODY — and the three flags say how far the region may be treated as one unit.
+ *
+ * `singleBranch` is false once the region opens an `#elseif` / `#else` of its own; `flat` is false
+ * once it holds a nested region; `linewise` is false for an inline `#if sys f(); #end`, whose
+ * directives share their lines with code.
+ */
+typedef CondBlock = {
+	final span: Span;
+	final condition: Null<Span>;
+	final headerEnd: Int;
+	final closeFrom: Int;
+	final singleBranch: Bool;
+	final flat: Bool;
+	final linewise: Bool;
+};
+
+/**
+ * One top-level region's OWN directives as `CondDirectives.ownRegions` reads them (opener, same-depth
+ * `#elseif` / `#else`, closer, in source order); `nested` is true once a region sat between them.
+ */
+typedef OwnRegion = { final directives: Array<CondDirective>; final nested: Bool; };
+
+/**
+ * What `CondDirectives.scan` threads through one walk: the opener / closer a keyword's condition-bearing-ness is
+ * decided against, and the grammar's readers of where a condition ends and of the blank around it.
+ */
+private typedef DirectiveKeywords = {
+	final opener: String;
+	final closer: Null<String>;
+	final conditionEnd: Null<(input: Input, at: Int) -> Int>;
+	final conditionBlankEnd: Null<(input: Input, at: Int) -> Int>;
+};
+
+/**
  * The shared conditional-compilation directive reader: the one place its consumers locate a
  * grammar's `#if` / `#elseif` / `#else` / `#end` occurrences in a source text and delimit each one's
  * condition.
@@ -327,53 +377,3 @@ final class CondDirectives {
 	}
 
 }
-
-/**
- * One conditional-compilation directive recovered by `CondDirectives.scan`: the `keyword` as the
- * grammar declares it, the `span` of the whole directive — from its marker character to the end
- * of its condition, or to the end of the keyword when it carries none — and `condition`, the span
- * of the condition text alone (null for a keyword that takes none, and for a condition-bearing
- * keyword whose tail the reader could not delimit).
- *
- * The span deliberately stops at the condition rather than at the end of the physical line: an
- * inline region (`#if sys trace(1); #end`) continues with ordinary code on the same line, and
- * neither a text search nor a fixer may be handed that as directive text.
- */
-typedef CondDirective = { final keyword: String; final span: Span; final condition: Null<Span>; };
-
-/**
- * One TOP-LEVEL conditional region, as `CondDirectives.topLevelBlocks` delimits it: `span` runs
- * from the `#if` marker to the end of the `#end` keyword, `headerEnd` is where the opening
- * directive stops and `closeFrom` where the closing one starts — the two offsets that bound the
- * region's BODY — and the three flags say how far the region may be treated as one unit.
- *
- * `singleBranch` is false once the region opens an `#elseif` / `#else` of its own; `flat` is false
- * once it holds a nested region; `linewise` is false for an inline `#if sys f(); #end`, whose
- * directives share their lines with code.
- */
-typedef CondBlock = {
-	final span: Span;
-	final condition: Null<Span>;
-	final headerEnd: Int;
-	final closeFrom: Int;
-	final singleBranch: Bool;
-	final flat: Bool;
-	final linewise: Bool;
-};
-
-/**
- * One top-level region's OWN directives as `CondDirectives.ownRegions` reads them (opener, same-depth
- * `#elseif` / `#else`, closer, in source order); `nested` is true once a region sat between them.
- */
-typedef OwnRegion = { final directives: Array<CondDirective>; final nested: Bool; };
-
-/**
- * What `CondDirectives.scan` threads through one walk: the opener / closer a keyword's condition-bearing-ness is
- * decided against, and the grammar's readers of where a condition ends and of the blank around it.
- */
-private typedef DirectiveKeywords = {
-	final opener: String;
-	final closer: Null<String>;
-	final conditionEnd: Null<(input: Input, at: Int) -> Int>;
-	final conditionBlankEnd: Null<(input: Input, at: Int) -> Int>;
-};

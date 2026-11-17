@@ -3,6 +3,25 @@ package anyparse.query;
 import anyparse.runtime.Span;
 
 /**
+ * One `apq cases` result: a `case` branch of a switch, its reportable source `span` (null when the grammar built
+ * the branch without span tracking), and `patternKind` — the node kind of the branch pattern the query matched.
+ */
+@:nullSafety(Strict)
+final class CasesHit {
+
+	public final caseBranch: QueryNode;
+	public final span: Null<Span>;
+	public final patternKind: String;
+
+	public function new(caseBranch: QueryNode, span: Null<Span>, patternKind: String) {
+		this.caseBranch = caseBranch;
+		this.span = span;
+		this.patternKind = patternKind;
+	}
+
+}
+
+/**
  * `apq cases <Ctor> <file-or-dir>...` — match all switch case-patterns
  * whose top-level constructor is `<Ctor>`. THE precise answer to
  * "where is `case Foo(_):` written" — `apq search 'case Foo(_)'`
@@ -84,25 +103,6 @@ final class Cases {
 				false;
 			case _: false;
 		};
-	}
-
-}
-
-/**
- * One `apq cases` result: a `case` branch of a switch, its reportable source `span` (null when the grammar built
- * the branch without span tracking), and `patternKind` — the node kind of the branch pattern the query matched.
- */
-@:nullSafety(Strict)
-final class CasesHit {
-
-	public final caseBranch: QueryNode;
-	public final span: Null<Span>;
-	public final patternKind: String;
-
-	public function new(caseBranch: QueryNode, span: Null<Span>, patternKind: String) {
-		this.caseBranch = caseBranch;
-		this.span = span;
-		this.patternKind = patternKind;
 	}
 
 }

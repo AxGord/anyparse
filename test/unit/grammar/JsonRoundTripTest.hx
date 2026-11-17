@@ -12,6 +12,35 @@ import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JValueTools;
 
 /**
+ * Tiny seeded linear congruential generator — private to this file so
+ * random round-trip failures stay reproducible across runs without a
+ * shared helper dependency.
+ */
+private final class SeededRng {
+
+	private var _state: Int;
+
+	public function new(seed: Int): Void {
+		_state = seed;
+	}
+
+	public inline function nextInt(max: Int): Int {
+		_state = (_state * 1103515245 + 12345) & 0x7FFFFFFF;
+		return max == 0 ? 0 : _state % max;
+	}
+
+	public inline function nextBool(): Bool {
+		return nextInt(2) == 0;
+	}
+
+	public inline function nextFloat(): Float {
+		_state = (_state * 1103515245 + 12345) & 0x7FFFFFFF;
+		return _state / 2147483647.0;
+	}
+
+}
+
+/**
  * Round-trip invariant for JSON through the macro pipeline:
  * `parse(write(ast)) == ast`. Covers a curated set of shapes plus a
  * seeded-random corpus so regressions in either direction surface
@@ -128,35 +157,6 @@ class JsonRoundTripTest extends Test {
 		final buf: StringBuf = new StringBuf();
 		for (_ in 0...len) buf.addChar(0x61 + rng.nextInt(26));
 		return buf.toString();
-	}
-
-}
-
-/**
- * Tiny seeded linear congruential generator — private to this file so
- * random round-trip failures stay reproducible across runs without a
- * shared helper dependency.
- */
-private final class SeededRng {
-
-	private var _state: Int;
-
-	public function new(seed: Int): Void {
-		_state = seed;
-	}
-
-	public inline function nextInt(max: Int): Int {
-		_state = (_state * 1103515245 + 12345) & 0x7FFFFFFF;
-		return max == 0 ? 0 : _state % max;
-	}
-
-	public inline function nextBool(): Bool {
-		return nextInt(2) == 0;
-	}
-
-	public inline function nextFloat(): Float {
-		_state = (_state * 1103515245 + 12345) & 0x7FFFFFFF;
-		return _state / 2147483647.0;
 	}
 
 }

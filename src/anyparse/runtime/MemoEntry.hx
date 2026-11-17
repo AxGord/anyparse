@@ -1,5 +1,19 @@
 package anyparse.runtime;
 
+/** Which stash a recorded run left in `Parser.pendingTrivia`. */
+enum abstract MemoExit(Int) {
+
+	/** None. */
+	final Nothing = 0;
+
+	/** The one it was handed. */
+	final Handed = 1;
+
+	/** One it created (`MemoEntry.own`). */
+	final Own = 2;
+
+}
+
 /**
  * One recorded run of a `@:memo` rule from one start position under one
  * pending-trivia content: where it stopped, the value it returned or the
@@ -34,19 +48,5 @@ final class MemoEntry {
 		this.exit = exit;
 		this.own = own;
 	}
-
-}
-
-/** Which stash a recorded run left in `Parser.pendingTrivia`. */
-enum abstract MemoExit(Int) {
-
-	/** None. */
-	final Nothing = 0;
-
-	/** The one it was handed. */
-	final Handed = 1;
-
-	/** One it created (`MemoEntry.own`). */
-	final Own = 2;
 
 }

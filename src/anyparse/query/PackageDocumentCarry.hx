@@ -9,6 +9,33 @@ import haxe.io.Path;
 
 using Lambda;
 
+/** One document of a registry kept as a directory: its path and its text. */
+typedef RegistryDocument = { final file: String; final source: String; }
+
+/** A document cut at one array: see `PackageDocumentCarry.cut`. */
+typedef RecordCut = {
+	final prefix: String;
+	final records: Array<String>;
+	final gap: String;
+	final suffix: String;
+}
+
+/** What `PackageDocumentCarry.carry` changed: the documents to write, and the ones left without a record that go. */
+typedef CarriedDocuments = { final written: Array<RegistryDocument>; final emptied: Array<String>; }
+
+/** One record: its source text and the type path it names. */
+private typedef Record = { final text: String; final type: String; }
+
+/** A document cut into the text before its records, the records, and the text after. */
+private typedef ParsedDocument = {
+	final file: String;
+	final records: Array<Record>;
+	var kept: Array<Record>;
+	final gap: String;
+	final prefix: String;
+	final suffix: String;
+}
+
 /**
  * The one answer to "how do the records of a registry kept one document per package move between its documents": a document
  * is cut at its record array by the JSON parse span of each record (so the text of every record and the gaps between
@@ -157,31 +184,4 @@ final class PackageDocumentCarry {
 		return null;
 	}
 
-}
-
-/** One document of a registry kept as a directory: its path and its text. */
-typedef RegistryDocument = { final file: String; final source: String; }
-
-/** A document cut at one array: see `PackageDocumentCarry.cut`. */
-typedef RecordCut = {
-	final prefix: String;
-	final records: Array<String>;
-	final gap: String;
-	final suffix: String;
-}
-
-/** What `PackageDocumentCarry.carry` changed: the documents to write, and the ones left without a record that go. */
-typedef CarriedDocuments = { final written: Array<RegistryDocument>; final emptied: Array<String>; }
-
-/** One record: its source text and the type path it names. */
-private typedef Record = { final text: String; final type: String; }
-
-/** A document cut into the text before its records, the records, and the text after. */
-private typedef ParsedDocument = {
-	final file: String;
-	final records: Array<Record>;
-	var kept: Array<Record>;
-	final gap: String;
-	final prefix: String;
-	final suffix: String;
 }

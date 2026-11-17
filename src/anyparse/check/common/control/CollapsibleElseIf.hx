@@ -7,6 +7,9 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The seam kinds `CollapsibleElseIf` reads: the statement-position `if` kinds and the block kind. */
+private typedef Seams = { final ifKinds: Array<String>; final blockStmtKind: String; final blockKinds: Array<String>; };
+
 /**
  * Flags an `else` whose body is a block holding exactly one statement, and that
  * statement is an `if` (`} else { if (b) p(); }`). The braces buy nothing — the
@@ -206,6 +209,3 @@ final class CollapsibleElseIf extends RuleBase implements QuotationAware {
 	}
 
 }
-
-/** The seam kinds `CollapsibleElseIf` reads: the statement-position `if` kinds and the block kind. */
-private typedef Seams = { final ifKinds: Array<String>; final blockStmtKind: String; final blockKinds: Array<String>; };

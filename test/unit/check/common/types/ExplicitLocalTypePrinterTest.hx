@@ -4,6 +4,22 @@ import anyparse.check.common.types.ExplicitLocalType;
 import anyparse.check.haxe.oracle.PositionTypeOracle;
 import anyparse.query.CanonicalEdit;
 
+/** A `TypeOracle` that answers every position with one canned type — the compiler-free stand-in for the display server. */
+private class CannedTypeOracle extends PositionTypeOracle {
+
+	private final _type: String;
+
+	public function new(type: String) {
+		super(new HaxeQueryPlugin().typeSyntax);
+		_type = type;
+	}
+
+	public function typeAt(file: String, bytePos: Int): Null<String> {
+		return _type;
+	}
+
+}
+
 /**
  * The `explicit-local-type` oracle autofix riding on the shared `TypeRefPrinter`: a compiler
  * type name is turned into a reference that RESOLVES in the annotated file. The three routes
@@ -82,22 +98,6 @@ class ExplicitLocalTypePrinterTest extends Test {
 			i = haystack.indexOf(needle, i + needle.length);
 		}
 		return count;
-	}
-
-}
-
-/** A `TypeOracle` that answers every position with one canned type — the compiler-free stand-in for the display server. */
-private class CannedTypeOracle extends PositionTypeOracle {
-
-	private final _type: String;
-
-	public function new(type: String) {
-		super(new HaxeQueryPlugin().typeSyntax);
-		_type = type;
-	}
-
-	public function typeAt(file: String, bytePos: Int): Null<String> {
-		return _type;
 	}
 
 }

@@ -4,6 +4,12 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** Where a span stands in an earlier text (`EditJournal.back`). */
+enum SpanBack {
+	Mapped(span: Span);
+	Unmapped(reason: String);
+}
+
 /**
  * The run's record of every text `CanonicalEdit.canonicalize` produced, with the edits it spliced to get there — the
  * only evidence of where a declaration of an earlier text now stands. A `--fix` run keeps one (`CachingGrammarPlugin`),
@@ -81,10 +87,4 @@ final class EditJournal {
 		return true;
 	}
 
-}
-
-/** Where a span stands in an earlier text (`EditJournal.back`). */
-enum SpanBack {
-	Mapped(span: Span);
-	Unmapped(reason: String);
 }

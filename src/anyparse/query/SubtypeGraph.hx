@@ -12,6 +12,47 @@ import anyparse.util.Groups;
 using Lambda;
 
 /**
+ * The three keyings of one subtype adjacency, built together by `SubtypeGraph.buildAdjacency`
+ * and read by `subtypesOf` (the simple half alone) and `subtypesOfDecl` (the qualified half
+ * unioned with the unresolved one). One record rather than three fields because the three are
+ * one memo: any two of them read apart from the third would answer about a different pass.
+ */
+typedef SubtypeAdjacency = {
+
+	/** A supertype's SIMPLE name -> every `(file, type)` naming it, in file / declaration order. */
+	var simple: Map<String, Array<ResolvedType>>;
+
+	/** The `(file, name)` identity of a RESOLVED supertype declaration -> the subtypes that named it. */
+	var qualified: Map<String, Array<ResolvedType>>;
+
+	/** A denotation NOT pinned to one declaration -> the subtypes that named it, keyed simply. */
+	var unresolved: Map<String, Array<ResolvedType>>;
+
+}
+
+/** A supertype as one declaration writes it, type arguments included, with the file writing it (`SubtypeGraph.chainArguments`). */
+typedef WrittenSupertype = {
+
+	/** The `extends` / `implements` target as written (`B<W>`). */
+	final written: String;
+
+	/** The file the declaration writing it is in, where its names are read. */
+	final file: String;
+
+}
+
+/** The written supertypes and the type parameters by SIMPLE name (`SubtypeGraph.argumentsPassed`), built together. */
+typedef WrittenSupertypes = {
+
+	/** A type's simple name -> what each of its declarations writes in `extends` / `implements`, in index order. */
+	final links: Map<String, Array<WrittenSupertype>>;
+
+	/** A type's simple name -> the type parameters its declarations declare. */
+	final params: Map<String, Array<String>>;
+
+}
+
+/**
  * The project-wide INHERITANCE graph: who extends or implements whom, and what that closure
  * proves. Two directions over the same `supertypes` edges — DOWNWARD from a type to its subtypes
  * (`subtypesOf` and the `eachSubtype` walks over the lazily-built adjacency), and UPWARD from a
@@ -997,46 +1038,5 @@ final class SubtypeGraph {
 		}
 		return null;
 	}
-
-}
-
-/**
- * The three keyings of one subtype adjacency, built together by `SubtypeGraph.buildAdjacency`
- * and read by `subtypesOf` (the simple half alone) and `subtypesOfDecl` (the qualified half
- * unioned with the unresolved one). One record rather than three fields because the three are
- * one memo: any two of them read apart from the third would answer about a different pass.
- */
-typedef SubtypeAdjacency = {
-
-	/** A supertype's SIMPLE name -> every `(file, type)` naming it, in file / declaration order. */
-	var simple: Map<String, Array<ResolvedType>>;
-
-	/** The `(file, name)` identity of a RESOLVED supertype declaration -> the subtypes that named it. */
-	var qualified: Map<String, Array<ResolvedType>>;
-
-	/** A denotation NOT pinned to one declaration -> the subtypes that named it, keyed simply. */
-	var unresolved: Map<String, Array<ResolvedType>>;
-
-}
-
-/** A supertype as one declaration writes it, type arguments included, with the file writing it (`SubtypeGraph.chainArguments`). */
-typedef WrittenSupertype = {
-
-	/** The `extends` / `implements` target as written (`B<W>`). */
-	final written: String;
-
-	/** The file the declaration writing it is in, where its names are read. */
-	final file: String;
-
-}
-
-/** The written supertypes and the type parameters by SIMPLE name (`SubtypeGraph.argumentsPassed`), built together. */
-typedef WrittenSupertypes = {
-
-	/** A type's simple name -> what each of its declarations writes in `extends` / `implements`, in index order. */
-	final links: Map<String, Array<WrittenSupertype>>;
-
-	/** A type's simple name -> the type parameters its declarations declare. */
-	final params: Map<String, Array<String>>;
 
 }

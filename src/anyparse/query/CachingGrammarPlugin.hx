@@ -27,6 +27,146 @@ import anyparse.util.Groups;
 import haxe.io.Path;
 
 /**
+ * The three views of a resolution scope, kept APART on purpose. `report` is the files the run
+ * lints and may rewrite — read live, so a `--fix` pass sees the current sources. `library` is
+ * the configured resolution roots / libs / std, read-only for the whole run. `projectRoots` is
+ * the `resolutionRoots` SUBSET of that library — the project's own sources and nothing else —
+ * for a proof that must widen past the report scope without admitting third-party code (see
+ * `LintCommand.readResolutionRoots`).
+ *
+ * The split is what bounds `CachingGrammarPlugin`'s process-scoped parse tier: only `library`
+ * is promoted into it, so a `--fix` loop's per-pass intermediate sources — a fresh string per
+ * pass per edited file — can never accumulate there.
+ */
+typedef ResolutionSources = {
+
+	final report: Array<{ file: String, source: String }>;
+	final projectRoots: Array<{ file: String, source: String }>;
+	final library: LibrarySources;
+
+	/**
+	 * The read-only sources the project DECLARED — its `resolutionRoots` and `resolutionLibs` — without the std that joins
+	 * the library by itself: the code the project wrote or chose, as opposed to the std it calls into. Absent reads as none.
+	 */
+	@:optional
+	final declaredLibrary: LibrarySources;
+
+	/**
+	 * Whether the declared `resolutionRoots` MATCHED at least one `.hx`, report files included. Not
+	 * derivable from `projectRoots`: that half excludes the report, so a whole-project lint answers
+	 * it EMPTY for a project whose roots matched, exactly as for one declaring none or roots matching
+	 * nothing. Absent reads as false.
+	 */
+	@:optional
+	final rootsMatched: Bool;
+
+	/**
+	 * Whether EVERY declared root matched at least one `.hx` — a root that
+	 * matched nothing may be where project files live. Absent reads as false.
+	 */
+	@:optional
+	final rootsAllMatched: Bool;
+
+};
+
+/**
+ * The library half of a `ResolutionSources`, as a NOMINAL type.
+ *
+ * Structurally it is the same `Array<{file, source}>` as the report half, so nothing but naming
+ * convention stopped a caller from handing the REPORT array to `SharedParseTier.promote` — and "only
+ * library sources are ever promoted" is the entire growth bound on the process-scoped parse
+ * tier. A `--fix` loop rewrites a report file every pass, so one such misfeed would retain every
+ * intermediate source for the life of the process, silently and unboundedly. Wrapping it makes
+ * that a compile error rather than an argument in a comment.
+ *
+ * Deliberately conversion-free in both directions: no `@:from` / `@:to`, so constructing one is
+ * a visible `new LibrarySources(...)` at the single site that reads the library off disk, and
+ * unwrapping is a visible `entries()`.
+ */
+abstract LibrarySources(Array<{ file: String, source: String }>) {
+
+	public inline function new(entries: Array<{ file: String, source: String }>) {
+		this = entries;
+	}
+
+	/** The wrapped entries — the one way out, so every read of the library is visibly that. */
+	public inline function entries(): Array<{ file: String, source: String }> {
+		return this;
+	}
+
+}
+
+/**
+ * An injected resolution scope: `sources` yields its two halves on demand, `declared` records
+ * WHY it exists.
+ *
+ * `declared` is true when the project asked for the scope through `resolutionRoots` /
+ * `resolutionLibs`, and false when it exists only because a Haxe std was discovered on the
+ * machine. On any Haxe-equipped box the implicit case is the common one, so "a scope is
+ * present" no longer means "the user opted into a wider scope" — the two questions had to
+ * become two signals (`hasAnyResolutionScope` / `hasDeclaredResolutionScope`). Consumers that
+ * want the WIDEST index available treat both alike; a proof whose scan must not admit std
+ * sources (`unused-private`'s zero-occurrence scan) asks for the declared one.
+ */
+typedef ResolutionScope = {
+
+	final declared: Bool;
+	final sources: () -> ResolutionSources;
+
+	/**
+	 * The builds the run's compiler oracles describe, read on first demand and once per run (`ReachBuilds`); absent
+	 * when the run configured no oracle, declined it, or did not declare its oracle list complete.
+	 */
+	@:optional
+	final builds: () -> Null<ReachBuilds>;
+
+	/**
+	 * Start `builds`' compiles in the background when they have not run: a run that is about to wait on its facts and then
+	 * ask the builds overlaps the two (`MemberReach.forRun`). Absent with `builds`.
+	 */
+	@:optional
+	final buildsAhead: () -> Void;
+
+	/**
+	 * Say once per consumer that a proof needing `builds` held because the run knows none (`SymbolIndexHost.holdForUnknownBuilds`).
+	 * Present exactly when a linted path declared its oracle list complete — also when the paths disagree on the list and
+	 * the run reads no `builds` at all.
+	 */
+	@:optional
+	final buildsHeld: (String) -> Void;
+
+	/**
+	 * What the run's compiler oracles typed, read on first demand and once per run (`TypedFactsProbe`); absent when the
+	 * run configured no oracle or declined it. Unlike `builds` it needs no complete oracle list: code no configuration
+	 * compiled simply has no facts.
+	 */
+	@:optional
+	final facts: () -> Null<CompilerFacts>;
+
+	/**
+	 * Record that the run rewrote a file, with the text it had when the run started when known: its facts are dropped now,
+	 * or once `facts` builds them (`CompilerFacts.invalidate`).
+	 */
+	@:optional
+	final factsEdited: (String, Null<String>) -> Void;
+
+	/**
+	 * Wait for the facts compiles the run started ahead, when it did: called before the run's first write, so no compile
+	 * reads a file half way through a rewrite. A run that started none compiles on demand, after its writes.
+	 */
+	@:optional
+	final factsSettled: () -> Void;
+
+	/**
+	 * The run is about to write: drop the builds' compiles `buildsAhead` began and nobody has read, so `builds` compiles
+	 * the tree as it is when first asked, as it always did. Absent with `builds`.
+	 */
+	@:optional
+	final buildsSettled: () -> Void;
+
+};
+
+/**
  * A `GrammarPlugin` decorator that memoizes `parseFile` / `parseFileTypeRefs` by source
  * content, run-scoped, over a PROCESS-scoped second tier for the resolution library.
  *
@@ -995,143 +1135,3 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	}
 
 }
-
-/**
- * The three views of a resolution scope, kept APART on purpose. `report` is the files the run
- * lints and may rewrite — read live, so a `--fix` pass sees the current sources. `library` is
- * the configured resolution roots / libs / std, read-only for the whole run. `projectRoots` is
- * the `resolutionRoots` SUBSET of that library — the project's own sources and nothing else —
- * for a proof that must widen past the report scope without admitting third-party code (see
- * `LintCommand.readResolutionRoots`).
- *
- * The split is what bounds `CachingGrammarPlugin`'s process-scoped parse tier: only `library`
- * is promoted into it, so a `--fix` loop's per-pass intermediate sources — a fresh string per
- * pass per edited file — can never accumulate there.
- */
-typedef ResolutionSources = {
-
-	final report: Array<{ file: String, source: String }>;
-	final projectRoots: Array<{ file: String, source: String }>;
-	final library: LibrarySources;
-
-	/**
-	 * The read-only sources the project DECLARED — its `resolutionRoots` and `resolutionLibs` — without the std that joins
-	 * the library by itself: the code the project wrote or chose, as opposed to the std it calls into. Absent reads as none.
-	 */
-	@:optional
-	final declaredLibrary: LibrarySources;
-
-	/**
-	 * Whether the declared `resolutionRoots` MATCHED at least one `.hx`, report files included. Not
-	 * derivable from `projectRoots`: that half excludes the report, so a whole-project lint answers
-	 * it EMPTY for a project whose roots matched, exactly as for one declaring none or roots matching
-	 * nothing. Absent reads as false.
-	 */
-	@:optional
-	final rootsMatched: Bool;
-
-	/**
-	 * Whether EVERY declared root matched at least one `.hx` — a root that
-	 * matched nothing may be where project files live. Absent reads as false.
-	 */
-	@:optional
-	final rootsAllMatched: Bool;
-
-};
-
-/**
- * The library half of a `ResolutionSources`, as a NOMINAL type.
- *
- * Structurally it is the same `Array<{file, source}>` as the report half, so nothing but naming
- * convention stopped a caller from handing the REPORT array to `SharedParseTier.promote` — and "only
- * library sources are ever promoted" is the entire growth bound on the process-scoped parse
- * tier. A `--fix` loop rewrites a report file every pass, so one such misfeed would retain every
- * intermediate source for the life of the process, silently and unboundedly. Wrapping it makes
- * that a compile error rather than an argument in a comment.
- *
- * Deliberately conversion-free in both directions: no `@:from` / `@:to`, so constructing one is
- * a visible `new LibrarySources(...)` at the single site that reads the library off disk, and
- * unwrapping is a visible `entries()`.
- */
-abstract LibrarySources(Array<{ file: String, source: String }>) {
-
-	public inline function new(entries: Array<{ file: String, source: String }>) {
-		this = entries;
-	}
-
-	/** The wrapped entries — the one way out, so every read of the library is visibly that. */
-	public inline function entries(): Array<{ file: String, source: String }> {
-		return this;
-	}
-
-}
-
-/**
- * An injected resolution scope: `sources` yields its two halves on demand, `declared` records
- * WHY it exists.
- *
- * `declared` is true when the project asked for the scope through `resolutionRoots` /
- * `resolutionLibs`, and false when it exists only because a Haxe std was discovered on the
- * machine. On any Haxe-equipped box the implicit case is the common one, so "a scope is
- * present" no longer means "the user opted into a wider scope" — the two questions had to
- * become two signals (`hasAnyResolutionScope` / `hasDeclaredResolutionScope`). Consumers that
- * want the WIDEST index available treat both alike; a proof whose scan must not admit std
- * sources (`unused-private`'s zero-occurrence scan) asks for the declared one.
- */
-typedef ResolutionScope = {
-
-	final declared: Bool;
-	final sources: () -> ResolutionSources;
-
-	/**
-	 * The builds the run's compiler oracles describe, read on first demand and once per run (`ReachBuilds`); absent
-	 * when the run configured no oracle, declined it, or did not declare its oracle list complete.
-	 */
-	@:optional
-	final builds: () -> Null<ReachBuilds>;
-
-	/**
-	 * Start `builds`' compiles in the background when they have not run: a run that is about to wait on its facts and then
-	 * ask the builds overlaps the two (`MemberReach.forRun`). Absent with `builds`.
-	 */
-	@:optional
-	final buildsAhead: () -> Void;
-
-	/**
-	 * Say once per consumer that a proof needing `builds` held because the run knows none (`SymbolIndexHost.holdForUnknownBuilds`).
-	 * Present exactly when a linted path declared its oracle list complete — also when the paths disagree on the list and
-	 * the run reads no `builds` at all.
-	 */
-	@:optional
-	final buildsHeld: (String) -> Void;
-
-	/**
-	 * What the run's compiler oracles typed, read on first demand and once per run (`TypedFactsProbe`); absent when the
-	 * run configured no oracle or declined it. Unlike `builds` it needs no complete oracle list: code no configuration
-	 * compiled simply has no facts.
-	 */
-	@:optional
-	final facts: () -> Null<CompilerFacts>;
-
-	/**
-	 * Record that the run rewrote a file, with the text it had when the run started when known: its facts are dropped now,
-	 * or once `facts` builds them (`CompilerFacts.invalidate`).
-	 */
-	@:optional
-	final factsEdited: (String, Null<String>) -> Void;
-
-	/**
-	 * Wait for the facts compiles the run started ahead, when it did: called before the run's first write, so no compile
-	 * reads a file half way through a rewrite. A run that started none compiles on demand, after its writes.
-	 */
-	@:optional
-	final factsSettled: () -> Void;
-
-	/**
-	 * The run is about to write: drop the builds' compiles `buildsAhead` began and nobody has read, so `builds` compiles
-	 * the tree as it is when first asked, as it always did. Absent with `builds`.
-	 */
-	@:optional
-	final buildsSettled: () -> Void;
-
-};

@@ -23,6 +23,212 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.query.ElementSpan;
 
 /**
+ * Which of the three loop directions a scan claims — disjoint by the sink: the
+ * loop's own literal for `exists` / `foreach`, a counter's increment for `count`.
+ */
+enum abstract LambdaLoopKind(Int) {
+
+	/** `for (x in xs) if (c) return true;` + `return false;` -> `xs.exists(x -> c)`. */
+	final Exists = 0;
+
+	/** `for (x in xs) if (c) return false;` + `return true;` -> `xs.foreach(x -> !(c))`. */
+	final Foreach = 1;
+
+	/** `var n = 0;` + `for (x in xs) if (c) n++;` -> `final n = xs.count(x -> c)` — no literal, no short-circuit. */
+	final Count = 2;
+
+}
+
+/** Which call a fold is written as — chosen once per site, by `spellingOf`. */
+private enum abstract CallSpelling(Int) {
+
+	/** The extension call `xs.<m>(v -> c)`, bound by a `using Lambda;`. */
+	final Extension = 0;
+
+	/** `Lambda.<m>(xs, v -> c)`: the receiver's own member would capture the extension call. */
+	final Qualified = 1;
+
+	/** `xs.length` — an unfiltered count over a proven `Array` / `List`: no call, no walk, no `using`. */
+	final Length = 2;
+
+}
+
+/** The `RefShape` kinds `LambdaLoopScan` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	var forStmtKind: String;
+	var returnKind: String;
+	var blockStmtKind: String;
+	var boolLitKind: String;
+	var ifKinds: Array<String>;
+
+	/**
+	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children may be
+	 * paired. A conditional-compilation region is deliberately absent: its branches project as
+	 * FLATTENED siblings, so pairing under it would join a loop in one `#if` branch to a return
+	 * in another and rewrite across the boundary.
+	 */
+	var blockKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
+	var andLowerPrecedenceKinds: Array<String>;
+
+	/**
+	 * The FLAG arm's seams: the MUTABLE local declaration kinds the flag may be declared with, the
+	 * loop scans it borrows (`LoopScan.countWrites`), and the two kinds its sink is spelled from.
+	 * Null / empty here turns that arm off and leaves the RETURN arm working.
+	 */
+	var mutableDeclKinds: Array<String>;
+	var loopSeams: Null<LoopSeams>;
+	var assignKind: Null<String>;
+	var exprStmtKind: Null<String>;
+	var identKind: Null<String>;
+	var notKind: Null<String>;
+	var intervalKind: Null<String>;
+	var callKind: Null<String>;
+	var newExprKind: Null<String>;
+	var fieldAccessKind: Null<String>;
+	var nullSafeAccessKind: Null<String>;
+	var forceFieldAccessKind: Null<String>;
+	var indexAccessKind: Null<String>;
+	var parenKind: Null<String>;
+
+	/**
+	 * The COUNT sink's spellings of a counter's step: the unary increments (`n++` / `++n`) and the
+	 * compound add (`n += 1`), plus the reader the counter's written annotation is proved `Int` with.
+	 */
+	var incrementKinds: Array<String>;
+	var addAssignKind: Null<String>;
+
+	/** The base-object identifier (`super`), which a condition moved into a lambda must not name. */
+	var superText: Null<String>;
+
+	/** `RefactorSupport.projectIsComplete`, the `length` spelling's precondition (`isLengthContainer`). */
+	var projectComplete: Bool;
+	var typeSyntax: TypeSyntaxReader;
+
+}
+
+/** The `for (v in xs) if (cond) <sink>;` destructure — the head every direction and both sinks start from. */
+private typedef Head = {
+
+	var loopVar: String;
+	var iterable: QueryNode;
+
+	/** The `if` condition — null only for an UNFILTERED count, whose loop steps on every element. */
+	var cond: Null<QueryNode>;
+
+	/** The literal the loop returns or writes — `true` for the `exists` direction, null for `count`. */
+	var value: Null<Bool>;
+
+	/**
+	 * Which call this site is written as. It changes only WHICH call is written: a qualified or
+	 * `length` site needs no `using Lambda;` and clears every other gate the same way.
+	 */
+	var spelling: CallSpelling;
+
+}
+
+/** A loop body's condition (null for an unfiltered count) and its sink's literal (null for `count`). */
+private typedef BodyShape = { var cond: Null<QueryNode>; var value: Null<Bool>; }
+
+/**
+ * A recovered loop of any direction: the node the finding anchors on, its
+ * trailing return or loop, an optional guard and the destructured head.
+ */
+private typedef Cand = {
+
+	/** The loop, or the guard `if` holding it — the node the finding's span covers and the fix's region starts at. */
+	var anchor: QueryNode;
+	var trailing: QueryNode;
+	var guard: Null<QueryNode>;
+	var head: Head;
+
+	/** Whether `trailing` is the anchor's immediate sibling, so the rewrite replaces both rather than the loop alone. */
+	var subsumesTrailing: Bool;
+
+	/**
+	 * The FLAG sink, or null for the RETURN one. When set, `anchor` is the DECLARATION and
+	 * `trailing` the loop that follows it, so the region covers both and the emitted text is a
+	 * declaration rather than a `return`.
+	 */
+	var flag: Null<Flag>;
+
+}
+
+/** The declaration a FLAG-form fold re-emits: the bound name and its written annotation, if any. */
+private typedef Flag = { var name: String; var annotation: Null<String>; }
+
+/** The FLAG sink's spelling, threaded into `forIfHead` so one destructure serves both sinks. */
+private typedef FlagSink = {
+
+	var name: String;
+	var exprStmtKind: String;
+	var assignKind: String;
+
+	/** Whether the sink is the COUNT one — the name's increment — rather than a bool assignment. */
+	var counts: Bool;
+	var loopSeams: LoopSeams;
+
+}
+
+/** The re-spliced texts of one rewrite plus the source spans they came from, in ascending order, for the comment gate. */
+private typedef Parts = {
+	var guard: Null<String>;
+	var iterable: String;
+	var predicate: Null<String>;
+	var kept: Array<Span>;
+}
+
+/**
+ * Everything the gates need, deferred: the memoised nominal-type resolvers a receiver is proved
+ * against (null when the grammar carries no type information, and never built by a scan that meets
+ * no gate), the purity context the FLAG arm's condition is proved against, the run's equally lazy
+ * resolution index, and the ONE method name this direction rewrites to — bound once at
+ * construction, since a scan runs for a single `LambdaLoopKind`.
+ */
+private typedef Probes = {
+
+	/** The VALUE resolver, behind the `Iterable`-shape proof a CALL iterable must clear. */
+	var nominal: () -> Null<(QueryNode) -> Null<String>>;
+
+	/** The MEMBER-LOOKUP resolver, behind the receiver-shadow gate — a `Null<T>` receiver answers `T`. */
+	var receiver: () -> Null<(QueryNode) -> Null<String>>;
+
+	/**
+	 * The purity context behind the FLAG arm's condition gate. Null when no symbol index is
+	 * reachable or the grammar carries no type information, and the arm then refuses every site —
+	 * the report-only degradation, not an optimistic guess.
+	 */
+	var purity: () -> Null<PurityCtx>;
+
+	/**
+	 * Whether the QUALIFIED `Lambda.<method>(…)` spelling reaches the module from this file
+	 * (`UsingScan.qualifiedCallReaches`) — the fallback a receiver-shadowed site takes. Memoised
+	 * and built on FIRST demand, so a file holding no shadowed site never reads its header.
+	 */
+	var qualified: () -> Bool;
+
+	/** The file's comment spans and inert-literal mask (`OccurrenceScan.inertRegions`), lexed on first demand. */
+	var masks: () -> Masks;
+
+	/** The WRITTEN type of a bare-identifier iterable's binding, or null for any other shape or an unannotated one. */
+	var writtenType: (QueryNode) -> Null<String>;
+	var index: () -> Null<SymbolIndex>;
+
+	/** The file the scan reads, which `StructuralTypes` resolves an unqualified type name from. */
+	var file: String;
+	var method: String;
+
+	/** The nominals a CALL iterable must resolve to for this direction's call to compile (`iterableTypes`). */
+	var iterableTypes: Array<String>;
+
+}
+
+/** What a name-mention scan masks: comment spans (for the qualifier test) and every byte that can neither bind nor read a name. */
+private typedef Masks = { var comments: Array<Span>; var inert: Array<Span>; }
+
+/**
  * The shape engine behind `prefer-exists`, `prefer-foreach` and `prefer-count`: a `for` loop whose
  * body writes one SINK, folded into the `Lambda` call it spells by hand. One recovery pass,
  * parameterised by `LambdaLoopKind`; the directions are disjoint by the sink (a boolean literal,
@@ -996,209 +1202,3 @@ final class LambdaLoopScan {
 	}
 
 }
-
-/**
- * Which of the three loop directions a scan claims — disjoint by the sink: the
- * loop's own literal for `exists` / `foreach`, a counter's increment for `count`.
- */
-enum abstract LambdaLoopKind(Int) {
-
-	/** `for (x in xs) if (c) return true;` + `return false;` -> `xs.exists(x -> c)`. */
-	final Exists = 0;
-
-	/** `for (x in xs) if (c) return false;` + `return true;` -> `xs.foreach(x -> !(c))`. */
-	final Foreach = 1;
-
-	/** `var n = 0;` + `for (x in xs) if (c) n++;` -> `final n = xs.count(x -> c)` — no literal, no short-circuit. */
-	final Count = 2;
-
-}
-
-/** Which call a fold is written as — chosen once per site, by `spellingOf`. */
-private enum abstract CallSpelling(Int) {
-
-	/** The extension call `xs.<m>(v -> c)`, bound by a `using Lambda;`. */
-	final Extension = 0;
-
-	/** `Lambda.<m>(xs, v -> c)`: the receiver's own member would capture the extension call. */
-	final Qualified = 1;
-
-	/** `xs.length` — an unfiltered count over a proven `Array` / `List`: no call, no walk, no `using`. */
-	final Length = 2;
-
-}
-
-/** The `RefShape` kinds `LambdaLoopScan` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	var forStmtKind: String;
-	var returnKind: String;
-	var blockStmtKind: String;
-	var boolLitKind: String;
-	var ifKinds: Array<String>;
-
-	/**
-	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children may be
-	 * paired. A conditional-compilation region is deliberately absent: its branches project as
-	 * FLATTENED siblings, so pairing under it would join a loop in one `#if` branch to a return
-	 * in another and rewrite across the boundary.
-	 */
-	var blockKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var valueBinderKinds: Array<String>;
-	var andLowerPrecedenceKinds: Array<String>;
-
-	/**
-	 * The FLAG arm's seams: the MUTABLE local declaration kinds the flag may be declared with, the
-	 * loop scans it borrows (`LoopScan.countWrites`), and the two kinds its sink is spelled from.
-	 * Null / empty here turns that arm off and leaves the RETURN arm working.
-	 */
-	var mutableDeclKinds: Array<String>;
-	var loopSeams: Null<LoopSeams>;
-	var assignKind: Null<String>;
-	var exprStmtKind: Null<String>;
-	var identKind: Null<String>;
-	var notKind: Null<String>;
-	var intervalKind: Null<String>;
-	var callKind: Null<String>;
-	var newExprKind: Null<String>;
-	var fieldAccessKind: Null<String>;
-	var nullSafeAccessKind: Null<String>;
-	var forceFieldAccessKind: Null<String>;
-	var indexAccessKind: Null<String>;
-	var parenKind: Null<String>;
-
-	/**
-	 * The COUNT sink's spellings of a counter's step: the unary increments (`n++` / `++n`) and the
-	 * compound add (`n += 1`), plus the reader the counter's written annotation is proved `Int` with.
-	 */
-	var incrementKinds: Array<String>;
-	var addAssignKind: Null<String>;
-
-	/** The base-object identifier (`super`), which a condition moved into a lambda must not name. */
-	var superText: Null<String>;
-
-	/** `RefactorSupport.projectIsComplete`, the `length` spelling's precondition (`isLengthContainer`). */
-	var projectComplete: Bool;
-	var typeSyntax: TypeSyntaxReader;
-
-}
-
-/** The `for (v in xs) if (cond) <sink>;` destructure — the head every direction and both sinks start from. */
-private typedef Head = {
-
-	var loopVar: String;
-	var iterable: QueryNode;
-
-	/** The `if` condition — null only for an UNFILTERED count, whose loop steps on every element. */
-	var cond: Null<QueryNode>;
-
-	/** The literal the loop returns or writes — `true` for the `exists` direction, null for `count`. */
-	var value: Null<Bool>;
-
-	/**
-	 * Which call this site is written as. It changes only WHICH call is written: a qualified or
-	 * `length` site needs no `using Lambda;` and clears every other gate the same way.
-	 */
-	var spelling: CallSpelling;
-
-}
-
-/** A loop body's condition (null for an unfiltered count) and its sink's literal (null for `count`). */
-private typedef BodyShape = { var cond: Null<QueryNode>; var value: Null<Bool>; }
-
-/**
- * A recovered loop of any direction: the node the finding anchors on, its
- * trailing return or loop, an optional guard and the destructured head.
- */
-private typedef Cand = {
-
-	/** The loop, or the guard `if` holding it — the node the finding's span covers and the fix's region starts at. */
-	var anchor: QueryNode;
-	var trailing: QueryNode;
-	var guard: Null<QueryNode>;
-	var head: Head;
-
-	/** Whether `trailing` is the anchor's immediate sibling, so the rewrite replaces both rather than the loop alone. */
-	var subsumesTrailing: Bool;
-
-	/**
-	 * The FLAG sink, or null for the RETURN one. When set, `anchor` is the DECLARATION and
-	 * `trailing` the loop that follows it, so the region covers both and the emitted text is a
-	 * declaration rather than a `return`.
-	 */
-	var flag: Null<Flag>;
-
-}
-
-/** The declaration a FLAG-form fold re-emits: the bound name and its written annotation, if any. */
-private typedef Flag = { var name: String; var annotation: Null<String>; }
-
-/** The FLAG sink's spelling, threaded into `forIfHead` so one destructure serves both sinks. */
-private typedef FlagSink = {
-
-	var name: String;
-	var exprStmtKind: String;
-	var assignKind: String;
-
-	/** Whether the sink is the COUNT one — the name's increment — rather than a bool assignment. */
-	var counts: Bool;
-	var loopSeams: LoopSeams;
-
-}
-
-/** The re-spliced texts of one rewrite plus the source spans they came from, in ascending order, for the comment gate. */
-private typedef Parts = {
-	var guard: Null<String>;
-	var iterable: String;
-	var predicate: Null<String>;
-	var kept: Array<Span>;
-}
-
-/**
- * Everything the gates need, deferred: the memoised nominal-type resolvers a receiver is proved
- * against (null when the grammar carries no type information, and never built by a scan that meets
- * no gate), the purity context the FLAG arm's condition is proved against, the run's equally lazy
- * resolution index, and the ONE method name this direction rewrites to — bound once at
- * construction, since a scan runs for a single `LambdaLoopKind`.
- */
-private typedef Probes = {
-
-	/** The VALUE resolver, behind the `Iterable`-shape proof a CALL iterable must clear. */
-	var nominal: () -> Null<(QueryNode) -> Null<String>>;
-
-	/** The MEMBER-LOOKUP resolver, behind the receiver-shadow gate — a `Null<T>` receiver answers `T`. */
-	var receiver: () -> Null<(QueryNode) -> Null<String>>;
-
-	/**
-	 * The purity context behind the FLAG arm's condition gate. Null when no symbol index is
-	 * reachable or the grammar carries no type information, and the arm then refuses every site —
-	 * the report-only degradation, not an optimistic guess.
-	 */
-	var purity: () -> Null<PurityCtx>;
-
-	/**
-	 * Whether the QUALIFIED `Lambda.<method>(…)` spelling reaches the module from this file
-	 * (`UsingScan.qualifiedCallReaches`) — the fallback a receiver-shadowed site takes. Memoised
-	 * and built on FIRST demand, so a file holding no shadowed site never reads its header.
-	 */
-	var qualified: () -> Bool;
-
-	/** The file's comment spans and inert-literal mask (`OccurrenceScan.inertRegions`), lexed on first demand. */
-	var masks: () -> Masks;
-
-	/** The WRITTEN type of a bare-identifier iterable's binding, or null for any other shape or an unannotated one. */
-	var writtenType: (QueryNode) -> Null<String>;
-	var index: () -> Null<SymbolIndex>;
-
-	/** The file the scan reads, which `StructuralTypes` resolves an unqualified type name from. */
-	var file: String;
-	var method: String;
-
-	/** The nominals a CALL iterable must resolve to for this direction's call to compile (`iterableTypes`). */
-	var iterableTypes: Array<String>;
-
-}
-
-/** What a name-mention scan masks: comment spans (for the qualifier test) and every byte that can neither bind nor read a name. */
-private typedef Masks = { var comments: Array<Span>; var inert: Array<Span>; }

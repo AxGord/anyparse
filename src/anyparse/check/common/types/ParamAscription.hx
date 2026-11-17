@@ -10,6 +10,54 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /**
+ * The arm's verdict for one `Dynamic` finding: whether the finding is this arm's SUBJECT at all,
+ * and the edits when it is and every gate passed.
+ *
+ * The two answers are separate because the ledger's are: a finding that is not a parameter belongs
+ * to no arm, while one that is and was refused has a reason of its own. Folded into a bare
+ * `Null<Array<…>>` a reader chasing the second would look for a gate that never ran.
+ */
+typedef ParamVerdict = { final subject: Bool; final edits: Null<Array<FixEdit>>; };
+
+/** The modifier kinds and metadata names of the annotation run written immediately before a declaration. */
+private typedef LeadingRun = { final kinds: Array<String>; final metas: Array<String>; };
+
+/** The parameter a `Dynamic` finding sits on, plus what the arm needs to reach its owner and its reads. */
+private typedef ParamSubject = {
+
+	/** The type-member function declaring the parameter. */
+	final owner: QueryNode;
+
+	/** The root-to-`owner` node chain — the modifier runs and the enclosing type declaration are read off it. */
+	final chain: Array<QueryNode>;
+	final name: String;
+
+	/** The parameter's binding offset: the `from` its resolved reads carry. */
+	final bindFrom: Int;
+
+	/** The span of the WHOLE written type — what the signature edit replaces. */
+	final typeSpan: Span;
+
+	/** Whether the `Dynamic` sits INSIDE an explicit nullable wrapper that is the rest of the written type. */
+	final wrapped: Bool;
+
+};
+
+/** The classified reads of a `Dynamic` parameter — built only when every one of them is an ascription or a null comparison. */
+private typedef ParamReads = {
+
+	/** The ascription nodes the fix unwraps to their operand. */
+	final ascriptions: Array<QueryNode>;
+
+	/** The written ascribed type source of each, parallel to `ascriptions`. */
+	final types: Array<String>;
+
+	/** Whether some read compares the parameter with null — the retyped signature must still admit it. */
+	var nullCompared: Bool;
+
+};
+
+/**
  * The ASCRIPTION arm of `avoid-dynamic`: a `Dynamic` PARAMETER whose every read states the type
  * it really holds is not a typing hole to report and leave alone — the ascription is the
  * signature written one level too deep, and moving it up is the same program with the type in
@@ -393,51 +441,3 @@ final class ParamAscription {
 	}
 
 }
-
-/**
- * The arm's verdict for one `Dynamic` finding: whether the finding is this arm's SUBJECT at all,
- * and the edits when it is and every gate passed.
- *
- * The two answers are separate because the ledger's are: a finding that is not a parameter belongs
- * to no arm, while one that is and was refused has a reason of its own. Folded into a bare
- * `Null<Array<…>>` a reader chasing the second would look for a gate that never ran.
- */
-typedef ParamVerdict = { final subject: Bool; final edits: Null<Array<FixEdit>>; };
-
-/** The modifier kinds and metadata names of the annotation run written immediately before a declaration. */
-private typedef LeadingRun = { final kinds: Array<String>; final metas: Array<String>; };
-
-/** The parameter a `Dynamic` finding sits on, plus what the arm needs to reach its owner and its reads. */
-private typedef ParamSubject = {
-
-	/** The type-member function declaring the parameter. */
-	final owner: QueryNode;
-
-	/** The root-to-`owner` node chain — the modifier runs and the enclosing type declaration are read off it. */
-	final chain: Array<QueryNode>;
-	final name: String;
-
-	/** The parameter's binding offset: the `from` its resolved reads carry. */
-	final bindFrom: Int;
-
-	/** The span of the WHOLE written type — what the signature edit replaces. */
-	final typeSpan: Span;
-
-	/** Whether the `Dynamic` sits INSIDE an explicit nullable wrapper that is the rest of the written type. */
-	final wrapped: Bool;
-
-};
-
-/** The classified reads of a `Dynamic` parameter — built only when every one of them is an ascription or a null comparison. */
-private typedef ParamReads = {
-
-	/** The ascription nodes the fix unwraps to their operand. */
-	final ascriptions: Array<QueryNode>;
-
-	/** The written ascribed type source of each, parallel to `ascriptions`. */
-	final types: Array<String>;
-
-	/** Whether some read compares the parameter with null — the retyped signature must still admit it. */
-	var nullCompared: Bool;
-
-};

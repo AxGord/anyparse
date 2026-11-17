@@ -13,6 +13,14 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state `TerminalParseLowering` reads, bundled once in
+ * `Lowering`'s constructor. `eregByRule` is the SAME map instance the
+ * owner declares - `lowerTerminal` writes the rule's `EReg` into it as a
+ * side effect, exactly as before the split.
+ */
+typedef TerminalCtx = { final formatInfo: FormatReader.FormatInfo; final eregByRule: Map<String, GeneratedRule.EregSpec>; }
+
+/**
  * Pass 3 helpers - the Terminal rule shape.
  *
  * One of the four shapes `Lowering.lowerRule` dispatches on: a rule whose
@@ -302,12 +310,4 @@ final class TerminalParseLowering {
 	}
 
 }
-
-/**
- * The build state `TerminalParseLowering` reads, bundled once in
- * `Lowering`'s constructor. `eregByRule` is the SAME map instance the
- * owner declares - `lowerTerminal` writes the rule's `EReg` into it as a
- * side effect, exactly as before the split.
- */
-typedef TerminalCtx = { final formatInfo: FormatReader.FormatInfo; final eregByRule: Map<String, GeneratedRule.EregSpec>; }
 #end

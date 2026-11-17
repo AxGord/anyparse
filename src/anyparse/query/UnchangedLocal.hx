@@ -6,6 +6,9 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** What a local identifier reads: its storage key (`WriteSites.accessPath`) and the offset of the declaration it binds. */
+private typedef LocalRead = { final key: String; final binding: Int; };
+
 /**
  * Whether a local keeps its value while code runs: the one answer to "can a call, or a region of code, change what this
  * identifier reads". A local or a parameter — a binding declared inside a function — survives a call when no function
@@ -132,6 +135,3 @@ final class UnchangedLocal {
 	}
 
 }
-
-/** What a local identifier reads: its storage key (`WriteSites.accessPath`) and the offset of the declaration it binds. */
-private typedef LocalRead = { final key: String; final binding: Int; };

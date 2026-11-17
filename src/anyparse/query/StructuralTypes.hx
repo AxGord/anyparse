@@ -10,6 +10,50 @@ import anyparse.util.Arrays;
 
 using Lambda;
 
+/** The element an `iterator()` method yields (`StructuralTypes.iteratorElement`): as `host` writes it on `member`. */
+typedef IteratorElement = { final text: String; final host: ResolvedType; final member: MemberInfo; }
+
+/**
+ * One member of the anonymous structure a conformance question is asked about — its name, the
+ * WRITTEN type source it declares when it has one, and the declaration that spelled that source.
+ *
+ * The HOST is what makes the type source ANSWERABLE rather than merely comparable as text: a
+ * simple name resolves through its own declaring file's import scope, and a name matching one of
+ * that declaration's type PARAMETERS is not a nominal at all. Null on both for the language's
+ * BUILTIN structural sets, which are member names with no types — the refutation half of
+ * `memberCouldUnify` then does not apply and only the positive proof runs.
+ */
+typedef StructureMember = {
+
+	/** The member's name. */
+	var name: String;
+
+	/** The member's VERBATIM declared type source, or null when the structure spells none. */
+	var typeSource: Null<String>;
+
+	/** The declaration `typeSource` was written in — its import scope and type parameters. */
+	var host: Null<ResolvedType>;
+
+	/**
+	 * Whether the structure member cannot be written through the structure — a `final` field or a method — so a type
+	 * unifies with it covariantly (`tUnification.ml`: a read-only field unifies the class member's type WITH the
+	 * structure's), where a mutable one asks for the same type.
+	 */
+	var readOnly: Bool;
+
+};
+
+/** A written type as a structure-member unification compares it (`StructuralTypes.comparableTypeOf`). */
+private typedef ComparableType = {
+
+	/** Its outer nominal, by simple name. */
+	final name: String;
+
+	/** The declaration it resolves to where it is written, or null when the index resolves none. */
+	final decl: Null<ResolvedType>;
+
+}
+
 /**
  * STRUCTURAL typing over the index: membership decided by what a type DECLARES, never by an
  * `implements` clause. Two questions live here — whether a value unifies with one of the
@@ -551,49 +595,5 @@ final class StructuralTypes {
 			readOnly: !MUTABLE_ANON_FIELD_KINDS.contains(m.kind)
 		};
 	}
-
-}
-
-/** The element an `iterator()` method yields (`StructuralTypes.iteratorElement`): as `host` writes it on `member`. */
-typedef IteratorElement = { final text: String; final host: ResolvedType; final member: MemberInfo; }
-
-/**
- * One member of the anonymous structure a conformance question is asked about — its name, the
- * WRITTEN type source it declares when it has one, and the declaration that spelled that source.
- *
- * The HOST is what makes the type source ANSWERABLE rather than merely comparable as text: a
- * simple name resolves through its own declaring file's import scope, and a name matching one of
- * that declaration's type PARAMETERS is not a nominal at all. Null on both for the language's
- * BUILTIN structural sets, which are member names with no types — the refutation half of
- * `memberCouldUnify` then does not apply and only the positive proof runs.
- */
-typedef StructureMember = {
-
-	/** The member's name. */
-	var name: String;
-
-	/** The member's VERBATIM declared type source, or null when the structure spells none. */
-	var typeSource: Null<String>;
-
-	/** The declaration `typeSource` was written in — its import scope and type parameters. */
-	var host: Null<ResolvedType>;
-
-	/**
-	 * Whether the structure member cannot be written through the structure — a `final` field or a method — so a type
-	 * unifies with it covariantly (`tUnification.ml`: a read-only field unifies the class member's type WITH the
-	 * structure's), where a mutable one asks for the same type.
-	 */
-	var readOnly: Bool;
-
-};
-
-/** A written type as a structure-member unification compares it (`StructuralTypes.comparableTypeOf`). */
-private typedef ComparableType = {
-
-	/** Its outer nominal, by simple name. */
-	final name: String;
-
-	/** The declaration it resolves to where it is written, or null when the index resolves none. */
-	final decl: Null<ResolvedType>;
 
 }

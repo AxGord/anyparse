@@ -6,6 +6,52 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** Which implicit channel a site runs: the families of `ImplicitSites`. */
+enum SiteFamily {
+
+	/** A string conversion: the operands' `toString` may run. */
+	Text;
+
+	/** A `for … in` over a value that is not an interval: its iteration methods run. */
+	Iteration;
+
+	/** An index access: an index-access overload of the receiver's type runs. */
+	Index;
+
+	/** An operator of `kind`, which some member overloads. */
+	Operator(kind: String);
+
+	/** An object literal: a type built from a literal runs its constructor. */
+	Literal;
+
+}
+
+/**
+ * One implicit-call site: its family, its span, and the static type of each operand (null when not known). `exact`: every
+ * operand is an object of exactly the class its type names — a construction, or a local holding only one — never a
+ * subtype of it, nor an instance that left the type system (`ValueEscapes`).
+ */
+typedef ImplicitSite = {
+
+	var family: SiteFamily;
+	var span: Span;
+	var types: Array<Null<String>>;
+	var exact: Bool;
+
+	/**
+	 * For a site the compiler facts typed (`FactsView.sitesIn`), the typed type (`pack.Name`) of each operand, parallel to
+	 * `types` — null where it names none: which of the types sharing a simple name each operand is. Absent elsewhere.
+	 */
+	var ?owners: Array<Null<String>>;
+
+	/**
+	 * Whether the site is a conversion only a build converting what lands at a typed place makes (`ImplicitSites.landings`,
+	 * `UncheckedConversions.convertsSomewhere`); absent for one every build makes.
+	 */
+	var ?landing: Bool;
+
+}
+
 /**
  * The places in code where the language runs a member IMPLICITLY — the positive, syntactic half of the question
  * which implicitly-called members a reach walk must admit. A member of one family runs only from a site of that
@@ -245,51 +291,5 @@ final class ImplicitSites {
 		else
 			segment.children[0];
 	}
-
-}
-
-/** Which implicit channel a site runs: the families of `ImplicitSites`. */
-enum SiteFamily {
-
-	/** A string conversion: the operands' `toString` may run. */
-	Text;
-
-	/** A `for … in` over a value that is not an interval: its iteration methods run. */
-	Iteration;
-
-	/** An index access: an index-access overload of the receiver's type runs. */
-	Index;
-
-	/** An operator of `kind`, which some member overloads. */
-	Operator(kind: String);
-
-	/** An object literal: a type built from a literal runs its constructor. */
-	Literal;
-
-}
-
-/**
- * One implicit-call site: its family, its span, and the static type of each operand (null when not known). `exact`: every
- * operand is an object of exactly the class its type names — a construction, or a local holding only one — never a
- * subtype of it, nor an instance that left the type system (`ValueEscapes`).
- */
-typedef ImplicitSite = {
-
-	var family: SiteFamily;
-	var span: Span;
-	var types: Array<Null<String>>;
-	var exact: Bool;
-
-	/**
-	 * For a site the compiler facts typed (`FactsView.sitesIn`), the typed type (`pack.Name`) of each operand, parallel to
-	 * `types` — null where it names none: which of the types sharing a simple name each operand is. Absent elsewhere.
-	 */
-	var ?owners: Array<Null<String>>;
-
-	/**
-	 * Whether the site is a conversion only a build converting what lands at a typed place makes (`ImplicitSites.landings`,
-	 * `UncheckedConversions.convertsSomewhere`); absent for one every build makes.
-	 */
-	var ?landing: Bool;
 
 }

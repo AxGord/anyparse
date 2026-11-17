@@ -7,6 +7,20 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 
+/** A file's comment-bearing lexical regions and the block-doc ends read from them. */
+private typedef Lexed = { final regions: Array<LexRegion>; final docEnds: Map<Int, Bool>; }
+
+private typedef Seams = {
+	final anonKind: String;
+	final varKind: String;
+	final shortKinds: Array<String>;
+	final optionalKind: Null<String>;
+	final publicKind: Null<String>;
+	final bareMetaKind: Null<String>;
+	final optionalMetaName: Null<String>;
+	final metaKinds: Array<String>;
+}
+
 /**
  * Flags an anonymous structure TYPE whose fields are written in the `var` long form
  * (`{ var name:String; var role:String; }`) where the short form says the same type
@@ -265,18 +279,4 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 		return others == 0 || (others == 1 && written.kind == seams.anonKind && decl.children[0].kind == seams.anonKind) ? written : null;
 	}
 
-}
-
-/** A file's comment-bearing lexical regions and the block-doc ends read from them. */
-private typedef Lexed = { final regions: Array<LexRegion>; final docEnds: Map<Int, Bool>; }
-
-private typedef Seams = {
-	final anonKind: String;
-	final varKind: String;
-	final shortKinds: Array<String>;
-	final optionalKind: Null<String>;
-	final publicKind: Null<String>;
-	final bareMetaKind: Null<String>;
-	final optionalMetaName: Null<String>;
-	final metaKinds: Array<String>;
 }

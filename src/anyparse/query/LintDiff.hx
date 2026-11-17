@@ -9,6 +9,120 @@ import anyparse.util.Groups;
 import haxe.Exception;
 
 /**
+ * Rule id -> the check's own `messageIdentity`, as `Linter.messageIdentities` builds it by
+ * asking the registry which of its checks declare a `Check.VolatileMessage`.
+ *
+ * Passed in rather than looked up here for a dependency reason, not a testing one: `LintDiff`
+ * lives in `anyparse.query` and the registry in `anyparse.check`, so looking it up would drag
+ * every builtin check into every consumer of the query module. The suite exercises the REAL
+ * registry through this parameter (no stub exists — all three call sites pass the same
+ * expression). It is required rather than defaulted for the reason `--root` is not: a caller
+ * that forgot it would get a gate reporting movement nothing made, silently.
+ */
+typedef LintMessageIdentities = Map<String, (String) -> String>;
+
+/** The readable half of a tallied key: what to print as an example. */
+typedef LintDiffRow = {
+
+	var file: String;
+	var rule: String;
+	var message: String;
+	var severity: String;
+
+	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
+	var identity: Bool;
+
+};
+
+/** The parts of a finding's structured identity a key is made of (`keyFor`): every field but the chain. */
+typedef FindingIdentity = { var family: String; var member: String; var subject: String; };
+
+/** One report folded into a multiset of normalized keys. */
+typedef LintDiffTally = {
+
+	/** Records in the report, BEFORE de-duplication into keys. */
+	var total: Int;
+
+	/** Distinct keys in first-appearance (document) order. */
+	var order: Array<String>;
+
+	/** Key -> how many records share it. */
+	var counts: Map<String, Int>;
+
+	/** Key -> the first record seen under it. */
+	var rows: Map<String, LintDiffRow>;
+
+	/** Identity key -> the normalized message of each record under it, one per record: what pairs it across `data`. */
+	var messages: Map<String, Array<String>>;
+
+};
+
+/**
+ * The occurrences of `tally` not yet spent (`LintDiff.pool`): the counts, and per identity key the messages its unspent
+ * occurrences carried.
+ */
+typedef LintDiffPool = { final tally: LintDiffTally; final counts: Map<String, Int>; final messages: Map<String, Array<String>>; };
+
+/** A key that occurs more often on one side, with the surplus count. */
+typedef LintDiffEntry = {
+
+	var file: String;
+	var rule: String;
+	var message: String;
+	var severity: String;
+
+	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
+	var identity: Bool;
+
+	/** How many occurrences the other side is missing. */
+	var count: Int;
+
+};
+
+/** Added/removed occurrence counts for one severity. */
+typedef LintDiffSeverityDelta = { var severity: String; var added: Int; var removed: Int; };
+
+/** Both snapshot totals and both surpluses for one rule — the per-rule half of the verdict. */
+typedef LintDiffRuleDelta = {
+
+	var rule: String;
+
+	/** Occurrences of this rule in the BASE snapshot. */
+	var before: Int;
+
+	/** Occurrences of this rule in the compared snapshot. */
+	var after: Int;
+	var added: Int;
+	var removed: Int;
+
+};
+
+/**
+ * One fold of the two surplus lists into buckets: the names in first-seen order and the
+ * occurrence count each side contributed.
+ *
+ * A named type rather than an inline anonymous one because two callers read it and the
+ * project's own `anon-type-dup` counts a structure written twice.
+ */
+typedef LintDiffBuckets = { var names: Array<String>; var added: Map<String, Int>; var removed: Map<String, Int>; };
+
+/** The whole verdict: totals, both surplus lists and the severity breakdown. */
+typedef LintDiffResult = {
+
+	var oldTotal: Int;
+	var newTotal: Int;
+	var added: Array<LintDiffEntry>;
+	var removed: Array<LintDiffEntry>;
+	var addedTotal: Int;
+	var removedTotal: Int;
+	var severities: Array<LintDiffSeverityDelta>;
+
+	/** Every rule that moved, most movement first — the gate's headline question. */
+	var rules: Array<LintDiffRuleDelta>;
+
+};
+
+/**
  * `apq lint-diff` — compare two `apq lint --format json --all` snapshots as MULTISETS of
  * `(file, rule, severity, message)` keys — `(file, rule, severity, family, function, subject)` for a record carrying a
  * rule's structured identity (`keyFor`). The blast-radius gate every slice ends with.
@@ -596,117 +710,3 @@ final class LintDiff {
 	}
 
 }
-
-/**
- * Rule id -> the check's own `messageIdentity`, as `Linter.messageIdentities` builds it by
- * asking the registry which of its checks declare a `Check.VolatileMessage`.
- *
- * Passed in rather than looked up here for a dependency reason, not a testing one: `LintDiff`
- * lives in `anyparse.query` and the registry in `anyparse.check`, so looking it up would drag
- * every builtin check into every consumer of the query module. The suite exercises the REAL
- * registry through this parameter (no stub exists — all three call sites pass the same
- * expression). It is required rather than defaulted for the reason `--root` is not: a caller
- * that forgot it would get a gate reporting movement nothing made, silently.
- */
-typedef LintMessageIdentities = Map<String, (String) -> String>;
-
-/** The readable half of a tallied key: what to print as an example. */
-typedef LintDiffRow = {
-
-	var file: String;
-	var rule: String;
-	var message: String;
-	var severity: String;
-
-	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
-	var identity: Bool;
-
-};
-
-/** The parts of a finding's structured identity a key is made of (`keyFor`): every field but the chain. */
-typedef FindingIdentity = { var family: String; var member: String; var subject: String; };
-
-/** One report folded into a multiset of normalized keys. */
-typedef LintDiffTally = {
-
-	/** Records in the report, BEFORE de-duplication into keys. */
-	var total: Int;
-
-	/** Distinct keys in first-appearance (document) order. */
-	var order: Array<String>;
-
-	/** Key -> how many records share it. */
-	var counts: Map<String, Int>;
-
-	/** Key -> the first record seen under it. */
-	var rows: Map<String, LintDiffRow>;
-
-	/** Identity key -> the normalized message of each record under it, one per record: what pairs it across `data`. */
-	var messages: Map<String, Array<String>>;
-
-};
-
-/**
- * The occurrences of `tally` not yet spent (`LintDiff.pool`): the counts, and per identity key the messages its unspent
- * occurrences carried.
- */
-typedef LintDiffPool = { final tally: LintDiffTally; final counts: Map<String, Int>; final messages: Map<String, Array<String>>; };
-
-/** A key that occurs more often on one side, with the surplus count. */
-typedef LintDiffEntry = {
-
-	var file: String;
-	var rule: String;
-	var message: String;
-	var severity: String;
-
-	/** Whether the key is the finding's structured identity rather than its message (`keyFor`). */
-	var identity: Bool;
-
-	/** How many occurrences the other side is missing. */
-	var count: Int;
-
-};
-
-/** Added/removed occurrence counts for one severity. */
-typedef LintDiffSeverityDelta = { var severity: String; var added: Int; var removed: Int; };
-
-/** Both snapshot totals and both surpluses for one rule — the per-rule half of the verdict. */
-typedef LintDiffRuleDelta = {
-
-	var rule: String;
-
-	/** Occurrences of this rule in the BASE snapshot. */
-	var before: Int;
-
-	/** Occurrences of this rule in the compared snapshot. */
-	var after: Int;
-	var added: Int;
-	var removed: Int;
-
-};
-
-/**
- * One fold of the two surplus lists into buckets: the names in first-seen order and the
- * occurrence count each side contributed.
- *
- * A named type rather than an inline anonymous one because two callers read it and the
- * project's own `anon-type-dup` counts a structure written twice.
- */
-typedef LintDiffBuckets = { var names: Array<String>; var added: Map<String, Int>; var removed: Map<String, Int>; };
-
-/** The whole verdict: totals, both surplus lists and the severity breakdown. */
-typedef LintDiffResult = {
-
-	var oldTotal: Int;
-	var newTotal: Int;
-	var added: Array<LintDiffEntry>;
-	var removed: Array<LintDiffEntry>;
-	var addedTotal: Int;
-	var removedTotal: Int;
-	var severities: Array<LintDiffSeverityDelta>;
-
-	/** Every rule that moved, most movement first — the gate's headline question. */
-	var rules: Array<LintDiffRuleDelta>;
-
-};

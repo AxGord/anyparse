@@ -20,41 +20,6 @@ import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
-/**
- * The one answer to "which compiler oracle does a run's grammar supply": the plugin's own `OracleProvider`, looked up
- * through a `CachingGrammarPlugin` to the grammar it wraps, or an oracle that is never available for a grammar that
- * supplies none — so a verified phase on such a grammar declines every risky edit instead of compiling with a stranger.
- */
-@:nullSafety(Strict)
-final class OracleProviders {
-
-	/** The `Unavailable` reason every answer of a grammar without a compiler oracle carries. */
-	public static final NO_ORACLE: String = 'this grammar supplies no compiler oracle';
-
-	/** `plugin`'s compiler oracle — never null; see the type's doc for a grammar that has none. */
-	public static function of(plugin: GrammarPlugin): OracleProvider {
-		return firstOf([plugin]);
-	}
-
-	/** The compiler oracle of the first of `plugins` that supplies one: a run touching several grammars asks the one with a compiler. */
-	public static function firstOf(plugins: Array<GrammarPlugin>): OracleProvider {
-		for (plugin in plugins) {
-			final grammar: GrammarPlugin = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin)._inner : plugin;
-			if (grammar is OracleProvider) return cast grammar;
-		}
-		return new AbsentOracle();
-	}
-
-	/**
-	 * Read `config`'s `compilerOracle` declarations so their dropped entries are reported, for a command that discovers a
-	 * config and never asks it for builds: the warning is the only sign that an entry the project wrote is gone.
-	 */
-	public static function reportDrops(config: LintConfig, plugin: GrammarPlugin, notes: Array<ConfigNote>): Void {
-		config.compilerOracles(of(plugin), notes); // noqa: unused-return-value
-	}
-
-}
-
 /** The handle a grammar with no compiler answers a started probe with: nothing runs, so nothing is found or left. */
 @:nullSafety(Strict)
 private final class NoCompiles<T> implements StartedProbe<T> {
@@ -226,6 +191,41 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 		grammar: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
 	): Null<FactsOracle> {
 		return null;
+	}
+
+}
+
+/**
+ * The one answer to "which compiler oracle does a run's grammar supply": the plugin's own `OracleProvider`, looked up
+ * through a `CachingGrammarPlugin` to the grammar it wraps, or an oracle that is never available for a grammar that
+ * supplies none — so a verified phase on such a grammar declines every risky edit instead of compiling with a stranger.
+ */
+@:nullSafety(Strict)
+final class OracleProviders {
+
+	/** The `Unavailable` reason every answer of a grammar without a compiler oracle carries. */
+	public static final NO_ORACLE: String = 'this grammar supplies no compiler oracle';
+
+	/** `plugin`'s compiler oracle — never null; see the type's doc for a grammar that has none. */
+	public static function of(plugin: GrammarPlugin): OracleProvider {
+		return firstOf([plugin]);
+	}
+
+	/** The compiler oracle of the first of `plugins` that supplies one: a run touching several grammars asks the one with a compiler. */
+	public static function firstOf(plugins: Array<GrammarPlugin>): OracleProvider {
+		for (plugin in plugins) {
+			final grammar: GrammarPlugin = plugin is CachingGrammarPlugin ? (cast plugin: CachingGrammarPlugin)._inner : plugin;
+			if (grammar is OracleProvider) return cast grammar;
+		}
+		return new AbsentOracle();
+	}
+
+	/**
+	 * Read `config`'s `compilerOracle` declarations so their dropped entries are reported, for a command that discovers a
+	 * config and never asks it for builds: the warning is the only sign that an entry the project wrote is gone.
+	 */
+	public static function reportDrops(config: LintConfig, plugin: GrammarPlugin, notes: Array<ConfigNote>): Void {
+		config.compilerOracles(of(plugin), notes); // noqa: unused-return-value
 	}
 
 }

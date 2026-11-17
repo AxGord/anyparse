@@ -9,6 +9,12 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** One two-file cell: the declaring source, the reaching source, and the route's name. */
+private typedef Cell = { final name: String; final decl: String; final grantee: String; };
+
+/** One source a scope half holds. */
+private typedef SourceFile = { var file: String; var source: String; };
+
 /**
  * ONE fixture for a whole class of defect found one call site at a time: a check that asks the
  * REPORT-scope index a question only the RESOLUTION scope can answer, and reads "not found in the
@@ -1011,9 +1017,3 @@ class CrossScopeSoundnessTest extends Test {
 	}
 
 }
-
-/** One two-file cell: the declaring source, the reaching source, and the route's name. */
-private typedef Cell = { final name: String; final decl: String; final grantee: String; };
-
-/** One source a scope half holds. */
-private typedef SourceFile = { var file: String; var source: String; };

@@ -16,6 +16,53 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
+/** The kinds `PreferTernaryExpression` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	var ifExprKinds: Array<String>;
+	var branchKinds: Array<String>;
+	var delimitedAllKinds: Array<String>;
+	var delimitedTailKinds: Array<String>;
+
+	/** The arrow lambdas whose body is a value slot; empty when the grammar leaves a seam this read needs unset. */
+	var arrowKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var ifStmtKinds: Array<String>;
+	var exprStmtKind: Null<String>;
+	var callKinds: Array<String>;
+
+	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
+	var negation: Null<InversionSeams>;
+	var shape: RefShape;
+
+}
+
+/** A rewritable `if`-expression: the finding key span, the (trivia-trimmed) replaced span, and the ternary text. */
+private typedef Match = {
+
+	var span: Span;
+
+	/** `cond ? then : else` over the `if`-expression up to its else-branch's end, the condition a `ParenGuard` hole. */
+	var edit: GuardedEdit;
+
+}
+
+/** The per-file walk state: the parsed tree, its source and comment tokens, the seams, and the lazy symbol index. */
+private typedef Scan = {
+
+	var root: QueryNode;
+	var source: String;
+	var file: String;
+
+	/** The file's negation site (`NegatedCondition`), null when the grammar has no not kind. */
+	var site: Null<InversionSite>;
+	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	var seams: Seams;
+	var plugin: GrammarPlugin;
+	var resolveIndex: () -> Null<SymbolIndex>;
+
+}
+
 /**
  * Flags a 2-branch `if`-EXPRESSION already written in value position, rewriting it to a
  * ternary:
@@ -376,52 +423,5 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware impl
 				edit: NegatedCondition.ternaryEdit(new Span(span.from, elseSpan.to), '', condition, thenValue, elseValue, '', source, site)
 			};
 	}
-
-}
-
-/** The kinds `PreferTernaryExpression` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	var ifExprKinds: Array<String>;
-	var branchKinds: Array<String>;
-	var delimitedAllKinds: Array<String>;
-	var delimitedTailKinds: Array<String>;
-
-	/** The arrow lambdas whose body is a value slot; empty when the grammar leaves a seam this read needs unset. */
-	var arrowKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var ifStmtKinds: Array<String>;
-	var exprStmtKind: Null<String>;
-	var callKinds: Array<String>;
-
-	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
-	var negation: Null<InversionSeams>;
-	var shape: RefShape;
-
-}
-
-/** A rewritable `if`-expression: the finding key span, the (trivia-trimmed) replaced span, and the ternary text. */
-private typedef Match = {
-
-	var span: Span;
-
-	/** `cond ? then : else` over the `if`-expression up to its else-branch's end, the condition a `ParenGuard` hole. */
-	var edit: GuardedEdit;
-
-}
-
-/** The per-file walk state: the parsed tree, its source and comment tokens, the seams, and the lazy symbol index. */
-private typedef Scan = {
-
-	var root: QueryNode;
-	var source: String;
-	var file: String;
-
-	/** The file's negation site (`NegatedCondition`), null when the grammar has no not kind. */
-	var site: Null<InversionSite>;
-	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
-	var seams: Seams;
-	var plugin: GrammarPlugin;
-	var resolveIndex: () -> Null<SymbolIndex>;
 
 }

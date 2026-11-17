@@ -24,6 +24,32 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** What every track of one slot shares. */
+typedef SlotContext = {
+
+	var workroot: String;
+	var slot: Int;
+
+	/** The slot's worktree. */
+	var wt: String;
+	var server: Null<SlotServer>;
+	var buildOnly: Bool;
+	var killerFirst: Bool;
+
+	/** The composed build's directory, or null. */
+	var schema: Null<String>;
+
+}
+
+/** One classified run: the verdict label, the row detail, and the uncapped detail when the row elided names. */
+typedef Classified = { var verdict: String; var detail: String; var full: Null<String>; }
+
+/** A track's tests run: which run answered, its reading (null when unreadable), and the transcript(s) it read. */
+typedef SuiteRun = { var phase: String; var reading: Null<Classified>; var read: String; }
+
+/** The seconds a narrow attempt spent building and running, charged to the track's timing row. */
+typedef NarrowClock = { var build: Float; var run: Float; }
+
 /**
  * One job slot of a `dev mutation-check` run (`--slot <n> <workroot>`): a worktree of its own and, unless the run says
  * otherwise, one warm `haxe --wait` server, taking the run's tracks in deal order until none is left. A track resets the
@@ -599,29 +625,3 @@ final class MutationSlot {
 	}
 
 }
-
-/** What every track of one slot shares. */
-typedef SlotContext = {
-
-	var workroot: String;
-	var slot: Int;
-
-	/** The slot's worktree. */
-	var wt: String;
-	var server: Null<SlotServer>;
-	var buildOnly: Bool;
-	var killerFirst: Bool;
-
-	/** The composed build's directory, or null. */
-	var schema: Null<String>;
-
-}
-
-/** One classified run: the verdict label, the row detail, and the uncapped detail when the row elided names. */
-typedef Classified = { var verdict: String; var detail: String; var full: Null<String>; }
-
-/** A track's tests run: which run answered, its reading (null when unreadable), and the transcript(s) it read. */
-typedef SuiteRun = { var phase: String; var reading: Null<Classified>; var read: String; }
-
-/** The seconds a narrow attempt spent building and running, charged to the track's timing row. */
-typedef NarrowClock = { var build: Float; var run: Float; }

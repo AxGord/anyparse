@@ -2,6 +2,29 @@ package anyparse.query.cli;
 
 using Lambda;
 
+/** A flag whose next token is its value only when `accepts` says so; otherwise it stands alone. */
+typedef OptionalValueFlag = { var name: String; var accepts: String -> Bool; };
+
+/** A valued flag that takes the `count` tokens after it, not just the next one. */
+typedef MultiValueFlag = { var name: String; var count: Int; };
+
+/** What a bare `--` in argv is to a command. */
+enum CliSeparator {
+
+	/** No parser reads it: an unknown option. */
+	Refused;
+
+	/** It splits queries from scope (`refs A B -- src`); flags may follow it. */
+	Splits;
+
+	/** Every token after it is a positional, a flag-shaped one too (`search -- '--$x'`). */
+	EndsOptions;
+
+}
+
+/** What `CliFlags.scan` read: every token it placed, the first undeclared `--word`, a valued flag argv ended on. */
+private typedef CliScan = { var args: Array<CliArg>; var unknown: Null<String>; var valueless: Null<String>; };
+
 /**
  * Which tokens of a command's argv are flags, which are a flag's value and which are positionals: the one answer
  * the dispatcher's unknown-flag refusal, `LanguageChoice`'s "is this token a file" and every command's own parser
@@ -194,26 +217,3 @@ final class CliFlags {
 	}
 
 }
-
-/** A flag whose next token is its value only when `accepts` says so; otherwise it stands alone. */
-typedef OptionalValueFlag = { var name: String; var accepts: String -> Bool; };
-
-/** A valued flag that takes the `count` tokens after it, not just the next one. */
-typedef MultiValueFlag = { var name: String; var count: Int; };
-
-/** What a bare `--` in argv is to a command. */
-enum CliSeparator {
-
-	/** No parser reads it: an unknown option. */
-	Refused;
-
-	/** It splits queries from scope (`refs A B -- src`); flags may follow it. */
-	Splits;
-
-	/** Every token after it is a positional, a flag-shaped one too (`search -- '--$x'`). */
-	EndsOptions;
-
-}
-
-/** What `CliFlags.scan` read: every token it placed, the first undeclared `--word`, a valued flag argv ended on. */
-private typedef CliScan = { var args: Array<CliArg>; var unknown: Null<String>; var valueless: Null<String>; };

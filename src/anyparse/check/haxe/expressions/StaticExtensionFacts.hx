@@ -8,6 +8,37 @@ import anyparse.query.FactsTypeTree;
 
 using StringTools;
 
+/** What the facts prove about one static call's extension form. */
+enum ExtensionFactsVerdict {
+
+	/** The extension form calls the same function with the same receiver. */
+	Proven;
+
+	/** A type of the receiver's hierarchy declares a member of the name, which the extension form would call instead. */
+	Shadowed;
+
+	/** The receiver is `Dynamic`: the extension form compiles and dispatches at run time. */
+	DynamicReceiver;
+
+	/** The facts prove neither. */
+	Unproven;
+
+}
+
+/** What the facts say about the `using`s a site is reached by (`StaticExtensionFacts.usingsSupply`). */
+private enum UsingSupply {
+
+	/** No other `using` supplies the method. */
+	None;
+
+	/** Another `using` supplies it. */
+	Supplied;
+
+	/** A `using` names a type the facts do not hold. */
+	Unread;
+
+}
+
 /**
  * Whether the compiler's facts (`CompilerFacts`) prove that a static call `Module.method(recv, …)` may be written as the
  * extension call `recv.method(…)`: the receiver's type, every configuration agreeing on it where the facts place the
@@ -205,36 +236,5 @@ final class StaticExtensionFacts {
 			case _: false;
 		};
 	}
-
-}
-
-/** What the facts prove about one static call's extension form. */
-enum ExtensionFactsVerdict {
-
-	/** The extension form calls the same function with the same receiver. */
-	Proven;
-
-	/** A type of the receiver's hierarchy declares a member of the name, which the extension form would call instead. */
-	Shadowed;
-
-	/** The receiver is `Dynamic`: the extension form compiles and dispatches at run time. */
-	DynamicReceiver;
-
-	/** The facts prove neither. */
-	Unproven;
-
-}
-
-/** What the facts say about the `using`s a site is reached by (`StaticExtensionFacts.usingsSupply`). */
-private enum UsingSupply {
-
-	/** No other `using` supplies the method. */
-	None;
-
-	/** Another `using` supplies it. */
-	Supplied;
-
-	/** A `using` names a type the facts do not hold. */
-	Unread;
 
 }

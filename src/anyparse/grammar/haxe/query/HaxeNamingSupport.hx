@@ -18,6 +18,37 @@ using StringTools;
 using Lambda;
 
 /**
+ * The head binding's context, handed down to the `VarMore` chain that continues it
+ * (`var a = 1, b = 2;`). A `VarMore` is one kind whatever declaration it continues — a local
+ * statement, a class member, a structure field — so it carries no category of its own and no
+ * modifier run of its own (`static var a = 1, b = 2` writes `static` once, before the head).
+ */
+private typedef VarHost = {
+
+	final category: NamingCategory;
+
+	/** The modifier run preceding the HEAD binding, which governs every binding in the list. */
+	final mods: Array<String>;
+
+	/** Whether the head binding is an anon-structure field, whose name is a wire contract. */
+	final structural: Bool;
+
+};
+
+/**
+ * What the walk carries down from the declarations enclosing a node: the nearest type's name, whether
+ * it (or an outer one) is `@:rtti` or `extern`, the caller's property facts (`NamingSupport.project`), and the
+ * methods that are callbacks (`HaxeCallbackMods`).
+ */
+private typedef Enclosing = {
+	final typeName: Null<String>;
+	final rtti: Bool;
+	final isExtern: Bool;
+	final properties: Null<() -> Map<Int, PropertyClause>>;
+	final callbacks: HaxeCallbackMods;
+};
+
+/**
  * The Haxe grammar's `NamingSupport`: projects the named declarations the
  * `naming` check inspects, and resolves a file's policy — a project's
  * `checkstyle.json` (discovered walking up from the file) when present, else
@@ -946,34 +977,3 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 }
-
-/**
- * The head binding's context, handed down to the `VarMore` chain that continues it
- * (`var a = 1, b = 2;`). A `VarMore` is one kind whatever declaration it continues — a local
- * statement, a class member, a structure field — so it carries no category of its own and no
- * modifier run of its own (`static var a = 1, b = 2` writes `static` once, before the head).
- */
-private typedef VarHost = {
-
-	final category: NamingCategory;
-
-	/** The modifier run preceding the HEAD binding, which governs every binding in the list. */
-	final mods: Array<String>;
-
-	/** Whether the head binding is an anon-structure field, whose name is a wire contract. */
-	final structural: Bool;
-
-};
-
-/**
- * What the walk carries down from the declarations enclosing a node: the nearest type's name, whether
- * it (or an outer one) is `@:rtti` or `extern`, the caller's property facts (`NamingSupport.project`), and the
- * methods that are callbacks (`HaxeCallbackMods`).
- */
-private typedef Enclosing = {
-	final typeName: Null<String>;
-	final rtti: Bool;
-	final isExtern: Bool;
-	final properties: Null<() -> Map<Int, PropertyClause>>;
-	final callbacks: HaxeCallbackMods;
-};

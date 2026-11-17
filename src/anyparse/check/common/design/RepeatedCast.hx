@@ -23,6 +23,62 @@ import anyparse.query.WriteSites;
 using anyparse.util.Strings;
 using StringTools;
 
+private typedef Cast = {
+
+	final node: QueryNode;
+	final span: Span;
+	final operand: QueryNode;
+	final checked: Bool;
+
+	/** The binding offset of the operand's root when that is a local, else -1 (`StableChain`). */
+	final binding: Int;
+
+	/** What the operand reads (`StableRead.key`): two casts with one key read one storage. */
+	final key: String;
+	final typeText: String;
+
+	/** The functions holding the cast, outermost first. */
+	final units: Array<QueryNode>;
+
+}
+
+/** The casts of one group a function binds once (`homes`). */
+private typedef Home = { final unit: QueryNode; final occ: Array<Cast>; }
+
+private typedef Finding = { final span: Span; final message: String; final edits: Array<FixEdit>; }
+
+private typedef Scan = {
+
+	final source: String;
+	final tree: QueryNode;
+	final shape: RefShape;
+	final locals: UnchangedLocal;
+	final chains: StableChain;
+	final units: Array<String>;
+
+	/** The statement lists a `final` goes into: the grammar's blocks and its case arms. */
+	final blockKinds: Array<String>;
+	final loopKinds: Array<String>;
+
+	/**
+	 * The nodes that evaluate every child, in order: a statement or expression
+	 * with no branch in it, an operator that does not short-circuit.
+	 */
+	final inOrderKinds: Array<String>;
+
+	/** The nodes whose first child is the condition, subject or operand they always evaluate first, the rest perhaps never. */
+	final conditionKinds: Array<String>;
+
+	/** The conditionals two of whose branches never both run (`BranchPaths`). */
+	final exclusiveKinds: Array<String>;
+	final castTargets: () -> Map<Int, String>;
+	final purity: () -> Null<PurityCtx>;
+	final taken: Map<String, Bool>;
+	final minChecked: Int;
+	final minUnchecked: Int;
+
+}
+
 /**
  * Flags one value cast to one type several times in one function body, and binds the cast once:
  * `cast(o, Bubble).color = c; cast(o, Bubble).redraw();` becomes `final bubble: Bubble = cast(o, Bubble);
@@ -390,61 +446,5 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 		walk(node);
 		return out;
 	}
-
-}
-
-private typedef Cast = {
-
-	final node: QueryNode;
-	final span: Span;
-	final operand: QueryNode;
-	final checked: Bool;
-
-	/** The binding offset of the operand's root when that is a local, else -1 (`StableChain`). */
-	final binding: Int;
-
-	/** What the operand reads (`StableRead.key`): two casts with one key read one storage. */
-	final key: String;
-	final typeText: String;
-
-	/** The functions holding the cast, outermost first. */
-	final units: Array<QueryNode>;
-
-}
-
-/** The casts of one group a function binds once (`homes`). */
-private typedef Home = { final unit: QueryNode; final occ: Array<Cast>; }
-
-private typedef Finding = { final span: Span; final message: String; final edits: Array<FixEdit>; }
-
-private typedef Scan = {
-
-	final source: String;
-	final tree: QueryNode;
-	final shape: RefShape;
-	final locals: UnchangedLocal;
-	final chains: StableChain;
-	final units: Array<String>;
-
-	/** The statement lists a `final` goes into: the grammar's blocks and its case arms. */
-	final blockKinds: Array<String>;
-	final loopKinds: Array<String>;
-
-	/**
-	 * The nodes that evaluate every child, in order: a statement or expression
-	 * with no branch in it, an operator that does not short-circuit.
-	 */
-	final inOrderKinds: Array<String>;
-
-	/** The nodes whose first child is the condition, subject or operand they always evaluate first, the rest perhaps never. */
-	final conditionKinds: Array<String>;
-
-	/** The conditionals two of whose branches never both run (`BranchPaths`). */
-	final exclusiveKinds: Array<String>;
-	final castTargets: () -> Map<Int, String>;
-	final purity: () -> Null<PurityCtx>;
-	final taken: Map<String, Bool>;
-	final minChecked: Int;
-	final minUnchecked: Int;
 
 }

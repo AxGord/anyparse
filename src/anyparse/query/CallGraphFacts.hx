@@ -20,6 +20,9 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** What a node `CallGraphFacts.qualify` made reads: the graph node `node` as the member of the typed type `owner`. */
+typedef QualifiedRead = { final node: String; final owner: String; }
+
 /**
  * What a FACETED function node (`FactsView.bodyFacts`) contributes to a `CallGraph`
  * beside the edges its syntax records — or, when the facts are the truth (`FactsView.truth`), in place
@@ -785,6 +788,3 @@ final class CallGraphFacts {
 	}
 
 }
-
-/** What a node `CallGraphFacts.qualify` made reads: the graph node `node` as the member of the typed type `owner`. */
-typedef QualifiedRead = { final node: String; final owner: String; }

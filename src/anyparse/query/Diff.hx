@@ -3,6 +3,36 @@ package anyparse.query;
 import anyparse.runtime.Span;
 
 /**
+ * How a `DiffHit` node pair relates across the two compared trees: `Differs` (present on both
+ * sides but not structurally equal), `Added` (only on the right), `Removed` (only on the left).
+ */
+@:nullSafety(Strict)
+enum DiffKind {
+	Differs;
+	Added;
+	Removed;
+}
+
+/**
+ * One node-level difference from an `apq diff`: its `kind` plus the `left` / `right` nodes
+ * it relates (either is null for an add / remove, where the node exists on only one side).
+ */
+@:nullSafety(Strict)
+final class DiffHit {
+
+	public final kind: DiffKind;
+	public final left: Null<QueryNode>;
+	public final right: Null<QueryNode>;
+
+	public function new(kind: DiffKind, left: Null<QueryNode>, right: Null<QueryNode>) {
+		this.kind = kind;
+		this.left = left;
+		this.right = right;
+	}
+
+}
+
+/**
  * Structural AST diff for `apq diff <a> <b>` — paired walk over two
  * `QueryNode` trees emitting hits where the trees disagree.
  *
@@ -126,36 +156,6 @@ final class Diff {
 			for (i in lb ... la) walk(a.children[i], null, out);
 		else if (lb > la)
 			for (i in la ... lb) walk(null, b.children[i], out);
-	}
-
-}
-
-/**
- * How a `DiffHit` node pair relates across the two compared trees: `Differs` (present on both
- * sides but not structurally equal), `Added` (only on the right), `Removed` (only on the left).
- */
-@:nullSafety(Strict)
-enum DiffKind {
-	Differs;
-	Added;
-	Removed;
-}
-
-/**
- * One node-level difference from an `apq diff`: its `kind` plus the `left` / `right` nodes
- * it relates (either is null for an add / remove, where the node exists on only one side).
- */
-@:nullSafety(Strict)
-final class DiffHit {
-
-	public final kind: DiffKind;
-	public final left: Null<QueryNode>;
-	public final right: Null<QueryNode>;
-
-	public function new(kind: DiffKind, left: Null<QueryNode>, right: Null<QueryNode>) {
-		this.kind = kind;
-		this.left = left;
-		this.right = right;
 	}
 
 }

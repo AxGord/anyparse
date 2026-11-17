@@ -16,6 +16,9 @@ import utest.Test;
 using Lambda;
 using StringTools;
 
+/** What one fake `dev shard` run returned and said. */
+private typedef Ran = { var status: Int; var printed: Array<String>; var warned: Array<String>; }
+
 /**
  * `dev shard` end to end over a FAKE runner: a node script that lists the real registry, then answers each shard's
  * `APQ_TEST` with a transcript of one test per class — green, red on the shard holding the first class, or dying there
@@ -314,6 +317,3 @@ process.exitCode = failed;
 	}
 
 }
-
-/** What one fake `dev shard` run returned and said. */
-private typedef Ran = { var status: Int; var printed: Array<String>; var warned: Array<String>; }

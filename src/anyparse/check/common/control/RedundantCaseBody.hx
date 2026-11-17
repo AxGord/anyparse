@@ -6,6 +6,21 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 
+/** One foldable pair: the arm reported, which shape folds it, and the single edit that folds it. */
+private typedef Candidate = {
+
+	final span: Span;
+
+	/** Whether the fold DELETES the arm (a catch-all follows) rather than merging its label into the next. */
+	final subsume: Bool;
+	final editSpan: Span;
+	final editText: String;
+
+};
+
+/** One arm's body: its statement nodes and the source region they span. */
+private typedef Body = { final nodes: Array<QueryNode>; final from: Int; final to: Int; };
+
 /**
  * Flags a switch arm whose body its IMMEDIATE NEIGHBOUR already carries, in the two
  * shapes where the duplication can be removed without changing what any value
@@ -284,18 +299,3 @@ final class RedundantCaseBody extends RuleBase {
 	}
 
 }
-
-/** One foldable pair: the arm reported, which shape folds it, and the single edit that folds it. */
-private typedef Candidate = {
-
-	final span: Span;
-
-	/** Whether the fold DELETES the arm (a catch-all follows) rather than merging its label into the next. */
-	final subsume: Bool;
-	final editSpan: Span;
-	final editText: String;
-
-};
-
-/** One arm's body: its statement nodes and the source region they span. */
-private typedef Body = { final nodes: Array<QueryNode>; final from: Int; final to: Int; };

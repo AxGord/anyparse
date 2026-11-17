@@ -3,6 +3,9 @@ package anyparse.check.common.control;
 import anyparse.check.scan.SwitchChain;
 import anyparse.query.SymbolIndex;
 
+/** `PreferSwitchExpression`'s resolved configuration: the chain seams and the host kinds its head gate whitelists. */
+private typedef Config = { final seams: ChainSeams; final hosts: Array<String>; }
+
 /**
  * Flags a VALUE-position conditional chain that tests one or more expressions
  * against constants — a right-nested ternary `a == P ? v1 : a == Q ? v2 : v3`, or
@@ -149,6 +152,3 @@ final class PreferSwitchExpression extends RuleBase {
 	}
 
 }
-
-/** `PreferSwitchExpression`'s resolved configuration: the chain seams and the host kinds its head gate whitelists. */
-private typedef Config = { final seams: ChainSeams; final hosts: Array<String>; }

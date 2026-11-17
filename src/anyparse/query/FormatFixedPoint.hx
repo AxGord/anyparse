@@ -3,6 +3,37 @@ package anyparse.query;
 import haxe.Exception;
 
 /**
+ * Outcome of `FormatFixedPoint.run` — the fixed point plus what it cost to
+ * reach it.
+ */
+@:nullSafety(Strict)
+typedef FormatFixedPointResult = {
+
+	/**
+	 * The fixed point: the text every further round trip reproduces. `null`
+	 * only when the grammar has no writer (the plugin's own `null` answer,
+	 * forwarded unchanged). When `converged` is false this is the LAST output
+	 * seen and no caller may write it.
+	 */
+	var text: Null<String>;
+
+	/**
+	 * How many round trips actually CHANGED their input. `0` = the file was
+	 * already canonical, `1` = the healthy case (one rewrite, confirmed by a
+	 * second round trip that changed nothing), `>1` = the writer read
+	 * something its own output then altered.
+	 */
+	var rewrites: Int;
+
+	/** A round trip reproduced its input, so `text` is a real fixed point. */
+	var converged: Bool;
+
+	/** Why no fixed point was reached; `null` whenever `converged` is true. */
+	var failure: Null<String>;
+
+};
+
+/**
  * `apq fmt`'s fixed-point round trip: format, then keep formatting the
  * writer's OWN output until it stops changing.
  *
@@ -167,34 +198,3 @@ final class FormatFixedPoint {
 	}
 
 }
-
-/**
- * Outcome of `FormatFixedPoint.run` — the fixed point plus what it cost to
- * reach it.
- */
-@:nullSafety(Strict)
-typedef FormatFixedPointResult = {
-
-	/**
-	 * The fixed point: the text every further round trip reproduces. `null`
-	 * only when the grammar has no writer (the plugin's own `null` answer,
-	 * forwarded unchanged). When `converged` is false this is the LAST output
-	 * seen and no caller may write it.
-	 */
-	var text: Null<String>;
-
-	/**
-	 * How many round trips actually CHANGED their input. `0` = the file was
-	 * already canonical, `1` = the healthy case (one rewrite, confirmed by a
-	 * second round trip that changed nothing), `>1` = the writer read
-	 * something its own output then altered.
-	 */
-	var rewrites: Int;
-
-	/** A round trip reproduced its input, so `text` is a real fixed point. */
-	var converged: Bool;
-
-	/** Why no fixed point was reached; `null` whenever `converged` is true. */
-	var failure: Null<String>;
-
-};

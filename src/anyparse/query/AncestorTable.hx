@@ -6,6 +6,23 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using Lambda;
 
+/** One `extends` / `implements` link of a type declaration (`AncestorTable.links`). */
+typedef AncestorLink = {
+
+	/** The supertype as written, its path without type arguments (`TypeDeclInfo.supertypesRaw`). */
+	final raw: String;
+
+	/** Every declaration `raw` names from the declaring file (`TypeRefIndex.resolveTypeRefAll`): several when it is ambiguous. */
+	final matches: Array<ResolvedType>;
+
+	/** The declaration `raw` resolves to, or null when it names none or several (`TypeRefIndex.resolveTypeRef`). */
+	final decl: Null<ResolvedType>;
+
+	/** The type arguments the link passes, as the declaring file writes them; null when two `#if` branches write different ones. */
+	final args: Null<Array<String>>;
+
+}
+
 /**
  * The ancestor table of the typing service (`docs/typing-service.md`, step T2): every type declaration's direct supertype
  * links, each resolved ONCE where the declaration writes it and carrying the type arguments it passes; the declaration a
@@ -318,22 +335,5 @@ final class AncestorTable {
 	public static inline function dynamicSupertypeRef(raw: String): Bool {
 		return SourceText.lastSegment(raw) == 'Dynamic';
 	}
-
-}
-
-/** One `extends` / `implements` link of a type declaration (`AncestorTable.links`). */
-typedef AncestorLink = {
-
-	/** The supertype as written, its path without type arguments (`TypeDeclInfo.supertypesRaw`). */
-	final raw: String;
-
-	/** Every declaration `raw` names from the declaring file (`TypeRefIndex.resolveTypeRefAll`): several when it is ambiguous. */
-	final matches: Array<ResolvedType>;
-
-	/** The declaration `raw` resolves to, or null when it names none or several (`TypeRefIndex.resolveTypeRef`). */
-	final decl: Null<ResolvedType>;
-
-	/** The type arguments the link passes, as the declaring file writes them; null when two `#if` branches write different ones. */
-	final args: Null<Array<String>>;
 
 }

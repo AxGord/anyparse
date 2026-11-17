@@ -4,6 +4,27 @@ import anyparse.check.scan.OperatorSelection;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 
+/** The resolved seams `DoubleNegation` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final notKind: String;
+
+	/**
+	 * The parenthesis kind the redundancy scan reads THROUGH (`!(!x)`), or
+	 * null when the grammar has none — then only the bare `!!x` shape is seen.
+	 */
+	final parenKind: Null<String>;
+	final opaqueKinds: Array<String>;
+	final nullableKinds: Array<String>;
+
+	/**
+	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation —
+	 * the proof that the stripped `!` is an involution at all (`builtinNot`).
+	 */
+	final selection: Null<OperatorSelection>;
+
+};
+
 /**
  * Flags a double logical negation `!!x` — a not-node wrapping another, through any
  * parentheses between them (`!(!x)` is the same redundancy, spelled longer). In Haxe
@@ -157,24 +178,3 @@ final class DoubleNegation extends RuleBase {
 	}
 
 }
-
-/** The resolved seams `DoubleNegation` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final notKind: String;
-
-	/**
-	 * The parenthesis kind the redundancy scan reads THROUGH (`!(!x)`), or
-	 * null when the grammar has none — then only the bare `!!x` shape is seen.
-	 */
-	final parenKind: Null<String>;
-	final opaqueKinds: Array<String>;
-	final nullableKinds: Array<String>;
-
-	/**
-	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation —
-	 * the proof that the stripped `!` is an involution at all (`builtinNot`).
-	 */
-	final selection: Null<OperatorSelection>;
-
-};

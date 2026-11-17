@@ -10,6 +10,12 @@ import haxe.macro.Type;
 using Lambda;
 
 /**
+ * Result of a shape-analysis pass: the root rule name and a map of all
+ * named rules the worklist discovered.
+ */
+typedef ShapeResult = { root: String, rules: Map<String, ShapeNode> };
+
+/**
  * Pass 1 of the macro pipeline — shape analysis. Turns a
  * `haxe.macro.Type` into a map of top-level rule name → `ShapeNode`.
  *
@@ -579,10 +585,4 @@ class ShapeBuilder {
 	}
 
 }
-
-/**
- * Result of a shape-analysis pass: the root rule name and a map of all
- * named rules the worklist discovered.
- */
-typedef ShapeResult = { root: String, rules: Map<String, ShapeNode> };
 #end

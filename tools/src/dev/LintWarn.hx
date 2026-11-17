@@ -13,6 +13,9 @@ import sys.FileSystem;
 using Lambda;
 using StringTools;
 
+/** The tree an op wrote into and the engine that lints it. */
+typedef Target = { var root: String; var engine: String; }
+
 /**
  * `dev lint-warn` — the body of the PostToolUse hook `tools/hooks/hxq-lint-warn.sh`: reads the hook payload on stdin
  * and, after an hxq op that WROTE, lints what it wrote and answers the findings THIS edit added (`apq lint --baseline`
@@ -273,6 +276,3 @@ final class LintWarn {
 	}
 
 }
-
-/** The tree an op wrote into and the engine that lints it. */
-typedef Target = { var root: String; var engine: String; }

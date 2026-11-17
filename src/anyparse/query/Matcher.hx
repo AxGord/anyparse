@@ -6,6 +6,50 @@ import anyparse.query.Pattern.PatternStar;
 import anyparse.runtime.Span;
 
 /**
+ * One structural-pattern match: the matched source `span` plus `bindings` mapping each pattern metavariable (`$x`) to the node it captured.
+ */
+@:nullSafety(Strict)
+final class Match {
+
+	public final span: Span;
+	public final bindings: Map<String, QueryNode>;
+
+	/**
+	 * The input node the pattern unified with — its kind can differ from the pattern root's
+	 * under a plugin's kind-equivalence, which is what a consumer splicing over `span` needs
+	 * to know (`Rewrite` aligns a statement's terminator across such a mix).
+	 */
+	public final node: QueryNode;
+
+	/**
+	 * The parts of the matched nodes the pattern did not write — the type arguments of `new Box<Int>(1)`
+	 * under `new $C($a)`, the type of `final b:String = 1` under `final $x = $v`: the match is sound, but no
+	 * metavariable holds them, so a replacement spliced over `span` would drop them — `Rewrite` refuses such
+	 * a match.
+	 */
+	public final unwritten: Array<Unwritten>;
+
+	public function new(span: Span, bindings: Map<String, QueryNode>, node: QueryNode, ?unwritten: Array<Unwritten>) {
+		this.span = span;
+		this.bindings = bindings;
+		this.node = node;
+		this.unwritten = unwritten ?? [];
+	}
+
+}
+
+/** A part of a matched node its pattern did not write, so no metavariable holds it (`Match.unwritten`). */
+enum Unwritten {
+
+	/** The type arguments of a construction (`new Box<Int>(1)` under `new $C($a)`), at the construction's span. */
+	TypeArguments(at: Span);
+
+	/** The type a declaration or a check writes (`final b:String = 1` under `final $x = $v`), at the type's span. */
+	TypeAnnotation(at: Span);
+
+}
+
+/**
  * Pattern-vs-input structural matcher for `apq search`.
  *
  * Language-agnostic: operates on `Pattern` (which is `QueryNode` with
@@ -299,49 +343,5 @@ final class Matcher {
 		}
 		for (c in kids) walkSequence(pattern, c, eq, identKind, out, kindFilter);
 	}
-
-}
-
-/**
- * One structural-pattern match: the matched source `span` plus `bindings` mapping each pattern metavariable (`$x`) to the node it captured.
- */
-@:nullSafety(Strict)
-final class Match {
-
-	public final span: Span;
-	public final bindings: Map<String, QueryNode>;
-
-	/**
-	 * The input node the pattern unified with — its kind can differ from the pattern root's
-	 * under a plugin's kind-equivalence, which is what a consumer splicing over `span` needs
-	 * to know (`Rewrite` aligns a statement's terminator across such a mix).
-	 */
-	public final node: QueryNode;
-
-	/**
-	 * The parts of the matched nodes the pattern did not write — the type arguments of `new Box<Int>(1)`
-	 * under `new $C($a)`, the type of `final b:String = 1` under `final $x = $v`: the match is sound, but no
-	 * metavariable holds them, so a replacement spliced over `span` would drop them — `Rewrite` refuses such
-	 * a match.
-	 */
-	public final unwritten: Array<Unwritten>;
-
-	public function new(span: Span, bindings: Map<String, QueryNode>, node: QueryNode, ?unwritten: Array<Unwritten>) {
-		this.span = span;
-		this.bindings = bindings;
-		this.node = node;
-		this.unwritten = unwritten ?? [];
-	}
-
-}
-
-/** A part of a matched node its pattern did not write, so no metavariable holds it (`Match.unwritten`). */
-enum Unwritten {
-
-	/** The type arguments of a construction (`new Box<Int>(1)` under `new $C($a)`), at the construction's span. */
-	TypeArguments(at: Span);
-
-	/** The type a declaration or a check writes (`final b:String = 1` under `final $x = $v`), at the type's span. */
-	TypeAnnotation(at: Span);
 
 }

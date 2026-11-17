@@ -10,6 +10,21 @@ import sys.FileSystem;
 #end
 
 /**
+ * One file's pending write: `staged` holds the new bytes beside `target`, which is where
+ * `Cli.commitStagedWrite` renames them, and `asked` is the spelling any diagnostic quotes.
+ */
+@:nullSafety(Strict)
+private typedef StagedWrite = {
+
+	var staged: String;
+	var target: String;
+
+	/** The path as the CALLER spelled it, which is the one a diagnostic must name. */
+	var asked: String;
+
+};
+
+/**
  * Process IO for the `apq` CLI — the one place a command reaches the outside
  * world: the two output streams, file reads and the crash-safe staged file
  * write, stdin, and the progress line a long walk prints.
@@ -584,18 +599,3 @@ final class CliIo {
 	#end
 
 }
-
-/**
- * One file's pending write: `staged` holds the new bytes beside `target`, which is where
- * `Cli.commitStagedWrite` renames them, and `asked` is the spelling any diagnostic quotes.
- */
-@:nullSafety(Strict)
-private typedef StagedWrite = {
-
-	var staged: String;
-	var target: String;
-
-	/** The path as the CALLER spelled it, which is the one a diagnostic must name. */
-	var asked: String;
-
-};

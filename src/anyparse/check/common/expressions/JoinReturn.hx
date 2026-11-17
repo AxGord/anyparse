@@ -11,6 +11,33 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** The kinds `JoinReturn` reads. */
+private typedef Seams = {
+
+	/** `GrammarPlugin.typeSyntax` — how an ascription is read. */
+	var typeSyntax: TypeSyntaxReader;
+	var localDeclKinds: Array<String>;
+	var returnKind: String;
+	var exprStmtKind: Null<String>;
+	var assignKind: Null<String>;
+	var identKind: String;
+	var functionKinds: Array<String>;
+	var paramKinds: Array<String>;
+	var bodyKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var newExprKind: Null<String>;
+	var shape: RefShape;
+
+}
+
+/** A joinable pair: the declaration span (finding key), the replaced span, and the single-return replacement text. */
+private typedef Match = {
+	var declSpan: Span;
+	var editSpan: Span;
+	var text: String;
+	var message: String;
+}
+
 /**
  * Flags a value that is IMMEDIATELY returned right after it is produced, collapsing the pair
  * to a single return. The value is produced either by a local DECLARATION or by a plain
@@ -413,31 +440,4 @@ final class JoinReturn extends RuleBase {
 		for (c in node.children) collectLambdaSpans(c, lambdaKinds, out);
 	}
 
-}
-
-/** The kinds `JoinReturn` reads. */
-private typedef Seams = {
-
-	/** `GrammarPlugin.typeSyntax` — how an ascription is read. */
-	var typeSyntax: TypeSyntaxReader;
-	var localDeclKinds: Array<String>;
-	var returnKind: String;
-	var exprStmtKind: Null<String>;
-	var assignKind: Null<String>;
-	var identKind: String;
-	var functionKinds: Array<String>;
-	var paramKinds: Array<String>;
-	var bodyKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var newExprKind: Null<String>;
-	var shape: RefShape;
-
-}
-
-/** A joinable pair: the declaration span (finding key), the replaced span, and the single-return replacement text. */
-private typedef Match = {
-	var declSpan: Span;
-	var editSpan: Span;
-	var text: String;
-	var message: String;
 }

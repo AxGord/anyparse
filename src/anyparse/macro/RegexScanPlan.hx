@@ -2,6 +2,20 @@ package anyparse.macro;
 
 using Lambda;
 
+/** What may come after a node in its pattern. */
+private typedef Follow = {
+
+	/** A superset of the code units the rest may begin with, an assertion's reach counted. */
+	final first: CodeSet;
+
+	/** The rest matches from anywhere: all of it optional, no assertion in it. */
+	final infallible: Bool;
+
+}
+
+/** A lookahead body split at its head alternation. */
+typedef AheadBranches = { final branches: Array<ScanNode>; final tail: Array<ScanNode>; }
+
 /**
  * The one answer to "can this terminal's regex be scanned without backtracking": the pattern's tree when one
  * committed left-to-right pass reaches the very match a backtracking engine reports, `null` otherwise.
@@ -129,17 +143,3 @@ final class RegexScanPlan {
 	}
 
 }
-
-/** What may come after a node in its pattern. */
-private typedef Follow = {
-
-	/** A superset of the code units the rest may begin with, an assertion's reach counted. */
-	final first: CodeSet;
-
-	/** The rest matches from anywhere: all of it optional, no assertion in it. */
-	final infallible: Bool;
-
-}
-
-/** A lookahead body split at its head alternation. */
-typedef AheadBranches = { final branches: Array<ScanNode>; final tail: Array<ScanNode>; }

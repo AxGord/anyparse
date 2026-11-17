@@ -2,6 +2,9 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 
+/** One branch taken on the way to an occurrence: the conditional (by its span) and the index of the child entered. */
+typedef BranchStep = { final key: String; final idx: Int; }
+
 /**
  * Which occurrences in one function body can run in one execution of it: the one answer to "do these two sit in different
  * branches of one conditional, and how many of a set run at most on one path". A step is a branch child — a child past
@@ -70,6 +73,3 @@ final class BranchPaths {
 	}
 
 }
-
-/** One branch taken on the way to an occurrence: the conditional (by its span) and the index of the child entered. */
-typedef BranchStep = { final key: String; final idx: Int; }

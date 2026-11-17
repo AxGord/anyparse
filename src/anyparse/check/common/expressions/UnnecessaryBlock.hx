@@ -9,6 +9,25 @@ import anyparse.query.SymbolIndex;
 using StringTools;
 
 /**
+ * The resolved seams `UnnecessaryBlock` reads in both `run` and `fix`. The frame fields unify
+ * structurally with `ScopeFrames.FrameSeams`, so the value is passed to `ScopeFrames` unconverted.
+ */
+private typedef Seams = {
+	final blockStmtKind: String;
+	final opaqueKinds: Array<String>;
+	final containerKinds: Array<String>;
+	final blockKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final localDeclKinds: Array<String>;
+	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
+	final tail: TailSeams;
+};
+
+/**
  * Flags a bare `{ … }` statement block — one written directly in a statement-list position (another block, or a
  * `case` / `default` arm body) rather than as a control-flow body — whose statements would read the same one
  * indent to the left, so the braces buy nothing. `Info`, with an unwrap autofix. A common AS3-to-Haxe conversion
@@ -188,22 +207,3 @@ final class UnnecessaryBlock extends RuleBase {
 	}
 
 }
-
-/**
- * The resolved seams `UnnecessaryBlock` reads in both `run` and `fix`. The frame fields unify
- * structurally with `ScopeFrames.FrameSeams`, so the value is passed to `ScopeFrames` unconverted.
- */
-private typedef Seams = {
-	final blockStmtKind: String;
-	final opaqueKinds: Array<String>;
-	final containerKinds: Array<String>;
-	final blockKinds: Array<String>;
-	final scopeKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final localDeclKinds: Array<String>;
-	final condKind: Null<String>;
-	final spliceKinds: Array<String>;
-	final exprStmtKind: Null<String>;
-	final annotationKinds: Array<String>;
-	final tail: TailSeams;
-};

@@ -8,6 +8,38 @@ using anyparse.util.Strings;
 using StringTools;
 
 /**
+ * One conditional-compilation region as the directive scan sees it: the INDEX of its opening
+ * directive, the indices of its branch directives (`#elseif` / `#else`) in order, and the index of
+ * its `#end`. Indices rather than directives because a region is paired with its neighbour by
+ * adjacency in that same array.
+ */
+private typedef CondRegion = { final open: Int; final branches: Array<Int>; var close: Int; };
+
+/**
+ * One mergeable boundary: `boundary` is the reported span (the `#end` through the following `#if`),
+ * `edit` the span the fix replaces (both directive LINES and everything between them), `replacement`
+ * what goes there — null when the finding is report-only — and `message` the finding's text.
+ */
+private typedef MergeSite = {
+	final boundary: Span;
+	final edit: Span;
+	final replacement: Null<String>;
+	final message: String;
+};
+
+/**
+ * The merge two adjacent regions admit: `complements` tells the two splices apart (a boundary
+ * replaced by `#else` rather than deleted), `firstElse` whether the first region's last branch is
+ * its `#else`, and the two conditions are carried for the finding's text.
+ */
+private typedef MergeShape = {
+	final complements: Bool;
+	final firstElse: Bool;
+	final firstCondition: String;
+	final secondCondition: String;
+};
+
+/**
  * Flags two ADJACENT conditional-compilation regions whose conditions say the same thing, and
  * merges them into one. Two shapes, both of them a pair of directive lines that carry no
  * information:
@@ -331,35 +363,3 @@ final class CondRegionMerge extends RuleBase {
 	}
 
 }
-
-/**
- * One conditional-compilation region as the directive scan sees it: the INDEX of its opening
- * directive, the indices of its branch directives (`#elseif` / `#else`) in order, and the index of
- * its `#end`. Indices rather than directives because a region is paired with its neighbour by
- * adjacency in that same array.
- */
-private typedef CondRegion = { final open: Int; final branches: Array<Int>; var close: Int; };
-
-/**
- * One mergeable boundary: `boundary` is the reported span (the `#end` through the following `#if`),
- * `edit` the span the fix replaces (both directive LINES and everything between them), `replacement`
- * what goes there — null when the finding is report-only — and `message` the finding's text.
- */
-private typedef MergeSite = {
-	final boundary: Span;
-	final edit: Span;
-	final replacement: Null<String>;
-	final message: String;
-};
-
-/**
- * The merge two adjacent regions admit: `complements` tells the two splices apart (a boundary
- * replaced by `#else` rather than deleted), `firstElse` whether the first region's last branch is
- * its `#else`, and the two conditions are carried for the finding's text.
- */
-private typedef MergeShape = {
-	final complements: Bool;
-	final firstElse: Bool;
-	final firstCondition: String;
-	final secondCondition: String;
-};

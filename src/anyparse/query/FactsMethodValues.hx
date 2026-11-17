@@ -7,6 +7,32 @@ import anyparse.query.FactsTypeTree;
 
 using Lambda;
 
+/** A read that may obtain a method's value: the type of the object it reads off, and whether that is exactly its class. */
+typedef MethodValueRead = {
+
+	final receiver: Null<String>;
+	final exact: Bool;
+
+	/** Whether the value read is of no type the program declares: a read off a value of no class (`FDynamic`), or reflection. */
+	final typeless: Bool;
+
+}
+
+/**
+ * What the functions the builds typed obtain (`FactsMethodValues.scan`): the reads by the member name they name, those by
+ * a name computed at run time, and why some read may obtain any method, or null.
+ */
+typedef MethodValueReads = {
+
+	final named: Map<String, Array<MethodValueRead>>;
+	final computed: Array<MethodValueRead>;
+	var unknown: Null<String>;
+
+	/** Whether some function hands a function a receiver of its own to run with (`REBINDING_CALLS`). */
+	var rebinds: Bool;
+
+}
+
 /**
  * Where `this` is what its method's class says it is, read off the compiler's facts under the truth (`FactsView.truth`):
  * a dispatch on an instance of the class declaring a method, or of a subclass, binds `this` in its code — unless the
@@ -390,31 +416,5 @@ final class FactsMethodValues {
 		list.push(read);
 		out.named[name] = list;
 	}
-
-}
-
-/** A read that may obtain a method's value: the type of the object it reads off, and whether that is exactly its class. */
-typedef MethodValueRead = {
-
-	final receiver: Null<String>;
-	final exact: Bool;
-
-	/** Whether the value read is of no type the program declares: a read off a value of no class (`FDynamic`), or reflection. */
-	final typeless: Bool;
-
-}
-
-/**
- * What the functions the builds typed obtain (`FactsMethodValues.scan`): the reads by the member name they name, those by
- * a name computed at run time, and why some read may obtain any method, or null.
- */
-typedef MethodValueReads = {
-
-	final named: Map<String, Array<MethodValueRead>>;
-	final computed: Array<MethodValueRead>;
-	var unknown: Null<String>;
-
-	/** Whether some function hands a function a receiver of its own to run with (`REBINDING_CALLS`). */
-	var rebinds: Bool;
 
 }

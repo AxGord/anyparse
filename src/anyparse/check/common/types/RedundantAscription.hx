@@ -8,6 +8,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** The resolved seams `RedundantAscription` reads in both `run` and `fix`. */
+private typedef Seams = { final checkTypeKind: String; final newExprKind: String; final opaqueKinds: Array<String>; };
+
 /**
  * Flags a parenthesised ascription `(new T(...) : T)` whose ascribed type restates the
  * constructed class name — the construction already has type `T`, so the ascription is a
@@ -173,6 +176,3 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The resolved seams `RedundantAscription` reads in both `run` and `fix`. */
-private typedef Seams = { final checkTypeKind: String; final newExprKind: String; final opaqueKinds: Array<String>; };

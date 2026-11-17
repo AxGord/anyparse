@@ -11,6 +11,52 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using StringTools;
 
+/** The `RefShape` kinds `NullableSwitchMissingNull` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	var shape: RefShape;
+	var switchKinds: Array<String>;
+	var caseBranchKind: String;
+	var plainKind: String;
+	var identKind: String;
+	var nullLitKind: String;
+	var wildcardName: String;
+	var taggedKinds: Array<String>;
+	var defaultBranchKind: Null<String>;
+	var parenKind: Null<String>;
+	var nullCoalesceKind: Null<String>;
+	var optionalParamKind: Null<String>;
+	var localDeclKinds: Array<String>;
+	var paramKinds: Array<String>;
+	var nullMarkers: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declared type's wrapper is read. */
+	var typeSyntax: TypeSyntaxReader;
+	var callKind: Null<String>;
+	var fieldAccessKind: Null<String>;
+	var nullAssertionCalls: Array<String>;
+	var assertTrueCalls: Array<String>;
+	var assertFalseCalls: Array<String>;
+	var cfg: Null<NullableSourceCfg>;
+
+}
+
+/** Per-file context threaded to the `NullFlow` visit callback. */
+private typedef FileCtx = {
+
+	var file: String;
+	var root: QueryNode;
+	var declaredTypes: Map<Int, String>;
+	var declaredTypeSources: Map<Int, String>;
+	var returnTypes: Map<Int, String>;
+	var s: Seams;
+	var index: SymbolIndex;
+
+	/** The shared typer in RECEIVER mode (`CheckScan.typeNominalResolver`), which every nullable source's receiver is typed by. */
+	var nominalOf: Null<(QueryNode) -> Null<String>>;
+
+}
+
 /**
  * Flags a `switch` over a **provably-nullable ENUM subject** that has NO arm matching null
  * and NO wildcard — the one shape whose null subject is dereferenced. Reading a value's
@@ -349,51 +395,5 @@ final class NullableSwitchMissingNull extends RuleBase implements NoAutofix {
 		final wantKind: Null<String> = asTrue ? s.shape.notEqKind : s.shape.eqKind;
 		return wantKind == null || e.kind != wantKind ? null : NodeShape.nullComparedIdent(e, s.identKind, s.nullLitKind);
 	}
-
-}
-
-/** The `RefShape` kinds `NullableSwitchMissingNull` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	var shape: RefShape;
-	var switchKinds: Array<String>;
-	var caseBranchKind: String;
-	var plainKind: String;
-	var identKind: String;
-	var nullLitKind: String;
-	var wildcardName: String;
-	var taggedKinds: Array<String>;
-	var defaultBranchKind: Null<String>;
-	var parenKind: Null<String>;
-	var nullCoalesceKind: Null<String>;
-	var optionalParamKind: Null<String>;
-	var localDeclKinds: Array<String>;
-	var paramKinds: Array<String>;
-	var nullMarkers: Array<String>;
-
-	/** `GrammarPlugin.typeSyntax` — how a declared type's wrapper is read. */
-	var typeSyntax: TypeSyntaxReader;
-	var callKind: Null<String>;
-	var fieldAccessKind: Null<String>;
-	var nullAssertionCalls: Array<String>;
-	var assertTrueCalls: Array<String>;
-	var assertFalseCalls: Array<String>;
-	var cfg: Null<NullableSourceCfg>;
-
-}
-
-/** Per-file context threaded to the `NullFlow` visit callback. */
-private typedef FileCtx = {
-
-	var file: String;
-	var root: QueryNode;
-	var declaredTypes: Map<Int, String>;
-	var declaredTypeSources: Map<Int, String>;
-	var returnTypes: Map<Int, String>;
-	var s: Seams;
-	var index: SymbolIndex;
-
-	/** The shared typer in RECEIVER mode (`CheckScan.typeNominalResolver`), which every nullable source's receiver is typed by. */
-	var nominalOf: Null<(QueryNode) -> Null<String>>;
 
 }

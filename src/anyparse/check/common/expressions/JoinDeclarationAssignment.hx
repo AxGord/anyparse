@@ -9,6 +9,25 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The kinds `JoinDeclarationAssignment` reads. */
+private typedef Seams = {
+	var localDeclKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
+	var exprStmtKind: String;
+	var assignKind: String;
+	var identKind: String;
+	var stringInterpKind: Null<String>;
+	var blockKinds: Array<String>;
+}
+
+/** A joinable pair: the declaration span (finding key), the replaced span, and the two verbatim text pieces. */
+private typedef Match = {
+	var declSpan: Span;
+	var editSpan: Span;
+	var declText: String;
+	var rhsSource: String;
+}
+
 /**
  * Flags a bare local declaration immediately followed by its first assignment, joining the
  * pair into an initialized declaration:
@@ -199,23 +218,4 @@ final class JoinDeclarationAssignment extends RuleBase {
 		return false;
 	}
 
-}
-
-/** The kinds `JoinDeclarationAssignment` reads. */
-private typedef Seams = {
-	var localDeclKinds: Array<String>;
-	var localDeclContinuationKinds: Array<String>;
-	var exprStmtKind: String;
-	var assignKind: String;
-	var identKind: String;
-	var stringInterpKind: Null<String>;
-	var blockKinds: Array<String>;
-}
-
-/** A joinable pair: the declaration span (finding key), the replaced span, and the two verbatim text pieces. */
-private typedef Match = {
-	var declSpan: Span;
-	var editSpan: Span;
-	var declText: String;
-	var rhsSource: String;
 }

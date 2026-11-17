@@ -4,6 +4,28 @@ using Lambda;
 
 import anyparse.ds.Set;
 
+/** A member whose type its declaration leaves to inference: where it is declared. */
+typedef InferredRef = { var file: String; var type: String; var member: String; }
+
+/** A member read by name, and the types whose declaration of it the read may reach (null: any). */
+typedef MemberRead = { var name: String; var owners: Null<Array<String>>; }
+
+/** The words of the index's declared signatures: by member name, and by type name (see `ReachGraph.signatureWords`). */
+typedef SignatureWords = {
+
+	/** `name@Type` -> the words of that member's declared signature. */
+	var byMember: Map<String, Array<String>>;
+
+	/** Member name -> the types declaring a member so named (the constructor and implicitly-called members aside). */
+	var owners: Map<String, Array<String>>;
+	var byType: Map<String, Array<String>>;
+
+	/** Where the members whose type the declaration leaves to inference are declared, by name / by type. */
+	var inferredMember: Map<String, Array<InferredRef>>;
+	var inferredType: Map<String, Array<InferredRef>>;
+
+}
+
 /**
  * The abstract types one question's walk may meet as a STATIC type — `ReachGraph.visibleAbstracts`, kept as a
  * closure that only grows: the words the entered code spells (`add`), the members it reads (`read`), and, settled on
@@ -161,27 +183,5 @@ final class AbstractReach {
 			for (m in code.reads) read(m);
 		}
 	}
-
-}
-
-/** A member whose type its declaration leaves to inference: where it is declared. */
-typedef InferredRef = { var file: String; var type: String; var member: String; }
-
-/** A member read by name, and the types whose declaration of it the read may reach (null: any). */
-typedef MemberRead = { var name: String; var owners: Null<Array<String>>; }
-
-/** The words of the index's declared signatures: by member name, and by type name (see `ReachGraph.signatureWords`). */
-typedef SignatureWords = {
-
-	/** `name@Type` -> the words of that member's declared signature. */
-	var byMember: Map<String, Array<String>>;
-
-	/** Member name -> the types declaring a member so named (the constructor and implicitly-called members aside). */
-	var owners: Map<String, Array<String>>;
-	var byType: Map<String, Array<String>>;
-
-	/** Where the members whose type the declaration leaves to inference are declared, by name / by type. */
-	var inferredMember: Map<String, Array<InferredRef>>;
-	var inferredType: Map<String, Array<InferredRef>>;
 
 }

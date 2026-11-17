@@ -5,6 +5,20 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** One write: its node, where it takes effect, and the key of what it writes. */
+typedef WriteSite = {
+
+	/** The `RefShape.writeParentKinds` node. */
+	final node: QueryNode;
+
+	/** Where the write takes effect: the END of its node, since the right-hand side is read before the target is written. */
+	final effect: Int;
+
+	/** `WriteSites.targetPath` of its target — null when no path can name it, which a consumer reads as writing every operand. */
+	final path: Null<String>;
+
+};
+
 /**
  * Every WRITE in a tree — each `RefShape.writeParentKinds` node: an assignment in every operator spelling, an
  * increment, a decrement — with the storage it writes named the way `Refs` binds a name, so it is the one answer
@@ -176,17 +190,3 @@ final class WriteSites {
 	}
 
 }
-
-/** One write: its node, where it takes effect, and the key of what it writes. */
-typedef WriteSite = {
-
-	/** The `RefShape.writeParentKinds` node. */
-	final node: QueryNode;
-
-	/** Where the write takes effect: the END of its node, since the right-hand side is read before the target is written. */
-	final effect: Int;
-
-	/** `WriteSites.targetPath` of its target — null when no path can name it, which a consumer reads as writing every operand. */
-	final path: Null<String>;
-
-};

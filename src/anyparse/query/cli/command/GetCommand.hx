@@ -8,6 +8,25 @@ import anyparse.query.cli.CliArgs.ExpandedInputs;
 import anyparse.query.cli.DataPath.DataLookup;
 import anyparse.query.cli.DataPath.WhereClause;
 
+/** `apq get`'s argv, read. */
+typedef GetArgs = {
+	final lang: Null<String>;
+	final select: Null<String>;
+	final nth: Null<Int>;
+	final where: Null<WhereClause>;
+	final files: Array<String>;
+	final segments: Array<String>;
+};
+
+/** A data document read for `apq get`: its grammar, shape, text and tree, and the name messages call it by. */
+typedef LoadedDocument = {
+	final plugin: GrammarPlugin;
+	final shape: RefShape;
+	final source: String;
+	final tree: QueryNode;
+	final label: String;
+};
+
 /**
  * `apq get` — print the value at a dotted path (or a `--select` address) of a data document: a string
  * decoded and unquoted, a number / boolean / null as written, an object or array as compact JSON. Works
@@ -232,22 +251,3 @@ final class GetCommand implements CliCommand implements StdinDocument implements
 	}
 
 }
-
-/** `apq get`'s argv, read. */
-typedef GetArgs = {
-	final lang: Null<String>;
-	final select: Null<String>;
-	final nth: Null<Int>;
-	final where: Null<WhereClause>;
-	final files: Array<String>;
-	final segments: Array<String>;
-};
-
-/** A data document read for `apq get`: its grammar, shape, text and tree, and the name messages call it by. */
-typedef LoadedDocument = {
-	final plugin: GrammarPlugin;
-	final shape: RefShape;
-	final source: String;
-	final tree: QueryNode;
-	final label: String;
-};

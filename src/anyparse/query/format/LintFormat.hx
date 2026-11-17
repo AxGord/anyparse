@@ -22,6 +22,9 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** What an `--explain-long` run hands the json renderer: the report, or null when the rule ran and explained nothing. */
+typedef ExplainedLocks = { final report: Null<LongLockReport>; }
+
 /**
  * Machine-readable renderers for analysis-check violations — the JSON and
  * checkstyle-XML counterparts of `Text.renderViolations`. Both take a flat
@@ -380,6 +383,3 @@ final class LintFormat {
 	}
 
 }
-
-/** What an `--explain-long` run hands the json renderer: the report, or null when the rule ran and explained nothing. */
-typedef ExplainedLocks = { final report: Null<LongLockReport>; }

@@ -25,6 +25,90 @@ using Lambda;
 using StringTools;
 
 /**
+ * The build of the three binaries `Land` runs in the candidate tree after the pick: the tree and the log the transcripts go
+ * to.
+ */
+typedef Compile = (tree: String, log: String) -> Outcome;
+
+/** The battery of a `Land` run: its flags, the snapshot directory that keeps the count of landings, and how often it runs in full. */
+typedef BatteryRequest = {
+
+	var allowBlast: Bool;
+	var snapshot: Bool;
+
+	/** The battery rows whose failure the verdict waives, each reported as allowed (`dev battery --allow`). */
+	var allow: Array<String>;
+
+	/** Whether the full battery was asked for. */
+	var full: Bool;
+	var leased: Null<Int>;
+	var cache: String;
+	var every: Int;
+
+}
+
+/** The paths a merge brought into the tree, or null when they cannot be read. */
+typedef MergedPaths = (tree: String) -> Null<Array<String>>;
+
+/** The run of `dev battery`: its flags, the tree it runs over and the log it leaves. */
+typedef BatteryExec = (flags: Array<String>, tree: String, log: String) -> Outcome;
+/** The scope of the suite a merge needs: the tree and the commit it is compared with. */
+typedef ImpactScope = (tree: String, base: String) -> SuiteScope;
+
+/** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
+typedef LandOptions = {
+
+	/** The main checkout: the tree whose checked-out branch a passed landing fast-forwards. */
+	var repo: String;
+	var branch: String;
+	var logs: String;
+	var message: Null<String>;
+
+	/** The trailers the commit carries beside `Slice` (`metricTrailers`); none when absent. */
+	@:optional
+	var trailers: Array<String>;
+
+	/** The places settled for the merge driver, each `<path>#<key>=<choice>` (`Land.choiceLine`); none when absent. */
+	@:optional
+	var resolve: Array<String>;
+
+	/** The queue file a merge brief quotes; the repository's `.claude/batch/wave-D.md` when absent. */
+	@:optional
+	var queue: String;
+
+	/** The directory of skill documents the `prose-refs` row also reads; none when absent. */
+	@:optional
+	var skills: Null<String>;
+
+	/** The battery to run; null runs none. */
+	var battery: Null<BatteryRequest>;
+	var compile: Compile;
+
+	/** The writer runs of the `fmt` step (`LandFormat.engine` for a real landing). */
+	var format: FormatTools;
+
+	/** Which test classes the merge needs against the commit before it (`SuiteImpact.ofTree`); absent runs the whole suite. */
+	@:optional
+	var impact: Null<ImpactScope>;
+
+	/** Starts the whole suite of the landed commit beside the next land (`PostLand.start`); absent starts none. */
+	@:optional
+	var postLand: Null<PostLandStart>;
+
+	/** Starts the baseline of the landed commit beside the next land (`BaselineWarm.start`); absent starts none. */
+	@:optional
+	var warm: Null<WarmStart>;
+
+	/** Starts the arm sweep of the landed commit on every `ArmSweep.EVERY`th landing (`ArmSweep.start`); absent starts none. */
+	@:optional
+	var sweep: Null<SweepStart>;
+	var exec: BatteryExec;
+	var merged: MergedPaths;
+	var print: String -> Void;
+
+}
+
+/**
  * `dev land <branch>` — the parent's landing of a reviewed slice branch in the tree that holds this `dev.js`, as ONE
  * command that moves the checked-out branch only to a commit the battery judged. In a detached candidate tree of the
  * checked-out commit (`LandCandidate`) the branch's single commit is applied (`git cherry-pick --no-commit`), so the history
@@ -627,89 +711,5 @@ final class Land {
 			case _: 'it left none';
 		};
 	}
-
-}
-
-/**
- * The build of the three binaries `Land` runs in the candidate tree after the pick: the tree and the log the transcripts go
- * to.
- */
-typedef Compile = (tree: String, log: String) -> Outcome;
-
-/** The battery of a `Land` run: its flags, the snapshot directory that keeps the count of landings, and how often it runs in full. */
-typedef BatteryRequest = {
-
-	var allowBlast: Bool;
-	var snapshot: Bool;
-
-	/** The battery rows whose failure the verdict waives, each reported as allowed (`dev battery --allow`). */
-	var allow: Array<String>;
-
-	/** Whether the full battery was asked for. */
-	var full: Bool;
-	var leased: Null<Int>;
-	var cache: String;
-	var every: Int;
-
-}
-
-/** The paths a merge brought into the tree, or null when they cannot be read. */
-typedef MergedPaths = (tree: String) -> Null<Array<String>>;
-/** The run of `dev battery`: its flags, the tree it runs over and the log it leaves. */
-typedef BatteryExec = (flags: Array<String>, tree: String, log: String) -> Outcome;
-
-/** The scope of the suite a merge needs: the tree and the commit it is compared with. */
-typedef ImpactScope = (tree: String, base: String) -> SuiteScope;
-
-/** What a run of `Land` is given: what to merge into where, and the two seams a test replaces (the build and the output). */
-typedef LandOptions = {
-
-	/** The main checkout: the tree whose checked-out branch a passed landing fast-forwards. */
-	var repo: String;
-	var branch: String;
-	var logs: String;
-	var message: Null<String>;
-
-	/** The trailers the commit carries beside `Slice` (`metricTrailers`); none when absent. */
-	@:optional
-	var trailers: Array<String>;
-
-	/** The places settled for the merge driver, each `<path>#<key>=<choice>` (`Land.choiceLine`); none when absent. */
-	@:optional
-	var resolve: Array<String>;
-
-	/** The queue file a merge brief quotes; the repository's `.claude/batch/wave-D.md` when absent. */
-	@:optional
-	var queue: String;
-
-	/** The directory of skill documents the `prose-refs` row also reads; none when absent. */
-	@:optional
-	var skills: Null<String>;
-
-	/** The battery to run; null runs none. */
-	var battery: Null<BatteryRequest>;
-	var compile: Compile;
-
-	/** The writer runs of the `fmt` step (`LandFormat.engine` for a real landing). */
-	var format: FormatTools;
-
-	/** Which test classes the merge needs against the commit before it (`SuiteImpact.ofTree`); absent runs the whole suite. */
-	@:optional
-	var impact: Null<ImpactScope>;
-
-	/** Starts the whole suite of the landed commit beside the next land (`PostLand.start`); absent starts none. */
-	@:optional
-	var postLand: Null<PostLandStart>;
-
-	/** Starts the baseline of the landed commit beside the next land (`BaselineWarm.start`); absent starts none. */
-	@:optional
-	var warm: Null<WarmStart>;
-
-	/** Starts the arm sweep of the landed commit on every `ArmSweep.EVERY`th landing (`ArmSweep.start`); absent starts none. */
-	@:optional
-	var sweep: Null<SweepStart>;
-	var exec: BatteryExec;
-	var merged: MergedPaths;
-	var print: String -> Void;
 
 }

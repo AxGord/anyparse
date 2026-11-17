@@ -15,6 +15,75 @@ import anyparse.query.TypeInfoProvider;
 
 using StringTools;
 
+/** The `RefShape` kinds `PreferSafeNav` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	var ifKinds: Array<String>;
+	var notEqKind: String;
+	var nullKind: String;
+	var identKind: String;
+	var callKind: String;
+	var fieldAccessKind: String;
+	var exprStmtKind: String;
+	var blockStmtKind: String;
+	var parenKind: Null<String>;
+	var scopeKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+	var paramKinds: Array<String>;
+	var andKind: Null<String>;
+	var ternaryKind: Null<String>;
+	var eqKind: Null<String>;
+	var chainKinds: Array<String>;
+	var selfText: Null<String>;
+	var assignKind: Null<String>;
+
+	/** The member kinds that project a PHYSICAL field (Haxe `VarMember` / `FinalMember`) — the field-receiver proof's whitelist. */
+	var fieldDeclKinds: Array<String>;
+
+	/** The extern-modifier node kind, a preceding sibling of the type it marks — an extern host refuses the field-receiver proof. */
+	var externKind: Null<String>;
+
+	/**
+	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children the
+	 * assignment arm may pair. A conditional-compilation region is deliberately absent: its
+	 * branches project as FLATTENED siblings, so pairing under it would fold a declaration in
+	 * one `#if` branch into a guard in another. EMPTY when the grammar supplies no
+	 * `ControlFlowSupport` — which switches the assignment arm alone off, exactly as an unset
+	 * `ternaryKind` switches off the ternary arm.
+	 */
+	var blockKinds: Array<String>;
+
+}
+
+/**
+ * A matched guard: the null-checked identifier, the region the rewrite keeps (`stmt` — the
+ * body statement of an `if` arm, the guarded branch of a ternary arm), and the chain-root
+ * identifier inside it. `restCond` is the surviving `if` condition, always null on the ternary arm.
+ */
+private typedef Candidate = {
+	var condIdent: QueryNode;
+	var stmt: QueryNode;
+	var rootIdent: QueryNode;
+	var restCond: Null<QueryNode>;
+}
+
+/**
+ * A matched ASSIGNMENT-arm guard: the null-checked identifier, the guarding `if` statement the
+ * fold deletes, the assigned right-hand side and its chain-root identifier, and the `null`
+ * literal of the declaration the right-hand side folds into.
+ */
+private typedef AssignGuard = {
+	var condIdent: QueryNode;
+	var ifNode: QueryNode;
+	var rhs: QueryNode;
+	var rootIdent: QueryNode;
+	var nullLiteral: QueryNode;
+}
+
+/** One type declaration's lexical extent: the span it covers, the node hosting its members, and whether `extern` marks it. */
+private typedef TypeScope = { var span: Span; var host: QueryNode; var isExtern: Bool; }
+
 /**
  * Flags a null guard that safe navigation (`?.`) replaces. Three arms:
  *
@@ -802,72 +871,3 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	}
 
 }
-
-/** The `RefShape` kinds `PreferSafeNav` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	var ifKinds: Array<String>;
-	var notEqKind: String;
-	var nullKind: String;
-	var identKind: String;
-	var callKind: String;
-	var fieldAccessKind: String;
-	var exprStmtKind: String;
-	var blockStmtKind: String;
-	var parenKind: Null<String>;
-	var scopeKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var localDeclKinds: Array<String>;
-	var paramKinds: Array<String>;
-	var andKind: Null<String>;
-	var ternaryKind: Null<String>;
-	var eqKind: Null<String>;
-	var chainKinds: Array<String>;
-	var selfText: Null<String>;
-	var assignKind: Null<String>;
-
-	/** The member kinds that project a PHYSICAL field (Haxe `VarMember` / `FinalMember`) — the field-receiver proof's whitelist. */
-	var fieldDeclKinds: Array<String>;
-
-	/** The extern-modifier node kind, a preceding sibling of the type it marks — an extern host refuses the field-receiver proof. */
-	var externKind: Null<String>;
-
-	/**
-	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children the
-	 * assignment arm may pair. A conditional-compilation region is deliberately absent: its
-	 * branches project as FLATTENED siblings, so pairing under it would fold a declaration in
-	 * one `#if` branch into a guard in another. EMPTY when the grammar supplies no
-	 * `ControlFlowSupport` — which switches the assignment arm alone off, exactly as an unset
-	 * `ternaryKind` switches off the ternary arm.
-	 */
-	var blockKinds: Array<String>;
-
-}
-
-/**
- * A matched guard: the null-checked identifier, the region the rewrite keeps (`stmt` — the
- * body statement of an `if` arm, the guarded branch of a ternary arm), and the chain-root
- * identifier inside it. `restCond` is the surviving `if` condition, always null on the ternary arm.
- */
-private typedef Candidate = {
-	var condIdent: QueryNode;
-	var stmt: QueryNode;
-	var rootIdent: QueryNode;
-	var restCond: Null<QueryNode>;
-}
-
-/**
- * A matched ASSIGNMENT-arm guard: the null-checked identifier, the guarding `if` statement the
- * fold deletes, the assigned right-hand side and its chain-root identifier, and the `null`
- * literal of the declaration the right-hand side folds into.
- */
-private typedef AssignGuard = {
-	var condIdent: QueryNode;
-	var ifNode: QueryNode;
-	var rhs: QueryNode;
-	var rootIdent: QueryNode;
-	var nullLiteral: QueryNode;
-}
-
-/** One type declaration's lexical extent: the span it covers, the node hosting its members, and whether `extern` marks it. */
-private typedef TypeScope = { var span: Span; var host: QueryNode; var isExtern: Bool; }

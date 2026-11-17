@@ -10,6 +10,9 @@ import anyparse.query.CanonicalEdit;
 
 using StringTools;
 
+/** A run of the check over one source that reported exactly one finding, kept for the fix call. */
+private typedef CheckRun = { var check: PreferKeyValueLoop; var vs: Array<Violation>; }
+
 /**
  * The `prefer-keyvalue-loop` check: `for (i in 0...X.length)` whose body opens with
  * `final v = X[i];` is flagged `Info` and rewritten to `for (i => v in X)`. The index stays
@@ -647,6 +650,3 @@ class PreferKeyValueLoopCheckTest extends Test {
 	}
 
 }
-
-/** A run of the check over one source that reported exactly one finding, kept for the fix call. */
-private typedef CheckRun = { var check: PreferKeyValueLoop; var vs: Array<Violation>; }

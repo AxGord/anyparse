@@ -47,6 +47,26 @@ typedef FileChange = {
 
 }
 
+/** The paths one file can name a renamed type through — `CrossRename.pathsOf`. */
+private typedef TypePaths = {
+
+	/** The qualified spellings a type or value position accepts here (`RefactorSupport.qualifiedPaths`). */
+	final qualified: Array<String>;
+
+	/** The absolute module path an import names the type by: `pkg.Mod` for a main type, `pkg.Mod.T` for a sub-module one. */
+	final absolute: String;
+
+	/** The TYPE path an access grant names it by: `pkg.T`, or the bare name in the root package. */
+	final grant: String;
+
+	/** The metadata names whose arguments are access grants. */
+	final grantMetas: Array<String>;
+
+	/** Offsets of the identifiers that root a qualified spelling but are value bindings in this file. */
+	final shadowedRoots: Array<Int>;
+
+}
+
 /**
  * Scope-correct, format-preserving cross-file TYPE rename — hardens the
  * single-file ceiling of the refactoring quartet (`Rename` / `Inline` /
@@ -429,25 +449,5 @@ final class CrossRename {
 		final at: Int = RefactorSupport.pathOffset(source, span, path);
 		return at < 0 ? -1 : at + prefix.length - typeName.length;
 	}
-
-}
-
-/** The paths one file can name a renamed type through — `CrossRename.pathsOf`. */
-private typedef TypePaths = {
-
-	/** The qualified spellings a type or value position accepts here (`RefactorSupport.qualifiedPaths`). */
-	final qualified: Array<String>;
-
-	/** The absolute module path an import names the type by: `pkg.Mod` for a main type, `pkg.Mod.T` for a sub-module one. */
-	final absolute: String;
-
-	/** The TYPE path an access grant names it by: `pkg.T`, or the bare name in the root package. */
-	final grant: String;
-
-	/** The metadata names whose arguments are access grants. */
-	final grantMetas: Array<String>;
-
-	/** Offsets of the identifiers that root a qualified spelling but are value bindings in this file. */
-	final shadowedRoots: Array<Int>;
 
 }

@@ -10,6 +10,51 @@ import anyparse.util.Compare;
 import haxe.crypto.Md5;
 import haxe.ds.Either;
 
+/** What `MoveElements.moveElements` moves: the source array and its 1-based inclusive range, the target array. */
+typedef MoveElementsRequest = {
+
+	final source: String;
+	final sourceFile: String;
+	final address: AddressSpec;
+	final first: Int;
+	final last: Int;
+
+	/** The destination file's source, or null when the target array is in the source file. */
+	final destSource: Null<String>;
+
+	/** The target array — a selector or pattern, never a position. */
+	final target: AddressSpec;
+
+	/** Insert each entry at its sorted place (`AddElement.insertSorted`) instead of appending the slice. */
+	final sorted: Bool;
+	final reformat: Bool;
+	final optsJson: Null<String>;
+	final destOptsJson: Null<String>;
+
+}
+
+/** The result of `MoveElements.moveElements`: both new texts (dest null = the source file), the moved entries, their digest. */
+enum MoveElementsResult {
+	Ok(source: String, dest: Null<String>, entries: Array<String>, digest: String);
+	Err(message: String);
+}
+
+/** What `verify` compares the result against: the old entries of both arrays and where the arrays start. */
+typedef MoveCheck = {
+	final oldSource: Array<String>;
+	final oldTarget: Array<String>;
+	final sourceFrom: Int;
+	final targetFrom: Int;
+}
+
+/** What `planOf` resolves: the source array and the moved slice of it, the target array, and the text the target is in. */
+private typedef MovePlan = {
+	final array: QueryNode;
+	final moved: Array<QueryNode>;
+	final target: QueryNode;
+	final destOriginal: String;
+}
+
 /**
  * `move-elements` — move a contiguous SLICE of one array literal's elements into another array literal, in
  * another member or another module, keeping their order and text: the split a long hand-kept list takes when it
@@ -256,49 +301,4 @@ final class MoveElements {
 		return true;
 	}
 
-}
-
-/** What `MoveElements.moveElements` moves: the source array and its 1-based inclusive range, the target array. */
-typedef MoveElementsRequest = {
-
-	final source: String;
-	final sourceFile: String;
-	final address: AddressSpec;
-	final first: Int;
-	final last: Int;
-
-	/** The destination file's source, or null when the target array is in the source file. */
-	final destSource: Null<String>;
-
-	/** The target array — a selector or pattern, never a position. */
-	final target: AddressSpec;
-
-	/** Insert each entry at its sorted place (`AddElement.insertSorted`) instead of appending the slice. */
-	final sorted: Bool;
-	final reformat: Bool;
-	final optsJson: Null<String>;
-	final destOptsJson: Null<String>;
-
-}
-
-/** The result of `MoveElements.moveElements`: both new texts (dest null = the source file), the moved entries, their digest. */
-enum MoveElementsResult {
-	Ok(source: String, dest: Null<String>, entries: Array<String>, digest: String);
-	Err(message: String);
-}
-
-/** What `verify` compares the result against: the old entries of both arrays and where the arrays start. */
-typedef MoveCheck = {
-	final oldSource: Array<String>;
-	final oldTarget: Array<String>;
-	final sourceFrom: Int;
-	final targetFrom: Int;
-}
-
-/** What `planOf` resolves: the source array and the moved slice of it, the target array, and the text the target is in. */
-private typedef MovePlan = {
-	final array: QueryNode;
-	final moved: Array<QueryNode>;
-	final target: QueryNode;
-	final destOriginal: String;
 }

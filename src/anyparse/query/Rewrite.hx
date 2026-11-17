@@ -11,6 +11,15 @@ import haxe.Exception;
 using anyparse.util.Strings;
 using Lambda;
 
+/** What one match becomes under `Rewrite.rewriteBy`: new text with the ranges of it that came from the input, or the reason it cannot. */
+enum Replacement {
+	Spliced(text: String, holes: Array<Span>);
+	Refused(message: String);
+}
+
+/** One expanded replacement: its text, and where in it each metavariable's source landed. */
+private typedef Expansion = { text: String, holes: Array<Span> };
+
 /**
  * Structural search-and-replace — the fusion of `search` (find a pattern with
  * `$x` metavariables) and a span-replace, the gap that previously forced a
@@ -283,12 +292,3 @@ final class Rewrite {
 	}
 
 }
-
-/** What one match becomes under `Rewrite.rewriteBy`: new text with the ranges of it that came from the input, or the reason it cannot. */
-enum Replacement {
-	Spliced(text: String, holes: Array<Span>);
-	Refused(message: String);
-}
-
-/** One expanded replacement: its text, and where in it each metavariable's source landed. */
-private typedef Expansion = { text: String, holes: Array<Span> };

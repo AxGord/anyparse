@@ -22,6 +22,96 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** What a run found wrong so far: every reason in the order found, whether it is red, whether a shard did not finish. */
+private final class Verdict {
+
+	public final reasons: Array<String> = [];
+
+	/** The tests the red shards name as not passing, `Class.method`. */
+	public final failing: Array<String> = [];
+
+	public var red: Bool = false;
+	public var partial: Bool = false;
+
+	public function new() {}
+
+	/** Record `reason`, which makes the run red. */
+	public function fail(reason: String): Void {
+		red = true;
+		reasons.push(reason);
+	}
+
+}
+
+/** One `dev shard` run, as `Shard.run` takes it. */
+typedef ShardJob = {
+
+	var repo: String;
+	var testJs: String;
+	var shards: Int;
+	var verify: Bool;
+	var expect: Null<SuiteCounts>;
+	var planOnly: Bool;
+	var keep: Bool;
+	var timings: Null<String>;
+
+	/** The fixture-cache store the shards' probe compiles replay from, or null to compile everything for real. */
+	var fixtureCache: Null<String>;
+
+	/** Where a measurement or the verdict line goes (stdout). */
+	var print: String -> Void;
+
+	/** Where a refusal, a reason or an advisory goes (stderr). */
+	var warn: String -> Void;
+
+	/** Handed the run's totals once every shard has ended — a sum of what ran when a shard did not finish. */
+	var ?counted: Tally -> Void;
+
+	/** Handed every test a red shard names as not passing (`Class.method`) once every shard has ended. */
+	var ?failing: Array<String> -> Void;
+
+	/** How long a shard may be silent before it is cut; `Shard.IDLE_MS` when absent. */
+	var ?idleMs: Int;
+
+	/**
+	 * The registered classes to run, or every one when absent. A subset skips the cross-checks that compare a run with the
+	 * whole suite and never refreshes the class weights the next whole run deals by.
+	 */
+	var ?only: Array<String>;
+
+}
+
+/** A shard plan as the run uses it: each shard's `APQ_TEST` value and its tokens, the class total, the producer check. */
+typedef ShardSplit = {
+	var filters: Array<String>;
+	var lists: Array<Array<String>>;
+	var classes: Int;
+	var producerNote: String;
+}
+
+/** A suite's test and assertion totals. */
+typedef SuiteCounts = { var tests: Int; var assertions: Int; }
+
+/** The four counts of one transcript. */
+typedef Tally = {
+	var tests: Int;
+	var assertions: Int;
+	var failures: Int;
+	var errors: Int;
+}
+
+/** One transcript summarised: its counts, how they agree with the run's exit status, and its first failure. */
+typedef Summarised = {
+
+	var counts: Tally;
+	var rc: Int;
+	var locus: Null<String>;
+
+	/** Every test the transcript names as not passing, `Class.method`. */
+	var failing: Array<String>;
+
+}
+
 /**
  * `dev shard` — the whole utest suite as N parallel `APQ_TEST` shards, each registered class run exactly once. The split
  * and its gates are `ShardPlan`'s, over the class list the runner itself prints (`--list-classes`); this tool spawns the
@@ -590,95 +680,5 @@ final class Shard {
 		else
 			'producer count == *$TEST_FILE_SUFFIX files ($onDisk)';
 	}
-
-}
-
-/** What a run found wrong so far: every reason in the order found, whether it is red, whether a shard did not finish. */
-private final class Verdict {
-
-	public final reasons: Array<String> = [];
-
-	/** The tests the red shards name as not passing, `Class.method`. */
-	public final failing: Array<String> = [];
-
-	public var red: Bool = false;
-	public var partial: Bool = false;
-
-	public function new() {}
-
-	/** Record `reason`, which makes the run red. */
-	public function fail(reason: String): Void {
-		red = true;
-		reasons.push(reason);
-	}
-
-}
-
-/** One `dev shard` run, as `Shard.run` takes it. */
-typedef ShardJob = {
-
-	var repo: String;
-	var testJs: String;
-	var shards: Int;
-	var verify: Bool;
-	var expect: Null<SuiteCounts>;
-	var planOnly: Bool;
-	var keep: Bool;
-	var timings: Null<String>;
-
-	/** The fixture-cache store the shards' probe compiles replay from, or null to compile everything for real. */
-	var fixtureCache: Null<String>;
-
-	/** Where a measurement or the verdict line goes (stdout). */
-	var print: String -> Void;
-
-	/** Where a refusal, a reason or an advisory goes (stderr). */
-	var warn: String -> Void;
-
-	/** Handed the run's totals once every shard has ended — a sum of what ran when a shard did not finish. */
-	var ?counted: Tally -> Void;
-
-	/** Handed every test a red shard names as not passing (`Class.method`) once every shard has ended. */
-	var ?failing: Array<String> -> Void;
-
-	/** How long a shard may be silent before it is cut; `Shard.IDLE_MS` when absent. */
-	var ?idleMs: Int;
-
-	/**
-	 * The registered classes to run, or every one when absent. A subset skips the cross-checks that compare a run with the
-	 * whole suite and never refreshes the class weights the next whole run deals by.
-	 */
-	var ?only: Array<String>;
-
-}
-
-/** A shard plan as the run uses it: each shard's `APQ_TEST` value and its tokens, the class total, the producer check. */
-typedef ShardSplit = {
-	var filters: Array<String>;
-	var lists: Array<Array<String>>;
-	var classes: Int;
-	var producerNote: String;
-}
-
-/** A suite's test and assertion totals. */
-typedef SuiteCounts = { var tests: Int; var assertions: Int; }
-
-/** The four counts of one transcript. */
-typedef Tally = {
-	var tests: Int;
-	var assertions: Int;
-	var failures: Int;
-	var errors: Int;
-}
-
-/** One transcript summarised: its counts, how they agree with the run's exit status, and its first failure. */
-typedef Summarised = {
-
-	var counts: Tally;
-	var rc: Int;
-	var locus: Null<String>;
-
-	/** Every test the transcript names as not passing, `Class.method`. */
-	var failing: Array<String>;
 
 }

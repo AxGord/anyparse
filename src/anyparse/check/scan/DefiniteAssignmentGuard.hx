@@ -6,6 +6,41 @@ import anyparse.query.ShapeVocab;
 import anyparse.util.Groups;
 
 /**
+ * One local a fix would leave read with nothing to assign it: the name, and the READ's span
+ * in whichever source the finding was taken from.
+ */
+typedef UnassignedRead = { final name: String; final span: Null<Span>; }
+
+/**
+ * The kind vocabulary `DefiniteAssignmentGuard` reads out of `RefShape` once per call, so the
+ * walkers take names rather than re-deriving a set per node.
+ */
+typedef Vocabulary = {
+	final identKind: String;
+	final interpIdentKind: Null<String>;
+	final declKinds: Array<String>;
+	final writeKinds: Array<String>;
+	final continuationKinds: Array<String>;
+	final typeChildKinds: Array<String>;
+	final ifKinds: Array<String>;
+	final nestedFnKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final exitKinds: Array<String>;
+}
+
+/**
+ * The per-unit walk state: the vocabulary, the names this unit declares without an
+ * initializer exactly once, the ones whose declaration the walk has passed, and the findings.
+ * Threaded as one record so the assigned-set stays the only thing an arm copies.
+ */
+typedef WalkCtx = {
+	final vocab: Vocabulary;
+	final candidates: Array<String>;
+	final inScope: Array<String>;
+	final out: Array<UnassignedRead>;
+}
+
+/**
  * The compiler-free half of `lint --fix`'s revert net: whether an edit set would leave a local
  * READ before the language considers it assigned.
  *
@@ -309,39 +344,4 @@ final class DefiniteAssignmentGuard {
 			+ 'write under an `if` with no `else` is not one; keep the initializer, or assign the local before the read';
 	}
 
-}
-
-/**
- * One local a fix would leave read with nothing to assign it: the name, and the READ's span
- * in whichever source the finding was taken from.
- */
-typedef UnassignedRead = { final name: String; final span: Null<Span>; }
-
-/**
- * The kind vocabulary `DefiniteAssignmentGuard` reads out of `RefShape` once per call, so the
- * walkers take names rather than re-deriving a set per node.
- */
-typedef Vocabulary = {
-	final identKind: String;
-	final interpIdentKind: Null<String>;
-	final declKinds: Array<String>;
-	final writeKinds: Array<String>;
-	final continuationKinds: Array<String>;
-	final typeChildKinds: Array<String>;
-	final ifKinds: Array<String>;
-	final nestedFnKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final exitKinds: Array<String>;
-}
-
-/**
- * The per-unit walk state: the vocabulary, the names this unit declares without an
- * initializer exactly once, the ones whose declaration the walk has passed, and the findings.
- * Threaded as one record so the assigned-set stays the only thing an arm copies.
- */
-typedef WalkCtx = {
-	final vocab: Vocabulary;
-	final candidates: Array<String>;
-	final inScope: Array<String>;
-	final out: Array<UnassignedRead>;
 }

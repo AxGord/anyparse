@@ -2,6 +2,26 @@ package anyparse.format.comment;
 
 using StringTools;
 
+/** One `@formatter:off`/`:on` comment: where it sits and what shares its line. */
+private typedef Mark = {
+	final offset: Int;
+	final opens: Bool;
+	var line: Int;
+	var code: String;
+}
+
+/**
+ * A verbatim region as inclusive line indices, carrying the code that
+ * precedes each marker on its own line — the anchor the splice verifies
+ * before trusting the indices.
+ */
+typedef Region = {
+	final from: Int;
+	final to: Int;
+	final headCode: String;
+	final tailCode: Null<String>;
+}
+
 /**
  * `// @formatter:off` … `// @formatter:on` — the author's opt-out from formatting,
  * restored over the writer's output.
@@ -156,24 +176,4 @@ final class FormatterOff {
 		return lines;
 	}
 
-}
-
-/** One `@formatter:off`/`:on` comment: where it sits and what shares its line. */
-private typedef Mark = {
-	final offset: Int;
-	final opens: Bool;
-	var line: Int;
-	var code: String;
-}
-
-/**
- * A verbatim region as inclusive line indices, carrying the code that
- * precedes each marker on its own line — the anchor the splice verifies
- * before trusting the indices.
- */
-typedef Region = {
-	final from: Int;
-	final to: Int;
-	final headCode: String;
-	final tailCode: Null<String>;
 }

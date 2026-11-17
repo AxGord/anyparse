@@ -42,685 +42,6 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
-/**
- * The typer's conformance harness, step T1 of the typer by specification (`docs/typing-service.md`): it asks the typing
- * layers questions the compiler has answered and scores every answer MATCH (the compiler's), UNKNOWN (the typer
- * declined) or DIFFERENT (anything else, the one outcome a typer that fails closed must never give). The UNKNOWN share
- * of an area is the typer's coverage there.
- *
- * Two sources, neither copied into this repository. `upstream` reads a pinned Haxe 4.3.7 clone: `tests/display` (the
- * `type`, `position` and `usage` assertions on `{-N-}` markers; every other display assertion is counted, unanswered)
- * and `tests/misc` (the `$type` warnings and `A should be B` errors of every `compile-fail` stderr). `facts`, run in a
- * project root, compiles the project's oracles (`apq.json`) with the facts hook and asks the type of every range the
- * compiler typed.
- *
- * `--census` roots every UNKNOWN type answer (`UnknownCauses`) and prints the tallies after the table, which it leaves
- * byte-identical: the share of each inference form and of each gap that needs none, the denominator the typer's next steps
- * are measured against.
- *
- *   haxe tools/dev.hxml
- *   node bin/dev.js typer-conformance upstream <haxe-4.3.7-clone> [--list] [--census]
- *   (cd <project> && node <anyparse>/bin/dev.js typer-conformance facts [<configuration-substring>] [--list] [--census])
- */
-@:nullSafety(Strict)
-final class TyperConformance {
-
-	public static inline final USAGE: String =
-		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>] | probes [<dir>]  [--list] [--census]';
-
-	/** The group of the test function's name in `displayTests`' header pattern. */
-	private static inline final TEST_NAME_GROUP: Int = 3;
-
-	/** The group of `POSITION_ASSERT` / `FIRST_USAGE_ASSERT` holding the marker the query is made at. */
-	private static inline final QUERY_MARKER_GROUP: Int = 3;
-
-	/** The groups of `MESSAGE`: the line, the first and the end character, the text. */
-	private static inline final MESSAGE_LINE_GROUP: Int = 2;
-
-	private static inline final MESSAGE_FROM_GROUP: Int = 3;
-	private static inline final MESSAGE_TO_GROUP: Int = 4;
-	private static inline final MESSAGE_TEXT_GROUP: Int = 5;
-
-	/** The probe corpus `probes` runs when it is given no directory: the tree's own, one project per directory. */
-	private static final PROBES_DIR: String = 'tools/typer-facts';
-
-	/** The access of a call fact whose callee the compiler inlined at the call site (`CompilerFacts.CallFact`). */
-	private static final INLINED_ACCESS: String = 'inlined';
-
-	/** The type a class read as a value has, and an enum's (`Class<T>`, `Enum<T>`). */
-	private static final CLASS_VALUE: String = 'Class';
-
-	private static final ENUM_VALUE: String = 'Enum';
-
-	/** The kind the facts give a typedef (`CompilerFacts.TypeFact`). */
-	private static final TYPEDEF_KIND: String = 'typedef';
-
-	/** A display assertion the harness scores: `eq("<type>", type(pos(N)))`. */
-	private static final TYPE_ASSERT: EReg = ~/^eq\("((?:[^"\\]|\\.)*)",\s*type\(pos\((\d+)\)\)\)$/;
-
-	/** `eq(range(A, B), position(pos(N)))`. */
-	private static final POSITION_ASSERT: EReg = ~/^eq\(range\((\d+),\s*(\d+)\),\s*position\(pos\((\d+)\)\)\)$/;
-
-	/** `arrayEq([range(A, B), …], usage(pos(N)))`. */
-	private static final USAGE_ASSERT: EReg = ~/^arrayEq\(\[((?:\s*range\(\d+,\s*\d+\)\s*,?)*)\],\s*usage\(pos\((\d+)\)\)\)$/;
-
-	/** `eq(range(A, B), usage(pos(N))[0])`: the first usage alone. */
-	private static final FIRST_USAGE_ASSERT: EReg = ~/^eq\(range\((\d+),\s*(\d+)\),\s*usage\(pos\((\d+)\)\)\[0\]\)$/;
-
-	/** One `range(A, B)` of a usage list. */
-	private static final RANGE: EReg = ~/range\((\d+),\s*(\d+)\)/;
-
-	/** The display API calls an assertion may make, by area; the first one a statement calls decides its area. */
-	private static final DISPLAY_AREAS: Array<String> = [
-		'type',
-		'position',
-		'usage',
-		'fields',
-		'toplevel',
-		'signature',
-		'doc',
-		'metadataDoc',
-		'diagnostics',
-		'documentSymbols',
-		'noCompletionPoint',
-		'typeNotFound'
-	];
-
-	/** A classic compiler message: `<file>:<line>: characters <a>-<b> : <text>`. */
-	private static final MESSAGE: EReg = ~/^(.+?):(\d+): characters (\d+)-(\d+) : (.*)$/;
-
-	/** A `$type` warning's text. */
-	private static final TYPE_WARNING: EReg = ~/^Warning : (.+)$/;
-
-	/** A unification error's text, at the top of its chain: `<A> should be <B>`. */
-	private static final SHOULD_BE: EReg = ~/^(?:error: )?(.+) should be (.+)$/;
-
-	public static function main(argv: Array<String>): Int {
-		final args: Array<String> = argv.copy();
-		final list: Bool = args.remove('--list');
-		final report: Report = new Report(list, args.remove('--census'));
-		var gated: Bool = false;
-		var refused: Array<String> = [];
-		switch args {
-			case ['upstream', clone]:
-				upstream(clone, report);
-			case ['facts']:
-				facts(null, report);
-			case ['facts', configuration]:
-				facts(configuration, report);
-			case ['probes']:
-				gated = true;
-				refused = probes(Path.join([Repo.resolve(null), PROBES_DIR]), report);
-			case ['probes', dir]:
-				gated = true;
-				refused = probes(dir, report);
-			case _:
-				Sys.println(USAGE);
-				return 2;
-		}
-		report.print();
-		for (r in refused) Sys.println('REFUSED  $r');
-		// the probe corpus is a gate: one answer that is not the compiler's fails it, and so does a project it could not read
-		return gated && (report.differences() > 0 || refused.length > 0) ? 1 : 0;
-	}
-
-	/**
-	 * Why a probe project's run is no reading of the typer, or null when it is one: a configuration the compiler dropped (a
-	 * type error, a compiler that did not start), none compiled, no project file compiled, or no case scored. A run that
-	 * read nothing has no DIFFERENT to show, so a gate counting DIFFERENT alone would pass it.
-	 */
-	public static function probeRefusal(run: FactsRun): Null<String> {
-		return if (run.dropped.length > 0)
-			'a configuration did not compile (${run.dropped.join('; ')})'
-		else if (run.configurations == 0)
-			'no configuration compiled'
-		else if (run.compiled == 0)
-			'0 of ${run.files} project files compiled'
-		else if (run.cases == 0)
-			'no case was scored'
-		else
-			null;
-	}
-
-	/** The offset of the `}` closing the block whose body starts at `from`. */
-	public static function closingBrace(text: String, code: Array<Span>, from: Int): Int {
-		var depth: Int = 1;
-		for (run in code) for (i in (run.from < from ? from : run.from) ... run.to) {
-			final c: Int = text.fastCodeAt(i);
-			if (c == '{'.code) depth++;
-			if (c == '}'.code && --depth == 0) return i;
-		}
-		return text.length - 1;
-	}
-
-	/** The top-level statements of a function body, each trimmed and without its `;`. */
-	public static function statementsOf(body: String): Array<String> {
-		final out: Array<String> = [];
-		var depth: Int = 0;
-		var start: Int = 0;
-		for (run in LexicalRegions.codeSpans(body.length, new HaxeQueryPlugin().lexicalRegions(body))) for (i in run.from ... run.to) {
-			final c: String = body.charAt(i);
-			if (c == '(' || c == '[' || c == '{') depth++;
-			if (c == ')' || c == ']' || c == '}') depth--;
-			if (c != ';' || depth != 0) continue;
-			out.push(~/\s+/g.replace(body.substring(start, i), ' ').trim());
-			start = i + 1;
-		}
-		return out;
-	}
-
-	/**
-	 * Every probe project under `dir` — each directory holding an `apq.json` that names a compiler oracle — run as
-	 * `facts` in it, into one report: shapes no census tree holds, each compiled by the compiler and asked of the typer.
-	 * Returns one line per project whose run is no reading (`probeRefusal`), each printed as it is found.
-	 */
-	private static function probes(dir: String, report: Report): Array<String> {
-		final start: String = Sys.getCwd();
-		final root: String = FileSystem.fullPath(dir);
-		final names: Array<String> = FileSystem.readDirectory(root).filter(
-			n ->
-				FileSystem.exists(Path.join([root, n, ConfigFinder.PROJECT_CONFIG]))
-				|| FileSystem.exists(Path.join([root, n, ConfigFinder.LEGACY_PROJECT_CONFIG]))
-		);
-		names.sort(Compare.compareString);
-		final refused: Array<String> = [];
-		for (name in names) {
-			Sys.setCwd(Path.join([root, name]));
-			final why: Null<String> = try
-				probeRefusal(facts(null, report))
-			catch (exception: Exception)
-				'the run threw: ${exception.message}';
-			if (why == null) continue;
-			refused.push('$name: $why');
-			Sys.println('probes: $name is no reading — $why');
-		}
-		Sys.setCwd(start);
-		if (names.length == 0) refused.push('no probe project under $root');
-		return refused;
-	}
-
-	/** The display and misc suites of the clone at `clone`. */
-	private static function upstream(clone: String, report: Report): Void {
-		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final std: Array<{ file: String, source: String }> = evalStd();
-		final cases: Array<String> = [];
-		collectPaths(Path.join([clone, 'tests/display/src/cases']), '.hx', cases);
-		cases.sort(Compare.compareString);
-		for (path in cases) for (test in displayTests(path)) displayCase(test, plugin, std, report);
-		final stderrs: Array<String> = [];
-		collectPaths(Path.join([clone, 'tests/misc/projects']), '-fail.hxml.stderr', stderrs);
-		stderrs.sort(Compare.compareString);
-		for (path in stderrs) miscCase(path, plugin, std, report);
-	}
-
-	/** The standard library as the `--interp` target sees it: the top level, `haxe`, `sys` and `eval`. */
-	private static function evalStd(): Array<{ file: String, source: String }> {
-		final dir: Null<String> = StdResolver.stdDir();
-		final out: Array<{ file: String, source: String }> = [];
-		if (dir == null) return out;
-		for (entry in FileSystem.readDirectory(dir)) {
-			final path: String = Path.join([dir, entry]);
-			if (FileSystem.isDirectory(path)) {
-				if (['haxe', 'sys', 'eval'].contains(entry)) collect(path, out);
-			} else if (entry.endsWith('.hx')) {
-				out.push({ file: path, source: File.getContent(path) });
-			}
-		}
-		return out;
-	}
-
-	/** Every test of the display case file `path` that carries its code in its doc comment. */
-	private static function displayTests(path: String): Array<DisplayTest> {
-		final text: String = File.getContent(path);
-		final packageLine: EReg = ~/^package\s+([\w.]+)\s*;/m;
-		final pack: Null<String> = packageLine.match(text) ? packageLine.matched(1) : null;
-		final head: EReg = ~/\/\*\*([\s\S]*?)\*\*\/\s*((?:@:[A-Za-z]+(?:\([^)]*\))?\s*)*)function\s+(\w+)\s*\(\)[^{]*\{/;
-		final codeRuns: Array<Span> = LexicalRegions.codeSpans(text.length, new HaxeQueryPlugin().lexicalRegions(text));
-		final out: Array<DisplayTest> = [];
-		var at: Int = 0;
-		while (head.matchSub(text, at)) {
-			final pos: { pos: Int, len: Int } = head.matchedPos();
-			final bodyFrom: Int = pos.pos + pos.len;
-			final bodyTo: Int = closingBrace(text, codeRuns, bodyFrom);
-			final metas: String = head.matched(2);
-			final doc: String = head.matched(1).replace('**\\/', '**/');
-			final wrapped: String = metas.contains('@:funcCode') ? 'class Main { static function main() { $doc}}' : doc;
-			final code: String = (pack == null ? '' : 'package $pack;\n') + wrapped;
-			final file: EReg = ~/@:filename\("([^"]+)"\)/;
-			out.push({
-				label: '${Path.withoutDirectory(path)}#${head.matched(TEST_NAME_GROUP)}',
-				file: file.match(metas) ? file.matched(1) : Path.withoutDirectory(path),
-				code: code,
-				statements: statementsOf(text.substring(bodyFrom, bodyTo))
-			});
-			at = bodyTo;
-		}
-		return out;
-	}
-
-	/** One display test: its code with the markers taken out, scored assertion by assertion. */
-	private static function displayCase(
-		test: DisplayTest, plugin: CachingGrammarPlugin, std: Array<{ file: String, source: String }>, report: Report
-	): Void {
-		final markers: Map<Int, Int> = [];
-		final marker: EReg = ~/\{-(\d+)-\}/;
-		var source: String = '';
-		var rest: String = test.code;
-		while (marker.match(rest)) {
-			source += marker.matchedLeft();
-			final n: Null<Int> = Std.parseInt(marker.matched(1));
-			if (n != null) markers[n] = source.length;
-			rest = marker.matchedRight();
-		}
-		source += rest;
-		final typer: Null<FileTyper> = FileTyper.over(plugin, [{ file: test.file, source: source }], std, test.file);
-		for (statement in test.statements) {
-			final area: Null<String> = DISPLAY_AREAS.find(a -> statement.contains('$a('));
-			if (area == null) continue;
-			final label: String = '${test.label}: $statement';
-			if (typer == null)
-				report.unscored('display/$area', '$label (the code does not parse)')
-			else
-				displayAssertion(statement, 'display/$area', label, markers, typer, report);
-		}
-	}
-
-	/** One display assertion of `area`: a `type`, `position` or `usage` one is asked of `typer`, any other is unanswered. */
-	private static function displayAssertion(
-		statement: String, area: String, label: String, markers: Map<Int, Int>, typer: FileTyper, report: Report
-	): Void {
-		if (TYPE_ASSERT.match(statement)) {
-			final at: Null<Int> = markers[group(TYPE_ASSERT, 2)];
-			final node: Null<QueryNode> = at == null ? null : typer.displayed(at);
-			if (node == null)
-				report.unscored(area, '$label (the position sits on a seam between two expressions)')
-			else
-				typeAt(report, area, label, unescape(TYPE_ASSERT.matched(1)), typer, node);
-		} else if (POSITION_ASSERT.match(statement)) {
-			final expected: Null<Span> = rangeOf(markers, POSITION_ASSERT.matched(1), POSITION_ASSERT.matched(2));
-			final at: Null<Int> = markers[group(POSITION_ASSERT)];
-			if (expected != null && at != null) report.score(area, label, positionVerdict(expected, typer.definitionAt(at)));
-		} else if (USAGE_ASSERT.match(statement)) {
-			final at: Null<Int> = markers[group(USAGE_ASSERT, 2)];
-			final expected: Array<Span> = rangesOf(markers, USAGE_ASSERT.matched(1));
-			if (at != null) report.score(area, label, usageVerdict(expected, typer.usagesAt(at), false));
-		} else if (FIRST_USAGE_ASSERT.match(statement)) {
-			final expected: Null<Span> = rangeOf(markers, FIRST_USAGE_ASSERT.matched(1), FIRST_USAGE_ASSERT.matched(2));
-			final at: Null<Int> = markers[group(FIRST_USAGE_ASSERT)];
-			if (expected != null && at != null) report.score(area, label, usageVerdict([expected], typer.usagesAt(at), true));
-		} else {
-			report.score(area, label, Unknown);
-		}
-	}
-
-	/** The `$type` warnings and the top `should be` error of one `compile-fail` stderr, typed in its project's files. */
-	private static function miscCase(
-		stderr: String, plugin: CachingGrammarPlugin, std: Array<{ file: String, source: String }>, report: Report
-	): Void {
-		final dir: String = Path.directory(stderr);
-		final files: Array<{ file: String, source: String }> = [];
-		collect(dir, files);
-		final project: Array<{ file: String, source: String }> = files.map(f -> { file: f.file.substr(dir.length + 1), source: f.source });
-		final typers: Map<String, Null<FileTyper>> = [];
-		final projectName: String = Path.withoutDirectory(dir);
-		final lines: Array<String> = File.getContent(stderr).split('\n');
-		for (at => line in lines) if (MESSAGE.match(line.trim())) {
-			final file: String = Path.normalize(MESSAGE.matched(1));
-			final text: String = MESSAGE.matched(MESSAGE_TEXT_GROUP);
-			// a `... ` line continues the chain of the error above it, about a part of that type, not the expression's
-			if (text.startsWith('... ')) continue;
-			final warning: Bool = TYPE_WARNING.match(text);
-			final expected: Null<String> = if (warning)
-				TYPE_WARNING.matched(1)
-			else if (SHOULD_BE.match(text))
-				SHOULD_BE.matched(1)
-			else
-				null;
-			final area: String = warning ? 'misc/$$type' : 'misc/should-be';
-			final label: String = '$projectName/${Path.withoutDirectory(stderr)}: ${line.trim()}';
-			if (expected == null) {
-				report.unscored('misc/other', label);
-				continue;
-			}
-			// a chain under the error (`... have:` / `... want:`) makes its own pair the innermost one that failed, a part
-			if (!warning && chained(lines, at)) {
-				report.unscored(area, '$label (the error names a part of the type, its chain the whole)');
-				continue;
-			}
-			if (!typers.exists(file)) typers[file] = FileTyper.over(plugin, project, std, file);
-			final typer: Null<FileTyper> = typers[file];
-			final span: Null<Span> = typer?.spanOfColumns(
-				group(MESSAGE, MESSAGE_LINE_GROUP), group(MESSAGE, MESSAGE_FROM_GROUP), group(MESSAGE, MESSAGE_TO_GROUP)
-			);
-			final node: Null<QueryNode> = span == null ? null : typer?.exactly(span);
-			if (typer == null || node == null || span == null) {
-				report.unscored(area, '$label (no node at that range)');
-				continue;
-			}
-			// a warning is a `$$type` answer only when `$$type(` encloses that range; any other is a macro's own message
-			if (warning && !typer.typeProbed(span)) {
-				report.unscored('misc/other', label);
-				continue;
-			}
-			if (warning)
-				typeAt(report, area, label, expected, typer, node)
-			else
-				shouldBe(report, area, label, expected, typer, node);
-		}
-	}
-
-	/**
-	 * The `should be` error `label` at the range of `node`, its value of type `expected`, asked of `typer`: the value failing
-	 * the type written there for an ascription's range; not asked at an operator's range, where the compiler reports an
-	 * operand failing what the operator wants (`operators.ml`), not the operator's own value.
-	 */
-	private static function shouldBe(
-		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: QueryNode
-	): Void {
-		if (typer.isOperator(node))
-			report.unscored(area, '$label (an operand\'s error, reported at the operator\'s range)')
-		else
-			typeAt(report, area, label, expected, typer, typer.failingValue(node));
-	}
-
-	/**
-	 * Whether the chain under the error at `lines[at]` — its `... ` lines — holds a `have:` line: the error's own
-	 * `A should be B` then names the innermost pair that failed, a part of the expression's type, and `have` a view of
-	 * the whole that is not the type's own spelling (a class shown as the structure it was unified as).
-	 */
-	private static function chained(lines: Array<String>, at: Int): Bool {
-		for (line in lines.slice(at + 1)) {
-			if (!line.contains(' : ... ')) return false;
-			if (line.contains(' : ... have: ')) return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Compiles the project in the working directory with the facts hook and scores every case of it into `report`; what the
-	 * run read — the configurations that compiled and those dropped, the files, the cases — is returned, so a caller that
-	 * gates on the reading can refuse one that read nothing (`probeRefusal`).
-	 */
-	private static function facts(configuration: Null<String>, report: Report): FactsRun {
-		final notes: Array<ConfigNote> = [];
-		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']), notes);
-		final project: Array<{ file: String, source: String }> = [];
-		for (root in config.resolutionRoots()) collect(root, project);
-		final library: Array<{ file: String, source: String }> = EdgeDiff.libraryOf(config, project);
-		final asked: Array<OracleConfig> = [
-			for (o in config.compilerOracles(new HaxeQueryPlugin(), notes)) if (configuration == null || o.hxml.contains(configuration)) o
-		];
-		// A dev main holds no ledger: its config notes go to stderr.
-		ConfigNotes.warn(notes);
-		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final sources: Map<String, String> = [for (f in project) FileIdentity.realPath(f.file) => f.source];
-		final oracle: Null<FactsTypeOracle> = switch TypedFactsProbe.probeAll(OracleGeneration.prepare(asked).oracles) {
-			case null: null;
-			case table: new FactsTypeOracle(table, key -> sources[key], null, plugin);
-		};
-		if (oracle == null) {
-			Sys.println('facts: no configuration compiled');
-			return {
-				configurations: 0,
-				dropped: asked.map(o -> '${o.hxml}: no facts'),
-				files: project.length,
-				compiled: 0,
-				cases: 0
-			};
-		}
-		Sys.println('facts: configurations ${oracle.facts.configurations}, dropped ${oracle.facts.dropped}');
-		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, library.map(f -> f.file));
-		final aliases: Map<String, Array<Array<String>>> = typedefTargets(oracle);
-		final before: Int = report.scored();
-		var compiledFiles: Int = 0;
-		for (f in project) {
-			final key: String = FileIdentity.realPath(f.file);
-			final typer: Null<FileTyper> = FileTyper.within(plugin, index, f.file, f.source);
-			if (typer == null || !oracle.facts.compiled(key)) continue;
-			compiledFiles++;
-			typer.visit(factsCase.bind(report, oracle, aliases, key, f.file, typer));
-		}
-		Sys.println('facts: ${project.length} project files under ${config.resolutionRoots()}, $compiledFiles of them compiled');
-		return {
-			configurations: oracle.facts.configurations.length,
-			dropped: oracle.facts.dropped.map(d -> '${d.name}: ${d.reason}'),
-			files: project.length,
-			compiled: compiledFiles,
-			cases: report.scored() - before
-		};
-	}
-
-	/**
-	 * The facts case of `node` of `file` (table key `key`): the compiler's value type there asked of `typer`, unless the
-	 * facts at that range are not the text's own — the body an inlined call spliced there, a copy of an inline body typed in
-	 * a caller's terms, the compiler's own code lowered into the range, the implicit `this` a bare member read shares it with,
-	 * the `haxe.PosInfos` object the compiler hands a `?pos` parameter at the call's own range, the value an inlined call hands
-	 * a parameter it leaves out (`leavesAnInlinedArgumentOut`).
-	 */
-	private static function factsCase(
-		report: Report, oracle: FactsTypeOracle, aliases: Map<String, Array<Array<String>>>, key: String, file: String, typer: FileTyper,
-		node: QueryNode
-	): Void {
-		final at: Null<Span> = node.span;
-		final compiled: Null<String> = at == null
-			? null
-			: switch oracle.valueType(key, at) {
-				case Typed(type): type;
-				case Declined(_): null;
-			};
-		if (at == null || compiled == null) return;
-		final label: String = '$file:${at.from}: $compiled';
-		// an operator an inlined overload takes holds the overload's body at its range, its operands bound there
-		final spliced: Bool = typer.inlinedOverload(node)
-			|| oracle.facts.nodesAround(key, at).exists(
-				n ->
-					n.inlinedFrom != null
-					|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
-			);
-		if (spliced)
-			report.unscored('facts/${node.kind}', '$label (inlined code)')
-		else if (typer.namesNoValueOf(node, compiled, CLASS_VALUE))
-			report.unscored('facts/${node.kind}', '$label (the compiler\'s own code at that range)')
-		else if (typer.isIdentifier(node) && typer.namesNoValueOf(node, compiled, ENUM_VALUE))
-			report.unscored('facts/${node.kind}', '$label (the enum value a constructor read bare is read off)')
-		else if (typer.implicitReceiver(node, outerOf(normalized(compiled))))
-			report.unscored('facts/${node.kind}', '$label (the implicit receiver of a member read)')
-		else if (typer.isCall(node) && isPosInfos(normalized(compiled)))
-			report.unscored('facts/${node.kind}', '$label (the haxe.PosInfos argument the compiler adds at a call)')
-		else if (leavesAnInlinedArgumentOut(oracle, key, node, at, compiled, typer))
-			report.unscored('facts/${node.kind}', '$label (an inlined call leaving an argument out: the value it hands it, not the call)')
-		else
-			typeAt(report, 'facts/${node.kind}', label, compiled, typer, node, aliases);
-	}
-
-	/**
-	 * Whether `node`, at `at` of the file `key`, is a call the compiler inlined leaving out an argument of the type it typed
-	 * there (`compiled`): an `inlined` call fact of a method of the callee's name whose site holds the range, that method's
-	 * node declaring a parameter of that type past the arguments the call passes. The facts record an inlined call at the
-	 * innermost expression around it (`CallFact.site`, the enclosing statement), never at the call itself, so that type is the
-	 * value the compiler hands the parameter left out — its default — and not the call's: a limit of this harness, not an
-	 * answer of the typer.
-	 */
-	private static function leavesAnInlinedArgumentOut(
-		oracle: FactsTypeOracle, key: String, node: QueryNode, at: Span, compiled: String, typer: FileTyper
-	): Bool {
-		final callee: Null<String> = typer.isCall(node) && node.children.length > 0 ? node.children[0].name : null;
-		final passed: Int = node.children.length - 1;
-		final want: String = normalized(compiled);
-		return callee != null && oracle.facts.nodesAround(key, at).exists(n -> n.calls.exists(c -> {
-			final site: Null<FactPos> = c.site;
-			final target: Null<String> = c.target;
-			final method: Null<FactNode> = target == null ? null : oracle.facts.node(target);
-			c.access == INLINED_ACCESS
-				&& site != null
-				&& site.span.from <= at.from
-				&& at.to <= site.span.to
-				&& target != null
-				&& SourceText.lastSegment(target) == callee
-				&& method != null
-				&& method.params.slice(passed).exists(p -> normalized(p.type) == want);
-		}));
-	}
-
-	/**
-	 * The typer's two answers for `node` — written source and nominal — scored against the compiler's `expected` type. A
-	 * typer name that is a typedef the compiler printed through (`Signal0` for `Priority<Listener0>`), or the class a
-	 * `@:generic` one expands to (`TypedPool_pony_ui_touch_Touch`), is the same type spelled another way: the nominal
-	 * follows the alias, and a source the harness cannot expand to the same text is unscored, not a match. A typedef whose
-	 * alias the index cannot follow — one declared in several `#if` branches — but which every typedef of its name the
-	 * compiled build typed aliases to the compiler's type (`aliases`, `typedefTargets`) is unscored in both currencies: the
-	 * same type in that build, not shown to be in every one.
-	 */
-	private static function typeAt(
-		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: Null<QueryNode>,
-		?aliases: Map<String, Array<Array<String>>>
-	): Void {
-		final want: String = normalized(expected);
-		final outer: String = outerOf(want);
-		final typedefs: Map<String, Array<Array<String>>> = aliases ?? [];
-		final compiledAlias: (String) -> Bool = name -> {
-			final targets: Null<Array<Array<String>>> = typedefs[name];
-			targets != null && targets.length > 0 && targets.foreach(t -> t.length > 0 && t.foreach(x -> x == outer));
-		};
-		final source: Null<String> = node == null ? null : typer.source(node);
-		final nominal: Null<String> = node == null ? null : typer.nominal(node);
-		final named: Null<String> = nominal == null ? null : SourceText.lastSegment(nominal);
-		final sourceOuter: Null<String> = source == null ? null : outerOf(normalized(source));
-		if (source == null)
-			report.score('$area (source)', label, Unknown)
-		else if (normalized(source) == want)
-			report.score('$area (source)', label, Match)
-		else if (sourceOuter != null && (typer.spellsAlike(sourceOuter, outer) || compiledAlias(sourceOuter)))
-			report.unscored('$area (source)', '$label (an alias or a generic expansion of $source)')
-		else
-			report.score('$area (source)', label, Different(source));
-		if (named == null)
-			report.score('$area (nominal)', label, Unknown)
-		else if (named == outer || typer.aliased(named) == outer)
-			report.score('$area (nominal)', label, Match)
-		else if (typer.spellsAlike(named, outer))
-			report.unscored('$area (nominal)', '$label (a generic expansion of $named)')
-		else if (compiledAlias(named))
-			report.unscored('$area (nominal)', '$label (a typedef the compiled build aliases to it: $named)')
-		else
-			report.score('$area (nominal)', label, Different(named));
-		censusRoots(report, area, label, typer, node, source == null, named == null);
-	}
-
-	/**
-	 * Every typedef the compiled build typed, by simple name: for each, the outer simple names of the types a configuration
-	 * aliased it to (`TypeFact.targets`), in the spelling `typeAt` compares in.
-	 */
-	private static function typedefTargets(oracle: FactsTypeOracle): Map<String, Array<Array<String>>> {
-		final out: Map<String, Array<Array<String>>> = [];
-		for (id in oracle.facts.typeIds()) {
-			final t: Null<TypeFact> = oracle.facts.type(id);
-			if (t == null || t.kind != TYPEDEF_KIND) continue;
-			final name: String = SourceText.lastSegment(id);
-			final all: Array<Array<String>> = out[name] ?? [];
-			all.push(t.targets.map(target -> outerOf(normalized(target))));
-			out[name] = all;
-		}
-		return out;
-	}
-
-	private static function positionVerdict(expected: Span, found: Null<Span>): Verdict {
-		return if (found == null)
-			Unknown
-		else if (found.from == expected.from && found.to == expected.to)
-			Match
-		else
-			Different('${found.from}-${found.to}');
-	}
-
-	/** `found` against `expected`, the whole list or (`firstOnly`) its first range. */
-	private static function usageVerdict(expected: Array<Span>, found: Null<Array<Span>>, firstOnly: Bool): Verdict {
-		if (found == null) return Unknown;
-		final got: Array<String> = found.map(s -> '${s.from}-${s.to}');
-		got.sort(Compare.compareString);
-		final want: Array<String> = expected.map(s -> '${s.from}-${s.to}');
-		want.sort(Compare.compareString);
-		final same: Bool = firstOnly ? got.length > 0 && got[0] == want[0] : got.join(',') == want.join(',');
-		return same ? Match : Different(got.join(','));
-	}
-
-	/** `type` in the one spelling both sides are compared in (`TypeText`), or the text itself when it does not read as one. */
-	private static function normalized(type: String): String {
-		return TypeText.canonical(type) ?? type;
-	}
-
-	/** The outermost type name of a normalized type text. */
-	private static function outerOf(type: String): String {
-		final open: Int = type.indexOf('<');
-		return open < 0 ? type : type.substring(0, open);
-	}
-
-	/** Whether the normalized `type` is `haxe.PosInfos` as the compiler prints it: the structure of its four fields and more. */
-	private static function isPosInfos(type: String): Bool {
-		return ['className:String', 'fileName:String', 'lineNumber:Int', 'methodName:String'].foreach(f -> type.contains(f))
-			&& type.startsWith('{');
-	}
-
-	/** `r`'s group `n` read as a number, -1 when it is none. */
-	private static function group(r: EReg, n: Int = QUERY_MARKER_GROUP): Int {
-		return Std.parseInt(r.matched(n)) ?? -1;
-	}
-
-	private static function unescape(text: String): String {
-		return text.replace('\\"', '"').replace('\\\\', '\\');
-	}
-
-	private static function rangeOf(markers: Map<Int, Int>, from: String, to: String): Null<Span> {
-		final a: Null<Int> = markers[Std.parseInt(from) ?? -1];
-		final b: Null<Int> = markers[Std.parseInt(to) ?? -1];
-		return a == null || b == null ? null : new Span(a, b);
-	}
-
-	private static function rangesOf(markers: Map<Int, Int>, list: String): Array<Span> {
-		final out: Array<Span> = [];
-		var rest: String = list;
-		while (RANGE.match(rest)) {
-			final r: Null<Span> = rangeOf(markers, RANGE.matched(1), RANGE.matched(2));
-			if (r != null) out.push(r);
-			rest = RANGE.matchedRight();
-		}
-		return out;
-	}
-
-	/** The paths under `dir` ending in `suffix`. */
-	private static function collectPaths(dir: String, suffix: String, into: Array<String>): Void {
-		if (!FileSystem.exists(dir)) return;
-		for (entry in FileSystem.readDirectory(dir)) {
-			final path: String = Path.join([dir, entry]);
-			if (FileSystem.isDirectory(path))
-				collectPaths(path, suffix, into)
-			else if (entry.endsWith(suffix))
-				into.push(path);
-		}
-	}
-
-	/** Every `.hx` file under `dir`, read. */
-	private static function collect(dir: String, into: Array<{ file: String, source: String }>): Void {
-		final paths: Array<String> = [];
-		collectPaths(dir, '.hx', paths);
-		for (path in paths) into.push({ file: path, source: File.getContent(path) });
-	}
-
-	/** Under `--census`, the roots of the typer's UNKNOWN answers for `node`: in the written-source currency, the nominal one. */
-	private static function censusRoots(
-		report: Report, area: String, label: String, typer: FileTyper, node: Null<QueryNode>, unknownSource: Bool, unknownNominal: Bool
-	): Void {
-		if (unknownSource) report.unknownRoot('source', area, label, rootOf.bind(typer, node, true));
-		if (unknownNominal) report.unknownRoot('nominal', area, label, rootOf.bind(typer, node, false));
-	}
-
-	/** The root of the typer's UNKNOWN for `node` in the written-source (`sourceCurrency`) or the nominal currency. */
-	private static function rootOf(typer: FileTyper, node: Null<QueryNode>, sourceCurrency: Bool): UnknownCause {
-		return node == null ? { root: Other, detail: 'no node asked' } : typer.unknownCause(node, sourceCurrency);
-	}
-
-}
-
 /** One display test: where it is, the module its doc comment compiles to, and its body's statements. */
 private typedef DisplayTest = {
 	final label: String;
@@ -1801,6 +1122,685 @@ private final class Report {
 		final keys: Array<String> = [for (k in map.keys()) k];
 		keys.sort(Compare.compareString);
 		return keys;
+	}
+
+}
+
+/**
+ * The typer's conformance harness, step T1 of the typer by specification (`docs/typing-service.md`): it asks the typing
+ * layers questions the compiler has answered and scores every answer MATCH (the compiler's), UNKNOWN (the typer
+ * declined) or DIFFERENT (anything else, the one outcome a typer that fails closed must never give). The UNKNOWN share
+ * of an area is the typer's coverage there.
+ *
+ * Two sources, neither copied into this repository. `upstream` reads a pinned Haxe 4.3.7 clone: `tests/display` (the
+ * `type`, `position` and `usage` assertions on `{-N-}` markers; every other display assertion is counted, unanswered)
+ * and `tests/misc` (the `$type` warnings and `A should be B` errors of every `compile-fail` stderr). `facts`, run in a
+ * project root, compiles the project's oracles (`apq.json`) with the facts hook and asks the type of every range the
+ * compiler typed.
+ *
+ * `--census` roots every UNKNOWN type answer (`UnknownCauses`) and prints the tallies after the table, which it leaves
+ * byte-identical: the share of each inference form and of each gap that needs none, the denominator the typer's next steps
+ * are measured against.
+ *
+ *   haxe tools/dev.hxml
+ *   node bin/dev.js typer-conformance upstream <haxe-4.3.7-clone> [--list] [--census]
+ *   (cd <project> && node <anyparse>/bin/dev.js typer-conformance facts [<configuration-substring>] [--list] [--census])
+ */
+@:nullSafety(Strict)
+final class TyperConformance {
+
+	public static inline final USAGE: String =
+		'usage: dev typer-conformance upstream <haxe-4.3.7-clone> | facts [<configuration>] | probes [<dir>]  [--list] [--census]';
+
+	/** The group of the test function's name in `displayTests`' header pattern. */
+	private static inline final TEST_NAME_GROUP: Int = 3;
+
+	/** The group of `POSITION_ASSERT` / `FIRST_USAGE_ASSERT` holding the marker the query is made at. */
+	private static inline final QUERY_MARKER_GROUP: Int = 3;
+
+	/** The groups of `MESSAGE`: the line, the first and the end character, the text. */
+	private static inline final MESSAGE_LINE_GROUP: Int = 2;
+
+	private static inline final MESSAGE_FROM_GROUP: Int = 3;
+	private static inline final MESSAGE_TO_GROUP: Int = 4;
+	private static inline final MESSAGE_TEXT_GROUP: Int = 5;
+
+	/** The probe corpus `probes` runs when it is given no directory: the tree's own, one project per directory. */
+	private static final PROBES_DIR: String = 'tools/typer-facts';
+
+	/** The access of a call fact whose callee the compiler inlined at the call site (`CompilerFacts.CallFact`). */
+	private static final INLINED_ACCESS: String = 'inlined';
+
+	/** The type a class read as a value has, and an enum's (`Class<T>`, `Enum<T>`). */
+	private static final CLASS_VALUE: String = 'Class';
+
+	private static final ENUM_VALUE: String = 'Enum';
+
+	/** The kind the facts give a typedef (`CompilerFacts.TypeFact`). */
+	private static final TYPEDEF_KIND: String = 'typedef';
+
+	/** A display assertion the harness scores: `eq("<type>", type(pos(N)))`. */
+	private static final TYPE_ASSERT: EReg = ~/^eq\("((?:[^"\\]|\\.)*)",\s*type\(pos\((\d+)\)\)\)$/;
+
+	/** `eq(range(A, B), position(pos(N)))`. */
+	private static final POSITION_ASSERT: EReg = ~/^eq\(range\((\d+),\s*(\d+)\),\s*position\(pos\((\d+)\)\)\)$/;
+
+	/** `arrayEq([range(A, B), …], usage(pos(N)))`. */
+	private static final USAGE_ASSERT: EReg = ~/^arrayEq\(\[((?:\s*range\(\d+,\s*\d+\)\s*,?)*)\],\s*usage\(pos\((\d+)\)\)\)$/;
+
+	/** `eq(range(A, B), usage(pos(N))[0])`: the first usage alone. */
+	private static final FIRST_USAGE_ASSERT: EReg = ~/^eq\(range\((\d+),\s*(\d+)\),\s*usage\(pos\((\d+)\)\)\[0\]\)$/;
+
+	/** One `range(A, B)` of a usage list. */
+	private static final RANGE: EReg = ~/range\((\d+),\s*(\d+)\)/;
+
+	/** The display API calls an assertion may make, by area; the first one a statement calls decides its area. */
+	private static final DISPLAY_AREAS: Array<String> = [
+		'type',
+		'position',
+		'usage',
+		'fields',
+		'toplevel',
+		'signature',
+		'doc',
+		'metadataDoc',
+		'diagnostics',
+		'documentSymbols',
+		'noCompletionPoint',
+		'typeNotFound'
+	];
+
+	/** A classic compiler message: `<file>:<line>: characters <a>-<b> : <text>`. */
+	private static final MESSAGE: EReg = ~/^(.+?):(\d+): characters (\d+)-(\d+) : (.*)$/;
+
+	/** A `$type` warning's text. */
+	private static final TYPE_WARNING: EReg = ~/^Warning : (.+)$/;
+
+	/** A unification error's text, at the top of its chain: `<A> should be <B>`. */
+	private static final SHOULD_BE: EReg = ~/^(?:error: )?(.+) should be (.+)$/;
+
+	public static function main(argv: Array<String>): Int {
+		final args: Array<String> = argv.copy();
+		final list: Bool = args.remove('--list');
+		final report: Report = new Report(list, args.remove('--census'));
+		var gated: Bool = false;
+		var refused: Array<String> = [];
+		switch args {
+			case ['upstream', clone]:
+				upstream(clone, report);
+			case ['facts']:
+				facts(null, report);
+			case ['facts', configuration]:
+				facts(configuration, report);
+			case ['probes']:
+				gated = true;
+				refused = probes(Path.join([Repo.resolve(null), PROBES_DIR]), report);
+			case ['probes', dir]:
+				gated = true;
+				refused = probes(dir, report);
+			case _:
+				Sys.println(USAGE);
+				return 2;
+		}
+		report.print();
+		for (r in refused) Sys.println('REFUSED  $r');
+		// the probe corpus is a gate: one answer that is not the compiler's fails it, and so does a project it could not read
+		return gated && (report.differences() > 0 || refused.length > 0) ? 1 : 0;
+	}
+
+	/**
+	 * Why a probe project's run is no reading of the typer, or null when it is one: a configuration the compiler dropped (a
+	 * type error, a compiler that did not start), none compiled, no project file compiled, or no case scored. A run that
+	 * read nothing has no DIFFERENT to show, so a gate counting DIFFERENT alone would pass it.
+	 */
+	public static function probeRefusal(run: FactsRun): Null<String> {
+		return if (run.dropped.length > 0)
+			'a configuration did not compile (${run.dropped.join('; ')})'
+		else if (run.configurations == 0)
+			'no configuration compiled'
+		else if (run.compiled == 0)
+			'0 of ${run.files} project files compiled'
+		else if (run.cases == 0)
+			'no case was scored'
+		else
+			null;
+	}
+
+	/** The offset of the `}` closing the block whose body starts at `from`. */
+	public static function closingBrace(text: String, code: Array<Span>, from: Int): Int {
+		var depth: Int = 1;
+		for (run in code) for (i in (run.from < from ? from : run.from) ... run.to) {
+			final c: Int = text.fastCodeAt(i);
+			if (c == '{'.code) depth++;
+			if (c == '}'.code && --depth == 0) return i;
+		}
+		return text.length - 1;
+	}
+
+	/** The top-level statements of a function body, each trimmed and without its `;`. */
+	public static function statementsOf(body: String): Array<String> {
+		final out: Array<String> = [];
+		var depth: Int = 0;
+		var start: Int = 0;
+		for (run in LexicalRegions.codeSpans(body.length, new HaxeQueryPlugin().lexicalRegions(body))) for (i in run.from ... run.to) {
+			final c: String = body.charAt(i);
+			if (c == '(' || c == '[' || c == '{') depth++;
+			if (c == ')' || c == ']' || c == '}') depth--;
+			if (c != ';' || depth != 0) continue;
+			out.push(~/\s+/g.replace(body.substring(start, i), ' ').trim());
+			start = i + 1;
+		}
+		return out;
+	}
+
+	/**
+	 * Every probe project under `dir` — each directory holding an `apq.json` that names a compiler oracle — run as
+	 * `facts` in it, into one report: shapes no census tree holds, each compiled by the compiler and asked of the typer.
+	 * Returns one line per project whose run is no reading (`probeRefusal`), each printed as it is found.
+	 */
+	private static function probes(dir: String, report: Report): Array<String> {
+		final start: String = Sys.getCwd();
+		final root: String = FileSystem.fullPath(dir);
+		final names: Array<String> = FileSystem.readDirectory(root).filter(
+			n ->
+				FileSystem.exists(Path.join([root, n, ConfigFinder.PROJECT_CONFIG]))
+				|| FileSystem.exists(Path.join([root, n, ConfigFinder.LEGACY_PROJECT_CONFIG]))
+		);
+		names.sort(Compare.compareString);
+		final refused: Array<String> = [];
+		for (name in names) {
+			Sys.setCwd(Path.join([root, name]));
+			final why: Null<String> = try
+				probeRefusal(facts(null, report))
+			catch (exception: Exception)
+				'the run threw: ${exception.message}';
+			if (why == null) continue;
+			refused.push('$name: $why');
+			Sys.println('probes: $name is no reading — $why');
+		}
+		Sys.setCwd(start);
+		if (names.length == 0) refused.push('no probe project under $root');
+		return refused;
+	}
+
+	/** The display and misc suites of the clone at `clone`. */
+	private static function upstream(clone: String, report: Report): Void {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final std: Array<{ file: String, source: String }> = evalStd();
+		final cases: Array<String> = [];
+		collectPaths(Path.join([clone, 'tests/display/src/cases']), '.hx', cases);
+		cases.sort(Compare.compareString);
+		for (path in cases) for (test in displayTests(path)) displayCase(test, plugin, std, report);
+		final stderrs: Array<String> = [];
+		collectPaths(Path.join([clone, 'tests/misc/projects']), '-fail.hxml.stderr', stderrs);
+		stderrs.sort(Compare.compareString);
+		for (path in stderrs) miscCase(path, plugin, std, report);
+	}
+
+	/** The standard library as the `--interp` target sees it: the top level, `haxe`, `sys` and `eval`. */
+	private static function evalStd(): Array<{ file: String, source: String }> {
+		final dir: Null<String> = StdResolver.stdDir();
+		final out: Array<{ file: String, source: String }> = [];
+		if (dir == null) return out;
+		for (entry in FileSystem.readDirectory(dir)) {
+			final path: String = Path.join([dir, entry]);
+			if (FileSystem.isDirectory(path)) {
+				if (['haxe', 'sys', 'eval'].contains(entry)) collect(path, out);
+			} else if (entry.endsWith('.hx')) {
+				out.push({ file: path, source: File.getContent(path) });
+			}
+		}
+		return out;
+	}
+
+	/** Every test of the display case file `path` that carries its code in its doc comment. */
+	private static function displayTests(path: String): Array<DisplayTest> {
+		final text: String = File.getContent(path);
+		final packageLine: EReg = ~/^package\s+([\w.]+)\s*;/m;
+		final pack: Null<String> = packageLine.match(text) ? packageLine.matched(1) : null;
+		final head: EReg = ~/\/\*\*([\s\S]*?)\*\*\/\s*((?:@:[A-Za-z]+(?:\([^)]*\))?\s*)*)function\s+(\w+)\s*\(\)[^{]*\{/;
+		final codeRuns: Array<Span> = LexicalRegions.codeSpans(text.length, new HaxeQueryPlugin().lexicalRegions(text));
+		final out: Array<DisplayTest> = [];
+		var at: Int = 0;
+		while (head.matchSub(text, at)) {
+			final pos: { pos: Int, len: Int } = head.matchedPos();
+			final bodyFrom: Int = pos.pos + pos.len;
+			final bodyTo: Int = closingBrace(text, codeRuns, bodyFrom);
+			final metas: String = head.matched(2);
+			final doc: String = head.matched(1).replace('**\\/', '**/');
+			final wrapped: String = metas.contains('@:funcCode') ? 'class Main { static function main() { $doc}}' : doc;
+			final code: String = (pack == null ? '' : 'package $pack;\n') + wrapped;
+			final file: EReg = ~/@:filename\("([^"]+)"\)/;
+			out.push({
+				label: '${Path.withoutDirectory(path)}#${head.matched(TEST_NAME_GROUP)}',
+				file: file.match(metas) ? file.matched(1) : Path.withoutDirectory(path),
+				code: code,
+				statements: statementsOf(text.substring(bodyFrom, bodyTo))
+			});
+			at = bodyTo;
+		}
+		return out;
+	}
+
+	/** One display test: its code with the markers taken out, scored assertion by assertion. */
+	private static function displayCase(
+		test: DisplayTest, plugin: CachingGrammarPlugin, std: Array<{ file: String, source: String }>, report: Report
+	): Void {
+		final markers: Map<Int, Int> = [];
+		final marker: EReg = ~/\{-(\d+)-\}/;
+		var source: String = '';
+		var rest: String = test.code;
+		while (marker.match(rest)) {
+			source += marker.matchedLeft();
+			final n: Null<Int> = Std.parseInt(marker.matched(1));
+			if (n != null) markers[n] = source.length;
+			rest = marker.matchedRight();
+		}
+		source += rest;
+		final typer: Null<FileTyper> = FileTyper.over(plugin, [{ file: test.file, source: source }], std, test.file);
+		for (statement in test.statements) {
+			final area: Null<String> = DISPLAY_AREAS.find(a -> statement.contains('$a('));
+			if (area == null) continue;
+			final label: String = '${test.label}: $statement';
+			if (typer == null)
+				report.unscored('display/$area', '$label (the code does not parse)')
+			else
+				displayAssertion(statement, 'display/$area', label, markers, typer, report);
+		}
+	}
+
+	/** One display assertion of `area`: a `type`, `position` or `usage` one is asked of `typer`, any other is unanswered. */
+	private static function displayAssertion(
+		statement: String, area: String, label: String, markers: Map<Int, Int>, typer: FileTyper, report: Report
+	): Void {
+		if (TYPE_ASSERT.match(statement)) {
+			final at: Null<Int> = markers[group(TYPE_ASSERT, 2)];
+			final node: Null<QueryNode> = at == null ? null : typer.displayed(at);
+			if (node == null)
+				report.unscored(area, '$label (the position sits on a seam between two expressions)')
+			else
+				typeAt(report, area, label, unescape(TYPE_ASSERT.matched(1)), typer, node);
+		} else if (POSITION_ASSERT.match(statement)) {
+			final expected: Null<Span> = rangeOf(markers, POSITION_ASSERT.matched(1), POSITION_ASSERT.matched(2));
+			final at: Null<Int> = markers[group(POSITION_ASSERT)];
+			if (expected != null && at != null) report.score(area, label, positionVerdict(expected, typer.definitionAt(at)));
+		} else if (USAGE_ASSERT.match(statement)) {
+			final at: Null<Int> = markers[group(USAGE_ASSERT, 2)];
+			final expected: Array<Span> = rangesOf(markers, USAGE_ASSERT.matched(1));
+			if (at != null) report.score(area, label, usageVerdict(expected, typer.usagesAt(at), false));
+		} else if (FIRST_USAGE_ASSERT.match(statement)) {
+			final expected: Null<Span> = rangeOf(markers, FIRST_USAGE_ASSERT.matched(1), FIRST_USAGE_ASSERT.matched(2));
+			final at: Null<Int> = markers[group(FIRST_USAGE_ASSERT)];
+			if (expected != null && at != null) report.score(area, label, usageVerdict([expected], typer.usagesAt(at), true));
+		} else {
+			report.score(area, label, Unknown);
+		}
+	}
+
+	/** The `$type` warnings and the top `should be` error of one `compile-fail` stderr, typed in its project's files. */
+	private static function miscCase(
+		stderr: String, plugin: CachingGrammarPlugin, std: Array<{ file: String, source: String }>, report: Report
+	): Void {
+		final dir: String = Path.directory(stderr);
+		final files: Array<{ file: String, source: String }> = [];
+		collect(dir, files);
+		final project: Array<{ file: String, source: String }> = files.map(f -> { file: f.file.substr(dir.length + 1), source: f.source });
+		final typers: Map<String, Null<FileTyper>> = [];
+		final projectName: String = Path.withoutDirectory(dir);
+		final lines: Array<String> = File.getContent(stderr).split('\n');
+		for (at => line in lines) if (MESSAGE.match(line.trim())) {
+			final file: String = Path.normalize(MESSAGE.matched(1));
+			final text: String = MESSAGE.matched(MESSAGE_TEXT_GROUP);
+			// a `... ` line continues the chain of the error above it, about a part of that type, not the expression's
+			if (text.startsWith('... ')) continue;
+			final warning: Bool = TYPE_WARNING.match(text);
+			final expected: Null<String> = if (warning)
+				TYPE_WARNING.matched(1)
+			else if (SHOULD_BE.match(text))
+				SHOULD_BE.matched(1)
+			else
+				null;
+			final area: String = warning ? 'misc/$$type' : 'misc/should-be';
+			final label: String = '$projectName/${Path.withoutDirectory(stderr)}: ${line.trim()}';
+			if (expected == null) {
+				report.unscored('misc/other', label);
+				continue;
+			}
+			// a chain under the error (`... have:` / `... want:`) makes its own pair the innermost one that failed, a part
+			if (!warning && chained(lines, at)) {
+				report.unscored(area, '$label (the error names a part of the type, its chain the whole)');
+				continue;
+			}
+			if (!typers.exists(file)) typers[file] = FileTyper.over(plugin, project, std, file);
+			final typer: Null<FileTyper> = typers[file];
+			final span: Null<Span> = typer?.spanOfColumns(
+				group(MESSAGE, MESSAGE_LINE_GROUP), group(MESSAGE, MESSAGE_FROM_GROUP), group(MESSAGE, MESSAGE_TO_GROUP)
+			);
+			final node: Null<QueryNode> = span == null ? null : typer?.exactly(span);
+			if (typer == null || node == null || span == null) {
+				report.unscored(area, '$label (no node at that range)');
+				continue;
+			}
+			// a warning is a `$$type` answer only when `$$type(` encloses that range; any other is a macro's own message
+			if (warning && !typer.typeProbed(span)) {
+				report.unscored('misc/other', label);
+				continue;
+			}
+			if (warning)
+				typeAt(report, area, label, expected, typer, node)
+			else
+				shouldBe(report, area, label, expected, typer, node);
+		}
+	}
+
+	/**
+	 * The `should be` error `label` at the range of `node`, its value of type `expected`, asked of `typer`: the value failing
+	 * the type written there for an ascription's range; not asked at an operator's range, where the compiler reports an
+	 * operand failing what the operator wants (`operators.ml`), not the operator's own value.
+	 */
+	private static function shouldBe(
+		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: QueryNode
+	): Void {
+		if (typer.isOperator(node))
+			report.unscored(area, '$label (an operand\'s error, reported at the operator\'s range)')
+		else
+			typeAt(report, area, label, expected, typer, typer.failingValue(node));
+	}
+
+	/**
+	 * Whether the chain under the error at `lines[at]` — its `... ` lines — holds a `have:` line: the error's own
+	 * `A should be B` then names the innermost pair that failed, a part of the expression's type, and `have` a view of
+	 * the whole that is not the type's own spelling (a class shown as the structure it was unified as).
+	 */
+	private static function chained(lines: Array<String>, at: Int): Bool {
+		for (line in lines.slice(at + 1)) {
+			if (!line.contains(' : ... ')) return false;
+			if (line.contains(' : ... have: ')) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Compiles the project in the working directory with the facts hook and scores every case of it into `report`; what the
+	 * run read — the configurations that compiled and those dropped, the files, the cases — is returned, so a caller that
+	 * gates on the reading can refuse one that read nothing (`probeRefusal`).
+	 */
+	private static function facts(configuration: Null<String>, report: Report): FactsRun {
+		final notes: Array<ConfigNote> = [];
+		final config: LintConfig = LintConfig.discover(Path.join([Sys.getCwd(), 'TyperConformance.hx']), notes);
+		final project: Array<{ file: String, source: String }> = [];
+		for (root in config.resolutionRoots()) collect(root, project);
+		final library: Array<{ file: String, source: String }> = EdgeDiff.libraryOf(config, project);
+		final asked: Array<OracleConfig> = [
+			for (o in config.compilerOracles(new HaxeQueryPlugin(), notes)) if (configuration == null || o.hxml.contains(configuration)) o
+		];
+		// A dev main holds no ledger: its config notes go to stderr.
+		ConfigNotes.warn(notes);
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final sources: Map<String, String> = [for (f in project) FileIdentity.realPath(f.file) => f.source];
+		final oracle: Null<FactsTypeOracle> = switch TypedFactsProbe.probeAll(OracleGeneration.prepare(asked).oracles) {
+			case null: null;
+			case table: new FactsTypeOracle(table, key -> sources[key], null, plugin);
+		};
+		if (oracle == null) {
+			Sys.println('facts: no configuration compiled');
+			return {
+				configurations: 0,
+				dropped: asked.map(o -> '${o.hxml}: no facts'),
+				files: project.length,
+				compiled: 0,
+				cases: 0
+			};
+		}
+		Sys.println('facts: configurations ${oracle.facts.configurations}, dropped ${oracle.facts.dropped}');
+		final index: SymbolIndex = IndexScope.over(project.concat(library), plugin, library.map(f -> f.file));
+		final aliases: Map<String, Array<Array<String>>> = typedefTargets(oracle);
+		final before: Int = report.scored();
+		var compiledFiles: Int = 0;
+		for (f in project) {
+			final key: String = FileIdentity.realPath(f.file);
+			final typer: Null<FileTyper> = FileTyper.within(plugin, index, f.file, f.source);
+			if (typer == null || !oracle.facts.compiled(key)) continue;
+			compiledFiles++;
+			typer.visit(factsCase.bind(report, oracle, aliases, key, f.file, typer));
+		}
+		Sys.println('facts: ${project.length} project files under ${config.resolutionRoots()}, $compiledFiles of them compiled');
+		return {
+			configurations: oracle.facts.configurations.length,
+			dropped: oracle.facts.dropped.map(d -> '${d.name}: ${d.reason}'),
+			files: project.length,
+			compiled: compiledFiles,
+			cases: report.scored() - before
+		};
+	}
+
+	/**
+	 * The facts case of `node` of `file` (table key `key`): the compiler's value type there asked of `typer`, unless the
+	 * facts at that range are not the text's own — the body an inlined call spliced there, a copy of an inline body typed in
+	 * a caller's terms, the compiler's own code lowered into the range, the implicit `this` a bare member read shares it with,
+	 * the `haxe.PosInfos` object the compiler hands a `?pos` parameter at the call's own range, the value an inlined call hands
+	 * a parameter it leaves out (`leavesAnInlinedArgumentOut`).
+	 */
+	private static function factsCase(
+		report: Report, oracle: FactsTypeOracle, aliases: Map<String, Array<Array<String>>>, key: String, file: String, typer: FileTyper,
+		node: QueryNode
+	): Void {
+		final at: Null<Span> = node.span;
+		final compiled: Null<String> = at == null
+			? null
+			: switch oracle.valueType(key, at) {
+				case Typed(type): type;
+				case Declined(_): null;
+			};
+		if (at == null || compiled == null) return;
+		final label: String = '$file:${at.from}: $compiled';
+		// an operator an inlined overload takes holds the overload's body at its range, its operands bound there
+		final spliced: Bool = typer.inlinedOverload(node)
+			|| oracle.facts.nodesAround(key, at).exists(
+				n ->
+					n.inlinedFrom != null
+					|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
+			);
+		if (spliced)
+			report.unscored('facts/${node.kind}', '$label (inlined code)')
+		else if (typer.namesNoValueOf(node, compiled, CLASS_VALUE))
+			report.unscored('facts/${node.kind}', '$label (the compiler\'s own code at that range)')
+		else if (typer.isIdentifier(node) && typer.namesNoValueOf(node, compiled, ENUM_VALUE))
+			report.unscored('facts/${node.kind}', '$label (the enum value a constructor read bare is read off)')
+		else if (typer.implicitReceiver(node, outerOf(normalized(compiled))))
+			report.unscored('facts/${node.kind}', '$label (the implicit receiver of a member read)')
+		else if (typer.isCall(node) && isPosInfos(normalized(compiled)))
+			report.unscored('facts/${node.kind}', '$label (the haxe.PosInfos argument the compiler adds at a call)')
+		else if (leavesAnInlinedArgumentOut(oracle, key, node, at, compiled, typer))
+			report.unscored('facts/${node.kind}', '$label (an inlined call leaving an argument out: the value it hands it, not the call)')
+		else
+			typeAt(report, 'facts/${node.kind}', label, compiled, typer, node, aliases);
+	}
+
+	/**
+	 * Whether `node`, at `at` of the file `key`, is a call the compiler inlined leaving out an argument of the type it typed
+	 * there (`compiled`): an `inlined` call fact of a method of the callee's name whose site holds the range, that method's
+	 * node declaring a parameter of that type past the arguments the call passes. The facts record an inlined call at the
+	 * innermost expression around it (`CallFact.site`, the enclosing statement), never at the call itself, so that type is the
+	 * value the compiler hands the parameter left out — its default — and not the call's: a limit of this harness, not an
+	 * answer of the typer.
+	 */
+	private static function leavesAnInlinedArgumentOut(
+		oracle: FactsTypeOracle, key: String, node: QueryNode, at: Span, compiled: String, typer: FileTyper
+	): Bool {
+		final callee: Null<String> = typer.isCall(node) && node.children.length > 0 ? node.children[0].name : null;
+		final passed: Int = node.children.length - 1;
+		final want: String = normalized(compiled);
+		return callee != null && oracle.facts.nodesAround(key, at).exists(n -> n.calls.exists(c -> {
+			final site: Null<FactPos> = c.site;
+			final target: Null<String> = c.target;
+			final method: Null<FactNode> = target == null ? null : oracle.facts.node(target);
+			c.access == INLINED_ACCESS
+				&& site != null
+				&& site.span.from <= at.from
+				&& at.to <= site.span.to
+				&& target != null
+				&& SourceText.lastSegment(target) == callee
+				&& method != null
+				&& method.params.slice(passed).exists(p -> normalized(p.type) == want);
+		}));
+	}
+
+	/**
+	 * The typer's two answers for `node` — written source and nominal — scored against the compiler's `expected` type. A
+	 * typer name that is a typedef the compiler printed through (`Signal0` for `Priority<Listener0>`), or the class a
+	 * `@:generic` one expands to (`TypedPool_pony_ui_touch_Touch`), is the same type spelled another way: the nominal
+	 * follows the alias, and a source the harness cannot expand to the same text is unscored, not a match. A typedef whose
+	 * alias the index cannot follow — one declared in several `#if` branches — but which every typedef of its name the
+	 * compiled build typed aliases to the compiler's type (`aliases`, `typedefTargets`) is unscored in both currencies: the
+	 * same type in that build, not shown to be in every one.
+	 */
+	private static function typeAt(
+		report: Report, area: String, label: String, expected: String, typer: FileTyper, node: Null<QueryNode>,
+		?aliases: Map<String, Array<Array<String>>>
+	): Void {
+		final want: String = normalized(expected);
+		final outer: String = outerOf(want);
+		final typedefs: Map<String, Array<Array<String>>> = aliases ?? [];
+		final compiledAlias: (String) -> Bool = name -> {
+			final targets: Null<Array<Array<String>>> = typedefs[name];
+			targets != null && targets.length > 0 && targets.foreach(t -> t.length > 0 && t.foreach(x -> x == outer));
+		};
+		final source: Null<String> = node == null ? null : typer.source(node);
+		final nominal: Null<String> = node == null ? null : typer.nominal(node);
+		final named: Null<String> = nominal == null ? null : SourceText.lastSegment(nominal);
+		final sourceOuter: Null<String> = source == null ? null : outerOf(normalized(source));
+		if (source == null)
+			report.score('$area (source)', label, Unknown)
+		else if (normalized(source) == want)
+			report.score('$area (source)', label, Match)
+		else if (sourceOuter != null && (typer.spellsAlike(sourceOuter, outer) || compiledAlias(sourceOuter)))
+			report.unscored('$area (source)', '$label (an alias or a generic expansion of $source)')
+		else
+			report.score('$area (source)', label, Different(source));
+		if (named == null)
+			report.score('$area (nominal)', label, Unknown)
+		else if (named == outer || typer.aliased(named) == outer)
+			report.score('$area (nominal)', label, Match)
+		else if (typer.spellsAlike(named, outer))
+			report.unscored('$area (nominal)', '$label (a generic expansion of $named)')
+		else if (compiledAlias(named))
+			report.unscored('$area (nominal)', '$label (a typedef the compiled build aliases to it: $named)')
+		else
+			report.score('$area (nominal)', label, Different(named));
+		censusRoots(report, area, label, typer, node, source == null, named == null);
+	}
+
+	/**
+	 * Every typedef the compiled build typed, by simple name: for each, the outer simple names of the types a configuration
+	 * aliased it to (`TypeFact.targets`), in the spelling `typeAt` compares in.
+	 */
+	private static function typedefTargets(oracle: FactsTypeOracle): Map<String, Array<Array<String>>> {
+		final out: Map<String, Array<Array<String>>> = [];
+		for (id in oracle.facts.typeIds()) {
+			final t: Null<TypeFact> = oracle.facts.type(id);
+			if (t == null || t.kind != TYPEDEF_KIND) continue;
+			final name: String = SourceText.lastSegment(id);
+			final all: Array<Array<String>> = out[name] ?? [];
+			all.push(t.targets.map(target -> outerOf(normalized(target))));
+			out[name] = all;
+		}
+		return out;
+	}
+
+	private static function positionVerdict(expected: Span, found: Null<Span>): Verdict {
+		return if (found == null)
+			Unknown
+		else if (found.from == expected.from && found.to == expected.to)
+			Match
+		else
+			Different('${found.from}-${found.to}');
+	}
+
+	/** `found` against `expected`, the whole list or (`firstOnly`) its first range. */
+	private static function usageVerdict(expected: Array<Span>, found: Null<Array<Span>>, firstOnly: Bool): Verdict {
+		if (found == null) return Unknown;
+		final got: Array<String> = found.map(s -> '${s.from}-${s.to}');
+		got.sort(Compare.compareString);
+		final want: Array<String> = expected.map(s -> '${s.from}-${s.to}');
+		want.sort(Compare.compareString);
+		final same: Bool = firstOnly ? got.length > 0 && got[0] == want[0] : got.join(',') == want.join(',');
+		return same ? Match : Different(got.join(','));
+	}
+
+	/** `type` in the one spelling both sides are compared in (`TypeText`), or the text itself when it does not read as one. */
+	private static function normalized(type: String): String {
+		return TypeText.canonical(type) ?? type;
+	}
+
+	/** The outermost type name of a normalized type text. */
+	private static function outerOf(type: String): String {
+		final open: Int = type.indexOf('<');
+		return open < 0 ? type : type.substring(0, open);
+	}
+
+	/** Whether the normalized `type` is `haxe.PosInfos` as the compiler prints it: the structure of its four fields and more. */
+	private static function isPosInfos(type: String): Bool {
+		return ['className:String', 'fileName:String', 'lineNumber:Int', 'methodName:String'].foreach(f -> type.contains(f))
+			&& type.startsWith('{');
+	}
+
+	/** `r`'s group `n` read as a number, -1 when it is none. */
+	private static function group(r: EReg, n: Int = QUERY_MARKER_GROUP): Int {
+		return Std.parseInt(r.matched(n)) ?? -1;
+	}
+
+	private static function unescape(text: String): String {
+		return text.replace('\\"', '"').replace('\\\\', '\\');
+	}
+
+	private static function rangeOf(markers: Map<Int, Int>, from: String, to: String): Null<Span> {
+		final a: Null<Int> = markers[Std.parseInt(from) ?? -1];
+		final b: Null<Int> = markers[Std.parseInt(to) ?? -1];
+		return a == null || b == null ? null : new Span(a, b);
+	}
+
+	private static function rangesOf(markers: Map<Int, Int>, list: String): Array<Span> {
+		final out: Array<Span> = [];
+		var rest: String = list;
+		while (RANGE.match(rest)) {
+			final r: Null<Span> = rangeOf(markers, RANGE.matched(1), RANGE.matched(2));
+			if (r != null) out.push(r);
+			rest = RANGE.matchedRight();
+		}
+		return out;
+	}
+
+	/** The paths under `dir` ending in `suffix`. */
+	private static function collectPaths(dir: String, suffix: String, into: Array<String>): Void {
+		if (!FileSystem.exists(dir)) return;
+		for (entry in FileSystem.readDirectory(dir)) {
+			final path: String = Path.join([dir, entry]);
+			if (FileSystem.isDirectory(path))
+				collectPaths(path, suffix, into)
+			else if (entry.endsWith(suffix))
+				into.push(path);
+		}
+	}
+
+	/** Every `.hx` file under `dir`, read. */
+	private static function collect(dir: String, into: Array<{ file: String, source: String }>): Void {
+		final paths: Array<String> = [];
+		collectPaths(dir, '.hx', paths);
+		for (path in paths) into.push({ file: path, source: File.getContent(path) });
+	}
+
+	/** Under `--census`, the roots of the typer's UNKNOWN answers for `node`: in the written-source currency, the nominal one. */
+	private static function censusRoots(
+		report: Report, area: String, label: String, typer: FileTyper, node: Null<QueryNode>, unknownSource: Bool, unknownNominal: Bool
+	): Void {
+		if (unknownSource) report.unknownRoot('source', area, label, rootOf.bind(typer, node, true));
+		if (unknownNominal) report.unknownRoot('nominal', area, label, rootOf.bind(typer, node, false));
+	}
+
+	/** The root of the typer's UNKNOWN for `node` in the written-source (`sourceCurrency`) or the nominal currency. */
+	private static function rootOf(typer: FileTyper, node: Null<QueryNode>, sourceCurrency: Bool): UnknownCause {
+		return node == null ? { root: Other, detail: 'no node asked' } : typer.unknownCause(node, sourceCurrency);
 	}
 
 }

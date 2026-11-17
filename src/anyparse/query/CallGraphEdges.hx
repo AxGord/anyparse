@@ -19,6 +19,42 @@ import haxe.Exception;
 
 using Lambda;
 
+private typedef Frame = {
+
+	var id: String;
+	var localFns: Map<String, String>;
+
+	/** The declaration of `id` the walk is in: a node folding several has a frame per declaration. */
+	var span: Span;
+
+}
+
+/** A method referenced as a value: its node, and the receiver type an instance reference dispatches on (null for a static one). */
+private typedef MethodRef = {
+
+	var id: String;
+	var dispatch: Null<String>;
+
+	/** For a module-level function's use bound per build, every function it may run (`moduleBinding`), `id` first; else null. */
+	@:optional
+	var bodies: Null<Array<String>>;
+
+}
+
+/**
+ * What a bare use of a name its module declares a value of may run, by the builds compiling it (`moduleBinding`): each
+ * function, and why a build's is not one the graph holds — a value it calls, or an import the index cannot list.
+ */
+private typedef ModuleBinding = { var targets: Array<String>; var unresolved: Null<UnresolvedReason>; }
+
+/** What a call or `new` site resolved to: the target, and the receiver expression a call through a field access was made on. */
+private typedef CallSite = { var target: Null<String>; var receiver: Null<QueryNode>; }
+
+private typedef Receiver = { var typeName: String; var isValue: Bool; var isDynamic: Bool; }
+
+/** A call's resolved target, and the written type and type of the receiver it was made on (null for a bare call). */
+private typedef CallTarget = { var target: String; var receiverSource: Null<String>; var onType: Null<String>; }
+
 /**
  * The edges of a `CallGraph`, collected per file once its nodes are (`CallGraphNodes`): one walk over a parsed file
  * records every call, construction, accessor run, function value and containment it makes as an edge of the graph, and
@@ -1554,39 +1590,3 @@ final class CallGraphEdges {
 	}
 
 }
-
-private typedef Frame = {
-
-	var id: String;
-	var localFns: Map<String, String>;
-
-	/** The declaration of `id` the walk is in: a node folding several has a frame per declaration. */
-	var span: Span;
-
-}
-
-/** A method referenced as a value: its node, and the receiver type an instance reference dispatches on (null for a static one). */
-private typedef MethodRef = {
-
-	var id: String;
-	var dispatch: Null<String>;
-
-	/** For a module-level function's use bound per build, every function it may run (`moduleBinding`), `id` first; else null. */
-	@:optional
-	var bodies: Null<Array<String>>;
-
-}
-
-/**
- * What a bare use of a name its module declares a value of may run, by the builds compiling it (`moduleBinding`): each
- * function, and why a build's is not one the graph holds — a value it calls, or an import the index cannot list.
- */
-private typedef ModuleBinding = { var targets: Array<String>; var unresolved: Null<UnresolvedReason>; }
-
-/** What a call or `new` site resolved to: the target, and the receiver expression a call through a field access was made on. */
-private typedef CallSite = { var target: Null<String>; var receiver: Null<QueryNode>; }
-
-private typedef Receiver = { var typeName: String; var isValue: Bool; var isDynamic: Bool; }
-
-/** A call's resolved target, and the written type and type of the receiver it was made on (null for a bare call). */
-private typedef CallTarget = { var target: String; var receiverSource: Null<String>; var onType: Null<String>; }

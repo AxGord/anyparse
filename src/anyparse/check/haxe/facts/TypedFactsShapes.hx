@@ -9,6 +9,9 @@ import haxe.macro.TypedExprTools;
 using Lambda;
 
 
+/** A field access as the facts name it: the owning type (none for a structure or a dynamic access), the field, the access kind. */
+typedef FieldRef = { final owner: Null<String>; final field: String; final kind: String; };
+
 /** The shapes of the typed tree `TypedFactsWalk` asks about, answered without walking. */
 @:nullSafety(Strict)
 final class TypedFactsShapes {
@@ -218,7 +221,4 @@ final class TypedFactsShapes {
 	}
 
 }
-
-/** A field access as the facts name it: the owning type (none for a structure or a dynamic access), the field, the access kind. */
-typedef FieldRef = { final owner: Null<String>; final field: String; final kind: String; };
 #end

@@ -8,6 +8,16 @@ import haxe.Exception;
 
 using Lambda;
 
+/** What `NominalTypesTest.probeIn` hands the typer. */
+private typedef Probe = {
+	final plugin: HaxeQueryPlugin;
+	final root: QueryNode;
+	final node: QueryNode;
+	final declared: Map<Int, String>;
+	final index: SymbolIndex;
+	final chain: ChainTypeContext;
+}
+
 /**
  * The structural typer's arcs (`NominalTypes`), each read as the compiler types it (Haxe 4.3.7) and answering null where
  * the walk cannot say exactly: the deep walk's literal, construction and abstract-`this` arcs, its SOURCE mode
@@ -644,14 +654,4 @@ class NominalTypesTest extends Test {
 		return Arrays.findMap(node.children, c -> c.kind == 'ReturnStmt' ? c : nestedReturn(c));
 	}
 
-}
-
-/** What `NominalTypesTest.probeIn` hands the typer. */
-private typedef Probe = {
-	final plugin: HaxeQueryPlugin;
-	final root: QueryNode;
-	final node: QueryNode;
-	final declared: Map<Int, String>;
-	final index: SymbolIndex;
-	final chain: ChainTypeContext;
 }

@@ -5,6 +5,9 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The two kinds `duplicate-case` walks by: a case branch, and the conditional region whose branches are alternatives. */
+private typedef CaseSeams = { final caseBranchKind: String; final conditionalKind: Null<String>; };
+
 /**
  * Flags a duplicated switch case — a second branch whose pattern repeats an
  * earlier branch's in the same switch, making it dead. Purely structural.
@@ -129,6 +132,3 @@ final class DuplicateCase extends RuleBase {
 	}
 
 }
-
-/** The two kinds `duplicate-case` walks by: a case branch, and the conditional region whose branches are alternatives. */
-private typedef CaseSeams = { final caseBranchKind: String; final conditionalKind: Null<String>; };

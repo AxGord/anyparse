@@ -7,6 +7,20 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** A function's parameters as its declaration writes them (`CallGraphNames.paramsOf`). */
+typedef DeclaredParams = {
+
+	/** The written type of each parameter, in order; null for one written without a type. */
+	final params: Array<Null<String>>;
+
+	/** Whether the last parameter is a rest parameter. */
+	final rest: Bool;
+
+	/** The position of the first parameter a call may skip — optional or carrying a default value; the count for none. */
+	final skippableFrom: Int;
+
+}
+
 /** The name arithmetic `CallGraph` resolves with: type declarations, module names, dotted paths, written type heads. */
 @:nullSafety(Strict)
 final class CallGraphNames {
@@ -190,19 +204,5 @@ final class CallGraphNames {
 			case _: false;
 		};
 	}
-
-}
-
-/** A function's parameters as its declaration writes them (`CallGraphNames.paramsOf`). */
-typedef DeclaredParams = {
-
-	/** The written type of each parameter, in order; null for one written without a type. */
-	final params: Array<Null<String>>;
-
-	/** Whether the last parameter is a rest parameter. */
-	final rest: Bool;
-
-	/** The position of the first parameter a call may skip — optional or carrying a default value; the count for none. */
-	final skippableFrom: Int;
 
 }

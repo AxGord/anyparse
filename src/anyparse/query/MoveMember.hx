@@ -151,6 +151,16 @@ enum ViaResult {
 }
 
 /**
+ * Internal result of the scope-wide destination-type search: `FErr`
+ * aborts the move with a message; `FOk(null)` means "not found" (the
+ * caller words that error).
+ */
+enum FindTypeResult {
+	FOk(hit: Null<{ file: String, decl: TypeDeclMatch }>);
+	FErr(message: String);
+}
+
+/**
  * Scope-correct, format-preserving move of one or more members (method,
  * `var` or `final` field) from one type to another — within one package,
  * or across packages when every moved member is static — the Apply verb
@@ -1620,14 +1630,4 @@ final class MoveMember {
 		return null;
 	}
 
-}
-
-/**
- * Internal result of the scope-wide destination-type search: `FErr`
- * aborts the move with a message; `FOk(null)` means "not found" (the
- * caller words that error).
- */
-enum FindTypeResult {
-	FOk(hit: Null<{ file: String, decl: TypeDeclMatch }>);
-	FErr(message: String);
 }

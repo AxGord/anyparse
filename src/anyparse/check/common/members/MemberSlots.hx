@@ -64,6 +64,50 @@ typedef OrderedMember = {
 typedef BranchInfo = { var index: Int; var opens: Array<String>; }
 
 /**
+ * The canonical member-order ranks - a smaller rank sorts earlier. Fields precede
+ * the constructor precede accessors precede methods; within each group public
+ * precedes private; static fields lead (immutable `final` / constant before mutable
+ * `var`), static methods trail. Non-static property fields (those with a `(get, set)`-style
+ * accessor clause) sub-split ahead of the plain fields: a read-only property (stored read)
+ * before a getter property, both before the `final` field, before the plain `var`. A
+ * `EnumValue` is outside the ladder: a value of an enum abstract sorts before every other member and keeps its source
+ * order among the values, because that order is the abstract's auto-numbering. A
+ * distinct type rather than a bare `Int` so a rank can never be confused with an unrelated
+ * count; the two `@:op` forwards give it the `<` ordering and `-` difference that the sort
+ * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an
+ * abstract).
+ */
+enum abstract MemberRank(Int) {
+
+	final EnumValue = -1;
+	final StaticPublicImmutableField = 0;
+	final StaticPublicMutableField = 1;
+	final StaticPrivateImmutableField = 2;
+	final StaticPrivateMutableField = 3;
+	final PublicReadOnlyProperty = 4;
+	final PublicGetterProperty = 5;
+	final PublicImmutableField = 6;
+	final PublicMutableField = 7;
+	final PrivateReadOnlyProperty = 8;
+	final PrivateGetterProperty = 9;
+	final PrivateImmutableField = 10;
+	final PrivateMutableField = 11;
+	final Constructor = 12;
+	final Accessor = 13;
+	final PublicMethod = 14;
+	final PrivateMethod = 15;
+	final StaticPublicMethod = 16;
+	final StaticPrivateMethod = 17;
+
+	@:op(A < B)
+	static function lt(a: MemberRank, b: MemberRank): Bool;
+
+	@:op(A - B)
+	static function sub(a: MemberRank, b: MemberRank): Int;
+
+}
+
+/**
  * The COLLECTION half of `member-order`: turning a container's raw child list into the
  * `OrderedMember` slots the check and its autofix then reason over. It owns the member
  * MODEL the whole rule speaks in — `OrderedMember`, `BranchInfo`, `MemberRank` — and
@@ -506,49 +550,5 @@ final class MemberSlots {
 			}
 		}
 	}
-
-}
-
-/**
- * The canonical member-order ranks - a smaller rank sorts earlier. Fields precede
- * the constructor precede accessors precede methods; within each group public
- * precedes private; static fields lead (immutable `final` / constant before mutable
- * `var`), static methods trail. Non-static property fields (those with a `(get, set)`-style
- * accessor clause) sub-split ahead of the plain fields: a read-only property (stored read)
- * before a getter property, both before the `final` field, before the plain `var`. A
- * `EnumValue` is outside the ladder: a value of an enum abstract sorts before every other member and keeps its source
- * order among the values, because that order is the abstract's auto-numbering. A
- * distinct type rather than a bare `Int` so a rank can never be confused with an unrelated
- * count; the two `@:op` forwards give it the `<` ordering and `-` difference that the sort
- * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an
- * abstract).
- */
-enum abstract MemberRank(Int) {
-
-	final EnumValue = -1;
-	final StaticPublicImmutableField = 0;
-	final StaticPublicMutableField = 1;
-	final StaticPrivateImmutableField = 2;
-	final StaticPrivateMutableField = 3;
-	final PublicReadOnlyProperty = 4;
-	final PublicGetterProperty = 5;
-	final PublicImmutableField = 6;
-	final PublicMutableField = 7;
-	final PrivateReadOnlyProperty = 8;
-	final PrivateGetterProperty = 9;
-	final PrivateImmutableField = 10;
-	final PrivateMutableField = 11;
-	final Constructor = 12;
-	final Accessor = 13;
-	final PublicMethod = 14;
-	final PrivateMethod = 15;
-	final StaticPublicMethod = 16;
-	final StaticPrivateMethod = 17;
-
-	@:op(A < B)
-	static function lt(a: MemberRank, b: MemberRank): Bool;
-
-	@:op(A - B)
-	static function sub(a: MemberRank, b: MemberRank): Int;
 
 }

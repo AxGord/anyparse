@@ -3,6 +3,20 @@ package anyparse.macro;
 import haxe.macro.Expr;
 
 /**
+ * Specification of one static `EReg` field that Codegen must lift out
+ * of a generated rule body.
+ */
+typedef EregSpec = {
+
+	/** Private static field name, e.g. `_re_JStringLit`. */
+	varName: String,
+
+	/** Regex source without surrounding slashes or `^` anchor. */
+	pattern: String
+
+};
+
+/**
  * Output of a Lowering pass for one rule. Carries everything Codegen
  * needs to turn the rule into a Haxe `Field`:
  *
@@ -47,17 +61,3 @@ class GeneratedRule {
 	}
 
 }
-
-/**
- * Specification of one static `EReg` field that Codegen must lift out
- * of a generated rule body.
- */
-typedef EregSpec = {
-
-	/** Private static field name, e.g. `_re_JStringLit`. */
-	varName: String,
-
-	/** Regex source without surrounding slashes or `^` anchor. */
-	pattern: String
-
-};

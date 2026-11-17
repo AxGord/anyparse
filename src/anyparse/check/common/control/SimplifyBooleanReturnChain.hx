@@ -5,6 +5,21 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
+private typedef Ctx = {
+	support: BooleanLogicSupport,
+	blockKinds: Array<String>,
+	ifKinds: Array<String>,
+	returnKind: String,
+	boolLitKind: String
+};
+
+private typedef Chain = {
+	span: Span,
+	conds: Array<QueryNode>,
+	lits: Array<QueryNode>,
+	finalLit: QueryNode
+};
+
 /**
  * Flags a boolean guard chain — two or more contiguous `if (cond) return true;` /
  * `if (cond) return false;` guards (no `else`) closed by a final `return true;` /
@@ -202,18 +217,3 @@ final class SimplifyBooleanReturnChain extends RuleBase {
 	}
 
 }
-
-private typedef Ctx = {
-	support: BooleanLogicSupport,
-	blockKinds: Array<String>,
-	ifKinds: Array<String>,
-	returnKind: String,
-	boolLitKind: String
-};
-
-private typedef Chain = {
-	span: Span,
-	conds: Array<QueryNode>,
-	lits: Array<QueryNode>,
-	finalLit: QueryNode
-};

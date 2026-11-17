@@ -7,6 +7,47 @@ import haxe.Exception;
 
 using anyparse.util.Strings;
 
+/** One version of a file as the writer emits it, each line assigned to the declaration that owns it. */
+typedef FileVersion = {
+
+	final source: String;
+	final tree: QueryNode;
+	final lines: Array<String>;
+
+	/** The offset each line starts at. */
+	final starts: Array<Int>;
+	final units: Array<OwnerUnit>;
+
+	/** Per line, the index of the unit owning it, or -1. */
+	final owner: Array<Int>;
+
+	/** Per unit, the lines it owns. */
+	final owned: Array<Array<String>>;
+
+	/** The lines no declaration owns. */
+	final rest: Array<String>;
+
+}
+
+/** A named node that owns lines of its file. */
+typedef OwnerUnit = {
+	final node: QueryNode;
+	final key: String;
+	final header: Bool;
+	final depth: Int;
+	final parent: Int;
+	final first: Int;
+	final last: Int;
+}
+
+/** What the declaration walk carries down the tree. */
+typedef UnitScan = {
+	final valueKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final lineIndex: LineIndex;
+	final out: Array<OwnerUnit>;
+}
+
 /**
  * Which declaration owns each line of a file: a named node with at most one named ancestor (none below a module-level
  * value declaration) owns the lines it spans, the innermost one winning, and the blank, comment and annotation lines
@@ -126,45 +167,4 @@ final class DeclarationLines {
 		}
 	}
 
-}
-
-/** One version of a file as the writer emits it, each line assigned to the declaration that owns it. */
-typedef FileVersion = {
-
-	final source: String;
-	final tree: QueryNode;
-	final lines: Array<String>;
-
-	/** The offset each line starts at. */
-	final starts: Array<Int>;
-	final units: Array<OwnerUnit>;
-
-	/** Per line, the index of the unit owning it, or -1. */
-	final owner: Array<Int>;
-
-	/** Per unit, the lines it owns. */
-	final owned: Array<Array<String>>;
-
-	/** The lines no declaration owns. */
-	final rest: Array<String>;
-
-}
-
-/** A named node that owns lines of its file. */
-typedef OwnerUnit = {
-	final node: QueryNode;
-	final key: String;
-	final header: Bool;
-	final depth: Int;
-	final parent: Int;
-	final first: Int;
-	final last: Int;
-}
-
-/** What the declaration walk carries down the tree. */
-typedef UnitScan = {
-	final valueKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final lineIndex: LineIndex;
-	final out: Array<OwnerUnit>;
 }

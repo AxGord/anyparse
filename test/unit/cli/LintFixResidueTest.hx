@@ -22,6 +22,88 @@ import anyparse.runtime.Span;
 
 using StringTools;
 
+private typedef ResidueRun = { final code: Int; final stderr: String; final after: String; };
+
+/** Reports each `FOO` and rewrites it to `BAR`: a fix whose output another check reads elsewhere in the file. */
+private class Rename implements Check {
+
+	public function new() {}
+
+	public function id(): String {
+		return 'residue-rename';
+	}
+
+	public function description(): String {
+		return 'rewrites FOO to BAR';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return [
+			for (entry in files) for (at in occurrences(entry.source)) {
+				file: entry.file,
+				span: new Span(at, at + 3),
+				rule: id(),
+				severity: Severity.Warning,
+				message: 'a FOO'
+			}
+		];
+	}
+
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return [for (v in violations) { span: v.span, text: 'BAR' }];
+	}
+
+	private static function occurrences(source: String): Array<Int> {
+		final at: Array<Int> = [];
+		var from: Int = source.indexOf('FOO');
+		while (from >= 0) {
+			at.push(from);
+			from = source.indexOf('FOO', from + 3);
+		}
+		return at;
+	}
+
+}
+
+/** Reports the first line of a file that spells `BAR`: a finding the rewrite creates away from the line it changed. */
+private class Mention implements Check {
+
+	public function new() {}
+
+	public function id(): String {
+		return 'residue-mention';
+	}
+
+	public function description(): String {
+		return 'flags a file that spells BAR';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return [
+			for (entry in files) if (entry.source.indexOf('BAR') >= 0) {
+				file: entry.file,
+				span: new Span(0, 5),
+				rule: id(),
+				severity: Severity.Warning,
+				message: 'a BAR'
+			}
+		];
+	}
+
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return [];
+	}
+
+}
+
 /**
  * What `lint --fix` says about a finding its own writes left behind: a safe fix can produce the shape another rule
  * reports, and that finding sits on a line the run changed — named on stderr and answered with `EXIT_RESIDUE`, apart
@@ -160,87 +242,5 @@ class LintFixResidueTest extends Test {
 		return { code: code, stderr: stderr, after: files[0].source };
 	}
 	#end
-
-}
-
-private typedef ResidueRun = { final code: Int; final stderr: String; final after: String; };
-
-/** Reports each `FOO` and rewrites it to `BAR`: a fix whose output another check reads elsewhere in the file. */
-private class Rename implements Check {
-
-	public function new() {}
-
-	public function id(): String {
-		return 'residue-rename';
-	}
-
-	public function description(): String {
-		return 'rewrites FOO to BAR';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) for (at in occurrences(entry.source)) {
-				file: entry.file,
-				span: new Span(at, at + 3),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'a FOO'
-			}
-		];
-	}
-
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return [for (v in violations) { span: v.span, text: 'BAR' }];
-	}
-
-	private static function occurrences(source: String): Array<Int> {
-		final at: Array<Int> = [];
-		var from: Int = source.indexOf('FOO');
-		while (from >= 0) {
-			at.push(from);
-			from = source.indexOf('FOO', from + 3);
-		}
-		return at;
-	}
-
-}
-
-/** Reports the first line of a file that spells `BAR`: a finding the rewrite creates away from the line it changed. */
-private class Mention implements Check {
-
-	public function new() {}
-
-	public function id(): String {
-		return 'residue-mention';
-	}
-
-	public function description(): String {
-		return 'flags a file that spells BAR';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) if (entry.source.indexOf('BAR') >= 0) {
-				file: entry.file,
-				span: new Span(0, 5),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'a BAR'
-			}
-		];
-	}
-
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return [];
-	}
 
 }

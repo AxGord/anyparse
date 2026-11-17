@@ -12,6 +12,23 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * What `RefactorSupport.eachFieldMember`'s container walk threads through every frame — the
+ * kind-sets it matches on, the branch seams its member fold descends `#if` regions with, and the
+ * visitor. Resolved once per file.
+ */
+private typedef FieldMemberCtx = {
+	final source: String;
+	final file: String;
+	final containers: Array<String>;
+	final members: Array<String>;
+	final mutableFields: Array<String>;
+	final visibility: Array<String>;
+	final defaultVis: String;
+	final branch: MemberBranchSeams;
+	final visit: (owner: String, field: QueryNode, source: String, file: String, exported: Bool) -> Void;
+};
+
+/**
  * WHERE a field is written, and whether that write is reached on every path. The query layer
  * under every check that reasons about a field's initialisation — `prefer-final-field`,
  * `prefer-read-only-field`, `field-init-in-constructor`, `field-init-at-declaration` — and the
@@ -808,20 +825,3 @@ final class CtorFieldWrite {
 	}
 
 }
-
-/**
- * What `RefactorSupport.eachFieldMember`'s container walk threads through every frame — the
- * kind-sets it matches on, the branch seams its member fold descends `#if` regions with, and the
- * visitor. Resolved once per file.
- */
-private typedef FieldMemberCtx = {
-	final source: String;
-	final file: String;
-	final containers: Array<String>;
-	final members: Array<String>;
-	final mutableFields: Array<String>;
-	final visibility: Array<String>;
-	final defaultVis: String;
-	final branch: MemberBranchSeams;
-	final visit: (owner: String, field: QueryNode, source: String, file: String, exported: Bool) -> Void;
-};

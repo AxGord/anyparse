@@ -4,6 +4,19 @@ import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 
 /**
+ * The modifier-ranking config the `modifier-order` walk reads from a grammar's
+ * `RefShape`: the canonical `order`, the member-host `members` a run attaches to,
+ * the `final`-modified method wrapper kind (or null), and the rank a method's
+ * `final` keyword occupies in `order` (`-1` when the grammar ranks no `final`).
+ */
+private typedef Ranking = {
+	var order: Array<String>;
+	var members: Array<String>;
+	var finalMemberKind: Null<String>;
+	var finalRank: Int;
+}
+
+/**
  * Flags a member whose modifier keywords are not in the canonical order
  * `override → public / private → static → inline → final`. Purely cosmetic — the
  * order carries no meaning to the compiler — so `Info`; `--fix` reorders the run
@@ -182,17 +195,4 @@ final class ModifierOrder extends RuleBase {
 		for (i in 0...run.length) edits.push({ span: run[i].span, text: ranked[i].text });
 	}
 
-}
-
-/**
- * The modifier-ranking config the `modifier-order` walk reads from a grammar's
- * `RefShape`: the canonical `order`, the member-host `members` a run attaches to,
- * the `final`-modified method wrapper kind (or null), and the rank a method's
- * `final` keyword occupies in `order` (`-1` when the grammar ranks no `final`).
- */
-private typedef Ranking = {
-	var order: Array<String>;
-	var members: Array<String>;
-	var finalMemberKind: Null<String>;
-	var finalRank: Int;
 }

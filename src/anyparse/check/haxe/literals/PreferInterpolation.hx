@@ -19,6 +19,76 @@ import anyparse.query.TypingService;
 
 using StringTools;
 
+/** The resolved seams `PreferInterpolation` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final callKind: String;
+	final fieldAccessKind: String;
+	final identKind: String;
+
+	/**
+	 * The string-concatenation operator kind, or null when the grammar declares no
+	 * `StringFoldSupport` — a `Std.string(x)` sitting directly under one belongs to
+	 * `fold-adjacent-string-literals`, not to this rule.
+	 */
+	final concatKind: Null<String>;
+
+	/** The grammar's string-literal seam, or null without one: it answers and re-renders an interpolated constant. */
+	final stringFold: Null<StringFoldSupport>;
+
+	/**
+	 * The ANNOTATION-argument kinds. `fold-adjacent-string-literals` skips them
+	 * wholesale, so it claims no chain inside one and this rule must not defer there.
+	 */
+	final metaKinds: Array<String>;
+
+};
+
+/** The per-file inputs `scan` reads at every node. */
+private typedef ScanCtx = {
+
+	final source: String;
+	final root: QueryNode;
+	final seams: Seams;
+	final shape: RefShape;
+
+	/** The path of the file scanned: where an argument's type name is bound (`printsPlain`). */
+	final file: String;
+
+	/** The nominal type an expression provably has (`CheckScan.typeNominalResolver`), built when first asked; null when unproven. */
+	final typeOf: (QueryNode) -> Null<String>;
+
+	/** The index an argument's type name is bound in. */
+	final index: () -> Null<SymbolIndex>;
+
+	/**
+	 * True to bypass the `isSafeArg` gate: the `fix`-side re-find, whose violations already passed the gate of the `run`
+	 * that reported them.
+	 */
+	final relaxed: Bool;
+
+	/**
+	 * True to keep collecting INSIDE a matched call instead of stopping at the
+	 * outermost — the `fix`-side re-find only (see `scanSource`): its relaxed gate can
+	 * move the outermost stop above a call `run` flagged, and the finding's span must
+	 * still be recoverable. A `run` scan stays outermost-only in both modes.
+	 */
+	final collectNested: Bool;
+
+	/** The macro-argument gate of a `run` scan, null for the `fix`-side re-find (the finding already carries the verdict). */
+	final gate: Null<MacroGate>;
+
+	/** The file's lexical regions, lexed when first asked — what the comment gate of a rewrite reads. */
+	final regions: () -> Array<LexRegion>;
+
+	/** The calls enclosing the node being scanned, innermost last — what `gate` is asked about. */
+	final calls: Array<CallRef>;
+
+};
+
+/** One flagged call: its span and the replacement text `fix` writes there. */
+private typedef ScanMatch = { final span: Span; final replacement: String; final message: String; };
+
 /**
  * Flags `Std.string(x)` (and an interpolated constant, see below) and rewrites it to string interpolation — `'$x'` for a simple
  * identifier, `'${expr}'` for any other interpolation-safe expression — `Severity.Info`
@@ -503,73 +573,3 @@ final class PreferInterpolation extends HaxeRule {
 	}
 
 }
-
-/** The resolved seams `PreferInterpolation` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final callKind: String;
-	final fieldAccessKind: String;
-	final identKind: String;
-
-	/**
-	 * The string-concatenation operator kind, or null when the grammar declares no
-	 * `StringFoldSupport` — a `Std.string(x)` sitting directly under one belongs to
-	 * `fold-adjacent-string-literals`, not to this rule.
-	 */
-	final concatKind: Null<String>;
-
-	/** The grammar's string-literal seam, or null without one: it answers and re-renders an interpolated constant. */
-	final stringFold: Null<StringFoldSupport>;
-
-	/**
-	 * The ANNOTATION-argument kinds. `fold-adjacent-string-literals` skips them
-	 * wholesale, so it claims no chain inside one and this rule must not defer there.
-	 */
-	final metaKinds: Array<String>;
-
-};
-
-/** The per-file inputs `scan` reads at every node. */
-private typedef ScanCtx = {
-
-	final source: String;
-	final root: QueryNode;
-	final seams: Seams;
-	final shape: RefShape;
-
-	/** The path of the file scanned: where an argument's type name is bound (`printsPlain`). */
-	final file: String;
-
-	/** The nominal type an expression provably has (`CheckScan.typeNominalResolver`), built when first asked; null when unproven. */
-	final typeOf: (QueryNode) -> Null<String>;
-
-	/** The index an argument's type name is bound in. */
-	final index: () -> Null<SymbolIndex>;
-
-	/**
-	 * True to bypass the `isSafeArg` gate: the `fix`-side re-find, whose violations already passed the gate of the `run`
-	 * that reported them.
-	 */
-	final relaxed: Bool;
-
-	/**
-	 * True to keep collecting INSIDE a matched call instead of stopping at the
-	 * outermost — the `fix`-side re-find only (see `scanSource`): its relaxed gate can
-	 * move the outermost stop above a call `run` flagged, and the finding's span must
-	 * still be recoverable. A `run` scan stays outermost-only in both modes.
-	 */
-	final collectNested: Bool;
-
-	/** The macro-argument gate of a `run` scan, null for the `fix`-side re-find (the finding already carries the verdict). */
-	final gate: Null<MacroGate>;
-
-	/** The file's lexical regions, lexed when first asked — what the comment gate of a rewrite reads. */
-	final regions: () -> Array<LexRegion>;
-
-	/** The calls enclosing the node being scanned, innermost last — what `gate` is asked about. */
-	final calls: Array<CallRef>;
-
-};
-
-/** One flagged call: its span and the replacement text `fix` writes there. */
-private typedef ScanMatch = { final span: Span; final replacement: String; final message: String; };

@@ -5,6 +5,54 @@ import haxe.Exception;
 
 using StringTools;
 
+/** The value of one knob: what it is, only its `OptionShape` says. */
+abstract OptionValue(Dynamic) from Dynamic to Dynamic {} // noqa: avoid-dynamic
+
+/** The type of one knob, as much of it as source needs. */
+enum OptionShape {
+
+	/** A `Bool`, `Int` or `Float`: `Std.string` is its source. */
+	Scalar;
+
+	/** A `String`. */
+	Text;
+
+	/** An `enum abstract`: the constant holding the value, `type` its simple name and `from` the import path that brings it. */
+	Constants(type: String, from: String, names: Array<OptionConstant>);
+
+	/** A `Null<T>`. */
+	Nullable(inner: OptionShape);
+
+	/** An `Array<T>`. */
+	List(item: OptionShape);
+
+	/** An anonymous structure, named so a recursive one can point back at itself. */
+	Record(id: String, fields: Array<OptionField>);
+
+	/** The `Record` of this `id` that is still open around it. */
+	Again(id: String);
+
+	/** A type with no source spelling, such as a function. */
+	Opaque(type: String);
+
+}
+
+/**
+ * One constant of an `enum abstract`: its name and the value that equals it.
+ */
+typedef OptionConstant = { name: String, value: OptionValue };
+
+/**
+ * One field of a `Record`: whether the type declares it `@:optional`, so a value without it spells without it.
+ */
+typedef OptionField = { name: String, optional: Bool, shape: OptionShape };
+
+/** One knob of an options record: its name, type and a read of it. */
+typedef OptionKnob = { name: String, shape: OptionShape, read: OptionValue -> OptionValue };
+
+/** `<name> = <source>`: the statement that sets a knob. */
+typedef OptionAssignment = { name: String, source: String };
+
 /**
  * The one answer to "how does the value of an options-record knob read back as Haxe source, and which knobs did an edit change".
  *
@@ -94,50 +142,3 @@ final class OptionsSource {
 	}
 
 }
-
-/** The value of one knob: what it is, only its `OptionShape` says. */
-abstract OptionValue(Dynamic) from Dynamic to Dynamic {} // noqa: avoid-dynamic
-/** The type of one knob, as much of it as source needs. */
-enum OptionShape {
-
-	/** A `Bool`, `Int` or `Float`: `Std.string` is its source. */
-	Scalar;
-
-	/** A `String`. */
-	Text;
-
-	/** An `enum abstract`: the constant holding the value, `type` its simple name and `from` the import path that brings it. */
-	Constants(type: String, from: String, names: Array<OptionConstant>);
-
-	/** A `Null<T>`. */
-	Nullable(inner: OptionShape);
-
-	/** An `Array<T>`. */
-	List(item: OptionShape);
-
-	/** An anonymous structure, named so a recursive one can point back at itself. */
-	Record(id: String, fields: Array<OptionField>);
-
-	/** The `Record` of this `id` that is still open around it. */
-	Again(id: String);
-
-	/** A type with no source spelling, such as a function. */
-	Opaque(type: String);
-
-}
-
-/**
- * One constant of an `enum abstract`: its name and the value that equals it.
- */
-typedef OptionConstant = { name: String, value: OptionValue };
-
-/**
- * One field of a `Record`: whether the type declares it `@:optional`, so a value without it spells without it.
- */
-typedef OptionField = { name: String, optional: Bool, shape: OptionShape };
-
-/** One knob of an options record: its name, type and a read of it. */
-typedef OptionKnob = { name: String, shape: OptionShape, read: OptionValue -> OptionValue };
-
-/** `<name> = <source>`: the statement that sets a knob. */
-typedef OptionAssignment = { name: String, source: String };

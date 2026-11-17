@@ -129,13 +129,6 @@ typedef NamingRule = {
 }
 
 /**
- * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category /
- * modifier selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the
- * grammar built-in default.
- */
-typedef NamingPolicy = Array<NamingRule>;
-
-/**
  * A declaration the `naming` check should inspect, as projected by a
  * grammar's `NamingSupport`. `span` is the source range to report (null when
  * the grammar built the node without span tracking — the check skips it, like
@@ -382,3 +375,10 @@ typedef HoistedConstant = {
 	final mods: Array<String>;
 
 };
+
+/**
+ * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category /
+ * modifier selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the
+ * grammar built-in default.
+ */
+typedef NamingPolicy = Array<NamingRule>;

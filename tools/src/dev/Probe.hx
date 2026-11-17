@@ -24,6 +24,66 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** A kit: its invocations as `dev parity` runs them, and the case beside each. */
+typedef Kit = { var invocations: Array<Invocation>; var cases: Array<ProbeCase>; }
+
+/**
+ * What a kit holds beside one invocation: how its fixture is compiled afterwards, what the recording engine answered, the defect
+ * that answer is known to carry, and the fixture file the invocation's stdout rewrites (checked for one pass and kept comments).
+ */
+typedef ProbeCase = {
+
+	var compile: Null<CompileSpec>;
+	var expect: Null<Expectation>;
+	var knownDefect: Null<String>;
+	var fixpoint: Null<String>;
+
+	/** A regular expression every stdout line fits: the row records that, not the list (`shapeOf`). */
+	var ?outShape: String;
+
+	/** The fewest non-empty stdout lines a row with an `outShape` may print: a floor under a list that only grows. */
+	var ?outMinLines: Int;
+
+}
+
+/** One invocation's answer with both of its streams, normalized, for quoting a deviation. */
+typedef Seen = {
+
+	var answer: Expectation;
+	var out: String;
+	var err: String;
+
+	/** Why the engine gave no answer, empty when it answered. */
+	var failure: String;
+
+}
+
+/** A run's report lines, the invocations that deviate, and the known-defect rows that moved. */
+typedef Verdict = {
+
+	var lines: Array<String>;
+
+	/** The rows behind `lines`, each as `#<index> <name>`: what a comparison with another run of the kit matches on. */
+	var rows: Array<String>;
+	var deviating: Int;
+	var knownMoved: Int;
+
+}
+
+/** What `Probe.checkAll` read: the areas and invocations run, the rows that fail, the areas holding them, and their report lines. */
+typedef KitsReport = {
+
+	var areas: Int;
+	var invocations: Int;
+	var failing: Int;
+	var failed: Array<String>;
+
+	/** The failing rows, each as `<area> #<index> <name>`: red on another tree only where the same row is. */
+	var rows: Array<String>;
+	var lines: Array<String>;
+
+}
+
 /**
  * `dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--repo <tree>]` — a reviewer's probe
  * kit run on ONE engine. A kit is a `dev parity` suite whose invocations each carry what an engine answered when the kit was
@@ -482,65 +542,5 @@ final class Probe {
 			}
 		];
 	}
-
-}
-
-/** A kit: its invocations as `dev parity` runs them, and the case beside each. */
-typedef Kit = { var invocations: Array<Invocation>; var cases: Array<ProbeCase>; }
-
-/**
- * What a kit holds beside one invocation: how its fixture is compiled afterwards, what the recording engine answered, the defect
- * that answer is known to carry, and the fixture file the invocation's stdout rewrites (checked for one pass and kept comments).
- */
-typedef ProbeCase = {
-
-	var compile: Null<CompileSpec>;
-	var expect: Null<Expectation>;
-	var knownDefect: Null<String>;
-	var fixpoint: Null<String>;
-
-	/** A regular expression every stdout line fits: the row records that, not the list (`shapeOf`). */
-	var ?outShape: String;
-
-	/** The fewest non-empty stdout lines a row with an `outShape` may print: a floor under a list that only grows. */
-	var ?outMinLines: Int;
-
-}
-
-/** One invocation's answer with both of its streams, normalized, for quoting a deviation. */
-typedef Seen = {
-
-	var answer: Expectation;
-	var out: String;
-	var err: String;
-
-	/** Why the engine gave no answer, empty when it answered. */
-	var failure: String;
-
-}
-
-/** A run's report lines, the invocations that deviate, and the known-defect rows that moved. */
-typedef Verdict = {
-
-	var lines: Array<String>;
-
-	/** The rows behind `lines`, each as `#<index> <name>`: what a comparison with another run of the kit matches on. */
-	var rows: Array<String>;
-	var deviating: Int;
-	var knownMoved: Int;
-
-}
-
-/** What `Probe.checkAll` read: the areas and invocations run, the rows that fail, the areas holding them, and their report lines. */
-typedef KitsReport = {
-
-	var areas: Int;
-	var invocations: Int;
-	var failing: Int;
-	var failed: Array<String>;
-
-	/** The failing rows, each as `<area> #<index> <name>`: red on another tree only where the same row is. */
-	var rows: Array<String>;
-	var lines: Array<String>;
 
 }

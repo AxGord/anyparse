@@ -82,6 +82,103 @@ typedef SafeBisectSeat = {
 
 };
 
+/** Why an isolation stopped short — its run budget, an oracle that stopped answering, or a failure it cannot attribute. */
+private class IsolationStop extends Exception {}
+
+/**
+ * The typechecks one isolation spends, through one door. Every probe counts against the run's budget, an oracle that
+ * cannot answer stops the isolation, and a candidate already judged — the same files at the same texts — is answered
+ * from the verdict it got rather than compiled again.
+ */
+private class IsolationProbes {
+
+	/** How many candidates were compiled. */
+	public var spent(default, null): Int = 0;
+
+	/** Verdicts by candidate (`keyOf`). */
+	private final _verdicts: Map<String, Bool> = [];
+
+	private final _seat: SafeBisectSeat;
+	private final _cap: Int;
+
+	/**
+	 * `known` seeds the verdicts already in hand: the round's whole wave is red, the tree before it green, and a narrowing
+	 * that confirmed a tree gives it here.
+	 */
+	public function new(seat: SafeBisectSeat, cap: Int, known: Array<{ keep: Array<String>, green: Bool }>) {
+		_seat = seat;
+		_cap = cap;
+		for (verdict in known) _verdicts[keyOf(verdict.keep, [])] = verdict.green;
+	}
+
+	/** How many typechecks the run's budget still allows. */
+	public inline function left(): Int {
+		return _cap - spent;
+	}
+
+	/**
+	 * Whether the tree with `keep` at the round's bytes, `partial` at the given
+	 * texts and every other written file at its pre-round bytes typechecks.
+	 */
+	public function green(keep: Array<String>, partial: Map<String, String>): Bool {
+		final key: String = keyOf(keep, partial);
+		final known: Null<Bool> = _verdicts[key];
+		if (known != null) return known;
+		if (spent >= _cap)
+			throw new IsolationStop('the isolation reached the run budget of $_cap typecheck(s) — raise it with --fix-probes <n>');
+		spent++;
+		final verdict: Bool = switch _seat.probe(keep, partial) {
+			case Confirmed: true;
+			case Rejected(_): false;
+			case Unavailable(reason): throw new IsolationStop('a probe could not run ($reason)');
+		};
+		_verdicts[key] = verdict;
+		return verdict;
+	}
+
+	/**
+	 * One candidate as text: each file it holds at the round's bytes or at another
+	 * text, sorted — a partial text equal to the round's bytes is the kept file.
+	 */
+	private function keyOf(keep: Array<String>, partial: Map<String, String>): String {
+		final parts: Array<String> = [for (file in keep) if (!partial.exists(file)) '$file\n='];
+		for (file => text in partial) parts.push(text == _seat.fixed(file) ? '$file\n=' : '$file\n:$text');
+		parts.sort(Reflect.compare);
+		return parts.join('\n\n');
+	}
+
+}
+
+/**
+ * What the CLI does with the safe-pass verdict: whether the pass was rolled back at all, the
+ * summary tail to append, and the full stderr notice when it was — which files went back, which
+ * survived, and the compiler errors behind them. A rolled-back pass ends on a tree the oracle
+ * confirmed green, so the caller goes on to its later phases and fails the run at the end.
+ */
+typedef SafePassOutcome = {
+
+	final reverted: Bool;
+
+	/** The files the net rolled back (empty when it rolled back nothing), for the caller to take off its edit count. */
+	final revertedFiles: Array<String>;
+
+	/**
+	 * The files of `revertedFiles` the net only SPLIT, each with how many of the round's edits it KEPT there — the edits
+	 * of the rules the compiler accepted. Absent when the net split nothing.
+	 */
+	@:optional
+	final partialKept: Map<String, Int>;
+	final tail: String;
+	final notice: String;
+
+	/**
+	 * The configurations the net ran WITHOUT, each named with its cause (`OracleBaseline`) — for the
+	 * caller to name, since a net silently shrunk to the green subset reads as covering every build.
+	 */
+	final excluded: Array<OracleExclusion>;
+
+};
+
 /**
  * `apq lint --fix`'s safe-pass revert net: the judgement that decides whether the
  * non-risky fixes may stand, kept apart from the CLI so every arm is exercisable
@@ -600,100 +697,3 @@ final class LintFixSafePass {
 	}
 
 }
-
-/** Why an isolation stopped short — its run budget, an oracle that stopped answering, or a failure it cannot attribute. */
-private class IsolationStop extends Exception {}
-
-/**
- * The typechecks one isolation spends, through one door. Every probe counts against the run's budget, an oracle that
- * cannot answer stops the isolation, and a candidate already judged — the same files at the same texts — is answered
- * from the verdict it got rather than compiled again.
- */
-private class IsolationProbes {
-
-	/** How many candidates were compiled. */
-	public var spent(default, null): Int = 0;
-
-	/** Verdicts by candidate (`keyOf`). */
-	private final _verdicts: Map<String, Bool> = [];
-
-	private final _seat: SafeBisectSeat;
-	private final _cap: Int;
-
-	/**
-	 * `known` seeds the verdicts already in hand: the round's whole wave is red, the tree before it green, and a narrowing
-	 * that confirmed a tree gives it here.
-	 */
-	public function new(seat: SafeBisectSeat, cap: Int, known: Array<{ keep: Array<String>, green: Bool }>) {
-		_seat = seat;
-		_cap = cap;
-		for (verdict in known) _verdicts[keyOf(verdict.keep, [])] = verdict.green;
-	}
-
-	/** How many typechecks the run's budget still allows. */
-	public inline function left(): Int {
-		return _cap - spent;
-	}
-
-	/**
-	 * Whether the tree with `keep` at the round's bytes, `partial` at the given
-	 * texts and every other written file at its pre-round bytes typechecks.
-	 */
-	public function green(keep: Array<String>, partial: Map<String, String>): Bool {
-		final key: String = keyOf(keep, partial);
-		final known: Null<Bool> = _verdicts[key];
-		if (known != null) return known;
-		if (spent >= _cap)
-			throw new IsolationStop('the isolation reached the run budget of $_cap typecheck(s) — raise it with --fix-probes <n>');
-		spent++;
-		final verdict: Bool = switch _seat.probe(keep, partial) {
-			case Confirmed: true;
-			case Rejected(_): false;
-			case Unavailable(reason): throw new IsolationStop('a probe could not run ($reason)');
-		};
-		_verdicts[key] = verdict;
-		return verdict;
-	}
-
-	/**
-	 * One candidate as text: each file it holds at the round's bytes or at another
-	 * text, sorted — a partial text equal to the round's bytes is the kept file.
-	 */
-	private function keyOf(keep: Array<String>, partial: Map<String, String>): String {
-		final parts: Array<String> = [for (file in keep) if (!partial.exists(file)) '$file\n='];
-		for (file => text in partial) parts.push(text == _seat.fixed(file) ? '$file\n=' : '$file\n:$text');
-		parts.sort(Reflect.compare);
-		return parts.join('\n\n');
-	}
-
-}
-
-/**
- * What the CLI does with the safe-pass verdict: whether the pass was rolled back at all, the
- * summary tail to append, and the full stderr notice when it was — which files went back, which
- * survived, and the compiler errors behind them. A rolled-back pass ends on a tree the oracle
- * confirmed green, so the caller goes on to its later phases and fails the run at the end.
- */
-typedef SafePassOutcome = {
-
-	final reverted: Bool;
-
-	/** The files the net rolled back (empty when it rolled back nothing), for the caller to take off its edit count. */
-	final revertedFiles: Array<String>;
-
-	/**
-	 * The files of `revertedFiles` the net only SPLIT, each with how many of the round's edits it KEPT there — the edits
-	 * of the rules the compiler accepted. Absent when the net split nothing.
-	 */
-	@:optional
-	final partialKept: Map<String, Int>;
-	final tail: String;
-	final notice: String;
-
-	/**
-	 * The configurations the net ran WITHOUT, each named with its cause (`OracleBaseline`) — for the
-	 * caller to name, since a net silently shrunk to the green subset reads as covering every build.
-	 */
-	final excluded: Array<OracleExclusion>;
-
-};

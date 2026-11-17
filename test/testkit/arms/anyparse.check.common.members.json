@@ -1306,10 +1306,26 @@
 		{
 			"name": "M-MTO-GUARDED-MOVES",
 			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "fix",
+			"find": "if (slot == null || type.region != moved[0].region)",
+			"replace": "if (slot == null)",
+			"note": "a declaration under #if moves along with top-level ones across the region's boundary, so the refusal no longer names it"
+		},
+		{
+			"name": "M-MTO-REGION-NOT-MOVED",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
 			"method": "typesOf",
-			"find": "slot: guarded || !withSlots ? null",
-			"replace": "slot: !withSlots ? null",
-			"note": "a declaration under #if gets a slot like a top-level one, so the refusal no longer names it"
+			"find": "slot: withSlots ?",
+			"replace": "slot: withSlots && region == 0 ?",
+			"note": "a declaration inside a conditional region gets no slot again, so a module wrapped whole in #if macro is never reordered"
+		},
+		{
+			"name": "M-MTO-DECLINE-NAMES-TOP",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "fix",
+			"find": "type.region == 0 ? moved[0] : type",
+			"replace": "type",
+			"note": "the cross-region refusal names the later moved declaration even when it is the top-level one, so it says a type sits under #if when it does not"
 		},
 		{
 			"name": "M-MTO-STRAY-GAP-IGNORED",

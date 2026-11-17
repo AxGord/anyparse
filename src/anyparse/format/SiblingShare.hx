@@ -7,6 +7,8 @@ import anyparse.core.Doc;
 import anyparse.core.DocIdentityMap;
 import anyparse.format.wrap.WrapList;
 
+private typedef Offer = { final width: Int; final token: BreakToken; final alias: BreakToken; }
+
 /**
  * The one answer to "do these sibling slots take one placement decision".
  *
@@ -255,5 +257,3 @@ final class SiblingShare {
 	}
 
 }
-
-private typedef Offer = { final width: Int; final token: BreakToken; final alias: BreakToken; }

@@ -17,6 +17,114 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The `RefShape` kinds `PreferFind` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	var forStmtKind: String;
+	var returnKind: String;
+	var blockStmtKind: String;
+	var nullLitKind: String;
+	var identKind: String;
+	var ifKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+	var exprStmtKind: Null<String>;
+	var assignKind: Null<String>;
+	var breakKind: Null<String>;
+	var intervalKind: Null<String>;
+	var callKind: Null<String>;
+	var newExprKind: Null<String>;
+	var fieldAccessKind: Null<String>;
+	var nullSafeAccessKind: Null<String>;
+	var forceFieldAccessKind: Null<String>;
+	var indexAccessKind: Null<String>;
+	var parenKind: Null<String>;
+
+	/**
+	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children may be
+	 * paired. A conditional-compilation region is deliberately absent: its branches project as
+	 * FLATTENED siblings, so pairing under it would join a declaration in one `#if` branch to a
+	 * loop in another and rewrite across the boundary.
+	 */
+	var blockKinds: Array<String>;
+
+}
+
+/**
+ * A recovered first-match loop ready to rewrite: the form flag, the loop node, its
+ * partner (Form A trailing return / Form B declaration) and the destructured head.
+ */
+private typedef FixCandidate = {
+
+	/** Which of the three shapes was recovered — the tag `buildEdits` dispatches on. */
+	var form: FindForm;
+
+	/** The holder local's name for either break form, null for the return form. */
+	var declName: Null<String>;
+	var forNode: QueryNode;
+	var sibling: QueryNode;
+	var loopVar: String;
+	var iterable: QueryNode;
+	var cond: QueryNode;
+
+	/** The call spelling the site takes — see `Head.qualified`. */
+	var qualified: Bool;
+
+}
+
+/** A recovered GUARDED capture-and-break loop: the loop node, the holder local's name, and the destructured head. */
+private typedef GuardedBreak = {
+
+	var forNode: QueryNode;
+	var declName: String;
+	var loopVar: String;
+	var iterable: QueryNode;
+	var cond: QueryNode;
+
+	/** The call spelling the site takes — see `Head.qualified`. */
+	var qualified: Bool;
+
+}
+
+/**
+ * Which of the three first-match shapes a fix candidate recovered. A single tag rather than
+ * two booleans: the guarded break form IS a break form, so an `isBreak` flag alone could not
+ * discriminate it and the two branches would depend on their own order.
+ */
+private enum abstract FindForm(Int) {
+	final Return = 0;
+	final Break = 1;
+	final GuardedBreak = 2;
+}
+
+/**
+ * The two deferred questions a recovered loop asks about NAMES: `shadows` — whether the iterable's
+ * own type provably declares `find`, so Haxe binds that member instead of the extension (false for
+ * everything this run cannot prove) — and `qualified`, whether the FALLBACK spelling
+ * `Lambda.find(xs, …)` still reaches the module from this file. Both are built on first demand, so
+ * a file holding no recovered loop builds neither a resolver nor a header read.
+ */
+private typedef MemberProbe = { var shadows: (QueryNode) -> Bool; var qualified: () -> Bool; }
+
+/** The `for (v in xs) if (cond) …` destructure all three forms start from, plus the call spelling the site takes. */
+private typedef Head = {
+
+	var loopVar: String;
+	var iterable: QueryNode;
+	var cond: QueryNode;
+	var then: QueryNode;
+
+	/**
+	 * Whether this site takes the QUALIFIED spelling `Lambda.find(xs, v -> c)` rather than the
+	 * extension `xs.find(v -> c)` — true exactly when the receiver's own type declares `find` and
+	 * the module name still reaches `Lambda` here. It changes only WHICH call is written: a
+	 * qualified site needs no `using Lambda;` and clears every other gate the same way.
+	 */
+	var qualified: Bool;
+
+}
+
 /**
  * Flags a manual first-match `for` loop — one that iterates a collection to return
  * (or capture-and-break) the first element satisfying a condition — which the
@@ -729,113 +837,5 @@ final class PreferFind extends HaxeRule {
 		return CheckScan.regionHoldsComment(regions, forSpan, [iterSpan, condSpan])
 			|| LexicalRegions.commentIntersects(forSpan.to, retSpan.from, regions());
 	}
-
-}
-
-/** The `RefShape` kinds `PreferFind` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	var forStmtKind: String;
-	var returnKind: String;
-	var blockStmtKind: String;
-	var nullLitKind: String;
-	var identKind: String;
-	var ifKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var valueBinderKinds: Array<String>;
-	var localDeclKinds: Array<String>;
-	var exprStmtKind: Null<String>;
-	var assignKind: Null<String>;
-	var breakKind: Null<String>;
-	var intervalKind: Null<String>;
-	var callKind: Null<String>;
-	var newExprKind: Null<String>;
-	var fieldAccessKind: Null<String>;
-	var nullSafeAccessKind: Null<String>;
-	var forceFieldAccessKind: Null<String>;
-	var indexAccessKind: Null<String>;
-	var parenKind: Null<String>;
-
-	/**
-	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children may be
-	 * paired. A conditional-compilation region is deliberately absent: its branches project as
-	 * FLATTENED siblings, so pairing under it would join a declaration in one `#if` branch to a
-	 * loop in another and rewrite across the boundary.
-	 */
-	var blockKinds: Array<String>;
-
-}
-
-/**
- * A recovered first-match loop ready to rewrite: the form flag, the loop node, its
- * partner (Form A trailing return / Form B declaration) and the destructured head.
- */
-private typedef FixCandidate = {
-
-	/** Which of the three shapes was recovered — the tag `buildEdits` dispatches on. */
-	var form: FindForm;
-
-	/** The holder local's name for either break form, null for the return form. */
-	var declName: Null<String>;
-	var forNode: QueryNode;
-	var sibling: QueryNode;
-	var loopVar: String;
-	var iterable: QueryNode;
-	var cond: QueryNode;
-
-	/** The call spelling the site takes — see `Head.qualified`. */
-	var qualified: Bool;
-
-}
-
-/** A recovered GUARDED capture-and-break loop: the loop node, the holder local's name, and the destructured head. */
-private typedef GuardedBreak = {
-
-	var forNode: QueryNode;
-	var declName: String;
-	var loopVar: String;
-	var iterable: QueryNode;
-	var cond: QueryNode;
-
-	/** The call spelling the site takes — see `Head.qualified`. */
-	var qualified: Bool;
-
-}
-
-/**
- * Which of the three first-match shapes a fix candidate recovered. A single tag rather than
- * two booleans: the guarded break form IS a break form, so an `isBreak` flag alone could not
- * discriminate it and the two branches would depend on their own order.
- */
-private enum abstract FindForm(Int) {
-	final Return = 0;
-	final Break = 1;
-	final GuardedBreak = 2;
-}
-
-/**
- * The two deferred questions a recovered loop asks about NAMES: `shadows` — whether the iterable's
- * own type provably declares `find`, so Haxe binds that member instead of the extension (false for
- * everything this run cannot prove) — and `qualified`, whether the FALLBACK spelling
- * `Lambda.find(xs, …)` still reaches the module from this file. Both are built on first demand, so
- * a file holding no recovered loop builds neither a resolver nor a header read.
- */
-private typedef MemberProbe = { var shadows: (QueryNode) -> Bool; var qualified: () -> Bool; }
-
-/** The `for (v in xs) if (cond) …` destructure all three forms start from, plus the call spelling the site takes. */
-private typedef Head = {
-
-	var loopVar: String;
-	var iterable: QueryNode;
-	var cond: QueryNode;
-	var then: QueryNode;
-
-	/**
-	 * Whether this site takes the QUALIFIED spelling `Lambda.find(xs, v -> c)` rather than the
-	 * extension `xs.find(v -> c)` — true exactly when the receiver's own type declares `find` and
-	 * the module name still reaches `Lambda` here. It changes only WHICH call is written: a
-	 * qualified site needs no `using Lambda;` and clears every other gate the same way.
-	 */
-	var qualified: Bool;
 
 }

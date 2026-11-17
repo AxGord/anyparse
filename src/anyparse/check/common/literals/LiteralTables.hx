@@ -1,5 +1,23 @@
 package anyparse.check.common.literals;
 
+/** The grammar vocabulary the table shapes read, resolved once per run by `LiteralTables.shapeOf`. */
+typedef LiteralTableShape = {
+	final support: Null<StringFoldSupport>;
+	final arrayLiteralKind: String;
+	final mapEntryKind: String;
+	final literalKinds: Array<String>;
+	final negationKind: String;
+	final numericKinds: Array<String>;
+	final switchKinds: Array<String>;
+	final caseBranchKind: String;
+	final defaultBranchKind: String;
+	final plainPatternKind: String;
+	final orPatternKind: String;
+	final exprStatementKind: String;
+	final identKind: String;
+	final wildcardName: String;
+};
+
 /**
  * The literal-TABLE shapes the checks share: a collection literal of plain data (`isCollectionTable`)
  * and a `switch` that maps literal keys to literal values (`isSwitchTable`). A table's literals are data,
@@ -142,21 +160,3 @@ final class LiteralTables {
 	}
 
 }
-
-/** The grammar vocabulary the table shapes read, resolved once per run by `LiteralTables.shapeOf`. */
-typedef LiteralTableShape = {
-	final support: Null<StringFoldSupport>;
-	final arrayLiteralKind: String;
-	final mapEntryKind: String;
-	final literalKinds: Array<String>;
-	final negationKind: String;
-	final numericKinds: Array<String>;
-	final switchKinds: Array<String>;
-	final caseBranchKind: String;
-	final defaultBranchKind: String;
-	final plainPatternKind: String;
-	final orPatternKind: String;
-	final exprStatementKind: String;
-	final identKind: String;
-	final wildcardName: String;
-};

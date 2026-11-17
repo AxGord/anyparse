@@ -24,6 +24,59 @@ using Lambda;
 typedef FixRun = { final code: Int; final err: String; };
 
 /**
+ * Deletes the first of `texts` a module still holds, one per pass — so a rule given two texts edits a file in two passes —
+ * and, given `unless`, only once that text is gone: a safe fix that breaks every module reading what it deletes.
+ */
+private class DropText implements Check {
+
+	private final _id: String;
+	private final _texts: Array<String>;
+	private final _unless: Null<String>;
+
+	public function new(id: String, texts: Array<String>, ?unless: String) {
+		_id = id;
+		_texts = texts;
+		_unless = unless;
+	}
+
+	public function id(): String {
+		return _id;
+	}
+
+	public function description(): String {
+		return 'deletes a declaration other code reads';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final found: Array<Violation> = [];
+		for (entry in files) {
+			final unless: Null<String> = _unless;
+			if (unless != null && entry.source.indexOf(unless) >= 0) continue;
+			final text: Null<String> = _texts.find(t -> entry.source.indexOf(t) >= 0);
+			if (text == null) continue;
+			final at: Int = entry.source.indexOf(text);
+			found.push({
+				file: entry.file,
+				span: new Span(at, at + text.length),
+				rule: id(),
+				severity: Severity.Warning,
+				message: 'a declaration'
+			});
+		}
+		return found;
+	}
+
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return violations.map(v -> { span: v.span, text: '' });
+	}
+
+}
+
+/**
  * A safe fix that breaks a module the run never wrote costs that fix, not the run's other safe fixes.
  *
  * The net attributes a failure by the files the compiler blames; when the blamed file is the CALLER of an edited
@@ -237,58 +290,5 @@ class LintFixSafeBisectTest extends Test {
 		return { code: code, err: err };
 	}
 	#end
-
-}
-
-/**
- * Deletes the first of `texts` a module still holds, one per pass — so a rule given two texts edits a file in two passes —
- * and, given `unless`, only once that text is gone: a safe fix that breaks every module reading what it deletes.
- */
-private class DropText implements Check {
-
-	private final _id: String;
-	private final _texts: Array<String>;
-	private final _unless: Null<String>;
-
-	public function new(id: String, texts: Array<String>, ?unless: String) {
-		_id = id;
-		_texts = texts;
-		_unless = unless;
-	}
-
-	public function id(): String {
-		return _id;
-	}
-
-	public function description(): String {
-		return 'deletes a declaration other code reads';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final found: Array<Violation> = [];
-		for (entry in files) {
-			final unless: Null<String> = _unless;
-			if (unless != null && entry.source.indexOf(unless) >= 0) continue;
-			final text: Null<String> = _texts.find(t -> entry.source.indexOf(t) >= 0);
-			if (text == null) continue;
-			final at: Int = entry.source.indexOf(text);
-			found.push({
-				file: entry.file,
-				span: new Span(at, at + text.length),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'a declaration'
-			});
-		}
-		return found;
-	}
-
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return violations.map(v -> { span: v.span, text: '' });
-	}
 
 }

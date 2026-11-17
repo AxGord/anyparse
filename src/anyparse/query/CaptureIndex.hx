@@ -11,6 +11,20 @@ import anyparse.query.Scope.ScopeFrame;
 import anyparse.query.Scope.ScopeStack;
 import anyparse.runtime.Span;
 
+/** How `Refs` emits one pattern name `CaptureIndex` classified. */
+typedef PatternHit = {
+
+	final kind: RefKind;
+
+	/** The first capture of the name in the arm, for a capture; null for a read, which resolves as usual. */
+	final binding: Null<RefBinding>;
+	final undecided: Bool;
+
+	/** For an undecided capture, the binding it would shadow if it does capture — a rewrite of THAT binding refuses too. */
+	final shadows: Null<Span>;
+
+};
+
 /**
  * The `case` pattern captures of ONE `Refs` walk: which pattern nodes bind, and how each is emitted.
  *
@@ -146,17 +160,3 @@ final class CaptureIndex {
 	}
 
 }
-
-/** How `Refs` emits one pattern name `CaptureIndex` classified. */
-typedef PatternHit = {
-
-	final kind: RefKind;
-
-	/** The first capture of the name in the arm, for a capture; null for a read, which resolves as usual. */
-	final binding: Null<RefBinding>;
-	final undecided: Bool;
-
-	/** For an undecided capture, the binding it would shadow if it does capture — a rewrite of THAT binding refuses too. */
-	final shadows: Null<Span>;
-
-};

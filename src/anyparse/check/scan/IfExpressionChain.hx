@@ -68,6 +68,13 @@ typedef ShieldSeams = {
 }
 
 /**
+ * A terminal chain value peeled of its ternary spine (`IfExpressionChain.unrollTernaryTail`): one
+ * `(condition, value)` rung per `?:` it held, in source order, and the value the spine ends on.
+ * Empty `pairs` with `terminal` the input value means it was no ternary at all.
+ */
+typedef TernaryTail = { var pairs: Array<{ cond: QueryNode, value: QueryNode }>; var terminal: QueryNode; }
+
+/**
  * The dangling-`else` family's shared home. Two things live here: the `if`-CHAIN shape that
  * `prefer-if-expression-assignment` and `prefer-if-expression-return` rewrite — recognising a
  * chain of single-statement branches and assembling the collapsed
@@ -625,10 +632,3 @@ final class IfExpressionChain {
 	}
 
 }
-
-/**
- * A terminal chain value peeled of its ternary spine (`IfExpressionChain.unrollTernaryTail`): one
- * `(condition, value)` rung per `?:` it held, in source order, and the value the spine ends on.
- * Empty `pairs` with `terminal` the input value means it was no ternary at all.
- */
-typedef TernaryTail = { var pairs: Array<{ cond: QueryNode, value: QueryNode }>; var terminal: QueryNode; }

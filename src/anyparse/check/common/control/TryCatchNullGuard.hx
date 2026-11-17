@@ -14,6 +14,27 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The kinds `TryCatchNullGuard` reads. */
+private typedef Seams = {
+	var tryKinds: Array<String>;
+	var tryShape: TrySeams;
+	var nullKind: String;
+	var eqKind: String;
+	var ifKinds: Array<String>;
+	var declKinds: Array<String>;
+	var termKinds: Array<String>;
+	var nonNullKinds: Array<String>;
+	var identKind: String;
+	var stringInterpKind: Null<String>;
+	var parenKind: Null<String>;
+	var blockStmtKind: Null<String>;
+	var blockKinds: Array<String>;
+	var shape: RefShape;
+}
+
+/** A collapsible pair: the finding key span (the declaration), the replaced region, and the built replacement. */
+private typedef Match = { var keySpan: Span; var editSpan: Span; var text: String; }
+
 /**
  * Flags a local declaration whose initializer is a `try` EXPRESSION defaulting to `null` on
  * every catch clause, immediately followed by a null guard that leaves the function, and
@@ -414,24 +435,3 @@ final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The kinds `TryCatchNullGuard` reads. */
-private typedef Seams = {
-	var tryKinds: Array<String>;
-	var tryShape: TrySeams;
-	var nullKind: String;
-	var eqKind: String;
-	var ifKinds: Array<String>;
-	var declKinds: Array<String>;
-	var termKinds: Array<String>;
-	var nonNullKinds: Array<String>;
-	var identKind: String;
-	var stringInterpKind: Null<String>;
-	var parenKind: Null<String>;
-	var blockStmtKind: Null<String>;
-	var blockKinds: Array<String>;
-	var shape: RefShape;
-}
-
-/** A collapsible pair: the finding key span (the declaration), the replaced region, and the built replacement. */
-private typedef Match = { var keySpan: Span; var editSpan: Span; var text: String; }

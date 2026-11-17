@@ -12,6 +12,46 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** What kind of blind spot a hazard is; a reflective access carries its literal member name, null when computed. */
+enum ReachHazardKind {
+
+	ReflectiveName(literal: Null<String>);
+	Native;
+	Untyped;
+	Opaque;
+
+	/** A node kind the grammar does not declare modelled (`ExecutionShape.modelledKinds`). */
+	Unmodelled(kind: String);
+
+	/** Not a blind spot by itself: a site that changes SOME array — an element write, or an array-changing method on any receiver. */
+	ArrayChange;
+
+}
+
+/** One hazard: what it is, the node span it covers and the node itself. */
+typedef ReachHazard = {
+
+	var kind: ReachHazardKind;
+	var span: Span;
+	var node: QueryNode;
+
+	/**
+	 * Of a reflective access by a computed name read where the compiler facts are the truth (`ReachHazards.underTruth`),
+	 * the fact of it each build recorded, which says what the object it acts on is (`ReflectionFact.receiver`); absent
+	 * elsewhere.
+	 */
+	@:optional
+	var receivers: Array<ReflectionFact>;
+
+	/**
+	 * Of a native site read where the compiler facts are the truth (`ReachHazards.underTruth`), the fact of it: what its code
+	 * is handed and names (`NativeSiteReach`); absent elsewhere.
+	 */
+	@:optional
+	var native: NativeFact;
+
+}
+
 /**
  * The POSITIVE check a reachability walk runs over every body it enters: each node kind must be one the
  * grammar declares modelled (`ExecutionShape.modelledKinds`), and the sites a call graph does not carry are listed
@@ -282,45 +322,5 @@ final class ReachHazards {
 	private static inline function same(a: Span, b: Span): Bool {
 		return a.from == b.from && a.to == b.to;
 	}
-
-}
-
-/** What kind of blind spot a hazard is; a reflective access carries its literal member name, null when computed. */
-enum ReachHazardKind {
-
-	ReflectiveName(literal: Null<String>);
-	Native;
-	Untyped;
-	Opaque;
-
-	/** A node kind the grammar does not declare modelled (`ExecutionShape.modelledKinds`). */
-	Unmodelled(kind: String);
-
-	/** Not a blind spot by itself: a site that changes SOME array — an element write, or an array-changing method on any receiver. */
-	ArrayChange;
-
-}
-
-/** One hazard: what it is, the node span it covers and the node itself. */
-typedef ReachHazard = {
-
-	var kind: ReachHazardKind;
-	var span: Span;
-	var node: QueryNode;
-
-	/**
-	 * Of a reflective access by a computed name read where the compiler facts are the truth (`ReachHazards.underTruth`),
-	 * the fact of it each build recorded, which says what the object it acts on is (`ReflectionFact.receiver`); absent
-	 * elsewhere.
-	 */
-	@:optional
-	var receivers: Array<ReflectionFact>;
-
-	/**
-	 * Of a native site read where the compiler facts are the truth (`ReachHazards.underTruth`), the fact of it: what its code
-	 * is handed and names (`NativeSiteReach`); absent elsewhere.
-	 */
-	@:optional
-	var native: NativeFact;
 
 }

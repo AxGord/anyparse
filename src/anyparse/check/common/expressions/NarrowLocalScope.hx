@@ -14,6 +14,29 @@ import anyparse.query.SymbolIndex;
 using anyparse.util.Strings;
 using StringTools;
 
+/** The kinds `NarrowLocalScope` reads, plus the `RefShape` the `Refs` walk needs. */
+private typedef Seams = {
+	var shape: RefShape;
+	var localDeclKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
+	var exprStmtKind: String;
+	var assignKind: String;
+	var identKind: String;
+	var opaqueKinds: Array<String>;
+	var functionKinds: Array<String>;
+	var blockScopeKinds: Array<String>;
+}
+
+/** A sinkable declaration: the finding key, the line the fix deletes, and where its text lands. */
+private typedef Match = {
+	var name: String;
+	var declSpan: Span;
+	var removeSpan: Span;
+	var declText: String;
+	var insertAt: Int;
+	var indent: String;
+}
+
 /**
  * Flags a bare local declaration whose every occurrence sits inside ONE nested block, and sinks
  * the declaration into that block:
@@ -387,27 +410,4 @@ final class NarrowLocalScope extends RuleBase {
 			line;
 	}
 
-}
-
-/** The kinds `NarrowLocalScope` reads, plus the `RefShape` the `Refs` walk needs. */
-private typedef Seams = {
-	var shape: RefShape;
-	var localDeclKinds: Array<String>;
-	var localDeclContinuationKinds: Array<String>;
-	var exprStmtKind: String;
-	var assignKind: String;
-	var identKind: String;
-	var opaqueKinds: Array<String>;
-	var functionKinds: Array<String>;
-	var blockScopeKinds: Array<String>;
-}
-
-/** A sinkable declaration: the finding key, the line the fix deletes, and where its text lands. */
-private typedef Match = {
-	var name: String;
-	var declSpan: Span;
-	var removeSpan: Span;
-	var declText: String;
-	var insertAt: Int;
-	var indent: String;
 }

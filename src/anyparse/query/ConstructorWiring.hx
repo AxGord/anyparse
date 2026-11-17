@@ -4,6 +4,27 @@ import anyparse.query.CallGraph.EdgeKind;
 import anyparse.runtime.Span;
 
 /**
+ * A constructor run recorded at a `new T()` or `super()` site, wired to the `<init>` nodes it executes;
+ * `chainGrew` asks the next wiring to re-read it because a type on its chain gained a declaration.
+ */
+typedef CtorRun = {
+
+	var typeName: String;
+	var from: String;
+	var kind: EdgeKind;
+	var file: String;
+	var span: Null<Span>;
+	var chainGrew: Bool;
+
+	/**
+	 * The node the site's own edge named (null when it named none), so a
+	 * re-wiring adds the constructor only when it resolves to another one.
+	 */
+	var target: Null<String>;
+
+}
+
+/**
  * How a `CallGraph` wires constructor runs to the field initializers they execute: a declared constructor
  * runs its own type's `<init>`, and a `new T()` / `super()` whose type declares no constructor runs the
  * generated one — that type's initializers, then its superclass's. Runs are recorded while edges are
@@ -127,26 +148,5 @@ final class ConstructorWiring {
 		}
 		return inits;
 	}
-
-}
-
-/**
- * A constructor run recorded at a `new T()` or `super()` site, wired to the `<init>` nodes it executes;
- * `chainGrew` asks the next wiring to re-read it because a type on its chain gained a declaration.
- */
-typedef CtorRun = {
-
-	var typeName: String;
-	var from: String;
-	var kind: EdgeKind;
-	var file: String;
-	var span: Null<Span>;
-	var chainGrew: Bool;
-
-	/**
-	 * The node the site's own edge named (null when it named none), so a
-	 * re-wiring adds the constructor only when it resolves to another one.
-	 */
-	var target: Null<String>;
 
 }

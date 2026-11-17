@@ -12,6 +12,35 @@ import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.SymbolIndex;
 
+/** The run-wide evidence of one `run`, two whole-scope answers among it computed on first need. */
+private typedef RunState = {
+
+	/** The report set the run was given. */
+	final files: Array<{ file: String, source: String }>;
+
+	/** The scope and grammar the storage scans read. */
+	final storage: StorageScope;
+
+	/** Every string in scope a member name may be reached by at runtime. */
+	final reflection: ReflectionSurface;
+
+	/** The grammar's mutable field declaration kinds. */
+	final propertyKinds: Array<String>;
+
+	/** The kinds of a member's modifier and metadata run. */
+	final runKinds: Array<String>;
+
+	/** The kinds an annotation in that run carries (`MetaShape.metaKinds`). */
+	final metaKinds: Array<String>;
+
+	/** The scope's field write index, once a candidate needs it. */
+	var writes: Null<FieldWriteIndex>;
+
+	/** Whether the scope enumerates object fields, once an Info finding needs it. */
+	var enumerates: Null<Bool>;
+
+};
+
 /**
  * Flags a property whose physical field nothing ever stores. Its read slot is `default` / `null`, so a plain read
  * returns the field, but its write slot is `set` and its own set accessor never names it: the value a write hands
@@ -185,32 +214,3 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 	}
 
 }
-
-/** The run-wide evidence of one `run`, two whole-scope answers among it computed on first need. */
-private typedef RunState = {
-
-	/** The report set the run was given. */
-	final files: Array<{ file: String, source: String }>;
-
-	/** The scope and grammar the storage scans read. */
-	final storage: StorageScope;
-
-	/** Every string in scope a member name may be reached by at runtime. */
-	final reflection: ReflectionSurface;
-
-	/** The grammar's mutable field declaration kinds. */
-	final propertyKinds: Array<String>;
-
-	/** The kinds of a member's modifier and metadata run. */
-	final runKinds: Array<String>;
-
-	/** The kinds an annotation in that run carries (`MetaShape.metaKinds`). */
-	final metaKinds: Array<String>;
-
-	/** The scope's field write index, once a candidate needs it. */
-	var writes: Null<FieldWriteIndex>;
-
-	/** Whether the scope enumerates object fields, once an Info finding needs it. */
-	var enumerates: Null<Bool>;
-
-};

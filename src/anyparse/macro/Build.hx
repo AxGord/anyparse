@@ -19,6 +19,13 @@ import haxe.macro.ExprTools;
 import haxe.macro.Type;
 import anyparse.macro.MacroNames.*;
 
+/** The grammar root, its schema path and the resolved format — what every `@:build` entry starts from. */
+private typedef ResolvedTarget = {
+	typePath: String,
+	rootType: Type,
+	schemaTypePath: String,
+	formatInfo: FormatReader.FormatInfo
+};
 /**
  * `@:build` entry point. Applied to a marker class like
  * `JValueParser` with the grammar root type as an argument:
@@ -455,11 +462,4 @@ class Build {
 	}
 
 }
-/** The grammar root, its schema path and the resolved format — what every `@:build` entry starts from. */
-private typedef ResolvedTarget = {
-	typePath: String,
-	rootType: Type,
-	schemaTypePath: String,
-	formatInfo: FormatReader.FormatInfo
-};
 #end

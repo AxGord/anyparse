@@ -7,6 +7,33 @@ import haxe.Exception;
 
 using anyparse.util.Strings;
 
+/** One region of one file allowed to name a member - its own declaration, its type, a subtype. */
+typedef ReachRegion = { final file: String; final source: String; final span: Span; };
+
+/** What a member's modifier / metadata run says, as `PublicReach.readRun` reads it. */
+typedef MemberRun = {
+
+	final isPublic: Bool;
+
+	/** The `public` keyword's node, or null when the run carries none. */
+	final publicModifier: Null<QueryNode>;
+	final isOverride: Bool;
+	final isStatic: Bool;
+	final annotated: Bool;
+
+};
+
+/** The accumulated verdict of one inheritance-chain walk. */
+private typedef Chain = {
+
+	/** Whether a supertype reference resolved to no indexed declaration, leaving the chain unreadable. */
+	var unresolved: Bool;
+
+	/** Whether an ancestor carries `@:autoBuild` - it generates members into the class the walk started from. */
+	var generated: Bool;
+
+};
+
 /**
  * The whole-project REACH evidence a fix needs before it may act on the claim "nothing outside
  * this region names that member" - built for `unused-public-member`'s deletions and shared with
@@ -199,30 +226,3 @@ final class PublicReach {
 	}
 
 }
-
-/** One region of one file allowed to name a member - its own declaration, its type, a subtype. */
-typedef ReachRegion = { final file: String; final source: String; final span: Span; };
-
-/** What a member's modifier / metadata run says, as `PublicReach.readRun` reads it. */
-typedef MemberRun = {
-
-	final isPublic: Bool;
-
-	/** The `public` keyword's node, or null when the run carries none. */
-	final publicModifier: Null<QueryNode>;
-	final isOverride: Bool;
-	final isStatic: Bool;
-	final annotated: Bool;
-
-};
-
-/** The accumulated verdict of one inheritance-chain walk. */
-private typedef Chain = {
-
-	/** Whether a supertype reference resolved to no indexed declaration, leaving the chain unreadable. */
-	var unresolved: Bool;
-
-	/** Whether an ancestor carries `@:autoBuild` - it generates members into the class the walk started from. */
-	var generated: Bool;
-
-};

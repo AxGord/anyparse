@@ -11,6 +11,35 @@ import haxe.Exception;
 using Lambda;
 
 /**
+ * One located occurrence of a fragment inside the searched slice: the byte
+ * range `[from, to)` the replacement takes over, and how it was found.
+ *
+ * `indent` is the indentation of the line the occurrence STARTS on — where the
+ * dedent-tolerant arm has to re-base the replacement, because it matched trimmed
+ * lines and owns whole ones. `dedented` says which arm found it: the byte-exact
+ * arm splices the caller's own bytes between two mid-line neighbours and
+ * synthesises no indentation at all, so nothing about it needs re-basing or
+ * checking. A dedent match at column 0 also has an empty `indent`, which is why
+ * the arm is a flag of its own and not read off the indentation.
+ */
+private typedef Located = {
+	from: Int,
+	to: Int,
+	indent: String,
+	dedented: Bool
+};
+
+/**
+ * What `locate` answers: the ranges it placed, or the refusal that says why it placed none.
+ * Exactly one of the two carries the answer — a non-null `error` comes with an empty `ranges`
+ * and discards the whole payload.
+ */
+private typedef LocateResult = { ranges: Array<Located>, error: Null<String> };
+
+/** A locate over a slice that starts at `base` of the source. */
+private typedef LocatedFrom = { located: LocateResult, base: Int };
+
+/**
  * Patch a fragment INSIDE one addressed node — the surgical counterpart of
  * `ReplaceNode` for small edits: instead of resending a whole declaration to
  * change a few lines, the caller supplies the exact old fragment (copied
@@ -933,32 +962,3 @@ final class Patch {
 	}
 
 }
-
-/**
- * One located occurrence of a fragment inside the searched slice: the byte
- * range `[from, to)` the replacement takes over, and how it was found.
- *
- * `indent` is the indentation of the line the occurrence STARTS on — where the
- * dedent-tolerant arm has to re-base the replacement, because it matched trimmed
- * lines and owns whole ones. `dedented` says which arm found it: the byte-exact
- * arm splices the caller's own bytes between two mid-line neighbours and
- * synthesises no indentation at all, so nothing about it needs re-basing or
- * checking. A dedent match at column 0 also has an empty `indent`, which is why
- * the arm is a flag of its own and not read off the indentation.
- */
-private typedef Located = {
-	from: Int,
-	to: Int,
-	indent: String,
-	dedented: Bool
-};
-
-/**
- * What `locate` answers: the ranges it placed, or the refusal that says why it placed none.
- * Exactly one of the two carries the answer — a non-null `error` comes with an empty `ranges`
- * and discards the whole payload.
- */
-private typedef LocateResult = { ranges: Array<Located>, error: Null<String> };
-
-/** A locate over a slice that starts at `base` of the source. */
-private typedef LocatedFrom = { located: LocateResult, base: Int };

@@ -10,6 +10,9 @@ import unit.cli.CliFixture;
 
 using StringTools;
 
+/** One source of a cell's scope. */
+private typedef SourceFile = { var file: String; var source: String; };
+
 /**
  * `unused-private`'s string gate for a PRIVATE STATIC: a string spelling the name keeps the static only
  * when a class value of its owner — or of a subtype, or an alias — can reach reflection
@@ -307,6 +310,3 @@ class StaticReflectionReachTest extends Test {
 	}
 
 }
-
-/** One source of a cell's scope. */
-private typedef SourceFile = { var file: String; var source: String; };

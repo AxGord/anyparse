@@ -11,6 +11,9 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
+/** A verified pass's verdict and the consumer's text on disk after it. */
+private typedef Verified = { var verdict: FixVerifyResult; var main: String; }
+
 /**
  * A VALUE site of `shorten-type-ref` is rewritten only where the compiler names one declaration for the qualified and the
  * short spelling. A build macro attached by the build configuration (`--macro addGlobalMetadata`) is invisible in every
@@ -88,6 +91,3 @@ final class ShortenTypeRefCompilerProofE2ETest extends Test {
 	#end
 
 }
-
-/** A verified pass's verdict and the consumer's text on disk after it. */
-private typedef Verified = { var verdict: FixVerifyResult; var main: String; }

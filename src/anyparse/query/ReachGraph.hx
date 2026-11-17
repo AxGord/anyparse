@@ -24,6 +24,49 @@ import anyparse.util.Groups;
 using Lambda;
 
 /**
+ * A function an implicit-call site may run (`ReachGraph.ownedIdsAt`): its graph id, and the typed type whose member it is
+ * when the compiler facts say so — null when only its simple name says.
+ */
+typedef OwnedId = { final id: String; final owner: Null<String>; }
+
+/**
+ * What a reflective access by a computed name may reach (`ReachGraph.reflectedMembers`): the simple names of the types
+ * whose members it may touch, and the methods it may run, each with the typed type it is a member of.
+ */
+typedef ReflectedMembers = { final types: Array<String>; final ids: Array<OwnedId>; }
+
+/** An implicitly-called member the index declares, and the file declaring it. */
+private typedef ImplicitCandidate = {
+
+	var type: String;
+	var member: String;
+	var file: String;
+
+	/** The canonical path of the declaring type (`TypeNameBinding.canonicalPath`): which type of its simple name it is. */
+	var path: String;
+	var family: CandidateFamily;
+
+	/** Whether the declaring type is an abstract (its members are static calls) / an extern (target code may make one). */
+	var isAbstract: Bool;
+	var isExtern: Bool;
+
+}
+
+/** Which implicit channel runs a member — the family of `ImplicitSites.SiteFamily` it answers, or none in particular. */
+private enum CandidateFamily {
+
+	TextMember;
+	IterationMember;
+	IndexMember;
+	OperatorMember(kinds: Array<String>);
+	LiteralMember;
+
+	/** A conversion or a field-name fallback: runs wherever a value flows. */
+	Always;
+
+}
+
+/**
  * The call graph `MemberReach` walks, and how it grows: built over the project on first demand, extended one
  * library file at a time when a walk reaches a target declared there (bounded by `maxLibraryFiles`, and not
  * at all once a question met a blind spot), with the per-node groupings of unresolved sites and the set of
@@ -1551,48 +1594,5 @@ final class ReachGraph {
 	private static function bare(metas: Null<Array<String>>): Array<String> {
 		return [for (m in metas ?? []) StringTools.startsWith(m, '@') ? m.substr(1) : m];
 	}
-
-}
-
-/**
- * A function an implicit-call site may run (`ReachGraph.ownedIdsAt`): its graph id, and the typed type whose member it is
- * when the compiler facts say so — null when only its simple name says.
- */
-typedef OwnedId = { final id: String; final owner: Null<String>; }
-
-/**
- * What a reflective access by a computed name may reach (`ReachGraph.reflectedMembers`): the simple names of the types
- * whose members it may touch, and the methods it may run, each with the typed type it is a member of.
- */
-typedef ReflectedMembers = { final types: Array<String>; final ids: Array<OwnedId>; }
-
-/** An implicitly-called member the index declares, and the file declaring it. */
-private typedef ImplicitCandidate = {
-
-	var type: String;
-	var member: String;
-	var file: String;
-
-	/** The canonical path of the declaring type (`TypeNameBinding.canonicalPath`): which type of its simple name it is. */
-	var path: String;
-	var family: CandidateFamily;
-
-	/** Whether the declaring type is an abstract (its members are static calls) / an extern (target code may make one). */
-	var isAbstract: Bool;
-	var isExtern: Bool;
-
-}
-
-/** Which implicit channel runs a member — the family of `ImplicitSites.SiteFamily` it answers, or none in particular. */
-private enum CandidateFamily {
-
-	TextMember;
-	IterationMember;
-	IndexMember;
-	OperatorMember(kinds: Array<String>);
-	LiteralMember;
-
-	/** A conversion or a field-name fallback: runs wherever a value flows. */
-	Always;
 
 }

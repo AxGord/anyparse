@@ -12,6 +12,18 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** One degenerate switch: the span reported (and keyed on), and the edit that unwraps it. */
+private typedef Candidate = { final span: Span; final edit: { span: Span, text: String }; };
+
+/** The seams `UnnecessarySwitch` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final cases: CaseSeams;
+	final statementKinds: Array<String>;
+	final exprStatementKind: Null<String>;
+	final containerKinds: Array<String>;
+	final collectionKinds: Array<String>;
+};
+
 /**
  * Flags — and UNWRAPS — a switch whose only arm is an unconditional catch-all: `switch x {
  * case _: close(); }` decides nothing, so it is `close();` with a subject evaluated for no
@@ -284,15 +296,3 @@ final class UnnecessarySwitch extends RuleBase {
 	}
 
 }
-
-/** One degenerate switch: the span reported (and keyed on), and the edit that unwraps it. */
-private typedef Candidate = { final span: Span; final edit: { span: Span, text: String }; };
-
-/** The seams `UnnecessarySwitch` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final cases: CaseSeams;
-	final statementKinds: Array<String>;
-	final exprStatementKind: Null<String>;
-	final containerKinds: Array<String>;
-	final collectionKinds: Array<String>;
-};

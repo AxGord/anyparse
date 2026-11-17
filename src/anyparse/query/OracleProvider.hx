@@ -11,139 +11,6 @@ import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 
-/**
- * The compiler oracle of a grammar: its compiler, asked whether a tree typechecks under each configured build. The one
- * answer to "how does a verified fix phase reach the compiler oracle" — an optional capability the grammar plugin
- * implements and `OracleProviders.of` resolves; the phases ask only this surface, the language keeps the compiler.
- */
-@:nullSafety(Strict)
-interface OracleProvider {
-
-	/** How many compiles the oracle has run so far; a phase reads the difference across a call to count its own. */
-	public function invocations(): Int;
-
-	/** Every configuration typechecked once: the green ones judge, the red ones are excluded with a sentence each. */
-	public function judging(oracles: Array<OracleConfig>): OracleBaseline;
-
-	/** One build's verdict, compiled cold. */
-	public function typecheck(hxml: String, cwd: Null<String>, defines: Array<String>): OracleOutcome;
-
-	/** One verdict over every configuration, the first non-green one winning; `verbose` compiles print what they read. */
-	public function typecheckAll(oracles: Array<OracleConfig>, verbose: Bool): OracleOutcome;
-
-	/**
-	 * Each configuration's verdict and the files its compile read, in order; `stopAfterFailure` leaves the rest unasked.
-	 * `parallel` bounds how many compile at once (the provider's own default when absent); `decisive` accepts the diagnostics
-	 * of a failing compile as the verdict (they blame a file the caller just created) instead of asking again plainly.
-	 */
-	public function typecheckEachReading(
-		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
-	): Array<OracleReading>;
-
-	/** Whether `file` is a source this oracle's compiler parses — what a build's parsed-file list can name. */
-	public function isSource(file: String): Bool;
-
-	/**
-	 * The module a build with `classPaths` names `file` by, or null when no root holds it, it is no source, or its path is
-	 * no legal module name — a file no command line may name.
-	 */
-	public function moduleUnder(classPaths: Array<String>, file: String): Null<String>;
-
-	/** One build's verdict from a warm compilation server reading `paths`, or null when no server would answer. */
-	public function serverTypecheck(hxml: String, cwd: Null<String>, paths: Array<String>, defines: Array<String>): Null<OracleOutcome>;
-
-	/** The identity a report dedupes an exclusion by: its configuration and the class of its reason, never the sentence. */
-	public function exclusionKey(exclusion: OracleExclusion): String;
-
-	/** Which of `oracles` can vouch for an edit and what each compiles, settled once per `memo`; new exclusions join `excluded`. */
-	public function usableOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>, excluded: Array<OracleExclusion>): UsableCoverage;
-
-	/**
-	 * What each of `oracles` compiles, in order and unfiltered, probed once per `memo`: a build whose compiled set is unknown
-	 * stays in the answer as unknown, which `usableOnce` would drop — a reach question must treat it as "cannot say".
-	 */
-	public function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<CompiledSet>;
-
-	/** A fresh RUN-scoped name proof: whether a rewrite keeps what each written name means. */
-	public function nameProof(): NameProof;
-
-	/** A display server for one build, answering types at positions, or null when none would start. */
-	public function startDisplay(
-		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>
-	): Null<DisplayTypeOracle>;
-
-	/** The identity of one configured build: two configurations with one key are one build. */
-	public function oracleKey(oracle: OracleConfig): String;
-
-	/** The builds one raw `compilerOracle` value declares, relative paths against `baseDir`; what it cannot use goes to `drops`. */
-	public function readDeclaration(declared: OracleDeclared, drops: Array<String>): Array<OracleConfig>;
-
-	/** One configured build named for a diagnostic line. */
-	public function describeOracle(oracle: OracleConfig): String;
-
-	/** A fingerprint of everything one build would read, or null when that cannot be told; `memo` shares file reads across builds. */
-	public function fingerprint(hxml: String, cwd: Null<String>, defines: Array<String>, memo: Map<String, String>): Null<String>;
-
-	/** The verdict recorded for one build under `fingerprint`, or null when none is. */
-	public function lookupVerdict(hxml: String, cwd: Null<String>, fingerprint: String, defines: Array<String>): Null<OracleOutcome>;
-
-	/** Records a verdict unless the input moved from `fingerprint` or the compile read a file it did not hash; whether it was recorded. */
-	public function storeVerdictIfUnchanged(
-		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, defines: Array<String>, memo: Map<String, String>,
-		parsed: Null<Array<String>>
-	): Bool;
-
-	/** The class paths one build spells explicitly. */
-	public function classPaths(hxml: String, cwd: Null<String>): Array<String>;
-
-	/** Every class path one build reads, libraries and standard library included, or null when the compiler could not be asked. */
-	public function classRoots(hxml: String, cwd: Null<String>): Null<Array<String>>;
-
-	/** Brings each build's generated inputs up to date and holds them for this run, until `releaseBuilds`. */
-	public function prepareBuilds(oracles: Array<OracleConfig>): PreparedOracles;
-
-	/** The run's compiles are done: another run may regenerate these builds. */
-	public function releaseBuilds(oracles: Array<OracleConfig>): Void;
-
-	/** `oracles` carrying a fresh RUN-scoped memo of what the compilers answer; `written` lists the run's files at each question. */
-	public function attachRun(
-		oracles: Array<OracleConfig>, persisted: Bool, written: () -> Array<String>, grammar: GrammarPlugin
-	): Array<OracleConfig>;
-
-	/** Starts the warm servers of the run `attachRun` gave `oracles`, if any. */
-	public function startServers(oracles: Array<OracleConfig>): Void;
-
-	/** Stops the warm servers of the run `attachRun` gave `oracles`, if any. */
-	public function stopServers(oracles: Array<OracleConfig>): Void;
-
-	/** Starts the compiles typing what `oracles` compile, for a run to read later. */
-	public function startFacts(oracles: Array<OracleConfig>): StartedProbe<CompilerFacts>;
-
-	/** Starts the compiles describing the builds of `oracles`; finishing stores what they answer for a run that compiles nothing. */
-	public function startBuilds(oracles: Array<OracleConfig>): StartedProbe<ReachBuilds>;
-
-	/** The builds of `oracles`, compiled now and stored as `startBuilds` stores them; null when any build cannot be told. */
-	public function probeBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds>;
-
-	/** The builds an earlier run stored for exactly the input `oracles` read now, or null when none is. */
-	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds>;
-
-	/** The facts of the run behind `grammar` as a fix of `file`, read as `source`, asks them; null when it holds no complete facts. */
-	public function factsForFix(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle>;
-
-	/** `factsForFix` when the facts are the second proof of a fix, read only where a `--fix` run compiles them anyway. */
-	public function factsForFixRun(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle>;
-
-	/**
-	 * The compiler facts of the run behind `grammar` over `files`, each read as it is now, or null when the run holds no
-	 * complete facts; `fallback` answers for a file whose compiled text is gone.
-	 */
-	public function factsForFiles(
-		grammar: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
-	): Null<FactsOracle>;
-
-}
-
 /** Compiles a run started and has not read: exactly one of `finish` or `abandon` ends them. */
 @:nullSafety(Strict)
 interface StartedProbe<T> {
@@ -319,3 +186,136 @@ typedef UsableCoverage = {
 
 /** `OracleProvider.prepareBuilds`' answer: the configurations ready to use, and a line per command that ran. */
 typedef PreparedOracles = { var oracles: Array<OracleConfig>; var notes: Array<String>; }
+
+/**
+ * The compiler oracle of a grammar: its compiler, asked whether a tree typechecks under each configured build. The one
+ * answer to "how does a verified fix phase reach the compiler oracle" — an optional capability the grammar plugin
+ * implements and `OracleProviders.of` resolves; the phases ask only this surface, the language keeps the compiler.
+ */
+@:nullSafety(Strict)
+interface OracleProvider {
+
+	/** How many compiles the oracle has run so far; a phase reads the difference across a call to count its own. */
+	public function invocations(): Int;
+
+	/** Every configuration typechecked once: the green ones judge, the red ones are excluded with a sentence each. */
+	public function judging(oracles: Array<OracleConfig>): OracleBaseline;
+
+	/** One build's verdict, compiled cold. */
+	public function typecheck(hxml: String, cwd: Null<String>, defines: Array<String>): OracleOutcome;
+
+	/** One verdict over every configuration, the first non-green one winning; `verbose` compiles print what they read. */
+	public function typecheckAll(oracles: Array<OracleConfig>, verbose: Bool): OracleOutcome;
+
+	/**
+	 * Each configuration's verdict and the files its compile read, in order; `stopAfterFailure` leaves the rest unasked.
+	 * `parallel` bounds how many compile at once (the provider's own default when absent); `decisive` accepts the diagnostics
+	 * of a failing compile as the verdict (they blame a file the caller just created) instead of asking again plainly.
+	 */
+	public function typecheckEachReading(
+		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
+	): Array<OracleReading>;
+
+	/** Whether `file` is a source this oracle's compiler parses — what a build's parsed-file list can name. */
+	public function isSource(file: String): Bool;
+
+	/**
+	 * The module a build with `classPaths` names `file` by, or null when no root holds it, it is no source, or its path is
+	 * no legal module name — a file no command line may name.
+	 */
+	public function moduleUnder(classPaths: Array<String>, file: String): Null<String>;
+
+	/** One build's verdict from a warm compilation server reading `paths`, or null when no server would answer. */
+	public function serverTypecheck(hxml: String, cwd: Null<String>, paths: Array<String>, defines: Array<String>): Null<OracleOutcome>;
+
+	/** The identity a report dedupes an exclusion by: its configuration and the class of its reason, never the sentence. */
+	public function exclusionKey(exclusion: OracleExclusion): String;
+
+	/** Which of `oracles` can vouch for an edit and what each compiles, settled once per `memo`; new exclusions join `excluded`. */
+	public function usableOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>, excluded: Array<OracleExclusion>): UsableCoverage;
+
+	/**
+	 * What each of `oracles` compiles, in order and unfiltered, probed once per `memo`: a build whose compiled set is unknown
+	 * stays in the answer as unknown, which `usableOnce` would drop — a reach question must treat it as "cannot say".
+	 */
+	public function probedOnce(memo: OracleCoverageMemo, oracles: Array<OracleConfig>): Array<CompiledSet>;
+
+	/** A fresh RUN-scoped name proof: whether a rewrite keeps what each written name means. */
+	public function nameProof(): NameProof;
+
+	/** A display server for one build, answering types at positions, or null when none would start. */
+	public function startDisplay(
+		typeSyntax: TypeSyntaxReader, hxml: String, cwd: Null<String>, defines: Array<String>
+	): Null<DisplayTypeOracle>;
+
+	/** The identity of one configured build: two configurations with one key are one build. */
+	public function oracleKey(oracle: OracleConfig): String;
+
+	/** The builds one raw `compilerOracle` value declares, relative paths against `baseDir`; what it cannot use goes to `drops`. */
+	public function readDeclaration(declared: OracleDeclared, drops: Array<String>): Array<OracleConfig>;
+
+	/** One configured build named for a diagnostic line. */
+	public function describeOracle(oracle: OracleConfig): String;
+
+	/** A fingerprint of everything one build would read, or null when that cannot be told; `memo` shares file reads across builds. */
+	public function fingerprint(hxml: String, cwd: Null<String>, defines: Array<String>, memo: Map<String, String>): Null<String>;
+
+	/** The verdict recorded for one build under `fingerprint`, or null when none is. */
+	public function lookupVerdict(hxml: String, cwd: Null<String>, fingerprint: String, defines: Array<String>): Null<OracleOutcome>;
+
+	/** Records a verdict unless the input moved from `fingerprint` or the compile read a file it did not hash; whether it was recorded. */
+	public function storeVerdictIfUnchanged(
+		hxml: String, cwd: Null<String>, fingerprint: String, outcome: OracleOutcome, defines: Array<String>, memo: Map<String, String>,
+		parsed: Null<Array<String>>
+	): Bool;
+
+	/** The class paths one build spells explicitly. */
+	public function classPaths(hxml: String, cwd: Null<String>): Array<String>;
+
+	/** Every class path one build reads, libraries and standard library included, or null when the compiler could not be asked. */
+	public function classRoots(hxml: String, cwd: Null<String>): Null<Array<String>>;
+
+	/** Brings each build's generated inputs up to date and holds them for this run, until `releaseBuilds`. */
+	public function prepareBuilds(oracles: Array<OracleConfig>): PreparedOracles;
+
+	/** The run's compiles are done: another run may regenerate these builds. */
+	public function releaseBuilds(oracles: Array<OracleConfig>): Void;
+
+	/** `oracles` carrying a fresh RUN-scoped memo of what the compilers answer; `written` lists the run's files at each question. */
+	public function attachRun(
+		oracles: Array<OracleConfig>, persisted: Bool, written: () -> Array<String>, grammar: GrammarPlugin
+	): Array<OracleConfig>;
+
+	/** Starts the warm servers of the run `attachRun` gave `oracles`, if any. */
+	public function startServers(oracles: Array<OracleConfig>): Void;
+
+	/** Stops the warm servers of the run `attachRun` gave `oracles`, if any. */
+	public function stopServers(oracles: Array<OracleConfig>): Void;
+
+	/** Starts the compiles typing what `oracles` compile, for a run to read later. */
+	public function startFacts(oracles: Array<OracleConfig>): StartedProbe<CompilerFacts>;
+
+	/** Starts the compiles describing the builds of `oracles`; finishing stores what they answer for a run that compiles nothing. */
+	public function startBuilds(oracles: Array<OracleConfig>): StartedProbe<ReachBuilds>;
+
+	/** The builds of `oracles`, compiled now and stored as `startBuilds` stores them; null when any build cannot be told. */
+	public function probeBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds>;
+
+	/** The builds an earlier run stored for exactly the input `oracles` read now, or null when none is. */
+	public function storedBuilds(oracles: Array<OracleConfig>): Null<ReachBuilds>;
+
+	/** The facts of the run behind `grammar` as a fix of `file`, read as `source`, asks them; null when it holds no complete facts. */
+	public function factsForFix(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle>;
+
+	/** `factsForFix` when the facts are the second proof of a fix, read only where a `--fix` run compiles them anyway. */
+	public function factsForFixRun(grammar: GrammarPlugin, file: String, source: String): Null<FactsOracle>;
+
+	/**
+	 * The compiler facts of the run behind `grammar` over `files`, each read as it is now, or null when the run holds no
+	 * complete facts; `fallback` answers for a file whose compiled text is gone.
+	 */
+	public function factsForFiles(
+		grammar: GrammarPlugin, files: Array<{ file: String, source: String }>, fallback: () -> Null<TypeOracle>
+	): Null<FactsOracle>;
+
+}

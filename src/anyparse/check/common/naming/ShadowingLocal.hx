@@ -16,6 +16,74 @@ import anyparse.query.TreePath;
 
 using StringTools;
 
+/** The scope vocabulary `ShadowingLocal` walks with — resolved once per run, never per node. */
+private typedef ScopeSeams = {
+
+	final shape: RefShape;
+
+	/** Whether this run reports PARAMETERS (`shadowing-parameter`) rather than local declarations (`shadowing-local`). */
+	final reportParameters: Bool;
+
+	/** The rule id stamped on every finding of this run — the two spellings share the walk, not the id. */
+	final ruleId: String;
+	final localDeclKinds: Array<String>;
+	final declHostKinds: Array<String>;
+	final positionScopedKinds: Array<String>;
+	final classLikeKinds: Array<String>;
+	final paramKinds: Array<String>;
+	final selfScopeKinds: Array<String>;
+	final valueBinderKinds: Array<String>;
+	final catchKind: Null<String>;
+	final opaqueKinds: Array<String>;
+	final conditionalKind: Null<String>;
+
+	/**
+	 * Every node that opens a function scope: `ShapeVocab.nestedFunctionKinds` — THE
+	 * authority for function VALUES — plus `functionKinds`, the declarations (methods,
+	 * module-level functions) that open one without being a value. That second half is this
+	 * check's documented extra over the authority.
+	 */
+	final nestedFnKinds: Array<String>;
+
+};
+
+/** The binding a shadowing declaration hides: what to call it, the scope frame declaring it, and its own node. */
+private typedef Hidden = {
+
+	final label: String;
+
+	/** The position-scoped frame the binding is declared in — a loop / catch frame binds itself (`node == frame`). */
+	final frame: QueryNode;
+	final node: QueryNode;
+
+};
+
+/** What `fix` does with one finding: its edits, or the gate that kept it report-only. */
+private enum ShadowFix {
+	Applied(edits: Array<FixEdit>);
+	Declined(reason: String);
+}
+
+/** The per-file context of `ShadowingLocal.fix`. */
+private typedef FixFile = {
+
+	final source: String;
+	final tree: QueryNode;
+	final plugin: GrammarPlugin;
+	final seams: ScopeSeams;
+
+	/** `TypeInfoProvider.declaredTypeSources`: each declaration's WRITTEN type, by its span start. */
+	final typeSources: Map<Int, String>;
+
+	/**
+	 * The names this call already gave a renamed declaration, each with the scope frame it was checked in: a second
+	 * site taking the same name in an OVERLAPPING frame was validated against a source without the first rename, so it
+	 * waits for the next pass. Disjoint frames cannot meet.
+	 */
+	final claimed: Array<{ name: String, scope: Span }>;
+
+};
+
 /**
  * Flags a LOCAL declaration whose name is already bound — by an enclosing local, a loop or catch
  * binder, a local function, or a parameter — at the point it takes effect. `Warning`. The fix
@@ -651,71 +719,3 @@ final class ShadowingLocal extends RuleBase {
 	}
 
 }
-
-/** The scope vocabulary `ShadowingLocal` walks with — resolved once per run, never per node. */
-private typedef ScopeSeams = {
-
-	final shape: RefShape;
-
-	/** Whether this run reports PARAMETERS (`shadowing-parameter`) rather than local declarations (`shadowing-local`). */
-	final reportParameters: Bool;
-
-	/** The rule id stamped on every finding of this run — the two spellings share the walk, not the id. */
-	final ruleId: String;
-	final localDeclKinds: Array<String>;
-	final declHostKinds: Array<String>;
-	final positionScopedKinds: Array<String>;
-	final classLikeKinds: Array<String>;
-	final paramKinds: Array<String>;
-	final selfScopeKinds: Array<String>;
-	final valueBinderKinds: Array<String>;
-	final catchKind: Null<String>;
-	final opaqueKinds: Array<String>;
-	final conditionalKind: Null<String>;
-
-	/**
-	 * Every node that opens a function scope: `ShapeVocab.nestedFunctionKinds` — THE
-	 * authority for function VALUES — plus `functionKinds`, the declarations (methods,
-	 * module-level functions) that open one without being a value. That second half is this
-	 * check's documented extra over the authority.
-	 */
-	final nestedFnKinds: Array<String>;
-
-};
-
-/** The binding a shadowing declaration hides: what to call it, the scope frame declaring it, and its own node. */
-private typedef Hidden = {
-
-	final label: String;
-
-	/** The position-scoped frame the binding is declared in — a loop / catch frame binds itself (`node == frame`). */
-	final frame: QueryNode;
-	final node: QueryNode;
-
-};
-
-/** What `fix` does with one finding: its edits, or the gate that kept it report-only. */
-private enum ShadowFix {
-	Applied(edits: Array<FixEdit>);
-	Declined(reason: String);
-}
-
-/** The per-file context of `ShadowingLocal.fix`. */
-private typedef FixFile = {
-
-	final source: String;
-	final tree: QueryNode;
-	final plugin: GrammarPlugin;
-	final seams: ScopeSeams;
-
-	/** `TypeInfoProvider.declaredTypeSources`: each declaration's WRITTEN type, by its span start. */
-	final typeSources: Map<Int, String>;
-
-	/**
-	 * The names this call already gave a renamed declaration, each with the scope frame it was checked in: a second
-	 * site taking the same name in an OVERLAPPING frame was validated against a source without the first rename, so it
-	 * waits for the next pass. Disjoint frames cannot meet.
-	 */
-	final claimed: Array<{ name: String, scope: Span }>;
-
-};

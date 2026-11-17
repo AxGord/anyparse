@@ -13,6 +13,9 @@ import unit.cli.CliFixture;
 
 using StringTools;
 
+/** What one lint of a fixture found, and each of its files as the fix leaves it. */
+private typedef Outcome = { final found: Array<Violation>; final fixed: Map<String, String>; }
+
 /**
  * `unused-enum-abstract-value` over a real compile's facts: a value is weighed by the type the compiler read it as, so a
  * bare name in a `case` or beside `==` keeps the value of the type the place expects and leaves a same-named value of
@@ -406,6 +409,3 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 	}
 
 }
-
-/** What one lint of a fixture found, and each of its files as the fix leaves it. */
-private typedef Outcome = { final found: Array<Violation>; final fixed: Map<String, String>; }

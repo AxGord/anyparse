@@ -3,6 +3,24 @@ package anyparse.format;
 import anyparse.core.D;
 import anyparse.core.Doc;
 
+/** Result of one `ElseIfCommentReflow` scan step. */
+private enum ElseIfHeadScan {
+
+	/** The anchor was found and `doc` is the rewritten subtree. */
+	Anchored(doc: Doc);
+
+	/**
+	 * Nothing yet - keep scanning to the right. `afterCond` is `false` while
+	 * the walk is still inside the `if` keyword + condition run and `true`
+	 * once the condition unit has been passed.
+	 */
+	Scanning(afterCond: Bool);
+
+	/** Something the walk cannot prove is head - the whole reflow is refused. */
+	Refused;
+
+}
+
 /**
  * `sameLine.elseIfCommentReflow` runtime: move the ONE line comment a source wrote
  * between `else` and its nested `if` onto the end of that nested `if`'s head line.
@@ -126,23 +144,5 @@ final class ElseIfCommentReflow {
 		}
 		return Scanning(seenCond);
 	}
-
-}
-
-/** Result of one `ElseIfCommentReflow` scan step. */
-private enum ElseIfHeadScan {
-
-	/** The anchor was found and `doc` is the rewritten subtree. */
-	Anchored(doc: Doc);
-
-	/**
-	 * Nothing yet - keep scanning to the right. `afterCond` is `false` while
-	 * the walk is still inside the `if` keyword + condition run and `true`
-	 * once the condition unit has been passed.
-	 */
-	Scanning(afterCond: Bool);
-
-	/** Something the walk cannot prove is head - the whole reflow is refused. */
-	Refused;
 
 }

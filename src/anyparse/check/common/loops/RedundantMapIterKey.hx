@@ -8,6 +8,9 @@ import anyparse.query.TypeInfoProvider;
 
 using StringTools;
 
+/** The grammar seams `redundant-map-iter-key` reads: the loop kind it flags, and the kinds its VALUE binder projects as. */
+private typedef Seams = { var forStmtKind: String; var valueBinderKinds: Array<String>; var shape: RefShape; };
+
 /**
  * Flags a key-value `for` loop that discards its key with `_` — `for (_ => v in m)`
  * — which reads as `for (v in m)`, since Haxe iterates values by default. `Info` (a
@@ -230,6 +233,3 @@ final class RedundantMapIterKey extends RuleBase {
 	}
 
 }
-
-/** The grammar seams `redundant-map-iter-key` reads: the loop kind it flags, and the kinds its VALUE binder projects as. */
-private typedef Seams = { var forStmtKind: String; var valueBinderKinds: Array<String>; var shape: RefShape; };

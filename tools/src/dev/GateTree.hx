@@ -16,6 +16,38 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** What `dev slice-gate` was asked, as the gate and each of its branches read it. */
+typedef GateOptions = {
+
+	var tree: String;
+	var logs: String;
+
+	/** A `--baseline` run, which records rather than compares. */
+	var baseline: Bool;
+
+	/** The commit to measure against instead of the baseline's (null: the baseline's, else the merge-base with main). */
+	@:optional
+	var base: Null<String>;
+	var frozen: Array<String>;
+	var infra: Array<String>;
+	var arms: Array<String>;
+	var allow: Array<String>;
+
+	/** The arms whose row in the arms row does not fail it, the rest of the row still deciding (`--allow arms` waives it whole). */
+	var allowArms: Array<String>;
+	var noArms: Bool;
+
+	/** The threads a heavy row (the suite's shards, the arms' jobs) may take, or null for each tool's own default. */
+	var threads: Null<Int>;
+
+	/** The run a branch reports to: a gate's own, handed to its branches with `--run`. */
+	var run: String;
+
+}
+
+/** What `git diff --name-status -M` names: the changed paths as they are now, and each renamed one's path at the base. */
+typedef ChangedPaths = { var paths: Array<String>; var moved: Map<String, String>; }
+
 /**
  * The tree a slice gate runs on: what it was asked, the base the slice is measured against, the files the slice changed,
  * the table its rows report into, and the commands every row runs there on the tree's own engine.
@@ -376,35 +408,3 @@ final class GateTree {
 	}
 
 }
-
-/** What `dev slice-gate` was asked, as the gate and each of its branches read it. */
-typedef GateOptions = {
-
-	var tree: String;
-	var logs: String;
-
-	/** A `--baseline` run, which records rather than compares. */
-	var baseline: Bool;
-
-	/** The commit to measure against instead of the baseline's (null: the baseline's, else the merge-base with main). */
-	@:optional
-	var base: Null<String>;
-	var frozen: Array<String>;
-	var infra: Array<String>;
-	var arms: Array<String>;
-	var allow: Array<String>;
-
-	/** The arms whose row in the arms row does not fail it, the rest of the row still deciding (`--allow arms` waives it whole). */
-	var allowArms: Array<String>;
-	var noArms: Bool;
-
-	/** The threads a heavy row (the suite's shards, the arms' jobs) may take, or null for each tool's own default. */
-	var threads: Null<Int>;
-
-	/** The run a branch reports to: a gate's own, handed to its branches with `--run`. */
-	var run: String;
-
-}
-
-/** What `git diff --name-status -M` names: the changed paths as they are now, and each renamed one's path at the base. */
-typedef ChangedPaths = { var paths: Array<String>; var moved: Map<String, String>; }

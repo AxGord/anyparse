@@ -15,6 +15,55 @@ import anyparse.query.TreePath;
 import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
 
+/** A collected candidate expression: its node, span, normalized text, and enclosing branch path. */
+private typedef Candidate = {
+	var node: QueryNode;
+	final span: Span;
+	var norm: String;
+	var path: Array<BranchStep>;
+}
+
+/** A repeated-expression group: the shared RENDERED text (`SpanRender`) and its occurrences (earliest first). */
+private typedef Group = { var render: String; var occ: Array<Candidate>; }
+
+/** Per-file resolved constants threaded through the recursive walk. */
+private typedef Ctx = {
+
+	var fieldAccessKind: String;
+	var callKind: String;
+	var candidateKinds: Array<String>;
+	var functionUnitKinds: Array<String>;
+	var exclusiveConditionalKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var purity: PurityCtx;
+	var shape: RefShape;
+
+	/** The file's tree — what `Refs` binds the operands against. */
+	var tree: QueryNode;
+
+	/** Every function unit of the file (`collectUnits`): a write's body, and a binding's declaring one, is the smallest holding it. */
+	var units: Array<QueryNode>;
+	var loopKinds: Array<String>;
+
+	/** `ControlFlowSupport.blockKinds`: the statement lists a shared `final` can go into. */
+	var blockKinds: Array<String>;
+
+	/** The file's writes and function spans once a group has asked for them (`localsOf`). */
+	var locals: Null<UnchangedLocal>;
+
+}
+
+/**
+ * Occurrences of one group whose operands bind the same declarations: the joined paths, the paths, the group's own
+ * access path when it is a chain (`WriteSites.accessPath`), the occurrences by position.
+ */
+private typedef BindingBucket = {
+	var signature: String;
+	var paths: Array<String>;
+	var own: Null<String>;
+	var occ: Array<Candidate>;
+}
+
 /**
  * Flags a NON-TRIVIAL, PURE value expression that appears three or more times,
  * literally identical up to LAYOUT — whitespace between tokens, never a literal's
@@ -477,53 +526,4 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 		return CheckScan.normalizeSpan(source, span.from, span.to).norm;
 	}
 
-}
-
-/** A collected candidate expression: its node, span, normalized text, and enclosing branch path. */
-private typedef Candidate = {
-	var node: QueryNode;
-	final span: Span;
-	var norm: String;
-	var path: Array<BranchStep>;
-}
-
-/** A repeated-expression group: the shared RENDERED text (`SpanRender`) and its occurrences (earliest first). */
-private typedef Group = { var render: String; var occ: Array<Candidate>; }
-
-/** Per-file resolved constants threaded through the recursive walk. */
-private typedef Ctx = {
-
-	var fieldAccessKind: String;
-	var callKind: String;
-	var candidateKinds: Array<String>;
-	var functionUnitKinds: Array<String>;
-	var exclusiveConditionalKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var purity: PurityCtx;
-	var shape: RefShape;
-
-	/** The file's tree — what `Refs` binds the operands against. */
-	var tree: QueryNode;
-
-	/** Every function unit of the file (`collectUnits`): a write's body, and a binding's declaring one, is the smallest holding it. */
-	var units: Array<QueryNode>;
-	var loopKinds: Array<String>;
-
-	/** `ControlFlowSupport.blockKinds`: the statement lists a shared `final` can go into. */
-	var blockKinds: Array<String>;
-
-	/** The file's writes and function spans once a group has asked for them (`localsOf`). */
-	var locals: Null<UnchangedLocal>;
-
-}
-
-/**
- * Occurrences of one group whose operands bind the same declarations: the joined paths, the paths, the group's own
- * access path when it is a chain (`WriteSites.accessPath`), the occurrences by position.
- */
-private typedef BindingBucket = {
-	var signature: String;
-	var paths: Array<String>;
-	var own: Null<String>;
-	var occ: Array<Candidate>;
 }

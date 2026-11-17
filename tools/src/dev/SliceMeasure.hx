@@ -16,6 +16,12 @@ import sys.io.File;
 
 using StringTools;
 
+/** The `.hx` files of a revision's roots and its member call edges, each valued by the file it lands in (empty: outside). */
+typedef EdgeReading = { var files: Array<String>; var edges: Map<String, String>; }
+
+/** The call edges a slice added, and how many of them land in a module the base held, in one it added. */
+typedef EdgeShare = { var added: Int; var existing: Int; var fresh: Int; }
+
 /**
  * What one revision's own sources say for `dev slice-stats`, read from a copy of its roots that `git archive` writes: the
  * member call edges (the call graph lifted to members as `MemberGraphBuilder` lifts it) with the file each lands in, and the
@@ -170,9 +176,3 @@ final class SliceMeasure {
 	}
 
 }
-
-/** The `.hx` files of a revision's roots and its member call edges, each valued by the file it lands in (empty: outside). */
-typedef EdgeReading = { var files: Array<String>; var edges: Map<String, String>; }
-
-/** The call edges a slice added, and how many of them land in a module the base held, in one it added. */
-typedef EdgeShare = { var added: Int; var existing: Int; var fresh: Int; }

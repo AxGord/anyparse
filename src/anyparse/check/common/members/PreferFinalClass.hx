@@ -2,6 +2,16 @@ package anyparse.check.common.members;
 
 import anyparse.query.SymbolIndex;
 
+/** The resolved seams `PreferFinalClass` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final metaName: String;
+	final plainKind: String;
+	final finalKind: String;
+	final metaKinds: Array<String>;
+};
+
+private typedef Candidate = { var metaSpan: Span; var redundant: Bool; var declFrom: Int; };
+
 /**
  * Flags a class declaration carrying the `@:final` metadata tag — the user's rule: use
  * `final class`, not the `@:final` meta, for a class not designed for inheritance.
@@ -175,13 +185,3 @@ final class PreferFinalClass extends RuleBase {
 	}
 
 }
-
-/** The resolved seams `PreferFinalClass` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final metaName: String;
-	final plainKind: String;
-	final finalKind: String;
-	final metaKinds: Array<String>;
-};
-
-private typedef Candidate = { var metaSpan: Span; var redundant: Bool; var declFrom: Int; };

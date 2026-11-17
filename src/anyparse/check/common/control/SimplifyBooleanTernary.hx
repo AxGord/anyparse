@@ -5,6 +5,9 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 
+/** The grammar seams this check needs to be live at all: the ternary kind, the boolean-logic engine, and the shape. */
+private typedef Seams = { var shape: RefShape; var ternaryKind: String; var support: BooleanLogicSupport; }
+
 /**
  * Flags a ternary whose then- or else-branch is a boolean literal — a
  * `cond ? false : x` / `cond ? x : true` style expression that reduces to plain
@@ -279,6 +282,3 @@ final class SimplifyBooleanTernary extends RuleBase {
 	}
 
 }
-
-/** The grammar seams this check needs to be live at all: the ternary kind, the boolean-logic engine, and the shape. */
-private typedef Seams = { var shape: RefShape; var ternaryKind: String; var support: BooleanLogicSupport; }

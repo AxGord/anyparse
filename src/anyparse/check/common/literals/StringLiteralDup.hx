@@ -7,6 +7,18 @@ import anyparse.check.common.literals.LiteralTables.LiteralTableShape;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 
+/** A pending finding: the anchor span of a repeated literal and its rendered message. */
+private typedef Finding = { final at: Span; final message: String; };
+
+/** The per-file scan ingredients, resolved once per file rather than threaded one by one. */
+private typedef ScanCtx = {
+	final support: StringFoldSupport;
+	final metaKinds: Array<String>;
+	final tables: LiteralTableShape;
+	final casePatternKind: Null<String>;
+	final minLen: Int;
+};
+
 /**
  * Flags a plain string literal that appears three or more times (configurable)
  * in ONE file — a repeated literal the project rule says to hoist into a single
@@ -297,15 +309,3 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 	}
 
 }
-
-/** A pending finding: the anchor span of a repeated literal and its rendered message. */
-private typedef Finding = { final at: Span; final message: String; };
-
-/** The per-file scan ingredients, resolved once per file rather than threaded one by one. */
-private typedef ScanCtx = {
-	final support: StringFoldSupport;
-	final metaKinds: Array<String>;
-	final tables: LiteralTableShape;
-	final casePatternKind: Null<String>;
-	final minLen: Int;
-};

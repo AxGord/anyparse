@@ -190,6 +190,154 @@ typedef TaintCost = {
 }
 
 /**
+ * The states one `LockTaint.blockingEnds` walk entered, each once with every call into it, and the blocking calls found
+ * from them: what `ends` groups by call site and lock. A state's predecessor -1 is the held call itself.
+ */
+@:nullSafety(Strict)
+private final class EndGraph {
+
+	/** The states entered, breadth first. */
+	public final states: Array<WalkState> = [];
+
+	/** For each state, the states whose calls enter it. */
+	private final _preds: Array<Array<Int>> = [];
+
+	/** For each state, the first state entering it and the call: the shortest way to it. */
+	private final _first: Array<{ from: Int, edge: CallEdge }> = [];
+
+	/** Each state's index, by its key. */
+	private final _at: Map<String, Int> = [];
+
+	/** Each blocking call found, the state whose call it is, and whether it repeats on that way. */
+	private final _found: Array<{ from: Int, edge: CallEdge, repeated: Bool }> = [];
+
+	/** The held call the walk starts at. */
+	private final _call: CallEdge;
+
+	public function new(call: CallEdge) {
+		_call = call;
+	}
+
+	/** The call `edge` of the state at `from` enters `state`: a new state is queued, a known one gains a way in. */
+	public function enter(state: WalkState, from: Int, edge: CallEdge): Void {
+		final known: Null<Int> = _at[state.key];
+		if (known != null) {
+			if (!_preds[known].contains(from)) _preds[known].push(from);
+			return;
+		}
+		_at[state.key] = states.length;
+		states.push(state);
+		_preds.push([from]);
+		_first.push({ from: from, edge: edge });
+	}
+
+	/** The call `edge` of the state at `from` blocks, repeating on that way or not. */
+	public function blocked(from: Int, edge: CallEdge, repeated: Bool): Void {
+		_found.push({ from: from, edge: edge, repeated: repeated });
+	}
+
+	/**
+	 * The blocking calls found, one per call site and lock waited for (`trail` builds each way's trail): the shortest
+	 * way, repeated on any way, may repeat when it does or a function on any way into it is on a cycle (`onCycle`), and
+	 * the functions every way to it passes.
+	 */
+	public function ends(
+		onCycle: (String) -> Bool, trail: (Array<String>, CallEdge, Array<CallEdge>) -> BlockingTrail
+	): Array<BlockingEnd> {
+		final passing: Array<Array<String>> = dominators();
+		final cyclic: Array<Bool> = cyclicWays(onCycle);
+		final keys: Array<String> = [];
+		final out: Array<BlockingEnd> = [];
+		for (f in _found) {
+			final way: BlockingTrail = wayTo(f.from, f.edge, trail);
+			final key: String = '${MainSinkReport.siteKey(f.edge)}|${way.via ?? ''}';
+			final passes: Array<String> = (f.from < 0 ? [] : passing[f.from]).concat([_call.to, f.edge.to]);
+			final mayRepeat: Bool = f.repeated || onCycle(_call.to) || onCycle(f.edge.to) || (f.from >= 0 && cyclic[f.from]);
+			final at: Int = keys.indexOf(key);
+			if (at < 0) {
+				keys.push(key);
+				out.push({
+					trail: way,
+					repeated: f.repeated,
+					mayRepeat: mayRepeat,
+					passes: passes
+				});
+				continue;
+			}
+			final known: BlockingEnd = out[at];
+			out[at] = {
+				trail: known.trail,
+				repeated: known.repeated || f.repeated,
+				mayRepeat: known.mayRepeat || mayRepeat,
+				passes: known.passes.filter(id -> passes.contains(id))
+			};
+		}
+		return out;
+	}
+
+	/** The trail of the shortest way to the blocking call `end` of the state at `from` (`trail`). */
+	private function wayTo(from: Int, end: CallEdge, trail: (Array<String>, CallEdge, Array<CallEdge>) -> BlockingTrail): BlockingTrail {
+		final ids: Array<String> = [];
+		final edges: Array<CallEdge> = [];
+		var at: Int = from;
+		while (at >= 0) {
+			ids.unshift(states[at].id);
+			edges.unshift(_first[at].edge);
+			at = _first[at].from;
+		}
+		ids.push(end.to);
+		edges.push(end);
+		return trail(ids, end, edges);
+	}
+
+	/**
+	 * For each state, the functions every way from the held call into it passes, its own included: the least fixed
+	 * point of "a state's own function, and what all the states entering it share", breadth first so each sweep but the
+	 * first only shrinks a set.
+	 */
+	private function dominators(): Array<Array<String>> {
+		final known: Array<Null<Array<String>>> = [for (_ in states) null];
+		var moved: Bool = true;
+		while (moved) {
+			moved = false;
+			for (i => s in states) {
+				var shared: Null<Array<String>> = null;
+				for (p in _preds[i]) {
+					final up: Null<Array<String>> = p < 0 ? [] : known[p];
+					if (up == null) continue;
+					final before: Null<Array<String>> = shared;
+					shared = before == null ? up.copy() : before.filter(id -> up.contains(id));
+				}
+				final next: Array<String> = (shared ?? []).filter(id -> id != s.id).concat([s.id]);
+				final old: Null<Array<String>> = known[i];
+				if (old != null && old.length == next.length && old.foreach(id -> next.contains(id))) continue;
+				known[i] = next;
+				moved = true;
+			}
+		}
+		return known.map(k -> k ?? []);
+	}
+
+	/**
+	 * For each state, whether its function or one on some way into it is re-entered through a cycle of calls (`onCycle`):
+	 * every call such a function makes may repeat, whichever way the walk took.
+	 */
+	private function cyclicWays(onCycle: (String) -> Bool): Array<Bool> {
+		final cyclic: Array<Bool> = states.map(s -> onCycle(s.id));
+		var moved: Bool = true;
+		while (moved) {
+			moved = false;
+			for (i in 0...states.length) if (!cyclic[i] && _preds[i].exists(p -> p >= 0 && cyclic[p])) {
+				cyclic[i] = true;
+				moved = true;
+			}
+		}
+		return cyclic;
+	}
+
+}
+
+/**
  * Which calls block, and whether a call held under a lock reaches one — for a hold of each re-entrant lock the holder
  * may take again freely, the plain question under `null` — answered over the thread STATES of `ThreadStates` (a
  * function, the valuation of its tracked parameters, one context bit): a call a condition rules out on that path, or
@@ -737,154 +885,6 @@ final class LockTaint {
 		final way: BoundedWay = flags.way;
 		final bounded: String = way.entries.length > 0 ? '|${way.turns}x${way.cost}' : '';
 		return '${held ?? ''}|$id|$valuation|$ctx${flags.repeated ? '|repeated' : bounded}|${under ?? ''}';
-	}
-
-}
-
-/**
- * The states one `LockTaint.blockingEnds` walk entered, each once with every call into it, and the blocking calls found
- * from them: what `ends` groups by call site and lock. A state's predecessor -1 is the held call itself.
- */
-@:nullSafety(Strict)
-private final class EndGraph {
-
-	/** The states entered, breadth first. */
-	public final states: Array<WalkState> = [];
-
-	/** For each state, the states whose calls enter it. */
-	private final _preds: Array<Array<Int>> = [];
-
-	/** For each state, the first state entering it and the call: the shortest way to it. */
-	private final _first: Array<{ from: Int, edge: CallEdge }> = [];
-
-	/** Each state's index, by its key. */
-	private final _at: Map<String, Int> = [];
-
-	/** Each blocking call found, the state whose call it is, and whether it repeats on that way. */
-	private final _found: Array<{ from: Int, edge: CallEdge, repeated: Bool }> = [];
-
-	/** The held call the walk starts at. */
-	private final _call: CallEdge;
-
-	public function new(call: CallEdge) {
-		_call = call;
-	}
-
-	/** The call `edge` of the state at `from` enters `state`: a new state is queued, a known one gains a way in. */
-	public function enter(state: WalkState, from: Int, edge: CallEdge): Void {
-		final known: Null<Int> = _at[state.key];
-		if (known != null) {
-			if (!_preds[known].contains(from)) _preds[known].push(from);
-			return;
-		}
-		_at[state.key] = states.length;
-		states.push(state);
-		_preds.push([from]);
-		_first.push({ from: from, edge: edge });
-	}
-
-	/** The call `edge` of the state at `from` blocks, repeating on that way or not. */
-	public function blocked(from: Int, edge: CallEdge, repeated: Bool): Void {
-		_found.push({ from: from, edge: edge, repeated: repeated });
-	}
-
-	/**
-	 * The blocking calls found, one per call site and lock waited for (`trail` builds each way's trail): the shortest
-	 * way, repeated on any way, may repeat when it does or a function on any way into it is on a cycle (`onCycle`), and
-	 * the functions every way to it passes.
-	 */
-	public function ends(
-		onCycle: (String) -> Bool, trail: (Array<String>, CallEdge, Array<CallEdge>) -> BlockingTrail
-	): Array<BlockingEnd> {
-		final passing: Array<Array<String>> = dominators();
-		final cyclic: Array<Bool> = cyclicWays(onCycle);
-		final keys: Array<String> = [];
-		final out: Array<BlockingEnd> = [];
-		for (f in _found) {
-			final way: BlockingTrail = wayTo(f.from, f.edge, trail);
-			final key: String = '${MainSinkReport.siteKey(f.edge)}|${way.via ?? ''}';
-			final passes: Array<String> = (f.from < 0 ? [] : passing[f.from]).concat([_call.to, f.edge.to]);
-			final mayRepeat: Bool = f.repeated || onCycle(_call.to) || onCycle(f.edge.to) || (f.from >= 0 && cyclic[f.from]);
-			final at: Int = keys.indexOf(key);
-			if (at < 0) {
-				keys.push(key);
-				out.push({
-					trail: way,
-					repeated: f.repeated,
-					mayRepeat: mayRepeat,
-					passes: passes
-				});
-				continue;
-			}
-			final known: BlockingEnd = out[at];
-			out[at] = {
-				trail: known.trail,
-				repeated: known.repeated || f.repeated,
-				mayRepeat: known.mayRepeat || mayRepeat,
-				passes: known.passes.filter(id -> passes.contains(id))
-			};
-		}
-		return out;
-	}
-
-	/** The trail of the shortest way to the blocking call `end` of the state at `from` (`trail`). */
-	private function wayTo(from: Int, end: CallEdge, trail: (Array<String>, CallEdge, Array<CallEdge>) -> BlockingTrail): BlockingTrail {
-		final ids: Array<String> = [];
-		final edges: Array<CallEdge> = [];
-		var at: Int = from;
-		while (at >= 0) {
-			ids.unshift(states[at].id);
-			edges.unshift(_first[at].edge);
-			at = _first[at].from;
-		}
-		ids.push(end.to);
-		edges.push(end);
-		return trail(ids, end, edges);
-	}
-
-	/**
-	 * For each state, the functions every way from the held call into it passes, its own included: the least fixed
-	 * point of "a state's own function, and what all the states entering it share", breadth first so each sweep but the
-	 * first only shrinks a set.
-	 */
-	private function dominators(): Array<Array<String>> {
-		final known: Array<Null<Array<String>>> = [for (_ in states) null];
-		var moved: Bool = true;
-		while (moved) {
-			moved = false;
-			for (i => s in states) {
-				var shared: Null<Array<String>> = null;
-				for (p in _preds[i]) {
-					final up: Null<Array<String>> = p < 0 ? [] : known[p];
-					if (up == null) continue;
-					final before: Null<Array<String>> = shared;
-					shared = before == null ? up.copy() : before.filter(id -> up.contains(id));
-				}
-				final next: Array<String> = (shared ?? []).filter(id -> id != s.id).concat([s.id]);
-				final old: Null<Array<String>> = known[i];
-				if (old != null && old.length == next.length && old.foreach(id -> next.contains(id))) continue;
-				known[i] = next;
-				moved = true;
-			}
-		}
-		return known.map(k -> k ?? []);
-	}
-
-	/**
-	 * For each state, whether its function or one on some way into it is re-entered through a cycle of calls (`onCycle`):
-	 * every call such a function makes may repeat, whichever way the walk took.
-	 */
-	private function cyclicWays(onCycle: (String) -> Bool): Array<Bool> {
-		final cyclic: Array<Bool> = states.map(s -> onCycle(s.id));
-		var moved: Bool = true;
-		while (moved) {
-			moved = false;
-			for (i in 0...states.length) if (!cyclic[i] && _preds[i].exists(p -> p >= 0 && cyclic[p])) {
-				cyclic[i] = true;
-				moved = true;
-			}
-		}
-		return cyclic;
 	}
 
 }

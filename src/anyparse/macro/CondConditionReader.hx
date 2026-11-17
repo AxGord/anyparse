@@ -4,6 +4,16 @@ package anyparse.macro;
 import anyparse.core.ShapeTree;
 import haxe.macro.Context;
 
+/** The qualified static readers a grammar's condition terminal names: the condition's extent and the blank around it. */
+typedef CondReaders = {
+
+	/** Where a condition starting at `at` ends, `at` when none. */
+	final condition: String;
+
+	/** Where the blank starting at `at` ends, `at` when none. */
+	final blank: String;
+
+}
 /**
  * The one answer to "which readers delimit this grammar's conditional-compilation condition": the `@:scan` reader of
  * the terminal the grammar marks `@:condRegionCondition` and the reader its `@:condRegionBlank` names for the blank
@@ -37,16 +47,6 @@ final class CondConditionReader {
 		}
 		return found;
 	}
-
-}
-/** The qualified static readers a grammar's condition terminal names: the condition's extent and the blank around it. */
-typedef CondReaders = {
-
-	/** Where a condition starting at `at` ends, `at` when none. */
-	final condition: String;
-
-	/** Where the blank starting at `at` ends, `at` when none. */
-	final blank: String;
 
 }
 #end

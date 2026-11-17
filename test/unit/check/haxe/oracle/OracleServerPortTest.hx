@@ -12,6 +12,9 @@ import unit.check.haxe.oracle.PortHolder.holding;
 import unit.check.haxe.oracle.PortHolder.unusedPort;
 import unit.check.haxe.oracle.PortHolder.watching;
 
+/** What a pool over a one-module tree did: whether a server came up, and the status of a compile through it. */
+private typedef Served = { running: Bool, status: Null<Int> };
+
 /**
  * A `haxe --wait` server listens on a random loopback port. It exits at once on a port something else holds, and the
  * readiness poll is then answered by that holder or by nothing, so every starter (the pool, the shared server, a mutation
@@ -440,6 +443,3 @@ final class OracleServerPortTest extends Test {
 	#end
 
 }
-
-/** What a pool over a one-module tree did: whether a server came up, and the status of a compile through it. */
-private typedef Served = { running: Bool, status: Null<Int> };

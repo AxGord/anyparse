@@ -15,6 +15,88 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
+/** The `RefShape` kinds `PreferIfExpressionReturn` reads. */
+private typedef Seams = {
+
+	var ifKinds: Array<String>;
+	var returnKind: String;
+	var blockStmtKind: String;
+	var conditionalKinds: Array<String>;
+	var ternaryKind: Null<String>;
+	var parenKind: Null<String>;
+
+	/** Read only by `marchable`, which mirrors gates `PreferTernaryReturn` states over the raw shape. */
+	var shape: RefShape;
+
+	/** The kinds `NegationScan` negates a merged `Outer` run's first condition with. */
+	var negation: NegationSeams;
+
+	/** The positive list of value kinds a merge may repeat: every non-boolean case literal, plus a bare name. */
+	var mergeValueKinds: Array<String>;
+
+}
+
+/**
+ * A matched return chain, carried as SPANS rather than nodes so `buildEdit` and
+ * `droppedComment` cannot diverge on what the rebuild keeps: the copied `return ` prefix,
+ * each (condition, value) pair, and the terminal value. `prefix` runs from the head
+ * `return`'s start to the RAW start of its value (a start offset is exact -- only ENDS carry
+ * trivia); every other span is cut back to its last token by `IfExpressionChain.tokenSpan`.
+ */
+private typedef Match = {
+
+	var prefix: Span;
+	var pairs: Array<{ cond: Span, value: Span }>;
+	var terminalValue: Span;
+	var carried: Carried;
+
+	/** Each rung's condition NODE, paren-unwrapped, parallel to `pairs` — what a merge negates. */
+	var conds: Array<QueryNode>;
+
+	/** How many conditions the author WROTE as an else-linked chain; the folded ternary's are not counted. */
+	var writtenRungs: Int;
+
+	/** Which three values merge into two and how, or null when none do. */
+	var merge: Null<Merge>;
+
+	/** Whether the run is rewritten without a merge: no refusal of `plainRun` applies. */
+	var plain: Bool;
+
+}
+
+/**
+ * How a three-value return run merges into a two-value ternary: `Leading` when the first two
+ * values repeat (`c1 || c2 ? v1 : v3`), `Outer` when the first and the last do (`!c1 && c2 ? v2 : v1`).
+ */
+private enum MergeShape {
+	Leading;
+	Outer;
+}
+
+/**
+ * A merge of a matched run: its `shape`, the index `from` of the first of the three merged values
+ * (0 for a run of exactly three, else the start of the run's tail), the `span` the merged return
+ * replaces - from the statement holding that value to the end of the terminal - and the `return `
+ * prefix copied from that statement's own `return`.
+ */
+private typedef Merge = {
+	var shape: MergeShape;
+	var from: Int;
+	var span: Span;
+	var prefix: Span;
+}
+
+/**
+ * What a merged edit needs beyond the match: the plugin `ParenGuard` re-parses with, the grammar's
+ * negation engine, and the lazily-built operand-type probe that licenses flipping an ordered comparison.
+ */
+private typedef Emit = {
+	var plugin: GrammarPlugin;
+	var logic: Null<BooleanLogicSupport>;
+	var types: () -> Null<(QueryNode) -> Null<String>>;
+	var regions: () -> Array<LexRegion>;
+}
+
 /**
  * Flags an `if / else if / … / else` CHAIN whose EVERY branch is a valued `return`,
  * collapsing the whole chain to one `return` of an if-expression:
@@ -791,86 +873,4 @@ final class PreferIfExpressionReturn extends RuleBase implements QuotationAware 
 		return span == null ? null : text(source, IfExpressionChain.tokenSpan(span, source, comments));
 	}
 
-}
-
-/** The `RefShape` kinds `PreferIfExpressionReturn` reads. */
-private typedef Seams = {
-
-	var ifKinds: Array<String>;
-	var returnKind: String;
-	var blockStmtKind: String;
-	var conditionalKinds: Array<String>;
-	var ternaryKind: Null<String>;
-	var parenKind: Null<String>;
-
-	/** Read only by `marchable`, which mirrors gates `PreferTernaryReturn` states over the raw shape. */
-	var shape: RefShape;
-
-	/** The kinds `NegationScan` negates a merged `Outer` run's first condition with. */
-	var negation: NegationSeams;
-
-	/** The positive list of value kinds a merge may repeat: every non-boolean case literal, plus a bare name. */
-	var mergeValueKinds: Array<String>;
-
-}
-
-/**
- * A matched return chain, carried as SPANS rather than nodes so `buildEdit` and
- * `droppedComment` cannot diverge on what the rebuild keeps: the copied `return ` prefix,
- * each (condition, value) pair, and the terminal value. `prefix` runs from the head
- * `return`'s start to the RAW start of its value (a start offset is exact -- only ENDS carry
- * trivia); every other span is cut back to its last token by `IfExpressionChain.tokenSpan`.
- */
-private typedef Match = {
-
-	var prefix: Span;
-	var pairs: Array<{ cond: Span, value: Span }>;
-	var terminalValue: Span;
-	var carried: Carried;
-
-	/** Each rung's condition NODE, paren-unwrapped, parallel to `pairs` — what a merge negates. */
-	var conds: Array<QueryNode>;
-
-	/** How many conditions the author WROTE as an else-linked chain; the folded ternary's are not counted. */
-	var writtenRungs: Int;
-
-	/** Which three values merge into two and how, or null when none do. */
-	var merge: Null<Merge>;
-
-	/** Whether the run is rewritten without a merge: no refusal of `plainRun` applies. */
-	var plain: Bool;
-
-}
-
-/**
- * How a three-value return run merges into a two-value ternary: `Leading` when the first two
- * values repeat (`c1 || c2 ? v1 : v3`), `Outer` when the first and the last do (`!c1 && c2 ? v2 : v1`).
- */
-private enum MergeShape {
-	Leading;
-	Outer;
-}
-
-/**
- * A merge of a matched run: its `shape`, the index `from` of the first of the three merged values
- * (0 for a run of exactly three, else the start of the run's tail), the `span` the merged return
- * replaces - from the statement holding that value to the end of the terminal - and the `return `
- * prefix copied from that statement's own `return`.
- */
-private typedef Merge = {
-	var shape: MergeShape;
-	var from: Int;
-	var span: Span;
-	var prefix: Span;
-}
-
-/**
- * What a merged edit needs beyond the match: the plugin `ParenGuard` re-parses with, the grammar's
- * negation engine, and the lazily-built operand-type probe that licenses flipping an ordered comparison.
- */
-private typedef Emit = {
-	var plugin: GrammarPlugin;
-	var logic: Null<BooleanLogicSupport>;
-	var types: () -> Null<(QueryNode) -> Null<String>>;
-	var regions: () -> Array<LexRegion>;
 }

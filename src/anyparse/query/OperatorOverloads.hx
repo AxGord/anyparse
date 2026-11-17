@@ -8,6 +8,37 @@ import anyparse.query.TypeTerm.TypeEnd;
 
 using Lambda;
 
+/** The type an operator overload yields (`OperatorOverloads.binaryResult`). */
+typedef OperatorResult = {
+
+	/** The type the overload's declaration returns, resolved where it is written. */
+	final end: TypeEnd;
+
+	/** The return type as the overload writes it. */
+	final text: String;
+
+	/** The abstract declaring the overload, in whose file `text` is written. */
+	final host: ResolvedType;
+
+	/** The overload itself. */
+	final member: MemberInfo;
+
+}
+
+/** What one abstract's overloads pick for an operator: an overload, none (the language's own operator), or no answer. */
+private enum OverloadPick {
+
+	/** An overload binds the operands; what it yields. */
+	Chosen(result: OperatorResult);
+
+	/** No overload binds them: the language's operator, or the other operand's abstract, is asked next. */
+	NoneTaken;
+
+	/** Whether one binds is not decided. */
+	Undecided;
+
+}
+
 /**
  * The operator overload an abstract's `@:op` members select for a binary operator, and the type it yields
  * (`docs/typing-service.md`, step T4b; Haxe 4.3.7 `operators.ml`, `try_abstract_binop_overloads` and
@@ -240,36 +271,5 @@ final class OperatorOverloads {
 			case _: false;
 		};
 	}
-
-}
-
-/** The type an operator overload yields (`OperatorOverloads.binaryResult`). */
-typedef OperatorResult = {
-
-	/** The type the overload's declaration returns, resolved where it is written. */
-	final end: TypeEnd;
-
-	/** The return type as the overload writes it. */
-	final text: String;
-
-	/** The abstract declaring the overload, in whose file `text` is written. */
-	final host: ResolvedType;
-
-	/** The overload itself. */
-	final member: MemberInfo;
-
-}
-
-/** What one abstract's overloads pick for an operator: an overload, none (the language's own operator), or no answer. */
-private enum OverloadPick {
-
-	/** An overload binds the operands; what it yields. */
-	Chosen(result: OperatorResult);
-
-	/** No overload binds them: the language's operator, or the other operand's abstract, is asked next. */
-	NoneTaken;
-
-	/** Whether one binds is not decided. */
-	Undecided;
 
 }

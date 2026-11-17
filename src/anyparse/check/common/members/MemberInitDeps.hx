@@ -13,6 +13,17 @@ import anyparse.util.Arrays;
  */
 typedef InitOrderConstraint = { var before: OrderedMember; var after: OrderedMember; var kind: InitConstraintKind; }
 
+/** Which initializer dependency pins an `InitOrderConstraint`'s pair in its current order. */
+enum abstract InitConstraintKind(Int) {
+
+	/** One of the pair's initializers READS the other field, so swapping them changes what it sees. */
+	final SiblingRead = 0;
+
+	/** One of the pair initializes with a side effect, so swapping them runs the two in the other order. */
+	final SideEffect = 1;
+
+}
+
 /**
  * The INITIALIZER-DEPENDENCY layer of `member-order`: the one reason a reorder of a type's
  * members can change behaviour, asked as three questions and nothing else.
@@ -319,16 +330,5 @@ final class MemberInitDeps {
 		else
 			null;
 	}
-
-}
-
-/** Which initializer dependency pins an `InitOrderConstraint`'s pair in its current order. */
-enum abstract InitConstraintKind(Int) {
-
-	/** One of the pair's initializers READS the other field, so swapping them changes what it sees. */
-	final SiblingRead = 0;
-
-	/** One of the pair initializes with a side effect, so swapping them runs the two in the other order. */
-	final SideEffect = 1;
 
 }

@@ -17,6 +17,359 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * The text of one function a fact is checked against: its file's table key, its span, the loops inside it, and what the
+ * compiler writes there that the text does not spell — the nodes it binds values at, the comprehensions it calls for, the
+ * values it converts to strings, and the positions it gives code inside an interpolated string (`Interpolation`).
+ */
+@:nullSafety(Strict)
+private final class BodyText {
+
+	/** What may follow the range the compiler gives a literal's construction, inside the literal: a regular expression's flags. */
+	private static final FLAGS: EReg = ~/^[A-Za-z]*$/;
+
+	private final _key: String;
+	private final _span: Span;
+	private final _text: String;
+	private final _loops: Array<Span>;
+
+	/** The literals inside the function whose construction the compiler may write as one (`builds`), with their kinds. */
+	private final _literals: Array<{ kind: String, span: Span }>;
+
+	/** Every node's range inside the function, as `from:to` (`binds`). */
+	private final _nodes: Array<String>;
+
+	/** The names of the named nodes inside the function, by their start (`declares`). */
+	private final _starts: Map<Int, Array<String>>;
+
+	/** The comprehensions inside the function, with the call the compiler makes for each element (`comprehends`). */
+	private final _comprehensions: Array<{ span: Span, call: String }>;
+
+	/** The interpolated strings inside the function holding an escape, with where the compiler places their code. */
+	private final _interpolations: Array<Interpolation>;
+
+	/** The ranges of the operands of the concatenations inside the function, which the text converts to strings. */
+	private final _operands: Array<Span>;
+
+	/** The ranges of the interpolated strings inside the function, quotes included. */
+	private final _strings: Array<Span>;
+
+	private function new(
+		key: String, span: Span, text: String, loops: Array<Span>, literals: Array<{ kind: String, span: Span }>, nodes: Array<String>,
+		starts: Map<Int, Array<String>>, comprehensions: Array<{ span: Span, call: String }>, interpolations: Array<Interpolation>,
+		operands: Array<Span>, strings: Array<Span>
+	) {
+		_key = key;
+		_span = span;
+		_text = text;
+		_loops = loops;
+		_literals = literals;
+		_nodes = nodes;
+		_starts = starts;
+		_comprehensions = comprehensions;
+		_interpolations = interpolations;
+		_operands = operands;
+		_strings = strings;
+	}
+
+	/** Whether `p` lies in this function, in its own file. */
+	public inline function holds(p: FactPos): Bool {
+		return p.file == _key && _span.from <= p.span.from && p.span.to <= _span.to;
+	}
+
+	/** Whether the text at `p` holds `name` as a whole word. */
+	public function mentions(p: FactPos, name: String): Bool {
+		return FactText.mentions(textAt(p), name);
+	}
+
+	/** Whether the text at `p` is a bare identifier. */
+	public function bare(p: FactPos): Bool {
+		return FactText.bare(textAt(p).trim());
+	}
+
+	/** Whether the whole text of this function writes a call of `name` (`FactText.spellsCall`). */
+	public function spellsCall(name: String): Bool {
+		return FactText.spellsCall(_text.substring(_span.from, _span.to), name);
+	}
+
+	/** Whether the whole text of this function constructs the type `name` with `keyword` (`FactText.spellsConstruction`). */
+	public function spellsConstruction(keyword: String, name: String): Bool {
+		return FactText.spellsConstruction(_text.substring(_span.from, _span.to), keyword, name);
+	}
+
+	/** Whether the whole text of this function holds `name` as a whole word. */
+	public function spellsName(name: String): Bool {
+		return FactText.mentions(_text.substring(_span.from, _span.to), name);
+	}
+
+	/**
+	 * Whether `p`, in this function, is a literal of a kind whose construction the compiler writes as one of the type
+	 * `built` (`constructions`: `ExecutionShape.literalConstructions`): exactly its range, or that range followed by
+	 * nothing but letters — the flags of a regular expression, which the compiler's position of the construction leaves out.
+	 */
+	public function builds(p: FactPos, built: String, constructions: Map<String, String>): Bool {
+		return holds(p)
+			&& _literals.exists(
+				l ->
+					l.span.from == p.span.from
+					&& p.span.to <= l.span.to
+					&& FLAGS.match(_text.substring(p.span.to, l.span.to))
+					&& constructions[l.kind] == built
+			);
+	}
+
+	/**
+	 * Whether the call `c` is the one the compiler makes for an element a comprehension in this function yields: its
+	 * receiver is the comprehension's literal, exactly, and it calls what the literal's kind is lowered to call
+	 * (`ExecutionShape.comprehensionCalls`).
+	 */
+	public function comprehends(c: CallFact): Bool {
+		final receiver: Null<FactPos> = c.receiverAt;
+		return receiver != null
+			&& holds(c.at)
+			&& holds(receiver)
+			&& _comprehensions.exists(x -> x.span.from == receiver.span.from && x.span.to == receiver.span.to && x.call == c.target);
+	}
+
+	/**
+	 * Whether `p` is exactly the range of a node of this function — an expression the text writes, whose value a local the
+	 * compiler binds there holds (a `??` operand, an inlined call's argument, a partial application's bound value).
+	 */
+	public function binds(p: FactPos): Bool {
+		if (!holds(p)) return false;
+		final at: Span = sourceSpan(p);
+		return at.to > at.from && _nodes.contains('${at.from}:${at.to}');
+	}
+
+	/** Whether a node of this function naming `name` starts where `p` does: a declaration the compiler places at its keyword. */
+	public function declares(p: FactPos, name: String): Bool {
+		return holds(p) && (_starts[sourceSpan(p).from] ?? []).contains(name);
+	}
+
+	/**
+	 * Whether the value at `p` is one the text converts to a string: inside an interpolated string, or exactly an operand
+	 * of a concatenation (`ExecutionShape.concatenationKinds`).
+	 */
+	public function converts(p: FactPos): Bool {
+		if (!holds(p)) return false;
+		final at: Span = sourceSpan(p);
+		return _operands.exists(c -> c.from == at.from && c.to == at.to) || _strings.exists(s -> s.from < at.from && at.to < s.to);
+	}
+
+	/** Whether `p`, in this function, spells `name` or is a lowered loop's own. */
+	public function spells(p: FactPos, name: String): Bool {
+		return holds(p) && (mentions(p, name) || lowered(p));
+	}
+
+	/** Whether `p` is where the compiler put a lowered loop's own code: from a loop's start, without its terminator. */
+	public function lowered(p: FactPos): Bool {
+		return _loops.exists(l -> l.from == p.span.from && p.span.to <= l.to);
+	}
+
+	/** The text at `p`, which lies in this function's file — inside an interpolated string, where it is in the text. */
+	public function textAt(p: FactPos): String {
+		final at: Span = sourceSpan(p);
+		return _text.substring(at.from, at.to);
+	}
+
+	/**
+	 * Where the range `p` of this function's file is in its text: as it is, but inside an interpolated string holding an
+	 * escape, where the compiler counts what the escapes stand for (`Interpolation.source`).
+	 */
+	private function sourceSpan(p: FactPos): Span {
+		if (p.file != _key) return p.span;
+		for (i in _interpolations) if (i.span.from < p.span.from && p.span.from < i.span.to) {
+			final from: Null<Int> = i.source(p.span.from);
+			final to: Null<Int> = i.source(p.span.to);
+			return from == null || to == null ? p.span : new Span(from, to);
+		}
+		return p.span;
+	}
+
+	/** The text at `span` of `source` (parsed as `tree`), whose file the facts key as `key`. */
+	public static function of(key: String, span: Span, source: String, tree: QueryNode, shape: GrammarPlugin.RefShape): BodyText {
+		// noqa: complexity
+		final loopKinds: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.iterationBindingKinds ?? []);
+		final constructed: Map<String, String> = shape.execution?.literalConstructions ?? [];
+		final comprehended: Map<String, String> = shape.execution?.comprehensionCalls ?? [];
+		final comprehensionLoops: Array<String> = (shape.iterationBindingKinds ?? []).concat([for (k in [shape.whileExprKind]) if (
+			k != null
+		) k]);
+		final interpolating: Array<String> = shape.interpolatingStringKinds ?? [];
+		final loops: Array<Span> = [];
+		final literals: Array<{ kind: String, span: Span }> = [];
+		final nodes: Array<String> = [];
+		final starts: Map<Int, Array<String>> = [];
+		final comprehensions: Array<{ span: Span, call: String }> = [];
+		final interpolations: Array<Interpolation> = [];
+		final concatenations: Array<String> = shape.execution?.concatenationKinds ?? [];
+		final operands: Array<Span> = [];
+		final strings: Array<Span> = [];
+		final body: Span = span;
+		function collect(n: QueryNode): Void {
+			final at: Null<Span> = n.span;
+			if (at != null && (at.to <= body.from || at.from >= body.to)) return;
+			if (at != null) {
+				if (loopKinds.contains(n.kind)) loops.push(at);
+				if (constructed.exists(n.kind)) literals.push({ kind: n.kind, span: at });
+				nodes.push('${at.from}:${trimmedEnd(source, at)}');
+				final name: Null<String> = n.name;
+				if (name != null) {
+					final named: Array<String> = starts[at.from] ?? [];
+					named.push(name);
+					starts[at.from] = named;
+				}
+				final call: Null<String> = comprehended[n.kind];
+				if (call != null && n.children.length == 1 && comprehensionLoops.contains(n.children[0].kind))
+					comprehensions.push({ span: at, call: call });
+				if (interpolating.contains(n.kind)) {
+					final read: Null<Interpolation> = Interpolation.read(source, at);
+					if (read != null) interpolations.push(read);
+					strings.push(at);
+					// the compiler places the concatenation an interpolated string is from inside its opening quote to the end of
+					// its last part: the text before the closing quote, or the code of a `${…}` ending it
+					final last: Null<QueryNode> = n.children.length == 0 ? null : n.children[n.children.length - 1];
+					final code: Null<QueryNode> = last != null && last.kind == shape.stringInterpBlockKind && last.children.length > 0
+						? last.children[0]
+						: last;
+					final end: Null<Span> = code?.span;
+					// a text segment ends where its text does, spaces and all; code, where its last token does
+					if (end != null) nodes.push('${at.from + 1}:${code == last ? end.to : trimmedEnd(source, end)}');
+				}
+				if (concatenations.contains(n.kind)) for (operand in n.children) {
+					final o: Null<Span> = operand.span;
+					if (o != null) operands.push(new Span(o.from, trimmedEnd(source, o)));
+				}
+			}
+			for (c in n.children) collect(c);
+		}
+		collect(tree);
+		return new BodyText(key, span, source, loops, literals, nodes, starts, comprehensions, interpolations, operands, strings);
+	}
+
+	/** The end of `span` of `source` without the whitespace after the node: the compiler's position of an expression has none. */
+	private static function trimmedEnd(source: String, span: Span): Int {
+		var end: Int = span.to;
+		while (end > span.from && source.isSpace(end - 1)) end--;
+		return end;
+	}
+
+}
+
+/**
+ * An interpolated string holding an escape or a character past ASCII, and where the compiler places the code inside it
+ * (`format_string` in Haxe's `typer.ml`): from one past the opening quote it counts the BYTES of the string's value — its
+ * escapes resolved, its characters in UTF-8 — where the text counts characters, adding one for each `'` outside a
+ * `${…}`, which an escaped quote `\'` spells with two characters. Past any other escape the compiler's offsets fall
+ * short of the text's, and past a character UTF-8 writes in several bytes they run beyond it. Read on a positive
+ * whitelist: a string of characters of the basic plane whose escapes are the one-character `\n` `\r` `\t` `\\` `\"`
+ * `\'`; any other string is not read, and code inside it stays where the compiler put it.
+ */
+@:nullSafety(Strict)
+private final class Interpolation {
+
+	/** The first code UTF-8 writes in two bytes, the first it writes in three, and the bytes a basic-plane code takes at most. */
+	private static inline final TWO_BYTES: Int = 0x80;
+
+	private static inline final THREE_BYTES: Int = 0x800;
+	private static inline final MAX_WIDTH: Int = 3;
+
+	/** The first and the last code unit of a surrogate pair: a character past the basic plane. */
+	private static inline final SURROGATE_FIRST: Int = 0xd800;
+
+	private static inline final SURROGATE_LAST: Int = 0xdfff;
+
+	/** The escapes read, by the character after the backslash. */
+	private static final ESCAPES: Array<Int> = ['n'.code, 'r'.code, 't'.code, '\\'.code, '"'.code, '\''.code];
+
+	/** The string's range, quotes included. */
+	public final span: Span;
+
+	/** The compiler's offset -> the text's offset, for each character of the value and its end. */
+	private final _source: Map<Int, Int>;
+
+	private function new(span: Span, source: Map<Int, Int>) {
+		this.span = span;
+		_source = source;
+	}
+
+	/** Where in the text the compiler's offset `at` in this string lies; null for an offset it gives no character. */
+	public function source(at: Int): Null<Int> {
+		return _source[at];
+	}
+
+	/** The string at `span` of `text` read so, or null where its offsets are the text's or it is not read. */
+	public static function read(text: String, span: Span): Null<Interpolation> {
+		// noqa: complexity
+		final raw: String = text.substring(span.from, span.to);
+		final close: Int = raw.length == 0 ? -1 : raw.lastIndexOf(raw.charAt(0));
+		if (close <= 0) return null;
+		// the value's characters, where each stands in the text, and the bytes UTF-8 writes it in
+		final chars: Array<Int> = [];
+		final at: Array<Int> = [];
+		final widths: Array<Int> = [];
+		var shifted: Bool = false;
+		var i: Int = 1;
+		while (i < close) {
+			final code: Int = raw.fastCodeAt(i);
+			if (code >= SURROGATE_FIRST && code <= SURROGATE_LAST) return null;
+			if (code != '\\'.code) {
+				chars.push(code);
+				at.push(span.from + i);
+				final width: Int = if (code < TWO_BYTES)
+					1
+				else if (code < THREE_BYTES)
+					2
+				else
+					MAX_WIDTH;
+				widths.push(width);
+				if (width > 1) shifted = true;
+				i++;
+				continue;
+			}
+			if (i + 1 >= close) return null;
+			final escaped: Int = raw.fastCodeAt(i + 1);
+			if (!ESCAPES.contains(escaped)) return null;
+			chars.push(escaped == 'n'.code || escaped == 'r'.code || escaped == 't'.code ? ' '.code : escaped);
+			at.push(span.from + i);
+			widths.push(1);
+			shifted = true;
+			i += 2;
+		}
+		if (!shifted) return null;
+		final source: Map<Int, Int> = [];
+		var quotes: Int = 0;
+		var bytes: Int = 0;
+		var pos: Int = 0;
+		final length: Int = chars.length;
+		function place(k: Int): Void {
+			source[span.from + 1 + bytes + quotes] = at[k];
+			bytes += widths[k];
+		}
+		while (pos < length) {
+			final code: Int = chars[pos];
+			place(pos);
+			if (code == '\''.code) quotes++;
+			pos++;
+			if (code != "$".code || pos == length) continue;
+			final next: Int = chars[pos];
+			if (next == "$".code) {
+				place(pos);
+				pos++;
+			} else if (next == '{'.code) {
+				// the group's code is placed as the value's offsets past the quotes counted before it
+				final end: Int = Strings.closingBrace(length, k -> chars[k], pos);
+				if (end < 0) return null;
+				for (k in pos ... end + 1) place(k);
+				pos = end + 1;
+			}
+		}
+		source[span.from + 1 + bytes + quotes] = span.from + close;
+		return new Interpolation(span, source);
+	}
+
+}
+
+/**
  * Whether what the compiler built is what the index and the text say: that every subtype a build typed is a declaration
  * the index holds (`subtypesIndexed`), that a function's compiled body is its own text (`bodyIsSource`), and that what
  * the builds compiled of a whole type, after every build macro ran over it, is its text (`typeIsItsText`). Each answer
@@ -615,359 +968,6 @@ final class FactsProvenance {
 	private static function throughCall(kind: String, slot: Int): Bool {
 		final accessors: Array<String> = kind.substring(kind.indexOf('(') + 1, kind.length - 1).split(',');
 		return accessors[slot] == 'call';
-	}
-
-}
-
-/**
- * The text of one function a fact is checked against: its file's table key, its span, the loops inside it, and what the
- * compiler writes there that the text does not spell — the nodes it binds values at, the comprehensions it calls for, the
- * values it converts to strings, and the positions it gives code inside an interpolated string (`Interpolation`).
- */
-@:nullSafety(Strict)
-private final class BodyText {
-
-	/** What may follow the range the compiler gives a literal's construction, inside the literal: a regular expression's flags. */
-	private static final FLAGS: EReg = ~/^[A-Za-z]*$/;
-
-	private final _key: String;
-	private final _span: Span;
-	private final _text: String;
-	private final _loops: Array<Span>;
-
-	/** The literals inside the function whose construction the compiler may write as one (`builds`), with their kinds. */
-	private final _literals: Array<{ kind: String, span: Span }>;
-
-	/** Every node's range inside the function, as `from:to` (`binds`). */
-	private final _nodes: Array<String>;
-
-	/** The names of the named nodes inside the function, by their start (`declares`). */
-	private final _starts: Map<Int, Array<String>>;
-
-	/** The comprehensions inside the function, with the call the compiler makes for each element (`comprehends`). */
-	private final _comprehensions: Array<{ span: Span, call: String }>;
-
-	/** The interpolated strings inside the function holding an escape, with where the compiler places their code. */
-	private final _interpolations: Array<Interpolation>;
-
-	/** The ranges of the operands of the concatenations inside the function, which the text converts to strings. */
-	private final _operands: Array<Span>;
-
-	/** The ranges of the interpolated strings inside the function, quotes included. */
-	private final _strings: Array<Span>;
-
-	private function new(
-		key: String, span: Span, text: String, loops: Array<Span>, literals: Array<{ kind: String, span: Span }>, nodes: Array<String>,
-		starts: Map<Int, Array<String>>, comprehensions: Array<{ span: Span, call: String }>, interpolations: Array<Interpolation>,
-		operands: Array<Span>, strings: Array<Span>
-	) {
-		_key = key;
-		_span = span;
-		_text = text;
-		_loops = loops;
-		_literals = literals;
-		_nodes = nodes;
-		_starts = starts;
-		_comprehensions = comprehensions;
-		_interpolations = interpolations;
-		_operands = operands;
-		_strings = strings;
-	}
-
-	/** Whether `p` lies in this function, in its own file. */
-	public inline function holds(p: FactPos): Bool {
-		return p.file == _key && _span.from <= p.span.from && p.span.to <= _span.to;
-	}
-
-	/** Whether the text at `p` holds `name` as a whole word. */
-	public function mentions(p: FactPos, name: String): Bool {
-		return FactText.mentions(textAt(p), name);
-	}
-
-	/** Whether the text at `p` is a bare identifier. */
-	public function bare(p: FactPos): Bool {
-		return FactText.bare(textAt(p).trim());
-	}
-
-	/** Whether the whole text of this function writes a call of `name` (`FactText.spellsCall`). */
-	public function spellsCall(name: String): Bool {
-		return FactText.spellsCall(_text.substring(_span.from, _span.to), name);
-	}
-
-	/** Whether the whole text of this function constructs the type `name` with `keyword` (`FactText.spellsConstruction`). */
-	public function spellsConstruction(keyword: String, name: String): Bool {
-		return FactText.spellsConstruction(_text.substring(_span.from, _span.to), keyword, name);
-	}
-
-	/** Whether the whole text of this function holds `name` as a whole word. */
-	public function spellsName(name: String): Bool {
-		return FactText.mentions(_text.substring(_span.from, _span.to), name);
-	}
-
-	/**
-	 * Whether `p`, in this function, is a literal of a kind whose construction the compiler writes as one of the type
-	 * `built` (`constructions`: `ExecutionShape.literalConstructions`): exactly its range, or that range followed by
-	 * nothing but letters — the flags of a regular expression, which the compiler's position of the construction leaves out.
-	 */
-	public function builds(p: FactPos, built: String, constructions: Map<String, String>): Bool {
-		return holds(p)
-			&& _literals.exists(
-				l ->
-					l.span.from == p.span.from
-					&& p.span.to <= l.span.to
-					&& FLAGS.match(_text.substring(p.span.to, l.span.to))
-					&& constructions[l.kind] == built
-			);
-	}
-
-	/**
-	 * Whether the call `c` is the one the compiler makes for an element a comprehension in this function yields: its
-	 * receiver is the comprehension's literal, exactly, and it calls what the literal's kind is lowered to call
-	 * (`ExecutionShape.comprehensionCalls`).
-	 */
-	public function comprehends(c: CallFact): Bool {
-		final receiver: Null<FactPos> = c.receiverAt;
-		return receiver != null
-			&& holds(c.at)
-			&& holds(receiver)
-			&& _comprehensions.exists(x -> x.span.from == receiver.span.from && x.span.to == receiver.span.to && x.call == c.target);
-	}
-
-	/**
-	 * Whether `p` is exactly the range of a node of this function — an expression the text writes, whose value a local the
-	 * compiler binds there holds (a `??` operand, an inlined call's argument, a partial application's bound value).
-	 */
-	public function binds(p: FactPos): Bool {
-		if (!holds(p)) return false;
-		final at: Span = sourceSpan(p);
-		return at.to > at.from && _nodes.contains('${at.from}:${at.to}');
-	}
-
-	/** Whether a node of this function naming `name` starts where `p` does: a declaration the compiler places at its keyword. */
-	public function declares(p: FactPos, name: String): Bool {
-		return holds(p) && (_starts[sourceSpan(p).from] ?? []).contains(name);
-	}
-
-	/**
-	 * Whether the value at `p` is one the text converts to a string: inside an interpolated string, or exactly an operand
-	 * of a concatenation (`ExecutionShape.concatenationKinds`).
-	 */
-	public function converts(p: FactPos): Bool {
-		if (!holds(p)) return false;
-		final at: Span = sourceSpan(p);
-		return _operands.exists(c -> c.from == at.from && c.to == at.to) || _strings.exists(s -> s.from < at.from && at.to < s.to);
-	}
-
-	/** Whether `p`, in this function, spells `name` or is a lowered loop's own. */
-	public function spells(p: FactPos, name: String): Bool {
-		return holds(p) && (mentions(p, name) || lowered(p));
-	}
-
-	/** Whether `p` is where the compiler put a lowered loop's own code: from a loop's start, without its terminator. */
-	public function lowered(p: FactPos): Bool {
-		return _loops.exists(l -> l.from == p.span.from && p.span.to <= l.to);
-	}
-
-	/** The text at `p`, which lies in this function's file — inside an interpolated string, where it is in the text. */
-	public function textAt(p: FactPos): String {
-		final at: Span = sourceSpan(p);
-		return _text.substring(at.from, at.to);
-	}
-
-	/**
-	 * Where the range `p` of this function's file is in its text: as it is, but inside an interpolated string holding an
-	 * escape, where the compiler counts what the escapes stand for (`Interpolation.source`).
-	 */
-	private function sourceSpan(p: FactPos): Span {
-		if (p.file != _key) return p.span;
-		for (i in _interpolations) if (i.span.from < p.span.from && p.span.from < i.span.to) {
-			final from: Null<Int> = i.source(p.span.from);
-			final to: Null<Int> = i.source(p.span.to);
-			return from == null || to == null ? p.span : new Span(from, to);
-		}
-		return p.span;
-	}
-
-	/** The text at `span` of `source` (parsed as `tree`), whose file the facts key as `key`. */
-	public static function of(key: String, span: Span, source: String, tree: QueryNode, shape: GrammarPlugin.RefShape): BodyText {
-		// noqa: complexity
-		final loopKinds: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.iterationBindingKinds ?? []);
-		final constructed: Map<String, String> = shape.execution?.literalConstructions ?? [];
-		final comprehended: Map<String, String> = shape.execution?.comprehensionCalls ?? [];
-		final comprehensionLoops: Array<String> = (shape.iterationBindingKinds ?? []).concat([for (k in [shape.whileExprKind]) if (
-			k != null
-		) k]);
-		final interpolating: Array<String> = shape.interpolatingStringKinds ?? [];
-		final loops: Array<Span> = [];
-		final literals: Array<{ kind: String, span: Span }> = [];
-		final nodes: Array<String> = [];
-		final starts: Map<Int, Array<String>> = [];
-		final comprehensions: Array<{ span: Span, call: String }> = [];
-		final interpolations: Array<Interpolation> = [];
-		final concatenations: Array<String> = shape.execution?.concatenationKinds ?? [];
-		final operands: Array<Span> = [];
-		final strings: Array<Span> = [];
-		final body: Span = span;
-		function collect(n: QueryNode): Void {
-			final at: Null<Span> = n.span;
-			if (at != null && (at.to <= body.from || at.from >= body.to)) return;
-			if (at != null) {
-				if (loopKinds.contains(n.kind)) loops.push(at);
-				if (constructed.exists(n.kind)) literals.push({ kind: n.kind, span: at });
-				nodes.push('${at.from}:${trimmedEnd(source, at)}');
-				final name: Null<String> = n.name;
-				if (name != null) {
-					final named: Array<String> = starts[at.from] ?? [];
-					named.push(name);
-					starts[at.from] = named;
-				}
-				final call: Null<String> = comprehended[n.kind];
-				if (call != null && n.children.length == 1 && comprehensionLoops.contains(n.children[0].kind))
-					comprehensions.push({ span: at, call: call });
-				if (interpolating.contains(n.kind)) {
-					final read: Null<Interpolation> = Interpolation.read(source, at);
-					if (read != null) interpolations.push(read);
-					strings.push(at);
-					// the compiler places the concatenation an interpolated string is from inside its opening quote to the end of
-					// its last part: the text before the closing quote, or the code of a `${…}` ending it
-					final last: Null<QueryNode> = n.children.length == 0 ? null : n.children[n.children.length - 1];
-					final code: Null<QueryNode> = last != null && last.kind == shape.stringInterpBlockKind && last.children.length > 0
-						? last.children[0]
-						: last;
-					final end: Null<Span> = code?.span;
-					// a text segment ends where its text does, spaces and all; code, where its last token does
-					if (end != null) nodes.push('${at.from + 1}:${code == last ? end.to : trimmedEnd(source, end)}');
-				}
-				if (concatenations.contains(n.kind)) for (operand in n.children) {
-					final o: Null<Span> = operand.span;
-					if (o != null) operands.push(new Span(o.from, trimmedEnd(source, o)));
-				}
-			}
-			for (c in n.children) collect(c);
-		}
-		collect(tree);
-		return new BodyText(key, span, source, loops, literals, nodes, starts, comprehensions, interpolations, operands, strings);
-	}
-
-	/** The end of `span` of `source` without the whitespace after the node: the compiler's position of an expression has none. */
-	private static function trimmedEnd(source: String, span: Span): Int {
-		var end: Int = span.to;
-		while (end > span.from && source.isSpace(end - 1)) end--;
-		return end;
-	}
-
-}
-
-/**
- * An interpolated string holding an escape or a character past ASCII, and where the compiler places the code inside it
- * (`format_string` in Haxe's `typer.ml`): from one past the opening quote it counts the BYTES of the string's value — its
- * escapes resolved, its characters in UTF-8 — where the text counts characters, adding one for each `'` outside a
- * `${…}`, which an escaped quote `\'` spells with two characters. Past any other escape the compiler's offsets fall
- * short of the text's, and past a character UTF-8 writes in several bytes they run beyond it. Read on a positive
- * whitelist: a string of characters of the basic plane whose escapes are the one-character `\n` `\r` `\t` `\\` `\"`
- * `\'`; any other string is not read, and code inside it stays where the compiler put it.
- */
-@:nullSafety(Strict)
-private final class Interpolation {
-
-	/** The first code UTF-8 writes in two bytes, the first it writes in three, and the bytes a basic-plane code takes at most. */
-	private static inline final TWO_BYTES: Int = 0x80;
-
-	private static inline final THREE_BYTES: Int = 0x800;
-	private static inline final MAX_WIDTH: Int = 3;
-
-	/** The first and the last code unit of a surrogate pair: a character past the basic plane. */
-	private static inline final SURROGATE_FIRST: Int = 0xd800;
-
-	private static inline final SURROGATE_LAST: Int = 0xdfff;
-
-	/** The escapes read, by the character after the backslash. */
-	private static final ESCAPES: Array<Int> = ['n'.code, 'r'.code, 't'.code, '\\'.code, '"'.code, '\''.code];
-
-	/** The string's range, quotes included. */
-	public final span: Span;
-
-	/** The compiler's offset -> the text's offset, for each character of the value and its end. */
-	private final _source: Map<Int, Int>;
-
-	private function new(span: Span, source: Map<Int, Int>) {
-		this.span = span;
-		_source = source;
-	}
-
-	/** Where in the text the compiler's offset `at` in this string lies; null for an offset it gives no character. */
-	public function source(at: Int): Null<Int> {
-		return _source[at];
-	}
-
-	/** The string at `span` of `text` read so, or null where its offsets are the text's or it is not read. */
-	public static function read(text: String, span: Span): Null<Interpolation> {
-		// noqa: complexity
-		final raw: String = text.substring(span.from, span.to);
-		final close: Int = raw.length == 0 ? -1 : raw.lastIndexOf(raw.charAt(0));
-		if (close <= 0) return null;
-		// the value's characters, where each stands in the text, and the bytes UTF-8 writes it in
-		final chars: Array<Int> = [];
-		final at: Array<Int> = [];
-		final widths: Array<Int> = [];
-		var shifted: Bool = false;
-		var i: Int = 1;
-		while (i < close) {
-			final code: Int = raw.fastCodeAt(i);
-			if (code >= SURROGATE_FIRST && code <= SURROGATE_LAST) return null;
-			if (code != '\\'.code) {
-				chars.push(code);
-				at.push(span.from + i);
-				final width: Int = if (code < TWO_BYTES)
-					1
-				else if (code < THREE_BYTES)
-					2
-				else
-					MAX_WIDTH;
-				widths.push(width);
-				if (width > 1) shifted = true;
-				i++;
-				continue;
-			}
-			if (i + 1 >= close) return null;
-			final escaped: Int = raw.fastCodeAt(i + 1);
-			if (!ESCAPES.contains(escaped)) return null;
-			chars.push(escaped == 'n'.code || escaped == 'r'.code || escaped == 't'.code ? ' '.code : escaped);
-			at.push(span.from + i);
-			widths.push(1);
-			shifted = true;
-			i += 2;
-		}
-		if (!shifted) return null;
-		final source: Map<Int, Int> = [];
-		var quotes: Int = 0;
-		var bytes: Int = 0;
-		var pos: Int = 0;
-		final length: Int = chars.length;
-		function place(k: Int): Void {
-			source[span.from + 1 + bytes + quotes] = at[k];
-			bytes += widths[k];
-		}
-		while (pos < length) {
-			final code: Int = chars[pos];
-			place(pos);
-			if (code == '\''.code) quotes++;
-			pos++;
-			if (code != "$".code || pos == length) continue;
-			final next: Int = chars[pos];
-			if (next == "$".code) {
-				place(pos);
-				pos++;
-			} else if (next == '{'.code) {
-				// the group's code is placed as the value's offsets past the quotes counted before it
-				final end: Int = Strings.closingBrace(length, k -> chars[k], pos);
-				if (end < 0) return null;
-				for (k in pos ... end + 1) place(k);
-				pos = end + 1;
-			}
-		}
-		source[span.from + 1 + bytes + quotes] = span.from + close;
-		return new Interpolation(span, source);
 	}
 
 }

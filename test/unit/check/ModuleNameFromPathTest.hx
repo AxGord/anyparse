@@ -9,6 +9,23 @@ import anyparse.query.CanonicalEdit;
 
 using StringTools;
 
+/** A `TypeOracle` double answering one type at every position — no compiler, no process. */
+@:nullSafety(Strict)
+private final class OneTypeOracle extends PositionTypeOracle {
+
+	private final _type: String;
+
+	public function new(type: String) {
+		super(new HaxeQueryPlugin().typeSyntax);
+		_type = type;
+	}
+
+	public function typeAt(file: String, bytePos: Int): Null<String> {
+		return _type;
+	}
+
+}
+
 /**
  * Every `TypeRefPrinter` consumer names the module of the file it prints into by the FILE, the
  * way the compiler and the index do — never by the module's first top-level declaration. A
@@ -105,23 +122,6 @@ final class ModuleNameFromPathTest extends Test {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources([]) } });
 		return scoped;
-	}
-
-}
-
-/** A `TypeOracle` double answering one type at every position — no compiler, no process. */
-@:nullSafety(Strict)
-private final class OneTypeOracle extends PositionTypeOracle {
-
-	private final _type: String;
-
-	public function new(type: String) {
-		super(new HaxeQueryPlugin().typeSyntax);
-		_type = type;
-	}
-
-	public function typeAt(file: String, bytePos: Int): Null<String> {
-		return _type;
 	}
 
 }

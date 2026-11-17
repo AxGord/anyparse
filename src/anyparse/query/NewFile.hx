@@ -13,6 +13,57 @@ import haxe.Exception;
 using Lambda;
 
 /**
+ * Compact creation spec. `className` / `pkg` are derived by the caller from
+ * the target path (`pkg == ''` for a package-less root file). `kind`
+ * (default `class`), `isFinal` (class only, default true) and `extendsList`
+ * (qualified or simple type refs) shape the declaration; `underlying` /
+ * `fromList` / `toList` shape an `abstract`. `ifaceSimple` / `ifaceModule` /
+ * `ifaceSource` are set together for `--implements` on a class. `fields` are
+ * verbatim `--field` member texts; `bodiesRaw` is the raw `--bodies` payload
+ * (method bodies + the reserved `@@ imports` / `@@ doc`).
+ */
+typedef NewFileSpec = {
+
+	var className: String;
+	var pkg: String;
+	var fields: Array<String>;
+
+	@:optional
+	var kind: String;
+
+	@:optional
+	var isFinal: Bool;
+
+	@:optional
+	var extendsList: Array<String>;
+
+	@:optional
+	var underlying: String;
+
+	@:optional
+	var fromList: Array<String>;
+
+	@:optional
+	var toList: Array<String>;
+
+	@:optional
+	var ifaceSimple: String;
+
+	@:optional
+	var ifaceModule: String;
+
+	@:optional
+	var ifaceSource: String;
+
+	@:optional
+	var bodiesRaw: String;
+
+}
+
+/** `create` outcome: the edit (Ok canonical source / Err) plus the interface methods left as stubs. */
+typedef NewFileResult = { var result: EditResult; var stubbed: Array<String>; }
+
+/**
  * Backend for `apq new` — deterministic file CREATION, the create-side
  * counterpart of the writer-emit mutation ops. Where those rewrite an
  * existing canonical file, this assembles a brand-new module from a compact
@@ -527,54 +578,3 @@ final class NewFile {
 	}
 
 }
-
-/**
- * Compact creation spec. `className` / `pkg` are derived by the caller from
- * the target path (`pkg == ''` for a package-less root file). `kind`
- * (default `class`), `isFinal` (class only, default true) and `extendsList`
- * (qualified or simple type refs) shape the declaration; `underlying` /
- * `fromList` / `toList` shape an `abstract`. `ifaceSimple` / `ifaceModule` /
- * `ifaceSource` are set together for `--implements` on a class. `fields` are
- * verbatim `--field` member texts; `bodiesRaw` is the raw `--bodies` payload
- * (method bodies + the reserved `@@ imports` / `@@ doc`).
- */
-typedef NewFileSpec = {
-
-	var className: String;
-	var pkg: String;
-	var fields: Array<String>;
-
-	@:optional
-	var kind: String;
-
-	@:optional
-	var isFinal: Bool;
-
-	@:optional
-	var extendsList: Array<String>;
-
-	@:optional
-	var underlying: String;
-
-	@:optional
-	var fromList: Array<String>;
-
-	@:optional
-	var toList: Array<String>;
-
-	@:optional
-	var ifaceSimple: String;
-
-	@:optional
-	var ifaceModule: String;
-
-	@:optional
-	var ifaceSource: String;
-
-	@:optional
-	var bodiesRaw: String;
-
-}
-
-/** `create` outcome: the edit (Ok canonical source / Err) plus the interface methods left as stubs. */
-typedef NewFileResult = { var result: EditResult; var stubbed: Array<String>; }

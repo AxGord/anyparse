@@ -14,6 +14,36 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.util.Groups;
 
+/** The kinds `JoinSingleUseLocal` reads. */
+private typedef Seams = {
+	var localDeclKinds: Array<String>;
+	var mutableKinds: Array<String>;
+	var continuationKinds: Array<String>;
+	var identKind: String;
+	var fieldAccessKind: Null<String>;
+	var returnKind: Null<String>;
+	var blockKinds: Array<String>;
+	var barrierKinds: Array<String>;
+	var deferringKinds: Array<String>;
+	var invariantBinderKinds: Array<String>;
+	var branchKinds: Array<String>;
+	var memberNamingKinds: Array<String>;
+	var shape: RefShape;
+}
+
+/**
+ * An inlinable pair: the declaration span (finding key), the line-wide region the fix drops,
+ * the identifier token the fix overwrites, the initializer text it writes there, and whether the
+ * read sits past the immediately following statement.
+ */
+private typedef Match = {
+	var declSpan: Span;
+	var dropSpan: Span;
+	var readSpan: Span;
+	var initSource: String;
+	var later: Bool;
+}
+
 /**
  * Flags a redundant intermediate local: an IMMUTABLE single-variable declaration whose
  * initializer is a TRIVIAL PURE READ and whose one and only reference sits in the
@@ -658,34 +688,4 @@ final class JoinSingleUseLocal extends RuleBase {
 			: { init: init, span: span };
 	}
 
-}
-
-/** The kinds `JoinSingleUseLocal` reads. */
-private typedef Seams = {
-	var localDeclKinds: Array<String>;
-	var mutableKinds: Array<String>;
-	var continuationKinds: Array<String>;
-	var identKind: String;
-	var fieldAccessKind: Null<String>;
-	var returnKind: Null<String>;
-	var blockKinds: Array<String>;
-	var barrierKinds: Array<String>;
-	var deferringKinds: Array<String>;
-	var invariantBinderKinds: Array<String>;
-	var branchKinds: Array<String>;
-	var memberNamingKinds: Array<String>;
-	var shape: RefShape;
-}
-
-/**
- * An inlinable pair: the declaration span (finding key), the line-wide region the fix drops,
- * the identifier token the fix overwrites, the initializer text it writes there, and whether the
- * read sits past the immediately following statement.
- */
-private typedef Match = {
-	var declSpan: Span;
-	var dropSpan: Span;
-	var readSpan: Span;
-	var initSource: String;
-	var later: Bool;
 }

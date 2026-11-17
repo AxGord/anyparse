@@ -26,6 +26,82 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * The methods of the built-in container a value holds that the language resolves to the container itself, never to a
+ * static extension: the ones that only READ it and hand out nothing that could change it, and the ones that CHANGE it
+ * without letting it go anywhere. Both empty for a value of any other type, whose every method call is a change and an
+ * escape (`MemberTouchScan.classify`).
+ */
+typedef OwnMethods = { final reads: Array<String>; final changes: Array<String>; }
+
+/** A site of a member occurrence. */
+typedef Occurrence = { var file: String; var span: Span; }
+
+/**
+ * The scan's result: toucher node id -> its touch site, the escape sites,
+ * a blind spot in the project, and a touch inside the entry region.
+ */
+typedef MemberTouches = {
+
+	var touchers: Map<String, Occurrence>;
+
+	/** Toucher id -> a touch it makes on an object other than its own `this` (absent when every touch is on `this`). */
+	var notOnSelf: Map<String, Occurrence>;
+	var escapes: Array<Occurrence>;
+	var hidden: Null<ReachUnknown>;
+	var inRegion: Null<ReachStep>;
+
+}
+
+/** What `MemberTouchScan.isFresh` needs to type a method call's receiver: the file's tree and text. */
+typedef FreshContext = {
+
+	var tree: QueryNode;
+	var source: String;
+
+	/** Whether a call node of `tree` returns an object nothing else holds; absent, no call but a built-in one is fresh. */
+	@:optional
+	var call: Null<QueryNode -> Bool>;
+
+}
+
+private typedef Verdict = { var touch: Bool; var escape: Bool; }
+
+/** How the typed accesses of a member in a faceted function are read (`MemberTouchScan.nodeAccesses`). */
+private enum TypedTouches {
+
+	/** Through these accesses, each where it runs. */
+	Typed(accesses: Array<FieldFact>);
+
+	/** Through the function's syntax: some access is of a shape the facts do not answer for, and its text holds it. */
+	BySyntax;
+
+	/** By neither: such an access lies in code no text holds — a build macro's method, an expression macro's expansion. */
+	Unread;
+
+}
+
+/** The walk `MemberTouchScan.nodeAccesses` makes over one graph node's bodies, for the member `name` of `declaring`. */
+private typedef TouchWalk = {
+
+	final g: CallGraph;
+	final node: FnNode;
+	final name: String;
+	final declaring: String;
+	final owners: Array<String>;
+	final view: FactsView;
+
+	/** Whether the bodies are a build macro's (`CallGraphFacts.adopted`). */
+	final made: Bool;
+
+	/** The verdict an access no reading answers for ends the walk with. */
+	final unreadable: TypedTouches;
+	final out: Array<FieldFact>;
+	final work: Array<FactNode>;
+	var unread: Bool;
+
+}
+
+/**
  * The toucher half of `MemberReach`: every access of a member BY BINDING across the project files a
  * call graph holds, what each access does for a `ReachAccess` question (a touch, an escape of the
  * member's value, or a harmless read), and whether a LOCAL's value ever escapes before a region ends. Where the compiler facts are
@@ -932,81 +1008,5 @@ final class MemberTouchScan {
 	private static function typesOf(provider: Null<TypeInfoProvider>, source: String): Map<Int, String> {
 		return provider == null ? [] : provider.declaredTypes(source);
 	}
-
-}
-
-/**
- * The methods of the built-in container a value holds that the language resolves to the container itself, never to a
- * static extension: the ones that only READ it and hand out nothing that could change it, and the ones that CHANGE it
- * without letting it go anywhere. Both empty for a value of any other type, whose every method call is a change and an
- * escape (`MemberTouchScan.classify`).
- */
-typedef OwnMethods = { final reads: Array<String>; final changes: Array<String>; }
-
-/** A site of a member occurrence. */
-typedef Occurrence = { var file: String; var span: Span; }
-
-/**
- * The scan's result: toucher node id -> its touch site, the escape sites,
- * a blind spot in the project, and a touch inside the entry region.
- */
-typedef MemberTouches = {
-
-	var touchers: Map<String, Occurrence>;
-
-	/** Toucher id -> a touch it makes on an object other than its own `this` (absent when every touch is on `this`). */
-	var notOnSelf: Map<String, Occurrence>;
-	var escapes: Array<Occurrence>;
-	var hidden: Null<ReachUnknown>;
-	var inRegion: Null<ReachStep>;
-
-}
-
-/** What `MemberTouchScan.isFresh` needs to type a method call's receiver: the file's tree and text. */
-typedef FreshContext = {
-
-	var tree: QueryNode;
-	var source: String;
-
-	/** Whether a call node of `tree` returns an object nothing else holds; absent, no call but a built-in one is fresh. */
-	@:optional
-	var call: Null<QueryNode -> Bool>;
-
-}
-
-private typedef Verdict = { var touch: Bool; var escape: Bool; }
-
-/** How the typed accesses of a member in a faceted function are read (`MemberTouchScan.nodeAccesses`). */
-private enum TypedTouches {
-
-	/** Through these accesses, each where it runs. */
-	Typed(accesses: Array<FieldFact>);
-
-	/** Through the function's syntax: some access is of a shape the facts do not answer for, and its text holds it. */
-	BySyntax;
-
-	/** By neither: such an access lies in code no text holds — a build macro's method, an expression macro's expansion. */
-	Unread;
-
-}
-
-/** The walk `MemberTouchScan.nodeAccesses` makes over one graph node's bodies, for the member `name` of `declaring`. */
-private typedef TouchWalk = {
-
-	final g: CallGraph;
-	final node: FnNode;
-	final name: String;
-	final declaring: String;
-	final owners: Array<String>;
-	final view: FactsView;
-
-	/** Whether the bodies are a build macro's (`CallGraphFacts.adopted`). */
-	final made: Bool;
-
-	/** The verdict an access no reading answers for ends the walk with. */
-	final unreadable: TypedTouches;
-	final out: Array<FieldFact>;
-	final work: Array<FactNode>;
-	var unread: Bool;
 
 }

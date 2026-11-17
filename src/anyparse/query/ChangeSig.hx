@@ -20,6 +20,12 @@ enum ChangeSigResult {
 	Err(message: String);
 }
 
+/** Parsed permutation or a diagnostic — internal to `ChangeSig`. */
+private enum PermResult {
+	POk(order: Array<Int>);
+	PErr(message: String);
+}
+
 /**
  * Scope-correct, format-preserving change-signature (parameter reorder)
  * — the fourth refactoring operation built on the query engine, the
@@ -188,10 +194,4 @@ final class ChangeSig {
 		return identity ? PErr('permutation "$perm" is the identity — nothing to reorder') : POk(order);
 	}
 
-}
-
-/** Parsed permutation or a diagnostic — internal to `ChangeSig`. */
-private enum PermResult {
-	POk(order: Array<Int>);
-	PErr(message: String);
 }

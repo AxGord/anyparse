@@ -10,6 +10,38 @@ import anyparse.query.TypeNameBinding.ImportPath;
 
 using Lambda;
 
+/** What a bare value name means at module level at one use (`ValueNameBinding.moduleValuesAt`). */
+typedef ModuleValues = {
+
+	/** Each module-level declaration of the name a build compiling the use binds it to, in source order. */
+	final decls: Array<ModuleField>;
+
+	/** What the imports supply in the builds compiling the use and none of `decls`; null when every such build compiles one. */
+	final imported: Null<ImportedStatics>;
+
+}
+
+/** What the imports of a file may supply under one bare value name (`ValueNameBinding.importedStatics`). */
+typedef ImportedStatics = {
+
+	/** Each static an import binds the name to. */
+	final statics: Array<ImportedStatic>;
+
+	/** Whether an import may supply it that the index cannot list: a wildcard over an unlisted type, an undecoded alias. */
+	var unknown: Bool;
+
+}
+
+/**
+ * One static an import binds a bare name to: `owner` the type the path names (by simple name; the module's for a
+ * module-level field), `decls` the declarations of it the index holds (none outside it, none for a module-level field
+ * of a module without a main type), `member` the field.
+ */
+typedef ImportedStatic = { final owner: String; final decls: Array<ResolvedType>; final member: String; }
+
+/** An alias statement binding a static under another name (`ValueNameBinding.fieldAliases`): no `target` when its path does not decode. */
+typedef FieldAlias = { final alias: String; final target: Null<ImportedStatic>; }
+
 /**
  * THE meaning of a bare VALUE name no local, parameter or member binds, at module level — the one
  * answer to "which declaration does this bare value name bind": what the module itself declares
@@ -360,35 +392,3 @@ final class ValueNameBinding {
 	}
 
 }
-
-/** What a bare value name means at module level at one use (`ValueNameBinding.moduleValuesAt`). */
-typedef ModuleValues = {
-
-	/** Each module-level declaration of the name a build compiling the use binds it to, in source order. */
-	final decls: Array<ModuleField>;
-
-	/** What the imports supply in the builds compiling the use and none of `decls`; null when every such build compiles one. */
-	final imported: Null<ImportedStatics>;
-
-}
-
-/** What the imports of a file may supply under one bare value name (`ValueNameBinding.importedStatics`). */
-typedef ImportedStatics = {
-
-	/** Each static an import binds the name to. */
-	final statics: Array<ImportedStatic>;
-
-	/** Whether an import may supply it that the index cannot list: a wildcard over an unlisted type, an undecoded alias. */
-	var unknown: Bool;
-
-}
-
-/**
- * One static an import binds a bare name to: `owner` the type the path names (by simple name; the module's for a
- * module-level field), `decls` the declarations of it the index holds (none outside it, none for a module-level field
- * of a module without a main type), `member` the field.
- */
-typedef ImportedStatic = { final owner: String; final decls: Array<ResolvedType>; final member: String; }
-
-/** An alias statement binding a static under another name (`ValueNameBinding.fieldAliases`): no `target` when its path does not decode. */
-typedef FieldAlias = { final alias: String; final target: Null<ImportedStatic>; }

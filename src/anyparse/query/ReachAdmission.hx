@@ -6,6 +6,9 @@ import anyparse.query.MemberTouchScan.Occurrence;
 
 using Lambda;
 
+/** The functions an admission site may enter: the closure over touchers, its value-callable part, its constructors. */
+typedef Admission = { var closure: Map<String, String>; var value: Array<String>; var constructors: Array<String>; }
+
 /**
  * Which functions code a reach walk cannot follow — an unresolved call, an untyped access, library code it has
  * not read — may enter: those that can themselves reach a toucher of the member, through edges and through the
@@ -187,6 +190,3 @@ final class ReachAdmission {
 	}
 
 }
-
-/** The functions an admission site may enter: the closure over touchers, its value-callable part, its constructors. */
-typedef Admission = { var closure: Map<String, String>; var value: Array<String>; var constructors: Array<String>; }

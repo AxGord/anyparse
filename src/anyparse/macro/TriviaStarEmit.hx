@@ -3,6 +3,13 @@ package anyparse.macro;
 #if macro
 import haxe.macro.Expr;
 
+/** The trailing-trivia slot reads of a Star whose pair struct or enum ctor synthesised them; null where it did not. */
+typedef TrailSlots = {
+	final trailBBAccess: Null<Expr>;
+	final trailLCAccess: Null<Expr>;
+	final trailCloseAccess: Null<Expr>;
+	final trailOpenAccess: Null<Expr>;
+}
 /**
  * The one Star emission skeleton of the trivia writer: an instance is one Star's emit, holding the Star's `StarPlan`,
  * its element array and the trailing-trivia slots its pair struct synthesised. The tryparse, block and sep families
@@ -43,12 +50,5 @@ class TriviaStarEmit<P: StarPlan> {
 			_trailOpen: Null<String> = $_trailOpenSlot;
 	}
 
-}
-/** The trailing-trivia slot reads of a Star whose pair struct or enum ctor synthesised them; null where it did not. */
-typedef TrailSlots = {
-	final trailBBAccess: Null<Expr>;
-	final trailLCAccess: Null<Expr>;
-	final trailCloseAccess: Null<Expr>;
-	final trailOpenAccess: Null<Expr>;
 }
 #end

@@ -16,6 +16,28 @@ import haxe.macro.TypeTools;
 import sys.io.File;
 import sys.io.FileOutput;
 
+/** A method declared in `file` at `min`–`max` whose body a call site may splice in: `inline`, or inlined by its call site. */
+typedef InlineMethod = {
+
+	final file: String;
+	final min: Int;
+	final max: Int;
+	final id: String;
+
+	/**
+	 * Whether a local named `TypedFactsMacro.INLINED_RECEIVER` the compiler binds at a splice of the body, at the body's own
+	 * range, is the receiver: no parameter of the method takes that name. The compiler gives that name to nothing else it
+	 * binds — a parameter keeps its own, a static method's and an abstract's `this` included.
+	 */
+	final receiver: Bool;
+
+	/**
+	 * How many parameters the method declares (-1 for none of a function type): a method of none takes no value from its
+	 * call site but its receiver, so a value of that code spliced into its body is the receiver.
+	 */
+	final arity: Int;
+
+}
 /**
  * The compile-time half of `TypedFactsProbe`: an `onAfterTyping` hook that writes what the compiler typed as JSON Lines
  * to a file. The records and the type-string grammar are specified in `TypedFactsProbe`; this class only produces them,
@@ -581,28 +603,6 @@ final class TypedFactsMacro {
 			case AccCtor: 'ctor';
 		};
 	}
-
-}
-/** A method declared in `file` at `min`–`max` whose body a call site may splice in: `inline`, or inlined by its call site. */
-typedef InlineMethod = {
-
-	final file: String;
-	final min: Int;
-	final max: Int;
-	final id: String;
-
-	/**
-	 * Whether a local named `TypedFactsMacro.INLINED_RECEIVER` the compiler binds at a splice of the body, at the body's own
-	 * range, is the receiver: no parameter of the method takes that name. The compiler gives that name to nothing else it
-	 * binds — a parameter keeps its own, a static method's and an abstract's `this` included.
-	 */
-	final receiver: Bool;
-
-	/**
-	 * How many parameters the method declares (-1 for none of a function type): a method of none takes no value from its
-	 * call site but its receiver, so a value of that code spliced into its body is the receiver.
-	 */
-	final arity: Int;
 
 }
 #end

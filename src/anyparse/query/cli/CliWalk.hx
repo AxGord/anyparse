@@ -10,6 +10,24 @@ import sys.FileSystem;
 #end
 
 /**
+ * Skip-entry for a walker's 0-hit nudge: a path the walk could not parse
+ * plus a human-readable failure locus (`LINE:COL <message>`). The locus
+ * lets the reader judge whether the parse failure is upstream of the
+ * searched-for content (warning critical) or far past it (can ignore)
+ * without a follow-up `hxq ast <path>` probe.
+ */
+typedef SkipEntry = { path: String, locus: String };
+
+/**
+ * One walk's skip-parse entry together with the RAW SOURCE it came from — the pair
+ * `skipsFor` needs to decide which queries of a batch may be told about it.
+ *
+ * The source is carried rather than re-read: the walk already has it in hand, and
+ * re-reading a file to answer a diagnostic would make a 0-hit nudge cost a second
+ * pass over the failures.
+ */
+typedef QuerySkip = { var source: String; var entry: SkipEntry; };
+/**
  * The shared multi-file walk of the read-only `apq` commands: parse a visited
  * file or record why it was skipped, cap how many hits are rendered, and build
  * the nudge a 0-hit walk prints instead of staying silent.
@@ -656,21 +674,3 @@ final class CliWalk {
 	}
 
 }
-
-/**
- * Skip-entry for a walker's 0-hit nudge: a path the walk could not parse
- * plus a human-readable failure locus (`LINE:COL <message>`). The locus
- * lets the reader judge whether the parse failure is upstream of the
- * searched-for content (warning critical) or far past it (can ignore)
- * without a follow-up `hxq ast <path>` probe.
- */
-typedef SkipEntry = { path: String, locus: String };
-/**
- * One walk's skip-parse entry together with the RAW SOURCE it came from — the pair
- * `skipsFor` needs to decide which queries of a batch may be told about it.
- *
- * The source is carried rather than re-read: the walk already has it in hand, and
- * re-reading a file to answer a diagnostic would make a 0-hit nudge cost a second
- * pass over the failures.
- */
-typedef QuerySkip = { var source: String; var entry: SkipEntry; };

@@ -32,6 +32,30 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** What the threads of a slice gate's branches depend on (`SliceGate.demandOf`). */
+typedef GateDemand = {
+
+	/** Whether the run is a `--baseline` one. */
+	var recording: Bool;
+
+	/** The infra trees the run was given. */
+	var infra: Int;
+
+	/** Whether the slice touched a `.hx` file, which the lint row lints at the base and now. */
+	var touchedHx: Bool;
+	var jvmMoved: Bool;
+
+	/** Whether the engine or a probe kit moved, so the kits row runs (`KitsRow.reached`). */
+	var kitsMoved: Bool;
+
+	/** Whether the engine, a probe project or the harness moved, so the typer probes row runs (`TyperProbesRow.reached`). */
+	var typerMoved: Bool;
+
+	/** The infra trees of the baseline when rule code moved, or null when INFRA gate 4 does not run. */
+	var ruleInfra: Null<Int>;
+
+}
+
 /**
  * `dev slice-gate <worktree>` — every gate a worker's slice must pass, as ONE command whose report is one row per gate
  * and a verdict, a failed row quoting its first error (docs/testing.md § "The slice gate"). `--baseline`, run once on the
@@ -797,29 +821,5 @@ final class SliceGate {
 			case _: project;
 		};
 	}
-
-}
-
-/** What the threads of a slice gate's branches depend on (`SliceGate.demandOf`). */
-typedef GateDemand = {
-
-	/** Whether the run is a `--baseline` one. */
-	var recording: Bool;
-
-	/** The infra trees the run was given. */
-	var infra: Int;
-
-	/** Whether the slice touched a `.hx` file, which the lint row lints at the base and now. */
-	var touchedHx: Bool;
-	var jvmMoved: Bool;
-
-	/** Whether the engine or a probe kit moved, so the kits row runs (`KitsRow.reached`). */
-	var kitsMoved: Bool;
-
-	/** Whether the engine, a probe project or the harness moved, so the typer probes row runs (`TyperProbesRow.reached`). */
-	var typerMoved: Bool;
-
-	/** The infra trees of the baseline when rule code moved, or null when INFRA gate 4 does not run. */
-	var ruleInfra: Null<Int>;
 
 }

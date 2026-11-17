@@ -27,6 +27,54 @@ import haxe.Exception;
 
 using anyparse.util.Strings;
 
+private typedef Site = { pattern: String, asConfig: Bool, argumentOnly: Bool };
+
+/** One rewrite: the source it reads, the kit and the knobs it spells, the imports it collects, how many calls it converted so far. */
+private typedef Run = {
+
+	var source: String;
+	final kitName: String;
+	final knobs: Array<OptionKnob>;
+	final imports: Array<String>;
+	final plugin: GrammarPlugin;
+	var sites: Int;
+
+	/** The parse of `source`, read when an argument is typed; null until then. */
+	var tree: Null<QueryNode>;
+
+	/** A note per call left on its document because the options it loads are the test's subject. */
+	final subjects: Array<String>;
+
+};
+
+/** A replacement of `span` of the source by `text`. */
+private typedef Edit = { span: Span, text: String };
+
+/** A match of a call shape with the shape it matched. */
+private typedef Found = { match: Match, site: Site };
+/**
+ * A `final` the rewrite retypes: its name, its declaration, the constant it holds, whether its modifiers let it be retyped, and each
+ * configuration call reading it, by argument.
+ */
+private typedef Named = {
+	name: String,
+	span: Span,
+	init: QueryNode,
+	kept: Bool,
+	mixed: Bool,
+	retyping: Retyping,
+	readers: Map<Int, Reader>
+};
+
+/** A call shape's match reading a retyped `final` as its configuration. */
+private typedef Reader = { match: Match, site: Site, wrapper: Null<Span> };
+
+/** Whether a `final` may be retyped: with the edits of its modifier run, or pinned, with why not. */
+private enum Retyping {
+	Open(cuts: Array<Edit>);
+	Pinned(why: String);
+}
+
 /**
  * The one answer to "how does a test's `hxformat.json` call become typed `HxModuleWriteOptions`, by an op rather than by hand": every
  * `HaxeFormatConfigLoader.loadHxFormatJson(<literal>)` / `loadHxFormatJson(<literal>)`, `<kit>.strictJson(<literal>)` and
@@ -594,50 +642,4 @@ final class HxTypedOptionsRewrite {
 		return node;
 	}
 
-}
-
-private typedef Site = { pattern: String, asConfig: Bool, argumentOnly: Bool };
-
-/** One rewrite: the source it reads, the kit and the knobs it spells, the imports it collects, how many calls it converted so far. */
-private typedef Run = {
-
-	var source: String;
-	final kitName: String;
-	final knobs: Array<OptionKnob>;
-	final imports: Array<String>;
-	final plugin: GrammarPlugin;
-	var sites: Int;
-
-	/** The parse of `source`, read when an argument is typed; null until then. */
-	var tree: Null<QueryNode>;
-
-	/** A note per call left on its document because the options it loads are the test's subject. */
-	final subjects: Array<String>;
-
-};
-
-/** A replacement of `span` of the source by `text`. */
-private typedef Edit = { span: Span, text: String };
-/** A match of a call shape with the shape it matched. */
-private typedef Found = { match: Match, site: Site };
-/**
- * A `final` the rewrite retypes: its name, its declaration, the constant it holds, whether its modifiers let it be retyped, and each
- * configuration call reading it, by argument.
- */
-private typedef Named = {
-	name: String,
-	span: Span,
-	init: QueryNode,
-	kept: Bool,
-	mixed: Bool,
-	retyping: Retyping,
-	readers: Map<Int, Reader>
-};
-
-/** A call shape's match reading a retyped `final` as its configuration. */
-private typedef Reader = { match: Match, site: Site, wrapper: Null<Span> };
-/** Whether a `final` may be retyped: with the edits of its modifier run, or pinned, with why not. */
-private enum Retyping {
-	Open(cuts: Array<Edit>);
-	Pinned(why: String);
 }

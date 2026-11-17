@@ -9,6 +9,64 @@ import anyparse.query.NodeShape;
 import anyparse.query.ShapeVocab;
 
 /**
+ * The AST kinds the recursive assignment-tree hoist reads (`ifKinds` / `switchKinds` nullable --
+ * unset disables that nesting; `conditionalKinds` is every `if` form, statement and expression, for
+ * `ifChainValue`'s else-less gate).
+ */
+typedef TreeSeams = {
+	var identKind: String;
+	var ternaryKind: Null<String>;
+	var exprStmtKind: String;
+	var blockStmtKind: String;
+	var assignKind: String;
+	var caseBranchKind: String;
+	var defaultBranchKind: String;
+	var plainCasePatternKind: String;
+	var wildcardPatternName: String;
+	var parenKind: String;
+	var ifKinds: Null<Array<String>>;
+	var switchKinds: Null<Array<String>>;
+	var conditionalKinds: Array<String>;
+}
+
+/** A mutable holder threading the common l-value through the recursion (set by the leftmost leaf). */
+typedef LvalueRef = { var lvalue: Null<QueryNode>; }
+
+/**
+ * A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts,
+ * the copied spans, the comment slots, one seat per branch, and the leaf-assignment count.
+ */
+private typedef BranchValues = {
+	var built: Array<{ cond: String, value: String }>;
+	var kept: Array<Span>;
+	var gaps: Array<CarryGap>;
+	var seats: Array<{ cond: Null<Span>, atom: Null<Span> }>;
+	var leafCount: Int;
+}
+
+/** A recognised hoistable unit's built value expression, the verbatim-copied spans (comment-drop guard), and its leaf-assignment count. */
+typedef UnitValue = {
+	var text: String;
+	var kept: Array<Span>;
+	var gaps: Array<CarryGap>;
+	var atom: Null<Span>;
+	var leafCount: Int;
+}
+
+/**
+ * A switch's collected arms: the ` case h: v;…` text, the kept spans,
+ * whether a source default exists, the leaf count, and the subject node.
+ */
+typedef SwitchArms = {
+	var armsText: String;
+	var kept: Array<Span>;
+	var gaps: Array<CarryGap>;
+	var hasDefault: Bool;
+	var leafCount: Int;
+	var subject: QueryNode;
+}
+
+/**
  * Recursive assignment-tree hoist machinery shared by `prefer-if-expression-assignment` and
  * `prefer-switch-expression-assignment`. A statement-position `switch` or `if`/`else-if` chain
  * whose every arm / branch body is a HOISTABLE UNIT collapses to one `<lvalue> = <expr-tree>;`
@@ -627,62 +685,4 @@ final class AssignmentTreeHoist {
 		return last;
 	}
 
-}
-
-/**
- * The AST kinds the recursive assignment-tree hoist reads (`ifKinds` / `switchKinds` nullable --
- * unset disables that nesting; `conditionalKinds` is every `if` form, statement and expression, for
- * `ifChainValue`'s else-less gate).
- */
-typedef TreeSeams = {
-	var identKind: String;
-	var ternaryKind: Null<String>;
-	var exprStmtKind: String;
-	var blockStmtKind: String;
-	var assignKind: String;
-	var caseBranchKind: String;
-	var defaultBranchKind: String;
-	var plainCasePatternKind: String;
-	var wildcardPatternName: String;
-	var parenKind: String;
-	var ifKinds: Null<Array<String>>;
-	var switchKinds: Null<Array<String>>;
-	var conditionalKinds: Array<String>;
-}
-
-/** A mutable holder threading the common l-value through the recursion (set by the leftmost leaf). */
-typedef LvalueRef = { var lvalue: Null<QueryNode>; }
-
-/**
- * A chain's non-terminal branches as `branchValues` builds them: the `(cond, value)` texts,
- * the copied spans, the comment slots, one seat per branch, and the leaf-assignment count.
- */
-private typedef BranchValues = {
-	var built: Array<{ cond: String, value: String }>;
-	var kept: Array<Span>;
-	var gaps: Array<CarryGap>;
-	var seats: Array<{ cond: Null<Span>, atom: Null<Span> }>;
-	var leafCount: Int;
-}
-
-/** A recognised hoistable unit's built value expression, the verbatim-copied spans (comment-drop guard), and its leaf-assignment count. */
-typedef UnitValue = {
-	var text: String;
-	var kept: Array<Span>;
-	var gaps: Array<CarryGap>;
-	var atom: Null<Span>;
-	var leafCount: Int;
-}
-
-/**
- * A switch's collected arms: the ` case h: v;…` text, the kept spans,
- * whether a source default exists, the leaf count, and the subject node.
- */
-typedef SwitchArms = {
-	var armsText: String;
-	var kept: Array<Span>;
-	var gaps: Array<CarryGap>;
-	var hasDefault: Bool;
-	var leafCount: Int;
-	var subject: QueryNode;
 }

@@ -12,6 +12,12 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** The paths a commit takes out of the tree: files, and directories that hold none of the tree's files any more. */
+typedef Vanished = { var files: Array<String>; var dirs: Array<String>; }
+
+/** A prose file: where it is read, and how a hit names it. */
+private typedef ProseFile = { var path: String; var label: String; }
+
 /**
  * The one answer to "which prose files still name a path the landed commit deleted or renamed": the `prose-refs` row of
  * `dev land`. A moved or removed file leaves its old name behind in the documents and prompts that describe it, and no
@@ -185,9 +191,3 @@ final class LandProse {
 	}
 
 }
-
-/** The paths a commit takes out of the tree: files, and directories that hold none of the tree's files any more. */
-typedef Vanished = { var files: Array<String>; var dirs: Array<String>; }
-
-/** A prose file: where it is read, and how a hit names it. */
-private typedef ProseFile = { var path: String; var label: String; }

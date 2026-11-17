@@ -8,6 +8,9 @@ import anyparse.check.haxe.loops.IdentityMap;
 import anyparse.check.haxe.oracle.CompilerOracle;
 import unit.cli.CliFixture;
 
+/** What `FixVerifier` left of a fixture: the file as it stands and how many edits the compiler let through or took back. */
+private typedef Outcome = { final text: String; final applied: Int; final reverted: Int; };
+
 /**
  * `identity-map` under the compiler oracle: its rewrite stands where the compiler accepts it. A map that only widens an
  * enum abstract's element type to `Null<E>` is the array ascribed; the same ascription over an abstract that converts
@@ -97,6 +100,3 @@ final class IdentityMapOracleTest extends Test {
 	}
 
 }
-
-/** What `FixVerifier` left of a fixture: the file as it stands and how many edits the compiler let through or took back. */
-private typedef Outcome = { final text: String; final applied: Int; final reverted: Int; };

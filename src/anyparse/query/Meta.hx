@@ -4,6 +4,25 @@ import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.runtime.Span;
 
 /**
+ * One annotation site discovered by `Meta.find`.
+ *
+ * `annotation` is the verbatim tag (e.g. `@:foo`), `args` the
+ * per-argument source text (`[]` when the annotation takes none).
+ * `declKind` / `declName` / `declSpan` describe the declaration the
+ * annotation is attached to; `metaSpan` is the annotation node's own
+ * span. Spans are `Null` for contract safety — in practice every
+ * Haxe annotation and decl-host node carries one.
+ */
+typedef MetaHit = {
+	var annotation: String;
+	var args: Array<String>;
+	var declKind: String;
+	var declName: Null<String>;
+	var declSpan: Null<Span>;
+	var metaSpan: Null<Span>;
+}
+
+/**
  * Metadata-on-declaration walker for `apq meta`.
  *
  * Walks a `QueryNode` tree and collects every annotation node (`kind ∈ shape.metaKinds`), attributing each
@@ -117,23 +136,4 @@ final class Meta {
 		return from >= to ? '' : source.substring(from, to);
 	}
 
-}
-
-/**
- * One annotation site discovered by `Meta.find`.
- *
- * `annotation` is the verbatim tag (e.g. `@:foo`), `args` the
- * per-argument source text (`[]` when the annotation takes none).
- * `declKind` / `declName` / `declSpan` describe the declaration the
- * annotation is attached to; `metaSpan` is the annotation node's own
- * span. Spans are `Null` for contract safety — in practice every
- * Haxe annotation and decl-host node carries one.
- */
-typedef MetaHit = {
-	var annotation: String;
-	var args: Array<String>;
-	var declKind: String;
-	var declName: Null<String>;
-	var declSpan: Null<Span>;
-	var metaSpan: Null<Span>;
 }

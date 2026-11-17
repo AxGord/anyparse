@@ -8,6 +8,71 @@ import anyparse.runtime.Span;
 import anyparse.util.Groups;
 
 /**
+ * What `expandFor` answers: the deduped `.hx` paths the specs expanded to, whether the call
+ * named exactly ONE concrete file, and every spec that expanded to NOTHING.
+ *
+ * `unmatched` is what the union alone cannot say — a spec naming a file that is not there vanishes
+ * into `paths` the moment another spec matched, and the run analyses a scope short of what it was
+ * asked for. Named rather than spelled inline because the reporting seat and its pin both have to
+ * write it out.
+ */
+typedef ExpandedInputs = { var paths: Array<String>; var singleFile: Bool; var unmatched: Array<String>; };
+
+/**
+ * What `resolveInputPaths` hands a subcommand: the grammar plugin for `--lang`,
+ * the `.hx` paths its file / dir / glob specs expanded to, and whether the call
+ * named exactly ONE concrete file (the gofmt-style "print to stdout" case).
+ * Named because three seats spell it out — the resolver itself, `shard-plan`
+ * and `self-status`.
+ */
+typedef ResolvedInputs = { var plugin: GrammarPlugin; var paths: Array<String>; var singleFile: Bool; };
+
+/**
+ * The pair every `--`-then-scope argv parser builds identically before it starts consuming
+ * argv itself: an empty scope-spec accumulator and the `--` separator index `routePositional`
+ * reads. Named so the shared prologue collapses to one call instead of repeating the same two
+ * declarations command by command — the last residue `duplicate-code` still named after the rest of the per-command scaffold was shared.
+ */
+typedef PositionalScan = { var inputSpecs: Array<String>; var separator: Int; };
+
+/**
+ * `PositionalScan` plus the two output-shaping flags (`--flat`, `--limit`) a plain
+ * name-then-scope walker also carries — `RefsOpts` and `MentionsOpts` both close over
+ * exactly this subset before they add their own command-specific fields. One call
+ * collapses the shared five-field prologue below `duplicate-code`'s statement floor.
+ */
+typedef WalkerScan = {
+	var flat: Bool;
+	var limit: Int;
+	var names: Array<String>;
+	var inputSpecs: Array<String>;
+	var separator: Int;
+};
+
+/** One row of `CliArgs.grammars`: what a grammar plugin declares about itself, and how to build it. */
+typedef GrammarEntry = {
+
+	/** The `--lang` name. */
+	final lang: String;
+
+	/** The file extensions, lower case with the dot, whose files are this grammar's. */
+	final extensions: Array<String>;
+
+	/**
+	 * Whether a document's text is recognisably this grammar's, for stdin
+	 * with no `--lang`; null when the grammar declares no such test.
+	 */
+	final recognises: Null<String -> Bool>;
+
+	/** A fresh plugin instance. */
+	final make: () -> GrammarPlugin;
+
+	/** How `apq merge-file` takes the grammar's files apart: by declarations (source) or by records (data). */
+	final merge: MergeShape;
+
+};
+
+/**
  * The argument door of the `apq` CLI: everything that turns argv and the path
  * specs on it into the values a command actually runs on — one flag's value,
  * a `--limit`, a `<line>:<col>`, the grammar plugin `--lang` names, the
@@ -479,68 +544,3 @@ final class CliArgs {
 	}
 
 }
-
-/**
- * What `expandFor` answers: the deduped `.hx` paths the specs expanded to, whether the call
- * named exactly ONE concrete file, and every spec that expanded to NOTHING.
- *
- * `unmatched` is what the union alone cannot say — a spec naming a file that is not there vanishes
- * into `paths` the moment another spec matched, and the run analyses a scope short of what it was
- * asked for. Named rather than spelled inline because the reporting seat and its pin both have to
- * write it out.
- */
-typedef ExpandedInputs = { var paths: Array<String>; var singleFile: Bool; var unmatched: Array<String>; };
-
-/**
- * What `resolveInputPaths` hands a subcommand: the grammar plugin for `--lang`,
- * the `.hx` paths its file / dir / glob specs expanded to, and whether the call
- * named exactly ONE concrete file (the gofmt-style "print to stdout" case).
- * Named because three seats spell it out — the resolver itself, `shard-plan`
- * and `self-status`.
- */
-typedef ResolvedInputs = { var plugin: GrammarPlugin; var paths: Array<String>; var singleFile: Bool; };
-
-/**
- * The pair every `--`-then-scope argv parser builds identically before it starts consuming
- * argv itself: an empty scope-spec accumulator and the `--` separator index `routePositional`
- * reads. Named so the shared prologue collapses to one call instead of repeating the same two
- * declarations command by command — the last residue `duplicate-code` still named after the rest of the per-command scaffold was shared.
- */
-typedef PositionalScan = { var inputSpecs: Array<String>; var separator: Int; };
-
-/**
- * `PositionalScan` plus the two output-shaping flags (`--flat`, `--limit`) a plain
- * name-then-scope walker also carries — `RefsOpts` and `MentionsOpts` both close over
- * exactly this subset before they add their own command-specific fields. One call
- * collapses the shared five-field prologue below `duplicate-code`'s statement floor.
- */
-typedef WalkerScan = {
-	var flat: Bool;
-	var limit: Int;
-	var names: Array<String>;
-	var inputSpecs: Array<String>;
-	var separator: Int;
-};
-
-/** One row of `CliArgs.grammars`: what a grammar plugin declares about itself, and how to build it. */
-typedef GrammarEntry = {
-
-	/** The `--lang` name. */
-	final lang: String;
-
-	/** The file extensions, lower case with the dot, whose files are this grammar's. */
-	final extensions: Array<String>;
-
-	/**
-	 * Whether a document's text is recognisably this grammar's, for stdin
-	 * with no `--lang`; null when the grammar declares no such test.
-	 */
-	final recognises: Null<String -> Bool>;
-
-	/** A fresh plugin instance. */
-	final make: () -> GrammarPlugin;
-
-	/** How `apq merge-file` takes the grammar's files apart: by declarations (source) or by records (data). */
-	final merge: MergeShape;
-
-};

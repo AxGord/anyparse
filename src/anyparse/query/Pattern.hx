@@ -8,104 +8,6 @@ import anyparse.util.Compare;
 using anyparse.util.Strings;
 
 /**
- * Parsed `apq search` pattern — a `QueryNode` tree augmented with
- * metavariable identification.
- *
- * Pattern syntax (frozen in `docs/cli-query-tool.md`):
- *
- *  - `$X` — bound metavariable. Same name across the pattern must
- *    unify against structurally-identical subtrees.
- *  - `$_` — wildcard. Matches any subtree, no binding, independent
- *    across occurrences.
- *
- * The grammar plugin parses pattern source by the same parser as
- * input source — the metavariable extension is plugin-local (typically
- * textual `$X` → reserved-identifier substitution before parse, then
- * post-walk reclassification of those identifiers into `Metavar`-kind
- * `QueryNode`s). The engine sees `Metavar` as just another `kind`
- * value — it is not Haxe-specific.
- *
- * `category` records which syntactic wrapping the plugin used (decl /
- * stmt / expr / meta-args). The matcher does not inspect it directly;
- * it is kept for diagnostics and future selective-search behaviour.
- */
-@:nullSafety(Strict)
-final class Pattern {
-
-	/**
-	 * Kind of the synthetic root of a `Seq` pattern: its children are the statements, matched
-	 * against a run of adjacent siblings with one shared set of bindings.
-	 */
-	public static final SEQUENCE_KIND: String = 'PatternSequence';
-
-	public final root: QueryNode;
-	public final category: PatternCategory;
-	public final source: String;
-
-	/**
-	 * Plugin-supplied kind-equivalence consulted ONLY by the search
-	 * `Matcher`'s kind gate. `null` = strict string equality (the
-	 * default for any plugin that does not supply one).
-	 *
-	 * Lets a grammar declare that several position-specific
-	 * `QueryNode.kind` values denote the same construct for matching
-	 * (Haxe: a `var` declaration is `VarDecl` / `VarMember` /
-	 * `VarStmt` by position) WITHOUT collapsing those kinds in the
-	 * `QueryNode` tree — `ast` / `--select` / `refs` / `meta` keep
-	 * the precise per-position vocabulary (incl. the published
-	 * `--on VarMember`). Search-scoped by construction: a `Pattern`
-	 * exists only for `apq search`. The `Matcher` stays
-	 * language-agnostic — it consults this opaque relation, never the
-	 * grammar-specific kind names.
-	 */
-	public final kindEquivalence: Null<KindEquivalence>;
-
-	/**
-	 * Metavariable names the user WROTE that no node in `root` carries — the
-	 * pattern is therefore wider (or, for an undecoded name slot, narrower)
-	 * than the source says, and silently so.
-	 *
-	 * A metavar disappears when it lands in a source position the grammar does
-	 * not project as a node: a declared type (`final $n:$t = $v` keeps `$n` and
-	 * `$v`, never `$t`), a `cast($x, $T)` target type, a metadata name (`@:$m`,
-	 * whose placeholder is not even decodable — the name slot reads
-	 * `@:__APQ_MV_m_END__` and can never match). Reported once per lost
-	 * OCCURRENCE-set rather than per occurrence, so `f($x, $x)` with one half
-	 * dropped still names `x`.
-	 */
-	public final ignoredMetavars: Array<String>;
-
-	/**
-	 * The kind a plain identifier REFERENCE has in the grammar (`RefShape.identKind`), supplied by the plugin's `parsePattern`.
-	 * The `Matcher` reads it to let a metavariable bound in a NAME slot (a lambda parameter) agree with the same metavariable
-	 * written as an expression; `null` = no such agreement, the metavariable stays unequal across the two places.
-	 */
-	public final identKind: Null<String>;
-
-	public function new(
-		root: QueryNode, category: PatternCategory, source: String, ?kindEquivalence: Null<KindEquivalence>,
-		?ignoredMetavars: Null<Array<String>>, ?identKind: Null<String>
-	) {
-		this.root = root;
-		this.category = category;
-		this.source = source;
-		this.kindEquivalence = kindEquivalence;
-		this.ignoredMetavars = ignoredMetavars ?? [];
-		this.identKind = identKind;
-	}
-
-	/**
-	 * A pattern whose resolved root is a single leaf (no children) —
-	 * a bare identifier, a lone metavar, or a bare literal. Such a
-	 * pattern carries no code shape: `search` would only match the
-	 * name in expression position, never a declaration or type. The
-	 * CLI uses this to nudge toward `refs --decls` / `uses` / `ast`.
-	 */
-	public inline function isDegenerate(): Bool return root.children.length == 0;
-
-}
-
-/**
  * A symmetric kind-equivalence relation over `QueryNode.kind` strings,
  * built from a list of equivalence classes. Two kinds match iff they
  * are the same string or canonicalise to the same class
@@ -477,5 +379,103 @@ final class PatternStar {
 		for (k in from ... to) if (children[k].kind == KIND) n++;
 		return n;
 	}
+
+}
+
+/**
+ * Parsed `apq search` pattern — a `QueryNode` tree augmented with
+ * metavariable identification.
+ *
+ * Pattern syntax (frozen in `docs/cli-query-tool.md`):
+ *
+ *  - `$X` — bound metavariable. Same name across the pattern must
+ *    unify against structurally-identical subtrees.
+ *  - `$_` — wildcard. Matches any subtree, no binding, independent
+ *    across occurrences.
+ *
+ * The grammar plugin parses pattern source by the same parser as
+ * input source — the metavariable extension is plugin-local (typically
+ * textual `$X` → reserved-identifier substitution before parse, then
+ * post-walk reclassification of those identifiers into `Metavar`-kind
+ * `QueryNode`s). The engine sees `Metavar` as just another `kind`
+ * value — it is not Haxe-specific.
+ *
+ * `category` records which syntactic wrapping the plugin used (decl /
+ * stmt / expr / meta-args). The matcher does not inspect it directly;
+ * it is kept for diagnostics and future selective-search behaviour.
+ */
+@:nullSafety(Strict)
+final class Pattern {
+
+	/**
+	 * Kind of the synthetic root of a `Seq` pattern: its children are the statements, matched
+	 * against a run of adjacent siblings with one shared set of bindings.
+	 */
+	public static final SEQUENCE_KIND: String = 'PatternSequence';
+
+	public final root: QueryNode;
+	public final category: PatternCategory;
+	public final source: String;
+
+	/**
+	 * Plugin-supplied kind-equivalence consulted ONLY by the search
+	 * `Matcher`'s kind gate. `null` = strict string equality (the
+	 * default for any plugin that does not supply one).
+	 *
+	 * Lets a grammar declare that several position-specific
+	 * `QueryNode.kind` values denote the same construct for matching
+	 * (Haxe: a `var` declaration is `VarDecl` / `VarMember` /
+	 * `VarStmt` by position) WITHOUT collapsing those kinds in the
+	 * `QueryNode` tree — `ast` / `--select` / `refs` / `meta` keep
+	 * the precise per-position vocabulary (incl. the published
+	 * `--on VarMember`). Search-scoped by construction: a `Pattern`
+	 * exists only for `apq search`. The `Matcher` stays
+	 * language-agnostic — it consults this opaque relation, never the
+	 * grammar-specific kind names.
+	 */
+	public final kindEquivalence: Null<KindEquivalence>;
+
+	/**
+	 * Metavariable names the user WROTE that no node in `root` carries — the
+	 * pattern is therefore wider (or, for an undecoded name slot, narrower)
+	 * than the source says, and silently so.
+	 *
+	 * A metavar disappears when it lands in a source position the grammar does
+	 * not project as a node: a declared type (`final $n:$t = $v` keeps `$n` and
+	 * `$v`, never `$t`), a `cast($x, $T)` target type, a metadata name (`@:$m`,
+	 * whose placeholder is not even decodable — the name slot reads
+	 * `@:__APQ_MV_m_END__` and can never match). Reported once per lost
+	 * OCCURRENCE-set rather than per occurrence, so `f($x, $x)` with one half
+	 * dropped still names `x`.
+	 */
+	public final ignoredMetavars: Array<String>;
+
+	/**
+	 * The kind a plain identifier REFERENCE has in the grammar (`RefShape.identKind`), supplied by the plugin's `parsePattern`.
+	 * The `Matcher` reads it to let a metavariable bound in a NAME slot (a lambda parameter) agree with the same metavariable
+	 * written as an expression; `null` = no such agreement, the metavariable stays unequal across the two places.
+	 */
+	public final identKind: Null<String>;
+
+	public function new(
+		root: QueryNode, category: PatternCategory, source: String, ?kindEquivalence: Null<KindEquivalence>,
+		?ignoredMetavars: Null<Array<String>>, ?identKind: Null<String>
+	) {
+		this.root = root;
+		this.category = category;
+		this.source = source;
+		this.kindEquivalence = kindEquivalence;
+		this.ignoredMetavars = ignoredMetavars ?? [];
+		this.identKind = identKind;
+	}
+
+	/**
+	 * A pattern whose resolved root is a single leaf (no children) —
+	 * a bare identifier, a lone metavar, or a bare literal. Such a
+	 * pattern carries no code shape: `search` would only match the
+	 * name in expression position, never a declaration or type. The
+	 * CLI uses this to nudge toward `refs --decls` / `uses` / `ast`.
+	 */
+	public inline function isDegenerate(): Bool return root.children.length == 0;
 
 }

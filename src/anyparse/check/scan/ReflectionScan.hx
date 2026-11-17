@@ -9,6 +9,44 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 
 /**
+ * One file of the name-keyed reflection scope: its path and its raw source, parseable or not.
+ *
+ * A transparent alias for the `{ file, source }` pair the whole check layer passes around — declared
+ * so the seam that OWNS that scope has a name for its element, and so the members reading it do not
+ * each spell the structure out again. The alias is structural, so every `Check` implementor keeps
+ * compiling against the anon spelling; lifting the name into `Check`, next to the `run` signature
+ * that introduces the pair, is a sweep across the check layer rather than a change here.
+ */
+typedef ScopeFile = { var file: String; var source: String; };
+
+/**
+ * The reflection SURFACE of a scope: every string a member name — or a type's fully-qualified
+ * path — could be reached by at runtime.
+ *
+ * `whole` holds each PLAIN string literal's raw content, DUPLICATES KEPT — one reader counts
+ * occurrences rather than asking membership, so a self-named constant (`X = 'X'`) does not trip a
+ * gate on its own value. `fragments` holds the deduped static text of every INTERPOLATED literal,
+ * each only ever PART of a name the run computes.
+ *
+ * The three halves take DIFFERENT containment tests, which is why they stay apart: a whole literal is compared
+ * against the name, a fragment is asked whether the name could contain IT, and an unreadable source is asked
+ * only whether it spells the name as a word. `runtimeName` is where the member question puts all three together.
+ */
+typedef ReflectionSurface = {
+
+	final whole: Array<String>;
+	final fragments: Array<String>;
+
+	/**
+	 * The RAW SOURCE of every scope file the parser could not read — no literal contents, because
+	 * there is no tree to take them from, and the only honest answer about such a file is that its
+	 * bytes may spell any name. `runtimeName` is where that answer is asked.
+	 */
+	final unreadable: Array<String>;
+
+};
+
+/**
  * The one scan behind every "is this name reached by reflection" gate in the check layer, and the
  * containment test the interpolated half of its answer takes.
  *
@@ -291,41 +329,3 @@ final class ReflectionScan {
 	}
 
 }
-
-/**
- * One file of the name-keyed reflection scope: its path and its raw source, parseable or not.
- *
- * A transparent alias for the `{ file, source }` pair the whole check layer passes around — declared
- * so the seam that OWNS that scope has a name for its element, and so the members reading it do not
- * each spell the structure out again. The alias is structural, so every `Check` implementor keeps
- * compiling against the anon spelling; lifting the name into `Check`, next to the `run` signature
- * that introduces the pair, is a sweep across the check layer rather than a change here.
- */
-typedef ScopeFile = { var file: String; var source: String; };
-
-/**
- * The reflection SURFACE of a scope: every string a member name — or a type's fully-qualified
- * path — could be reached by at runtime.
- *
- * `whole` holds each PLAIN string literal's raw content, DUPLICATES KEPT — one reader counts
- * occurrences rather than asking membership, so a self-named constant (`X = 'X'`) does not trip a
- * gate on its own value. `fragments` holds the deduped static text of every INTERPOLATED literal,
- * each only ever PART of a name the run computes.
- *
- * The three halves take DIFFERENT containment tests, which is why they stay apart: a whole literal is compared
- * against the name, a fragment is asked whether the name could contain IT, and an unreadable source is asked
- * only whether it spells the name as a word. `runtimeName` is where the member question puts all three together.
- */
-typedef ReflectionSurface = {
-
-	final whole: Array<String>;
-	final fragments: Array<String>;
-
-	/**
-	 * The RAW SOURCE of every scope file the parser could not read — no literal contents, because
-	 * there is no tree to take them from, and the only honest answer about such a file is that its
-	 * bytes may spell any name. `runtimeName` is where that answer is asked.
-	 */
-	final unreadable: Array<String>;
-
-};

@@ -8,6 +8,17 @@ using Lambda;
 using StringTools;
 
 /**
+ * The three runs of the writer a landing's `fmt` step makes, in the tree it lands in: a rewrite of `files`, the `apq changed`
+ * report of those files against the tree object `base` (null when it could not run), and whether the writer leaves `files`
+ * alone after one pass.
+ */
+typedef FormatTools = {
+	var rewrite: (tree: String, files: Array<String>) -> Outcome;
+	var changes: (tree: String, base: String, files: Array<String>) -> Null<String>;
+	var settled: (tree: String, files: Array<String>) -> Outcome;
+}
+
+/**
  * The one answer to "after a landing's pick, which merged files are off the writer's canonical form, and is rewriting them
  * layout only?". Two branches that were each canonical can merge into a tree that is not (a policy landed on one side, a file
  * added on the other), so `dev land` applies the writer to the `.hx` files of the pick that the battery's fmt row reads. A
@@ -116,15 +127,4 @@ final class LandFormat {
 		};
 	}
 
-}
-
-/**
- * The three runs of the writer a landing's `fmt` step makes, in the tree it lands in: a rewrite of `files`, the `apq changed`
- * report of those files against the tree object `base` (null when it could not run), and whether the writer leaves `files`
- * alone after one pass.
- */
-typedef FormatTools = {
-	var rewrite: (tree: String, files: Array<String>) -> Outcome;
-	var changes: (tree: String, base: String, files: Array<String>) -> Null<String>;
-	var settled: (tree: String, files: Array<String>) -> Outcome;
 }

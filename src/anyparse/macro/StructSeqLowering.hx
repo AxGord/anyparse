@@ -16,6 +16,32 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state `StructSeqLowering` reads, bundled once in `Lowering`'s
+ * constructor. The first four fields are the owner's own state (the
+ * `starGates` array is the SAME instance - `emitStarFieldSteps` appends
+ * to it as a side effect); the last six are the naming and predicate
+ * vocabulary that stayed in `Lowering` because it is reached from every
+ * shape, bound here as closures rather than duplicated.
+ */
+typedef StructSeqCtx = {
+	final ctx: LoweringCtx;
+	final shape: ShapeBuilder.ShapeResult;
+	final formatInfo: FormatReader.FormatInfo;
+	final starGates: Array<{
+		rule: Null<String>,
+		field: Null<String>,
+		elem: String,
+		first: BranchFirstToken,
+	}>;
+	final buildBlockEndedPredicateCall: (predicateName: String, accumRef: Expr) -> Expr;
+	final isSpanBearing: (refName: String) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final parseFnName: (refName: String) -> String;
+	final ruleReturnCT: (refName: String) -> ComplexType;
+	final stashNewlineClearExpr: () -> Expr;
+}
+
+/**
  * Pass 3 helpers - the struct (Seq) rule shape and every field emit under it.
  *
  * The largest of the four shapes `Lowering.lowerRule` dispatches on: a
@@ -1638,31 +1664,5 @@ final class StructSeqLowering {
 		if (spannedKind != null) structFields.push({ field: '_kind', expr: macro $v{spannedKind} });
 	}
 
-}
-
-/**
- * The build state `StructSeqLowering` reads, bundled once in `Lowering`'s
- * constructor. The first four fields are the owner's own state (the
- * `starGates` array is the SAME instance - `emitStarFieldSteps` appends
- * to it as a side effect); the last six are the naming and predicate
- * vocabulary that stayed in `Lowering` because it is reached from every
- * shape, bound here as closures rather than duplicated.
- */
-typedef StructSeqCtx = {
-	final ctx: LoweringCtx;
-	final shape: ShapeBuilder.ShapeResult;
-	final formatInfo: FormatReader.FormatInfo;
-	final starGates: Array<{
-		rule: Null<String>,
-		field: Null<String>,
-		elem: String,
-		first: BranchFirstToken,
-	}>;
-	final buildBlockEndedPredicateCall: (predicateName: String, accumRef: Expr) -> Expr;
-	final isSpanBearing: (refName: String) -> Bool;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final parseFnName: (refName: String) -> String;
-	final ruleReturnCT: (refName: String) -> ComplexType;
-	final stashNewlineClearExpr: () -> Expr;
 }
 #end

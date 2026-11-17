@@ -6,6 +6,9 @@ import anyparse.query.MoveSymbol.MoveChange;
 using Lambda;
 using StringTools;
 
+/** One in-memory source file of a move's scope. */
+private typedef SourceFile = { file: String, source: String }
+
 /**
  * `ModuleMove.run` over a directory's ambient chain: the source (`import.hx`) travels with the modules it governs, and
  * a `using` the new chain gives a module is refused only where it could take a call over from a statement it outranks.
@@ -219,6 +222,3 @@ class ModuleMoveAmbientChainTest extends Test {
 	}
 
 }
-
-/** One in-memory source file of a move's scope. */
-private typedef SourceFile = { file: String, source: String }

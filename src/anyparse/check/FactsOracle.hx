@@ -3,6 +3,26 @@ package anyparse.check;
 import anyparse.check.Check.TypeOracle;
 import anyparse.runtime.Span;
 
+/** What the builds typed of a type's supertypes about a member name (`FactsTypeOracle.inheritedMember`). */
+enum InheritedMember {
+
+	/** No build typed the type where it is declared, or one of its supertypes. */
+	Untyped;
+
+	/** The supertype `supertype` declares a member of the name in some build. */
+	Declared(supertype: String);
+
+	/** The supertype `supertype` carries `@:autoBuild`: its macro builds the type as its own `@:build`. */
+	AutoBuilt(supertype: String);
+
+	/** No supertype declares the name, and none is `@:autoBuild`. */
+	Undeclared;
+
+}
+
+/** The values the builds read of one enum abstract (`FactsOracle.enumValueReads`). */
+typedef EnumValueReads = { final type: String; final keys: Array<String>; }
+
 /**
  * The compiler's typed facts as a check reads them: the one answer to "how does a rule ask a run's compiler facts",
  * what a grammar's `OracleProvider` hands a fix. Each answer holds what every configuration that compiled the code
@@ -38,23 +58,3 @@ interface FactsOracle extends TypeOracle {
 	public function enumValuesReadAt(file: String, span: Span): Null<Array<String>>;
 
 }
-
-/** What the builds typed of a type's supertypes about a member name (`FactsTypeOracle.inheritedMember`). */
-enum InheritedMember {
-
-	/** No build typed the type where it is declared, or one of its supertypes. */
-	Untyped;
-
-	/** The supertype `supertype` declares a member of the name in some build. */
-	Declared(supertype: String);
-
-	/** The supertype `supertype` carries `@:autoBuild`: its macro builds the type as its own `@:build`. */
-	AutoBuilt(supertype: String);
-
-	/** No supertype declares the name, and none is `@:autoBuild`. */
-	Undeclared;
-
-}
-
-/** The values the builds read of one enum abstract (`FactsOracle.enumValueReads`). */
-typedef EnumValueReads = { final type: String; final keys: Array<String>; }

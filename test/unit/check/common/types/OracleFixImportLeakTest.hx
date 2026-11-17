@@ -10,6 +10,34 @@ using anyparse.util.Strings;
 using StringTools;
 
 /**
+ * A `TypeOracle` double answering by the IDENTIFIER the queried byte ends on — the position
+ * both oracle-assisted fixers query (`ExplicitLocalType.fixWithOracle` asks at
+ * `insertPoint - 1`, `ExplicitType.returnEdit` at `nameAt + name.length - 1`; both are the
+ * name's last byte). No compiler, no process, no host dependency. Deliberately NOT named
+ * `CannedTypeOracle` — `ExplicitLocalTypePrinterTest` already has one under that name, and it
+ * answers the SAME type at every position.
+ */
+@:nullSafety(Strict)
+private final class IdentTypeOracle extends PositionTypeOracle {
+
+	private final _source: String;
+	private final _byName: Map<String, String>;
+
+	public function new(source: String, byName: Map<String, String>) {
+		super(new HaxeQueryPlugin().typeSyntax);
+		_source = source;
+		_byName = byName;
+	}
+
+	public function typeAt(file: String, bytePos: Int): Null<String> {
+		var start: Int = bytePos + 1;
+		while (start > 0 && _source.fastCodeAt(start - 1).isIdentChar()) start--;
+		return _byName[_source.substring(start, bytePos + 1)];
+	}
+
+}
+
+/**
  * The oracle-assisted fixers' IMPORT ACCOUNTING: `LiteralInfer.normalizeWith` ends in a
  * print, printing is what promises `TypeRefPrinter` an import, and the promises are materialised
  * once per file on `edits.length > 0`. So a candidate the fixer ABSTAINS from after printing
@@ -157,34 +185,6 @@ final class OracleFixImportLeakTest extends Test {
 			source, violations, plugin, new IdentTypeOracle(source, byName)
 		);
 		return edits.map(edit -> edit.text);
-	}
-
-}
-
-/**
- * A `TypeOracle` double answering by the IDENTIFIER the queried byte ends on — the position
- * both oracle-assisted fixers query (`ExplicitLocalType.fixWithOracle` asks at
- * `insertPoint - 1`, `ExplicitType.returnEdit` at `nameAt + name.length - 1`; both are the
- * name's last byte). No compiler, no process, no host dependency. Deliberately NOT named
- * `CannedTypeOracle` — `ExplicitLocalTypePrinterTest` already has one under that name, and it
- * answers the SAME type at every position.
- */
-@:nullSafety(Strict)
-private final class IdentTypeOracle extends PositionTypeOracle {
-
-	private final _source: String;
-	private final _byName: Map<String, String>;
-
-	public function new(source: String, byName: Map<String, String>) {
-		super(new HaxeQueryPlugin().typeSyntax);
-		_source = source;
-		_byName = byName;
-	}
-
-	public function typeAt(file: String, bytePos: Int): Null<String> {
-		var start: Int = bytePos + 1;
-		while (start > 0 && _source.fastCodeAt(start - 1).isIdentChar()) start--;
-		return _byName[_source.substring(start, bytePos + 1)];
 	}
 
 }

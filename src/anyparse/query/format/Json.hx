@@ -25,6 +25,51 @@ import anyparse.query.format.json.AstSearchSpan;
 import anyparse.runtime.Span;
 
 /**
+ * The line-start offsets of ONE source, built once so a span's line/col is a binary search
+ * instead of a scan from byte 0.
+ *
+ * `Span.lineCol` walks the source from the start on EVERY call and a JSON dump asks it twice per node, so a
+ * dump is quadratic in file size — invisible until a big file lands in a sampled slot: `ast --json` over a
+ * very large module spends nearly all its time inside that scan, and a test whose file stride landed on
+ * such a module went from seconds to minutes. RUN-scoped by construction — one instance per render call, no
+ * static state (invariant 1).
+ */
+@:nullSafety(Strict)
+private class LineIndex {
+
+	/** Offset of the first character of each line; `starts[0]` is always 0. */
+	private final _starts: Array<Int>;
+
+	private final _length: Int;
+
+	public function new(source: String) {
+		final offsets: Array<Int> = [0];
+		for (i in 0...source.length) if (source.fastCodeAt(i) == '\n'.code) offsets.push(i + 1);
+		_starts = offsets;
+		_length = source.length;
+	}
+
+	/**
+	 * The 1-based line and column of `offset`, clamped to the source's end exactly as
+	 * `Span.lineCol` clamps it — this must answer what that walk answers, byte for byte.
+	 */
+	public function positionAt(offset: Int): Position {
+		final at: Int = offset < _length ? offset : _length;
+		var lo: Int = 0;
+		var hi: Int = _starts.length - 1;
+		while (lo < hi) {
+			final mid: Int = (lo + hi + 1) >> 1;
+			if (_starts[mid] <= at)
+				lo = mid;
+			else
+				hi = mid - 1;
+		}
+		return { line: lo + 1, col: at - _starts[lo] + 1 };
+	}
+
+}
+
+/**
  * JSON renderer for `apq ast` output.
  *
  * Thin adapter — converts a generic `QueryNode` tree into the typed
@@ -179,51 +224,6 @@ final class Json {
 		// Both line and col are 1-based — the unified apq
 		// coordinate convention (refs / ast --at / source agree).
 		return { start: [from.line, from.col], end: [to.line, to.col] };
-	}
-
-}
-
-/**
- * The line-start offsets of ONE source, built once so a span's line/col is a binary search
- * instead of a scan from byte 0.
- *
- * `Span.lineCol` walks the source from the start on EVERY call and a JSON dump asks it twice per node, so a
- * dump is quadratic in file size — invisible until a big file lands in a sampled slot: `ast --json` over a
- * very large module spends nearly all its time inside that scan, and a test whose file stride landed on
- * such a module went from seconds to minutes. RUN-scoped by construction — one instance per render call, no
- * static state (invariant 1).
- */
-@:nullSafety(Strict)
-private class LineIndex {
-
-	/** Offset of the first character of each line; `starts[0]` is always 0. */
-	private final _starts: Array<Int>;
-
-	private final _length: Int;
-
-	public function new(source: String) {
-		final offsets: Array<Int> = [0];
-		for (i in 0...source.length) if (source.fastCodeAt(i) == '\n'.code) offsets.push(i + 1);
-		_starts = offsets;
-		_length = source.length;
-	}
-
-	/**
-	 * The 1-based line and column of `offset`, clamped to the source's end exactly as
-	 * `Span.lineCol` clamps it — this must answer what that walk answers, byte for byte.
-	 */
-	public function positionAt(offset: Int): Position {
-		final at: Int = offset < _length ? offset : _length;
-		var lo: Int = 0;
-		var hi: Int = _starts.length - 1;
-		while (lo < hi) {
-			final mid: Int = (lo + hi + 1) >> 1;
-			if (_starts[mid] <= at)
-				lo = mid;
-			else
-				hi = mid - 1;
-		}
-		return { line: lo + 1, col: at - _starts[lo] + 1 };
 	}
 
 }

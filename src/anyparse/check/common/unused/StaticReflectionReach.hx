@@ -12,6 +12,64 @@ import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Groups;
 
+/** The per-file facts `walk` reads. */
+private typedef FileScan = {
+
+	/** The file's source. */
+	final source: String;
+
+	/** The grammar's reference shape. */
+	final shape: RefShape;
+
+	/** The grammar's string fold. */
+	final fold: StringFoldSupport;
+
+	/** The grammar's call kind. */
+	final callKind: String;
+
+	/** The grammar's field-access kind. */
+	final fieldKind: String;
+
+	/** Whether the file spells `macro`, so its strings may become identifiers at compile time. */
+	final macroFile: Bool;
+
+	/** Whether the file spells `using Std;`. */
+	final usingStd: Bool;
+
+	/** The names of the types the file declares, filled by the walk. */
+	final declared: Array<String>;
+
+};
+
+/** What the project scan has gathered so far. */
+private typedef ScanState = {
+
+	/** Whether some site yields a class value of any class. */
+	var escapesAll: Bool;
+
+	/** The classes whose `getClass(this)` escapes. */
+	final thisOwners: Array<String>;
+
+	/** The names read in an unconsumed value position, with their counts. */
+	final values: Map<String, Int>;
+
+	/** Every receiver name, to the members it is read with. */
+	final receivers: Map<String, Array<String>>;
+
+	/** The types a class-reifying project macro may hand out. */
+	final reified: Array<String>;
+
+	/** Every alias and its target. */
+	final aliases: Array<{ alias: String, target: String }>;
+
+	/** The string contents a project file spells outside a macro file and a native-code carrier. */
+	final relaxable: Array<String>;
+
+	/** The raw text of every unparsed `#if` region. */
+	final opaque: Array<String>;
+
+};
+
 /**
  * Whether a string spelling a PRIVATE STATIC's name can reach that static by reflection — the question
  * `unused-private`'s string gate asks, answered for statics by where a CLASS VALUE can go.
@@ -418,61 +476,3 @@ final class StaticReflectionReach {
 	}
 
 }
-
-/** The per-file facts `walk` reads. */
-private typedef FileScan = {
-
-	/** The file's source. */
-	final source: String;
-
-	/** The grammar's reference shape. */
-	final shape: RefShape;
-
-	/** The grammar's string fold. */
-	final fold: StringFoldSupport;
-
-	/** The grammar's call kind. */
-	final callKind: String;
-
-	/** The grammar's field-access kind. */
-	final fieldKind: String;
-
-	/** Whether the file spells `macro`, so its strings may become identifiers at compile time. */
-	final macroFile: Bool;
-
-	/** Whether the file spells `using Std;`. */
-	final usingStd: Bool;
-
-	/** The names of the types the file declares, filled by the walk. */
-	final declared: Array<String>;
-
-};
-
-/** What the project scan has gathered so far. */
-private typedef ScanState = {
-
-	/** Whether some site yields a class value of any class. */
-	var escapesAll: Bool;
-
-	/** The classes whose `getClass(this)` escapes. */
-	final thisOwners: Array<String>;
-
-	/** The names read in an unconsumed value position, with their counts. */
-	final values: Map<String, Int>;
-
-	/** Every receiver name, to the members it is read with. */
-	final receivers: Map<String, Array<String>>;
-
-	/** The types a class-reifying project macro may hand out. */
-	final reified: Array<String>;
-
-	/** Every alias and its target. */
-	final aliases: Array<{ alias: String, target: String }>;
-
-	/** The string contents a project file spells outside a macro file and a native-code carrier. */
-	final relaxable: Array<String>;
-
-	/** The raw text of every unparsed `#if` region. */
-	final opaque: Array<String>;
-
-};

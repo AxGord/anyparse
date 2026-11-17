@@ -13,6 +13,112 @@ import sys.io.FileInput;
 
 using StringTools;
 
+/** One agent's transcript, read. */
+typedef AgentReading = {
+
+	var id: String;
+
+	/** The role the opening of its first prompt names (`TokenTranscript.ROLE_*`). */
+	var role: String;
+
+	/** The slice its prompt (else its task line) names. */
+	var slice: Null<String>;
+	var tools: Map<String, ToolStat>;
+	var turns: Array<TurnReading>;
+
+	/** The shell commands that read a repo `.hx` with `cat`/`sed -n`/`head`/`tail`. */
+	var hxReads: Array<String>;
+
+	/** The commands and tool calls that wrote a repo `.hx` outside hxq. */
+	var hxWrites: Array<String>;
+
+	/** The interpreter scripts run in a repo directory that name a `.hx` and call a write: a heuristic. */
+	var scriptWrites: Array<String>;
+
+	/** The reads and writes the gate hook denied: attempts that never ran. */
+	var deniedReads: Array<String>;
+	var deniedWrites: Array<String>;
+
+	/** The characters of the write payloads (hxq write ops, `Edit`, `Write`) and the leading blanks among them. */
+	var writeChars: Int;
+	var indentChars: Int;
+
+}
+
+/** The calls of one kind and the sizes of what they sent and got back. */
+typedef ToolStat = {
+
+	var calls: Int;
+	var inChars: Int;
+	var outChars: Int;
+
+	/** The calls whose output was over `OVER_SMALL` / `OVER_LARGE` tokens. */
+	var over2k: Int;
+	var over5k: Int;
+
+	/** The calls with the largest answers, the largest first. */
+	var biggest: Array<BigCall>;
+
+}
+
+/** A call and the size of its answer. */
+typedef BigCall = { var outChars: Int; var call: String; }
+
+/** A prompt opening and the role it names. */
+private typedef RolePrefix = { var prefix: String; var role: String; }
+
+/** One API message of an agent: when it began and ended (ms since the epoch) and its usage fields. */
+typedef TurnReading = {
+
+	var model: String;
+	var start: Float;
+	var end: Float;
+	var input: Int;
+	var output: Int;
+	var cacheRead: Int;
+
+	/** The tokens written to the 5-minute and the 1-hour cache. */
+	var write5m: Int;
+	var write1h: Int;
+
+}
+
+/** A tool call seen and not yet answered. */
+private typedef PendingCall = {
+
+	var key: String;
+	var inChars: Int;
+
+	/** The command, path or input of the call, one line, clipped. */
+	var call: String;
+	var access: Access;
+
+}
+
+/** The samples a call gives to the bypass counts, each null when the call is not that kind of access. */
+private typedef Access = { var read: Null<String>; var write: Null<String>; var script: Null<String>; }
+
+/** One content block of a transcript message, as far as the audit reads it. */
+private typedef Block = {
+	var ?type: String;
+	var ?id: String;
+	var ?name: String;
+	var ?input: Input;
+	var ?toolUseId: String;
+	var ?isError: Bool;
+	var ?text: String;
+	var ?content: JValue;
+}
+
+/** The fields of a tool call's input the audit looks at, whichever the tool, and the whole input as JSON text. */
+private typedef Input = {
+	var ?command: String;
+	var ?filePath: String;
+	var ?newString: String;
+	var ?content: String;
+	var json: String;
+}
+
 /**
  * The one answer to "what did ONE agent's transcript spend": reads a Claude Code subagent transcript (JSONL, one event per
  * line) into its tool calls (output and input size per tool, hxq subcommand, dev command, git subcommand or plugin call), its
@@ -442,110 +548,4 @@ final class TokenTranscript {
 		return bytes.getString(0, length);
 	}
 
-}
-
-/** One agent's transcript, read. */
-typedef AgentReading = {
-
-	var id: String;
-
-	/** The role the opening of its first prompt names (`TokenTranscript.ROLE_*`). */
-	var role: String;
-
-	/** The slice its prompt (else its task line) names. */
-	var slice: Null<String>;
-	var tools: Map<String, ToolStat>;
-	var turns: Array<TurnReading>;
-
-	/** The shell commands that read a repo `.hx` with `cat`/`sed -n`/`head`/`tail`. */
-	var hxReads: Array<String>;
-
-	/** The commands and tool calls that wrote a repo `.hx` outside hxq. */
-	var hxWrites: Array<String>;
-
-	/** The interpreter scripts run in a repo directory that name a `.hx` and call a write: a heuristic. */
-	var scriptWrites: Array<String>;
-
-	/** The reads and writes the gate hook denied: attempts that never ran. */
-	var deniedReads: Array<String>;
-	var deniedWrites: Array<String>;
-
-	/** The characters of the write payloads (hxq write ops, `Edit`, `Write`) and the leading blanks among them. */
-	var writeChars: Int;
-	var indentChars: Int;
-
-}
-
-/** The calls of one kind and the sizes of what they sent and got back. */
-typedef ToolStat = {
-
-	var calls: Int;
-	var inChars: Int;
-	var outChars: Int;
-
-	/** The calls whose output was over `OVER_SMALL` / `OVER_LARGE` tokens. */
-	var over2k: Int;
-	var over5k: Int;
-
-	/** The calls with the largest answers, the largest first. */
-	var biggest: Array<BigCall>;
-
-}
-
-/** A call and the size of its answer. */
-typedef BigCall = { var outChars: Int; var call: String; }
-
-/** A prompt opening and the role it names. */
-private typedef RolePrefix = { var prefix: String; var role: String; }
-
-/** One API message of an agent: when it began and ended (ms since the epoch) and its usage fields. */
-typedef TurnReading = {
-
-	var model: String;
-	var start: Float;
-	var end: Float;
-	var input: Int;
-	var output: Int;
-	var cacheRead: Int;
-
-	/** The tokens written to the 5-minute and the 1-hour cache. */
-	var write5m: Int;
-	var write1h: Int;
-
-}
-
-/** A tool call seen and not yet answered. */
-private typedef PendingCall = {
-
-	var key: String;
-	var inChars: Int;
-
-	/** The command, path or input of the call, one line, clipped. */
-	var call: String;
-	var access: Access;
-
-}
-
-/** The samples a call gives to the bypass counts, each null when the call is not that kind of access. */
-private typedef Access = { var read: Null<String>; var write: Null<String>; var script: Null<String>; }
-
-/** One content block of a transcript message, as far as the audit reads it. */
-private typedef Block = {
-	var ?type: String;
-	var ?id: String;
-	var ?name: String;
-	var ?input: Input;
-	var ?toolUseId: String;
-	var ?isError: Bool;
-	var ?text: String;
-	var ?content: JValue;
-}
-
-/** The fields of a tool call's input the audit looks at, whichever the tool, and the whole input as JSON text. */
-private typedef Input = {
-	var ?command: String;
-	var ?filePath: String;
-	var ?newString: String;
-	var ?content: String;
-	var json: String;
 }

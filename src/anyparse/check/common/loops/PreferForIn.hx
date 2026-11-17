@@ -13,6 +13,26 @@ import anyparse.util.Arrays;
 
 using StringTools;
 
+/** The `RefShape` kinds `PreferForIn` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	var whileStmtKind: String;
+	var whileExprKind: Null<String>;
+	var blockStmtKind: String;
+	var callKind: String;
+	var fieldAccessKind: String;
+	var identKind: String;
+	var localDeclKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var interpIdentKind: Null<String>;
+	var scopeKinds: Array<String>;
+}
+
+/** A flagged loop: the full replacement span and the `for` text that takes its place. */
+private typedef Match = { var span: Span; var text: String; }
+
+/** Per-file inputs the walkers share: the source and the resolved seams. */
+private typedef Ctx = { var source: String; var regions: () -> Array<LexRegion>; var seams: Seams; }
+
 /**
  * Flags a hand-rolled iterator protocol — `while (it.hasNext()) { final x = it.next(); … }` —
  * which the language's own `for (x in it)` expresses directly. `Severity.Info` and `DefaultOff`
@@ -406,23 +426,3 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The `RefShape` kinds `PreferForIn` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-	var whileStmtKind: String;
-	var whileExprKind: Null<String>;
-	var blockStmtKind: String;
-	var callKind: String;
-	var fieldAccessKind: String;
-	var identKind: String;
-	var localDeclKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var interpIdentKind: Null<String>;
-	var scopeKinds: Array<String>;
-}
-
-/** A flagged loop: the full replacement span and the `for` text that takes its place. */
-private typedef Match = { var span: Span; var text: String; }
-
-/** Per-file inputs the walkers share: the source and the resolved seams. */
-private typedef Ctx = { var source: String; var regions: () -> Array<LexRegion>; var seams: Seams; }

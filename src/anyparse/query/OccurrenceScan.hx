@@ -14,6 +14,34 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * Lexical classification of one word-boundary occurrence of an identifier. Drives the naming
+ * completeness gate: `ActiveCode`, `ConditionalRaw`, `StringLiteral` and `DirectiveComment` block
+ * the rename; `StringWord` is ignored; `CommentTrivia` renames along when the name is distinctive
+ * enough to be worth rewriting in prose, and is otherwise ignored too.
+ *
+ * Only a class that can carry a REFERENCE blocks. `StringLiteral` vs `StringWord` draws that line
+ * inside a string: a literal that NAMES the identifier can be a by-name lookup
+ * (`Reflect.field(o, 'edit')`), a literal that merely contains the word cannot (`t('Can edit')`).
+ * A comment is on the far side of the same line — it does not execute at all, so no form of it can
+ * make a rename unsafe; the worst case is a sentence that ages. A `noqa` is the exception, and it
+ * is not `CommentTrivia` but `DirectiveComment`: it addresses the TOOL, and the tool must obey.
+ */
+enum abstract OccurrenceClass(Int) {
+	final ActiveCode = 0;
+	final ConditionalRaw = 1;
+	final CommentTrivia = 2;
+	final StringLiteral = 3;
+	final DirectiveComment = 4;
+	final StringWord = 5;
+}
+
+/**
+ * One classified word-boundary occurrence: the span of the matched identifier
+ * and its lexical class.
+ */
+typedef ClassifiedOccurrence = { final span: Span; final kind: OccurrenceClass; };
+
+/**
  * One word-boundary occurrence of a NAME in a source, and what may be done with it. The
  * question this module owns is not "where does the name appear" — that is a text scan
  * (`SourceText.identTokenOffset`) — but "what KIND of place is this occurrence in": active
@@ -681,31 +709,3 @@ final class OccurrenceScan {
 	}
 
 }
-
-/**
- * Lexical classification of one word-boundary occurrence of an identifier. Drives the naming
- * completeness gate: `ActiveCode`, `ConditionalRaw`, `StringLiteral` and `DirectiveComment` block
- * the rename; `StringWord` is ignored; `CommentTrivia` renames along when the name is distinctive
- * enough to be worth rewriting in prose, and is otherwise ignored too.
- *
- * Only a class that can carry a REFERENCE blocks. `StringLiteral` vs `StringWord` draws that line
- * inside a string: a literal that NAMES the identifier can be a by-name lookup
- * (`Reflect.field(o, 'edit')`), a literal that merely contains the word cannot (`t('Can edit')`).
- * A comment is on the far side of the same line — it does not execute at all, so no form of it can
- * make a rename unsafe; the worst case is a sentence that ages. A `noqa` is the exception, and it
- * is not `CommentTrivia` but `DirectiveComment`: it addresses the TOOL, and the tool must obey.
- */
-enum abstract OccurrenceClass(Int) {
-	final ActiveCode = 0;
-	final ConditionalRaw = 1;
-	final CommentTrivia = 2;
-	final StringLiteral = 3;
-	final DirectiveComment = 4;
-	final StringWord = 5;
-}
-
-/**
- * One classified word-boundary occurrence: the span of the matched identifier
- * and its lexical class.
- */
-typedef ClassifiedOccurrence = { final span: Span; final kind: OccurrenceClass; };

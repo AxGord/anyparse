@@ -16,6 +16,38 @@ import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 
+/** The kinds `ReturnReassignTernary` reads. */
+private typedef Seams = {
+
+	var ifKinds: Array<String>;
+	var returnKind: String;
+	var exprStmtKind: String;
+	var assignKind: String;
+	var identKind: String;
+	var blockStmtKind: Null<String>;
+	var localDeclKinds: Array<String>;
+	var paramKinds: Array<String>;
+	var bodyKinds: Array<String>;
+	var nestedFnKinds: Array<String>;
+	var fnKinds: Array<String>;
+	var blockKinds: Array<String>;
+
+	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
+	var negation: Null<InversionSeams>;
+	var shape: RefShape;
+
+}
+
+/** A collapsible pair: the `if` span (finding key), the replaced span, and the merged text (null = report-only). */
+private typedef Match = {
+
+	var ifSpan: Span;
+
+	/** The ternary `return` replacing the pair, its condition a `ParenGuard` hole; null when a comment would be dropped. */
+	var edit: Null<GuardedEdit>;
+
+}
+
 /**
  * Flags the function-tail shape `if (cond) x = e; return x;` -- a single-branch `if`
  * whose body is exactly one plain assignment to a LOCAL, immediately followed by a
@@ -387,37 +419,5 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 		}
 		for (c in node.children) collectNestedFnSpans(c, fnKinds, out);
 	}
-
-}
-
-/** The kinds `ReturnReassignTernary` reads. */
-private typedef Seams = {
-
-	var ifKinds: Array<String>;
-	var returnKind: String;
-	var exprStmtKind: String;
-	var assignKind: String;
-	var identKind: String;
-	var blockStmtKind: Null<String>;
-	var localDeclKinds: Array<String>;
-	var paramKinds: Array<String>;
-	var bodyKinds: Array<String>;
-	var nestedFnKinds: Array<String>;
-	var fnKinds: Array<String>;
-	var blockKinds: Array<String>;
-
-	/** The negation read the emitted ternary is oriented by; null when the grammar has no not kind. */
-	var negation: Null<InversionSeams>;
-	var shape: RefShape;
-
-}
-
-/** A collapsible pair: the `if` span (finding key), the replaced span, and the merged text (null = report-only). */
-private typedef Match = {
-
-	var ifSpan: Span;
-
-	/** The ternary `return` replacing the pair, its condition a `ParenGuard` hole; null when a comment would be dropped. */
-	var edit: Null<GuardedEdit>;
 
 }

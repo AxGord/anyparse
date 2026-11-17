@@ -4,6 +4,17 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
+/** Resolved per-run constants threaded through the recursive walk. */
+private typedef Ctx = {
+	var numericOps: Array<String>;
+	var indexAccessKind: Null<String>;
+	var stringLiteralKinds: Array<String>;
+	var callKind: String;
+	var fieldAccessKind: String;
+	var identKind: String;
+	var sigs: Array<{ receiver: String, method: String }>;
+};
+
 /**
  * Flags the result of a `Null<T>`-returning call used directly as a non-null
  * number with no null check in between — the classic silent-null bug. Slice 1
@@ -139,14 +150,3 @@ final class UncheckedNullable extends RuleBase implements NoAutofix {
 	}
 
 }
-
-/** Resolved per-run constants threaded through the recursive walk. */
-private typedef Ctx = {
-	var numericOps: Array<String>;
-	var indexAccessKind: Null<String>;
-	var stringLiteralKinds: Array<String>;
-	var callKind: String;
-	var fieldAccessKind: String;
-	var identKind: String;
-	var sigs: Array<{ receiver: String, method: String }>;
-};

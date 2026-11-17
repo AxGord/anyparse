@@ -24,6 +24,81 @@ import anyparse.util.Arrays;
 
 using anyparse.util.Strings;
 
+/** What one returned value proves about a `macro` function's return type (`ExplicitType.returnProof`). */
+private enum ReturnProof {
+
+	/** A quotation of an expression: its type is `haxe.macro.Expr`. */
+	Quoted;
+
+	/** A `Dynamic` value (`Context.error`): unifies with the quotations beside it. */
+	Companion;
+
+	/** Anything else. */
+	Unproven;
+
+}
+
+/** What `ExplicitType`'s `macro`-function pass reads per file; `printer` is made on the first annotation. */
+private typedef MacroSeams = {
+	final source: String;
+	final tree: QueryNode;
+	final plugin: GrammarPlugin;
+	final index: Null<SymbolIndex>;
+	final shape: RefShape;
+	final flagged: Map<String, Violation>;
+	final file: String;
+	var printer: Null<TypeRefPrinter>;
+}
+
+/**
+ * One inherited parameter annotation: the VERBATIM type source `text` written for the position,
+ * and the `file` of the supertype / interface that wrote it — the second half is what
+ * `ExplicitType.typeUsableFrom` needs to tell an ambient top-level name from one that only
+ * resolved because the DECLARING file imported it.
+ */
+private typedef InheritedParam = { final text: String; final file: String; };
+
+/**
+ * The read-only context `ExplicitType.returnEdit` needs per finding: the `source` and `file`
+ * being fixed (the display server addresses a POSITION IN A FILE), the body-marker kinds, the
+ * violation spans this call owns, the per-file type `printer`, and the `oracle` itself.
+ */
+private typedef ReturnSeams = {
+
+	final source: String;
+	final file: String;
+	final bodies: Array<String>;
+
+	/** The parameter kinds (`RefShape.paramKinds`). */
+	final params: Array<String>;
+	final flagged: Map<String, Violation>;
+	final printer: TypeRefPrinter;
+	final oracle: TypeOracle;
+
+	/**
+	 * The source's lexically-scanned non-code regions, hoisted once per file — the grammar's own
+	 * answer (`GrammarPlugin.lexicalRegions`), carried here rather than re-derived per member.
+	 */
+	final regions: Array<LexRegion>;
+
+	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
+	final typeParams: Map<Int, Array<String>>;
+
+};
+
+/**
+ * The read-only context `ExplicitType.collectInheritedParamEdits` threads through its helpers: the
+ * resolving `idx`, the `plugin` that parses a declaring file, the `file` being fixed (the
+ * resolution origin for every copied type reference), and the member / parameter kind seams.
+ */
+private typedef InheritedSeams = {
+	final idx: SymbolIndex;
+	final plugin: GrammarPlugin;
+	final file: String;
+	final functions: Array<String>;
+	final params: Array<String>;
+};
+
 /**
  * Flags a class / abstract / interface member that omits an explicit type — a
  * field with no `:Type`, a function parameter with no `:Type`, or a function with
@@ -866,78 +941,3 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 	}
 
 }
-
-/** What one returned value proves about a `macro` function's return type (`ExplicitType.returnProof`). */
-private enum ReturnProof {
-
-	/** A quotation of an expression: its type is `haxe.macro.Expr`. */
-	Quoted;
-
-	/** A `Dynamic` value (`Context.error`): unifies with the quotations beside it. */
-	Companion;
-
-	/** Anything else. */
-	Unproven;
-
-}
-
-/** What `ExplicitType`'s `macro`-function pass reads per file; `printer` is made on the first annotation. */
-private typedef MacroSeams = {
-	final source: String;
-	final tree: QueryNode;
-	final plugin: GrammarPlugin;
-	final index: Null<SymbolIndex>;
-	final shape: RefShape;
-	final flagged: Map<String, Violation>;
-	final file: String;
-	var printer: Null<TypeRefPrinter>;
-}
-
-/**
- * One inherited parameter annotation: the VERBATIM type source `text` written for the position,
- * and the `file` of the supertype / interface that wrote it — the second half is what
- * `ExplicitType.typeUsableFrom` needs to tell an ambient top-level name from one that only
- * resolved because the DECLARING file imported it.
- */
-private typedef InheritedParam = { final text: String; final file: String; };
-
-/**
- * The read-only context `ExplicitType.returnEdit` needs per finding: the `source` and `file`
- * being fixed (the display server addresses a POSITION IN A FILE), the body-marker kinds, the
- * violation spans this call owns, the per-file type `printer`, and the `oracle` itself.
- */
-private typedef ReturnSeams = {
-
-	final source: String;
-	final file: String;
-	final bodies: Array<String>;
-
-	/** The parameter kinds (`RefShape.paramKinds`). */
-	final params: Array<String>;
-	final flagged: Map<String, Violation>;
-	final printer: TypeRefPrinter;
-	final oracle: TypeOracle;
-
-	/**
-	 * The source's lexically-scanned non-code regions, hoisted once per file — the grammar's own
-	 * answer (`GrammarPlugin.lexicalRegions`), carried here rather than re-derived per member.
-	 */
-	final regions: Array<LexRegion>;
-
-	/** This file's type-parameter names per declaring span (`TypeInfoProvider.typeParamNames`). */
-	final typeParams: Map<Int, Array<String>>;
-
-};
-
-/**
- * The read-only context `ExplicitType.collectInheritedParamEdits` threads through its helpers: the
- * resolving `idx`, the `plugin` that parses a declaring file, the `file` being fixed (the
- * resolution origin for every copied type reference), and the member / parameter kind seams.
- */
-private typedef InheritedSeams = {
-	final idx: SymbolIndex;
-	final plugin: GrammarPlugin;
-	final file: String;
-	final functions: Array<String>;
-	final params: Array<String>;
-};

@@ -35,6 +35,137 @@ import anyparse.query.WriteSites;
 using StringTools;
 
 /**
+ * The run's thread facts: the call graph, every write of the project and the threads that run each function, built once for the
+ * findings that passed every local condition — `run` makes none for a project nothing asks about, and none at all for a run where
+ * some file's chain declares no `closedWorld`, which could never be complete.
+ */
+@:nullSafety(Strict)
+private final class ThreadFacts {
+
+	private final _known: Null<KnownThreads>;
+	private final _open: Null<String>;
+	private final _leftOut: Null<String>;
+
+	public function new(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
+		notes: Null<Array<ConfigNote>>
+	) {
+		final open: Null<{ file: String, source: String }> = files.find(f ->
+			!ThreadSafetyOptions.read(LintConfig.resolveWith(resolve, f.file)).flag('closedWorld')
+		);
+		_open = open?.file;
+		final held: Null<KnownThreads> = open == null ? known(files, plugin, resolve, notes) : null;
+		_known = held;
+		_leftOut = held == null || held.complete ? null : projectLeftOut(files, held);
+	}
+
+	/** Why no copy can be judged — what the project leaves unsaid about its writers — or null when the facts hold. */
+	public function missing(): Null<String> {
+		final open: Null<String> = _open;
+		if (open != null)
+			return 'the config of $open declares no thread-safety "closedWorld" — declare it (true) in the project\'s config'
+				+ ' and lint the whole project to judge them';
+		final leftOut: Null<String> = _leftOut;
+		return leftOut == null
+			? null
+			: 'this run leaves part of the project of $leftOut out (a file it does not hold, or one it could not parse), so its'
+				+ ' "closedWorld" is read as false — lint the whole project to judge them';
+	}
+
+	/** Whether the field `field`, read in `file` from offset `at`, is known to hold still under two reads there. */
+	public function steady(file: String, field: String, at: Int): Bool {
+		final known: Null<KnownThreads> = _known;
+		return known != null
+			&& known.complete
+			&& known.chains[file]?.closedWorld == true
+			&& !known.writers.mayChangeUnderRead(field, known.graph.functionAt(file, at));
+	}
+
+	/** The project, as `ProjectCoverage` names it, of the first file whose `closedWorld` the run does not close. */
+	private static function projectLeftOut(files: Array<{ file: String, source: String }>, held: KnownThreads): String {
+		final file: Null<{ file: String, source: String }> = files.find(f -> held.chains[f.file]?.closedWorld != true);
+		return file == null ? '' : new ProjectCoverage([], null).projectOf(file.file);
+	}
+
+	private static function known(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
+		notes: Null<Array<ConfigNote>>
+	): KnownThreads {
+		final graph: CallGraph = ThreadGraph.build(files, plugin, false);
+		final contexts: ThreadContexts = ThreadContexts.ofGraph(graph, files, plugin, resolve, notes);
+		final chains: Map<String, ChainLists> = contexts.byFile;
+		final complete: Bool = files.foreach(f -> chains[f.file]?.closedWorld == true);
+		final writes: FieldWrites = new FieldWrites(
+			graph, plugin, complete, ReflectiveReach.declaredClasses(files, resolve),
+			{ seedable: contexts.seedable, inertRef: contexts.inertRef }, ReflectiveReach.declaredMethodHolders(files, resolve)
+		);
+		return {
+			graph: graph,
+			chains: chains,
+			complete: complete,
+			writers: new SpawnedWriters(graph, writes, contexts, plugin.refShape().constructorName)
+		};
+	}
+
+}
+
+/**
+ * What `ThreadFacts` knows of a run: its graph, each file's chain lists,
+ * whether every file's `closedWorld` holds, and the thread answer.
+ */
+private typedef KnownThreads = {
+	final graph: CallGraph;
+	final chains: Map<String, ChainLists>;
+	final complete: Bool;
+	final writers: SpawnedWriters;
+};
+
+/** One copy that passes the local conditions: where it is declared, the text its uses become, and where the first use sits. */
+private typedef Match = {
+	final name: String;
+	final field: String;
+	final initText: String;
+	final declSpan: Span;
+	final dropSpan: Span;
+	final uses: Array<Span>;
+	final firstUse: Int;
+};
+
+/** The text spans of every use of a copy, and where the first one sits. */
+private typedef Window = { final uses: Array<Span>; final firstUse: Int; };
+
+/** One file's scan: its text and tree, the stable-chain reader, every write and the spans of every call. */
+private typedef Scan = {
+	final source: String;
+	final regions: () -> Array<LexRegion>;
+	final tree: QueryNode;
+	final seams: Seams;
+	final chains: StableChain;
+	final writes: Array<WriteSite>;
+	final calls: Array<Span>;
+	final unseen: UnseenCalls;
+	final annotations: () -> Map<Int, String>;
+	final typeSyntax: TypeSyntaxReader;
+};
+
+/** The seams the rule reads in `run` and in the fix. */
+private typedef Seams = {
+	final shape: RefShape;
+	final localDeclKinds: Array<String>;
+	final continuationKinds: Array<String>;
+	final identKind: String;
+	final fieldAccessKind: String;
+	final nullKind: String;
+	final parenKind: Null<String>;
+	final equalityKinds: Array<String>;
+	final callKinds: Array<String>;
+	final blockKinds: Array<String>;
+	final wrapperKinds: Array<String>;
+	final guardKinds: Array<String>;
+	final armKinds: Array<String>;
+};
+
+/**
  * Flags a local that only copies a field so a null check narrows it — `final listener: Null<F> = onChange; if (listener != null)
  * listener(this);` — and rewrites it to read the field itself: `if (onChange != null) onChange(this);`. Reported at
  * `Severity.Info`; the fix is `RiskyFix`, so it lands only after the project's compiler oracle typechecks the result.
@@ -369,134 +500,3 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 	}
 
 }
-
-/**
- * The run's thread facts: the call graph, every write of the project and the threads that run each function, built once for the
- * findings that passed every local condition — `run` makes none for a project nothing asks about, and none at all for a run where
- * some file's chain declares no `closedWorld`, which could never be complete.
- */
-@:nullSafety(Strict)
-private final class ThreadFacts {
-
-	private final _known: Null<KnownThreads>;
-	private final _open: Null<String>;
-	private final _leftOut: Null<String>;
-
-	public function new(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
-		notes: Null<Array<ConfigNote>>
-	) {
-		final open: Null<{ file: String, source: String }> = files.find(f ->
-			!ThreadSafetyOptions.read(LintConfig.resolveWith(resolve, f.file)).flag('closedWorld')
-		);
-		_open = open?.file;
-		final held: Null<KnownThreads> = open == null ? known(files, plugin, resolve, notes) : null;
-		_known = held;
-		_leftOut = held == null || held.complete ? null : projectLeftOut(files, held);
-	}
-
-	/** Why no copy can be judged — what the project leaves unsaid about its writers — or null when the facts hold. */
-	public function missing(): Null<String> {
-		final open: Null<String> = _open;
-		if (open != null)
-			return 'the config of $open declares no thread-safety "closedWorld" — declare it (true) in the project\'s config'
-				+ ' and lint the whole project to judge them';
-		final leftOut: Null<String> = _leftOut;
-		return leftOut == null
-			? null
-			: 'this run leaves part of the project of $leftOut out (a file it does not hold, or one it could not parse), so its'
-				+ ' "closedWorld" is read as false — lint the whole project to judge them';
-	}
-
-	/** Whether the field `field`, read in `file` from offset `at`, is known to hold still under two reads there. */
-	public function steady(file: String, field: String, at: Int): Bool {
-		final known: Null<KnownThreads> = _known;
-		return known != null
-			&& known.complete
-			&& known.chains[file]?.closedWorld == true
-			&& !known.writers.mayChangeUnderRead(field, known.graph.functionAt(file, at));
-	}
-
-	/** The project, as `ProjectCoverage` names it, of the first file whose `closedWorld` the run does not close. */
-	private static function projectLeftOut(files: Array<{ file: String, source: String }>, held: KnownThreads): String {
-		final file: Null<{ file: String, source: String }> = files.find(f -> held.chains[f.file]?.closedWorld != true);
-		return file == null ? '' : new ProjectCoverage([], null).projectOf(file.file);
-	}
-
-	private static function known(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, resolve: Null<(String) -> LintConfig>,
-		notes: Null<Array<ConfigNote>>
-	): KnownThreads {
-		final graph: CallGraph = ThreadGraph.build(files, plugin, false);
-		final contexts: ThreadContexts = ThreadContexts.ofGraph(graph, files, plugin, resolve, notes);
-		final chains: Map<String, ChainLists> = contexts.byFile;
-		final complete: Bool = files.foreach(f -> chains[f.file]?.closedWorld == true);
-		final writes: FieldWrites = new FieldWrites(
-			graph, plugin, complete, ReflectiveReach.declaredClasses(files, resolve),
-			{ seedable: contexts.seedable, inertRef: contexts.inertRef }, ReflectiveReach.declaredMethodHolders(files, resolve)
-		);
-		return {
-			graph: graph,
-			chains: chains,
-			complete: complete,
-			writers: new SpawnedWriters(graph, writes, contexts, plugin.refShape().constructorName)
-		};
-	}
-
-}
-
-/**
- * What `ThreadFacts` knows of a run: its graph, each file's chain lists,
- * whether every file's `closedWorld` holds, and the thread answer.
- */
-private typedef KnownThreads = {
-	final graph: CallGraph;
-	final chains: Map<String, ChainLists>;
-	final complete: Bool;
-	final writers: SpawnedWriters;
-};
-
-/** One copy that passes the local conditions: where it is declared, the text its uses become, and where the first use sits. */
-private typedef Match = {
-	final name: String;
-	final field: String;
-	final initText: String;
-	final declSpan: Span;
-	final dropSpan: Span;
-	final uses: Array<Span>;
-	final firstUse: Int;
-};
-
-/** The text spans of every use of a copy, and where the first one sits. */
-private typedef Window = { final uses: Array<Span>; final firstUse: Int; };
-
-/** One file's scan: its text and tree, the stable-chain reader, every write and the spans of every call. */
-private typedef Scan = {
-	final source: String;
-	final regions: () -> Array<LexRegion>;
-	final tree: QueryNode;
-	final seams: Seams;
-	final chains: StableChain;
-	final writes: Array<WriteSite>;
-	final calls: Array<Span>;
-	final unseen: UnseenCalls;
-	final annotations: () -> Map<Int, String>;
-	final typeSyntax: TypeSyntaxReader;
-};
-
-/** The seams the rule reads in `run` and in the fix. */
-private typedef Seams = {
-	final shape: RefShape;
-	final localDeclKinds: Array<String>;
-	final continuationKinds: Array<String>;
-	final identKind: String;
-	final fieldAccessKind: String;
-	final nullKind: String;
-	final parenKind: Null<String>;
-	final equalityKinds: Array<String>;
-	final callKinds: Array<String>;
-	final blockKinds: Array<String>;
-	final wrapperKinds: Array<String>;
-	final guardKinds: Array<String>;
-	final armKinds: Array<String>;
-};

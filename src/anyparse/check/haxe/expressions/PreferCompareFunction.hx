@@ -24,6 +24,84 @@ import anyparse.query.TypingService;
 
 using StringTools;
 
+private typedef Seams = {
+	final ltKind: String;
+	final gtKind: String;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final ternaryKind: String;
+	final ifExpressionKinds: Array<String>;
+	final ifStatementKinds: Array<String>;
+	final returnKinds: Array<String>;
+	final expressionBodyKinds: Array<String>;
+	final lambdaKinds: Array<String>;
+	final paramKinds: Array<String>;
+	final nestedFunctionKinds: Array<String>;
+	final identKind: String;
+	final blockKinds: Array<String>;
+	final blockStmtKind: String;
+	final exprStatementKind: Null<String>;
+	final fnExprKind: Null<String>;
+	final parenKind: Null<String>;
+	final shape: RefShape;
+	final valueKinds: Array<String>;
+	final intType: String;
+	final stringType: String;
+}
+
+/** One comparison of the chain and the value it selects. */
+private typedef Rung = { cond: QueryNode, value: QueryNode }
+
+/** The chain, the span a fix replaces, and whether that span is statements (so the replacement is a `return`). */
+private typedef Chain = {
+	rungs: Array<Rung>,
+	terminal: QueryNode,
+	extent: Span,
+	asReturn: Bool,
+	whole: Bool
+}
+
+/** The two operands of a strict comparison, the smaller first. */
+private typedef Order = { smallNode: QueryNode, bigNode: QueryNode }
+
+/** What the type, purity and null proofs answer about an operand. */
+private typedef Typed = {
+	purity: PurityCtx,
+	nominal: (QueryNode) -> Null<String>,
+	element: (QueryNode) -> Null<String>,
+	nonNull: (QueryNode) -> Bool,
+	elementNonNull: (String, Span) -> Bool,
+	isStdReflect: (QueryNode) -> Bool
+}
+
+/** The comparison a chain computes, and whether both its operands are proved non-null. */
+private typedef Called = {
+	type: Null<String>,
+	left: QueryNode,
+	right: QueryNode,
+	nonNull: Bool
+}
+
+/**
+ * A finding. `span` is what it reports, `replaced` what its fix rewrites, a whole function when `operands` is null;
+ * `compare` is null for `Reflect.compare`, and `noFix` says why the rewrite would not be behaviour-preserving, null where it is.
+ */
+private typedef Match = {
+	span: Span,
+	replaced: Span,
+	compare: Null<NamedCompare>,
+	operands: Null<Operands>,
+	message: String,
+	noFix: Null<String>,
+	asReturn: Bool
+}
+
+/** A configuration error, and the file it is reported on; `enabled` says the rule runs on that file. */
+private typedef ConfigProblem = { message: String, file: String, enabled: Bool }
+
+/** The two operands of a written call, as source text. */
+private typedef Operands = { left: String, right: String }
+
 /**
  * Flags a sort callback that spells a three-way comparison of two values by hand, or uses `Reflect.compare` where the project
  * names a typed function for the operand type. `Severity.Info`, with an autofix.
@@ -693,81 +771,3 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	}
 
 }
-
-private typedef Seams = {
-	final ltKind: String;
-	final gtKind: String;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final ternaryKind: String;
-	final ifExpressionKinds: Array<String>;
-	final ifStatementKinds: Array<String>;
-	final returnKinds: Array<String>;
-	final expressionBodyKinds: Array<String>;
-	final lambdaKinds: Array<String>;
-	final paramKinds: Array<String>;
-	final nestedFunctionKinds: Array<String>;
-	final identKind: String;
-	final blockKinds: Array<String>;
-	final blockStmtKind: String;
-	final exprStatementKind: Null<String>;
-	final fnExprKind: Null<String>;
-	final parenKind: Null<String>;
-	final shape: RefShape;
-	final valueKinds: Array<String>;
-	final intType: String;
-	final stringType: String;
-}
-
-/** One comparison of the chain and the value it selects. */
-private typedef Rung = { cond: QueryNode, value: QueryNode }
-
-/** The chain, the span a fix replaces, and whether that span is statements (so the replacement is a `return`). */
-private typedef Chain = {
-	rungs: Array<Rung>,
-	terminal: QueryNode,
-	extent: Span,
-	asReturn: Bool,
-	whole: Bool
-}
-
-/** The two operands of a strict comparison, the smaller first. */
-private typedef Order = { smallNode: QueryNode, bigNode: QueryNode }
-
-/** What the type, purity and null proofs answer about an operand. */
-private typedef Typed = {
-	purity: PurityCtx,
-	nominal: (QueryNode) -> Null<String>,
-	element: (QueryNode) -> Null<String>,
-	nonNull: (QueryNode) -> Bool,
-	elementNonNull: (String, Span) -> Bool,
-	isStdReflect: (QueryNode) -> Bool
-}
-
-/** The comparison a chain computes, and whether both its operands are proved non-null. */
-private typedef Called = {
-	type: Null<String>,
-	left: QueryNode,
-	right: QueryNode,
-	nonNull: Bool
-}
-
-/**
- * A finding. `span` is what it reports, `replaced` what its fix rewrites, a whole function when `operands` is null;
- * `compare` is null for `Reflect.compare`, and `noFix` says why the rewrite would not be behaviour-preserving, null where it is.
- */
-private typedef Match = {
-	span: Span,
-	replaced: Span,
-	compare: Null<NamedCompare>,
-	operands: Null<Operands>,
-	message: String,
-	noFix: Null<String>,
-	asReturn: Bool
-}
-
-/** A configuration error, and the file it is reported on; `enabled` says the rule runs on that file. */
-private typedef ConfigProblem = { message: String, file: String, enabled: Bool }
-
-/** The two operands of a written call, as source text. */
-private typedef Operands = { left: String, right: String }

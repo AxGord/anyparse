@@ -13,6 +13,14 @@ import anyparse.query.OracleProviders;
 import anyparse.query.RunLedger;
 import anyparse.query.cli.command.LintFixDriver;
 
+/** One rule's findings in `C.hx` and what produced them. */
+private typedef Found = {
+	final check: Check;
+	final files: Array<{ file: String, source: String }>;
+	final plugin: CachingGrammarPlugin;
+	final own: Array<Violation>;
+}
+
 /**
  * `ImportReach` - a fix that adds an `import` is offered only where every build that compiles the file resolves that module.
  *
@@ -342,12 +350,4 @@ final class ImportReachTest extends Test {
 	}
 	#end
 
-}
-
-/** One rule's findings in `C.hx` and what produced them. */
-private typedef Found = {
-	final check: Check;
-	final files: Array<{ file: String, source: String }>;
-	final plugin: CachingGrammarPlugin;
-	final own: Array<Violation>;
 }

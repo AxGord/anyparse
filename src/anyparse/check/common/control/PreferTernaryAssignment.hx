@@ -18,6 +18,23 @@ import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
+/** The `RefShape` kinds `PreferTernaryAssignment` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	var ifKinds: Array<String>;
+	var exprStmtKind: String;
+	var blockStmtKind: String;
+	var assignKind: String;
+	var shape: RefShape;
+}
+
+/** A matched if/else: the condition, the then-branch assignment, and the two r-values. */
+private typedef Match = {
+	var condition: QueryNode;
+	var thenAssign: QueryNode;
+	var thenRhs: QueryNode;
+	var elseRhs: QueryNode;
+}
+
 /**
  * Flags an `if (cond) lhs = a; else lhs = b;` whose two branches assign the SAME
  * l-value with a plain `=`, collapsing the pair to a single
@@ -371,21 +388,4 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware impl
 		return { span: span, text: '$head$text;', holes: [new Span(head.length, head.length + text.length)] };
 	}
 
-}
-
-/** The `RefShape` kinds `PreferTernaryAssignment` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-	var ifKinds: Array<String>;
-	var exprStmtKind: String;
-	var blockStmtKind: String;
-	var assignKind: String;
-	var shape: RefShape;
-}
-
-/** A matched if/else: the condition, the then-branch assignment, and the two r-values. */
-private typedef Match = {
-	var condition: QueryNode;
-	var thenAssign: QueryNode;
-	var thenRhs: QueryNode;
-	var elseRhs: QueryNode;
 }

@@ -8,6 +8,9 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;
 
+/** One unread binder name: the span reported, and the edit per occurrence that unbinds it. */
+private typedef Candidate = { final span: Span; final name: String; final edits: Array<{ span: Span, text: String }>; };
+
 /**
  * Flags a case-pattern BINDER that neither the arm's guard nor its body ever reads,
  * and replaces it with the wildcard — `case _data:` becomes `case _:`,
@@ -255,6 +258,3 @@ final class UnusedCaseBinder extends RuleBase {
 	}
 
 }
-
-/** One unread binder name: the span reported, and the edit per occurrence that unbinds it. */
-private typedef Candidate = { final span: Span; final name: String; final edits: Array<{ span: Span, text: String }>; };

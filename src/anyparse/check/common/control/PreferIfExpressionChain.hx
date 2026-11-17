@@ -16,6 +16,75 @@ import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Groups;
 
+/** The kinds `PreferIfExpressionChain` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	var ternaryKind: String;
+	var chainKinds: Array<String>;
+	var conditionalKinds: Array<String>;
+	var hostKinds: Array<String>;
+	var exprStatementKind: Null<String>;
+	var armKinds: Array<String>;
+	var negation: NegationSeams;
+	var logic: Null<BooleanLogicSupport>;
+	var parenKind: Null<String>;
+}
+
+/**
+ * One rung of a scanned chain: its condition (parens already stripped), its value, and whether
+ * the rebuild emits that condition NEGATED — which is what an INVERTED rung is.
+ */
+private typedef Rung = { var cond: QueryNode; var value: QueryNode; var invert: Bool; }
+
+/**
+ * A chain read as a spine: its rungs, the terminal the last `else` holds, and how many of its
+ * links the author wrote as a ternary. `invertTail` mutates the first two as it folds a nested
+ * ternary in, which is why they travel together rather than as separate returns; the count is
+ * read BEFORE that, so it stays a fact about the SPINE the author wrote.
+ */
+private typedef Chain = {
+
+	var rungs: Array<Rung>;
+	var terminal: QueryNode;
+	var ternaryRungs: Int;
+
+	/**
+	 * The nested ternary NODES `invertTail` folded into this chain, in fold order.
+	 *
+	 * Recorded rather than predicted: the fold has gates of its own (a comment in the rung's
+	 * condition, the negation engine's worth test), so mirroring "would it fold?" at a second site
+	 * would be a second implementation of one question. Its only reader is `spineClaimed`, which
+	 * must know the FULL set of nodes the rewrite consumes — a folded ternary is consumed exactly
+	 * as an else-spine link is, and reading only the spine let a claimed one be destroyed.
+	 */
+	var folded: Array<QueryNode>;
+
+}
+
+/**
+ * One rung as the rebuild EMITS it: the condition TEXT, the condition span it copies, and the value span.
+ */
+private typedef Emitted = { var condText: String; var condSpan: Span; var value: Span; }
+
+/**
+ * The two services the walk carries — the root-plus-index pair the `prefer-switch-expression`
+ * deferral is asked with, and the lazily-resolved operand-type probe the negation engine asks of a
+ * condition the inversion complements. Bundled so the walk's parameter list does not grow one entry
+ * per service.
+ */
+private typedef Lazy = {
+
+	var switchScope: ChainScope;
+	var types: () -> Null<(QueryNode) -> Null<String>>;
+	var boolTernaryClaims: () -> Map<String, Bool>;
+
+	/** The file's lexical regions, scanned once for the whole walk. */
+	var regions: () -> Array<LexRegion>;
+
+}
+
+/** A convertible chain: the finding key span, the (trivia-trimmed) replaced span, and the if-chain text. */
+private typedef Match = { var span: Span; var editSpan: Span; var text: String; }
+
 /**
  * Flags a RIGHT-NESTED ternary chain of three or more values already written in value
  * position, and rewrites it to the equivalent if-expression chain:
@@ -598,72 +667,3 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 	}
 
 }
-
-/** The kinds `PreferIfExpressionChain` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-	var ternaryKind: String;
-	var chainKinds: Array<String>;
-	var conditionalKinds: Array<String>;
-	var hostKinds: Array<String>;
-	var exprStatementKind: Null<String>;
-	var armKinds: Array<String>;
-	var negation: NegationSeams;
-	var logic: Null<BooleanLogicSupport>;
-	var parenKind: Null<String>;
-}
-
-/**
- * One rung of a scanned chain: its condition (parens already stripped), its value, and whether
- * the rebuild emits that condition NEGATED — which is what an INVERTED rung is.
- */
-private typedef Rung = { var cond: QueryNode; var value: QueryNode; var invert: Bool; }
-
-/**
- * A chain read as a spine: its rungs, the terminal the last `else` holds, and how many of its
- * links the author wrote as a ternary. `invertTail` mutates the first two as it folds a nested
- * ternary in, which is why they travel together rather than as separate returns; the count is
- * read BEFORE that, so it stays a fact about the SPINE the author wrote.
- */
-private typedef Chain = {
-
-	var rungs: Array<Rung>;
-	var terminal: QueryNode;
-	var ternaryRungs: Int;
-
-	/**
-	 * The nested ternary NODES `invertTail` folded into this chain, in fold order.
-	 *
-	 * Recorded rather than predicted: the fold has gates of its own (a comment in the rung's
-	 * condition, the negation engine's worth test), so mirroring "would it fold?" at a second site
-	 * would be a second implementation of one question. Its only reader is `spineClaimed`, which
-	 * must know the FULL set of nodes the rewrite consumes — a folded ternary is consumed exactly
-	 * as an else-spine link is, and reading only the spine let a claimed one be destroyed.
-	 */
-	var folded: Array<QueryNode>;
-
-}
-
-/**
- * One rung as the rebuild EMITS it: the condition TEXT, the condition span it copies, and the value span.
- */
-private typedef Emitted = { var condText: String; var condSpan: Span; var value: Span; }
-
-/**
- * The two services the walk carries — the root-plus-index pair the `prefer-switch-expression`
- * deferral is asked with, and the lazily-resolved operand-type probe the negation engine asks of a
- * condition the inversion complements. Bundled so the walk's parameter list does not grow one entry
- * per service.
- */
-private typedef Lazy = {
-
-	var switchScope: ChainScope;
-	var types: () -> Null<(QueryNode) -> Null<String>>;
-	var boolTernaryClaims: () -> Map<String, Bool>;
-
-	/** The file's lexical regions, scanned once for the whole walk. */
-	var regions: () -> Array<LexRegion>;
-
-}
-
-/** A convertible chain: the finding key span, the (trivia-trimmed) replaced span, and the if-chain text. */
-private typedef Match = { var span: Span; var editSpan: Span; var text: String; }

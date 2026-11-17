@@ -14,6 +14,123 @@ import anyparse.query.TypeSyntax;
 import anyparse.util.Groups;
 
 /**
+ * The `RefShape` kinds `LoopScan` reads, bundled once by `seamsOf` so every scan takes one
+ * argument. A rule adds its own kinds beside a `core: LoopSeams` field rather than extending
+ * this structurally — the scans then take `s.core` and stay independent of which rule calls them.
+ */
+typedef LoopSeams = {
+
+	var shape: RefShape;
+	var identKind: String;
+
+	/**
+	 * The kind a `$name` read inside a single-quoted string projects as — a DIFFERENT kind from
+	 * `identKind`, so a read counter keyed on the latter alone reads `'$i'` as no use of `i` at
+	 * all. Nullable: a grammar without string interpolation leaves it unset and the scans that
+	 * consult it simply see one read position.
+	 */
+	var stringInterpIdentKind: Null<String>;
+
+	/**
+	 * The kinds whose `name` slot carries literal TEXT rather than a symbol. A scan that reads a
+	 * name slot as a BINDING must subtract them, or `'i'` in the body answers as a declaration
+	 * of `i`. Empty for a grammar that names no string literal, which only widens such a scan.
+	 */
+	var textLiteralKinds: Array<String>;
+	var blockStmtKind: String;
+	var forStmtKind: String;
+	var fieldAccessKind: String;
+	var indexAccessKind: String;
+	var callKind: String;
+	var accessKinds: Array<String>;
+	var numericLiteralKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
+	var writeParentKinds: Array<String>;
+	var closureKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+
+}
+
+/**
+ * The one field every reification-skipping walk reads. A rule whose own seams carry
+ * `opaqueKinds` passes them as they are, with no `LoopSeams` built from a copy of the fields.
+ */
+typedef OpaqueSeams = { var opaqueKinds: Array<String>; }
+
+/** `OpaqueSeams` plus what `countWrites` reads: the write-parent kinds and the bare identifier kind. */
+typedef WriteScanSeams = { var opaqueKinds: Array<String>; var writeParentKinds: Array<String>; var identKind: String; }
+
+/** `OpaqueSeams` plus the local-declaration kinds `declares` reads. */
+typedef DeclScanSeams = { var opaqueKinds: Array<String>; var localDeclKinds: Array<String>; }
+
+/**
+ * `LoopSeams` plus the interval kind, for the rules that match an INDEXED header
+ * (`0...X.length`). Bundled by `intervalSeamsOf`, and a separate typedef rather than a field on
+ * `LoopSeams` because the scans themselves never ask about an interval — a grammar that names
+ * no range loop still answers everything they need.
+ */
+typedef IntervalLoopSeams = { var core: LoopSeams; var intervalKind: String; }
+
+/**
+ * What `indexedHeaderOf` proved about a `for (i in 0...X.size)` header: the two names, the
+ * receiver whose declared type the rewrite gate reads, and the two nodes whose spans a header
+ * splice needs. `body` is the loop's body node, carried through unexamined.
+ *
+ * `collection` is the receiver as the rewrite spells it: `path` (root first, one segment for a bare
+ * identifier) joined by `.`, and `leaf` is its last segment, the name an element binder derives from.
+ */
+typedef IndexedLoopHeader = {
+	var index: String;
+	var collection: String;
+	var path: Array<String>;
+	var leaf: String;
+	var sizeReceiver: QueryNode;
+	var iterable: QueryNode;
+	var body: QueryNode;
+}
+
+/**
+ * The kinds the JUMP-BINDING scans (`loopBody`, `isLoop`, `escapesIteration`) read — deliberately
+ * separate from `LoopSeams`, which demands field access, index access and numeric literals that a
+ * jump scan never asks about. `hardExitKinds` are the exits an inner loop does NOT shield
+ * (`return` / `throw`); `loopJumpKinds` are the ones it does, and a caller narrows that list to ask
+ * a narrower question (`break` alone, when a `continue` is provably harmless).
+ */
+typedef LoopJumpSeams = {
+	var loopKinds: Array<String>;
+	var doWhileKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var nestedScopeKinds: Array<String>;
+	var hardExitKinds: Array<String>;
+	var loopJumpKinds: Array<String>;
+}
+
+/**
+ * The per-FILE facts every gate reads: the tree root a type lookup resolves against, the source
+ * and its inert-region mask (comments, regexes and non-interpolating literals — the spans a text
+ * scan must not read as a use), the declared-type map, the seams, and the grammar's type reader.
+ */
+typedef LoopFileScan = {
+
+	var root: QueryNode;
+	var source: String;
+	var types: Null<Map<Int, String>>;
+	var inert: Array<Span>;
+
+	/** The file's lexical regions, scanned once on first ask: what a comment gate reads instead of the raw text. */
+	var regions: () -> Array<LexRegion>;
+	var seams: IntervalLoopSeams;
+
+	/** `GrammarPlugin.typeSyntax` — how a gate reads a declared type's arguments. */
+	var typeSyntax: TypeSyntaxReader;
+
+	/** The written type of a path receiver (`lazyPathTypes`), null when unresolved; always null when the caller passes none. */
+	var pathTypes: (QueryNode) -> Null<String>;
+
+}
+
+/**
  * The subtree scans the COLLECTION-LOOP rewrite rules share — `prefer-keyvalue-loop` (an indexed `for` whose body opens
  * by binding `X[i]`), `prefer-value-loop` (an indexed `for` whose index only ever indexes `X`) and
  * `dead-binder-counter-loop` (a `var i = 0;` counter threaded through a `for`-in whose binder nothing reads). Both move a
@@ -678,122 +795,5 @@ final class LoopScan {
 		return thenBranch.kind == continueKind
 			|| (thenBranch.kind == blockStmtKind && thenBranch.children.length == 1 && thenBranch.children[0].kind == continueKind);
 	}
-
-}
-
-/**
- * The `RefShape` kinds `LoopScan` reads, bundled once by `seamsOf` so every scan takes one
- * argument. A rule adds its own kinds beside a `core: LoopSeams` field rather than extending
- * this structurally — the scans then take `s.core` and stay independent of which rule calls them.
- */
-typedef LoopSeams = {
-
-	var shape: RefShape;
-	var identKind: String;
-
-	/**
-	 * The kind a `$name` read inside a single-quoted string projects as — a DIFFERENT kind from
-	 * `identKind`, so a read counter keyed on the latter alone reads `'$i'` as no use of `i` at
-	 * all. Nullable: a grammar without string interpolation leaves it unset and the scans that
-	 * consult it simply see one read position.
-	 */
-	var stringInterpIdentKind: Null<String>;
-
-	/**
-	 * The kinds whose `name` slot carries literal TEXT rather than a symbol. A scan that reads a
-	 * name slot as a BINDING must subtract them, or `'i'` in the body answers as a declaration
-	 * of `i`. Empty for a grammar that names no string literal, which only widens such a scan.
-	 */
-	var textLiteralKinds: Array<String>;
-	var blockStmtKind: String;
-	var forStmtKind: String;
-	var fieldAccessKind: String;
-	var indexAccessKind: String;
-	var callKind: String;
-	var accessKinds: Array<String>;
-	var numericLiteralKinds: Array<String>;
-	var localDeclKinds: Array<String>;
-	var localDeclContinuationKinds: Array<String>;
-	var writeParentKinds: Array<String>;
-	var closureKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-
-}
-
-/**
- * The one field every reification-skipping walk reads. A rule whose own seams carry
- * `opaqueKinds` passes them as they are, with no `LoopSeams` built from a copy of the fields.
- */
-typedef OpaqueSeams = { var opaqueKinds: Array<String>; }
-
-/** `OpaqueSeams` plus what `countWrites` reads: the write-parent kinds and the bare identifier kind. */
-typedef WriteScanSeams = { var opaqueKinds: Array<String>; var writeParentKinds: Array<String>; var identKind: String; }
-
-/** `OpaqueSeams` plus the local-declaration kinds `declares` reads. */
-typedef DeclScanSeams = { var opaqueKinds: Array<String>; var localDeclKinds: Array<String>; }
-
-/**
- * `LoopSeams` plus the interval kind, for the rules that match an INDEXED header
- * (`0...X.length`). Bundled by `intervalSeamsOf`, and a separate typedef rather than a field on
- * `LoopSeams` because the scans themselves never ask about an interval — a grammar that names
- * no range loop still answers everything they need.
- */
-typedef IntervalLoopSeams = { var core: LoopSeams; var intervalKind: String; }
-
-/**
- * What `indexedHeaderOf` proved about a `for (i in 0...X.size)` header: the two names, the
- * receiver whose declared type the rewrite gate reads, and the two nodes whose spans a header
- * splice needs. `body` is the loop's body node, carried through unexamined.
- *
- * `collection` is the receiver as the rewrite spells it: `path` (root first, one segment for a bare
- * identifier) joined by `.`, and `leaf` is its last segment, the name an element binder derives from.
- */
-typedef IndexedLoopHeader = {
-	var index: String;
-	var collection: String;
-	var path: Array<String>;
-	var leaf: String;
-	var sizeReceiver: QueryNode;
-	var iterable: QueryNode;
-	var body: QueryNode;
-}
-
-/**
- * The kinds the JUMP-BINDING scans (`loopBody`, `isLoop`, `escapesIteration`) read — deliberately
- * separate from `LoopSeams`, which demands field access, index access and numeric literals that a
- * jump scan never asks about. `hardExitKinds` are the exits an inner loop does NOT shield
- * (`return` / `throw`); `loopJumpKinds` are the ones it does, and a caller narrows that list to ask
- * a narrower question (`break` alone, when a `continue` is provably harmless).
- */
-typedef LoopJumpSeams = {
-	var loopKinds: Array<String>;
-	var doWhileKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var nestedScopeKinds: Array<String>;
-	var hardExitKinds: Array<String>;
-	var loopJumpKinds: Array<String>;
-}
-
-/**
- * The per-FILE facts every gate reads: the tree root a type lookup resolves against, the source
- * and its inert-region mask (comments, regexes and non-interpolating literals — the spans a text
- * scan must not read as a use), the declared-type map, the seams, and the grammar's type reader.
- */
-typedef LoopFileScan = {
-
-	var root: QueryNode;
-	var source: String;
-	var types: Null<Map<Int, String>>;
-	var inert: Array<Span>;
-
-	/** The file's lexical regions, scanned once on first ask: what a comment gate reads instead of the raw text. */
-	var regions: () -> Array<LexRegion>;
-	var seams: IntervalLoopSeams;
-
-	/** `GrammarPlugin.typeSyntax` — how a gate reads a declared type's arguments. */
-	var typeSyntax: TypeSyntaxReader;
-
-	/** The written type of a path receiver (`lazyPathTypes`), null when unresolved; always null when the caller passes none. */
-	var pathTypes: (QueryNode) -> Null<String>;
 
 }

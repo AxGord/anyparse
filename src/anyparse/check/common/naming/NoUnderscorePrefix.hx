@@ -17,6 +17,26 @@ using anyparse.util.Strings;
 using StringTools;
 
 /**
+ * The per-file option set of one `run`: whether parameters / locals are in scope, and
+ * whether `unused-parameter`'s silencing `_<name>` rename is live (see the class doc).
+ */
+private typedef Options = { final params: Bool; final locals: Bool; final silenceGuard: Bool; };
+
+/**
+ * One flagged binding whose derived target name passed `strippedName`: the declaration, that target, and the scope the target must
+ * be unique within. The set of these decides the same-target conflict between two flagged bindings before any rename is emitted.
+ */
+private typedef Candidate = {
+
+	final decl: NamedDecl;
+	final target: String;
+
+	/** The binding's innermost enclosing function span, or null when none resolves (treated as conflicting with everything). */
+	final scope: Null<Span>;
+
+};
+
+/**
  * Flags a function PARAMETER or a LOCAL binding (a `var` / `final` local, a loop
  * variable, a comprehension variable, a local `function` / `inline function`) whose
  * identifier carries a leading underscore — `_event`, `__selectedIndex`, `__finish`.
@@ -467,23 +487,3 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 	}
 
 }
-
-/**
- * The per-file option set of one `run`: whether parameters / locals are in scope, and
- * whether `unused-parameter`'s silencing `_<name>` rename is live (see the class doc).
- */
-private typedef Options = { final params: Bool; final locals: Bool; final silenceGuard: Bool; };
-
-/**
- * One flagged binding whose derived target name passed `strippedName`: the declaration, that target, and the scope the target must
- * be unique within. The set of these decides the same-target conflict between two flagged bindings before any rename is emitted.
- */
-private typedef Candidate = {
-
-	final decl: NamedDecl;
-	final target: String;
-
-	/** The binding's innermost enclosing function span, or null when none resolves (treated as conflicting with everything). */
-	final scope: Null<Span>;
-
-};

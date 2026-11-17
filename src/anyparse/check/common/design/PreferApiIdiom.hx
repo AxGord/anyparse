@@ -20,6 +20,60 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using anyparse.util.Strings;
 
+/** An idiom the resolution index confirmed, with its type resolved. */
+typedef Idiom = { final spec: IdiomSpec; final type: ResolvedType; }
+
+/** One `R.f = rhs;` statement. */
+private typedef Write = {
+	final span: Span;
+	final field: String;
+	final recv: QueryNode;
+	final recvPath: Array<String>;
+	final recvKey: String;
+	final rhs: QueryNode;
+}
+
+/** One matched window: the span it replaces, the call that replaces it, how many statements it took, and the message. */
+private typedef Match = {
+	final span: Span;
+	final text: String;
+	final width: Int;
+	final message: String;
+}
+
+/** The seams the rule reads, resolved once per run. */
+private typedef Seams = {
+	final shape: RefShape;
+	final typed: TypeInfoProvider;
+	final exprStmtKind: String;
+	final assignKind: String;
+	final fieldKind: String;
+	final identKind: String;
+	final interpIdentKind: Null<String>;
+	final blockKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final fieldKinds: Array<String>;
+	final memberKinds: Array<String>;
+	final wrappers: Array<String>;
+	final selfText: Null<String>;
+	final typeSyntax: TypeSyntaxReader;
+}
+
+/** Per-file state of one scan. */
+private typedef Ctx = {
+	final source: String;
+	final regions: () -> Array<LexRegion>;
+	final file: String;
+	final info: FileInfo;
+	final root: QueryNode;
+	final index: SymbolIndex;
+	final seams: Seams;
+	final idioms: Array<Idiom>;
+	final purity: PurityCtx;
+	final declaredTypeSources: Map<Int, String>;
+	final invisibleBinders: Null<Array<String>>;
+}
+
 /**
  * Rewrites consecutive writes of a type's fields into the one method call the PROJECT declares equivalent —
  * `p.x = a; p.y = b;` into `p.setTo(a, b);`, `p.x = q.x; p.y = q.y;` into `p.copyFrom(q);`. `Severity.Info`, with an
@@ -560,58 +614,4 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		return name == null ? null : ctx.index.refs.findDeclaredType(ctx.file, name);
 	}
 
-}
-
-/** An idiom the resolution index confirmed, with its type resolved. */
-typedef Idiom = { final spec: IdiomSpec; final type: ResolvedType; }
-
-/** One `R.f = rhs;` statement. */
-private typedef Write = {
-	final span: Span;
-	final field: String;
-	final recv: QueryNode;
-	final recvPath: Array<String>;
-	final recvKey: String;
-	final rhs: QueryNode;
-}
-
-/** One matched window: the span it replaces, the call that replaces it, how many statements it took, and the message. */
-private typedef Match = {
-	final span: Span;
-	final text: String;
-	final width: Int;
-	final message: String;
-}
-
-/** The seams the rule reads, resolved once per run. */
-private typedef Seams = {
-	final shape: RefShape;
-	final typed: TypeInfoProvider;
-	final exprStmtKind: String;
-	final assignKind: String;
-	final fieldKind: String;
-	final identKind: String;
-	final interpIdentKind: Null<String>;
-	final blockKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-	final fieldKinds: Array<String>;
-	final memberKinds: Array<String>;
-	final wrappers: Array<String>;
-	final selfText: Null<String>;
-	final typeSyntax: TypeSyntaxReader;
-}
-
-/** Per-file state of one scan. */
-private typedef Ctx = {
-	final source: String;
-	final regions: () -> Array<LexRegion>;
-	final file: String;
-	final info: FileInfo;
-	final root: QueryNode;
-	final index: SymbolIndex;
-	final seams: Seams;
-	final idioms: Array<Idiom>;
-	final purity: PurityCtx;
-	final declaredTypeSources: Map<Int, String>;
-	final invisibleBinders: Null<Array<String>>;
 }

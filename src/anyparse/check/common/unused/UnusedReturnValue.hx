@@ -8,6 +8,18 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 
+/** Resolved per-run constants threaded through the recursive walk. */
+private typedef Ctx = {
+	var shape: RefShape;
+	var identKind: String;
+	var callKind: String;
+	var exprStmtKind: String;
+	var fieldAccessKind: Null<String>;
+	var selfReferenceText: Null<String>;
+	var opaqueKinds: Array<String>;
+	var index: SymbolIndex;
+};
+
 /**
  * Flags a call in STATEMENT position whose result is a PROVABLY non-`Void` value
  * that is discarded — a possibly-lost return value the author should either use or
@@ -257,15 +269,3 @@ final class UnusedReturnValue extends RuleBase implements ConfigAware implements
 	}
 
 }
-
-/** Resolved per-run constants threaded through the recursive walk. */
-private typedef Ctx = {
-	var shape: RefShape;
-	var identKind: String;
-	var callKind: String;
-	var exprStmtKind: String;
-	var fieldAccessKind: Null<String>;
-	var selfReferenceText: Null<String>;
-	var opaqueKinds: Array<String>;
-	var index: SymbolIndex;
-};

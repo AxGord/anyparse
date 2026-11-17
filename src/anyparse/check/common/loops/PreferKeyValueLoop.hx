@@ -13,6 +13,33 @@ import anyparse.query.LexicalRegions;
 using anyparse.util.Strings;
 using StringTools;
 
+/** One matched loop: the spans the rewrite splices, the three names it re-spells, and the annotations its type gate reads. */
+private typedef Match = {
+	var forSpan: Span;
+	var declSpan: Span;
+	var keyVar: String;
+	var valueVar: String;
+	var collection: String;
+	var collectionTypeSource: Null<String>;
+	var declTypeSource: Null<String>;
+	var header: IndexedLoopHeader;
+}
+
+/**
+ * One loop the no-opener arm matched: the spans its splices cover, the two names it reads, the
+ * binder it would write, and why the fix is withheld when it is (the finding's `declineReason`).
+ */
+private typedef ReadsMatch = {
+	var forSpan: Span;
+	var iterableSpan: Span;
+	var index: String;
+	var collection: String;
+	var binder: Null<String>;
+	var readSpans: Array<Span>;
+	var decline: Null<String>;
+	var header: IndexedLoopHeader;
+}
+
 /**
  * Flags an INDEXED `for` that only wanted the element — `for (i in 0...X.length)` whose body
  * OPENS with `final v = X[i];` — which Haxe's key-value iteration writes directly:
@@ -398,31 +425,4 @@ final class PreferKeyValueLoop extends RuleBase implements DefaultOff {
 			null;
 	}
 
-}
-
-/** One matched loop: the spans the rewrite splices, the three names it re-spells, and the annotations its type gate reads. */
-private typedef Match = {
-	var forSpan: Span;
-	var declSpan: Span;
-	var keyVar: String;
-	var valueVar: String;
-	var collection: String;
-	var collectionTypeSource: Null<String>;
-	var declTypeSource: Null<String>;
-	var header: IndexedLoopHeader;
-}
-
-/**
- * One loop the no-opener arm matched: the spans its splices cover, the two names it reads, the
- * binder it would write, and why the fix is withheld when it is (the finding's `declineReason`).
- */
-private typedef ReadsMatch = {
-	var forSpan: Span;
-	var iterableSpan: Span;
-	var index: String;
-	var collection: String;
-	var binder: Null<String>;
-	var readSpans: Array<Span>;
-	var decline: Null<String>;
-	var header: IndexedLoopHeader;
 }

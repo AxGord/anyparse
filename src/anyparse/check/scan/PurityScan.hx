@@ -10,6 +10,42 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypingService;
 
+/** Per-file resolved constants threaded through `PurityScan`'s recursive walk. */
+typedef PurityCtx = {
+
+	final shape: RefShape;
+
+	/**
+	 * The grammar's side-effect-free expression vocabulary, derived ONCE per file rather than per
+	 * node: `isPure` asks it at every node of every subtree it walks, and the vocabulary is a
+	 * function of `shape` alone. Run-scoped like the rest of this context — nothing here outlives
+	 * the file it was built for.
+	 */
+	final safeKinds: Array<String>;
+	final identKind: String;
+	final fieldAccessKind: String;
+	final callKind: String;
+	final indexAccessKind: Null<String>;
+	final selfReferenceText: Null<String>;
+	final declaredTypes: Map<Int, String>;
+
+	/** Every binding's outer nominal, parametric and optional types included: a receiver's type is what this asks. */
+	final receiverTypes: Map<Int, String>;
+
+	/**
+	 * The member-lookup type of a receiver whose binding writes none (`CheckScan.typeNominalResolver`): the typer binds a loop
+	 * binder and a lambda parameter as the program does. Null when the grammar carries no type information.
+	 */
+	final boundReceiverType: Null<(QueryNode) -> Null<String>>;
+	final wrappers: Array<String>;
+	final index: SymbolIndex;
+
+	/** The caller's report-scoped index: a stdlib static is transparent only while no type of the REPORT shadows its name. */
+	final report: SymbolIndex;
+	final root: QueryNode;
+
+};
+
 /**
  * Whether an expression subtree can be evaluated once — or DROPPED — without changing what the
  * program does: the one answer to "can this expression be hoisted or deleted without changing
@@ -235,39 +271,3 @@ final class PurityScan {
 	}
 
 }
-
-/** Per-file resolved constants threaded through `PurityScan`'s recursive walk. */
-typedef PurityCtx = {
-
-	final shape: RefShape;
-
-	/**
-	 * The grammar's side-effect-free expression vocabulary, derived ONCE per file rather than per
-	 * node: `isPure` asks it at every node of every subtree it walks, and the vocabulary is a
-	 * function of `shape` alone. Run-scoped like the rest of this context — nothing here outlives
-	 * the file it was built for.
-	 */
-	final safeKinds: Array<String>;
-	final identKind: String;
-	final fieldAccessKind: String;
-	final callKind: String;
-	final indexAccessKind: Null<String>;
-	final selfReferenceText: Null<String>;
-	final declaredTypes: Map<Int, String>;
-
-	/** Every binding's outer nominal, parametric and optional types included: a receiver's type is what this asks. */
-	final receiverTypes: Map<Int, String>;
-
-	/**
-	 * The member-lookup type of a receiver whose binding writes none (`CheckScan.typeNominalResolver`): the typer binds a loop
-	 * binder and a lambda parameter as the program does. Null when the grammar carries no type information.
-	 */
-	final boundReceiverType: Null<(QueryNode) -> Null<String>>;
-	final wrappers: Array<String>;
-	final index: SymbolIndex;
-
-	/** The caller's report-scoped index: a stdlib static is transparent only while no type of the REPORT shadows its name. */
-	final report: SymbolIndex;
-	final root: QueryNode;
-
-};

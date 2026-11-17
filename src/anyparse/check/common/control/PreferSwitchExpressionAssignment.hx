@@ -10,6 +10,26 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+/** The kinds `PreferSwitchExpressionAssignment` reads. */
+private typedef Seams = {
+	var tree: TreeSeams;
+	var switchKinds: Array<String>;
+	var mutableKinds: Array<String>;
+	var identKind: String;
+	var stringInterpKind: Null<String>;
+	var fieldAccessKind: Null<String>;
+	var blockKinds: Array<String>;
+	var shape: RefShape;
+}
+
+/** A collapsible pair: the declaration span (finding key), the replaced span, and the built replacement text. */
+private typedef Match = {
+	var declSpan: Span;
+	var editSpan: Span;
+	var text: String;
+	var message: String;
+}
+
 /**
  * Flags two shapes that collapse a statement-position `switch` assigning in every arm into a single
  * switch-expression assignment. Purely structural (no type information). `Info` -- the code is
@@ -399,24 +419,4 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 		};
 	}
 
-}
-
-/** The kinds `PreferSwitchExpressionAssignment` reads. */
-private typedef Seams = {
-	var tree: TreeSeams;
-	var switchKinds: Array<String>;
-	var mutableKinds: Array<String>;
-	var identKind: String;
-	var stringInterpKind: Null<String>;
-	var fieldAccessKind: Null<String>;
-	var blockKinds: Array<String>;
-	var shape: RefShape;
-}
-
-/** A collapsible pair: the declaration span (finding key), the replaced span, and the built replacement text. */
-private typedef Match = {
-	var declSpan: Span;
-	var editSpan: Span;
-	var text: String;
-	var message: String;
 }

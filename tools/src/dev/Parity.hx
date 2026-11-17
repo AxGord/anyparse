@@ -21,6 +21,47 @@ import sys.io.File;
 
 using StringTools;
 
+/** A parity suite: the fixture files every invocation starts from unless it names its own, and the invocations. */
+typedef Suite = {
+
+	var files: Map<String, String>;
+	var invocations: Array<Invocation>;
+
+	/** Whether `apq <command> --help` of every command the tip engine lists joins the invocations. */
+	var commandHelp: Bool;
+
+}
+
+/** One CLI call of a suite: its program (`apq` or `hxq`) and arguments, its standard input, and the files it starts from. */
+typedef Invocation = {
+
+	var name: String;
+	var argv: Array<String>;
+	var stdin: Null<String>;
+	var files: Map<String, String>;
+
+	/** Trees committed in order into a git repository; `files` is then the working tree on top of the last commit. */
+	var ?commits: Array<Map<String, String>>;
+
+}
+
+/** What one engine answered to one invocation: exit status, both streams, a failure to run, and the fixture files after it. */
+typedef Outcome = {
+	var status: Null<Int>;
+	var out: String;
+	var err: String;
+	var failure: String;
+	var files: Map<String, String>;
+}
+
+/** One invocation with both engines' outcomes and what differs between them. */
+typedef Comparison = {
+	var invocation: Invocation;
+	var base: Outcome;
+	var tip: Outcome;
+	var differences: Array<String>;
+}
+
 /**
  * `dev parity <base-commit|engine> <tip-engine> [--suite <file>] [--out <dir>] [--threads <n>] [--verbose] [--one-process]
  * [--repo <tree>]` — a declared list of CLI invocations run on two engines, and only the invocations whose exit status,
@@ -434,45 +475,4 @@ final class Parity {
 			.check();
 	}
 
-}
-
-/** A parity suite: the fixture files every invocation starts from unless it names its own, and the invocations. */
-typedef Suite = {
-
-	var files: Map<String, String>;
-	var invocations: Array<Invocation>;
-
-	/** Whether `apq <command> --help` of every command the tip engine lists joins the invocations. */
-	var commandHelp: Bool;
-
-}
-
-/** One CLI call of a suite: its program (`apq` or `hxq`) and arguments, its standard input, and the files it starts from. */
-typedef Invocation = {
-
-	var name: String;
-	var argv: Array<String>;
-	var stdin: Null<String>;
-	var files: Map<String, String>;
-
-	/** Trees committed in order into a git repository; `files` is then the working tree on top of the last commit. */
-	var ?commits: Array<Map<String, String>>;
-
-}
-
-/** What one engine answered to one invocation: exit status, both streams, a failure to run, and the fixture files after it. */
-typedef Outcome = {
-	var status: Null<Int>;
-	var out: String;
-	var err: String;
-	var failure: String;
-	var files: Map<String, String>;
-}
-
-/** One invocation with both engines' outcomes and what differs between them. */
-typedef Comparison = {
-	var invocation: Invocation;
-	var base: Outcome;
-	var tip: Outcome;
-	var differences: Array<String>;
 }

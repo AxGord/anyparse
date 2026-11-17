@@ -15,6 +15,63 @@ import haxe.macro.TypedExprTools;
 using Lambda;
 using StringTools;
 
+/** How the value an expression produces is used where it is read: what a field read's `u` records (`TypedFactsProbe`). */
+private enum FactUse {
+
+	/** Anything the other constructors do not name — an argument, a stored or returned value — and a capture. */
+	Value;
+
+	/** Discarded: a statement's own value. */
+	Statement;
+
+	/** The receiver of a call of its field `method`, or of an inlined call of it (`TypedFactsWalk.receiverCall`). */
+	Call(method: String);
+
+	/** An array indexed to read an element. */
+	Index;
+
+	/** An array indexed to write an element: `a[i] = v`, `a[i] += v`, `a[i]++`. */
+	ElementWrite;
+
+	/** The receiver of a field read that is no method closure. */
+	Member;
+
+	/** The receiver of a field write. */
+	MemberWrite;
+
+	/** An operand of a comparison, or a `switch` subject. */
+	Compare;
+
+	/** The iterated value of a `for` the compiler kept. */
+	Iterable;
+
+	/** A field read by a compound assignment or an increment of that field, the read half of its write. */
+	Update;
+
+	/** The initializer of the local `id`, or a value an assignment statement stores in it: the local's reads are the uses. */
+	Held(id: Int);
+
+	/** The local an assignment writes: no use of the value it held. */
+	Assigned;
+
+	/**
+	 * The `index`-th argument of a call of the method `target` through the field access `access` (`FStatic`, `FInstance`):
+	 * the value goes to that parameter, which the method's own facts follow (`pu`). Recorded as a `value` use, so a reader
+	 * that does not follow the parameter keeps reading an escape.
+	 */
+	Argument(target: String, access: String, index: Int);
+
+}
+/**
+ * A local a `var` declares: the node that declared it, the uses its reads made, as `useText`,
+ * and the locals of that node a read of it was stored in, whose reads are uses of its value too.
+ */
+private typedef Alias = { final owner: String; final uses: Array<String>; final links: Array<Int>; }
+
+/** A field chain rooted at a native identifier (`TypedFactsWalk.nativeChain`): the identifier, its text, what a call through it hands. */
+private typedef NativeChain = { final root: TypedExpr; final text: String; final handed: Array<TypedExpr>; }
+/** A call of a field as `TypedFactsWalk.fieldCall` records it: its fact, and the method `to` taking its arguments, called `via`. */
+private typedef FieldCall = { final fact: String; final to: Null<String>; final via: String; }
 /**
  * One node's facts: the walk over one function or initializer body. A nested function is a node of its own, spawned
  * by the walk and named in the parent's `fns`. Each category is deduplicated, since the compiler unrolls a loop over a
@@ -1282,61 +1339,4 @@ final class TypedFactsWalk {
 	}
 
 }
-/** How the value an expression produces is used where it is read: what a field read's `u` records (`TypedFactsProbe`). */
-private enum FactUse {
-
-	/** Anything the other constructors do not name — an argument, a stored or returned value — and a capture. */
-	Value;
-
-	/** Discarded: a statement's own value. */
-	Statement;
-
-	/** The receiver of a call of its field `method`, or of an inlined call of it (`TypedFactsWalk.receiverCall`). */
-	Call(method: String);
-
-	/** An array indexed to read an element. */
-	Index;
-
-	/** An array indexed to write an element: `a[i] = v`, `a[i] += v`, `a[i]++`. */
-	ElementWrite;
-
-	/** The receiver of a field read that is no method closure. */
-	Member;
-
-	/** The receiver of a field write. */
-	MemberWrite;
-
-	/** An operand of a comparison, or a `switch` subject. */
-	Compare;
-
-	/** The iterated value of a `for` the compiler kept. */
-	Iterable;
-
-	/** A field read by a compound assignment or an increment of that field, the read half of its write. */
-	Update;
-
-	/** The initializer of the local `id`, or a value an assignment statement stores in it: the local's reads are the uses. */
-	Held(id: Int);
-
-	/** The local an assignment writes: no use of the value it held. */
-	Assigned;
-
-	/**
-	 * The `index`-th argument of a call of the method `target` through the field access `access` (`FStatic`, `FInstance`):
-	 * the value goes to that parameter, which the method's own facts follow (`pu`). Recorded as a `value` use, so a reader
-	 * that does not follow the parameter keeps reading an escape.
-	 */
-	Argument(target: String, access: String, index: Int);
-
-}
-
-/**
- * A local a `var` declares: the node that declared it, the uses its reads made, as `useText`,
- * and the locals of that node a read of it was stored in, whose reads are uses of its value too.
- */
-private typedef Alias = { final owner: String; final uses: Array<String>; final links: Array<Int>; }
-/** A field chain rooted at a native identifier (`TypedFactsWalk.nativeChain`): the identifier, its text, what a call through it hands. */
-private typedef NativeChain = { final root: TypedExpr; final text: String; final handed: Array<TypedExpr>; }
-/** A call of a field as `TypedFactsWalk.fieldCall` records it: its fact, and the method `to` taking its arguments, called `via`. */
-private typedef FieldCall = { final fact: String; final to: Null<String>; final via: String; }
 #end

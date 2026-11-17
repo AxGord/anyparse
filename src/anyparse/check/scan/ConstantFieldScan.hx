@@ -4,6 +4,68 @@ import anyparse.query.MemberKinds;
 import anyparse.query.StringFold.StringFoldSupport;
 
 /**
+ * The resolved grammar seams the constant-field checks read. A superset — `inline-constant` reads
+ * `containers` / `mutableFieldKinds` / `identKind`, `static-constant` reads `classLikeContainers`
+ * (an `enum abstract` value is not an instance field) — so one resolution serves both.
+ */
+typedef ConstantFieldSeams = {
+
+	final containers: Array<String>;
+	final classLikeContainers: Array<String>;
+	final members: Array<String>;
+	final finalFieldKinds: Array<String>;
+	final mutableFieldKinds: Array<String>;
+	final visibility: Array<String>;
+	final defaultVis: String;
+	final staticKind: String;
+	final inlineKind: Null<String>;
+	final identKind: String;
+
+	/** `RefShape.externModifierKind` — a modifier whose field may only be inline, read by `inline-constant`. */
+	final externKind: Null<String>;
+	final metaKinds: Array<String>;
+
+	/** `RefShape.nativeInteropDeclMetaName` — read by `inline-constant` alone; null when the grammar leaves it unset. */
+	final nativeInteropMetaName: Null<String>;
+
+	/**
+	 * `RefShape.retainedDeclMetaName` — the declaration is pinned against removal, so machinery no
+	 * source scan models reaches its members. Both checks decline it.
+	 */
+	final retainedMetaName: Null<String>;
+
+	/**
+	 * `RefShape.reflectedDeclMetaName` — the declaration's member NAMES are runtime data. Both checks
+	 * decline it, for a different reason than `retainedMetaName`: retention keeps the member, this
+	 * keeps its NAME meaningful, and both rewrites move where the value lives.
+	 */
+	final reflectedMetaName: Null<String>;
+
+	/**
+	 * `RefShape.implicitConstructorDeclMetaName` — the declaration's fields ARE its constructor's
+	 * parameters. Read by `static-constant` alone: moving a field off the instance deletes an
+	 * argument every construction site is written against. `inline-constant` leaves the field where
+	 * it is, so it takes no such gate.
+	 */
+	final implicitConstructorMetaName: Null<String>;
+	final literalKinds: Array<String>;
+	final stringLiteralKinds: Array<String>;
+	final numericKinds: Array<String>;
+	final negationKind: Null<String>;
+
+	/**
+	 * `RefShape.numericOperatorKinds` — the operators `isConstantExpression` folds over constant
+	 * operands (arithmetic, relational, bitwise, shift, unary `-` / `~`); empty when unset.
+	 */
+	final operatorKinds: Array<String>;
+
+	/** `RefShape.parenKind` — a grouping `isConstantExpression` sees through; null when unset. */
+	final parenKind: Null<String>;
+	final stringFold: Null<StringFoldSupport>;
+
+};
+
+/**
  * The seams and scans the CONSTANT-FIELD pair of checks share — `inline-constant` (`static final`
  * scalar -> `static inline final`) and `static-constant` (instance `final` of a literal ->
  * `static final`). The two ask the same questions of the grammar (which kinds host a `final` field,
@@ -151,65 +213,3 @@ final class ConstantFieldScan {
 	}
 
 }
-
-/**
- * The resolved grammar seams the constant-field checks read. A superset — `inline-constant` reads
- * `containers` / `mutableFieldKinds` / `identKind`, `static-constant` reads `classLikeContainers`
- * (an `enum abstract` value is not an instance field) — so one resolution serves both.
- */
-typedef ConstantFieldSeams = {
-
-	final containers: Array<String>;
-	final classLikeContainers: Array<String>;
-	final members: Array<String>;
-	final finalFieldKinds: Array<String>;
-	final mutableFieldKinds: Array<String>;
-	final visibility: Array<String>;
-	final defaultVis: String;
-	final staticKind: String;
-	final inlineKind: Null<String>;
-	final identKind: String;
-
-	/** `RefShape.externModifierKind` — a modifier whose field may only be inline, read by `inline-constant`. */
-	final externKind: Null<String>;
-	final metaKinds: Array<String>;
-
-	/** `RefShape.nativeInteropDeclMetaName` — read by `inline-constant` alone; null when the grammar leaves it unset. */
-	final nativeInteropMetaName: Null<String>;
-
-	/**
-	 * `RefShape.retainedDeclMetaName` — the declaration is pinned against removal, so machinery no
-	 * source scan models reaches its members. Both checks decline it.
-	 */
-	final retainedMetaName: Null<String>;
-
-	/**
-	 * `RefShape.reflectedDeclMetaName` — the declaration's member NAMES are runtime data. Both checks
-	 * decline it, for a different reason than `retainedMetaName`: retention keeps the member, this
-	 * keeps its NAME meaningful, and both rewrites move where the value lives.
-	 */
-	final reflectedMetaName: Null<String>;
-
-	/**
-	 * `RefShape.implicitConstructorDeclMetaName` — the declaration's fields ARE its constructor's
-	 * parameters. Read by `static-constant` alone: moving a field off the instance deletes an
-	 * argument every construction site is written against. `inline-constant` leaves the field where
-	 * it is, so it takes no such gate.
-	 */
-	final implicitConstructorMetaName: Null<String>;
-	final literalKinds: Array<String>;
-	final stringLiteralKinds: Array<String>;
-	final numericKinds: Array<String>;
-	final negationKind: Null<String>;
-
-	/**
-	 * `RefShape.numericOperatorKinds` — the operators `isConstantExpression` folds over constant
-	 * operands (arithmetic, relational, bitwise, shift, unary `-` / `~`); empty when unset.
-	 */
-	final operatorKinds: Array<String>;
-
-	/** `RefShape.parenKind` — a grouping `isConstantExpression` sees through; null when unset. */
-	final parenKind: Null<String>;
-	final stringFold: Null<StringFoldSupport>;
-
-};

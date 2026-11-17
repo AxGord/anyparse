@@ -12,6 +12,86 @@ import sys.FileSystem;
 using Lambda;
 using StringTools;
 
+/** One rule of the list: a `Literal` substring, or a `Pattern` (a global regular expression). */
+enum Rule {
+	Literal(text: String);
+	Pattern(re: EReg);
+}
+
+/**
+ * What a token of the scanned text can name in a tree, by trailing path: a
+ * `FilePath`, a `ModulePath` (a file of any extension) or a `DirectoryPath`.
+ */
+enum Naming {
+	FilePath(path: String);
+	ModulePath(path: String);
+	DirectoryPath(path: String);
+}
+
+/** The files of one tree, with their module paths and directories, by base name: answers whether a `Naming` names one. */
+@:nullSafety(Strict)
+final class PathIndex {
+
+	private final _files: Map<String, Array<String>> = [];
+
+	/** Each file's path without its extension. */
+	private final _modules: Map<String, Array<String>> = [];
+
+	private final _directories: Map<String, Array<String>> = [];
+
+	public function new(files: Array<String>) {
+		for (file in files) {
+			add(_files, file);
+			final cut: Int = file.lastIndexOf('/');
+			final dot: Int = file.lastIndexOf('.');
+			if (dot > cut + 1) add(_modules, file.substr(0, dot));
+			var directory: String = file;
+			var at: Int = cut;
+			// a directory already held came with every directory above it
+			while (at > 0) {
+				directory = directory.substr(0, at);
+				if (!add(_directories, directory)) break;
+				at = directory.lastIndexOf('/');
+			}
+		}
+	}
+
+	/** Whether `naming` is one of the tree's files, module paths or directories, or the trailing whole segments of one. */
+	public function knows(naming: Naming): Bool {
+		return switch naming {
+			case FilePath(path): holds(_files, path);
+			case ModulePath(path): holds(_modules, path);
+			case DirectoryPath(path): holds(_directories, path);
+		}
+	}
+
+	private static inline function baseName(path: String): String {
+		return path.substr(path.lastIndexOf('/') + 1);
+	}
+
+	/** Add `path` under its base name unless it is there already; answers whether it was added. */
+	private static function add(byName: Map<String, Array<String>>, path: String): Bool {
+		final name: String = baseName(path);
+		final same: Null<Array<String>> = byName[name];
+		if (same == null) {
+			byName[name] = [path];
+			return true;
+		}
+		if (same.contains(path)) return false;
+		same.push(path);
+		return true;
+	}
+
+	private static function holds(byName: Map<String, Array<String>>, path: String): Bool {
+		final same: Null<Array<String>> = byName[baseName(path)];
+		return same != null && same.exists(held -> held == path || held.endsWith('/$path'));
+	}
+
+}
+
+/** One ref of a push: its local and remote names and the commits it publishes, or a null range when no remote holds a base. */
+typedef PushRange = { var local: String; var remote: String; var range: Null<String>; }
+
 /**
  * `dev scrub-guard [--list PATH] [--private-root DIR]... [--range A..B | --pre-push] [--quiet]` — fails when text a downstream project
  * must not see published is about to enter the repository.
@@ -464,83 +544,3 @@ final class ScrubGuard {
 	}
 
 }
-
-/** One rule of the list: a `Literal` substring, or a `Pattern` (a global regular expression). */
-enum Rule {
-	Literal(text: String);
-	Pattern(re: EReg);
-}
-
-/**
- * What a token of the scanned text can name in a tree, by trailing path: a
- * `FilePath`, a `ModulePath` (a file of any extension) or a `DirectoryPath`.
- */
-enum Naming {
-	FilePath(path: String);
-	ModulePath(path: String);
-	DirectoryPath(path: String);
-}
-
-/** The files of one tree, with their module paths and directories, by base name: answers whether a `Naming` names one. */
-@:nullSafety(Strict)
-final class PathIndex {
-
-	private final _files: Map<String, Array<String>> = [];
-
-	/** Each file's path without its extension. */
-	private final _modules: Map<String, Array<String>> = [];
-
-	private final _directories: Map<String, Array<String>> = [];
-
-	public function new(files: Array<String>) {
-		for (file in files) {
-			add(_files, file);
-			final cut: Int = file.lastIndexOf('/');
-			final dot: Int = file.lastIndexOf('.');
-			if (dot > cut + 1) add(_modules, file.substr(0, dot));
-			var directory: String = file;
-			var at: Int = cut;
-			// a directory already held came with every directory above it
-			while (at > 0) {
-				directory = directory.substr(0, at);
-				if (!add(_directories, directory)) break;
-				at = directory.lastIndexOf('/');
-			}
-		}
-	}
-
-	/** Whether `naming` is one of the tree's files, module paths or directories, or the trailing whole segments of one. */
-	public function knows(naming: Naming): Bool {
-		return switch naming {
-			case FilePath(path): holds(_files, path);
-			case ModulePath(path): holds(_modules, path);
-			case DirectoryPath(path): holds(_directories, path);
-		}
-	}
-
-	private static inline function baseName(path: String): String {
-		return path.substr(path.lastIndexOf('/') + 1);
-	}
-
-	/** Add `path` under its base name unless it is there already; answers whether it was added. */
-	private static function add(byName: Map<String, Array<String>>, path: String): Bool {
-		final name: String = baseName(path);
-		final same: Null<Array<String>> = byName[name];
-		if (same == null) {
-			byName[name] = [path];
-			return true;
-		}
-		if (same.contains(path)) return false;
-		same.push(path);
-		return true;
-	}
-
-	private static function holds(byName: Map<String, Array<String>>, path: String): Bool {
-		final same: Null<Array<String>> = byName[baseName(path)];
-		return same != null && same.exists(held -> held == path || held.endsWith('/$path'));
-	}
-
-}
-
-/** One ref of a push: its local and remote names and the commits it publishes, or a null range when no remote holds a base. */
-typedef PushRange = { var local: String; var remote: String; var range: Null<String>; }

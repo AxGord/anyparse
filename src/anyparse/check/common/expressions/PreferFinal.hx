@@ -10,6 +10,17 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 
 /**
+ * One `var` candidate: its name, its declaration span, its enclosing scope,
+ * and the type it constructs (null unless the initializer is a `new`).
+ */
+private typedef Candidate = {
+	final name: String;
+	final span: Span;
+	final scope: Span;
+	final constructed: Null<String>;
+};
+
+/**
  * Flags a local `var` declaration that is never reassigned — a mutable
  * binding the immutable `final` should replace — and rewrites `var` to
  * `final`. `Severity.Info` (a modernization cleanup toward immutability),
@@ -228,14 +239,3 @@ final class PreferFinal extends RuleBase {
 	}
 
 }
-
-/**
- * One `var` candidate: its name, its declaration span, its enclosing scope,
- * and the type it constructs (null unless the initializer is a `new`).
- */
-private typedef Candidate = {
-	final name: String;
-	final span: Span;
-	final scope: Span;
-	final constructed: Null<String>;
-};

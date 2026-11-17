@@ -11,6 +11,42 @@ import anyparse.query.SymbolIndex;
 import haxe.Exception;
 
 /**
+ * One `if` POSITION this rule claims: the kinds that head a chain there, and whether the rebuilt
+ * text owns its `;`. A statement chain owns its own terminator; an if-EXPRESSION does not --
+ * the `final` / `return` / argument node it is a child of owns that `;`.
+ */
+private typedef IfPosition = { var kinds: Array<String>; var statement: Bool; }
+
+/** The `RefShape` kinds `JoinBranchCall` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	/** Every claimed `if` kind mapped to the position it heads -- `positionOf` is one lookup, per node. */
+	var byKind: Map<String, IfPosition>;
+	var exprStmtKind: String;
+	var blockStmtKind: String;
+	var callKind: String;
+	var conditionalKinds: Array<String>;
+
+}
+
+/** The per-file scan state: the parsed tree, its comment tokens, the resolved seams and the purity scan. */
+private typedef Ctx = {
+	var root: QueryNode;
+	var source: String;
+	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	var seams: Seams;
+	var purity: () -> Null<PurityCtx>;
+}
+
+/** A matched chain's copied text: the surviving call split around its varying argument, and the (condition, value) pairs. */
+private typedef Match = {
+	var prefix: String;
+	var suffix: String;
+	var pairs: Array<{ cond: String, value: String }>;
+	var terminal: String;
+}
+
+/**
  * Flags an `if` / `else if` / … / `else` chain whose EVERY branch is the SAME call differing in
  * exactly ONE argument, and sinks the branching INTO that argument:
  *
@@ -436,40 +472,4 @@ final class JoinBranchCall extends RuleBase {
 		return '${m.prefix}${IfExpressionChain.buildValue(m.pairs, m.terminal)}${m.suffix}$terminator';
 	}
 
-}
-
-/**
- * One `if` POSITION this rule claims: the kinds that head a chain there, and whether the rebuilt
- * text owns its `;`. A statement chain owns its own terminator; an if-EXPRESSION does not --
- * the `final` / `return` / argument node it is a child of owns that `;`.
- */
-private typedef IfPosition = { var kinds: Array<String>; var statement: Bool; }
-
-/** The `RefShape` kinds `JoinBranchCall` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	/** Every claimed `if` kind mapped to the position it heads -- `positionOf` is one lookup, per node. */
-	var byKind: Map<String, IfPosition>;
-	var exprStmtKind: String;
-	var blockStmtKind: String;
-	var callKind: String;
-	var conditionalKinds: Array<String>;
-
-}
-
-/** The per-file scan state: the parsed tree, its comment tokens, the resolved seams and the purity scan. */
-private typedef Ctx = {
-	var root: QueryNode;
-	var source: String;
-	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
-	var seams: Seams;
-	var purity: () -> Null<PurityCtx>;
-}
-
-/** A matched chain's copied text: the surviving call split around its varying argument, and the (condition, value) pairs. */
-private typedef Match = {
-	var prefix: String;
-	var suffix: String;
-	var pairs: Array<{ cond: String, value: String }>;
-	var terminal: String;
 }

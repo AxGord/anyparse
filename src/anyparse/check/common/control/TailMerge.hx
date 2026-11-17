@@ -8,6 +8,36 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
+ * The run of statements that executes after the construct being visited completes:
+ * `stmts` themselves, `prevEnd` the offset just past the statement preceding them (0 when
+ * `stmts` is empty), `shadow` the local names bound BETWEEN that run's scope and the
+ * current position (the names a duplicated tail must not reference), and `opaqueDecl`
+ * whether some declaration on the way binds names `shadow` could not enumerate, which
+ * refuses every candidate below it.
+ */
+private typedef Fall = {
+	final stmts: Array<QueryNode>;
+	final prevEnd: Int;
+	final shadow: Array<String>;
+	final opaqueDecl: Bool;
+};
+
+/**
+ * One duplicated tail: `tailSpan` is what the finding reports (the duplicated statements),
+ * `removeSpan` what the fix deletes (the same run plus the trivia before it), `count` how
+ * many statements it holds, and `fixable` whether the comment gates let the fix run.
+ */
+private typedef Candidate = {
+	final tailSpan: Span;
+	final removeSpan: Span;
+	final count: Int;
+	final fixable: Bool;
+};
+
+/** The grammar seams `TailMerge` resolves once per `run` / `fix` — the shared statement-run seams, `TailScan.TailSeams`. */
+private typedef Seams = TailSeams;
+
+/**
  * Flags a branch of an `if` chain that ENDS with the very statements that follow the
  * chain — a duplicated tail. Control leaving the branch normally would run the shared
  * copy anyway, so the branch's own copy can be deleted and the branch left to fall
@@ -347,33 +377,3 @@ final class TailMerge extends RuleBase {
 	}
 
 }
-
-/**
- * The run of statements that executes after the construct being visited completes:
- * `stmts` themselves, `prevEnd` the offset just past the statement preceding them (0 when
- * `stmts` is empty), `shadow` the local names bound BETWEEN that run's scope and the
- * current position (the names a duplicated tail must not reference), and `opaqueDecl`
- * whether some declaration on the way binds names `shadow` could not enumerate, which
- * refuses every candidate below it.
- */
-private typedef Fall = {
-	final stmts: Array<QueryNode>;
-	final prevEnd: Int;
-	final shadow: Array<String>;
-	final opaqueDecl: Bool;
-};
-
-/**
- * One duplicated tail: `tailSpan` is what the finding reports (the duplicated statements),
- * `removeSpan` what the fix deletes (the same run plus the trivia before it), `count` how
- * many statements it holds, and `fixable` whether the comment gates let the fix run.
- */
-private typedef Candidate = {
-	final tailSpan: Span;
-	final removeSpan: Span;
-	final count: Int;
-	final fixable: Bool;
-};
-
-/** The grammar seams `TailMerge` resolves once per `run` / `fix` — the shared statement-run seams, `TailScan.TailSeams`. */
-private typedef Seams = TailSeams;

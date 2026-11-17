@@ -13,6 +13,29 @@ import anyparse.util.Groups;
 
 using StringTools;
 
+/** Per-run resolved `RefShape` seams and the optional type provider. */
+private typedef Cfg = {
+	var shape: RefShape;
+	var plugin: GrammarPlugin;
+	var forKind: String;
+	var identKind: String;
+	var callKind: String;
+	var fieldKind: String;
+	var indexKind: String;
+	var blockKind: Null<String>;
+	var selfRef: Null<String>;
+	var writeParentKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+	var immutableLocalDeclKinds: Array<String>;
+	var paramKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
+	var mapFamily: Array<String>;
+	var nullableWrappers: Array<String>;
+	var safeAnnotationTypes: Array<String>;
+	var opaqueKinds: Array<String>;
+	var typed: Null<TypeInfoProvider>;
+};
+
 /**
  * Flags a `for (k in m.keys())` loop whose body reads the SAME map by the SAME key
  * (`m[k]` or `m.get(k)`) — the keys-then-lookup anti-pattern that re-looks-up every
@@ -622,26 +645,3 @@ final class MapKeysLookup extends RuleBase {
 	}
 
 }
-
-/** Per-run resolved `RefShape` seams and the optional type provider. */
-private typedef Cfg = {
-	var shape: RefShape;
-	var plugin: GrammarPlugin;
-	var forKind: String;
-	var identKind: String;
-	var callKind: String;
-	var fieldKind: String;
-	var indexKind: String;
-	var blockKind: Null<String>;
-	var selfRef: Null<String>;
-	var writeParentKinds: Array<String>;
-	var localDeclKinds: Array<String>;
-	var immutableLocalDeclKinds: Array<String>;
-	var paramKinds: Array<String>;
-	var valueBinderKinds: Array<String>;
-	var mapFamily: Array<String>;
-	var nullableWrappers: Array<String>;
-	var safeAnnotationTypes: Array<String>;
-	var opaqueKinds: Array<String>;
-	var typed: Null<TypeInfoProvider>;
-};

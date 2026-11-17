@@ -10,6 +10,20 @@ using StringTools;
 using Lambda;
 
 /**
+ * What makes a chain the layout of a separated list. `sep` is the gap text that is the list's separator rather than an
+ * operator: it hugs its left operand (`a, b`) while the other gaps keep their spaces. `tail` is what follows the last
+ * element's chain, `close` the list's closer.
+ */
+typedef ChainList = { final sep: String; final tail: Array<Doc>; final close: String; };
+
+/**
+ * The Keep shape's per-gap comment channels besides the after-operator one, parallel to `ops`: `own` the run of
+ * own-line comments between an operator and its right operand, `above` an after-operator `//` comment as the line
+ * `comments.trailingCommentOverflow: "above"` may move it to (null where it may not), `lineWidth` the overflow limit.
+ */
+private typedef KeepGapComments = { final own: Null<Array<Null<Doc>>>; final above: Null<Array<Null<Doc>>>; final lineWidth: Int; }
+
+/**
  * Runtime helper that emits a `Doc` for a binary-op chain construct (`a || b || c`,
  * `a + b - c + d`) whose layout is driven by a `WrapRules` cascade.
  *
@@ -1475,17 +1489,3 @@ final class BinaryChainEmit {
 	}
 
 }
-
-/**
- * What makes a chain the layout of a separated list. `sep` is the gap text that is the list's separator rather than an
- * operator: it hugs its left operand (`a, b`) while the other gaps keep their spaces. `tail` is what follows the last
- * element's chain, `close` the list's closer.
- */
-typedef ChainList = { final sep: String; final tail: Array<Doc>; final close: String; };
-
-/**
- * The Keep shape's per-gap comment channels besides the after-operator one, parallel to `ops`: `own` the run of
- * own-line comments between an operator and its right operand, `above` an after-operator `//` comment as the line
- * `comments.trailingCommentOverflow: "above"` may move it to (null where it may not), `lineWidth` the overflow limit.
- */
-private typedef KeepGapComments = { final own: Null<Array<Null<Doc>>>; final above: Null<Array<Null<Doc>>>; final lineWidth: Int; }

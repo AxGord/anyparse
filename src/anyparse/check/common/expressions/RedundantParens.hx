@@ -10,6 +10,106 @@ using anyparse.util.Strings;
 using StringTools;
 
 /**
+ * The grammar's parenthesis kind, the four host-kind lists that pin a DELIMITED slot
+ * — `allChild` (every child), `tailChild` (every child but the first),
+ * `condFirstChild` / `condLastChild` (the bracketed condition of a conditional) — and
+ * `greedy`, the interior kinds whose parens stay even in a delimited slot.
+ *
+ * `atoms` (self-delimiting kinds), `atomChains` (transparent links, atomic only when
+ * every child is), `families`, and the two host / unwrap PAIRS — `comparisonHost` /
+ * `comparisonUnwrap` (comparison-tier hosts, arithmetic content) and `additiveHost` /
+ * `additiveUnwrap` (additive hosts, multiplicative content) — carry the four OPERAND
+ * arms, with `opaqueSubtree` bounding them. Each holds the grammar's vocabulary when this
+ * project opted the owning arm in and an EMPTY array otherwise, so a default run answers
+ * every operand question uniformly false with no second flag to read. Resolved once per
+ * file so the walk never re-reads the shape or the config.
+ *
+ * `rightGreedy`, `unaryMinus` and `requiredHost` are deliberately NOT arm-scoped. The
+ * first two gate the SHIPPED, default-on ternary-condition arm as well as the opt-in ones,
+ * and the third states where a metadata annotation binds — a correctness rule that holds
+ * whatever a project opted in.
+ *
+ * WHEN A THIRD PRECEDENCE-GATED HOST/UNWRAP PAIR LANDS beside `comparison*` and
+ * `additive*`, collapse the parallel fields into one array of pairs and loop `slotOf` over
+ * it. Two pairs still read better spelled out; three is the trigger.
+ */
+private typedef ParenSlots = {
+	var parenKind: String;
+	var ternaryKind: Null<String>;
+	var ternaryUnwrap: Array<String>;
+	var allChild: Array<String>;
+	var tailChild: Array<String>;
+	var condFirstChild: Array<String>;
+	var condLastChild: Array<String>;
+	var greedy: Array<String>;
+	var splice: Array<String>;
+	var spliceHost: Array<String>;
+	var atoms: Array<String>;
+	var atomChains: Array<String>;
+	var families: Array<Array<String>>;
+	var comparisonHost: Array<String>;
+	var comparisonUnwrap: Array<String>;
+	var additiveHost: Array<String>;
+	var additiveUnwrap: Array<String>;
+	var rightGreedy: Array<String>;
+	var unaryMinus: Array<String>;
+	var prefixAnnotation: Array<String>;
+	var requiredHost: Array<String>;
+	var opaqueSubtree: Array<String>;
+}
+
+/**
+ * An indexed paren node plus whether its own pair can be dropped entirely (rather
+ * than collapsed to one pair) — the `fix` lookup's payload.
+ */
+private typedef ParenSite = { var node: QueryNode; var dropsParens: Bool; }
+
+/**
+ * How a child slot is bounded. `Plain` — nothing delimits it, so a paren there may be
+ * load-bearing for precedence. `Delimited` — the construct supplies its own boundaries.
+ * `DelimitedSplice` — delimited AND the host expands a splicing reification argument
+ * (`RefShape.spliceSensitiveExprKinds`), where a paren changes ARITY, not syntax.
+ * `TernaryCondition` — a ternary's condition child, a precedence-gated slot where the
+ * paren drops only when the bare inner binds strictly tighter than `?:`
+ * (`RefShape.ternaryConditionUnwrapKinds`). `SameFamilyLeft` — the LEFT operand of a
+ * binary operator whose parenthesized content is another member of the same
+ * left-associative precedence family, which the opt-in `sameOperatorLeft` arm drops.
+ * `Required` — a direct child of a `RefShape.parenRequiredHostKinds` host, where the
+ * pair is grammar syntax or an idiom this check declines to own. `ComparisonOperand` —
+ * either operand of a `RefShape.comparisonOperandHostKinds` operator, a second
+ * precedence-gated slot where the paren drops only for the arithmetic content on
+ * `RefShape.comparisonOperandUnwrapKinds`, and only when a parenthesized sibling is
+ * itself provable (on that same whitelist, or as an atom when the `atoms` arm is
+ * on) — the opt-in `comparisonOperands` arm. `AdditiveOperand` — the next arm down:
+ * either operand of a `RefShape.additiveOperandHostKinds` operator, where the paren
+ * drops for the strictly tighter multiplicative content on
+ * `RefShape.additiveOperandUnwrapKinds` under the identical sibling rule — the opt-in
+ * `additiveOperands` arm.
+ *
+ * `TernaryElse` — a ternary's else-arm child, the RIGHTMOST operand of a right-associative
+ * `?:`, where a nested ternary re-parses to the tree it already had; a fail-closed whitelist
+ * of one kind, gated only on the SEPARATOR-greedy tail.
+ *
+ * The four PRECEDENCE-GATED slots that prove the drop from the content's ROOT kind —
+ * `TernaryCondition`, `SameFamilyLeft`, `ComparisonOperand`, `AdditiveOperand` —
+ * additionally refuse content ending in a `RefShape.rightGreedyExprKinds` construct, and the two whitelist
+ * ones refuse content whose leftmost token is a `RefShape.unaryMinusKinds`. `dropsParens` switches over this
+ * enum EXHAUSTIVELY, so a new member fails to compile until it states which of those it
+ * wants.
+ */
+private enum abstract SlotKind(Int) {
+	final Plain = 0;
+	final Delimited = 1;
+	final DelimitedSplice = 2;
+	final TernaryCondition = 3;
+	final SameFamilyLeft = 4;
+	final Required = 5;
+	final ComparisonOperand = 6;
+	final AdditiveOperand = 7;
+	final TernaryElse = 8;
+}
+
+/**
  * Flags redundant parentheses in four shapes. A parenthesized expression wrapped
  * directly in another (`((e))`) — the outer pair adds nothing wherever it sits. And a
  * LONE `(e)` sitting in a DELIMITED position: one where the surrounding construct
@@ -798,104 +898,4 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 			indexParens(c, slots, slotOf(node, i, slots), inner, host || (prefixed && startsTogether(node, c)), out);
 	}
 
-}
-
-/**
- * The grammar's parenthesis kind, the four host-kind lists that pin a DELIMITED slot
- * — `allChild` (every child), `tailChild` (every child but the first),
- * `condFirstChild` / `condLastChild` (the bracketed condition of a conditional) — and
- * `greedy`, the interior kinds whose parens stay even in a delimited slot.
- *
- * `atoms` (self-delimiting kinds), `atomChains` (transparent links, atomic only when
- * every child is), `families`, and the two host / unwrap PAIRS — `comparisonHost` /
- * `comparisonUnwrap` (comparison-tier hosts, arithmetic content) and `additiveHost` /
- * `additiveUnwrap` (additive hosts, multiplicative content) — carry the four OPERAND
- * arms, with `opaqueSubtree` bounding them. Each holds the grammar's vocabulary when this
- * project opted the owning arm in and an EMPTY array otherwise, so a default run answers
- * every operand question uniformly false with no second flag to read. Resolved once per
- * file so the walk never re-reads the shape or the config.
- *
- * `rightGreedy`, `unaryMinus` and `requiredHost` are deliberately NOT arm-scoped. The
- * first two gate the SHIPPED, default-on ternary-condition arm as well as the opt-in ones,
- * and the third states where a metadata annotation binds — a correctness rule that holds
- * whatever a project opted in.
- *
- * WHEN A THIRD PRECEDENCE-GATED HOST/UNWRAP PAIR LANDS beside `comparison*` and
- * `additive*`, collapse the parallel fields into one array of pairs and loop `slotOf` over
- * it. Two pairs still read better spelled out; three is the trigger.
- */
-private typedef ParenSlots = {
-	var parenKind: String;
-	var ternaryKind: Null<String>;
-	var ternaryUnwrap: Array<String>;
-	var allChild: Array<String>;
-	var tailChild: Array<String>;
-	var condFirstChild: Array<String>;
-	var condLastChild: Array<String>;
-	var greedy: Array<String>;
-	var splice: Array<String>;
-	var spliceHost: Array<String>;
-	var atoms: Array<String>;
-	var atomChains: Array<String>;
-	var families: Array<Array<String>>;
-	var comparisonHost: Array<String>;
-	var comparisonUnwrap: Array<String>;
-	var additiveHost: Array<String>;
-	var additiveUnwrap: Array<String>;
-	var rightGreedy: Array<String>;
-	var unaryMinus: Array<String>;
-	var prefixAnnotation: Array<String>;
-	var requiredHost: Array<String>;
-	var opaqueSubtree: Array<String>;
-}
-
-/**
- * An indexed paren node plus whether its own pair can be dropped entirely (rather
- * than collapsed to one pair) — the `fix` lookup's payload.
- */
-private typedef ParenSite = { var node: QueryNode; var dropsParens: Bool; }
-
-/**
- * How a child slot is bounded. `Plain` — nothing delimits it, so a paren there may be
- * load-bearing for precedence. `Delimited` — the construct supplies its own boundaries.
- * `DelimitedSplice` — delimited AND the host expands a splicing reification argument
- * (`RefShape.spliceSensitiveExprKinds`), where a paren changes ARITY, not syntax.
- * `TernaryCondition` — a ternary's condition child, a precedence-gated slot where the
- * paren drops only when the bare inner binds strictly tighter than `?:`
- * (`RefShape.ternaryConditionUnwrapKinds`). `SameFamilyLeft` — the LEFT operand of a
- * binary operator whose parenthesized content is another member of the same
- * left-associative precedence family, which the opt-in `sameOperatorLeft` arm drops.
- * `Required` — a direct child of a `RefShape.parenRequiredHostKinds` host, where the
- * pair is grammar syntax or an idiom this check declines to own. `ComparisonOperand` —
- * either operand of a `RefShape.comparisonOperandHostKinds` operator, a second
- * precedence-gated slot where the paren drops only for the arithmetic content on
- * `RefShape.comparisonOperandUnwrapKinds`, and only when a parenthesized sibling is
- * itself provable (on that same whitelist, or as an atom when the `atoms` arm is
- * on) — the opt-in `comparisonOperands` arm. `AdditiveOperand` — the next arm down:
- * either operand of a `RefShape.additiveOperandHostKinds` operator, where the paren
- * drops for the strictly tighter multiplicative content on
- * `RefShape.additiveOperandUnwrapKinds` under the identical sibling rule — the opt-in
- * `additiveOperands` arm.
- *
- * `TernaryElse` — a ternary's else-arm child, the RIGHTMOST operand of a right-associative
- * `?:`, where a nested ternary re-parses to the tree it already had; a fail-closed whitelist
- * of one kind, gated only on the SEPARATOR-greedy tail.
- *
- * The four PRECEDENCE-GATED slots that prove the drop from the content's ROOT kind —
- * `TernaryCondition`, `SameFamilyLeft`, `ComparisonOperand`, `AdditiveOperand` —
- * additionally refuse content ending in a `RefShape.rightGreedyExprKinds` construct, and the two whitelist
- * ones refuse content whose leftmost token is a `RefShape.unaryMinusKinds`. `dropsParens` switches over this
- * enum EXHAUSTIVELY, so a new member fails to compile until it states which of those it
- * wants.
- */
-private enum abstract SlotKind(Int) {
-	final Plain = 0;
-	final Delimited = 1;
-	final DelimitedSplice = 2;
-	final TernaryCondition = 3;
-	final SameFamilyLeft = 4;
-	final Required = 5;
-	final ComparisonOperand = 6;
-	final AdditiveOperand = 7;
-	final TernaryElse = 8;
 }

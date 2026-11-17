@@ -4,6 +4,9 @@ import anyparse.check.common.members.PreferFinalPublicField;
 
 using Lambda;
 
+/** One source a fixture hands the rule. */
+private typedef SourceFile = { var file: String; var source: String; };
+
 /**
  * The structural-conformance gate asked as a PROOF rather than as a name test
  * (`StructuralTypes.memberCouldUnify`).
@@ -270,6 +273,3 @@ class StructuralConformanceProofTest extends Test {
 	}
 
 }
-
-/** One source a fixture hands the rule. */
-private typedef SourceFile = { var file: String; var source: String; };

@@ -17,6 +17,45 @@ import haxe.Exception;
  */
 typedef GuardedEdit = { span: Span, text: String, holes: Array<Span> };
 
+/** How to spell a grouping pair, as `RefShape.parenDelimiters` declares it. */
+private typedef ParenDelimiters = { open: String, close: String };
+
+/** Everything the per-wrap probes need, assembled once. */
+private typedef Probe = {
+	source: String,
+	edits: Array<GuardedEdit>,
+	delims: ParenDelimiters,
+	plugin: GrammarPlugin,
+	sites: Array<Site>,
+	allLegal: Array<Bool>,
+	refs: Array<Null<QueryNode>>,
+	refText: String,
+	refPairs: Map<String, Bool>,
+	closer: Null<String>,
+	statementKind: Null<String>
+};
+
+/** @see `ParenGuard.enumerateSites` */
+private typedef Site = {
+	edit: Int,
+	position: Int,
+	from: Int,
+	to: Int
+};
+
+/**
+ * One assembled candidate: its text, each site's content span in it, the spans
+ * of the pairs the guard itself wrote (delimiters included), the edits that
+ * produce it, and its parse.
+ */
+private typedef Variant = {
+	text: String,
+	spans: Array<Span>,
+	pairs: Map<String, Bool>,
+	edits: Array<{ span: Span, text: String }>,
+	tree: Null<QueryNode>
+};
+
 /**
  * Minimal parenthesisation for a TEXT splice.
  *
@@ -559,42 +598,3 @@ final class ParenGuard {
 	}
 
 }
-
-/** How to spell a grouping pair, as `RefShape.parenDelimiters` declares it. */
-private typedef ParenDelimiters = { open: String, close: String };
-
-/** Everything the per-wrap probes need, assembled once. */
-private typedef Probe = {
-	source: String,
-	edits: Array<GuardedEdit>,
-	delims: ParenDelimiters,
-	plugin: GrammarPlugin,
-	sites: Array<Site>,
-	allLegal: Array<Bool>,
-	refs: Array<Null<QueryNode>>,
-	refText: String,
-	refPairs: Map<String, Bool>,
-	closer: Null<String>,
-	statementKind: Null<String>
-};
-
-/** @see `ParenGuard.enumerateSites` */
-private typedef Site = {
-	edit: Int,
-	position: Int,
-	from: Int,
-	to: Int
-};
-
-/**
- * One assembled candidate: its text, each site's content span in it, the spans
- * of the pairs the guard itself wrote (delimiters included), the edits that
- * produce it, and its parse.
- */
-private typedef Variant = {
-	text: String,
-	spans: Array<Span>,
-	pairs: Map<String, Bool>,
-	edits: Array<{ span: Span, text: String }>,
-	tree: Null<QueryNode>
-};

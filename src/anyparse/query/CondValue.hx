@@ -2,24 +2,6 @@ package anyparse.query;
 
 using Lambda;
 
-/**
- * The value one operand of a conditional-compilation condition takes, as the Haxe compiler's evaluator holds it
- * (`small_type` in `src/syntax/parserEntry.ml`, 4.3): an undefined define, a boolean an operator made, a number, a string —
- * a define's value or a literal — a `version("…")`, or a define known to be set whose value is not known (`Set`).
- */
-enum CondValue {
-
-	Undefined;
-	Truth(value: Bool);
-	Number(value: Float);
-	Text(value: String);
-	Version(release: Array<VersionPart>, pre: Null<Array<VersionPart>>);
-
-	/** A define known to be set, its value unknown: a string, true, and of no known order against anything but a boolean. */
-	Set;
-
-}
-
 /** One dot-separated part of a semantic version: a number, or anything `int_of_string` refuses. */
 enum VersionPart {
 	Num(value: Int);
@@ -215,5 +197,23 @@ final class CondValues {
 		for (i in 0...s.length) if (s.fastCodeAt(i) > ASCII_LAST) return false;
 		return true;
 	}
+
+}
+
+/**
+ * The value one operand of a conditional-compilation condition takes, as the Haxe compiler's evaluator holds it
+ * (`small_type` in `src/syntax/parserEntry.ml`, 4.3): an undefined define, a boolean an operator made, a number, a string —
+ * a define's value or a literal — a `version("…")`, or a define known to be set whose value is not known (`Set`).
+ */
+enum CondValue {
+
+	Undefined;
+	Truth(value: Bool);
+	Number(value: Float);
+	Text(value: String);
+	Version(release: Array<VersionPart>, pre: Null<Array<VersionPart>>);
+
+	/** A define known to be set, its value unknown: a string, true, and of no known order against anything but a boolean. */
+	Set;
 
 }

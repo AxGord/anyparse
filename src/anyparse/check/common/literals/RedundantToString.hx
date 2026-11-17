@@ -15,6 +15,123 @@ import anyparse.query.TypeResolver;
 
 using anyparse.util.Strings;
 
+/** Which stringifying CONTEXT makes a `toString()` call redundant. */
+private enum Arm {
+
+	/**
+	 * Inside a `${ … }` interpolation block. Carries the block node the `$name` collapse rewrites
+	 * and the string literal that owns it, whose escapes decide whether the collapse is safe.
+	 */
+	Interpolation(block: QueryNode, literal: QueryNode);
+
+	/** A direct operand of a `+` whose other operand is String-typed. */
+	Concat;
+
+	/** The single argument of a `Std.string(...)` call. */
+	StdString;
+
+	/** The receiver is itself String-typed, so the call is the identity — no surrounding context needed. */
+	StringReceiver;
+
+}
+
+/** One `.toString()` site, already resolved to its edit or to the reason it has none. */
+private typedef Candidate = {
+
+	/** The call node's span — the violation's span and the key `fix` matches on. */
+	final span: Span;
+
+	/** The edit that removes the call, or null when `blocker` says why there is none. */
+	final edit: Null<{ span: Span, text: String }>;
+
+	/** Why this position already stringifies — the first half of the message. */
+	final why: String;
+
+	/** Why the site is report-only, or null when it is fixable. */
+	final blocker: Null<String>;
+
+};
+
+/** The resolved seams `RedundantToString` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	/** The whole shape, for the `TypeResolver` calls that take it directly. */
+	final shape: RefShape;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final identKind: String;
+
+	/** The `${ … }` interpolation block kind, or null when the grammar has no interpolation. */
+	final stringInterpBlockKind: Null<String>;
+
+	/** The string-literal kinds — a literal operand is String-typed by construction. */
+	final stringLiteralKinds: Array<String>;
+
+	/** The grammar's string type name, read off `literalTypeNames` for a string literal kind. */
+	final stringTypeName: Null<String>;
+
+	/** Literal kind -> type name; its KEYS are the literal receivers that are non-null by construction. */
+	final literalTypeNames: Map<String, String>;
+
+	/** Every CLASS declaration kind — the only shapes that cannot overload `+`. */
+	final classDeclKinds: Array<String>;
+
+	/** The string-concatenation operator kind, or null when the grammar declares no `StringFoldSupport`. */
+	final concatKind: Null<String>;
+
+	/** `Type.method` -> declared return type, the curated non-null static table. */
+	final staticMethodReturns: Map<String, String>;
+
+	/** Type names that WRAP a nullable value, so a declared return of one proves nothing. */
+	final nullableWrapperTypeNames: Array<String>;
+
+	/** Subtrees the walk does not descend into (macro reification). */
+	final opaqueKinds: Array<String>;
+
+};
+
+/** The per-file inputs every collector function reads — one struct instead of a six-parameter tuple. */
+private typedef Ctx = {
+
+	final root: QueryNode;
+	final source: String;
+
+	/** The file's lexical regions: where a comment marker is a comment and where it is string text. */
+	final regions: Array<LexRegion>;
+	final seams: Seams;
+	final declaredTypes: Map<Int, String>;
+
+	/** The null proof over this file's declared types. */
+	final nullity: DeclaredNullity;
+
+	/** What a receiver's type BINDS to where it is written; null when the grammar carries no type information. */
+	final binder: Null<OperandBinder>;
+
+	/** The resolution scope: whole-analysed-set in `run`, and in `fix` whenever the caller passes one. */
+	final index: SymbolIndex;
+
+	/** The file analysed. */
+	final file: String;
+
+	/** The compiler's facts, asked by `fix` for a receiver type the resolution scope cannot place; null in `run`. */
+	final facts: Null<FactsOracle>;
+
+};
+
+/** What a receiver resolves to — the two facts every gate downstream needs. */
+private typedef ReceiverInfo = {
+
+	/**
+	 * The declarations the receiver's type binds to — empty for a built-in or a literal, which no
+	 * declaration in scope stands for — or null when the binding is not proven.
+	 */
+	final decls: Null<Array<ResolvedType>>;
+
+	/** Whether the receiver is provably non-null. */
+	final nonNull: Bool;
+
+};
+
 /**
  * Flags a `.toString()` call sitting in a position that ALREADY stringifies, so the call only
  * restates what the language does anyway. `Severity.Info`; `fix` drops the call. **DEFAULT OFF** —
@@ -541,120 +658,3 @@ final class RedundantToString extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** Which stringifying CONTEXT makes a `toString()` call redundant. */
-private enum Arm {
-
-	/**
-	 * Inside a `${ … }` interpolation block. Carries the block node the `$name` collapse rewrites
-	 * and the string literal that owns it, whose escapes decide whether the collapse is safe.
-	 */
-	Interpolation(block: QueryNode, literal: QueryNode);
-
-	/** A direct operand of a `+` whose other operand is String-typed. */
-	Concat;
-
-	/** The single argument of a `Std.string(...)` call. */
-	StdString;
-
-	/** The receiver is itself String-typed, so the call is the identity — no surrounding context needed. */
-	StringReceiver;
-
-}
-
-/** One `.toString()` site, already resolved to its edit or to the reason it has none. */
-private typedef Candidate = {
-
-	/** The call node's span — the violation's span and the key `fix` matches on. */
-	final span: Span;
-
-	/** The edit that removes the call, or null when `blocker` says why there is none. */
-	final edit: Null<{ span: Span, text: String }>;
-
-	/** Why this position already stringifies — the first half of the message. */
-	final why: String;
-
-	/** Why the site is report-only, or null when it is fixable. */
-	final blocker: Null<String>;
-
-};
-
-/** The resolved seams `RedundantToString` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	/** The whole shape, for the `TypeResolver` calls that take it directly. */
-	final shape: RefShape;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final identKind: String;
-
-	/** The `${ … }` interpolation block kind, or null when the grammar has no interpolation. */
-	final stringInterpBlockKind: Null<String>;
-
-	/** The string-literal kinds — a literal operand is String-typed by construction. */
-	final stringLiteralKinds: Array<String>;
-
-	/** The grammar's string type name, read off `literalTypeNames` for a string literal kind. */
-	final stringTypeName: Null<String>;
-
-	/** Literal kind -> type name; its KEYS are the literal receivers that are non-null by construction. */
-	final literalTypeNames: Map<String, String>;
-
-	/** Every CLASS declaration kind — the only shapes that cannot overload `+`. */
-	final classDeclKinds: Array<String>;
-
-	/** The string-concatenation operator kind, or null when the grammar declares no `StringFoldSupport`. */
-	final concatKind: Null<String>;
-
-	/** `Type.method` -> declared return type, the curated non-null static table. */
-	final staticMethodReturns: Map<String, String>;
-
-	/** Type names that WRAP a nullable value, so a declared return of one proves nothing. */
-	final nullableWrapperTypeNames: Array<String>;
-
-	/** Subtrees the walk does not descend into (macro reification). */
-	final opaqueKinds: Array<String>;
-
-};
-
-/** The per-file inputs every collector function reads — one struct instead of a six-parameter tuple. */
-private typedef Ctx = {
-
-	final root: QueryNode;
-	final source: String;
-
-	/** The file's lexical regions: where a comment marker is a comment and where it is string text. */
-	final regions: Array<LexRegion>;
-	final seams: Seams;
-	final declaredTypes: Map<Int, String>;
-
-	/** The null proof over this file's declared types. */
-	final nullity: DeclaredNullity;
-
-	/** What a receiver's type BINDS to where it is written; null when the grammar carries no type information. */
-	final binder: Null<OperandBinder>;
-
-	/** The resolution scope: whole-analysed-set in `run`, and in `fix` whenever the caller passes one. */
-	final index: SymbolIndex;
-
-	/** The file analysed. */
-	final file: String;
-
-	/** The compiler's facts, asked by `fix` for a receiver type the resolution scope cannot place; null in `run`. */
-	final facts: Null<FactsOracle>;
-
-};
-
-/** What a receiver resolves to — the two facts every gate downstream needs. */
-private typedef ReceiverInfo = {
-
-	/**
-	 * The declarations the receiver's type binds to — empty for a built-in or a literal, which no
-	 * declaration in scope stands for — or null when the binding is not proven.
-	 */
-	final decls: Null<Array<ResolvedType>>;
-
-	/** Whether the receiver is provably non-null. */
-	final nonNull: Bool;
-
-};

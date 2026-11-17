@@ -12,6 +12,40 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The `RefShape` kinds `PreferSafeNavComparison` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	final andKind: String;
+	final orKind: String;
+	final eqKind: String;
+	final notEqKind: String;
+	final nullKind: String;
+	final identKind: String;
+	final fieldAccessKind: String;
+	final blockKinds: Array<String>;
+	final boundaryKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final lambdaKinds: Array<String>;
+	final inlineFnKinds: Array<String>;
+	final modifierKinds: Array<String>;
+	final inlineKind: Null<String>;
+	final opaqueKinds: Array<String>;
+	final unsafeKinds: Array<String>;
+	final selfText: Null<String>;
+	final parenKind: Null<String>;
+};
+
+/**
+ * One collapsible run: the source range it spans (`from` … `to`), where its LAST conjunct
+ * starts (`lastFrom` — the only text the fix keeps), and the null-checked operands in
+ * source order, the first of which drives the narrowing scan.
+ */
+private typedef NullRun = {
+	final from: Int;
+	final to: Int;
+	final lastFrom: Int;
+	final operands: Array<QueryNode>;
+};
+
 /**
  * Flags a null-check conjunction that a safe-navigation comparison replaces —
  * `x != null && x.b != null` collapses to `x?.b != null`, and its `||` dual
@@ -540,37 +574,3 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 	}
 
 }
-
-/** The `RefShape` kinds `PreferSafeNavComparison` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-	final andKind: String;
-	final orKind: String;
-	final eqKind: String;
-	final notEqKind: String;
-	final nullKind: String;
-	final identKind: String;
-	final fieldAccessKind: String;
-	final blockKinds: Array<String>;
-	final boundaryKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final lambdaKinds: Array<String>;
-	final inlineFnKinds: Array<String>;
-	final modifierKinds: Array<String>;
-	final inlineKind: Null<String>;
-	final opaqueKinds: Array<String>;
-	final unsafeKinds: Array<String>;
-	final selfText: Null<String>;
-	final parenKind: Null<String>;
-};
-
-/**
- * One collapsible run: the source range it spans (`from` … `to`), where its LAST conjunct
- * starts (`lastFrom` — the only text the fix keeps), and the null-checked operands in
- * source order, the first of which drives the narrowing scan.
- */
-private typedef NullRun = {
-	final from: Int;
-	final to: Int;
-	final lastFrom: Int;
-	final operands: Array<QueryNode>;
-};

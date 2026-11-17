@@ -1,6 +1,21 @@
 package anyparse.query;
 
 /**
+ * One config document a walk-up found: its content and the ABSOLUTE path it was read
+ * from, which is what lets a caller resolve a config-relative setting against the
+ * directory of the document that declared it.
+ */
+typedef ConfigFile = { var content: String; var path: String; }
+
+/**
+ * A whole walk-up: the readable documents nearest first, plus the paths of any that
+ * EXIST and could not be read. The second list is not diagnostics tidiness — a chain
+ * that silently drops a document the project wrote applies the ancestor's answer to a
+ * question the project already answered, with nothing on stderr to say so.
+ */
+typedef ConfigChain = { var documents: Array<ConfigFile>; var unreadable: Array<String>; }
+
+/**
  * Walks up the directory tree from a file looking for a named project config,
  * returning its content. The shared IO half of every walk-up config lookup
  * (`checkstyle.json` via `CheckstyleConfigFinder`, `apq.json` via
@@ -175,18 +190,3 @@ final class ConfigFinder {
 	}
 
 }
-
-/**
- * One config document a walk-up found: its content and the ABSOLUTE path it was read
- * from, which is what lets a caller resolve a config-relative setting against the
- * directory of the document that declared it.
- */
-typedef ConfigFile = { var content: String; var path: String; }
-
-/**
- * A whole walk-up: the readable documents nearest first, plus the paths of any that
- * EXIST and could not be read. The second list is not diagnostics tidiness — a chain
- * that silently drops a document the project wrote applies the ancestor's answer to a
- * question the project already answered, with nothing on stderr to say so.
- */
-typedef ConfigChain = { var documents: Array<ConfigFile>; var unreadable: Array<String>; }

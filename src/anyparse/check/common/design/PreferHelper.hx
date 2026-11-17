@@ -25,6 +25,105 @@ import haxe.Exception;
 
 using anyparse.util.Strings;
 
+/** One opted-in helper, its body as a pattern. */
+private typedef Template = {
+
+	/** `pkg.Type.member`, for the message. */
+	final helper: String;
+
+	/** The helper's type path, as the call spells it through `TypeRefPrinter`. */
+	final typePath: String;
+	final member: String;
+
+	/** The parameter names in declaration order — the call's argument order. */
+	final params: Array<String>;
+
+	/** The names the body's top-level statements declare. */
+	final locals: Array<String>;
+
+	/** The names the body declares below its top level, loop binders included: scoped to the copy, never read after it. */
+	final nested: Array<String>;
+
+	/** Each function parameter, the body's one call of it the hole: the locals that call passes, the lambda's parameters. */
+	final calls: Map<String, Array<String>>;
+
+	/** The value parameters a read of which may follow a body effect: a site binds each to a plain value only. */
+	final late: Array<String>;
+
+	/** The spelling around the closing return's value, when the body ends in one: the call then ends the site's function. */
+	final exit: Null<Exit>;
+	final pattern: Pattern;
+
+	/** Where the helper is declared: its own body is never a site. */
+	final file: String;
+	final span: Span;
+
+}
+
+/** The text before and after the value of a template's closing return. */
+private typedef Exit = { final head: String; final tail: String; }
+
+/** One matched copy: the replaced statements and the call's argument texts. */
+private typedef Site = { final span: Span; final template: Template; final args: Array<String>; }
+/** What `scanBody` learns of a helper's body. */
+private typedef BodyScan = {
+
+	final params: Array<String>;
+	final holes: Array<String>;
+	final nested: Array<String>;
+	final reads: Map<String, Int>;
+
+	/** Each value parameter's reads, a read a loop repeats placed at that loop's end. */
+	final readsAt: Map<String, Array<Int>>;
+	final calls: Map<String, Array<String>>;
+	final idents: Array<QueryNode>;
+
+	/** The control exits that refuse the body: a body ending in a value return keeps its value returns. */
+	final jumps: Array<String>;
+	final exits: Bool;
+	var problem: Null<String>;
+
+}
+
+/** The file one site search runs over. */
+private typedef SiteCtx = {
+	final file: String;
+	final source: String;
+	final root: QueryNode;
+	final purity: PurityCtx;
+	final regions: () -> Array<LexRegion>;
+	final seams: Seams;
+	final plugin: GrammarPlugin;
+}
+
+private typedef Seams = {
+
+	final identKind: String;
+	final interpIdentKind: Null<String>;
+	final paramKinds: Array<String>;
+	final blockBodyKind: String;
+	final localDeclKinds: Array<String>;
+	final localContinuationKinds: Array<String>;
+
+	/** The control exits a site would take from its OWN function: every exit but a throw, plus break and continue. */
+	final jumpKinds: Array<String>;
+	final iterationBinderKinds: Array<String>;
+	final valueBinderKinds: Array<String>;
+	final loopKinds: Array<String>;
+	final callKind: Null<String>;
+	final returnKind: Null<String>;
+	final valueReturnKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final lambdaKinds: Array<String>;
+
+	/**
+	 * The jumps a lambda hole's binding may not hold: in the lambda a `return` leaves the
+	 * lambda, a `break` or `continue` no loop of the binding encloses has none to bind to.
+	 */
+	final escapes: LoopJumpSeams;
+
+}
+
 /**
  * The one answer to "which statement fragments of a tree are an inlined copy of an opted-in template helper's body, and
  * may be replaced by a call to it". A helper opts in by carrying the annotation `apq.json` names
@@ -590,104 +689,5 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			}
 		};
 	}
-
-}
-
-/** One opted-in helper, its body as a pattern. */
-private typedef Template = {
-
-	/** `pkg.Type.member`, for the message. */
-	final helper: String;
-
-	/** The helper's type path, as the call spells it through `TypeRefPrinter`. */
-	final typePath: String;
-	final member: String;
-
-	/** The parameter names in declaration order — the call's argument order. */
-	final params: Array<String>;
-
-	/** The names the body's top-level statements declare. */
-	final locals: Array<String>;
-
-	/** The names the body declares below its top level, loop binders included: scoped to the copy, never read after it. */
-	final nested: Array<String>;
-
-	/** Each function parameter, the body's one call of it the hole: the locals that call passes, the lambda's parameters. */
-	final calls: Map<String, Array<String>>;
-
-	/** The value parameters a read of which may follow a body effect: a site binds each to a plain value only. */
-	final late: Array<String>;
-
-	/** The spelling around the closing return's value, when the body ends in one: the call then ends the site's function. */
-	final exit: Null<Exit>;
-	final pattern: Pattern;
-
-	/** Where the helper is declared: its own body is never a site. */
-	final file: String;
-	final span: Span;
-
-}
-
-/** The text before and after the value of a template's closing return. */
-private typedef Exit = { final head: String; final tail: String; }
-/** One matched copy: the replaced statements and the call's argument texts. */
-private typedef Site = { final span: Span; final template: Template; final args: Array<String>; }
-
-/** What `scanBody` learns of a helper's body. */
-private typedef BodyScan = {
-
-	final params: Array<String>;
-	final holes: Array<String>;
-	final nested: Array<String>;
-	final reads: Map<String, Int>;
-
-	/** Each value parameter's reads, a read a loop repeats placed at that loop's end. */
-	final readsAt: Map<String, Array<Int>>;
-	final calls: Map<String, Array<String>>;
-	final idents: Array<QueryNode>;
-
-	/** The control exits that refuse the body: a body ending in a value return keeps its value returns. */
-	final jumps: Array<String>;
-	final exits: Bool;
-	var problem: Null<String>;
-
-}
-
-/** The file one site search runs over. */
-private typedef SiteCtx = {
-	final file: String;
-	final source: String;
-	final root: QueryNode;
-	final purity: PurityCtx;
-	final regions: () -> Array<LexRegion>;
-	final seams: Seams;
-	final plugin: GrammarPlugin;
-}
-
-private typedef Seams = {
-
-	final identKind: String;
-	final interpIdentKind: Null<String>;
-	final paramKinds: Array<String>;
-	final blockBodyKind: String;
-	final localDeclKinds: Array<String>;
-	final localContinuationKinds: Array<String>;
-
-	/** The control exits a site would take from its OWN function: every exit but a throw, plus break and continue. */
-	final jumpKinds: Array<String>;
-	final iterationBinderKinds: Array<String>;
-	final valueBinderKinds: Array<String>;
-	final loopKinds: Array<String>;
-	final callKind: Null<String>;
-	final returnKind: Null<String>;
-	final valueReturnKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final lambdaKinds: Array<String>;
-
-	/**
-	 * The jumps a lambda hole's binding may not hold: in the lambda a `return` leaves the
-	 * lambda, a `break` or `continue` no loop of the binding encloses has none to bind to.
-	 */
-	final escapes: LoopJumpSeams;
 
 }

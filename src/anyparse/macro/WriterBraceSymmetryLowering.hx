@@ -11,6 +11,24 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the brace-symmetry family reads, bundled once per
+ * `WriterLowering` instance.
+ *
+ * Two data fields — `shape` for the rule lookups that resolve a block's element
+ * type, `ctx` for the trivia gate every member opens with — and three shape-name
+ * helpers that stayed in `WriterLowering` because most of their callers did.
+ * The bundle IS the dependency surface: a member here that needs something else
+ * has to widen this literal, which is one visible edit in that constructor.
+ */
+typedef BraceSymmetryCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final ctx: LoweringCtx;
+	final findCtorPattern: (bodyTypePath: String, ctorName: String) -> Null<Expr>;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+}
+
+/**
  * Pass 3W — whether a branch must mirror its sibling's braces, and what the
  * mirror emits.
  *
@@ -582,23 +600,5 @@ final class WriterBraceSymmetryLowering {
 		return { effAccess: effAccess, ssbSuppressCond: ssbSuppressCond, ssbTrailCommentExpr: ssbTrailCommentExpr };
 	}
 
-}
-
-/**
- * The build state the brace-symmetry family reads, bundled once per
- * `WriterLowering` instance.
- *
- * Two data fields — `shape` for the rule lookups that resolve a block's element
- * type, `ctx` for the trivia gate every member opens with — and three shape-name
- * helpers that stayed in `WriterLowering` because most of their callers did.
- * The bundle IS the dependency surface: a member here that needs something else
- * has to widen this literal, which is one visible edit in that constructor.
- */
-typedef BraceSymmetryCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final ctx: LoweringCtx;
-	final findCtorPattern: (bodyTypePath: String, ctorName: String) -> Null<Expr>;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
 }
 #end

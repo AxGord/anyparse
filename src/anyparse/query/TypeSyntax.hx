@@ -4,6 +4,43 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** `GrammarPlugin.typeSyntax` as a value — how code that holds no plugin reads a written type. */
+typedef TypeSyntaxReader = String -> Null<TypeSyntax>;
+
+/** What a `TypeSyntax` is. */
+enum TypeShape {
+
+	/** A named type: its `path` as written (`pkg.Map`) and its type arguments in order. */
+	Nominal(path: String, args: Array<TypeSyntax>);
+
+	/**
+	 * A function type: its parameters, its result, and whether it was spelled in the curried arrow
+	 * form (`A -> B -> R`, every arrow of the chain one parameter) rather than with a parenthesised
+	 * parameter list (`(a: A, B) -> R`). The curried form lists what it spells — `Void -> R` has the
+	 * one parameter `Void` — and leaves its meaning to the consumer.
+	 */
+	Function(params: Array<TypeParam>, ret: TypeSyntax, curried: Bool);
+
+	/** An anonymous structure type, its typed fields in order. */
+	Structure(fields: Array<TypeField>);
+
+	/** An intersection `A & B`, its members in order. */
+	Intersection(members: Array<TypeSyntax>);
+
+	/** A conditional-compilation region in type position, one type per branch in order. */
+	Conditional(branches: Array<TypeSyntax>);
+
+	/** A type this model does not break down: a macro splice, a constant, a bracketed macro argument list. */
+	Other;
+
+}
+
+/** One parameter of a function type: its name when it has one, whether it is optional, and its type. */
+typedef TypeParam = { var name: Null<String>; var optional: Bool; var type: TypeSyntax; }
+
+/** One typed field of a structure type. */
+typedef TypeField = { var name: String; var optional: Bool; var type: TypeSyntax; }
+
 /**
  * A written type as its grammar reads it (`GrammarPlugin.typeSyntax`): the parts an analysis
  * asks of type text, with the verbatim slice and the offsets of every part, so a consumer can hand
@@ -120,40 +157,3 @@ final class TypeSyntax {
 	}
 
 }
-
-/** `GrammarPlugin.typeSyntax` as a value — how code that holds no plugin reads a written type. */
-typedef TypeSyntaxReader = String -> Null<TypeSyntax>;
-
-/** What a `TypeSyntax` is. */
-enum TypeShape {
-
-	/** A named type: its `path` as written (`pkg.Map`) and its type arguments in order. */
-	Nominal(path: String, args: Array<TypeSyntax>);
-
-	/**
-	 * A function type: its parameters, its result, and whether it was spelled in the curried arrow
-	 * form (`A -> B -> R`, every arrow of the chain one parameter) rather than with a parenthesised
-	 * parameter list (`(a: A, B) -> R`). The curried form lists what it spells — `Void -> R` has the
-	 * one parameter `Void` — and leaves its meaning to the consumer.
-	 */
-	Function(params: Array<TypeParam>, ret: TypeSyntax, curried: Bool);
-
-	/** An anonymous structure type, its typed fields in order. */
-	Structure(fields: Array<TypeField>);
-
-	/** An intersection `A & B`, its members in order. */
-	Intersection(members: Array<TypeSyntax>);
-
-	/** A conditional-compilation region in type position, one type per branch in order. */
-	Conditional(branches: Array<TypeSyntax>);
-
-	/** A type this model does not break down: a macro splice, a constant, a bracketed macro argument list. */
-	Other;
-
-}
-
-/** One parameter of a function type: its name when it has one, whether it is optional, and its type. */
-typedef TypeParam = { var name: Null<String>; var optional: Bool; var type: TypeSyntax; }
-
-/** One typed field of a structure type. */
-typedef TypeField = { var name: String; var optional: Bool; var type: TypeSyntax; }

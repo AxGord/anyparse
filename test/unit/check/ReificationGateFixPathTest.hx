@@ -17,6 +17,64 @@ import sys.io.File;
 #end
 
 /**
+ * A `RiskyFix` double that rewrites every `'AAA'` string literal to `'BBB'`. Deliberately
+ * unconditional: the edit is always available and always typechecks, so nothing in the pipeline
+ * except the reification gate can decline it.
+ */
+private class LiteralRewriteCheck implements Check implements RiskyFix {
+
+	private static final TARGET: String = '\'AAA\'';
+	private static final REPLACEMENT: String = '\'BBB\'';
+
+	public function new() {}
+
+	public function id(): String {
+		return 'literal-rewrite-double';
+	}
+
+	public function description(): String {
+		return 'a test double rewriting every AAA literal to BBB';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Literals;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final out: Array<Violation> = [];
+		for (entry in files) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(out, entry.file, entry.source, tree);
+		}
+		return out;
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (violation in violations) {
+			final span: Null<Span> = violation.span;
+			if (span != null) edits.push({ span: span, text: REPLACEMENT });
+		}
+		return edits;
+	}
+
+	private function walk(out: Array<Violation>, file: String, source: String, node: QueryNode): Void {
+		final span: Null<Span> = node.span;
+		if (span != null && source.substring(span.from, span.to) == TARGET) out.push({
+			file: file,
+			span: span,
+			rule: id(),
+			severity: Severity.Info,
+			message: 'rewritable literal'
+		});
+		for (child in node.children) walk(out, file, source, child);
+	}
+
+}
+
+/**
  * The reification gate on the `RiskyFix` FIX path, driven through the REAL `FixVerifier.verify`
  * with a real compiler oracle behind it. That path calls `Linter.collect` itself rather than
  * flowing through `Linter.run`, so it is the one place `ReificationGateTest` cannot reach.
@@ -87,63 +145,5 @@ class ReificationGateFixPathTest extends Test {
 		return ok;
 	}
 	#end
-
-}
-
-/**
- * A `RiskyFix` double that rewrites every `'AAA'` string literal to `'BBB'`. Deliberately
- * unconditional: the edit is always available and always typechecks, so nothing in the pipeline
- * except the reification gate can decline it.
- */
-private class LiteralRewriteCheck implements Check implements RiskyFix {
-
-	private static final TARGET: String = '\'AAA\'';
-	private static final REPLACEMENT: String = '\'BBB\'';
-
-	public function new() {}
-
-	public function id(): String {
-		return 'literal-rewrite-double';
-	}
-
-	public function description(): String {
-		return 'a test double rewriting every AAA literal to BBB';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Literals;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final out: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(out, entry.file, entry.source, tree);
-		}
-		return out;
-	}
-
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (violation in violations) {
-			final span: Null<Span> = violation.span;
-			if (span != null) edits.push({ span: span, text: REPLACEMENT });
-		}
-		return edits;
-	}
-
-	private function walk(out: Array<Violation>, file: String, source: String, node: QueryNode): Void {
-		final span: Null<Span> = node.span;
-		if (span != null && source.substring(span.from, span.to) == TARGET) out.push({
-			file: file,
-			span: span,
-			rule: id(),
-			severity: Severity.Info,
-			message: 'rewritable literal'
-		});
-		for (child in node.children) walk(out, file, source, child);
-	}
 
 }

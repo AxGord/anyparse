@@ -10,6 +10,22 @@ import haxe.macro.MacroStringTools;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the ctor-pattern queries read, bundled once per
+ * `WriterLowering` instance.
+ *
+ * One data field -- `shape`, for the `rules` table every member opens with --
+ * and two shape-name helpers that stayed behind. The bundle IS the dependency
+ * surface: a member here that needs a layout decision, a `LoweringCtx` or the
+ * format info has to widen this literal, which is one visible edit in that
+ * constructor and the signal that it stopped being a lookup.
+ */
+typedef CtorPatternCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+}
+
+/**
  * Pass 3W - what the grammar says about a referenced rule's CONSTRUCTORS.
  *
  * Every member here asks one question of `shape.rules`: given a rule path,
@@ -394,21 +410,5 @@ final class WriterCtorPatternLowering {
 		return null;
 	}
 
-}
-
-/**
- * The build state the ctor-pattern queries read, bundled once per
- * `WriterLowering` instance.
- *
- * One data field -- `shape`, for the `rules` table every member opens with --
- * and two shape-name helpers that stayed behind. The bundle IS the dependency
- * surface: a member here that needs a layout decision, a `LoweringCtx` or the
- * format info has to widen this literal, which is one visible edit in that
- * constructor and the signal that it stopped being a lookup.
- */
-typedef CtorPatternCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
 }
 #end

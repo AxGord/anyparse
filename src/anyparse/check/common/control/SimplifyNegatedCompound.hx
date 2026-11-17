@@ -9,6 +9,32 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 
+/** One accepted rewrite: the `!( … )` node's span, the source replacing it, and the arm that accepted it. */
+private typedef Candidate = { final span: Span; final text: String; final message: String; };
+
+/** The resolved seams `SimplifyNegatedCompound` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final shape: RefShape;
+	final opaqueKinds: Array<String>;
+	final negation: NegationSeams;
+	final support: BooleanLogicSupport;
+
+	/**
+	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
+	 * The engine REBUILDS the condition out of its operator spine, so every operator on that
+	 * spine is re-selected by the rewrite — and an abstract that declares `@:op(A == B)` without
+	 * `@:op(A != B)` makes the flip disagree with the wrap: two `Point`-like values the `==`
+	 * overload calls equal answer `!(a == b)` false and `a != b` TRUE, because Haxe does not
+	 * derive the second overload from the first.
+	 */
+	final selection: Null<OperatorSelection>;
+
+	/** The operator kinds the engine may flip or rebuild — what `selection` is asked about. */
+	final operatorKinds: Array<String>;
+
+};
+
 /**
  * Flags a logical-not that simplifies to a form carrying strictly fewer `!` operators.
  * `Severity.Info` with an autofix. Two shapes reach the rule:
@@ -230,29 +256,3 @@ final class SimplifyNegatedCompound extends RuleBase {
 	}
 
 }
-
-/** One accepted rewrite: the `!( … )` node's span, the source replacing it, and the arm that accepted it. */
-private typedef Candidate = { final span: Span; final text: String; final message: String; };
-
-/** The resolved seams `SimplifyNegatedCompound` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final shape: RefShape;
-	final opaqueKinds: Array<String>;
-	final negation: NegationSeams;
-	final support: BooleanLogicSupport;
-
-	/**
-	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
-	 * The engine REBUILDS the condition out of its operator spine, so every operator on that
-	 * spine is re-selected by the rewrite — and an abstract that declares `@:op(A == B)` without
-	 * `@:op(A != B)` makes the flip disagree with the wrap: two `Point`-like values the `==`
-	 * overload calls equal answer `!(a == b)` false and `a != b` TRUE, because Haxe does not
-	 * derive the second overload from the first.
-	 */
-	final selection: Null<OperatorSelection>;
-
-	/** The operator kinds the engine may flip or rebuild — what `selection` is asked about. */
-	final operatorKinds: Array<String>;
-
-};

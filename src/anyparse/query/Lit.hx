@@ -4,6 +4,25 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
 
 /**
+ * One `apq lit` result: a string / numeric literal matched by content, carrying
+ * its node `kind`, the literal `name` (its source text), and its source `span`.
+ */
+@:nullSafety(Strict)
+final class LitHit {
+
+	public final kind: String;
+	public final name: String;
+	public final span: Span;
+
+	public function new(kind: String, name: String, span: Span) {
+		this.kind = kind;
+		this.name = name;
+		this.span = span;
+	}
+
+}
+
+/**
  * String-literal / leaf-name walker for `apq lit` — finds verbatim
  * occurrences of a target text inside captured leaf-node `name` slots.
  *
@@ -212,25 +231,6 @@ final class Lit {
 		if (firstLine.length <= DISPLAY_MAX) return firstLine + tail;
 		final dropChars: Int = firstLine.length - DISPLAY_MAX;
 		return '${firstLine.substring(0, DISPLAY_MAX)} … +$dropChars chars$tail';
-	}
-
-}
-
-/**
- * One `apq lit` result: a string / numeric literal matched by content, carrying
- * its node `kind`, the literal `name` (its source text), and its source `span`.
- */
-@:nullSafety(Strict)
-final class LitHit {
-
-	public final kind: String;
-	public final name: String;
-	public final span: Span;
-
-	public function new(kind: String, name: String, span: Span) {
-		this.kind = kind;
-		this.name = name;
-		this.span = span;
 	}
 
 }

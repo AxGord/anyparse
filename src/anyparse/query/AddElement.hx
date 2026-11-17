@@ -23,6 +23,12 @@ enum InsertSide {
 	Before;
 }
 
+/** One element of a sorted string list (`AddElement.insertSorted`): its string value, its span and its source text. */
+private typedef SortedEntry = { final key: String; final span: Span; final text: String; }
+
+/** One splice of an insert: the text `CanonicalEdit.canonicalize` puts at `span`. */
+private typedef Splice = { span: Span, text: String };
+
 /**
  * Insert a sibling element next to an existing one — the GENERALIZED
  * list-insert mutation op, and the writer-emit primitive the per-kind
@@ -643,9 +649,3 @@ final class AddElement {
 	}
 
 }
-
-/** One element of a sorted string list (`AddElement.insertSorted`): its string value, its span and its source text. */
-private typedef SortedEntry = { final key: String; final span: Span; final text: String; }
-
-/** One splice of an insert: the text `CanonicalEdit.canonicalize` puts at `span`. */
-private typedef Splice = { span: Span, text: String };

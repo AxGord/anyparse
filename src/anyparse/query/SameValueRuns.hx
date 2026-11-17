@@ -5,6 +5,9 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** An occurrence, as `SameValueRuns` reads it: where it sits. */
+typedef Located = { final span: Span; }
+
 /**
  * Which occurrences of one expression read one value, and the statement list one local holding it could go into: the
  * one answer to "does a write cut these occurrences apart, and where can they be bound once".
@@ -62,6 +65,3 @@ final class SameValueRuns {
 	}
 
 }
-
-/** An occurrence, as `SameValueRuns` reads it: where it sits. */
-typedef Located = { final span: Span; }

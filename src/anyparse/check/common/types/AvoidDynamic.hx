@@ -23,6 +23,32 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.util.Groups;
 
+/** Mutable accumulator threaded through the local-narrowing use classifier. */
+private typedef NarrowAcc = {
+
+	/** A use where raw Dynamic is load-bearing was seen — skip the declaration. */
+	var disqualified: Bool;
+
+	/** The local is compared with / assigned null — narrowing to a non-null type would be unsound. */
+	var nullUse: Bool;
+
+	/** Count of real uses (reads + reassignments) — a declaration with none is not narrowed. */
+	var useCount: Int;
+
+	/** Named types of the typed reassignment sources (`x = foo`). */
+	var reassignTypes: Array<String>;
+
+	/** A reassignment whose source type is unresolved — the value is not provably always one type. */
+	var reassignHasUntyped: Bool;
+
+	/** Named types of the weak typed sinks the value flows into (`y = x` / `var y: T = x`) — a consistency veto only. */
+	var sinkTypes: Array<String>;
+
+};
+
+/** The initializer shape of a `Dynamic` local: presence, null-literal, and resolved source type. */
+private typedef InitInfo = { var present: Bool; var isNull: Bool; var type: Null<String>; };
+
 /**
  * Flags a raw `Dynamic` in a DECLARED type position — a field type, a function
  * parameter or return type, a generic type argument (`Map<Dynamic, …>`), or a
@@ -723,29 +749,3 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 	}
 
 }
-
-/** Mutable accumulator threaded through the local-narrowing use classifier. */
-private typedef NarrowAcc = {
-
-	/** A use where raw Dynamic is load-bearing was seen — skip the declaration. */
-	var disqualified: Bool;
-
-	/** The local is compared with / assigned null — narrowing to a non-null type would be unsound. */
-	var nullUse: Bool;
-
-	/** Count of real uses (reads + reassignments) — a declaration with none is not narrowed. */
-	var useCount: Int;
-
-	/** Named types of the typed reassignment sources (`x = foo`). */
-	var reassignTypes: Array<String>;
-
-	/** A reassignment whose source type is unresolved — the value is not provably always one type. */
-	var reassignHasUntyped: Bool;
-
-	/** Named types of the weak typed sinks the value flows into (`y = x` / `var y: T = x`) — a consistency veto only. */
-	var sinkTypes: Array<String>;
-
-};
-
-/** The initializer shape of a `Dynamic` local: presence, null-literal, and resolved source type. */
-private typedef InitInfo = { var present: Bool; var isNull: Bool; var type: Null<String>; };

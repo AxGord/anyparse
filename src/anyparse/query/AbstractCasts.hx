@@ -13,6 +13,48 @@ import anyparse.query.TypeTerm.TypeEnd;
 
 using Lambda;
 
+/** One `#if` branch of an abstract's header (`CastClauses`), its clauses resolved. */
+typedef CastBranch = {
+
+	/** The types its `from` clauses write, in source order. */
+	final from: Array<TypeEnd>;
+
+	/** The types its `to` clauses write, in source order. */
+	final to: Array<TypeEnd>;
+
+	/** Whether a cast through one of them allows a further abstract cast (`@:coreType`, `@:transitive`). */
+	final transitive: Bool;
+
+}
+
+/** A `@:from` or `@:to` member of an abstract: the type it takes or returns, and whether it is in every build. */
+typedef CastField = {
+
+	/** A `@:from` member's parameter type, a `@:to` member's return type. */
+	final end: TypeEnd;
+
+	/** Whether every build declaring the abstract declares the member — one declaration, the member not under `#if`. */
+	final certain: Bool;
+
+}
+
+/** The cast graph of one abstract (`AbstractCasts.graph`). */
+typedef CastGraph = {
+
+	/** One record per `#if` branch declaring the abstract. */
+	final branches: Array<CastBranch>;
+
+	/** The `@:from` members, the union of every branch's. */
+	final fromFields: Array<CastField>;
+
+	/** The `@:to` members, the union of every branch's. */
+	final toFields: Array<CastField>;
+
+	/** False when a build macro may give the abstract a conversion no declaration shows. */
+	final fieldsComplete: Bool;
+
+}
+
 /**
  * The cast graph of the abstracts the index holds (`docs/typing-service.md`, step T4): for each abstract declaration, the
  * types its header's `from` and `to` clauses write, one record per `#if` branch declaring it, and the `@:from` / `@:to`
@@ -368,47 +410,5 @@ final class AbstractCasts {
 			for (m in r.type.members) if (b.span.from <= m.declFrom && m.declFrom < b.span.to) m
 		];
 	}
-
-}
-
-/** One `#if` branch of an abstract's header (`CastClauses`), its clauses resolved. */
-typedef CastBranch = {
-
-	/** The types its `from` clauses write, in source order. */
-	final from: Array<TypeEnd>;
-
-	/** The types its `to` clauses write, in source order. */
-	final to: Array<TypeEnd>;
-
-	/** Whether a cast through one of them allows a further abstract cast (`@:coreType`, `@:transitive`). */
-	final transitive: Bool;
-
-}
-
-/** A `@:from` or `@:to` member of an abstract: the type it takes or returns, and whether it is in every build. */
-typedef CastField = {
-
-	/** A `@:from` member's parameter type, a `@:to` member's return type. */
-	final end: TypeEnd;
-
-	/** Whether every build declaring the abstract declares the member — one declaration, the member not under `#if`. */
-	final certain: Bool;
-
-}
-
-/** The cast graph of one abstract (`AbstractCasts.graph`). */
-typedef CastGraph = {
-
-	/** One record per `#if` branch declaring the abstract. */
-	final branches: Array<CastBranch>;
-
-	/** The `@:from` members, the union of every branch's. */
-	final fromFields: Array<CastField>;
-
-	/** The `@:to` members, the union of every branch's. */
-	final toFields: Array<CastField>;
-
-	/** False when a build macro may give the abstract a conversion no declaration shows. */
-	final fieldsComplete: Bool;
 
 }

@@ -5,6 +5,9 @@ import haxe.Exception;
 
 using Lambda;
 
+/** One subcommand of `Dev`. */
+typedef Subcommand = { var name: String; var main: Array<String> -> Int; var usage: String; }
+
 /**
  * `node bin/dev.js <subcommand> [args]` — the developer CLI over `devkit` (build: `haxe tools/dev.hxml`). Every
  * subcommand answers its exit status; a command line it cannot read exits 2 with its usage, and so does a tool it
@@ -103,6 +106,3 @@ final class Dev {
 	}
 
 }
-
-/** One subcommand of `Dev`. */
-typedef Subcommand = { var name: String; var main: Array<String> -> Int; var usage: String; }

@@ -18,6 +18,30 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * The type a parameter is written with, and the file writing it — none where several declarations of the callee agree on
+ * the type from different files (`CallReturns.selectedParameter`); `unbound` the type parameters of the call's signature
+ * it still names, which no argument before it binds.
+ */
+typedef WrittenParameter = { final text: String; final file: Null<FileInfo>; final unbound: Array<String>; }
+
+/** How a call's arguments meet the signature it selects, as far as typing one of them reads it (`CallReturns.parameterType`). */
+typedef ArgumentRun = {
+
+	/** The parameter each argument binds, in argument order (`CallSelection.parameterRun`). */
+	final run: Array<Int>;
+
+	/** The argument whose parameter is asked. */
+	final at: Int;
+
+	/** The type arguments the receiver is written with, for its type's parameters. */
+	final receiverArgs: Array<String>;
+
+	/** The type of the argument at an index, typed with no expected type; null for one not typed. */
+	final given: (at: Int) -> Null<String>;
+
+}
+
+/**
  * The type a call returns in the index's written-source currency (`NominalTypes`) where the typing service selects the
  * signature it binds (`CallSelection`, step T5): the receiver's declarations as the call's file resolves them, the
  * arguments typed once, with no expected type, by the arcs whose type this file writes (`argumentHost`).
@@ -369,29 +393,5 @@ final class CallReturns {
 		final written: Null<String> = c.chain.declaredTypeSources[from];
 		return written == null ? null : NominalTypes.boundType(from, written, c, true);
 	}
-
-}
-
-/**
- * The type a parameter is written with, and the file writing it — none where several declarations of the callee agree on
- * the type from different files (`CallReturns.selectedParameter`); `unbound` the type parameters of the call's signature
- * it still names, which no argument before it binds.
- */
-typedef WrittenParameter = { final text: String; final file: Null<FileInfo>; final unbound: Array<String>; }
-
-/** How a call's arguments meet the signature it selects, as far as typing one of them reads it (`CallReturns.parameterType`). */
-typedef ArgumentRun = {
-
-	/** The parameter each argument binds, in argument order (`CallSelection.parameterRun`). */
-	final run: Array<Int>;
-
-	/** The argument whose parameter is asked. */
-	final at: Int;
-
-	/** The type arguments the receiver is written with, for its type's parameters. */
-	final receiverArgs: Array<String>;
-
-	/** The type of the argument at an index, typed with no expected type; null for one not typed. */
-	final given: (at: Int) -> Null<String>;
 
 }

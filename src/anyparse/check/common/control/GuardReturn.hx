@@ -17,6 +17,40 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The `RefShape` kinds `GuardReturn` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	final ifKinds: Array<String>;
+	final returnKinds: Array<String>;
+	final blockKinds: Array<String>;
+	final flow: ControlFlowSupport;
+	final localDeclKinds: Array<String>;
+	final localDeclExprKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final voidTypeName: Null<String>;
+	final blockBodyKind: Null<String>;
+	final valueReturnKinds: Array<String>;
+	final returnScopeStop: Array<String>;
+	final shape: RefShape;
+	final implicitTailEnabled: Bool;
+	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
+	final negation: NegationSeams;
+	final logic: Null<BooleanLogicSupport>;
+}
+
+/**
+ * A matched guard: the flagged `if` statement, its braced then-branch, its condition, and the
+ * `return` it inverts into - the lone `return` that FOLLOWS the `if` on the explicit-pair arm,
+ * or null on the implicit-tail arm, where the guard returns no value and the rewritten span
+ * ends at the `if` itself.
+ */
+private typedef Candidate = GuardedIf & { var tail: Null<QueryNode>; }
+
 /**
  * Flags a trailing `if (cond) { BLOCK }` (no `else`) whose fall-through is a `return`, and
  * INVERTS it into an early-return guard so the bulk of the work sheds an indentation level.
@@ -515,37 +549,3 @@ final class GuardReturn extends RuleBase {
 	}
 
 }
-
-/** The `RefShape` kinds `GuardReturn` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-	final ifKinds: Array<String>;
-	final returnKinds: Array<String>;
-	final blockKinds: Array<String>;
-	final flow: ControlFlowSupport;
-	final localDeclKinds: Array<String>;
-	final localDeclExprKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-	final scopeKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final voidTypeName: Null<String>;
-	final blockBodyKind: Null<String>;
-	final valueReturnKinds: Array<String>;
-	final returnScopeStop: Array<String>;
-	final shape: RefShape;
-	final implicitTailEnabled: Bool;
-	final condKind: Null<String>;
-	final spliceKinds: Array<String>;
-	final exprStmtKind: Null<String>;
-	final annotationKinds: Array<String>;
-	final negation: NegationSeams;
-	final logic: Null<BooleanLogicSupport>;
-}
-
-/**
- * A matched guard: the flagged `if` statement, its braced then-branch, its condition, and the
- * `return` it inverts into - the lone `return` that FOLLOWS the `if` on the explicit-pair arm,
- * or null on the implicit-tail arm, where the guard returns no value and the rewritten span
- * ends at the `if` itself.
- */
-private typedef Candidate = GuardedIf & { var tail: Null<QueryNode>; }

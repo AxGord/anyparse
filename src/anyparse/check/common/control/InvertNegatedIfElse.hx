@@ -11,6 +11,48 @@ import anyparse.query.MemberKinds;
 import anyparse.query.ParenGuard;
 import anyparse.query.SymbolIndex;
 
+/** The resolved seams `InvertNegatedIfElse` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final ifKinds: Array<String>;
+	final ternaryKind: Null<String>;
+	final ifExpressionKinds: Array<String>;
+
+	/** `ternaryKind` and `ifExpressionKinds` together — every value form the rule inverts. */
+	final valueKinds: Array<String>;
+
+	/** The negation read every form shares (`NegatedCondition`), its operator table included. */
+	final negation: InversionSeams;
+
+	/** Read by `RegionTerminator` for the region kind and its terminator. */
+	final shape: RefShape;
+
+};
+
+/** One file's scan: the run seams and that file's negation site. */
+private typedef Scan = {
+
+	final seams: Seams;
+	final site: InversionSite;
+
+	/** The file's lexical regions, lexed on first demand (`ElementSpan.trailingTrimmedSpan`). */
+	final regions: () -> Array<LexRegion>;
+
+};
+
+/** What a value form is to this rule. */
+private enum ValueVerdict {
+
+	Skip;
+
+	/** Rewritten as `swap` reads it. */
+	Fixable(swap: Swap);
+
+	/** Reported, not rewritten: a comment would be dropped or left describing the other branch. */
+	CommentBlocked(swap: Swap);
+
+}
+
 /**
  * Flags a negated two-branch conditional — an `if` STATEMENT with an `else`, a value-position `if` or a ternary — whose condition's
  * TOP-LEVEL node is a logical NOT, and inverts it: drop the `!`, SWAP the branches (`if (c) B else A`, `if (c) b else a`, `c ? b :
@@ -296,47 +338,5 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 	private static function write(to: Span, text: String): GuardedEdit {
 		return { span: to, text: text, holes: [] };
 	}
-
-}
-
-/** The resolved seams `InvertNegatedIfElse` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final ifKinds: Array<String>;
-	final ternaryKind: Null<String>;
-	final ifExpressionKinds: Array<String>;
-
-	/** `ternaryKind` and `ifExpressionKinds` together — every value form the rule inverts. */
-	final valueKinds: Array<String>;
-
-	/** The negation read every form shares (`NegatedCondition`), its operator table included. */
-	final negation: InversionSeams;
-
-	/** Read by `RegionTerminator` for the region kind and its terminator. */
-	final shape: RefShape;
-
-};
-
-/** One file's scan: the run seams and that file's negation site. */
-private typedef Scan = {
-
-	final seams: Seams;
-	final site: InversionSite;
-
-	/** The file's lexical regions, lexed on first demand (`ElementSpan.trailingTrimmedSpan`). */
-	final regions: () -> Array<LexRegion>;
-
-};
-
-/** What a value form is to this rule. */
-private enum ValueVerdict {
-
-	Skip;
-
-	/** Rewritten as `swap` reads it. */
-	Fixable(swap: Swap);
-
-	/** Reported, not rewritten: a comment would be dropped or left describing the other branch. */
-	CommentBlocked(swap: Swap);
 
 }

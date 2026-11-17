@@ -3,6 +3,17 @@ package unit.cli;
 import anyparse.proc.Sleep;
 import unit.check.ProcessProbe;
 
+/** Which server the fixture's run is made to start. */
+private enum abstract ServerKind(Int) {
+
+	/** The run's warm pool: a `--fix` run given every rule, with compiler facts. */
+	var Pool;
+
+	/** The display server: the oracle-assisted pass of a run without compiler facts. */
+	var Display;
+
+}
+
 /**
  * No `haxe --wait` server a `lint --fix` run starts outlives the run, however the run is ended: SIGTERM of `apq`, SIGKILL
  * of `apq`, or SIGKILL of the whole process group `apq` leads — what a timed-out or stopped agent's shell does. Two kinds
@@ -115,16 +126,5 @@ class ApqOracleServerLifetimeCliTest extends Test {
 		Assert.pass('not a node target');
 		#end
 	}
-
-}
-
-/** Which server the fixture's run is made to start. */
-private enum abstract ServerKind(Int) {
-
-	/** The run's warm pool: a `--fix` run given every rule, with compiler facts. */
-	var Pool;
-
-	/** The display server: the oracle-assisted pass of a run without compiler facts. */
-	var Display;
 
 }

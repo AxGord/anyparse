@@ -1,6 +1,21 @@
 package anyparse.check.scan;
 
 /**
+ * The grammar seams `ScopeFrames` reads. Both `RedundantElse`'s and `GuardReturn`'s own private
+ * `Seams` unify with it structurally, so neither has to convert.
+ */
+typedef FrameSeams = {
+	final blockKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final localDeclKinds: Array<String>;
+	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
+}
+
+/**
  * The name-visibility model the de-nesting checks share: which bindings are already live where a
  * statement run is about to be moved TO, so a de-nested local cannot silently re-declare — or
  * re-bind a later read of — an outer one.
@@ -190,19 +205,4 @@ final class ScopeFrames {
 			&& (node.kind == seams.exprStmtKind || seams.blockKinds.contains(parent.kind));
 	}
 
-}
-
-/**
- * The grammar seams `ScopeFrames` reads. Both `RedundantElse`'s and `GuardReturn`'s own private
- * `Seams` unify with it structurally, so neither has to convert.
- */
-typedef FrameSeams = {
-	final blockKinds: Array<String>;
-	final scopeKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final localDeclKinds: Array<String>;
-	final condKind: Null<String>;
-	final spliceKinds: Array<String>;
-	final exprStmtKind: Null<String>;
-	final annotationKinds: Array<String>;
 }

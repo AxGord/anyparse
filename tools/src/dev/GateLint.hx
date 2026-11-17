@@ -24,6 +24,31 @@ using Lambda;
 using StringTools;
 
 /**
+ * A tree INFRA gate 4 lints: how its row names it, what to lint and whether
+ * with the oracle, its cache entry and the snapshot it is compared with.
+ */
+typedef InfraLint = {
+	var name: String;
+	var tree: String;
+	var scope: Array<String>;
+	var key: Null<String>;
+	var oracle: Bool;
+	var snapshot: String;
+}
+
+/** What `hxq lint-diff` found moved, and its first added row. */
+typedef LintMove = {
+
+	var added: Int;
+	var removed: Int;
+	var first: String;
+
+	/** Every row of the report for a finding that appeared (`+ …`) or went (`- …`), in print order. */
+	var rows: Array<String>;
+
+}
+
+/**
  * The lint rows of a slice gate — `lint` (the touched files against the base) and `infra4` (INFRA gate 4) — and of its
  * `--baseline` (each infra tree by the base engine), every lint of one row at once. A base-side lint is cached in the logs by
  * tree, scope and what the engine is built from, so a later run of the gate on an engine built from the same sources reuses it.
@@ -544,30 +569,5 @@ final class GateLint {
 	private static function hostLoad(): String {
 		return '${Std.int(js.node.Os.loadavg()[0])}';
 	}
-
-}
-
-/**
- * A tree INFRA gate 4 lints: how its row names it, what to lint and whether
- * with the oracle, its cache entry and the snapshot it is compared with.
- */
-typedef InfraLint = {
-	var name: String;
-	var tree: String;
-	var scope: Array<String>;
-	var key: Null<String>;
-	var oracle: Bool;
-	var snapshot: String;
-}
-
-/** What `hxq lint-diff` found moved, and its first added row. */
-typedef LintMove = {
-
-	var added: Int;
-	var removed: Int;
-	var first: String;
-
-	/** Every row of the report for a finding that appeared (`+ …`) or went (`- …`), in print order. */
-	var rows: Array<String>;
 
 }

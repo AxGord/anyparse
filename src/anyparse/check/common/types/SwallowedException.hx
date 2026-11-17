@@ -8,6 +8,45 @@ import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 
+/** The grammar seams one `swallowed-exception` run reads, resolved once. */
+private typedef CatchScan = {
+
+	final shape: RefShape;
+	final catchKind: String;
+	final blockKind: String;
+
+	/** `RefShape.controlExitKinds`: a rethrow or a return escalates or recovers. */
+	final exitKinds: Array<String>;
+
+	/** `RefShape.tryStatementKinds`: a catch under one is a statement-context handler, bare body or braced. */
+	final tryStatementKinds: Array<String>;
+
+	/** `RefShape.outcomeRecordingCalls`: dotted calls that record a test outcome. */
+	final outcomeCalls: Array<String>;
+
+	/** `ShapeVocab.switchArmKinds`: a `case` or `default` arm holds a statement list the tail of which is its value. */
+	final armKinds: Array<String>;
+
+	/** `RefShape.emptyStmtKind`: a bare body that is one is left to `empty-statement`. */
+	final emptyKind: Null<String>;
+
+	/** `ShapeVocab.functionLikeKinds`: the boundary an outcome local must not cross. */
+	final functionKinds: Array<String>;
+
+	/** `ControlFlowSupport.blockKinds`: the statement lists whose later statements follow the try. */
+	final statementListKinds: Array<String>;
+
+	/** `ShapeVocab.loopKinds`: a read anywhere in a loop around the try is reached by its next iteration. */
+	final loopKinds: Array<String>;
+
+	/** `RefShape.iterationBindingKinds`: the `for` loops, whose head iterable is evaluated once. */
+	final iterationKinds: Array<String>;
+
+	/** `RefShape.iterationValueBinderKinds`: the binder nodes ahead of a `for` iterable. */
+	final valueBinderKinds: Array<String>;
+
+};
+
 /**
  * Flags a statement-context `catch` clause that silently swallows the exception it caught — a named handler whose
  * statement block neither references the exception variable, rethrows, nor returns. Catching an error you then drop on the
@@ -267,42 +306,3 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 	}
 
 }
-
-/** The grammar seams one `swallowed-exception` run reads, resolved once. */
-private typedef CatchScan = {
-
-	final shape: RefShape;
-	final catchKind: String;
-	final blockKind: String;
-
-	/** `RefShape.controlExitKinds`: a rethrow or a return escalates or recovers. */
-	final exitKinds: Array<String>;
-
-	/** `RefShape.tryStatementKinds`: a catch under one is a statement-context handler, bare body or braced. */
-	final tryStatementKinds: Array<String>;
-
-	/** `RefShape.outcomeRecordingCalls`: dotted calls that record a test outcome. */
-	final outcomeCalls: Array<String>;
-
-	/** `ShapeVocab.switchArmKinds`: a `case` or `default` arm holds a statement list the tail of which is its value. */
-	final armKinds: Array<String>;
-
-	/** `RefShape.emptyStmtKind`: a bare body that is one is left to `empty-statement`. */
-	final emptyKind: Null<String>;
-
-	/** `ShapeVocab.functionLikeKinds`: the boundary an outcome local must not cross. */
-	final functionKinds: Array<String>;
-
-	/** `ControlFlowSupport.blockKinds`: the statement lists whose later statements follow the try. */
-	final statementListKinds: Array<String>;
-
-	/** `ShapeVocab.loopKinds`: a read anywhere in a loop around the try is reached by its next iteration. */
-	final loopKinds: Array<String>;
-
-	/** `RefShape.iterationBindingKinds`: the `for` loops, whose head iterable is evaluated once. */
-	final iterationKinds: Array<String>;
-
-	/** `RefShape.iterationValueBinderKinds`: the binder nodes ahead of a `for` iterable. */
-	final valueBinderKinds: Array<String>;
-
-};

@@ -4,6 +4,14 @@ package anyparse.macro;
 import anyparse.core.ShapeTree.ShapeNode;
 #end
 
+/** How a `StarPlan` reads its Star: the `@:fmt` flags, argument lists and strings, and the strategy annotations. */
+typedef StarMeta = {
+	final flag: String -> Bool;
+	final args: String -> Null<Array<String>>;
+	final string: String -> Null<String>;
+	final annotation: String -> Dynamic;
+}
+
 /**
  * The one answer to "what does a writer Star's grammar metadata ask its emitter for": each method is one `@:fmt` flag,
  * argument list or `lit.*` annotation of the Star, named after it and typed, read lazily through `StarMeta`. Plain data
@@ -72,12 +80,4 @@ class StarPlan {
 	}
 	#end
 
-}
-
-/** How a `StarPlan` reads its Star: the `@:fmt` flags, argument lists and strings, and the strategy annotations. */
-typedef StarMeta = {
-	final flag: String -> Bool;
-	final args: String -> Null<Array<String>>;
-	final string: String -> Null<String>;
-	final annotation: String -> Dynamic;
 }

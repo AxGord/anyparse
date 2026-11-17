@@ -14,6 +14,9 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** A file's text and its tree (`FunctionValueTypes.parsed`). */
+private typedef ParsedFile = { final source: String; final tree: QueryNode; }
+
 /**
  * Which functions a call of a value may run, read off the compiler's facts under the truth (`FactsView.truth`): only the
  * function values that may reach it, where the facts say which (`admitted`). Any function value is admitted otherwise.
@@ -1118,6 +1121,3 @@ final class FunctionValueTypes {
 	}
 
 }
-
-/** A file's text and its tree (`FunctionValueTypes.parsed`). */
-private typedef ParsedFile = { final source: String; final tree: QueryNode; }

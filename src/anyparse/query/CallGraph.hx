@@ -255,6 +255,17 @@ enum abstract EdgeKind(Int) {
 }
 
 /**
+ * A file the graph holds: its path and text, its tree, and the node of each function-like declaration in it by
+ * the offset its span starts at, which `CallGraphNodes.collect` records and `CallGraphEdges.collect` reads.
+ */
+typedef ParsedEntry = {
+	var file: String;
+	var source: String;
+	var tree: QueryNode;
+	var fnBySpanFrom: Map<Int, String>;
+}
+
+/**
  * Project-wide approximate call graph over the `QueryNode` projection — the
  * shared core of the `callees` / `callers` / `reach` subcommands, the
  * `thread-safety` check and `MemberReach`.
@@ -937,15 +948,4 @@ final class CallGraph {
 		return out;
 	}
 
-}
-
-/**
- * A file the graph holds: its path and text, its tree, and the node of each function-like declaration in it by
- * the offset its span starts at, which `CallGraphNodes.collect` records and `CallGraphEdges.collect` reads.
- */
-typedef ParsedEntry = {
-	var file: String;
-	var source: String;
-	var tree: QueryNode;
-	var fnBySpanFrom: Map<Int, String>;
 }

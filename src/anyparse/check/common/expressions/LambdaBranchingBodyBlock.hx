@@ -10,6 +10,16 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The kinds `LambdaBranchingBodyBlock` reads, bundled once so the walker takes one argument. */
+private typedef Seams = {
+	var arrowKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var conditionalKinds: Array<String>;
+	var switchKinds: Array<String>;
+	var callKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+}
+
 /**
  * Flags an ARROW lambda whose body BRANCHES INTERNALLY — an `if` with an `else`, or a
  * `switch` — and is written WITHOUT a block, and wraps it back in `{ }`:
@@ -200,14 +210,4 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 		};
 	}
 
-}
-
-/** The kinds `LambdaBranchingBodyBlock` reads, bundled once so the walker takes one argument. */
-private typedef Seams = {
-	var arrowKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var conditionalKinds: Array<String>;
-	var switchKinds: Array<String>;
-	var callKinds: Array<String>;
-	var opaqueKinds: Array<String>;
 }

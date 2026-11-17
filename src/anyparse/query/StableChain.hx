@@ -11,6 +11,12 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** A stable chain: its key, and the binding offset of its root when that is a local (-1 for a member). */
+typedef StableRead = { final key: String; final binding: Int; }
+
+/** One link of a chain being read: its key, root binding and the type it reads in the file's spelling, when written. */
+private typedef Link = { final key: String; final binding: Int; final type: Null<String>; }
+
 /**
  * Whether an access chain reads storage nothing rebinds while code runs: the one answer to "is this a local or parameter
  * no call writes (`UnchangedLocal`), or a member declared final with no getter, followed by such members only".
@@ -125,9 +131,3 @@ final class StableChain {
 	}
 
 }
-
-/** A stable chain: its key, and the binding offset of its root when that is a local (-1 for a member). */
-typedef StableRead = { final key: String; final binding: Int; }
-
-/** One link of a chain being read: its key, root binding and the type it reads in the file's spelling, when written. */
-private typedef Link = { final key: String; final binding: Int; final type: Null<String>; }

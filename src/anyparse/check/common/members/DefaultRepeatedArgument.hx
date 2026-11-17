@@ -12,6 +12,87 @@ import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Groups;
 
+/** One parsed file plus the per-file tables the census reads. */
+private typedef Parsed = {
+	final file: String;
+	final source: String;
+	final tree: QueryNode;
+	final shape: RefShape;
+	final binders: Map<String, Bool>;
+};
+
+/** One function declaration the rule can see, and what its signature allows. */
+private typedef MemberInfo = {
+
+	final file: String;
+	final owner: String;
+	final name: String;
+	final params: Array<QueryNode>;
+	final isStatic: Bool;
+
+	/** False when the declaration's own shape forbids a default — see the type doc's gate list. */
+	final plain: Bool;
+
+};
+
+/** One agreeing call site's deletion span. */
+private typedef CallSite = { final file: String; final cutFrom: Int; final cutTo: Int; };
+
+/** What one flagged parameter's fix must do. */
+private typedef Plan = {
+	final declFile: String;
+	final paramEnd: Int;
+	final constant: String;
+	final sites: Array<CallSite>;
+};
+
+/** Everything the scope declares, keyed for the census. */
+private typedef Scope = {
+	final members: Map<String, MemberInfo>;
+	final constants: Map<String, Bool>;
+	final memberOwners: Map<String, Int>;
+	final ambiguousTypes: Map<String, Bool>;
+	final seenTypes: Map<String, Bool>;
+	final valueReferenced: Map<String, Bool>;
+};
+
+/** Every seam `DefaultRepeatedArgument` reads, resolved once per run. */
+private typedef Seams = {
+
+	/** The kinds of an expression that is never `null` (`provenNonNull`). */
+	final nonNullKinds: Array<String>;
+	final nullLiteralKind: Null<String>;
+	final parenKind: Null<String>;
+	final negationKind: Null<String>;
+	final callKind: String;
+	final identKind: String;
+	final fieldAccessKind: String;
+	final paramKinds: Array<String>;
+	final optionalParamKind: Null<String>;
+	final restParamKind: Null<String>;
+	final typeHostKinds: Array<String>;
+	final memberDeclKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final binderKinds: Array<String>;
+	final modifierKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final staticModifierKind: Null<String>;
+	final inlineModifierKind: Null<String>;
+	final dynamicModifierKind: Null<String>;
+	final macroModifierKind: Null<String>;
+	final overrideModifierKind: Null<String>;
+	final conditionalMemberKind: Null<String>;
+	final constructorName: Null<String>;
+	final bodyKinds: Array<String>;
+
+	/** `RefShape.declTypeChildKinds` — what tells a declaration's type annotation from its initializer. */
+	final declTypeChildKinds: Array<String>;
+
+	/** The literal test an `inline` constant's initializer passes to be spelled as a default; null when unset. */
+	final constantFields: Null<ConstantFieldSeams>;
+
+};
+
 /**
  * A parameter with no default that at least two call sites hand the SAME compile-time constant:
  * the constant is the default the signature never declared. Flags the parameter, and the autofix
@@ -563,84 +644,3 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 	}
 
 }
-
-/** One parsed file plus the per-file tables the census reads. */
-private typedef Parsed = {
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-	final shape: RefShape;
-	final binders: Map<String, Bool>;
-};
-
-/** One function declaration the rule can see, and what its signature allows. */
-private typedef MemberInfo = {
-
-	final file: String;
-	final owner: String;
-	final name: String;
-	final params: Array<QueryNode>;
-	final isStatic: Bool;
-
-	/** False when the declaration's own shape forbids a default — see the type doc's gate list. */
-	final plain: Bool;
-
-};
-
-/** One agreeing call site's deletion span. */
-private typedef CallSite = { final file: String; final cutFrom: Int; final cutTo: Int; };
-
-/** What one flagged parameter's fix must do. */
-private typedef Plan = {
-	final declFile: String;
-	final paramEnd: Int;
-	final constant: String;
-	final sites: Array<CallSite>;
-};
-
-/** Everything the scope declares, keyed for the census. */
-private typedef Scope = {
-	final members: Map<String, MemberInfo>;
-	final constants: Map<String, Bool>;
-	final memberOwners: Map<String, Int>;
-	final ambiguousTypes: Map<String, Bool>;
-	final seenTypes: Map<String, Bool>;
-	final valueReferenced: Map<String, Bool>;
-};
-
-/** Every seam `DefaultRepeatedArgument` reads, resolved once per run. */
-private typedef Seams = {
-
-	/** The kinds of an expression that is never `null` (`provenNonNull`). */
-	final nonNullKinds: Array<String>;
-	final nullLiteralKind: Null<String>;
-	final parenKind: Null<String>;
-	final negationKind: Null<String>;
-	final callKind: String;
-	final identKind: String;
-	final fieldAccessKind: String;
-	final paramKinds: Array<String>;
-	final optionalParamKind: Null<String>;
-	final restParamKind: Null<String>;
-	final typeHostKinds: Array<String>;
-	final memberDeclKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final binderKinds: Array<String>;
-	final modifierKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final staticModifierKind: Null<String>;
-	final inlineModifierKind: Null<String>;
-	final dynamicModifierKind: Null<String>;
-	final macroModifierKind: Null<String>;
-	final overrideModifierKind: Null<String>;
-	final conditionalMemberKind: Null<String>;
-	final constructorName: Null<String>;
-	final bodyKinds: Array<String>;
-
-	/** `RefShape.declTypeChildKinds` — what tells a declaration's type annotation from its initializer. */
-	final declTypeChildKinds: Array<String>;
-
-	/** The literal test an `inline` constant's initializer passes to be spelled as a default; null when unset. */
-	final constantFields: Null<ConstantFieldSeams>;
-
-};

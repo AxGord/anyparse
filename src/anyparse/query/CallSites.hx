@@ -35,6 +35,27 @@ enum CursorFnResult {
 	FnAtErr(message: String);
 }
 
+/** Classification of a `Call`'s callee relative to the target name — internal. */
+private enum CalleeShape {
+	CalleeBare(identSpan: Span);
+	CalleeThis;
+	CalleeOtherReceiver(recv: String);
+	CalleeNone;
+}
+
+/**
+ * The partial result of `classifyMethodCalls`: the collected call-site
+ * `Call` nodes, the spans already consumed as bare-call callees, the count
+ * of `this.name(...)` sites, and the first completeness diagnostic (null
+ * when every call site was resolvable).
+ */
+private typedef MethodCallScan = {
+	final sites: Array<QueryNode>;
+	final consumedFroms: Array<Int>;
+	final thisSiteCount: Int;
+	final error: Null<String>;
+};
+
 /**
  * Shared call-site resolution + completeness proof for the function-level
  * refactoring operations that must rewrite a function's call sites in
@@ -515,24 +536,3 @@ final class CallSites {
 	}
 
 }
-
-/** Classification of a `Call`'s callee relative to the target name — internal. */
-private enum CalleeShape {
-	CalleeBare(identSpan: Span);
-	CalleeThis;
-	CalleeOtherReceiver(recv: String);
-	CalleeNone;
-}
-
-/**
- * The partial result of `classifyMethodCalls`: the collected call-site
- * `Call` nodes, the spans already consumed as bare-call callees, the count
- * of `this.name(...)` sites, and the first completeness diagnostic (null
- * when every call site was resolvable).
- */
-private typedef MethodCallScan = {
-	final sites: Array<QueryNode>;
-	final consumedFroms: Array<Int>;
-	final thisSiteCount: Int;
-	final error: Null<String>;
-};

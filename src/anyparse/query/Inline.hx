@@ -21,6 +21,33 @@ enum InlineResult {
 }
 
 /**
+ * A validated inline target: the binding name, its local decl node, the
+ * inline-safe initializer subtree and its exact source span, and the reads
+ * to substitute.
+ */
+private typedef InlineTarget = {
+
+	final name: String;
+	final decl: QueryNode;
+	final initializer: QueryNode;
+	final initRange: Span;
+
+	/** Every hit of every name the initializer reads, resolved once over the original tree. */
+	final initHits: Map<String, Array<RefHit>>;
+	final reads: Array<RefHit>;
+
+};
+
+/** An identifier of an initializer that names a binding, with the span it is written at. */
+private typedef NamedIdent = { final name: String; final span: Span; };
+
+/** Resolution outcome of `resolveInlineTarget`: the target or a refusal. */
+private enum InlinePrep {
+	POk(target: InlineTarget);
+	PErr(message: String);
+}
+
+/**
  * Scope-correct, format-preserving inline-variable — the sibling of
  * `Rename`, the second refactoring operation built on the query engine.
  *
@@ -353,31 +380,4 @@ final class Inline {
 		return out;
 	}
 
-}
-
-/**
- * A validated inline target: the binding name, its local decl node, the
- * inline-safe initializer subtree and its exact source span, and the reads
- * to substitute.
- */
-private typedef InlineTarget = {
-
-	final name: String;
-	final decl: QueryNode;
-	final initializer: QueryNode;
-	final initRange: Span;
-
-	/** Every hit of every name the initializer reads, resolved once over the original tree. */
-	final initHits: Map<String, Array<RefHit>>;
-	final reads: Array<RefHit>;
-
-};
-
-/** An identifier of an initializer that names a binding, with the span it is written at. */
-private typedef NamedIdent = { final name: String; final span: Span; };
-
-/** Resolution outcome of `resolveInlineTarget`: the target or a refusal. */
-private enum InlinePrep {
-	POk(target: InlineTarget);
-	PErr(message: String);
 }

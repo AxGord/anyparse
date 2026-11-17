@@ -18,6 +18,52 @@ import sys.io.File;
 #end
 
 /**
+ * A `Check` + `RiskyFix` stand-in that appends a fixed text to each file named in its table, so a scenario can make
+ * two files' edits build alone and clash together.
+ */
+@:nullSafety(Strict)
+private class AppendFake implements Check implements RiskyFix {
+
+	private final _tails: Map<String, String>;
+
+	public function new(tails: Map<String, String>) {
+		_tails = tails;
+	}
+
+	public function id(): String {
+		return 'append-fake';
+	}
+
+	public function description(): String {
+		return 'test double: appends a fixed text to each file its table names';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return [
+			for (entry in files) if (_tails.exists(Path.withoutDirectory(entry.file))) {
+				file: entry.file,
+				span: null,
+				rule: id(),
+				severity: Severity.Warning,
+				message: 'test double finding'
+			}
+		];
+	}
+
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		final tail: Null<String> = violations.length == 0 ? null : _tails[Path.withoutDirectory(violations[0].file)];
+		if (tail == null) return [];
+		final text: String = tail;
+		return [{ span: new Span(source.length, source.length), text: text }];
+	}
+
+}
+
+/**
  * End-to-end coverage of `FixVerifier`'s BATCH judgement: one risky check's candidates in several files are written
  * together and typechecked as one round, and a rejected set is judged in halves so the files that build still land.
  * `TestRiskyLiteralRewrite` rewrites each file's literal `1` and `AppendFake` appends a declaration; the fixture
@@ -306,51 +352,5 @@ final class FixVerifierBatchE2ETest extends Test {
 		return ok;
 	}
 	#end
-
-}
-
-/**
- * A `Check` + `RiskyFix` stand-in that appends a fixed text to each file named in its table, so a scenario can make
- * two files' edits build alone and clash together.
- */
-@:nullSafety(Strict)
-private class AppendFake implements Check implements RiskyFix {
-
-	private final _tails: Map<String, String>;
-
-	public function new(tails: Map<String, String>) {
-		_tails = tails;
-	}
-
-	public function id(): String {
-		return 'append-fake';
-	}
-
-	public function description(): String {
-		return 'test double: appends a fixed text to each file its table names';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) if (_tails.exists(Path.withoutDirectory(entry.file))) {
-				file: entry.file,
-				span: null,
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'test double finding'
-			}
-		];
-	}
-
-	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		final tail: Null<String> = violations.length == 0 ? null : _tails[Path.withoutDirectory(violations[0].file)];
-		if (tail == null) return [];
-		final text: String = tail;
-		return [{ span: new Span(source.length, source.length), text: text }];
-	}
 
 }

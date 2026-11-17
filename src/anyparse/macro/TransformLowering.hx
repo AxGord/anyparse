@@ -10,6 +10,61 @@ import haxe.macro.MacroStringTools;
 using Lambda;
 
 /**
+ * One generated `_transform<T>` function descriptor.
+ */
+typedef TransformFn = {
+
+	/** Full grammar type path this function transforms. */
+	final typePath: String;
+
+	/** Generated function name (`_transform<SimpleName>`). */
+	final fnName: String;
+
+	/** The transformed type's ComplexType — both `node` param and return type. */
+	final paramCT: ComplexType;
+
+	/** Body expression (the deep-rebuild + hook application). */
+	final body: Expr;
+
+};
+
+/**
+ * One per-type hook descriptor for the generated `visit` typedef.
+ */
+typedef TransformHook = {
+
+	/** Hook field name on the `visit` struct (`hx<SimpleName>`). */
+	final name: String;
+
+	/** The transformed type's ComplexType — the hook is `T -> T`. */
+	final ct: ComplexType;
+
+};
+
+/**
+ * Result of transform lowering: every `_transform<T>` to emit, the
+ * per-type hook list for the `visit` typedef, and the root entry info.
+ */
+typedef TransformResult = {
+
+	/** Full grammar root type path (e.g. `anyparse.grammar.haxe.HxModule`). */
+	final rootTypePath: String;
+
+	/** Root grammar type ComplexType — `transform`'s `root` param + return. */
+	final rootCT: ComplexType;
+
+	/** `_transform` function name for the root type — `transform` delegates to it. */
+	final rootFnName: String;
+
+	/** All generated `_transform<T>` functions, one per reachable rule. */
+	final fns: Array<TransformFn>;
+
+	/** Per-type hooks for the generated `visit` typedef. */
+	final hooks: Array<TransformHook>;
+
+};
+
+/**
  * Pass 3T of the macro pipeline — transform lowering.
  *
  * Walks the same `ShapeTree` as `Lowering`/`WriterLowering` but emits a
@@ -313,59 +368,4 @@ class TransformLowering {
 	}
 
 }
-
-/**
- * One generated `_transform<T>` function descriptor.
- */
-typedef TransformFn = {
-
-	/** Full grammar type path this function transforms. */
-	final typePath: String;
-
-	/** Generated function name (`_transform<SimpleName>`). */
-	final fnName: String;
-
-	/** The transformed type's ComplexType — both `node` param and return type. */
-	final paramCT: ComplexType;
-
-	/** Body expression (the deep-rebuild + hook application). */
-	final body: Expr;
-
-};
-
-/**
- * One per-type hook descriptor for the generated `visit` typedef.
- */
-typedef TransformHook = {
-
-	/** Hook field name on the `visit` struct (`hx<SimpleName>`). */
-	final name: String;
-
-	/** The transformed type's ComplexType — the hook is `T -> T`. */
-	final ct: ComplexType;
-
-};
-
-/**
- * Result of transform lowering: every `_transform<T>` to emit, the
- * per-type hook list for the `visit` typedef, and the root entry info.
- */
-typedef TransformResult = {
-
-	/** Full grammar root type path (e.g. `anyparse.grammar.haxe.HxModule`). */
-	final rootTypePath: String;
-
-	/** Root grammar type ComplexType — `transform`'s `root` param + return. */
-	final rootCT: ComplexType;
-
-	/** `_transform` function name for the root type — `transform` delegates to it. */
-	final rootFnName: String;
-
-	/** All generated `_transform<T>` functions, one per reachable rule. */
-	final fns: Array<TransformFn>;
-
-	/** Per-type hooks for the generated `visit` typedef. */
-	final hooks: Array<TransformHook>;
-
-};
 #end

@@ -2,6 +2,12 @@ package unit.ds;
 
 import anyparse.ds.Set;
 
+private final class Holder {
+
+	public function new() {}
+
+}
+
 /** `anyparse.ds.Set`: the membership contract every target keeps, for the three key kinds the project uses. */
 class SetTest extends Test {
 
@@ -63,11 +69,5 @@ class SetTest extends Test {
 		Assert.isFalse(copy.has(2));
 		Assert.isFalse(set.has(3));
 	}
-
-}
-
-private final class Holder {
-
-	public function new() {}
 
 }

@@ -11,6 +11,89 @@ import haxe.Exception;
 using Lambda;
 
 /**
+ * The declaration side of a null-guarded constructor-default fold: the field name and
+ * its declaration span, the `(default, null)` property head to drop (null for a plain
+ * `var`), the default expression, and the ` = <default>` region the fold deletes.
+ */
+private typedef FoldableDecl = {
+
+	final node: QueryNode;
+	final name: String;
+	final span: Span;
+	final dropped: Null<Span>;
+	final initSpan: Span;
+
+	/** The default expression node itself — what a caller extracting the default must classify. */
+	final initNode: QueryNode;
+	final initDrop: Span;
+
+};
+
+/**
+ * The constructor side of a null-guarded constructor-default fold: the whole
+ * `if (p != null) x = p;` statement to replace, the assignment target and the guarded
+ * parameter to rebuild it from, and the bytes the assignment ended with.
+ */
+private typedef GuardedCtorInit = {
+	final stmt: Span;
+	final target: Span;
+	final param: String;
+	final terminator: String;
+};
+
+/**
+ * The constructor side of a CONDITIONAL field-default fold: the whole `if (C) { x = E; … }`
+ * statement, the assignment STATEMENT opening its branch, the assignment target, the
+ * condition node, the assigned value, whether that assignment is the branch's SOLE statement
+ * (so the whole `if` is replaced rather than survived), and the bytes the assignment ended
+ * with.
+ */
+private typedef ConditionalCtorInit = {
+	final ifStmt: Span;
+	final assignStmt: Span;
+	final target: Span;
+	final condition: QueryNode;
+	final value: Span;
+	final sole: Bool;
+	final terminator: String;
+};
+
+/** A spanned `target = value;` statement taken apart — see `CtorFieldFold.assignmentParts`. */
+private typedef AssignmentParts = {
+	final stmtSpan: Span;
+	final assign: QueryNode;
+	final assignSpan: Span;
+	final target: QueryNode;
+};
+
+/**
+ * The DEFAULT a conditional-default fold is about to move into constructor position, handed to a
+ * caller that wants to name it instead of moving it verbatim
+ * (`ctorConditionalDefaultTernaryEdits`'s `extract` seam).
+ *
+ * Handed over rather than re-derived by the caller because the two must not disagree: the text a
+ * caller names is the text this fold DELETES from the declaration, and a second read of the
+ * declaration - through a different scan, against a source one edit older - is the way that
+ * invariant breaks silently.
+ */
+typedef CtorDefaultSite = {
+
+	/** The class-like container declaring the field — the receiving type of any emitted member. */
+	final container: QueryNode;
+	final fieldName: String;
+
+	/** The field's written type annotation, or null when the head states none (`declaredTypeAnnotation`). */
+	final typeAnnotation: Null<String>;
+
+	/** The default expression node — what tells a caller whether it is a bare literal. */
+	final defaultNode: QueryNode;
+
+	/** The default's verbatim source text, exactly as the fold would splice it. */
+	final defaultText: String;
+
+};
+
+/**
  * WHERE a field is initialised — at its declaration or in the constructor — and the edits that
  * move it between the two. The shared machinery under `field-init-at-declaration`,
  * `field-init-in-constructor`, `prefer-final-field` and `prefer-read-only-field`, and by far
@@ -791,86 +874,3 @@ final class CtorFieldFold {
 	}
 
 }
-
-/**
- * The declaration side of a null-guarded constructor-default fold: the field name and
- * its declaration span, the `(default, null)` property head to drop (null for a plain
- * `var`), the default expression, and the ` = <default>` region the fold deletes.
- */
-private typedef FoldableDecl = {
-
-	final node: QueryNode;
-	final name: String;
-	final span: Span;
-	final dropped: Null<Span>;
-	final initSpan: Span;
-
-	/** The default expression node itself — what a caller extracting the default must classify. */
-	final initNode: QueryNode;
-	final initDrop: Span;
-
-};
-
-/**
- * The constructor side of a null-guarded constructor-default fold: the whole
- * `if (p != null) x = p;` statement to replace, the assignment target and the guarded
- * parameter to rebuild it from, and the bytes the assignment ended with.
- */
-private typedef GuardedCtorInit = {
-	final stmt: Span;
-	final target: Span;
-	final param: String;
-	final terminator: String;
-};
-
-/**
- * The constructor side of a CONDITIONAL field-default fold: the whole `if (C) { x = E; … }`
- * statement, the assignment STATEMENT opening its branch, the assignment target, the
- * condition node, the assigned value, whether that assignment is the branch's SOLE statement
- * (so the whole `if` is replaced rather than survived), and the bytes the assignment ended
- * with.
- */
-private typedef ConditionalCtorInit = {
-	final ifStmt: Span;
-	final assignStmt: Span;
-	final target: Span;
-	final condition: QueryNode;
-	final value: Span;
-	final sole: Bool;
-	final terminator: String;
-};
-
-/** A spanned `target = value;` statement taken apart — see `CtorFieldFold.assignmentParts`. */
-private typedef AssignmentParts = {
-	final stmtSpan: Span;
-	final assign: QueryNode;
-	final assignSpan: Span;
-	final target: QueryNode;
-};
-
-/**
- * The DEFAULT a conditional-default fold is about to move into constructor position, handed to a
- * caller that wants to name it instead of moving it verbatim
- * (`ctorConditionalDefaultTernaryEdits`'s `extract` seam).
- *
- * Handed over rather than re-derived by the caller because the two must not disagree: the text a
- * caller names is the text this fold DELETES from the declaration, and a second read of the
- * declaration - through a different scan, against a source one edit older - is the way that
- * invariant breaks silently.
- */
-typedef CtorDefaultSite = {
-
-	/** The class-like container declaring the field — the receiving type of any emitted member. */
-	final container: QueryNode;
-	final fieldName: String;
-
-	/** The field's written type annotation, or null when the head states none (`declaredTypeAnnotation`). */
-	final typeAnnotation: Null<String>;
-
-	/** The default expression node — what tells a caller whether it is a bare literal. */
-	final defaultNode: QueryNode;
-
-	/** The default's verbatim source text, exactly as the fold would splice it. */
-	final defaultText: String;
-
-};

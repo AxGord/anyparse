@@ -6,6 +6,40 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FactPos;
 import haxe.io.Bytes;
 
+/** One positioned type a node records for an expression (`FactText.typedSites`). */
+typedef TypedSite = {
+
+	final at: Null<FactPos>;
+	final type: String;
+
+	/** The member name the expression's text must spell for the site to count; null when any text may carry it. */
+	final member: Null<String>;
+
+	/**
+	 * For a call's receiver, that call: its range and the member it calls, which the source there must spell for the
+	 * receiver to count (null when the call names no member). Null for every other site.
+	 */
+	final call: Null<{ at: FactPos, member: Null<String> }>;
+
+}
+
+/** A node line's head, read without parsing the line. */
+typedef NodeHead = {
+
+	final id: String;
+	final file: String;
+	final min: Int;
+	final max: Int;
+	final foreign: Bool;
+
+	/**
+	 * Whether no range of its file may claim the node: a body a macro placed (`gen`), a `@:generic` instance's copy of
+	 * its generic class's body (`gi`), or a function spliced in from another body (`inl`). Such a node is found by id.
+	 */
+	final generated: Bool;
+
+}
+
 /**
  * The text side of the compiler facts: reading a facts line without parsing it, the content hash a facts file records
  * per file, and whether a fact the compiler placed at a source range is about the expression written there.
@@ -210,39 +244,5 @@ final class FactText {
 	private static function isWordChar(c: Int): Bool {
 		return c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code);
 	}
-
-}
-
-/** One positioned type a node records for an expression (`FactText.typedSites`). */
-typedef TypedSite = {
-
-	final at: Null<FactPos>;
-	final type: String;
-
-	/** The member name the expression's text must spell for the site to count; null when any text may carry it. */
-	final member: Null<String>;
-
-	/**
-	 * For a call's receiver, that call: its range and the member it calls, which the source there must spell for the
-	 * receiver to count (null when the call names no member). Null for every other site.
-	 */
-	final call: Null<{ at: FactPos, member: Null<String> }>;
-
-}
-
-/** A node line's head, read without parsing the line. */
-typedef NodeHead = {
-
-	final id: String;
-	final file: String;
-	final min: Int;
-	final max: Int;
-	final foreign: Bool;
-
-	/**
-	 * Whether no range of its file may claim the node: a body a macro placed (`gen`), a `@:generic` instance's copy of
-	 * its generic class's body (`gi`), or a function spliced in from another body (`inl`). Such a node is found by id.
-	 */
-	final generated: Bool;
 
 }

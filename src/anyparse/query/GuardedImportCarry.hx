@@ -9,6 +9,30 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.runtime.Span;
 
 /**
+ * The three answers `GuardedImportCarry.carryFor` has: nothing guarded binds the name, a region to
+ * carry verbatim under its condition, or a reason the region is not a unit this op may relocate.
+ */
+enum GuardedCarry {
+	GuardedNone;
+	GuardedProviders(condition: String, imports: Array<ImportInfo>);
+	GuardedRefusal(message: String);
+}
+
+/**
+ * Where one guarded statement sits in its file's conditional nesting: unguarded as far as the
+ * directive walk can tell, one region deep in that region's `#if` arm (the only carriable shape),
+ * one region deep in a LATER branch, several regions deep, or under a condition the reader could
+ * not delimit.
+ */
+private enum GuardSite {
+	GuardNone;
+	GuardTop(condition: String);
+	GuardBranch(keyword: String);
+	GuardNested(depth: Int);
+	GuardNoCondition;
+}
+
+/**
  * The `#if`-guarded half of the `move` family's dependency-import carry.
  *
  * A guarded import is a rung of SOME build's ladder and of no other, so it cannot be carried as an
@@ -290,28 +314,4 @@ final class GuardedImportCarry {
 		);
 	}
 
-}
-
-/**
- * The three answers `GuardedImportCarry.carryFor` has: nothing guarded binds the name, a region to
- * carry verbatim under its condition, or a reason the region is not a unit this op may relocate.
- */
-enum GuardedCarry {
-	GuardedNone;
-	GuardedProviders(condition: String, imports: Array<ImportInfo>);
-	GuardedRefusal(message: String);
-}
-
-/**
- * Where one guarded statement sits in its file's conditional nesting: unguarded as far as the
- * directive walk can tell, one region deep in that region's `#if` arm (the only carriable shape),
- * one region deep in a LATER branch, several regions deep, or under a condition the reader could
- * not delimit.
- */
-private enum GuardSite {
-	GuardNone;
-	GuardTop(condition: String);
-	GuardBranch(keyword: String);
-	GuardNested(depth: Int);
-	GuardNoCondition;
 }

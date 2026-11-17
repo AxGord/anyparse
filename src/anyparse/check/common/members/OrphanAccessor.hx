@@ -10,6 +10,68 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Groups;
 
+/** The accumulated verdict of one inheritance-chain walk for a single property name. */
+private typedef Resolution = {
+
+	/** Whether a member of that name was found anywhere in the resolved chain. */
+	var declared: Bool;
+
+	/** Whether such a member declares the wanted accessor slot — the walk stops as soon as it does. */
+	var withSlot: Bool;
+
+	/** Whether a supertype reference resolved to no indexed declaration, leaving absence unproven. */
+	var unresolved: Bool;
+
+	/** Whether an ancestor carries `@:autoBuild` — it generates members into the class the walk started from. */
+	var generated: Bool;
+
+};
+
+/** The whole-run deletion evidence, gathered once where the entire file set is in hand. */
+private typedef Ctx = {
+
+	/** Accessor-shaped names that occur as an identifier / field access / interpolated ident in report scope. */
+	var referenced: Array<String>;
+
+	/** Every WHOLE, non-interpolated string-literal content in report scope — the reflection surface. */
+	var reflected: Array<String>;
+
+	/** The static text FRAGMENTS of every interpolated string in scope — a partially computed reflection name. */
+	var fragments: Array<String>;
+
+	/**
+	 * The WIDEST index the run has — report UNION the resolution sources — carried for its
+	 * SKIPPED-file set alone. The three scans above, and the fourth fact the deletion rests on
+	 * (`subtypeDeclaresMember`), are all built from parsed trees, so a file that did not parse
+	 * contributes to none of them; its retained raw source is the only thing left that can say
+	 * whether it could carry any of the four.
+	 *
+	 * The RESOLUTION index and not the report one, because a skip-parsing sibling the caller did
+	 * not ask to lint is precisely the file a one-file `--fix` cannot see. The widening is safe
+	 * only because the probes reading it are per NAME and per OWNER: a scope file vetoes a
+	 * deletion when it spells that deletion's own subject, and a THIRD-PARTY one only for a third-party
+	 * candidate — but that narrowing carries ONLY the property name. The accessor name and the
+	 * accessor PREFIX are asked unnarrowed, so an unreadable haxelib source spelling whole-word
+	 * `get_` DOES silence the fix over the whole project. Fail-closed, and a precision loss.
+	 */
+	var scopeIndex: SymbolIndex;
+
+	/**
+	 * `RefShape.retainedDeclMetaName` — the tag that pins a member against removal, because its
+	 * uses are not all in the source. Carried here rather than read at the member walk so the
+	 * grammar is asked once per run; null when the grammar names no such tag, and then no member
+	 * is pinned by annotation (the type-level `hasKeep` flag still applies).
+	 */
+	var retainedMeta: Null<String>;
+
+	/** `RefShape.staticModifierKind` — the modifier that makes an accessor serve a static property; empty when unset. */
+	var staticKind: String;
+
+	/** `MetaShape.metaKinds` — the kinds a modifier-run node carries when it is an annotation rather than a plain modifier. */
+	var metaKinds: Array<String>;
+
+}
+
 /**
  * Flags a `get_X` / `set_X` method that no property slot ever reaches — the accessor half of a
  * property whose declaration was changed to `(default, set)` / a plain field, or removed, while
@@ -543,67 +605,5 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		out.push(reported);
 		return reported;
 	}
-
-}
-
-/** The accumulated verdict of one inheritance-chain walk for a single property name. */
-private typedef Resolution = {
-
-	/** Whether a member of that name was found anywhere in the resolved chain. */
-	var declared: Bool;
-
-	/** Whether such a member declares the wanted accessor slot — the walk stops as soon as it does. */
-	var withSlot: Bool;
-
-	/** Whether a supertype reference resolved to no indexed declaration, leaving absence unproven. */
-	var unresolved: Bool;
-
-	/** Whether an ancestor carries `@:autoBuild` — it generates members into the class the walk started from. */
-	var generated: Bool;
-
-};
-
-/** The whole-run deletion evidence, gathered once where the entire file set is in hand. */
-private typedef Ctx = {
-
-	/** Accessor-shaped names that occur as an identifier / field access / interpolated ident in report scope. */
-	var referenced: Array<String>;
-
-	/** Every WHOLE, non-interpolated string-literal content in report scope — the reflection surface. */
-	var reflected: Array<String>;
-
-	/** The static text FRAGMENTS of every interpolated string in scope — a partially computed reflection name. */
-	var fragments: Array<String>;
-
-	/**
-	 * The WIDEST index the run has — report UNION the resolution sources — carried for its
-	 * SKIPPED-file set alone. The three scans above, and the fourth fact the deletion rests on
-	 * (`subtypeDeclaresMember`), are all built from parsed trees, so a file that did not parse
-	 * contributes to none of them; its retained raw source is the only thing left that can say
-	 * whether it could carry any of the four.
-	 *
-	 * The RESOLUTION index and not the report one, because a skip-parsing sibling the caller did
-	 * not ask to lint is precisely the file a one-file `--fix` cannot see. The widening is safe
-	 * only because the probes reading it are per NAME and per OWNER: a scope file vetoes a
-	 * deletion when it spells that deletion's own subject, and a THIRD-PARTY one only for a third-party
-	 * candidate — but that narrowing carries ONLY the property name. The accessor name and the
-	 * accessor PREFIX are asked unnarrowed, so an unreadable haxelib source spelling whole-word
-	 * `get_` DOES silence the fix over the whole project. Fail-closed, and a precision loss.
-	 */
-	var scopeIndex: SymbolIndex;
-
-	/**
-	 * `RefShape.retainedDeclMetaName` — the tag that pins a member against removal, because its
-	 * uses are not all in the source. Carried here rather than read at the member walk so the
-	 * grammar is asked once per run; null when the grammar names no such tag, and then no member
-	 * is pinned by annotation (the type-level `hasKeep` flag still applies).
-	 */
-	var retainedMeta: Null<String>;
-
-	/** `RefShape.staticModifierKind` — the modifier that makes an accessor serve a static property; empty when unset. */
-	var staticKind: String;
-
-	/** `MetaShape.metaKinds` — the kinds a modifier-run node carries when it is an annotation rather than a plain modifier. */
-	var metaKinds: Array<String>;
 
 }

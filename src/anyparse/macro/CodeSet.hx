@@ -2,6 +2,9 @@ package anyparse.macro;
 
 using StringTools;
 
+/** An inclusive run of code units. */
+typedef CodeRange = { final lo: Int; final hi: Int; }
+
 /**
  * An immutable set of UTF-16 code units, held as sorted disjoint inclusive ranges. The character sets of a
  * `RegexScanPlan`. Deliberately not `#if macro`: the plan's soundness rests on a test, and a test runs on js.
@@ -98,6 +101,3 @@ final class CodeSet {
 	}
 
 }
-
-/** An inclusive run of code units. */
-typedef CodeRange = { final lo: Int; final hi: Int; }

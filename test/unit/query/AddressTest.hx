@@ -13,6 +13,21 @@ using Lambda;
 using StringTools;
 
 /**
+ * What `AddressTest.indexFixture` hands its callers: one source, its tree, the kind equivalence
+ * that tree's plugin declares, an `AddressIndex` over it, and every node of it in pre-order.
+ *
+ * A named type rather than the anonymous one written at each call site — the four index-wide
+ * tests spell the same five fields, which is what `anon-type-dup` is for.
+ */
+private typedef IndexFixture = {
+	var src: String;
+	var tree: QueryNode;
+	var equiv: KindEquivalence;
+	var index: AddressIndex;
+	var nodes: Array<QueryNode>;
+};
+
+/**
  * Unit tests for the shared target-address resolver (`Address.resolve`) — the
  * `<line>[:<col>]` / `--select` / `--match` / `--nth` layer of the mutation
  * ops — plus the `--kind` ancestor lift (`Address.liftToKind`).
@@ -923,18 +938,3 @@ class AddressTest extends Test {
 	}
 
 }
-
-/**
- * What `AddressTest.indexFixture` hands its callers: one source, its tree, the kind equivalence
- * that tree's plugin declares, an `AddressIndex` over it, and every node of it in pre-order.
- *
- * A named type rather than the anonymous one written at each call site — the four index-wide
- * tests spell the same five fields, which is what `anon-type-dup` is for.
- */
-private typedef IndexFixture = {
-	var src: String;
-	var tree: QueryNode;
-	var equiv: KindEquivalence;
-	var index: AddressIndex;
-	var nodes: Array<QueryNode>;
-};

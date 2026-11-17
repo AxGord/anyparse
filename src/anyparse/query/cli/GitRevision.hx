@@ -7,6 +7,12 @@ import haxe.io.Path;
 
 using Lambda;
 
+/** One path `git diff --name-status` reports: its status letter, its path now, and its path at the base revision. */
+typedef ChangedPath = { final status: String; final path: String; final basePath: String; }
+
+/** One file a revision holds: its path, relative to the cwd, and the id of its content, the same for the same text. */
+typedef RevisionFile = { final path: String; final blob: String; }
+
 /**
  * What a git revision holds, read through `git` with no shell in between: a file's text at a revision, the files a
  * revision holds under a scope, and the paths two revisions differ in. Paths are relative to
@@ -159,9 +165,3 @@ final class GitRevision {
 	}
 
 }
-
-/** One path `git diff --name-status` reports: its status letter, its path now, and its path at the base revision. */
-typedef ChangedPath = { final status: String; final path: String; final basePath: String; }
-
-/** One file a revision holds: its path, relative to the cwd, and the id of its content, the same for the same text. */
-typedef RevisionFile = { final path: String; final blob: String; }

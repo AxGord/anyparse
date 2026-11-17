@@ -38,6 +38,9 @@ enum DifferentialOutcome {
 	Skipped(reason: String);
 }
 
+/** One filling of one slot: what the probe writes, what a report writes, and which parameter it consumed. */
+private typedef Argument = { final code: String; final display: String; final param: Null<String>; };
+
 /**
  * The DIFFERENTIAL HARNESS behind `apq stdlib-dup`: given a candidate from `StdlibDupScan`, it
  * enumerates every stdlib call the candidate could be equivalent to, generates ONE Haxe program
@@ -525,6 +528,3 @@ final class StdlibDifferential {
 	#end
 
 }
-
-/** One filling of one slot: what the probe writes, what a report writes, and which parameter it consumed. */
-private typedef Argument = { final code: String; final display: String; final param: Null<String>; };

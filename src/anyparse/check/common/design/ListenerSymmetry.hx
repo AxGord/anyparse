@@ -4,6 +4,26 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** Resolved kind-sets and the compiled add/remove patterns for one check run. */
+private typedef ListenerCfg = {
+	final containerKinds: Array<String>;
+	final memberKinds: Array<String>;
+	final methodKinds: Array<String>;
+	final staticKind: Null<String>;
+	final conditionalKind: Null<String>;
+	final addRe: EReg;
+	final removeRe: EReg;
+};
+
+/** One collected type member: its name, static flag, whether it is a method, its span and source-order index. */
+private typedef ListenerMember = {
+	final name: String;
+	final isStatic: Bool;
+	final isMethod: Bool;
+	final span: Span;
+	final index: Int;
+};
+
 /**
  * Flags a subscribe/unsubscribe listener method that lacks its symmetrical
  * twin. A method whose name matches `add<Xxx>Listener(s)` should have a
@@ -197,23 +217,3 @@ final class ListenerSymmetry extends RuleBase {
 	}
 
 }
-
-/** Resolved kind-sets and the compiled add/remove patterns for one check run. */
-private typedef ListenerCfg = {
-	final containerKinds: Array<String>;
-	final memberKinds: Array<String>;
-	final methodKinds: Array<String>;
-	final staticKind: Null<String>;
-	final conditionalKind: Null<String>;
-	final addRe: EReg;
-	final removeRe: EReg;
-};
-
-/** One collected type member: its name, static flag, whether it is a method, its span and source-order index. */
-private typedef ListenerMember = {
-	final name: String;
-	final isStatic: Bool;
-	final isMethod: Bool;
-	final span: Span;
-	final index: Int;
-};

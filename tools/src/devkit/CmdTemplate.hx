@@ -4,6 +4,24 @@ using StringTools;
 
 import anyparse.util.Strings;
 
+/** One run of a template word: literal `Text`, or the Haxe expression `source` of a `Value` at `offset` in the template. */
+enum TemplatePart {
+	Text(text: String);
+	Value(source: String, offset: Int);
+}
+
+/** A template `CmdTemplate.parse` cannot read, with the `offset` of the construct at fault. */
+class TemplateError extends haxe.Exception {
+
+	public final offset: Int;
+
+	public function new(message: String, offset: Int) {
+		super(message);
+		this.offset = offset;
+	}
+
+}
+
 /**
  * The template language of `Cmd.cmd`, read at compile time into an argument vector: words split on whitespace, a
  * `"…"` run groups literal text that holds spaces (the quotes are dropped, `""` is one empty word), `$name` and
@@ -105,24 +123,6 @@ final class CmdTemplate {
 		}
 		value(Value(template.substring(at + 1, end), at + 1));
 		return end;
-	}
-
-}
-
-/** One run of a template word: literal `Text`, or the Haxe expression `source` of a `Value` at `offset` in the template. */
-enum TemplatePart {
-	Text(text: String);
-	Value(source: String, offset: Int);
-}
-
-/** A template `CmdTemplate.parse` cannot read, with the `offset` of the construct at fault. */
-class TemplateError extends haxe.Exception {
-
-	public final offset: Int;
-
-	public function new(message: String, offset: Int) {
-		super(message);
-		this.offset = offset;
 	}
 
 }

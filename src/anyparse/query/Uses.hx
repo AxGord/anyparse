@@ -4,6 +4,25 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.runtime.Span;
 
 /**
+ * One type-reference site discovered by `Uses.find`. `name` is the node's OWN
+ * spelling, which equals the query target for a plain-name match and carries the
+ * whole dotted path for a qualified one — so a renderer driven by the hit alone
+ * (mirrors `RefHit`) shows the reader WHICH spelling was found.
+ */
+@:nullSafety(Strict)
+final class UsesHit {
+
+	public final name: String;
+	public final span: Span;
+
+	public function new(name: String, span: Span) {
+		this.name = name;
+		this.span = span;
+	}
+
+}
+
+/**
  * Type-reference walker for `apq uses`.
  *
  * Sister of `Refs` for the type-position axis: `Refs` resolves value /
@@ -67,25 +86,6 @@ final class Uses {
 			if (span != null) out.push(new UsesHit(name, span));
 		}
 		for (c in node.children) walk(target, c, shape, includeQualified, out);
-	}
-
-}
-
-/**
- * One type-reference site discovered by `Uses.find`. `name` is the node's OWN
- * spelling, which equals the query target for a plain-name match and carries the
- * whole dotted path for a qualified one — so a renderer driven by the hit alone
- * (mirrors `RefHit`) shows the reader WHICH spelling was found.
- */
-@:nullSafety(Strict)
-final class UsesHit {
-
-	public final name: String;
-	public final span: Span;
-
-	public function new(name: String, span: Span) {
-		this.name = name;
-		this.span = span;
 	}
 
 }

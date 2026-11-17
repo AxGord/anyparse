@@ -22,6 +22,26 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 
+/** The options the rule reads. */
+typedef PinOptions = {
+	final pin: String;
+	final guard: String;
+	final killer: String;
+	final registry: String;
+}
+
+/** One file's scan: the options, the registry it resolved, and the seams, tree and text it reads. */
+typedef PinScan = {
+	final options: PinOptions;
+	final arms: Map<String, ArmTarget>;
+	final fold: StringFoldSupport;
+	final shape: RefShape;
+	final metaShape: MetaShape;
+	final root: QueryNode;
+	final file: String;
+	final source: String;
+}
+
 /**
  * Flags a test pinned as a GUARD (`@:pin('guard')`) whose class names a mutation arm (`@:killer('<ARM>')` on a sibling — one the test
  * does not name itself) that cuts a member this test calls: a cut that reaches the test can kill it, so the guard pin may be hiding
@@ -241,24 +261,4 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 	}
 	#end
 
-}
-
-/** The options the rule reads. */
-typedef PinOptions = {
-	final pin: String;
-	final guard: String;
-	final killer: String;
-	final registry: String;
-}
-
-/** One file's scan: the options, the registry it resolved, and the seams, tree and text it reads. */
-typedef PinScan = {
-	final options: PinOptions;
-	final arms: Map<String, ArmTarget>;
-	final fold: StringFoldSupport;
-	final shape: RefShape;
-	final metaShape: MetaShape;
-	final root: QueryNode;
-	final file: String;
-	final source: String;
 }

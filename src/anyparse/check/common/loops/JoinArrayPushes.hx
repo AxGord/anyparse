@@ -19,6 +19,71 @@ import anyparse.query.ElementSpan;
 
 using anyparse.util.Strings;
 
+/** The `RefShape` kinds `JoinArrayPushes` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	var shape: RefShape;
+	var identKind: String;
+	var callKind: String;
+	var fieldAccessKind: String;
+	var exprStmtKind: String;
+	var arrayLiteralKind: String;
+	var blockKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+	var continuationKinds: Array<String>;
+	var blockBodyKind: Null<String>;
+	var fieldDeclKinds: Array<String>;
+	var memberDeclKinds: Array<String>;
+	var classLikeKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var interpIdentKind: String;
+	var newExprKind: Null<String>;
+	var arrayTypeNames: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declaration's annotation is read. */
+	var typeSyntax: TypeSyntaxReader;
+	var selfText: Null<String>;
+	var superText: Null<String>;
+	var overrideKind: Null<String>;
+	var collectionKinds: Array<String>;
+
+}
+
+/**
+ * Per-file inputs the walkers share: the source, the resolved seams, and the two lazily-forced
+ * indexes only Path B needs — the cross-file field-write index and the purity context.
+ */
+private typedef Ctx = {
+	var source: String;
+	var seams: Seams;
+	var writes: () -> FieldWriteIndex;
+	var regions: () -> Array<LexRegion>;
+	var purity: () -> Null<PurityCtx>;
+}
+
+/** A Path A array declaration: the bound name, the declaration statement's span and its empty literal's span. */
+private typedef LocalDecl = { var name: String; var span: Span; var literal: Span; }
+
+/** A Path B array field: its declaration span (what the finding reports) and its empty literal's span. */
+private typedef FieldDecl = { var span: Span; var literal: Span; }
+
+/**
+ * One `<name>.push(e);` statement of a run: the receiver name, the statement's span (deleted by
+ * the fix), the argument node and span (the element), the receiver's own span (resolved against
+ * the field declaration on Path B) and whether the receiver was written `this.<name>`.
+ */
+private typedef Push = {
+	var name: String;
+	var stmt: Span;
+	var arg: QueryNode;
+	var argSpan: Span;
+	var receiver: Span;
+	var qualified: Bool;
+}
+
+/** One foldable binding: the span the finding reports and the edits that fold it. */
+private typedef Match = { var span: Span; var edits: Array<{ span: Span, text: String }>; }
+
 /**
  * Flags an EMPTY-ARRAY binding followed by a run of `a.push(<expr>);` statements — an array
  * literal written the long way — and folds the pushed expressions back into the `[]`.
@@ -753,68 +818,3 @@ final class JoinArrayPushes extends RuleBase {
 	}
 
 }
-
-/** The `RefShape` kinds `JoinArrayPushes` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	var shape: RefShape;
-	var identKind: String;
-	var callKind: String;
-	var fieldAccessKind: String;
-	var exprStmtKind: String;
-	var arrayLiteralKind: String;
-	var blockKinds: Array<String>;
-	var localDeclKinds: Array<String>;
-	var continuationKinds: Array<String>;
-	var blockBodyKind: Null<String>;
-	var fieldDeclKinds: Array<String>;
-	var memberDeclKinds: Array<String>;
-	var classLikeKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var interpIdentKind: String;
-	var newExprKind: Null<String>;
-	var arrayTypeNames: Array<String>;
-
-	/** `GrammarPlugin.typeSyntax` — how a declaration's annotation is read. */
-	var typeSyntax: TypeSyntaxReader;
-	var selfText: Null<String>;
-	var superText: Null<String>;
-	var overrideKind: Null<String>;
-	var collectionKinds: Array<String>;
-
-}
-
-/**
- * Per-file inputs the walkers share: the source, the resolved seams, and the two lazily-forced
- * indexes only Path B needs — the cross-file field-write index and the purity context.
- */
-private typedef Ctx = {
-	var source: String;
-	var seams: Seams;
-	var writes: () -> FieldWriteIndex;
-	var regions: () -> Array<LexRegion>;
-	var purity: () -> Null<PurityCtx>;
-}
-
-/** A Path A array declaration: the bound name, the declaration statement's span and its empty literal's span. */
-private typedef LocalDecl = { var name: String; var span: Span; var literal: Span; }
-
-/** A Path B array field: its declaration span (what the finding reports) and its empty literal's span. */
-private typedef FieldDecl = { var span: Span; var literal: Span; }
-
-/**
- * One `<name>.push(e);` statement of a run: the receiver name, the statement's span (deleted by
- * the fix), the argument node and span (the element), the receiver's own span (resolved against
- * the field declaration on Path B) and whether the receiver was written `this.<name>`.
- */
-private typedef Push = {
-	var name: String;
-	var stmt: Span;
-	var arg: QueryNode;
-	var argSpan: Span;
-	var receiver: Span;
-	var qualified: Bool;
-}
-
-/** One foldable binding: the span the finding reports and the edits that fold it. */
-private typedef Match = { var span: Span; var edits: Array<{ span: Span, text: String }>; }

@@ -4,6 +4,39 @@ using StringTools;
 
 import devkit.Summary.Step;
 
+/** One finished row of a run: what it was, in which phase, and what it cost. */
+typedef LedgerRow = {
+
+	var row: String;
+
+	/** The stage of the tool run the row belongs to (`gate`, `land`, …); empty when the caller names none. */
+	var phase: String;
+
+	/** The row's wall time, in milliseconds. */
+	var wallMs: Float;
+
+	/** How long its branch waited for a pool lease, in milliseconds. */
+	@:optional
+	var waitMs: Float;
+
+	/** The cpu seconds its process used. */
+	@:optional
+	var cpuS: Float;
+
+	/** The pool threads it held. */
+	@:optional
+	var threads: Int;
+
+	/** The first row of the branch that ran it, whose cpu and wait are the whole branch's; absent when the row is its own branch. */
+	@:optional
+	var branch: String;
+
+	/** When the row was recorded, in milliseconds since the epoch; absent on a line an older tool wrote. */
+	@:optional
+	var at: Float;
+
+}
+
 /**
  * The one answer to "what did each row of a tool run cost, wall and lease wait and cpu and threads, across runs": the
  * finished rows of a run, recorded as one line `row TAB phase TAB wall_ms TAB wait_ms TAB cpu_s TAB threads` in a file
@@ -229,38 +262,5 @@ final class ExecLedger {
 	private static function cut(whole: Null<Float>, covered: Null<Float>): Null<Float> {
 		return whole == null || covered == null ? whole : Math.max(0, whole - covered);
 	}
-
-}
-
-/** One finished row of a run: what it was, in which phase, and what it cost. */
-typedef LedgerRow = {
-
-	var row: String;
-
-	/** The stage of the tool run the row belongs to (`gate`, `land`, …); empty when the caller names none. */
-	var phase: String;
-
-	/** The row's wall time, in milliseconds. */
-	var wallMs: Float;
-
-	/** How long its branch waited for a pool lease, in milliseconds. */
-	@:optional
-	var waitMs: Float;
-
-	/** The cpu seconds its process used. */
-	@:optional
-	var cpuS: Float;
-
-	/** The pool threads it held. */
-	@:optional
-	var threads: Int;
-
-	/** The first row of the branch that ran it, whose cpu and wait are the whole branch's; absent when the row is its own branch. */
-	@:optional
-	var branch: String;
-
-	/** When the row was recorded, in milliseconds since the epoch; absent on a line an older tool wrote. */
-	@:optional
-	var at: Float;
 
 }

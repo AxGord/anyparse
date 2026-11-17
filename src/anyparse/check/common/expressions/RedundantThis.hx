@@ -5,6 +5,21 @@ import anyparse.query.BinderScan;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 
+private typedef Ctx = {
+	self: String,
+	fieldAccessKind: String,
+	identKind: String,
+	functionKinds: Array<String>,
+	bindingKinds: Array<String>,
+	patternKind: Null<String>,
+	patternBinderKinds: Array<String>,
+	lambdaKinds: Array<String>,
+	underlyingThisKinds: Array<String>,
+	containerKinds: Array<String>,
+	memberDeclKinds: Array<String>,
+	membershipGate: Bool
+};
+
 /**
  * Flags a redundant `this.` qualifier — a `this.field` access where no local,
  * parameter, loop / catch variable or local function in the enclosing member
@@ -274,18 +289,3 @@ final class RedundantThis extends RuleBase {
 	}
 
 }
-
-private typedef Ctx = {
-	self: String,
-	fieldAccessKind: String,
-	identKind: String,
-	functionKinds: Array<String>,
-	bindingKinds: Array<String>,
-	patternKind: Null<String>,
-	patternBinderKinds: Array<String>,
-	lambdaKinds: Array<String>,
-	underlyingThisKinds: Array<String>,
-	containerKinds: Array<String>,
-	memberDeclKinds: Array<String>,
-	membershipGate: Bool
-};

@@ -7,6 +7,8 @@ import utest.Test;
 
 using StringTools;
 
+private typedef Row = { var name: String; var outcome: Outcome; }
+
 /**
  * The `fmt-race` verdict of `dev land`: a battery red only on the `fmt` row, whose listed files the branch did not change and
  * main did since the merge base, is named a race with its fix; every other red battery, and a green one, has no verdict. The
@@ -132,5 +134,3 @@ final class LandFmtRaceTest extends Test {
 	}
 
 }
-
-private typedef Row = { var name: String; var outcome: Outcome; }

@@ -18,6 +18,45 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** What the cross-file half adds to a `FixVerifyResult`. */
+typedef CrossFileVerdicts = {
+	var applied: Array<String>;
+	var appliedEdits: Int;
+	var reverted: Array<FixVerifyRevert>;
+	var declined: Array<FixVerifyDecline>;
+	var tallies: Array<FixVerifyTally>;
+};
+
+/** What `FixVerifierCrossFile.extend` reads of the verifier's run beside its result. */
+typedef CrossFileRun = {
+	final checks: Array<Check>;
+	final plugin: GrammarPlugin;
+	final opts: Null<Map<String, Null<String>>>;
+	final memo: OracleCoverageMemo;
+	final judging: Array<OracleConfig>;
+	final write: (String, String) -> Void;
+	final resolveConfig: Null<(String) -> LintConfig>;
+	final applyEnablement: Bool;
+};
+
+/** Everything one component's verdict reads. */
+private typedef Judge = {
+	final files: Array<{ file: String, source: String }>;
+	final sets: Array<RiskyCrossFileEdit>;
+	final plugin: GrammarPlugin;
+	final opts: Null<Map<String, Null<String>>>;
+	final usable: UsableCoverage;
+	final excluded: Array<OracleExclusion>;
+	final write: (String, String) -> Void;
+};
+
+/** One component's verdict: the edit sets kept on disk, a whole revert, or a decline before anything was written. */
+private enum ComponentVerdict {
+	Kept(sets: Array<RiskyCrossFileEdit>);
+	Reverted(cause: FixRevertCause);
+	Declined(reason: String);
+}
+
 /**
  * `FixVerifier`'s CROSS-FILE half: a risky arm's multi-file edit sets (`RiskyArm.riskyCrossFileFix`)
  * written, typechecked and reverted AS A WHOLE. A cross-file rename half-applied does not compile, so
@@ -314,43 +353,4 @@ final class FixVerifierCrossFile {
 		return rows;
 	}
 
-}
-
-/** What the cross-file half adds to a `FixVerifyResult`. */
-typedef CrossFileVerdicts = {
-	var applied: Array<String>;
-	var appliedEdits: Int;
-	var reverted: Array<FixVerifyRevert>;
-	var declined: Array<FixVerifyDecline>;
-	var tallies: Array<FixVerifyTally>;
-};
-
-/** What `FixVerifierCrossFile.extend` reads of the verifier's run beside its result. */
-typedef CrossFileRun = {
-	final checks: Array<Check>;
-	final plugin: GrammarPlugin;
-	final opts: Null<Map<String, Null<String>>>;
-	final memo: OracleCoverageMemo;
-	final judging: Array<OracleConfig>;
-	final write: (String, String) -> Void;
-	final resolveConfig: Null<(String) -> LintConfig>;
-	final applyEnablement: Bool;
-};
-
-/** Everything one component's verdict reads. */
-private typedef Judge = {
-	final files: Array<{ file: String, source: String }>;
-	final sets: Array<RiskyCrossFileEdit>;
-	final plugin: GrammarPlugin;
-	final opts: Null<Map<String, Null<String>>>;
-	final usable: UsableCoverage;
-	final excluded: Array<OracleExclusion>;
-	final write: (String, String) -> Void;
-};
-
-/** One component's verdict: the edit sets kept on disk, a whole revert, or a decline before anything was written. */
-private enum ComponentVerdict {
-	Kept(sets: Array<RiskyCrossFileEdit>);
-	Reverted(cause: FixRevertCause);
-	Declined(reason: String);
 }

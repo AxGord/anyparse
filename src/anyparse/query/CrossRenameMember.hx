@@ -70,6 +70,55 @@ private typedef ReceiverProof = {
 };
 
 /**
+ * The grammar seams the EXPECTED-RETURN scan reads, resolved once per rename. Bundled so the
+ * recursive descent carries one argument instead of a dozen, exactly as the check layer bundles
+ * its own. Only the first four are load-bearing — a grammar that names none of the rest still
+ * proves a plain `return VALUE;`, it just proves fewer shapes.
+ */
+private typedef ReturnSeams = {
+
+	final memberName: String;
+	final identKind: String;
+	final functionKinds: Array<String>;
+	final bodyKinds: Array<String>;
+	final typeKinds: Array<String>;
+	final returnKinds: Array<String>;
+	final parenKind: Null<String>;
+	final armHostKinds: Array<String>;
+	final switchKinds: Array<String>;
+	final branchKinds: Array<String>;
+	final exprStatementKind: Null<String>;
+	final nullableWrappers: Array<String>;
+	final opaqueKinds: Array<String>;
+
+	/** The call kind whose callee is a value slot — an enum constructor's scan only, null otherwise. */
+	final ctorCallKind: Null<String>;
+
+};
+
+/**
+ * One expected-return scan in flight: the file being scanned, the member being renamed, the
+ * grammar seams, the index the return types resolve through, the offsets the file's own scope
+ * BINDS (never the member, filled on first use), the per-function proof memo, and the
+ * accumulating result. Threaded so the walk stays a handful of small functions instead of one
+ * closure-carrying block.
+ */
+private typedef ReturnScan = {
+	final source: String;
+	final regions: Array<LexRegion>;
+	final file: String;
+	final cursorFile: String;
+	final target: MemberTarget;
+	final seams: ReturnSeams;
+	final index: SymbolIndex;
+	final tree: QueryNode;
+	final refShape: RefShape;
+	var bound: Null<Array<Int>>;
+	final proven: Map<Int, Bool>;
+	final out: Array<Int>;
+};
+
+/**
  * Scope-correct, format-preserving cross-file rename of a METHOD or
  * FIELD — the value/method counterpart of `CrossRename` (which renames a
  * TYPE). Both are reached through `apq rename --scope`: the CLI resolves
@@ -1217,52 +1266,3 @@ final class CrossRenameMember {
 	}
 
 }
-
-/**
- * The grammar seams the EXPECTED-RETURN scan reads, resolved once per rename. Bundled so the
- * recursive descent carries one argument instead of a dozen, exactly as the check layer bundles
- * its own. Only the first four are load-bearing — a grammar that names none of the rest still
- * proves a plain `return VALUE;`, it just proves fewer shapes.
- */
-private typedef ReturnSeams = {
-
-	final memberName: String;
-	final identKind: String;
-	final functionKinds: Array<String>;
-	final bodyKinds: Array<String>;
-	final typeKinds: Array<String>;
-	final returnKinds: Array<String>;
-	final parenKind: Null<String>;
-	final armHostKinds: Array<String>;
-	final switchKinds: Array<String>;
-	final branchKinds: Array<String>;
-	final exprStatementKind: Null<String>;
-	final nullableWrappers: Array<String>;
-	final opaqueKinds: Array<String>;
-
-	/** The call kind whose callee is a value slot — an enum constructor's scan only, null otherwise. */
-	final ctorCallKind: Null<String>;
-
-};
-
-/**
- * One expected-return scan in flight: the file being scanned, the member being renamed, the
- * grammar seams, the index the return types resolve through, the offsets the file's own scope
- * BINDS (never the member, filled on first use), the per-function proof memo, and the
- * accumulating result. Threaded so the walk stays a handful of small functions instead of one
- * closure-carrying block.
- */
-private typedef ReturnScan = {
-	final source: String;
-	final regions: Array<LexRegion>;
-	final file: String;
-	final cursorFile: String;
-	final target: MemberTarget;
-	final seams: ReturnSeams;
-	final index: SymbolIndex;
-	final tree: QueryNode;
-	final refShape: RefShape;
-	var bound: Null<Array<Int>>;
-	final proven: Map<Int, Bool>;
-	final out: Array<Int>;
-};

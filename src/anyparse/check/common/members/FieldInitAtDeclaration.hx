@@ -23,6 +23,60 @@ import anyparse.query.TypeSyntax;
 import haxe.Exception;
 
 /**
+ * One accepted-or-rejectable constructor init: the field's `name` and declaration `span`, the
+ * top-level statement it owns (`stmtFrom`, the chain walk's key), whether the field's cross-file
+ * write count is one (`sole`, the legacy path) and whether the write is an assignment EXPRESSION
+ * rather than a statement of its own (`embedded`).
+ *
+ * Order-safety is NOT a field here: `candidateFor` refuses a right-hand side that resolves
+ * anything in-class, so every candidate is order-safe by construction.
+ */
+private typedef Candidate = {
+	var name: String;
+	var stmtFrom: Int;
+	var span: Span;
+	var sole: Bool;
+	var embedded: Bool;
+}
+
+/**
+ * `container`'s candidates split by acceptance path — `byStmt` keyed by the top-level statement each
+ * owns, `embedded` owning none — plus whether every PRE-EXISTING declaration initializer sharing the
+ * prologue resolves nothing in-class (`coMoversOrderSafe`). The candidates need no such record: they
+ * are order-safe by construction.
+ */
+private typedef Candidates = { var byStmt: Map<Int, Candidate>; var embedded: Array<Candidate>; var coMoversOrderSafe: Bool; }
+
+/**
+ * The early-init proofs of one file's run, as `candidateFor` asks them: whether the sole write of the field `member` of
+ * `container`, right-hand side `rhs`, written at `at` in the constructor `ctor`, may be hoisted across an explicit
+ * `super(...)` — `FieldInitAtDeclaration.crossingAdmitted`'s narrowings, else `crossingProven`'s proof, both bound to the
+ * run's files and plugin and to the candidate's file, source and parsed tree.
+ */
+private typedef EarlyInitProof = (member: QueryNode, container: QueryNode, ctor: QueryNode, rhs: QueryNode, at: Int) -> Bool;
+
+/**
+ * The invariants of one early-read scan over one scope file: the field (`name`, declared at
+ * `fieldFrom` in `fieldFile`), the file being walked (`file`, whose parsed `tree` binding resolution
+ * needs, and whether it is a REPORT file whose writes the write index already counted —
+ * `writesCounted`), and the grammar seams the walk reads.
+ */
+private typedef EarlyReadScan = {
+	var name: String;
+	var fieldFile: String;
+	var fieldFrom: Int;
+	var file: String;
+	var tree: QueryNode;
+	var writesCounted: Bool;
+	var shape: RefShape;
+	var classLike: Array<String>;
+	var occurrenceKinds: Array<String>;
+	var faultingKinds: Array<String>;
+	var tryKinds: Array<String>;
+	var catchKind: Null<String>;
+}
+
+/**
  * Flags an INSTANCE field (`var` or `final`) that has NO declaration initializer but
  * whose write is one unconditional constructor assignment `x = expr` / `this.x = expr`
  * whose right-hand side is context-independent
@@ -1196,58 +1250,4 @@ final class FieldInitAtDeclaration extends RuleBase implements NotedFix {
 		};
 	}
 
-}
-
-/**
- * One accepted-or-rejectable constructor init: the field's `name` and declaration `span`, the
- * top-level statement it owns (`stmtFrom`, the chain walk's key), whether the field's cross-file
- * write count is one (`sole`, the legacy path) and whether the write is an assignment EXPRESSION
- * rather than a statement of its own (`embedded`).
- *
- * Order-safety is NOT a field here: `candidateFor` refuses a right-hand side that resolves
- * anything in-class, so every candidate is order-safe by construction.
- */
-private typedef Candidate = {
-	var name: String;
-	var stmtFrom: Int;
-	var span: Span;
-	var sole: Bool;
-	var embedded: Bool;
-}
-
-/**
- * `container`'s candidates split by acceptance path — `byStmt` keyed by the top-level statement each
- * owns, `embedded` owning none — plus whether every PRE-EXISTING declaration initializer sharing the
- * prologue resolves nothing in-class (`coMoversOrderSafe`). The candidates need no such record: they
- * are order-safe by construction.
- */
-private typedef Candidates = { var byStmt: Map<Int, Candidate>; var embedded: Array<Candidate>; var coMoversOrderSafe: Bool; }
-
-/**
- * The early-init proofs of one file's run, as `candidateFor` asks them: whether the sole write of the field `member` of
- * `container`, right-hand side `rhs`, written at `at` in the constructor `ctor`, may be hoisted across an explicit
- * `super(...)` — `FieldInitAtDeclaration.crossingAdmitted`'s narrowings, else `crossingProven`'s proof, both bound to the
- * run's files and plugin and to the candidate's file, source and parsed tree.
- */
-private typedef EarlyInitProof = (member: QueryNode, container: QueryNode, ctor: QueryNode, rhs: QueryNode, at: Int) -> Bool;
-
-/**
- * The invariants of one early-read scan over one scope file: the field (`name`, declared at
- * `fieldFrom` in `fieldFile`), the file being walked (`file`, whose parsed `tree` binding resolution
- * needs, and whether it is a REPORT file whose writes the write index already counted —
- * `writesCounted`), and the grammar seams the walk reads.
- */
-private typedef EarlyReadScan = {
-	var name: String;
-	var fieldFile: String;
-	var fieldFrom: Int;
-	var file: String;
-	var tree: QueryNode;
-	var writesCounted: Bool;
-	var shape: RefShape;
-	var classLike: Array<String>;
-	var occurrenceKinds: Array<String>;
-	var faultingKinds: Array<String>;
-	var tryKinds: Array<String>;
-	var catchKind: Null<String>;
 }

@@ -3,6 +3,13 @@ package unit.check.common.control;
 import anyparse.check.common.control.BranchChain;
 import anyparse.query.QueryNode;
 
+private typedef Shape = {
+	final node: QueryNode;
+	final cond: QueryNode;
+	final then: QueryNode;
+	final elseNode: QueryNode;
+}
+
 /**
  * `BranchChain`'s positional accessors: which child of an if (or ternary) node is its condition, its then
  * branch and its else branch, and whether a node is the else branch of an `if` - an `else if` link.
@@ -89,11 +96,4 @@ final class BranchChainTest extends Test {
 		};
 	}
 
-}
-
-private typedef Shape = {
-	final node: QueryNode;
-	final cond: QueryNode;
-	final then: QueryNode;
-	final elseNode: QueryNode;
 }

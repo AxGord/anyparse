@@ -7,6 +7,40 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** What a native site may do to the question's member (`NativeSiteReach.judge`). */
+enum NativeVerdict {
+
+	/** It may reach the member: a blind spot. */
+	Blind;
+
+	/**
+	 * It may run what the objects it is handed let target code run by a name — the types of those objects, as source spells
+	 * them; null for objects of a type no source spells, empty for none — the function values it is handed or an object it
+	 * is handed may hold (`values`), and what a class its text names lets code naming it run (`classes`, typed ids: its
+	 * statics, its constructor, and an instance's members by name).
+	 */
+	Hands(types: Null<Array<String>>, values: Bool, classes: Array<String>);
+
+}
+
+/** What target code handed values may run with them (`NativeSiteReach.take`). */
+typedef NativeHands = {
+
+	/** The types of the objects it is handed, as source spells them; null for an object of a type no source spells. */
+	var types: Null<Array<String>>;
+
+	/** Whether it is handed a function value, or an object that may hold one. */
+	var values: Bool;
+
+	/**
+	 * Whether it is handed a value that may be an object carrying the member, whose field the target code may then write by
+	 * its name (`MemberReach.externSite`); absent for none.
+	 */
+	@:optional
+	var blind: Bool;
+
+}
+
 /**
  * What a native site the member-reach walk meets may do to the question's member, where the compiler facts are the truth
  * (`FactsView.truth`), under the one assumption `FactsEscapes` states for the project and the libraries alike: target code
@@ -96,39 +130,5 @@ final class NativeSiteReach {
 	private inline function noObject(t: FactsType, anyEscaped: Bool): Bool {
 		return _view.unchecked().none(t, anyEscaped);
 	}
-
-}
-
-/** What a native site may do to the question's member (`NativeSiteReach.judge`). */
-enum NativeVerdict {
-
-	/** It may reach the member: a blind spot. */
-	Blind;
-
-	/**
-	 * It may run what the objects it is handed let target code run by a name — the types of those objects, as source spells
-	 * them; null for objects of a type no source spells, empty for none — the function values it is handed or an object it
-	 * is handed may hold (`values`), and what a class its text names lets code naming it run (`classes`, typed ids: its
-	 * statics, its constructor, and an instance's members by name).
-	 */
-	Hands(types: Null<Array<String>>, values: Bool, classes: Array<String>);
-
-}
-
-/** What target code handed values may run with them (`NativeSiteReach.take`). */
-typedef NativeHands = {
-
-	/** The types of the objects it is handed, as source spells them; null for an object of a type no source spells. */
-	var types: Null<Array<String>>;
-
-	/** Whether it is handed a function value, or an object that may hold one. */
-	var values: Bool;
-
-	/**
-	 * Whether it is handed a value that may be an object carrying the member, whose field the target code may then write by
-	 * its name (`MemberReach.externSite`); absent for none.
-	 */
-	@:optional
-	var blind: Bool;
 
 }

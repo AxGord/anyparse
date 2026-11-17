@@ -4,6 +4,8 @@ import anyparse.core.Doc;
 
 using Lambda;
 
+private typedef ElemParts = { final operands: Array<Doc>; final tail: Array<Doc>; };
+
 /**
  * The one answer to "how does a separated list lay out when its elements are chains of an operator that reads as a
  * second separator" (`case a | b, c:`). Both separators are gaps of one chain, so a fill packs across them and the
@@ -116,5 +118,3 @@ final class ElemChainEmit {
 	}
 
 }
-
-private typedef ElemParts = { final operands: Array<Doc>; final tail: Array<Doc>; };

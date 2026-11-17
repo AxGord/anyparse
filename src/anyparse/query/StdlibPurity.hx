@@ -2,6 +2,17 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 
+/** How far a stdlib callee is proven pure (`StdlibPurity.calleePurity`). */
+private enum abstract StdCallPurity(Int) {
+
+	/** No side effect, the same answer for the same arguments, no identity of its own: computable once. */
+	final Transparent = 0;
+
+	/** No side effect, so a discarded call may go, but two calls are not one (a clock, a fresh object). */
+	final EffectFree = 1;
+
+}
+
 /**
  * Which stdlib calls are provably pure, and how far — the ONE table every purity predicate
  * reads, and the one answer to "is this call effect-free, or transparent". `PurityScan` asks
@@ -206,16 +217,5 @@ final class StdlibPurity {
 		else
 			StdCallPurity.Transparent;
 	}
-
-}
-
-/** How far a stdlib callee is proven pure (`StdlibPurity.calleePurity`). */
-private enum abstract StdCallPurity(Int) {
-
-	/** No side effect, the same answer for the same arguments, no identity of its own: computable once. */
-	final Transparent = 0;
-
-	/** No side effect, so a discarded call may go, but two calls are not one (a clock, a fresh object). */
-	final EffectFree = 1;
 
 }

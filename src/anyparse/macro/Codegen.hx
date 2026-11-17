@@ -8,6 +8,25 @@ import haxe.macro.Expr;
 
 using StringTools;
 
+/** How a verbatim trailing capture treats a block comment that runs on past its first line. */
+private enum abstract TrailingRunOn(Int) {
+
+	/** Refused: left for the next element's leading capture. */
+	var Refused;
+
+	/** Taken when it also ends its own last line; code after its closer is what it leads. */
+	var EndingItsLine;
+
+	/** Taken whatever follows it (a comment right after an open delimiter). */
+	var Always;
+
+	/**
+	 * Taken whatever follows it, a documentation comment included: the slot is closed by a mandatory separator
+	 * literal, which a comment can neither lead nor document, so nothing after the closer could own it instead.
+	 */
+	var BeforeSeparator;
+
+}
 /**
  * Pass 4 of the macro pipeline — codegen.
  *
@@ -1354,25 +1373,6 @@ class Codegen {
 		}
 		return cond;
 	}
-
-}
-/** How a verbatim trailing capture treats a block comment that runs on past its first line. */
-private enum abstract TrailingRunOn(Int) {
-
-	/** Refused: left for the next element's leading capture. */
-	var Refused;
-
-	/** Taken when it also ends its own last line; code after its closer is what it leads. */
-	var EndingItsLine;
-
-	/** Taken whatever follows it (a comment right after an open delimiter). */
-	var Always;
-
-	/**
-	 * Taken whatever follows it, a documentation comment included: the slot is closed by a mandatory separator
-	 * literal, which a comment can neither lead nor document, so nothing after the closer could own it instead.
-	 */
-	var BeforeSeparator;
 
 }
 #end

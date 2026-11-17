@@ -13,6 +13,23 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+/** The AST kinds and control-flow support `join-override-chain` reads. */
+typedef Seams = {
+	var tree: TreeSeams;
+	var switchKinds: Array<String>;
+	var mutableKinds: Array<String>;
+	var identKind: String;
+	var stringInterpIdentKind: Null<String>;
+	var blockKinds: Array<String>;
+	var shape: RefShape;
+}
+
+/** One collapsible run: the declaration span the finding is reported on, the region the edit replaces, and its text. */
+typedef Match = { var declSpan: Span; var editSpan: Span; var text: String; }
+
+/** One construct nested onto the run so far: the grown value, that construct's own leaf-write count, and its span. */
+typedef Grown = { var unit: UnitValue; var leafCount: Int; var span: Span; }
+
 /**
  * Flags a local declaration followed by a CHAIN of conditional overwrites of that local -- two or
  * more consecutive statement-position `switch`es, each assigning the local on some paths and
@@ -347,20 +364,3 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The AST kinds and control-flow support `join-override-chain` reads. */
-typedef Seams = {
-	var tree: TreeSeams;
-	var switchKinds: Array<String>;
-	var mutableKinds: Array<String>;
-	var identKind: String;
-	var stringInterpIdentKind: Null<String>;
-	var blockKinds: Array<String>;
-	var shape: RefShape;
-}
-
-/** One collapsible run: the declaration span the finding is reported on, the region the edit replaces, and its text. */
-typedef Match = { var declSpan: Span; var editSpan: Span; var text: String; }
-
-/** One construct nested onto the run so far: the grown value, that construct's own leaf-write count, and its span. */
-typedef Grown = { var unit: UnitValue; var leafCount: Int; var span: Span; }

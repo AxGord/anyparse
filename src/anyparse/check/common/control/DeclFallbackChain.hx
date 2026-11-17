@@ -8,6 +8,31 @@ import anyparse.query.Refs;
 import anyparse.query.SourceText;
 import anyparse.query.TypeInfoProvider;
 
+/** The kinds `DeclFallbackChain` reads. */
+typedef DeclSeams = {
+	var tree: TreeSeams;
+	var ifKinds: Array<String>;
+	var mutableKinds: Array<String>;
+	var continuationKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var typed: TypeInfoProvider;
+	var shape: RefShape;
+}
+
+/**
+ * A matched pair: the declaration's span (the finding key), its relocated initializer, the chain's
+ * branches, the declaration prefix (`var x:T`, and where its copied source ends), the replaced
+ * region (the declaration through the chain), and the first-pass if-expression value.
+ */
+typedef DeclChain = {
+	var declSpan: Span;
+	var init: QueryNode;
+	var branches: Array<{ cond: QueryNode, stmt: QueryNode }>;
+	var prefix: { text: String, keptTo: Int };
+	var region: Span;
+	var probe: UnitValue;
+}
+
 /**
  * A single-variable mutable declaration whose initializer is the implicit `else` of the
  * ELSE-LESS assignment chain that IMMEDIATELY follows it:
@@ -156,29 +181,4 @@ final class DeclFallbackChain {
 			};
 	}
 
-}
-
-/** The kinds `DeclFallbackChain` reads. */
-typedef DeclSeams = {
-	var tree: TreeSeams;
-	var ifKinds: Array<String>;
-	var mutableKinds: Array<String>;
-	var continuationKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var typed: TypeInfoProvider;
-	var shape: RefShape;
-}
-
-/**
- * A matched pair: the declaration's span (the finding key), its relocated initializer, the chain's
- * branches, the declaration prefix (`var x:T`, and where its copied source ends), the replaced
- * region (the declaration through the chain), and the first-pass if-expression value.
- */
-typedef DeclChain = {
-	var declSpan: Span;
-	var init: QueryNode;
-	var branches: Array<{ cond: QueryNode, stmt: QueryNode }>;
-	var prefix: { text: String, keptTo: Int };
-	var region: Span;
-	var probe: UnitValue;
 }

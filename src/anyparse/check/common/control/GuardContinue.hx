@@ -17,6 +17,67 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The `RefShape` kinds `GuardContinue` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	/** Every loop statement this check visits (`ShapeVocab.statementLoopKinds`): `loopKinds` and `doWhileKinds` together. */
+	var statementLoopKinds: Array<String>;
+	var loopKinds: Array<String>;
+	var doWhileKinds: Array<String>;
+	var ifKinds: Array<String>;
+	var blockKinds: Array<String>;
+
+	/**
+	 * The block kind `LoopScan.leadingContinueGuard` reads for a braced `{ continue;
+	 * }`. Nullable because this check works without it; `loop-guard` does not.
+	 */
+	var blockStmtKind: Null<String>;
+
+	/** The `continue` statement kind, required: without it this check has no guard form to emit. */
+	var continueKind: String;
+	var localDeclKinds: Array<String>;
+	var localDeclExprKinds: Array<String>;
+	var metaKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var hoist: Null<HoistSeams>;
+	var negation: NegationSeams;
+
+	/** The dangling-`else` position gate's inputs — read only to mirror `loop-guard`'s own claim. */
+	var shield: ShieldSeams;
+	var support: Null<BooleanLogicSupport>;
+
+}
+
+/**
+ * The optional seams the hoistable-tail extension reads; null disables the hoist (strict tail position only).
+ */
+private typedef HoistSeams = {
+	var exprStmtKind: String;
+	var assignKind: String;
+	var identKind: String;
+	var interpIdentKind: Null<String>;
+	var literalKinds: Array<String>;
+	var hardExitKinds: Array<String>;
+	var loopJumpKinds: Array<String>;
+	var nestedScopeKinds: Array<String>;
+}
+
+/**
+ * A matched loop guard: the trailing `if` statement, its braced then-branch, its
+ * condition, the hoistable tail statements following the `if` (empty when it is the
+ * exact last statement), and the collision renames the de-nested block needs (empty
+ * when no de-nested local clashes with the surrounding scope).
+ */
+private typedef Candidate = GuardedIf & { var tail: Array<QueryNode>; var renames: Array<LocalRename>; }
+
+/**
+ * One de-nested local renamed out of a scope collision: the name it binds, the
+ * mechanically fresh replacement, and every absolute span to splice that replacement
+ * over — the declaration's binder token plus each read, a plain identifier or the
+ * identifier of a `$name` interpolation (the `$` itself is outside the span).
+ */
+private typedef LocalRename = { var name: String; var newName: String; var spans: Array<Span>; }
+
 /**
  * Flags a loop (`for` / `while` / `do … while`) whose braced body's LAST statement is
  * a bare `if (cond) { … }` (no `else`) preceded by at least one other statement, and
@@ -633,64 +694,3 @@ final class GuardContinue extends RuleBase {
 	}
 
 }
-
-/** The `RefShape` kinds `GuardContinue` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	/** Every loop statement this check visits (`ShapeVocab.statementLoopKinds`): `loopKinds` and `doWhileKinds` together. */
-	var statementLoopKinds: Array<String>;
-	var loopKinds: Array<String>;
-	var doWhileKinds: Array<String>;
-	var ifKinds: Array<String>;
-	var blockKinds: Array<String>;
-
-	/**
-	 * The block kind `LoopScan.leadingContinueGuard` reads for a braced `{ continue;
-	 * }`. Nullable because this check works without it; `loop-guard` does not.
-	 */
-	var blockStmtKind: Null<String>;
-
-	/** The `continue` statement kind, required: without it this check has no guard form to emit. */
-	var continueKind: String;
-	var localDeclKinds: Array<String>;
-	var localDeclExprKinds: Array<String>;
-	var metaKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var hoist: Null<HoistSeams>;
-	var negation: NegationSeams;
-
-	/** The dangling-`else` position gate's inputs — read only to mirror `loop-guard`'s own claim. */
-	var shield: ShieldSeams;
-	var support: Null<BooleanLogicSupport>;
-
-}
-
-/**
- * The optional seams the hoistable-tail extension reads; null disables the hoist (strict tail position only).
- */
-private typedef HoistSeams = {
-	var exprStmtKind: String;
-	var assignKind: String;
-	var identKind: String;
-	var interpIdentKind: Null<String>;
-	var literalKinds: Array<String>;
-	var hardExitKinds: Array<String>;
-	var loopJumpKinds: Array<String>;
-	var nestedScopeKinds: Array<String>;
-}
-
-/**
- * A matched loop guard: the trailing `if` statement, its braced then-branch, its
- * condition, the hoistable tail statements following the `if` (empty when it is the
- * exact last statement), and the collision renames the de-nested block needs (empty
- * when no de-nested local clashes with the surrounding scope).
- */
-private typedef Candidate = GuardedIf & { var tail: Array<QueryNode>; var renames: Array<LocalRename>; }
-
-/**
- * One de-nested local renamed out of a scope collision: the name it binds, the
- * mechanically fresh replacement, and every absolute span to splice that replacement
- * over — the declaration's binder token plus each read, a plain identifier or the
- * identifier of a `$name` interpolation (the `$` itself is outside the span).
- */
-private typedef LocalRename = { var name: String; var newName: String; var spans: Array<Span>; }

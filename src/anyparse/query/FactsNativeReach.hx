@@ -10,6 +10,23 @@ import anyparse.util.Groups;
 using Lambda;
 
 /**
+ * What a reader of target code does with what the code reaches (`FactsNativeReach`): each answers false when that is not
+ * known, or when what is reached is what the reader looks for.
+ */
+typedef NativeHand = {
+
+	/** A value of the type a type string spells, and what it holds, is reached. */
+	final escape: (String) -> Bool;
+
+	/** A value of a read type, and what it holds, is reached. */
+	final escapeType: (FactsType) -> Bool;
+
+	/** What the code reaches is not known, for the reason given. */
+	final refuse: (String) -> Bool;
+
+}
+
+/**
  * What target-language code reaches, read off the compiler's facts, under the stated assumption `FactsEscapes` makes — one
  * for the project and the libraries alike: target code reaches only the values handed to it. Handed are the values a call of
  * it hands it (`NativeFact.handed`: its arguments, its `{0}` placeholders among them, a call's through a chain of names
@@ -266,22 +283,5 @@ final class FactsNativeReach {
 		final simple: String = SourceText.lastSegment(id);
 		return names.exists(x -> x.indexOf(simple) >= 0);
 	}
-
-}
-
-/**
- * What a reader of target code does with what the code reaches (`FactsNativeReach`): each answers false when that is not
- * known, or when what is reached is what the reader looks for.
- */
-typedef NativeHand = {
-
-	/** A value of the type a type string spells, and what it holds, is reached. */
-	final escape: (String) -> Bool;
-
-	/** A value of a read type, and what it holds, is reached. */
-	final escapeType: (FactsType) -> Bool;
-
-	/** What the code reaches is not known, for the reason given. */
-	final refuse: (String) -> Bool;
 
 }

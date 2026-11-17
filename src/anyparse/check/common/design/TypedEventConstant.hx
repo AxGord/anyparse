@@ -16,6 +16,61 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** The declaration's two types, resolved and checked. */
+typedef EventTypes = { final base: ResolvedType; final abstractType: ResolvedType; }
+
+/** One linted file, parsed once for both walks. */
+private typedef Parsed = {
+	final file: String;
+	final source: String;
+	final tree: QueryNode;
+	final info: FileInfo;
+	final declaredTypeSources: Map<Int, String>;
+}
+
+/** One candidate constant. */
+private typedef Candidate = {
+	final file: String;
+	final decl: ResolvedType;
+	final className: String;
+	final constName: String;
+	final typeSpan: Span;
+}
+
+/** One use of a candidate as an event type: a listener call (with its listener, if any) or a `new`. */
+private typedef Use = {
+	final file: String;
+	final span: Span;
+	final handler: Null<QueryNode>;
+	final newType: Null<String>;
+	final parsed: Parsed;
+}
+
+/** The seams the rule reads, resolved once per run. */
+private typedef Seams = {
+	final shape: RefShape;
+	final typed: Null<TypeInfoProvider>;
+	final callKind: String;
+	final fieldKind: String;
+	final identKind: String;
+	final newKind: String;
+	final stringType: String;
+	final stringKinds: Array<String>;
+	final fieldKinds: Array<String>;
+	final finalKinds: Array<String>;
+	final memberKinds: Array<String>;
+	final classKinds: Array<String>;
+	final abstractKinds: Array<String>;
+	final enumAbstractKind: Null<String>;
+	final lambdaKinds: Array<String>;
+	final paramKinds: Array<String>;
+	final typeArgKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final wrappers: Array<String>;
+	final selfText: Null<String>;
+	final typeSyntax: TypeSyntaxReader;
+}
+
 /**
  * Retypes an event class's `String` event-type constant to the project's TYPED event-type abstract —
  * `public static inline final CLOSE:String = 'close';` on `class ModalEvent extends Event` becomes
@@ -522,59 +577,4 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 		return firstLine.length < text.length ? '$firstLine…' : text;
 	}
 
-}
-
-/** The declaration's two types, resolved and checked. */
-typedef EventTypes = { final base: ResolvedType; final abstractType: ResolvedType; }
-
-/** One linted file, parsed once for both walks. */
-private typedef Parsed = {
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-	final info: FileInfo;
-	final declaredTypeSources: Map<Int, String>;
-}
-
-/** One candidate constant. */
-private typedef Candidate = {
-	final file: String;
-	final decl: ResolvedType;
-	final className: String;
-	final constName: String;
-	final typeSpan: Span;
-}
-
-/** One use of a candidate as an event type: a listener call (with its listener, if any) or a `new`. */
-private typedef Use = {
-	final file: String;
-	final span: Span;
-	final handler: Null<QueryNode>;
-	final newType: Null<String>;
-	final parsed: Parsed;
-}
-
-/** The seams the rule reads, resolved once per run. */
-private typedef Seams = {
-	final shape: RefShape;
-	final typed: Null<TypeInfoProvider>;
-	final callKind: String;
-	final fieldKind: String;
-	final identKind: String;
-	final newKind: String;
-	final stringType: String;
-	final stringKinds: Array<String>;
-	final fieldKinds: Array<String>;
-	final finalKinds: Array<String>;
-	final memberKinds: Array<String>;
-	final classKinds: Array<String>;
-	final abstractKinds: Array<String>;
-	final enumAbstractKind: Null<String>;
-	final lambdaKinds: Array<String>;
-	final paramKinds: Array<String>;
-	final typeArgKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-	final wrappers: Array<String>;
-	final selfText: Null<String>;
-	final typeSyntax: TypeSyntaxReader;
 }

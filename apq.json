@@ -371,6 +371,9 @@
 		},
 		"misplaced-type-doc": true,
 		"mixed-logical-parens": true,
+		"module-type-order": {
+			"enabled": true
+		},
 		"naming": {
 			"catchVarName": "exception",
 			"handlerSuffix": "Handler"

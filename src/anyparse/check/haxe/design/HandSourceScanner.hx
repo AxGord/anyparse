@@ -10,6 +10,37 @@ import anyparse.check.scan.RunScan;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 
+/** The seams the scan reads, resolved once per run. */
+private typedef Vocab = {
+	final loopKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final callKind: String;
+	final accessKind: String;
+	final identKind: String;
+	final stringKinds: Array<String>;
+	final numberKinds: Array<String>;
+	final declKinds: Array<String>;
+	final boolKind: Null<String>;
+	final notKind: Null<String>;
+	final assignKind: Null<String>;
+	final addAssignKind: Null<String>;
+	final incrementKinds: Array<String>;
+	final parenKind: Null<String>;
+	final comparedHostKinds: Array<String>;
+}
+
+/** What one loop's subtree reads, names and mutates. */
+private typedef Facts = {
+	var reads: Bool;
+	final codes: Array<Int>;
+	var opener: Bool;
+	var directive: Bool;
+	final declared: Array<String>;
+	final flagged: Array<String>;
+	final up: Array<String>;
+	final down: Array<String>;
+}
+
 /**
  * Flags a loop that reads the characters of a text and tracks its own lexical state by hand — the strings, escapes,
  * comment openers, `#if` directives or bracket depth of SOURCE text that `LexicalRegions` (strings, comments, regexes),
@@ -249,35 +280,4 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 		);
 	}
 
-}
-
-/** The seams the scan reads, resolved once per run. */
-private typedef Vocab = {
-	final loopKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final callKind: String;
-	final accessKind: String;
-	final identKind: String;
-	final stringKinds: Array<String>;
-	final numberKinds: Array<String>;
-	final declKinds: Array<String>;
-	final boolKind: Null<String>;
-	final notKind: Null<String>;
-	final assignKind: Null<String>;
-	final addAssignKind: Null<String>;
-	final incrementKinds: Array<String>;
-	final parenKind: Null<String>;
-	final comparedHostKinds: Array<String>;
-}
-
-/** What one loop's subtree reads, names and mutates. */
-private typedef Facts = {
-	var reads: Bool;
-	final codes: Array<Int>;
-	var opener: Bool;
-	var directive: Bool;
-	final declared: Array<String>;
-	final flagged: Array<String>;
-	final up: Array<String>;
-	final down: Array<String>;
 }

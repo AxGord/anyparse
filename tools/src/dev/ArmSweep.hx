@@ -14,6 +14,9 @@ import sys.io.File;
 
 using StringTools;
 
+/** Starts the arm sweep of a landed commit in `repo`. */
+typedef SweepStart = (repo: String, sha: String) -> Outcome;
+
 /**
  * The one answer to "which arms of the whole registry no longer kill on a landed commit": on every `EVERY`th landing,
  * `dev land` starts `dev arm-sweep run <sha>`, a process that outlives the land and its lock, takes a lease of its own from
@@ -244,6 +247,3 @@ final class ArmSweep {
 	}
 
 }
-
-/** Starts the arm sweep of a landed commit in `repo`. */
-typedef SweepStart = (repo: String, sha: String) -> Outcome;

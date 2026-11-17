@@ -19,6 +19,44 @@ import anyparse.util.Groups;
 
 using StringTools;
 
+/** Why the facts oracle names no type (`OracleType.Declined`): the reasons it gives of its own, besides a disagreement it spells out. */
+enum abstract FactsDecline(String) to String {
+	var FileNotCompiled = 'no oracle configuration compiles this file';
+	var CodeNotCompiled = 'no oracle configuration compiles this code — a conditional branch every build leaves out';
+	var Rewritten = 'the run rewrote this file after the compiler typed it, so no fact names its text';
+	var Unbound = 'the compiler left its type unknown (an unbound monomorph)';
+	var NoFact = 'the compiler recorded no type for it';
+	var Unspellable = "its type is an abstract's statics or implementation class, which no source can spell";
+	var ParamMismatch = "the compiler's parameter list does not match the declaration's";
+	var DynamicSource = 'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
+	var Shifted = 'it sits in a string after an escape sequence, where the compiler shifts the ranges of the interpolated code';
+	var Elsewhere = 'the facts place this code in another member or type than the file as it is now does';
+}
+
+/** Where one file's facts are read: the table, the file and its key there, the map from its text now to the one they describe. */
+private typedef FactsSite = {
+
+	final facts: CompilerFacts;
+	final file: String;
+	final key: String;
+
+	/** The text `facts` describe. */
+	final text: String;
+
+	/** The file's text now. */
+	final current: String;
+
+	/** The types `typesIn` read, once it has. */
+	var types: Null<Array<{ id: String, span: Span }>>;
+
+	/** The lexical regions of `text`, once `escapedBefore` read them. */
+	var regions: Null<Array<LexRegion>>;
+
+}
+
+/** The member and the type holding a span of a file as it is now, and the member's own span; null where it lies in none. */
+private typedef Home = { final member: Null<String>; final type: Null<String>; final span: Null<Span>; }
+
 /**
  * A `TypeOracle` over the compiler's typed facts (`CompilerFacts`): the type every oracle configuration gave a
  * declaration when it typed the code, read off the table the run already compiled — a local's `VarFact`, a function
@@ -623,41 +661,3 @@ final class FactsTypeOracle implements FactsOracle {
 	}
 
 }
-
-/** Why the facts oracle names no type (`OracleType.Declined`): the reasons it gives of its own, besides a disagreement it spells out. */
-enum abstract FactsDecline(String) to String {
-	var FileNotCompiled = 'no oracle configuration compiles this file';
-	var CodeNotCompiled = 'no oracle configuration compiles this code — a conditional branch every build leaves out';
-	var Rewritten = 'the run rewrote this file after the compiler typed it, so no fact names its text';
-	var Unbound = 'the compiler left its type unknown (an unbound monomorph)';
-	var NoFact = 'the compiler recorded no type for it';
-	var Unspellable = "its type is an abstract's statics or implementation class, which no source can spell";
-	var ParamMismatch = "the compiler's parameter list does not match the declaration's";
-	var DynamicSource = 'a `Dynamic` value flows into it, so the type the compiler gave it was inferred from its uses, not from the value';
-	var Shifted = 'it sits in a string after an escape sequence, where the compiler shifts the ranges of the interpolated code';
-	var Elsewhere = 'the facts place this code in another member or type than the file as it is now does';
-}
-
-/** Where one file's facts are read: the table, the file and its key there, the map from its text now to the one they describe. */
-private typedef FactsSite = {
-
-	final facts: CompilerFacts;
-	final file: String;
-	final key: String;
-
-	/** The text `facts` describe. */
-	final text: String;
-
-	/** The file's text now. */
-	final current: String;
-
-	/** The types `typesIn` read, once it has. */
-	var types: Null<Array<{ id: String, span: Span }>>;
-
-	/** The lexical regions of `text`, once `escapedBefore` read them. */
-	var regions: Null<Array<LexRegion>>;
-
-}
-
-/** The member and the type holding a span of a file as it is now, and the member's own span; null where it lies in none. */
-private typedef Home = { final member: Null<String>; final type: Null<String>; final span: Null<Span>; }

@@ -8,6 +8,31 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** A closed enum abstract: its name, its values, the types its `@:from` functions take, and whether `0` is a value. */
+private typedef ClosedAbstract = {
+	final name: String;
+	final values: Array<String>;
+	final fromTypes: Array<String>;
+	final zeroIsValue: Bool;
+}
+
+/** The members of an enum abstract that can build a value: its values, and its functions (whether each is a `@:from`). */
+private typedef AbstractMembers = { final values: Array<QueryNode>; final functions: Array<{ fn: QueryNode, from: Bool }>; }
+
+/** Where an expression is evaluated: its file, the outermost function around it (null outside one) and that function's type. */
+private typedef ValueContext = { final file: String; final fn: Null<QueryNode>; final owner: Null<String>; }
+
+/** A write in the project (an assignment, a compound one, an increment) and where it sits. */
+private typedef WriteSite = {
+
+	final node: QueryNode;
+	final at: ValueContext;
+
+	/** The write as `FieldWrites` records it: what `FieldWrites.mayWrite` asks whether it may write a given type's field. */
+	final site: FieldWriteSite;
+
+}
+
 /**
  * The catch-all branch (`case _`, `default`) of a `switch` over an `enum abstract` whose every value an earlier guard-free
  * case names: no value reaches it. Only for a run that sees every write of the project (`FieldWrites.complete`), and a
@@ -577,30 +602,5 @@ final class ExhaustiveSwitches {
 	private function handsValue(arg: QueryNode, at: ValueContext, closed: ClosedAbstract, optional: Bool): Bool {
 		return valueExpr(arg, at, closed) || (optional && (arg.kind == _shape.nullLiteralKind || parameterOf(arg, at, closed, true)));
 	}
-
-}
-
-/** A closed enum abstract: its name, its values, the types its `@:from` functions take, and whether `0` is a value. */
-private typedef ClosedAbstract = {
-	final name: String;
-	final values: Array<String>;
-	final fromTypes: Array<String>;
-	final zeroIsValue: Bool;
-}
-
-/** The members of an enum abstract that can build a value: its values, and its functions (whether each is a `@:from`). */
-private typedef AbstractMembers = { final values: Array<QueryNode>; final functions: Array<{ fn: QueryNode, from: Bool }>; }
-
-/** Where an expression is evaluated: its file, the outermost function around it (null outside one) and that function's type. */
-private typedef ValueContext = { final file: String; final fn: Null<QueryNode>; final owner: Null<String>; }
-
-/** A write in the project (an assignment, a compound one, an increment) and where it sits. */
-private typedef WriteSite = {
-
-	final node: QueryNode;
-	final at: ValueContext;
-
-	/** The write as `FieldWrites` records it: what `FieldWrites.mayWrite` asks whether it may write a given type's field. */
-	final site: FieldWriteSite;
 
 }

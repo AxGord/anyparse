@@ -12,6 +12,31 @@ import anyparse.query.TypeInfoProvider;
 
 using StringTools;
 
+/** The grammar-level seams the check reads once per run — any one missing makes it a no-op. */
+private typedef Scan = {
+
+	final seams: CaseSeams;
+	final shape: RefShape;
+
+	/** The STATEMENT-position switch kinds — the gate that keeps expression switches out. */
+	final statementKinds: Array<String>;
+
+	/** The subject type names free of exhaustiveness checking (`RefShape.openSwitchSubjectTypes`). */
+	final openTypes: Array<String>;
+	final provider: TypeInfoProvider;
+
+};
+
+/** One file's scan context: the grammar seams plus everything resolving that file's switch subjects needs. */
+private typedef Ctx = {
+	final scan: Scan;
+	final root: QueryNode;
+	final declaredTypes: Map<Int, String>;
+	final index: SymbolIndex;
+	final file: String;
+	final regions: () -> Array<LexRegion>;
+};
+
 /**
  * Flags — and DELETES — a TRAILING EMPTY case arm of a STATEMENT switch that has no
  * catch-all, when the subject's type provably carries no exhaustiveness obligation. Such an
@@ -329,28 +354,3 @@ final class EmptyCaseArm extends RuleBase {
 	}
 
 }
-
-/** The grammar-level seams the check reads once per run — any one missing makes it a no-op. */
-private typedef Scan = {
-
-	final seams: CaseSeams;
-	final shape: RefShape;
-
-	/** The STATEMENT-position switch kinds — the gate that keeps expression switches out. */
-	final statementKinds: Array<String>;
-
-	/** The subject type names free of exhaustiveness checking (`RefShape.openSwitchSubjectTypes`). */
-	final openTypes: Array<String>;
-	final provider: TypeInfoProvider;
-
-};
-
-/** One file's scan context: the grammar seams plus everything resolving that file's switch subjects needs. */
-private typedef Ctx = {
-	final scan: Scan;
-	final root: QueryNode;
-	final declaredTypes: Map<Int, String>;
-	final index: SymbolIndex;
-	final file: String;
-	final regions: () -> Array<LexRegion>;
-};

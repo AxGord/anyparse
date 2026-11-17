@@ -13,6 +13,9 @@ import haxe.macro.Expr;
 import haxe.macro.Type;
 import sys.FileSystem;
 
+/** One grammar plugin's claim on the CLI's dispatch: its module path, its `--lang` and its file extensions. */
+typedef PluginClaim = { final module: String; final lang: String; final extensions: Array<String>; }
+
 /**
  * The one answer to "which grammar plugins can the CLI dispatch": every module on the compiler's classpath whose file
  * is named `<Name>QueryPlugin.hx`, read at compile time, so a new grammar package is found with no CLI edit and a build
@@ -192,6 +195,3 @@ final class GrammarDiscovery {
 	#end
 
 }
-
-/** One grammar plugin's claim on the CLI's dispatch: its module path, its `--lang` and its file extensions. */
-typedef PluginClaim = { final module: String; final lang: String; final extensions: Array<String>; }

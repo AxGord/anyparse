@@ -11,6 +11,9 @@ import sys.io.File;
 
 using StringTools;
 
+/** One finished `node` process. */
+private typedef Run = { final status: Null<Int>; final stdout: String; final stderr: String; };
+
 /**
  * The code-cache launcher (`bin/apq-launch.js`): a cache is offered to V8 only when it was filed under this binary's
  * content and this runtime and is intact, it is published by rename, and a run of an engine rebuilt under it saves
@@ -269,6 +272,3 @@ final class CodeCacheLauncherTest extends Test {
 	}
 
 }
-
-/** One finished `node` process. */
-private typedef Run = { final status: Null<Int>; final stdout: String; final stderr: String; };

@@ -6,6 +6,19 @@ import anyparse.check.Check.VolatileMessage;
 import anyparse.query.SymbolIndex;
 
 /**
+ * Resolved kind config for the complexity walk, built once per run so the
+ * recursion threads one struct. `functionKinds` is the MEASURED set (member
+ * functions — recursion stops at them; nested local functions fold into the
+ * enclosing measured function). `switchKinds` empty ⇒ per-`case` fallback.
+ */
+private typedef ComplexityCfg = {
+	final functionKinds: Array<String>;
+	final branchKinds: Array<String>;
+	final caseBranchKind: String;
+	final switchKinds: Array<String>;
+};
+
+/**
  * Flags functions whose cyclomatic complexity exceeds a threshold — a metric
  * the formatter cannot fix, surfacing refactor hotspots. The first METRIC check
  * (every other check flags a defect to delete or rename); report-only, so `fix`
@@ -169,16 +182,3 @@ final class Complexity extends RuleBase implements ConfigAware implements NoAuto
 	}
 
 }
-
-/**
- * Resolved kind config for the complexity walk, built once per run so the
- * recursion threads one struct. `functionKinds` is the MEASURED set (member
- * functions — recursion stops at them; nested local functions fold into the
- * enclosing measured function). `switchKinds` empty ⇒ per-`case` fallback.
- */
-private typedef ComplexityCfg = {
-	final functionKinds: Array<String>;
-	final branchKinds: Array<String>;
-	final caseBranchKind: String;
-	final switchKinds: Array<String>;
-};

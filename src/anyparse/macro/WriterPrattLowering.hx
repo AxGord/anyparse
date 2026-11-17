@@ -18,6 +18,26 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the Pratt branch family reads, bundled once per
+ * `WriterLowering` instance.
+ *
+ * `shape` and `ctx` are the two of the three build inputs this family
+ * touches; `ruleValueCT` and `writeFnFor` are the shape-name helpers that
+ * stayed in `WriterLowering` because most of their callers did. Handing
+ * them over as fields rather than reaching back through the instance is
+ * what keeps every member here static and the dependency surface written
+ * down.
+ */
+typedef PrattLoweringCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final ctx: LoweringCtx;
+	final ruleValueCT: (refName: String) -> ComplexType;
+	final writeFnFor: (refName: String) -> String;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final branchExtraArgs: (branch: ShapeNode) -> Int;
+}
+
+/**
  * Pass 3W helpers - the Pratt branch emit family.
  *
  * Builds the generated writer body for every OPERATOR branch of an `@:peg`
@@ -1335,25 +1355,5 @@ final class WriterPrattLowering {
 		return ref != null && simpleName(ref) == simpleName(typePath);
 	}
 
-}
-
-/**
- * The build state the Pratt branch family reads, bundled once per
- * `WriterLowering` instance.
- *
- * `shape` and `ctx` are the two of the three build inputs this family
- * touches; `ruleValueCT` and `writeFnFor` are the shape-name helpers that
- * stayed in `WriterLowering` because most of their callers did. Handing
- * them over as fields rather than reaching back through the instance is
- * what keeps every member here static and the dependency surface written
- * down.
- */
-typedef PrattLoweringCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final ctx: LoweringCtx;
-	final ruleValueCT: (refName: String) -> ComplexType;
-	final writeFnFor: (refName: String) -> String;
-	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
-	final branchExtraArgs: (branch: ShapeNode) -> Int;
 }
 #end

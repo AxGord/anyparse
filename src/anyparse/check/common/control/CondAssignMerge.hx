@@ -11,6 +11,60 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The kinds `CondAssignMerge` reads. */
+private typedef Seams = {
+
+	var shape: RefShape;
+	var ifKeyword: String;
+	var endKeyword: String;
+
+	/** The condition-less branch keyword (`#else`), or null when the grammar declares none. */
+	var bareElseKeyword: Null<String>;
+	var elseKeywords: Array<String>;
+	var exprStmtKind: String;
+	var assignKind: String;
+	var localDeclKinds: Array<String>;
+
+	/** The value-returning `return` statement kind, or null when the grammar leaves it unset. */
+	var returnKind: Null<String>;
+
+	/** The `throw` kinds, empty when the grammar leaves them unset. */
+	var throwKinds: Array<String>;
+	var blockKinds: Array<String>;
+
+}
+
+/** One branch of a region: the offset of its own directive, and the single statement it holds. */
+private typedef Arm = { var headerFrom: Int; var stmt: QueryNode; var stmtSpan: Span; }
+
+/** A split region: its branches in order, and whether the chain reaches a final `#else`. */
+private typedef Region = { var arms: Array<Arm>; var hasElse: Bool; }
+
+/** A branch statement split into the text kept once and the r-value kept per branch. */
+private typedef Parts = {
+
+	var prefix: String;
+	var value: String;
+
+	/** Whether the statement EXITS (`return` / `throw`) — the only shape the implicit else is sound for. */
+	var exit: Bool;
+
+}
+
+/** A mergeable region: its span (finding key) and the merged statement, or null text when a comment blocks the fix. */
+private typedef Match = {
+
+	var span: Span;
+
+	/** Whether the arms are EXIT statements — picks the message, and gates the implicit else. */
+	var exit: Bool;
+
+	/** Whether the statement AFTER the region was consumed as the implicit else. */
+	var implicitElse: Bool;
+	var text: Null<String>;
+
+}
+
 /**
  * Flags a statement-scope conditional-compilation region whose EVERY branch is a single
  * assignment to the same target, and merges it into ONE statement whose r-value carries the
@@ -505,59 +559,5 @@ final class CondAssignMerge extends RuleBase implements DefaultOff {
 	private static function hasComment(comments: Array<{ from: Int, to: Int, isLine: Bool }>, region: Span): Bool {
 		return comments.exists(token -> token.from < region.to && token.to > region.from);
 	}
-
-}
-
-/** The kinds `CondAssignMerge` reads. */
-private typedef Seams = {
-
-	var shape: RefShape;
-	var ifKeyword: String;
-	var endKeyword: String;
-
-	/** The condition-less branch keyword (`#else`), or null when the grammar declares none. */
-	var bareElseKeyword: Null<String>;
-	var elseKeywords: Array<String>;
-	var exprStmtKind: String;
-	var assignKind: String;
-	var localDeclKinds: Array<String>;
-
-	/** The value-returning `return` statement kind, or null when the grammar leaves it unset. */
-	var returnKind: Null<String>;
-
-	/** The `throw` kinds, empty when the grammar leaves them unset. */
-	var throwKinds: Array<String>;
-	var blockKinds: Array<String>;
-
-}
-
-/** One branch of a region: the offset of its own directive, and the single statement it holds. */
-private typedef Arm = { var headerFrom: Int; var stmt: QueryNode; var stmtSpan: Span; }
-
-/** A split region: its branches in order, and whether the chain reaches a final `#else`. */
-private typedef Region = { var arms: Array<Arm>; var hasElse: Bool; }
-
-/** A branch statement split into the text kept once and the r-value kept per branch. */
-private typedef Parts = {
-
-	var prefix: String;
-	var value: String;
-
-	/** Whether the statement EXITS (`return` / `throw`) — the only shape the implicit else is sound for. */
-	var exit: Bool;
-
-}
-
-/** A mergeable region: its span (finding key) and the merged statement, or null text when a comment blocks the fix. */
-private typedef Match = {
-
-	var span: Span;
-
-	/** Whether the arms are EXIT statements — picks the message, and gates the implicit else. */
-	var exit: Bool;
-
-	/** Whether the statement AFTER the region was consumed as the implicit else. */
-	var implicitElse: Bool;
-	var text: Null<String>;
 
 }

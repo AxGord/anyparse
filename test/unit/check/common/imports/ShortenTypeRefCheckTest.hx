@@ -9,6 +9,9 @@ import anyparse.check.common.imports.ShortenTypeRef;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 
+/** A fix call's grouped edits and the findings it was handed, which carry the decline reasons it wrote. */
+private typedef AskedFix = { var edits: Array<GroupedEdit>; var findings: Array<Violation>; }
+
 /**
  * The `shorten-type-ref` check: a DOTTED type reference the file itself spells differently.
  * Covers the `pack.SubType` HYBRID repair (to the short name with the import present, to the
@@ -1093,6 +1096,3 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 }
-
-/** A fix call's grouped edits and the findings it was handed, which carry the decline reasons it wrote. */
-private typedef AskedFix = { var edits: Array<GroupedEdit>; var findings: Array<Violation>; }

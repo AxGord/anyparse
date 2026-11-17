@@ -16,6 +16,40 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** One public method that cleared every cheap gate: its name and its own declaration span. */
+private typedef Candidate = {
+
+	/** The method's name — the token the reference test proved absent everywhere else. */
+	final name: String;
+
+	/** The method declaration's own span, which the finding reports and `fix` looks up. */
+	final span: Span;
+
+	/** The declaration node — read to tell whether deleting it would empty a `#if` region. */
+	final node: QueryNode;
+
+	/** Whether the declaration carries `static` — no framework INVOCATION contract can claim one. */
+	final isStatic: Bool;
+
+};
+
+/** The whole-run reference evidence, gathered once where the entire file set is in hand. */
+private typedef Ctx = {
+
+	/** Identifier-token occurrence counts over every source in report UNION resolution scope. */
+	final tokens: Map<String, Int>;
+
+	/** The static text FRAGMENTS of every interpolated string in report scope — the deletion gate. */
+	final fragments: Array<String>;
+
+	/** The grammar's naming projection, for its framework-reachability predicate; null when it exposes none. */
+	final naming: Null<NamingSupport>;
+
+	/** The project's declared framework contracts, resolved once per run — the roster the reachability predicate is asked with. */
+	final contracts: Array<FrameworkContract>;
+
+};
+
 /**
  * Flags a PUBLIC METHOD of a class whose NAME occurs NOWHERE in scope outside its own
  * declaration — dead weight that neither the compiler nor the formatter removes, and which
@@ -421,37 +455,3 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 	}
 
 }
-
-/** One public method that cleared every cheap gate: its name and its own declaration span. */
-private typedef Candidate = {
-
-	/** The method's name — the token the reference test proved absent everywhere else. */
-	final name: String;
-
-	/** The method declaration's own span, which the finding reports and `fix` looks up. */
-	final span: Span;
-
-	/** The declaration node — read to tell whether deleting it would empty a `#if` region. */
-	final node: QueryNode;
-
-	/** Whether the declaration carries `static` — no framework INVOCATION contract can claim one. */
-	final isStatic: Bool;
-
-};
-
-/** The whole-run reference evidence, gathered once where the entire file set is in hand. */
-private typedef Ctx = {
-
-	/** Identifier-token occurrence counts over every source in report UNION resolution scope. */
-	final tokens: Map<String, Int>;
-
-	/** The static text FRAGMENTS of every interpolated string in report scope — the deletion gate. */
-	final fragments: Array<String>;
-
-	/** The grammar's naming projection, for its framework-reachability predicate; null when it exposes none. */
-	final naming: Null<NamingSupport>;
-
-	/** The project's declared framework contracts, resolved once per run — the roster the reachability predicate is asked with. */
-	final contracts: Array<FrameworkContract>;
-
-};

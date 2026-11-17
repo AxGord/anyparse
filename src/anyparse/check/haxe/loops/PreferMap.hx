@@ -14,6 +14,35 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+/** The resolved seams `PreferMap` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final arrayLiteralKind: String;
+	final callKind: String;
+	final identKind: String;
+	final parenKind: Null<String>;
+	final arrayTypeNames: Array<String>;
+	final iterationKinds: Array<String>;
+	final valueBinderKinds: Array<String>;
+	final operandKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final shape: RefShape;
+	final checkTypeKind: Null<String>;
+
+	/** Whether the lambda spelling is available: the grammar names its statement lists, so a block body is recognisable. */
+	final lambdaForm: Bool;
+
+	/** The kinds a body may not contain: control flow, declarations, blocks, loops, `try`, `#if`, local functions. */
+	final leavingKinds: Array<String>;
+	final ifExpressionKinds: Array<String>;
+	final writeKinds: Array<String>;
+	final superText: Null<String>;
+
+	/** The identifier node a bare `$x` interpolation projects as. */
+	final interpIdentKind: Null<String>;
+
+};
+
 /**
  * Flags an array comprehension that maps each element — `[for (x in xs) body]` where the body is ONE value
  * expression reading the loop binder — and rewrites it to `xs.map(…)`, keeping the binder's name. `Severity.Info`.
@@ -238,32 +267,3 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	}
 
 }
-
-/** The resolved seams `PreferMap` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final arrayLiteralKind: String;
-	final callKind: String;
-	final identKind: String;
-	final parenKind: Null<String>;
-	final arrayTypeNames: Array<String>;
-	final iterationKinds: Array<String>;
-	final valueBinderKinds: Array<String>;
-	final operandKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-	final shape: RefShape;
-	final checkTypeKind: Null<String>;
-
-	/** Whether the lambda spelling is available: the grammar names its statement lists, so a block body is recognisable. */
-	final lambdaForm: Bool;
-
-	/** The kinds a body may not contain: control flow, declarations, blocks, loops, `try`, `#if`, local functions. */
-	final leavingKinds: Array<String>;
-	final ifExpressionKinds: Array<String>;
-	final writeKinds: Array<String>;
-	final superText: Null<String>;
-
-	/** The identifier node a bare `$x` interpolation projects as. */
-	final interpIdentKind: Null<String>;
-
-};

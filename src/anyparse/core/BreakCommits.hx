@@ -2,6 +2,14 @@ package anyparse.core;
 
 import anyparse.format.IndentChar;
 
+/** One break `offerItemBreaks` offers: the `BreakCommit` `node` nested in item `item`, resolved to `brk` when `token` is taken. */
+private typedef ItemBreak = {
+	var item: Int;
+	var node: Doc;
+	var brk: Doc;
+	var token: Null<BreakToken>;
+}
+
 /**
  * Resolves every `Doc.BreakCommit` before the collapse pass and the emit render see the Doc.
  *
@@ -371,12 +379,4 @@ final class BreakCommits {
 		return measured ? null : out;
 	}
 
-}
-
-/** One break `offerItemBreaks` offers: the `BreakCommit` `node` nested in item `item`, resolved to `brk` when `token` is taken. */
-private typedef ItemBreak = {
-	var item: Int;
-	var node: Doc;
-	var brk: Doc;
-	var token: Null<BreakToken>;
 }

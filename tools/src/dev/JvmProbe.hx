@@ -5,6 +5,9 @@ import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Result;
 
+/** The target a probe run is built for, the command that builds it, and the command that runs it. */
+typedef ProbeCommands = { target: String, build: Command, run: Command };
+
 /**
  * `dev jvm-portability [--no-build] [<path>...]` — the static-target probe (`JvmPortability`) built for `--jvm` from
  * `tools/jvm-portability.hxml` and run under `java`, its report passed through. The probe stays a JVM build of its own:
@@ -69,6 +72,3 @@ final class JvmProbe {
 	}
 
 }
-
-/** The target a probe run is built for, the command that builds it, and the command that runs it. */
-typedef ProbeCommands = { target: String, build: Command, run: Command };

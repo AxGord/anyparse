@@ -7,6 +7,65 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefIndex;
 
 /**
+ * A module's `using` header: the file's top level, plus the `#if … #end` region that guards its
+ * WHOLE body when it has one — built by `UsingScan.headerOf`. `guard` is null for the ordinary
+ * unguarded module and for every region the coverage gates refuse.
+ */
+typedef UsingHeader = {
+
+	final root: QueryNode;
+	final guard: Null<QueryNode>;
+
+	/** The unguarded `using` paths the file's folder chain (`import.hx`) supplies, empty when the caller holds no index. */
+	final ambientUsings: Array<String>;
+
+	/**
+	 * Every `using` the module declares inside a conditional-compilation region, each paired with
+	 * the span of the innermost region holding it — what `usingScopeAt` tests a rewrite site
+	 * against. A `using` DIRECTLY under an accepted whole-body `guard` appears here too and decides nothing: that
+	 * region covers every type the module declares, and `headerDecls` merges its children, so `hasUsingModule`
+	 * has already answered. One nested a level deeper inside that guard is NOT in `headerDecls`, which reads one
+	 * level only, so its entry here is what answers — correctly, since the inner region is where it binds.
+	 */
+	final guardedUsings: Array<GuardedImport>;
+
+}
+
+/**
+ * Whether a module's `using` is in scope where a rewrite is about to spell an extension call —
+ * `UsingScan.usingScopeAt`'s verdict, and the three answers an insert has to tell apart.
+ */
+enum abstract UsingScope(Int) {
+
+	/** In scope at every site: an unguarded `using`, or a guarded one whose region covers them all. Nothing to insert. */
+	final InScope = 0;
+
+	/** Declared ONLY inside a `#if` region that leaves some site out — neither an insert nor the rewrite is safe. */
+	final Guarded = 1;
+
+	/** Not declared at all, so an insert is the whole job. */
+	final Absent = 2;
+
+}
+
+/** A type a `using` brings, with the path it is imported by and the file declaring it. */
+private typedef UsedType = { final path: String; final type: TypeDeclInfo; final file: FileInfo; };
+
+/** What the other `using`s of a file say about one extension method (`UsingScan.usingConflict`). */
+enum abstract UsingConflict(Int) {
+
+	/** Every other `using` is proven to supply no such extension. */
+	final Clear = 0;
+
+	/** Another `using` may supply it: the rewritten call could bind there. */
+	final Conflict = 1;
+
+	/** Another `using` names a module this cannot read. */
+	final Unresolved = 2;
+
+}
+
+/**
  * The `using`-declaration helpers the static-extension checks share — `dead-binder-counter-loop`,
  * `prefer-exists`, `prefer-foreach`, `prefer-find`, `prefer-lpad` and `prefer-static-extension` each rewrite a
  * call into an extension method, so each has to ask the same four questions of a file's header: is
@@ -559,64 +618,5 @@ final class UsingScan {
 		}
 		return anchor;
 	}
-
-}
-
-/**
- * A module's `using` header: the file's top level, plus the `#if … #end` region that guards its
- * WHOLE body when it has one — built by `UsingScan.headerOf`. `guard` is null for the ordinary
- * unguarded module and for every region the coverage gates refuse.
- */
-typedef UsingHeader = {
-
-	final root: QueryNode;
-	final guard: Null<QueryNode>;
-
-	/** The unguarded `using` paths the file's folder chain (`import.hx`) supplies, empty when the caller holds no index. */
-	final ambientUsings: Array<String>;
-
-	/**
-	 * Every `using` the module declares inside a conditional-compilation region, each paired with
-	 * the span of the innermost region holding it — what `usingScopeAt` tests a rewrite site
-	 * against. A `using` DIRECTLY under an accepted whole-body `guard` appears here too and decides nothing: that
-	 * region covers every type the module declares, and `headerDecls` merges its children, so `hasUsingModule`
-	 * has already answered. One nested a level deeper inside that guard is NOT in `headerDecls`, which reads one
-	 * level only, so its entry here is what answers — correctly, since the inner region is where it binds.
-	 */
-	final guardedUsings: Array<GuardedImport>;
-
-}
-
-/**
- * Whether a module's `using` is in scope where a rewrite is about to spell an extension call —
- * `UsingScan.usingScopeAt`'s verdict, and the three answers an insert has to tell apart.
- */
-enum abstract UsingScope(Int) {
-
-	/** In scope at every site: an unguarded `using`, or a guarded one whose region covers them all. Nothing to insert. */
-	final InScope = 0;
-
-	/** Declared ONLY inside a `#if` region that leaves some site out — neither an insert nor the rewrite is safe. */
-	final Guarded = 1;
-
-	/** Not declared at all, so an insert is the whole job. */
-	final Absent = 2;
-
-}
-
-/** A type a `using` brings, with the path it is imported by and the file declaring it. */
-private typedef UsedType = { final path: String; final type: TypeDeclInfo; final file: FileInfo; };
-
-/** What the other `using`s of a file say about one extension method (`UsingScan.usingConflict`). */
-enum abstract UsingConflict(Int) {
-
-	/** Every other `using` is proven to supply no such extension. */
-	final Clear = 0;
-
-	/** Another `using` may supply it: the rewritten call could bind there. */
-	final Conflict = 1;
-
-	/** Another `using` names a module this cannot read. */
-	final Unresolved = 2;
 
 }

@@ -9,6 +9,32 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * One open conditional region at a position: which region, which of its branches, and that
+ * branch's condition chain.
+ *
+ * `region` is an occurrence ordinal — it answers "is this the SAME region", which is what
+ * `comparable` needs and what `sameBranch` must NOT use. `condition` answers "does this branch
+ * guard the same builds", which is what a REFUSAL needs; the two questions differ exactly on a
+ * pair of sibling regions spelling one condition.
+ */
+typedef CondFrame = {
+
+	final region: Int;
+	final branch: Int;
+
+	/**
+	 * Every condition the region has spelled up to and including this branch, normalised and
+	 * joined with `|` — `a` for the `#if` arm, `a|b` for an `#elseif b`, `a|` for an `#else`.
+	 * Empty where the directive carries no condition the reader could delimit.
+	 */
+	final condition: String;
+
+};
+
+/** The replayed directive marks of one source, in source order — `CondBranchPath.scan`'s result. */
+typedef CondBranchIndex = Array<{ at: Int, path: Array<CondFrame> }>;
+
+/**
  * Which conditional-compilation BRANCH a source position sits in, for checks that compare
  * sibling constructs.
  *
@@ -171,29 +197,3 @@ final class CondBranchPath {
 	}
 
 }
-
-/**
- * One open conditional region at a position: which region, which of its branches, and that
- * branch's condition chain.
- *
- * `region` is an occurrence ordinal — it answers "is this the SAME region", which is what
- * `comparable` needs and what `sameBranch` must NOT use. `condition` answers "does this branch
- * guard the same builds", which is what a REFUSAL needs; the two questions differ exactly on a
- * pair of sibling regions spelling one condition.
- */
-typedef CondFrame = {
-
-	final region: Int;
-	final branch: Int;
-
-	/**
-	 * Every condition the region has spelled up to and including this branch, normalised and
-	 * joined with `|` — `a` for the `#if` arm, `a|b` for an `#elseif b`, `a|` for an `#else`.
-	 * Empty where the directive carries no condition the reader could delimit.
-	 */
-	final condition: String;
-
-};
-
-/** The replayed directive marks of one source, in source order — `CondBranchPath.scan`'s result. */
-typedef CondBranchIndex = Array<{ at: Int, path: Array<CondFrame> }>;

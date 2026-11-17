@@ -7,6 +7,23 @@ import anyparse.proc.SpawnJob;
 import haxe.DynamicAccess;
 import haxe.Exception;
 
+/** How a command is supervised once it runs: the group it leaves behind, and the silence it is cut after. */
+typedef Guard = {
+
+	/** Milliseconds of silence after which the run is killed; 0 for no limit. */
+	var idle: Int;
+
+	/** The file whose change counts as a sign of life, and whose text says where a stalled run stood. */
+	var progress: Null<String>;
+
+	/** Whether `idle` counts from the first change of `progress` and not from the start. */
+	var awaitProgress: Bool;
+
+	/** Whether the command waits for a pool lease first, its timeout counting from the grant (`SpawnJob.leased`). */
+	var leased: Bool;
+
+}
+
 /**
  * One program and its argument vector, run with no shell in between — so nothing in an argument is ever quoted,
  * split or expanded. Usually built by `Cmd.cmd`. A command is immutable: `at`, `env`, `timeout`, `input`, `pipe` and
@@ -293,22 +310,5 @@ final class Command {
 	private static function runsDirect(job: SpawnJob): Bool {
 		return job.tethered != true && job.leased != true && (job.idle ?? 0) <= 0 && ProcessSpawn.isShort(job);
 	}
-
-}
-
-/** How a command is supervised once it runs: the group it leaves behind, and the silence it is cut after. */
-typedef Guard = {
-
-	/** Milliseconds of silence after which the run is killed; 0 for no limit. */
-	var idle: Int;
-
-	/** The file whose change counts as a sign of life, and whose text says where a stalled run stood. */
-	var progress: Null<String>;
-
-	/** Whether `idle` counts from the first change of `progress` and not from the start. */
-	var awaitProgress: Bool;
-
-	/** Whether the command waits for a pool lease first, its timeout counting from the grant (`SpawnJob.leased`). */
-	var leased: Bool;
 
 }

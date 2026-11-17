@@ -14,6 +14,72 @@ import anyparse.query.TreePath;
 using StringTools;
 
 /**
+ * The seam kinds `AsymmetricBranchBraces` reads: the statement-position `if` kinds, the block kind, the exempt
+ * else kinds, and the five `fix` reads to decide whether a bare branch may be braced.
+ */
+private typedef Seams = {
+
+	final ifKinds: Array<String>;
+	final blockStmtKind: String;
+	final exemptElseKinds: Array<String>;
+
+	/** `RefShape.statementTerminator`; unset makes `fix` inert. */
+	final terminator: Null<String>;
+
+	/** `RefShape.exprStatementKind`: an unterminated bare expression statement takes the terminator inside the braces. */
+	final exprStmtKind: Null<String>;
+
+	/** `RefShape.localDeclKinds`: a bare declaration is never braced. */
+	final declKinds: Array<String>;
+
+	/** Statements closed by a brace of their own whatever their content: `RefShape.switchStatementKinds`. */
+	final braceClosedKinds: Array<String>;
+
+	/** Statements that close the way their LAST child does: the `if`, loop, `try` and `catch` kinds. */
+	final lastChildClosedKinds: Array<String>;
+
+	/** The try/catch kinds, statement and value alike (`BranchChain.tryBodiesOf`). */
+	final tryKinds: Array<String>;
+	final catchKind: Null<String>;
+
+	/** What a braced body is: the block-statement kind and `ControlFlowSupport.blockKinds` - a value `try` holds blocks too. */
+	final bracedKinds: Array<String>;
+
+	/** `RefShape.spliceKinds`: a quotation's spliced ASTs, left bare (`BranchChain.isSplice`). */
+	final spliceKinds: Array<String>;
+
+	/** `RefShape.prefixAnnotationKinds`: the metadata wrappers a splice sits under (`BranchChain.isSplice`). */
+	final annotationKinds: Array<String>;
+
+	/** The grammar's shape, for `CondRegionScan.isConditionalKind`. */
+	final shape: RefShape;
+
+};
+
+/** One asymmetric if/else or chain: the reported span, the `if` node it is anchored on, and the message naming the defect. */
+private typedef Asymmetry = { final span: Span; final node: QueryNode; final message: String; };
+
+/** The per-file context of `AsymmetricBranchBraces.fix`. */
+private typedef FixSite = {
+
+	final source: String;
+	final tree: QueryNode;
+	final seams: Seams;
+	final terminator: String;
+	final plugin: GrammarPlugin;
+
+	/** The file's comment tokens (`SourceComments.collectCommentTokens`): a bare branch's own comments go inside its braces. */
+	final comments: Array<CommentTok>;
+
+};
+
+/** What `fix` does with one asymmetric pair: the brace edits of its chain, or the gate that kept them bare. */
+private enum BraceFix {
+	Braced(edits: Array<FixEdit>);
+	Declined(reason: String);
+}
+
+/**
  * Flags an if / else-if chain whose branches disagree: one braced, another bare -
  * `if (a) { p(); q(); } else r();`, its mirror, or `if (a) { p(); } else if (b) q();`.
  * `Info`: both spellings compile and mean the same thing, and which one to keep is the
@@ -432,70 +498,4 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 		};
 	}
 
-}
-
-/**
- * The seam kinds `AsymmetricBranchBraces` reads: the statement-position `if` kinds, the block kind, the exempt
- * else kinds, and the five `fix` reads to decide whether a bare branch may be braced.
- */
-private typedef Seams = {
-
-	final ifKinds: Array<String>;
-	final blockStmtKind: String;
-	final exemptElseKinds: Array<String>;
-
-	/** `RefShape.statementTerminator`; unset makes `fix` inert. */
-	final terminator: Null<String>;
-
-	/** `RefShape.exprStatementKind`: an unterminated bare expression statement takes the terminator inside the braces. */
-	final exprStmtKind: Null<String>;
-
-	/** `RefShape.localDeclKinds`: a bare declaration is never braced. */
-	final declKinds: Array<String>;
-
-	/** Statements closed by a brace of their own whatever their content: `RefShape.switchStatementKinds`. */
-	final braceClosedKinds: Array<String>;
-
-	/** Statements that close the way their LAST child does: the `if`, loop, `try` and `catch` kinds. */
-	final lastChildClosedKinds: Array<String>;
-
-	/** The try/catch kinds, statement and value alike (`BranchChain.tryBodiesOf`). */
-	final tryKinds: Array<String>;
-	final catchKind: Null<String>;
-
-	/** What a braced body is: the block-statement kind and `ControlFlowSupport.blockKinds` - a value `try` holds blocks too. */
-	final bracedKinds: Array<String>;
-
-	/** `RefShape.spliceKinds`: a quotation's spliced ASTs, left bare (`BranchChain.isSplice`). */
-	final spliceKinds: Array<String>;
-
-	/** `RefShape.prefixAnnotationKinds`: the metadata wrappers a splice sits under (`BranchChain.isSplice`). */
-	final annotationKinds: Array<String>;
-
-	/** The grammar's shape, for `CondRegionScan.isConditionalKind`. */
-	final shape: RefShape;
-
-};
-
-/** One asymmetric if/else or chain: the reported span, the `if` node it is anchored on, and the message naming the defect. */
-private typedef Asymmetry = { final span: Span; final node: QueryNode; final message: String; };
-
-/** The per-file context of `AsymmetricBranchBraces.fix`. */
-private typedef FixSite = {
-
-	final source: String;
-	final tree: QueryNode;
-	final seams: Seams;
-	final terminator: String;
-	final plugin: GrammarPlugin;
-
-	/** The file's comment tokens (`SourceComments.collectCommentTokens`): a bare branch's own comments go inside its braces. */
-	final comments: Array<CommentTok>;
-
-};
-
-/** What `fix` does with one asymmetric pair: the brace edits of its chain, or the gate that kept them bare. */
-private enum BraceFix {
-	Braced(edits: Array<FixEdit>);
-	Declined(reason: String);
 }

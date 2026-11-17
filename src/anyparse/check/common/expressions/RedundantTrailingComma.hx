@@ -5,6 +5,9 @@ import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
+/** The kind sets `RedundantTrailingComma` reads off the plugin, resolved once per run. */
+private typedef ListKinds = { final hosts: Array<String>; final params: Array<String>; final mandatory: Array<String>; };
+
 /**
  * Flags a redundant trailing comma - the `,` between the LAST element of a
  * comma-separated list and its closing delimiter (`[1, 2,]`, `{x: 1, y: 2,}`,
@@ -173,6 +176,3 @@ final class RedundantTrailingComma extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The kind sets `RedundantTrailingComma` reads off the plugin, resolved once per run. */
-private typedef ListKinds = { final hosts: Array<String>; final params: Array<String>; final mandatory: Array<String>; };

@@ -13,6 +13,33 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The node kinds `PreferLpad` reads, resolved once per run by `readSeams`. */
+typedef LpadSeams = {
+	final ifKinds: Array<String>;
+	final stringKinds: Array<String>;
+	final numericKinds: Array<String>;
+	final forKind: String;
+	final intervalKind: String;
+	final ltKind: String;
+	final identKind: String;
+	final interpIdentKind: String;
+}
+
+/** One accepted ladder: the padded value's name, the affixes written around it, the width and the exclusive top. */
+typedef LpadLadder = {
+	final subject: String;
+	final base: String;
+	final suffix: String;
+	final width: Int;
+	final top: Int;
+}
+
+/** One branch value split into the text before the zeros, the zero run itself, and the text after the hole. */
+typedef LpadSegments = { final base: String; final zeros: Int; final suffix: String; }
+
+/** One ladder in a file: where it is, what it says, and whether its range is proved (the fix gate). */
+typedef LpadSite = { final span: Span; final ladder: LpadLadder; final proven: Bool; }
+
 /**
  * Flags a zero-pad LADDER -- a value-position `if` chain that picks a hand-written run of `0`s by
  * digit count -- and writes it as one `lpad` call:
@@ -399,30 +426,3 @@ final class PreferLpad extends HaxeRule implements DefaultOff {
 	}
 
 }
-
-/** The node kinds `PreferLpad` reads, resolved once per run by `readSeams`. */
-typedef LpadSeams = {
-	final ifKinds: Array<String>;
-	final stringKinds: Array<String>;
-	final numericKinds: Array<String>;
-	final forKind: String;
-	final intervalKind: String;
-	final ltKind: String;
-	final identKind: String;
-	final interpIdentKind: String;
-}
-
-/** One accepted ladder: the padded value's name, the affixes written around it, the width and the exclusive top. */
-typedef LpadLadder = {
-	final subject: String;
-	final base: String;
-	final suffix: String;
-	final width: Int;
-	final top: Int;
-}
-
-/** One branch value split into the text before the zeros, the zero run itself, and the text after the hole. */
-typedef LpadSegments = { final base: String; final zeros: Int; final suffix: String; }
-
-/** One ladder in a file: where it is, what it says, and whether its range is proved (the fix gate). */
-typedef LpadSite = { final span: Span; final ladder: LpadLadder; final proven: Bool; }

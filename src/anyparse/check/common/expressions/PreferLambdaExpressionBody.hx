@@ -15,6 +15,48 @@ import haxe.Exception;
 
 using StringTools;
 
+/** The kinds `PreferLambdaExpressionBody` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	var arrowKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var valueReturnKinds: Array<String>;
+	var exprStatementKind: Null<String>;
+	var opaqueKinds: Array<String>;
+
+	/** The control-flow statements a body may hold whole — `if` / `switch` / loop / `throw`. Empty leaves that arm inert. */
+	var controlFlowKinds: Array<String>;
+
+	/** The kinds whose body branches internally and therefore keeps its braces — `switch`. */
+	var branchingKinds: Array<String>;
+
+	/**
+	 * The invocation kinds whose LAST child is the trailing argument — a lambda there is
+	 * followed by `)` and nothing else. See `branchesInternally`.
+	 */
+	var callKinds: Array<String>;
+
+	/**
+	 * The dangling-`else` gate's inputs: the parents that close every child with a delimiter,
+	 * and every `if` form an emitted else-less conditional could be absorbed by.
+	 */
+	var shield: ShieldSeams;
+
+	/** Statement kinds whose span covers a trailing terminator the emitted text must not carry. */
+	var terminatedKinds: Array<String>;
+
+}
+
+/**
+ * What a collapsible block yields: the node whose source becomes the body, and whether its
+ * span carries a terminator that the strip must cut (true only for the control-flow arm —
+ * the value arms emit a bare expression node's span verbatim).
+ */
+private typedef Collapsible = { var node: QueryNode; var terminated: Bool; }
+
+/** A collapsible lambda body: the block's span (the finding key AND the replaced region) and the expression text. */
+private typedef Match = { var span: Span; var text: String; }
+
 /**
  * Flags an ARROW lambda whose `{ … }` body holds exactly one statement, and collapses the
  * block to a bare expression body:
@@ -871,45 +913,3 @@ final class PreferLambdaExpressionBody extends RuleBase {
 	}
 
 }
-
-/** The kinds `PreferLambdaExpressionBody` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	var arrowKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var valueReturnKinds: Array<String>;
-	var exprStatementKind: Null<String>;
-	var opaqueKinds: Array<String>;
-
-	/** The control-flow statements a body may hold whole — `if` / `switch` / loop / `throw`. Empty leaves that arm inert. */
-	var controlFlowKinds: Array<String>;
-
-	/** The kinds whose body branches internally and therefore keeps its braces — `switch`. */
-	var branchingKinds: Array<String>;
-
-	/**
-	 * The invocation kinds whose LAST child is the trailing argument — a lambda there is
-	 * followed by `)` and nothing else. See `branchesInternally`.
-	 */
-	var callKinds: Array<String>;
-
-	/**
-	 * The dangling-`else` gate's inputs: the parents that close every child with a delimiter,
-	 * and every `if` form an emitted else-less conditional could be absorbed by.
-	 */
-	var shield: ShieldSeams;
-
-	/** Statement kinds whose span covers a trailing terminator the emitted text must not carry. */
-	var terminatedKinds: Array<String>;
-
-}
-
-/**
- * What a collapsible block yields: the node whose source becomes the body, and whether its
- * span carries a terminator that the strip must cut (true only for the control-flow arm —
- * the value arms emit a bare expression node's span verbatim).
- */
-private typedef Collapsible = { var node: QueryNode; var terminated: Bool; }
-
-/** A collapsible lambda body: the block's span (the finding key AND the replaced region) and the expression text. */
-private typedef Match = { var span: Span; var text: String; }

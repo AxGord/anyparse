@@ -24,6 +24,67 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** One arm's cut as its record declares it. */
+enum ArmCut {
+
+	/** `find`/`replace`: the `hxq patch` payload. */
+	Find(type: String, method: String, kind: String, payload: String);
+
+	/** `force`: the value the member returns first thing. */
+	Force(type: String, method: String, kind: String, value: String);
+
+	/** An arm the registry does not hold, or whose pairs do not pair up. */
+	Unrenderable(why: String);
+
+}
+
+/** Where one arm cuts, and why it could not be rendered once that is known. */
+typedef ArmTarget = {
+	var type: String;
+	var method: String;
+	var file: String;
+	var selector: String;
+	var failure: Null<String>;
+}
+
+/** The arms of a run split by whether their cut rendered: the names that did, and a verdict row for each that did not. */
+typedef RenderSplit = { var rendered: Array<String>; var failed: Array<String>; }
+
+/** The pinned tests and classes of every arm, each a sorted comma-separated list. */
+typedef PinTables = { var tests: Map<String, String>; var classes: Map<String, String>; }
+
+/** One `dev mutation-arm` run. */
+typedef ArmJob = {
+
+	var repo: String;
+	var registry: String;
+	var names: Array<String>;
+
+	/** The engine that renders the cuts, and the runner whose registry names the pins. */
+	var apq: String;
+	var test: String;
+	var jobs: Null<String>;
+	var fast: Bool;
+	var keep: Bool;
+	var checkApply: Bool;
+
+	/** Render and apply every cut to a scratch copy and stop: no build, no suite. */
+	var applyOnly: Bool;
+
+	/** The commit the cuts are rendered against and every slot is made from. */
+	var base: String;
+
+}
+
+/** The engine and the runner a run reads the unmutated tree through. */
+typedef ArmBinaries = { var apq: String; var test: String; }
+
+/** The composed build running in the background: its directory, and the batch whose job it is. */
+typedef SchemaRun = { var dir: String; var batch: PendingRuns; }
+
+/** What `release` must end whatever way the run went. */
+typedef RunState = { var schema: Null<SchemaRun>; }
+
 /**
  * `dev mutation-arm <ARM>... | --all` — a DECLARED mutation arm (`test/testkit/arms`) turned into a run:
  * each arm's cut rendered into a patch against a scratch worktree, its pins (the `@:killer`s that name it, out of the
@@ -696,64 +757,3 @@ final class MutationArm {
 	}
 
 }
-
-/** One arm's cut as its record declares it. */
-enum ArmCut {
-
-	/** `find`/`replace`: the `hxq patch` payload. */
-	Find(type: String, method: String, kind: String, payload: String);
-
-	/** `force`: the value the member returns first thing. */
-	Force(type: String, method: String, kind: String, value: String);
-
-	/** An arm the registry does not hold, or whose pairs do not pair up. */
-	Unrenderable(why: String);
-
-}
-
-/** Where one arm cuts, and why it could not be rendered once that is known. */
-typedef ArmTarget = {
-	var type: String;
-	var method: String;
-	var file: String;
-	var selector: String;
-	var failure: Null<String>;
-}
-
-/** The arms of a run split by whether their cut rendered: the names that did, and a verdict row for each that did not. */
-typedef RenderSplit = { var rendered: Array<String>; var failed: Array<String>; }
-
-/** The pinned tests and classes of every arm, each a sorted comma-separated list. */
-typedef PinTables = { var tests: Map<String, String>; var classes: Map<String, String>; }
-
-/** One `dev mutation-arm` run. */
-typedef ArmJob = {
-
-	var repo: String;
-	var registry: String;
-	var names: Array<String>;
-
-	/** The engine that renders the cuts, and the runner whose registry names the pins. */
-	var apq: String;
-	var test: String;
-	var jobs: Null<String>;
-	var fast: Bool;
-	var keep: Bool;
-	var checkApply: Bool;
-
-	/** Render and apply every cut to a scratch copy and stop: no build, no suite. */
-	var applyOnly: Bool;
-
-	/** The commit the cuts are rendered against and every slot is made from. */
-	var base: String;
-
-}
-
-/** The engine and the runner a run reads the unmutated tree through. */
-typedef ArmBinaries = { var apq: String; var test: String; }
-
-/** The composed build running in the background: its directory, and the batch whose job it is. */
-typedef SchemaRun = { var dir: String; var batch: PendingRuns; }
-
-/** What `release` must end whatever way the run went. */
-typedef RunState = { var schema: Null<SchemaRun>; }

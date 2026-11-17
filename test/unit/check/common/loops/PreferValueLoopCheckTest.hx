@@ -9,6 +9,9 @@ import anyparse.query.CanonicalEdit;
 
 using StringTools;
 
+/** One `run` over one fixture: the check instance and the findings it produced, kept together so a fix assertion re-uses both. */
+private typedef CheckRun = { var check: PreferValueLoop; var vs: Array<Violation>; }
+
 /**
  * The `prefer-value-loop` check: `for (i in 0...X.length)` whose index is read ONLY as `X[i]` is
  * flagged `Info` and rewritten to `for (v in X)`, with every `X[i]` re-spelled as the binder.
@@ -578,6 +581,3 @@ class PreferValueLoopCheckTest extends Test {
 	}
 
 }
-
-/** One `run` over one fixture: the check instance and the findings it produced, kept together so a fix assertion re-uses both. */
-private typedef CheckRun = { var check: PreferValueLoop; var vs: Array<Violation>; }

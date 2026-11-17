@@ -6,6 +6,8 @@ import anyparse.query.GrammarPlugin;
 
 using StringTools;
 
+private typedef Source = { file: String, source: String };
+
 /**
  * `redundant-lambda-wrapper` through a receiver or a `Type.member` callee whose class is declared in another file: the finding
  * is the same whether that file is among the linted files or only in the resolution scope.
@@ -69,5 +71,3 @@ class RedundantLambdaWrapperScopeCheckTest extends Test {
 	}
 
 }
-
-private typedef Source = { file: String, source: String };

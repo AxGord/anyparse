@@ -16,6 +16,25 @@ import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 
+/** What every gate of one `edits` call reads, gathered once. */
+private typedef Context = {
+
+	final files: Array<{ file: String, source: String }>;
+
+	/** Every project source, the run's own files at their current text. */
+	final project: Array<{ file: String, source: String }>;
+	final plugin: GrammarPlugin;
+	final support: NamingSupport;
+	final shape: RefShape;
+
+	/** The resolution index (report UNION libraries), or the report index without a scope. */
+	final index: SymbolIndex;
+
+	/** The reflection surface over the run's files and the resolution sources. */
+	final surface: ReflectionSurface;
+
+};
+
 /**
  * `naming`'s CROSS-FILE rename arm: a TYPE or an ENUM-ABSTRACT VALUE whose name violates the policy is
  * renamed in every file that names it, through the `rename --scope` engines (`CrossRename`,
@@ -338,22 +357,3 @@ final class NamingCrossRename {
 	}
 
 }
-
-/** What every gate of one `edits` call reads, gathered once. */
-private typedef Context = {
-
-	final files: Array<{ file: String, source: String }>;
-
-	/** Every project source, the run's own files at their current text. */
-	final project: Array<{ file: String, source: String }>;
-	final plugin: GrammarPlugin;
-	final support: NamingSupport;
-	final shape: RefShape;
-
-	/** The resolution index (report UNION libraries), or the report index without a scope. */
-	final index: SymbolIndex;
-
-	/** The reflection surface over the run's files and the resolution sources. */
-	final surface: ReflectionSurface;
-
-};

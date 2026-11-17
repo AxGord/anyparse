@@ -17,6 +17,73 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 
+/** The grammar seams the check reads. */
+private typedef Seams = {
+
+	var shape: RefShape;
+	var loopKinds: Array<String>;
+	var valueBinderKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+
+	/** The kinds whose subtree's mention of a name counts as a read however the tree resolves it. */
+	var hazardKinds: Array<String>;
+
+	/** The case-branch kind and the kind each of its patterns projects as; either unset leaves no pattern exempt. */
+	var caseBranchKind: Null<String>;
+	var plainPatternKind: Null<String>;
+
+};
+
+/** The per-file facts every gate reads. */
+private typedef FileCtx = {
+
+	var root: QueryNode;
+	var source: String;
+	var file: String;
+	var s: Seams;
+	var plugin: GrammarPlugin;
+
+	/** Comments, regexes and non-interpolating literals — bytes that can neither bind nor read a name. */
+	var inert: Array<Span>;
+	var comments: Array<Span>;
+
+	/** The file's lexical regions: a comment gate over header text reads these, so a `//` in a string is no comment. */
+	var regions: Array<LexRegion>;
+
+	/** Every string literal; an occurrence inside one that is not inert sits in an interpolating literal. */
+	var strings: Array<Span>;
+
+	/** Structure field names (`{ i: 1 }`, `{ i:Int }`): a label reachable only through a receiver, never a read. */
+	var fieldNames: Array<Span>;
+
+	/** Every case pattern (see `collectPatternSpans`). */
+	var patterns: Array<Span>;
+	var fold: Null<StringFoldSupport>;
+	var index: () -> Null<SymbolIndex>;
+	var types: () -> Map<Int, String>;
+	var importMap: () -> Map<String, String>;
+	var claimer: () -> Null<(decl: QueryNode, forNode: QueryNode, scope: QueryNode) -> Bool>;
+
+};
+
+/** One unread binder: the span reported and the edit that unbinds it. */
+private typedef Candidate = {
+
+	var span: Span;
+	var message: String;
+	var edit: FixEdit;
+
+	/** The rename a DROP falls back to when the report pass did not prove it; null for a rename. */
+	var fallback: Null<FixEdit>;
+
+	/** The loop a map key's drop asks `MemberReach` about before it is made; null for any other finding. */
+	var keyed: Null<KeyedLoop>;
+
+};
+
+/** A key-value loop over a map: its iterable and the body whose reach decides whether the key may go. */
+private typedef KeyedLoop = { var iterable: QueryNode; var body: Span; };
+
 /**
  * Flags a `for` loop binder that nothing in the loop body reads, and renames it to the wildcard:
  * `for (i in 0...n)` becomes `for (_ in 0...n)`, `for (k => v in m)` with `v` unread becomes
@@ -400,70 +467,3 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The grammar seams the check reads. */
-private typedef Seams = {
-
-	var shape: RefShape;
-	var loopKinds: Array<String>;
-	var valueBinderKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-
-	/** The kinds whose subtree's mention of a name counts as a read however the tree resolves it. */
-	var hazardKinds: Array<String>;
-
-	/** The case-branch kind and the kind each of its patterns projects as; either unset leaves no pattern exempt. */
-	var caseBranchKind: Null<String>;
-	var plainPatternKind: Null<String>;
-
-};
-
-/** The per-file facts every gate reads. */
-private typedef FileCtx = {
-
-	var root: QueryNode;
-	var source: String;
-	var file: String;
-	var s: Seams;
-	var plugin: GrammarPlugin;
-
-	/** Comments, regexes and non-interpolating literals — bytes that can neither bind nor read a name. */
-	var inert: Array<Span>;
-	var comments: Array<Span>;
-
-	/** The file's lexical regions: a comment gate over header text reads these, so a `//` in a string is no comment. */
-	var regions: Array<LexRegion>;
-
-	/** Every string literal; an occurrence inside one that is not inert sits in an interpolating literal. */
-	var strings: Array<Span>;
-
-	/** Structure field names (`{ i: 1 }`, `{ i:Int }`): a label reachable only through a receiver, never a read. */
-	var fieldNames: Array<Span>;
-
-	/** Every case pattern (see `collectPatternSpans`). */
-	var patterns: Array<Span>;
-	var fold: Null<StringFoldSupport>;
-	var index: () -> Null<SymbolIndex>;
-	var types: () -> Map<Int, String>;
-	var importMap: () -> Map<String, String>;
-	var claimer: () -> Null<(decl: QueryNode, forNode: QueryNode, scope: QueryNode) -> Bool>;
-
-};
-
-/** One unread binder: the span reported and the edit that unbinds it. */
-private typedef Candidate = {
-
-	var span: Span;
-	var message: String;
-	var edit: FixEdit;
-
-	/** The rename a DROP falls back to when the report pass did not prove it; null for a rename. */
-	var fallback: Null<FixEdit>;
-
-	/** The loop a map key's drop asks `MemberReach` about before it is made; null for any other finding. */
-	var keyed: Null<KeyedLoop>;
-
-};
-
-/** A key-value loop over a map: its iterable and the body whose reach decides whether the key may go. */
-private typedef KeyedLoop = { var iterable: QueryNode; var body: Span; };

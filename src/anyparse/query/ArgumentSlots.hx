@@ -13,6 +13,19 @@ enum ArgumentFit {
 /** A parameter as a call binds it: one a call may leave out (`?p`, `p = v`), the rest parameter. */
 typedef SlotParam = { final optional: Bool; final rest: Bool; }
 
+/** The state of one `ArgumentSlots.runs` walk: the runs found so far, and the binding of the one being built. */
+private typedef SlotWalk = {
+	final params: Array<SlotParam>;
+	final count: Int;
+	final fit: (arg: Int, param: Int) -> ArgumentFit;
+	final bound: Array<Int>;
+	final out: Array<Array<Int>>;
+	var overflow: Bool;
+}
+
+/** The compiler's own way to bind a call's arguments (`ArgumentSlots.compilerPath`): its verdict, the parameter each bound. */
+private typedef CompilerPath = { final verdict: ArgumentFit; final bound: Array<Int>; }
+
 /**
  * THE model of how a call binds its arguments to the parameters of the function it calls — every reader that asks which
  * parameter an argument lands on asks here. Haxe 4.3.7 binds GREEDILY, argument by argument and never backtracking
@@ -137,16 +150,3 @@ final class ArgumentSlots {
 	}
 
 }
-
-/** The state of one `ArgumentSlots.runs` walk: the runs found so far, and the binding of the one being built. */
-private typedef SlotWalk = {
-	final params: Array<SlotParam>;
-	final count: Int;
-	final fit: (arg: Int, param: Int) -> ArgumentFit;
-	final bound: Array<Int>;
-	final out: Array<Array<Int>>;
-	var overflow: Bool;
-}
-
-/** The compiler's own way to bind a call's arguments (`ArgumentSlots.compilerPath`): its verdict, the parameter each bound. */
-private typedef CompilerPath = { final verdict: ArgumentFit; final bound: Array<Int>; }

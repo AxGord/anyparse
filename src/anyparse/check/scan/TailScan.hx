@@ -11,6 +11,43 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.TreePath;
 
 /**
+ * The grammar seams a statement-run scan resolves once per `run` / `fix`. The declaration trio feeds the
+ * shadowing gate: `localDeclKinds` / `localDeclExprKinds` are the local VARIABLE forms
+ * `BinderScan.topLevelDeclaredNode` unwraps `metaKinds` down to — and the only ones whose projection can
+ * under-report a multi-declarator's names (`hasOpaqueDecl`) — while `fnDeclKinds` are the local FUNCTION
+ * declarations, plain and `inline`, which bind a shadowing name too but never come in multiples.
+ * `terminalKinds` is the return / throw set WITHOUT `break` / `continue`; `support` answers the wider
+ * "does this statement exit" question.
+ */
+typedef TailSeams = {
+	final ifKinds: Array<String>;
+	final blockKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final terminalKinds: Array<String>;
+	final identKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final spliceKinds: Array<String>;
+	final condKind: Null<String>;
+	final localDeclKinds: Array<String>;
+	final localDeclContinuationKinds: Array<String>;
+	final localDeclExprKinds: Array<String>;
+	final fnDeclKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final support: ControlFlowSupport;
+	final terminator: Null<String>;
+};
+
+/** An `if` standing as a block statement, with the statements that follow it in that block. */
+typedef ChainSite = { final head: QueryNode; final following: Array<QueryNode>; };
+
+/** A rewrite of an `if` chain: the chain, the span its finding reports and the edits that carry it out (none when report-only). */
+typedef RewriteSite = { final chain: QueryNode; final span: Span; final edits: Array<FixEdit>; };
+
+/** `elseEnds`: the final branch's index, its span, and the span of the branch before it. */
+typedef ElseEnds = { final last: Int; final chainEnd: Span; final beforeElse: Span; };
+
+/**
  * The one answer to "do these statements run the same under the same names, and may a run of them move
  * without a name changing meaning": token identity of two statements, the names a statement list binds,
  * whether a tail reads one, conditional compilation and comments inside a region. Shared by `tail-merge`
@@ -293,40 +330,3 @@ final class TailScan {
 	}
 
 }
-
-/**
- * The grammar seams a statement-run scan resolves once per `run` / `fix`. The declaration trio feeds the
- * shadowing gate: `localDeclKinds` / `localDeclExprKinds` are the local VARIABLE forms
- * `BinderScan.topLevelDeclaredNode` unwraps `metaKinds` down to — and the only ones whose projection can
- * under-report a multi-declarator's names (`hasOpaqueDecl`) — while `fnDeclKinds` are the local FUNCTION
- * declarations, plain and `inline`, which bind a shadowing name too but never come in multiples.
- * `terminalKinds` is the return / throw set WITHOUT `break` / `continue`; `support` answers the wider
- * "does this statement exit" question.
- */
-typedef TailSeams = {
-	final ifKinds: Array<String>;
-	final blockKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-	final terminalKinds: Array<String>;
-	final identKinds: Array<String>;
-	final scopeKinds: Array<String>;
-	final spliceKinds: Array<String>;
-	final condKind: Null<String>;
-	final localDeclKinds: Array<String>;
-	final localDeclContinuationKinds: Array<String>;
-	final localDeclExprKinds: Array<String>;
-	final fnDeclKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final support: ControlFlowSupport;
-	final terminator: Null<String>;
-};
-
-/** An `if` standing as a block statement, with the statements that follow it in that block. */
-typedef ChainSite = { final head: QueryNode; final following: Array<QueryNode>; };
-
-/** A rewrite of an `if` chain: the chain, the span its finding reports and the edits that carry it out (none when report-only). */
-typedef RewriteSite = { final chain: QueryNode; final span: Span; final edits: Array<FixEdit>; };
-
-/** `elseEnds`: the final branch's index, its span, and the span of the branch before it. */
-typedef ElseEnds = { final last: Int; final chainEnd: Span; final beforeElse: Span; };

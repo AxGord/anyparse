@@ -8,6 +8,9 @@ import anyparse.runtime.Span;
 using anyparse.util.Strings;
 using Lambda;
 
+/** An element a sibling-element op acts on, with the container it sits in (null for the root). */
+typedef ElementHit = { node: QueryNode, parent: Null<QueryNode> };
+
 /**
  * The bytes an ELEMENT owns, and the bytes removing it must cover. A declaration's node span
  * is narrower than the declaration: the modifier and metadata siblings project BEFORE it, the
@@ -917,6 +920,3 @@ final class ElementSpan {
 	}
 
 }
-
-/** An element a sibling-element op acts on, with the container it sits in (null for the root). */
-typedef ElementHit = { node: QueryNode, parent: Null<QueryNode> };

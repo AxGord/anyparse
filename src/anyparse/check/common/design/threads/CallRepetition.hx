@@ -10,6 +10,12 @@ import anyparse.util.Groups;
 using StringTools;
 
 /**
+ * The repetitions `boundedRepeats` entries bind along one way of calls (`CallRepetition.along`): the product of their
+ * bounds (`turns`), the worst cost of one turn (`cost`, ms), and the entries met.
+ */
+typedef BoundedWay = { final turns: Float; final cost: Float; final entries: Array<BoundedRepeat>; }
+
+/**
  * Whether a call may run more than once each time the code around it runs — what turns a call of a short sink
  * (`shortSinks`) long. A call repeats when its site sits in a loop of its function, when it hands a function value to a
  * call that may run it more than once, or when it stays inside a recursion: its caller and its target call each other,
@@ -508,9 +514,3 @@ final class CallRepetition {
 	}
 
 }
-
-/**
- * The repetitions `boundedRepeats` entries bind along one way of calls (`CallRepetition.along`): the product of their
- * bounds (`turns`), the worst cost of one turn (`cost`, ms), and the entries met.
- */
-typedef BoundedWay = { final turns: Float; final cost: Float; final entries: Array<BoundedRepeat>; }

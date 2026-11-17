@@ -12,6 +12,35 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+private typedef Seams = {
+
+	final support: StringFoldSupport;
+	final shape: RefShape;
+	final literalKinds: Array<String>;
+
+	/** Kinds whose subtree is never read: a macro or the target reads the text there. */
+	final skipKinds: Array<String>;
+
+	/** Kinds under which a literal is reported but cannot be rewritten into a concatenation. */
+	final unfixableKinds: Array<String>;
+	final modifierKinds: Array<String>;
+	final inlineKind: Null<String>;
+	final metaKinds: Array<String>;
+	final enumAbstractMetaName: Null<String>;
+	final enumAbstractDeclKind: Null<String>;
+	final conditionalKind: Null<String>;
+	final functionKinds: Array<String>;
+
+};
+
+private typedef Site = {
+	final node: QueryNode;
+	final parent: Null<QueryNode>;
+	final index: Int;
+	final literal: StringLiteral;
+	final fixable: Bool;
+};
+
 /**
  * Flags a plain string literal holding a C++ trigraph (`??` followed by one of `=/'()!<>-`) and rewrites it to a
  * concatenation cut between the two question marks, `'a??)'` -> `('a?' + '?)')`. `Warning`, because hxcpp copies a
@@ -153,32 +182,3 @@ final class TrigraphInString extends HaxeRule {
 	}
 
 }
-
-private typedef Seams = {
-
-	final support: StringFoldSupport;
-	final shape: RefShape;
-	final literalKinds: Array<String>;
-
-	/** Kinds whose subtree is never read: a macro or the target reads the text there. */
-	final skipKinds: Array<String>;
-
-	/** Kinds under which a literal is reported but cannot be rewritten into a concatenation. */
-	final unfixableKinds: Array<String>;
-	final modifierKinds: Array<String>;
-	final inlineKind: Null<String>;
-	final metaKinds: Array<String>;
-	final enumAbstractMetaName: Null<String>;
-	final enumAbstractDeclKind: Null<String>;
-	final conditionalKind: Null<String>;
-	final functionKinds: Array<String>;
-
-};
-
-private typedef Site = {
-	final node: QueryNode;
-	final parent: Null<QueryNode>;
-	final index: Int;
-	final literal: StringLiteral;
-	final fixable: Bool;
-};

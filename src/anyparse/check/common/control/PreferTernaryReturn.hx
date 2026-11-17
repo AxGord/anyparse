@@ -20,6 +20,56 @@ import anyparse.query.TypeResolver;
 
 using StringTools;
 
+/** The resolved seams `PreferTernaryReturn` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final ifKinds: Array<String>;
+	final returnKind: String;
+	final support: ControlFlowSupport;
+	final shape: RefShape;
+
+	/** The four seams behind `TypeResolver.childReturnTypeSource`, resolved once per run. */
+	final functionKinds: Array<String>;
+	final lambdaKinds: Array<String>;
+	final bodyKinds: Array<String>;
+	final paramKinds: Array<String>;
+
+};
+
+/** `preservedComments`' position-split result: the hoisted block plus the one branch-attached comment. */
+private typedef PreservedComments = { final hoisted: String; final branchTrailing: Null<String>; };
+
+private typedef TernaryMatch = {
+	var ifNode: QueryNode;
+	var condition: QueryNode;
+	var thenValue: QueryNode;
+	var elseValue: QueryNode;
+	var nextReturn: QueryNode;
+	var retType: Null<String>;
+};
+
+/** What `buildEdit` needs beyond the match: the lexical regions, the grammar, the negation site and the boolean-form seams. */
+private typedef Rebuild = {
+	final regions: Array<LexRegion>;
+	final plugin: GrammarPlugin;
+	final site: Null<InversionSite>;
+	final boolean: Null<BooleanForm>;
+};
+
+/**
+ * The seams that write a boolean-literal pair as its logical expression: the ternary kind and boolean-logic engine
+ * `simplify-boolean-ternary` reduces with, the lazily-built type probe, and whether `mixed-logical-parens` is on.
+ */
+private typedef BooleanForm = {
+	final file: String;
+	final shape: RefShape;
+	final ternaryKind: String;
+	final support: BooleanLogicSupport;
+	final types: (QueryNode) -> Null<String>;
+	final quoted: Array<Span>;
+	final parens: Bool;
+};
+
 /**
  * Flags an `if (cond) return a;` whose immediately-following sibling is a
  * `return b;`, collapsing the pair to a single `return cond ? a : b;`. Purely
@@ -625,53 +675,3 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 	}
 
 }
-
-/** The resolved seams `PreferTernaryReturn` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final ifKinds: Array<String>;
-	final returnKind: String;
-	final support: ControlFlowSupport;
-	final shape: RefShape;
-
-	/** The four seams behind `TypeResolver.childReturnTypeSource`, resolved once per run. */
-	final functionKinds: Array<String>;
-	final lambdaKinds: Array<String>;
-	final bodyKinds: Array<String>;
-	final paramKinds: Array<String>;
-
-};
-
-/** `preservedComments`' position-split result: the hoisted block plus the one branch-attached comment. */
-private typedef PreservedComments = { final hoisted: String; final branchTrailing: Null<String>; };
-
-private typedef TernaryMatch = {
-	var ifNode: QueryNode;
-	var condition: QueryNode;
-	var thenValue: QueryNode;
-	var elseValue: QueryNode;
-	var nextReturn: QueryNode;
-	var retType: Null<String>;
-};
-
-/** What `buildEdit` needs beyond the match: the lexical regions, the grammar, the negation site and the boolean-form seams. */
-private typedef Rebuild = {
-	final regions: Array<LexRegion>;
-	final plugin: GrammarPlugin;
-	final site: Null<InversionSite>;
-	final boolean: Null<BooleanForm>;
-};
-
-/**
- * The seams that write a boolean-literal pair as its logical expression: the ternary kind and boolean-logic engine
- * `simplify-boolean-ternary` reduces with, the lazily-built type probe, and whether `mixed-logical-parens` is on.
- */
-private typedef BooleanForm = {
-	final file: String;
-	final shape: RefShape;
-	final ternaryKind: String;
-	final support: BooleanLogicSupport;
-	final types: (QueryNode) -> Null<String>;
-	final quoted: Array<Span>;
-	final parens: Bool;
-};

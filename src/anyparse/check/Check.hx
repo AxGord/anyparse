@@ -84,78 +84,6 @@ typedef FindingData = {
 typedef RepeatSite = { var member: String; var at: String; }
 
 /**
- * A single analysis check. The framework is grammar-agnostic: a check
- * receives the same in-memory `(file, source)` set the query layer uses
- * plus the `GrammarPlugin` for the language, and returns the violations
- * it found across all of them. A check that parses a file itself is
- * responsible for skipping (not throwing on) unparseable input — the
- * `Linter` does not catch per-check exceptions, so a check must be as
- * tolerant as `SymbolIndex.build`.
- *
- * This is the documented extension seam of the analysis layer, mirroring
- * the `Strategy` / `Format` / `GrammarPlugin` plugin contracts: a new
- * check is a new class, never a core change. `run` is the only behaviour;
- * `id` / `description` are metadata for the `lint` CLI's selection and
- * usage output.
- */
-@:nullSafety(Strict)
-interface Check {
-
-	/** Stable kebab-case identifier, e.g. `unused-import`. */
-	public function id(): String;
-
-	/** One-line description for `lint --help` / the rule listing. */
-	public function description(): String;
-
-	/** The subject the rule is about — what an `apq.json` `categories` entry and `apq lint --category` select it by. */
-	public function category(): RuleCategory;
-
-	/**
-	 * Run the check across `files` and return every violation found, in
-	 * the check's natural order. Must not throw on unparseable input.
-	 *
-	 * CONSUMERS: call `Linter.collect` (or `Linter.run`) rather than this directly — that is where the
-	 * central reification gate drops a finding written inside a `macro …` quotation, and a consumer
-	 * that reaches past it silently re-opens the class of bug the gate exists for.
-	 */
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation>;
-
-	/**
-	 * The source edits that fix the auto-fixable subset of `violations` —
-	 * the caller passes this check's OWN violations for ONE file (same
-	 * `source`). Each edit is a raw `{span, text}` the caller batches into a
-	 * single `RefactorSupport.canonicalize` per file, so several fixes apply
-	 * without the span-shift a re-emit-per-fix would cause (`text` replaces
-	 * `[span.from, span.to)`; empty = a deletion). A check with no autofix,
-	 * or none applicable to these violations, returns an empty array — that
-	 * is the default for any non-fixable check.
-	 *
-	 * JUSTIFICATION CONTRACT: every emitted edit must be justified by a
-	 * violation in THIS call. `violations` is always a SUBSET of what `run`
-	 * reported — `Linter.collect` drops the quoted and the suppressed before
-	 * any fix path sees a finding — so an edit derived from the SOURCE rather
-	 * than from `violations` can outlive the finding that motivated it. The
-	 * worked example is on `GroupedFix`, whose grouping seam says which edits
-	 * are inseparable, never that one is deserved.
-	 *
-	 * SAYING WHY NOTHING CAME BACK: an empty array is the same answer for a
-	 * check that has NO autofix and for one whose gate declined HERE, and
-	 * `apq lint --fix` reported the two identically until a reader filed work
-	 * on a guard the rule already had. A check with no autofix at all declares
-	 * `NoAutofix` and gives the reason once, on the class; a check that HAS a
-	 * fix and withholds it at a site writes `Violation.declineReason` on that
-	 * finding, naming the gate — here, or in `run` when the gate is
-	 * whole-scope. Declaring neither is allowed and is not a defect: the run
-	 * then reports only what it observed, that the fix was called for these
-	 * findings and answered nothing.
-	 */
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }>;
-
-}
-
-/**
  * A `Check` that reads per-file `apq.json` OPTIONS (e.g. complexity `max`,
  * magic-number `ignore`, thread-safety `sinks`) while it runs — as opposed to
  * enablement / severity, which the framework applies after the fact. `Linter.run`
@@ -226,6 +154,7 @@ interface QuotationAware {}
  * provable shape gate; the machinery lives in `FixVerifier` / `CompilerOracle`.
  */
 interface RiskyFix {}
+
 /**
  * Opt-in capability of a TRUSTED check one of whose fix ARMS is risky - the per-arm counterpart of
  * the whole-check `RiskyFix` marker. The check's ordinary `fix` / `crossFileFix` stays in the
@@ -869,5 +798,77 @@ interface Supersedes {
 
 	/** The rule ids whose same-span findings this check's findings replace. */
 	function supersedes(): Array<String>;
+
+}
+
+/**
+ * A single analysis check. The framework is grammar-agnostic: a check
+ * receives the same in-memory `(file, source)` set the query layer uses
+ * plus the `GrammarPlugin` for the language, and returns the violations
+ * it found across all of them. A check that parses a file itself is
+ * responsible for skipping (not throwing on) unparseable input — the
+ * `Linter` does not catch per-check exceptions, so a check must be as
+ * tolerant as `SymbolIndex.build`.
+ *
+ * This is the documented extension seam of the analysis layer, mirroring
+ * the `Strategy` / `Format` / `GrammarPlugin` plugin contracts: a new
+ * check is a new class, never a core change. `run` is the only behaviour;
+ * `id` / `description` are metadata for the `lint` CLI's selection and
+ * usage output.
+ */
+@:nullSafety(Strict)
+interface Check {
+
+	/** Stable kebab-case identifier, e.g. `unused-import`. */
+	public function id(): String;
+
+	/** One-line description for `lint --help` / the rule listing. */
+	public function description(): String;
+
+	/** The subject the rule is about — what an `apq.json` `categories` entry and `apq lint --category` select it by. */
+	public function category(): RuleCategory;
+
+	/**
+	 * Run the check across `files` and return every violation found, in
+	 * the check's natural order. Must not throw on unparseable input.
+	 *
+	 * CONSUMERS: call `Linter.collect` (or `Linter.run`) rather than this directly — that is where the
+	 * central reification gate drops a finding written inside a `macro …` quotation, and a consumer
+	 * that reaches past it silently re-opens the class of bug the gate exists for.
+	 */
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation>;
+
+	/**
+	 * The source edits that fix the auto-fixable subset of `violations` —
+	 * the caller passes this check's OWN violations for ONE file (same
+	 * `source`). Each edit is a raw `{span, text}` the caller batches into a
+	 * single `RefactorSupport.canonicalize` per file, so several fixes apply
+	 * without the span-shift a re-emit-per-fix would cause (`text` replaces
+	 * `[span.from, span.to)`; empty = a deletion). A check with no autofix,
+	 * or none applicable to these violations, returns an empty array — that
+	 * is the default for any non-fixable check.
+	 *
+	 * JUSTIFICATION CONTRACT: every emitted edit must be justified by a
+	 * violation in THIS call. `violations` is always a SUBSET of what `run`
+	 * reported — `Linter.collect` drops the quoted and the suppressed before
+	 * any fix path sees a finding — so an edit derived from the SOURCE rather
+	 * than from `violations` can outlive the finding that motivated it. The
+	 * worked example is on `GroupedFix`, whose grouping seam says which edits
+	 * are inseparable, never that one is deserved.
+	 *
+	 * SAYING WHY NOTHING CAME BACK: an empty array is the same answer for a
+	 * check that has NO autofix and for one whose gate declined HERE, and
+	 * `apq lint --fix` reported the two identically until a reader filed work
+	 * on a guard the rule already had. A check with no autofix at all declares
+	 * `NoAutofix` and gives the reason once, on the class; a check that HAS a
+	 * fix and withholds it at a site writes `Violation.declineReason` on that
+	 * finding, naming the gate — here, or in `run` when the gate is
+	 * whole-scope. Declaring neither is allowed and is not a defect: the run
+	 * then reports only what it observed, that the fix was called for these
+	 * findings and answered nothing.
+	 */
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }>;
 
 }

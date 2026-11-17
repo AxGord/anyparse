@@ -16,6 +16,38 @@ using StringTools;
 using Lambda;
 
 /**
+ * One token-capture probe: where the token lives in the shape (`field` plus the `slot` that
+ * addresses it inside the field's value), the source that carries it (`before` + token +
+ * `after`, either side free to spell `{}` for a second occurrence), and the `kind` the parse
+ * has to project for the token to count as captured.
+ */
+typedef TokenProbe = {
+
+	var field: String;
+	var slot: String;
+	var kind: String;
+
+	/**
+	 * How the projected node's NAME relates to the token — `NAME_IS`, `NAME_OPENS` or `NAME_NONE`.
+	 * Declared and not derived: `Meta` names the token and `EnumAbstractDecl` names the type its
+	 * body brace opens, and nothing in a parse tells those two apart.
+	 */
+	var names: String;
+	var before: String;
+	var after: String;
+
+};
+
+/**
+ * One construct source: the kinds this source is `KIND_SOURCES`' cover for, and the source itself.
+ *
+ * `kinds` is a claim about this source and not a description of it — a source emits many more kinds
+ * than it is the cover for, and listing only the ones it OWNS is what keeps every projected kind
+ * attributable to exactly one row.
+ */
+typedef KindSource = { var kinds: Array<String>; var source: String; };
+
+/**
  * Every kind name a grammar plugin DECLARES, against every kind name its parser PROJECTS.
  *
  * `RefShape` publishes a few hundred fields, most of which carry a kind name or a set of them, and a kind set is
@@ -1836,35 +1868,3 @@ final class RefShapeKindProjectionTest extends Test {
 	#end
 
 }
-
-/**
- * One token-capture probe: where the token lives in the shape (`field` plus the `slot` that
- * addresses it inside the field's value), the source that carries it (`before` + token +
- * `after`, either side free to spell `{}` for a second occurrence), and the `kind` the parse
- * has to project for the token to count as captured.
- */
-typedef TokenProbe = {
-
-	var field: String;
-	var slot: String;
-	var kind: String;
-
-	/**
-	 * How the projected node's NAME relates to the token — `NAME_IS`, `NAME_OPENS` or `NAME_NONE`.
-	 * Declared and not derived: `Meta` names the token and `EnumAbstractDecl` names the type its
-	 * body brace opens, and nothing in a parse tells those two apart.
-	 */
-	var names: String;
-	var before: String;
-	var after: String;
-
-};
-
-/**
- * One construct source: the kinds this source is `KIND_SOURCES`' cover for, and the source itself.
- *
- * `kinds` is a claim about this source and not a description of it — a source emits many more kinds
- * than it is the cover for, and listing only the ones it OWNS is what keeps every projected kind
- * attributable to exactly one row.
- */
-typedef KindSource = { var kinds: Array<String>; var source: String; };

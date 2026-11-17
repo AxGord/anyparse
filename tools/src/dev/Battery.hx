@@ -32,6 +32,12 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** One lint the blast step compares with its base snapshot: the snapshot's label and the tree its paths are under. */
+typedef BlastArm = { var label: String; var root: String; }
+
+/** One `lint-diff` the blast step ran: the snapshot's label and the exit status, null when it gave none. */
+typedef BlastRun = { var label: String; var status: Null<Int>; }
+
 /**
  * `dev battery` — the end-of-slice proof as ONE command with one verdict (docs/testing.md § "The per-slice battery"): the
  * three binaries and a typecheck of the corpus drill, then four branches at once, each a `--rows` process of this tool
@@ -840,9 +846,3 @@ final class Battery {
 	}
 
 }
-
-/** One lint the blast step compares with its base snapshot: the snapshot's label and the tree its paths are under. */
-typedef BlastArm = { var label: String; var root: String; }
-
-/** One `lint-diff` the blast step ran: the snapshot's label and the exit status, null when it gave none. */
-typedef BlastRun = { var label: String; var status: Null<Int>; }

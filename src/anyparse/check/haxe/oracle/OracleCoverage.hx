@@ -17,6 +17,34 @@ import haxe.io.Path;
 import sys.FileSystem;
 
 /**
+ * One arm of the probed compile: the source files that arm READ, and the define names it
+ * ran under.
+ *
+ * An hxml is a sequence of `--next` arms and each one is its own compilation — its own
+ * defines, its own set of modules. A region is typechecked when SOME arm both reads its
+ * file and makes it live, so the two facts have to travel together: a union of every
+ * arm's defines would prove `#if (a && b)` live for an `a` from one arm and a `b` from
+ * another, which no compile ever did.
+ *
+ * `defines` carries NAMES only, `key=value` reduced to `key`. Positive-only: a name here
+ * IS defined for that arm, a name absent from it is UNKNOWN rather than undefined — the
+ * compiler prints its `Defines:` line before init macros run, and this list is that line
+ * plus the `--macro define(...)` calls the same transcript goes on to report.
+ */
+typedef CompiledArm = {
+
+	var files: Array<String>;
+	var defines: Array<String>;
+
+	/**
+	 * The roots the arm's compile resolves a module under, from the compiler's own `Classpath:` line — empty
+	 * when the transcript named none, which is an UNKNOWN reach rather than a build that sees nothing.
+	 */
+	var classPaths: Array<String>;
+
+}
+
+/**
  * WHICH FILES and WHICH REGIONS of them the configured compiler oracle actually
  * compiles — the question a `RiskyFix` verdict depends on.
  *
@@ -661,33 +689,5 @@ final class OracleCoverage implements CompiledSet {
 		};
 	}
 	#end
-
-}
-
-/**
- * One arm of the probed compile: the source files that arm READ, and the define names it
- * ran under.
- *
- * An hxml is a sequence of `--next` arms and each one is its own compilation — its own
- * defines, its own set of modules. A region is typechecked when SOME arm both reads its
- * file and makes it live, so the two facts have to travel together: a union of every
- * arm's defines would prove `#if (a && b)` live for an `a` from one arm and a `b` from
- * another, which no compile ever did.
- *
- * `defines` carries NAMES only, `key=value` reduced to `key`. Positive-only: a name here
- * IS defined for that arm, a name absent from it is UNKNOWN rather than undefined — the
- * compiler prints its `Defines:` line before init macros run, and this list is that line
- * plus the `--macro define(...)` calls the same transcript goes on to report.
- */
-typedef CompiledArm = {
-
-	var files: Array<String>;
-	var defines: Array<String>;
-
-	/**
-	 * The roots the arm's compile resolves a module under, from the compiler's own `Classpath:` line — empty
-	 * when the transcript named none, which is an UNKNOWN reach rather than a build that sees nothing.
-	 */
-	var classPaths: Array<String>;
 
 }

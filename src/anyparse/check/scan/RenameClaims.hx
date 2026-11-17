@@ -5,6 +5,11 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 
 /**
+ * One accepted member rename: the type the new name lands on, and the name itself.
+ */
+private typedef MemberClaim = { final owner: String; final newName: String; };
+
+/**
  * The member renames one `apq lint --fix` PASS has already accepted, so a rename decided later in
  * that pass can see them.
  *
@@ -103,8 +108,3 @@ final class RenameClaims {
 	}
 
 }
-
-/**
- * One accepted member rename: the type the new name lands on, and the name itself.
- */
-private typedef MemberClaim = { final owner: String; final newName: String; };

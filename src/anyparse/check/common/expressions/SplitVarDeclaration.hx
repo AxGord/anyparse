@@ -10,6 +10,18 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The kinds `SplitVarDeclaration` reads. */
+private typedef Seams = {
+	var shape: RefShape;
+	var localDeclKinds: Array<String>;
+	var continuationKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var blockKinds: Array<String>;
+}
+
+/** A splittable declaration: the statement span (finding key and replaced range), its binding count, and the rebuilt text. */
+private typedef Match = { var span: Span; var count: Int; var text: String; }
+
 /**
  * Flags a local declaration that binds several variables in one statement and rebuilds it as
  * one declaration per statement:
@@ -283,15 +295,3 @@ final class SplitVarDeclaration extends RuleBase {
 	}
 
 }
-
-/** The kinds `SplitVarDeclaration` reads. */
-private typedef Seams = {
-	var shape: RefShape;
-	var localDeclKinds: Array<String>;
-	var continuationKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var blockKinds: Array<String>;
-}
-
-/** A splittable declaration: the statement span (finding key and replaced range), its binding count, and the rebuilt text. */
-private typedef Match = { var span: Span; var count: Int; var text: String; }

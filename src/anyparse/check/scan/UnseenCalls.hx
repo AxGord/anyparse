@@ -10,6 +10,14 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeNameBinding.Tier;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** What `UnseenCalls` judges a window by: the purity context, the operator selection with its typing, the operand binder. */
+private typedef Proofs = {
+	final purity: PurityCtx;
+	final selection: Null<OperatorSelection>;
+	final typing: Null<OperandTyping>;
+	final binder: Null<OperandBinder>;
+};
+
 /**
  * The one answer to "can code run inside this stretch of source with no call written in it": a read of a property getter,
  * an operator or an index access a type overloads, and a written type that converts the value it is given (`@:from`).
@@ -131,11 +139,3 @@ final class UnseenCalls {
 	}
 
 }
-
-/** What `UnseenCalls` judges a window by: the purity context, the operator selection with its typing, the operand binder. */
-private typedef Proofs = {
-	final purity: PurityCtx;
-	final selection: Null<OperatorSelection>;
-	final typing: Null<OperandTyping>;
-	final binder: Null<OperandBinder>;
-};

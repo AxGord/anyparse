@@ -4,6 +4,9 @@ import anyparse.check.common.members.PreferFinalPublicField;
 import anyparse.check.common.members.PreferReadOnlyField;
 import anyparse.query.CachingGrammarPlugin;
 
+/** One source the scope holds — the shape every scope half in this file is an array of. */
+private typedef SourceFile = { var file: String; var source: String; };
+
 /**
  * Which HALF of a resolution scope the two field-immutability rules read, and with what owner
  * narrowing.
@@ -290,6 +293,3 @@ class FieldWriteResolutionScopeTest extends Test {
 	}
 
 }
-
-/** One source the scope holds — the shape every scope half in this file is an array of. */
-private typedef SourceFile = { var file: String; var source: String; };

@@ -8,6 +8,11 @@ import haxe.macro.Expr;
 using Lambda;
 
 /**
+ * A chain's walk from one link (`WriterMetaLineEndLowering.chainWalk`): the statements binding `_tail` and
+ * `_chainSimple`, and the pattern of a next link.
+ */
+typedef ChainWalk = { final decls: Array<Expr>; final pattern: Expr; }
+/**
  * Pass 3W — the one answer to "which line-end policy governs this metadata run".
  *
  * `@:fmt(metaLineEndPolicy('<optField>'))` names the knob of a metadata Star.
@@ -335,9 +340,4 @@ final class WriterMetaLineEndLowering {
 	}
 
 }
-/**
- * A chain's walk from one link (`WriterMetaLineEndLowering.chainWalk`): the statements binding `_tail` and
- * `_chainSimple`, and the pattern of a next link.
- */
-typedef ChainWalk = { final decls: Array<Expr>; final pattern: Expr; }
 #end

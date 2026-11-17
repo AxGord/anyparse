@@ -12,6 +12,50 @@ import anyparse.query.SymbolIndex;
 
 using StringTools;
 
+/** The `RefShape` kinds `WhileTrueCondition` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	var whileKind: String;
+	var breakKind: String;
+	var boolLitKind: String;
+	var ifKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var breaks: LoopJumpSeams;
+	var jumps: LoopJumpSeams;
+	var negation: NegationSeams;
+	var support: Null<BooleanLogicSupport>;
+}
+
+/** Per-file inputs the walkers share: the source, the resolved seams, the comment tokens and the type resolver. */
+private typedef Ctx = {
+	var source: String;
+	var seams: Seams;
+	var regions: Array<LexRegion>;
+	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	var types: Null<(QueryNode) -> Null<String>>;
+}
+
+/**
+ * A matched loop's parts: the branch that stays inside (null for form (a), whose kept run is the
+ * body block after the guard), the exiting branch's statements before its `break`, that `break`
+ * node, and whether the header condition is the guard's own or its negation.
+ */
+private typedef Arms = {
+	var keep: Null<QueryNode>;
+	var lift: Array<QueryNode>;
+	var breakNode: QueryNode;
+	var negate: Bool;
+}
+
+/** An exiting branch read apart: the statements before its `break`, and the `break` itself. */
+private typedef Terminator = { var head: Array<QueryNode>; var breakNode: QueryNode; }
+
+/** The loop's new body: its text, and the source region that text was taken from (null when it is synthesised). */
+private typedef Kept = { var text: String; var region: Null<Span>; }
+
+/** A flagged loop: the whole-loop span, and its replacement text (null when a dropped comment withholds the fix). */
+private typedef Match = { var span: Span; var text: Null<String>; }
+
 /**
  * Flags a `while (true)` whose ONLY exit is a `break` that dominates the top of the body, and
  * lifts that exit condition into the loop header — the loop then says where it stops instead of
@@ -366,47 +410,3 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The `RefShape` kinds `WhileTrueCondition` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-	var whileKind: String;
-	var breakKind: String;
-	var boolLitKind: String;
-	var ifKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var breaks: LoopJumpSeams;
-	var jumps: LoopJumpSeams;
-	var negation: NegationSeams;
-	var support: Null<BooleanLogicSupport>;
-}
-
-/** Per-file inputs the walkers share: the source, the resolved seams, the comment tokens and the type resolver. */
-private typedef Ctx = {
-	var source: String;
-	var seams: Seams;
-	var regions: Array<LexRegion>;
-	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
-	var types: Null<(QueryNode) -> Null<String>>;
-}
-
-/**
- * A matched loop's parts: the branch that stays inside (null for form (a), whose kept run is the
- * body block after the guard), the exiting branch's statements before its `break`, that `break`
- * node, and whether the header condition is the guard's own or its negation.
- */
-private typedef Arms = {
-	var keep: Null<QueryNode>;
-	var lift: Array<QueryNode>;
-	var breakNode: QueryNode;
-	var negate: Bool;
-}
-
-/** An exiting branch read apart: the statements before its `break`, and the `break` itself. */
-private typedef Terminator = { var head: Array<QueryNode>; var breakNode: QueryNode; }
-
-/** The loop's new body: its text, and the source region that text was taken from (null when it is synthesised). */
-private typedef Kept = { var text: String; var region: Null<Span>; }
-
-/** A flagged loop: the whole-loop span, and its replacement text (null when a dropped comment withholds the fix). */
-private typedef Match = { var span: Span; var text: Null<String>; }

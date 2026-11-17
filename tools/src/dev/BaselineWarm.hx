@@ -12,6 +12,15 @@ import haxe.io.Path;
 
 using StringTools;
 
+/** Which commands a warm run measures: the trees a baseline records as frozen, and the infra trees a rule-code slice lints. */
+typedef WarmRecipe = { var frozen: Array<String>; var infra: Array<String>; }
+
+/** A gate run in flight: whether it still runs, how to end it, and what it answered once it ended. */
+typedef Warming = { var running: () -> Bool; var cancel: () -> Void; var ended: () -> Outcome; }
+
+/** Starts the warm run of a landed commit in `repo`. */
+typedef WarmStart = (repo: String, sha: String) -> Outcome;
+
 /**
  * The one answer to "how does the baseline a first slice gate needs get measured before that gate asks for it": once a land
  * has passed, `dev land` starts `dev baseline-warm run <sha>` for the landed commit, a process that outlives the land and
@@ -191,12 +200,3 @@ final class BaselineWarm {
 	}
 
 }
-
-/** Which commands a warm run measures: the trees a baseline records as frozen, and the infra trees a rule-code slice lints. */
-typedef WarmRecipe = { var frozen: Array<String>; var infra: Array<String>; }
-
-/** A gate run in flight: whether it still runs, how to end it, and what it answered once it ended. */
-typedef Warming = { var running: () -> Bool; var cancel: () -> Void; var ended: () -> Outcome; }
-
-/** Starts the warm run of a landed commit in `repo`. */
-typedef WarmStart = (repo: String, sha: String) -> Outcome;

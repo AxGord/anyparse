@@ -15,6 +15,28 @@ import anyparse.query.TypeResolver;
 using StringTools;
 
 /**
+ * The `RefShape` kinds `PreferRangeLoop` reads (plus the shape itself
+ * for binding resolution), bundled once so the walkers take one argument.
+ */
+private typedef Seams = {
+	var shape: RefShape;
+	var whileStmtKind: String;
+	var ltKind: String;
+	var postIncrKind: String;
+	var identKind: String;
+	var blockStmtKind: String;
+	var exprStmtKind: String;
+	var continueKind: String;
+	var mutableKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+	var writeParentKinds: Array<String>;
+	var numericLiteralKinds: Array<String>;
+	var closureKinds: Array<String>;
+	var atomicKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+}
+
+/**
  * Flags a manual counter loop — a `var i = A;` declaration immediately followed
  * by `while (i < B) { BODY; i++; }` — which the user's rule replaces with a range
  * `for`: use `for (i in A...B)` instead of a `while` with a manual `i++`.
@@ -418,26 +440,4 @@ final class PreferRangeLoop extends RuleBase {
 			&& (text.indexOf('.') != -1 || text.indexOf('e') != -1 || text.indexOf('E') != -1);
 	}
 
-}
-
-/**
- * The `RefShape` kinds `PreferRangeLoop` reads (plus the shape itself
- * for binding resolution), bundled once so the walkers take one argument.
- */
-private typedef Seams = {
-	var shape: RefShape;
-	var whileStmtKind: String;
-	var ltKind: String;
-	var postIncrKind: String;
-	var identKind: String;
-	var blockStmtKind: String;
-	var exprStmtKind: String;
-	var continueKind: String;
-	var mutableKinds: Array<String>;
-	var localDeclKinds: Array<String>;
-	var writeParentKinds: Array<String>;
-	var numericLiteralKinds: Array<String>;
-	var closureKinds: Array<String>;
-	var atomicKinds: Array<String>;
-	var opaqueKinds: Array<String>;
 }

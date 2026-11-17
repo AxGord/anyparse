@@ -34,6 +34,53 @@ import anyparse.util.Groups;
 using Lambda;
 
 /**
+ * How a reach analysis reads the run's compiler facts once it has built its scope: the view over that scope under that list
+ * of builds (`FactsView.over`).
+ */
+typedef FactsSource = (scope: ReachProject, configurations: Null<Array<ReachConfiguration>>) -> Null<FactsView>;
+
+/** The sites the syntax cannot be trusted to see in code whose facts are the truth (`FactsView.truthSites`). */
+typedef TruthSites = { final natives: Array<NativeFact>; final reflection: Array<ReflectionFact>; }
+
+/**
+ * What code hands the target code of extern members (`FactsView.externCalls`): the type of each value an argument hands
+ * it, each call's receiver (null for none), and how many calls and constructions of them there are.
+ */
+typedef ExternCalls = { final handed: Array<String>; final receivers: Array<Null<String>>; final count: Int; }
+
+/** The conditional compilation of a text: its directives, its top-level regions, and whether a region never closes. */
+private typedef ConditionalText = { final directives: Array<Span>; final regions: Array<Span>; final whole: Bool; }
+
+/** A typed type's declaration as the compile read it: its file (a table key), the text, its range, the index's reading. */
+private typedef TypeText = {
+	final file: String;
+	final source: String;
+	final span: Span;
+	final info: Null<TypeDeclInfo>;
+}
+
+/**
+ * A declaration of a type the index holds (`FactsView.declarationsNamed`): its package-qualified id as the index spells it,
+ * its file's table key, and whether a build read that file.
+ */
+private typedef IndexedDeclaration = { final id: String; final key: String; final read: Bool; }
+
+/**
+ * The members an implicit call of one family runs (`FactsView.implicitUnheld`), as the facts spell them: the methods it calls
+ * by name, the metadata marking a method it calls, and the metadata of a type the language constructs from a literal.
+ */
+typedef ImplicitMembers = {
+
+	final names: Array<String>;
+	final metas: Array<String>;
+	final typeMetas: Array<String>;
+
+	/** Whether the compiler makes the call itself, so an extern type's inline method runs its body there. */
+	final externInline: Bool;
+
+}
+
+/**
  * The reach analysis's reading of the compiler's facts (`CompilerFacts`): which function bodies the facts describe
  * completely enough to REPLACE the name-based reading of them, what those bodies run implicitly, and the markers that
  * make a question about them Unknown.
@@ -1812,52 +1859,5 @@ final class FactsView {
 		path.push(t.name);
 		return path.join('.');
 	}
-
-}
-
-/**
- * How a reach analysis reads the run's compiler facts once it has built its scope: the view over that scope under that list
- * of builds (`FactsView.over`).
- */
-typedef FactsSource = (scope: ReachProject, configurations: Null<Array<ReachConfiguration>>) -> Null<FactsView>;
-
-/** The sites the syntax cannot be trusted to see in code whose facts are the truth (`FactsView.truthSites`). */
-typedef TruthSites = { final natives: Array<NativeFact>; final reflection: Array<ReflectionFact>; }
-
-/**
- * What code hands the target code of extern members (`FactsView.externCalls`): the type of each value an argument hands
- * it, each call's receiver (null for none), and how many calls and constructions of them there are.
- */
-typedef ExternCalls = { final handed: Array<String>; final receivers: Array<Null<String>>; final count: Int; }
-
-/** The conditional compilation of a text: its directives, its top-level regions, and whether a region never closes. */
-private typedef ConditionalText = { final directives: Array<Span>; final regions: Array<Span>; final whole: Bool; }
-
-/** A typed type's declaration as the compile read it: its file (a table key), the text, its range, the index's reading. */
-private typedef TypeText = {
-	final file: String;
-	final source: String;
-	final span: Span;
-	final info: Null<TypeDeclInfo>;
-}
-
-/**
- * A declaration of a type the index holds (`FactsView.declarationsNamed`): its package-qualified id as the index spells it,
- * its file's table key, and whether a build read that file.
- */
-private typedef IndexedDeclaration = { final id: String; final key: String; final read: Bool; }
-
-/**
- * The members an implicit call of one family runs (`FactsView.implicitUnheld`), as the facts spell them: the methods it calls
- * by name, the metadata marking a method it calls, and the metadata of a type the language constructs from a literal.
- */
-typedef ImplicitMembers = {
-
-	final names: Array<String>;
-	final metas: Array<String>;
-	final typeMetas: Array<String>;
-
-	/** Whether the compiler makes the call itself, so an extern type's inline method runs its body there. */
-	final externInline: Bool;
 
 }

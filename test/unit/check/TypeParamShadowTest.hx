@@ -6,6 +6,23 @@ import anyparse.check.haxe.oracle.PositionTypeOracle;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 
+/** A `TypeOracle` double answering one type at every position — no compiler, no process. */
+@:nullSafety(Strict)
+private final class HolderTypeOracle extends PositionTypeOracle {
+
+	private final _type: String;
+
+	public function new(type: String) {
+		super(new HaxeQueryPlugin().typeSyntax);
+		_type = type;
+	}
+
+	public function typeAt(file: String, bytePos: Int): Null<String> {
+		return _type;
+	}
+
+}
+
 /**
  * A type parameter in scope binds its simple name ahead of every type, so a short name the
  * printer would otherwise write there re-binds the reference to the parameter — and it still
@@ -79,23 +96,6 @@ final class TypeParamShadowTest extends Test {
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources([]) } });
 		return scoped;
-	}
-
-}
-
-/** A `TypeOracle` double answering one type at every position — no compiler, no process. */
-@:nullSafety(Strict)
-private final class HolderTypeOracle extends PositionTypeOracle {
-
-	private final _type: String;
-
-	public function new(type: String) {
-		super(new HaxeQueryPlugin().typeSyntax);
-		_type = type;
-	}
-
-	public function typeAt(file: String, bytePos: Int): Null<String> {
-		return _type;
 	}
 
 }

@@ -26,6 +26,28 @@ import utest.Test;
 using StringTools;
 using Lambda;
 
+/** What a `check()` over a scratch tree left: the rows each branch process was handed, and the leases asked of the pool. */
+private typedef GateRan = {
+
+	var branches: String;
+	var leases: String;
+	var status: Int;
+
+	/** Each branch's log, by the first row it ran: what its process printed and why it was cut. */
+	var rowLogs: Map<String, String>;
+
+	/** The names the gate's logs directory holds afterwards, and the text of its `baseline.json` (empty when it has none). */
+	var logsHad: Array<String>;
+	var baselineText: String;
+
+	/** The table the gate printed, for the message of a failed assertion. */
+	var table: String;
+
+}
+
+/** What the corpus row of a scratch tree meets (`SliceGateTest.corpusWhy`). */
+private typedef CorpusFacts = { var fork: Bool; var snapshot: Bool; }
+
 /** `dev.SliceGate`: where a gate's and a branch's threads come from, and what its branches hold between them. */
 @:nullSafety(Strict)
 final class SliceGateTest extends Test {
@@ -815,25 +837,3 @@ final class SliceGateTest extends Test {
 	}
 
 }
-
-/** What a `check()` over a scratch tree left: the rows each branch process was handed, and the leases asked of the pool. */
-private typedef GateRan = {
-
-	var branches: String;
-	var leases: String;
-	var status: Int;
-
-	/** Each branch's log, by the first row it ran: what its process printed and why it was cut. */
-	var rowLogs: Map<String, String>;
-
-	/** The names the gate's logs directory holds afterwards, and the text of its `baseline.json` (empty when it has none). */
-	var logsHad: Array<String>;
-	var baselineText: String;
-
-	/** The table the gate printed, for the message of a failed assertion. */
-	var table: String;
-
-}
-
-/** What the corpus row of a scratch tree meets (`SliceGateTest.corpusWhy`). */
-private typedef CorpusFacts = { var fork: Bool; var snapshot: Bool; }

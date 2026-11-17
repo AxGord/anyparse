@@ -14,6 +14,145 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 
+/** One rung of a scanned chain: the `case`-pattern text per discriminant position, and the branch body's source range. */
+private typedef ChainRung = {
+
+	final patterns: Array<String>;
+
+	/** The value key of each pattern, parallel to `patterns` (null = unknown). */
+	final values: Array<Null<String>>;
+	final body: Span;
+
+};
+
+/**
+ * A scanned chain ready to render: the discriminant source texts (one entry = a plain
+ * subject, several = a tuple), the rungs in source order, and the trailing else-slot's body
+ * range, which is rendered as `case _` — null for an else-less chain, which `render` closes with
+ * an EMPTY `case _:` (gate 7).
+ */
+private typedef ChainScan = { final discTexts: Array<String>; final rungs: Array<ChainRung>; final elseBody: Null<Span>; };
+
+/**
+ * The statement lists an else-less chain may stand in and still close with an empty `case _:`:
+ * `anywhere` holds a list whose last statement is never a value (a function's block body),
+ * `beforeAnother` one whose last statement may be (a nested block, a block expression), where the
+ * chain must have a statement after it.
+ */
+private typedef ElselessHosts = { final anywhere: Array<String>; final beforeAnother: Array<String>; };
+
+/**
+ * The two per-FILE services a constant proof asks for: the file's own parsed `root`, against
+ * which a BARE identifier's binding is resolved, and the lazy cross-file `SymbolIndex` a named
+ * constant's modifiers are read from.
+ *
+ * A pair rather than two parameters because they must describe the SAME file — a root from one
+ * file with an index over another silently answers "unprovable" for every bare constant, and a
+ * check that under-reports its claim is the direction that lets a sibling rewrite double-claim
+ * the site. Both are values the caller owns for the length of one run; nothing here is cached
+ * across a `run` / `fix` pair, `SwitchChain` holding no state of its own.
+ */
+typedef ChainScope = {
+
+	final root: QueryNode;
+	final resolveIndex: () -> Null<SymbolIndex>;
+
+	/**
+	 * Whether an equality with this DISCRIMINANT operand selects the LANGUAGE's `==` as far as the
+	 * discriminant's type decides it — gate 10's discriminant half (the pattern half is proved from the
+	 * constant's own declaration). Built by `SwitchChain.scopeOf` from the run's `OperatorSelection`,
+	 * so it is free in a scope where no type overloads `==` and binds the operand's declared type only
+	 * where one does.
+	 */
+	final operandBuiltin: (QueryNode) -> Bool;
+
+};
+
+/**
+ * The per-rule configuration a switch chain is scanned and rendered against, resolved once
+ * per run by `SwitchChain.seamsOf`. The first two fields are the CALLER's policy:
+ * `chainKinds` (the statement rule passes `ifStatementKinds`, the expression rule `ternaryKind`
+ * plus `ifExpressionKinds`), `bodyTerminator` (appended after each rendered branch body) and
+ * `selfTerminatingEndings` (the endings that make that append unnecessary). The
+ * rest are `RefShape` seams, each degrading on its own when the grammar leaves it unset.
+ */
+typedef ChainSeams = {
+
+	/**
+	 * The whole `RefShape`, carried because the bare-identifier constant proof asks the
+	 * RESOLVER (`TypeResolver.bareFieldOwner`) rather than a kind list, and the resolver takes
+	 * a shape. The individual kind fields below stay because the scanner reads them per node.
+	 */
+	final shape: RefShape;
+	final chainKinds: Array<String>;
+	final bodyTerminator: String;
+
+	/**
+	 * Trailing texts that mean a rendered body already terminates itself, so
+	 * `bodyTerminator` is not appended — empty for the expression rule, whose bodies are bare
+	 * values.
+	 */
+	final selfTerminatingEndings: Array<String>;
+	final eqKind: String;
+	final litKinds: Array<String>;
+	final fieldKinds: Array<String>;
+	final andKind: Null<String>;
+	final parenKind: Null<String>;
+	final callKind: Null<String>;
+
+	/**
+	 * `CheckScan.mutationKinds(shape)` — every kind whose presence in a discriminant makes
+	 * the per-rung-to-once collapse observable. Derived once by `seamsOf`; gate 5's set.
+	 */
+	final mutationKinds: Array<String>;
+	final fieldAccessKind: Null<String>;
+	final identKind: String;
+	final enumAbstractDeclKind: Null<String>;
+	final tuple: Null<{ open: String, close: String }>;
+	final stringFold: Null<StringFoldSupport>;
+
+	/** What a `case` pattern's VALUE is read through — gate 9's distinctness proof. */
+	final values: CaseValueSeams;
+
+	/** The built-in type names (`OperandBinder.builtinNamesOf`), none of which can overload `==` — gate 10. */
+	final builtinTypeNames: Array<String>;
+
+	/**
+	 * Where an else-less chain may close with an empty `case _:` (gate 7), or null when the rule never
+	 * closes one — the expression rule, whose chains are values.
+	 */
+	final elselessHosts: Null<ElselessHosts>;
+
+};
+
+/**
+ * One equality of a rung condition, split into the constant text a `case` pattern is
+ * written from and the discriminant it tests.
+ */
+private typedef EqPair = {
+
+	final pattern: String;
+	final disc: QueryNode;
+
+	/** The pattern's `CaseValueKey`, or null when its value is not provably known — gate 9 then refuses the chain. */
+	final value: Null<String>;
+
+	/** Whether the PATTERN leaves the language's `==` selected — gate 10's pattern half (`CasePattern.builtinEq`). */
+	final patternBuiltin: Bool;
+
+};
+
+/** A pattern-valid operand: its verbatim `case`-pattern source and its `CaseValueKey` (null = unknown). */
+private typedef CasePattern = {
+
+	final text: String;
+	final value: Null<String>;
+
+	/** Whether the pattern's own type leaves the language's `==` selected (`selectsBuiltinEq`). */
+	final builtinEq: Bool;
+
+};
+
 /**
  * The shared scanner / renderer behind BOTH switch checks: `prefer-switch` (an `if` /
  * `else if` chain in STATEMENT position) and `prefer-switch-expression` (a ternary /
@@ -816,142 +955,3 @@ final class SwitchChain {
 	}
 
 }
-
-/** One rung of a scanned chain: the `case`-pattern text per discriminant position, and the branch body's source range. */
-private typedef ChainRung = {
-
-	final patterns: Array<String>;
-
-	/** The value key of each pattern, parallel to `patterns` (null = unknown). */
-	final values: Array<Null<String>>;
-	final body: Span;
-
-};
-
-/**
- * A scanned chain ready to render: the discriminant source texts (one entry = a plain
- * subject, several = a tuple), the rungs in source order, and the trailing else-slot's body
- * range, which is rendered as `case _` — null for an else-less chain, which `render` closes with
- * an EMPTY `case _:` (gate 7).
- */
-private typedef ChainScan = { final discTexts: Array<String>; final rungs: Array<ChainRung>; final elseBody: Null<Span>; };
-
-/**
- * The statement lists an else-less chain may stand in and still close with an empty `case _:`:
- * `anywhere` holds a list whose last statement is never a value (a function's block body),
- * `beforeAnother` one whose last statement may be (a nested block, a block expression), where the
- * chain must have a statement after it.
- */
-private typedef ElselessHosts = { final anywhere: Array<String>; final beforeAnother: Array<String>; };
-
-/**
- * The two per-FILE services a constant proof asks for: the file's own parsed `root`, against
- * which a BARE identifier's binding is resolved, and the lazy cross-file `SymbolIndex` a named
- * constant's modifiers are read from.
- *
- * A pair rather than two parameters because they must describe the SAME file — a root from one
- * file with an index over another silently answers "unprovable" for every bare constant, and a
- * check that under-reports its claim is the direction that lets a sibling rewrite double-claim
- * the site. Both are values the caller owns for the length of one run; nothing here is cached
- * across a `run` / `fix` pair, `SwitchChain` holding no state of its own.
- */
-typedef ChainScope = {
-
-	final root: QueryNode;
-	final resolveIndex: () -> Null<SymbolIndex>;
-
-	/**
-	 * Whether an equality with this DISCRIMINANT operand selects the LANGUAGE's `==` as far as the
-	 * discriminant's type decides it — gate 10's discriminant half (the pattern half is proved from the
-	 * constant's own declaration). Built by `SwitchChain.scopeOf` from the run's `OperatorSelection`,
-	 * so it is free in a scope where no type overloads `==` and binds the operand's declared type only
-	 * where one does.
-	 */
-	final operandBuiltin: (QueryNode) -> Bool;
-
-};
-
-/**
- * The per-rule configuration a switch chain is scanned and rendered against, resolved once
- * per run by `SwitchChain.seamsOf`. The first two fields are the CALLER's policy:
- * `chainKinds` (the statement rule passes `ifStatementKinds`, the expression rule `ternaryKind`
- * plus `ifExpressionKinds`), `bodyTerminator` (appended after each rendered branch body) and
- * `selfTerminatingEndings` (the endings that make that append unnecessary). The
- * rest are `RefShape` seams, each degrading on its own when the grammar leaves it unset.
- */
-typedef ChainSeams = {
-
-	/**
-	 * The whole `RefShape`, carried because the bare-identifier constant proof asks the
-	 * RESOLVER (`TypeResolver.bareFieldOwner`) rather than a kind list, and the resolver takes
-	 * a shape. The individual kind fields below stay because the scanner reads them per node.
-	 */
-	final shape: RefShape;
-	final chainKinds: Array<String>;
-	final bodyTerminator: String;
-
-	/**
-	 * Trailing texts that mean a rendered body already terminates itself, so
-	 * `bodyTerminator` is not appended — empty for the expression rule, whose bodies are bare
-	 * values.
-	 */
-	final selfTerminatingEndings: Array<String>;
-	final eqKind: String;
-	final litKinds: Array<String>;
-	final fieldKinds: Array<String>;
-	final andKind: Null<String>;
-	final parenKind: Null<String>;
-	final callKind: Null<String>;
-
-	/**
-	 * `CheckScan.mutationKinds(shape)` — every kind whose presence in a discriminant makes
-	 * the per-rung-to-once collapse observable. Derived once by `seamsOf`; gate 5's set.
-	 */
-	final mutationKinds: Array<String>;
-	final fieldAccessKind: Null<String>;
-	final identKind: String;
-	final enumAbstractDeclKind: Null<String>;
-	final tuple: Null<{ open: String, close: String }>;
-	final stringFold: Null<StringFoldSupport>;
-
-	/** What a `case` pattern's VALUE is read through — gate 9's distinctness proof. */
-	final values: CaseValueSeams;
-
-	/** The built-in type names (`OperandBinder.builtinNamesOf`), none of which can overload `==` — gate 10. */
-	final builtinTypeNames: Array<String>;
-
-	/**
-	 * Where an else-less chain may close with an empty `case _:` (gate 7), or null when the rule never
-	 * closes one — the expression rule, whose chains are values.
-	 */
-	final elselessHosts: Null<ElselessHosts>;
-
-};
-
-/**
- * One equality of a rung condition, split into the constant text a `case` pattern is
- * written from and the discriminant it tests.
- */
-private typedef EqPair = {
-
-	final pattern: String;
-	final disc: QueryNode;
-
-	/** The pattern's `CaseValueKey`, or null when its value is not provably known — gate 9 then refuses the chain. */
-	final value: Null<String>;
-
-	/** Whether the PATTERN leaves the language's `==` selected — gate 10's pattern half (`CasePattern.builtinEq`). */
-	final patternBuiltin: Bool;
-
-};
-
-/** A pattern-valid operand: its verbatim `case`-pattern source and its `CaseValueKey` (null = unknown). */
-private typedef CasePattern = {
-
-	final text: String;
-	final value: Null<String>;
-
-	/** Whether the pattern's own type leaves the language's `==` selected (`selectsBuiltinEq`). */
-	final builtinEq: Bool;
-
-};

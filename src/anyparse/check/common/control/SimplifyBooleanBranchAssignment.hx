@@ -11,6 +11,25 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+/** The seams `SimplifyBooleanBranchAssignment` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+	var ifKinds: Array<String>;
+	var exprStmtKind: String;
+	var blockStmtKind: String;
+	var assignKind: String;
+	var boolLitKind: String;
+	var blockKinds: Array<String>;
+	var negation: NegationSeams;
+	var logic: Null<BooleanLogicSupport>;
+	var shape: RefShape;
+}
+
+/** One target of a matched site: its then-branch assignment, that assignment's literal, and which value it carries. */
+private typedef Pair = { var assign: QueryNode; var rhs: QueryNode; var positive: Bool; }
+
+/** A matched if/else: the condition, and one `Pair` per assigned target in branch order. */
+private typedef Match = { var condition: QueryNode; var pairs: Array<Pair>; }
+
 /**
  * Flags an `if (cond) { a = true; b = false; } else { a = false; b = true; }` -- an `if`/`else`
  * whose branches assign OPPOSITE boolean literals to the same ordered set of two or more targets
@@ -308,22 +327,3 @@ final class SimplifyBooleanBranchAssignment extends RuleBase {
 	}
 
 }
-
-/** The seams `SimplifyBooleanBranchAssignment` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-	var ifKinds: Array<String>;
-	var exprStmtKind: String;
-	var blockStmtKind: String;
-	var assignKind: String;
-	var boolLitKind: String;
-	var blockKinds: Array<String>;
-	var negation: NegationSeams;
-	var logic: Null<BooleanLogicSupport>;
-	var shape: RefShape;
-}
-
-/** One target of a matched site: its then-branch assignment, that assignment's literal, and which value it carries. */
-private typedef Pair = { var assign: QueryNode; var rhs: QueryNode; var positive: Bool; }
-
-/** A matched if/else: the condition, and one `Pair` per assigned target in branch order. */
-private typedef Match = { var condition: QueryNode; var pairs: Array<Pair>; }

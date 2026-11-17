@@ -4,6 +4,17 @@ import anyparse.query.DeclaredNullity;
 import anyparse.query.SymbolIndex;
 
 /**
+ * The resolved seams `RedundantNullCoalescing` reads in `run` and `fix`;
+ * `opaqueKinds` / `shape` are read only by `run` (the type-aware walk).
+ */
+private typedef Seams = {
+	final coalKind: String;
+	final nullKind: Null<String>;
+	final opaqueKinds: Array<String>;
+	final shape: RefShape;
+};
+
+/**
  * Flags a null-coalescing whose left operand is provably non-null —
  * `nonNull ?? fallback` — so the right operand is dead. `Severity.Info`; `fix`
  * unwraps it to the left operand. A second arm needs no type: `x ?? null` is `x`
@@ -91,14 +102,3 @@ final class RedundantNullCoalescing extends RuleBase {
 	}
 
 }
-
-/**
- * The resolved seams `RedundantNullCoalescing` reads in `run` and `fix`;
- * `opaqueKinds` / `shape` are read only by `run` (the type-aware walk).
- */
-private typedef Seams = {
-	final coalKind: String;
-	final nullKind: Null<String>;
-	final opaqueKinds: Array<String>;
-	final shape: RefShape;
-};

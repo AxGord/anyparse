@@ -10,6 +10,69 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** One slice landed on the history: its id, the landing commit and its base, its branch's range, and its markers. */
+typedef Landing = {
+
+	var id: String;
+	var commit: String;
+	var base: String;
+
+	/** The slice's own commits as a revision range: the landing commit alone for a linear landing. */
+	var branch: String;
+
+	/** When the landing was committed and when the slice's first commit was authored, in seconds since the epoch. */
+	var landed: Float;
+	var started: Float;
+	var rounds: Null<Int>;
+	var tokens: Null<Int>;
+
+}
+
+/** The lines a slice added and deleted under one root. */
+typedef LineCount = { var added: Int; var deleted: Int; }
+
+/** The lines a slice added and deleted under `src/` and under `test/`. */
+typedef LineCounts = { var src: LineCount; var test: LineCount; }
+
+/** The `.hx` modules a slice added, and those it edited. */
+typedef ModuleCounts = { var fresh: Int; var edited: Int; }
+
+/** The reading of one landed slice. */
+typedef SliceRow = {
+
+	var landing: Landing;
+	var hours: Float;
+	var src: LineCount;
+	var test: LineCount;
+
+	/** The `.hx` modules the slice added, and those it edited. */
+	var fresh: Int;
+	var edited: Int;
+	var edges: Null<EdgeShare>;
+
+	/** How the duplicate-code findings moved, added minus removed. */
+	var clones: Null<Int>;
+
+}
+
+/** The slices landed in one week, summed: hours as their median, rounds as their mean, the rest as totals. */
+typedef WeekRow = {
+
+	/** The Monday the week starts on. */
+	var week: String;
+	var slices: Int;
+	var hours: Float;
+	var rounds: Null<Float>;
+	var tokens: Null<Int>;
+	var src: Int;
+	var test: Int;
+	var fresh: Int;
+	var edited: Int;
+	var edges: Null<EdgeShare>;
+	var clones: Null<Int>;
+
+}
+
 /**
  * `dev slice-stats` — whether improving the project gets easier, read deterministically from git: every slice landed on the
  * first-parent history of a revision (a merge of a `batch/hxqb-<ID>` branch, or a commit carrying the `Slice` trailer `dev
@@ -392,68 +455,5 @@ final class SliceStats {
 		final inside: Int = share.existing + share.fresh;
 		return inside == 0 ? '${share.added} ${NONE}' : '${share.added} ${Math.round(share.existing * PERCENT / inside)}%';
 	}
-
-}
-
-/** One slice landed on the history: its id, the landing commit and its base, its branch's range, and its markers. */
-typedef Landing = {
-
-	var id: String;
-	var commit: String;
-	var base: String;
-
-	/** The slice's own commits as a revision range: the landing commit alone for a linear landing. */
-	var branch: String;
-
-	/** When the landing was committed and when the slice's first commit was authored, in seconds since the epoch. */
-	var landed: Float;
-	var started: Float;
-	var rounds: Null<Int>;
-	var tokens: Null<Int>;
-
-}
-
-/** The lines a slice added and deleted under one root. */
-typedef LineCount = { var added: Int; var deleted: Int; }
-
-/** The lines a slice added and deleted under `src/` and under `test/`. */
-typedef LineCounts = { var src: LineCount; var test: LineCount; }
-
-/** The `.hx` modules a slice added, and those it edited. */
-typedef ModuleCounts = { var fresh: Int; var edited: Int; }
-
-/** The reading of one landed slice. */
-typedef SliceRow = {
-
-	var landing: Landing;
-	var hours: Float;
-	var src: LineCount;
-	var test: LineCount;
-
-	/** The `.hx` modules the slice added, and those it edited. */
-	var fresh: Int;
-	var edited: Int;
-	var edges: Null<EdgeShare>;
-
-	/** How the duplicate-code findings moved, added minus removed. */
-	var clones: Null<Int>;
-
-}
-
-/** The slices landed in one week, summed: hours as their median, rounds as their mean, the rest as totals. */
-typedef WeekRow = {
-
-	/** The Monday the week starts on. */
-	var week: String;
-	var slices: Int;
-	var hours: Float;
-	var rounds: Null<Float>;
-	var tokens: Null<Int>;
-	var src: Int;
-	var test: Int;
-	var fresh: Int;
-	var edited: Int;
-	var edges: Null<EdgeShare>;
-	var clones: Null<Int>;
 
 }

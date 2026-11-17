@@ -14,6 +14,48 @@ import anyparse.check.scan.UsingScan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ElementSpan;
 
+/** The `RefShape` kinds `DeadBinderCounterLoop` reads on top of the shared `LoopScan` core. */
+private typedef Seams = {
+
+	var core: LoopSeams;
+	var postIncrKind: String;
+	var continueKind: String;
+	var exprStmtKind: String;
+	var blockKinds: Array<String>;
+	var mutableKinds: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a declared container type is read. */
+	var typeSyntax: TypeSyntaxReader;
+
+	/** `RefactorSupport.projectIsComplete` — whether the std-container proof has a whole project to rule project types out over. */
+	var projectComplete: Bool;
+
+}
+
+/** The counting expression a matched container yields, plus whether it needs `using Lambda;` in scope. */
+private typedef Bound = { var expr: String; var lambda: Bool; }
+
+/**
+ * One collected rewrite, whether its bound is the `count()` form, and the `<from>:<to>` key of the
+ * finding it came from — the triple `fix` re-reads after the containment filter.
+ *
+ * The key is what lets a `using` refusal name the findings it takes down and no others: a violation
+ * `wanted` never matched, or whose edit the containment filter dropped, got no edit for its own
+ * reason, and the `using` gate did not decide it.
+ */
+private typedef CountEdit = { var edit: { span: Span, text: String }; var lambda: Bool; var key: String; }
+
+/** One matched pair: the spans the rewrite splices, the counter it re-binds, and the bound that replaces the iteration. */
+private typedef Match = {
+	var declSpan: Span;
+	var forSpan: Span;
+	var bodySpan: Span;
+	var incrSpan: Span;
+	var counter: String;
+	var bound: String;
+	var needsLambda: Bool;
+}
+
 /**
  * Flags a `for`-in loop that iterates a collection ONLY to count it — `var i = 0;` immediately
  * followed by `for (x in coll) { … i++; }` where nothing reads the binder `x` — which a range
@@ -469,46 +511,4 @@ final class DeadBinderCounterLoop extends RuleBase implements DefaultOff {
 		return out;
 	}
 
-}
-
-/** The `RefShape` kinds `DeadBinderCounterLoop` reads on top of the shared `LoopScan` core. */
-private typedef Seams = {
-
-	var core: LoopSeams;
-	var postIncrKind: String;
-	var continueKind: String;
-	var exprStmtKind: String;
-	var blockKinds: Array<String>;
-	var mutableKinds: Array<String>;
-
-	/** `GrammarPlugin.typeSyntax` — how a declared container type is read. */
-	var typeSyntax: TypeSyntaxReader;
-
-	/** `RefactorSupport.projectIsComplete` — whether the std-container proof has a whole project to rule project types out over. */
-	var projectComplete: Bool;
-
-}
-
-/** The counting expression a matched container yields, plus whether it needs `using Lambda;` in scope. */
-private typedef Bound = { var expr: String; var lambda: Bool; }
-
-/**
- * One collected rewrite, whether its bound is the `count()` form, and the `<from>:<to>` key of the
- * finding it came from — the triple `fix` re-reads after the containment filter.
- *
- * The key is what lets a `using` refusal name the findings it takes down and no others: a violation
- * `wanted` never matched, or whose edit the containment filter dropped, got no edit for its own
- * reason, and the `using` gate did not decide it.
- */
-private typedef CountEdit = { var edit: { span: Span, text: String }; var lambda: Bool; var key: String; }
-
-/** One matched pair: the spans the rewrite splices, the counter it re-binds, and the bound that replaces the iteration. */
-private typedef Match = {
-	var declSpan: Span;
-	var forSpan: Span;
-	var bodySpan: Span;
-	var incrSpan: Span;
-	var counter: String;
-	var bound: String;
-	var needsLambda: Bool;
 }

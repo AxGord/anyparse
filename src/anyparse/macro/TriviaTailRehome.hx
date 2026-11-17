@@ -10,6 +10,20 @@ import haxe.macro.MacroStringTools;
 using Lambda;
 using anyparse.macro.MetaInspect;
 
+/** Where an Alt branch's last token lies, for `TriviaTailRehome.altTail`. */
+private enum AltTail {
+
+	/** The branch's own positional slot at this index captures the comment. */
+	Slot(index: Int);
+
+	/** The operand at this index ends the branch; its answer is the branch's. */
+	Operand(index: Int);
+
+	/** Neither: the parser leaves the comment where it is. */
+	None;
+
+}
+
 /**
  * Where the trivia parser puts a comment that directly follows a value: the `TailComments` class of a synth module.
  *
@@ -275,20 +289,6 @@ final class TriviaTailRehome {
 			case _: [];
 		};
 	}
-
-}
-
-/** Where an Alt branch's last token lies, for `TriviaTailRehome.altTail`. */
-private enum AltTail {
-
-	/** The branch's own positional slot at this index captures the comment. */
-	Slot(index: Int);
-
-	/** The operand at this index ends the branch; its answer is the branch's. */
-	Operand(index: Int);
-
-	/** Neither: the parser leaves the comment where it is. */
-	None;
 
 }
 #end

@@ -8,6 +8,22 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** A canned `TypeOracle` for the bag-fix inference tail — returns one fixed type (or null) for every query, no process. */
+private class FakeTypeOracle extends PositionTypeOracle {
+
+	private final _answer: Null<String>;
+
+	public function new(answer: Null<String>) {
+		super(new HaxeQueryPlugin().typeSyntax);
+		_answer = answer;
+	}
+
+	public function typeAt(file: String, bytePos: Int): Null<String> {
+		return _answer;
+	}
+
+}
+
 /**
  * The `avoid-dynamic` DynamicAccess bag FIX (`fixWithOracle`, D4). A `Dynamic` LOCAL /
  * private plain FIELD used exclusively as a string-keyed reflect bag whose values unify to
@@ -153,22 +169,6 @@ class AvoidDynamicBagFixTest extends Test {
 		final check: AvoidDynamic = new AvoidDynamic();
 		final vs: Array<Violation> = CheckFixture.violations(check, src, plugin);
 		return check.fixWithOracle(src, vs, plugin, oracle);
-	}
-
-}
-
-/** A canned `TypeOracle` for the bag-fix inference tail — returns one fixed type (or null) for every query, no process. */
-private class FakeTypeOracle extends PositionTypeOracle {
-
-	private final _answer: Null<String>;
-
-	public function new(answer: Null<String>) {
-		super(new HaxeQueryPlugin().typeSyntax);
-		_answer = answer;
-	}
-
-	public function typeAt(file: String, bytePos: Int): Null<String> {
-		return _answer;
 	}
 
 }

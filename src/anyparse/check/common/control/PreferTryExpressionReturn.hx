@@ -7,6 +7,9 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
+/** The kinds `PreferTryExpressionReturn` reads. */
+private typedef Seams = { var tryKinds: Array<String>; var returnKinds: Array<String>; var tryShape: TrySeams; }
+
 /**
  * Flags a statement-position `try` / `catch` whose body AND every catch clause is a single
  * valued `return`, collapsing it to one `return` of a try-EXPRESSION:
@@ -159,6 +162,3 @@ final class PreferTryExpressionReturn extends RuleBase {
 	}
 
 }
-
-/** The kinds `PreferTryExpressionReturn` reads. */
-private typedef Seams = { var tryKinds: Array<String>; var returnKinds: Array<String>; var tryShape: TrySeams; }

@@ -6,6 +6,18 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 
 /**
+ * Resolved constants threaded through the recursive walk — per-run except `guarded`,
+ * the per-FILE set of exists-guarded map-read span keys `existsGuardedReads` collects.
+ */
+private typedef Ctx = {
+	var derefKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var cfg: NullableSourceCfg;
+	var index: Null<SymbolIndex>;
+	var guarded: Map<String, Bool>;
+};
+
+/**
  * Flags a dereference of a provably-nullable expression with no null check — a
  * possible NPE. Three nullable sources so far: a `Map`-family index `m[k]` (a
  * `Null<V>`), an `Array` / `List` `pop` / `shift` call (a `Null<T>`), and a call
@@ -151,15 +163,3 @@ final class PossibleNullDereference extends RuleBase implements NoAutofix {
 	}
 
 }
-
-/**
- * Resolved constants threaded through the recursive walk — per-run except `guarded`,
- * the per-FILE set of exists-guarded map-read span keys `existsGuardedReads` collects.
- */
-private typedef Ctx = {
-	var derefKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var cfg: NullableSourceCfg;
-	var index: Null<SymbolIndex>;
-	var guarded: Map<String, Bool>;
-};

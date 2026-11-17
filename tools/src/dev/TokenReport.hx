@@ -6,6 +6,14 @@ import dev.TokenTranscript.TurnReading;
 
 using Lambda;
 
+/** A model family and its dollars per million tokens. */
+typedef Price = {
+	var family: String;
+	var input: Float;
+	var output: Float;
+	var read: Float;
+}
+
 /**
  * The one answer to "where do the agents' tokens and money go": sums the readings of many transcripts (`TokenTranscript`)
  * into per-tool and per-role sizes, per-model usage priced from `PRICES`, the cost per slice (and per landed slice), the cache rewrites
@@ -321,12 +329,4 @@ final class TokenReport {
 		return rows;
 	}
 
-}
-
-/** A model family and its dollars per million tokens. */
-typedef Price = {
-	var family: String;
-	var input: Float;
-	var output: Float;
-	var read: Float;
 }

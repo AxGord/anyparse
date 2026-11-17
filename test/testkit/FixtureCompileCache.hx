@@ -13,6 +13,44 @@ import js.node.fs.Stats;
 
 using Lambda;
 
+/** A compile `FixtureCompileCache.plan` allows: the directories it reads and writes, and its placeheld arguments. */
+typedef CompilePlan = { var roots: Array<String>; var args: Array<String>; }
+
+/**
+ * What a spawn asks `FixtureCompileCache.lookup`: the program and its arguments, the directory it runs in (null: the
+ * process's own) and the variables set over the environment for it alone (a null value takes one away).
+ */
+typedef SpawnRequest = {
+	var cmd: String;
+	var args: Array<String>;
+	var cwd: Null<String>;
+	var env: Null<DynamicAccess<Null<String>>>;
+}
+
+/** A recorded compile's answer to a `SpawnRequest`: what the compiler exited with and printed. */
+typedef SpawnAnswer = { var status: Int; var out: String; var err: String; }
+
+/** A compile's answer. `exited`: it ran to an exit status, so it may be recorded. */
+typedef CompileOutcome = {
+	var status: Int;
+	var out: Buffer;
+	var err: Buffer;
+	var exited: Bool;
+}
+
+/** A recorded compile, every path in it placeheld: its status, streams, and the files it wrote (`text` null: deleted). */
+typedef CompileEntry = {
+
+	var status: Int;
+	var out: String;
+	var err: String;
+	var files: Array<{ root: Int, path: String, text: Null<String> }>;
+
+	/** The mutant switches (`APQ_MUTANT` ids) the compile ran, a schema build's arms; none for any other source. */
+	var reached: Array<Int>;
+
+}
+
 /**
  * A content-addressed REPLAY of the fixture compiles the reach probes run, for `dev mutation-check`.
  *
@@ -601,43 +639,5 @@ final class FixtureCompileCache {
 	private static function activeArm(env: DynamicAccess<String>): Int {
 		return Std.parseInt(env.get('APQ_MUTANT') ?? '') ?? 0;
 	}
-
-}
-
-/** A compile `FixtureCompileCache.plan` allows: the directories it reads and writes, and its placeheld arguments. */
-typedef CompilePlan = { var roots: Array<String>; var args: Array<String>; }
-
-/**
- * What a spawn asks `FixtureCompileCache.lookup`: the program and its arguments, the directory it runs in (null: the
- * process's own) and the variables set over the environment for it alone (a null value takes one away).
- */
-typedef SpawnRequest = {
-	var cmd: String;
-	var args: Array<String>;
-	var cwd: Null<String>;
-	var env: Null<DynamicAccess<Null<String>>>;
-}
-
-/** A recorded compile's answer to a `SpawnRequest`: what the compiler exited with and printed. */
-typedef SpawnAnswer = { var status: Int; var out: String; var err: String; }
-
-/** A compile's answer. `exited`: it ran to an exit status, so it may be recorded. */
-typedef CompileOutcome = {
-	var status: Int;
-	var out: Buffer;
-	var err: Buffer;
-	var exited: Bool;
-}
-
-/** A recorded compile, every path in it placeheld: its status, streams, and the files it wrote (`text` null: deleted). */
-typedef CompileEntry = {
-
-	var status: Int;
-	var out: String;
-	var err: String;
-	var files: Array<{ root: Int, path: String, text: Null<String> }>;
-
-	/** The mutant switches (`APQ_MUTANT` ids) the compile ran, a schema build's arms; none for any other source. */
-	var reached: Array<Int>;
 
 }

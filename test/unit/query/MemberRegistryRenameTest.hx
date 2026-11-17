@@ -13,6 +13,89 @@ import anyparse.query.TypePathRegistries.MemberKeys;
 using StringTools;
 
 /**
+ * A fixture record; `finds` and `replaces` spell `find` and `replace` as a list.
+ */
+private typedef ArmRow = {
+
+	final name: String;
+	final type: String;
+	final method: String;
+
+	@:optional
+	final kind: String;
+
+	@:optional
+	final find: String;
+
+	@:optional
+	final replace: String;
+
+	@:optional
+	final finds: Array<String>;
+
+	@:optional
+	final replaces: Array<String>;
+
+	@:optional
+	final force: String;
+
+}
+
+/** One record of a followed document. */
+private typedef ArmAfter = {
+	final method: Null<String>;
+	final find: Null<String>;
+	final replace: Null<String>;
+	final finds: Array<String>;
+	final replaces: Array<String>;
+	final force: Null<String>;
+}
+
+/** A followed document read back as JSON, so an assertion on it also proves it parses. */
+private class ArmsAfter {
+
+	public final text: String;
+	public final notes: Array<String>;
+
+	public function new(text: String, notes: Array<String>) {
+		this.text = text;
+		this.notes = notes;
+	}
+
+	/** The record `name`, a cut that is a list in `finds` / `replaces`. */
+	public function arm(name: String): ArmAfter {
+		final items: Array<JValue> = switch JValueTools.field(JValueParser.parse(text), 'arms') {
+			case JArray(held): held;
+			case _: [];
+		};
+		for (item in items) if (string(JValueTools.field(item, 'name')) == name) return {
+			method: string(JValueTools.field(item, 'method')),
+			find: string(JValueTools.field(item, 'find')),
+			replace: string(JValueTools.field(item, 'replace')),
+			finds: strings(JValueTools.field(item, 'find')),
+			replaces: strings(JValueTools.field(item, 'replace')),
+			force: string(JValueTools.field(item, 'force'))
+		};
+		throw 'no arm $name in $text';
+	}
+
+	private static function string(value: Null<JValue>): Null<String> {
+		return switch value {
+			case JString(text): (text: String);
+			case _: null;
+		};
+	}
+
+	private static function strings(value: Null<JValue>): Array<String> {
+		return switch value {
+			case JArray(items): [for (item in items) string(item) ?? ''];
+			case _: [];
+		};
+	}
+
+}
+
+/**
  * `MemberRegistryRename`: a registry value follows what the rename's own edit set proved. A find follows the tokens it
  * located, a replace its paired find, a member value the edited declaration; anything else stays and what cannot be
  * mapped is named.
@@ -627,89 +710,6 @@ final class MemberRegistryRenameTest extends Test {
 		return switch CrossRenameMember.crossRenameMember(file, source, line, col, newName, sources, plugin, plugin.refShape()) {
 			case Ok(changes, _): MemberRegistryRename.of(changes, sources, newName, plugin);
 			case Err(message): throw message;
-		};
-	}
-
-}
-
-/**
- * A fixture record; `finds` and `replaces` spell `find` and `replace` as a list.
- */
-private typedef ArmRow = {
-
-	final name: String;
-	final type: String;
-	final method: String;
-
-	@:optional
-	final kind: String;
-
-	@:optional
-	final find: String;
-
-	@:optional
-	final replace: String;
-
-	@:optional
-	final finds: Array<String>;
-
-	@:optional
-	final replaces: Array<String>;
-
-	@:optional
-	final force: String;
-
-}
-
-/** One record of a followed document. */
-private typedef ArmAfter = {
-	final method: Null<String>;
-	final find: Null<String>;
-	final replace: Null<String>;
-	final finds: Array<String>;
-	final replaces: Array<String>;
-	final force: Null<String>;
-}
-
-/** A followed document read back as JSON, so an assertion on it also proves it parses. */
-private class ArmsAfter {
-
-	public final text: String;
-	public final notes: Array<String>;
-
-	public function new(text: String, notes: Array<String>) {
-		this.text = text;
-		this.notes = notes;
-	}
-
-	/** The record `name`, a cut that is a list in `finds` / `replaces`. */
-	public function arm(name: String): ArmAfter {
-		final items: Array<JValue> = switch JValueTools.field(JValueParser.parse(text), 'arms') {
-			case JArray(held): held;
-			case _: [];
-		};
-		for (item in items) if (string(JValueTools.field(item, 'name')) == name) return {
-			method: string(JValueTools.field(item, 'method')),
-			find: string(JValueTools.field(item, 'find')),
-			replace: string(JValueTools.field(item, 'replace')),
-			finds: strings(JValueTools.field(item, 'find')),
-			replaces: strings(JValueTools.field(item, 'replace')),
-			force: string(JValueTools.field(item, 'force'))
-		};
-		throw 'no arm $name in $text';
-	}
-
-	private static function string(value: Null<JValue>): Null<String> {
-		return switch value {
-			case JString(text): (text: String);
-			case _: null;
-		};
-	}
-
-	private static function strings(value: Null<JValue>): Array<String> {
-		return switch value {
-			case JArray(items): [for (item in items) string(item) ?? ''];
-			case _: [];
 		};
 	}
 

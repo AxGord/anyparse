@@ -20,6 +20,76 @@ import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
 import anyparse.util.Groups;
 
+/** What the gates concluded about one static-utility call site. */
+enum abstract Verdict(Int) {
+
+	/** Provably safe to rewrite: the receiver's member closure lacks the method. */
+	final Fixable = 0;
+
+	/** The receiver's nominal type did not resolve — reported, never rewritten. */
+	final UnresolvedReceiver = 1;
+
+	/** The receiver resolved but its member closure did not — reported, never rewritten. */
+	final UnresolvedClosure = 2;
+
+	/** The receiver is proven, but a channel the compiler could bind the call through is not — reported, never rewritten. */
+	final UnprovenChannels = 3;
+
+}
+
+/** The `RefShape` kinds + type provider this check reads, bundled once so the walkers take one argument. */
+typedef Seams = {
+	var shape: RefShape;
+	var typed: TypeInfoProvider;
+	var identKind: String;
+	var callKind: String;
+	var fieldKind: String;
+	var opaqueKinds: Array<String>;
+	var stringLiteralKinds: Array<String>;
+	var literalTypeNames: Map<String, String>;
+	var nullableWrappers: Array<String>;
+	var dynamicTypeName: Null<String>;
+	var parenKind: Null<String>;
+};
+
+/** One file's resolved `apq.json` options: the configured modules (full entry + simple name) and the `using`-insert toggle. */
+private typedef Options = { var modules: Array<String>; var simpleNames: Array<String>; var addUsing: Bool; };
+
+/** A static-utility call site that cleared every structural + conflict gate, with its receiver verdict and message. */
+typedef Candidate = {
+	var call: QueryNode;
+	var callSpan: Span;
+	var recv: QueryNode;
+	var method: String;
+	var module: String;
+	var verdict: Verdict;
+	var message: String;
+};
+
+/** A static call of an extension module's method, as `PreferStaticExtension.extensionSite` reads it. */
+typedef ExtensionSite = {
+	final call: QueryNode;
+	final typeName: String;
+	final module: String;
+	final method: String;
+	final recv: QueryNode;
+	final callSpan: Span;
+}
+
+/** What `channelsOf` read off the channels a call's extension form could bind through. */
+private typedef Channels = {
+
+	/** The written name denotes another type, or the function takes no part in `using`: the site is no candidate. */
+	final elsewhere: Bool;
+
+	/** The name denotes the configured module through the index, over a bounded ambient chain. */
+	final proven: Bool;
+
+	/** Every `using` that may reach the site: the file's, in any region, and the ambient chain's. */
+	final usings: Array<String>;
+
+};
+
 /**
  * Rewrites a STATIC UTILITY call on a configured module to extension-method form —
  * `Lambda.map(xs, f)` → `xs.map(f)`, `StringTools.trim(s)` → `s.trim()` — inserting a
@@ -774,73 +844,3 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	}
 
 }
-
-/** What the gates concluded about one static-utility call site. */
-enum abstract Verdict(Int) {
-
-	/** Provably safe to rewrite: the receiver's member closure lacks the method. */
-	final Fixable = 0;
-
-	/** The receiver's nominal type did not resolve — reported, never rewritten. */
-	final UnresolvedReceiver = 1;
-
-	/** The receiver resolved but its member closure did not — reported, never rewritten. */
-	final UnresolvedClosure = 2;
-
-	/** The receiver is proven, but a channel the compiler could bind the call through is not — reported, never rewritten. */
-	final UnprovenChannels = 3;
-
-}
-
-/** The `RefShape` kinds + type provider this check reads, bundled once so the walkers take one argument. */
-typedef Seams = {
-	var shape: RefShape;
-	var typed: TypeInfoProvider;
-	var identKind: String;
-	var callKind: String;
-	var fieldKind: String;
-	var opaqueKinds: Array<String>;
-	var stringLiteralKinds: Array<String>;
-	var literalTypeNames: Map<String, String>;
-	var nullableWrappers: Array<String>;
-	var dynamicTypeName: Null<String>;
-	var parenKind: Null<String>;
-};
-
-/** One file's resolved `apq.json` options: the configured modules (full entry + simple name) and the `using`-insert toggle. */
-private typedef Options = { var modules: Array<String>; var simpleNames: Array<String>; var addUsing: Bool; };
-
-/** A static-utility call site that cleared every structural + conflict gate, with its receiver verdict and message. */
-typedef Candidate = {
-	var call: QueryNode;
-	var callSpan: Span;
-	var recv: QueryNode;
-	var method: String;
-	var module: String;
-	var verdict: Verdict;
-	var message: String;
-};
-
-/** A static call of an extension module's method, as `PreferStaticExtension.extensionSite` reads it. */
-typedef ExtensionSite = {
-	final call: QueryNode;
-	final typeName: String;
-	final module: String;
-	final method: String;
-	final recv: QueryNode;
-	final callSpan: Span;
-}
-
-/** What `channelsOf` read off the channels a call's extension form could bind through. */
-private typedef Channels = {
-
-	/** The written name denotes another type, or the function takes no part in `using`: the site is no candidate. */
-	final elsewhere: Bool;
-
-	/** The name denotes the configured module through the index, over a bounded ambient chain. */
-	final proven: Bool;
-
-	/** Every `using` that may reach the site: the file's, in any region, and the ambient chain's. */
-	final usings: Array<String>;
-
-};

@@ -10,6 +10,9 @@ import anyparse.query.cli.UsageFailure;
 import anyparse.query.cli.command.LintArgs;
 import anyparse.query.cli.command.LintFixLedger;
 
+/** One run's stderr, and the file it was run over afterwards. */
+private typedef BudgetRun = { final before: String; final err: String; final after: String; };
+
 /**
  * `apq lint --fix --review-budget <n>`: the budget a run lifts for the reorders of `member-order`, and the `--fix`
  * headline that says it did. The run is the real command over a real file, so what is proved is the flag reaching the
@@ -132,6 +135,3 @@ final class LintReviewBudgetCliTest extends Test {
 	#end
 
 }
-
-/** One run's stderr, and the file it was run over afterwards. */
-private typedef BudgetRun = { final before: String; final err: String; final after: String; };

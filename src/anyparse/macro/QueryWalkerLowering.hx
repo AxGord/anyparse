@@ -10,6 +10,85 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * One generated walker function descriptor.
+ */
+typedef WalkerFn = {
+
+	/** Full grammar type path this function serves. */
+	final typePath: String;
+
+	/** Generated function name. */
+	final fnName: String;
+
+	/** The paired `*S` type - the function's value parameter. */
+	final paramCT: ComplexType;
+
+	/** Body expression. */
+	final body: Expr;
+
+};
+
+/**
+ * Result of query-walker lowering: every function to emit plus the root entry.
+ */
+typedef QueryWalkerResult = {
+
+	/** Full grammar root type path. */
+	final rootTypePath: String;
+
+	/** Paired root type - the public entry's `root` parameter. */
+	final rootCT: ComplexType;
+
+	/** `_walk` function name for the root type, which the public entry delegates to. */
+	final rootFnName: String;
+
+	/** One `_walk<T>` per non-Terminal rule. */
+	final walks: Array<WalkerFn>;
+
+	/** One `_nameOf<T>` per non-Terminal rule. */
+	final names: Array<WalkerFn>;
+
+	/** One `_typeRefs<T>` per rule reachable from a `type` field. */
+	final typeRefs: Array<WalkerFn>;
+
+	/**
+	 * Projected node kinds that SWALLOW a conditional-compilation region as raw bytes -
+	 * derived from the `@:condRegionRaw` terminals the grammar declares, never from a list of
+	 * ctor names. What the engine's fail-closed gate over a name-driven rewrite reads.
+	 */
+	final opaqueCondRegionKinds: Array<String>;
+
+	/**
+	 * Projected node kinds that denote a conditional-compilation region at all - the
+	 * `opaqueCondRegionKinds` superset, adding the regions whose interior the grammar DOES
+	 * model. Derived by the same walk from the `@:condRegionCondition` terminal as well.
+	 */
+	final conditionalRegionKinds: Array<String>;
+
+	/**
+	 * The qualified readers of where the grammar's conditional-compilation condition ends and of the blank around it
+	 * (`CondConditionReader`), or null when the grammar declares no condition terminal.
+	 */
+	final conditionReader: Null<CondConditionReader.CondReaders>;
+
+	/**
+	 * Every node kind the generated walker can project - the grammar's whole
+	 * `QueryNode.kind` vocabulary, derived from the same shape the walk is emitted from.
+	 * Published so a plugin's hand-written `RefShape` kind sets can be differenced against
+	 * what its parser actually emits; a stale name there fails open and no build sees it.
+	 */
+	final projectedKinds: Array<String>;
+
+	/**
+	 * The subset of `projectedKinds` that MORE THAN ONE grammar rule declares. A kind set
+	 * names a spelling and not a rule, so an entry here is admitted for every rule that
+	 * spells it.
+	 */
+	final ambiguousProjectedKinds: Array<String>;
+
+};
+
+/**
  * Pass 3Q of the macro pipeline - query-walker lowering.
  *
  * Walks the same `ShapeTree` as `Lowering` / `WriterLowering` /
@@ -995,83 +1074,4 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	}
 
 }
-
-/**
- * One generated walker function descriptor.
- */
-typedef WalkerFn = {
-
-	/** Full grammar type path this function serves. */
-	final typePath: String;
-
-	/** Generated function name. */
-	final fnName: String;
-
-	/** The paired `*S` type - the function's value parameter. */
-	final paramCT: ComplexType;
-
-	/** Body expression. */
-	final body: Expr;
-
-};
-
-/**
- * Result of query-walker lowering: every function to emit plus the root entry.
- */
-typedef QueryWalkerResult = {
-
-	/** Full grammar root type path. */
-	final rootTypePath: String;
-
-	/** Paired root type - the public entry's `root` parameter. */
-	final rootCT: ComplexType;
-
-	/** `_walk` function name for the root type, which the public entry delegates to. */
-	final rootFnName: String;
-
-	/** One `_walk<T>` per non-Terminal rule. */
-	final walks: Array<WalkerFn>;
-
-	/** One `_nameOf<T>` per non-Terminal rule. */
-	final names: Array<WalkerFn>;
-
-	/** One `_typeRefs<T>` per rule reachable from a `type` field. */
-	final typeRefs: Array<WalkerFn>;
-
-	/**
-	 * Projected node kinds that SWALLOW a conditional-compilation region as raw bytes -
-	 * derived from the `@:condRegionRaw` terminals the grammar declares, never from a list of
-	 * ctor names. What the engine's fail-closed gate over a name-driven rewrite reads.
-	 */
-	final opaqueCondRegionKinds: Array<String>;
-
-	/**
-	 * Projected node kinds that denote a conditional-compilation region at all - the
-	 * `opaqueCondRegionKinds` superset, adding the regions whose interior the grammar DOES
-	 * model. Derived by the same walk from the `@:condRegionCondition` terminal as well.
-	 */
-	final conditionalRegionKinds: Array<String>;
-
-	/**
-	 * The qualified readers of where the grammar's conditional-compilation condition ends and of the blank around it
-	 * (`CondConditionReader`), or null when the grammar declares no condition terminal.
-	 */
-	final conditionReader: Null<CondConditionReader.CondReaders>;
-
-	/**
-	 * Every node kind the generated walker can project - the grammar's whole
-	 * `QueryNode.kind` vocabulary, derived from the same shape the walk is emitted from.
-	 * Published so a plugin's hand-written `RefShape` kind sets can be differenced against
-	 * what its parser actually emits; a stale name there fails open and no build sees it.
-	 */
-	final projectedKinds: Array<String>;
-
-	/**
-	 * The subset of `projectedKinds` that MORE THAN ONE grammar rule declares. A kind set
-	 * names a spelling and not a rule, so an entry here is admitted for every rule that
-	 * spells it.
-	 */
-	final ambiguousProjectedKinds: Array<String>;
-
-};
 #end

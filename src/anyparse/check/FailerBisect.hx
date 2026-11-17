@@ -2,6 +2,15 @@ package anyparse.check;
 
 import haxe.Exception;
 
+/** Internal control-flow signal: the bisect probe budget was exhausted. */
+private class BudgetExceeded extends Exception {
+
+	public function new() {
+		super('failer bisect budget exceeded');
+	}
+
+}
+
 /**
  * Binary-split group testing over units known to fail together: the search `FixVerifier` bisects a rejected risky edit
  * set with, and the safe-pass net (`LintFixSafePass.isolate`) bisects a rejected wave with. Index-agnostic — the caller
@@ -70,15 +79,6 @@ final class FailerBisect {
 		if (spent[0] >= budget) throw new BudgetExceeded();
 		spent[0]++;
 		return probe(indices);
-	}
-
-}
-
-/** Internal control-flow signal: the bisect probe budget was exhausted. */
-private class BudgetExceeded extends Exception {
-
-	public function new() {
-		super('failer bisect budget exceeded');
 	}
 
 }

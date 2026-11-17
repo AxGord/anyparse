@@ -22,6 +22,1112 @@ import haxe.macro.MacroStringTools;
 using Lambda;
 using anyparse.macro.MetaInspect;
 
+/** Output of WriterLowering for one rule. */
+typedef WriterRule = {
+	fnName: String,
+	valueCT: ComplexType,
+	body: Expr,
+	hasCtxPrec: Bool,
+	isBinary: Bool
+};
+
+/**
+ * Carries the runtime-access expression and enum type path of the
+ * immediately preceding bare-Ref struct field whose body was wrapped
+ * via `bodyPolicyWrap`. Consumed by `sameLineSeparator` (ψ₉) to emit
+ * a shape-aware leading separator on the following `@:fmt(sameLine(...))`
+ * keyword: block ctors respect the flag, non-block ctors force a
+ * hardline.
+ *
+ * `headGlue` is the runtime Bool that says the `elseSwitch` knob glued this
+ * body to its own head, so it closes in that head's column and the following
+ * keyword may cuddle the close exactly as it cuddles a block's. Built where
+ * the body is emitted, from that field's OWN meta and minus the captured
+ * comment that declines the glue - the gap must never infer it from the
+ * keyword field's meta, which says nothing about what the body did. Null on
+ * every path with no such knob.
+ */
+typedef PrevBodyInfo = { access: Expr, typePath: String, ?headGlue: Null<Expr> };
+
+/**
+ * One struct field's per-iteration metadata, produced by `readFieldMeta` and
+ * consumed by `lowerStruct`'s field-emit branches.
+ */
+typedef FieldMeta = {
+	fieldName: String,
+	kwLead: Null<String>,
+	leadText: Null<String>,
+	trailText: Null<String>,
+	trailOptText: Null<String>,
+	isStar: Bool,
+	isOptional: Bool,
+	hasElseIf: Bool,
+	condWrapArgs: Null<Array<String>>,
+	isSpanStart: Bool,
+	hasCondWrapEnd: Bool,
+	hasCondWrap: Bool,
+	fieldAccess: Expr,
+	hasStructFieldTrailOptSlot: Bool,
+	structTrailOptAccess: Null<Expr>
+};
+/**
+ * Per-classifier transparent-ctor accumulator used while reading
+ * `@:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent)` args in
+ * `readCascadeInfosFromStar`.
+ */
+typedef TransparentEntry = { final ctors: Array<String>; var tailAdapter: Null<String>; var headAdapter: Null<String>; };
+/**
+ * Shared inputs for `sameLineSeparatorShapeAware` — the shape-aware
+ * tail extracted from `sameLineSeparator`. Bundles the >5 scalars the
+ * tail needs into one context struct.
+ */
+typedef SameLineShapeAwareCtx = {
+	final child: ShapeNode;
+	final prevBody: PrevBodyInfo;
+	final prevPadTrailing: Null<Expr>;
+	final flagBased: Expr;
+	final shapeAwareSwitch: Expr;
+};
+/**
+ * ω-bodyPolicyWrap-struct-arg — option struct for `WriterLowering.bodyPolicyWrap`.
+ *
+ * Refactored from a 17-positional-arg signature (5 mandatory + 12 optional) into
+ * a single struct-arg form so call sites are readable and forwarding-only fields
+ * don't need long `null, null, null` runs. The 6 fields without `?` are required
+ * (every call site passes them explicitly today); the rest are forwarding flags
+ * for one of the runtime overrides documented in `bodyPolicyWrap`'s body.
+ *
+ * Field semantics — see `bodyPolicyWrap` body comments for full detail:
+ *   - `flagName`            — name of the `BodyPolicy` field on `opt` driving the layout switch.
+ *   - `exprFlagName`        — optional 2nd `BodyPolicy` field name (expr-position dispatch when `opt._inExprPosition`).
+ *   - `writeCall`           — pre-built `Doc` expression that emits the body's bytes.
+ *   - `bodyValueExpr`       — runtime access to the body value (used for `Type.enumConstructor` checks).
+ *   - `bodyTypePath`        — fully qualified Haxe type path of the body's enum (for ctor-pattern lookup).
+ *   - `hasElseIf`           — `true` for `HxIfExpr.thenBranch`-style sites that elide `{}` when followed by `if`.
+ *   - `elseFieldName`       — name of the sibling `else`-side field on `value`; `null` when no peer.
+ *   - `afterKwExpr`         — runtime access to captured after-kw trivia (`kwGapDoc` source).
+ *   - `kwLeadingExpr`       — runtime access to captured kw-leading trivia.
+
+ *   - `kwPolicyFlagName`    — name of a sibling `WhitespacePolicy` knob driving the `Same` separator (kw-policy mode).
+ *   - `afterTrailExpr`      — runtime access to captured after-kw trailing comment (forces `Next` shape).
+ *   - `beforeLeadingExpr`   — runtime access to the `Array<String>` of own-line comments captured before a
+ *     bare-Ref body (forces `Next` shape; composes with `afterTrailExpr`).
+ *   - `indentObjArgs`       — `(ctorName, optField, lcField)` triple for the `indentObjGuardedNext` rule.
+ *   - `policyOverrides`     — list of `(ctorName, flagName)` pairs cascading the runtime body-policy override.
+ *   - `bodyAllmanIndentArgs`— `(ctorName, optField)` pair for the multi-line Allman+indent override.
+ *   - `widthAware`          — when `true`, the `Same` branch routes through `IfWidthExceeds` for line-fit-aware break.
+ *   - `ifExprIndentArgs`    — `(ctorName, optField)` pair for the IfExpr-as-value RHS-style indent in flat path.
+ *   - `fallbackFlagName`    — name of a fallback `BodyPolicy` flag activated when the sibling `else` is absent.
+ *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies
+ *     (ω-expression-if-with-blocks).
+ *   - `singleLineFlagName`  — name of the `BodyPolicy` knob used when the value is NOT a control-flow / block ctor
+ *     (ω-return-body-single-line).
+ *   - `singleLineMultiCtors`— value ctor names treated as multi-line (keep the base policy); all other ctors read `singleLineFlagName`.
+ */
+typedef WrapBodyOpts = {
+	flagName: String,
+	?exprFlagName: Null<String>,
+	writeCall: Expr,
+	bodyValueExpr: Expr,
+	bodyTypePath: String,
+	hasElseIf: Bool,
+	elseFieldName: Null<String>,
+	// `@:fmt(ifElseLadder)` on a statement-`if` branch body: inside an `if` / `else` chain the body's placement is
+	// `Next` (`WriterBodyPolicyLowering.buildIfElseLadderTest`). Null/false → byte-inert.
+	?ifElseLadder: Bool,
+	// `@:fmt(exprIfElseLadder)` beside it: the `if` is an expression, a statement only where `opt._statementFrame` makes it
+	// one (`WriterBodyPolicyLowering.ifElseLadderStatementTest`).
+	?exprIfElseLadder: Bool,
+	// The `else` field whose presence puts a ladder body in a chain, read by the ladder alone: an expression `if`'s
+	// `else` branch leaves `elseFieldName` null, so its FitLine layout keeps reading `fitLineIfWithElse` as before.
+	?ladderElseFieldName: String,
+	// `@:fmt(nestedIfElseLadder('<ifCtor>'))` beside `ifElseLadder` on a then-body: a body that is itself an `<ifCtor>`
+	// owning an `else` (read through the same `ladderElseFieldName`) joins the ladder too. Null → byte-inert.
+	?nestedIfCtor: String,
+	// `@:fmt(plainValueIf('<ifCtor>', '<thenField>', '<wrapperCtor>', '<plainCtor>'…))` beside `ifElseLadder`: a chain the
+	// ladder reaches only through `opt._statementFrame` in expression position keeps the knob's layout when every branch is
+	// a plain value (`LoopBodyShape.isPlainValueChain`). Null → byte-inert.
+	?plainValueIfArgs: Array<String>,
+	// `@:fmt(ifElseLadder('<ifCtor>', '<thenField>', '<bracedCtor>'…))`: a `switch` branch the `elseSwitch` knob would glue
+	// ladders instead when a branch of its chain is none of the braced ctors
+	// (`WriterBodyPolicyLowering.buildSwitchBranchLadderTest`). Null (the bare flag) → byte-inert.
+	?ladderBranchArgs: Array<String>,
+	// Beside it: the same question asked of the branches as the writer emits them, de-braced ones included
+	// (`WriterBraceSymmetryLowering.chainBareBranchTest`). Null → the branches are read as parsed.
+	?ladderWrittenBareExpr: Expr,
+	?afterKwExpr: Null<Expr>,
+	?kwLeadingExpr: Null<Expr>,
+	?kwPolicyFlagName: Null<String>,
+	?afterTrailExpr: Null<Expr>,
+	?beforeLeadingExpr: Null<Expr>,
+	?indentObjArgs: Array<String>,
+	?policyOverrides: Array<Array<String>>,
+	?bodyAllmanIndentArgs: Array<String>,
+	?widthAware: Bool,
+	?ifExprIndentArgs: Array<String>,
+	?fallbackFlagName: String,
+	?inlineBlockBodyArgs: Array<String>,
+	?singleLineFlagName: Null<String>,
+	?singleLineMultiCtors: Null<Array<String>>,
+	// ω-condwrap-fitline-construct-group — true when lowerStruct wraps the
+	// preceding condWrap cond + this body into ONE construct-level BodyGroup.
+	// The FitLine layout then becomes the classic soft line (`Line(' ')` +
+	// body under Nest): flat when the WHOLE construct fits the line, broken
+	// when it does not — which also fires when the condition committed to
+	// its wrapped shape (its hardlines fail the group's fitsFlat), matching
+	// the fork's "body on the same line iff the whole statement fits" rule.
+	// Replaces the body-only `_dinfle` probe whose post-`)` column reset
+	// glued `) return x;` after a wrapped condition. Null/false → byte-inert.
+	?condFitGroup: Bool,
+	// omega-try-brace-symmetry: `@:fmt(constructFitBody)` on a body field inside a
+	// `constructFitGroup`. Its `FitLine` layout becomes ONE soft line owned by that group, so the
+	// body sits on the header line while the whole construct fits and drops to its own indented line
+	// the moment the group breaks — the shape an `if` with an `else` produces, which is what a
+	// try/catch has to match: a `catch` always follows, exactly as an `else` does. Without it the
+	// FitLine body answers for its own line and GLUES, leaving `try body` on the head while the
+	// `catch` seam below it has already broken.
+	?constructFitBody: Bool,
+	// ω-fnbody-meta-block-glue — when true, the body-placement override
+	// detects an `ExprBody` whose inner expression is a metadata-wrapped
+	// BLOCK (`@:meta { … }`, runtime shape `ExprBody(MetaExpr(_, BlockExpr))`,
+	// nested metas unwrapped) and routes it to the glued `sameLayoutExpr`
+	// (` ` + body) instead of the policy switch. The metadata + block then
+	// stay cuddled to the signature line (`):Ret @:privateAccess {`) and the
+	// block's own internal Nest supplies the single body-indent step — the
+	// `functionBody`/`untypedBody` policy never breaks the metadata onto its
+	// own line and never adds the spurious extra Nest. Non-block metadata
+	// bodies (`@:meta return x`) and every non-meta body keep the policy
+	// dispatch unchanged. The ctor names (`ExprBody`/`MetaExpr`/`BlockExpr`)
+	// are passed declaratively from the grammar flag to keep the macro
+	// format-neutral. Null/false → byte-inert.
+	?metaBlockGlueArgs: Null<Array<String>>,
+	// ω-single-stmt-braces trailing-comment hoist: runtime Null<String> comment to
+	// fold after a de-braced body's `;` (hoistTrailingComment result). Null off the
+	// dropSingleStmtBraces path so buildBodyWriteCall skips the fold (byte-inert).
+	?ssbTrailCommentExpr: Null<Expr>,
+	// omega-arrow-value-if-reflow: true for a body field carrying
+	// `@:fmt(arrowValueIfReflowSite)` (HxIfExpr.thenBranch / elseBranch).
+	// The resolved BodyPolicy is then overridden to `Same` whenever the
+	// struct-level gate local `_aifReflow` is set at runtime, so every
+	// branch value glues to its own condition and the enclosing
+	// `Group` owns the one flat-vs-broken decision for the whole chain.
+	// False everywhere else -> byte-inert.
+	?arrowValueIfSite: Bool,
+	// omega-elseif-comment-reflow: true for the body field carrying
+	// `@:fmt(elseIfCommentReflow)` (HxIfStmt.elseBody). On the `elseIf`-ctor
+	// `Same` arm ONLY, and only when `opt.elseIfCommentReflow` is set and the
+	// kw-trivia slots hold exactly one `//` comment, the `kwGapDoc` separator
+	// is swapped for a plain space and that comment is spliced onto the nested
+	// `if`'s head line by `ElseIfCommentReflow.insertHeadTrail`. Every other
+	// arm, and a splice that finds no anchor, keep the untouched layout.
+	// False everywhere else -> byte-inert.
+	?elseIfCommentReflow: Bool,
+	// ω-loop-body-if-else-next: the three declarative names from
+	// `@:fmt(loopBodyIfElseNext('<optField>', '<ifCtor>', '<elseField>'))` on a
+	// LOOP body field (`HxForStmt.body` / `HxWhileStmt.body`). When
+	// `opt.<optField>` is set AND the body value is an `<ifCtor>` whose head
+	// carries a non-null `<elseField>`, the `FitLine` layout degrades to the
+	// `Next` one — the loop header keeps its own line and the whole `if`/`else`
+	// moves one indent step in, so the `else` lines up with its `if` instead of
+	// with the loop. An `if` WITHOUT an `else` keeps gluing: `for (x in xs) if
+	// (c) f(x);` is a deliberate idiom, which is why this cannot be a body
+	// policy (`forBody: next` moves that one too). Sibling of the
+	// `fitLineIfWithElse` escape one storey down, which asks about the placed
+	// node's own `else` field rather than about the CHILD's shape. Null → byte-inert.
+	?loopBodyIfElseArgs: Null<Array<String>>,
+	// The names of `@:fmt(statementIfBody(...))` on a function body field: a body that is such an `if` owning an `else`, with
+	// a brace-less branch, takes the `Next` placement whatever the body knob chose, as `loopBodyIfElseArgs` does for a loop
+	// body. Null → byte-inert.
+	?statementIfBodyArgs: Null<Array<String>>,
+	// omega-else-switch: the declarative names from
+	// `@:fmt(elseSwitch('<optField>', '<ctor>'…))` on a BRANCH body field - the
+	// `KeywordPlacement` knob field first, then one or more body ctors that
+	// spell a keyword-headed `switch` branch (`HxIfStmt` names both the
+	// parenthesised and the bare `switch` statement ctor, on `thenBody` and
+	// `elseBody` alike - the user's rule is that the two halves of one
+	// `if`/`else` are laid out the same way). The core macro
+	// therefore spells no grammar ctor of its own here, unlike the older
+	// `elseIf` flag beside it, which still hardcodes `IfStmt`/`IfExpr`.
+	// Null → byte-inert.
+	?elseSwitchArgs: Null<Array<String>>,
+	// omega-strict-fitline-body: the body ctors from
+	// `@:fmt(strictFitLineBody('<ctor>'…))` (`HxForExpr.body` /
+	// `HxForReif.body` / `HxWhileExpr.body`) whose glue may survive. Its `FitLine` layout keeps the
+	// glue only for a body that IS one of those keyword-led constructs AND
+	// whose head line ends at an open delimiter, so nothing below the head can
+	// render at the container indent; every other non-flat body goes to the
+	// next line one indent deeper. That is `BodyFit.strictFitLineLayout`,
+	// reached here by a field flag rather than by the case-body caller's
+	// control-flow verdict, whose refusal is unconditional. Null -> byte-inert.
+	?strictFitLineArgs: Null<Array<String>>,
+	// omega-bracket-body-glue: the runtime flag name from
+	// `@:fmt(bracketBodyGlueIfFlag('<flagName>'))` on a body field
+	// (`HxIfExpr.thenBranch` / `elseBranch`). When `opt.<flagName>` is set and
+	// the body's runtime ctor is one of the body type's BRACKET block ctors
+	// (`@:lead('[')` + `@:trail` + a single `Star`, i.e. `HxExpr.ArrayExpr` —
+	// an array literal AND an array comprehension), the resolved policy is
+	// substituted with `Same`, so the `[` hugs the branch head exactly as a
+	// `{` block body already does through the curly block-ctor arm. Folded
+	// into the policy SELECTOR rather than added as another outer arm for the
+	// JVM method-size reason `buildBodyCoreWrap` records. Null -> byte-inert.
+	?bracketBodyGlueArgs: Null<Array<String>>
+};
+
+/**
+ * Runtime-built Exprs shared across the `bodyPolicyWrap` layout-primitive
+ * helpers (`buildBodySameLayout` etc.): the resolved writeCall, the
+ * `Same`-mode kw→body separator, the kw-policy inline separator, and
+ * whether kw-trivia slots were forwarded.
+ */
+typedef BodyWrapShared = {
+	final writeCall: Expr;
+	final sameSepNb: Expr;
+	final kwPolicyInlineSep: Null<Expr>;
+	final hasKwSlots: Bool;
+	// Does the body value open with `{` — a runtime ctor test over the body type's block ctors (`false` when it has none).
+	final isBlockBody: Expr;
+};
+
+/**
+ * The resolved body-layout Exprs (one per `BodyPolicy` axis plus the
+ * block-ctor variant) threaded into `bodyPolicyWrap`'s policy/outer dispatch.
+ */
+typedef BodyLayouts = {
+
+	final sameLayoutExpr: Expr;
+	final nextLayoutExpr: Expr;
+	final blockLayoutExpr: Expr;
+	final fitExpr: Expr;
+
+	/**
+	 * omega-elseif-comment-reflow: the `Same` layout the `elseIf`-ctor arm
+	 * uses. Identical to `sameLayoutExpr` unless the field carries
+	 * `@:fmt(elseIfCommentReflow)`, in which case it is that layout behind a
+	 * runtime gate that first tries the glued form with the interposed
+	 * comment spliced onto the nested `if`'s head line.
+	 */
+	final elseIfSameLayoutExpr: Expr;
+
+};
+
+/**
+ * ω-interblank — resolved data for `@:fmt(interMemberBlankLines(...))`.
+ * Produced by `WriterLowering.buildInterMemberClassifyInfo` and spliced
+ * into the `triviaBlockStarExpr` per-element loop to classify each
+ * element as a var (kind `1`), a function (kind `2`), or other
+ * (kind `0`). `classifyCases` is a ready-to-use `ESwitch` case list —
+ * one entry per enum variant, exhaustive, no wildcard.
+ *
+ * `betweenVars` / `betweenFunctions` / `afterVars` are the runtime reads
+ * of the Int knobs that gate each blank-line slot, resolved from the names
+ * the grammar gives by `WriterTriviaStarDispatch.knobReads`.
+ */
+typedef InterMemberClassifyInfo = {
+	classifierFieldName: String,
+	classifyCases: Array<Case>,
+	betweenVars: Expr,
+	betweenFunctions: Expr,
+	afterVars: Expr
+};
+
+/**
+ * Parameters for `buildInterMemberClassifyCases` — the enum (Alt) rule
+ * whose ctors map to classify kinds plus the var/fn ctor sets and the
+ * optional `condCtor`/`bodyField` look-through config. Bundled to keep
+ * the case-builder helper under the >5-scalar threshold.
+ */
+typedef InterMemberCasesCtx = {
+	final enumRule: ShapeNode;
+	final varCtors: Array<String>;
+	final fnCtors: Array<String>;
+	final condCtor: Null<String>;
+	final bodyField: Null<String>;
+	final fieldName: String;
+};
+
+/**
+ * ω-class-static-var-cascade — resolved data for
+ * `@:fmt(staticVarSubdivision)` /
+ * `@:fmt(staticVarSubdivision('<modifierField>', '<staticCtor>',
+ * '<afterStaticVarsField>'))`. Produced by
+ * `WriterLowering.buildStaticVarSubdivisionInfo`. When present alongside
+ * `interMemberInfo`, `triviaBlockStarExpr` augments the per-iteration
+ * `_currKind` switch with a sibling-Star scan: when the base switch
+ * yields kind `1` (instance var) AND the `<modifierField>` Star contains
+ * a `<staticCtor>`-ctor element, `_currKind` is promoted to `3` (static
+ * var). The cascade then routes (1,3)/(3,1) transitions to the
+ * `<afterStaticVars>` opt knob, leaving (1,1)/(3,3)/(2,2)/var↔fn
+ * arms on the existing `betweenVars` / `betweenFunctions` / `afterVars`.
+ *
+ * ω-abstract-static-fn-cascade — the same sibling-Star scan also promotes
+ * base kind `2` (function) to kind `4` (static function) on encountering
+ * the `<staticCtor>` modifier. A (4,4) pair routes to the
+ * `<betweenStaticFunctions>` opt knob; kinds `2` and `4` are both
+ * treated as the "function" family for the var↔fn `afterVars` arm, and a
+ * (2,4)/(4,2) static-difference falls back to `betweenFunctions` (fork's
+ * `afterStaticFunctions` default equals `betweenFunctions` — `1` — so no
+ * separate knob is modelled until a fixture distinguishes them).
+ *
+ * Class, abstract and macro-class members opt in; interface members do NOT — fork's
+ * `InterfaceFieldsEmptyLinesConfig` lacks `afterStaticVars` and treats
+ * static-var transitions as plain `betweenVars`. Skipping the meta on
+ * `HxInterfaceDecl.members` keeps that behaviour without a separate
+ * interface-side knob.
+ */
+typedef StaticVarSubdivisionInfo = {
+	modifierFieldName: String,
+	staticCtorName: String,
+	afterStaticVars: Expr,
+	betweenStaticFunctions: Expr
+};
+
+/**
+ * ω-cond-leading-doc-lookthrough — resolved data for
+ * `@:fmt(beforeDocCondLookThrough('<classifierField>', '<condCtor>',
+ * '<bodyField>'))`. Produced by
+ * `WriterLowering.buildCondLeadingDocLookThroughInfo`. When present on a
+ * trivia-bearing member Star that also opted into
+ * `@:fmt(beforeDocCommentEmptyLines)`, `triviaBlockStarExpr`'s
+ * `_currHasDocComment` scan looks THROUGH a preprocessor `#if … #end`
+ * member (the `<condCtor>` ctor on the `<classifierField>` classifier enum)
+ * to the FIRST element of its `<bodyField>` Star: when that inner member's
+ * leading trivia starts with `/**`, the Conditional is treated as
+ * doc-comment-led for the `beforeDocCommentEmptyLines` policy.
+ *
+ * Mirrors fork's `MarkEmptyLines`, which makes a conditional wrapper
+ * transparent for doc-comment adjacency: `beforeDocCommentEmptyLines = None`
+ * then strips the source blank between a field and a `#if` whose body opens
+ * with a documented member (issue_188, the class-member analogue of the
+ * issue_298 `#end → type-decl` transparency). The Conditional's OWN leading
+ * never carries the inner doc-comment (the `/**` belongs to the inner
+ * member, not the `#if` directive), so the plain `_t.leadingComments` scan
+ * misses it without this look-through.
+ *
+ * `condCasePattern` is a ready-to-use `case <condCtor>(_inner):` pattern
+ * binding the single ctor arg; `bodyFieldName` is the trivia Star field on
+ * that arg whose `[0].leadingComments` is scanned.
+ */
+typedef CondLeadingDocLookThroughInfo = { classifierFieldName: String, condCasePattern: Expr, bodyFieldName: String };
+
+/**
+ * ω-after-package — resolved data for
+ * `@:fmt(blankLinesAfterCtor(classifierField, CtorName1, [CtorName2, …], optField))`.
+ * Produced by `WriterLowering.buildAfterCtorBlankInfo` and spliced
+ * into `triviaEofStarExpr`'s per-element loop to override the source-
+ * captured blank-line count when the previous element's classifier
+ * matches one of the named ctors.
+ *
+ * `classifyCases` is a ready-to-use exhaustive `ESwitch` case list:
+ * each enum variant present in the classifier target enum maps to
+ * either kind `1` (matches one of the configured ctor names) or
+ * kind `0` (no match). The runtime gate then reads
+ * `_prevKindAfter == 1 ? opt.<optField> : (_t.blankBefore ? 1 : 0)` —
+ * a hard override on match (the source-captured count is discarded),
+ * source-driven otherwise. `0` strips an existing blank line, higher
+ * counts insert that many regardless of source.
+ *
+ * `optField` is the `HxModuleWriteOptions` Int field name read at
+ * runtime (e.g. `afterPackage`). The Star may carry multiple
+ * `@:fmt(blankLinesAfterCtor(...))` entries (ω-after-typedecl) — each
+ * produces its own `AfterCtorBlankInfo` with a disjoint ctor set and
+ * its own `optField`. The runtime cascade walks them in source order:
+ * the first matching kind-tracker wins, falling through to `beforeCtor`
+ * infos and finally the source-driven `blankBefore` flag. Authors
+ * order entries by priority (e.g. `afterPackage` before `afterTypeDecl`).
+ */
+typedef AfterCtorBlankInfo = {
+	classifierFieldName: String,
+	classifyCases: Array<Case>,
+	optField: String,
+	// ω-after-conditional-block — when non-null, the after-ctor override is
+	// ADDITIONALLY gated on the previous element's tail-leaf classify
+	// returning null. The string names a generated typed
+	// `<payload> -> Null<{ctorName, path}>` leaf walker on the trivia
+	// predicate class (e.g. `AstPredsT.tailLeafKeepsBlankAfterConditional`
+	// — the meta arg is the function name), run on the matched ctor's
+	// first positional arg (`_v0`); a null result means the wrapper's
+	// tail leaf is NOT one of the recognised ctors (import / using), so
+	// the override fires. Non-null (tail IS an import / using) suppresses
+	// the override and the cascade falls through to the source-driven
+	// blank count. The matched classify case binds `_v0` so the walker
+	// has the payload. Null for every plain `blankLinesAfterCtor{,If}` —
+	// those keep the original bare `_prevKind == 1` gate, byte-identical.
+	// (The field name keeps its historical `OptField` suffix from the
+	// retired `WriteOptions` adapter era for diff locality; unlike
+	// `BetweenCtorBlankInfo.adapterOptField`, it no longer names an opt
+	// field.)
+	?tailAdapterOptField: Null<String>
+};
+
+/**
+ * ω-before-package — resolved data for
+ * `@:fmt(blankLinesAtHeadIfCtor(classifierField, CtorName1, [CtorName2, …],
+ * optField))`. Produced by `WriterLowering.buildHeadCtorBlankInfo` and
+ * spliced into the start of `triviaEofStarExpr` / `triviaTryparseStarExpr`
+ * elseBody (after `_docs` init, before any element emit). Fires
+ * `opt.<optField>` blank lines at the START of the Star body when the
+ * FIRST element matches one of the named ctors. Source-driven blank
+ * suppression / extension does not apply — this is a pure override
+ * tied to the structural shape of the head element.
+ *
+ * Mirrors `AfterCtorBlankInfo` shape exactly (single-axis classify-
+ * switch + opt field), with two semantic differences: (a) classifier is
+ * read off `_arr[0].node.<field>`, not the per-element `_t.node`;
+ * (b) consumed once at the head, not per-iteration. Multiple infos on
+ * the same Star are walked in source order, first matching wins —
+ * remaining infos are inert. Reusable for any future "blank lines at
+ * head before ctor X" slice (e.g. file-leading-comment normalisation
+ * before a typedef header) by pointing at a different opt field.
+ *
+ * No `Before` mirror is needed at the cascade level: head and "before
+ * first" are the same boundary at a Star's head, and the source-driven
+ * binary blank-line slot does not apply at index 0 either way.
+ */
+typedef HeadCtorBlankInfo = { classifierFieldName: String, classifyCases: Array<Case>, optField: String };
+
+/**
+ * ω-between-single-line-types — resolved data for
+ * `@:fmt(blankLinesBetweenSameCtorIfNot(classifierField, predicateName,
+ * CtorName1, [CtorName2, …], optField))`. Produced by
+ * `WriterLowering.buildBetweenSameCtorBlankInfoIfNot` and spliced into
+ * `triviaEofStarExpr` / `triviaTryparseStarExpr`'s per-element loop
+ * alongside the after/before/between/transition families.
+ *
+ * Shape mirrors `AfterCtorBlankInfo` / `BeforeCtorBlankInfo` exactly
+ * (single-axis classify-switch returning `1` for any matching ctor
+ * whose `predicateName` evaluates to FALSE on its payload, `0`
+ * otherwise) plus an opt-field name. The two diverge from after / before
+ * at the cascade gate: this family fires when BOTH prev and curr have
+ * kind=1 — i.e. consecutive pair where both ends fall in the matching
+ * ctor set AND neither side matches the predicate.
+ *
+ * Used to drive haxe-formatter's `emptyLines.betweenSingleLineTypes`
+ * semantic (1 blank between any pair of single-line typedef / class /
+ * interface / abstract / enum decls). The predicate is grammar-derived
+ * via `buildMultilinePredicate` (same one driving `afterMultilineDecl` /
+ * `beforeMultilineDecl`) but with inverted polarity at kind-emission
+ * time, so untagged / empty-body decls bucket into "single-line" and
+ * non-empty type-body decls bucket into "multi-line" automatically.
+ *
+ * Cascade priority: after-ctor > between-ctor (path-aware) > transition
+ * > between-same-ctor-if-not > before-ctor > source-driven. Sits below
+ * the path-aware between family (Imports/Usings) because that family
+ * also gates on both sides and would conflict otherwise; sits above
+ * before-ctor so a single-line typedef → single-line typedef pair
+ * still fires `betweenSingleLineTypes` even when an unrelated
+ * before-ctor rule would otherwise apply.
+ */
+typedef BetweenSameCtorIfNotInfo = { classifierFieldName: String, classifyCases: Array<Case>, optField: String };
+
+/**
+ * Shared parser-context locals bundled for the `lowerEnumBranch`
+ * per-shape emission helpers (ternary / infix / prefix / postfix /
+ * kw-Ref). Replaces a >5-scalar helper signature with one context
+ * struct.
+ */
+typedef LowerBranchCtx = {
+	final branch: ShapeNode;
+	final typePath: String;
+	final writeFnName: String;
+	final hasPratt: Bool;
+	final argNames: Array<String>;
+	final precPostfix: Int;
+};
+/**
+ * Aggregated cascade info arrays read off a `@:trivia` Star ShapeNode
+ * by `WriterLowering.readCascadeInfosFromStar`. Each array is the
+ * resolved form of one `@:fmt(blankLines*)` meta family on the same
+ * Star — see the per-Info typedefs for shape semantics. Both the EOF
+ * Star branch (`triviaEofStarExpr`) and the tryparse Star branch
+ * (`triviaTryparseStarExpr`) consume this struct unchanged.
+ *
+ * `headCtorInfos` is the head-of-Star override family
+ * (`blankLinesAtHeadIfCtor`); spliced once at the start of the Star
+ * body. Empty array → no head emit, byte-identical to non-opt-in
+ * consumers.
+ */
+typedef CascadeInfos = {
+	afterCtorInfos: Array<AfterCtorBlankInfo>,
+	beforeCtorInfos: Array<BeforeCtorBlankInfo>,
+	betweenCtorInfos: Array<BetweenCtorBlankInfo>,
+	transitionAcrossInfos: Array<TransitionAcrossInfo>,
+	headCtorInfos: Array<HeadCtorBlankInfo>,
+	betweenSameCtorIfNotInfos: Array<BetweenSameCtorIfNotInfo>
+};
+
+/**
+ * Output of `WriterCascadeLowering.buildCascadeEmit` — six Exprs ready to
+ * splice into the consumer's runtime block. `initPrev` / `initCurr`
+ * are single combined `EVars` statements (folded across all infos);
+ * `currCompute` / `trackPrev` are `EBlock`s of pure assignments;
+ * `blanksCount` is the cascade ternary with fallback
+ * `(_t.blankBefore ? 1 : 0)`. `headEmit` is the head-of-Star block
+ * (head cascade ternary + push loop, guarded on `_arr.length > 0`)
+ * spliced once at the start of the Star body, after `_docs` init.
+ * Empty info arrays produce `macro {}` placeholders so non-cascade-
+ * bearing consumers stay byte-identical.
+ * Shared setup locals bundled for the `triviaEofStarExpr` emission
+ * helpers (`triviaEofWhileExpr` / `triviaEofElseBody` + the per-flag
+ * leaf Expr builders). Replaces a >5-scalar helper signature with one
+ * context struct.
+
+ * The per-flag init / track / wrap leaf Exprs bundled for the orchestrator,
+ * built once by `triviaBlockLeafExprs`. Replaces a multi-value return with one
+ * struct.
+ */
+typedef BlockLeafExprs = {
+	final initDocCommentExpr: Expr;
+	final initCurrDocCommentExpr: Expr;
+	final initPrevKindExpr: Expr;
+	final initCurrKindExpr: Expr;
+	final trackPrevKindExpr: Expr;
+	final trackDocCommentExpr: Expr;
+	final innerWrapExpr: Expr;
+	final extraInnerTrailBlankExpr: Expr;
+};
+
+typedef EofStarCtx = {
+
+	final fieldAccess: Expr;
+	final triviaElemCall: Expr;
+
+	/**
+	 * ω-measured-multiline-decl — the Star carries
+	 * `@:fmt(measuredMultilineDecls)`, so the loop pre-builds every element's
+	 * Doc into `_elemDocs` and its rendered-multiline verdict into
+	 * `_measMulti`, which the cascade's `multiline` predicate reads.
+	 */
+	final measuredMultiline: Bool;
+
+	/** Per-element write call with the comprehension binder `_e` as receiver — feeds the `_elemDocs` pre-pass. */
+	final measuredElemCall: Expr;
+	final trailBB: Expr;
+	final trailLC: Expr;
+	final emit: CascadeEmit;
+	final pos: Position;
+	final lineCommentTrailBlank: Bool;
+	final lineCommentLedAddBlank: Bool;
+	final afterFileHeaderCommentBlanks: Bool;
+	final betweenMultilineCommentsBlanks: Bool;
+
+};
+/**
+ * Output bundle of `triviaSepTypedefBlanksExprs` — the seven spliced Expr
+ * fragments the sep-Star force-multi loop and `_sepCtx` consume.
+ */
+typedef SepStarBlanks = {
+	final keepCurlyBeginExpr: Expr;
+	final keepCurlyEndExpr: Expr;
+	final typedefBeginExpr: Expr;
+	final typedefEndExpr: Expr;
+	final typedefBetweenExpr: Expr;
+	final blankBeforeExpr: Expr;
+	final initCurrDocCommentExpr: Expr;
+};
+/**
+ * Output bundle of `triviaSepKeepCurlyExprs` — the five `typedefBodyBlanks`-
+ * gated keepCurly / typedef-RHS blank-insert Expr fragments.
+ */
+typedef SepStarKeepCurly = {
+	final keepCurlyBeginExpr: Expr;
+	final keepCurlyEndExpr: Expr;
+	final typedefBeginExpr: Expr;
+	final typedefEndExpr: Expr;
+	final typedefBetweenExpr: Expr;
+};
+/**
+ * Output bundle of `triviaSepKeepCurlyOpenClose` — the open/close-side
+ * Keep-mode curly-blank Expr fragments.
+ */
+typedef SepStarKeepCurlyOC = { final keepCurlyBeginExpr: Expr; final keepCurlyEndExpr: Expr; };
+/**
+ * Output bundle of `triviaSepTypedefBlankInserts` — the typedef-RHS forced
+ * blank-insert Expr fragments (begin/end/between).
+ */
+typedef SepStarTypedefInserts = { final typedefBeginExpr: Expr; final typedefEndExpr: Expr; final typedefBetweenExpr: Expr; };
+/**
+ * The second wrap cascade a sep-Star can name, and the runtime test that
+ * chooses it — `@:fmt(mapWrapRules('<field>'))` on `HxExpr.ArrayExpr`, where a
+ * MAP literal reads `wrapping.mapWrap` and everything else `wrapping.arrayWrap`.
+ *
+ * The two travel together because neither is usable alone: the field name
+ * without the test would pick a cascade for every list, and the test without
+ * the name has nothing to pick. `isMapLiteralExpr` is a spliced `Expr` rather than a predicate name
+ * because the class it calls depends on the build (`AstPreds` plain, `AstPredsT` trivia), which only the
+ * lowering that owns `_shape` and `_ctx` can resolve — `WriterLowering.mapWrapFor` builds both halves.
+ */
+typedef SepStarMapWrap = { final field: String; final isMapLiteralExpr: Expr; };
+
+/**
+ * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /
+ * force-exceeds / force-mode / keep-matrix Expr fragments the sep-Star tail
+ * consumes (`_sepCtx`'s appendTrailingComma + keepMatrix, and
+ * `WrapList.emit`'s forceExceeds/forceMode/flatTrailingComma args).
+ */
+typedef SepStarTrailExprs = {
+	final forceExceedsExpr: Expr;
+	final appendTrailingCommaExpr: Expr;
+	final flatTrailingCommaExpr: Expr;
+	final forceModeExpr: Expr;
+};
+/**
+ * Output bundle of `triviaSepCheckExprs` — the ignore/noWrap runtime
+ * checks plus the leftCurly/rightCurly placement Docs the sep-Star tail
+ * consumes (`_ignoreEmit`/`_noWrapFlat`, `_sepCtx`'s lead/trail
+ * Docs, and `WrapList.emit`'s lead-flat/lead-break/trail-break args).
+ */
+typedef SepStarChecks = {
+	final ignoreCheckExpr: Expr;
+	final noWrapFlatCheckExpr: Expr;
+	final triviaLeadDoc: Expr;
+	final wrapLeadFlatDoc: Expr;
+	final wrapLeadBreakDoc: Expr;
+	final wrapTrailBreakDoc: Expr;
+	final triviaTrailDoc: Expr;
+};
+typedef CascadeEmit = {
+	initPrev: Expr,
+	initCurr: Expr,
+	currCompute: Expr,
+	trackPrev: Expr,
+	blanksCount: Expr,
+	headEmit: Expr
+};
+/**
+ * Mutable accumulators threaded through the `buildCascadeEmit` per-axis
+ * compute helpers (`emitAfterCompute` etc.). Each helper appends its
+ * `prev`/`curr` tracker var decls, its per-element compute statements, and
+ * its prev-tracking assignments. Bundled so the helpers take one
+ * destination param (the "pass the destination" pattern) instead of four.
+ */
+typedef CascadeAccum = {
+	final prevVars: Array<Var>;
+	final currVars: Array<Var>;
+	final currCompute: Array<Expr>;
+	final trackPrev: Array<Expr>;
+};
+
+/**
+ * ω-imports-using-blank — resolved data for
+ * `@:fmt(blankLinesBeforeCtor(classifierField, CtorName1, [CtorName2, …], optField))`.
+ * Produced by `WriterLowering.buildBeforeCtorBlankInfo` and spliced into
+ * `triviaEofStarExpr`'s per-element loop. Shape mirrors
+ * `AfterCtorBlankInfo` exactly — same single-axis classify-switch
+ * (`1` for any matching ctor, `0` otherwise) plus an opt-field name —
+ * the two diverge only at the runtime gate. After-ctor's gate fires on
+ * `_prevKindAfter == 1`; before-ctor's gate fires on
+ * `_currKindBefore == 1 && _prevKindBefore != 1`, which gives the
+ * "first X after a non-X" transition semantics (e.g. force a blank
+ * line at `import → using`, no force between consecutive `using` decls).
+ *
+ * Cascade priority in `triviaEofStarExpr`: after-ctor entries (in
+ * source order) win first, then before-ctor entries (in source order,
+ * each gated on `prev != curr` for that entry's set), then source-
+ * driven `blankBefore`. A single decl pair is governed by at most one
+ * override; no double-counting. Multiple before-ctor entries on the
+ * same Star are supported (ω-after-typedecl) — same shape as
+ * `AfterCtorBlankInfo`, evaluated independently per entry.
+ */
+typedef BeforeCtorBlankInfo = {
+	classifierFieldName: String,
+	classifyCases: Array<Case>,
+	optField: String,
+	// ω-before-multiline-prev-not — when non-null, a second binary
+	// classify-switch (kind=1 if the element's classifier ctor is in the
+	// excluded-prev set, e.g. `Conditional`). The before-ctor cascade
+	// ternary gains an extra `&& _prevKindPrevExcl != 1` guard so the
+	// override is suppressed when the previous sibling matched an excluded
+	// ctor — the cascade then falls through to the source-driven
+	// `_t.blankBefore` count. Closes the spurious-blank-after-`#end` bug
+	// (issue_298): a cond-comp `#if … #end` immediately before a multiline
+	// class no longer forces `beforeMultilineDecl` regardless of source.
+	// Null for the plain `blankLinesBeforeCtor{,If}` builders → no extra
+	// tracker, byte-identical cascade.
+	?prevExcludeCases: Null<Array<Case>>
+};
+
+/**
+ * ω-imports-using-between — resolved data for
+ * `@:fmt(blankLinesBetweenSameCtorByLevel(classifierField, CtorName1,
+ * [CtorName2, …], levelOptField, countOptField, adapterOptField))`.
+ * Produced by `WriterLowering.buildBetweenCtorBlankInfo` and spliced
+ * into `triviaEofStarExpr`'s per-element loop alongside the
+ * after/before-ctor families. Shape diverges from those two: the
+ * runtime tracks both a kind flag (1 for any matching ctor, 0 otherwise)
+ * AND a path String (first ctor arg of the matched ctor, e.g. the
+ * `HxTypeName`/`HxWildPath` payload of `ImportDecl(path)`). The cascade
+ * ternary fires `opt.<countOptField>` blank lines when both prev and
+ * curr match the same set AND
+ * `opt.<adapterOptField>(prevPath, currPath, opt.<levelOptField>)`
+ * returns `true`.
+ *
+ * `ctorPatterns` carries one entry per enum variant in the classifier
+ * target — `pattern` is a ready-to-use ESwitch case pattern (matched
+ * ctors bind their first positional arg as `_v0`; unmatched ctors use
+ * a wildcard for every arg). The case body is generated at cascade-
+ * emit time inside `triviaEofStarExpr` because it needs to reference
+ * the per-info `_currTailKindBetween<i>` / `_currTailPathBetween<i>` ident
+ * names, which depend on the info's index in the cascade.
+ *
+ * `adapterOptField` names a function-typed field on `WriteOptions`
+ * (e.g. `betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>`)
+ * default-wired by the grammar plugin. Engine emits a pure
+ * `opt.<adapterOptField>(...)` EField call — no FQN parsing, no
+ * grammar-package coupling baked into the macro core. Cascade
+ * priority: after-ctor entries (outermost) > between entries >
+ * before-ctor entries > source-driven `blankBefore`.
+ *
+ * `tailAdapterOptField` (ω-cond-comp-tail-transparency) and
+ * `headAdapterOptField` (ω-imports-using-transition) name generated
+ * typed leaf walkers on the trivia predicate class
+ * (e.g. `AstPredsT.betweenImportsTailLeafClassify` /
+ * `betweenImportsHeadLeafClassify`, each
+ * `<payload> -> Null<{ctorName, path}>` — the meta arg is the
+ * function name; the `OptField` suffix survives from the retired
+ * `WriteOptions` adapter era, unlike the sibling `adapterOptField`
+ * which still names a real opt field). When non-null, ctors
+ * named in `transparentCtorNames` are routed through the matching
+ * direction's walker at runtime: tail walks the wrapper payload (e.g.
+ * `HxConditionalDecl`) to its LAST-branch / LAST-element leaf decl,
+ * head walks to FIRST-branch / FIRST-element. Each walker returns
+ * `{ctorName, path}`; the engine runs a runtime
+ * `_r.ctorName == 'CtorA' || _r.ctorName == 'CtorB'` filter against
+ * the per-info `matchedCtorNames` list — so a single shared walker
+ * pair can feed multiple between infos on the same Star (one walker
+ * pair drives both Imports and Usings infos on `HxModule.decls`).
+ * Tail feeds the next iteration's prev-side via the track-step;
+ * head feeds THIS iteration's curr-side at cascade fire. Either or
+ * both walker fields may be null: the absent direction zeros out
+ * its kind/path for transparent ctors (same as the unmatched bucket)
+ * while the wired direction's classification still drives the
+ * cascade. With both null, transparent ctors fall fully into the
+ * unmatched bucket.
+ *
+ * `transparentCtorNames` lists the wrapper ctor names (e.g.
+ * `Conditional`) collected from
+ * `@:fmt(blankLinesBetweenSameCtorTailTransparent(classifierField,
+ * ctorName, adapterOptField))` and
+ * `@:fmt(blankLinesBetweenSameCtorHeadTransparent(...))` metas with
+ * matching classifier field — merged across both directions, so any
+ * ctor that appears in EITHER meta becomes transparent. Validated
+ * arity ≥ 1 (first positional arg is the wrapper payload passed to
+ * the adapter pair).
+ */
+typedef BetweenCtorBlankInfo = {
+	classifierFieldName: String,
+	ctorPatterns: Array<BetweenCtorPattern>,
+	matchedCtorNames: Array<String>,
+	levelOptField: String,
+	countOptField: String,
+	adapterOptField: String,
+	tailAdapterOptField: Null<String>,
+	headAdapterOptField: Null<String>,
+	transparentCtorNames: Array<String>
+};
+
+/**
+ * One ESwitch case pattern with its matched/unmatched/transparent flag,
+ * used by `BetweenCtorBlankInfo`. Matched-ctor patterns bind `_v0` to
+ * the ctor's first positional arg so the cascade-emit phase can read
+ * the import / using path String at runtime. Transparent-ctor patterns
+ * also bind `_v0` (the wrapper payload, e.g. `HxConditionalDecl`) so
+ * the emit phase can pass it to the tail-leaf classifier adapter.
+ * Unmatched-ctor patterns use a wildcard for every arg.
+ *
+ * `isMatch` and `isTransparent` are mutually exclusive — at most one
+ * is `true`. `isMatch=true` → kind=1/path=_v0 case body. `isTransparent
+ * =true` → adapter-call case body filtered by per-info ctorNames.
+ * Both `false` → kind=0/path='' (unmatched fallback).
+ */
+typedef BetweenCtorPattern = { pattern: Expr, isMatch: Bool, isTransparent: Bool };
+
+/**
+ * ω-imports-using-transition — resolved data for
+ * `@:fmt(blankLinesOnTransitionAcross(classifierField, CtorA1,
+ * [CtorA2, …], '|', CtorB1, [CtorB2, …], countOptField))`. Produced by
+ * `WriterLowering.buildTransitionAcrossInfo` and spliced into
+ * `triviaEofStarExpr`'s per-element loop alongside the
+ * `BetweenCtorBlankInfo` family.
+ *
+ * Fires `opt.<countOptField>` blank lines when prev's tail-classified
+ * kind and curr's head-classified kind fall into DIFFERENT subsets
+ * (subset A vs subset B): `(prevTailA==1 && currHeadB==1) || (prevTailB
+ * ==1 && currHeadA==1) → fire`. Mirrors fork's `MarkEmptyLines.markImports`
+ * cross-kind emit (`prevInfo.isImport != newInfo.isImport →
+ * emit beforeUsing`).
+ *
+ * Transparent-ctor support is inherited from the same Star's
+ * `blankLinesBetweenSameCtor{Tail,Head}Transparent` metas — the merged
+ * `transparentByClassifier` map's adapter pair feeds both the betweenCtor
+ * and transitionAcross runtime classifiers, so a single pair of
+ * head/tail walkers covers all classifiers on the same Star.
+ *
+ * `ctorPatterns` carries one entry per enum variant in the classifier
+ * target. `subset` selects the case-body shape: 1 for subset A match,
+ * 2 for subset B match, 3 for transparent (calls head + tail adapters
+ * and sets each direction's A/B flags by ctorName lookup), 0 for
+ * unmatched (zero out all flags). Matched-ctor patterns bind `_v0` to
+ * the ctor's first positional arg (currently unused at this cascade,
+ * reserved for parity with `BetweenCtorBlankInfo` and possible future
+ * path-aware transition rules); transparent-ctor patterns also bind
+ * `_v0` (the wrapper payload passed to the adapter pair); unmatched
+ * patterns wildcard every arg.
+ */
+typedef TransitionAcrossInfo = {
+	classifierFieldName: String,
+	ctorPatterns: Array<TransitionAcrossPattern>,
+	matchedCtorNamesA: Array<String>,
+	matchedCtorNamesB: Array<String>,
+	countOptField: String,
+	tailAdapterOptField: Null<String>,
+	headAdapterOptField: Null<String>,
+	transparentCtorNames: Array<String>
+};
+
+/**
+ * One ESwitch case pattern with its subset tag for `TransitionAcrossInfo`.
+ * `subset`: 1 = matched in subset A, 2 = matched in subset B, 3 =
+ * transparent wrapper, 0 = unmatched.
+ */
+typedef TransitionAcrossPattern = { pattern: Expr, subset: Int };
+
+/**
+ * The two ctor subsets split out of the `@:fmt(blankLinesOnTransitionAcross)`
+ * arg list (around the `"|"` separator) after pre-loop validation, returned
+ * by `splitTransitionAcrossCtors`.
+ */
+typedef TransitionAcrossSplit = { final ctorNamesA: Array<String>; final ctorNamesB: Array<String>; };
+
+/**
+ * Parameters for `buildTransitionAcrossPatterns` — the classifier enum
+ * (Alt) plus the three ctor-name subsets that drive the per-branch
+ * pattern build. Bundled to keep the helper under the >5-scalar threshold.
+ */
+typedef TransitionAcrossPatternsCtx = {
+	final enumRule: ShapeNode;
+	final enumRuleName: String;
+	final ctorNamesA: Array<String>;
+	final ctorNamesB: Array<String>;
+	final transparentCtorNames: Array<String>;
+};
+
+/**
+ * Result of `buildTransitionAcrossPatterns` — the assembled switch
+ * patterns plus the ctor-name sets actually matched in each subset
+ * (used by the orchestrator's post-loop "not found in enum" validation).
+ */
+typedef TransitionAcrossPatterns = {
+	final patterns: Array<TransitionAcrossPattern>;
+	final matchedA: Array<String>;
+	final matchedB: Array<String>;
+	final transparentMatched: Array<String>;
+};
+
+/**
+ * Internal result type shared by `buildAfterCtorBlankInfo` and
+ * `buildBeforeCtorBlankInfo` — both metas accept the same arg shape
+ * and produce the same classify-switch + optField pair, then wrap it
+ * into their respective Info typedef. Centralising the resolution in
+ * one helper keeps shape-validation messages and the classifier-lookup
+ * path in sync between the two knobs.
+ */
+typedef CtorBlankResolution = { fieldName: String, cases: Array<Case>, optField: String };
+
+/**
+ * Shared setup locals bundled for the `lowerEnumStar` emission helpers
+ * (`lowerEnumStarTrivia` / `lowerEnumStarPlain`). Replaces a >5-scalar
+ * helper signature with one context struct.
+ */
+typedef EnumStarCtx = {
+	final branch: ShapeNode;
+	final argNames: Array<String>;
+	final argsAccess: Expr;
+	final elemFn: String;
+	final elemCall: Expr;
+	final leadText: String;
+	final trailText: String;
+	final sepText: Null<String>;
+	final starNode: ShapeNode;
+};
+/**
+ * Shared setup locals bundled for the `lowerPostfixStar` emission helpers
+ * (`lowerPostfixSepListCall` / `lowerPostfixPushElem` / `lowerPostfixTailExpr`).
+ * Replaces a >5-scalar helper signature with one context struct (mirrors
+ * `EnumStarCtx`).
+ */
+typedef PostfixStarCtx = {
+	final branch: ShapeNode;
+	final postfixOp: String;
+	final postfixClose: String;
+	final elemSep: String;
+	final isTriviaStar: Bool;
+	final argNames: Array<String>;
+	final tcExpr: Expr;
+	final callInsideOpen: Expr;
+	final callInsideClose: Expr;
+	final wrapRulesField: Null<String>;
+	final elemCall: Expr;
+	final relocateTrailingComments: Bool;
+};
+
+/**
+ * Spliced sub-Exprs shared by the two `wrapWithChainDispatch` chain-walk
+ * macro bodies (`wrapChainTriviaBody` / `wrapChainPlainBody`). Bundled to
+ * keep each body helper under the >5-scalar threshold.
+ */
+typedef ChainDispatchCtx = {
+	final argsListExpr: Expr;
+	final argDocsExpr: Expr;
+	final chainRulesExpr: Expr;
+	final writeIdent: Expr;
+	final precExpr: Expr;
+	final segCallLeadingBreakExpr: Expr;
+	final body: Expr;
+};
+
+/**
+ * Trivia-mode synth-ctor positional-arg writer bindings derived once in
+ * `lowerEnumStarTrivia` and threaded into both `triviaSepStarBuild` and
+ * `triviaBlockStarBuild`.
+ */
+typedef TriviaAltSlots = {
+	final trailCloseAccess: Null<Expr>;
+	final trailOpenAccess: Null<Expr>;
+	final trailBBAccess: Null<Expr>;
+	final trailLCAccess: Null<Expr>;
+	final sepTrailPresentAccess: Null<Expr>;
+};
+
+/**
+ * Shared trivia-Star setup locals bundled for the `emitTrivia*Star`
+ * dispatch helpers split out of `emitWriterStarField`. Replaces a >5-param
+ * helper signature with one context struct (mirrors the static `*StarCtx`
+ * structs the per-helper emit code consumes).
+ */
+typedef TriviaStarCtx = {
+	final starNode: ShapeNode;
+	final fieldAccess: Expr;
+	final elemFn: String;
+	final elemRefName: String;
+	final isFirstField: Bool;
+	final isLastField: Bool;
+	final typePath: String;
+	final openText: Null<String>;
+	final closeText: Null<String>;
+	final sepText: Null<String>;
+	final prevBareRefBody: Null<PrevBodyInfo>;
+	final prevTrailFieldName: Null<String>;
+	final fieldName: Null<String>;
+	final trailBBAccess: Null<Expr>;
+	final trailLCAccess: Null<Expr>;
+	final trailCloseAccess: Null<Expr>;
+	final trailOpenAccess: Null<Expr>;
+	final trailBAAccess: Null<Expr>;
+	final trailPresentAccess: Null<Expr>;
+};
+/**
+ * Shared plain-mode (non-`@:trivia`) Star setup locals bundled for the
+ * `emit*Star` plain dispatch helpers split out of `emitWriterStarField`.
+ * `elemCall` is the per-element write-call Expr threaded into every branch.
+ */
+typedef PlainStarCtx = {
+	final starNode: ShapeNode;
+	final fieldAccess: Expr;
+	final elemCall: Expr;
+	final elemFn: String;
+	final elemRefName: String;
+	final isFirstField: Bool;
+	final isLastField: Bool;
+	final isRaw: Bool;
+	final typePath: String;
+	final openText: Null<String>;
+	final closeText: Null<String>;
+	final sepText: Null<String>;
+	final prevBareRefBody: Null<PrevBodyInfo>;
+};
+/**
+ * The resolved per-call Star locals of `emitWriterStarField` bundled into one
+ * struct so the `emitTriviaStar` dispatch (and the plain-mode ctx build) take a
+ * single param instead of the full 13-scalar set.
+ */
+typedef StarFieldArgs = {
+	final starNode: ShapeNode;
+	final fieldAccess: Expr;
+	final elemFn: String;
+	final elemRefName: String;
+	final isFirstField: Bool;
+	final isLastField: Bool;
+	final isRaw: Bool;
+	final typePath: String;
+	final openText: Null<String>;
+	final closeText: Null<String>;
+	final sepText: Null<String>;
+	final prevBareRefBody: Null<PrevBodyInfo>;
+	final prevTrailFieldName: Null<String>;
+};
+/**
+ * The resolved `@:fmt` pad flags of `emitTryparsePadStar` bundled for the
+ * `emitTryparsePadEmit` emission helper, so it takes one param instead of the
+ * five-bool set.
+ */
+typedef PadFlags = {
+
+	final padLeading: Bool;
+	final padTrailing: Bool;
+	final lineLengthAwareSeps: Bool;
+	final sepBeforeOptActive: Bool;
+	final softFill: Bool;
+	final metaPolicy: Null<Expr>;
+	final metaNode: ShapeNode;
+	final rootTypePath: String;
+	final trivia: Bool;
+
+	/**
+	 * Under `@:sep(text, tailRelax, blockEnded(pred))`: the test that the element `_arr[_si]` ends its own statement
+	 * by AST shape, so no separator follows it. Null on a Star whose separator is not block-ended.
+	 */
+	final blockEndedPrior: Null<Expr>;
+
+};
+/**
+ * The three classify-info results resolved by
+ * `WriterLowering.buildTriviaBlockInfos`, bundled so the block-mode trivia
+ * dispatch takes one value instead of three separate locals.
+ */
+typedef TriviaBlockInfos = {
+	final interMemberInfo: Null<InterMemberClassifyInfo>;
+	final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>;
+	final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>;
+};
+/**
+ * The first / subsequent element separator overrides resolved by
+ * `WriterLowering.buildTryparseSepOverrides`, bundled so the tryparse dispatch
+ * takes one value instead of two separate locals.
+ */
+typedef TryparseSepOverrides = { final firstSepOverride: Null<Expr>; final subsequentSepOverride: Null<Expr>; };
+/**
+ * Synth-ctor positional-arg slot kind for `altSlotAccess`. Order MUST
+ * mirror `TriviaTypeSynth.buildEnumCtor`'s push order — the walker
+ * relies on declaration order to skip slots preceding the requested one.
+ */
+enum abstract AltSlot(Int) {
+	final CloseTrailing = 0;
+	final TrailOpt = 1;
+	final CaptureSource = 2;
+	final WrapOpenNewline = 4;
+	final ChainNewline = 6;
+	final ChainLeadComment = 7;
+	final PostfixOpSpace = 8;
+	final ChainAfterComment = 9;
+	final ChainRhsTrail = 10;
+	final TernaryCondTrail = 11;
+	final TernaryThenTrail = 12;
+	final ChainOwnComments = 13;
+	final WrapOpenTrailing = 14;
+	final KwAfter = 15;
+	final KwLeading = 16;
+}
+
 /**
  * Pass 3W of the macro pipeline — writer lowering.
  *
@@ -1760,1111 +2866,5 @@ class WriterLowering {
 		return AstPredLowering.predCallExpr(_predRootStatic, true, false, name, args);
 	}
 
-}
-
-/** Output of WriterLowering for one rule. */
-typedef WriterRule = {
-	fnName: String,
-	valueCT: ComplexType,
-	body: Expr,
-	hasCtxPrec: Bool,
-	isBinary: Bool
-};
-
-/**
- * Carries the runtime-access expression and enum type path of the
- * immediately preceding bare-Ref struct field whose body was wrapped
- * via `bodyPolicyWrap`. Consumed by `sameLineSeparator` (ψ₉) to emit
- * a shape-aware leading separator on the following `@:fmt(sameLine(...))`
- * keyword: block ctors respect the flag, non-block ctors force a
- * hardline.
- *
- * `headGlue` is the runtime Bool that says the `elseSwitch` knob glued this
- * body to its own head, so it closes in that head's column and the following
- * keyword may cuddle the close exactly as it cuddles a block's. Built where
- * the body is emitted, from that field's OWN meta and minus the captured
- * comment that declines the glue - the gap must never infer it from the
- * keyword field's meta, which says nothing about what the body did. Null on
- * every path with no such knob.
- */
-typedef PrevBodyInfo = { access: Expr, typePath: String, ?headGlue: Null<Expr> };
-/**
- * One struct field's per-iteration metadata, produced by `readFieldMeta` and
- * consumed by `lowerStruct`'s field-emit branches.
- */
-typedef FieldMeta = {
-	fieldName: String,
-	kwLead: Null<String>,
-	leadText: Null<String>,
-	trailText: Null<String>,
-	trailOptText: Null<String>,
-	isStar: Bool,
-	isOptional: Bool,
-	hasElseIf: Bool,
-	condWrapArgs: Null<Array<String>>,
-	isSpanStart: Bool,
-	hasCondWrapEnd: Bool,
-	hasCondWrap: Bool,
-	fieldAccess: Expr,
-	hasStructFieldTrailOptSlot: Bool,
-	structTrailOptAccess: Null<Expr>
-};
-/**
- * Per-classifier transparent-ctor accumulator used while reading
- * `@:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent)` args in
- * `readCascadeInfosFromStar`.
- */
-typedef TransparentEntry = { final ctors: Array<String>; var tailAdapter: Null<String>; var headAdapter: Null<String>; };
-/**
- * Shared inputs for `sameLineSeparatorShapeAware` — the shape-aware
- * tail extracted from `sameLineSeparator`. Bundles the >5 scalars the
- * tail needs into one context struct.
- */
-typedef SameLineShapeAwareCtx = {
-	final child: ShapeNode;
-	final prevBody: PrevBodyInfo;
-	final prevPadTrailing: Null<Expr>;
-	final flagBased: Expr;
-	final shapeAwareSwitch: Expr;
-};
-
-/**
- * ω-bodyPolicyWrap-struct-arg — option struct for `WriterLowering.bodyPolicyWrap`.
- *
- * Refactored from a 17-positional-arg signature (5 mandatory + 12 optional) into
- * a single struct-arg form so call sites are readable and forwarding-only fields
- * don't need long `null, null, null` runs. The 6 fields without `?` are required
- * (every call site passes them explicitly today); the rest are forwarding flags
- * for one of the runtime overrides documented in `bodyPolicyWrap`'s body.
- *
- * Field semantics — see `bodyPolicyWrap` body comments for full detail:
- *   - `flagName`            — name of the `BodyPolicy` field on `opt` driving the layout switch.
- *   - `exprFlagName`        — optional 2nd `BodyPolicy` field name (expr-position dispatch when `opt._inExprPosition`).
- *   - `writeCall`           — pre-built `Doc` expression that emits the body's bytes.
- *   - `bodyValueExpr`       — runtime access to the body value (used for `Type.enumConstructor` checks).
- *   - `bodyTypePath`        — fully qualified Haxe type path of the body's enum (for ctor-pattern lookup).
- *   - `hasElseIf`           — `true` for `HxIfExpr.thenBranch`-style sites that elide `{}` when followed by `if`.
- *   - `elseFieldName`       — name of the sibling `else`-side field on `value`; `null` when no peer.
- *   - `afterKwExpr`         — runtime access to captured after-kw trivia (`kwGapDoc` source).
- *   - `kwLeadingExpr`       — runtime access to captured kw-leading trivia.
-
- *   - `kwPolicyFlagName`    — name of a sibling `WhitespacePolicy` knob driving the `Same` separator (kw-policy mode).
- *   - `afterTrailExpr`      — runtime access to captured after-kw trailing comment (forces `Next` shape).
- *   - `beforeLeadingExpr`   — runtime access to the `Array<String>` of own-line comments captured before a
- *     bare-Ref body (forces `Next` shape; composes with `afterTrailExpr`).
- *   - `indentObjArgs`       — `(ctorName, optField, lcField)` triple for the `indentObjGuardedNext` rule.
- *   - `policyOverrides`     — list of `(ctorName, flagName)` pairs cascading the runtime body-policy override.
- *   - `bodyAllmanIndentArgs`— `(ctorName, optField)` pair for the multi-line Allman+indent override.
- *   - `widthAware`          — when `true`, the `Same` branch routes through `IfWidthExceeds` for line-fit-aware break.
- *   - `ifExprIndentArgs`    — `(ctorName, optField)` pair for the IfExpr-as-value RHS-style indent in flat path.
- *   - `fallbackFlagName`    — name of a fallback `BodyPolicy` flag activated when the sibling `else` is absent.
- *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies
- *     (ω-expression-if-with-blocks).
- *   - `singleLineFlagName`  — name of the `BodyPolicy` knob used when the value is NOT a control-flow / block ctor
- *     (ω-return-body-single-line).
- *   - `singleLineMultiCtors`— value ctor names treated as multi-line (keep the base policy); all other ctors read `singleLineFlagName`.
- */
-typedef WrapBodyOpts = {
-	flagName: String,
-	?exprFlagName: Null<String>,
-	writeCall: Expr,
-	bodyValueExpr: Expr,
-	bodyTypePath: String,
-	hasElseIf: Bool,
-	elseFieldName: Null<String>,
-	// `@:fmt(ifElseLadder)` on a statement-`if` branch body: inside an `if` / `else` chain the body's placement is
-	// `Next` (`WriterBodyPolicyLowering.buildIfElseLadderTest`). Null/false → byte-inert.
-	?ifElseLadder: Bool,
-	// `@:fmt(exprIfElseLadder)` beside it: the `if` is an expression, a statement only where `opt._statementFrame` makes it
-	// one (`WriterBodyPolicyLowering.ifElseLadderStatementTest`).
-	?exprIfElseLadder: Bool,
-	// The `else` field whose presence puts a ladder body in a chain, read by the ladder alone: an expression `if`'s
-	// `else` branch leaves `elseFieldName` null, so its FitLine layout keeps reading `fitLineIfWithElse` as before.
-	?ladderElseFieldName: String,
-	// `@:fmt(nestedIfElseLadder('<ifCtor>'))` beside `ifElseLadder` on a then-body: a body that is itself an `<ifCtor>`
-	// owning an `else` (read through the same `ladderElseFieldName`) joins the ladder too. Null → byte-inert.
-	?nestedIfCtor: String,
-	// `@:fmt(plainValueIf('<ifCtor>', '<thenField>', '<wrapperCtor>', '<plainCtor>'…))` beside `ifElseLadder`: a chain the
-	// ladder reaches only through `opt._statementFrame` in expression position keeps the knob's layout when every branch is
-	// a plain value (`LoopBodyShape.isPlainValueChain`). Null → byte-inert.
-	?plainValueIfArgs: Array<String>,
-	// `@:fmt(ifElseLadder('<ifCtor>', '<thenField>', '<bracedCtor>'…))`: a `switch` branch the `elseSwitch` knob would glue
-	// ladders instead when a branch of its chain is none of the braced ctors
-	// (`WriterBodyPolicyLowering.buildSwitchBranchLadderTest`). Null (the bare flag) → byte-inert.
-	?ladderBranchArgs: Array<String>,
-	// Beside it: the same question asked of the branches as the writer emits them, de-braced ones included
-	// (`WriterBraceSymmetryLowering.chainBareBranchTest`). Null → the branches are read as parsed.
-	?ladderWrittenBareExpr: Expr,
-	?afterKwExpr: Null<Expr>,
-	?kwLeadingExpr: Null<Expr>,
-	?kwPolicyFlagName: Null<String>,
-	?afterTrailExpr: Null<Expr>,
-	?beforeLeadingExpr: Null<Expr>,
-	?indentObjArgs: Array<String>,
-	?policyOverrides: Array<Array<String>>,
-	?bodyAllmanIndentArgs: Array<String>,
-	?widthAware: Bool,
-	?ifExprIndentArgs: Array<String>,
-	?fallbackFlagName: String,
-	?inlineBlockBodyArgs: Array<String>,
-	?singleLineFlagName: Null<String>,
-	?singleLineMultiCtors: Null<Array<String>>,
-	// ω-condwrap-fitline-construct-group — true when lowerStruct wraps the
-	// preceding condWrap cond + this body into ONE construct-level BodyGroup.
-	// The FitLine layout then becomes the classic soft line (`Line(' ')` +
-	// body under Nest): flat when the WHOLE construct fits the line, broken
-	// when it does not — which also fires when the condition committed to
-	// its wrapped shape (its hardlines fail the group's fitsFlat), matching
-	// the fork's "body on the same line iff the whole statement fits" rule.
-	// Replaces the body-only `_dinfle` probe whose post-`)` column reset
-	// glued `) return x;` after a wrapped condition. Null/false → byte-inert.
-	?condFitGroup: Bool,
-	// omega-try-brace-symmetry: `@:fmt(constructFitBody)` on a body field inside a
-	// `constructFitGroup`. Its `FitLine` layout becomes ONE soft line owned by that group, so the
-	// body sits on the header line while the whole construct fits and drops to its own indented line
-	// the moment the group breaks — the shape an `if` with an `else` produces, which is what a
-	// try/catch has to match: a `catch` always follows, exactly as an `else` does. Without it the
-	// FitLine body answers for its own line and GLUES, leaving `try body` on the head while the
-	// `catch` seam below it has already broken.
-	?constructFitBody: Bool,
-	// ω-fnbody-meta-block-glue — when true, the body-placement override
-	// detects an `ExprBody` whose inner expression is a metadata-wrapped
-	// BLOCK (`@:meta { … }`, runtime shape `ExprBody(MetaExpr(_, BlockExpr))`,
-	// nested metas unwrapped) and routes it to the glued `sameLayoutExpr`
-	// (` ` + body) instead of the policy switch. The metadata + block then
-	// stay cuddled to the signature line (`):Ret @:privateAccess {`) and the
-	// block's own internal Nest supplies the single body-indent step — the
-	// `functionBody`/`untypedBody` policy never breaks the metadata onto its
-	// own line and never adds the spurious extra Nest. Non-block metadata
-	// bodies (`@:meta return x`) and every non-meta body keep the policy
-	// dispatch unchanged. The ctor names (`ExprBody`/`MetaExpr`/`BlockExpr`)
-	// are passed declaratively from the grammar flag to keep the macro
-	// format-neutral. Null/false → byte-inert.
-	?metaBlockGlueArgs: Null<Array<String>>,
-	// ω-single-stmt-braces trailing-comment hoist: runtime Null<String> comment to
-	// fold after a de-braced body's `;` (hoistTrailingComment result). Null off the
-	// dropSingleStmtBraces path so buildBodyWriteCall skips the fold (byte-inert).
-	?ssbTrailCommentExpr: Null<Expr>,
-	// omega-arrow-value-if-reflow: true for a body field carrying
-	// `@:fmt(arrowValueIfReflowSite)` (HxIfExpr.thenBranch / elseBranch).
-	// The resolved BodyPolicy is then overridden to `Same` whenever the
-	// struct-level gate local `_aifReflow` is set at runtime, so every
-	// branch value glues to its own condition and the enclosing
-	// `Group` owns the one flat-vs-broken decision for the whole chain.
-	// False everywhere else -> byte-inert.
-	?arrowValueIfSite: Bool,
-	// omega-elseif-comment-reflow: true for the body field carrying
-	// `@:fmt(elseIfCommentReflow)` (HxIfStmt.elseBody). On the `elseIf`-ctor
-	// `Same` arm ONLY, and only when `opt.elseIfCommentReflow` is set and the
-	// kw-trivia slots hold exactly one `//` comment, the `kwGapDoc` separator
-	// is swapped for a plain space and that comment is spliced onto the nested
-	// `if`'s head line by `ElseIfCommentReflow.insertHeadTrail`. Every other
-	// arm, and a splice that finds no anchor, keep the untouched layout.
-	// False everywhere else -> byte-inert.
-	?elseIfCommentReflow: Bool,
-	// ω-loop-body-if-else-next: the three declarative names from
-	// `@:fmt(loopBodyIfElseNext('<optField>', '<ifCtor>', '<elseField>'))` on a
-	// LOOP body field (`HxForStmt.body` / `HxWhileStmt.body`). When
-	// `opt.<optField>` is set AND the body value is an `<ifCtor>` whose head
-	// carries a non-null `<elseField>`, the `FitLine` layout degrades to the
-	// `Next` one — the loop header keeps its own line and the whole `if`/`else`
-	// moves one indent step in, so the `else` lines up with its `if` instead of
-	// with the loop. An `if` WITHOUT an `else` keeps gluing: `for (x in xs) if
-	// (c) f(x);` is a deliberate idiom, which is why this cannot be a body
-	// policy (`forBody: next` moves that one too). Sibling of the
-	// `fitLineIfWithElse` escape one storey down, which asks about the placed
-	// node's own `else` field rather than about the CHILD's shape. Null → byte-inert.
-	?loopBodyIfElseArgs: Null<Array<String>>,
-	// The names of `@:fmt(statementIfBody(...))` on a function body field: a body that is such an `if` owning an `else`, with
-	// a brace-less branch, takes the `Next` placement whatever the body knob chose, as `loopBodyIfElseArgs` does for a loop
-	// body. Null → byte-inert.
-	?statementIfBodyArgs: Null<Array<String>>,
-	// omega-else-switch: the declarative names from
-	// `@:fmt(elseSwitch('<optField>', '<ctor>'…))` on a BRANCH body field - the
-	// `KeywordPlacement` knob field first, then one or more body ctors that
-	// spell a keyword-headed `switch` branch (`HxIfStmt` names both the
-	// parenthesised and the bare `switch` statement ctor, on `thenBody` and
-	// `elseBody` alike - the user's rule is that the two halves of one
-	// `if`/`else` are laid out the same way). The core macro
-	// therefore spells no grammar ctor of its own here, unlike the older
-	// `elseIf` flag beside it, which still hardcodes `IfStmt`/`IfExpr`.
-	// Null → byte-inert.
-	?elseSwitchArgs: Null<Array<String>>,
-	// omega-strict-fitline-body: the body ctors from
-	// `@:fmt(strictFitLineBody('<ctor>'…))` (`HxForExpr.body` /
-	// `HxForReif.body` / `HxWhileExpr.body`) whose glue may survive. Its `FitLine` layout keeps the
-	// glue only for a body that IS one of those keyword-led constructs AND
-	// whose head line ends at an open delimiter, so nothing below the head can
-	// render at the container indent; every other non-flat body goes to the
-	// next line one indent deeper. That is `BodyFit.strictFitLineLayout`,
-	// reached here by a field flag rather than by the case-body caller's
-	// control-flow verdict, whose refusal is unconditional. Null -> byte-inert.
-	?strictFitLineArgs: Null<Array<String>>,
-	// omega-bracket-body-glue: the runtime flag name from
-	// `@:fmt(bracketBodyGlueIfFlag('<flagName>'))` on a body field
-	// (`HxIfExpr.thenBranch` / `elseBranch`). When `opt.<flagName>` is set and
-	// the body's runtime ctor is one of the body type's BRACKET block ctors
-	// (`@:lead('[')` + `@:trail` + a single `Star`, i.e. `HxExpr.ArrayExpr` —
-	// an array literal AND an array comprehension), the resolved policy is
-	// substituted with `Same`, so the `[` hugs the branch head exactly as a
-	// `{` block body already does through the curly block-ctor arm. Folded
-	// into the policy SELECTOR rather than added as another outer arm for the
-	// JVM method-size reason `buildBodyCoreWrap` records. Null -> byte-inert.
-	?bracketBodyGlueArgs: Null<Array<String>>
-};
-
-/**
- * Runtime-built Exprs shared across the `bodyPolicyWrap` layout-primitive
- * helpers (`buildBodySameLayout` etc.): the resolved writeCall, the
- * `Same`-mode kw→body separator, the kw-policy inline separator, and
- * whether kw-trivia slots were forwarded.
- */
-typedef BodyWrapShared = {
-	final writeCall: Expr;
-	final sameSepNb: Expr;
-	final kwPolicyInlineSep: Null<Expr>;
-	final hasKwSlots: Bool;
-	// Does the body value open with `{` — a runtime ctor test over the body type's block ctors (`false` when it has none).
-	final isBlockBody: Expr;
-};
-
-/**
- * The resolved body-layout Exprs (one per `BodyPolicy` axis plus the
- * block-ctor variant) threaded into `bodyPolicyWrap`'s policy/outer dispatch.
- */
-typedef BodyLayouts = {
-
-	final sameLayoutExpr: Expr;
-	final nextLayoutExpr: Expr;
-	final blockLayoutExpr: Expr;
-	final fitExpr: Expr;
-
-	/**
-	 * omega-elseif-comment-reflow: the `Same` layout the `elseIf`-ctor arm
-	 * uses. Identical to `sameLayoutExpr` unless the field carries
-	 * `@:fmt(elseIfCommentReflow)`, in which case it is that layout behind a
-	 * runtime gate that first tries the glued form with the interposed
-	 * comment spliced onto the nested `if`'s head line.
-	 */
-	final elseIfSameLayoutExpr: Expr;
-
-};
-
-/**
- * ω-interblank — resolved data for `@:fmt(interMemberBlankLines(...))`.
- * Produced by `WriterLowering.buildInterMemberClassifyInfo` and spliced
- * into the `triviaBlockStarExpr` per-element loop to classify each
- * element as a var (kind `1`), a function (kind `2`), or other
- * (kind `0`). `classifyCases` is a ready-to-use `ESwitch` case list —
- * one entry per enum variant, exhaustive, no wildcard.
- *
- * `betweenVars` / `betweenFunctions` / `afterVars` are the runtime reads
- * of the Int knobs that gate each blank-line slot, resolved from the names
- * the grammar gives by `WriterTriviaStarDispatch.knobReads`.
- */
-typedef InterMemberClassifyInfo = {
-	classifierFieldName: String,
-	classifyCases: Array<Case>,
-	betweenVars: Expr,
-	betweenFunctions: Expr,
-	afterVars: Expr
-};
-
-/**
- * Parameters for `buildInterMemberClassifyCases` — the enum (Alt) rule
- * whose ctors map to classify kinds plus the var/fn ctor sets and the
- * optional `condCtor`/`bodyField` look-through config. Bundled to keep
- * the case-builder helper under the >5-scalar threshold.
- */
-typedef InterMemberCasesCtx = {
-	final enumRule: ShapeNode;
-	final varCtors: Array<String>;
-	final fnCtors: Array<String>;
-	final condCtor: Null<String>;
-	final bodyField: Null<String>;
-	final fieldName: String;
-};
-
-/**
- * ω-class-static-var-cascade — resolved data for
- * `@:fmt(staticVarSubdivision)` /
- * `@:fmt(staticVarSubdivision('<modifierField>', '<staticCtor>',
- * '<afterStaticVarsField>'))`. Produced by
- * `WriterLowering.buildStaticVarSubdivisionInfo`. When present alongside
- * `interMemberInfo`, `triviaBlockStarExpr` augments the per-iteration
- * `_currKind` switch with a sibling-Star scan: when the base switch
- * yields kind `1` (instance var) AND the `<modifierField>` Star contains
- * a `<staticCtor>`-ctor element, `_currKind` is promoted to `3` (static
- * var). The cascade then routes (1,3)/(3,1) transitions to the
- * `<afterStaticVars>` opt knob, leaving (1,1)/(3,3)/(2,2)/var↔fn
- * arms on the existing `betweenVars` / `betweenFunctions` / `afterVars`.
- *
- * ω-abstract-static-fn-cascade — the same sibling-Star scan also promotes
- * base kind `2` (function) to kind `4` (static function) on encountering
- * the `<staticCtor>` modifier. A (4,4) pair routes to the
- * `<betweenStaticFunctions>` opt knob; kinds `2` and `4` are both
- * treated as the "function" family for the var↔fn `afterVars` arm, and a
- * (2,4)/(4,2) static-difference falls back to `betweenFunctions` (fork's
- * `afterStaticFunctions` default equals `betweenFunctions` — `1` — so no
- * separate knob is modelled until a fixture distinguishes them).
- *
- * Class, abstract and macro-class members opt in; interface members do NOT — fork's
- * `InterfaceFieldsEmptyLinesConfig` lacks `afterStaticVars` and treats
- * static-var transitions as plain `betweenVars`. Skipping the meta on
- * `HxInterfaceDecl.members` keeps that behaviour without a separate
- * interface-side knob.
- */
-typedef StaticVarSubdivisionInfo = {
-	modifierFieldName: String,
-	staticCtorName: String,
-	afterStaticVars: Expr,
-	betweenStaticFunctions: Expr
-};
-
-/**
- * ω-cond-leading-doc-lookthrough — resolved data for
- * `@:fmt(beforeDocCondLookThrough('<classifierField>', '<condCtor>',
- * '<bodyField>'))`. Produced by
- * `WriterLowering.buildCondLeadingDocLookThroughInfo`. When present on a
- * trivia-bearing member Star that also opted into
- * `@:fmt(beforeDocCommentEmptyLines)`, `triviaBlockStarExpr`'s
- * `_currHasDocComment` scan looks THROUGH a preprocessor `#if … #end`
- * member (the `<condCtor>` ctor on the `<classifierField>` classifier enum)
- * to the FIRST element of its `<bodyField>` Star: when that inner member's
- * leading trivia starts with `/**`, the Conditional is treated as
- * doc-comment-led for the `beforeDocCommentEmptyLines` policy.
- *
- * Mirrors fork's `MarkEmptyLines`, which makes a conditional wrapper
- * transparent for doc-comment adjacency: `beforeDocCommentEmptyLines = None`
- * then strips the source blank between a field and a `#if` whose body opens
- * with a documented member (issue_188, the class-member analogue of the
- * issue_298 `#end → type-decl` transparency). The Conditional's OWN leading
- * never carries the inner doc-comment (the `/**` belongs to the inner
- * member, not the `#if` directive), so the plain `_t.leadingComments` scan
- * misses it without this look-through.
- *
- * `condCasePattern` is a ready-to-use `case <condCtor>(_inner):` pattern
- * binding the single ctor arg; `bodyFieldName` is the trivia Star field on
- * that arg whose `[0].leadingComments` is scanned.
- */
-typedef CondLeadingDocLookThroughInfo = { classifierFieldName: String, condCasePattern: Expr, bodyFieldName: String };
-
-/**
- * ω-after-package — resolved data for
- * `@:fmt(blankLinesAfterCtor(classifierField, CtorName1, [CtorName2, …], optField))`.
- * Produced by `WriterLowering.buildAfterCtorBlankInfo` and spliced
- * into `triviaEofStarExpr`'s per-element loop to override the source-
- * captured blank-line count when the previous element's classifier
- * matches one of the named ctors.
- *
- * `classifyCases` is a ready-to-use exhaustive `ESwitch` case list:
- * each enum variant present in the classifier target enum maps to
- * either kind `1` (matches one of the configured ctor names) or
- * kind `0` (no match). The runtime gate then reads
- * `_prevKindAfter == 1 ? opt.<optField> : (_t.blankBefore ? 1 : 0)` —
- * a hard override on match (the source-captured count is discarded),
- * source-driven otherwise. `0` strips an existing blank line, higher
- * counts insert that many regardless of source.
- *
- * `optField` is the `HxModuleWriteOptions` Int field name read at
- * runtime (e.g. `afterPackage`). The Star may carry multiple
- * `@:fmt(blankLinesAfterCtor(...))` entries (ω-after-typedecl) — each
- * produces its own `AfterCtorBlankInfo` with a disjoint ctor set and
- * its own `optField`. The runtime cascade walks them in source order:
- * the first matching kind-tracker wins, falling through to `beforeCtor`
- * infos and finally the source-driven `blankBefore` flag. Authors
- * order entries by priority (e.g. `afterPackage` before `afterTypeDecl`).
- */
-typedef AfterCtorBlankInfo = {
-	classifierFieldName: String,
-	classifyCases: Array<Case>,
-	optField: String,
-	// ω-after-conditional-block — when non-null, the after-ctor override is
-	// ADDITIONALLY gated on the previous element's tail-leaf classify
-	// returning null. The string names a generated typed
-	// `<payload> -> Null<{ctorName, path}>` leaf walker on the trivia
-	// predicate class (e.g. `AstPredsT.tailLeafKeepsBlankAfterConditional`
-	// — the meta arg is the function name), run on the matched ctor's
-	// first positional arg (`_v0`); a null result means the wrapper's
-	// tail leaf is NOT one of the recognised ctors (import / using), so
-	// the override fires. Non-null (tail IS an import / using) suppresses
-	// the override and the cascade falls through to the source-driven
-	// blank count. The matched classify case binds `_v0` so the walker
-	// has the payload. Null for every plain `blankLinesAfterCtor{,If}` —
-	// those keep the original bare `_prevKind == 1` gate, byte-identical.
-	// (The field name keeps its historical `OptField` suffix from the
-	// retired `WriteOptions` adapter era for diff locality; unlike
-	// `BetweenCtorBlankInfo.adapterOptField`, it no longer names an opt
-	// field.)
-	?tailAdapterOptField: Null<String>
-};
-
-/**
- * ω-before-package — resolved data for
- * `@:fmt(blankLinesAtHeadIfCtor(classifierField, CtorName1, [CtorName2, …],
- * optField))`. Produced by `WriterLowering.buildHeadCtorBlankInfo` and
- * spliced into the start of `triviaEofStarExpr` / `triviaTryparseStarExpr`
- * elseBody (after `_docs` init, before any element emit). Fires
- * `opt.<optField>` blank lines at the START of the Star body when the
- * FIRST element matches one of the named ctors. Source-driven blank
- * suppression / extension does not apply — this is a pure override
- * tied to the structural shape of the head element.
- *
- * Mirrors `AfterCtorBlankInfo` shape exactly (single-axis classify-
- * switch + opt field), with two semantic differences: (a) classifier is
- * read off `_arr[0].node.<field>`, not the per-element `_t.node`;
- * (b) consumed once at the head, not per-iteration. Multiple infos on
- * the same Star are walked in source order, first matching wins —
- * remaining infos are inert. Reusable for any future "blank lines at
- * head before ctor X" slice (e.g. file-leading-comment normalisation
- * before a typedef header) by pointing at a different opt field.
- *
- * No `Before` mirror is needed at the cascade level: head and "before
- * first" are the same boundary at a Star's head, and the source-driven
- * binary blank-line slot does not apply at index 0 either way.
- */
-typedef HeadCtorBlankInfo = { classifierFieldName: String, classifyCases: Array<Case>, optField: String };
-
-/**
- * ω-between-single-line-types — resolved data for
- * `@:fmt(blankLinesBetweenSameCtorIfNot(classifierField, predicateName,
- * CtorName1, [CtorName2, …], optField))`. Produced by
- * `WriterLowering.buildBetweenSameCtorBlankInfoIfNot` and spliced into
- * `triviaEofStarExpr` / `triviaTryparseStarExpr`'s per-element loop
- * alongside the after/before/between/transition families.
- *
- * Shape mirrors `AfterCtorBlankInfo` / `BeforeCtorBlankInfo` exactly
- * (single-axis classify-switch returning `1` for any matching ctor
- * whose `predicateName` evaluates to FALSE on its payload, `0`
- * otherwise) plus an opt-field name. The two diverge from after / before
- * at the cascade gate: this family fires when BOTH prev and curr have
- * kind=1 — i.e. consecutive pair where both ends fall in the matching
- * ctor set AND neither side matches the predicate.
- *
- * Used to drive haxe-formatter's `emptyLines.betweenSingleLineTypes`
- * semantic (1 blank between any pair of single-line typedef / class /
- * interface / abstract / enum decls). The predicate is grammar-derived
- * via `buildMultilinePredicate` (same one driving `afterMultilineDecl` /
- * `beforeMultilineDecl`) but with inverted polarity at kind-emission
- * time, so untagged / empty-body decls bucket into "single-line" and
- * non-empty type-body decls bucket into "multi-line" automatically.
- *
- * Cascade priority: after-ctor > between-ctor (path-aware) > transition
- * > between-same-ctor-if-not > before-ctor > source-driven. Sits below
- * the path-aware between family (Imports/Usings) because that family
- * also gates on both sides and would conflict otherwise; sits above
- * before-ctor so a single-line typedef → single-line typedef pair
- * still fires `betweenSingleLineTypes` even when an unrelated
- * before-ctor rule would otherwise apply.
- */
-typedef BetweenSameCtorIfNotInfo = { classifierFieldName: String, classifyCases: Array<Case>, optField: String };
-/**
- * Shared parser-context locals bundled for the `lowerEnumBranch`
- * per-shape emission helpers (ternary / infix / prefix / postfix /
- * kw-Ref). Replaces a >5-scalar helper signature with one context
- * struct.
- */
-typedef LowerBranchCtx = {
-	final branch: ShapeNode;
-	final typePath: String;
-	final writeFnName: String;
-	final hasPratt: Bool;
-	final argNames: Array<String>;
-	final precPostfix: Int;
-};
-
-/**
- * Aggregated cascade info arrays read off a `@:trivia` Star ShapeNode
- * by `WriterLowering.readCascadeInfosFromStar`. Each array is the
- * resolved form of one `@:fmt(blankLines*)` meta family on the same
- * Star — see the per-Info typedefs for shape semantics. Both the EOF
- * Star branch (`triviaEofStarExpr`) and the tryparse Star branch
- * (`triviaTryparseStarExpr`) consume this struct unchanged.
- *
- * `headCtorInfos` is the head-of-Star override family
- * (`blankLinesAtHeadIfCtor`); spliced once at the start of the Star
- * body. Empty array → no head emit, byte-identical to non-opt-in
- * consumers.
- */
-typedef CascadeInfos = {
-	afterCtorInfos: Array<AfterCtorBlankInfo>,
-	beforeCtorInfos: Array<BeforeCtorBlankInfo>,
-	betweenCtorInfos: Array<BetweenCtorBlankInfo>,
-	transitionAcrossInfos: Array<TransitionAcrossInfo>,
-	headCtorInfos: Array<HeadCtorBlankInfo>,
-	betweenSameCtorIfNotInfos: Array<BetweenSameCtorIfNotInfo>
-};
-
-/**
- * Output of `WriterCascadeLowering.buildCascadeEmit` — six Exprs ready to
- * splice into the consumer's runtime block. `initPrev` / `initCurr`
- * are single combined `EVars` statements (folded across all infos);
- * `currCompute` / `trackPrev` are `EBlock`s of pure assignments;
- * `blanksCount` is the cascade ternary with fallback
- * `(_t.blankBefore ? 1 : 0)`. `headEmit` is the head-of-Star block
- * (head cascade ternary + push loop, guarded on `_arr.length > 0`)
- * spliced once at the start of the Star body, after `_docs` init.
- * Empty info arrays produce `macro {}` placeholders so non-cascade-
- * bearing consumers stay byte-identical.
- * Shared setup locals bundled for the `triviaEofStarExpr` emission
- * helpers (`triviaEofWhileExpr` / `triviaEofElseBody` + the per-flag
- * leaf Expr builders). Replaces a >5-scalar helper signature with one
- * context struct.
-
- * The per-flag init / track / wrap leaf Exprs bundled for the orchestrator,
- * built once by `triviaBlockLeafExprs`. Replaces a multi-value return with one
- * struct.
- */
-typedef BlockLeafExprs = {
-	final initDocCommentExpr: Expr;
-	final initCurrDocCommentExpr: Expr;
-	final initPrevKindExpr: Expr;
-	final initCurrKindExpr: Expr;
-	final trackPrevKindExpr: Expr;
-	final trackDocCommentExpr: Expr;
-	final innerWrapExpr: Expr;
-	final extraInnerTrailBlankExpr: Expr;
-};
-typedef EofStarCtx = {
-
-	final fieldAccess: Expr;
-	final triviaElemCall: Expr;
-
-	/**
-	 * ω-measured-multiline-decl — the Star carries
-	 * `@:fmt(measuredMultilineDecls)`, so the loop pre-builds every element's
-	 * Doc into `_elemDocs` and its rendered-multiline verdict into
-	 * `_measMulti`, which the cascade's `multiline` predicate reads.
-	 */
-	final measuredMultiline: Bool;
-
-	/** Per-element write call with the comprehension binder `_e` as receiver — feeds the `_elemDocs` pre-pass. */
-	final measuredElemCall: Expr;
-	final trailBB: Expr;
-	final trailLC: Expr;
-	final emit: CascadeEmit;
-	final pos: Position;
-	final lineCommentTrailBlank: Bool;
-	final lineCommentLedAddBlank: Bool;
-	final afterFileHeaderCommentBlanks: Bool;
-	final betweenMultilineCommentsBlanks: Bool;
-
-};
-/**
- * Output bundle of `triviaSepTypedefBlanksExprs` — the seven spliced Expr
- * fragments the sep-Star force-multi loop and `_sepCtx` consume.
- */
-typedef SepStarBlanks = {
-	final keepCurlyBeginExpr: Expr;
-	final keepCurlyEndExpr: Expr;
-	final typedefBeginExpr: Expr;
-	final typedefEndExpr: Expr;
-	final typedefBetweenExpr: Expr;
-	final blankBeforeExpr: Expr;
-	final initCurrDocCommentExpr: Expr;
-};
-/**
- * Output bundle of `triviaSepKeepCurlyExprs` — the five `typedefBodyBlanks`-
- * gated keepCurly / typedef-RHS blank-insert Expr fragments.
- */
-typedef SepStarKeepCurly = {
-	final keepCurlyBeginExpr: Expr;
-	final keepCurlyEndExpr: Expr;
-	final typedefBeginExpr: Expr;
-	final typedefEndExpr: Expr;
-	final typedefBetweenExpr: Expr;
-};
-/**
- * Output bundle of `triviaSepKeepCurlyOpenClose` — the open/close-side
- * Keep-mode curly-blank Expr fragments.
- */
-typedef SepStarKeepCurlyOC = { final keepCurlyBeginExpr: Expr; final keepCurlyEndExpr: Expr; };
-/**
- * Output bundle of `triviaSepTypedefBlankInserts` — the typedef-RHS forced
- * blank-insert Expr fragments (begin/end/between).
- */
-typedef SepStarTypedefInserts = { final typedefBeginExpr: Expr; final typedefEndExpr: Expr; final typedefBetweenExpr: Expr; };
-
-/**
- * The second wrap cascade a sep-Star can name, and the runtime test that
- * chooses it — `@:fmt(mapWrapRules('<field>'))` on `HxExpr.ArrayExpr`, where a
- * MAP literal reads `wrapping.mapWrap` and everything else `wrapping.arrayWrap`.
- *
- * The two travel together because neither is usable alone: the field name
- * without the test would pick a cascade for every list, and the test without
- * the name has nothing to pick. `isMapLiteralExpr` is a spliced `Expr` rather than a predicate name
- * because the class it calls depends on the build (`AstPreds` plain, `AstPredsT` trivia), which only the
- * lowering that owns `_shape` and `_ctx` can resolve — `WriterLowering.mapWrapFor` builds both halves.
- */
-typedef SepStarMapWrap = { final field: String; final isMapLiteralExpr: Expr; };
-/**
- * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /
- * force-exceeds / force-mode / keep-matrix Expr fragments the sep-Star tail
- * consumes (`_sepCtx`'s appendTrailingComma + keepMatrix, and
- * `WrapList.emit`'s forceExceeds/forceMode/flatTrailingComma args).
- */
-typedef SepStarTrailExprs = {
-	final forceExceedsExpr: Expr;
-	final appendTrailingCommaExpr: Expr;
-	final flatTrailingCommaExpr: Expr;
-	final forceModeExpr: Expr;
-};
-/**
- * Output bundle of `triviaSepCheckExprs` — the ignore/noWrap runtime
- * checks plus the leftCurly/rightCurly placement Docs the sep-Star tail
- * consumes (`_ignoreEmit`/`_noWrapFlat`, `_sepCtx`'s lead/trail
- * Docs, and `WrapList.emit`'s lead-flat/lead-break/trail-break args).
- */
-typedef SepStarChecks = {
-	final ignoreCheckExpr: Expr;
-	final noWrapFlatCheckExpr: Expr;
-	final triviaLeadDoc: Expr;
-	final wrapLeadFlatDoc: Expr;
-	final wrapLeadBreakDoc: Expr;
-	final wrapTrailBreakDoc: Expr;
-	final triviaTrailDoc: Expr;
-};
-typedef CascadeEmit = {
-	initPrev: Expr,
-	initCurr: Expr,
-	currCompute: Expr,
-	trackPrev: Expr,
-	blanksCount: Expr,
-	headEmit: Expr
-};
-
-/**
- * Mutable accumulators threaded through the `buildCascadeEmit` per-axis
- * compute helpers (`emitAfterCompute` etc.). Each helper appends its
- * `prev`/`curr` tracker var decls, its per-element compute statements, and
- * its prev-tracking assignments. Bundled so the helpers take one
- * destination param (the "pass the destination" pattern) instead of four.
- */
-typedef CascadeAccum = {
-	final prevVars: Array<Var>;
-	final currVars: Array<Var>;
-	final currCompute: Array<Expr>;
-	final trackPrev: Array<Expr>;
-};
-
-/**
- * ω-imports-using-blank — resolved data for
- * `@:fmt(blankLinesBeforeCtor(classifierField, CtorName1, [CtorName2, …], optField))`.
- * Produced by `WriterLowering.buildBeforeCtorBlankInfo` and spliced into
- * `triviaEofStarExpr`'s per-element loop. Shape mirrors
- * `AfterCtorBlankInfo` exactly — same single-axis classify-switch
- * (`1` for any matching ctor, `0` otherwise) plus an opt-field name —
- * the two diverge only at the runtime gate. After-ctor's gate fires on
- * `_prevKindAfter == 1`; before-ctor's gate fires on
- * `_currKindBefore == 1 && _prevKindBefore != 1`, which gives the
- * "first X after a non-X" transition semantics (e.g. force a blank
- * line at `import → using`, no force between consecutive `using` decls).
- *
- * Cascade priority in `triviaEofStarExpr`: after-ctor entries (in
- * source order) win first, then before-ctor entries (in source order,
- * each gated on `prev != curr` for that entry's set), then source-
- * driven `blankBefore`. A single decl pair is governed by at most one
- * override; no double-counting. Multiple before-ctor entries on the
- * same Star are supported (ω-after-typedecl) — same shape as
- * `AfterCtorBlankInfo`, evaluated independently per entry.
- */
-typedef BeforeCtorBlankInfo = {
-	classifierFieldName: String,
-	classifyCases: Array<Case>,
-	optField: String,
-	// ω-before-multiline-prev-not — when non-null, a second binary
-	// classify-switch (kind=1 if the element's classifier ctor is in the
-	// excluded-prev set, e.g. `Conditional`). The before-ctor cascade
-	// ternary gains an extra `&& _prevKindPrevExcl != 1` guard so the
-	// override is suppressed when the previous sibling matched an excluded
-	// ctor — the cascade then falls through to the source-driven
-	// `_t.blankBefore` count. Closes the spurious-blank-after-`#end` bug
-	// (issue_298): a cond-comp `#if … #end` immediately before a multiline
-	// class no longer forces `beforeMultilineDecl` regardless of source.
-	// Null for the plain `blankLinesBeforeCtor{,If}` builders → no extra
-	// tracker, byte-identical cascade.
-	?prevExcludeCases: Null<Array<Case>>
-};
-
-/**
- * ω-imports-using-between — resolved data for
- * `@:fmt(blankLinesBetweenSameCtorByLevel(classifierField, CtorName1,
- * [CtorName2, …], levelOptField, countOptField, adapterOptField))`.
- * Produced by `WriterLowering.buildBetweenCtorBlankInfo` and spliced
- * into `triviaEofStarExpr`'s per-element loop alongside the
- * after/before-ctor families. Shape diverges from those two: the
- * runtime tracks both a kind flag (1 for any matching ctor, 0 otherwise)
- * AND a path String (first ctor arg of the matched ctor, e.g. the
- * `HxTypeName`/`HxWildPath` payload of `ImportDecl(path)`). The cascade
- * ternary fires `opt.<countOptField>` blank lines when both prev and
- * curr match the same set AND
- * `opt.<adapterOptField>(prevPath, currPath, opt.<levelOptField>)`
- * returns `true`.
- *
- * `ctorPatterns` carries one entry per enum variant in the classifier
- * target — `pattern` is a ready-to-use ESwitch case pattern (matched
- * ctors bind their first positional arg as `_v0`; unmatched ctors use
- * a wildcard for every arg). The case body is generated at cascade-
- * emit time inside `triviaEofStarExpr` because it needs to reference
- * the per-info `_currTailKindBetween<i>` / `_currTailPathBetween<i>` ident
- * names, which depend on the info's index in the cascade.
- *
- * `adapterOptField` names a function-typed field on `WriteOptions`
- * (e.g. `betweenImportsPathDiffers:Null<(String, String, Int) -> Bool>`)
- * default-wired by the grammar plugin. Engine emits a pure
- * `opt.<adapterOptField>(...)` EField call — no FQN parsing, no
- * grammar-package coupling baked into the macro core. Cascade
- * priority: after-ctor entries (outermost) > between entries >
- * before-ctor entries > source-driven `blankBefore`.
- *
- * `tailAdapterOptField` (ω-cond-comp-tail-transparency) and
- * `headAdapterOptField` (ω-imports-using-transition) name generated
- * typed leaf walkers on the trivia predicate class
- * (e.g. `AstPredsT.betweenImportsTailLeafClassify` /
- * `betweenImportsHeadLeafClassify`, each
- * `<payload> -> Null<{ctorName, path}>` — the meta arg is the
- * function name; the `OptField` suffix survives from the retired
- * `WriteOptions` adapter era, unlike the sibling `adapterOptField`
- * which still names a real opt field). When non-null, ctors
- * named in `transparentCtorNames` are routed through the matching
- * direction's walker at runtime: tail walks the wrapper payload (e.g.
- * `HxConditionalDecl`) to its LAST-branch / LAST-element leaf decl,
- * head walks to FIRST-branch / FIRST-element. Each walker returns
- * `{ctorName, path}`; the engine runs a runtime
- * `_r.ctorName == 'CtorA' || _r.ctorName == 'CtorB'` filter against
- * the per-info `matchedCtorNames` list — so a single shared walker
- * pair can feed multiple between infos on the same Star (one walker
- * pair drives both Imports and Usings infos on `HxModule.decls`).
- * Tail feeds the next iteration's prev-side via the track-step;
- * head feeds THIS iteration's curr-side at cascade fire. Either or
- * both walker fields may be null: the absent direction zeros out
- * its kind/path for transparent ctors (same as the unmatched bucket)
- * while the wired direction's classification still drives the
- * cascade. With both null, transparent ctors fall fully into the
- * unmatched bucket.
- *
- * `transparentCtorNames` lists the wrapper ctor names (e.g.
- * `Conditional`) collected from
- * `@:fmt(blankLinesBetweenSameCtorTailTransparent(classifierField,
- * ctorName, adapterOptField))` and
- * `@:fmt(blankLinesBetweenSameCtorHeadTransparent(...))` metas with
- * matching classifier field — merged across both directions, so any
- * ctor that appears in EITHER meta becomes transparent. Validated
- * arity ≥ 1 (first positional arg is the wrapper payload passed to
- * the adapter pair).
- */
-typedef BetweenCtorBlankInfo = {
-	classifierFieldName: String,
-	ctorPatterns: Array<BetweenCtorPattern>,
-	matchedCtorNames: Array<String>,
-	levelOptField: String,
-	countOptField: String,
-	adapterOptField: String,
-	tailAdapterOptField: Null<String>,
-	headAdapterOptField: Null<String>,
-	transparentCtorNames: Array<String>
-};
-
-/**
- * One ESwitch case pattern with its matched/unmatched/transparent flag,
- * used by `BetweenCtorBlankInfo`. Matched-ctor patterns bind `_v0` to
- * the ctor's first positional arg so the cascade-emit phase can read
- * the import / using path String at runtime. Transparent-ctor patterns
- * also bind `_v0` (the wrapper payload, e.g. `HxConditionalDecl`) so
- * the emit phase can pass it to the tail-leaf classifier adapter.
- * Unmatched-ctor patterns use a wildcard for every arg.
- *
- * `isMatch` and `isTransparent` are mutually exclusive — at most one
- * is `true`. `isMatch=true` → kind=1/path=_v0 case body. `isTransparent
- * =true` → adapter-call case body filtered by per-info ctorNames.
- * Both `false` → kind=0/path='' (unmatched fallback).
- */
-typedef BetweenCtorPattern = { pattern: Expr, isMatch: Bool, isTransparent: Bool };
-
-/**
- * ω-imports-using-transition — resolved data for
- * `@:fmt(blankLinesOnTransitionAcross(classifierField, CtorA1,
- * [CtorA2, …], '|', CtorB1, [CtorB2, …], countOptField))`. Produced by
- * `WriterLowering.buildTransitionAcrossInfo` and spliced into
- * `triviaEofStarExpr`'s per-element loop alongside the
- * `BetweenCtorBlankInfo` family.
- *
- * Fires `opt.<countOptField>` blank lines when prev's tail-classified
- * kind and curr's head-classified kind fall into DIFFERENT subsets
- * (subset A vs subset B): `(prevTailA==1 && currHeadB==1) || (prevTailB
- * ==1 && currHeadA==1) → fire`. Mirrors fork's `MarkEmptyLines.markImports`
- * cross-kind emit (`prevInfo.isImport != newInfo.isImport →
- * emit beforeUsing`).
- *
- * Transparent-ctor support is inherited from the same Star's
- * `blankLinesBetweenSameCtor{Tail,Head}Transparent` metas — the merged
- * `transparentByClassifier` map's adapter pair feeds both the betweenCtor
- * and transitionAcross runtime classifiers, so a single pair of
- * head/tail walkers covers all classifiers on the same Star.
- *
- * `ctorPatterns` carries one entry per enum variant in the classifier
- * target. `subset` selects the case-body shape: 1 for subset A match,
- * 2 for subset B match, 3 for transparent (calls head + tail adapters
- * and sets each direction's A/B flags by ctorName lookup), 0 for
- * unmatched (zero out all flags). Matched-ctor patterns bind `_v0` to
- * the ctor's first positional arg (currently unused at this cascade,
- * reserved for parity with `BetweenCtorBlankInfo` and possible future
- * path-aware transition rules); transparent-ctor patterns also bind
- * `_v0` (the wrapper payload passed to the adapter pair); unmatched
- * patterns wildcard every arg.
- */
-typedef TransitionAcrossInfo = {
-	classifierFieldName: String,
-	ctorPatterns: Array<TransitionAcrossPattern>,
-	matchedCtorNamesA: Array<String>,
-	matchedCtorNamesB: Array<String>,
-	countOptField: String,
-	tailAdapterOptField: Null<String>,
-	headAdapterOptField: Null<String>,
-	transparentCtorNames: Array<String>
-};
-
-/**
- * One ESwitch case pattern with its subset tag for `TransitionAcrossInfo`.
- * `subset`: 1 = matched in subset A, 2 = matched in subset B, 3 =
- * transparent wrapper, 0 = unmatched.
- */
-typedef TransitionAcrossPattern = { pattern: Expr, subset: Int };
-
-/**
- * The two ctor subsets split out of the `@:fmt(blankLinesOnTransitionAcross)`
- * arg list (around the `"|"` separator) after pre-loop validation, returned
- * by `splitTransitionAcrossCtors`.
- */
-typedef TransitionAcrossSplit = { final ctorNamesA: Array<String>; final ctorNamesB: Array<String>; };
-
-/**
- * Parameters for `buildTransitionAcrossPatterns` — the classifier enum
- * (Alt) plus the three ctor-name subsets that drive the per-branch
- * pattern build. Bundled to keep the helper under the >5-scalar threshold.
- */
-typedef TransitionAcrossPatternsCtx = {
-	final enumRule: ShapeNode;
-	final enumRuleName: String;
-	final ctorNamesA: Array<String>;
-	final ctorNamesB: Array<String>;
-	final transparentCtorNames: Array<String>;
-};
-
-/**
- * Result of `buildTransitionAcrossPatterns` — the assembled switch
- * patterns plus the ctor-name sets actually matched in each subset
- * (used by the orchestrator's post-loop "not found in enum" validation).
- */
-typedef TransitionAcrossPatterns = {
-	final patterns: Array<TransitionAcrossPattern>;
-	final matchedA: Array<String>;
-	final matchedB: Array<String>;
-	final transparentMatched: Array<String>;
-};
-
-/**
- * Internal result type shared by `buildAfterCtorBlankInfo` and
- * `buildBeforeCtorBlankInfo` — both metas accept the same arg shape
- * and produce the same classify-switch + optField pair, then wrap it
- * into their respective Info typedef. Centralising the resolution in
- * one helper keeps shape-validation messages and the classifier-lookup
- * path in sync between the two knobs.
- */
-typedef CtorBlankResolution = { fieldName: String, cases: Array<Case>, optField: String };
-/**
- * Shared setup locals bundled for the `lowerEnumStar` emission helpers
- * (`lowerEnumStarTrivia` / `lowerEnumStarPlain`). Replaces a >5-scalar
- * helper signature with one context struct.
- */
-typedef EnumStarCtx = {
-	final branch: ShapeNode;
-	final argNames: Array<String>;
-	final argsAccess: Expr;
-	final elemFn: String;
-	final elemCall: Expr;
-	final leadText: String;
-	final trailText: String;
-	final sepText: Null<String>;
-	final starNode: ShapeNode;
-};
-
-/**
- * Shared setup locals bundled for the `lowerPostfixStar` emission helpers
- * (`lowerPostfixSepListCall` / `lowerPostfixPushElem` / `lowerPostfixTailExpr`).
- * Replaces a >5-scalar helper signature with one context struct (mirrors
- * `EnumStarCtx`).
- */
-typedef PostfixStarCtx = {
-	final branch: ShapeNode;
-	final postfixOp: String;
-	final postfixClose: String;
-	final elemSep: String;
-	final isTriviaStar: Bool;
-	final argNames: Array<String>;
-	final tcExpr: Expr;
-	final callInsideOpen: Expr;
-	final callInsideClose: Expr;
-	final wrapRulesField: Null<String>;
-	final elemCall: Expr;
-	final relocateTrailingComments: Bool;
-};
-
-/**
- * Spliced sub-Exprs shared by the two `wrapWithChainDispatch` chain-walk
- * macro bodies (`wrapChainTriviaBody` / `wrapChainPlainBody`). Bundled to
- * keep each body helper under the >5-scalar threshold.
- */
-typedef ChainDispatchCtx = {
-	final argsListExpr: Expr;
-	final argDocsExpr: Expr;
-	final chainRulesExpr: Expr;
-	final writeIdent: Expr;
-	final precExpr: Expr;
-	final segCallLeadingBreakExpr: Expr;
-	final body: Expr;
-};
-
-/**
- * Trivia-mode synth-ctor positional-arg writer bindings derived once in
- * `lowerEnumStarTrivia` and threaded into both `triviaSepStarBuild` and
- * `triviaBlockStarBuild`.
- */
-typedef TriviaAltSlots = {
-	final trailCloseAccess: Null<Expr>;
-	final trailOpenAccess: Null<Expr>;
-	final trailBBAccess: Null<Expr>;
-	final trailLCAccess: Null<Expr>;
-	final sepTrailPresentAccess: Null<Expr>;
-};
-/**
- * Shared trivia-Star setup locals bundled for the `emitTrivia*Star`
- * dispatch helpers split out of `emitWriterStarField`. Replaces a >5-param
- * helper signature with one context struct (mirrors the static `*StarCtx`
- * structs the per-helper emit code consumes).
- */
-typedef TriviaStarCtx = {
-	final starNode: ShapeNode;
-	final fieldAccess: Expr;
-	final elemFn: String;
-	final elemRefName: String;
-	final isFirstField: Bool;
-	final isLastField: Bool;
-	final typePath: String;
-	final openText: Null<String>;
-	final closeText: Null<String>;
-	final sepText: Null<String>;
-	final prevBareRefBody: Null<PrevBodyInfo>;
-	final prevTrailFieldName: Null<String>;
-	final fieldName: Null<String>;
-	final trailBBAccess: Null<Expr>;
-	final trailLCAccess: Null<Expr>;
-	final trailCloseAccess: Null<Expr>;
-	final trailOpenAccess: Null<Expr>;
-	final trailBAAccess: Null<Expr>;
-	final trailPresentAccess: Null<Expr>;
-};
-/**
- * Shared plain-mode (non-`@:trivia`) Star setup locals bundled for the
- * `emit*Star` plain dispatch helpers split out of `emitWriterStarField`.
- * `elemCall` is the per-element write-call Expr threaded into every branch.
- */
-typedef PlainStarCtx = {
-	final starNode: ShapeNode;
-	final fieldAccess: Expr;
-	final elemCall: Expr;
-	final elemFn: String;
-	final elemRefName: String;
-	final isFirstField: Bool;
-	final isLastField: Bool;
-	final isRaw: Bool;
-	final typePath: String;
-	final openText: Null<String>;
-	final closeText: Null<String>;
-	final sepText: Null<String>;
-	final prevBareRefBody: Null<PrevBodyInfo>;
-};
-/**
- * The resolved per-call Star locals of `emitWriterStarField` bundled into one
- * struct so the `emitTriviaStar` dispatch (and the plain-mode ctx build) take a
- * single param instead of the full 13-scalar set.
- */
-typedef StarFieldArgs = {
-	final starNode: ShapeNode;
-	final fieldAccess: Expr;
-	final elemFn: String;
-	final elemRefName: String;
-	final isFirstField: Bool;
-	final isLastField: Bool;
-	final isRaw: Bool;
-	final typePath: String;
-	final openText: Null<String>;
-	final closeText: Null<String>;
-	final sepText: Null<String>;
-	final prevBareRefBody: Null<PrevBodyInfo>;
-	final prevTrailFieldName: Null<String>;
-};
-/**
- * The resolved `@:fmt` pad flags of `emitTryparsePadStar` bundled for the
- * `emitTryparsePadEmit` emission helper, so it takes one param instead of the
- * five-bool set.
- */
-typedef PadFlags = {
-
-	final padLeading: Bool;
-	final padTrailing: Bool;
-	final lineLengthAwareSeps: Bool;
-	final sepBeforeOptActive: Bool;
-	final softFill: Bool;
-	final metaPolicy: Null<Expr>;
-	final metaNode: ShapeNode;
-	final rootTypePath: String;
-	final trivia: Bool;
-
-	/**
-	 * Under `@:sep(text, tailRelax, blockEnded(pred))`: the test that the element `_arr[_si]` ends its own statement
-	 * by AST shape, so no separator follows it. Null on a Star whose separator is not block-ended.
-	 */
-	final blockEndedPrior: Null<Expr>;
-
-};
-/**
- * The three classify-info results resolved by
- * `WriterLowering.buildTriviaBlockInfos`, bundled so the block-mode trivia
- * dispatch takes one value instead of three separate locals.
- */
-typedef TriviaBlockInfos = {
-	final interMemberInfo: Null<InterMemberClassifyInfo>;
-	final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>;
-	final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>;
-};
-/**
- * The first / subsequent element separator overrides resolved by
- * `WriterLowering.buildTryparseSepOverrides`, bundled so the tryparse dispatch
- * takes one value instead of two separate locals.
- */
-typedef TryparseSepOverrides = { final firstSepOverride: Null<Expr>; final subsequentSepOverride: Null<Expr>; };
-
-/**
- * Synth-ctor positional-arg slot kind for `altSlotAccess`. Order MUST
- * mirror `TriviaTypeSynth.buildEnumCtor`'s push order — the walker
- * relies on declaration order to skip slots preceding the requested one.
- */
-enum abstract AltSlot(Int) {
-	final CloseTrailing = 0;
-	final TrailOpt = 1;
-	final CaptureSource = 2;
-	final WrapOpenNewline = 4;
-	final ChainNewline = 6;
-	final ChainLeadComment = 7;
-	final PostfixOpSpace = 8;
-	final ChainAfterComment = 9;
-	final ChainRhsTrail = 10;
-	final TernaryCondTrail = 11;
-	final TernaryThenTrail = 12;
-	final ChainOwnComments = 13;
-	final WrapOpenTrailing = 14;
-	final KwAfter = 15;
-	final KwLeading = 16;
 }
 #end

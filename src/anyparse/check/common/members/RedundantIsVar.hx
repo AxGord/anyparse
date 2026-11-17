@@ -16,6 +16,40 @@ import anyparse.query.MemberWriteScan;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 
+/** One `@:isVar` property that cleared the per-member shape gates. */
+private typedef Candidate = {
+
+	/** The property's name — the token every scope scan asks about. */
+	final name: String;
+
+	/** The `@:isVar` metadata's own span, which the finding reports and `fix` deletes. */
+	final meta: Span;
+
+};
+
+/** The run-wide evidence every candidate is judged against. */
+private typedef Ctx = {
+
+	/** The grammar plugin, for parsing scope files. */
+	final plugin: GrammarPlugin;
+
+	/** The grammar's reference shape, resolved once per run. */
+	final shape: RefShape;
+
+	/** Report UNION the resolution sources — every file that may reach the field. */
+	final scope: Array<{ file: String, source: String }>;
+
+	/** Every string in scope a member name may be reached by at runtime. */
+	final reflection: ReflectionSurface;
+
+	/** Whether the fix runs under a compiler oracle — a macro-built owner's finding is declined without one. */
+	final oracleVerified: Bool;
+
+	/** The grammar's string-fold support, which names the target intrinsics; null when it exposes none. */
+	final fold: Null<StringFoldSupport>;
+
+};
+
 /**
  * Flags an `@:isVar` whose physical storage is DEAD and deletes the metadata. `Info`, DEFAULT OFF.
  *
@@ -184,37 +218,3 @@ final class RedundantIsVar extends RuleBase implements DefaultOff implements Ris
 	}
 
 }
-
-/** One `@:isVar` property that cleared the per-member shape gates. */
-private typedef Candidate = {
-
-	/** The property's name — the token every scope scan asks about. */
-	final name: String;
-
-	/** The `@:isVar` metadata's own span, which the finding reports and `fix` deletes. */
-	final meta: Span;
-
-};
-
-/** The run-wide evidence every candidate is judged against. */
-private typedef Ctx = {
-
-	/** The grammar plugin, for parsing scope files. */
-	final plugin: GrammarPlugin;
-
-	/** The grammar's reference shape, resolved once per run. */
-	final shape: RefShape;
-
-	/** Report UNION the resolution sources — every file that may reach the field. */
-	final scope: Array<{ file: String, source: String }>;
-
-	/** Every string in scope a member name may be reached by at runtime. */
-	final reflection: ReflectionSurface;
-
-	/** Whether the fix runs under a compiler oracle — a macro-built owner's finding is declined without one. */
-	final oracleVerified: Bool;
-
-	/** The grammar's string-fold support, which names the target intrinsics; null when it exposes none. */
-	final fold: Null<StringFoldSupport>;
-
-};

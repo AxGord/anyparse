@@ -161,6 +161,62 @@ typedef RuleEdits = {
 };
 
 /**
+ * What `apq fmt` decided, with the summary as DATA.
+ *
+ * `summary` is empty for every exit taken before a file was read (a usage
+ * error, an empty match, a lang with no writer) — those already printed their
+ * own sentence, and a count line about a run that never counted anything would
+ * be the family's own defect.
+ */
+typedef FmtRunResult = { var exit: Int; var summary: String; };
+
+/**
+ * What ONE rule's autofix did over a whole `lint --fix` run — the ledger behind the per-rule
+ * "reported but got no edit" block.
+ *
+ * `reported` is the FIRST pass's finding count (later passes see only what an earlier edit
+ * exposed, so summing them would not be a number to compare `fixed N` against). `declined`
+ * counts the first-pass findings that got no LANDED edit — either their `Check.fix`
+ * answered with none at all, or it answered and the writer-emit gate refused the lot; the
+ * measurement, taken where the call happens, that replaces guessing. `edits` accumulates over
+ * EVERY pass on purpose: one edit anywhere PROVES the rule can fix, which is exactly the claim
+ * a reader of `fixed 0` got wrong twice.
+ *
+ * `reasons` are the check's own `Violation.declineReason` texts — or, for an edit set the
+ * writer-emit gate refused, that gate's sentence — each with the number of DECLINED findings that
+ * carried it, never one sentence per rule. First-seen-wins was the shape while every
+ * converted rule declined for a single cause; the first rule to adopt the field per-ARM declines for
+ * four different ones on one tree (`unused-import`: 110 out-of-scope, 54 `#if`-guarded, 25 unknown
+ * `using`, 15 unknown wildcard), and reporting whichever the file walk reached first would state one
+ * quarter of the answer with the confidence of the whole. An empty array means the check said
+ * nothing and the run must not invent it; a sum below `declined` means it spoke for only some.
+ *
+ * `refusals` counts the writer-emit gate's own refusals, per sentence, over EVERY pass, in EDIT SETS rather
+ * than findings — the one thing `declined` cannot carry. `declined` is deliberately a FIRST-pass
+ * measurement, because a later pass re-reports whatever an earlier edit exposed and summing those would
+ * count one finding several times; but a gate refusal that first happens on pass 2 is no re-report, it is
+ * the only word anyone gets about why that fix vanished, and it used to reach no report at all.
+ *
+ * `gateRefusalLines` renders it, in a block of its own under the ledger: an edit-set count and a
+ * finding count are different quantities and one header cannot total both.
+ *
+ * `handedOff` / `handedOffReasons` are the share of `declined` / `reasons` that a `RiskyArm` rule's SAFE arm declined
+ * only because its risky arm owns the finding (`riskyArmFindings` / `riskyCrossFileFindings`). They stay in the row
+ * as declines while the risky phase never runs — the run then fixed nothing for those findings — and are taken back
+ * out by `LintFixVerify.ledgerRiskyTallies` when it does run, because the arm's own tallies then answer for the very
+ * same findings and counting both was counting each of them twice.
+ */
+typedef RuleFixOutcome = {
+	var reported: Int;
+	var declined: Int;
+	var edits: Int;
+	var reasons: Array<{ text: String, count: Int }>;
+	var refusals: Array<{ text: String, count: Int }>;
+	var handedOff: Int;
+	var handedOffReasons: Array<{ text: String, count: Int }>;
+};
+
+/**
  * `apq` CLI entry point. Parses argv, picks a grammar plugin via
  * `--lang`, dispatches on the subcommand.
  *
@@ -371,59 +427,3 @@ final class Cli {
 	}
 
 }
-
-/**
- * What `apq fmt` decided, with the summary as DATA.
- *
- * `summary` is empty for every exit taken before a file was read (a usage
- * error, an empty match, a lang with no writer) — those already printed their
- * own sentence, and a count line about a run that never counted anything would
- * be the family's own defect.
- */
-typedef FmtRunResult = { var exit: Int; var summary: String; };
-
-/**
- * What ONE rule's autofix did over a whole `lint --fix` run — the ledger behind the per-rule
- * "reported but got no edit" block.
- *
- * `reported` is the FIRST pass's finding count (later passes see only what an earlier edit
- * exposed, so summing them would not be a number to compare `fixed N` against). `declined`
- * counts the first-pass findings that got no LANDED edit — either their `Check.fix`
- * answered with none at all, or it answered and the writer-emit gate refused the lot; the
- * measurement, taken where the call happens, that replaces guessing. `edits` accumulates over
- * EVERY pass on purpose: one edit anywhere PROVES the rule can fix, which is exactly the claim
- * a reader of `fixed 0` got wrong twice.
- *
- * `reasons` are the check's own `Violation.declineReason` texts — or, for an edit set the
- * writer-emit gate refused, that gate's sentence — each with the number of DECLINED findings that
- * carried it, never one sentence per rule. First-seen-wins was the shape while every
- * converted rule declined for a single cause; the first rule to adopt the field per-ARM declines for
- * four different ones on one tree (`unused-import`: 110 out-of-scope, 54 `#if`-guarded, 25 unknown
- * `using`, 15 unknown wildcard), and reporting whichever the file walk reached first would state one
- * quarter of the answer with the confidence of the whole. An empty array means the check said
- * nothing and the run must not invent it; a sum below `declined` means it spoke for only some.
- *
- * `refusals` counts the writer-emit gate's own refusals, per sentence, over EVERY pass, in EDIT SETS rather
- * than findings — the one thing `declined` cannot carry. `declined` is deliberately a FIRST-pass
- * measurement, because a later pass re-reports whatever an earlier edit exposed and summing those would
- * count one finding several times; but a gate refusal that first happens on pass 2 is no re-report, it is
- * the only word anyone gets about why that fix vanished, and it used to reach no report at all.
- *
- * `gateRefusalLines` renders it, in a block of its own under the ledger: an edit-set count and a
- * finding count are different quantities and one header cannot total both.
- *
- * `handedOff` / `handedOffReasons` are the share of `declined` / `reasons` that a `RiskyArm` rule's SAFE arm declined
- * only because its risky arm owns the finding (`riskyArmFindings` / `riskyCrossFileFindings`). They stay in the row
- * as declines while the risky phase never runs — the run then fixed nothing for those findings — and are taken back
- * out by `LintFixVerify.ledgerRiskyTallies` when it does run, because the arm's own tallies then answer for the very
- * same findings and counting both was counting each of them twice.
- */
-typedef RuleFixOutcome = {
-	var reported: Int;
-	var declined: Int;
-	var edits: Int;
-	var reasons: Array<{ text: String, count: Int }>;
-	var refusals: Array<{ text: String, count: Int }>;
-	var handedOff: Int;
-	var handedOffReasons: Array<{ text: String, count: Int }>;
-};

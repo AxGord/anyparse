@@ -9,6 +9,33 @@ import anyparse.query.SymbolIndex;
 using anyparse.util.Strings;
 
 /**
+ * One convertible comment: the span to REPORT, and the edits that convert it. An above-line run rewrites in place
+ * (one edit); a trailing decl comment RELOCATES (two — the tail is cut, the doc is inserted at the decl's anchor).
+ */
+private typedef DocCommentRewrite = { comment: Span, edits: Array<{ span: Span, text: String }> };
+
+/**
+ * A declaration's doc anchor (the start of its leading `@:meta` / modifier run), the declaration's own end, its node
+ * kind, and the span of the declaration ENCLOSING it — `owner` is `-1` at module level. The owner is what makes two
+ * anchors siblings; indent cannot, because two types in one module hold their members at the same depth. `count` is
+ * how many declarations start on the anchor's line: above one, a trailing comment there has no single owner.
+ * `declFrom` is the declaration's OWN start, which parts from `from` exactly when an `@:meta` / modifier run precedes
+ * it — the trailing mechanism keys on the declaration's line, the above-run mechanism on the anchor's.
+ */
+private typedef Anchor = {
+	from: Int,
+	declFrom: Int,
+	to: Int,
+	kind: String,
+	owner: Int,
+	ownerEnd: Int,
+	count: Int
+};
+
+/** Resolved kind-sets the anchor walk threads through its recursion. */
+private typedef Seams = { final decls: Array<String>; final isRunEntry: (QueryNode) -> Bool; };
+
+/**
  * Flags a `//` comment that documents a TYPE or MEMBER declaration — prose in the one
  * comment form no doc extractor reads. `Info`; `--fix` turns it into a doc comment at the
  * declaration's doc anchor. A pure trivia edit: a comment never affects compilation, and
@@ -585,30 +612,3 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/**
- * One convertible comment: the span to REPORT, and the edits that convert it. An above-line run rewrites in place
- * (one edit); a trailing decl comment RELOCATES (two — the tail is cut, the doc is inserted at the decl's anchor).
- */
-private typedef DocCommentRewrite = { comment: Span, edits: Array<{ span: Span, text: String }> };
-
-/**
- * A declaration's doc anchor (the start of its leading `@:meta` / modifier run), the declaration's own end, its node
- * kind, and the span of the declaration ENCLOSING it — `owner` is `-1` at module level. The owner is what makes two
- * anchors siblings; indent cannot, because two types in one module hold their members at the same depth. `count` is
- * how many declarations start on the anchor's line: above one, a trailing comment there has no single owner.
- * `declFrom` is the declaration's OWN start, which parts from `from` exactly when an `@:meta` / modifier run precedes
- * it — the trailing mechanism keys on the declaration's line, the above-run mechanism on the anchor's.
- */
-private typedef Anchor = {
-	from: Int,
-	declFrom: Int,
-	to: Int,
-	kind: String,
-	owner: Int,
-	ownerEnd: Int,
-	count: Int
-};
-
-/** Resolved kind-sets the anchor walk threads through its recursion. */
-private typedef Seams = { final decls: Array<String>; final isRunEntry: (QueryNode) -> Bool; };

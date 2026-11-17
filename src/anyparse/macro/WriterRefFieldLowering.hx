@@ -20,6 +20,67 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the Ref-field family reads, bundled once per
+ * `WriterLowering` instance.
+ *
+ * `ctx` is the trivia gate, `ctorPat` / `fieldSep` / `bodyPolicy` /
+ * `braceSym` the four bundles this family hands straight through, and
+ * `isTightLead` / `isTriviaBearing` / `writeFnFor` the naming helpers that
+ * stayed behind. Neither `shape` nor the format info appears, which is the
+ * measurement that this family decides a field's layout from the field
+ * itself.
+ */
+typedef RefFieldCtx = {
+	final ctx: LoweringCtx;
+	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
+	final fieldSep: WriterFieldSepLowering.FieldSepCtx;
+	final bodyPolicy: WriterBodyPolicyLowering.BodyPolicyCtx;
+	final braceSym: WriterBraceSymmetryLowering.BraceSymmetryCtx;
+	final isTightLead: (leadText: Null<String>) -> Bool;
+	final isKeyValueLead: (leadText: Null<String>) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final writeFnFor: (refName: String) -> String;
+}
+
+/**
+ * The two head-gap comment slots a bare body field's separator reads, as runtime accesses: the comment cuddled to the
+ * prior field's closer (`Null<String>`, `null` when none) and the own-line run before the body (`Array<String>`).
+ */
+typedef HeadGapSlots = { final afterTrail: Expr; final beforeLeading: Expr; }
+/**
+ * The one answer to "what does `lowerStruct` know about the Ref field it hands to the Ref writer": the field's
+ * name, access and literals, its `@:fmt` reads and the trackers of the fields before it, built once per field and
+ * read by every Ref emitter, so a new per-field input is one field here, its value in `lowerStruct` and its reader.
+ */
+typedef RefFieldSite = {
+	final typePath: String;
+	final fieldName: String;
+	final fieldAccess: Expr;
+	final isOptional: Bool;
+	final isRaw: Bool;
+	final isFirstField: Bool;
+	final kwLead: Null<String>;
+	final leadText: Null<String>;
+	final trailText: Null<String>;
+	final trailOptText: Null<String>;
+	final bodyPolicyFlag: Null<String>;
+	final bodyPolicyExprFlag: Null<String>;
+	final hasElseIf: Bool;
+	final elseFieldName: Null<String>;
+	final fallbackFlag: Null<String>;
+	final hasCondWrap: Bool;
+	final hasCondWrapEnd: Bool;
+	final condWrapArgs: Null<Array<String>>;
+	final spanInfoPresent: Bool;
+	final condFitGroup: Bool;
+	final hasStructFieldTrailOptSlot: Bool;
+	final structTrailOptAccess: Null<Expr>;
+	final prevBodyField: Null<PrevBodyInfo>;
+	final prevTrailFieldName: Null<String>;
+	final prevAnyStarNonEmpty: Null<Expr>;
+	final prevPadTrailing: Null<Expr>;
+}
+/**
  * Pass 3W - what a struct field that is a `Ref` emits.
  *
  * `lowerStruct` walks a Seq rule's fields and hands each one here. The two
@@ -2048,66 +2109,5 @@ final class WriterRefFieldLowering {
 		return macro ($probe ? _setStatementFrame(_clearExprPosition($e, opt), opt) : $e);
 	}
 
-}
-
-/**
- * The build state the Ref-field family reads, bundled once per
- * `WriterLowering` instance.
- *
- * `ctx` is the trivia gate, `ctorPat` / `fieldSep` / `bodyPolicy` /
- * `braceSym` the four bundles this family hands straight through, and
- * `isTightLead` / `isTriviaBearing` / `writeFnFor` the naming helpers that
- * stayed behind. Neither `shape` nor the format info appears, which is the
- * measurement that this family decides a field's layout from the field
- * itself.
- */
-typedef RefFieldCtx = {
-	final ctx: LoweringCtx;
-	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
-	final fieldSep: WriterFieldSepLowering.FieldSepCtx;
-	final bodyPolicy: WriterBodyPolicyLowering.BodyPolicyCtx;
-	final braceSym: WriterBraceSymmetryLowering.BraceSymmetryCtx;
-	final isTightLead: (leadText: Null<String>) -> Bool;
-	final isKeyValueLead: (leadText: Null<String>) -> Bool;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final writeFnFor: (refName: String) -> String;
-}
-/**
- * The two head-gap comment slots a bare body field's separator reads, as runtime accesses: the comment cuddled to the
- * prior field's closer (`Null<String>`, `null` when none) and the own-line run before the body (`Array<String>`).
- */
-typedef HeadGapSlots = { final afterTrail: Expr; final beforeLeading: Expr; }
-/**
- * The one answer to "what does `lowerStruct` know about the Ref field it hands to the Ref writer": the field's
- * name, access and literals, its `@:fmt` reads and the trackers of the fields before it, built once per field and
- * read by every Ref emitter, so a new per-field input is one field here, its value in `lowerStruct` and its reader.
- */
-typedef RefFieldSite = {
-	final typePath: String;
-	final fieldName: String;
-	final fieldAccess: Expr;
-	final isOptional: Bool;
-	final isRaw: Bool;
-	final isFirstField: Bool;
-	final kwLead: Null<String>;
-	final leadText: Null<String>;
-	final trailText: Null<String>;
-	final trailOptText: Null<String>;
-	final bodyPolicyFlag: Null<String>;
-	final bodyPolicyExprFlag: Null<String>;
-	final hasElseIf: Bool;
-	final elseFieldName: Null<String>;
-	final fallbackFlag: Null<String>;
-	final hasCondWrap: Bool;
-	final hasCondWrapEnd: Bool;
-	final condWrapArgs: Null<Array<String>>;
-	final spanInfoPresent: Bool;
-	final condFitGroup: Bool;
-	final hasStructFieldTrailOptSlot: Bool;
-	final structTrailOptAccess: Null<Expr>;
-	final prevBodyField: Null<PrevBodyInfo>;
-	final prevTrailFieldName: Null<String>;
-	final prevAnyStarNonEmpty: Null<Expr>;
-	final prevPadTrailing: Null<Expr>;
 }
 #end

@@ -1,5 +1,25 @@
 package anyparse.check.scan;
 
+/** The resolved seams the host walk threads through every frame — read once per tree. */
+private typedef Seams = {
+
+	/** The conditional-compilation region kind, or null when the grammar has none. */
+	final condKind: Null<String>;
+
+	/** The declaration-starting keyword kinds such a region may contribute (`RefShape.condDeclPrefixKeywordKinds`). */
+	final prefixKinds: Array<String>;
+
+	/** The annotation that makes an abstract an enum abstract (`RefShape.enumAbstractMetaName`). */
+	final metaName: Null<String>;
+
+	/** The abstract-like declaration kinds (`RefShape.underlyingThisTypeKinds`). */
+	final abstracts: Array<String>;
+
+	/** The kinds a declaration's leading run may hold; any other kind ENDS the run. */
+	final leading: Array<String>;
+
+};
+
 /**
  * The enum abstracts a grammar does NOT project under its own `RefShape.enumAbstractDeclKind`
  * — the two Haxe spellings that reach the same type through a leading annotation instead of the
@@ -120,23 +140,3 @@ final class EnumAbstractForms {
 	}
 
 }
-
-/** The resolved seams the host walk threads through every frame — read once per tree. */
-private typedef Seams = {
-
-	/** The conditional-compilation region kind, or null when the grammar has none. */
-	final condKind: Null<String>;
-
-	/** The declaration-starting keyword kinds such a region may contribute (`RefShape.condDeclPrefixKeywordKinds`). */
-	final prefixKinds: Array<String>;
-
-	/** The annotation that makes an abstract an enum abstract (`RefShape.enumAbstractMetaName`). */
-	final metaName: Null<String>;
-
-	/** The abstract-like declaration kinds (`RefShape.underlyingThisTypeKinds`). */
-	final abstracts: Array<String>;
-
-	/** The kinds a declaration's leading run may hold; any other kind ENDS the run. */
-	final leading: Array<String>;
-
-};

@@ -11,6 +11,18 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the cascade INFO builders read, bundled once per
+ * `WriterLowering` instance.
+ *
+ * Two fields is the whole dependency surface, which is what a pure read of
+ * the shape tree should cost.
+ */
+typedef CtorBlankCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final branchSynthExtraArity: (bodyTypePath: String, branch: ShapeNode) -> Int;
+}
+
+/**
  * Pass 3W helpers - the blank-line cascade INFO builders.
  *
  * The `@:fmt(blankLines*)` family is declared on a Star ctor as a pile of
@@ -1227,17 +1239,5 @@ final class WriterCtorBlankLowering {
 		return macro (_t.leadingComments.length > 0 || ($metaAccess.length > 0 && $beforeNlAccess));
 	}
 
-}
-
-/**
- * The build state the cascade INFO builders read, bundled once per
- * `WriterLowering` instance.
- *
- * Two fields is the whole dependency surface, which is what a pure read of
- * the shape tree should cost.
- */
-typedef CtorBlankCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final branchSynthExtraArity: (bodyTypePath: String, branch: ShapeNode) -> Int;
 }
 #end

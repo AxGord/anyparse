@@ -17,6 +17,39 @@ import anyparse.query.TypingService;
 import anyparse.util.Groups;
 
 /**
+ * A type and where it is written: at `at` of the binder's file, or — `host` set — of the file declaring a callee, whose
+ * type parameters in scope there `host` names; a type parameter `bindings` holds is the type the call binds it to.
+ */
+typedef Located = {
+
+	final text: String;
+	final at: Int;
+
+	@:optional
+	final host: WrittenHost;
+
+	@:optional
+	final bindings: Map<String, Located>;
+
+}
+
+/** The file of the index a type is written in, and the type parameters in scope where it is. */
+typedef WrittenHost = { final file: FileInfo; final params: Array<String>; }
+
+/**
+ * The parameter list a call selects (`OperandBinder.calleeParams`): where it is written (`at` of the binder's file, or of
+ * `host`'s), the type parameters the call binds there, and how many parameters come before the first argument's (a static
+ * extension's receiver).
+ */
+typedef CalleeParams = {
+	final params: DeclaredParams;
+	final at: Int;
+	final host: Null<WrittenHost>;
+	final shift: Int;
+	final bindings: Map<String, Located>;
+}
+
+/**
  * What the declared type of an operand binds to, for ONE file — every type bound in the scope of the
  * file that WRITES it, never by its simple name. This is not a typer of its own: the shapes are walked
  * by THE structural walk every typer shares (`TypingService.typeWalk`), and this class is that walk's
@@ -530,37 +563,4 @@ final class OperandBinder {
 		return !m.hasOverloadMeta && !m.isMacro;
 	}
 
-}
-
-/**
- * A type and where it is written: at `at` of the binder's file, or — `host` set — of the file declaring a callee, whose
- * type parameters in scope there `host` names; a type parameter `bindings` holds is the type the call binds it to.
- */
-typedef Located = {
-
-	final text: String;
-	final at: Int;
-
-	@:optional
-	final host: WrittenHost;
-
-	@:optional
-	final bindings: Map<String, Located>;
-
-}
-
-/** The file of the index a type is written in, and the type parameters in scope where it is. */
-typedef WrittenHost = { final file: FileInfo; final params: Array<String>; }
-
-/**
- * The parameter list a call selects (`OperandBinder.calleeParams`): where it is written (`at` of the binder's file, or of
- * `host`'s), the type parameters the call binds there, and how many parameters come before the first argument's (a static
- * extension's receiver).
- */
-typedef CalleeParams = {
-	final params: DeclaredParams;
-	final at: Int;
-	final host: Null<WrittenHost>;
-	final shift: Int;
-	final bindings: Map<String, Located>;
 }

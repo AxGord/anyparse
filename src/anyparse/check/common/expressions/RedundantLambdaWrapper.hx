@@ -22,6 +22,123 @@ import anyparse.query.TypeSyntax;
 import anyparse.query.UnchangedLocal;
 import anyparse.util.Arrays;
 
+/** The lambda's forwarded callee plus the parameter count it forwards — `forwarding`'s structural verdict. */
+private typedef Forward = { final callee: QueryNode; final arity: Int; };
+
+/** How a forwarded callee may be reduced: not at all, as a plain method value, or as a std function the compiler oracle must confirm. */
+private enum Reduction {
+	None;
+	Plain;
+	Std;
+}
+
+/** What one declaration offers a caller that wants its VALUE rather than its result. */
+private typedef Signature = {
+
+	final arity: Int;
+	final isStatic: Bool;
+
+	/** False when the declaration's own shape forbids the reduction — see the type doc's gate list. */
+	final safe: Bool;
+
+};
+
+/** One file's shadowing value binders and its local function declarations. */
+private typedef FileScope = {
+
+	final valueNames: Map<String, Bool>;
+
+	/** How many times each name is bound, by ANY binder — a name bound twice is ambiguous. */
+	final binderCounts: Map<String, Int>;
+
+	/** The binding spans of the binder kinds a reduction may read through — see `bind`. */
+	final binderSpans: Map<String, Array<Span>>;
+	final localFns: Map<String, Signature>;
+
+};
+
+/** The resolved seams plus the per-run tables `walk` reads. */
+private typedef Ctx = {
+
+	final file: String;
+	final plugin: GrammarPlugin;
+
+	/** Every parsed file by path, the linted ones first and each file the index adds on demand; run-scoped. */
+	final trees: Map<String, QueryNode>;
+
+	/** Members of each resolved declaration, by file and offset; run-scoped. */
+	final hosted: Map<String, Null<Map<String, Signature>>>;
+
+	/** The resolution-scope index, or null on a bare plugin — a std callee is then never proven. */
+	final index: Null<SymbolIndex>;
+
+	/** Whether the index spans the whole project, the precondition of reading a name as the std's. */
+	final projectComplete: Bool;
+	final seams: Seams;
+	final shape: RefShape;
+	final scope: FileScope;
+	final tree: QueryNode;
+
+	/**
+	 * The function members of each type name the LINTED files declare (null when declared twice): the fallback for a
+	 * `Type.member` name no index resolves, and the std arm's "declared in scope" guard.
+	 */
+	final types: Map<String, Null<Map<String, Signature>>>;
+
+	/** Verbatim `:Type` annotations by binding-span start, or null when the grammar exposes none. */
+	final typeSources: Null<Map<Int, String>>;
+
+	/** `GrammarPlugin.typeSyntax` — how a binder's function-type annotation is read. */
+	final typeSyntax: TypeSyntaxReader;
+
+	/** Memo of "is this name ever written in this file", filled on demand by `written`. */
+	final written: Map<String, Bool>;
+
+	/** Which receivers read the same object on every call. */
+	final chains: StableChain;
+
+	/** Constructors and field initializers, where a field receiver may not be assigned yet. */
+	final construction: Array<Span>;
+
+	/** The methods a constructor reaches, where a field it assigns later may still be unassigned. */
+	final ctorReach: ConstructorReach;
+
+	/** Type parameter bounds by declaration offset (`SpanTypeInfo.typeParamConstraints`). */
+	final constraints: () -> Map<Int, Map<String, Array<String>>>;
+
+};
+
+/** Every seam `RedundantLambdaWrapper` reads, resolved once per run. */
+private typedef Seams = {
+	final lambdaKinds: Array<String>;
+	final expressionBodyKinds: Array<String>;
+	final valueReturnKinds: Array<String>;
+	final callKind: String;
+	final identKind: String;
+	final fieldAccessKind: Null<String>;
+	final paramKinds: Array<String>;
+	final optionalParamKind: Null<String>;
+	final restParamKind: Null<String>;
+	final typeHostKinds: Array<String>;
+	final interfaceKinds: Array<String>;
+	final memberDeclKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final localFunctionKinds: Array<String>;
+	final inlineFunctionKinds: Array<String>;
+	final binderKinds: Array<String>;
+	final reducibleBinderKinds: Array<String>;
+	final modifierKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final staticModifierKind: Null<String>;
+	final externModifierKind: Null<String>;
+	final inlineModifierKind: Null<String>;
+	final dynamicModifierKind: Null<String>;
+	final macroModifierKind: Null<String>;
+	final conditionalMemberKind: Null<String>;
+	final constructorName: Null<String>;
+	final upperInitialTypes: Bool;
+};
+
 /**
  * ETA-REDUCTION: flags a lambda whose whole body is ONE call that forwards the lambda's own
  * parameters, in order, and does nothing else — `x -> f(x)`, `(a, b) -> f(a, b)`, `() -> f()` —
@@ -876,120 +993,3 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	}
 
 }
-
-/** The lambda's forwarded callee plus the parameter count it forwards — `forwarding`'s structural verdict. */
-private typedef Forward = { final callee: QueryNode; final arity: Int; };
-
-/** How a forwarded callee may be reduced: not at all, as a plain method value, or as a std function the compiler oracle must confirm. */
-private enum Reduction {
-	None;
-	Plain;
-	Std;
-}
-
-/** What one declaration offers a caller that wants its VALUE rather than its result. */
-private typedef Signature = {
-
-	final arity: Int;
-	final isStatic: Bool;
-
-	/** False when the declaration's own shape forbids the reduction — see the type doc's gate list. */
-	final safe: Bool;
-
-};
-
-/** One file's shadowing value binders and its local function declarations. */
-private typedef FileScope = {
-
-	final valueNames: Map<String, Bool>;
-
-	/** How many times each name is bound, by ANY binder — a name bound twice is ambiguous. */
-	final binderCounts: Map<String, Int>;
-
-	/** The binding spans of the binder kinds a reduction may read through — see `bind`. */
-	final binderSpans: Map<String, Array<Span>>;
-	final localFns: Map<String, Signature>;
-
-};
-
-/** The resolved seams plus the per-run tables `walk` reads. */
-private typedef Ctx = {
-
-	final file: String;
-	final plugin: GrammarPlugin;
-
-	/** Every parsed file by path, the linted ones first and each file the index adds on demand; run-scoped. */
-	final trees: Map<String, QueryNode>;
-
-	/** Members of each resolved declaration, by file and offset; run-scoped. */
-	final hosted: Map<String, Null<Map<String, Signature>>>;
-
-	/** The resolution-scope index, or null on a bare plugin — a std callee is then never proven. */
-	final index: Null<SymbolIndex>;
-
-	/** Whether the index spans the whole project, the precondition of reading a name as the std's. */
-	final projectComplete: Bool;
-	final seams: Seams;
-	final shape: RefShape;
-	final scope: FileScope;
-	final tree: QueryNode;
-
-	/**
-	 * The function members of each type name the LINTED files declare (null when declared twice): the fallback for a
-	 * `Type.member` name no index resolves, and the std arm's "declared in scope" guard.
-	 */
-	final types: Map<String, Null<Map<String, Signature>>>;
-
-	/** Verbatim `:Type` annotations by binding-span start, or null when the grammar exposes none. */
-	final typeSources: Null<Map<Int, String>>;
-
-	/** `GrammarPlugin.typeSyntax` — how a binder's function-type annotation is read. */
-	final typeSyntax: TypeSyntaxReader;
-
-	/** Memo of "is this name ever written in this file", filled on demand by `written`. */
-	final written: Map<String, Bool>;
-
-	/** Which receivers read the same object on every call. */
-	final chains: StableChain;
-
-	/** Constructors and field initializers, where a field receiver may not be assigned yet. */
-	final construction: Array<Span>;
-
-	/** The methods a constructor reaches, where a field it assigns later may still be unassigned. */
-	final ctorReach: ConstructorReach;
-
-	/** Type parameter bounds by declaration offset (`SpanTypeInfo.typeParamConstraints`). */
-	final constraints: () -> Map<Int, Map<String, Array<String>>>;
-
-};
-
-/** Every seam `RedundantLambdaWrapper` reads, resolved once per run. */
-private typedef Seams = {
-	final lambdaKinds: Array<String>;
-	final expressionBodyKinds: Array<String>;
-	final valueReturnKinds: Array<String>;
-	final callKind: String;
-	final identKind: String;
-	final fieldAccessKind: Null<String>;
-	final paramKinds: Array<String>;
-	final optionalParamKind: Null<String>;
-	final restParamKind: Null<String>;
-	final typeHostKinds: Array<String>;
-	final interfaceKinds: Array<String>;
-	final memberDeclKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final localFunctionKinds: Array<String>;
-	final inlineFunctionKinds: Array<String>;
-	final binderKinds: Array<String>;
-	final reducibleBinderKinds: Array<String>;
-	final modifierKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final staticModifierKind: Null<String>;
-	final externModifierKind: Null<String>;
-	final inlineModifierKind: Null<String>;
-	final dynamicModifierKind: Null<String>;
-	final macroModifierKind: Null<String>;
-	final conditionalMemberKind: Null<String>;
-	final constructorName: Null<String>;
-	final upperInitialTypes: Bool;
-};

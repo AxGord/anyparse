@@ -19,6 +19,73 @@ import sys.io.File;
 private typedef FakeEdit = { var find: String; var text: String; var group: Null<Int>; }
 
 /**
+ * A `Check` + `RiskyFix` + `GroupedFix` stand-in that turns a fixed find/replace TABLE into
+ * grouped edits, so a scenario can hand `FixVerifier` any dependency shape without inventing a
+ * real rule. Each `find` is located from where the previous one ended, so a table may target two
+ * occurrences of the same text (the rename pair). A `find` the fixture no longer contains is a
+ * broken fixture, not a finding — it throws rather than silently producing fewer edits.
+ */
+@:nullSafety(Strict)
+private class TableFake implements Check implements RiskyFix implements GroupedFix {
+
+	/** The rule id the verifier filters this fake's own findings by — overridable, so two fakes can be told apart in one run. */
+	private static inline final RULE_ID: String = 'table-fake';
+
+	private final _table: Array<FakeEdit>;
+	private final _id: String;
+
+	public function new(table: Array<FakeEdit>, id: String = RULE_ID) {
+		_table = table;
+		_id = id;
+	}
+
+	public function id(): String {
+		return _id;
+	}
+
+	public function description(): String {
+		return 'test double: rewrites a fixed literal table in declared groups';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return [
+			for (entry in files) {
+				file: entry.file,
+				span: null,
+				rule: _id,
+				severity: Severity.Warning,
+				message: 'test double finding'
+			}
+		];
+	}
+
+	public function fix(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		return fixGrouped(source, violations, plugin, index).map(edit -> { span: edit.span, text: edit.text });
+	}
+
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit> {
+		final edits: Array<GroupedEdit> = [];
+		var from: Int = 0;
+		for (entry in _table) {
+			final at: Int = source.indexOf(entry.find, from);
+			if (at < 0) throw new Exception('the fixture no longer contains ${entry.find}');
+			edits.push({ span: new Span(at, at + entry.find.length), text: entry.text, group: entry.group });
+			from = at + entry.find.length;
+		}
+		return edits;
+	}
+
+}
+
+/**
  * End-to-end coverage of `FixVerifier.verify`'s ATOMIC GROUPS: an edit a check declared
  * inseparable from another must never survive a bisect that dropped its partner. The
  * motivating shape is `shorten-type-ref`'s orphan import — the `import` line COMPILES on
@@ -216,72 +283,5 @@ final class FixVerifierGroupE2ETest extends Test {
 		return ok;
 	}
 	#end
-
-}
-
-/**
- * A `Check` + `RiskyFix` + `GroupedFix` stand-in that turns a fixed find/replace TABLE into
- * grouped edits, so a scenario can hand `FixVerifier` any dependency shape without inventing a
- * real rule. Each `find` is located from where the previous one ended, so a table may target two
- * occurrences of the same text (the rename pair). A `find` the fixture no longer contains is a
- * broken fixture, not a finding — it throws rather than silently producing fewer edits.
- */
-@:nullSafety(Strict)
-private class TableFake implements Check implements RiskyFix implements GroupedFix {
-
-	/** The rule id the verifier filters this fake's own findings by — overridable, so two fakes can be told apart in one run. */
-	private static inline final RULE_ID: String = 'table-fake';
-
-	private final _table: Array<FakeEdit>;
-	private final _id: String;
-
-	public function new(table: Array<FakeEdit>, id: String = RULE_ID) {
-		_table = table;
-		_id = id;
-	}
-
-	public function id(): String {
-		return _id;
-	}
-
-	public function description(): String {
-		return 'test double: rewrites a fixed literal table in declared groups';
-	}
-
-	public function category(): RuleCategory {
-		return RuleCategory.Design;
-	}
-
-	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) {
-				file: entry.file,
-				span: null,
-				rule: _id,
-				severity: Severity.Warning,
-				message: 'test double finding'
-			}
-		];
-	}
-
-	public function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<{ span: Span, text: String }> {
-		return fixGrouped(source, violations, plugin, index).map(edit -> { span: edit.span, text: edit.text });
-	}
-
-	public function fixGrouped(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
-	): Array<GroupedEdit> {
-		final edits: Array<GroupedEdit> = [];
-		var from: Int = 0;
-		for (entry in _table) {
-			final at: Int = source.indexOf(entry.find, from);
-			if (at < 0) throw new Exception('the fixture no longer contains ${entry.find}');
-			edits.push({ span: new Span(at, at + entry.find.length), text: entry.text, group: entry.group });
-			from = at + entry.find.length;
-		}
-		return edits;
-	}
 
 }

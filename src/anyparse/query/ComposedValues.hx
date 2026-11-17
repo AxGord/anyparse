@@ -19,6 +19,42 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * What the index host reads as expected of a literal or a lambda (`ComposedValues.EXPECTATIONS`): the type `text` written
+ * in `file`, or none (`free`: the literal is typed as a value of its own, `text` and `file` unread). `unbound` names the
+ * type parameters of a call `text` still spells, which no argument before the value binds (`CallReturns.parameterType`):
+ * a part of the type naming one is no answer.
+ */
+typedef Expectation = {
+	final text: String;
+	final file: Null<FileInfo>;
+	final free: Bool;
+	final unbound: Array<String>;
+}
+
+/** What a written type says about one field of a value of it (`ComposedValues.literalExpectation`). */
+enum LiteralExpectation {
+
+	/** A declaration of the scope, read through its plain aliases. */
+	Declared(decl: ResolvedType);
+
+	/**
+	 * A written type that declares no such field of a declaration of the scope: a library type, `Dynamic`, an inline structure
+	 * writing the field itself.
+	 */
+	NotADeclaration;
+
+	/** Nothing written says what the value is, or what is written is a type parameter or a name this file cannot resolve. */
+	Unwritten;
+
+	/**
+	 * A written type reaching the field through a part the reader does not
+	 * follow: an extension (`{> T, …}`), an intersection, a `#if` type.
+	 */
+	Unfollowed;
+
+}
+
+/**
  * The index host's arcs over a value the walk composes of others (`NominalTypes`, `TypingService.typeWalk`): a
  * construction, an element read by index, an operator over its operands, an array or object literal, the element a loop
  * over an interval binds and an enum-abstract value read off its type — each the type Haxe 4.3.7 gives it, in the written
@@ -805,41 +841,5 @@ final class ComposedValues {
 			case _: NotADeclaration;
 		};
 	}
-
-}
-
-/**
- * What the index host reads as expected of a literal or a lambda (`ComposedValues.EXPECTATIONS`): the type `text` written
- * in `file`, or none (`free`: the literal is typed as a value of its own, `text` and `file` unread). `unbound` names the
- * type parameters of a call `text` still spells, which no argument before the value binds (`CallReturns.parameterType`):
- * a part of the type naming one is no answer.
- */
-typedef Expectation = {
-	final text: String;
-	final file: Null<FileInfo>;
-	final free: Bool;
-	final unbound: Array<String>;
-}
-
-/** What a written type says about one field of a value of it (`ComposedValues.literalExpectation`). */
-enum LiteralExpectation {
-
-	/** A declaration of the scope, read through its plain aliases. */
-	Declared(decl: ResolvedType);
-
-	/**
-	 * A written type that declares no such field of a declaration of the scope: a library type, `Dynamic`, an inline structure
-	 * writing the field itself.
-	 */
-	NotADeclaration;
-
-	/** Nothing written says what the value is, or what is written is a type parameter or a name this file cannot resolve. */
-	Unwritten;
-
-	/**
-	 * A written type reaching the field through a part the reader does not
-	 * follow: an extension (`{> T, …}`), an intersection, a `#if` type.
-	 */
-	Unfollowed;
 
 }

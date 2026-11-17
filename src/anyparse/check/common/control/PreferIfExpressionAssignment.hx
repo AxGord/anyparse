@@ -9,6 +9,12 @@ import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
+/** The `RefShape` kinds `PreferIfExpressionAssignment` reads. */
+private typedef Seams = { var ifKinds: Array<String>; var tree: TreeSeams; }
+
+/** A matched assignment chain: the head assignment (for the prefix), the (condition, r-value) pairs, the terminal r-value. */
+private typedef Match = { var lvalue: QueryNode; var value: String; }
+
 /**
  * Flags an `if / else if / … / else` CHAIN, or a 2-branch `if`/`else` carrying a nested
  * construct, whose EVERY branch assigns the SAME l-value with a plain `=`, collapsing it to
@@ -296,9 +302,3 @@ final class PreferIfExpressionAssignment extends RuleBase implements QuotationAw
 	}
 
 }
-
-/** The `RefShape` kinds `PreferIfExpressionAssignment` reads. */
-private typedef Seams = { var ifKinds: Array<String>; var tree: TreeSeams; }
-
-/** A matched assignment chain: the head assignment (for the prefix), the (condition, r-value) pairs, the terminal r-value. */
-private typedef Match = { var lvalue: QueryNode; var value: String; }

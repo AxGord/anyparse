@@ -8,6 +8,36 @@ import anyparse.query.SymbolIndex;
 
 using anyparse.util.Strings;
 
+/** A comment token from `RefactorSupport.collectCommentTokens`. */
+private typedef CommentTok = { from: Int, to: Int, isLine: Bool };
+
+/** A confirmed finding: the stranded block, the offset to move it to, and the type it belongs to. */
+private typedef Stranded = { final doc: CommentTok; final anchor: Int; final name: String; };
+
+/** A doc block inside a declaration's leading run, the run's start it belongs at, and why the fix may not move it (null when it may). */
+private typedef BetweenDoc = { final doc: CommentTok; final anchor: Int; final refusal: Null<String>; };
+
+/** The header decls preceding a module's sole type, plus that type's doc anchor and reported name. */
+private typedef Header = { final decls: Array<QueryNode>; final anchor: Int; final name: String; };
+
+/** Resolved kind-sets the header walk threads through. */
+private typedef Seams = {
+
+	final typeDecls: Array<String>;
+	final nameHosts: Array<String>;
+
+	/**
+	 * The kinds whose children may hold declarations with a leading run: types,
+	 * member containers, a typedef's anonymous structure, conditional regions.
+	 */
+	final descend: Array<String>;
+	final packageKind: String;
+
+	/** Whether a sibling belongs to a declaration's leading run (`CheckScan.leadingRunEntry`). */
+	final isRunEntry: (QueryNode) -> Bool;
+
+};
+
 /**
  * Flags a `/**`-opened doc block written between the `package` statement and the
  * module's `import` / `using` lines. The compiler attaches a doc to the declaration
@@ -312,33 +342,3 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** A comment token from `RefactorSupport.collectCommentTokens`. */
-private typedef CommentTok = { from: Int, to: Int, isLine: Bool };
-
-/** A confirmed finding: the stranded block, the offset to move it to, and the type it belongs to. */
-private typedef Stranded = { final doc: CommentTok; final anchor: Int; final name: String; };
-
-/** A doc block inside a declaration's leading run, the run's start it belongs at, and why the fix may not move it (null when it may). */
-private typedef BetweenDoc = { final doc: CommentTok; final anchor: Int; final refusal: Null<String>; };
-
-/** The header decls preceding a module's sole type, plus that type's doc anchor and reported name. */
-private typedef Header = { final decls: Array<QueryNode>; final anchor: Int; final name: String; };
-
-/** Resolved kind-sets the header walk threads through. */
-private typedef Seams = {
-
-	final typeDecls: Array<String>;
-	final nameHosts: Array<String>;
-
-	/**
-	 * The kinds whose children may hold declarations with a leading run: types,
-	 * member containers, a typedef's anonymous structure, conditional regions.
-	 */
-	final descend: Array<String>;
-	final packageKind: String;
-
-	/** Whether a sibling belongs to a declaration's leading run (`CheckScan.leadingRunEntry`). */
-	final isRunEntry: (QueryNode) -> Bool;
-
-};

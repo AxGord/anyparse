@@ -50,6 +50,81 @@ import haxe.ds.ObjectMap;
 
 using StringTools;
 
+/** The `FindingData.family` of each kind of `thread-safety` finding, as its class doc letters them. */
+enum abstract FindingFamily(String) to String {
+
+	/** (a) a main-thread function calls a blocking sink. */
+	final MainSink = 'A';
+
+	/** (b) a lock held across calls that can block. */
+	final LockHeld = 'B';
+
+	/** (c) a lock left held when an exception leaves its function. */
+	final ThrowHeld = 'C';
+
+	/** (d) two locks taken in opposite orders on two threads. */
+	final OrderInversion = 'D';
+
+}
+
+/** What a `thread-safety` finding adds to its message when its cost or its thread is why it is graded as it is. */
+enum abstract CostNote(String) to String {
+
+	/**
+	 * A main-thread call that waits too little to warn about (`shortSinks`), run once: every way up to it is a resolved
+	 * call from the entry point that no loop, recursion or value handed to a repeating call repeats (`MainRepeats.climb`).
+	 */
+	final ShortMainCall = ' — short: a short sink or a take of a lock held only across short calls, once per main-thread run (every'
+		+ ' caller up from the entry point resolved, none in a loop, a recursion or a value handed to a call not listed `runsOnce`),'
+		+ ' so reported as info';
+
+	/** A short main-thread call some way up to which is a registration (`registers`): once per event the runtime dispatches. */
+	final ShortRegisteredCall = ' — short: a short sink or a take of a lock held only across short calls, once per event of a'
+		+ ' registration (`registers`) — how often the runtime dispatches it is not known here — with no loop, recursion or value'
+		+ ' handed to a call not listed `runsOnce` on the way down from it, so reported as info';
+
+	/**
+	 * A hold every blocking call of which waits too little to warn about (`shortSinks`), or takes a lock every long hold
+	 * of which needs one held there (`LockDominance`) — directly in its window or in a callee, alike.
+	 */
+	final ShortHold = ' — short: every call it spans waits only on short sinks, on locks held only across short calls, or on a lock'
+		+ ' whose every long hold needs a lock held here, each once per hold (no loop, `iterates` callback or recursion under the'
+		+ ' lock), so reported as info';
+
+	/**
+	 * `ShortHold`, for a hold whose chain lists `boundedRepeats` entries: a repetition one binds counts as once, never as
+	 * "no loop" — the bounds multiplied along each way under the budget (`CallRepetition.along`).
+	 */
+	final ShortBoundedHold = ' — short: every call it spans waits only on short sinks, on locks held only across short calls, or on a'
+		+ ' lock whose every long hold needs a lock held here, each once per hold but for the repetitions `boundedRepeats` binds'
+		+ ' (their bounds multiplied along each way under `repeatBudgetMs`), so reported as info';
+
+	/** A call a sink's own body makes: the call of that sink is the finding. */
+	final InsideSink = ' — inside a sink\'s own body, whose call is the finding, so reported as info';
+
+	/** A hold only the main thread runs: no thread it stalls waits for it, but the main thread works long under it. */
+	final MainOwnWork = ' — held on the main thread only, which never waits for its own hold: the stall is the main thread\'s own long'
+		+ ' work under the lock';
+
+	/** A hold no path of its function gives back: held past the function's end, across whatever runs until it is released. */
+	final HandOff = ' — and no path of the function gives it back: held past its end until another function releases it, across'
+		+ ' whatever runs until then';
+
+}
+
+/**
+ * A hold whose finding (b) warns: the calls it names, whether it was graded as
+ * handing its lock off, and the taint and re-held lock those calls were found under.
+ */
+private typedef WarnedHold = {
+	final hold: LockAcquire;
+	final calls: Array<CallEdge>;
+	final finding: Violation;
+	final handOff: Bool;
+	final taint: LockTaint;
+	final held: Null<String>;
+}
+
 /**
  * Config-driven thread-context analysis over the approximate `CallGraph` — finds the two classic main-thread stalls:
  * (a) a MAIN-context function calling a configured blocking sink; (b) a function holding a configured lock across a
@@ -825,79 +900,4 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		return first != null && then != null && outer.edge == inner.edge && first.to <= then.from;
 	}
 
-}
-
-/** The `FindingData.family` of each kind of `thread-safety` finding, as its class doc letters them. */
-enum abstract FindingFamily(String) to String {
-
-	/** (a) a main-thread function calls a blocking sink. */
-	final MainSink = 'A';
-
-	/** (b) a lock held across calls that can block. */
-	final LockHeld = 'B';
-
-	/** (c) a lock left held when an exception leaves its function. */
-	final ThrowHeld = 'C';
-
-	/** (d) two locks taken in opposite orders on two threads. */
-	final OrderInversion = 'D';
-
-}
-
-/** What a `thread-safety` finding adds to its message when its cost or its thread is why it is graded as it is. */
-enum abstract CostNote(String) to String {
-
-	/**
-	 * A main-thread call that waits too little to warn about (`shortSinks`), run once: every way up to it is a resolved
-	 * call from the entry point that no loop, recursion or value handed to a repeating call repeats (`MainRepeats.climb`).
-	 */
-	final ShortMainCall = ' — short: a short sink or a take of a lock held only across short calls, once per main-thread run (every'
-		+ ' caller up from the entry point resolved, none in a loop, a recursion or a value handed to a call not listed `runsOnce`),'
-		+ ' so reported as info';
-
-	/** A short main-thread call some way up to which is a registration (`registers`): once per event the runtime dispatches. */
-	final ShortRegisteredCall = ' — short: a short sink or a take of a lock held only across short calls, once per event of a'
-		+ ' registration (`registers`) — how often the runtime dispatches it is not known here — with no loop, recursion or value'
-		+ ' handed to a call not listed `runsOnce` on the way down from it, so reported as info';
-
-	/**
-	 * A hold every blocking call of which waits too little to warn about (`shortSinks`), or takes a lock every long hold
-	 * of which needs one held there (`LockDominance`) — directly in its window or in a callee, alike.
-	 */
-	final ShortHold = ' — short: every call it spans waits only on short sinks, on locks held only across short calls, or on a lock'
-		+ ' whose every long hold needs a lock held here, each once per hold (no loop, `iterates` callback or recursion under the'
-		+ ' lock), so reported as info';
-
-	/**
-	 * `ShortHold`, for a hold whose chain lists `boundedRepeats` entries: a repetition one binds counts as once, never as
-	 * "no loop" — the bounds multiplied along each way under the budget (`CallRepetition.along`).
-	 */
-	final ShortBoundedHold = ' — short: every call it spans waits only on short sinks, on locks held only across short calls, or on a'
-		+ ' lock whose every long hold needs a lock held here, each once per hold but for the repetitions `boundedRepeats` binds'
-		+ ' (their bounds multiplied along each way under `repeatBudgetMs`), so reported as info';
-
-	/** A call a sink's own body makes: the call of that sink is the finding. */
-	final InsideSink = ' — inside a sink\'s own body, whose call is the finding, so reported as info';
-
-	/** A hold only the main thread runs: no thread it stalls waits for it, but the main thread works long under it. */
-	final MainOwnWork = ' — held on the main thread only, which never waits for its own hold: the stall is the main thread\'s own long'
-		+ ' work under the lock';
-
-	/** A hold no path of its function gives back: held past the function's end, across whatever runs until it is released. */
-	final HandOff = ' — and no path of the function gives it back: held past its end until another function releases it, across'
-		+ ' whatever runs until then';
-
-}
-
-/**
- * A hold whose finding (b) warns: the calls it names, whether it was graded as
- * handing its lock off, and the taint and re-held lock those calls were found under.
- */
-private typedef WarnedHold = {
-	final hold: LockAcquire;
-	final calls: Array<CallEdge>;
-	final finding: Violation;
-	final handOff: Bool;
-	final taint: LockTaint;
-	final held: Null<String>;
 }

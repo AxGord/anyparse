@@ -13,6 +13,9 @@ import anyparse.query.cli.command.SourceCommand;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 
+/** A parsed source and the nodes one selector resolved against it. */
+private typedef AstSelection = { final tree: QueryNode; final matches: Array<QueryNode>; };
+
 /**
  * The READ window for one addressed declaration, on both commands that print it: `apq source
  * --select <sel>` / `--at <line>:<col>`, which resolves a node address to the 1-based inclusive line
@@ -292,6 +295,3 @@ class ApqSourceSelectTest extends Test {
 	}
 
 }
-
-/** A parsed source and the nodes one selector resolved against it. */
-private typedef AstSelection = { final tree: QueryNode; final matches: Array<QueryNode>; };

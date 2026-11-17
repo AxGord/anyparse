@@ -13,449 +13,6 @@ import anyparse.runtime.Input;
 import anyparse.runtime.Span;
 
 /**
- * Plugin contract for a grammar that the query engine can operate on.
- *
- * The engine sees the AST exclusively through this interface: parse a
- * source string, get a `QueryNode` tree, walk it. The engine never
- * references grammar-specific types — adding a new language is a
- * matter of writing a `GrammarPlugin` implementation in that grammar's
- * package, never touching engine code.
- */
-@:nullSafety(Strict)
-interface GrammarPlugin {
-
-	/** Short name used by `--lang`. */
-	public function langName(): String;
-
-	/**
-	 * Parse `source` and return a generic node tree. The plugin is
-	 * responsible for choosing kind names and name slots — see
-	 * `QueryNode` for the contract.
-	 *
-	 * Plugins may throw on parse failure; callers handle the
-	 * exception. The engine itself never catches.
-	 */
-	public function parseFile(source: String): QueryNode;
-
-	/**
-	 * Parse a `apq search` pattern — language source extended with
-	 * `$X` / `$_` metavariables.
-	 *
-	 * The plugin is free to substitute the metavariable token before
-	 * invoking the grammar parser and to wrap the pattern in synthetic
-	 * decl/stmt scaffolding so the grammar accepts it; the returned
-	 * `Pattern.root` is the user's pattern subtree with all metavar
-	 * leaves reclassified to `kind='Metavar'`. See `Pattern` and the
-	 * pattern-syntax section of `docs/cli-query-tool.md`.
-	 *
-	 * Plugins throw on parse failure across every try-fallback attempt;
-	 * the CLI catches and surfaces the most-informative error.
-	 */
-	public function parsePattern(source: String): Pattern;
-
-	/**
-	 * Declare which `QueryNode.kind` values the `Refs` walker should
-	 * treat as identifier references and binding-declaration hosts.
-	 * Plugin-supplied so the walker stays language-agnostic.
-	 *
-	 * See `docs/cli-query-tool.md` (`apq refs`) for the user-facing
-	 * contract and `RefShape` for field semantics.
-	 */
-	public function refShape(): RefShape;
-
-	/**
-	 * Every `QueryNode.kind` this grammar's parser can project — its whole kind
-	 * vocabulary, generated from the same shape the walk is emitted from rather
-	 * than hand-listed.
-	 *
-	 * A kind is an `Array<String>` slot everywhere it is spelled, so a misspelling
-	 * fails OPEN in both directions: a stale name in a plugin's own `RefShape`
-	 * silently stops matching, and a typo in a user's `--select` silently matches
-	 * nothing. This is the vocabulary both differentials read.
-	 *
-	 * EMPTY means the grammar publishes none, and every consumer must then skip its
-	 * check rather than report the whole selector unknown. The projection's own
-	 * synthetic root (`QueryNode.kind` of the tree `parseFile` returns) is NOT in
-	 * here — it is minted by the plugin, not by the grammar — so a consumer that
-	 * accepts a root segment admits it separately.
-	 */
-	public function projectedKinds(): Array<String>;
-
-	/**
-	 * Declare which `QueryNode.kind` values the `Meta` walker should
-	 * treat as annotation nodes and which kinds are declaration hosts
-	 * an annotation can attach to. Plugin-supplied so the walker stays
-	 * language-agnostic.
-	 *
-	 * See `docs/cli-query-tool.md` (`apq meta`) for the user-facing
-	 * contract and `MetaShape` for field semantics.
-	 */
-	public function metaShape(): MetaShape;
-
-	/**
-	 * Kind-equivalence relation for `apq ast --select`: groups
-	 * `QueryNode.kind` values a `--select <Kind>` should treat as one, so
-	 * a selector matches the grammar's wrapper-shaped variants of a decl.
-	 * For Haxe this folds the `final` wrappers — `ClassDecl ≡ ClassForm`
-	 * (a `final class`'s named inner node) and `FnMember ≡
-	 * FinalModifiedMember` (a `final` method) — so `--select ClassDecl` /
-	 * `--select FnMember` cover final declarations too. Deliberately
-	 * SEPARATE from the search-only `SEARCH_KIND_EQUIVALENCE`: `--select`
-	 * keeps its precise per-position kinds (`VarMember` ≠ `VarStmt`), only
-	 * the final-wrapper folding is added. A plugin with no wrapper shapes
-	 * returns an empty relation (every kind equivalent only to itself).
-	 */
-	public function selectKindEquivalence(): KindEquivalence;
-
-	/**
-	 * Parse `source` like `parseFile`, but additionally surface
-	 * type-position references (field/var type annotations, enum-ctor
-	 * parameter types, …) as addressable nodes. `parseFile` deliberately
-	 * drops these to keep the tree lean for `ast`/`search`/`refs`/`meta`;
-	 * this parallel projection is read by `uses` / `blast` / `mentions` and by
-	 * the operations that REWRITE what it reports (`CrossRename`, `MoveSymbol`,
-	 * `MoveMember`, `PreferMapType`, `ShortenTypeRef`) plus the completeness gate
-	 * of `Naming` - never by those four, which stay byte-identical by construction.
-	 *
-	 * See `docs/cli-query-tool.md` (`apq uses`) and `TypeRefShape`.
-	 */
-	public function parseFileTypeRefs(source: String): QueryNode;
-
-	/**
-	 * The branch-aware projection of an ALREADY-PARSED `tree` of `source`: every
-	 * conditional-compilation region that sits in a STATEMENT list is regrouped into one
-	 * synthetic `CondBranch` node per branch.
-	 *
-	 * `parseFile` projects a `#if A … #elseif B … #else … #end` region as ONE node with
-	 * every branch's statements flattened as siblings, which is not a statement list but N
-	 * of them — so the checks that walk a statement list
-	 * (`ControlFlowSupport.blockKinds`) deliberately skip it. This parallel projection
-	 * recovers the branch boundaries from the directive text in the gaps between child
-	 * spans and gives each branch its own list. Consumed ONLY by the checks that opt in via
-	 * `CheckScan.parseBranchAwareOrNull`, so every other consumer stays byte-identical to
-	 * `parseFile` by construction.
-	 *
-	 * A projection over a tree, not a parse, so a decorator can memoize it without parsing
-	 * twice and a grammar can supply its own without owning the cache. The caller passes the
-	 * tree it already has — `CheckScan.parseBranchAwareOrNull` pairs it with `parseFile`.
-	 *
-	 * A plugin whose grammar exposes no conditional seams — or whose
-	 * `ControlFlowSupport.blockKinds()` does not name `CondBranch` — returns `tree` itself.
-	 * Pure: `tree` is never mutated, and any subtree the rewrite does not touch is SHARED
-	 * with it rather than copied.
-	 */
-	public function projectBranchAware(tree: QueryNode, source: String): QueryNode;
-
-	/**
-	 * Declare which `QueryNode.kind` values the `Uses` walker should
-	 * treat as type references. Plugin-supplied so the walker stays
-	 * language-agnostic. Only meaningful on a tree produced by
-	 * `parseFileTypeRefs`.
-	 */
-	public function typeRefShape(): TypeRefShape;
-
-	/**
-	 * Optional: parse `source` with the grammar's pretty-printer-aware
-	 * pipeline (the format that preserves comments / blank lines where
-	 * available) and emit the formatted source back. Used by `apq ast
-	 * --writer-output` for fast writer-bug iteration without round-trip
-	 * through the project's test runner.
-	 *
-	 * Return `null` when the grammar plugin has no writer wired up — the
-	 * CLI surfaces a "no writer for lang X" error.
-	 *
-	 * `optsJson` is an optional, language-defined JSON config string
-	 * driving writer options (e.g. an `hxformat.json`-shaped payload for
-	 * the Haxe plugin). `null` → plugin uses its built-in defaults; non-
-	 * null → plugin parses and applies. Plugins that don't recognise the
-	 * format may ignore the argument (the CLI threads `.hxtest` section-1
-	 * here so a single fixture reproduces the corpus harness's writer
-	 * settings without manually rebuilding options).
-	 *
-	 * Plugins may throw on parse failure; callers handle the exception.
-	 *
-	 * A plugin whose writer cannot round-trip every comment MUST throw
-	 * `anyparse.format.comment.CommentLossException` rather than return
-	 * output with a comment missing — `apq fmt` and every op that
-	 * canonicalises through `RefactorSupport` treat that as the signal to
-	 * leave the file's bytes alone. Returning lossy output instead makes
-	 * those callers delete an author's comment with no diagnostic; there is
-	 * no way for them to detect it after the fact.
-	 * `CommentInventory.firstMissing` implements the check.
-	 */
-	public function writeRoundTrip(source: String, ?optsJson: String): Null<String>;
-
-	/**
-	 * The edit set `edits` laid into `source` by a FORMAT-PRESERVING writer, or null for a grammar whose
-	 * writer RE-EMITS the whole file — the shape `CanonicalEdit.canonicalize` then finishes itself, by
-	 * splicing the raw texts and running the writer to its fixed point.
-	 *
-	 * A grammar answers here when its writer keeps the file's own layout rather than imposing one:
-	 * `writeRoundTrip` hands every parseable source back unchanged, so the fixed point would leave a
-	 * spliced text exactly as spliced — an element appended to a one-per-line list as `, x` on the
-	 * previous line. The answer is the spliced document with what the edits introduced laid out the way
-	 * the surrounding source is, and every byte outside their reach untouched (JSON:
-	 * `JsonLayoutWriter.layout`). Throws the parser's `ParseError` when the splice does not parse.
-	 */
-	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String>;
-
-	/**
-	 * Optional: the layout numbers the writer would use for `optsJson` — the
-	 * target line width and the column width of one indent character. Lets a check
-	 * reason about how wide a construct may be BEFORE paying for a
-	 * `writeRoundTrip`, using the same configuration the writer itself would.
-	 *
-	 * `optsJson` follows the `writeRoundTrip` convention: a language-defined JSON
-	 * config string (an `hxformat.json` payload for the Haxe plugin) or `null` for
-	 * the plugin's built-in defaults. Return `null` when the grammar has no writer
-	 * / no width concept — a width-aware check then no-ops for it.
-	 */
-	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics>;
-
-	/**
-	 * Optional: the writer's member-gap policy for `optsJson` (`MemberGapPolicy`) - the blank lines it forces between
-	 * two adjacent type members under that config. `optsJson` follows the `writeRoundTrip` convention. Return `null`
-	 * when the grammar's writer forces none; a check reading it then keeps its own spacing rule.
-	 */
-	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy>;
-
-	/**
-	 * Optional: parse `source` with the plain (non-trivia) parser and
-	 * emit via the plain writer. Drops comments and source-layout
-	 * newlines — flattens to the writer's canonical form. Used by `apq
-	 * ast --writer-output-plain` and by `apq writer-equals --plain`
-	 * because this is what unit tests like
-	 * `HxModuleWriter.write(HaxeModuleParser.parse(src))` actually see.
-	 *
-	 * The trivia pipeline (`writeRoundTrip`) and the plain pipeline emit
-	 * different bytes on the same input — unit-test expected strings
-	 * MUST be probed via the plain entry. Return `null` when the
-	 * grammar plugin has no plain writer (binary grammars, plugins with
-	 * a single unified pipeline), or when this engine was built without it
-	 * (the Haxe plugin compiles its plain pipeline only under
-	 * `-D anyparse_plain_pipeline`).
-	 *
-	 * `optsJson` follows the same convention as `writeRoundTrip` — a
-	 * language-defined JSON config or `null` for defaults.
-	 *
-	 * Plugins may throw on parse failure; callers handle the exception.
-	 */
-	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String>;
-
-	/**
-	 * Optional: strict trivia-mode parse used by `apq recon` for corpus
-	 * skip-parse sweeps. Returns `true` on successful parse; throws
-	 * `ParseError` (or other `Exception`) on parse failure so the caller
-	 * can cluster by error locus; returns `false` when the plugin has no
-	 * trivia parser wired up (CLI surfaces a `no recon parser for lang X`
-	 * and exits).
-	 *
-	 * The trivia pipeline preserves comments / blank lines and matches
-	 * the surface accepted by the writer's round-trip path, so a recon
-	 * run mirrors what the corpus harness sees on each fixture.
-	 */
-	public function reconParse(source: String): Bool;
-
-	/**
-	 * `typeSource` — a type written as TEXT: an annotation's verbatim source, a span of a file, a
-	 * type a rule composed — read as ONE type by this grammar's own parser, or null when it is not
-	 * one: it does not parse, or a second token stands before or after the type. Comments around
-	 * the type are trivia, as they are to the parser: the answer's span covers the type alone, so a
-	 * consumer that splices `typeSource` back needs `text == typeSource` to know it is undecorated.
-	 * Offsets in the answer are into `typeSource` itself.
-	 *
-	 * The query tree keeps a type only as far as its projection does, so a consumer asking for the
-	 * SHAPE of a written type (its type arguments, a function's parameters and result, a structure's
-	 * fields) has text in hand, and reading text is grammar knowledge: it belongs here, never to a
-	 * bracket-counting loop in a check. A consumer declines on null — never guesses. A grammar with
-	 * no type syntax returns null for everything.
-	 */
-	public function typeSyntax(typeSource: String): Null<TypeSyntax>;
-
-	/**
-	 * Optional: the grammar's naming-convention capability, consumed by the
-	 * `naming` analysis check. Return null when the grammar has no naming
-	 * concept (binary formats) — the check then no-ops for it, mirroring the
-	 * optional writer methods above.
-	 */
-	public function namingSupport(): Null<NamingSupport>;
-
-	/**
-	 * Optional: the grammar's adjacent-string-literal folding capability, consumed
-	 * by the `fold-adjacent-string-literals` check. Null when the grammar has no
-	 * string-concatenation concept — the check then no-ops, like `namingSupport`.
-	 */
-	public function stringFoldSupport(): Null<StringFoldSupport>;
-
-	/**
-	 * The maximum cyclomatic complexity a function may have before the
-	 * `complexity` check flags it, for the file at `path` — sourced from a
-	 * project config (e.g. a `checkstyle.json`) when present, else null so the
-	 * check keeps its built-in default. Grammars without such a config return null.
-	 */
-	public function maxComplexity(path: String): Null<Int>;
-
-	/**
-	 * Optional: the grammar's control-flow capability, consumed by the
-	 * `dead-code` check. Null when the grammar has no statement / block concept
-	 * (binary formats) — the check then no-ops, like `stringFoldSupport`.
-	 */
-	public function controlFlowSupport(): Null<ControlFlowSupport>;
-
-	/**
-	 * Every NON-CODE region of `source` — comment, string literal, regex literal — as
-	 * `[from, to)` byte spans in source order, by THIS grammar's lexical rules.
-	 *
-	 * The sibling of `controlFlowSupport()` for the question "is this offset real code?", and
-	 * the seam that keeps a comment scan out of the engine: what opens a comment, what quotes
-	 * a string, whether a regex literal exists at all and what may hide inside its body are
-	 * grammar facts, and the Haxe answers to them used to sit in `anyparse.query` where a
-	 * second grammar could not reach them. Takes raw source and needs no parse, exactly as
-	 * `parseFile` / `writeRoundTrip` do.
-	 *
-	 * A grammar with no comment and no literal concept returns an empty array, which reads as
-	 * "every byte is code". That is the conservative answer for the masking consumers — an
-	 * unmasked region only ever costs an extra occurrence, never a missed one — but NOT for
-	 * `BodySlotGuard` / `Patch`, which use it to decide that a slot holding only a comment is
-	 * empty. A grammar that HAS comments must answer them here.
-	 *
-	 * There is deliberately NO default implementation, and no way for one to be missing: this is an abstract interface member.
-	 * `CliArgs.pickPlugin` knows two `--lang`s: `haxe`, and `json`, whose answer is every string literal (keys included) read off
-	 * its own parse, since JSON has no comment. The `ar` and `sexpr` grammars ship a parser and a writer but no `GrammarPlugin`
-	 * at all, so the question does not reach them. The hazard is a FUTURE plugin author satisfying the compiler with `[]`
-	 * because it is the cheapest thing that type-checks, and the paragraph above is what that author
-	 * has to read past.
-	 *
-	 * A grammar-agnostic default IS buildable when a second implementor arrives, and the ingredients
-	 * are already declared rather than hypothetical: `Format.lineComment` and `Format.blockComment`
-	 * are read at MACRO time into `FormatReader.commentPatterns`, and `TextFormat.stringQuote` names
-	 * the quote characters. What such a default could NOT express is precisely what makes the Haxe
-	 * answer non-trivial — an interpolation hole whose end needs brace-and-quote balancing, and a
-	 * regex literal whose body may hold a comment opener — so a grammar with either must still
-	 * override. Building it for one implementor would be a default nothing exercises; the check that
-	 * the declaration and the hand scanner still agree is worth having now, and
-	 * `unit.LexicalRegionAgreementTest` has it.
-	 */
-	public function lexicalRegions(source: String): Array<LexRegion>;
-
-	/**
-	 * Every token of `source` that starts in `[from, to)`, in source order, by THIS grammar's own declarations: a
-	 * declared literal text, a terminal the grammar tags `@:token(<Kind>)`, or a whole non-code region of
-	 * `lexicalRegions` as one token. A grammar with a generated lexical pass answers with its `tokens`; one that
-	 * declares no token reader answers empty. `from` is read as a token boundary: a token that starts before it is
-	 * not reported, and one it falls inside is read from `from` on.
-	 */
-	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan>;
-
-	/**
-	 * Optional: the grammar's boolean-expression simplification capability,
-	 * consumed by the `simplify-boolean-ternary` check. Null when the grammar has
-	 * no boolean-ternary concept — the check then no-ops, like the other optional
-	 * support methods above.
-	 */
-	public function booleanLogicSupport(): Null<BooleanLogicSupport>;
-
-	/**
-	 * Optional: the extension-method names a `using <modulePath>` brings into
-	 * scope, for module paths the grammar knows from its standard library. The
-	 * `unused-import` check uses this to verify that a `using` whose bound name is
-	 * never referenced directly is still live via an extension call. Return null
-	 * for an unknown module path (the check then leaves that `using` an
-	 * unverifiable advisory) and for a grammar with no `using` concept.
-	 */
-	public function knownExtensionMethods(modulePath: String): Null<Array<String>>;
-
-	/**
-	 * Lint-check option overrides discovered from the grammar's native config
-	 * near `path` (Haxe: `checkstyle.json`), or null when the grammar has no such
-	 * config or none is found. The neutral counterpart of `maxComplexity` for the
-	 * checks wired to honour a project's existing checkstyle config.
-	 */
-	public function checkOverrides(path: String): Null<CheckOverrides>;
-
-	/**
-	 * The AMBIENT import sources in scope for the module stored at `path` with package `pkg` —
-	 * files whose import / using statements bind names in that module although the module spells
-	 * none of them. A Haxe per-directory `import.hx`, a C# `global using` file and a language's
-	 * prelude are all this shape; the file name and the rule that finds the chain are the
-	 * grammar's, never the engine's.
-	 *
-	 * NEAREST FIRST: entry 0's bindings OUTRANK every later entry's for a simple name both bind,
-	 * and the module's OWN statements outrank the whole chain. `pkg` is the package the index read
-	 * off the module, for a grammar whose directory layout mirrors its package namespace and whose
-	 * chain therefore stops at a source root it can compute.
-	 *
-	 * `bounded` is false when that stop point could not be established, which is the signal for a
-	 * consumer that PINS a reference to one declaration to refuse instead — an ambient binding the
-	 * engine cannot see outranks a same-package type, so an unbounded chain cannot be resolved
-	 * against, only withheld from.
-	 *
-	 * A grammar with no ambient-import concept returns an empty, bounded chain.
-	 */
-	public function ambientImportSources(path: String, pkg: String): AmbientImports;
-
-	/**
-	 * When `path` is itself an AMBIENT import source, the modules it GOVERNS — every module that
-	 * receives its statements without spelling them — each with its text; null when `path` is an
-	 * ordinary module. The inverse of `ambientImportSources`, and what a rule judging such a file's
-	 * OWN statements needs: their reader is never this file, whose text is nothing but the statements
-	 * under judgement.
-	 *
-	 * `governs` carries the text for the reason `AmbientImportSource` does: the modules are read from
-	 * disk, so a run narrowed to the ambient source alone can still see who reads it.
-	 *
-	 * `bounded` is false when the governed set could not be established — a directory that could not
-	 * be listed, a module that could not be read. A short set is not a smaller one: a rule asking
-	 * whether ANYTHING under here uses a binding would call it dead on the modules it never saw, so
-	 * the only safe reading of a false is to withhold every verdict about this file.
-	 *
-	 * A grammar with no ambient-import concept answers null for every path.
-	 */
-	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance>;
-
-	/**
-	 * The names-first answer of `ambientImportGovernance`: the modules `path` governs by FILE NAME
-	 * alone, and null when `path` is an ordinary module. The one answer to "which modules does this
-	 * ambient source govern, without reading them" — a caller that only counts, lists or null-tests
-	 * the governed set must ask here, because the texts are most of what the other answer costs.
-	 *
-	 * `files` lists the modules `ambientImportGovernance` would carry a text for, in the same order,
-	 * plus any module that is listed but cannot be read: a caller of this answer never reads one.
-	 * `bounded` is false only when a directory could not be listed.
-	 *
-	 * A grammar with no ambient-import concept answers null for every path.
-	 */
-	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles>;
-
-	/**
-	 * Every position an ambient import source COULD occupy for the module at `path`, NEAREST FIRST
-	 * and whether or not a file is there — the chain `ambientImportSources` would read if all of
-	 * them existed.
-	 *
-	 * What a rule that PROPOSES an ambient source needs, and the reason it is a seam rather than
-	 * path arithmetic in the engine: where such a file lives and what it is called are the
-	 * grammar's to say, and so is where the ladder stops. Nesting is decided from the ladders
-	 * alone — one position is an ancestor of another exactly when some module lists both and the
-	 * ancestor sits later — so the engine never walks a directory itself.
-	 *
-	 * Empty for a grammar with no ambient-import concept, and empty when the stop point cannot be
-	 * established: there is no ladder to climb when its top is unknown.
-	 */
-	public function ambientImportSites(path: String, pkg: String): Array<String>;
-
-	/**
-	 * Optional: `source` with every call that loads a test's configuration document from a literal rewritten as the typed edit of the
-	 * options kit `kit` (a qualified type), the imports that edit needs added, as `apq typed-options` writes it; `Ok(source, 0)` when the
-	 * source holds no such call, `Err` naming what refused it. Null when the grammar has no configuration document to type. A call
-	 * left on its document because the options it loads are the test's subject appends a note to `subjects`.
-	 */
-	public function typedOptionsRewrite(
-		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
-	): Null<EditResult>;
-
-}
-
-/**
  * Plugin-declared contract for `apq refs`. The walker reads these slots and never inspects
  * grammar-specific node types.
  *
@@ -4455,3 +4012,446 @@ typedef AmbientImportGovernance = { var governs: Array<AmbientImportSource>; var
  * `GrammarPlugin.ambientImportGovernedFiles`, which is where it is read.
  */
 typedef AmbientImportGovernedFiles = { var files: Array<String>; var bounded: Bool; };
+
+/**
+ * Plugin contract for a grammar that the query engine can operate on.
+ *
+ * The engine sees the AST exclusively through this interface: parse a
+ * source string, get a `QueryNode` tree, walk it. The engine never
+ * references grammar-specific types — adding a new language is a
+ * matter of writing a `GrammarPlugin` implementation in that grammar's
+ * package, never touching engine code.
+ */
+@:nullSafety(Strict)
+interface GrammarPlugin {
+
+	/** Short name used by `--lang`. */
+	public function langName(): String;
+
+	/**
+	 * Parse `source` and return a generic node tree. The plugin is
+	 * responsible for choosing kind names and name slots — see
+	 * `QueryNode` for the contract.
+	 *
+	 * Plugins may throw on parse failure; callers handle the
+	 * exception. The engine itself never catches.
+	 */
+	public function parseFile(source: String): QueryNode;
+
+	/**
+	 * Parse a `apq search` pattern — language source extended with
+	 * `$X` / `$_` metavariables.
+	 *
+	 * The plugin is free to substitute the metavariable token before
+	 * invoking the grammar parser and to wrap the pattern in synthetic
+	 * decl/stmt scaffolding so the grammar accepts it; the returned
+	 * `Pattern.root` is the user's pattern subtree with all metavar
+	 * leaves reclassified to `kind='Metavar'`. See `Pattern` and the
+	 * pattern-syntax section of `docs/cli-query-tool.md`.
+	 *
+	 * Plugins throw on parse failure across every try-fallback attempt;
+	 * the CLI catches and surfaces the most-informative error.
+	 */
+	public function parsePattern(source: String): Pattern;
+
+	/**
+	 * Declare which `QueryNode.kind` values the `Refs` walker should
+	 * treat as identifier references and binding-declaration hosts.
+	 * Plugin-supplied so the walker stays language-agnostic.
+	 *
+	 * See `docs/cli-query-tool.md` (`apq refs`) for the user-facing
+	 * contract and `RefShape` for field semantics.
+	 */
+	public function refShape(): RefShape;
+
+	/**
+	 * Every `QueryNode.kind` this grammar's parser can project — its whole kind
+	 * vocabulary, generated from the same shape the walk is emitted from rather
+	 * than hand-listed.
+	 *
+	 * A kind is an `Array<String>` slot everywhere it is spelled, so a misspelling
+	 * fails OPEN in both directions: a stale name in a plugin's own `RefShape`
+	 * silently stops matching, and a typo in a user's `--select` silently matches
+	 * nothing. This is the vocabulary both differentials read.
+	 *
+	 * EMPTY means the grammar publishes none, and every consumer must then skip its
+	 * check rather than report the whole selector unknown. The projection's own
+	 * synthetic root (`QueryNode.kind` of the tree `parseFile` returns) is NOT in
+	 * here — it is minted by the plugin, not by the grammar — so a consumer that
+	 * accepts a root segment admits it separately.
+	 */
+	public function projectedKinds(): Array<String>;
+
+	/**
+	 * Declare which `QueryNode.kind` values the `Meta` walker should
+	 * treat as annotation nodes and which kinds are declaration hosts
+	 * an annotation can attach to. Plugin-supplied so the walker stays
+	 * language-agnostic.
+	 *
+	 * See `docs/cli-query-tool.md` (`apq meta`) for the user-facing
+	 * contract and `MetaShape` for field semantics.
+	 */
+	public function metaShape(): MetaShape;
+
+	/**
+	 * Kind-equivalence relation for `apq ast --select`: groups
+	 * `QueryNode.kind` values a `--select <Kind>` should treat as one, so
+	 * a selector matches the grammar's wrapper-shaped variants of a decl.
+	 * For Haxe this folds the `final` wrappers — `ClassDecl ≡ ClassForm`
+	 * (a `final class`'s named inner node) and `FnMember ≡
+	 * FinalModifiedMember` (a `final` method) — so `--select ClassDecl` /
+	 * `--select FnMember` cover final declarations too. Deliberately
+	 * SEPARATE from the search-only `SEARCH_KIND_EQUIVALENCE`: `--select`
+	 * keeps its precise per-position kinds (`VarMember` ≠ `VarStmt`), only
+	 * the final-wrapper folding is added. A plugin with no wrapper shapes
+	 * returns an empty relation (every kind equivalent only to itself).
+	 */
+	public function selectKindEquivalence(): KindEquivalence;
+
+	/**
+	 * Parse `source` like `parseFile`, but additionally surface
+	 * type-position references (field/var type annotations, enum-ctor
+	 * parameter types, …) as addressable nodes. `parseFile` deliberately
+	 * drops these to keep the tree lean for `ast`/`search`/`refs`/`meta`;
+	 * this parallel projection is read by `uses` / `blast` / `mentions` and by
+	 * the operations that REWRITE what it reports (`CrossRename`, `MoveSymbol`,
+	 * `MoveMember`, `PreferMapType`, `ShortenTypeRef`) plus the completeness gate
+	 * of `Naming` - never by those four, which stay byte-identical by construction.
+	 *
+	 * See `docs/cli-query-tool.md` (`apq uses`) and `TypeRefShape`.
+	 */
+	public function parseFileTypeRefs(source: String): QueryNode;
+
+	/**
+	 * The branch-aware projection of an ALREADY-PARSED `tree` of `source`: every
+	 * conditional-compilation region that sits in a STATEMENT list is regrouped into one
+	 * synthetic `CondBranch` node per branch.
+	 *
+	 * `parseFile` projects a `#if A … #elseif B … #else … #end` region as ONE node with
+	 * every branch's statements flattened as siblings, which is not a statement list but N
+	 * of them — so the checks that walk a statement list
+	 * (`ControlFlowSupport.blockKinds`) deliberately skip it. This parallel projection
+	 * recovers the branch boundaries from the directive text in the gaps between child
+	 * spans and gives each branch its own list. Consumed ONLY by the checks that opt in via
+	 * `CheckScan.parseBranchAwareOrNull`, so every other consumer stays byte-identical to
+	 * `parseFile` by construction.
+	 *
+	 * A projection over a tree, not a parse, so a decorator can memoize it without parsing
+	 * twice and a grammar can supply its own without owning the cache. The caller passes the
+	 * tree it already has — `CheckScan.parseBranchAwareOrNull` pairs it with `parseFile`.
+	 *
+	 * A plugin whose grammar exposes no conditional seams — or whose
+	 * `ControlFlowSupport.blockKinds()` does not name `CondBranch` — returns `tree` itself.
+	 * Pure: `tree` is never mutated, and any subtree the rewrite does not touch is SHARED
+	 * with it rather than copied.
+	 */
+	public function projectBranchAware(tree: QueryNode, source: String): QueryNode;
+
+	/**
+	 * Declare which `QueryNode.kind` values the `Uses` walker should
+	 * treat as type references. Plugin-supplied so the walker stays
+	 * language-agnostic. Only meaningful on a tree produced by
+	 * `parseFileTypeRefs`.
+	 */
+	public function typeRefShape(): TypeRefShape;
+
+	/**
+	 * Optional: parse `source` with the grammar's pretty-printer-aware
+	 * pipeline (the format that preserves comments / blank lines where
+	 * available) and emit the formatted source back. Used by `apq ast
+	 * --writer-output` for fast writer-bug iteration without round-trip
+	 * through the project's test runner.
+	 *
+	 * Return `null` when the grammar plugin has no writer wired up — the
+	 * CLI surfaces a "no writer for lang X" error.
+	 *
+	 * `optsJson` is an optional, language-defined JSON config string
+	 * driving writer options (e.g. an `hxformat.json`-shaped payload for
+	 * the Haxe plugin). `null` → plugin uses its built-in defaults; non-
+	 * null → plugin parses and applies. Plugins that don't recognise the
+	 * format may ignore the argument (the CLI threads `.hxtest` section-1
+	 * here so a single fixture reproduces the corpus harness's writer
+	 * settings without manually rebuilding options).
+	 *
+	 * Plugins may throw on parse failure; callers handle the exception.
+	 *
+	 * A plugin whose writer cannot round-trip every comment MUST throw
+	 * `anyparse.format.comment.CommentLossException` rather than return
+	 * output with a comment missing — `apq fmt` and every op that
+	 * canonicalises through `RefactorSupport` treat that as the signal to
+	 * leave the file's bytes alone. Returning lossy output instead makes
+	 * those callers delete an author's comment with no diagnostic; there is
+	 * no way for them to detect it after the fact.
+	 * `CommentInventory.firstMissing` implements the check.
+	 */
+	public function writeRoundTrip(source: String, ?optsJson: String): Null<String>;
+
+	/**
+	 * The edit set `edits` laid into `source` by a FORMAT-PRESERVING writer, or null for a grammar whose
+	 * writer RE-EMITS the whole file — the shape `CanonicalEdit.canonicalize` then finishes itself, by
+	 * splicing the raw texts and running the writer to its fixed point.
+	 *
+	 * A grammar answers here when its writer keeps the file's own layout rather than imposing one:
+	 * `writeRoundTrip` hands every parseable source back unchanged, so the fixed point would leave a
+	 * spliced text exactly as spliced — an element appended to a one-per-line list as `, x` on the
+	 * previous line. The answer is the spliced document with what the edits introduced laid out the way
+	 * the surrounding source is, and every byte outside their reach untouched (JSON:
+	 * `JsonLayoutWriter.layout`). Throws the parser's `ParseError` when the splice does not parse.
+	 */
+	public function layoutSplice(source: String, edits: Array<{ span: Span, text: String }>): Null<String>;
+
+	/**
+	 * Optional: the layout numbers the writer would use for `optsJson` — the
+	 * target line width and the column width of one indent character. Lets a check
+	 * reason about how wide a construct may be BEFORE paying for a
+	 * `writeRoundTrip`, using the same configuration the writer itself would.
+	 *
+	 * `optsJson` follows the `writeRoundTrip` convention: a language-defined JSON
+	 * config string (an `hxformat.json` payload for the Haxe plugin) or `null` for
+	 * the plugin's built-in defaults. Return `null` when the grammar has no writer
+	 * / no width concept — a width-aware check then no-ops for it.
+	 */
+	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics>;
+
+	/**
+	 * Optional: the writer's member-gap policy for `optsJson` (`MemberGapPolicy`) - the blank lines it forces between
+	 * two adjacent type members under that config. `optsJson` follows the `writeRoundTrip` convention. Return `null`
+	 * when the grammar's writer forces none; a check reading it then keeps its own spacing rule.
+	 */
+	public function memberGapPolicy(?optsJson: String): Null<MemberGapPolicy>;
+
+	/**
+	 * Optional: parse `source` with the plain (non-trivia) parser and
+	 * emit via the plain writer. Drops comments and source-layout
+	 * newlines — flattens to the writer's canonical form. Used by `apq
+	 * ast --writer-output-plain` and by `apq writer-equals --plain`
+	 * because this is what unit tests like
+	 * `HxModuleWriter.write(HaxeModuleParser.parse(src))` actually see.
+	 *
+	 * The trivia pipeline (`writeRoundTrip`) and the plain pipeline emit
+	 * different bytes on the same input — unit-test expected strings
+	 * MUST be probed via the plain entry. Return `null` when the
+	 * grammar plugin has no plain writer (binary grammars, plugins with
+	 * a single unified pipeline), or when this engine was built without it
+	 * (the Haxe plugin compiles its plain pipeline only under
+	 * `-D anyparse_plain_pipeline`).
+	 *
+	 * `optsJson` follows the same convention as `writeRoundTrip` — a
+	 * language-defined JSON config or `null` for defaults.
+	 *
+	 * Plugins may throw on parse failure; callers handle the exception.
+	 */
+	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String>;
+
+	/**
+	 * Optional: strict trivia-mode parse used by `apq recon` for corpus
+	 * skip-parse sweeps. Returns `true` on successful parse; throws
+	 * `ParseError` (or other `Exception`) on parse failure so the caller
+	 * can cluster by error locus; returns `false` when the plugin has no
+	 * trivia parser wired up (CLI surfaces a `no recon parser for lang X`
+	 * and exits).
+	 *
+	 * The trivia pipeline preserves comments / blank lines and matches
+	 * the surface accepted by the writer's round-trip path, so a recon
+	 * run mirrors what the corpus harness sees on each fixture.
+	 */
+	public function reconParse(source: String): Bool;
+
+	/**
+	 * `typeSource` — a type written as TEXT: an annotation's verbatim source, a span of a file, a
+	 * type a rule composed — read as ONE type by this grammar's own parser, or null when it is not
+	 * one: it does not parse, or a second token stands before or after the type. Comments around
+	 * the type are trivia, as they are to the parser: the answer's span covers the type alone, so a
+	 * consumer that splices `typeSource` back needs `text == typeSource` to know it is undecorated.
+	 * Offsets in the answer are into `typeSource` itself.
+	 *
+	 * The query tree keeps a type only as far as its projection does, so a consumer asking for the
+	 * SHAPE of a written type (its type arguments, a function's parameters and result, a structure's
+	 * fields) has text in hand, and reading text is grammar knowledge: it belongs here, never to a
+	 * bracket-counting loop in a check. A consumer declines on null — never guesses. A grammar with
+	 * no type syntax returns null for everything.
+	 */
+	public function typeSyntax(typeSource: String): Null<TypeSyntax>;
+
+	/**
+	 * Optional: the grammar's naming-convention capability, consumed by the
+	 * `naming` analysis check. Return null when the grammar has no naming
+	 * concept (binary formats) — the check then no-ops for it, mirroring the
+	 * optional writer methods above.
+	 */
+	public function namingSupport(): Null<NamingSupport>;
+
+	/**
+	 * Optional: the grammar's adjacent-string-literal folding capability, consumed
+	 * by the `fold-adjacent-string-literals` check. Null when the grammar has no
+	 * string-concatenation concept — the check then no-ops, like `namingSupport`.
+	 */
+	public function stringFoldSupport(): Null<StringFoldSupport>;
+
+	/**
+	 * The maximum cyclomatic complexity a function may have before the
+	 * `complexity` check flags it, for the file at `path` — sourced from a
+	 * project config (e.g. a `checkstyle.json`) when present, else null so the
+	 * check keeps its built-in default. Grammars without such a config return null.
+	 */
+	public function maxComplexity(path: String): Null<Int>;
+
+	/**
+	 * Optional: the grammar's control-flow capability, consumed by the
+	 * `dead-code` check. Null when the grammar has no statement / block concept
+	 * (binary formats) — the check then no-ops, like `stringFoldSupport`.
+	 */
+	public function controlFlowSupport(): Null<ControlFlowSupport>;
+
+	/**
+	 * Every NON-CODE region of `source` — comment, string literal, regex literal — as
+	 * `[from, to)` byte spans in source order, by THIS grammar's lexical rules.
+	 *
+	 * The sibling of `controlFlowSupport()` for the question "is this offset real code?", and
+	 * the seam that keeps a comment scan out of the engine: what opens a comment, what quotes
+	 * a string, whether a regex literal exists at all and what may hide inside its body are
+	 * grammar facts, and the Haxe answers to them used to sit in `anyparse.query` where a
+	 * second grammar could not reach them. Takes raw source and needs no parse, exactly as
+	 * `parseFile` / `writeRoundTrip` do.
+	 *
+	 * A grammar with no comment and no literal concept returns an empty array, which reads as
+	 * "every byte is code". That is the conservative answer for the masking consumers — an
+	 * unmasked region only ever costs an extra occurrence, never a missed one — but NOT for
+	 * `BodySlotGuard` / `Patch`, which use it to decide that a slot holding only a comment is
+	 * empty. A grammar that HAS comments must answer them here.
+	 *
+	 * There is deliberately NO default implementation, and no way for one to be missing: this is an abstract interface member.
+	 * `CliArgs.pickPlugin` knows two `--lang`s: `haxe`, and `json`, whose answer is every string literal (keys included) read off
+	 * its own parse, since JSON has no comment. The `ar` and `sexpr` grammars ship a parser and a writer but no `GrammarPlugin`
+	 * at all, so the question does not reach them. The hazard is a FUTURE plugin author satisfying the compiler with `[]`
+	 * because it is the cheapest thing that type-checks, and the paragraph above is what that author
+	 * has to read past.
+	 *
+	 * A grammar-agnostic default IS buildable when a second implementor arrives, and the ingredients
+	 * are already declared rather than hypothetical: `Format.lineComment` and `Format.blockComment`
+	 * are read at MACRO time into `FormatReader.commentPatterns`, and `TextFormat.stringQuote` names
+	 * the quote characters. What such a default could NOT express is precisely what makes the Haxe
+	 * answer non-trivial — an interpolation hole whose end needs brace-and-quote balancing, and a
+	 * regex literal whose body may hold a comment opener — so a grammar with either must still
+	 * override. Building it for one implementor would be a default nothing exercises; the check that
+	 * the declaration and the hand scanner still agree is worth having now, and
+	 * `unit.LexicalRegionAgreementTest` has it.
+	 */
+	public function lexicalRegions(source: String): Array<LexRegion>;
+
+	/**
+	 * Every token of `source` that starts in `[from, to)`, in source order, by THIS grammar's own declarations: a
+	 * declared literal text, a terminal the grammar tags `@:token(<Kind>)`, or a whole non-code region of
+	 * `lexicalRegions` as one token. A grammar with a generated lexical pass answers with its `tokens`; one that
+	 * declares no token reader answers empty. `from` is read as a token boundary: a token that starts before it is
+	 * not reported, and one it falls inside is read from `from` on.
+	 */
+	public function tokenSpans(source: String, from: Int, to: Int): Array<TokenSpan>;
+
+	/**
+	 * Optional: the grammar's boolean-expression simplification capability,
+	 * consumed by the `simplify-boolean-ternary` check. Null when the grammar has
+	 * no boolean-ternary concept — the check then no-ops, like the other optional
+	 * support methods above.
+	 */
+	public function booleanLogicSupport(): Null<BooleanLogicSupport>;
+
+	/**
+	 * Optional: the extension-method names a `using <modulePath>` brings into
+	 * scope, for module paths the grammar knows from its standard library. The
+	 * `unused-import` check uses this to verify that a `using` whose bound name is
+	 * never referenced directly is still live via an extension call. Return null
+	 * for an unknown module path (the check then leaves that `using` an
+	 * unverifiable advisory) and for a grammar with no `using` concept.
+	 */
+	public function knownExtensionMethods(modulePath: String): Null<Array<String>>;
+
+	/**
+	 * Lint-check option overrides discovered from the grammar's native config
+	 * near `path` (Haxe: `checkstyle.json`), or null when the grammar has no such
+	 * config or none is found. The neutral counterpart of `maxComplexity` for the
+	 * checks wired to honour a project's existing checkstyle config.
+	 */
+	public function checkOverrides(path: String): Null<CheckOverrides>;
+
+	/**
+	 * The AMBIENT import sources in scope for the module stored at `path` with package `pkg` —
+	 * files whose import / using statements bind names in that module although the module spells
+	 * none of them. A Haxe per-directory `import.hx`, a C# `global using` file and a language's
+	 * prelude are all this shape; the file name and the rule that finds the chain are the
+	 * grammar's, never the engine's.
+	 *
+	 * NEAREST FIRST: entry 0's bindings OUTRANK every later entry's for a simple name both bind,
+	 * and the module's OWN statements outrank the whole chain. `pkg` is the package the index read
+	 * off the module, for a grammar whose directory layout mirrors its package namespace and whose
+	 * chain therefore stops at a source root it can compute.
+	 *
+	 * `bounded` is false when that stop point could not be established, which is the signal for a
+	 * consumer that PINS a reference to one declaration to refuse instead — an ambient binding the
+	 * engine cannot see outranks a same-package type, so an unbounded chain cannot be resolved
+	 * against, only withheld from.
+	 *
+	 * A grammar with no ambient-import concept returns an empty, bounded chain.
+	 */
+	public function ambientImportSources(path: String, pkg: String): AmbientImports;
+
+	/**
+	 * When `path` is itself an AMBIENT import source, the modules it GOVERNS — every module that
+	 * receives its statements without spelling them — each with its text; null when `path` is an
+	 * ordinary module. The inverse of `ambientImportSources`, and what a rule judging such a file's
+	 * OWN statements needs: their reader is never this file, whose text is nothing but the statements
+	 * under judgement.
+	 *
+	 * `governs` carries the text for the reason `AmbientImportSource` does: the modules are read from
+	 * disk, so a run narrowed to the ambient source alone can still see who reads it.
+	 *
+	 * `bounded` is false when the governed set could not be established — a directory that could not
+	 * be listed, a module that could not be read. A short set is not a smaller one: a rule asking
+	 * whether ANYTHING under here uses a binding would call it dead on the modules it never saw, so
+	 * the only safe reading of a false is to withhold every verdict about this file.
+	 *
+	 * A grammar with no ambient-import concept answers null for every path.
+	 */
+	public function ambientImportGovernance(path: String): Null<AmbientImportGovernance>;
+
+	/**
+	 * The names-first answer of `ambientImportGovernance`: the modules `path` governs by FILE NAME
+	 * alone, and null when `path` is an ordinary module. The one answer to "which modules does this
+	 * ambient source govern, without reading them" — a caller that only counts, lists or null-tests
+	 * the governed set must ask here, because the texts are most of what the other answer costs.
+	 *
+	 * `files` lists the modules `ambientImportGovernance` would carry a text for, in the same order,
+	 * plus any module that is listed but cannot be read: a caller of this answer never reads one.
+	 * `bounded` is false only when a directory could not be listed.
+	 *
+	 * A grammar with no ambient-import concept answers null for every path.
+	 */
+	public function ambientImportGovernedFiles(path: String): Null<AmbientImportGovernedFiles>;
+
+	/**
+	 * Every position an ambient import source COULD occupy for the module at `path`, NEAREST FIRST
+	 * and whether or not a file is there — the chain `ambientImportSources` would read if all of
+	 * them existed.
+	 *
+	 * What a rule that PROPOSES an ambient source needs, and the reason it is a seam rather than
+	 * path arithmetic in the engine: where such a file lives and what it is called are the
+	 * grammar's to say, and so is where the ladder stops. Nesting is decided from the ladders
+	 * alone — one position is an ancestor of another exactly when some module lists both and the
+	 * ancestor sits later — so the engine never walks a directory itself.
+	 *
+	 * Empty for a grammar with no ambient-import concept, and empty when the stop point cannot be
+	 * established: there is no ladder to climb when its top is unknown.
+	 */
+	public function ambientImportSites(path: String, pkg: String): Array<String>;
+
+	/**
+	 * Optional: `source` with every call that loads a test's configuration document from a literal rewritten as the typed edit of the
+	 * options kit `kit` (a qualified type), the imports that edit needs added, as `apq typed-options` writes it; `Ok(source, 0)` when the
+	 * source holds no such call, `Err` naming what refused it. Null when the grammar has no configuration document to type. A call
+	 * left on its document because the options it loads are the test's subject appends a note to `subjects`.
+	 */
+	public function typedOptionsRewrite(
+		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
+	): Null<EditResult>;
+
+}

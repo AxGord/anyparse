@@ -4,6 +4,9 @@ import haxe.Exception;
 
 using StringTools;
 
+/** A command line a subcommand cannot read: the CLI prints the message with the usage and exits 2. */
+class UsageError extends Exception {}
+
 /**
  * The command line of one subcommand, taken apart in the order a tool asks for it: flags and options first (each in
  * either `--name value` or `--name=value` form, anywhere on the line), the positionals last — which is also where an
@@ -104,6 +107,3 @@ final class Args {
 	}
 
 }
-
-/** A command line a subcommand cannot read: the CLI prints the message with the usage and exits 2. */
-class UsageError extends Exception {}

@@ -11,6 +11,16 @@ using StringTools;
 using Lambda;
 
 /**
+ * What ONE `member-order` fix call answered for ONE source: the `declineReason` of each finding it
+ * was handed, in report order, beside the number of edits it produced.
+ *
+ * The two travel together because neither alone says what happened. A null reason is what a FIXED
+ * finding carries and also what a silently declined one carried before this check learned to speak;
+ * only the edit count separates them.
+ */
+typedef FixOutcome = { var reasons: Array<Null<String>>; var edits: Int; };
+
+/**
  * The `member-order` check: a type whose members are not in canonical order
  * (constants, properties, fields, constructor, accessors, instance methods, static methods; public before private) is flagged
  * `Info` and `--fix` reorders them. Reordering bails when a field initializer is side-effecting or reads a sibling
@@ -1627,13 +1637,3 @@ class MemberOrderCheckTest extends Test {
 	}
 
 }
-
-/**
- * What ONE `member-order` fix call answered for ONE source: the `declineReason` of each finding it
- * was handed, in report order, beside the number of edits it produced.
- *
- * The two travel together because neither alone says what happened. A null reason is what a FIXED
- * finding carries and also what a silently declined one carried before this check learned to speak;
- * only the edit count separates them.
- */
-typedef FixOutcome = { var reasons: Array<Null<String>>; var edits: Int; };

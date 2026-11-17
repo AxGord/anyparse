@@ -4,6 +4,19 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
+/** Resolved nullable-source recognition config — the seams `NullableSource` reads, built once per grammar. */
+typedef NullableSourceCfg = {
+	var identKind: String;
+	var shape: RefShape;
+	var indexAccessKind: Null<String>;
+	var nullableIndexTypes: Array<String>;
+	var callKind: Null<String>;
+	var fieldAccessKind: Null<String>;
+	var instanceSigs: Array<{ type: String, method: String }>;
+	var excludedCalls: Array<String>;
+	var returnMarkers: Array<String>;
+};
+
 /**
  * Recognises whether an expression is a **provably-nullable source** — the shared
  * type-driven predicate behind the point-wise `possible-null-dereference` check and
@@ -264,16 +277,3 @@ final class NullableSource {
 	}
 
 }
-
-/** Resolved nullable-source recognition config — the seams `NullableSource` reads, built once per grammar. */
-typedef NullableSourceCfg = {
-	var identKind: String;
-	var shape: RefShape;
-	var indexAccessKind: Null<String>;
-	var nullableIndexTypes: Array<String>;
-	var callKind: Null<String>;
-	var fieldAccessKind: Null<String>;
-	var instanceSigs: Array<{ type: String, method: String }>;
-	var excludedCalls: Array<String>;
-	var returnMarkers: Array<String>;
-};

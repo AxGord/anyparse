@@ -12,6 +12,58 @@ import anyparse.query.SymbolIndex;
 using anyparse.util.Strings;
 using StringTools;
 
+/** One convertible branch: the span reported, the span replaced, and the replacement text. */
+private typedef Candidate = { final branch: Span; final edit: Span; final text: String; };
+
+/**
+ * How a case pattern classifies for the convertibility whitelist: `Refused` is outside it
+ * (and refuses the whole switch), while `LiteralPattern` and `DottedPattern` are the two
+ * admitted classes. They are kept apart because a switch MIXING them is refused: a literal
+ * and a dotted constant can denote the same value while reading as distinct patterns, so
+ * a false guard could silently fall into the other one. Same-class collisions stay visible
+ * to a reader and are what the duplicate scan compares.
+ */
+private enum abstract PatternClass(Int) {
+	final Refused = 0;
+	final LiteralPattern = 1;
+	final DottedPattern = 2;
+}
+
+/** A case branch cut into its pattern run, its guard presence, and its body statements. */
+private typedef BranchParts = { final patterns: Array<QueryNode>; final body: Array<QueryNode>; };
+
+/** The per-file scan context: the source, the resolved seams, the line budget, and lazy type resolution. */
+private typedef Scan = {
+	final tree: QueryNode;
+	final source: String;
+	final seams: Seams;
+	final metrics: LayoutMetrics;
+	final index: () -> Null<SymbolIndex>;
+};
+
+/** The seam kinds `PreferCaseGuard` resolves once per run. */
+private typedef Seams = {
+
+	final switchKinds: Array<String>;
+	final caseBranchKind: String;
+	final plainCasePatternKind: String;
+	final parenKind: String;
+	final ifKinds: Array<String>;
+	final blockStmtKind: String;
+	final stringLiteralKinds: Array<String>;
+	final numericKinds: Array<String>;
+
+	/** Tells a PLAIN string literal from an interpolated one, and yields its raw content for the duplicate key. */
+	final stringFold: StringFoldSupport;
+	final negationKind: Null<String>;
+	final fieldAccessKind: String;
+	final identKind: String;
+	final exhaustiveDeclKinds: Array<String>;
+	final conditionalKind: Null<String>;
+	final emptyStmtKind: Null<String>;
+
+};
+
 /**
  * Flags a switch-case branch whose body is EXACTLY one else-less `if` wrapping the
  * whole body, and rewrites it as a case GUARD: `case P: if (c) s;` becomes
@@ -524,55 +576,3 @@ final class PreferCaseGuard extends RuleBase implements RiskyFix {
 	}
 
 }
-
-/** One convertible branch: the span reported, the span replaced, and the replacement text. */
-private typedef Candidate = { final branch: Span; final edit: Span; final text: String; };
-
-/**
- * How a case pattern classifies for the convertibility whitelist: `Refused` is outside it
- * (and refuses the whole switch), while `LiteralPattern` and `DottedPattern` are the two
- * admitted classes. They are kept apart because a switch MIXING them is refused: a literal
- * and a dotted constant can denote the same value while reading as distinct patterns, so
- * a false guard could silently fall into the other one. Same-class collisions stay visible
- * to a reader and are what the duplicate scan compares.
- */
-private enum abstract PatternClass(Int) {
-	final Refused = 0;
-	final LiteralPattern = 1;
-	final DottedPattern = 2;
-}
-
-/** A case branch cut into its pattern run, its guard presence, and its body statements. */
-private typedef BranchParts = { final patterns: Array<QueryNode>; final body: Array<QueryNode>; };
-
-/** The per-file scan context: the source, the resolved seams, the line budget, and lazy type resolution. */
-private typedef Scan = {
-	final tree: QueryNode;
-	final source: String;
-	final seams: Seams;
-	final metrics: LayoutMetrics;
-	final index: () -> Null<SymbolIndex>;
-};
-
-/** The seam kinds `PreferCaseGuard` resolves once per run. */
-private typedef Seams = {
-
-	final switchKinds: Array<String>;
-	final caseBranchKind: String;
-	final plainCasePatternKind: String;
-	final parenKind: String;
-	final ifKinds: Array<String>;
-	final blockStmtKind: String;
-	final stringLiteralKinds: Array<String>;
-	final numericKinds: Array<String>;
-
-	/** Tells a PLAIN string literal from an interpolated one, and yields its raw content for the duplicate key. */
-	final stringFold: StringFoldSupport;
-	final negationKind: Null<String>;
-	final fieldAccessKind: String;
-	final identKind: String;
-	final exhaustiveDeclKinds: Array<String>;
-	final conditionalKind: Null<String>;
-	final emptyStmtKind: Null<String>;
-
-};

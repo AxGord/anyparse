@@ -9,6 +9,43 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
 
 /**
+ * One `#if ... #end` region a grammar captured RAW, as `CondRegionScan.opaqueCondRegions`
+ * reports it: `region` is the directive region itself — what a diagnostic quotes and what
+ * `fmt` leaves byte-for-byte — and `gaps` the byte runs inside the node that no child covers,
+ * the narrower set a fail-closed text scan is allowed to read.
+ */
+typedef OpaqueCondRegion = {
+
+	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKinds`. */
+	final kind: String;
+	final region: Span;
+	final gaps: Array<Span>;
+
+	/**
+	 * The node's own children lying wholly INSIDE `region` — the parts of it the writer
+	 * formats like any other subtree. Empty for a wholly-raw region; non-empty for the
+	 * ctors that keep only their unbalanced HEAD raw.
+	 */
+	final formatted: Array<Span>;
+
+};
+
+/**
+ * The seams `RefactorSupport.condArmDeclarations` reads while scanning one conditional region's
+ * arms for a declaration of `name` — the grammar's conditional and declaration vocabularies plus
+ * the file's directives the branch splitter reads, gathered once per `exclusiveBranchRedeclaration` call.
+ */
+private typedef ArmScan = {
+	final name: String;
+	final condKind: String;
+	final declKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final elseKeywords: Array<String>;
+	final directives: Array<CondDirective>;
+	final shape: RefShape;
+};
+
+/**
  * Conditional-compilation regions, as far as an ANALYSIS can see them. A `#if` region is the
  * one construct whose contents the projected tree may not carry: an unparsed splice is raw
  * bytes, and a declaration that exists only under one set of build flags is invisible to any
@@ -477,40 +514,3 @@ final class CondRegionScan {
 	}
 
 }
-
-/**
- * One `#if ... #end` region a grammar captured RAW, as `CondRegionScan.opaqueCondRegions`
- * reports it: `region` is the directive region itself — what a diagnostic quotes and what
- * `fmt` leaves byte-for-byte — and `gaps` the byte runs inside the node that no child covers,
- * the narrower set a fail-closed text scan is allowed to read.
- */
-typedef OpaqueCondRegion = {
-
-	/** The projected ctor the grammar fell back to — one of `RefShape.opaqueCondRegionKinds`. */
-	final kind: String;
-	final region: Span;
-	final gaps: Array<Span>;
-
-	/**
-	 * The node's own children lying wholly INSIDE `region` — the parts of it the writer
-	 * formats like any other subtree. Empty for a wholly-raw region; non-empty for the
-	 * ctors that keep only their unbalanced HEAD raw.
-	 */
-	final formatted: Array<Span>;
-
-};
-
-/**
- * The seams `RefactorSupport.condArmDeclarations` reads while scanning one conditional region's
- * arms for a declaration of `name` — the grammar's conditional and declaration vocabularies plus
- * the file's directives the branch splitter reads, gathered once per `exclusiveBranchRedeclaration` call.
- */
-private typedef ArmScan = {
-	final name: String;
-	final condKind: String;
-	final declKinds: Array<String>;
-	final metaKinds: Array<String>;
-	final elseKeywords: Array<String>;
-	final directives: Array<CondDirective>;
-	final shape: RefShape;
-};

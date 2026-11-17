@@ -4,6 +4,9 @@ import anyparse.query.CallGraph;
 import anyparse.query.ShapeVocab;
 import anyparse.runtime.LineIndex;
 
+/** The taint asking which calls block LONG (`all`), the same over the normal paths only (`normal`), and what tells them apart. */
+typedef PathCosts = { final all: LockTaint; final normal: LockTaint; final errors: ErrorPaths; }
+
 /**
  * Where a call runs only on an error path: its site sits inside the body of a `catch` clause of its file that no loop of its
  * function holds (every turn of a loop may fail: such a `catch` runs on the normal path) — of its own function, or of the one a
@@ -123,6 +126,3 @@ final class ErrorPaths {
 	}
 
 }
-
-/** The taint asking which calls block LONG (`all`), the same over the normal paths only (`normal`), and what tells them apart. */
-typedef PathCosts = { final all: LockTaint; final normal: LockTaint; final errors: ErrorPaths; }

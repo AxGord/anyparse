@@ -10,6 +10,67 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /**
+ * ONE file's type information plus the grammar seams the position gates read: the shape, the
+ * source text, the two span-indexed type maps (`declaredTypeSources` / `castTargetSources`), the
+ * import map used for FQN reconciliation, and the nullable-wrapper names. Bundled because the
+ * gate chain threads all six through four helpers unchanged.
+ */
+typedef FileTypes = {
+
+	final shape: RefShape;
+	final source: String;
+	final declaredTypeSources: Map<Int, String>;
+	final castTargets: Map<Int, String>;
+	final importMap: Map<String, String>;
+	final wrapperNames: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a cast's target type is read. */
+	final typeSyntax: TypeSyntaxReader;
+
+};
+
+/**
+ * One cast node the walk found in a position, with the three context nodes the position gates
+ * read: its PARENT (which position it is in at all), the enclosing function (position (b)'s
+ * return annotation) and the enclosing visibility container (position (d)'s `this.f` arm).
+ */
+typedef CastSite = {
+	final node: QueryNode;
+	final span: Span;
+	final parent: QueryNode;
+	final enclosingFn: Null<QueryNode>;
+	final enclosingContainer: Null<QueryNode>;
+}
+
+/**
+ * ONE file's context for a positioned-cast report: which file it came from, its parsed tree, its
+ * type information, and the resolution index the whole run shares.
+ */
+typedef CastScan = {
+
+	final file: String;
+	final root: QueryNode;
+	final types: FileTypes;
+	final resolutionIndex: () -> SymbolIndex;
+
+	/** The file's lexical regions, scanned on first ask: the string-aware answer to where its comments sit. */
+	final regions: () -> Array<LexRegion>;
+
+}
+
+/**
+ * The kind lists `walkCasts` tests per node, resolved ONCE per walk. Read from the shape at every
+ * step instead, each `?? []` fallback would allocate a fresh array per node of the tree.
+ */
+typedef WalkKinds = {
+	final opaque: Array<String>;
+	final functions: Array<String>;
+	final lambdas: Array<String>;
+	final bodies: Array<String>;
+	final containers: Array<String>;
+}
+
+/**
  * The written type source a cast's POSITION demands — the shared gate chain behind every check
  * that asks whether a cast restates something the surrounding code already pins.
  *
@@ -447,65 +508,4 @@ final class ExpectedType {
 		return best;
 	}
 
-}
-
-/**
- * ONE file's type information plus the grammar seams the position gates read: the shape, the
- * source text, the two span-indexed type maps (`declaredTypeSources` / `castTargetSources`), the
- * import map used for FQN reconciliation, and the nullable-wrapper names. Bundled because the
- * gate chain threads all six through four helpers unchanged.
- */
-typedef FileTypes = {
-
-	final shape: RefShape;
-	final source: String;
-	final declaredTypeSources: Map<Int, String>;
-	final castTargets: Map<Int, String>;
-	final importMap: Map<String, String>;
-	final wrapperNames: Array<String>;
-
-	/** `GrammarPlugin.typeSyntax` — how a cast's target type is read. */
-	final typeSyntax: TypeSyntaxReader;
-
-};
-
-/**
- * One cast node the walk found in a position, with the three context nodes the position gates
- * read: its PARENT (which position it is in at all), the enclosing function (position (b)'s
- * return annotation) and the enclosing visibility container (position (d)'s `this.f` arm).
- */
-typedef CastSite = {
-	final node: QueryNode;
-	final span: Span;
-	final parent: QueryNode;
-	final enclosingFn: Null<QueryNode>;
-	final enclosingContainer: Null<QueryNode>;
-}
-
-/**
- * ONE file's context for a positioned-cast report: which file it came from, its parsed tree, its
- * type information, and the resolution index the whole run shares.
- */
-typedef CastScan = {
-
-	final file: String;
-	final root: QueryNode;
-	final types: FileTypes;
-	final resolutionIndex: () -> SymbolIndex;
-
-	/** The file's lexical regions, scanned on first ask: the string-aware answer to where its comments sit. */
-	final regions: () -> Array<LexRegion>;
-
-}
-
-/**
- * The kind lists `walkCasts` tests per node, resolved ONCE per walk. Read from the shape at every
- * step instead, each `?? []` fallback would allocate a fresh array per node of the tree.
- */
-typedef WalkKinds = {
-	final opaque: Array<String>;
-	final functions: Array<String>;
-	final lambdas: Array<String>;
-	final bodies: Array<String>;
-	final containers: Array<String>;
 }

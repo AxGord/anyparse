@@ -16,6 +16,41 @@ import anyparse.query.SymbolIndex;
 using anyparse.util.Strings;
 
 /**
+ * The initializer proof `scanContainer` threads down to `consider` — "does this member's
+ * initializer make it inlinable, given its owning container and file". Closed over the resolved
+ * seams, the plugin and the LAZY resolution index in `run`, so a run with no qualified reference
+ * never pays for an index.
+ */
+private typedef InitProof = (container: QueryNode, init: QueryNode) -> Bool;
+
+/** What `run` resolves once and every container scan reads. */
+private typedef RunFacts = {
+	final reflected: ReflectionSurface;
+	final macroConsumed: Array<String>;
+	final proof: InitProof;
+	final demand: ConstantDemandScan;
+};
+
+/**
+ * What a member's leading modifier run says about it, resolved once by `modifierRunOf`:
+ * `static` / already-`inline` and that token's span / exported visibility / carrying a pin meta (`@:keep`, `@:rtti`) / `extern`.
+ */
+private typedef ModifierRun = {
+
+	final isStatic: Bool;
+	final isInline: Bool;
+	final exported: Bool;
+	final pinned: Bool;
+
+	/** The member carries the extern modifier; a non-inline extern field with an initializer is a compile error. */
+	final isExtern: Bool;
+
+	/** The `inline` modifier's own span, which the String arm flags and its fix deletes; null when absent. */
+	final inlineSpan: Null<Span>;
+
+};
+
+/**
  * Flags a `static final` constant of a basic scalar type whose initializer is a compile-time
  * constant, and rewrites it to `static inline final` by inserting the `inline` keyword.
  * `Severity.Info` (a codegen / modernization cleanup), with an autofix. An inline scalar constant
@@ -696,37 +731,3 @@ final class InlineConstant extends RuleBase {
 	}
 
 }
-
-/**
- * The initializer proof `scanContainer` threads down to `consider` — "does this member's
- * initializer make it inlinable, given its owning container and file". Closed over the resolved
- * seams, the plugin and the LAZY resolution index in `run`, so a run with no qualified reference
- * never pays for an index.
- */
-private typedef InitProof = (container: QueryNode, init: QueryNode) -> Bool;
-/** What `run` resolves once and every container scan reads. */
-private typedef RunFacts = {
-	final reflected: ReflectionSurface;
-	final macroConsumed: Array<String>;
-	final proof: InitProof;
-	final demand: ConstantDemandScan;
-};
-
-/**
- * What a member's leading modifier run says about it, resolved once by `modifierRunOf`:
- * `static` / already-`inline` and that token's span / exported visibility / carrying a pin meta (`@:keep`, `@:rtti`) / `extern`.
- */
-private typedef ModifierRun = {
-
-	final isStatic: Bool;
-	final isInline: Bool;
-	final exported: Bool;
-	final pinned: Bool;
-
-	/** The member carries the extern modifier; a non-inline extern field with an initializer is a compile error. */
-	final isExtern: Bool;
-
-	/** The `inline` modifier's own span, which the String arm flags and its fix deletes; null when absent. */
-	final inlineSpan: Null<Span>;
-
-};

@@ -18,6 +18,180 @@ using Lambda;
 using StringTools;
 
 /**
+ * The statement runs of the findings, resolved through the AST of ONE tree (`root`) — both reports of an `--after` pair
+ * are resolved against it. Everything it reads is kept for the length of this run only.
+ */
+@:nullSafety(Strict)
+final class Runs {
+
+	/** How many `hxq ast` processes run at once: the knee of the project's process fan-out. */
+	private static inline final AST_PARALLEL: Int = 4;
+
+	private final _trees: Map<String, AstDumpJson> = [];
+	private final _index: Map<String, Map<String, Array<Candidate>>> = [];
+	private final _lines: Map<String, Array<String>> = [];
+	private final _bareDecl: EReg = ~/^(var|final)\s+[A-Za-z_]\w*\s*(:\s*[^=]+?)?\s*(=\s*(-?[A-Za-z_][\w.]*|-?\d[\w.]*|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\[\]|\{\}))?\s*;?\s*$/s;
+	private final _bareAssign: EReg = ~/^[A-Za-z_][\w.]*\s*=\s*(-?[A-Za-z_][\w.]*|-?\d[\w.]*|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\[\]|\{\})\s*;?\s*$/s;
+	private final _label: String;
+	private final _root: String;
+	private final _cache: Null<String>;
+
+	public function new(label: String, root: String, cache: Null<String>) {
+		_label = label;
+		_root = root;
+		_cache = cache;
+		if (cache != null) FileSystem.createDirectory(cache);
+	}
+
+	/**
+	 * Read the AST of every file of `files` not read yet, in parallel. The first one runs alone, so a stale `hxq` engine
+	 * is rebuilt once rather than by several processes at the same time.
+	 */
+	public function prefetch(files: Array<String>): Void {
+		final missing: Array<String> = [];
+		for (file in files) if (!_trees.exists(file) && !missing.contains(file)) {
+			final cached: Null<String> = cachePath(file);
+			if (cached != null && FileSystem.exists(cached))
+				_trees[file] = AstDumpJsonParser.parse(File.getContent(cached));
+			else
+				missing.push(file);
+		}
+		if (missing.length == 0) return;
+		store(missing[0], astCommand(missing[0]).run());
+		final rest: Array<String> = missing.slice(1);
+		for (i => result in Pool.of(AST_PARALLEL).map(rest, astCommand)) store(rest[i], result);
+	}
+
+	/** The kind of `f`'s statement run by the regex reading: `bare-decl`, `bare-assign`, `bare-mixed`, `logic` or `unresolved`. */
+	public function classify(f: Finding): String {
+		final statements: Null<Array<AstNodeJson>> = runOf(f);
+		if (statements == null) return 'unresolved';
+		final texts: Array<String> = statements.map(s -> CloneCensus.pyStrip(text(f.file, s.span)));
+		return if (texts.foreach(t -> _bareDecl.match(t)))
+			'bare-decl'
+		else if (texts.foreach(t -> _bareAssign.match(t)))
+			'bare-assign'
+		else if (texts.foreach(t -> _bareDecl.match(t) || _bareAssign.match(t)))
+			'bare-mixed'
+		else
+			'logic';
+	}
+
+	/** The `n` statement nodes of finding `f`, or null when its position resolves to no run. */
+	private function runOf(f: Finding): Null<Array<AstNodeJson>> {
+		final candidates: Null<Array<Candidate>> = nodesAt(f.file)['${f.line}:${f.col}'];
+		if (candidates == null) return null;
+		for (c in candidates) if (c.index + f.n <= c.siblings.length) return c.siblings.slice(c.index, c.index + f.n);
+		return null;
+	}
+
+	/** Every node of `file` by its start `line:col`, outermost first. */
+	private function nodesAt(file: String): Map<String, Array<Candidate>> {
+		final known: Null<Map<String, Array<Candidate>>> = _index[file];
+		if (known != null) return known;
+		final by: Map<String, Array<Candidate>> = [];
+		function walk(node: AstNodeJson): Void {
+			final kids: Array<AstNodeJson> = node.children ?? [];
+			for (i => child in kids) {
+				final span: Null<AstSearchSpan> = child.span;
+				if (span != null) {
+					final key: String = '${span.start[0]}:${span.start[1]}';
+					final list: Array<Candidate> = by[key] ?? [];
+					list.push({ siblings: kids, index: i });
+					by[key] = list;
+				}
+				walk(child);
+			}
+		}
+		walk(tree(file).tree);
+		_index[file] = by;
+		return by;
+	}
+
+	/** The source text `span` covers in `file`, its columns 1-based and its end exclusive; none for no span. */
+	private function text(file: String, span: Null<AstSearchSpan>): String {
+		if (span == null) return '';
+		final ls: Array<String> = sourceLines(file);
+		final l1: Int = span.start[0];
+		final c1: Int = span.start[1];
+		final l2: Int = span.end[0];
+		final c2: Int = span.end[1];
+		return l1 == l2
+			? slice(ls[l1 - 1], c1 - 1, c2 - 1)
+			: [slice(ls[l1 - 1], c1 - 1, ls[l1 - 1].length)].concat(ls.slice(l1, l2 - 1)).concat([slice(ls[l2 - 1], 0, c2 - 1)]).join('\n');
+	}
+
+	private function sourceLines(file: String): Array<String> {
+		final known: Null<Array<String>> = _lines[file];
+		if (known != null) return known;
+		final lines: Array<String> = universalNewlines(File.getContent(Path.join([_root, file]))).split('\n');
+		_lines[file] = lines;
+		return lines;
+	}
+
+	private function tree(file: String): AstDumpJson {
+		if (!_trees.exists(file)) prefetch([file]);
+		final known: Null<AstDumpJson> = _trees[file];
+		if (known == null) throw new Exception('clone-census: no AST of $file');
+		return known;
+	}
+
+	private function astCommand(file: String): Command {
+		return cmd('hxq ast $file --json').at(_root);
+	}
+
+	/** Keep the `hxq ast --json` output `result` of `file`, and cache it when a cache is kept. */
+	private function store(file: String, result: Result): Void {
+		final parsed: Null<AstDumpJson> = try AstDumpJsonParser.parse(result.out) catch (exception: Exception) null;
+		if (parsed == null)
+			throw new Exception(
+				'clone-census: `${result.command}` printed no AST (${result.failure != '' ? result.failure : result.err.trim()})'
+			);
+		_trees[file] = parsed;
+		final cached: Null<String> = cachePath(file);
+		if (cached != null) File.saveContent(cached, result.out);
+	}
+
+	private function cachePath(file: String): Null<String> {
+		final cache: Null<String> = _cache;
+		return cache == null ? null : Path.join([cache, '${_label}__${file.split('/').join('__')}.json']);
+	}
+
+	/** `text` with every `\r\n` and lone `\r` read as `\n`, as Python's text mode reads a file. */
+	public static function universalNewlines(text: String): String {
+		return text.replace('\r\n', '\n').replace('\r', '\n');
+	}
+
+	/** Python's slice `s[from:to]`: both ends clamped, empty when they cross. */
+	private static function slice(s: String, from: Int, to: Int): String {
+		final a: Int = Std.int(Math.max(0, Math.min(from, s.length)));
+		final b: Int = Std.int(Math.max(0, Math.min(to, s.length)));
+		return b <= a ? '' : s.substring(a, b);
+	}
+
+}
+
+/** One duplicate-code finding: its copy at `file:line:col`, `n` statements long, of the anchor `origFile:origLine`. */
+typedef Finding = {
+	var file: String;
+	var line: Int;
+	var col: Int;
+	var n: Int;
+	var origFile: String;
+	var origLine: Int;
+	var cross: Bool;
+}
+
+/** Findings by family, families in first-seen order. */
+typedef Grouped = { var keys: Array<String>; var members: Map<String, Array<Finding>>; }
+
+/** Findings by whole identity, keys in first-seen order. */
+typedef Keyed = { var keys: Array<String>; var byKey: Map<String, Finding>; }
+
+/** A node starting at some position: its siblings and its index among them. */
+typedef Candidate = { var siblings: Array<AstNodeJson>; var index: Int; }
+
+/**
  * `dev clone-census <label> <t2-report> <t1-report> <repo-root> [--cache DIR] [--after <t2> <t1>] [--removed FILE]` —
  * the census of the two duplicate-code rules' lint output: findings, families, occurrences, purely-renamed families,
  * the cross-file share and the bare-run share.
@@ -284,177 +458,3 @@ final class CloneCensus {
 	}
 
 }
-
-/**
- * The statement runs of the findings, resolved through the AST of ONE tree (`root`) — both reports of an `--after` pair
- * are resolved against it. Everything it reads is kept for the length of this run only.
- */
-@:nullSafety(Strict)
-final class Runs {
-
-	/** How many `hxq ast` processes run at once: the knee of the project's process fan-out. */
-	private static inline final AST_PARALLEL: Int = 4;
-
-	private final _trees: Map<String, AstDumpJson> = [];
-	private final _index: Map<String, Map<String, Array<Candidate>>> = [];
-	private final _lines: Map<String, Array<String>> = [];
-	private final _bareDecl: EReg = ~/^(var|final)\s+[A-Za-z_]\w*\s*(:\s*[^=]+?)?\s*(=\s*(-?[A-Za-z_][\w.]*|-?\d[\w.]*|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\[\]|\{\}))?\s*;?\s*$/s;
-	private final _bareAssign: EReg = ~/^[A-Za-z_][\w.]*\s*=\s*(-?[A-Za-z_][\w.]*|-?\d[\w.]*|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|\[\]|\{\})\s*;?\s*$/s;
-	private final _label: String;
-	private final _root: String;
-	private final _cache: Null<String>;
-
-	public function new(label: String, root: String, cache: Null<String>) {
-		_label = label;
-		_root = root;
-		_cache = cache;
-		if (cache != null) FileSystem.createDirectory(cache);
-	}
-
-	/**
-	 * Read the AST of every file of `files` not read yet, in parallel. The first one runs alone, so a stale `hxq` engine
-	 * is rebuilt once rather than by several processes at the same time.
-	 */
-	public function prefetch(files: Array<String>): Void {
-		final missing: Array<String> = [];
-		for (file in files) if (!_trees.exists(file) && !missing.contains(file)) {
-			final cached: Null<String> = cachePath(file);
-			if (cached != null && FileSystem.exists(cached))
-				_trees[file] = AstDumpJsonParser.parse(File.getContent(cached));
-			else
-				missing.push(file);
-		}
-		if (missing.length == 0) return;
-		store(missing[0], astCommand(missing[0]).run());
-		final rest: Array<String> = missing.slice(1);
-		for (i => result in Pool.of(AST_PARALLEL).map(rest, astCommand)) store(rest[i], result);
-	}
-
-	/** The kind of `f`'s statement run by the regex reading: `bare-decl`, `bare-assign`, `bare-mixed`, `logic` or `unresolved`. */
-	public function classify(f: Finding): String {
-		final statements: Null<Array<AstNodeJson>> = runOf(f);
-		if (statements == null) return 'unresolved';
-		final texts: Array<String> = statements.map(s -> CloneCensus.pyStrip(text(f.file, s.span)));
-		return if (texts.foreach(t -> _bareDecl.match(t)))
-			'bare-decl'
-		else if (texts.foreach(t -> _bareAssign.match(t)))
-			'bare-assign'
-		else if (texts.foreach(t -> _bareDecl.match(t) || _bareAssign.match(t)))
-			'bare-mixed'
-		else
-			'logic';
-	}
-
-	/** The `n` statement nodes of finding `f`, or null when its position resolves to no run. */
-	private function runOf(f: Finding): Null<Array<AstNodeJson>> {
-		final candidates: Null<Array<Candidate>> = nodesAt(f.file)['${f.line}:${f.col}'];
-		if (candidates == null) return null;
-		for (c in candidates) if (c.index + f.n <= c.siblings.length) return c.siblings.slice(c.index, c.index + f.n);
-		return null;
-	}
-
-	/** Every node of `file` by its start `line:col`, outermost first. */
-	private function nodesAt(file: String): Map<String, Array<Candidate>> {
-		final known: Null<Map<String, Array<Candidate>>> = _index[file];
-		if (known != null) return known;
-		final by: Map<String, Array<Candidate>> = [];
-		function walk(node: AstNodeJson): Void {
-			final kids: Array<AstNodeJson> = node.children ?? [];
-			for (i => child in kids) {
-				final span: Null<AstSearchSpan> = child.span;
-				if (span != null) {
-					final key: String = '${span.start[0]}:${span.start[1]}';
-					final list: Array<Candidate> = by[key] ?? [];
-					list.push({ siblings: kids, index: i });
-					by[key] = list;
-				}
-				walk(child);
-			}
-		}
-		walk(tree(file).tree);
-		_index[file] = by;
-		return by;
-	}
-
-	/** The source text `span` covers in `file`, its columns 1-based and its end exclusive; none for no span. */
-	private function text(file: String, span: Null<AstSearchSpan>): String {
-		if (span == null) return '';
-		final ls: Array<String> = sourceLines(file);
-		final l1: Int = span.start[0];
-		final c1: Int = span.start[1];
-		final l2: Int = span.end[0];
-		final c2: Int = span.end[1];
-		return l1 == l2
-			? slice(ls[l1 - 1], c1 - 1, c2 - 1)
-			: [slice(ls[l1 - 1], c1 - 1, ls[l1 - 1].length)].concat(ls.slice(l1, l2 - 1)).concat([slice(ls[l2 - 1], 0, c2 - 1)]).join('\n');
-	}
-
-	private function sourceLines(file: String): Array<String> {
-		final known: Null<Array<String>> = _lines[file];
-		if (known != null) return known;
-		final lines: Array<String> = universalNewlines(File.getContent(Path.join([_root, file]))).split('\n');
-		_lines[file] = lines;
-		return lines;
-	}
-
-	private function tree(file: String): AstDumpJson {
-		if (!_trees.exists(file)) prefetch([file]);
-		final known: Null<AstDumpJson> = _trees[file];
-		if (known == null) throw new Exception('clone-census: no AST of $file');
-		return known;
-	}
-
-	private function astCommand(file: String): Command {
-		return cmd('hxq ast $file --json').at(_root);
-	}
-
-	/** Keep the `hxq ast --json` output `result` of `file`, and cache it when a cache is kept. */
-	private function store(file: String, result: Result): Void {
-		final parsed: Null<AstDumpJson> = try AstDumpJsonParser.parse(result.out) catch (exception: Exception) null;
-		if (parsed == null)
-			throw new Exception(
-				'clone-census: `${result.command}` printed no AST (${result.failure != '' ? result.failure : result.err.trim()})'
-			);
-		_trees[file] = parsed;
-		final cached: Null<String> = cachePath(file);
-		if (cached != null) File.saveContent(cached, result.out);
-	}
-
-	private function cachePath(file: String): Null<String> {
-		final cache: Null<String> = _cache;
-		return cache == null ? null : Path.join([cache, '${_label}__${file.split('/').join('__')}.json']);
-	}
-
-	/** `text` with every `\r\n` and lone `\r` read as `\n`, as Python's text mode reads a file. */
-	public static function universalNewlines(text: String): String {
-		return text.replace('\r\n', '\n').replace('\r', '\n');
-	}
-
-	/** Python's slice `s[from:to]`: both ends clamped, empty when they cross. */
-	private static function slice(s: String, from: Int, to: Int): String {
-		final a: Int = Std.int(Math.max(0, Math.min(from, s.length)));
-		final b: Int = Std.int(Math.max(0, Math.min(to, s.length)));
-		return b <= a ? '' : s.substring(a, b);
-	}
-
-}
-
-/** One duplicate-code finding: its copy at `file:line:col`, `n` statements long, of the anchor `origFile:origLine`. */
-typedef Finding = {
-	var file: String;
-	var line: Int;
-	var col: Int;
-	var n: Int;
-	var origFile: String;
-	var origLine: Int;
-	var cross: Bool;
-}
-
-/** Findings by family, families in first-seen order. */
-typedef Grouped = { var keys: Array<String>; var members: Map<String, Array<Finding>>; }
-
-/** Findings by whole identity, keys in first-seen order. */
-typedef Keyed = { var keys: Array<String>; var byKey: Map<String, Finding>; }
-
-/** A node starting at some position: its siblings and its index among them. */
-typedef Candidate = { var siblings: Array<AstNodeJson>; var index: Int; }

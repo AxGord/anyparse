@@ -19,6 +19,29 @@ import unit.cli.CliFixture;
 using Lambda;
 using StringTools;
 
+/** One operand position: a function body whose `@` the route's operand replaces. */
+private typedef Shape = { final name: String; final body: String; };
+
+/** What a rule answers about a shape, read the way its finding means it. */
+private enum Read {
+
+	/** A finding in the shape accepts the operand. */
+	Reports;
+
+	/** A finding in the shape REFUSES it: the rule defers a chain the switch rules claim. */
+	Silent;
+
+	/** The fold: a finding with a fix accepts, one carrying the operator gate's refusal is unproven, none refuses. */
+	Fixable;
+
+	/** A ternary builder: an edit that writes the condition positive accepts, one keeping the `!` refuses. */
+	Positive;
+
+}
+
+/** One rule asked about one shape. */
+private typedef Ask = { final check: Check; final shape: String; final read: Read; };
+
 /**
  * ONE operand typing answers every rule that asks whether an operator is the language's own (`OperatorSelection`).
  * The same operand, reached by each arc the shared walk types (`TypingService.typeWalk` over `OperandBinder`) — a written
@@ -739,26 +762,3 @@ class OperandTypingTest extends Test {
 	}
 
 }
-
-/** One operand position: a function body whose `@` the route's operand replaces. */
-private typedef Shape = { final name: String; final body: String; };
-
-/** What a rule answers about a shape, read the way its finding means it. */
-private enum Read {
-
-	/** A finding in the shape accepts the operand. */
-	Reports;
-
-	/** A finding in the shape REFUSES it: the rule defers a chain the switch rules claim. */
-	Silent;
-
-	/** The fold: a finding with a fix accepts, one carrying the operator gate's refusal is unproven, none refuses. */
-	Fixable;
-
-	/** A ternary builder: an edit that writes the condition positive accepts, one keeping the `!` refuses. */
-	Positive;
-
-}
-
-/** One rule asked about one shape. */
-private typedef Ask = { final check: Check; final shape: String; final read: Read; };

@@ -4,6 +4,20 @@ import anyparse.query.MemberReach;
 import anyparse.query.MemberTouchScan;
 import anyparse.query.SymbolIndex;
 
+/** What a key-value loop's iterable lets its key drop rest on (`ValueIterationProof.kindOf`). */
+enum ValueIteration {
+
+	/** Both iterators walk one chain: the key may go. */
+	Provable;
+
+	/** A map: the key may go when nothing the body runs changes it (`ValueIterationProof.keyedDecline`). */
+	Keyed;
+
+	/** Neither is proved: the key stays. */
+	Unprovable;
+
+}
+
 /**
  * Whether a key-value loop may drop its key and iterate the values alone — the one question `redundant-map-iter-key`
  * and `unused-loop-binder` ask before either drops a key.
@@ -53,19 +67,5 @@ final class ValueIterationProof {
 			case _: '$KEYED_DECLINE: ${reach.explain(result)}';
 		};
 	}
-
-}
-
-/** What a key-value loop's iterable lets its key drop rest on (`ValueIterationProof.kindOf`). */
-enum ValueIteration {
-
-	/** Both iterators walk one chain: the key may go. */
-	Provable;
-
-	/** A map: the key may go when nothing the body runs changes it (`ValueIterationProof.keyedDecline`). */
-	Keyed;
-
-	/** Neither is proved: the key stays. */
-	Unprovable;
 
 }

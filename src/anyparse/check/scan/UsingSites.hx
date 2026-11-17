@@ -10,6 +10,28 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.ValueDoors;
 import haxe.Exception;
 
+/** What one access `recv.name` is to a `using` (`UsingSites`). */
+private enum AccessSite {
+
+	/** A member or a static of the receiver's own type binds it, before any static extension. */
+	NoUsing;
+
+	/** A value receiver of the declaration `receiver`, in the file `fi` of `index`: the typing service decides. */
+	Receiver(fi: FileInfo, receiver: ResolvedType, name: String, index: SymbolIndex);
+
+	/** Not known: counts as the `using` taking part. */
+	Unknown;
+
+}
+
+/** The once-built state behind `UsingSites`. */
+private typedef AccessDoor = {
+	final accesses: Map<Int, QueryNode>;
+	final typeOf: Null<(QueryNode) -> Null<String>>;
+	final tree: Null<QueryNode>;
+	final index: Null<SymbolIndex>;
+};
+
 /**
  * Whether a `using` takes part in the accesses `recv.name` one source writes — the one answer `unused-import`,
  * `redundant-import`, `hoist-common-import` and the move carry ask, so none of them builds its own. Each access is read
@@ -206,25 +228,3 @@ final class UsingSites {
 	}
 
 }
-
-/** What one access `recv.name` is to a `using` (`UsingSites`). */
-private enum AccessSite {
-
-	/** A member or a static of the receiver's own type binds it, before any static extension. */
-	NoUsing;
-
-	/** A value receiver of the declaration `receiver`, in the file `fi` of `index`: the typing service decides. */
-	Receiver(fi: FileInfo, receiver: ResolvedType, name: String, index: SymbolIndex);
-
-	/** Not known: counts as the `using` taking part. */
-	Unknown;
-
-}
-
-/** The once-built state behind `UsingSites`. */
-private typedef AccessDoor = {
-	final accesses: Map<Int, QueryNode>;
-	final typeOf: Null<(QueryNode) -> Null<String>>;
-	final tree: Null<QueryNode>;
-	final index: Null<SymbolIndex>;
-};

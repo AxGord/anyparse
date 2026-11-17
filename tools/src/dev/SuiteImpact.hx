@@ -22,6 +22,217 @@ using Lambda;
 using StringTools;
 
 /**
+ * The text dependencies among the sources of one tree, indexed once: the files each dotted path occurs in and the files of
+ * each package, so a closure costs a lookup per module, not a scan.
+ */
+@:nullSafety(Strict)
+private final class ImpactGraph {
+
+	private static inline final TOUCHED: Int = -1;
+	private static final AMBIENT: String = 'import.hx';
+	private static final CHAIN: EReg = ~/[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+(?:\.\*)?/g;
+	private static final WORD: EReg = ~/[A-Za-z_][A-Za-z0-9_]*/g;
+
+	private final _paths: Array<String> = [];
+	private final _texts: Array<String> = [];
+	private final _at: Map<String, Int> = [];
+	private final _chains: Map<String, Array<Int>> = [];
+	private final _packs: Map<String, Array<Int>> = [];
+	private final _words: Map<Int, Map<String, Bool>> = [];
+	private final _outputs: Map<String, Array<String>> = [];
+
+	/** Each file the last `dependents` reached, with the file it was reached from, `TOUCHED` for a touched path's own. */
+	private final _via: Map<Int, Int> = [];
+
+	private final _pending: Array<PendingModule> = [];
+	private final _declared: DeclaredTypes;
+
+	/** The files that are reached but pass the change on to no file. */
+	private final _sinks: Array<String>;
+
+	public function new(
+		sources: Array<ImpactSource>, entries: Map<String, String>, declared: DeclaredTypes, ?sinks: Array<String>
+	) {
+		_declared = declared;
+		_sinks = sinks ?? [];
+		for (i => source in sources) {
+			final text: String = SuiteImpact.uncommented(source.text);
+			_paths.push(source.path);
+			_texts.push(text);
+			_at[source.path] = i;
+			final module: Null<ImpactModule> = SuiteImpact.moduleOf(source.path);
+			if (module != null) listed(_packs, module.pack, i);
+			final seen: Map<String, Bool> = [];
+			for (chain in matchesOf(CHAIN, text, 0)) {
+				final parts: Array<String> = chain.split('.');
+				var prefix: String = parts[0];
+				for (k in 1...parts.length) {
+					prefix += '.${parts[k]}';
+					if (seen.exists(prefix)) continue;
+					seen[prefix] = true;
+					listed(_chains, prefix, i);
+				}
+			}
+		}
+		for (output => main in entries) Groups.push(_outputs, main, output);
+	}
+
+	/**
+	 * Every file a change of `touched` reaches, the touched files among them: a module reaches the files that name it, a
+	 * module-less path the files that name its path, and an ambient import file every file below it.
+	 */
+	public function dependents(touched: Array<String>): Array<String> {
+		_via.clear();
+		_pending.resize(0);
+		for (path in touched) seed(path);
+		while (_pending.length > 0) {
+			final next: Null<PendingModule> = _pending.pop();
+			if (next != null) spread(next.module, next.at);
+		}
+		final out: Array<String> = [for (i => _ in _via) _paths[i]];
+		out.sort(Compare.compareString);
+		return out;
+	}
+
+	/** The files the last `dependents` reached `path` through, `path` first and a touched one last; empty when it was not reached. */
+	public function chain(path: String): Array<String> {
+		final out: Array<String> = [];
+		var at: Null<Int> = _at[path];
+		while (at != null && at >= 0 && _via.exists(at) && !out.contains(_paths[at])) {
+			out.push(_paths[at]);
+			at = _via[at];
+		}
+		return out;
+	}
+
+	private function seed(path: String): Void {
+		final module: Null<ImpactModule> = SuiteImpact.moduleOf(path);
+		final at: Null<Int> = _at[path];
+		if (at != null) reach(at, TOUCHED);
+		if (module == null)
+			for (i in mentioning(SuiteImpact.needles(path))) reach(i, TOUCHED)
+		else if (at == null)
+			queue(module, TOUCHED);
+	}
+
+	/** Reaches every file that names `module`, which the file at `from` holds. */
+	private function spread(module: ImpactModule, from: Int): Void {
+		for (i in _chains[module.qualified] ?? []) reach(i, from);
+		if (module.pack != '') for (i in _chains['${module.pack}.*'] ?? []) reach(i, from);
+		final names: Array<String> = declared(module);
+		// a simple name resolves in the module's package and every package below it
+		for (pack => files in _packs)
+			if (module.pack == '' || pack == module.pack || pack.startsWith('${module.pack}.'))
+				for (i in files)
+					if (!_via.exists(i) && names.exists(name -> wordsOf(i).exists(name))) reach(i, from);
+		// only a test runs a build's output inside the suite: elsewhere its name is help text or a path the code hands on
+		for (output in _outputs[module.qualified] ?? []) for (i in mentioning([output])) if (SuiteImpact.isTest(_paths[i])) reach(i, from);
+	}
+
+	/**
+	 * Marks file `i` reached from the file `from`, unless a lower layer would depend on a higher one: a test class passes a
+	 * change on only to the test files that call it, and a name of it in a shard plan or a help text is data. An ambient
+	 * import file passes the module on only to the files below it that use one of its names, or to all of them when it opens
+	 * the module's statics with `using`.
+	 */
+	private function reach(i: Int, from: Int): Void {
+		if (_via.exists(i) || (from != TOUCHED && SuiteImpact.layer(_paths[i]) < SuiteImpact.layer(_paths[from]))) return;
+		_via[i] = from;
+		final path: String = _paths[i];
+		if (_sinks.contains(path)) return;
+		final module: Null<ImpactModule> = SuiteImpact.moduleOf(path);
+		if (Path.withoutDirectory(path) != AMBIENT) {
+			if (module != null) queue(module, i);
+			return;
+		}
+		final dir: String = '${Path.directory(path)}/';
+		final opened: Null<ImpactModule> = from == TOUCHED ? null : SuiteImpact.moduleOf(_paths[from]);
+		final names: Null<Array<String>> = opened == null || _texts[i].indexOf('using ${opened.qualified}') >= 0 ? null : declared(opened);
+		for (j => other in _paths) if (other.startsWith(dir) && (names == null || names.exists(name -> wordsOf(j).exists(name))))
+			reach(j, i);
+	}
+
+	/** The module's name and every type its file declares, the names a same-package file uses it by. */
+	private function declared(module: ImpactModule): Array<String> {
+		final names: Array<String> = [module.name];
+		for (name in _declared.types[module.path] ?? []) Groups.pushUnique(names, name);
+		return names;
+	}
+
+	private function mentioning(needles: Array<String>): Array<Int> {
+		return [
+			for (i => text in _texts) if (needles.exists(needle -> SuiteImpact.names(text, needle))) i
+		];
+	}
+
+	private function wordsOf(i: Int): Map<String, Bool> {
+		final known: Null<Map<String, Bool>> = _words[i];
+		if (known != null) return known;
+		final words: Map<String, Bool> = [for (word in matchesOf(WORD, _texts[i], 0)) word => true];
+		_words[i] = words;
+		return words;
+	}
+
+	private function queue(module: ImpactModule, at: Int): Void {
+		_pending.push({ module: module, at: at });
+	}
+
+	private static function listed(index: Map<String, Array<Int>>, key: String, i: Int): Void {
+		Groups.push(index, key, i);
+	}
+
+	/** Group `group` of every match of the global `pattern` in `text`, in order. */
+	private static function matchesOf(pattern: EReg, text: String, group: Int): Array<String> {
+		final out: Array<String> = [];
+		var from: Int = 0;
+		while (pattern.matchSub(text, from)) {
+			final span: { pos: Int, len: Int } = pattern.matchedPos();
+			from = span.pos + span.len;
+			out.push(pattern.matched(group));
+		}
+		return out;
+	}
+
+}
+
+/** A source file of a tree: its path from the tree and its text. */
+typedef ImpactSource = { var path: String; var text: String; }
+
+/** The types each parsed source declares, by path, and the sources that do not parse, whose types are unknown. */
+typedef DeclaredTypes = { var types: Map<String, Array<String>>; var unparsed: Array<String>; }
+
+/** The module a `.hx` under a root holds. */
+typedef ImpactModule = {
+	var path: String;
+	var pack: String;
+	var name: String;
+	var qualified: String;
+}
+
+/** A module whose dependents a closure has yet to reach, and the file that holds it, `-1` for a removed one. */
+private typedef PendingModule = { var module: ImpactModule; var at: Int; }
+
+/** The main module a build runs and the file it writes. */
+typedef BuildEntry = { var main: String; var output: String; }
+
+/** What the arm census read: the pins an impact selection leaves out, and how many files it selected for. */
+typedef ArmReach = { var misses: Array<String>; var files: Int; var whole: Int; }
+
+/** What a suite runs for a change. */
+enum SuiteScope {
+
+	/** Every registered class: `why` names the touch no text dependency bounds. */
+	WholeSuite(why: String);
+
+	/** Only these test classes, by their qualified names; none when no class depends on the change. */
+	Selected(classes: Array<String>);
+
+	/** Every class but `left` tooling ones: `why` names the generated code the change reaches, which those classes cannot. */
+	Trimmed(why: String, classes: Array<String>, left: Int);
+
+}
+
+/**
  * The one answer to "which test classes does a diff need": a touched module reaches every file whose text names it (an
  * import, a qualified path, a simple name in its package or one below, a build output that runs it) and the test classes among them run;
  * a touch no text dependency bounds runs every class.
@@ -651,216 +862,5 @@ final class SuiteImpact {
 		final sinks: Array<String> = [for (source in sources) if (isGenerated(source.path)) source.path];
 		return new ImpactGraph(sources, entries, types, sinks);
 	}
-
-}
-
-/**
- * The text dependencies among the sources of one tree, indexed once: the files each dotted path occurs in and the files of
- * each package, so a closure costs a lookup per module, not a scan.
- */
-@:nullSafety(Strict)
-private final class ImpactGraph {
-
-	private static inline final TOUCHED: Int = -1;
-	private static final AMBIENT: String = 'import.hx';
-	private static final CHAIN: EReg = ~/[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+(?:\.\*)?/g;
-	private static final WORD: EReg = ~/[A-Za-z_][A-Za-z0-9_]*/g;
-
-	private final _paths: Array<String> = [];
-	private final _texts: Array<String> = [];
-	private final _at: Map<String, Int> = [];
-	private final _chains: Map<String, Array<Int>> = [];
-	private final _packs: Map<String, Array<Int>> = [];
-	private final _words: Map<Int, Map<String, Bool>> = [];
-	private final _outputs: Map<String, Array<String>> = [];
-
-	/** Each file the last `dependents` reached, with the file it was reached from, `TOUCHED` for a touched path's own. */
-	private final _via: Map<Int, Int> = [];
-
-	private final _pending: Array<PendingModule> = [];
-	private final _declared: DeclaredTypes;
-
-	/** The files that are reached but pass the change on to no file. */
-	private final _sinks: Array<String>;
-
-	public function new(
-		sources: Array<ImpactSource>, entries: Map<String, String>, declared: DeclaredTypes, ?sinks: Array<String>
-	) {
-		_declared = declared;
-		_sinks = sinks ?? [];
-		for (i => source in sources) {
-			final text: String = SuiteImpact.uncommented(source.text);
-			_paths.push(source.path);
-			_texts.push(text);
-			_at[source.path] = i;
-			final module: Null<ImpactModule> = SuiteImpact.moduleOf(source.path);
-			if (module != null) listed(_packs, module.pack, i);
-			final seen: Map<String, Bool> = [];
-			for (chain in matchesOf(CHAIN, text, 0)) {
-				final parts: Array<String> = chain.split('.');
-				var prefix: String = parts[0];
-				for (k in 1...parts.length) {
-					prefix += '.${parts[k]}';
-					if (seen.exists(prefix)) continue;
-					seen[prefix] = true;
-					listed(_chains, prefix, i);
-				}
-			}
-		}
-		for (output => main in entries) Groups.push(_outputs, main, output);
-	}
-
-	/**
-	 * Every file a change of `touched` reaches, the touched files among them: a module reaches the files that name it, a
-	 * module-less path the files that name its path, and an ambient import file every file below it.
-	 */
-	public function dependents(touched: Array<String>): Array<String> {
-		_via.clear();
-		_pending.resize(0);
-		for (path in touched) seed(path);
-		while (_pending.length > 0) {
-			final next: Null<PendingModule> = _pending.pop();
-			if (next != null) spread(next.module, next.at);
-		}
-		final out: Array<String> = [for (i => _ in _via) _paths[i]];
-		out.sort(Compare.compareString);
-		return out;
-	}
-
-	/** The files the last `dependents` reached `path` through, `path` first and a touched one last; empty when it was not reached. */
-	public function chain(path: String): Array<String> {
-		final out: Array<String> = [];
-		var at: Null<Int> = _at[path];
-		while (at != null && at >= 0 && _via.exists(at) && !out.contains(_paths[at])) {
-			out.push(_paths[at]);
-			at = _via[at];
-		}
-		return out;
-	}
-
-	private function seed(path: String): Void {
-		final module: Null<ImpactModule> = SuiteImpact.moduleOf(path);
-		final at: Null<Int> = _at[path];
-		if (at != null) reach(at, TOUCHED);
-		if (module == null)
-			for (i in mentioning(SuiteImpact.needles(path))) reach(i, TOUCHED)
-		else if (at == null)
-			queue(module, TOUCHED);
-	}
-
-	/** Reaches every file that names `module`, which the file at `from` holds. */
-	private function spread(module: ImpactModule, from: Int): Void {
-		for (i in _chains[module.qualified] ?? []) reach(i, from);
-		if (module.pack != '') for (i in _chains['${module.pack}.*'] ?? []) reach(i, from);
-		final names: Array<String> = declared(module);
-		// a simple name resolves in the module's package and every package below it
-		for (pack => files in _packs)
-			if (module.pack == '' || pack == module.pack || pack.startsWith('${module.pack}.'))
-				for (i in files)
-					if (!_via.exists(i) && names.exists(name -> wordsOf(i).exists(name))) reach(i, from);
-		// only a test runs a build's output inside the suite: elsewhere its name is help text or a path the code hands on
-		for (output in _outputs[module.qualified] ?? []) for (i in mentioning([output])) if (SuiteImpact.isTest(_paths[i])) reach(i, from);
-	}
-
-	/**
-	 * Marks file `i` reached from the file `from`, unless a lower layer would depend on a higher one: a test class passes a
-	 * change on only to the test files that call it, and a name of it in a shard plan or a help text is data. An ambient
-	 * import file passes the module on only to the files below it that use one of its names, or to all of them when it opens
-	 * the module's statics with `using`.
-	 */
-	private function reach(i: Int, from: Int): Void {
-		if (_via.exists(i) || (from != TOUCHED && SuiteImpact.layer(_paths[i]) < SuiteImpact.layer(_paths[from]))) return;
-		_via[i] = from;
-		final path: String = _paths[i];
-		if (_sinks.contains(path)) return;
-		final module: Null<ImpactModule> = SuiteImpact.moduleOf(path);
-		if (Path.withoutDirectory(path) != AMBIENT) {
-			if (module != null) queue(module, i);
-			return;
-		}
-		final dir: String = '${Path.directory(path)}/';
-		final opened: Null<ImpactModule> = from == TOUCHED ? null : SuiteImpact.moduleOf(_paths[from]);
-		final names: Null<Array<String>> = opened == null || _texts[i].indexOf('using ${opened.qualified}') >= 0 ? null : declared(opened);
-		for (j => other in _paths) if (other.startsWith(dir) && (names == null || names.exists(name -> wordsOf(j).exists(name))))
-			reach(j, i);
-	}
-
-	/** The module's name and every type its file declares, the names a same-package file uses it by. */
-	private function declared(module: ImpactModule): Array<String> {
-		final names: Array<String> = [module.name];
-		for (name in _declared.types[module.path] ?? []) Groups.pushUnique(names, name);
-		return names;
-	}
-
-	private function mentioning(needles: Array<String>): Array<Int> {
-		return [
-			for (i => text in _texts) if (needles.exists(needle -> SuiteImpact.names(text, needle))) i
-		];
-	}
-
-	private function wordsOf(i: Int): Map<String, Bool> {
-		final known: Null<Map<String, Bool>> = _words[i];
-		if (known != null) return known;
-		final words: Map<String, Bool> = [for (word in matchesOf(WORD, _texts[i], 0)) word => true];
-		_words[i] = words;
-		return words;
-	}
-
-	private function queue(module: ImpactModule, at: Int): Void {
-		_pending.push({ module: module, at: at });
-	}
-
-	private static function listed(index: Map<String, Array<Int>>, key: String, i: Int): Void {
-		Groups.push(index, key, i);
-	}
-
-	/** Group `group` of every match of the global `pattern` in `text`, in order. */
-	private static function matchesOf(pattern: EReg, text: String, group: Int): Array<String> {
-		final out: Array<String> = [];
-		var from: Int = 0;
-		while (pattern.matchSub(text, from)) {
-			final span: { pos: Int, len: Int } = pattern.matchedPos();
-			from = span.pos + span.len;
-			out.push(pattern.matched(group));
-		}
-		return out;
-	}
-
-}
-
-/** A source file of a tree: its path from the tree and its text. */
-typedef ImpactSource = { var path: String; var text: String; }
-
-/** The types each parsed source declares, by path, and the sources that do not parse, whose types are unknown. */
-typedef DeclaredTypes = { var types: Map<String, Array<String>>; var unparsed: Array<String>; }
-
-/** The module a `.hx` under a root holds. */
-typedef ImpactModule = {
-	var path: String;
-	var pack: String;
-	var name: String;
-	var qualified: String;
-}
-
-/** A module whose dependents a closure has yet to reach, and the file that holds it, `-1` for a removed one. */
-private typedef PendingModule = { var module: ImpactModule; var at: Int; }
-
-/** The main module a build runs and the file it writes. */
-typedef BuildEntry = { var main: String; var output: String; }
-
-/** What the arm census read: the pins an impact selection leaves out, and how many files it selected for. */
-typedef ArmReach = { var misses: Array<String>; var files: Int; var whole: Int; }
-
-/** What a suite runs for a change. */
-enum SuiteScope {
-
-	/** Every registered class: `why` names the touch no text dependency bounds. */
-	WholeSuite(why: String);
-
-	/** Only these test classes, by their qualified names; none when no class depends on the change. */
-	Selected(classes: Array<String>);
-
-	/** Every class but `left` tooling ones: `why` names the generated code the change reaches, which those classes cannot. */
-	Trimmed(why: String, classes: Array<String>, left: Int);
 
 }

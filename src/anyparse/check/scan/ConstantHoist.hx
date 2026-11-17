@@ -17,6 +17,71 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 /**
+ * One constant to move out of a function body: which declaration it came from, where the new member
+ * goes, what to remove, and what to write.
+ */
+typedef Hoist = {
+
+	/** The flagged declaration's cursor offset — how the caller knows to keep its rename arm off it. */
+	final declFrom: Int;
+
+	/** Where the new member goes: just after the receiving type's body-opening brace. */
+	final insertAt: Int;
+
+	/**
+	 * The whole line the local declaration occupies, removed with it — including a trailing comment
+	 * carried into `memberText`, which is part of the declaration's line and must not be left behind.
+	 */
+	final deleteSpan: Span;
+
+	/** The member declaration the grammar renders for it (`NamingSupport.hoistedConstant`). */
+	final memberText: String;
+
+};
+
+/**
+ * The scope-correct occurrence set of the binding declared at an offset — every span a RENAME of it
+ * would rewrite — or null when that set cannot be proven complete.
+ *
+ * Supplied by the caller rather than re-derived here: `Naming` already resolves it for its rename
+ * arm, and the two gates must agree about what counts as a reference. Passing the answer in keeps the
+ * hoist arm out of that resolution's internals. The set is resolved
+ * BODY-SCOPED: the arm only ever hands the resolver a LOCAL's declaration (its category gate runs
+ * first), and `Naming`'s closure assumes exactly that.
+ */
+typedef OccurrenceResolver = (declFrom: Int, name: String) -> Null<Array<Span>>;
+
+/**
+ * What every gate of the arm reads, resolved once per `hoistsFor` call: the parsed file and its
+ * source, the policy the emitted member must satisfy, the grammar kinds and seams the gates need,
+ * the flagged spans, the RESOLUTION-scope index the inherited-member proof asks, and the caller's
+ * occurrence resolver.
+ */
+private typedef HoistContext = {
+
+	final source: String;
+	final tree: QueryNode;
+	final policy: NamingPolicy;
+
+	/** The local-declaration kinds that bind an immutable local — see `immutableLocalKinds`. */
+	final declKinds: Array<String>;
+
+	/** The type-declaration kinds a constant may be hoisted INTO — classes only. */
+	final classKinds: Array<String>;
+
+	/** The statement-list hosts — a declaration must be a DIRECT child of one. */
+	final blockKinds: Array<String>;
+	final plugin: GrammarPlugin;
+	final shape: RefShape;
+	final support: NamingSupport;
+	final flaggedFroms: Array<Int>;
+	final index: SymbolIndex;
+	final file: String;
+	final occurrences: OccurrenceResolver;
+
+};
+
+/**
  * The `naming` autofix's constant-HOIST arm, factored out of the check that drives it.
  *
  * A local `final` that is an author-intended CONSTANT — an UPPER_SNAKE name over a
@@ -395,68 +460,3 @@ final class ConstantHoist {
 	}
 
 }
-
-/**
- * One constant to move out of a function body: which declaration it came from, where the new member
- * goes, what to remove, and what to write.
- */
-typedef Hoist = {
-
-	/** The flagged declaration's cursor offset — how the caller knows to keep its rename arm off it. */
-	final declFrom: Int;
-
-	/** Where the new member goes: just after the receiving type's body-opening brace. */
-	final insertAt: Int;
-
-	/**
-	 * The whole line the local declaration occupies, removed with it — including a trailing comment
-	 * carried into `memberText`, which is part of the declaration's line and must not be left behind.
-	 */
-	final deleteSpan: Span;
-
-	/** The member declaration the grammar renders for it (`NamingSupport.hoistedConstant`). */
-	final memberText: String;
-
-};
-
-/**
- * The scope-correct occurrence set of the binding declared at an offset — every span a RENAME of it
- * would rewrite — or null when that set cannot be proven complete.
- *
- * Supplied by the caller rather than re-derived here: `Naming` already resolves it for its rename
- * arm, and the two gates must agree about what counts as a reference. Passing the answer in keeps the
- * hoist arm out of that resolution's internals. The set is resolved
- * BODY-SCOPED: the arm only ever hands the resolver a LOCAL's declaration (its category gate runs
- * first), and `Naming`'s closure assumes exactly that.
- */
-typedef OccurrenceResolver = (declFrom: Int, name: String) -> Null<Array<Span>>;
-
-/**
- * What every gate of the arm reads, resolved once per `hoistsFor` call: the parsed file and its
- * source, the policy the emitted member must satisfy, the grammar kinds and seams the gates need,
- * the flagged spans, the RESOLUTION-scope index the inherited-member proof asks, and the caller's
- * occurrence resolver.
- */
-private typedef HoistContext = {
-
-	final source: String;
-	final tree: QueryNode;
-	final policy: NamingPolicy;
-
-	/** The local-declaration kinds that bind an immutable local — see `immutableLocalKinds`. */
-	final declKinds: Array<String>;
-
-	/** The type-declaration kinds a constant may be hoisted INTO — classes only. */
-	final classKinds: Array<String>;
-
-	/** The statement-list hosts — a declaration must be a DIRECT child of one. */
-	final blockKinds: Array<String>;
-	final plugin: GrammarPlugin;
-	final shape: RefShape;
-	final support: NamingSupport;
-	final flaggedFroms: Array<Int>;
-	final index: SymbolIndex;
-	final file: String;
-	final occurrences: OccurrenceResolver;
-
-};

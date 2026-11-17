@@ -5,6 +5,53 @@ import devkit.ExecLedger;
 import devkit.Table;
 import haxe.io.Path;
 
+/** A branch total rows are added to one at a time. */
+private abstract Accrual(LedgerTotal) {
+
+	private static inline final MS_PER_MINUTE: Float = 60000;
+
+	public inline function new(total: LedgerTotal) {
+		this = total;
+	}
+
+	public function push(row: LedgerRow): Void {
+		this.rows++;
+		this.wallMs += row.wallMs;
+		this.waitMs += row.waitMs ?? 0;
+		final threads: Null<Int> = row.threads;
+		if (threads != null) this.threadMinutes += threads * row.wallMs / MS_PER_MINUTE;
+		final cpu: Null<Float> = row.cpuS;
+		if (cpu != null) this.cpuS = (this.cpuS ?? 0) + cpu;
+		final metered: Bool = this.cpuS != null;
+		this.meteredMs = metered ? this.wallMs : 0;
+		this.unmetered = metered ? 0 : 1;
+	}
+
+}
+
+/** The summed rows of one branch of a phase, or of the whole phase (branch `ExecLedgerCli.TOTAL`). */
+typedef LedgerTotal = {
+
+	var phase: String;
+	var branch: String;
+	var rows: Int;
+	var wallMs: Float;
+	var waitMs: Float;
+
+	/** The cpu seconds its metered branches used, or null when none was metered. */
+	var cpuS: Null<Float>;
+
+	/** The wall time of its metered branches, the time its cpu was spent in. */
+	var meteredMs: Float;
+
+	/** Threads held times wall time, in minutes. */
+	var threadMinutes: Float;
+
+	/** How many of its branches no cpu reading reached. */
+	var unmetered: Int;
+
+}
+
 /**
  * `dev exec-ledger` — the one answer to "what did the rows of the lands cost, summed": the `ExecLedger` file under the
  * blast cache, summed per phase and branch into wall, lease wait, cpu, cores used (cpu seconds over wall seconds),
@@ -177,52 +224,5 @@ final class ExecLedgerCli {
 	private static function decimal(value: Float): String {
 		return '${Math.round(value * HUNDREDTHS) / HUNDREDTHS}';
 	}
-
-}
-
-/** A branch total rows are added to one at a time. */
-private abstract Accrual(LedgerTotal) {
-
-	private static inline final MS_PER_MINUTE: Float = 60000;
-
-	public inline function new(total: LedgerTotal) {
-		this = total;
-	}
-
-	public function push(row: LedgerRow): Void {
-		this.rows++;
-		this.wallMs += row.wallMs;
-		this.waitMs += row.waitMs ?? 0;
-		final threads: Null<Int> = row.threads;
-		if (threads != null) this.threadMinutes += threads * row.wallMs / MS_PER_MINUTE;
-		final cpu: Null<Float> = row.cpuS;
-		if (cpu != null) this.cpuS = (this.cpuS ?? 0) + cpu;
-		final metered: Bool = this.cpuS != null;
-		this.meteredMs = metered ? this.wallMs : 0;
-		this.unmetered = metered ? 0 : 1;
-	}
-
-}
-
-/** The summed rows of one branch of a phase, or of the whole phase (branch `ExecLedgerCli.TOTAL`). */
-typedef LedgerTotal = {
-
-	var phase: String;
-	var branch: String;
-	var rows: Int;
-	var wallMs: Float;
-	var waitMs: Float;
-
-	/** The cpu seconds its metered branches used, or null when none was metered. */
-	var cpuS: Null<Float>;
-
-	/** The wall time of its metered branches, the time its cpu was spent in. */
-	var meteredMs: Float;
-
-	/** Threads held times wall time, in minutes. */
-	var threadMinutes: Float;
-
-	/** How many of its branches no cpu reading reached. */
-	var unmetered: Int;
 
 }

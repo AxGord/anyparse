@@ -19,6 +19,27 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 
+/** A plain static import `path` = `module`.`member` and the span of its statement. */
+private typedef StaticImport = {
+	final path: String;
+	final module: String;
+	final member: String;
+	final span: Span;
+}
+
+/** The use sites of a bare name: calls with the name as callee, and whether any other use exists. */
+private typedef Uses = { final calls: Array<QueryNode>; var other: Bool; }
+
+/** One reported import: the reason it is report-only, or the full edit set (call rewrites plus the import's deletion). */
+private typedef Finding = {
+	final path: String;
+	final module: String;
+	final member: String;
+	final span: Span;
+	final decline: Null<String>;
+	final edits: Null<Array<FixEdit>>;
+}
+
 /**
  * Flags a static import of an extension function that the same file also brings in with `using` —
  * `import StringTools.fastCodeAt;` beside `using StringTools;` — and rewrites each bare call
@@ -266,25 +287,4 @@ final class PreferUsingOverStaticImport extends HaxeRule implements RiskyFix {
 		return namesMember(node, member, seams) || node.children.exists(child -> mentions(child, member, seams));
 	}
 
-}
-
-/** A plain static import `path` = `module`.`member` and the span of its statement. */
-private typedef StaticImport = {
-	final path: String;
-	final module: String;
-	final member: String;
-	final span: Span;
-}
-
-/** The use sites of a bare name: calls with the name as callee, and whether any other use exists. */
-private typedef Uses = { final calls: Array<QueryNode>; var other: Bool; }
-
-/** One reported import: the reason it is report-only, or the full edit set (call rewrites plus the import's deletion). */
-private typedef Finding = {
-	final path: String;
-	final module: String;
-	final member: String;
-	final span: Span;
-	final decline: Null<String>;
-	final edits: Null<Array<FixEdit>>;
 }

@@ -15,6 +15,27 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** What one `using` path brings as static extensions (`StaticExtensions.usingHosts`). */
+typedef UsingHosts = {
+
+	/** The types whose statics are candidates, in the order the compiler tries them. */
+	final types: Array<ResolvedType>;
+
+	/** The module-level fields of the module, tried after its types; none for a `Module.Sub` path. */
+	final moduleFields: Array<ModuleField>;
+
+	/** Whether the index holds the module in several files: `types` and `moduleFields` list every file's, in no one order. */
+	final ambiguous: Bool;
+
+}
+
+/** What one step of the walk says (`StaticExtensions`): it binds, it passes the access on, or it is not decided. */
+private enum ExtensionStep {
+	Bound(found: HostedMembers);
+	Passed;
+	Open;
+}
+
 /**
  * Which static extension a field access `recv.name` binds, step T3 of the typer by specification
  * (`docs/typing-service.md`): the compiler's order of `fields.ml` (`type_field`, Haxe 4.3.7) over the declarations the
@@ -342,25 +363,4 @@ final class StaticExtensions {
 		};
 	}
 
-}
-
-/** What one `using` path brings as static extensions (`StaticExtensions.usingHosts`). */
-typedef UsingHosts = {
-
-	/** The types whose statics are candidates, in the order the compiler tries them. */
-	final types: Array<ResolvedType>;
-
-	/** The module-level fields of the module, tried after its types; none for a `Module.Sub` path. */
-	final moduleFields: Array<ModuleField>;
-
-	/** Whether the index holds the module in several files: `types` and `moduleFields` list every file's, in no one order. */
-	final ambiguous: Bool;
-
-}
-
-/** What one step of the walk says (`StaticExtensions`): it binds, it passes the access on, or it is not decided. */
-private enum ExtensionStep {
-	Bound(found: HostedMembers);
-	Passed;
-	Open;
 }

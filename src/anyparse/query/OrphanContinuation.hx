@@ -10,6 +10,17 @@ import haxe.Exception;
 
 using Lambda;
 
+/** One walk's seams, plus the comment tokens and directives `commentsOf` / `directivesOf` scan on first need. */
+private typedef OrphanScan = {
+	final source: String;
+	final shape: RefShape;
+	final kinds: Array<String>;
+	final sequenceKinds: Array<String>;
+	var comments: Null<Array<CommentTok>>;
+	var directives: Null<Array<CondDirective>>;
+	final regions: () -> Array<LexRegion>;
+};
+
 /**
  * The validity predicate over a parsed tree that the parse itself cannot be: which ORPHAN
  * CONTINUATIONS (`RefShape.orphanContinuationKinds` — Haxe `OrphanElseStmt`, an `else` with no
@@ -218,14 +229,3 @@ final class OrphanContinuation {
 	}
 
 }
-
-/** One walk's seams, plus the comment tokens and directives `commentsOf` / `directivesOf` scan on first need. */
-private typedef OrphanScan = {
-	final source: String;
-	final shape: RefShape;
-	final kinds: Array<String>;
-	final sequenceKinds: Array<String>;
-	var comments: Null<Array<CommentTok>>;
-	var directives: Null<Array<CondDirective>>;
-	final regions: () -> Array<LexRegion>;
-};

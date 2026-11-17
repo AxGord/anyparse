@@ -9,6 +9,18 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SymbolIndex;
 
+/** One matched loop: the spans the rewrite splices, the names it reads, the binder it would write. */
+private typedef Match = {
+	var forSpan: Span;
+	var iterableSpan: Span;
+	var index: String;
+	var collection: String;
+	var binder: Null<String>;
+	var readSpans: Array<Span>;
+	var decline: Null<String>;
+	var header: IndexedLoopHeader;
+}
+
 /**
  * Flags an INDEXED `for` whose index is never anything but an index into the collection it
  * counts — `for (i in 0...X.length)` where every mention of `i` sits inside an `X[i]` — which
@@ -212,16 +224,4 @@ final class PreferValueLoop extends RuleBase implements DefaultOff {
 			);
 	}
 
-}
-
-/** One matched loop: the spans the rewrite splices, the names it reads, the binder it would write. */
-private typedef Match = {
-	var forSpan: Span;
-	var iterableSpan: Span;
-	var index: String;
-	var collection: String;
-	var binder: Null<String>;
-	var readSpans: Array<Span>;
-	var decline: Null<String>;
-	var header: IndexedLoopHeader;
 }

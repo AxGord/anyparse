@@ -7,6 +7,20 @@ import anyparse.query.TailValueScan;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.UnchangedLocal;
 
+/** A maximal run: the receiver's name, the span from the first statement to the last, and each statement's root identifier. */
+private typedef SafeNavRun = { final name: String; final span: Span; final roots: Array<QueryNode>; };
+
+/** The resolved seams `GroupSafeNav` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final shape: RefShape;
+	final safeNavKind: String;
+	final exprStmtKind: String;
+	final identKind: String;
+	final chainKinds: Array<String>;
+	final blockKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+};
+
 /**
  * Flags two or more CONSECUTIVE statements that each null-safe-navigate the same local — `r?.a(); r?.b();` — and
  * rewrites them under one guard, `if (r != null) { r.a(); r.b(); }`: one test where the reader saw several, and a
@@ -171,17 +185,3 @@ final class GroupSafeNav extends RuleBase {
 	}
 
 }
-
-/** A maximal run: the receiver's name, the span from the first statement to the last, and each statement's root identifier. */
-private typedef SafeNavRun = { final name: String; final span: Span; final roots: Array<QueryNode>; };
-
-/** The resolved seams `GroupSafeNav` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final shape: RefShape;
-	final safeNavKind: String;
-	final exprStmtKind: String;
-	final identKind: String;
-	final chainKinds: Array<String>;
-	final blockKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-};

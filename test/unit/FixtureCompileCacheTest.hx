@@ -12,6 +12,8 @@ import utest.Test;
 
 using StringTools;
 
+private typedef Fixture = { var dir: String; var probe: String; }
+
 /**
  * `testkit.FixtureCompileCache`, the replay `dev mutation-check` puts in front of the probe compiles: a replay at
  * another place answers what the compiler answers THERE, any changed input — the probe macro's source included — is a
@@ -368,5 +370,3 @@ class FixtureCompileCacheTest extends Test {
 	}
 
 }
-
-private typedef Fixture = { var dir: String; var probe: String; }

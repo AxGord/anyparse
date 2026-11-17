@@ -11,6 +11,23 @@ using StringTools;
 using Lambda;
 
 /**
+ * One `compilerOracle` array element's keys exactly as DECLARED — before any path is
+ * resolved and before a missing `hxml` decides the element's fate.
+ *
+ * Module-private: it is the reading step's own shape, not a config surface.
+ */
+private typedef OracleFields = {
+	var hxml: Null<String>;
+	var dir: Null<String>;
+	var defines: Array<String>;
+	var generate: Null<String>;
+	var generateInputs: Null<Array<String>>;
+}
+
+/** A configuration read from the array form, with the position its element had there, for the drop lines. */
+private typedef IndexedOracle = { var index: Int; var config: OracleConfig; }
+
+/**
  * The one answer to "which builds does a `compilerOracle` value declare": its string or list form read into configurations,
  * every wrong entry dropped with a line. Grammar-neutral: the compile directory of an hxml is decided by the `probe` the
  * caller hands in (the Haxe compiler reads class paths for it) or left unset for a run whose grammar has no compiler.
@@ -218,20 +235,3 @@ final class OracleDeclarationReader {
 	}
 
 }
-
-/**
- * One `compilerOracle` array element's keys exactly as DECLARED — before any path is
- * resolved and before a missing `hxml` decides the element's fate.
- *
- * Module-private: it is the reading step's own shape, not a config surface.
- */
-private typedef OracleFields = {
-	var hxml: Null<String>;
-	var dir: Null<String>;
-	var defines: Array<String>;
-	var generate: Null<String>;
-	var generateInputs: Null<Array<String>>;
-}
-
-/** A configuration read from the array form, with the position its element had there, for the drop lines. */
-private typedef IndexedOracle = { var index: Int; var config: OracleConfig; }

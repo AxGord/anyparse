@@ -4,6 +4,8 @@ package unit.macro;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
+
+private typedef BuildRun = { code: Int, out: String };
 #end
 
 /**
@@ -208,7 +210,3 @@ class OptionsRecordTest extends Test {
 	#end
 
 }
-
-#if nodejs
-private typedef BuildRun = { code: Int, out: String };
-#end

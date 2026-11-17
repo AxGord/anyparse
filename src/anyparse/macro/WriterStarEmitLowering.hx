@@ -24,6 +24,35 @@ using StringTools;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state both Star forks read, bundled once per `WriterLowering`
+ * instance.
+ *
+ * Wider than the two layer bundles because a Star emit is where the writer's
+ * concerns meet: the shape table and the format info, the trivia gate, four
+ * sibling bundles it hands straight through, and the naming helpers plus the
+ * one Seq-walker gate (`buildKeepBlankAfterCtorGate`) it shares with
+ * `lowerStruct`. The bundle IS the surface: a Star leaf that needs something
+ * else has to widen this literal, which is one visible edit in that
+ * constructor.
+ */
+typedef StarEmitCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final formatInfo: FormatReader.FormatInfo;
+	final ctx: LoweringCtx;
+	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
+	final fieldSep: WriterFieldSepLowering.FieldSepCtx;
+	final braceSym: WriterBraceSymmetryLowering.BraceSymmetryCtx;
+	final ctorBlank: WriterCtorBlankLowering.CtorBlankCtx;
+	final triviaStar: WriterTriviaStarDispatch.TriviaStarDispatchCtx;
+	final buildKeepBlankAfterCtorGate: (child: ShapeNode, node: ShapeNode, typePath: String) -> Null<Expr>;
+	final isSpacedLead: (openText: Null<String>) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<SepStarMapWrap>;
+	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
+	final writeFnFor: (refName: String) -> String;
+}
+
+/**
  * Pass 3W - BOTH writer halves of the Star fork, in one module.
  *
  * A repetition emits differently depending on where it sits: a `Star` FIELD
@@ -1422,34 +1451,5 @@ final class WriterStarEmitLowering {
 		parts.push(macro anyparse.core.LeafTag.DelimiterLeaf.callArgs(_dc([$a{run}])));
 	}
 
-}
-
-/**
- * The build state both Star forks read, bundled once per `WriterLowering`
- * instance.
- *
- * Wider than the two layer bundles because a Star emit is where the writer's
- * concerns meet: the shape table and the format info, the trivia gate, four
- * sibling bundles it hands straight through, and the naming helpers plus the
- * one Seq-walker gate (`buildKeepBlankAfterCtorGate`) it shares with
- * `lowerStruct`. The bundle IS the surface: a Star leaf that needs something
- * else has to widen this literal, which is one visible edit in that
- * constructor.
- */
-typedef StarEmitCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final formatInfo: FormatReader.FormatInfo;
-	final ctx: LoweringCtx;
-	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
-	final fieldSep: WriterFieldSepLowering.FieldSepCtx;
-	final braceSym: WriterBraceSymmetryLowering.BraceSymmetryCtx;
-	final ctorBlank: WriterCtorBlankLowering.CtorBlankCtx;
-	final triviaStar: WriterTriviaStarDispatch.TriviaStarDispatchCtx;
-	final buildKeepBlankAfterCtorGate: (child: ShapeNode, node: ShapeNode, typePath: String) -> Null<Expr>;
-	final isSpacedLead: (openText: Null<String>) -> Bool;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<SepStarMapWrap>;
-	final ruleCtorPath: (typePath: String, ctor: String) -> Array<String>;
-	final writeFnFor: (refName: String) -> String;
 }
 #end

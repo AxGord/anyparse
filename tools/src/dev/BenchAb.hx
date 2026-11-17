@@ -7,6 +7,9 @@ import sys.FileSystem;
 
 using StringTools;
 
+/** One arm of a run: the build, its label, and the mode it runs when not the run's. */
+typedef BenchArm = { final label: String; final binary: String; final mode: Null<String>; }
+
 /**
  * `dev bench-ab [--config <hxformat.json>] <mode> <target> <rounds> <reps> <label>:<binary>...` — the parse/writer
  * harness (`parse-prof`) run by several builds, interleaved round by round, the MEDIAN per arm the result. A `.js` arm is
@@ -101,6 +104,3 @@ final class BenchAb {
 	}
 
 }
-
-/** One arm of a run: the build, its label, and the mode it runs when not the run's. */
-typedef BenchArm = { final label: String; final binary: String; final mode: Null<String>; }

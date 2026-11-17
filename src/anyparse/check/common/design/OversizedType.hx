@@ -17,6 +17,55 @@ import anyparse.util.Groups;
 using StringTools;
 
 /**
+ * Resolved kind-sets and thresholds for the oversized-type walk, built once per
+ * file so the recursion threads one struct.
+ */
+private typedef OversizedCfg = {
+	final containerKinds: Array<String>;
+	final memberKinds: Array<String>;
+	final conditionalKind: Null<String>;
+	final maxMembers: Int;
+	final maxLines: Int;
+	final granted: Array<OversizedGrant>;
+	final constants: (Array<MemberAt>) -> Array<Bool>;
+	final noSeam: (String) -> Bool;
+	final dictated: (String, Array<String>) -> Null<Int>;
+};
+
+/** One member declaration of a type, with the node whose DIRECT child it is — the type, or a `#if` region in it. */
+private typedef MemberAt = { final node: QueryNode; final host: QueryNode; };
+
+/** What `OversizedType.isConstant` reads for one file — resolved once, on the first type that needs it. */
+private typedef ConstantKit = {
+
+	final seams: ConstantFieldSeams;
+
+	/** The kinds a member's leading run may hold (modifiers and annotations) — where its `static` / `inline` sit. */
+	final leading: Array<String>;
+
+	/** `TypeInfoProvider.propertyAccessors`: the span starts of the members that carry an accessor clause. */
+	final accessors: Map<Int, Bool>;
+
+	/** `EnumAbstractForms.valueStarts`: the span starts of the members of an `@:enum abstract`. */
+	final valueStarts: Array<Int>;
+
+};
+
+/**
+ * One `grants` entry as `OversizedType.readGrant` accepted it: the type it names, its ceiling per dimension (null where
+ * the grant gives none, so the rule's threshold holds there) and its head as a finding quotes it.
+ */
+private typedef OversizedGrant = {
+	final name: String;
+	final members: Null<Int>;
+	final lines: Null<Int>;
+	final head: String;
+};
+
+/** What `OversizedType.readGrants` made of one config's `grants`: the accepted grants and one line per refused entry. */
+private typedef GrantList = { final granted: Array<OversizedGrant>; final problems: Array<String>; };
+
+/**
  * Flags a type declaration that has grown past a member-count or line-extent
  * threshold — a decomposition candidate the micro-level checks (per-function
  * complexity, style) cannot see. The first TYPE-level metric check: a ratchet
@@ -677,52 +726,3 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	}
 
 }
-
-/**
- * Resolved kind-sets and thresholds for the oversized-type walk, built once per
- * file so the recursion threads one struct.
- */
-private typedef OversizedCfg = {
-	final containerKinds: Array<String>;
-	final memberKinds: Array<String>;
-	final conditionalKind: Null<String>;
-	final maxMembers: Int;
-	final maxLines: Int;
-	final granted: Array<OversizedGrant>;
-	final constants: (Array<MemberAt>) -> Array<Bool>;
-	final noSeam: (String) -> Bool;
-	final dictated: (String, Array<String>) -> Null<Int>;
-};
-
-/** One member declaration of a type, with the node whose DIRECT child it is — the type, or a `#if` region in it. */
-private typedef MemberAt = { final node: QueryNode; final host: QueryNode; };
-
-/** What `OversizedType.isConstant` reads for one file — resolved once, on the first type that needs it. */
-private typedef ConstantKit = {
-
-	final seams: ConstantFieldSeams;
-
-	/** The kinds a member's leading run may hold (modifiers and annotations) — where its `static` / `inline` sit. */
-	final leading: Array<String>;
-
-	/** `TypeInfoProvider.propertyAccessors`: the span starts of the members that carry an accessor clause. */
-	final accessors: Map<Int, Bool>;
-
-	/** `EnumAbstractForms.valueStarts`: the span starts of the members of an `@:enum abstract`. */
-	final valueStarts: Array<Int>;
-
-};
-
-/**
- * One `grants` entry as `OversizedType.readGrant` accepted it: the type it names, its ceiling per dimension (null where
- * the grant gives none, so the rule's threshold holds there) and its head as a finding quotes it.
- */
-private typedef OversizedGrant = {
-	final name: String;
-	final members: Null<Int>;
-	final lines: Null<Int>;
-	final head: String;
-};
-
-/** What `OversizedType.readGrants` made of one config's `grants`: the accepted grants and one line per refused entry. */
-private typedef GrantList = { final granted: Array<OversizedGrant>; final problems: Array<String>; };

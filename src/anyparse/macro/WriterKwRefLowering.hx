@@ -13,6 +13,22 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the keyword-plus-Ref family reads, bundled once per
+ * `WriterLowering` instance.
+ *
+ * `bodyPolicy` is the sibling family's bundle, threaded through because
+ * Case 3 wraps its Ref body with `WriterBodyPolicyLowering.bodyPolicyWrap`.
+ */
+typedef KwRefCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final ctx: LoweringCtx;
+	final bodyPolicy: WriterBodyPolicyLowering.BodyPolicyCtx;
+	final isTightLead: (leadText: Null<String>) -> Bool;
+	final isTriviaBearing: (refName: String) -> Bool;
+	final writeFnFor: (refName: String) -> String;
+}
+
+/**
  * Pass 3W helpers - the keyword-plus-Ref enum branch family.
  *
  * Builds the generated writer body for the two enum-branch shapes that are
@@ -1143,21 +1159,5 @@ final class WriterKwRefLowering {
 		return kw.ctx.trivia && kw.isTriviaBearing(c.typePath) && TriviaPairAltCtor.isCtorKwValueBranch(c.branch);
 	}
 
-}
-
-/**
- * The build state the keyword-plus-Ref family reads, bundled once per
- * `WriterLowering` instance.
- *
- * `bodyPolicy` is the sibling family's bundle, threaded through because
- * Case 3 wraps its Ref body with `WriterBodyPolicyLowering.bodyPolicyWrap`.
- */
-typedef KwRefCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final ctx: LoweringCtx;
-	final bodyPolicy: WriterBodyPolicyLowering.BodyPolicyCtx;
-	final isTightLead: (leadText: Null<String>) -> Bool;
-	final isTriviaBearing: (refName: String) -> Bool;
-	final writeFnFor: (refName: String) -> String;
 }
 #end

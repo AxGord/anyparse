@@ -8,6 +8,9 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** A type one declaration writes (null for none), and the file writing it, where its names are read (`CallGraphKeys.keyedIn`). */
+typedef WrittenIn = { var file: String; var written: Null<String>; }
+
 /**
  * How a `CallGraph` keys the types its files write, and the declaration facts it reads by simple name: the key a
  * type name written in a file means (`typeOf` — the declaration the shared binding `TypeNameBinding.bindingsOf` binds it
@@ -326,6 +329,3 @@ final class CallGraphImports {
 	}
 
 }
-
-/** A type one declaration writes (null for none), and the file writing it, where its names are read (`CallGraphKeys.keyedIn`). */
-typedef WrittenIn = { var file: String; var written: Null<String>; }

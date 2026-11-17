@@ -112,6 +112,21 @@ typedef LexTokenTerminal = {
 
 };
 
+/** A delimited-literal `@:re` taken apart into the pieces a walk needs. */
+private typedef ReShape = {
+	prefix: String,
+	suffix: String,
+	excluded: Array<Int>,
+	escape: Int,
+	flagLow: Int,
+	flagHigh: Int
+};
+
+/** A run of literal characters read out of a pattern, and where reading stopped. */
+private typedef LiteralRun = { text: String, next: Int };
+/** The character codes a pattern's `[^ … ]` set excludes, and where reading stopped. */
+private typedef ExcludedSet = { codes: Array<Int>, next: Int };
+
 /**
  * The lexical pass's LOWERING — the third of the five passes, run for the
  * `Build.buildLexicalScan` entry point.
@@ -625,19 +640,4 @@ class LexicalLowering {
 	}
 
 }
-
-/** A delimited-literal `@:re` taken apart into the pieces a walk needs. */
-private typedef ReShape = {
-	prefix: String,
-	suffix: String,
-	excluded: Array<Int>,
-	escape: Int,
-	flagLow: Int,
-	flagHigh: Int
-};
-/** A run of literal characters read out of a pattern, and where reading stopped. */
-private typedef LiteralRun = { text: String, next: Int };
-
-/** The character codes a pattern's `[^ … ]` set excludes, and where reading stopped. */
-private typedef ExcludedSet = { codes: Array<Int>, next: Int };
 #end

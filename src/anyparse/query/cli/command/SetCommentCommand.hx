@@ -4,6 +4,24 @@ import anyparse.query.ExitCode.*;
 import anyparse.runtime.Span;
 
 /**
+ * Parsed options for `apq set-comment` — `lang`, `write` / `reformat`, the target `file`, the `pos` address, and the comment
+ * body (`commentText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
+@:nullSafety(Strict)
+typedef SetCommentOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var fromFile: Null<String>;
+	var file: Null<String>;
+	var pos: Null<String>;
+	var commentText: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+
+/**
  * `apq set-comment` — the SINGLE-FILE EDIT shape of the command seam.
  *
  * It is the pilot for the 19 address-and-edit commands (`patch`,
@@ -148,21 +166,3 @@ final class SetCommentCommand implements CliCommand implements PostWriteFix {
 	}
 
 }
-
-/**
- * Parsed options for `apq set-comment` — `lang`, `write` / `reformat`, the target `file`, the `pos` address, and the comment
- * body (`commentText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
- */
-@:nullSafety(Strict)
-typedef SetCommentOpts = {
-	var lang: String;
-	var write: Bool;
-	var reformat: Bool;
-	var fromFile: Null<String>;
-	var file: Null<String>;
-	var pos: Null<String>;
-	var commentText: Null<String>;
-	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
-	// the caller returns this immediately and ignores the rest of the struct.
-	var errExit: Null<Int>;
-};

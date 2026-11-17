@@ -10,6 +10,17 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * Cross-file `extract-constant --into` result: the changed scope files
+ * (each with the literal replaced by `<ModuleClass>.<NAME>`, plus an
+ * import when the file's package differs from the module's), the final
+ * constants-module source, and whether that module was freshly created.
+ */
+enum ExtractIntoResult {
+	Ok(changes: Array<{ file: String, newSource: String, count: Int }>, moduleSource: String, created: Bool);
+	Err(message: String);
+}
+
+/**
  * `extract-constant` — replace every occurrence of a plain single- or
  * double-quoted string literal inside one type with a reference to a fresh
  * `private static final` constant, so a repeated key / tag lives in one
@@ -241,15 +252,4 @@ final class ExtractConstant {
 		return tree.children.exists(c -> (c.kind == 'ImportDecl' || c.kind == 'UsingDecl') && c.name == modulePath);
 	}
 
-}
-
-/**
- * Cross-file `extract-constant --into` result: the changed scope files
- * (each with the literal replaced by `<ModuleClass>.<NAME>`, plus an
- * import when the file's package differs from the module's), the final
- * constants-module source, and whether that module was freshly created.
- */
-enum ExtractIntoResult {
-	Ok(changes: Array<{ file: String, newSource: String, count: Int }>, moduleSource: String, created: Bool);
-	Err(message: String);
 }

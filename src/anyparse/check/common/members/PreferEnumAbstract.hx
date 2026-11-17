@@ -11,6 +11,66 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Groups;
 
+private typedef ConstDecl = { final prefix: String; final span: Span; final name: String; };
+
+private typedef EnumAbstractCfg = {
+
+	final constKinds: Array<String>;
+	final staticKind: String;
+	final inlineKind: String;
+	final metaKinds: Array<String>;
+	final literalTypeNames: Map<String, String>;
+	final modifierKinds: Array<String>;
+	final numericKinds: Array<String>;
+	final negationKind: String;
+	final identKind: String;
+	final functionKinds: Array<String>;
+	final returnKind: String;
+	final assignKinds: Array<String>;
+	final ternaryKind: String;
+	final resultContainerKinds: Array<String>;
+	final classKinds: Array<String>;
+
+	/** The conditional-compilation region kinds, read for one directly above the container. */
+	final conditionalKinds: Array<String>;
+
+	/** What a region above the container may lead its declaration with: metadata, a modifier, a declaration keyword. */
+	final declarationLeadKinds: Array<String>;
+	final syntax: Null<EnumAbstractSyntax>;
+
+};
+
+private typedef WholeType = {
+
+	final span: Span;
+	final name: String;
+	final count: Int;
+	final typeName: String;
+
+	/** The conversion edits for this container, or null when a refusal declined the rewrite. */
+	final plan: Null<ConversionPlan>;
+
+};
+
+/**
+ * One accepted whole-type conversion: which container, and the edits that convert it.
+ *
+ * `from` is the container's own start offset, which with `file` is the key `fix` reconstructs
+ * from a violation's `span`. `declSource` is the declaration's verbatim text at plan time —
+ * `fix` re-checks it against the source it is handed, so a plan can never be applied to a file
+ * that moved underneath it (the fix loop re-runs the check per pass, but a stale plan would
+ * splice at offsets that no longer mean anything).
+ */
+private typedef ConversionPlan = {
+	final file: String;
+	final from: Int;
+	final name: String;
+	final declSource: String;
+	final edits: Array<{ span: Span, text: String }>;
+};
+
+private typedef Group = { final prefix: String; final span: Span; final members: Array<String>; };
+
 /**
  * Suggests grouping a set of related `static final` integer constants into an
  * `enum abstract` — the constants read as a closed enumeration but carry no
@@ -751,63 +811,3 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	}
 
 }
-
-private typedef ConstDecl = { final prefix: String; final span: Span; final name: String; };
-
-private typedef EnumAbstractCfg = {
-
-	final constKinds: Array<String>;
-	final staticKind: String;
-	final inlineKind: String;
-	final metaKinds: Array<String>;
-	final literalTypeNames: Map<String, String>;
-	final modifierKinds: Array<String>;
-	final numericKinds: Array<String>;
-	final negationKind: String;
-	final identKind: String;
-	final functionKinds: Array<String>;
-	final returnKind: String;
-	final assignKinds: Array<String>;
-	final ternaryKind: String;
-	final resultContainerKinds: Array<String>;
-	final classKinds: Array<String>;
-
-	/** The conditional-compilation region kinds, read for one directly above the container. */
-	final conditionalKinds: Array<String>;
-
-	/** What a region above the container may lead its declaration with: metadata, a modifier, a declaration keyword. */
-	final declarationLeadKinds: Array<String>;
-	final syntax: Null<EnumAbstractSyntax>;
-
-};
-
-private typedef WholeType = {
-
-	final span: Span;
-	final name: String;
-	final count: Int;
-	final typeName: String;
-
-	/** The conversion edits for this container, or null when a refusal declined the rewrite. */
-	final plan: Null<ConversionPlan>;
-
-};
-
-/**
- * One accepted whole-type conversion: which container, and the edits that convert it.
- *
- * `from` is the container's own start offset, which with `file` is the key `fix` reconstructs
- * from a violation's `span`. `declSource` is the declaration's verbatim text at plan time —
- * `fix` re-checks it against the source it is handed, so a plan can never be applied to a file
- * that moved underneath it (the fix loop re-runs the check per pass, but a stale plan would
- * splice at offsets that no longer mean anything).
- */
-private typedef ConversionPlan = {
-	final file: String;
-	final from: Int;
-	final name: String;
-	final declSource: String;
-	final edits: Array<{ span: Span, text: String }>;
-};
-
-private typedef Group = { final prefix: String; final span: Span; final members: Array<String>; };

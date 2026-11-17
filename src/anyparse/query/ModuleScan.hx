@@ -11,6 +11,18 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * One import-ish declaration a `#if … #end` region guards, as `ModuleScan.guardedImportScopes`
+ * reports it.
+ *
+ * `decl` is the statement itself; `region` the span of the INNERMOST region holding it — the byte
+ * range a reference must fall inside for the names the statement binds to be bound there — or null
+ * when the grammar recorded no span for that region. A null `region` covers nothing, which is the
+ * fail-closed answer: a caller asking whether a site is covered gets "no" and refuses, rather than
+ * treating an unlocatable guard as if it were absent.
+ */
+typedef GuardedImport = { final decl: QueryNode; final region: Null<Span>; };
+
+/**
  * The static readers over a module's TOP LEVEL: its `package`, the names its import / `using`
  * header binds — including the ones the grammar nests under a `Conditional` rather than leaving
  * at the top level — and the types the module itself declares.
@@ -362,15 +374,3 @@ final class ModuleScan {
 	}
 
 }
-
-/**
- * One import-ish declaration a `#if … #end` region guards, as `ModuleScan.guardedImportScopes`
- * reports it.
- *
- * `decl` is the statement itself; `region` the span of the INNERMOST region holding it — the byte
- * range a reference must fall inside for the names the statement binds to be bound there — or null
- * when the grammar recorded no span for that region. A null `region` covers nothing, which is the
- * fail-closed answer: a caller asking whether a site is covered gets "no" and refuses, rather than
- * treating an unlocatable guard as if it were absent.
- */
-typedef GuardedImport = { final decl: QueryNode; final region: Null<Span>; };

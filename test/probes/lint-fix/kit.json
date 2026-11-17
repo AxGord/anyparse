@@ -2837,6 +2837,39 @@
 			}
 		},
 		{
+			"name": "MTO-CROSS-REGION-NAMES-GUARDED",
+			"note": "module-type-order: the main type under #if js with a top-level typedef after it is not moved, and --verbose names the guarded class A as the reason, never the top-level typedef",
+			"argv": [
+				"hxq",
+				"lint",
+				"A.hx",
+				"--rule",
+				"module-type-order",
+				"--no-oracle",
+				"--all",
+				"--fix",
+				"--verbose"
+			],
+			"files": {
+				"A.hx": "package p;\n\n#if js\nclass A {}\n#end\n\ntypedef T = Int;\n",
+				"apq.json": "{ \"rules\": { \"module-type-order\": { \"enabled\": true } } }\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "044f2bad190f11ae",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
+		},
+		{
 			"name": "PH-IMPORT-RIDES-ON-REWRITE",
 			"note": "prefer-helper's only rewrite (a findMap whose lambda loses the narrowing of o) is rejected by the oracle: the import it needed must go with it, leaving the file untouched",
 			"argv": [

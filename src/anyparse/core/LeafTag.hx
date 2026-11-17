@@ -4,29 +4,6 @@ using anyparse.util.Strings;
 using StringTools;
 
 /**
- * What a `Doc.Text` leaf IS, said by the writer that built it, so a reader of the Doc never re-reads the leaf's bytes
- * to find out: the one answer to "which kind of leaf is this `Text`". An untagged leaf is writer syntax nobody has
- * named yet; each value is set where the leaf is built and nowhere else, save a call's `(`, which the call writer
- * names at the boundary of the run a list emitter built for it (`DelimiterLeaf.callArgs`).
- */
-enum LeafTag {
-
-	/** A line comment (`CommentRun.isLine`): it runs to its line end, so nothing may follow it on that line. */
-	LineComment;
-
-	/** Any other comment, or one line of it: a delimited comment that ends where its closer does. */
-	BlockComment;
-
-	/**
-	 * Writer syntax classified by its first visible byte (`opens`: a run it opens, or a word start) and by its end
-	 * (`ends`: a run it closes or leaves open): the leaf a grammar's open / close / lead / trail / empty literal or a
-	 * keyword / name builds, `foo(` and `) {` included.
-	 */
-	Delimiter(opens: OpenEdge, ends: EndEdge);
-
-}
-
-/**
  * What a `LeafTag.Delimiter` leaf's first visible byte is: the delimited run it opens, or a word start that opens none.
  */
 enum OpenEdge {
@@ -297,5 +274,28 @@ class DelimiterLeaf {
 		if (c == '('.code || c == '['.code || c == '{'.code) return Opens;
 		return c == '>'.code && i > 0 && s.fastCodeAt(i - 1) == '-'.code ? Arrow : Plain;
 	}
+
+}
+
+/**
+ * What a `Doc.Text` leaf IS, said by the writer that built it, so a reader of the Doc never re-reads the leaf's bytes
+ * to find out: the one answer to "which kind of leaf is this `Text`". An untagged leaf is writer syntax nobody has
+ * named yet; each value is set where the leaf is built and nowhere else, save a call's `(`, which the call writer
+ * names at the boundary of the run a list emitter built for it (`DelimiterLeaf.callArgs`).
+ */
+enum LeafTag {
+
+	/** A line comment (`CommentRun.isLine`): it runs to its line end, so nothing may follow it on that line. */
+	LineComment;
+
+	/** Any other comment, or one line of it: a delimited comment that ends where its closer does. */
+	BlockComment;
+
+	/**
+	 * Writer syntax classified by its first visible byte (`opens`: a run it opens, or a word start) and by its end
+	 * (`ends`: a run it closes or leaves open): the leaf a grammar's open / close / lead / trail / empty literal or a
+	 * keyword / name builds, `foo(` and `) {` included.
+	 */
+	Delimiter(opens: OpenEdge, ends: EndEdge);
 
 }

@@ -14,6 +14,90 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 /**
+ * A block statement: its RENDERED comparison text (`SpanRender`), whether
+ * that text carries a hole, whether it is bare, and its source span.
+ */
+typedef DupStmt = {
+	var text: String;
+	var renamed: Bool;
+	var bare: Bool;
+	var span: Span;
+}
+
+/** A (block-index, statement-index) coordinate into the per-file collected block list. */
+typedef DupPos = { var b: Int; var i: Int; }
+
+/**
+ * A recorded clone occurrence: its span, statement count, and the original's line. For a
+ * cross-file finding `origFile` names the anchor's file and `laterFile` the later occurrence's
+ * `perFile` index; a same-file finding leaves `origFile` empty and `laterFile` `-1`.
+ */
+typedef DupFinding = {
+	var span: Span;
+	var count: Int;
+	var origLine: Int;
+	var b: Int;
+	var startIdx: Int;
+	var origFile: String;
+	var laterFile: Int;
+}
+
+/**
+ * One scoped file: its path, source, and the block statement sequences `run` collected once
+ * (`collectBlocks`) for BOTH the same-file and the cross-file pass, so the tree is walked once.
+ */
+typedef DupFile = { var file: String; var source: String; var blocks: Array<Array<DupStmt>>; }
+
+/**
+ * What separates the two readings of one clone engine: the rule id its findings carry, whether a
+ * LOCAL binding's name is normalized away before comparison, and each wording's tail — the
+ * cross-file tail doubling as that rule's `messageIdentity` mask anchor.
+ */
+typedef DupMode = {
+	var ruleId: String;
+	var normalizeBinders: Bool;
+	var sameFileTail: String;
+	var crossFileTail: String;
+}
+
+/**
+ * The vocabularies one file's block walk needs. `binders` null is the reading that normalizes
+ * no name, where every statement's key is its raw render; `bare` is read under both.
+ */
+typedef DupCtx = {
+	var source: String;
+	var blockKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var binders: Null<DupBinders>;
+	var bare: DupBareKinds;
+}
+
+/**
+ * The grammar seams a binder-normalizing render asks: the scopes a local binding can span, the
+ * kinds that carry a binding on their own `name`, and the identifier kind a reference projects as.
+ */
+typedef DupBinders = {
+	var shape: RefShape;
+	var scopeKinds: Array<String>;
+	var binderKinds: Array<String>;
+	var identKind: String;
+}
+
+/**
+ * The grammar seams the bare-run filter reads, beside the shape they come from: the local
+ * declaration kinds with their continuation and type-annotation children, the literal kinds, and
+ * the collection literal kinds whose empty spelling is a literal too.
+ */
+typedef DupBareKinds = {
+	var shape: RefShape;
+	var declKinds: Array<String>;
+	var continuationKinds: Array<String>;
+	var typeChildKinds: Array<String>;
+	var literalKinds: Array<String>;
+	var emptyCollectionKinds: Array<String>;
+}
+
+/**
  * Flags a run of three or more consecutive statements that appears, byte-for-byte
  * identical up to LAYOUT (a literal's own interior compares exactly), in two or
  * more places — a copy-paste clone the user's rule says to always extract into a
@@ -718,88 +802,4 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 		return node.kind == shape.negationKind && node.children.length == 1 && numeric != null && numeric.contains(node.children[0].kind);
 	}
 
-}
-
-/**
- * A block statement: its RENDERED comparison text (`SpanRender`), whether
- * that text carries a hole, whether it is bare, and its source span.
- */
-typedef DupStmt = {
-	var text: String;
-	var renamed: Bool;
-	var bare: Bool;
-	var span: Span;
-}
-
-/** A (block-index, statement-index) coordinate into the per-file collected block list. */
-typedef DupPos = { var b: Int; var i: Int; }
-
-/**
- * A recorded clone occurrence: its span, statement count, and the original's line. For a
- * cross-file finding `origFile` names the anchor's file and `laterFile` the later occurrence's
- * `perFile` index; a same-file finding leaves `origFile` empty and `laterFile` `-1`.
- */
-typedef DupFinding = {
-	var span: Span;
-	var count: Int;
-	var origLine: Int;
-	var b: Int;
-	var startIdx: Int;
-	var origFile: String;
-	var laterFile: Int;
-}
-
-/**
- * One scoped file: its path, source, and the block statement sequences `run` collected once
- * (`collectBlocks`) for BOTH the same-file and the cross-file pass, so the tree is walked once.
- */
-typedef DupFile = { var file: String; var source: String; var blocks: Array<Array<DupStmt>>; }
-
-/**
- * What separates the two readings of one clone engine: the rule id its findings carry, whether a
- * LOCAL binding's name is normalized away before comparison, and each wording's tail — the
- * cross-file tail doubling as that rule's `messageIdentity` mask anchor.
- */
-typedef DupMode = {
-	var ruleId: String;
-	var normalizeBinders: Bool;
-	var sameFileTail: String;
-	var crossFileTail: String;
-}
-
-/**
- * The vocabularies one file's block walk needs. `binders` null is the reading that normalizes
- * no name, where every statement's key is its raw render; `bare` is read under both.
- */
-typedef DupCtx = {
-	var source: String;
-	var blockKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var binders: Null<DupBinders>;
-	var bare: DupBareKinds;
-}
-
-/**
- * The grammar seams a binder-normalizing render asks: the scopes a local binding can span, the
- * kinds that carry a binding on their own `name`, and the identifier kind a reference projects as.
- */
-typedef DupBinders = {
-	var shape: RefShape;
-	var scopeKinds: Array<String>;
-	var binderKinds: Array<String>;
-	var identKind: String;
-}
-
-/**
- * The grammar seams the bare-run filter reads, beside the shape they come from: the local
- * declaration kinds with their continuation and type-annotation children, the literal kinds, and
- * the collection literal kinds whose empty spelling is a literal too.
- */
-typedef DupBareKinds = {
-	var shape: RefShape;
-	var declKinds: Array<String>;
-	var continuationKinds: Array<String>;
-	var typeChildKinds: Array<String>;
-	var literalKinds: Array<String>;
-	var emptyCollectionKinds: Array<String>;
 }

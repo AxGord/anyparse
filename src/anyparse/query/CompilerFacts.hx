@@ -471,6 +471,26 @@ typedef TypeFact = {
 }
 
 /**
+ * A node's line: the text, the dump whose file table its foreign positions index, the file it is homed in, and every dump
+ * that wrote it naming the same files (`dump` first).
+ */
+private typedef NodeLine = {
+	final dump: Int;
+	final text: String;
+	final home: String;
+	final builds: Array<Int>;
+}
+
+/** Where one or more dumps typed a type: its home file, its range there, and those dumps. */
+private typedef HomeRecord = { final home: String; final p: Array<Int>; final builds: Array<Int>; }
+
+/** A node's range in its home file, in the compiler's codepoints. */
+private typedef NodeRange = { final id: String; final min: Int; final max: Int; }
+
+/** One dump's file table and path mapping. */
+private typedef DumpFiles = { final paths: Array<Null<String>>; final file: (String) -> String; }
+
+/**
  * The union of the facts every configuration of one run wrote (`TypedFactsProbe`), looked up by node id, by file and
  * anyparse `Span`, or by type. A node, a type or a call site present in ANY configuration is in the table; one present
  * in none — code no configuration compiled, a conditional branch every one of them left out, a file the table could
@@ -1246,23 +1266,3 @@ final class CompilerFacts {
 	}
 
 }
-
-/**
- * A node's line: the text, the dump whose file table its foreign positions index, the file it is homed in, and every dump
- * that wrote it naming the same files (`dump` first).
- */
-private typedef NodeLine = {
-	final dump: Int;
-	final text: String;
-	final home: String;
-	final builds: Array<Int>;
-}
-
-/** Where one or more dumps typed a type: its home file, its range there, and those dumps. */
-private typedef HomeRecord = { final home: String; final p: Array<Int>; final builds: Array<Int>; }
-
-/** A node's range in its home file, in the compiler's codepoints. */
-private typedef NodeRange = { final id: String; final min: Int; final max: Int; }
-
-/** One dump's file table and path mapping. */
-private typedef DumpFiles = { final paths: Array<Null<String>>; final file: (String) -> String; }

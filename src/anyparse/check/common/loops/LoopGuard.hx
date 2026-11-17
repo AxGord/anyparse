@@ -11,6 +11,53 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 
+/** The `RefShape` kinds `LoopGuard` reads, bundled once so the walkers take one argument. */
+private typedef Seams = {
+
+	/** Every loop statement (`ShapeVocab.statementLoopKinds`); a `doWhileKinds` one carries its body FIRST, the rest last. */
+	var loopKinds: Array<String>;
+	var doWhileKinds: Array<String>;
+	var continueKind: String;
+	var ifKinds: Array<String>;
+	var blockStmtKind: String;
+
+	/**
+	 * The block kinds a loop body or a header's branch may be (`ControlFlowSupport.blockKinds`, `blockStmtKind` alone
+	 * without the support): a `for` / `while` body is a statement block, a `do … while` one a body block, the branch of
+	 * its header `if` a block expression.
+	 */
+	var bodyBlockKinds: Array<String>;
+
+	/** The wrapper a `do … while` puts around a body that is not a block (`RefShape.expressionBodyKinds`). */
+	var exprBodyKinds: Array<String>;
+
+	/** Every `if` a MERGE header may be (`ShapeVocab.ifKinds`): a `do … while` header is an if-expression. */
+	var headerIfKinds: Array<String>;
+	var negation: NegationSeams;
+	var opaqueKinds: Array<String>;
+	var support: Null<BooleanLogicSupport>;
+	var andOperatorText: Null<String>;
+
+	/**
+	 * The dangling-`else` gate's inputs: the parents that close every child with a delimiter,
+	 * and every `if` form a lifted header's missing `else` could be absorbed by.
+	 */
+	var shield: ShieldSeams;
+
+}
+
+/**
+ * A matched loop guard: the `if`-continue statement, the block whose span the rewrite replaces,
+ * the guard condition to invert, and — on the MERGE arm only — the CONDITION of the header `if`
+ * the inversion joins with `&&` (null on the LIFT arm, which creates that header instead).
+ */
+private typedef Candidate = {
+	var guard: QueryNode;
+	var body: QueryNode;
+	var cond: QueryNode;
+	var headerCond: Null<QueryNode>;
+}
+
 /**
  * Flags a loop (`for` / `while` / `do … while`) whose body opens with a bare `if (g) continue;` guard — the
  * user's rule: combine `for` + `if` into `for (...) if (...) {`, preferred over a leading
@@ -331,51 +378,4 @@ final class LoopGuard extends RuleBase {
 		return lineBreak < 0 || lineBreak > limit ? limit : lineBreak;
 	}
 
-}
-
-/** The `RefShape` kinds `LoopGuard` reads, bundled once so the walkers take one argument. */
-private typedef Seams = {
-
-	/** Every loop statement (`ShapeVocab.statementLoopKinds`); a `doWhileKinds` one carries its body FIRST, the rest last. */
-	var loopKinds: Array<String>;
-	var doWhileKinds: Array<String>;
-	var continueKind: String;
-	var ifKinds: Array<String>;
-	var blockStmtKind: String;
-
-	/**
-	 * The block kinds a loop body or a header's branch may be (`ControlFlowSupport.blockKinds`, `blockStmtKind` alone
-	 * without the support): a `for` / `while` body is a statement block, a `do … while` one a body block, the branch of
-	 * its header `if` a block expression.
-	 */
-	var bodyBlockKinds: Array<String>;
-
-	/** The wrapper a `do … while` puts around a body that is not a block (`RefShape.expressionBodyKinds`). */
-	var exprBodyKinds: Array<String>;
-
-	/** Every `if` a MERGE header may be (`ShapeVocab.ifKinds`): a `do … while` header is an if-expression. */
-	var headerIfKinds: Array<String>;
-	var negation: NegationSeams;
-	var opaqueKinds: Array<String>;
-	var support: Null<BooleanLogicSupport>;
-	var andOperatorText: Null<String>;
-
-	/**
-	 * The dangling-`else` gate's inputs: the parents that close every child with a delimiter,
-	 * and every `if` form a lifted header's missing `else` could be absorbed by.
-	 */
-	var shield: ShieldSeams;
-
-}
-
-/**
- * A matched loop guard: the `if`-continue statement, the block whose span the rewrite replaces,
- * the guard condition to invert, and — on the MERGE arm only — the CONDITION of the header `if`
- * the inversion joins with `&&` (null on the LIFT arm, which creates that header instead).
- */
-private typedef Candidate = {
-	var guard: QueryNode;
-	var body: QueryNode;
-	var cond: QueryNode;
-	var headerCond: Null<QueryNode>;
 }

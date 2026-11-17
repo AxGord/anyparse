@@ -11,6 +11,38 @@ import anyparse.util.Groups;
 using Lambda;
 
 /**
+ * The per-file seams a `MemberBranchScan.fold` reads: the conditional region kind (null = no
+ * descent), the branch-opening directives and the file's directives the branch boundaries are
+ * recovered from.
+ */
+typedef MemberBranchSeams = {
+
+	/** The member-position conditional region kind; null makes `fold` a plain left fold. */
+	final condKind: Null<String>;
+
+	/** The branch-opening directives (`#else` / `#elseif`); empty makes a region one flat run. */
+	final elseKeywords: Array<String>;
+	final directives: Array<CondDirective>;
+
+};
+
+/**
+ * One member run as `MemberBranchScan.eachMember` folds it: the modifier / annotation siblings
+ * collected since the last member, and whether EVERY build that reaches the next member sees
+ * exactly those. `certain` goes false only where conditional branches leave different runs
+ * behind — the shape an enabling gate cannot judge.
+ *
+ * `var`, not `final`, and it is load-bearing: `eachMember` seeds `fold` from a lambda that
+ * returns a bare object literal, so the type parameter binds to the plain anon `{ nodes,
+ * certain }` first and this typedef must unify INTO it. A `final` field lowers to a `never`
+ * setter and cannot (`Inconsistent setter for field certain : never should be default`).
+ * One variable, same source, target swapped: `--jvm` rejects it while `-js` and `-neko`
+ * accept it. `final` in a structure typedef is fine anywhere the expected type is
+ * written at the literal — see `docs/testing.md` § "The core stays target-independent".
+ */
+private typedef MemberRun = { var nodes: Array<QueryNode>; var certain: Bool; };
+
+/**
  * The branch-aware member-run fold: how a member-scanning check reads
  * members declared under conditional compilation — a container's children
  * when one of them is a member-position conditional-compilation region.
@@ -390,35 +422,3 @@ final class MemberBranchScan {
 	}
 
 }
-
-/**
- * The per-file seams a `MemberBranchScan.fold` reads: the conditional region kind (null = no
- * descent), the branch-opening directives and the file's directives the branch boundaries are
- * recovered from.
- */
-typedef MemberBranchSeams = {
-
-	/** The member-position conditional region kind; null makes `fold` a plain left fold. */
-	final condKind: Null<String>;
-
-	/** The branch-opening directives (`#else` / `#elseif`); empty makes a region one flat run. */
-	final elseKeywords: Array<String>;
-	final directives: Array<CondDirective>;
-
-};
-
-/**
- * One member run as `MemberBranchScan.eachMember` folds it: the modifier / annotation siblings
- * collected since the last member, and whether EVERY build that reaches the next member sees
- * exactly those. `certain` goes false only where conditional branches leave different runs
- * behind — the shape an enabling gate cannot judge.
- *
- * `var`, not `final`, and it is load-bearing: `eachMember` seeds `fold` from a lambda that
- * returns a bare object literal, so the type parameter binds to the plain anon `{ nodes,
- * certain }` first and this typedef must unify INTO it. A `final` field lowers to a `never`
- * setter and cannot (`Inconsistent setter for field certain : never should be default`).
- * One variable, same source, target swapped: `--jvm` rejects it while `-js` and `-neko`
- * accept it. `final` in a structure typedef is fine anywhere the expected type is
- * written at the literal — see `docs/testing.md` § "The core stays target-independent".
- */
-private typedef MemberRun = { var nodes: Array<QueryNode>; var certain: Bool; };

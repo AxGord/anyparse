@@ -9,6 +9,22 @@ import haxe.macro.Expr;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The strip / add gate Exprs + per-element compute Exprs bundled for the
+ * `triviaBlockBlankBeforeAssemblyExpr` final-assembly helper. Replaces a
+ * >5-param helper signature with one struct.
+ */
+typedef BlankGateExprs = {
+	final currHasDocComputeExpr: Expr;
+	final currKindComputeExpr: Expr;
+	final stripByDocExpr: Expr;
+	final stripByExistingExpr: Expr;
+	final vetoByDocExpr: Expr;
+	final addByDocExpr: Expr;
+	final addByInterMemberExpr: Expr;
+	final addByUniformBetweenExpr: Expr;
+};
+
+/**
  * Pass 3W helpers — the block-mode (`@:lead` + `@:trail` + `@:trivia`) Star
  * emit family.
  *
@@ -995,20 +1011,4 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	}
 
 }
-
-/**
- * The strip / add gate Exprs + per-element compute Exprs bundled for the
- * `triviaBlockBlankBeforeAssemblyExpr` final-assembly helper. Replaces a
- * >5-param helper signature with one struct.
- */
-typedef BlankGateExprs = {
-	final currHasDocComputeExpr: Expr;
-	final currKindComputeExpr: Expr;
-	final stripByDocExpr: Expr;
-	final stripByExistingExpr: Expr;
-	final vetoByDocExpr: Expr;
-	final addByDocExpr: Expr;
-	final addByInterMemberExpr: Expr;
-	final addByUniformBetweenExpr: Expr;
-};
 #end

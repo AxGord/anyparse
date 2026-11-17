@@ -3,6 +3,20 @@ package anyparse.check.haxe.oracle;
 import anyparse.proc.Sleep;
 import haxe.io.Path;
 
+/** One `apq` process as a lock holder: its pid, and when it started (empty when that cannot be told). */
+typedef Holder = { var pid: Int; var start: String; }
+
+/**
+ * The owner of a generation's exclusive hold as read off its `owner` file: pid and start time (null / empty when the
+ * file is missing or unparseable), the text that identifies this particular hold, and whether it is abandoned.
+ */
+typedef LockOwner = {
+	var pid: Null<Int>;
+	var start: String;
+	var identity: String;
+	var abandoned: Bool;
+}
+
 /**
  * The reader/writer lock that guards one `compilerOracle` generation across `apq` processes (`OracleGeneration`).
  *
@@ -308,18 +322,4 @@ final class OracleGenerationLock {
 	}
 	#end
 
-}
-
-/** One `apq` process as a lock holder: its pid, and when it started (empty when that cannot be told). */
-typedef Holder = { var pid: Int; var start: String; }
-
-/**
- * The owner of a generation's exclusive hold as read off its `owner` file: pid and start time (null / empty when the
- * file is missing or unparseable), the text that identifies this particular hold, and whether it is abandoned.
- */
-typedef LockOwner = {
-	var pid: Null<Int>;
-	var start: String;
-	var identity: String;
-	var abandoned: Bool;
 }

@@ -15,6 +15,124 @@ import anyparse.query.TypeInfoProvider;
 
 using StringTools;
 
+/** One collapsible arm: the span replaced, and the spliced arm run that replaces it. */
+private typedef Candidate = { final span: Span; final text: String; };
+
+/** The nodes one collapse is built from, resolved once by `candidateFor` for `emit` to read. */
+private typedef Frame = {
+
+	final switchNode: QueryNode;
+	final at: Int;
+	final arm: QueryNode;
+	final plain: QueryNode;
+	final pat: QueryNode;
+
+	/** The binder's occurrence INSIDE the outer pattern — the slot each inner pattern is spliced into. */
+	final binderNode: QueryNode;
+	final inner: QueryNode;
+	final innerArms: Array<QueryNode>;
+
+	/** The call subject moved into the slot as an extractor; null when the subject is the bare binder. */
+	final call: Null<QueryNode>;
+
+	/** The call's argument that is the outer binder; null with `call`. */
+	final use: Null<QueryNode>;
+
+};
+
+/** An outer arm that passed the shape gates, before the binder the nested switch reads is chosen. */
+private typedef Site = {
+	final switchNode: QueryNode;
+	final at: Int;
+	final arm: QueryNode;
+	final plain: QueryNode;
+	final pat: QueryNode;
+	final inner: QueryNode;
+	final subject: QueryNode;
+};
+
+/** The outer label text every spliced arm reproduces: the `case` lead, the slot around the binder, the terminator. */
+private typedef Label = {
+
+	final lead: String;
+
+	/** The call moved into the binder's slot (placeholder where the binder stood, then the arrow); empty for a bare-binder collapse. */
+	final extractor: String;
+	final prefix: String;
+	final suffix: String;
+	final terminator: String;
+
+};
+
+/** One inner arm cut into the fragments the splice reproduces. */
+private typedef InnerArm = {
+
+	final patterns: Array<String>;
+
+	/** The text between consecutive patterns, one per pattern after the first. */
+	final separators: Array<String>;
+
+	/** The guard verbatim, its ` if ` spelling included; empty when the arm has none. */
+	final guard: String;
+	final body: String;
+
+	/** Whether the arm matches every subject: one wildcard pattern, no guard. */
+	final catchAll: Bool;
+
+};
+
+/** The per-file scan context: the parsed tree, its source, and the resolved seams. */
+private typedef Scan = {
+
+	final tree: QueryNode;
+	final source: String;
+	final seams: Seams;
+
+	/** What the file's lookup order may bind a bare pattern name to; null when the index does not hold the file. */
+	final scope: Null<PatternNameScope>;
+
+	/** The typed proofs of a capture and of inner coverage; null without type info. */
+	final slots: Null<CaseSlotTypes>;
+
+	/** The file's lexical regions, scanned once on the first comment gate a candidate reaches. */
+	final regions: () -> Array<LexRegion>;
+
+};
+
+/** The seam kinds `CollapseNestedSwitch` resolves once per run. */
+private typedef Seams = {
+
+	/** The shape the seams were read from — what `CasePatterns` takes. */
+	final shape: RefShape;
+	final switchKinds: Array<String>;
+
+	/** The statement-position subset — empty leaves the outer fall-through path permanently closed. */
+	final switchStatementKinds: Array<String>;
+	final caseBranchKind: String;
+	final defaultBranchKind: Null<String>;
+	final plainCasePatternKind: String;
+	final wildcardPatternName: String;
+	final identKind: String;
+	final parenKind: String;
+
+	/** The assignment kind — inside a pattern it is the `=`-CAPTURE form, whose left slot holds a NAME, not a pattern. */
+	final assignKind: String;
+
+	/** A `'$b'` read projects as this, never as `identKind` — the binder-isolation gate counts both. */
+	final stringInterpIdentKind: Null<String>;
+	final binderKinds: Array<String>;
+
+	/** Pattern kinds that RUN code while matching — empty models a family whose patterns evaluate nothing. */
+	final extractorKinds: Array<String>;
+
+	/** The call kind and the extractor operator — both set opens the call-subject collapse. */
+	final callKind: Null<String>;
+	final extractorArrow: Null<String>;
+	final conditionalKind: Null<String>;
+	final opaqueKinds: Array<String>;
+
+};
+
 /**
  * Flags an outer `case P(b):` whose body is EXACTLY one `switch b { … }` on that
  * binder, and rewrites it as DEEP PATTERN MATCHING: each inner `case Q_i: body_i`
@@ -779,121 +897,3 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** One collapsible arm: the span replaced, and the spliced arm run that replaces it. */
-private typedef Candidate = { final span: Span; final text: String; };
-
-/** The nodes one collapse is built from, resolved once by `candidateFor` for `emit` to read. */
-private typedef Frame = {
-
-	final switchNode: QueryNode;
-	final at: Int;
-	final arm: QueryNode;
-	final plain: QueryNode;
-	final pat: QueryNode;
-
-	/** The binder's occurrence INSIDE the outer pattern — the slot each inner pattern is spliced into. */
-	final binderNode: QueryNode;
-	final inner: QueryNode;
-	final innerArms: Array<QueryNode>;
-
-	/** The call subject moved into the slot as an extractor; null when the subject is the bare binder. */
-	final call: Null<QueryNode>;
-
-	/** The call's argument that is the outer binder; null with `call`. */
-	final use: Null<QueryNode>;
-
-};
-
-/** An outer arm that passed the shape gates, before the binder the nested switch reads is chosen. */
-private typedef Site = {
-	final switchNode: QueryNode;
-	final at: Int;
-	final arm: QueryNode;
-	final plain: QueryNode;
-	final pat: QueryNode;
-	final inner: QueryNode;
-	final subject: QueryNode;
-};
-
-/** The outer label text every spliced arm reproduces: the `case` lead, the slot around the binder, the terminator. */
-private typedef Label = {
-
-	final lead: String;
-
-	/** The call moved into the binder's slot (placeholder where the binder stood, then the arrow); empty for a bare-binder collapse. */
-	final extractor: String;
-	final prefix: String;
-	final suffix: String;
-	final terminator: String;
-
-};
-
-/** One inner arm cut into the fragments the splice reproduces. */
-private typedef InnerArm = {
-
-	final patterns: Array<String>;
-
-	/** The text between consecutive patterns, one per pattern after the first. */
-	final separators: Array<String>;
-
-	/** The guard verbatim, its ` if ` spelling included; empty when the arm has none. */
-	final guard: String;
-	final body: String;
-
-	/** Whether the arm matches every subject: one wildcard pattern, no guard. */
-	final catchAll: Bool;
-
-};
-
-/** The per-file scan context: the parsed tree, its source, and the resolved seams. */
-private typedef Scan = {
-
-	final tree: QueryNode;
-	final source: String;
-	final seams: Seams;
-
-	/** What the file's lookup order may bind a bare pattern name to; null when the index does not hold the file. */
-	final scope: Null<PatternNameScope>;
-
-	/** The typed proofs of a capture and of inner coverage; null without type info. */
-	final slots: Null<CaseSlotTypes>;
-
-	/** The file's lexical regions, scanned once on the first comment gate a candidate reaches. */
-	final regions: () -> Array<LexRegion>;
-
-};
-
-/** The seam kinds `CollapseNestedSwitch` resolves once per run. */
-private typedef Seams = {
-
-	/** The shape the seams were read from — what `CasePatterns` takes. */
-	final shape: RefShape;
-	final switchKinds: Array<String>;
-
-	/** The statement-position subset — empty leaves the outer fall-through path permanently closed. */
-	final switchStatementKinds: Array<String>;
-	final caseBranchKind: String;
-	final defaultBranchKind: Null<String>;
-	final plainCasePatternKind: String;
-	final wildcardPatternName: String;
-	final identKind: String;
-	final parenKind: String;
-
-	/** The assignment kind — inside a pattern it is the `=`-CAPTURE form, whose left slot holds a NAME, not a pattern. */
-	final assignKind: String;
-
-	/** A `'$b'` read projects as this, never as `identKind` — the binder-isolation gate counts both. */
-	final stringInterpIdentKind: Null<String>;
-	final binderKinds: Array<String>;
-
-	/** Pattern kinds that RUN code while matching — empty models a family whose patterns evaluate nothing. */
-	final extractorKinds: Array<String>;
-
-	/** The call kind and the extractor operator — both set opens the call-subject collapse. */
-	final callKind: Null<String>;
-	final extractorArrow: Null<String>;
-	final conditionalKind: Null<String>;
-	final opaqueKinds: Array<String>;
-
-};

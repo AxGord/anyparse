@@ -15,6 +15,41 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 using StringTools;
 
+/** The resolved seams `ComparisonToBoolean` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final shape: RefShape;
+	final equalityKinds: Array<String>;
+	final boolLitKind: String;
+	final eqKind: Null<String>;
+	final nullableKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final identKind: String;
+	final parenKind: Null<String>;
+	final callKind: Null<String>;
+	final instanceMethodReturns: Map<String, String>;
+	final boolOpKinds: Array<String>;
+};
+
+/** A member lookup both resolved arms have already PINNED: the run's index and the receiver's type nominal. */
+private typedef PinnedLookup = { final index: SymbolIndex; final recvType: String; };
+
+/**
+ * One file's resolution context for the resolved-type Bool proof: the parsed `root` the scope
+ * resolver walks, the file's `declaredTypes`, and two deferred seams — `castTargets` and `index`
+ * (the run's `SymbolIndex`, which reads the configured libraries). `index` is genuinely lazy and
+ * shared across the run. `castTargets` is memoized per file: on a `CachingGrammarPlugin` it is a
+ * read off the same memoized span-info bundle `declaredTypes` already forced, so the memo saves a
+ * map rebuild rather than a parse; against a bare plugin it saves the second full parse.
+ */
+private typedef TypeProof = {
+	final file: String;
+	final root: QueryNode;
+	final declaredTypes: Null<Map<Int, String>>;
+	final nullity: Null<DeclaredNullity>;
+	final castTargets: () -> Map<Int, String>;
+	final index: () -> Null<SymbolIndex>;
+};
+
 /**
  * Flags a comparison against a boolean literal — `x == true`, `x != false` and the like —
  * where the literal adds nothing (SonarLint S1125). Structural shape plus a type gate.
@@ -579,38 +614,3 @@ final class ComparisonToBoolean extends RuleBase {
 	}
 
 }
-
-/** The resolved seams `ComparisonToBoolean` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final shape: RefShape;
-	final equalityKinds: Array<String>;
-	final boolLitKind: String;
-	final eqKind: Null<String>;
-	final nullableKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-	final identKind: String;
-	final parenKind: Null<String>;
-	final callKind: Null<String>;
-	final instanceMethodReturns: Map<String, String>;
-	final boolOpKinds: Array<String>;
-};
-
-/** A member lookup both resolved arms have already PINNED: the run's index and the receiver's type nominal. */
-private typedef PinnedLookup = { final index: SymbolIndex; final recvType: String; };
-
-/**
- * One file's resolution context for the resolved-type Bool proof: the parsed `root` the scope
- * resolver walks, the file's `declaredTypes`, and two deferred seams — `castTargets` and `index`
- * (the run's `SymbolIndex`, which reads the configured libraries). `index` is genuinely lazy and
- * shared across the run. `castTargets` is memoized per file: on a `CachingGrammarPlugin` it is a
- * read off the same memoized span-info bundle `declaredTypes` already forced, so the memo saves a
- * map rebuild rather than a parse; against a bare plugin it saves the second full parse.
- */
-private typedef TypeProof = {
-	final file: String;
-	final root: QueryNode;
-	final declaredTypes: Null<Map<Int, String>>;
-	final nullity: Null<DeclaredNullity>;
-	final castTargets: () -> Map<Int, String>;
-	final index: () -> Null<SymbolIndex>;
-};

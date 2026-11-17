@@ -8,6 +8,20 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+/** A gate suite's selected classes, split by `SuiteReuse`. */
+typedef SuiteSplit = {
+
+	/** The classes that run, or null when every class does. */
+	var run: Null<Array<String>>;
+
+	/** The classes that keep the pass of the record's tree. */
+	var kept: Array<String>;
+
+	/** The tree whose pass the kept classes keep, or null when none is kept. */
+	var from: Null<String>;
+
+}
+
 /**
  * The one answer to "which test classes of a gate's impact suite keep an earlier check's pass instead of running again": a
  * class the record of the last vouching check holds keeps its pass when the change since that record's tree reaches it not
@@ -149,19 +163,5 @@ final class SuiteReuse {
 			&& (record.impact == null || (record.vouched ?? []).contains(name))
 			&& (name != ShardPlan.CORPUS_CLASS || record.sweep != null);
 	}
-
-}
-
-/** A gate suite's selected classes, split by `SuiteReuse`. */
-typedef SuiteSplit = {
-
-	/** The classes that run, or null when every class does. */
-	var run: Null<Array<String>>;
-
-	/** The classes that keep the pass of the record's tree. */
-	var kept: Array<String>;
-
-	/** The tree whose pass the kept classes keep, or null when none is kept. */
-	var from: Null<String>;
 
 }

@@ -9,6 +9,21 @@ import anyparse.runtime.Span;
 using Lambda;
 using StringTools;
 
+/** One declaring source, the member its reacher names, and the reacher's statement. */
+private typedef Cell = {
+	final name: String;
+	final rule: String;
+	final decl: String;
+	final member: String;
+	final body: String;
+};
+
+/** The edits of one cell run, per rule. */
+private typedef CellRun = { final declEdits: Map<String, Array<Span>>; final reachEdits: Map<String, Int>; };
+
+/** One source a scope half holds. */
+private typedef SourceFile = { var file: String; var source: String; };
+
 /**
  * Every spelling by which a second file takes access to a type's private members must stop the same rewrites of them.
  *
@@ -481,18 +496,3 @@ class PrivateAccessFormParityTest extends Test {
 	}
 
 }
-
-/** One declaring source, the member its reacher names, and the reacher's statement. */
-private typedef Cell = {
-	final name: String;
-	final rule: String;
-	final decl: String;
-	final member: String;
-	final body: String;
-};
-
-/** The edits of one cell run, per rule. */
-private typedef CellRun = { final declEdits: Map<String, Array<Span>>; final reachEdits: Map<String, Int>; };
-
-/** One source a scope half holds. */
-private typedef SourceFile = { var file: String; var source: String; };

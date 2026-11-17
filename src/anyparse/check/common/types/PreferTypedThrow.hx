@@ -14,6 +14,16 @@ import anyparse.util.Groups;
 
 using anyparse.util.Strings;
 
+/** The resolved grammar seams of one `prefer-typed-throw` run — read once per `run` / `fix` rather than per node. */
+private typedef Seams = {
+	var throwKinds: Array<String>;
+	var stringKinds: Array<String>;
+	var parenKind: Null<String>;
+	var condKind: Null<String>;
+	var exceptionPath: String;
+	var blockingCatchTypes: Array<String>;
+}
+
 /**
  * Flags `throw '<string>'` — a raw string thrown as an exception. The value carries no
  * type, no stack and no uniform API; the canonical form boxes it
@@ -311,14 +321,4 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 		};
 	}
 
-}
-
-/** The resolved grammar seams of one `prefer-typed-throw` run — read once per `run` / `fix` rather than per node. */
-private typedef Seams = {
-	var throwKinds: Array<String>;
-	var stringKinds: Array<String>;
-	var parenKind: Null<String>;
-	var condKind: Null<String>;
-	var exceptionPath: String;
-	var blockingCatchTypes: Array<String>;
 }

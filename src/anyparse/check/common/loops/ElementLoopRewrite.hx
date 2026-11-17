@@ -13,6 +13,20 @@ import anyparse.query.TypeResolver;
 
 using StringTools;
 
+/** What `ElementLoopRewrite.gatedEdits` needs besides the loop: the reach thunk, the file, and where a decline is written. */
+typedef ReachGate = {
+	var reachOf: () -> MemberReach;
+	var file: String;
+	var violations: Array<Violation>;
+	var rule: String;
+}
+
+/**
+ * What `ElementLoopRewrite.binderFor` decided: the element binder's name, or null with the `refusal` a
+ * report-only finding carries as its `declineReason`. Exactly one of the two is set.
+ */
+typedef BinderChoice = { var name: Null<String>; var refusal: Null<String>; }
+
 /**
  * What the two ELEMENT-loop rewrites share — `prefer-value-loop` (`for (v in X)`) and `prefer-keyvalue-loop`'s
  * no-opener arm (`for (i => v in X)`), both of which re-spell every `X[i]` of an indexed loop as a binder read
@@ -417,17 +431,3 @@ final class ElementLoopRewrite {
 	}
 
 }
-
-/** What `ElementLoopRewrite.gatedEdits` needs besides the loop: the reach thunk, the file, and where a decline is written. */
-typedef ReachGate = {
-	var reachOf: () -> MemberReach;
-	var file: String;
-	var violations: Array<Violation>;
-	var rule: String;
-}
-
-/**
- * What `ElementLoopRewrite.binderFor` decided: the element binder's name, or null with the `refusal` a
- * report-only finding carries as its `declineReason`. Exactly one of the two is set.
- */
-typedef BinderChoice = { var name: Null<String>; var refusal: Null<String>; }

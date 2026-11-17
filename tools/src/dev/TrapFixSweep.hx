@@ -11,6 +11,18 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
+ * One probe swept: its trap and file, its verdict (`TrapFixSweep.verdictOf`), the edits the fix reported (`-` where none
+ * ran) and the rules that made them.
+ */
+typedef SweptProbe = {
+	final trap: String;
+	final file: String;
+	final verdict: String;
+	final edits: String;
+	final exercised: Array<String>;
+}
+
+/**
  * `dev trap-fix-sweep [--rule <id>]... [--catalog <json>]` — every autofix rule over every trap of a catalog (by default
  * the name-resolution traps, `test/traps/resolve.json`): each probe's project that compiles and runs under `--interp` is
  * run as written, formatted, run again, `lint --fix`ed on a copy (`--rule` narrows the rules, else `--all`) under a
@@ -171,16 +183,4 @@ final class TrapFixSweep {
 		File.saveContent(path, text);
 	}
 
-}
-
-/**
- * One probe swept: its trap and file, its verdict (`TrapFixSweep.verdictOf`), the edits the fix reported (`-` where none
- * ran) and the rules that made them.
- */
-typedef SweptProbe = {
-	final trap: String;
-	final file: String;
-	final verdict: String;
-	final edits: String;
-	final exercised: Array<String>;
 }

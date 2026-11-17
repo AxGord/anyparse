@@ -9,6 +9,9 @@ import anyparse.runtime.CommonPrefix;
 
 using StringTools;
 
+/** One comment body line with its wrap markers removed: `marker` records whether it carried a ` * ` gutter. */
+private typedef StrippedLine = { ws: String, content: String, marker: Bool };
+
 /**
  * Engine-level adapter for captured C-family block-comment bodies.
  *
@@ -573,6 +576,3 @@ class BlockCommentNormalizer {
 	}
 
 }
-
-/** One comment body line with its wrap markers removed: `marker` records whether it carried a ` * ` gutter. */
-private typedef StrippedLine = { ws: String, content: String, marker: Bool };

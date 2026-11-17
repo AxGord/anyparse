@@ -13,6 +13,30 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+/** The kinds `PreferTryExpressionAssignment` reads. */
+private typedef Seams = {
+	var tryKinds: Array<String>;
+	var nestingKinds: Array<String>;
+	var tryShape: TrySeams;
+	var assignKind: String;
+	var exprStmtKind: String;
+	var mutableKinds: Array<String>;
+	var fieldAccessKind: Null<String>;
+	var identKind: String;
+	var stringInterpKind: Null<String>;
+	var localDeclContinuationKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var shape: RefShape;
+}
+
+/** A collapsible `try`: the finding key span, the replaced span, the built replacement, and the arm's message. */
+private typedef Match = {
+	var keySpan: Span;
+	var editSpan: Span;
+	var text: String;
+	var message: String;
+}
+
 /**
  * Flags a statement-position `try` / `catch` whose body AND every catch clause is a single
  * plain `=` assignment to the SAME target, collapsing it into one assignment of a
@@ -379,28 +403,4 @@ final class PreferTryExpressionAssignment extends RuleBase {
 		return true;
 	}
 
-}
-
-/** The kinds `PreferTryExpressionAssignment` reads. */
-private typedef Seams = {
-	var tryKinds: Array<String>;
-	var nestingKinds: Array<String>;
-	var tryShape: TrySeams;
-	var assignKind: String;
-	var exprStmtKind: String;
-	var mutableKinds: Array<String>;
-	var fieldAccessKind: Null<String>;
-	var identKind: String;
-	var stringInterpKind: Null<String>;
-	var localDeclContinuationKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var shape: RefShape;
-}
-
-/** A collapsible `try`: the finding key span, the replaced span, the built replacement, and the arm's message. */
-private typedef Match = {
-	var keySpan: Span;
-	var editSpan: Span;
-	var text: String;
-	var message: String;
 }

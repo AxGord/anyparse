@@ -1,6 +1,28 @@
 package anyparse.check.common.unused;
 
 /**
+ * The resolved seams the declaration walk threads through every frame — read once per tree.
+ */
+private typedef Seams = {
+
+	/** The declaration kinds this walk reads the leading runs of (`RefShape.memberDeclKinds` / `typeDeclKinds`). */
+	final decls: Array<String>;
+
+	/** The conditional-compilation region kind (`RefShape.conditionalMemberKind`). */
+	final condKind: String;
+
+	/** The annotation kinds (`MetaShape.metaKinds`). */
+	final metas: Array<String>;
+
+	/** The annotation names that count — one for a single-name seam, several for `typeStartsAny`. */
+	final metaNames: Array<String>;
+
+	/** The modifier kinds a declaration's leading run may hold; any other kind ENDS the run. */
+	final modifiers: Array<String>;
+
+};
+
+/**
  * The declarations whose leading run carries ONE NAMED annotation, asked ACROSS a
  * conditional-compilation region:
  *
@@ -149,25 +171,3 @@ final class AnnotatedDeclScan {
 	}
 
 }
-
-/**
- * The resolved seams the declaration walk threads through every frame — read once per tree.
- */
-private typedef Seams = {
-
-	/** The declaration kinds this walk reads the leading runs of (`RefShape.memberDeclKinds` / `typeDeclKinds`). */
-	final decls: Array<String>;
-
-	/** The conditional-compilation region kind (`RefShape.conditionalMemberKind`). */
-	final condKind: String;
-
-	/** The annotation kinds (`MetaShape.metaKinds`). */
-	final metas: Array<String>;
-
-	/** The annotation names that count — one for a single-name seam, several for `typeStartsAny`. */
-	final metaNames: Array<String>;
-
-	/** The modifier kinds a declaration's leading run may hold; any other kind ENDS the run. */
-	final modifiers: Array<String>;
-
-};

@@ -6,6 +6,49 @@ using StringTools;
 import anyparse.core.LeafTag.DelimiterLeaf;
 
 /**
+ * Tri-state verdict of `DocMeasure.scanTail`'s right-to-left walk over a
+ * `Doc`'s rendered tail.
+ */
+private enum abstract DocTailScan(Int) {
+
+	/** A forced hardline was reached and everything to its right was close delimiters / whitespace. */
+	final TailBreak = 0;
+
+	/** Only close delimiters and whitespace seen so far; keep scanning left. */
+	final TailCloses = 1;
+
+	/** Substantive content sits to the right of any hardline — the tail is not a closing line. */
+	final TailOther = 2;
+
+}
+
+/**
+ * The three facts `DocMeasure.scanTailAt` records about the closing line it
+ * finds, when a caller asks for them: the `Nest` depth that line starts at,
+ * whether the LEFTMOST closer opening it is a brace, and how wide the closer
+ * run is. All three are meaningful only alongside a `TailBreak` verdict.
+ *
+ * A mutable carrier rather than a return value, on purpose. The walk visits
+ * every node of the tail spine, and `endsWithForcedCloseLine` — the
+ * cuddled-chain gate on the writer's per-link path — wants none of the
+ * three, so it passes `null` and the walk allocates nothing at all.
+ * Returning a struct from every node instead is slower over a whole format pass.
+ */
+private typedef TailOut = { var nest: Int; var braceCloser: Bool; var closeWidth: Int; }
+
+/**
+ * The lines a glued ternary `c ? a : b` leaves after its condition's head: `width` is the closing line of the condition
+ * through the tail's first forced break, `breaks` says a branch breaks on it, and `closingLine` is the `) : else` line
+ * an opened then-branch leaves (`-1` when it opens nothing), `elseBreaks` that the else branch breaks on that line.
+ */
+typedef GluedTernaryTail = {
+	width: Int,
+	breaks: Bool,
+	closingLine: Int,
+	elseBreaks: Bool
+};
+
+/**
  * Static `Doc` measurement utilities that don't depend on render-time
  * stack/mode state. Live in `core` so both `core.Renderer` and the
  * `format.wrap` engine can call them without crossing layering rules
@@ -1134,46 +1177,3 @@ final class DocMeasure {
 	}
 
 }
-
-/**
- * Tri-state verdict of `DocMeasure.scanTail`'s right-to-left walk over a
- * `Doc`'s rendered tail.
- */
-private enum abstract DocTailScan(Int) {
-
-	/** A forced hardline was reached and everything to its right was close delimiters / whitespace. */
-	final TailBreak = 0;
-
-	/** Only close delimiters and whitespace seen so far; keep scanning left. */
-	final TailCloses = 1;
-
-	/** Substantive content sits to the right of any hardline — the tail is not a closing line. */
-	final TailOther = 2;
-
-}
-
-/**
- * The three facts `DocMeasure.scanTailAt` records about the closing line it
- * finds, when a caller asks for them: the `Nest` depth that line starts at,
- * whether the LEFTMOST closer opening it is a brace, and how wide the closer
- * run is. All three are meaningful only alongside a `TailBreak` verdict.
- *
- * A mutable carrier rather than a return value, on purpose. The walk visits
- * every node of the tail spine, and `endsWithForcedCloseLine` — the
- * cuddled-chain gate on the writer's per-link path — wants none of the
- * three, so it passes `null` and the walk allocates nothing at all.
- * Returning a struct from every node instead is slower over a whole format pass.
- */
-private typedef TailOut = { var nest: Int; var braceCloser: Bool; var closeWidth: Int; }
-
-/**
- * The lines a glued ternary `c ? a : b` leaves after its condition's head: `width` is the closing line of the condition
- * through the tail's first forced break, `breaks` says a branch breaks on it, and `closingLine` is the `) : else` line
- * an opened then-branch leaves (`-1` when it opens nothing), `elseBreaks` that the else branch breaks on that line.
- */
-typedef GluedTernaryTail = {
-	width: Int,
-	breaks: Bool,
-	closingLine: Int,
-	elseBreaks: Bool
-};

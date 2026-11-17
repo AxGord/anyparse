@@ -5,6 +5,15 @@ import anyparse.query.LintScore.LintScoreResult;
 import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintTruthJson;
 
+/** The options of one `apq lint-score` run. */
+private typedef ScoreOpts = {
+	final truth: String;
+	final report: String;
+	final severity: Null<String>;
+	final format: String;
+	final limit: Int;
+}
+
 /**
  * `apq lint-score` — score a lint report against a ground-truth file (`LintScore`).
  *
@@ -153,13 +162,4 @@ final class LintScoreCommand implements CliCommand implements LanguageFree {
 	}
 	#end
 
-}
-
-/** The options of one `apq lint-score` run. */
-private typedef ScoreOpts = {
-	final truth: String;
-	final report: String;
-	final severity: Null<String>;
-	final format: String;
-	final limit: Int;
 }

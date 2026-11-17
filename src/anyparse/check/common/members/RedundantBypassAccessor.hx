@@ -3,6 +3,14 @@ package anyparse.check.common.members;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 
+private typedef Ctx = {
+	assignKind: String,
+	identKind: String,
+	fieldAccessKind: Null<String>,
+	self: Null<String>,
+	metaKinds: Array<String>
+};
+
 /**
  * Flags a `@:bypassAccessor` metadata on a plain-`=` assignment whose lvalue -
  * a bare `x` or `this.x` - resolves to an own-class member that has NO
@@ -193,11 +201,3 @@ final class RedundantBypassAccessor extends RuleBase {
 	}
 
 }
-
-private typedef Ctx = {
-	assignKind: String,
-	identKind: String,
-	fieldAccessKind: Null<String>,
-	self: Null<String>,
-	metaKinds: Array<String>
-};

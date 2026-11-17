@@ -4,6 +4,49 @@ import anyparse.core.PoolLease;
 import haxe.io.Path;
 import sys.FileSystem;
 
+/** Where the threads of a run's heavy processes come from. */
+enum LeaseMode {
+
+	/** No pool: every process runs as it would without one. */
+	Unpooled;
+
+	/** The run holds a lease of `threads` from its caller: its processes share them, and none asks the pool again. */
+	Held(threads: Int);
+
+	/** The run holds none: each heavy process takes its own lease of the pool's `budget` threads through `wfRun`. */
+	Own(wfRun: String, budget: Int);
+
+}
+
+/** The threads one lease asks for: exactly `max`, or flexibly from `min` up to `max`. */
+typedef Ask = {
+
+	var min: Int;
+	var max: Int;
+
+	/**
+	 * The pool priority the lease queues at, or null for the caller's own (`WF_PRIORITY`). A priority given here is no longer
+	 * re-ranked with the caller's level.
+	 */
+	@:optional
+	var priority: Int;
+
+	/**
+	 * The seconds the command is expected to take on each size of the range, from the caller's own recorded runs, or none when
+	 * it has no reading by size. Only a curve covering every size from `min` to `max` reaches the pool.
+	 */
+	@:optional
+	var estSeconds: Map<Int, Int>;
+
+	/**
+	 * The cpus each process of the command runs on, one when it names none. A command that opts in leases that many threads
+	 * per process and still sees its process count in `WF_THREADS`.
+	 */
+	@:optional
+	var cores: Int;
+
+}
+
 /**
  * Where the threads of a run's heavy processes come from, and the command that takes them. Under `Own` each heavy process
  * takes a lease of its own from the machine-wide pool through `wf-run` and gives it back the moment it ends, so a long
@@ -144,48 +187,5 @@ final class Lease {
 		final status: Result = Command.of([wfRun, '--status']).timeout(STATUS_TIMEOUT_MS).run();
 		return status.ok ? budgetOf(status.out) : null;
 	}
-
-}
-
-/** Where the threads of a run's heavy processes come from. */
-enum LeaseMode {
-
-	/** No pool: every process runs as it would without one. */
-	Unpooled;
-
-	/** The run holds a lease of `threads` from its caller: its processes share them, and none asks the pool again. */
-	Held(threads: Int);
-
-	/** The run holds none: each heavy process takes its own lease of the pool's `budget` threads through `wfRun`. */
-	Own(wfRun: String, budget: Int);
-
-}
-
-/** The threads one lease asks for: exactly `max`, or flexibly from `min` up to `max`. */
-typedef Ask = {
-
-	var min: Int;
-	var max: Int;
-
-	/**
-	 * The pool priority the lease queues at, or null for the caller's own (`WF_PRIORITY`). A priority given here is no longer
-	 * re-ranked with the caller's level.
-	 */
-	@:optional
-	var priority: Int;
-
-	/**
-	 * The seconds the command is expected to take on each size of the range, from the caller's own recorded runs, or none when
-	 * it has no reading by size. Only a curve covering every size from `min` to `max` reaches the pool.
-	 */
-	@:optional
-	var estSeconds: Map<Int, Int>;
-
-	/**
-	 * The cpus each process of the command runs on, one when it names none. A command that opts in leases that many threads
-	 * per process and still sees its process count in `WF_THREADS`.
-	 */
-	@:optional
-	var cores: Int;
 
 }

@@ -5,6 +5,14 @@ import haxe.DynamicAccess;
 import sys.FileSystem;
 import sys.io.File;
 
+/** A request as the module logged it. */
+private typedef Asked = {
+	var cmd: String;
+	var args: Array<String>;
+	var cwd: String;
+	var env: DynamicAccess<String>;
+}
+
 /**
  * The lookup seam of `ProcessSpawn` (`ANSWER_ENV`): a job whose answer the named module has recorded is answered from it
  * without a process, in this process and in the process driver alike; a job it has no answer for is spawned as it always
@@ -237,12 +245,4 @@ final class ProcessSpawnAnswerTest extends Test {
 		return haxe.Json.stringify(text); // noqa: avoid-haxe-json
 	}
 
-}
-
-/** A request as the module logged it. */
-private typedef Asked = {
-	var cmd: String;
-	var args: Array<String>;
-	var cwd: String;
-	var env: DynamicAccess<String>;
 }

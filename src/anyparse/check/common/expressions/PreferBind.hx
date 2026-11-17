@@ -12,6 +12,26 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.UnchangedLocal;
 
+/** The resolved seams `PreferBind` reads in both `run` and `fix`. */
+private typedef Seams = { final lambdaKind: String; final callKind: String; final shape: RefShape; };
+
+/**
+ * One file's scan: the seams, the parsed root the scope resolver binds identifiers against, the file's
+ * name and source, the declared-type map keyed by binding offset, and the index a callee is proven
+ * against with the `OperandBinder` over it, both built on first use.
+ */
+private typedef Ctx = {
+	final seams: Seams;
+	final root: QueryNode;
+	final file: String;
+	final source: String;
+	final plugin: GrammarPlugin;
+	final index: () -> Null<SymbolIndex>;
+	final declaredTypes: Map<Int, String>;
+	var binder: Null<OperandBinder>;
+	var unchanged: Null<UnchangedLocal>;
+};
+
 /**
  * Flags a zero-parameter arrow lambda whose whole body is a single call —
  * `() -> f(a, b)` — and rewrites it to a partial application, `f.bind(a, b)`.
@@ -407,23 +427,3 @@ final class PreferBind extends RuleBase {
 	}
 
 }
-
-/** The resolved seams `PreferBind` reads in both `run` and `fix`. */
-private typedef Seams = { final lambdaKind: String; final callKind: String; final shape: RefShape; };
-
-/**
- * One file's scan: the seams, the parsed root the scope resolver binds identifiers against, the file's
- * name and source, the declared-type map keyed by binding offset, and the index a callee is proven
- * against with the `OperandBinder` over it, both built on first use.
- */
-private typedef Ctx = {
-	final seams: Seams;
-	final root: QueryNode;
-	final file: String;
-	final source: String;
-	final plugin: GrammarPlugin;
-	final index: () -> Null<SymbolIndex>;
-	final declaredTypes: Map<Int, String>;
-	var binder: Null<OperandBinder>;
-	var unchanged: Null<UnchangedLocal>;
-};

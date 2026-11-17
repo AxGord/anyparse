@@ -8,6 +8,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 
+/** A callee's declarations, their host, and whether a static extension reaches them. */
+typedef ResolvedCallee = { final members: Array<MemberInfo>; final host: ResolvedType; final extension: Bool; }
+
 /**
  * The one answer to "which member declarations does this call's callee name": `m` as the enclosing type's member
  * (inherited included) unless a local shadows it, else what an `import` names; `recv.m` off the receiver's one resolved
@@ -125,6 +128,3 @@ final class CalleeResolver {
 	}
 
 }
-
-/** A callee's declarations, their host, and whether a static extension reaches them. */
-typedef ResolvedCallee = { final members: Array<MemberInfo>; final host: ResolvedType; final extension: Bool; }

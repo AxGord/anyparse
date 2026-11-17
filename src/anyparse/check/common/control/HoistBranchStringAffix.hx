@@ -11,6 +11,58 @@ import anyparse.query.SourceComments;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 
+/** The `RefShape` seams and support kinds this check reads, bundled once per run. */
+private typedef Seams = {
+	var shape: RefShape;
+	var condKind: String;
+	var ifKeyword: String;
+	var endKeyword: String;
+	var elseKeywords: Array<String>;
+	var returnKind: String;
+	var stringKinds: Array<String>;
+	var blockKinds: Array<String>;
+	var concatKind: String;
+}
+
+/** The per-file scan state: the source, its comment tokens, its conditional directives and the seams. */
+private typedef Ctx = {
+	var source: String;
+	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
+	var directives: Array<CondDirective>;
+	var seams: Seams;
+}
+
+/** A string literal a cut may fall in: its own bounds, the interior its segments tile, and those segments. */
+private typedef Literal = {
+	var open: Int;
+	var close: Int;
+	var from: Int;
+	var to: Int;
+	var quote: String;
+	var segments: Array<Span>;
+}
+
+/**
+ * One branch's `return` value: how many concatenation operands it has, the two literals the cuts
+ * apply to, and the seams a wholly-eaten outer operand leaves the remainder starting / ending at.
+ */
+private typedef Branch = {
+	var count: Int;
+	var secondFrom: Int;
+	var penultimateTo: Int;
+	var head: Literal;
+	var tail: Literal;
+}
+
+/** A matched region's copied text: the span to replace, the hoisted affixes, the directives and each branch's remainder. */
+private typedef Match = {
+	var region: Span;
+	var head: String;
+	var tail: String;
+	var directives: Array<String>;
+	var branches: Array<String>;
+}
+
 /**
  * Flags a statement-position conditional-compilation region whose EVERY branch is one
  * `return <string>;` and whose branch strings begin and/or end with the same text, and writes that
@@ -505,56 +557,4 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 		return buffer.toString();
 	}
 
-}
-
-/** The `RefShape` seams and support kinds this check reads, bundled once per run. */
-private typedef Seams = {
-	var shape: RefShape;
-	var condKind: String;
-	var ifKeyword: String;
-	var endKeyword: String;
-	var elseKeywords: Array<String>;
-	var returnKind: String;
-	var stringKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var concatKind: String;
-}
-
-/** The per-file scan state: the source, its comment tokens, its conditional directives and the seams. */
-private typedef Ctx = {
-	var source: String;
-	var comments: Array<{ from: Int, to: Int, isLine: Bool }>;
-	var directives: Array<CondDirective>;
-	var seams: Seams;
-}
-
-/** A string literal a cut may fall in: its own bounds, the interior its segments tile, and those segments. */
-private typedef Literal = {
-	var open: Int;
-	var close: Int;
-	var from: Int;
-	var to: Int;
-	var quote: String;
-	var segments: Array<Span>;
-}
-
-/**
- * One branch's `return` value: how many concatenation operands it has, the two literals the cuts
- * apply to, and the seams a wholly-eaten outer operand leaves the remainder starting / ending at.
- */
-private typedef Branch = {
-	var count: Int;
-	var secondFrom: Int;
-	var penultimateTo: Int;
-	var head: Literal;
-	var tail: Literal;
-}
-
-/** A matched region's copied text: the span to replace, the hoisted affixes, the directives and each branch's remainder. */
-private typedef Match = {
-	var region: Span;
-	var head: String;
-	var tail: String;
-	var directives: Array<String>;
-	var branches: Array<String>;
 }

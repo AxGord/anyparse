@@ -6,6 +6,21 @@ import anyparse.grammar.json.JValueTools;
 import anyparse.util.Groups;
 import haxe.Exception;
 
+/** One `prefer-api-idiom` entry as declared — see `PreferApiIdiom` for the shape. */
+typedef IdiomSpec = {
+	final type: String;
+	final fields: Array<String>;
+	final method: Null<String>;
+	final copy: Null<String>;
+	final subtypes: Bool;
+}
+
+/** `typed-event-constant`'s declaration, as read. */
+typedef EventSpec = { final eventBase: String; final typeAbstract: String; final listenerMethods: Array<String>; }
+
+/** One mutation arm of a registry: its name and the member it cuts. */
+typedef ArmTarget = { final name: String; final type: String; final method: String; }
+
 /**
  * The readers of the rule options that DECLARE framework knowledge rather than tune a threshold —
  * `prefer-api-idiom`'s `idioms` and `typed-event-constant`'s event types — and of the mutation-arm
@@ -203,18 +218,3 @@ final class RuleDeclaration {
 	}
 
 }
-
-/** One `prefer-api-idiom` entry as declared — see `PreferApiIdiom` for the shape. */
-typedef IdiomSpec = {
-	final type: String;
-	final fields: Array<String>;
-	final method: Null<String>;
-	final copy: Null<String>;
-	final subtypes: Bool;
-}
-
-/** `typed-event-constant`'s declaration, as read. */
-typedef EventSpec = { final eventBase: String; final typeAbstract: String; final listenerMethods: Array<String>; }
-
-/** One mutation arm of a registry: its name and the member it cuts. */
-typedef ArmTarget = { final name: String; final type: String; final method: String; }

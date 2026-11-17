@@ -15,6 +15,48 @@ import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 /**
+ * The structural half of a match — the nodes, before any type or comment gate.
+ */
+private typedef Shape = {
+	final recv: QueryNode;
+	final read: QueryNode;
+	final fallback: QueryNode;
+	final name: String;
+}
+
+/**
+ * One matched `m.exists(k) ? m[k] : d` site and the verbatim parts its rewrite keeps.
+ */
+private typedef Match = {
+	final span: Span;
+	final name: String;
+	final bindingFrom: Int;
+	final readSource: String;
+	final fallbackSource: String;
+};
+
+/** Per-run resolved seams + type provider. */
+private typedef Cfg = {
+
+	final shape: RefShape;
+	final typed: TypeInfoProvider;
+	final ternaryKind: String;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final indexAccessKind: String;
+	final identKind: String;
+	final existsMethods: Array<String>;
+	final mapTypes: Array<String>;
+	final nullableWrappers: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
+	final typeSyntax: TypeSyntaxReader;
+	final opaqueKinds: Array<String>;
+	final mutationKinds: Array<String>;
+
+};
+
+/**
  * Flags a map lookup spelled as a membership test followed by an index read —
  * `m.exists(k) ? m[k] : d` — which the null-coalescing operator collapses to `m[k] ?? d`,
  * halving the hash lookups. `Severity.Info`, DEFAULT OFF, with an autofix that fires only
@@ -327,45 +369,3 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/**
- * The structural half of a match — the nodes, before any type or comment gate.
- */
-private typedef Shape = {
-	final recv: QueryNode;
-	final read: QueryNode;
-	final fallback: QueryNode;
-	final name: String;
-}
-
-/**
- * One matched `m.exists(k) ? m[k] : d` site and the verbatim parts its rewrite keeps.
- */
-private typedef Match = {
-	final span: Span;
-	final name: String;
-	final bindingFrom: Int;
-	final readSource: String;
-	final fallbackSource: String;
-};
-
-/** Per-run resolved seams + type provider. */
-private typedef Cfg = {
-
-	final shape: RefShape;
-	final typed: TypeInfoProvider;
-	final ternaryKind: String;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final indexAccessKind: String;
-	final identKind: String;
-	final existsMethods: Array<String>;
-	final mapTypes: Array<String>;
-	final nullableWrappers: Array<String>;
-
-	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
-	final typeSyntax: TypeSyntaxReader;
-	final opaqueKinds: Array<String>;
-	final mutationKinds: Array<String>;
-
-};

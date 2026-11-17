@@ -16,6 +16,45 @@ import anyparse.query.TreePath;
 
 using StringTools;
 
+/** The seam kinds `RedundantBraces` reads. */
+private typedef Seams = {
+
+	final ifKinds: Array<String>;
+
+	/** Every loop statement; a `do … while` one (`doWhileKinds`) is skipped. */
+	final loopKinds: Array<String>;
+	final doWhileKinds: Array<String>;
+
+	/** The `switch` statement kinds: an `else switch` is neither braced nor bare. */
+	final switchKinds: Array<String>;
+
+	/** Statements whose braces are kept: `if`s, blocks and every local declaration kind. */
+	final keptKinds: Array<String>;
+
+	/** The chain and statement-closing seams the brace rules share (`BranchChain.chainSeams`). */
+	final closing: ChainSeams;
+
+	/** The dangling-`else` position gate's inputs (`IfExpressionChain.shieldSeams`). */
+	final shield: ShieldSeams;
+
+};
+
+/** One file's context: its source and comment tokens, the seams and the grammar. */
+private typedef Site = {
+	final source: String;
+	final seams: Seams;
+	final plugin: GrammarPlugin;
+	final comments: Array<CommentTok>;
+};
+
+/** One finding: the reported span, the chain head or loop it is anchored on, the blocks the fix strips, the message. */
+private typedef Unbrace = {
+	final span: Span;
+	final node: QueryNode;
+	final blocks: Array<QueryNode>;
+	final message: String;
+};
+
 /**
  * Flags braces around a single statement that nothing needs: every branch of an if / else-if chain, or a loop body,
  * holding one statement in a block - `if (a) { p(); } else { q(); }`, `for (c in s) { p(); }`. `Info` and `DefaultOff`:
@@ -247,42 +286,3 @@ final class RedundantBraces extends RuleBase implements DefaultOff implements Qu
 	}
 
 }
-
-/** The seam kinds `RedundantBraces` reads. */
-private typedef Seams = {
-
-	final ifKinds: Array<String>;
-
-	/** Every loop statement; a `do … while` one (`doWhileKinds`) is skipped. */
-	final loopKinds: Array<String>;
-	final doWhileKinds: Array<String>;
-
-	/** The `switch` statement kinds: an `else switch` is neither braced nor bare. */
-	final switchKinds: Array<String>;
-
-	/** Statements whose braces are kept: `if`s, blocks and every local declaration kind. */
-	final keptKinds: Array<String>;
-
-	/** The chain and statement-closing seams the brace rules share (`BranchChain.chainSeams`). */
-	final closing: ChainSeams;
-
-	/** The dangling-`else` position gate's inputs (`IfExpressionChain.shieldSeams`). */
-	final shield: ShieldSeams;
-
-};
-
-/** One file's context: its source and comment tokens, the seams and the grammar. */
-private typedef Site = {
-	final source: String;
-	final seams: Seams;
-	final plugin: GrammarPlugin;
-	final comments: Array<CommentTok>;
-};
-
-/** One finding: the reported span, the chain head or loop it is anchored on, the blocks the fix strips, the message. */
-private typedef Unbrace = {
-	final span: Span;
-	final node: QueryNode;
-	final blocks: Array<QueryNode>;
-	final message: String;
-};

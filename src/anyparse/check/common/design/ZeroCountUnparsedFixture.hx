@@ -13,6 +13,40 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.query.TypeResolver;
 
+/** The option lists the rule reads. */
+typedef FixtureOptions = {
+
+	final asserts: Array<String>;
+	final countFields: Array<String>;
+	final sourceFields: Array<String>;
+
+	/** The functions whose unparseable fixture IS the point — a test that a skipped file yields nothing. */
+	final skipParseTests: Array<String>;
+
+}
+
+/** The grammar seams the scan reads, resolved once per run. */
+typedef FixtureSeams = {
+	final shape: RefShape;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final objectFieldKind: String;
+	final numericKinds: Array<String>;
+	final paramKinds: Array<String>;
+	final memberDeclKinds: Array<String>;
+	final localDeclKinds: Array<String>;
+	final fold: StringFoldSupport;
+}
+
+/** One file's scan: the seams, the options, and the tree and text the fixtures are read from. */
+typedef FixtureScan = {
+	final seams: FixtureSeams;
+	final options: FixtureOptions;
+	final plugin: GrammarPlugin;
+	final root: QueryNode;
+	final source: String;
+}
+
 /**
  * Flags the fixture of a ZERO-COUNT assertion (`Assert.equals(0, violations(src).length)`) that the file's own grammar
  * does not parse: a lint run skips a file it cannot parse, so the zero may say only that, and the assertion passes
@@ -244,38 +278,4 @@ final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware imp
 		return out;
 	}
 
-}
-
-/** The option lists the rule reads. */
-typedef FixtureOptions = {
-
-	final asserts: Array<String>;
-	final countFields: Array<String>;
-	final sourceFields: Array<String>;
-
-	/** The functions whose unparseable fixture IS the point — a test that a skipped file yields nothing. */
-	final skipParseTests: Array<String>;
-
-}
-
-/** The grammar seams the scan reads, resolved once per run. */
-typedef FixtureSeams = {
-	final shape: RefShape;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final objectFieldKind: String;
-	final numericKinds: Array<String>;
-	final paramKinds: Array<String>;
-	final memberDeclKinds: Array<String>;
-	final localDeclKinds: Array<String>;
-	final fold: StringFoldSupport;
-}
-
-/** One file's scan: the seams, the options, and the tree and text the fixtures are read from. */
-typedef FixtureScan = {
-	final seams: FixtureSeams;
-	final options: FixtureOptions;
-	final plugin: GrammarPlugin;
-	final root: QueryNode;
-	final source: String;
 }

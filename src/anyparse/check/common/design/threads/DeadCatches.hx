@@ -6,6 +6,9 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ShapeVocab;
 
+/** Where a name is read: the function node around it and the type declaring that function (null when the graph names none). */
+private typedef ReadScope = { final fn: QueryNode; final type: Null<String>; }
+
 /**
  * The `catch` bodies no exception can reach: the `try` around them runs nothing that throws. A positive whitelist of what a body may hold
  * — blocks and expression statements, conditional-compilation regions, literals with no interpolation, comparisons, reads of a binding or
@@ -157,6 +160,3 @@ final class DeadCatches {
 	}
 
 }
-
-/** Where a name is read: the function node around it and the type declaring that function (null when the graph names none). */
-private typedef ReadScope = { final fn: QueryNode; final type: Null<String>; }

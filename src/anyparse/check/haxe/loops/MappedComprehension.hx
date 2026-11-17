@@ -2,6 +2,25 @@ package anyparse.check.haxe.loops;
 
 import anyparse.query.BinderScan;
 
+/** The grammar kinds `MappedComprehension.of` reads. */
+typedef ComprehensionSeams = {
+	final arrayLiteralKind: String;
+	final identKind: String;
+	final parenKind: Null<String>;
+	final iterationKinds: Array<String>;
+	final valueBinderKinds: Array<String>;
+	final operandKinds: Array<String>;
+};
+
+/** A mapping comprehension read apart: what it iterates, the name it binds, the value it yields, and where each is written. */
+typedef Mapping = {
+	final iterable: QueryNode;
+	final body: QueryNode;
+	final binder: String;
+	final iterableSpan: Span;
+	final bodySpan: Span;
+};
+
 /**
  * The one answer to "is this node a mapping comprehension": `[for (x in xs) body]` — an array literal holding only a loop
  * over a postfix-operand iterable with no value binder — read as its iterable, binder and body. Shared by `prefer-map`,
@@ -56,22 +75,3 @@ final class MappedComprehension {
 	}
 
 }
-
-/** The grammar kinds `MappedComprehension.of` reads. */
-typedef ComprehensionSeams = {
-	final arrayLiteralKind: String;
-	final identKind: String;
-	final parenKind: Null<String>;
-	final iterationKinds: Array<String>;
-	final valueBinderKinds: Array<String>;
-	final operandKinds: Array<String>;
-};
-
-/** A mapping comprehension read apart: what it iterates, the name it binds, the value it yields, and where each is written. */
-typedef Mapping = {
-	final iterable: QueryNode;
-	final body: QueryNode;
-	final binder: String;
-	final iterableSpan: Span;
-	final bodySpan: Span;
-};

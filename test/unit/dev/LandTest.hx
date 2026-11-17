@@ -20,6 +20,217 @@ import utest.Test;
 
 using StringTools;
 
+/** What a `Land.land` run over a scratch repository left behind. */
+private typedef Landing = {
+
+	var status: Int;
+	var output: String;
+
+	/** The flags of every battery the run started. */
+	var flags: Array<Array<String>>;
+
+	/** The commits whose whole suite the landing started, the commit the scope was asked against, the classes it listed. */
+	var started: Array<String>;
+
+	/** The commits the baseline warm was started for. */
+	var warmed: Array<String>;
+
+	/** The commits an arm sweep was started for. */
+	var swept: Array<String>;
+	var impactBase: String;
+	var selected: String;
+
+	/** The snapshot key of the commit `main` ends at. */
+	var headAfter: String;
+
+	/**
+	 * The commit `main` was at before the run and its snapshot key; when a battery made the snapshot, the commit of the tree
+	 * it ran over and whether that tree outlived it.
+	 */
+	var headBefore: String;
+	var base: String;
+	var builtFrom: String;
+	var builtTreeLeft: Bool;
+
+	/** Whether the landings were counted. */
+	var tallied: Bool;
+	var builds: Int;
+
+	/** The trees the binaries were built in. */
+	var compiled: Array<String>;
+
+	/** The binary the stand-in build writes, as main's checkout holds it after the landing; empty when it holds none. */
+	var engine: String;
+
+	/** What the landing's own battery ran over; empty fields when it ran none. */
+	var judged: Judged;
+
+	/** The suite weights main's checkout holds after the landing; empty for none. */
+	var weights: String;
+
+	/** Whether the candidate tree outlived the landing. */
+	var candidateLeft: Bool;
+	var merging: Bool;
+	var dirty: String;
+	var merged: Bool;
+
+	/** Whether `main` is at another commit than before the run. */
+	var moved: Bool;
+
+	/** The parents of the commit `main` ends at. */
+	var parents: Int;
+
+	/** The commits `main` ends with. */
+	var commits: Int;
+
+	/** The message and the author of the head commit. */
+	var message: String;
+	var author: String;
+
+	/** The status and the output of a second landing of the same branch right after the first. */
+	var againStatus: Int;
+	var againOutput: String;
+
+	/** The contents, after the run, of the paths the setup asked to read. */
+	var files: Map<String, String>;
+
+	/** The merge brief the run wrote, or empty. */
+	var brief: String;
+
+	/** The log of the `prose-refs` row, or empty. */
+	var proseLog: String;
+
+}
+
+/** The tree a landing's own battery ran over, its HEAD then, and the suite weights it found there. */
+private typedef Judged = { var tree: String; var head: String; var weights: String; }
+
+/** The battery a landing asks for: whether in full, and the landings the count already holds. */
+private typedef Battery = {
+
+	var full: Bool;
+	var landed: Int;
+
+	/** Whether the script is red. */
+	@:optional
+	var fails: Bool;
+
+	/** What a red script leaves in its log. */
+	@:optional
+	var redLog: String;
+
+	/**
+	 * Whether the cache lacks the snapshot of the commit landed onto; whether the battery that makes it is red but still
+	 * leaves a snapshot, or leaves none.
+	 */
+	@:optional
+	var noSnapshot: Bool;
+
+	@:optional
+	var baseRed: Bool;
+
+	@:optional
+	var baseFails: Bool;
+
+	/** Whether the paths of the merge cannot be read. */
+	@:optional
+	var unreadable: Bool;
+
+}
+
+/** One file written whole. */
+private typedef Edit = { var path: String; var content: String; }
+
+/** What a scratch repository holds beside the one commit of the branch. */
+private typedef Setup = {
+
+	/** The text of `.gitattributes`. */
+	@:optional
+	var attributes: String;
+
+	/** Files in the base commit, and files the branch's commit writes beside its own. */
+	@:optional
+	var base: Array<Edit>;
+
+	@:optional
+	var onSide: Array<Edit>;
+
+	/** One more commit on the branch per edit. */
+	@:optional
+	var moreCommits: Array<Edit>;
+
+	/** One commit on `main` after the branch point. */
+	@:optional
+	var onMain: Array<Edit>;
+
+	/** Whether `main` already holds the branch's patch as a commit of its own, made by hand, with no trailer. */
+	@:optional
+	var handPicked: Bool;
+
+	/** Whether `main` already holds the branch's commit. */
+	@:optional
+	var preLanded: Bool;
+
+	/** Whether a worktree holds the branch, its gate's logs beside it holding a record. */
+	@:optional
+	var gated: Bool;
+
+	/** The message of the branch's commit, and the `-m` of the landing. */
+	@:optional
+	var sideMessage: String;
+
+	@:optional
+	var message: String;
+
+	/** The trailers the landing marks its commit with beside `Slice`. */
+	@:optional
+	var trailers: Array<String>;
+
+	/** The places the landing settles for the merge driver (`--resolve`). */
+	@:optional
+	var resolve: Array<String>;
+
+	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
+	@:optional
+	var during: (repo: String) -> Void;
+
+	@:optional
+	var again: Bool;
+
+	/** The writer runs of the `fmt` step; the ones that rewrite nothing when absent. */
+	@:optional
+	var format: FormatTools;
+
+	/** The paths whose contents the run reports. */
+	@:optional
+	var read: Array<String>;
+
+	/** Documents of the skills directory the landing reads beside the repository's own prose. */
+	@:optional
+	var skills: Array<Edit>;
+
+	/** The scope the merge needs, or none for a land with no scope seam. */
+	@:optional
+	var impact: SuiteScope;
+
+	/** The baseline warm seam: `starts` or `throws`; no seam when absent. */
+	@:optional
+	var warm: String;
+
+	/** Whether an earlier land's whole suite ended red. */
+	@:optional
+	var redRecord: Bool;
+
+	/** The suite weights main's checkout holds before the landing. */
+	@:optional
+	var weights: String;
+
+	/** The suite weights the landing's battery writes into its tree, as a green unfiltered suite does. */
+	@:optional
+	var measured: String;
+
+}
+
 /**
  * `dev land` over a scratch repository: a slice of one commit lands on `main` linearly with its `Slice` trailer, made and
  * judged in a candidate tree first, so a step that does not pass — one that threw as much as one that failed, a red battery
@@ -1216,216 +1427,5 @@ final class LandTest extends Test {
 		into.weights = contentsOf('$tree/$WEIGHTS');
 		if (measured != null) File.saveContent('$tree/$WEIGHTS', measured);
 	}
-
-}
-
-/** What a `Land.land` run over a scratch repository left behind. */
-private typedef Landing = {
-
-	var status: Int;
-	var output: String;
-
-	/** The flags of every battery the run started. */
-	var flags: Array<Array<String>>;
-
-	/** The commits whose whole suite the landing started, the commit the scope was asked against, the classes it listed. */
-	var started: Array<String>;
-
-	/** The commits the baseline warm was started for. */
-	var warmed: Array<String>;
-
-	/** The commits an arm sweep was started for. */
-	var swept: Array<String>;
-	var impactBase: String;
-	var selected: String;
-
-	/** The snapshot key of the commit `main` ends at. */
-	var headAfter: String;
-
-	/**
-	 * The commit `main` was at before the run and its snapshot key; when a battery made the snapshot, the commit of the tree
-	 * it ran over and whether that tree outlived it.
-	 */
-	var headBefore: String;
-	var base: String;
-	var builtFrom: String;
-	var builtTreeLeft: Bool;
-
-	/** Whether the landings were counted. */
-	var tallied: Bool;
-	var builds: Int;
-
-	/** The trees the binaries were built in. */
-	var compiled: Array<String>;
-
-	/** The binary the stand-in build writes, as main's checkout holds it after the landing; empty when it holds none. */
-	var engine: String;
-
-	/** What the landing's own battery ran over; empty fields when it ran none. */
-	var judged: Judged;
-
-	/** The suite weights main's checkout holds after the landing; empty for none. */
-	var weights: String;
-
-	/** Whether the candidate tree outlived the landing. */
-	var candidateLeft: Bool;
-	var merging: Bool;
-	var dirty: String;
-	var merged: Bool;
-
-	/** Whether `main` is at another commit than before the run. */
-	var moved: Bool;
-
-	/** The parents of the commit `main` ends at. */
-	var parents: Int;
-
-	/** The commits `main` ends with. */
-	var commits: Int;
-
-	/** The message and the author of the head commit. */
-	var message: String;
-	var author: String;
-
-	/** The status and the output of a second landing of the same branch right after the first. */
-	var againStatus: Int;
-	var againOutput: String;
-
-	/** The contents, after the run, of the paths the setup asked to read. */
-	var files: Map<String, String>;
-
-	/** The merge brief the run wrote, or empty. */
-	var brief: String;
-
-	/** The log of the `prose-refs` row, or empty. */
-	var proseLog: String;
-
-}
-
-/** The tree a landing's own battery ran over, its HEAD then, and the suite weights it found there. */
-private typedef Judged = { var tree: String; var head: String; var weights: String; }
-
-/** The battery a landing asks for: whether in full, and the landings the count already holds. */
-private typedef Battery = {
-
-	var full: Bool;
-	var landed: Int;
-
-	/** Whether the script is red. */
-	@:optional
-	var fails: Bool;
-
-	/** What a red script leaves in its log. */
-	@:optional
-	var redLog: String;
-
-	/**
-	 * Whether the cache lacks the snapshot of the commit landed onto; whether the battery that makes it is red but still
-	 * leaves a snapshot, or leaves none.
-	 */
-	@:optional
-	var noSnapshot: Bool;
-
-	@:optional
-	var baseRed: Bool;
-
-	@:optional
-	var baseFails: Bool;
-
-	/** Whether the paths of the merge cannot be read. */
-	@:optional
-	var unreadable: Bool;
-
-}
-
-/** One file written whole. */
-private typedef Edit = { var path: String; var content: String; }
-
-/** What a scratch repository holds beside the one commit of the branch. */
-private typedef Setup = {
-
-	/** The text of `.gitattributes`. */
-	@:optional
-	var attributes: String;
-
-	/** Files in the base commit, and files the branch's commit writes beside its own. */
-	@:optional
-	var base: Array<Edit>;
-
-	@:optional
-	var onSide: Array<Edit>;
-
-	/** One more commit on the branch per edit. */
-	@:optional
-	var moreCommits: Array<Edit>;
-
-	/** One commit on `main` after the branch point. */
-	@:optional
-	var onMain: Array<Edit>;
-
-	/** Whether `main` already holds the branch's patch as a commit of its own, made by hand, with no trailer. */
-	@:optional
-	var handPicked: Bool;
-
-	/** Whether `main` already holds the branch's commit. */
-	@:optional
-	var preLanded: Bool;
-
-	/** Whether a worktree holds the branch, its gate's logs beside it holding a record. */
-	@:optional
-	var gated: Bool;
-
-	/** The message of the branch's commit, and the `-m` of the landing. */
-	@:optional
-	var sideMessage: String;
-
-	@:optional
-	var message: String;
-
-	/** The trailers the landing marks its commit with beside `Slice`. */
-	@:optional
-	var trailers: Array<String>;
-
-	/** The places the landing settles for the merge driver (`--resolve`). */
-	@:optional
-	var resolve: Array<String>;
-
-	/** What the user does in the repository while the binaries are built, and whether the branch is landed a second time. */
-	@:optional
-	var during: (repo: String) -> Void;
-
-	@:optional
-	var again: Bool;
-
-	/** The writer runs of the `fmt` step; the ones that rewrite nothing when absent. */
-	@:optional
-	var format: FormatTools;
-
-	/** The paths whose contents the run reports. */
-	@:optional
-	var read: Array<String>;
-
-	/** Documents of the skills directory the landing reads beside the repository's own prose. */
-	@:optional
-	var skills: Array<Edit>;
-
-	/** The scope the merge needs, or none for a land with no scope seam. */
-	@:optional
-	var impact: SuiteScope;
-
-	/** The baseline warm seam: `starts` or `throws`; no seam when absent. */
-	@:optional
-	var warm: String;
-
-	/** Whether an earlier land's whole suite ended red. */
-	@:optional
-	var redRecord: Bool;
-
-	/** The suite weights main's checkout holds before the landing. */
-	@:optional
-	var weights: String;
-
-	/** The suite weights the landing's battery writes into its tree, as a green unfiltered suite does. */
-	@:optional
-	var measured: String;
 
 }

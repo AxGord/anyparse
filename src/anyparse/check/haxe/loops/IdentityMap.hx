@@ -13,6 +13,36 @@ import anyparse.query.StdTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
 
+/** The grammar kinds and readers `IdentityMap` uses; the comprehension's own four are `MappedComprehension`'s. */
+private typedef Seams = {
+	final comprehension: ComprehensionSeams;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final checkTypeKind: String;
+	final arrayTypeNames: Array<String>;
+	final opaqueKinds: Array<String>;
+	final lambdaKinds: Array<String>;
+	final requiredParamKinds: Array<String>;
+	final valueTypeNames: Array<String>;
+	final elementParams: Map<String, Int>;
+	final nullWrapperNames: Array<String>;
+	final typeSyntax: TypeSyntaxReader;
+};
+
+/** One identity map: the array it copies and, when the body ascribes the element, where that type is written. */
+private typedef Hit = { final iterable: QueryNode; final iterableSpan: Span; final typeSpan: Null<Span>; };
+
+/** A finding's edit — its span and the text that replaces it — and whether the map widens a type or only copies. */
+private typedef Match = { final edit: FixEdit; final widens: Bool; };
+
+/** What `IdentityMap` asks of one file: the nominal and written type of an expression, and the index its type names resolve in. */
+private typedef Typing = {
+	final nominal: (QueryNode) -> Null<String>;
+	final written: (QueryNode) -> Null<String>;
+	final index: Null<SymbolIndex>;
+	final file: Null<FileInfo>;
+};
+
 /**
  * Flags a map that hands every element back unchanged — `xs.map(x -> x)`, `xs.map(x -> (x : T))`, `[for (x in xs) x]`,
  * `[for (x in xs) (x : T)]` — and rewrites it to what it says. `Severity.Info`.
@@ -271,32 +301,3 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 	}
 
 }
-
-/** The grammar kinds and readers `IdentityMap` uses; the comprehension's own four are `MappedComprehension`'s. */
-private typedef Seams = {
-	final comprehension: ComprehensionSeams;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final checkTypeKind: String;
-	final arrayTypeNames: Array<String>;
-	final opaqueKinds: Array<String>;
-	final lambdaKinds: Array<String>;
-	final requiredParamKinds: Array<String>;
-	final valueTypeNames: Array<String>;
-	final elementParams: Map<String, Int>;
-	final nullWrapperNames: Array<String>;
-	final typeSyntax: TypeSyntaxReader;
-};
-
-/** One identity map: the array it copies and, when the body ascribes the element, where that type is written. */
-private typedef Hit = { final iterable: QueryNode; final iterableSpan: Span; final typeSpan: Null<Span>; };
-
-/** A finding's edit — its span and the text that replaces it — and whether the map widens a type or only copies. */
-private typedef Match = { final edit: FixEdit; final widens: Bool; };
-/** What `IdentityMap` asks of one file: the nominal and written type of an expression, and the index its type names resolve in. */
-private typedef Typing = {
-	final nominal: (QueryNode) -> Null<String>;
-	final written: (QueryNode) -> Null<String>;
-	final index: Null<SymbolIndex>;
-	final file: Null<FileInfo>;
-};

@@ -12,6 +12,22 @@ import sys.io.File;
 
 using StringTools;
 
+/** What a battery run is, compared with a `GateRecord`. */
+typedef GateFacts = {
+
+	var tree: String;
+	var toolchain: String;
+	var node: String;
+	var fork: String;
+
+	/** Whether the battery's suite skips verifying the shard plan, as the gate's does. */
+	var quick: Bool;
+
+}
+
+/** A record a battery was offered and the battery rows it stands for. */
+typedef GateOffer = { var gate: Null<GateRecord>; var rows: Array<String>; }
+
 /**
  * The one answer to "which battery rows a slice gate already passed for the exact tree a land is about to verify": the gate
  * leaves a `GateRecord` in its own logs, a land finds it beside the worktree that holds its branch, and the battery takes a
@@ -223,19 +239,3 @@ final class GateReuse {
 	}
 
 }
-
-/** What a battery run is, compared with a `GateRecord`. */
-typedef GateFacts = {
-
-	var tree: String;
-	var toolchain: String;
-	var node: String;
-	var fork: String;
-
-	/** Whether the battery's suite skips verifying the shard plan, as the gate's does. */
-	var quick: Bool;
-
-}
-
-/** A record a battery was offered and the battery rows it stands for. */
-typedef GateOffer = { var gate: Null<GateRecord>; var rows: Array<String>; }

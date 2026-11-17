@@ -11,6 +11,9 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 
+/** What one `apq` run left: its exit code and its stdout. */
+typedef CliRun = { final code: Int; final out: String; }
+
 /**
  * Shared on-disk fixture writer for the `apq` CLI end-to-end tests.
  *
@@ -239,6 +242,3 @@ final class CliFixture {
 	}
 
 }
-
-/** What one `apq` run left: its exit code and its stdout. */
-typedef CliRun = { final code: Int; final out: String; }

@@ -14,6 +14,9 @@ import unit.check.common.design.ThreadSafetyLongLocksTest;
 
 using StringTools;
 
+/** What one lint run printed: stdout and stderr. */
+private typedef LintOutput = { final out: String; final err: String; }
+
 /**
  * `apq lint --explain-long`: the long-lock evidence after the findings — a text section, or the
  * `{"findings": […], "longLocks": {…} | null}` envelope under `--format json`, always an envelope once asked — refused
@@ -255,6 +258,3 @@ class LintExplainLongCliTest extends Test {
 	#end
 
 }
-
-/** What one lint run printed: stdout and stderr. */
-private typedef LintOutput = { final out: String; final err: String; }

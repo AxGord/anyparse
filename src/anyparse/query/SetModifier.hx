@@ -8,6 +8,29 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * The bare modifier keywords of one declaration prefix run, the source span they occupy, whether
+ * that span covers anything but keywords and whitespace (`split` — the caller refuses), and the
+ * keywords the run's conditional regions contribute (`guarded` — which this op does not rewrite and
+ * a change must not collide with).
+ */
+typedef ModifierRun = {
+	final names: Array<String>;
+	final from: Int;
+	final to: Int;
+	final split: Bool;
+	final guarded: Array<String>;
+};
+
+/** Where `SetModifier.declarationAt` found the addressed declaration, or why it found none. */
+private enum DeclarationSite {
+	Located(at: DeclarationAt);
+	Refused(message: String);
+}
+
+/** A declaration `SetModifier` rewrites the modifiers of: `siblings[index]`, whose own text starts at `coreFrom`. */
+private typedef DeclarationAt = { final siblings: Array<QueryNode>; final index: Int; final coreFrom: Int; }
+
+/**
  * Flip a declaration's visibility / add or remove a boolean modifier at a
  * cursor — without retyping the declaration. This is the safe replacement for
  * the `replace-node --at <modifier>` footgun: a modifier projects to a sibling
@@ -397,26 +420,3 @@ final class SetModifier {
 	}
 
 }
-
-/**
- * The bare modifier keywords of one declaration prefix run, the source span they occupy, whether
- * that span covers anything but keywords and whitespace (`split` — the caller refuses), and the
- * keywords the run's conditional regions contribute (`guarded` — which this op does not rewrite and
- * a change must not collide with).
- */
-typedef ModifierRun = {
-	final names: Array<String>;
-	final from: Int;
-	final to: Int;
-	final split: Bool;
-	final guarded: Array<String>;
-};
-
-/** Where `SetModifier.declarationAt` found the addressed declaration, or why it found none. */
-private enum DeclarationSite {
-	Located(at: DeclarationAt);
-	Refused(message: String);
-}
-
-/** A declaration `SetModifier` rewrites the modifiers of: `siblings[index]`, whose own text starts at `coreFrom`. */
-private typedef DeclarationAt = { final siblings: Array<QueryNode>; final index: Int; final coreFrom: Int; }

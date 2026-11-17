@@ -16,6 +16,49 @@ import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.io.Path;
 
+/** One `prepare` call's state: who holds the locks, until when it waits, and what it has refused and said, and what it saw. */
+typedef GenerationRun = {
+
+	var me: Holder;
+	var deadline: Float;
+	var failures: Map<String, String>;
+	var notes: Array<String>;
+
+	/** What this run last saw of each usable group, by key (`OracleGeneration.observe`). */
+	var observed: Map<String, String>;
+
+	/** Why each group this run regenerated while an input moved is no snapshot of the tree, by key. */
+	var raced: Map<String, String>;
+
+}
+
+/**
+ * A stale generation about to run: its group, why, and its explicit
+ * and previously-recorded implicit inputs as hashed before the command.
+ */
+typedef StaleGroup = {
+	var group: GenerationGroup;
+	var why: String;
+	var inputs: Array<FileHash>;
+	var implicitBefore: Array<FileHash>;
+}
+
+/** The haxelib repository generations resolve libraries from, and each dev install in it as dev path to repository directory. */
+typedef LibraryIndex = { var repo: Null<String>; var devs: Map<String, String>; }
+
+/**
+ * One generation `prepare` may run: the key it is shared by, its declaration, every hxml it serves with the directory
+ * that hxml compiles from (`dirs`, paired by position), and the inputs its staleness is decided by (null: none, so it
+ * regenerates every run).
+ */
+typedef GenerationGroup = {
+	var key: String;
+	var generate: OracleGenerate;
+	var hxmls: Array<String>;
+	var dirs: Array<String>;
+	var inputs: Null<Array<String>>;
+}
+
 /**
  * The `compilerOracle` entries that say how to OBTAIN their hxml: each one's `generate` command is run to (re)create
  * the hxml before the configuration is used, so a project whose build tool writes the hxml (lime, a code generator)
@@ -715,47 +758,4 @@ final class OracleGeneration {
 	}
 	#end
 
-}
-
-/** One `prepare` call's state: who holds the locks, until when it waits, and what it has refused and said, and what it saw. */
-typedef GenerationRun = {
-
-	var me: Holder;
-	var deadline: Float;
-	var failures: Map<String, String>;
-	var notes: Array<String>;
-
-	/** What this run last saw of each usable group, by key (`OracleGeneration.observe`). */
-	var observed: Map<String, String>;
-
-	/** Why each group this run regenerated while an input moved is no snapshot of the tree, by key. */
-	var raced: Map<String, String>;
-
-}
-
-/**
- * A stale generation about to run: its group, why, and its explicit
- * and previously-recorded implicit inputs as hashed before the command.
- */
-typedef StaleGroup = {
-	var group: GenerationGroup;
-	var why: String;
-	var inputs: Array<FileHash>;
-	var implicitBefore: Array<FileHash>;
-}
-
-/** The haxelib repository generations resolve libraries from, and each dev install in it as dev path to repository directory. */
-typedef LibraryIndex = { var repo: Null<String>; var devs: Map<String, String>; }
-
-/**
- * One generation `prepare` may run: the key it is shared by, its declaration, every hxml it serves with the directory
- * that hxml compiles from (`dirs`, paired by position), and the inputs its staleness is decided by (null: none, so it
- * regenerates every run).
- */
-typedef GenerationGroup = {
-	var key: String;
-	var generate: OracleGenerate;
-	var hxmls: Array<String>;
-	var dirs: Array<String>;
-	var inputs: Null<Array<String>>;
 }

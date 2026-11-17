@@ -12,6 +12,139 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** Where a name is written, as `TypingService.resolve` reads it. */
+enum NamePosition {
+
+	/** A type reference: an annotation, a type argument, a supertype, a construction's type. */
+	TypePosition;
+
+	/** An expression reading the name as a value, or as the head of a path of field reads (`Mod.Sub.f()`). */
+	ValuePosition;
+
+}
+
+/** What a written name denotes (`TypingService.resolve`): the compiler's answer, or none — never another one. */
+enum Resolution {
+
+	/** The one declaration of the index the name denotes. */
+	Declared(decl: ResolvedType);
+
+	/** Nothing proves one declaration of the index: a type outside it, a tier nothing here reads, a name naming no type. */
+	Unknown;
+
+}
+
+/** How a bare name reads against one type path (`TypingService.bareBinding`). */
+enum BareBinding {
+
+	/** What binds the name, on every build, is that type. */
+	Same;
+
+	/** Another type binds the name, or may on some build. */
+	Other;
+
+	/** Nothing readable binds the name, and a statement the index cannot read — an import of a module it never saw — may. */
+	Unreadable;
+
+	/** Nothing binds the name. */
+	Unbound;
+
+}
+
+/** How a spelling `Head.Sub` read as a value is read at one site (`TypingService.headReading`). */
+enum HeadReading {
+
+	/** The head binds no type there, or only ones declaring no member `Sub`: the compiler reads the spelling by module path. */
+	ByModulePath;
+
+	/** The head binds a type declaring a member named `Sub` (a static field, an enum constructor): a member access. */
+	AsMember;
+
+	/** What the head binds, or whether that declares `Sub`, is not something the index holds. */
+	Unreadable;
+
+}
+
+/**
+ * The resolution `TypingService.typeWalk` asks for, answering in its own currency `T`. Two hosts answer a type SOURCE and
+ * differ in how it is spelled: the call graph spells it as it keys types (`CallGraphKeys.keyedIn`), the index as it was
+ * written, resolved in the file that wrote it. The third, `OperandBinder`, answers what that written type BINDS to where it
+ * is written (a `TypeNameBinding.Tier`), the currency an operator-overload gate judges a declaration in. `C` is what a walk
+ * threads through every question (the call graph's enclosing type). The walk owns the shapes; the host owns what a
+ * binding, a member, a call ARE — `docs/decisions.md`, "ONE structural walk, TWO resolution models". An arc a host does
+ * not know is a null function (the walk skips the shape) or a null answer, never a guess.
+ */
+typedef TypingHost<T, C> = {
+
+	/** `node` with what a type passes through unchanged (parentheses) peeled off, or `node` itself. */
+	final peel: (node: QueryNode, ctx: C) -> QueryNode;
+
+	/** Whether `kind` is a field access the host types (`a.b`; a member-lookup host adds `a?.b`, `a!.b`). */
+	final isAccess: (kind: String, ctx: C) -> Bool;
+
+	/** The value of a literal whose type `RefShape.literalTypeNames` names `typeName`; null for a host typing none. */
+	final literal: Null<(typeName: String, ctx: C) -> Null<T>>;
+
+	/**
+	 * The type the ascription `node` (`RefShape.checkTypeKind`, `(e : T)`) gives the value it holds: the type it writes,
+	 * which the value is checked against; null for a host typing none.
+	 */
+	final ascribed: Null<(node: QueryNode, ctx: C) -> Null<T>>;
+
+	/** What the self reference `node` denotes. */
+	final self: (node: QueryNode, ctx: C) -> Null<T>;
+
+	/** The binding offset of the value the identifier `ident` reads, or null when it binds none. */
+	final binding: (ident: QueryNode, ctx: C) -> Null<Int>;
+
+	/** The type the binding at `from` is written with, or the host otherwise holds for it; null when none. */
+	final bound: (from: Int, ctx: C) -> Null<T>;
+
+	/** The expression initialising the binding at `from`, written with no type, as read at `use`: the binding holds its type. */
+	final initializer: (from: Int, use: QueryNode, ctx: C) -> Null<QueryNode>;
+
+	/** The element the loop binder at `from` binds, read off what the loop iterates. */
+	final loopElement: (from: Int, ctx: C) -> Null<T>;
+
+	/**
+	 * The type the lambda parameter at `from`, written with no type and read at `use`, takes from the function type the
+	 * lambda is expected to be (`ExpectedTypes.lambdaParamTypes`); null for a host typing none.
+	 */
+	final parameter: Null<(from: Int, use: QueryNode, ctx: C) -> Null<T>>;
+
+	/** What the identifier `ident`, which binds no value, names. */
+	final unbound: (ident: QueryNode, ctx: C) -> Null<T>;
+
+	/** What the field access `node` (an `isAccess` kind with a receiver) reads. */
+	final access: (node: QueryNode, ctx: C) -> Null<T>;
+
+	/** The element the index access `node` into a value of type `container` reads; null for a host typing none. */
+	final element: Null<(node: QueryNode, container: T, ctx: C) -> Null<T>>;
+
+	/** What the call `node` returns. */
+	final call: (node: QueryNode, ctx: C) -> Null<T>;
+
+	/** What the construction `node` makes; null for a host typing none. */
+	final construction: Null<(node: QueryNode, ctx: C) -> Null<T>>;
+
+	/**
+	 * What the value `node` whose type depends on what its position expects makes — an array or object literal
+	 * (`RefShape.arrayLiteralKind`, `objectLiteralKind`), a conditional (`ternaryKind`, `ifExpressionKinds`); null for a host
+	 * typing none.
+	 */
+	final contextual: Null<(node: QueryNode, ctx: C) -> Null<T>>;
+
+	/**
+	 * What the operator `node` — of `RefShape.arithmeticKinds` or `booleanOperatorKinds`, a compound assignment, the negation
+	 * or the logical not — yields over operands of the types `operands`, each typed by the walk; null for a host typing none.
+	 */
+	final arithmetic: Null<(node: QueryNode, operands: Array<T>, ctx: C) -> Null<T>>;
+
+	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
+	final reading: (ctx: C) -> Array<Int>;
+
+}
+
 /**
  * The typing service of one run scope: the ONE place a typing question is asked, over the declarations
  * the `SymbolIndex` read, and the one answer to "what type does this expression or declaration have".
@@ -518,138 +651,5 @@ final class TypingService {
 		final params: Array<String> = decl.type.typeParamNames;
 		return written.replace(' ', '') == (params.length == 0 ? canonical : '$canonical<${params.join(',')}>');
 	}
-
-}
-
-/** Where a name is written, as `TypingService.resolve` reads it. */
-enum NamePosition {
-
-	/** A type reference: an annotation, a type argument, a supertype, a construction's type. */
-	TypePosition;
-
-	/** An expression reading the name as a value, or as the head of a path of field reads (`Mod.Sub.f()`). */
-	ValuePosition;
-
-}
-
-/** What a written name denotes (`TypingService.resolve`): the compiler's answer, or none — never another one. */
-enum Resolution {
-
-	/** The one declaration of the index the name denotes. */
-	Declared(decl: ResolvedType);
-
-	/** Nothing proves one declaration of the index: a type outside it, a tier nothing here reads, a name naming no type. */
-	Unknown;
-
-}
-
-/** How a bare name reads against one type path (`TypingService.bareBinding`). */
-enum BareBinding {
-
-	/** What binds the name, on every build, is that type. */
-	Same;
-
-	/** Another type binds the name, or may on some build. */
-	Other;
-
-	/** Nothing readable binds the name, and a statement the index cannot read — an import of a module it never saw — may. */
-	Unreadable;
-
-	/** Nothing binds the name. */
-	Unbound;
-
-}
-
-/** How a spelling `Head.Sub` read as a value is read at one site (`TypingService.headReading`). */
-enum HeadReading {
-
-	/** The head binds no type there, or only ones declaring no member `Sub`: the compiler reads the spelling by module path. */
-	ByModulePath;
-
-	/** The head binds a type declaring a member named `Sub` (a static field, an enum constructor): a member access. */
-	AsMember;
-
-	/** What the head binds, or whether that declares `Sub`, is not something the index holds. */
-	Unreadable;
-
-}
-
-/**
- * The resolution `TypingService.typeWalk` asks for, answering in its own currency `T`. Two hosts answer a type SOURCE and
- * differ in how it is spelled: the call graph spells it as it keys types (`CallGraphKeys.keyedIn`), the index as it was
- * written, resolved in the file that wrote it. The third, `OperandBinder`, answers what that written type BINDS to where it
- * is written (a `TypeNameBinding.Tier`), the currency an operator-overload gate judges a declaration in. `C` is what a walk
- * threads through every question (the call graph's enclosing type). The walk owns the shapes; the host owns what a
- * binding, a member, a call ARE — `docs/decisions.md`, "ONE structural walk, TWO resolution models". An arc a host does
- * not know is a null function (the walk skips the shape) or a null answer, never a guess.
- */
-typedef TypingHost<T, C> = {
-
-	/** `node` with what a type passes through unchanged (parentheses) peeled off, or `node` itself. */
-	final peel: (node: QueryNode, ctx: C) -> QueryNode;
-
-	/** Whether `kind` is a field access the host types (`a.b`; a member-lookup host adds `a?.b`, `a!.b`). */
-	final isAccess: (kind: String, ctx: C) -> Bool;
-
-	/** The value of a literal whose type `RefShape.literalTypeNames` names `typeName`; null for a host typing none. */
-	final literal: Null<(typeName: String, ctx: C) -> Null<T>>;
-
-	/**
-	 * The type the ascription `node` (`RefShape.checkTypeKind`, `(e : T)`) gives the value it holds: the type it writes,
-	 * which the value is checked against; null for a host typing none.
-	 */
-	final ascribed: Null<(node: QueryNode, ctx: C) -> Null<T>>;
-
-	/** What the self reference `node` denotes. */
-	final self: (node: QueryNode, ctx: C) -> Null<T>;
-
-	/** The binding offset of the value the identifier `ident` reads, or null when it binds none. */
-	final binding: (ident: QueryNode, ctx: C) -> Null<Int>;
-
-	/** The type the binding at `from` is written with, or the host otherwise holds for it; null when none. */
-	final bound: (from: Int, ctx: C) -> Null<T>;
-
-	/** The expression initialising the binding at `from`, written with no type, as read at `use`: the binding holds its type. */
-	final initializer: (from: Int, use: QueryNode, ctx: C) -> Null<QueryNode>;
-
-	/** The element the loop binder at `from` binds, read off what the loop iterates. */
-	final loopElement: (from: Int, ctx: C) -> Null<T>;
-
-	/**
-	 * The type the lambda parameter at `from`, written with no type and read at `use`, takes from the function type the
-	 * lambda is expected to be (`ExpectedTypes.lambdaParamTypes`); null for a host typing none.
-	 */
-	final parameter: Null<(from: Int, use: QueryNode, ctx: C) -> Null<T>>;
-
-	/** What the identifier `ident`, which binds no value, names. */
-	final unbound: (ident: QueryNode, ctx: C) -> Null<T>;
-
-	/** What the field access `node` (an `isAccess` kind with a receiver) reads. */
-	final access: (node: QueryNode, ctx: C) -> Null<T>;
-
-	/** The element the index access `node` into a value of type `container` reads; null for a host typing none. */
-	final element: Null<(node: QueryNode, container: T, ctx: C) -> Null<T>>;
-
-	/** What the call `node` returns. */
-	final call: (node: QueryNode, ctx: C) -> Null<T>;
-
-	/** What the construction `node` makes; null for a host typing none. */
-	final construction: Null<(node: QueryNode, ctx: C) -> Null<T>>;
-
-	/**
-	 * What the value `node` whose type depends on what its position expects makes — an array or object literal
-	 * (`RefShape.arrayLiteralKind`, `objectLiteralKind`), a conditional (`ternaryKind`, `ifExpressionKinds`); null for a host
-	 * typing none.
-	 */
-	final contextual: Null<(node: QueryNode, ctx: C) -> Null<T>>;
-
-	/**
-	 * What the operator `node` — of `RefShape.arithmeticKinds` or `booleanOperatorKinds`, a compound assignment, the negation
-	 * or the logical not — yields over operands of the types `operands`, each typed by the walk; null for a host typing none.
-	 */
-	final arithmetic: Null<(node: QueryNode, operands: Array<T>, ctx: C) -> Null<T>>;
-
-	/** The binding offsets whose unannotated type the walk is reading right now, against a cycle (`for (x in x)`). */
-	final reading: (ctx: C) -> Array<Int>;
 
 }

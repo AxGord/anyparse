@@ -33,6 +33,66 @@ enum Tier {
 
 }
 
+/** An import path as the compiler reads it (`TypeNameBinding.splitPath`): its module, then what follows it — a type, then a field. */
+typedef ImportPath = { final module: String; final rest: Array<String>; }
+
+/** One type a name may bind to (`TypeNameBinding.bindingsOf`): declarations of the index, or the path of a type outside it. */
+enum NameTarget {
+	InIndex(decls: Array<ResolvedType>);
+	OutOfIndex(path: String);
+}
+
+/**
+ * Every type a name may bind to on some build (`TypeNameBinding.bindingsOf`): `bound` wherever the order reads it,
+ * null where nothing readable binds it; `guarded` on the builds a `#if`-guarded statement holds; `unlisted` where a
+ * package wildcard the order cannot list may supply it.
+ */
+typedef NameTargets = { var bound: Null<NameTarget>; final guarded: Array<NameTarget>; final unlisted: Array<NameTarget>; }
+
+/**
+ * The explicit statements and the package wildcards of a file and its ambient chain, each in the order the
+ * compiler asks them: the file's own last to first, then each ambient source nearest first, last to first.
+ */
+private typedef StatementOrder = {
+
+	final explicit: Array<ImportInfo>;
+	final wildcards: Array<ImportInfo>;
+
+	/** The `#if` branch the name is used in, null when the caller gave no offset. */
+	final use: Null<Array<CondFrame>>;
+
+}
+
+/** The index's files by module and by package, and the std's own `StdTypes` files among them (`StdResolver.isStdFile`). */
+private typedef Tables = {
+	final modules: Map<String, Array<FileInfo>>;
+	final packages: Map<String, Array<FileInfo>>;
+	final stdTypes: Array<FileInfo>;
+}
+
+/** What one tier, or the order from one statement on, says about a name inside `TypeNameBinding`. */
+private enum Answer {
+
+	/** The tier does not bind the name; the next one is asked. */
+	Pass;
+
+	/** It binds the name to these declarations of the index. */
+	Decls(decls: Array<ResolvedType>);
+
+	/** It binds the name to a declaration the index does not hold — a built-in, a std or library type — at `path`. */
+	Outside(path: String);
+
+	/** It binds the name to one of `targets` on different builds — a `#if`-guarded statement's against the rest's — each read. */
+	Either(targets: Array<NameTarget>);
+
+	/**
+	 * It may bind the name to something nothing here can read, so no lower tier may answer: at `path` when the statement
+	 * or the package names one.
+	 */
+	Unreadable(path: Null<String>);
+
+}
+
 /**
  * THE meaning of a SIMPLE type name written in a file, the one answer to "which declaration
  * does this simple type name bind" — the one implementation every reader of a bare
@@ -803,65 +863,5 @@ final class TypeNameBinding {
 					if ((name == null || t.name == name) && (!mainOnly || t.isMain) && !t.isPrivate) { file: f, type: t }
 		];
 	}
-
-}
-
-/** An import path as the compiler reads it (`TypeNameBinding.splitPath`): its module, then what follows it — a type, then a field. */
-typedef ImportPath = { final module: String; final rest: Array<String>; }
-
-/** One type a name may bind to (`TypeNameBinding.bindingsOf`): declarations of the index, or the path of a type outside it. */
-enum NameTarget {
-	InIndex(decls: Array<ResolvedType>);
-	OutOfIndex(path: String);
-}
-
-/**
- * Every type a name may bind to on some build (`TypeNameBinding.bindingsOf`): `bound` wherever the order reads it,
- * null where nothing readable binds it; `guarded` on the builds a `#if`-guarded statement holds; `unlisted` where a
- * package wildcard the order cannot list may supply it.
- */
-typedef NameTargets = { var bound: Null<NameTarget>; final guarded: Array<NameTarget>; final unlisted: Array<NameTarget>; }
-
-/**
- * The explicit statements and the package wildcards of a file and its ambient chain, each in the order the
- * compiler asks them: the file's own last to first, then each ambient source nearest first, last to first.
- */
-private typedef StatementOrder = {
-
-	final explicit: Array<ImportInfo>;
-	final wildcards: Array<ImportInfo>;
-
-	/** The `#if` branch the name is used in, null when the caller gave no offset. */
-	final use: Null<Array<CondFrame>>;
-
-}
-
-/** The index's files by module and by package, and the std's own `StdTypes` files among them (`StdResolver.isStdFile`). */
-private typedef Tables = {
-	final modules: Map<String, Array<FileInfo>>;
-	final packages: Map<String, Array<FileInfo>>;
-	final stdTypes: Array<FileInfo>;
-}
-
-/** What one tier, or the order from one statement on, says about a name inside `TypeNameBinding`. */
-private enum Answer {
-
-	/** The tier does not bind the name; the next one is asked. */
-	Pass;
-
-	/** It binds the name to these declarations of the index. */
-	Decls(decls: Array<ResolvedType>);
-
-	/** It binds the name to a declaration the index does not hold — a built-in, a std or library type — at `path`. */
-	Outside(path: String);
-
-	/** It binds the name to one of `targets` on different builds — a `#if`-guarded statement's against the rest's — each read. */
-	Either(targets: Array<NameTarget>);
-
-	/**
-	 * It may bind the name to something nothing here can read, so no lower tier may answer: at `path` when the statement
-	 * or the package names one.
-	 */
-	Unreadable(path: Null<String>);
 
 }

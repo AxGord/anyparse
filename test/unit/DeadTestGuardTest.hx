@@ -12,6 +12,9 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 
+/** One conditional-compilation guard the running build cannot prove live: its 1-based line and its verbatim directive text. */
+private typedef UnprovenGuard = { final line: Int; final text: String; };
+
 /**
  * Every `#if` guard under `test/` must be one THIS build can prove live.
  *
@@ -174,6 +177,3 @@ class DeadTestGuardTest extends Test {
 	}
 
 }
-
-/** One conditional-compilation guard the running build cannot prove live: its 1-based line and its verbatim directive text. */
-private typedef UnprovenGuard = { final line: Int; final text: String; };

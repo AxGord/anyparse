@@ -11,6 +11,23 @@ import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.WriteSites;
 
+/** The run-wide evidence a storage scan reads. */
+typedef StorageScope = {
+
+	/** The grammar plugin, for parsing scope files. */
+	final plugin: GrammarPlugin;
+
+	/** The grammar's reference shape, resolved once per run. */
+	final shape: RefShape;
+
+	/** Report UNION the resolution sources — every file that may reach the field. */
+	final scope: Array<ScopeFile>;
+
+	/** The grammar's string-fold support, which names the target intrinsics; null when it exposes none. */
+	final fold: Null<StringFoldSupport>;
+
+};
+
 /**
  * Who reaches a property's PHYSICAL field. A plain read of a property whose read slot is `default` / `null`
  * returns that field, while every write outside its own accessors runs the set accessor; so the field holds
@@ -139,20 +156,3 @@ final class PropertyStorage {
 	}
 
 }
-
-/** The run-wide evidence a storage scan reads. */
-typedef StorageScope = {
-
-	/** The grammar plugin, for parsing scope files. */
-	final plugin: GrammarPlugin;
-
-	/** The grammar's reference shape, resolved once per run. */
-	final shape: RefShape;
-
-	/** Report UNION the resolution sources — every file that may reach the field. */
-	final scope: Array<ScopeFile>;
-
-	/** The grammar's string-fold support, which names the target intrinsics; null when it exposes none. */
-	final fold: Null<StringFoldSupport>;
-
-};

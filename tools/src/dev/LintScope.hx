@@ -17,6 +17,9 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** The report `LintScope.whole` makes, or the reason it cannot. */
+typedef WholeReport = { report: Null<String>, why: Null<String> }
+
 /**
  * The one answer to "which files must a battery re-lint for a landing, and which findings of the base snapshot does that
  * leave standing": a landing that changes no engine input and no lint configuration re-lints the `.hx` files it changed,
@@ -199,6 +202,3 @@ final class LintScope {
 	}
 
 }
-
-/** The report `LintScope.whole` makes, or the reason it cannot. */
-typedef WholeReport = { report: Null<String>, why: Null<String> }

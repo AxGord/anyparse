@@ -93,6 +93,86 @@ private typedef LockWrapper = {
 	final self: Bool;
 }
 
+/** The set operations over lock calls and wrappers that the wrapper inference of `LockSites` rounds on. */
+private class WrapperOps {
+
+	public static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
+		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
+	}
+
+	/** The lock calls of `takes` (takes) and `gives` (gives), grouped by the function each sits in. */
+	public static function opsByFunction(
+		takes: Array<LockCall>, gives: Array<LockCall>
+	): Map<String, Array<{ call: LockCall, takes: Bool }>> {
+		final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = [];
+		for (list in [takes, gives]) for (c in list) {
+			final known: Array<{ call: LockCall, takes: Bool }> = ops[c.edge.from] ?? [];
+			known.push({ call: c, takes: list == takes });
+			ops[c.edge.from] = known;
+		}
+		return ops;
+	}
+
+	public static function sameWrappers(a: Map<String, LockWrapper>, b: Map<String, LockWrapper>): Bool {
+		for (id => w in a) if (!sameWrapper(b[id], w)) return false;
+		for (id in b.keys()) if (!a.exists(id)) return false;
+		return true;
+	}
+
+	/**
+	 * Whether the function `id` (body `fn`) runs nothing but its lock calls `ops`: every call the graph
+	 * resolves, and every call or construction the tree holds outside a nested function, sits at one of them.
+	 * Work in a helper runs under the locks its callers hold from the call on, which no window of theirs spans.
+	 */
+	public static function lockTrafficOnly(
+		graph: CallGraph, kinds: { shape: RefShape, nested: Array<String> }, id: String, fn: QueryNode,
+		ops: Array<{ call: LockCall, takes: Bool }>
+	): Bool {
+		// by the whole span: a chained call (`me()._b.release()`) starts where the call it is made on does
+		final sites: Array<String> = ops.map(o -> LockReleasers.callKey(o.call.edge.span));
+		if (graph.outEdges(id).exists(e -> e.kind.isInvocation() && !sites.contains(LockReleasers.callKey(e.span)))) return false;
+		final shape: RefShape = kinds.shape;
+		function runsOther(node: QueryNode): Bool {
+			if (node != fn && kinds.nested.contains(node.kind)) return false;
+			final at: Null<Span> = node.span;
+			return ((node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at)))
+				|| node.children.exists(runsOther);
+		}
+		return !runsOther(fn);
+	}
+
+	/**
+	 * Marks each of `acquires` a multi-lock helper of `helpers` makes delegated: its take goes on at each call of the
+	 * helper, as a wrapper's does, so the hold its caller opens leaks or not in its stead.
+	 */
+	public static function delegateHelperTakes(acquires: Array<LockAcquire>, helpers: Array<String>): Void {
+		for (i => a in acquires) if (helpers.contains(a.edge.from)) acquires[i] = {
+			edge: a.edge,
+			pair: a.pair,
+			lock: a.lock,
+			window: a.window,
+			leaks: a.leaks,
+			blind: a.blind,
+			untraced: a.untraced,
+			blindCalls: a.blindCalls,
+			uncontended: a.uncontended,
+			delegated: true,
+			escapes: a.escapes,
+			inner: a.inner
+		};
+	}
+
+	/**
+	 * Whether every invocation of the function `id` is a plain call, and
+	 * there is one: a dispatch may run another override, taking nothing.
+	 */
+	public static function plainCallsOnly(graph: CallGraph, id: String): Bool {
+		final into: Array<CallEdge> = [for (e in graph.inEdges(id)) if (e.kind.isInvocation()) e];
+		return into.length > 0 && into.foreach(e -> e.kind == Call);
+	}
+
+}
+
 /**
  * The lock-discipline facts of one call graph: every call taking a `lockPairs` lock, the lock OBJECT it takes, and the
  * path-aware window it holds that lock across (`LockWindow`).
@@ -711,86 +791,6 @@ final class LockSites {
 	private static function siteKey(edge: CallEdge): Null<String> {
 		final at: Null<Span> = edge.span;
 		return at == null ? null : '${edge.file}:${at.from}';
-	}
-
-}
-
-/** The set operations over lock calls and wrappers that the wrapper inference of `LockSites` rounds on. */
-private class WrapperOps {
-
-	public static inline function sameWrapper(a: Null<LockWrapper>, b: LockWrapper): Bool {
-		return a != null && a.takes == b.takes && a.lock == b.lock && a.pair == b.pair && a.self == b.self;
-	}
-
-	/** The lock calls of `takes` (takes) and `gives` (gives), grouped by the function each sits in. */
-	public static function opsByFunction(
-		takes: Array<LockCall>, gives: Array<LockCall>
-	): Map<String, Array<{ call: LockCall, takes: Bool }>> {
-		final ops: Map<String, Array<{ call: LockCall, takes: Bool }>> = [];
-		for (list in [takes, gives]) for (c in list) {
-			final known: Array<{ call: LockCall, takes: Bool }> = ops[c.edge.from] ?? [];
-			known.push({ call: c, takes: list == takes });
-			ops[c.edge.from] = known;
-		}
-		return ops;
-	}
-
-	public static function sameWrappers(a: Map<String, LockWrapper>, b: Map<String, LockWrapper>): Bool {
-		for (id => w in a) if (!sameWrapper(b[id], w)) return false;
-		for (id in b.keys()) if (!a.exists(id)) return false;
-		return true;
-	}
-
-	/**
-	 * Whether the function `id` (body `fn`) runs nothing but its lock calls `ops`: every call the graph
-	 * resolves, and every call or construction the tree holds outside a nested function, sits at one of them.
-	 * Work in a helper runs under the locks its callers hold from the call on, which no window of theirs spans.
-	 */
-	public static function lockTrafficOnly(
-		graph: CallGraph, kinds: { shape: RefShape, nested: Array<String> }, id: String, fn: QueryNode,
-		ops: Array<{ call: LockCall, takes: Bool }>
-	): Bool {
-		// by the whole span: a chained call (`me()._b.release()`) starts where the call it is made on does
-		final sites: Array<String> = ops.map(o -> LockReleasers.callKey(o.call.edge.span));
-		if (graph.outEdges(id).exists(e -> e.kind.isInvocation() && !sites.contains(LockReleasers.callKey(e.span)))) return false;
-		final shape: RefShape = kinds.shape;
-		function runsOther(node: QueryNode): Bool {
-			if (node != fn && kinds.nested.contains(node.kind)) return false;
-			final at: Null<Span> = node.span;
-			return ((node.kind == shape.callKind || node.kind == shape.newExprKind) && !sites.contains(LockReleasers.callKey(at)))
-				|| node.children.exists(runsOther);
-		}
-		return !runsOther(fn);
-	}
-
-	/**
-	 * Marks each of `acquires` a multi-lock helper of `helpers` makes delegated: its take goes on at each call of the
-	 * helper, as a wrapper's does, so the hold its caller opens leaks or not in its stead.
-	 */
-	public static function delegateHelperTakes(acquires: Array<LockAcquire>, helpers: Array<String>): Void {
-		for (i => a in acquires) if (helpers.contains(a.edge.from)) acquires[i] = {
-			edge: a.edge,
-			pair: a.pair,
-			lock: a.lock,
-			window: a.window,
-			leaks: a.leaks,
-			blind: a.blind,
-			untraced: a.untraced,
-			blindCalls: a.blindCalls,
-			uncontended: a.uncontended,
-			delegated: true,
-			escapes: a.escapes,
-			inner: a.inner
-		};
-	}
-
-	/**
-	 * Whether every invocation of the function `id` is a plain call, and
-	 * there is one: a dispatch may run another override, taking nothing.
-	 */
-	public static function plainCallsOnly(graph: CallGraph, id: String): Bool {
-		final into: Array<CallEdge> = [for (e in graph.inEdges(id)) if (e.kind.isInvocation()) e];
-		return into.length > 0 && into.foreach(e -> e.kind == Call);
 	}
 
 }

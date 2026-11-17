@@ -10,6 +10,96 @@ import anyparse.query.ParenGuard;
 import anyparse.query.SymbolIndex;
 import haxe.Exception;
 
+/** The per-run half of a negation read: the not and paren kinds, and the run's operator table. */
+typedef InversionSeams = {
+
+	final notKind: String;
+	final parenKind: Null<String>;
+
+	/** Null when the grammar declares no operator-overload annotation — every `!` is then built in. */
+	final selection: Null<OperatorSelection>;
+
+	/** What `keepDefaultElse` and `defaultLast` read: the literals, the statement shapes around one, the config, the negation engine. */
+	final defaults: DefaultElseSeams;
+
+};
+
+/** The per-run half of the `keepDefaultElse` and `defaultLast` reads. */
+typedef DefaultElseSeams = {
+
+	final values: CaseValueSeams;
+
+	/** A block wrapping one statement is read through (`else { return null; }`); null when the grammar has none. */
+	final blockKind: Null<String>;
+
+	/** A value `return` is read through to its value (`else return null;`); null when the grammar has none. */
+	final returnKind: Null<String>;
+
+	/** The run's per-file config resolver; null reads each file's chain from disk (`LintConfig.resolveWith`). */
+	final config: Null<(String) -> LintConfig>;
+
+	/** What `defaultLast` negates a condition with (`NegationScan.negateConditionText`). */
+	final negation: NegationSeams;
+
+	/** The grammar's negation engine, or null for the text engine alone. */
+	final support: Null<BooleanLogicSupport>;
+
+	/** The condition kinds `defaultLast` turns: an atom that takes a bare `!`, an `==` / `!=` that flips. */
+	final turnableKinds: Array<String>;
+
+	/** The operators a `defaultLast` negation adds or flips — the not, `==`, `!=` — each asked of the operator table. */
+	final negationKinds: Array<String>;
+
+	/** The interpolation segment kinds of a string literal: a string holding one computes its value. */
+	final interpolationKinds: Array<String>;
+
+};
+
+/** One file's negation context: the run seams plus the file, its source and its parsed tree. */
+typedef InversionSite = {
+
+	final seams: InversionSeams;
+	final file: String;
+	final source: String;
+
+	/** The file's lexical regions, lexed once on first demand, so a negation tells a comment from a string literal. */
+	final regions: () -> Array<LexRegion>;
+
+	/** The file's tree, read only when the run declares an overloaded `!` (to type the operand). */
+	final root: Null<QueryNode>;
+
+	/** The file's `invert-negated-if-else` `keepDefaultElse` option (default off; `defaultLast` implies it), read once on first demand. */
+	final keepDefaultElse: () -> Bool;
+
+	/** The file's `invert-negated-if-else` `defaultLast` option (default off), read with `keepDefaultElse`. */
+	final defaultLast: () -> Bool;
+
+};
+
+/** A two-way choice read with its arms swapped (`NegatedCondition.swapOf`). */
+typedef Swap = {
+
+	/** The condition's text once the two arms change places. */
+	final condition: String;
+
+	/** Whether that rebuild drops a comment of the condition (one between a dropped `!` and its operand). */
+	final dropsComment: Bool;
+
+	/** True for a `defaultLast` turn (a default then arm brought last), false for a dropped not. */
+	final defaultLast: Bool;
+
+};
+
+/** What one arm of a two-way choice yields (`NegatedCondition.armValue`). */
+private typedef ArmValue = {
+
+	final value: QueryNode;
+
+	/** Whether a `return` yields it — the arm is a statement. */
+	final returned: Bool;
+
+};
+
 /**
  * The one place a condition whose TOP-LEVEL node is a logical NOT is read in its positive form —
  * for the branch swap `invert-negated-if-else` performs on an `if` statement, a value-position `if`
@@ -328,93 +418,3 @@ final class NegatedCondition {
 	}
 
 }
-
-/** The per-run half of a negation read: the not and paren kinds, and the run's operator table. */
-typedef InversionSeams = {
-
-	final notKind: String;
-	final parenKind: Null<String>;
-
-	/** Null when the grammar declares no operator-overload annotation — every `!` is then built in. */
-	final selection: Null<OperatorSelection>;
-
-	/** What `keepDefaultElse` and `defaultLast` read: the literals, the statement shapes around one, the config, the negation engine. */
-	final defaults: DefaultElseSeams;
-
-};
-
-/** The per-run half of the `keepDefaultElse` and `defaultLast` reads. */
-typedef DefaultElseSeams = {
-
-	final values: CaseValueSeams;
-
-	/** A block wrapping one statement is read through (`else { return null; }`); null when the grammar has none. */
-	final blockKind: Null<String>;
-
-	/** A value `return` is read through to its value (`else return null;`); null when the grammar has none. */
-	final returnKind: Null<String>;
-
-	/** The run's per-file config resolver; null reads each file's chain from disk (`LintConfig.resolveWith`). */
-	final config: Null<(String) -> LintConfig>;
-
-	/** What `defaultLast` negates a condition with (`NegationScan.negateConditionText`). */
-	final negation: NegationSeams;
-
-	/** The grammar's negation engine, or null for the text engine alone. */
-	final support: Null<BooleanLogicSupport>;
-
-	/** The condition kinds `defaultLast` turns: an atom that takes a bare `!`, an `==` / `!=` that flips. */
-	final turnableKinds: Array<String>;
-
-	/** The operators a `defaultLast` negation adds or flips — the not, `==`, `!=` — each asked of the operator table. */
-	final negationKinds: Array<String>;
-
-	/** The interpolation segment kinds of a string literal: a string holding one computes its value. */
-	final interpolationKinds: Array<String>;
-
-};
-
-/** One file's negation context: the run seams plus the file, its source and its parsed tree. */
-typedef InversionSite = {
-
-	final seams: InversionSeams;
-	final file: String;
-	final source: String;
-
-	/** The file's lexical regions, lexed once on first demand, so a negation tells a comment from a string literal. */
-	final regions: () -> Array<LexRegion>;
-
-	/** The file's tree, read only when the run declares an overloaded `!` (to type the operand). */
-	final root: Null<QueryNode>;
-
-	/** The file's `invert-negated-if-else` `keepDefaultElse` option (default off; `defaultLast` implies it), read once on first demand. */
-	final keepDefaultElse: () -> Bool;
-
-	/** The file's `invert-negated-if-else` `defaultLast` option (default off), read with `keepDefaultElse`. */
-	final defaultLast: () -> Bool;
-
-};
-
-/** A two-way choice read with its arms swapped (`NegatedCondition.swapOf`). */
-typedef Swap = {
-
-	/** The condition's text once the two arms change places. */
-	final condition: String;
-
-	/** Whether that rebuild drops a comment of the condition (one between a dropped `!` and its operand). */
-	final dropsComment: Bool;
-
-	/** True for a `defaultLast` turn (a default then arm brought last), false for a dropped not. */
-	final defaultLast: Bool;
-
-};
-
-/** What one arm of a two-way choice yields (`NegatedCondition.armValue`). */
-private typedef ArmValue = {
-
-	final value: QueryNode;
-
-	/** Whether a `return` yields it — the arm is a statement. */
-	final returned: Bool;
-
-};

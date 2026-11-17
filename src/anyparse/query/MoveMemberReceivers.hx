@@ -11,6 +11,20 @@ import haxe.Exception;
 using Lambda;
 
 /**
+ * One RECEIVER-qualified access to a moved INSTANCE member (`g.x()`, `this.x`) whose receiver is provably the source
+ * type: `at` is where the member name starts — the via field's `via.` goes there — and `outsideType` says whether the
+ * access sits outside the source type, where the via field must be public to be reached. `inCut`: the access is inside a
+ * moved body, so its edit travels with the moved text.
+ */
+typedef ReceiverHit = {
+	var m: MovedMember;
+	var file: String;
+	var at: Int;
+	var outsideType: Bool;
+	var inCut: Bool;
+}
+
+/**
  * The receiver-qualified callers of the instance members a `move-member` moves (`g.x()`, `this.x`), each classified
  * by its receiver's type: routed through the field of the source that holds the destination, left alone as another
  * type's member, or refused as unprovable (`collectReceiverHits`).
@@ -150,18 +164,4 @@ final class MoveMemberReceivers {
 		return decl != null && kinds.contains(decl.type.kind);
 	}
 
-}
-
-/**
- * One RECEIVER-qualified access to a moved INSTANCE member (`g.x()`, `this.x`) whose receiver is provably the source
- * type: `at` is where the member name starts — the via field's `via.` goes there — and `outsideType` says whether the
- * access sits outside the source type, where the via field must be public to be reached. `inCut`: the access is inside a
- * moved body, so its edit travels with the moved text.
- */
-typedef ReceiverHit = {
-	var m: MovedMember;
-	var file: String;
-	var at: Int;
-	var outsideType: Bool;
-	var inCut: Bool;
 }

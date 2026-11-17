@@ -5,6 +5,15 @@ import anyparse.query.MoveElements;
 
 using StringTools;
 
+/** What a successful move hands back, `dest` empty when it is the source file. */
+private typedef Result = {
+	final source: String;
+	final dest: String;
+	final destOrNull: Null<String>;
+	final entries: Array<String>;
+	final digest: String;
+}
+
 /**
  * `MoveElements.moveElements` — `move-elements`: a contiguous slice of one array literal's elements moves into
  * another array literal, in another member or module, in order and with its text. Accepted cases assert the
@@ -216,13 +225,4 @@ class MoveElementsSliceTest extends Test {
 		}
 	}
 
-}
-
-/** What a successful move hands back, `dest` empty when it is the source file. */
-private typedef Result = {
-	final source: String;
-	final dest: String;
-	final destOrNull: Null<String>;
-	final entries: Array<String>;
-	final digest: String;
 }

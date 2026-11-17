@@ -28,6 +28,17 @@ typedef ResolveDefineOpts = {
 };
 
 /**
+ * What the per-file walk accumulated: files `changed`, files that `failed`, `regions` folded
+ * (nested ones counted individually) and one rendered stderr line per region left standing.
+ */
+private typedef ResolveTally = {
+	final changed: Int;
+	final failed: Int;
+	final regions: Int;
+	final undecided: Array<String>;
+};
+
+/**
  * `apq resolve-define` — fold every `#if` region a define DECIDES, keeping the live branch.
  *
  * The write-twin of `apq cond`, the same relation `comment-rewrite` has to `lit`: `cond` shows
@@ -294,14 +305,3 @@ final class ResolveDefineCommand implements CliCommand implements LeadingQuery {
 	}
 
 }
-
-/**
- * What the per-file walk accumulated: files `changed`, files that `failed`, `regions` folded
- * (nested ones counted individually) and one rendered stderr line per region left standing.
- */
-private typedef ResolveTally = {
-	final changed: Int;
-	final failed: Int;
-	final regions: Int;
-	final undecided: Array<String>;
-};

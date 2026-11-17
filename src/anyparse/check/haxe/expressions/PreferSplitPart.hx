@@ -18,6 +18,34 @@ import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService;
 
+/** A cut: the node it replaces, the string operand, and the text of the operand and the delimiter. */
+private typedef Cut = {
+	final span: Span;
+	final operand: QueryNode;
+	final receiver: String;
+	final delimiter: String;
+	final member: String;
+};
+
+/** A `[0]` or `.pop()` over a call: that call, and the utility function reading the same part. */
+private typedef SplitRead = { final split: QueryNode; final member: String; };
+
+/** The text utility a config chain names: its qualified path, or what is wrong with the option as written. */
+private typedef Tools = { final path: Null<String>; final problems: Array<String>; };
+
+/** The resolved seams `PreferSplitPart` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final callKind: String;
+	final fieldAccessKind: String;
+	final indexAccessKind: String;
+	final stringLiteralKinds: Array<String>;
+	final literalTypeNames: Map<String, String>;
+	final interpTextKind: Null<String>;
+	final interpInertKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final stringType: String;
+};
+
 /**
  * Flags a hand-cut of a string at a delimiter that the project's text utility already names — `s.split(",")[0]` for
  * `allBefore`, `s.split(".").pop()` for `allAfterLast` — and rewrites it to the utility call, with its import.
@@ -347,31 +375,3 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 	}
 
 }
-
-/** A cut: the node it replaces, the string operand, and the text of the operand and the delimiter. */
-private typedef Cut = {
-	final span: Span;
-	final operand: QueryNode;
-	final receiver: String;
-	final delimiter: String;
-	final member: String;
-};
-
-/** A `[0]` or `.pop()` over a call: that call, and the utility function reading the same part. */
-private typedef SplitRead = { final split: QueryNode; final member: String; };
-
-/** The text utility a config chain names: its qualified path, or what is wrong with the option as written. */
-private typedef Tools = { final path: Null<String>; final problems: Array<String>; };
-
-/** The resolved seams `PreferSplitPart` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final callKind: String;
-	final fieldAccessKind: String;
-	final indexAccessKind: String;
-	final stringLiteralKinds: Array<String>;
-	final literalTypeNames: Map<String, String>;
-	final interpTextKind: Null<String>;
-	final interpInertKinds: Array<String>;
-	final opaqueKinds: Array<String>;
-	final stringType: String;
-};

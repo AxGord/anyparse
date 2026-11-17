@@ -6,6 +6,23 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.SymbolIndex;
 
+/** Resolved kind-sets the doc-coverage walk threads through its recursion. */
+private typedef Seams = {
+	final typeDecls: Array<String>;
+	final members: Array<String>;
+	final containers: Array<String>;
+	final interfaceDecls: Array<String>;
+	final isRunEntry: (QueryNode) -> Bool;
+	final publicKind: Null<String>;
+	final privateKind: Null<String>;
+	final externKind: Null<String>;
+	final publicMetaNames: Array<String>;
+	final constructorName: Null<String>;
+};
+
+/** Per-file resolved config for the doc-coverage walk. */
+private typedef DocCfg = { final requireTypeDoc: Bool; final requireMemberDoc: Bool; final includeConstructor: Bool; };
+
 /**
  * Flags a public API declaration — a top-level type or a public member of one —
  * that carries no leading doc comment. The public surface is what other modules
@@ -239,20 +256,3 @@ final class DocCoverage extends RuleBase implements ConfigAware implements NoAut
 	}
 
 }
-
-/** Resolved kind-sets the doc-coverage walk threads through its recursion. */
-private typedef Seams = {
-	final typeDecls: Array<String>;
-	final members: Array<String>;
-	final containers: Array<String>;
-	final interfaceDecls: Array<String>;
-	final isRunEntry: (QueryNode) -> Bool;
-	final publicKind: Null<String>;
-	final privateKind: Null<String>;
-	final externKind: Null<String>;
-	final publicMetaNames: Array<String>;
-	final constructorName: Null<String>;
-};
-
-/** Per-file resolved config for the doc-coverage walk. */
-private typedef DocCfg = { final requireTypeDoc: Bool; final requireMemberDoc: Bool; final includeConstructor: Bool; };

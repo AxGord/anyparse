@@ -16,6 +16,42 @@ import anyparse.query.TypeSyntax;
 import anyparse.util.Arrays;
 
 /**
+ * What `growsInRepetition` asks: the map's name and declaration offset,
+ * the census seams, and the kinds that repeat or declare a function.
+ */
+private typedef GrowthQuery = {
+	final name: String;
+	final declAt: Int;
+	final seams: ValueSeams;
+	final repeating: Array<String>;
+	final functions: Array<String>;
+	final constructor: Null<String>;
+};
+
+/** What `rewriteSet` respells in one file: the set's name, its key type and written type, and the project's set type. */
+private typedef SetRewrite = {
+	final source: String;
+	final seams: ValueSeams;
+	final name: String;
+	final member: Bool;
+	final key: String;
+	final written: String;
+	final setName: String;
+};
+
+/**
+ * What the rewrite of one file needs from the project: the file and the index its names resolve against, the configured
+ * set type and bit-set type (null for a project that names none), and how a configured type is spelled in the file.
+ */
+private typedef SetProject = {
+	final file: String;
+	final index: Null<SymbolIndex>;
+	final set: Null<String>;
+	final bits: Null<String>;
+	final spell: (String) -> String;
+};
+
+/**
  * Flags a map declared with boolean values (`Map<K, Bool>`) that is only ever a SET of its keys: every value it stores is
  * the literal `true` and every use asks membership (`exists`, an index read, `keys`, `remove`). An array of the keys with
  * `contains` says the same with no value to misread. `Severity.Info`, DEFAULT OFF: the rewrite trades a hash lookup for a
@@ -492,39 +528,3 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 	}
 
 }
-
-/**
- * What `growsInRepetition` asks: the map's name and declaration offset,
- * the census seams, and the kinds that repeat or declare a function.
- */
-private typedef GrowthQuery = {
-	final name: String;
-	final declAt: Int;
-	final seams: ValueSeams;
-	final repeating: Array<String>;
-	final functions: Array<String>;
-	final constructor: Null<String>;
-};
-
-/** What `rewriteSet` respells in one file: the set's name, its key type and written type, and the project's set type. */
-private typedef SetRewrite = {
-	final source: String;
-	final seams: ValueSeams;
-	final name: String;
-	final member: Bool;
-	final key: String;
-	final written: String;
-	final setName: String;
-};
-
-/**
- * What the rewrite of one file needs from the project: the file and the index its names resolve against, the configured
- * set type and bit-set type (null for a project that names none), and how a configured type is spelled in the file.
- */
-private typedef SetProject = {
-	final file: String;
-	final index: Null<SymbolIndex>;
-	final set: Null<String>;
-	final bits: Null<String>;
-	final spell: (String) -> String;
-};

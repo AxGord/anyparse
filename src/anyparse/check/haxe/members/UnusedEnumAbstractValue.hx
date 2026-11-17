@@ -22,6 +22,34 @@ import anyparse.query.SymbolIndex;
 using anyparse.util.Strings;
 using StringTools;
 
+/** What one run of the rule reads for every type it weighs. */
+private typedef Ctx = {
+
+	final plugin: GrammarPlugin;
+	final shape: RefShape;
+
+	/** The files whose code may read a value. */
+	final scope: Array<ScopeFile>;
+
+	/** The index declaring the scope's members. */
+	final declarations: SymbolIndex;
+
+	/** Every identifier token's occurrence count over the scope. */
+	final tokens: Map<String, Int>;
+
+	/** The builds' facts, or null when the run holds none. */
+	final facts: Null<FactsOracle>;
+	final values: CaseValueSeams;
+	final memberKinds: Array<String>;
+
+	/** The annotations pinning a type or a value against removal, or exporting it to code outside the program. */
+	final pins: Array<String>;
+
+}
+
+/** A file of the scope and its text. */
+private typedef ScopeFile = { file: String, source: String };
+
 /**
  * Flags a value of an enum abstract nothing reads — the one answer to "which enum abstract values does no code read, by
  * type". A value's name says little: a bare `GRID` in a `case` or beside `==` is the value of whatever type the place
@@ -346,31 +374,3 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 	}
 
 }
-
-/** What one run of the rule reads for every type it weighs. */
-private typedef Ctx = {
-
-	final plugin: GrammarPlugin;
-	final shape: RefShape;
-
-	/** The files whose code may read a value. */
-	final scope: Array<ScopeFile>;
-
-	/** The index declaring the scope's members. */
-	final declarations: SymbolIndex;
-
-	/** Every identifier token's occurrence count over the scope. */
-	final tokens: Map<String, Int>;
-
-	/** The builds' facts, or null when the run holds none. */
-	final facts: Null<FactsOracle>;
-	final values: CaseValueSeams;
-	final memberKinds: Array<String>;
-
-	/** The annotations pinning a type or a value against removal, or exporting it to code outside the program. */
-	final pins: Array<String>;
-
-}
-
-/** A file of the scope and its text. */
-private typedef ScopeFile = { file: String, source: String };

@@ -4,6 +4,125 @@ import anyparse.query.GrammarPlugin.RefShape;
 
 using Lambda;
 
+/** What a name in a pattern IS, as far as the caller's knowledge of declarations reaches. */
+enum abstract PatternRole(Int) {
+
+	/** Binds a new name for the arm — by syntax (`var x`, `x = p`) or by the bare-name rule. */
+	final Capture = 0;
+
+	/** A bare name a constant declaration may claim, or one inside an unmodelled shape. */
+	final Undecided = 1;
+
+}
+
+/** Where a pattern name's EXPECTED type comes from — what a proof that it captures has to read. */
+enum PatternSite {
+
+	/** The whole pattern (through parentheses or an alternative): the switch subject's type. */
+	Whole;
+
+	/** An array element or structure field reached from the whole pattern through such shapes only. */
+	Structural;
+
+	/** Argument `index` of the constructor pattern named `callee`. */
+	Slot(callee: String, index: Int);
+
+	/** Anywhere else — an extractor's right side, a negation, an unmodelled shape. */
+	Opaque;
+
+}
+
+/** What `CasePatterns.subjectProof` proved about a switch subject's type. */
+typedef SubjectProof = {
+
+	/** The type carries no pattern constant. */
+	final typed: Bool;
+
+	/** The type is dynamic, and so is every element and field of it. */
+	final isDynamic: Bool;
+
+};
+
+/** One name a pattern may bind. */
+typedef PatternIdent = {
+
+	/** The node that carries the name — a bare identifier, a binder node or an `=`-capture's left slot. */
+	final node: QueryNode;
+	final name: String;
+	final role: PatternRole;
+
+	/** Whether the name binds by SYNTAX (`var x`, `x = p`) rather than by the bare-name rule. */
+	final explicit: Bool;
+
+	/** Whether the binder IS the whole pattern — a catch-all. */
+	final whole: Bool;
+
+	/** What the name's expected type is known from. */
+	final site: PatternSite;
+
+	/** The sub-pattern of an `x = p` capture, whose start ends the text that unbinds `x`; null otherwise. */
+	final assigned: Null<QueryNode>;
+
+};
+
+/** The result of `CasePatterns.scan`. */
+typedef PatternScan = {
+
+	final idents: Array<PatternIdent>;
+
+	/** Whether every pattern stayed inside the whitelist; when false, a name the scan missed may still bind. */
+	final modelled: Bool;
+
+};
+
+/** The mutable accumulator of one `CasePatterns.scan`. */
+@:nullSafety(Strict)
+private final class ScanState {
+
+	public var modelled(default, null): Bool = true;
+
+	public final idents: Array<PatternIdent> = [];
+	public final shape: RefShape;
+	public final constants: Array<String>;
+
+	public function new(shape: RefShape, constants: Array<String>) {
+		this.shape = shape;
+		this.constants = constants;
+	}
+
+	public function push(
+		node: QueryNode, name: String, role: PatternRole, explicit: Bool, whole: Bool, site: PatternSite, assigned: Null<QueryNode>
+	): Void {
+		idents.push({
+			node: node,
+			name: name,
+			role: role,
+			explicit: explicit,
+			whole: whole,
+			site: site,
+			assigned: assigned
+		});
+	}
+
+	/**
+	 * Record a shape outside the whitelist: every bare name inside it may bind, so each is `Undecided`.
+	 * A declaration node the resolver already binds (a nested `var x`) carries no bare name to add.
+	 */
+	public function unmodelled(node: QueryNode): Void {
+		modelled = false;
+		final declKinds: Array<String> = shape.declHostKinds;
+		function walk(n: QueryNode): Void {
+			if (declKinds.contains(n.kind)) return;
+			final name: Null<String> = n.name;
+			if (n.kind == shape.identKind && name != null && CasePatterns.isCaptureSpelling(name, shape))
+				push(n, name, Undecided, false, false, Opaque, null);
+			for (child in n.children) walk(child);
+		}
+		walk(node);
+	}
+
+}
+
 /**
  * The ONE definition of which names a `case` pattern BINDS. The scope resolver (`Refs`), the
  * case-arm lint rules (`CasePatternScan`) and every consumer that has to tell a capture from a
@@ -394,125 +513,6 @@ final class CasePatterns {
 				|| node.children.exists(walk);
 		}
 		return walk(root);
-	}
-
-}
-
-/** What a name in a pattern IS, as far as the caller's knowledge of declarations reaches. */
-enum abstract PatternRole(Int) {
-
-	/** Binds a new name for the arm — by syntax (`var x`, `x = p`) or by the bare-name rule. */
-	final Capture = 0;
-
-	/** A bare name a constant declaration may claim, or one inside an unmodelled shape. */
-	final Undecided = 1;
-
-}
-
-/** Where a pattern name's EXPECTED type comes from — what a proof that it captures has to read. */
-enum PatternSite {
-
-	/** The whole pattern (through parentheses or an alternative): the switch subject's type. */
-	Whole;
-
-	/** An array element or structure field reached from the whole pattern through such shapes only. */
-	Structural;
-
-	/** Argument `index` of the constructor pattern named `callee`. */
-	Slot(callee: String, index: Int);
-
-	/** Anywhere else — an extractor's right side, a negation, an unmodelled shape. */
-	Opaque;
-
-}
-
-/** What `CasePatterns.subjectProof` proved about a switch subject's type. */
-typedef SubjectProof = {
-
-	/** The type carries no pattern constant. */
-	final typed: Bool;
-
-	/** The type is dynamic, and so is every element and field of it. */
-	final isDynamic: Bool;
-
-};
-
-/** One name a pattern may bind. */
-typedef PatternIdent = {
-
-	/** The node that carries the name — a bare identifier, a binder node or an `=`-capture's left slot. */
-	final node: QueryNode;
-	final name: String;
-	final role: PatternRole;
-
-	/** Whether the name binds by SYNTAX (`var x`, `x = p`) rather than by the bare-name rule. */
-	final explicit: Bool;
-
-	/** Whether the binder IS the whole pattern — a catch-all. */
-	final whole: Bool;
-
-	/** What the name's expected type is known from. */
-	final site: PatternSite;
-
-	/** The sub-pattern of an `x = p` capture, whose start ends the text that unbinds `x`; null otherwise. */
-	final assigned: Null<QueryNode>;
-
-};
-
-/** The result of `CasePatterns.scan`. */
-typedef PatternScan = {
-
-	final idents: Array<PatternIdent>;
-
-	/** Whether every pattern stayed inside the whitelist; when false, a name the scan missed may still bind. */
-	final modelled: Bool;
-
-};
-
-/** The mutable accumulator of one `CasePatterns.scan`. */
-@:nullSafety(Strict)
-private final class ScanState {
-
-	public var modelled(default, null): Bool = true;
-
-	public final idents: Array<PatternIdent> = [];
-	public final shape: RefShape;
-	public final constants: Array<String>;
-
-	public function new(shape: RefShape, constants: Array<String>) {
-		this.shape = shape;
-		this.constants = constants;
-	}
-
-	public function push(
-		node: QueryNode, name: String, role: PatternRole, explicit: Bool, whole: Bool, site: PatternSite, assigned: Null<QueryNode>
-	): Void {
-		idents.push({
-			node: node,
-			name: name,
-			role: role,
-			explicit: explicit,
-			whole: whole,
-			site: site,
-			assigned: assigned
-		});
-	}
-
-	/**
-	 * Record a shape outside the whitelist: every bare name inside it may bind, so each is `Undecided`.
-	 * A declaration node the resolver already binds (a nested `var x`) carries no bare name to add.
-	 */
-	public function unmodelled(node: QueryNode): Void {
-		modelled = false;
-		final declKinds: Array<String> = shape.declHostKinds;
-		function walk(n: QueryNode): Void {
-			if (declKinds.contains(n.kind)) return;
-			final name: Null<String> = n.name;
-			if (n.kind == shape.identKind && name != null && CasePatterns.isCaptureSpelling(name, shape))
-				push(n, name, Undecided, false, false, Opaque, null);
-			for (child in n.children) walk(child);
-		}
-		walk(node);
 	}
 
 }

@@ -13,6 +13,20 @@ import utest.Test;
 
 using StringTools;
 
+/** What the row said about a scratch repository: its reading, whether it passed, and the log of every hit. */
+private typedef Reading = { var note: String; var passed: Bool; var logged: String; }
+
+/** The oddities a scratch repository can be given: a log that cannot be written, more prose than the row names. */
+private typedef Odd = {
+
+	@:optional
+	var nowhere: Bool;
+
+	@:optional
+	var many: Bool;
+
+}
+
 /**
  * The `prose-refs` row of `dev land` over a scratch repository: the prose that names a path the head commit deleted or
  * renamed is listed as `file:line`, and what the commit left alone, the records of the past and a name only part of a longer
@@ -170,19 +184,5 @@ final class LandProseTest extends Test {
 		cmd('git -C $repo add -A').run().check();
 		cmd('git -C $repo -c user.name=t -c user.email=t@t commit -q -m $message').run().check();
 	}
-
-}
-
-/** What the row said about a scratch repository: its reading, whether it passed, and the log of every hit. */
-private typedef Reading = { var note: String; var passed: Bool; var logged: String; }
-
-/** The oddities a scratch repository can be given: a log that cannot be written, more prose than the row names. */
-private typedef Odd = {
-
-	@:optional
-	var nowhere: Bool;
-
-	@:optional
-	var many: Bool;
 
 }

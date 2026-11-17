@@ -7,6 +7,72 @@ import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Groups;
 
+/** The resolved seams `MissingVisibility` reads in both `run` and `fix`. */
+private typedef Seams = {
+
+	final containers: Array<String>;
+	final members: Array<String>;
+	final visibility: Array<String>;
+	final order: Array<String>;
+
+	/** The kinds a declaration's preceding modifier run may hold; any other kind ENDS the run. */
+	final modifierRunKinds: Array<String>;
+	final keyword: Null<String>;
+	final overrideKind: Null<String>;
+	final externKind: Null<String>;
+	final publicMetaNames: Array<String>;
+
+	/** The member-position conditional-compilation region kind; null keeps the plain direct-children scan. */
+	final condKind: Null<String>;
+
+	/** The branch-opening directives (`#else` / `#elseif`); empty makes a region one flat run. */
+	final elseKeywords: Array<String>;
+
+};
+
+/** What `MissingVisibility.run`'s walk threads through every frame — resolved once per file. */
+private typedef ScanCtx = {
+
+	final out: Array<Violation>;
+	final file: String;
+	final seams: Seams;
+	final source: String;
+	final directives: Array<CondDirective>;
+
+	/**
+	 * The span starts of the values of an enum abstract the grammar does not project as one
+	 * (`EnumAbstractForms.valueStarts`). They arrive as members of a plain abstract, and an
+	 * enum-abstract value is implicitly public — writing `private` on one turns every read of it
+	 * into `Cannot access private field`.
+	 */
+	final guarded: Array<Int>;
+
+};
+
+/** What `MissingVisibility.fix`'s walk threads through every frame — resolved once per call. */
+private typedef FixCtx = {
+
+	final edits: Array<{ span: Span, text: String }>;
+	final seams: Seams;
+	final source: String;
+	final directives: Array<CondDirective>;
+	final visRank: Int;
+	final keyword: String;
+	final flagged: Array<Int>;
+	final index: Null<SymbolIndex>;
+
+	/** The same unprojected enum-abstract values `ScanCtx.guarded` holds, re-derived here. */
+	final guarded: Array<Int>;
+
+};
+
+/**
+ * The modifier-run state carried between siblings of one member run: the insert position claimed by
+ * a preceding sibling ranked above visibility (`-1` = none, insert at the member itself), and
+ * whether the run carries an `override`.
+ */
+private typedef RunState = { final insertAt: Int; final sawOverride: Bool; };
+
 /**
  * Flags a class / abstract member declared without an explicit `public` or
  * `private` modifier. Haxe defaults an unmodified member to `private`, so the
@@ -453,69 +519,3 @@ final class MissingVisibility extends RuleBase {
 	}
 
 }
-
-/** The resolved seams `MissingVisibility` reads in both `run` and `fix`. */
-private typedef Seams = {
-
-	final containers: Array<String>;
-	final members: Array<String>;
-	final visibility: Array<String>;
-	final order: Array<String>;
-
-	/** The kinds a declaration's preceding modifier run may hold; any other kind ENDS the run. */
-	final modifierRunKinds: Array<String>;
-	final keyword: Null<String>;
-	final overrideKind: Null<String>;
-	final externKind: Null<String>;
-	final publicMetaNames: Array<String>;
-
-	/** The member-position conditional-compilation region kind; null keeps the plain direct-children scan. */
-	final condKind: Null<String>;
-
-	/** The branch-opening directives (`#else` / `#elseif`); empty makes a region one flat run. */
-	final elseKeywords: Array<String>;
-
-};
-
-/** What `MissingVisibility.run`'s walk threads through every frame — resolved once per file. */
-private typedef ScanCtx = {
-
-	final out: Array<Violation>;
-	final file: String;
-	final seams: Seams;
-	final source: String;
-	final directives: Array<CondDirective>;
-
-	/**
-	 * The span starts of the values of an enum abstract the grammar does not project as one
-	 * (`EnumAbstractForms.valueStarts`). They arrive as members of a plain abstract, and an
-	 * enum-abstract value is implicitly public — writing `private` on one turns every read of it
-	 * into `Cannot access private field`.
-	 */
-	final guarded: Array<Int>;
-
-};
-
-/** What `MissingVisibility.fix`'s walk threads through every frame — resolved once per call. */
-private typedef FixCtx = {
-
-	final edits: Array<{ span: Span, text: String }>;
-	final seams: Seams;
-	final source: String;
-	final directives: Array<CondDirective>;
-	final visRank: Int;
-	final keyword: String;
-	final flagged: Array<Int>;
-	final index: Null<SymbolIndex>;
-
-	/** The same unprojected enum-abstract values `ScanCtx.guarded` holds, re-derived here. */
-	final guarded: Array<Int>;
-
-};
-
-/**
- * The modifier-run state carried between siblings of one member run: the insert position claimed by
- * a preceding sibling ranked above visibility (`-1` = none, insert at the member itself), and
- * whether the run carries an `override`.
- */
-private typedef RunState = { final insertAt: Int; final sawOverride: Bool; };

@@ -32,6 +32,65 @@ private typedef ExpressionTyping = {
 }
 
 /**
+ * The result of `CheckScan.normalizeSpan`: the whitespace-collapsed text of a source
+ * range (`norm`) and its non-whitespace character count (`nonWs`, the content-gate metric).
+ */
+typedef NormalizedSpan = { final norm: String; final nonWs: Int; };
+
+/** The condition / logical / block seam kinds `simplifyConditionFixes` reads from the grammar. */
+private typedef CondSimplifySeams = {
+	final ifKinds: Array<String>;
+	final andKind: String;
+	final orKind: String;
+	final parenKind: String;
+	final blockKinds: Array<String>;
+	final blockStmtKind: Null<String>;
+	final containerKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final localDeclKinds: Array<String>;
+	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
+	final regions: () -> Array<LexRegion>;
+};
+
+/**
+ * The condition-kind seams `NegationScan.negateConditionText` reads to invert a condition:
+ * the logical-not (`notKind`) it strips, the paren (`parenKind`) it unwraps, the
+ * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, the atomic-expression kinds
+ * (`atomicKinds`) that take a bare `!` rather than `!(…)`, and the logical
+ * (`andKind` / `orKind`) kinds that word `simplify-negated-compound`'s finding — `andKind`
+ * also discriminates the and-slot for `negateConditionText`'s STRIP arm.
+ * `andLowerPrecedenceKinds` is the `RefShape` list `collapsible-if` merges with — it decides
+ * the parenthesis pair when a caller asks for the negation as an operand of the
+ * logical-and slot.
+ */
+typedef NegationSeams = {
+	final notKind: Null<String>;
+	final parenKind: Null<String>;
+	final eqKind: Null<String>;
+	final notEqKind: Null<String>;
+	final atomicKinds: Array<String>;
+	final andKind: Null<String>;
+	final orKind: Null<String>;
+	final andLowerPrecedenceKinds: Array<String>;
+};
+
+/**
+ * A declaration's leading run as `CheckScan.leadingRuns` reads it: the span from the run's first entry to the
+ * declaration's start, the run's entries in source order, and the half-open range of child indices
+ * `from`...`to` the entries occupy under their parent (`to` is the index of the declaration they prefix).
+ */
+typedef LeadingRun = {
+	final span: Span;
+	final entries: Array<QueryNode>;
+	final from: Int;
+	final to: Int;
+};
+
+/**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.
  * A check parses INDEPENDENTLY in `run` and in `fix` — the platform's
  * thread-safety invariant forbids any shared mutable state or cache between
@@ -1030,62 +1089,3 @@ final class CheckScan {
 	}
 
 }
-
-/**
- * The result of `CheckScan.normalizeSpan`: the whitespace-collapsed text of a source
- * range (`norm`) and its non-whitespace character count (`nonWs`, the content-gate metric).
- */
-typedef NormalizedSpan = { final norm: String; final nonWs: Int; };
-
-/** The condition / logical / block seam kinds `simplifyConditionFixes` reads from the grammar. */
-private typedef CondSimplifySeams = {
-	final ifKinds: Array<String>;
-	final andKind: String;
-	final orKind: String;
-	final parenKind: String;
-	final blockKinds: Array<String>;
-	final blockStmtKind: Null<String>;
-	final containerKinds: Array<String>;
-	final scopeKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final localDeclKinds: Array<String>;
-	final condKind: Null<String>;
-	final spliceKinds: Array<String>;
-	final exprStmtKind: Null<String>;
-	final annotationKinds: Array<String>;
-	final regions: () -> Array<LexRegion>;
-};
-
-/**
- * The condition-kind seams `NegationScan.negateConditionText` reads to invert a condition:
- * the logical-not (`notKind`) it strips, the paren (`parenKind`) it unwraps, the
- * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, the atomic-expression kinds
- * (`atomicKinds`) that take a bare `!` rather than `!(…)`, and the logical
- * (`andKind` / `orKind`) kinds that word `simplify-negated-compound`'s finding — `andKind`
- * also discriminates the and-slot for `negateConditionText`'s STRIP arm.
- * `andLowerPrecedenceKinds` is the `RefShape` list `collapsible-if` merges with — it decides
- * the parenthesis pair when a caller asks for the negation as an operand of the
- * logical-and slot.
- */
-typedef NegationSeams = {
-	final notKind: Null<String>;
-	final parenKind: Null<String>;
-	final eqKind: Null<String>;
-	final notEqKind: Null<String>;
-	final atomicKinds: Array<String>;
-	final andKind: Null<String>;
-	final orKind: Null<String>;
-	final andLowerPrecedenceKinds: Array<String>;
-};
-
-/**
- * A declaration's leading run as `CheckScan.leadingRuns` reads it: the span from the run's first entry to the
- * declaration's start, the run's entries in source order, and the half-open range of child indices
- * `from`...`to` the entries occupy under their parent (`to` is the index of the declaration they prefix).
- */
-typedef LeadingRun = {
-	final span: Span;
-	final entries: Array<QueryNode>;
-	final from: Int;
-	final to: Int;
-};

@@ -10,6 +10,26 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * One branch of a conditional-compilation region recovered by
+ * `CondBranchProjection.conditionalBranchRuns`: the consecutive child nodes that make it up, and
+ * the exact span they occupy — from the first node's start to the last node's end, so it never
+ * covers ITS OWN region's `#if` / `#elseif` / `#else` / `#end` directives.
+ *
+ * Only its own: a run whose statements include a NESTED region, or a `CondSplice*` node, has a
+ * span that covers that construct's directives in full. The invariant is about where this
+ * region's branch boundaries fall, not about the absence of `#` in the text.
+ */
+typedef CondBranchRun = { final nodes: Array<QueryNode>; final span: Span; };
+
+/** The conditional / block seam kinds plus the file's directives `CondBranchProjection.branchAwareTree` threads through its walk. */
+private typedef BranchSeams = {
+	final condKind: String;
+	final elseKeywords: Array<String>;
+	final blockKinds: Array<String>;
+	final directives: Array<CondDirective>;
+};
+
+/**
  * The conditional-compilation branch projection: the pure `(tree, source, seams) -> tree` rewrite
  * that regroups every statement-position `#if` region into one synthetic `CondBranch` statement
  * list per branch. Lives in the query layer next to the seams it reads (`RefShape`,
@@ -197,23 +217,3 @@ final class CondBranchProjection {
 	}
 
 }
-
-/**
- * One branch of a conditional-compilation region recovered by
- * `CondBranchProjection.conditionalBranchRuns`: the consecutive child nodes that make it up, and
- * the exact span they occupy — from the first node's start to the last node's end, so it never
- * covers ITS OWN region's `#if` / `#elseif` / `#else` / `#end` directives.
- *
- * Only its own: a run whose statements include a NESTED region, or a `CondSplice*` node, has a
- * span that covers that construct's directives in full. The invariant is about where this
- * region's branch boundaries fall, not about the absence of `#` in the text.
- */
-typedef CondBranchRun = { final nodes: Array<QueryNode>; final span: Span; };
-
-/** The conditional / block seam kinds plus the file's directives `CondBranchProjection.branchAwareTree` threads through its walk. */
-private typedef BranchSeams = {
-	final condKind: String;
-	final elseKeywords: Array<String>;
-	final blockKinds: Array<String>;
-	final directives: Array<CondDirective>;
-};

@@ -21,6 +21,14 @@ using Lambda;
 using StringTools;
 
 /**
+ * The start of the run for a landed commit: the tree, the commit, the snapshot cache and whether the whole suite runs.
+ * A land whose battery ran every class starts the hxcpp build alone.
+ */
+typedef PostLandStart = (tree: String, sha: String, cache: String, suite: Bool) -> Outcome;
+
+/** What a `dev shard` run reports of itself: the shards it ran on and the milliseconds it took. */
+typedef ShardSpan = { var shards: Int; var ms: Float; }
+/**
  * The one answer to "did the whole suite pass on a commit whose land ran only the classes its change reaches": `dev land`
  * starts `dev post-land run <sha>` once the land has passed, a process that outlives the land and its lock, checks the commit
  * out into a worktree of its own, builds it and runs the whole suite there and then the whole lint (the check of the lint
@@ -657,11 +665,3 @@ final class PostLand {
 	}
 
 }
-
-/**
- * The start of the run for a landed commit: the tree, the commit, the snapshot cache and whether the whole suite runs.
- * A land whose battery ran every class starts the hxcpp build alone.
- */
-typedef PostLandStart = (tree: String, sha: String, cache: String, suite: Bool) -> Outcome;
-/** What a `dev shard` run reports of itself: the shards it ran on and the milliseconds it took. */
-typedef ShardSpan = { var shards: Int; var ms: Float; }

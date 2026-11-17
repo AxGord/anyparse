@@ -12,6 +12,49 @@ using StringTools;
 using Lambda;
 
 /**
+ * The gaps a touched container hands a new entry or a touched gap: before an entry (`first` for the
+ * first, else `later`), before the closing delimiter, before a `,`, and around a member's `:`.
+ */
+@:nullSafety(Strict)
+private final class ContainerStyle {
+
+	public final expanded: Bool;
+	public final close: String;
+	public final preComma: String;
+	public final keySep: KeySep;
+
+	private final _first: String;
+	private final _later: String;
+
+	public function new(expanded: Bool, first: String, later: String, close: String, preComma: String, keySep: KeySep) {
+		this.expanded = expanded;
+		this.close = close;
+		this.preComma = preComma;
+		this.keySep = keySep;
+		_first = first;
+		_later = later;
+	}
+
+	/** The gap before entry `i`. */
+	public inline function lead(i: Int): String {
+		return i == 0 ? _first : _later;
+	}
+
+}
+
+/** Where the gaps of one container sit: before each entry, before each entry's `,` (null: none follows), before the closer. */
+private typedef ContainerLayout = { final leads: Array<Span>; final preCommas: Array<Null<Span>>; final close: Span; }
+
+/** The whitespace before and after a member's `:`. */
+private typedef KeySep = { final before: String; final after: String; }
+
+/** The two gaps around one member's `:`. */
+private typedef MemberGaps = { final before: Span; final after: Span; }
+
+/** The gaps of an inline container: before its first entry, between two entries, before its closer. */
+private typedef InlineGaps = { final first: String; final sep: String; final close: String; }
+
+/**
  * The `json` grammar's FORMAT-PRESERVING writer: it re-emits a document from its projected tree
  * (`JsonProjection`) keeping the file's own layout, and lays out only what an edit introduced.
  *
@@ -459,46 +502,3 @@ final class JsonLayoutWriter {
 	}
 
 }
-
-/**
- * The gaps a touched container hands a new entry or a touched gap: before an entry (`first` for the
- * first, else `later`), before the closing delimiter, before a `,`, and around a member's `:`.
- */
-@:nullSafety(Strict)
-private final class ContainerStyle {
-
-	public final expanded: Bool;
-	public final close: String;
-	public final preComma: String;
-	public final keySep: KeySep;
-
-	private final _first: String;
-	private final _later: String;
-
-	public function new(expanded: Bool, first: String, later: String, close: String, preComma: String, keySep: KeySep) {
-		this.expanded = expanded;
-		this.close = close;
-		this.preComma = preComma;
-		this.keySep = keySep;
-		_first = first;
-		_later = later;
-	}
-
-	/** The gap before entry `i`. */
-	public inline function lead(i: Int): String {
-		return i == 0 ? _first : _later;
-	}
-
-}
-
-/** Where the gaps of one container sit: before each entry, before each entry's `,` (null: none follows), before the closer. */
-private typedef ContainerLayout = { final leads: Array<Span>; final preCommas: Array<Null<Span>>; final close: Span; }
-
-/** The whitespace before and after a member's `:`. */
-private typedef KeySep = { final before: String; final after: String; }
-
-/** The two gaps around one member's `:`. */
-private typedef MemberGaps = { final before: Span; final after: Span; }
-
-/** The gaps of an inline container: before its first entry, between two entries, before its closer. */
-private typedef InlineGaps = { final first: String; final sep: String; final close: String; }

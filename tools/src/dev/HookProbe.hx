@@ -11,6 +11,36 @@ import sys.io.File;
 
 using StringTools;
 
+/** One acceptance matrix's run: a row per case, the failures counted. */
+@:nullSafety(Strict)
+private final class Matrix {
+
+	private final _width: Int;
+
+	private var _fails: Int = 0;
+
+	public function new(width: Int) {
+		_width = width;
+	}
+
+	/** Print the row of the case `label`, which wanted `want` and got `got`; `detail` follows a failure's row. */
+	public function check(want: String, got: String, label: String, detail: String = ''): Void {
+		if (got == want) {
+			Sys.println('ok   ${got.rpad(' ', _width)} $label');
+			return;
+		}
+		Sys.println('FAIL want=$want got=$got  $label${detail == '' ? '' : ':\n$detail'}');
+		_fails++;
+	}
+
+	/** Print the tally; answers the failure count, the probe's exit status. */
+	public function end(): Int {
+		Sys.println('fails=$_fails');
+		return _fails;
+	}
+
+}
+
 /**
  * The acceptance matrices of the two hxq hooks, whose installed copies live under `.claude/hooks/` — gitignored, so no
  * suite test reaches them. Each case varies ONE thing and names the verdict the hook must give; the exit status is the
@@ -209,36 +239,6 @@ final class HookProbe {
 	/** The probe class, whose one method returns `7777` followed by `tail`. */
 	private static function probeClass(tail: String): String {
 		return 'class Probe197 {\n\n\tpublic function new() {}\n\n\tpublic function f(): Int {\n\t\treturn 7777$tail;\n\t}\n\n}\n';
-	}
-
-}
-
-/** One acceptance matrix's run: a row per case, the failures counted. */
-@:nullSafety(Strict)
-private final class Matrix {
-
-	private final _width: Int;
-
-	private var _fails: Int = 0;
-
-	public function new(width: Int) {
-		_width = width;
-	}
-
-	/** Print the row of the case `label`, which wanted `want` and got `got`; `detail` follows a failure's row. */
-	public function check(want: String, got: String, label: String, detail: String = ''): Void {
-		if (got == want) {
-			Sys.println('ok   ${got.rpad(' ', _width)} $label');
-			return;
-		}
-		Sys.println('FAIL want=$want got=$got  $label${detail == '' ? '' : ':\n$detail'}');
-		_fails++;
-	}
-
-	/** Print the tally; answers the failure count, the probe's exit status. */
-	public function end(): Int {
-		Sys.println('fails=$_fails');
-		return _fails;
 	}
 
 }

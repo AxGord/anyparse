@@ -63,6 +63,52 @@ typedef CarriedEdits = {
 }
 
 /**
+ * A validated move target: the type name, the span of the bytes the
+ * declaration OWNS (modifier group folded in, trailing trivia trimmed off), the
+ * UNTRIMMED end of that group, whether the declaration is module-`private`, the
+ * cursor file's source, the source and destination file infos, and the scope's
+ * source-text lookup.
+ *
+ * `declGroupEnd` is kept only so the cut can tell blank-line separation the
+ * span already claimed from trivia that belongs to the next declaration — see
+ * `computeCutSpan`. `declPrivate` gates the source-side import: a module-private
+ * type cannot be imported from another module.
+ */
+private typedef MoveTarget = {
+	final typeName: String;
+	final declSpan: Span;
+	final declGroupEnd: Int;
+	final declNode: QueryNode;
+	final declParent: Null<QueryNode>;
+	final declPrivate: Bool;
+	final cursorSource: String;
+	final cursorInfo: FileInfo;
+	final destInfo: FileInfo;
+	final sourceOf: Map<String, String>;
+	final bindings: ImportBindings;
+};
+
+/**
+ * The per-move constants an importer repoint reads: the two import paths, the source module, whether
+ * the moved type was that module's MAIN type (which decides what a statement spelling `oldPath`
+ * binds), and the names the module still declares.
+ */
+private typedef ImporterRepoint = {
+	final oldPath: String;
+	final newPath: String;
+	final sourceModule: String;
+	final mainMoved: Bool;
+	final remaining: Array<String>;
+	final moved: Array<String>;
+};
+
+/** Resolution outcome of `resolveMoveTarget`: the target or a refusal. */
+private enum MovePrep {
+	POk(target: MoveTarget);
+	PErr(message: String);
+}
+
+/**
  * Scope-correct, format-preserving move of a TYPE declaration from one file to another, in the
  * same package or across packages, fixing imports across a scope. The largest cross-file
  * refactoring op in the query suite — it relocates a type's source verbatim, carries the
@@ -1534,50 +1580,4 @@ final class MoveSymbol {
 				.exists(r -> r.file.file == movedFrom.file && r.type.name == typeName);
 	}
 
-}
-
-/**
- * A validated move target: the type name, the span of the bytes the
- * declaration OWNS (modifier group folded in, trailing trivia trimmed off), the
- * UNTRIMMED end of that group, whether the declaration is module-`private`, the
- * cursor file's source, the source and destination file infos, and the scope's
- * source-text lookup.
- *
- * `declGroupEnd` is kept only so the cut can tell blank-line separation the
- * span already claimed from trivia that belongs to the next declaration — see
- * `computeCutSpan`. `declPrivate` gates the source-side import: a module-private
- * type cannot be imported from another module.
- */
-private typedef MoveTarget = {
-	final typeName: String;
-	final declSpan: Span;
-	final declGroupEnd: Int;
-	final declNode: QueryNode;
-	final declParent: Null<QueryNode>;
-	final declPrivate: Bool;
-	final cursorSource: String;
-	final cursorInfo: FileInfo;
-	final destInfo: FileInfo;
-	final sourceOf: Map<String, String>;
-	final bindings: ImportBindings;
-};
-
-/**
- * The per-move constants an importer repoint reads: the two import paths, the source module, whether
- * the moved type was that module's MAIN type (which decides what a statement spelling `oldPath`
- * binds), and the names the module still declares.
- */
-private typedef ImporterRepoint = {
-	final oldPath: String;
-	final newPath: String;
-	final sourceModule: String;
-	final mainMoved: Bool;
-	final remaining: Array<String>;
-	final moved: Array<String>;
-};
-
-/** Resolution outcome of `resolveMoveTarget`: the target or a refusal. */
-private enum MovePrep {
-	POk(target: MoveTarget);
-	PErr(message: String);
 }

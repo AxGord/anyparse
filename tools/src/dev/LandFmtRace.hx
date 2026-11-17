@@ -8,6 +8,9 @@ import devkit.Result;
 import sys.FileSystem;
 import sys.io.File;
 
+/** A battery row that did not pass: its name and the reason its table line gives. */
+typedef RedRow = { var name: String; var why: String; }
+
 /**
  * The one answer to "is a land whose battery is red only on the `fmt` row the branch's own doing, or the writer's drift on files
  * main changed after the branch's last sync?". Reads the battery's log (its table and the files its `fmt` section lists) and the two
@@ -89,6 +92,3 @@ final class LandFmtRace {
 	}
 
 }
-
-/** A battery row that did not pass: its name and the reason its table line gives. */
-typedef RedRow = { var name: String; var why: String; }

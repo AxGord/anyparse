@@ -14,6 +14,45 @@ import anyparse.util.Arrays;
 
 using StringTools;
 
+/** The per-file analysis context threaded through the walk. */
+private typedef Ctx = {
+
+	final file: String;
+	final source: String;
+	final tree: QueryNode;
+	final plugin: GrammarPlugin;
+	final shape: RefShape;
+	final fnKind: String;
+	final callKind: String;
+	final getIndex: () -> Null<SymbolIndex>;
+	final typeSources: () -> Map<Int, String>;
+
+	/** The file's lexical regions, lexed on first ask: a comment gate reads them, so a `//` inside a string is no comment. */
+	final regions: () -> Array<LexRegion>;
+	final declTrees: Map<String, Null<QueryNode>>;
+
+};
+
+/** A resolved type-reference candidate — a declaration paired with its declaring file. */
+private typedef Candidate = { file: FileInfo, type: TypeDeclInfo };
+
+/** A function literal's children split into parameters, return-type hint and body. */
+private typedef FnParts = { final params: Array<QueryNode>; final hint: Null<QueryNode>; final body: QueryNode; };
+
+/** What a candidate literal deserves: an autofixed finding, a report-only finding, or nothing. */
+private enum Verdict {
+	Fixable;
+	ReportOnly;
+	Silent;
+}
+
+/** A convertible body's tail class — see `tailOf`. */
+private enum Tail {
+	Preserving;
+	VoidTail;
+	Open;
+}
+
 /**
  * Flags an anonymous `function` literal in CALL-ARGUMENT position — `f(function() { … })`,
  * `new T(function(x) { … })` — and rewrites it to the arrow form: `f(() -> { … })`,
@@ -732,43 +771,4 @@ final class PreferArrowCallback extends RuleBase {
 		return span == null ? [] : RunScan.typeParamNamesOf(ctx.plugin, source)[span.from] ?? [];
 	}
 
-}
-
-/** The per-file analysis context threaded through the walk. */
-private typedef Ctx = {
-
-	final file: String;
-	final source: String;
-	final tree: QueryNode;
-	final plugin: GrammarPlugin;
-	final shape: RefShape;
-	final fnKind: String;
-	final callKind: String;
-	final getIndex: () -> Null<SymbolIndex>;
-	final typeSources: () -> Map<Int, String>;
-
-	/** The file's lexical regions, lexed on first ask: a comment gate reads them, so a `//` inside a string is no comment. */
-	final regions: () -> Array<LexRegion>;
-	final declTrees: Map<String, Null<QueryNode>>;
-
-};
-
-/** A resolved type-reference candidate — a declaration paired with its declaring file. */
-private typedef Candidate = { file: FileInfo, type: TypeDeclInfo };
-
-/** A function literal's children split into parameters, return-type hint and body. */
-private typedef FnParts = { final params: Array<QueryNode>; final hint: Null<QueryNode>; final body: QueryNode; };
-
-/** What a candidate literal deserves: an autofixed finding, a report-only finding, or nothing. */
-private enum Verdict {
-	Fixable;
-	ReportOnly;
-	Silent;
-}
-
-/** A convertible body's tail class — see `tailOf`. */
-private enum Tail {
-	Preserving;
-	VoidTail;
-	Open;
 }

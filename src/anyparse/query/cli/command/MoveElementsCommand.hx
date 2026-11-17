@@ -5,6 +5,22 @@ import anyparse.query.ExitCode.*;
 import anyparse.query.MoveElements;
 import haxe.ds.Either;
 
+/** Parsed options of `apq move-elements`. */
+@:nullSafety(Strict)
+typedef MoveElementsOpts = {
+	final lang: String;
+	final write: Bool;
+	final reformat: Bool;
+	final dryRun: Bool;
+	final file: String;
+	final address: AddressSpec;
+	final first: Int;
+	final last: Int;
+	final into: Null<String>;
+	final target: AddressSpec;
+	final sorted: Bool;
+}
+
 /**
  * `apq move-elements` — move a slice of one array literal's elements into another array literal.
  *
@@ -230,20 +246,4 @@ final class MoveElementsCommand implements CliCommand {
 		CliIo.sysPrint('  --lang <name>  grammar plugin (default: by file extension)\n');
 	}
 
-}
-
-/** Parsed options of `apq move-elements`. */
-@:nullSafety(Strict)
-typedef MoveElementsOpts = {
-	final lang: String;
-	final write: Bool;
-	final reformat: Bool;
-	final dryRun: Bool;
-	final file: String;
-	final address: AddressSpec;
-	final first: Int;
-	final last: Int;
-	final into: Null<String>;
-	final target: AddressSpec;
-	final sorted: Bool;
 }

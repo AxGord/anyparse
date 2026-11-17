@@ -7,6 +7,53 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 
 /**
+ * One generated span-info function descriptor.
+ */
+typedef SpanInfoFn = {
+
+	/** Full grammar type path this function serves. */
+	final typePath: String;
+
+	/** Generated function name. */
+	final fnName: String;
+
+	/** The paired `*S` type - the function's value parameter. */
+	final paramCT: ComplexType;
+
+	/** Body expression. */
+	final body: Expr;
+
+};
+
+/**
+ * Result of span-info lowering: every function to emit plus the root entry.
+ */
+typedef SpanInfoResult = {
+
+	/** Full grammar root type path. */
+	final rootTypePath: String;
+
+	/** Paired root type - the public entry's `root` parameter. */
+	final rootCT: ComplexType;
+
+	/** `_spanInfo` function name for the root type, which the public entry delegates to. */
+	final rootFnName: String;
+
+	/** One `_spanInfo<T>` per non-Terminal rule. */
+	final walks: Array<SpanInfoFn>;
+
+	/** One `_nominalName<T>` per enum rule a `type` / `returnType` field points at. */
+	final nominals: Array<SpanInfoFn>;
+
+	/** One `_spanOf<T>` for the same rule set as `nominals`. */
+	final spanOfs: Array<SpanInfoFn>;
+
+	/** Element type of an accessor clause's `ids` array, or null when the grammar has no such shape. */
+	final accessorIdCT: Null<ComplexType>;
+
+};
+
+/**
  * Pass 3S of the macro pipeline - span-info lowering.
  *
  * Emits the `SpanTypeInfo` projection: the six span-indexed maps a check asks
@@ -523,51 +570,4 @@ class SpanInfoLowering extends PairedShapeLowering {
 	}
 
 }
-
-/**
- * One generated span-info function descriptor.
- */
-typedef SpanInfoFn = {
-
-	/** Full grammar type path this function serves. */
-	final typePath: String;
-
-	/** Generated function name. */
-	final fnName: String;
-
-	/** The paired `*S` type - the function's value parameter. */
-	final paramCT: ComplexType;
-
-	/** Body expression. */
-	final body: Expr;
-
-};
-
-/**
- * Result of span-info lowering: every function to emit plus the root entry.
- */
-typedef SpanInfoResult = {
-
-	/** Full grammar root type path. */
-	final rootTypePath: String;
-
-	/** Paired root type - the public entry's `root` parameter. */
-	final rootCT: ComplexType;
-
-	/** `_spanInfo` function name for the root type, which the public entry delegates to. */
-	final rootFnName: String;
-
-	/** One `_spanInfo<T>` per non-Terminal rule. */
-	final walks: Array<SpanInfoFn>;
-
-	/** One `_nominalName<T>` per enum rule a `type` / `returnType` field points at. */
-	final nominals: Array<SpanInfoFn>;
-
-	/** One `_spanOf<T>` for the same rule set as `nominals`. */
-	final spanOfs: Array<SpanInfoFn>;
-
-	/** Element type of an accessor clause's `ids` array, or null when the grammar has no such shape. */
-	final accessorIdCT: Null<ComplexType>;
-
-};
 #end

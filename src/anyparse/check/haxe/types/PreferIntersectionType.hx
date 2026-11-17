@@ -7,6 +7,11 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+private typedef Seams = { final anonKind: String; final aliasKind: String; }
+
+/** A structure to rewrite: its span, and the text that replaces it. */
+private typedef Site = { final span: Span; final text: String; }
+
 /**
  * Flags a typedef whose whole right-hand side is an anonymous structure holding nothing but `> T` extension clauses
  * (`typedef C = { > A, > B, };`) and rewrites it to the intersection it says (`typedef C = A & B;`; a single extension
@@ -127,8 +132,3 @@ final class PreferIntersectionType extends HaxeRule implements RiskyFix {
 	}
 
 }
-
-private typedef Seams = { final anonKind: String; final aliasKind: String; }
-
-/** A structure to rewrite: its span, and the text that replaces it. */
-private typedef Site = { final span: Span; final text: String; }

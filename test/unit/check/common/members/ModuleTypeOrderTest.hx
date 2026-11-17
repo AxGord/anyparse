@@ -8,8 +8,9 @@ import anyparse.check.common.members.ModuleTypeOrder;
  * `mainType: last` a secondary type written after it is flagged and moved before it, `first`
  * asks the opposite, `kindOrder` orders the secondary types by declaration word, and the fix
  * moves whole declarations - doc comment, metadata, modifiers, a comment closing the line - with
- * the blank lines staying where they were. A declaration under `#if`, or a gap holding anything
- * but whitespace, withholds the fix and keeps the finding with its reason.
+ * the blank lines staying where they were. Declarations of one conditional region move among
+ * themselves; a move across a region's boundary, or a gap holding anything but whitespace,
+ * withholds the fix and keeps the finding with its reason.
  */
 @:nullSafety(Strict)
 final class ModuleTypeOrderTest extends Test {
@@ -156,6 +157,36 @@ final class ModuleTypeOrderTest extends Test {
 		Assert.equals(
 			'package p;\n\ntypedef T = Int;\n\nenum E {\n\tA;\n}\n\nclass C {}\n', CheckFixture.fixedUnder(new ModuleTypeOrder(), src, json)
 		);
+	}
+
+	/** Declarations sharing one conditional region, such as a module wrapped whole in `#if macro`, are reordered inside it. */
+	@:killer('M-MTO-REGION-NOT-MOVED')
+	@:pin('control')
+	public function testTypesOfOneConditionalRegionAreReorderedInsideIt(): Void {
+		final src: String = 'package p;\n\n#if macro\nclass C {}\n\ntypedef T = Int;\n#end\n';
+		Assert.equals(
+			'package p;\n\n#if macro\ntypedef T = Int;\n\nclass C {}\n#end\n', CheckFixture.fixedSource(new ModuleTypeOrder(), src)
+		);
+	}
+
+	/** Two branches of one conditional block are not one region a reorder may permute: the `#else` between them withholds the fix. */
+	public function testTypesInTwoBranchesOfOneBlockAreNotMoved(): Void {
+		final src: String = 'package p;\n\n#if js\nclass C {}\n#else\ntypedef T = Int;\n#end\n';
+		final run: FixRun = CheckFixture.fixRunUnder(new ModuleTypeOrder(), src, '{}');
+		Assert.equals(1, run.violations.length);
+		Assert.equals(0, run.edits.length);
+	}
+
+	/** A main type under `#if` with a top-level type after it: the refusal names the guarded declaration, not the top-level one. */
+	@:killer('M-MTO-DECLINE-NAMES-TOP')
+	@:pin('control')
+	public function testTheRefusalNamesTheDeclarationUnderIf(): Void {
+		final src: String = 'package p;\n\n#if js\nclass C {}\n#end\n\ntypedef T = Int;\n';
+		final run: FixRun = CheckFixture.fixRunUnder(new ModuleTypeOrder(), src, '{}');
+		Assert.equals(1, run.violations.length);
+		Assert.equals(0, run.edits.length);
+		final reason: String = run.violations[0].declineReason ?? '';
+		Assert.isTrue(reason.indexOf('class C sits inside a conditional region') >= 0, reason);
 	}
 
 }

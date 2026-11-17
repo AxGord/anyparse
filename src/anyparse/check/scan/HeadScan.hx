@@ -6,6 +6,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
 
+/** The resolved facts the head gates ask of the owners: the unchanged-locals scan, the purity context and the tree. */
+typedef HeadCtx = { final unchanged: UnchangedLocal; final purity: PurityCtx; final tree: QueryNode; };
+
 /**
  * The one answer to "may the statements every branch of an if chain OPENS with run once BEFORE the chain, ahead of every
  * condition, instead of first inside the taken branch": the shared prefix of the branches and the gates that decide how much
@@ -147,6 +150,3 @@ final class HeadScan {
 	}
 
 }
-
-/** The resolved facts the head gates ask of the owners: the unchanged-locals scan, the purity context and the tree. */
-typedef HeadCtx = { final unchanged: UnchangedLocal; final purity: PurityCtx; final tree: QueryNode; };

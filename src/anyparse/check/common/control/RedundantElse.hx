@@ -12,6 +12,42 @@ import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
 /**
+ * The resolved seams `RedundantElse` reads in `run` and `fix`; `localDeclKinds`, `functionKinds`,
+ * `scopeKinds` and `condKind` are used only by `fix`'s de-nest scope-collision check.
+ */
+private typedef Seams = {
+
+	final ifKinds: Array<String>;
+	final support: ControlFlowSupport;
+
+	/** Handed to `PreferIfExpressionReturn.claimsChain`, and read by `RegionTerminator` for a region body's terminator. */
+	final shape: RefShape;
+	final blockKinds: Array<String>;
+	final localDeclKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final condKind: Null<String>;
+	final spliceKinds: Array<String>;
+	final exprStmtKind: Null<String>;
+	final annotationKinds: Array<String>;
+
+	/** The `fix` narrowing gate's kinds: the guard shape it recognises and the receivers it compares. */
+	final identKind: String;
+	final fieldAccessKind: Null<String>;
+	final notEqKind: Null<String>;
+	final nullLitKind: Null<String>;
+	final parenKind: Null<String>;
+	final selfRef: Null<String>;
+
+	/** Kinds that drop a field's non-null narrowing when the kept then-branch holds one. */
+	final resetKinds: Array<String>;
+
+	/** The `fix` capture gate's seams: the names an else body binds and the identifier kinds a later read is spelled with. */
+	final tail: TailSeams;
+
+};
+
+/**
  * Flags an `else` that follows an `if` branch which always exits — a
  * `return` / `throw` / `break` / `continue`. The `else` adds needless nesting:
  * its body can be de-nested to run as the `if`'s siblings, because control only
@@ -366,39 +402,3 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 	}
 
 }
-
-/**
- * The resolved seams `RedundantElse` reads in `run` and `fix`; `localDeclKinds`, `functionKinds`,
- * `scopeKinds` and `condKind` are used only by `fix`'s de-nest scope-collision check.
- */
-private typedef Seams = {
-
-	final ifKinds: Array<String>;
-	final support: ControlFlowSupport;
-
-	/** Handed to `PreferIfExpressionReturn.claimsChain`, and read by `RegionTerminator` for a region body's terminator. */
-	final shape: RefShape;
-	final blockKinds: Array<String>;
-	final localDeclKinds: Array<String>;
-	final functionKinds: Array<String>;
-	final scopeKinds: Array<String>;
-	final condKind: Null<String>;
-	final spliceKinds: Array<String>;
-	final exprStmtKind: Null<String>;
-	final annotationKinds: Array<String>;
-
-	/** The `fix` narrowing gate's kinds: the guard shape it recognises and the receivers it compares. */
-	final identKind: String;
-	final fieldAccessKind: Null<String>;
-	final notEqKind: Null<String>;
-	final nullLitKind: Null<String>;
-	final parenKind: Null<String>;
-	final selfRef: Null<String>;
-
-	/** Kinds that drop a field's non-null narrowing when the kept then-branch holds one. */
-	final resetKinds: Array<String>;
-
-	/** The `fix` capture gate's seams: the names an else body binds and the identifier kinds a later read is spelled with. */
-	final tail: TailSeams;
-
-};

@@ -11,6 +11,40 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** A resolved `Map`-abstract `get` / `set` call site. */
+private typedef Match = {
+	var callSpan: Span;
+	var recv: QueryNode;
+	var key: QueryNode;
+	var value: Null<QueryNode>;
+	var isSet: Bool;
+	var isStatement: Bool;
+};
+
+/** Per-run resolved seams + type provider. */
+private typedef Cfg = {
+
+	var shape: RefShape;
+	var typed: TypeInfoProvider;
+	var identKind: String;
+	var callKind: String;
+	var fieldKind: String;
+	var exprStmtKind: String;
+	var objectLiteralKind: Null<String>;
+	var mapTypes: Array<String>;
+	var nullableWrappers: Array<String>;
+
+	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
+	var typeSyntax: TypeSyntaxReader;
+	var opaqueKinds: Array<String>;
+	var ternaryKind: Null<String>;
+	var nullCoalKind: Null<String>;
+	var eqKind: Null<String>;
+	var notEqKind: Null<String>;
+	var nullLitKind: Null<String>;
+
+};
+
 /**
  * Flags a `Map` read / write spelled as a method call where index access is idiomatic —
  * `m.get(k)` → `m[k]`, `m.set(k, v)` → `m[k] = v` — per the user preference "access values
@@ -361,37 +395,3 @@ final class PreferIndexAccess extends RuleBase {
 	}
 
 }
-
-/** A resolved `Map`-abstract `get` / `set` call site. */
-private typedef Match = {
-	var callSpan: Span;
-	var recv: QueryNode;
-	var key: QueryNode;
-	var value: Null<QueryNode>;
-	var isSet: Bool;
-	var isStatement: Bool;
-};
-
-/** Per-run resolved seams + type provider. */
-private typedef Cfg = {
-
-	var shape: RefShape;
-	var typed: TypeInfoProvider;
-	var identKind: String;
-	var callKind: String;
-	var fieldKind: String;
-	var exprStmtKind: String;
-	var objectLiteralKind: Null<String>;
-	var mapTypes: Array<String>;
-	var nullableWrappers: Array<String>;
-
-	/** `GrammarPlugin.typeSyntax` — how a receiver's written type is read. */
-	var typeSyntax: TypeSyntaxReader;
-	var opaqueKinds: Array<String>;
-	var ternaryKind: Null<String>;
-	var nullCoalKind: Null<String>;
-	var eqKind: Null<String>;
-	var notEqKind: Null<String>;
-	var nullLitKind: Null<String>;
-
-};

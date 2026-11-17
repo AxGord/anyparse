@@ -8,6 +8,20 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** `QualifiedReceiver.read`'s answer. */
+enum ReceiverTarget {
+
+	/** The receiver names the type declaring the member: the call targets it. */
+	DeclaringType;
+
+	/** The receiver names another type declaring its own member of the name: the call does not target this one. */
+	OtherType;
+
+	/** Nothing proves either reading — a value receiver, a dotted path, a type outside the index, an alias. */
+	Unproven;
+
+}
+
 /**
  * What the receiver `R` of a qualified call `R.name(...)` names, relative to ONE member declaration of `name`: the type
  * declaring it, another type's same-named member, or nothing provable. Read through `TypingService.resolveAt`, which first
@@ -71,19 +85,5 @@ final class QualifiedReceiver {
 		else
 			OtherType;
 	}
-
-}
-
-/** `QualifiedReceiver.read`'s answer. */
-enum ReceiverTarget {
-
-	/** The receiver names the type declaring the member: the call targets it. */
-	DeclaringType;
-
-	/** The receiver names another type declaring its own member of the name: the call does not target this one. */
-	OtherType;
-
-	/** Nothing proves either reading — a value receiver, a dotted path, a type outside the index, an alias. */
-	Unproven;
 
 }

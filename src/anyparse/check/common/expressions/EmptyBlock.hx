@@ -10,6 +10,22 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
+/** The per-run context of the empty-block walk: where findings go, and the kinds it tests nodes against. */
+private typedef EmptyScan = {
+	var out: Array<Violation>;
+	var file: String;
+	var source: String;
+	var flagKinds: Array<String>;
+	var conditionLoops: Array<String>;
+	var shape: RefShape;
+}
+
+/** What the fix does with one flagged empty block: the deletion, or the gate that kept it. */
+private enum EmptyFix {
+	Remove(edit: FixEdit);
+	Keep(reason: String);
+}
+
 /**
  * Flags an empty control-flow block — an `if` / `else` / `while` / `for` /
  * `try` / `catch` body written as `{}` with no statements: a forgotten
@@ -193,20 +209,4 @@ final class EmptyBlock extends RuleBase {
 			DECLINE_OTHER;
 	}
 
-}
-
-/** The per-run context of the empty-block walk: where findings go, and the kinds it tests nodes against. */
-private typedef EmptyScan = {
-	var out: Array<Violation>;
-	var file: String;
-	var source: String;
-	var flagKinds: Array<String>;
-	var conditionLoops: Array<String>;
-	var shape: RefShape;
-}
-
-/** What the fix does with one flagged empty block: the deletion, or the gate that kept it. */
-private enum EmptyFix {
-	Remove(edit: FixEdit);
-	Keep(reason: String);
 }

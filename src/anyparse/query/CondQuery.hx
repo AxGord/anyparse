@@ -11,6 +11,64 @@ import anyparse.util.Strings;
 using Lambda;
 
 /**
+ * One conditional-compilation region `CondQuery.regionsMentioning` reports: `span` runs from its
+ * `#if` marker to the end of its `#end`, `depth` is 0 for a region no other region encloses, and
+ * `branches` holds one entry per branch in source order — including the branches whose conditions
+ * do not mention the queried define, since the region is the unit a reader has to see whole.
+ */
+typedef CondRegion = { final span: Span; final depth: Int; final branches: Array<CondBranch>; };
+
+/**
+ * One DIRECTIVE-DELIMITED branch: the `keyword` as the grammar declares it, the verbatim
+ * `directive` text, `at` — the directive's own span, which is what a hit line's `line:col` names —
+ * and `body`, the byte run between this directive and the next one at the same nesting depth.
+ *
+ * `live` is three-valued under the hypothesis the caller stated about the queried define — set,
+ * or explicitly NOT set (true = provably taken, false = provably not, null = a flag outside the
+ * query decides). `raw` says the body holds
+ * text no projected node covers, so `--names` has nothing to answer with and the source is printed
+ * instead.
+ */
+typedef CondBranch = {
+	final keyword: String;
+	final directive: String;
+	final at: Span;
+	final body: Span;
+	final live: Null<Bool>;
+	final raw: Bool;
+};
+
+/**
+ * What `apq cond` asked for, as `CondQuery.render` and `CondQuery.keepsBranch` consume it. `maxBody` is the
+ * per-branch line budget — `CondQuery.DEFAULT_MAX_BODY` unless the caller says otherwise, and non-positive
+ * for no cap.
+ */
+typedef CondRenderOptions = {
+	final flat: Bool;
+	final names: Bool;
+	final active: Bool;
+	final inactive: Bool;
+	final maxBody: Int;
+};
+
+/** A region still being read: how many regions enclose it, its branch directives so far, and the bodies already closed. */
+private typedef OpenRegion = { final depth: Int; final heads: Array<CondDirective>; final bodies: Array<Span>; };
+
+/**
+ * The grammar's directive vocabulary plus the queried define, gathered once per
+ * `regionsMentioning` call, with the `shape` a condition is read through. `facts` is the hypothesis liveness is folded under: the define
+ * asserted DEFINED by default, asserted UNDEFINED when the caller opts into that polarity.
+ */
+private typedef CondSeams = {
+	final ifKeyword: String;
+	final endKeyword: Null<String>;
+	final elseKeywords: Array<String>;
+	final define: String;
+	final facts: DefineFacts;
+	final shape: RefShape;
+};
+
+/**
  * The DIRECTIVE-DELIMITED BRANCH — what `apq cond` reports, and the one thing at this layer that
  * has to be delimited without a node to point at.
  *
@@ -443,61 +501,3 @@ final class CondQuery {
 	}
 
 }
-
-/**
- * One conditional-compilation region `CondQuery.regionsMentioning` reports: `span` runs from its
- * `#if` marker to the end of its `#end`, `depth` is 0 for a region no other region encloses, and
- * `branches` holds one entry per branch in source order — including the branches whose conditions
- * do not mention the queried define, since the region is the unit a reader has to see whole.
- */
-typedef CondRegion = { final span: Span; final depth: Int; final branches: Array<CondBranch>; };
-
-/**
- * One DIRECTIVE-DELIMITED branch: the `keyword` as the grammar declares it, the verbatim
- * `directive` text, `at` — the directive's own span, which is what a hit line's `line:col` names —
- * and `body`, the byte run between this directive and the next one at the same nesting depth.
- *
- * `live` is three-valued under the hypothesis the caller stated about the queried define — set,
- * or explicitly NOT set (true = provably taken, false = provably not, null = a flag outside the
- * query decides). `raw` says the body holds
- * text no projected node covers, so `--names` has nothing to answer with and the source is printed
- * instead.
- */
-typedef CondBranch = {
-	final keyword: String;
-	final directive: String;
-	final at: Span;
-	final body: Span;
-	final live: Null<Bool>;
-	final raw: Bool;
-};
-
-/**
- * What `apq cond` asked for, as `CondQuery.render` and `CondQuery.keepsBranch` consume it. `maxBody` is the
- * per-branch line budget — `CondQuery.DEFAULT_MAX_BODY` unless the caller says otherwise, and non-positive
- * for no cap.
- */
-typedef CondRenderOptions = {
-	final flat: Bool;
-	final names: Bool;
-	final active: Bool;
-	final inactive: Bool;
-	final maxBody: Int;
-};
-
-/** A region still being read: how many regions enclose it, its branch directives so far, and the bodies already closed. */
-private typedef OpenRegion = { final depth: Int; final heads: Array<CondDirective>; final bodies: Array<Span>; };
-
-/**
- * The grammar's directive vocabulary plus the queried define, gathered once per
- * `regionsMentioning` call, with the `shape` a condition is read through. `facts` is the hypothesis liveness is folded under: the define
- * asserted DEFINED by default, asserted UNDEFINED when the caller opts into that polarity.
- */
-private typedef CondSeams = {
-	final ifKeyword: String;
-	final endKeyword: Null<String>;
-	final elseKeywords: Array<String>;
-	final define: String;
-	final facts: DefineFacts;
-	final shape: RefShape;
-};

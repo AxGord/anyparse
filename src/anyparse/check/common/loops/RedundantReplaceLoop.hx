@@ -17,6 +17,124 @@ import haxe.Exception;
 
 using StringTools;
 
+/** The resolved seams `RedundantReplaceLoop` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final shape: RefShape;
+	final whileStmtKind: String;
+	final notEqKind: String;
+	final callKind: String;
+	final fieldAccessKind: String;
+	final identKind: String;
+	final assignKind: String;
+	final blockStmtKind: String;
+	final exprStmtKind: String;
+	final unaryMinusKinds: Array<String>;
+	final numericLiteralKinds: Array<String>;
+	final fnKinds: Array<String>;
+	final paramKinds: Array<String>;
+	final ifStatementKinds: Array<String>;
+	final flow: Null<ControlFlowSupport>;
+	final blockKinds: Array<String>;
+	final eqKind: Null<String>;
+	final parenKind: Null<String>;
+	final strings: StringFoldSupport;
+	final opaqueKinds: Array<String>;
+};
+
+/** A destructured `x.method(...)` call: its receiver node and method name. */
+private typedef MethodCall = { final recv: QueryNode; final method: String; };
+
+/**
+ * One resolved `S` / `B` operand: EITHER a plain string literal, OR a bare identifier bound to a
+ * PARAMETER of a function or lambda enclosing the loop. Exactly one of the two fields is non-null; `src` is the
+ * operand's verbatim source text, which a finding message echoes (never a re-wrapped `.content`).
+ */
+private typedef Operand = {
+
+	/** The literal content when the operand is a plain string literal, else null. */
+	final literal: Null<String>;
+
+	/** The START OFFSET of the parameter declaration this operand is bound to, else null. */
+	final paramBindingFrom: Null<Int>;
+
+	/** The operand's verbatim source text, delimiters included. */
+	final src: String;
+
+};
+
+/**
+ * Which arm a matched loop falls in — the outcomes the type doc describes.
+ */
+private enum abstract Arm(Int) {
+
+	/** Both operands are literals and `B` does not contain `S`: redundant, `Info`, autofixed. */
+	final A = 0;
+
+	/** Both operands are literals and `B` contains `S`: provably infinite, `Warning`, report-only. */
+	final B = 1;
+
+	/** Neither literal-`B` hybrid: the pair is undecidable here, infinite for some argument, `Info`, report-only. */
+	final C = 2;
+
+	/** A PARAMETER `S` with the EMPTY literal `B`: redundant for every non-empty `S`, `Info`, report-only. */
+	final CEmptyB = 3;
+
+	/** A PARAMETER `S` with a NON-EMPTY literal `B`: infinite for exactly those `S` occurring in `B`, `Info`, report-only. */
+	final CLiteralB = 4;
+
+}
+
+/**
+ * A matched redundant-replace loop: both spans, which arm it is, whether an (insufficient)
+ * equality guard precedes it, and the verbatim text the message echoes.
+ */
+private typedef Match = {
+
+	/** The whole `while` statement — the finding's span, and what arm A's fix replaces. */
+	final whileSpan: Span;
+
+	/** The loop body's single assignment statement — arm A's replacement text, copied verbatim. */
+	final stmtSpan: Span;
+
+	/** Which of the three arms this loop falls in. */
+	final arm: Arm;
+
+	/** Arm C only: whether a dominating `S == B` guard precedes the loop, which adds the message's caveat clause. */
+	final eqGuarded: Bool;
+
+	/** The receiver identifier's name, echoed in the message. */
+	final receiverName: String;
+
+	/** The `S` operand's verbatim source (a literal with its delimiters, or a bare parameter name). */
+	final searchSrc: String;
+
+	/** The `B` operand's verbatim source (a literal with its delimiters, or a bare parameter name). */
+	final replacementSrc: String;
+
+};
+
+/** `matchBody`'s result: the body statement's span (arm A's replacement text) and the resolved `B` operand. */
+private typedef BodyMatch = {
+
+	/** The loop body's single assignment statement — arm A's replacement text, copied verbatim. */
+	final stmtSpan: Span;
+
+	/** The resolved `B` operand — `replace`'s second argument. */
+	final replacement: Operand;
+
+};
+
+/** `classifyArm`'s verdict: the arm a matched loop falls in, plus arm C's equality-guard caveat flag. */
+private typedef Classification = {
+
+	/** Which of the three arms the loop falls in. */
+	final arm: Arm;
+
+	/** Whether a dominating `S == B` guard precedes the loop (arm C's message caveat); always false for arms A / B. */
+	final eqGuarded: Bool;
+
+};
+
 /**
  * Flags `while (x.indexOf(S) != -1) x = x.replace(S, B);` — a search-and-replace loop
  * whose `while` is USUALLY redundant: `StringTools.replace` already replaces every occurrence
@@ -775,121 +893,3 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 	}
 
 }
-
-/** The resolved seams `RedundantReplaceLoop` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final shape: RefShape;
-	final whileStmtKind: String;
-	final notEqKind: String;
-	final callKind: String;
-	final fieldAccessKind: String;
-	final identKind: String;
-	final assignKind: String;
-	final blockStmtKind: String;
-	final exprStmtKind: String;
-	final unaryMinusKinds: Array<String>;
-	final numericLiteralKinds: Array<String>;
-	final fnKinds: Array<String>;
-	final paramKinds: Array<String>;
-	final ifStatementKinds: Array<String>;
-	final flow: Null<ControlFlowSupport>;
-	final blockKinds: Array<String>;
-	final eqKind: Null<String>;
-	final parenKind: Null<String>;
-	final strings: StringFoldSupport;
-	final opaqueKinds: Array<String>;
-};
-
-/** A destructured `x.method(...)` call: its receiver node and method name. */
-private typedef MethodCall = { final recv: QueryNode; final method: String; };
-
-/**
- * One resolved `S` / `B` operand: EITHER a plain string literal, OR a bare identifier bound to a
- * PARAMETER of a function or lambda enclosing the loop. Exactly one of the two fields is non-null; `src` is the
- * operand's verbatim source text, which a finding message echoes (never a re-wrapped `.content`).
- */
-private typedef Operand = {
-
-	/** The literal content when the operand is a plain string literal, else null. */
-	final literal: Null<String>;
-
-	/** The START OFFSET of the parameter declaration this operand is bound to, else null. */
-	final paramBindingFrom: Null<Int>;
-
-	/** The operand's verbatim source text, delimiters included. */
-	final src: String;
-
-};
-
-/**
- * Which arm a matched loop falls in — the outcomes the type doc describes.
- */
-private enum abstract Arm(Int) {
-
-	/** Both operands are literals and `B` does not contain `S`: redundant, `Info`, autofixed. */
-	final A = 0;
-
-	/** Both operands are literals and `B` contains `S`: provably infinite, `Warning`, report-only. */
-	final B = 1;
-
-	/** Neither literal-`B` hybrid: the pair is undecidable here, infinite for some argument, `Info`, report-only. */
-	final C = 2;
-
-	/** A PARAMETER `S` with the EMPTY literal `B`: redundant for every non-empty `S`, `Info`, report-only. */
-	final CEmptyB = 3;
-
-	/** A PARAMETER `S` with a NON-EMPTY literal `B`: infinite for exactly those `S` occurring in `B`, `Info`, report-only. */
-	final CLiteralB = 4;
-
-}
-
-/**
- * A matched redundant-replace loop: both spans, which arm it is, whether an (insufficient)
- * equality guard precedes it, and the verbatim text the message echoes.
- */
-private typedef Match = {
-
-	/** The whole `while` statement — the finding's span, and what arm A's fix replaces. */
-	final whileSpan: Span;
-
-	/** The loop body's single assignment statement — arm A's replacement text, copied verbatim. */
-	final stmtSpan: Span;
-
-	/** Which of the three arms this loop falls in. */
-	final arm: Arm;
-
-	/** Arm C only: whether a dominating `S == B` guard precedes the loop, which adds the message's caveat clause. */
-	final eqGuarded: Bool;
-
-	/** The receiver identifier's name, echoed in the message. */
-	final receiverName: String;
-
-	/** The `S` operand's verbatim source (a literal with its delimiters, or a bare parameter name). */
-	final searchSrc: String;
-
-	/** The `B` operand's verbatim source (a literal with its delimiters, or a bare parameter name). */
-	final replacementSrc: String;
-
-};
-
-/** `matchBody`'s result: the body statement's span (arm A's replacement text) and the resolved `B` operand. */
-private typedef BodyMatch = {
-
-	/** The loop body's single assignment statement — arm A's replacement text, copied verbatim. */
-	final stmtSpan: Span;
-
-	/** The resolved `B` operand — `replace`'s second argument. */
-	final replacement: Operand;
-
-};
-
-/** `classifyArm`'s verdict: the arm a matched loop falls in, plus arm C's equality-guard caveat flag. */
-private typedef Classification = {
-
-	/** Which of the three arms the loop falls in. */
-	final arm: Arm;
-
-	/** Whether a dominating `S == B` guard precedes the loop (arm C's message caveat); always false for arms A / B. */
-	final eqGuarded: Bool;
-
-};

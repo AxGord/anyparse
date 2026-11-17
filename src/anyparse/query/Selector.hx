@@ -3,6 +3,45 @@ package anyparse.query;
 import anyparse.query.Pattern.KindEquivalence;
 
 /**
+ * One segment of a parsed `--select` path: the node `kind` to match, an optional `name` filter, and
+ * `descendant` (`A > B` direct child vs `A >> B` any-depth). A selector is the ordered list of these segments.
+ */
+@:nullSafety(Strict)
+final class SelectorSegment {
+
+	public final kind: String;
+	public final name: Null<String>;
+
+	/**
+	 * Relation of this segment to the PREVIOUS match: `false` — a direct
+	 * child (`A > B`), `true` — any-depth descendant (`A >> B`). Meaningless
+	 * on the first segment (which matches at any depth from the root).
+	 */
+	public final descendant: Bool;
+
+	public function new(kind: String, name: Null<String>, descendant: Bool = false) {
+		this.kind = kind;
+		this.name = name;
+		this.descendant = descendant;
+	}
+
+	/**
+	 * Does `node` match this segment? `equiv` (when non-null) widens the
+	 * kind test through the grammar's kind-equivalence relation, so a
+	 * `--select ClassDecl` matches the `final class` inner `ClassForm` and
+	 * `--select FnMember` matches a `final function`'s `FinalModifiedMember`
+	 * (see `GrammarPlugin.selectKindEquivalence`). A null `equiv` keeps the
+	 * exact-kind behaviour, so the matcher stays usable without a plugin
+	 * (synthetic-tree callers / tests).
+	 */
+	public function matches(node: QueryNode, ?equiv: KindEquivalence): Bool {
+		final kindMatch: Bool = equiv == null ? node.kind == kind : equiv.equivalent(node.kind, kind);
+		return kindMatch && (name == null || node.name == name);
+	}
+
+}
+
+/**
  * Parsed `--select` path expression.
  *
  * V2 grammar (see `docs/cli-query-tool.md`):
@@ -89,45 +128,6 @@ final class Selector {
 		while (start < end && SourceText.isSpace(s.fastCodeAt(start))) start++;
 		while (end > start && SourceText.isSpace(s.fastCodeAt(end - 1))) end--;
 		return s.substring(start, end);
-	}
-
-}
-
-/**
- * One segment of a parsed `--select` path: the node `kind` to match, an optional `name` filter, and
- * `descendant` (`A > B` direct child vs `A >> B` any-depth). A selector is the ordered list of these segments.
- */
-@:nullSafety(Strict)
-final class SelectorSegment {
-
-	public final kind: String;
-	public final name: Null<String>;
-
-	/**
-	 * Relation of this segment to the PREVIOUS match: `false` — a direct
-	 * child (`A > B`), `true` — any-depth descendant (`A >> B`). Meaningless
-	 * on the first segment (which matches at any depth from the root).
-	 */
-	public final descendant: Bool;
-
-	public function new(kind: String, name: Null<String>, descendant: Bool = false) {
-		this.kind = kind;
-		this.name = name;
-		this.descendant = descendant;
-	}
-
-	/**
-	 * Does `node` match this segment? `equiv` (when non-null) widens the
-	 * kind test through the grammar's kind-equivalence relation, so a
-	 * `--select ClassDecl` matches the `final class` inner `ClassForm` and
-	 * `--select FnMember` matches a `final function`'s `FinalModifiedMember`
-	 * (see `GrammarPlugin.selectKindEquivalence`). A null `equiv` keeps the
-	 * exact-kind behaviour, so the matcher stays usable without a plugin
-	 * (synthetic-tree callers / tests).
-	 */
-	public function matches(node: QueryNode, ?equiv: KindEquivalence): Bool {
-		final kindMatch: Bool = equiv == null ? node.kind == kind : equiv.equivalent(node.kind, kind);
-		return kindMatch && (name == null || node.name == name);
 	}
 
 }

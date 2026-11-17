@@ -13,6 +13,25 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the body-policy family reads, bundled once per
+ * `WriterLowering` instance.
+ *
+ * The four function fields are shape / comment helpers that stayed in
+ * `WriterLowering` because most of their callers did; handing them over as
+ * fields is what keeps every member here static.
+ */
+typedef BodyPolicyCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final ctx: LoweringCtx;
+	final branchCtorPattern: (bodyTypePath: String, branch: ShapeNode) -> Expr;
+	final buildBracketBodyGlueTest: (args: Null<Array<String>>, bodyTypePath: Null<String>, bodyValueExpr: Expr) -> Null<Expr>;
+	final findCtorPattern: (bodyTypePath: String, ctorName: String) -> Null<Expr>;
+	final foldSsbTrailingComment: (base: Expr, ssbTrailCommentExpr: Null<Expr>) -> Expr;
+}
+
+/** One `@:fmt(elseSwitch)` test per `KeywordPlacement` value, each `null` on a field without the meta. */
+typedef ElseSwitchTests = { final same: Null<Expr>; final next: Null<Expr>; };
+/**
  * Pass 3W helpers - the body-policy wrap family.
  *
  * Everything behind ONE decision: given a field the grammar marked as a
@@ -1275,23 +1294,4 @@ final class WriterBodyPolicyLowering {
 	}
 
 }
-
-/**
- * The build state the body-policy family reads, bundled once per
- * `WriterLowering` instance.
- *
- * The four function fields are shape / comment helpers that stayed in
- * `WriterLowering` because most of their callers did; handing them over as
- * fields is what keeps every member here static.
- */
-typedef BodyPolicyCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final ctx: LoweringCtx;
-	final branchCtorPattern: (bodyTypePath: String, branch: ShapeNode) -> Expr;
-	final buildBracketBodyGlueTest: (args: Null<Array<String>>, bodyTypePath: Null<String>, bodyValueExpr: Expr) -> Null<Expr>;
-	final findCtorPattern: (bodyTypePath: String, ctorName: String) -> Null<Expr>;
-	final foldSsbTrailingComment: (base: Expr, ssbTrailCommentExpr: Null<Expr>) -> Expr;
-}
-/** One `@:fmt(elseSwitch)` test per `KeywordPlacement` value, each `null` on a field without the meta. */
-typedef ElseSwitchTests = { final same: Null<Expr>; final next: Null<Expr>; };
 #end

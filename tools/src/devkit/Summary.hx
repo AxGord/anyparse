@@ -6,6 +6,50 @@ import haxe.Timer;
 using Lambda;
 using StringTools;
 
+/** How one step of a `Summary` ended. */
+enum Outcome {
+
+	Passed;
+	Failed(why: String);
+
+	/** The step could not produce a verdict at all — it fails the run like `Failed`. */
+	NotRun(why: String);
+
+	/** The tool decided the step does not apply. */
+	Skipped(why: String);
+
+}
+
+/** One recorded step of a `Summary`. */
+typedef Step = {
+
+	var name: String;
+	var outcome: Outcome;
+	var ms: Float;
+
+	/** The reading a passed step shows; empty when it has none. */
+	var note: String;
+
+	/** The lines that decide a step that failed or did not run; empty when it set none. */
+	var excerpt: Array<String>;
+
+	/** How long the branch that ran the step waited for its pool lease before it, in milliseconds; set on the branch's first step only. */
+	@:optional
+	var wait: Float;
+
+	/**
+	 * The cpu seconds the process tree of the branch that ran the step used (`Branches.metered`); set on the branch's first
+	 * step only, since its rows share one process, and absent when nothing measured it.
+	 */
+	@:optional
+	var cpu: Float;
+
+	/** The pool threads the branch that ran the step held, on each of its steps; absent when it held no lease. */
+	@:optional
+	var threads: Int;
+
+}
+
 /**
  * The steps of a tool's run and how each ended, kept in run order — the table a tool prints last and the one verdict it
  * exits with. A step has four outcomes, never two: a step that could not run (`NotRun`, and every step that threw)
@@ -172,49 +216,5 @@ final class Summary {
 		final tenths: Int = Math.round(ms * TENTHS_PER_SECOND / MS_PER_SECOND);
 		return '${Std.int(tenths / TENTHS_PER_SECOND)}.${tenths % TENTHS_PER_SECOND}s';
 	}
-
-}
-
-/** How one step of a `Summary` ended. */
-enum Outcome {
-
-	Passed;
-	Failed(why: String);
-
-	/** The step could not produce a verdict at all — it fails the run like `Failed`. */
-	NotRun(why: String);
-
-	/** The tool decided the step does not apply. */
-	Skipped(why: String);
-
-}
-
-/** One recorded step of a `Summary`. */
-typedef Step = {
-
-	var name: String;
-	var outcome: Outcome;
-	var ms: Float;
-
-	/** The reading a passed step shows; empty when it has none. */
-	var note: String;
-
-	/** The lines that decide a step that failed or did not run; empty when it set none. */
-	var excerpt: Array<String>;
-
-	/** How long the branch that ran the step waited for its pool lease before it, in milliseconds; set on the branch's first step only. */
-	@:optional
-	var wait: Float;
-
-	/**
-	 * The cpu seconds the process tree of the branch that ran the step used (`Branches.metered`); set on the branch's first
-	 * step only, since its rows share one process, and absent when nothing measured it.
-	 */
-	@:optional
-	var cpu: Float;
-
-	/** The pool threads the branch that ran the step held, on each of its steps; absent when it held no lease. */
-	@:optional
-	var threads: Int;
 
 }

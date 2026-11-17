@@ -14,6 +14,33 @@ import anyparse.util.Groups;
 import haxe.io.Path;
 
 /**
+ * The `p="…"` position of a display `<type>` reply — the region the compiler says its answer
+ * describes, in the compiler's own 1-based line / column coordinates. `byLine` marks the
+ * multi-line spelling (`lines A-B`), whose bounds are whole LINES (`first`..`last`); otherwise
+ * `first`/`last` are the column bounds of `characters A-B` on `line`.
+ */
+typedef TypeReplyPosition = {
+	file: String,
+	line: Int,
+	first: Int,
+	last: Int,
+	byLine: Bool
+};
+
+/**
+ * One request of `CompilerDisplayOracle.positionsOver`: the server on `port` of `hxml` run from `cwd` under `defines`,
+ * and the name at offset `at` of `content` it is asked about.
+ */
+typedef PositionRequest = {
+	port: Int,
+	hxml: String,
+	cwd: Null<String>,
+	defines: Array<String>,
+	content: String,
+	at: Int
+};
+
+/**
  * A `TypeOracle` backed by the Haxe DISPLAY protocol against a warm compilation
  * server — the compiler-oracle TAIL for a resolver-unreachable autofix (the
  * generics / inference locals `explicit-local-type`'s structural arm cannot pin).
@@ -486,30 +513,3 @@ final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayT
 	#end
 
 }
-
-/**
- * The `p="…"` position of a display `<type>` reply — the region the compiler says its answer
- * describes, in the compiler's own 1-based line / column coordinates. `byLine` marks the
- * multi-line spelling (`lines A-B`), whose bounds are whole LINES (`first`..`last`); otherwise
- * `first`/`last` are the column bounds of `characters A-B` on `line`.
- */
-typedef TypeReplyPosition = {
-	file: String,
-	line: Int,
-	first: Int,
-	last: Int,
-	byLine: Bool
-};
-
-/**
- * One request of `CompilerDisplayOracle.positionsOver`: the server on `port` of `hxml` run from `cwd` under `defines`,
- * and the name at offset `at` of `content` it is asked about.
- */
-typedef PositionRequest = {
-	port: Int,
-	hxml: String,
-	cwd: Null<String>,
-	defines: Array<String>,
-	content: String,
-	at: Int
-};

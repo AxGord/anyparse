@@ -5,6 +5,9 @@ import devkit.Excerpt;
 
 using StringTools;
 
+/** A track row of `dev mutation-arm`, read. */
+typedef ArmRow = { var verdict: String; var name: String; var line: String; }
+
 /**
  * The one answer to "which lines of a gate row's log decide its failure": the suite's red shards, the findings a lint
  * added, the arms that were not killed — the lines the slice gate prints under its table, so a worker never opens a
@@ -84,6 +87,3 @@ final class GateExcerpt {
 	}
 
 }
-
-/** A track row of `dev mutation-arm`, read. */
-typedef ArmRow = { var verdict: String; var name: String; var line: String; }

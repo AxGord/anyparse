@@ -8,6 +8,14 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;
 import anyparse.util.Arrays;
 
+private typedef Run = {
+	final cond: QueryNode;
+	final src: String;
+	final seams: NegationSeams;
+	final support: BooleanLogicSupport;
+	final regions: Array<LexRegion>;
+}
+
 /**
  * `NegationScan` read through real lexical regions: a `//` spelled inside a string operand is not a comment, so
  * the De Morgan tier runs, while a real comment keeps the verbatim wrap.
@@ -67,12 +75,4 @@ class NegationScanRegionsTest extends Test {
 		return s != null && s.from == from && s.to == to ? n : Arrays.findMap(n.children, c -> find(c, from, to));
 	}
 
-}
-
-private typedef Run = {
-	final cond: QueryNode;
-	final src: String;
-	final seams: NegationSeams;
-	final support: BooleanLogicSupport;
-	final regions: Array<LexRegion>;
 }

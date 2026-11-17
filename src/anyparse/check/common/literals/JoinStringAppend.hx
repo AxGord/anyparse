@@ -13,6 +13,51 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** The seams `JoinStringAppend` reads. */
+private typedef Seams = {
+
+	var shape: RefShape;
+
+	/** `GrammarPlugin.typeSyntax` — how a target's declared type is read. */
+	var typeSyntax: TypeSyntaxReader;
+	var addAssignKind: String;
+	var assignKind: Null<String>;
+	var identKind: String;
+	var exprStmtKind: String;
+	var blockKinds: Array<String>;
+	var stringInterpKind: Null<String>;
+	var stringLiteralKinds: Array<String>;
+	var safeOperandKinds: Array<String>;
+
+	/**
+	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
+	 * The join turns N appends into ONE, so an overloaded `+=` runs its own body once instead of
+	 * N times — on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator,
+	 * `p += 'a'; p += 'b'` is `root/a/b` and the joined `p += 'a' + 'b'` is `root/ab`. The type gate
+	 * above does not catch it, because a string-literal term is exactly what makes such a run
+	 * look String-typed.
+	 */
+	var selection: Null<OperatorSelection>;
+
+}
+
+/**
+ * One joinable run: the reported anchor (the first statement's span, also
+ * the finding key), the replaced region, and the built replacement text.
+ */
+private typedef Match = {
+
+	var anchorSpan: Span;
+	var editSpan: Span;
+	var replacementText: String;
+	var target: String;
+
+	/** The target's own identifier node — what the operator gate resolves to a type (`builtinAppend`). */
+	var targetNode: QueryNode;
+	var termCount: Int;
+
+}
+
 /**
  * Flags a run of >= 2 ADJACENT statements that all append to the same bare-identifier
  * target — either a plain compound-`+=` chain, or one plain `=` followed by one or more
@@ -390,50 +435,5 @@ final class JoinStringAppend extends RuleBase implements DefaultOff {
 		}
 		return false;
 	}
-
-}
-
-/** The seams `JoinStringAppend` reads. */
-private typedef Seams = {
-
-	var shape: RefShape;
-
-	/** `GrammarPlugin.typeSyntax` — how a target's declared type is read. */
-	var typeSyntax: TypeSyntaxReader;
-	var addAssignKind: String;
-	var assignKind: Null<String>;
-	var identKind: String;
-	var exprStmtKind: String;
-	var blockKinds: Array<String>;
-	var stringInterpKind: Null<String>;
-	var stringLiteralKinds: Array<String>;
-	var safeOperandKinds: Array<String>;
-
-	/**
-	 * The run OPERATOR table, or null when the grammar declares no operator-overload annotation.
-	 * The join turns N appends into ONE, so an overloaded `+=` runs its own body once instead of
-	 * N times — on an `abstract Route(String)` whose `@:op(A += B)` inserts a separator,
-	 * `p += 'a'; p += 'b'` is `root/a/b` and the joined `p += 'a' + 'b'` is `root/ab`. The type gate
-	 * above does not catch it, because a string-literal term is exactly what makes such a run
-	 * look String-typed.
-	 */
-	var selection: Null<OperatorSelection>;
-
-}
-
-/**
- * One joinable run: the reported anchor (the first statement's span, also
- * the finding key), the replaced region, and the built replacement text.
- */
-private typedef Match = {
-
-	var anchorSpan: Span;
-	var editSpan: Span;
-	var replacementText: String;
-	var target: String;
-
-	/** The target's own identifier node — what the operator gate resolves to a type (`builtinAppend`). */
-	var targetNode: QueryNode;
-	var termCount: Int;
 
 }

@@ -2,6 +2,20 @@ package anyparse.check.common.literals;
 
 import anyparse.query.MemberKinds;
 
+/** The kinds `ConstantReadSlots` reads off a grammar's shape. */
+typedef ConstantSeams = {
+	final modifierKinds: Array<String>;
+	final inlineKind: Null<String>;
+	final metaKinds: Array<String>;
+	final enumAbstractMetaName: Null<String>;
+	final enumAbstractDeclKind: Null<String>;
+	final conditionalKind: Null<String>;
+	final functionKinds: Array<String>;
+};
+
+/** One child of a node, as `ConstantReadSlots.of` classifies it. */
+typedef ChildSlot = { final declaration: Bool; final constant: Bool; final constantMembers: Bool; };
+
 /**
  * The one answer to "which children of a node are declarations whose initialiser the compiler reads as a constant": a
  * member behind an `inline` modifier, and a value member of an enum abstract. A `case` pattern or a metadata argument may
@@ -51,17 +65,3 @@ final class ConstantReadSlots {
 	}
 
 }
-
-/** The kinds `ConstantReadSlots` reads off a grammar's shape. */
-typedef ConstantSeams = {
-	final modifierKinds: Array<String>;
-	final inlineKind: Null<String>;
-	final metaKinds: Array<String>;
-	final enumAbstractMetaName: Null<String>;
-	final enumAbstractDeclKind: Null<String>;
-	final conditionalKind: Null<String>;
-	final functionKinds: Array<String>;
-};
-
-/** One child of a node, as `ConstantReadSlots.of` classifies it. */
-typedef ChildSlot = { final declaration: Bool; final constant: Bool; final constantMembers: Bool; };

@@ -11,6 +11,49 @@ using anyparse.util.Strings;
 using Lambda;
 
 /**
+ * Outcome of a source-mutation operation: `Ok` carries the rewritten source
+ * and, when the producer measured one, how many writer round trips the
+ * finalise took (`rewrites`); `Err` a human-readable diagnostic. Shared by
+ * the structural INSERT / REPLACE ops (`AddMember` / `AddImport` /
+ * `ReplaceNode`), which all funnel their finalize through
+ * `RefactorSupport.canonicalize` and therefore return the same shape.
+ *
+ * `rewrites` is `null` from any producer that never ran the writer loop — an
+ * `Ok` built straight from a splice — and the argument is OPTIONAL so the
+ * ~280 `case Ok(text)` sites that do not care keep matching unchanged. A
+ * value above 1 says the WRITER needed a second pass on this content, which
+ * is the defect `apq fmt` reports and every mutation op used to swallow: the
+ * op wrote a file its own `fmt --list` would call drifted, and nobody was
+ * told.
+ */
+enum EditResult {
+	Ok(text: String, ?rewrites: Int);
+	Err(message: String);
+}
+
+/**
+ * One edit's VERBATIM CARRY: the source ranges whose text that edit's replacement quotes byte
+ * for byte. `edit` is the span of the edit this describes — the edits reaching one
+ * `canonicalize` are pairwise disjoint, so a span identifies one across any filtering or
+ * reordering the caller does between building the declaration and making the call — and
+ * `spans` are the carried ranges IN THE ORDER THEY APPEAR IN THE REPLACEMENT, which is what
+ * lets the guard locate them by a single left-to-right scan instead of guessing.
+ *
+ * Why an edit has to SAY this rather than have it derived: a replacement is text, and the
+ * question `CommentOwnerGuard.hoistedComment` asks — did a comment move across code that
+ * SURVIVED — is not decidable from the two texts, because an ordinary in-place rewrite changes
+ * the same bytes an out-of-order one does. The declaration is what tells the two apart, and it
+ * is cheap exactly where it matters: a fix that assembles its replacement out of source
+ * fragments already holds those spans (`PreferTernaryReturn.buildEdit` passes the same three to
+ * `preservedComments`), while a fix that emits fresh syntax carries nothing and declares
+ * nothing.
+ *
+ * Purely OPT-IN, and inert without a declaration: an edit set that declares no carry is judged
+ * exactly as it was before this type existed.
+ */
+typedef CarriedEdit = { final edit: Span; final spans: Array<Span>; }
+
+/**
  * Applying a set of source edits and handing the result back CANONICAL — the finalize half of
  * every structural mutation. `applyEdits` is the splice; `canonicalize` is the writer round
  * trip that makes inserted code obey the grammar's own formatting rules; `editKeepingCanonical`
@@ -504,46 +547,3 @@ final class CanonicalEdit {
 	}
 
 }
-
-/**
- * Outcome of a source-mutation operation: `Ok` carries the rewritten source
- * and, when the producer measured one, how many writer round trips the
- * finalise took (`rewrites`); `Err` a human-readable diagnostic. Shared by
- * the structural INSERT / REPLACE ops (`AddMember` / `AddImport` /
- * `ReplaceNode`), which all funnel their finalize through
- * `RefactorSupport.canonicalize` and therefore return the same shape.
- *
- * `rewrites` is `null` from any producer that never ran the writer loop — an
- * `Ok` built straight from a splice — and the argument is OPTIONAL so the
- * ~280 `case Ok(text)` sites that do not care keep matching unchanged. A
- * value above 1 says the WRITER needed a second pass on this content, which
- * is the defect `apq fmt` reports and every mutation op used to swallow: the
- * op wrote a file its own `fmt --list` would call drifted, and nobody was
- * told.
- */
-enum EditResult {
-	Ok(text: String, ?rewrites: Int);
-	Err(message: String);
-}
-
-/**
- * One edit's VERBATIM CARRY: the source ranges whose text that edit's replacement quotes byte
- * for byte. `edit` is the span of the edit this describes — the edits reaching one
- * `canonicalize` are pairwise disjoint, so a span identifies one across any filtering or
- * reordering the caller does between building the declaration and making the call — and
- * `spans` are the carried ranges IN THE ORDER THEY APPEAR IN THE REPLACEMENT, which is what
- * lets the guard locate them by a single left-to-right scan instead of guessing.
- *
- * Why an edit has to SAY this rather than have it derived: a replacement is text, and the
- * question `CommentOwnerGuard.hoistedComment` asks — did a comment move across code that
- * SURVIVED — is not decidable from the two texts, because an ordinary in-place rewrite changes
- * the same bytes an out-of-order one does. The declaration is what tells the two apart, and it
- * is cheap exactly where it matters: a fix that assembles its replacement out of source
- * fragments already holds those spans (`PreferTernaryReturn.buildEdit` passes the same three to
- * `preservedComments`), while a fix that emits fresh syntax carries nothing and declares
- * nothing.
- *
- * Purely OPT-IN, and inert without a declaration: an edit set that declares no carry is judged
- * exactly as it was before this type existed.
- */
-typedef CarriedEdit = { final edit: Span; final spans: Array<Span>; }

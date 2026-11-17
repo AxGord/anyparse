@@ -6,6 +6,9 @@ import anyparse.query.SymbolIndex;
 using anyparse.util.Strings;
 using StringTools;
 
+/** One flagged site: the condition span the fix replaces, and the bare flag it replaces it with. */
+private typedef FlagParens = { final condition: Span; final flag: String; };
+
 /**
  * Flags the parentheses around a conditional-compilation condition that is one bare flag —
  * `#if (sys)`, `#elseif (mobile)` — and drops them (`#if sys`, `#elseif mobile`). A single
@@ -135,6 +138,3 @@ final class RedundantCondCompParens extends RuleBase {
 	}
 
 }
-
-/** One flagged site: the condition span the fix replaces, and the bare flag it replaces it with. */
-private typedef FlagParens = { final condition: Span; final flag: String; };

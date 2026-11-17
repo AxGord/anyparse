@@ -76,6 +76,15 @@ typedef RiskyFixOutcome = {
  */
 typedef AssistedOutcome = { var tail: String; var appliedCount: Int; var excluded: Array<OracleExclusion>; }
 
+/** The display server `LintFixVerify.displayOf` starts for `configs` on first need, and whether it was tried. */
+private typedef DisplayHandle = {
+	final compiler: OracleProvider;
+	final configs: Array<OracleConfig>;
+	final typeSyntax: TypeSyntaxReader;
+	var server: Null<DisplayTypeOracle>;
+	var tried: Bool;
+}
+
 /**
  * The compiler oracle's half of `apq lint --fix`.
  *
@@ -1058,13 +1067,4 @@ final class LintFixVerify {
 			: ', ${files.length} file(s) not writer-canonical so risky fixes not attempted there (e.g. ${files[0]}; run fmt first)';
 	}
 
-}
-
-/** The display server `LintFixVerify.displayOf` starts for `configs` on first need, and whether it was tried. */
-private typedef DisplayHandle = {
-	final compiler: OracleProvider;
-	final configs: Array<OracleConfig>;
-	final typeSyntax: TypeSyntaxReader;
-	var server: Null<DisplayTypeOracle>;
-	var tried: Bool;
 }

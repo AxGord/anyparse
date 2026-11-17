@@ -34,6 +34,17 @@ enum OperatorVerdict {
 
 }
 
+/** One file's operand typing (`OperatorSelection.typingFor`): the two proof sources every asking rule shares. */
+typedef OperandTyping = {
+
+	/** What an operand's declared type binds to where it is written: the shared walk over its binding host (`OperandBinder`). */
+	final written: (QueryNode) -> Tier;
+
+	/** Whether the compiler's facts type an operand with a type no operator overload can be declared on; false outside a `--fix` run. */
+	final proven: (QueryNode) -> Bool;
+
+};
+
 /**
  * The shared "is this operator the BUILT-IN one" predicate every rule that rewrites an
  * expression containing an operator consults, so that question is answered once rather than
@@ -403,14 +414,3 @@ final class OperatorSelection {
 	}
 
 }
-
-/** One file's operand typing (`OperatorSelection.typingFor`): the two proof sources every asking rule shares. */
-typedef OperandTyping = {
-
-	/** What an operand's declared type binds to where it is written: the shared walk over its binding host (`OperandBinder`). */
-	final written: (QueryNode) -> Tier;
-
-	/** Whether the compiler's facts type an operand with a type no operator overload can be declared on; false outside a `--fix` run. */
-	final proven: (QueryNode) -> Bool;
-
-};

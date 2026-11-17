@@ -13,6 +13,19 @@ using Lambda;
 using anyparse.macro.MetaInspect;
 
 /**
+ * The build state the close-peek trivia Star dispatch reads, bundled once
+ * per `WriterLowering` instance.
+ */
+typedef TriviaStarDispatchCtx = {
+	final shape: ShapeBuilder.ShapeResult;
+	final formatInfo: FormatReader.FormatInfo;
+	final isSpacedLead: (openText: Null<String>) -> Bool;
+	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
+}
+
+/** `WriterTriviaStarDispatch.docLedReads`: a Star's metadata-counts-as-doc reads of the element `_t` and of the body `_arr`. */
+typedef DocLedReads = { final elem: Expr; final body: Expr; }
+/**
  * Pass 3W helpers - the close-peek trivia Star dispatch and its per-element
  * readers.
  *
@@ -652,17 +665,4 @@ final class WriterTriviaStarDispatch {
 	}
 
 }
-
-/**
- * The build state the close-peek trivia Star dispatch reads, bundled once
- * per `WriterLowering` instance.
- */
-typedef TriviaStarDispatchCtx = {
-	final shape: ShapeBuilder.ShapeResult;
-	final formatInfo: FormatReader.FormatInfo;
-	final isSpacedLead: (openText: Null<String>) -> Bool;
-	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
-}
-/** `WriterTriviaStarDispatch.docLedReads`: a Star's metadata-counts-as-doc reads of the element `_t` and of the body `_arr`. */
-typedef DocLedReads = { final elem: Expr; final body: Expr; }
 #end

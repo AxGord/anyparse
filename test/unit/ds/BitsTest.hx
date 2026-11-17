@@ -3,6 +3,20 @@ package unit.ds;
 import anyparse.ds.Bits;
 import unit.ds.BitsDomains;
 
+/** Sets held in fields, the way a type keeps its flags. */
+private final class Palette {
+
+	public var hues: Bits<Hue> = new Bits<Hue>();
+	public var wide: Bits<Wide> = new Bits<Wide>();
+
+	public function new() {}
+
+	public function paint(hue: Hue): Void { // noqa: prefer-inline
+		hues.add(hue);
+	}
+
+}
+
 /** `anyparse.ds.Bits`: the set contract on a one-`Int` store and on a word-vector store, and the bit algebra on both. */
 class BitsTest extends Test {
 
@@ -149,20 +163,6 @@ class BitsTest extends Test {
 		Assert.isTrue(sets[0].has(Green));
 		Assert.isTrue(sets[0].remove(Green));
 		Assert.isTrue(sets[0].isEmpty());
-	}
-
-}
-
-/** Sets held in fields, the way a type keeps its flags. */
-private final class Palette {
-
-	public var hues: Bits<Hue> = new Bits<Hue>();
-	public var wide: Bits<Wide> = new Bits<Wide>();
-
-	public function new() {}
-
-	public function paint(hue: Hue): Void { // noqa: prefer-inline
-		hues.add(hue);
 	}
 
 }

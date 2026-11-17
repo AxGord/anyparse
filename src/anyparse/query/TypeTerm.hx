@@ -2,27 +2,6 @@ package anyparse.query;
 
 import anyparse.query.SymbolIndex.ResolvedType;
 
-/**
- * A type as an inference reads it (`Monomorphs`, `InferencePolicy`): a written type taken apart into its head and its
- * type arguments, or a variable the inference binds. The heads are the cast graph's ends (`TypeEnd`), so a term and a
- * unification question speak one currency.
- */
-enum TypeTerm {
-
-	/** A variable of one inference (`Monomorphs`): a type parameter of the signature a call is typed against. */
-	Mono(id: Int);
-
-	/** The type `head` applied to `args` (none for a plain type), `text` its spelling where it is written. */
-	Of(head: TypeEnd, args: Array<TypeTerm>, text: String);
-
-	/**
-	 * A type the term does not take apart — a function type, a structure, a type parameter of another scope —, spelled
-	 * where it is written; `monos` the variables it mentions, which a unification through it cannot bind.
-	 */
-	Opaque(text: String, monos: Array<Int>);
-
-}
-
 /** One end of a unification question or of a cast edge, as the cast graph reads a type (`AbstractCasts`). */
 enum TypeEnd {
 
@@ -49,5 +28,26 @@ enum TypeEnd {
 	 * clauses read with the arguments for its type parameters (`AbstractCasts.appliedGraph`, `apply_params`).
 	 */
 	Applied(r: ResolvedType, args: Array<TypeEnd>);
+
+}
+
+/**
+ * A type as an inference reads it (`Monomorphs`, `InferencePolicy`): a written type taken apart into its head and its
+ * type arguments, or a variable the inference binds. The heads are the cast graph's ends (`TypeEnd`), so a term and a
+ * unification question speak one currency.
+ */
+enum TypeTerm {
+
+	/** A variable of one inference (`Monomorphs`): a type parameter of the signature a call is typed against. */
+	Mono(id: Int);
+
+	/** The type `head` applied to `args` (none for a plain type), `text` its spelling where it is written. */
+	Of(head: TypeEnd, args: Array<TypeTerm>, text: String);
+
+	/**
+	 * A type the term does not take apart — a function type, a structure, a type parameter of another scope —, spelled
+	 * where it is written; `monos` the variables it mentions, which a unification through it cannot bind.
+	 */
+	Opaque(text: String, monos: Array<Int>);
 
 }

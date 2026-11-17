@@ -18,6 +18,81 @@ import anyparse.util.Strings;
 
 using StringTools;
 
+/** The `RefShape` kinds and names this check reads, bundled once by `seamsOf`. */
+private typedef Seams = {
+	var core: LoopSeams;
+	var intervalKind: String;
+	var containers: Array<String>;
+	var fieldKinds: Array<String>;
+	var finalFieldKind: String;
+	var modifierKinds: Array<String>;
+	var visibility: Array<String>;
+	var defaultVis: String;
+	var staticKind: String;
+	var arrayLiteralKind: String;
+	var newExprKind: String;
+	var assignKind: String;
+	var exprStmtKind: String;
+	var arrayTypes: Array<String>;
+	var fixedTypes: Array<String>;
+	var appendMethod: String;
+	var sizeMember: String;
+	var readMethods: Array<String>;
+	var loopKinds: Array<String>;
+	var unsizedElementKinds: Array<String>;
+	var binderKinds: Array<String>;
+	var exitKinds: Array<String>;
+	var scopeKinds: Array<String>;
+	var statementListKinds: Array<String>;
+	var modulePathKinds: Array<String>;
+	var typeArgKinds: Array<String>;
+	var interpIdentKind: Null<String>;
+	var selfText: Null<String>;
+	var parenKind: Null<String>;
+	var negKinds: Array<String>;
+	var foldOps: Map<String, String>;
+}
+
+/** The per-file facts every scan reads. */
+private typedef FileCtx = {
+
+	var file: String;
+	var source: String;
+	var tree: QueryNode;
+	var seams: Seams;
+	var constants: Map<String, Constant>;
+	var types: Null<Map<Int, String>>;
+
+	/** The file's property accessor clauses (`TypeInfoProvider.accessorClauses`), which make a field a property. */
+	var clauses: Map<Int, AccessorClause>;
+	var typeSyntax: TypeSyntaxReader;
+	var lazyIndex: () -> Null<SymbolIndex>;
+	var plugin: GrammarPlugin;
+	var out: Array<Violation>;
+
+}
+
+/**
+ * What proves an array's length: the expression it comes from (`bound` — the fill loop's upper bound,
+ * the literal itself, the construction's argument), the line that says so, and the nodes the
+ * occurrence scan admits as the source's own (`push`, `initAssign`). `literalCount` is the element
+ * count of a literal source and -1 otherwise; `declFrom` is where the declaration starts.
+ */
+private typedef LengthSource = {
+	var name: String;
+	var declFrom: Int;
+	var bound: QueryNode;
+	var line: Int;
+	var literalCount: Int;
+	var fillLoop: Null<QueryNode>;
+	var push: Null<QueryNode>;
+	var initAssign: Null<QueryNode>;
+	var fixedLength: Bool;
+}
+
+/** A `static final` member's initializer, the source it lives in and its type's simple name — what a reference folds to. */
+private typedef Constant = { var value: QueryNode; var source: String; var owner: String; }
+
 /**
  * Flags an indexed loop `for (i in 0...Y)` that READS `xs[i]` while the length of `xs` is PROVEN to
  * come from a different expression `X` — the loop bound is unrelated to the array it indexes. The
@@ -734,78 +809,3 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 	}
 
 }
-
-/** The `RefShape` kinds and names this check reads, bundled once by `seamsOf`. */
-private typedef Seams = {
-	var core: LoopSeams;
-	var intervalKind: String;
-	var containers: Array<String>;
-	var fieldKinds: Array<String>;
-	var finalFieldKind: String;
-	var modifierKinds: Array<String>;
-	var visibility: Array<String>;
-	var defaultVis: String;
-	var staticKind: String;
-	var arrayLiteralKind: String;
-	var newExprKind: String;
-	var assignKind: String;
-	var exprStmtKind: String;
-	var arrayTypes: Array<String>;
-	var fixedTypes: Array<String>;
-	var appendMethod: String;
-	var sizeMember: String;
-	var readMethods: Array<String>;
-	var loopKinds: Array<String>;
-	var unsizedElementKinds: Array<String>;
-	var binderKinds: Array<String>;
-	var exitKinds: Array<String>;
-	var scopeKinds: Array<String>;
-	var statementListKinds: Array<String>;
-	var modulePathKinds: Array<String>;
-	var typeArgKinds: Array<String>;
-	var interpIdentKind: Null<String>;
-	var selfText: Null<String>;
-	var parenKind: Null<String>;
-	var negKinds: Array<String>;
-	var foldOps: Map<String, String>;
-}
-
-/** The per-file facts every scan reads. */
-private typedef FileCtx = {
-
-	var file: String;
-	var source: String;
-	var tree: QueryNode;
-	var seams: Seams;
-	var constants: Map<String, Constant>;
-	var types: Null<Map<Int, String>>;
-
-	/** The file's property accessor clauses (`TypeInfoProvider.accessorClauses`), which make a field a property. */
-	var clauses: Map<Int, AccessorClause>;
-	var typeSyntax: TypeSyntaxReader;
-	var lazyIndex: () -> Null<SymbolIndex>;
-	var plugin: GrammarPlugin;
-	var out: Array<Violation>;
-
-}
-
-/**
- * What proves an array's length: the expression it comes from (`bound` — the fill loop's upper bound,
- * the literal itself, the construction's argument), the line that says so, and the nodes the
- * occurrence scan admits as the source's own (`push`, `initAssign`). `literalCount` is the element
- * count of a literal source and -1 otherwise; `declFrom` is where the declaration starts.
- */
-private typedef LengthSource = {
-	var name: String;
-	var declFrom: Int;
-	var bound: QueryNode;
-	var line: Int;
-	var literalCount: Int;
-	var fillLoop: Null<QueryNode>;
-	var push: Null<QueryNode>;
-	var initAssign: Null<QueryNode>;
-	var fixedLength: Bool;
-}
-
-/** A `static final` member's initializer, the source it lives in and its type's simple name — what a reference folds to. */
-private typedef Constant = { var value: QueryNode; var source: String; var owner: String; }

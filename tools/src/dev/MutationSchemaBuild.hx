@@ -11,6 +11,16 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** One composed arm of the build: where its copy and its dispatch line went, and the type that holds them. */
+typedef Placement = {
+	var id: Int;
+	var file: String;
+	var dispatch: Int;
+	var from: Int;
+	var to: Int;
+	var owner: String;
+}
+
 /**
  * The composed build of a `dev mutation-arm` run (`--schema-build <dir> <base>`, run in the background): every planned
  * arm's copy composed into one tree by `apq mutation-schema` and compiled ONCE, so such an arm costs a suite run and no
@@ -247,14 +257,4 @@ final class MutationSchemaBuild {
 		File.saveContent(Path.join([dir, 'map']), map.join(''));
 	}
 
-}
-
-/** One composed arm of the build: where its copy and its dispatch line went, and the type that holds them. */
-typedef Placement = {
-	var id: Int;
-	var file: String;
-	var dispatch: Int;
-	var from: Int;
-	var to: Int;
-	var owner: String;
 }

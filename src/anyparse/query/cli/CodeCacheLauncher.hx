@@ -13,6 +13,61 @@ import js.node.Path;
 import js.node.Process;
 import js.node.fs.Stats;
 
+/** What became of an engine's cache in one call. */
+enum abstract CacheUse(String) to String {
+
+	/** V8 took the cache. */
+	var Hit = 'hit';
+
+	/** No valid cache was there to offer. */
+	var Miss = 'miss';
+
+	/** V8 refused the cache it was offered. */
+	var Rejected = 'rejected';
+
+}
+
+/** An engine compiled for one call. */
+typedef CompiledEngine = {
+
+	final script: CachedScript;
+
+	/** The key its cache is filed under. */
+	final key: Buffer;
+
+	/** The binary's size and modification time when it was read. */
+	final stamp: String;
+	final cache: CacheUse;
+
+};
+
+/** `vm.Script` with the code-cache members the hxnodejs extern leaves out. */
+@:jsRequire('vm', 'Script')
+extern class CachedScript {
+
+	/** Whether V8 refused the `cachedData` it was offered; undefined when none was. */
+	public var cachedDataRejected(default, null): Null<Bool>;
+
+	public function new(code: String, options: CachedScriptOptions);
+
+	public function runInThisContext(): Any;
+
+	public function createCachedData(): Buffer;
+
+}
+
+/**
+ * The options of `CachedScript`: `cachedData` is left out, never null, when there is no cache to offer.
+ */
+typedef CachedScriptOptions = {
+
+	var filename: String;
+
+	@:optional
+	var cachedData: Buffer;
+
+};
+
 /**
  * The launcher a build writes beside `apq.js` as `apq-launch.js`: it compiles the engine through a V8 code cache kept in
  * a file beside the binary, so a call deserializes bytecode instead of parsing the engine's source. A cache that is
@@ -288,58 +343,3 @@ final class CodeCacheLauncher {
 	}
 
 }
-
-/** What became of an engine's cache in one call. */
-enum abstract CacheUse(String) to String {
-
-	/** V8 took the cache. */
-	var Hit = 'hit';
-
-	/** No valid cache was there to offer. */
-	var Miss = 'miss';
-
-	/** V8 refused the cache it was offered. */
-	var Rejected = 'rejected';
-
-}
-
-/** An engine compiled for one call. */
-typedef CompiledEngine = {
-
-	final script: CachedScript;
-
-	/** The key its cache is filed under. */
-	final key: Buffer;
-
-	/** The binary's size and modification time when it was read. */
-	final stamp: String;
-	final cache: CacheUse;
-
-};
-
-/** `vm.Script` with the code-cache members the hxnodejs extern leaves out. */
-@:jsRequire('vm', 'Script')
-extern class CachedScript {
-
-	/** Whether V8 refused the `cachedData` it was offered; undefined when none was. */
-	public var cachedDataRejected(default, null): Null<Bool>;
-
-	public function new(code: String, options: CachedScriptOptions);
-
-	public function runInThisContext(): Any;
-
-	public function createCachedData(): Buffer;
-
-}
-
-/**
- * The options of `CachedScript`: `cachedData` is left out, never null, when there is no cache to offer.
- */
-typedef CachedScriptOptions = {
-
-	var filename: String;
-
-	@:optional
-	var cachedData: Buffer;
-
-};

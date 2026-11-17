@@ -2,6 +2,47 @@ package anyparse.format;
 
 using StringTools;
 
+/** Where two whitespace-stripped strings first disagree, with a window of each side for the report. */
+typedef Divergence = { final line: Int; final expected: String; final actual: String; };
+
+/** A whitespace-stripped string plus the 1-based source line of each surviving character. */
+private typedef Stripped = { final text: String; final lines: Array<Int>; };
+
+/**
+ * A grammar's non-code regions, handed to `WhitespaceInvariant` so it stays grammar-agnostic.
+ *
+ * `scan(source, onRegion)` reports every comment, string literal and regex literal of `source` as a
+ * `[start, end)` byte span in source order, with `literal` true for a string or regex and false for a comment.
+ * A literal holding code reports only its text around that code, and the comments and literals inside the code.
+ * Source the grammar cannot scan reports nothing, so all of it is code.
+ */
+typedef InertScan = (source: String, onRegion: (start: Int, end: Int, literal: Bool) -> Void) -> Void;
+
+/** What one source byte is to the invariant. */
+private enum abstract Zone(Int) {
+	final Code = 0;
+	final Comment = 1;
+	final Literal = 2;
+}
+
+/** The `Zone` of each byte of one source. */
+private final class ZoneMap {
+
+	private final _zones: Array<Zone>;
+
+	public function new(source: String, scan: InertScan) {
+		final zones: Array<Zone> = [for (_ in 0...source.length) Code];
+		scan(source, (start, end, literal) -> for (i in start ... (end < source.length ? end : source.length))
+			zones[i] = literal ? Literal : Comment);
+		_zones = zones;
+	}
+
+	public function zoneAt(offset: Int): Zone {
+		return _zones[offset];
+	}
+
+}
+
 /**
  * The formatter's non-whitespace invariant: a correct formatter changes only
  * WHITESPACE, so stripping every whitespace character from the input and from
@@ -135,47 +176,6 @@ final class WhitespaceInvariant {
 	/** The last line the stripped source reached — the report position when the SOURCE is the side that ran out. */
 	private static function lastLine(stripped: Stripped): Int {
 		return stripped.lines.length == 0 ? 1 : stripped.lines[stripped.lines.length - 1];
-	}
-
-}
-
-/** Where two whitespace-stripped strings first disagree, with a window of each side for the report. */
-typedef Divergence = { final line: Int; final expected: String; final actual: String; };
-
-/** A whitespace-stripped string plus the 1-based source line of each surviving character. */
-private typedef Stripped = { final text: String; final lines: Array<Int>; };
-
-/**
- * A grammar's non-code regions, handed to `WhitespaceInvariant` so it stays grammar-agnostic.
- *
- * `scan(source, onRegion)` reports every comment, string literal and regex literal of `source` as a
- * `[start, end)` byte span in source order, with `literal` true for a string or regex and false for a comment.
- * A literal holding code reports only its text around that code, and the comments and literals inside the code.
- * Source the grammar cannot scan reports nothing, so all of it is code.
- */
-typedef InertScan = (source: String, onRegion: (start: Int, end: Int, literal: Bool) -> Void) -> Void;
-
-/** What one source byte is to the invariant. */
-private enum abstract Zone(Int) {
-	final Code = 0;
-	final Comment = 1;
-	final Literal = 2;
-}
-
-/** The `Zone` of each byte of one source. */
-private final class ZoneMap {
-
-	private final _zones: Array<Zone>;
-
-	public function new(source: String, scan: InertScan) {
-		final zones: Array<Zone> = [for (_ in 0...source.length) Code];
-		scan(source, (start, end, literal) -> for (i in start ... (end < source.length ? end : source.length))
-			zones[i] = literal ? Literal : Comment);
-		_zones = zones;
-	}
-
-	public function zoneAt(offset: Int): Zone {
-		return _zones[offset];
 	}
 
 }

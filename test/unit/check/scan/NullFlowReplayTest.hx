@@ -11,6 +11,13 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+private typedef Fixture = {
+	plugin: HaxeQueryPlugin,
+	tree: QueryNode,
+	bare: RefShape,
+	cached: RefShape
+};
+
 /**
  * A seedless `NullFlow.analyze` walk over a tree the run's `RefsCache` holds is recorded once and replayed to every
  * later consumer. The contract: a replay hands each consumer exactly the visits, in exactly the order, with exactly
@@ -178,10 +185,3 @@ final class NullFlowReplayTest extends Test {
 	}
 
 }
-
-private typedef Fixture = {
-	plugin: HaxeQueryPlugin,
-	tree: QueryNode,
-	bare: RefShape,
-	cached: RefShape
-};

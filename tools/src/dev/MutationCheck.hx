@@ -17,6 +17,46 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** One `dev mutation-check` run, as `MutationCheck.run` takes it. */
+typedef CheckJob = {
+
+	var repo: String;
+	var manifest: String;
+
+	/** The job slots asked for, unparsed; null for the default (`MutationCheck.defaultJobs`). */
+	var jobs: Null<String>;
+	var keep: Bool;
+	var buildOnly: Bool;
+	var killerFirst: Bool;
+
+	/** The composed build's directory (`dev mutation-arm`), or null. */
+	var schema: Null<String>;
+
+	/** The commit every slot worktree is made from. */
+	var base: String;
+
+}
+
+/** One track of a manifest: its name, its patch (an absolute path), its `APQ_TEST` filter and its expectations. */
+typedef TrackRow = {
+	var name: String;
+	var patch: String;
+	var filter: String;
+	var expected: String;
+}
+
+/** The job slots a run takes: their count and a note when an ask was cut down, or why the ask is refused. */
+enum JobCount {
+	Count(n: Int, note: Null<String>);
+	Unusable(why: String);
+}
+
+/** A manifest read: its tracks, or why a line of it is refused. */
+enum ManifestParse {
+	Rows(rows: Array<TrackRow>);
+	Refused(why: String);
+}
+
 /**
  * `dev mutation-check <manifest>` — every track of a manifest (one deliberate breakage: a patch, an `APQ_TEST` filter and
  * the failures it expects) applied in a job slot, built, run and classified into one verdict row; exits 0 only when every
@@ -372,44 +412,4 @@ final class MutationCheck {
 		return value == null || value == '' ? null : value;
 	}
 
-}
-
-/** One `dev mutation-check` run, as `MutationCheck.run` takes it. */
-typedef CheckJob = {
-
-	var repo: String;
-	var manifest: String;
-
-	/** The job slots asked for, unparsed; null for the default (`MutationCheck.defaultJobs`). */
-	var jobs: Null<String>;
-	var keep: Bool;
-	var buildOnly: Bool;
-	var killerFirst: Bool;
-
-	/** The composed build's directory (`dev mutation-arm`), or null. */
-	var schema: Null<String>;
-
-	/** The commit every slot worktree is made from. */
-	var base: String;
-
-}
-
-/** One track of a manifest: its name, its patch (an absolute path), its `APQ_TEST` filter and its expectations. */
-typedef TrackRow = {
-	var name: String;
-	var patch: String;
-	var filter: String;
-	var expected: String;
-}
-
-/** The job slots a run takes: their count and a note when an ask was cut down, or why the ask is refused. */
-enum JobCount {
-	Count(n: Int, note: Null<String>);
-	Unusable(why: String);
-}
-
-/** A manifest read: its tracks, or why a line of it is refused. */
-enum ManifestParse {
-	Rows(rows: Array<TrackRow>);
-	Refused(why: String);
 }

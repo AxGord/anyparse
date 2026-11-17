@@ -17,6 +17,41 @@ import sys.io.File;
 using Lambda;
 using StringTools;
 
+/** What the arms row has to do: an outcome already settled, or the `picked` selection to run against the base's registry `old`. */
+enum ArmPlan {
+	Settled(outcome: Outcome);
+	Runs(picked: ArmSelection, old: Null<Array<ArmRecord>>);
+}
+
+/** The arms of a slice gate by how they run: the kill run, and the apply check of arms on layout-only files. */
+typedef ArmSelection = {
+
+	var fast: Array<String>;
+	var applyOnly: Array<String>;
+
+	/** The part of `applyOnly` a selection over the floor moved out of `fast`. */
+	var demoted: Array<String>;
+
+	/** The arms the last kill run of the tree killed and nothing since reached: selected, and left out of `fast`. */
+	var carried: Array<String>;
+
+}
+
+/**
+ * A source module the slice changed and the members of it that it did:
+ * null when its report cannot name them, and then every member counts.
+ */
+typedef ModuleTouch = { var module: String; var members: Null<Array<String>>; }
+
+/** What the re-run at the base read: the arms that do not kill their pin there, or why it could not read them. */
+typedef RotReading = { var rot: Array<String>; var failure: Null<String>; }
+
+/** What the files touched since a commit changed: the members of each module, and the modules whose change is layout only. */
+private typedef Reading = { var touches: Array<ModuleTouch>; var layout: Array<String>; }
+
+/** What the runs of an arms row have read so far: each run's tally and the arm rows that did not hold. */
+private typedef ArmReading = { var notes: Array<String>; var rows: Array<ArmRow>; }
+
 /**
  * The arms row of a slice gate: `dev mutation-arm --fast` over the arms the slice added or re-encoded, every arm that cuts a
  * member the slice changed (every arm of a touched type whose changed members `hxq changed` cannot name), every arm a pin of a
@@ -542,38 +577,3 @@ final class GateArms {
 	}
 
 }
-
-/** What the arms row has to do: an outcome already settled, or the `picked` selection to run against the base's registry `old`. */
-enum ArmPlan {
-	Settled(outcome: Outcome);
-	Runs(picked: ArmSelection, old: Null<Array<ArmRecord>>);
-}
-
-/** The arms of a slice gate by how they run: the kill run, and the apply check of arms on layout-only files. */
-typedef ArmSelection = {
-
-	var fast: Array<String>;
-	var applyOnly: Array<String>;
-
-	/** The part of `applyOnly` a selection over the floor moved out of `fast`. */
-	var demoted: Array<String>;
-
-	/** The arms the last kill run of the tree killed and nothing since reached: selected, and left out of `fast`. */
-	var carried: Array<String>;
-
-}
-
-/**
- * A source module the slice changed and the members of it that it did:
- * null when its report cannot name them, and then every member counts.
- */
-typedef ModuleTouch = { var module: String; var members: Null<Array<String>>; }
-
-/** What the re-run at the base read: the arms that do not kill their pin there, or why it could not read them. */
-typedef RotReading = { var rot: Array<String>; var failure: Null<String>; }
-
-/** What the files touched since a commit changed: the members of each module, and the modules whose change is layout only. */
-private typedef Reading = { var touches: Array<ModuleTouch>; var layout: Array<String>; }
-
-/** What the runs of an arms row have read so far: each run's tally and the arm rows that did not hold. */
-private typedef ArmReading = { var notes: Array<String>; var rows: Array<ArmRow>; }

@@ -5,6 +5,9 @@ import anyparse.query.NominalTypes;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
+/** A member together with the resolved type that declares it — see `ConfiguredTypes.memberOf`. */
+typedef OwnedMember = { final owner: ResolvedType; final member: MemberInfo; }
+
 /**
  * Resolution helpers for a rule whose SUBJECT TYPES the project names in its `apq.json` by qualified path —
  * `prefer-api-idiom`'s idiom types, `typed-event-constant`'s event base and type abstract.
@@ -109,6 +112,3 @@ final class ConfiguredTypes {
 	}
 
 }
-
-/** A member together with the resolved type that declares it — see `ConfiguredTypes.memberOf`. */
-typedef OwnedMember = { final owner: ResolvedType; final member: MemberInfo; }

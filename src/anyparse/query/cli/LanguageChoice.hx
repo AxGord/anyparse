@@ -6,6 +6,9 @@ import sys.FileSystem;
 
 using Lambda;
 
+/** What `LanguageChoice.choose` answers: the argv of each run, one per grammar the call reads, and stdin if it was read to decide. */
+typedef LanguageChoiceResult = { final runs: Array<Array<String>>; final stdin: Null<String>; };
+
 /**
  * Which grammars a process-level `apq` call runs on when its argv carries no `--lang` — the one answer to that question.
  * In order: the grammars whose registered extension (`CliArgs.langOfFile`) the file arguments carry, yielding only to a
@@ -214,6 +217,3 @@ final class LanguageChoice {
 	}
 
 }
-
-/** What `LanguageChoice.choose` answers: the argv of each run, one per grammar the call reads, and stdin if it was read to decide. */
-typedef LanguageChoiceResult = { final runs: Array<Array<String>>; final stdin: Null<String>; };

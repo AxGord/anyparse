@@ -10,6 +10,19 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
 
 /**
+ * One common tail: `tailSpan` is what the finding reports (the FIRST branch's tail), `count` how many
+ * statements it holds, `whole` whether every branch is nothing but the tail, and `edits` the rewrite
+ * (empty when the finding is report-only).
+ */
+private typedef Candidate = {
+	final chain: QueryNode;
+	final span: Span;
+	final count: Int;
+	final whole: Bool;
+	final edits: Array<FixEdit>;
+};
+
+/**
  * Flags a statement-position `if` / `else if` / … / `else` chain whose EVERY branch ends with the same
  * statements, and moves them after the chain:
  *
@@ -265,16 +278,3 @@ final class HoistCommonBranchTail extends RuleBase {
 	}
 
 }
-
-/**
- * One common tail: `tailSpan` is what the finding reports (the FIRST branch's tail), `count` how many
- * statements it holds, `whole` whether every branch is nothing but the tail, and `edits` the rewrite
- * (empty when the finding is report-only).
- */
-private typedef Candidate = {
-	final chain: QueryNode;
-	final span: Span;
-	final count: Int;
-	final whole: Bool;
-	final edits: Array<FixEdit>;
-};

@@ -6,6 +6,20 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** How a value of one type relates to another type's member (`ValueCarriers.relation`). */
+enum CarryRelation {
+
+	/** Their value types meet: the value may be an object carrying the member. */
+	Carries;
+
+	/** Nothing can be told: the value may be anything. */
+	MayCarry;
+
+	/** Both value types are known and disjoint: the value never carries the member. */
+	CannotCarry;
+
+}
+
 /**
  * The ONE answer the reach analysis gives to "can a value statically typed `T` be an object that carries `owner`'s
  * member?" — every relation-style decision in it asks here: whether an access through a typed receiver touches the
@@ -222,19 +236,5 @@ final class ValueCarriers {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
 		return site == null ? null : _scope.index.fileInfo(site.file)?.types.find(d -> d.name == type);
 	}
-
-}
-
-/** How a value of one type relates to another type's member (`ValueCarriers.relation`). */
-enum CarryRelation {
-
-	/** Their value types meet: the value may be an object carrying the member. */
-	Carries;
-
-	/** Nothing can be told: the value may be anything. */
-	MayCarry;
-
-	/** Both value types are known and disjoint: the value never carries the member. */
-	CannotCarry;
 
 }

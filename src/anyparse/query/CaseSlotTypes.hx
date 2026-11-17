@@ -12,6 +12,25 @@ import anyparse.util.Arrays;
 
 using Lambda;
 
+/** A written type a pattern slot holds. */
+typedef SlotType = {
+
+	final source: String;
+
+	/** Where `source` is read; null when the text came from a declaration whose file is not known here. */
+	final scope: Null<SlotScope>;
+
+	/** True when `source` mentions type parameters of an enclosing enum, so its own arguments bind nothing here. */
+	final argsUnread: Bool;
+
+	/** True when the slot is an optional parameter, which holds null though `source` writes no wrapper. */
+	final optional: Bool;
+
+}
+
+/** The file and offset a written type reads from. */
+typedef SlotScope = { final file: FileInfo; final at: Int; }
+
 /**
  * What the slots of a `case` pattern hold, read off the declarations of a run's index: the written type a
  * switch subject carries, the type a constructor's parameter takes under the type arguments of the value it
@@ -260,22 +279,3 @@ final class CaseSlotTypes {
 	}
 
 }
-
-/** A written type a pattern slot holds. */
-typedef SlotType = {
-
-	final source: String;
-
-	/** Where `source` is read; null when the text came from a declaration whose file is not known here. */
-	final scope: Null<SlotScope>;
-
-	/** True when `source` mentions type parameters of an enclosing enum, so its own arguments bind nothing here. */
-	final argsUnread: Bool;
-
-	/** True when the slot is an optional parameter, which holds null though `source` writes no wrapper. */
-	final optional: Bool;
-
-}
-
-/** The file and offset a written type reads from. */
-typedef SlotScope = { final file: FileInfo; final at: Int; }

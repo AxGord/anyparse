@@ -5,6 +5,37 @@ import anyparse.check.scan.ReflectionScan.ScopeFile;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 
+/** The grammar seams `ConstantDemandScan.walk` reads, resolved once per run. */
+private typedef DemandSeams = {
+	final constants: ConstantFieldSeams;
+	final paramKinds: Array<String>;
+	final moduleValueKinds: Array<String>;
+	final staticLocalKinds: Array<String>;
+	final staticInitFunctionNames: Array<String>;
+	final constructorName: Null<String>;
+	final callKind: Null<String>;
+	final targetCodeCallNames: Array<String>;
+	final fieldAccessKind: Null<String>;
+	final bareNameKinds: Array<String>;
+};
+
+/** What `ConstantDemandScan.walk` collects over the run's scope. */
+private typedef DemandOut = { final spelled: Map<String, Array<DemandSpelling>>; final typeMembers: Map<String, Array<String>>; };
+
+/** What qualifies one spelling of a name in a demanding position. */
+private enum DemandSpelling {
+
+	/** `Q.name`: `Q` the receiver's last segment. */
+	Qualified(qualifier: String);
+
+	/** A bare `name` inside the type named `enclosing`, null at module level. */
+	Bare(enclosing: Null<String>);
+
+	/** Any other named node, which may name any constant of its name. */
+	Unqualified;
+
+}
+
 /**
  * What in a run depends on a constant's compile-time value or on its already being assigned: the one answer to "must
  * this constant stay inline". A name a position of those kinds spells is held over its subtree, by simple name and what
@@ -186,36 +217,5 @@ final class ConstantDemandScan {
 	private static function isConstructor(member: QueryNode, seams: DemandSeams): Bool {
 		return seams.constructorName != null && member.name == seams.constructorName;
 	}
-
-}
-
-/** The grammar seams `ConstantDemandScan.walk` reads, resolved once per run. */
-private typedef DemandSeams = {
-	final constants: ConstantFieldSeams;
-	final paramKinds: Array<String>;
-	final moduleValueKinds: Array<String>;
-	final staticLocalKinds: Array<String>;
-	final staticInitFunctionNames: Array<String>;
-	final constructorName: Null<String>;
-	final callKind: Null<String>;
-	final targetCodeCallNames: Array<String>;
-	final fieldAccessKind: Null<String>;
-	final bareNameKinds: Array<String>;
-};
-
-/** What `ConstantDemandScan.walk` collects over the run's scope. */
-private typedef DemandOut = { final spelled: Map<String, Array<DemandSpelling>>; final typeMembers: Map<String, Array<String>>; };
-
-/** What qualifies one spelling of a name in a demanding position. */
-private enum DemandSpelling {
-
-	/** `Q.name`: `Q` the receiver's last segment. */
-	Qualified(qualifier: String);
-
-	/** A bare `name` inside the type named `enclosing`, null at module level. */
-	Bare(enclosing: Null<String>);
-
-	/** Any other named node, which may name any constant of its name. */
-	Unqualified;
 
 }

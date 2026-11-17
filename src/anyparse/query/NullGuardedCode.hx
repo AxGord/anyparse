@@ -16,6 +16,31 @@ import anyparse.util.Arrays;
 
 using Lambda;
 
+/** A file's text and its tree (`NullGuardedCode.parsed`). */
+private typedef ParsedText = { final source: String; final tree: QueryNode; }
+
+/** A parameter of a member method: the method's type's simple name and its own, the parameter's position and their count. */
+private typedef MemberParam = {
+	final type: String;
+	final method: String;
+	final index: Int;
+	final count: Int;
+}
+
+/** The facts `NullGuardedCode` reads, gathered once. */
+private typedef FactsIndex = {
+
+	final calls: Map<String, Array<CallFact>>;
+	final fields: Map<String, Array<{ node: FactNode, fact: FieldFact }>>;
+
+	/** Field name -> the accesses of a field so named off a value no class types (`FieldFact.owner` null). */
+	final byName: Map<String, Array<FieldFact>>;
+	final reflection: Array<ReflectionFact>;
+	final targetWords: Map<String, Bool>;
+	var computedTargetCode: Bool;
+
+}
+
 /**
  * The code a null guard of a parameter keeps from running, read off the compiler's facts under the truth
  * (`FactsView.truth`): the branch an `if (p != null)` takes — one whose condition is such a test, or an `&&` holding one —
@@ -775,30 +800,5 @@ final class NullGuardedCode {
 		}
 		return null;
 	}
-
-}
-
-/** A file's text and its tree (`NullGuardedCode.parsed`). */
-private typedef ParsedText = { final source: String; final tree: QueryNode; }
-
-/** A parameter of a member method: the method's type's simple name and its own, the parameter's position and their count. */
-private typedef MemberParam = {
-	final type: String;
-	final method: String;
-	final index: Int;
-	final count: Int;
-}
-
-/** The facts `NullGuardedCode` reads, gathered once. */
-private typedef FactsIndex = {
-
-	final calls: Map<String, Array<CallFact>>;
-	final fields: Map<String, Array<{ node: FactNode, fact: FieldFact }>>;
-
-	/** Field name -> the accesses of a field so named off a value no class types (`FieldFact.owner` null). */
-	final byName: Map<String, Array<FieldFact>>;
-	final reflection: Array<ReflectionFact>;
-	final targetWords: Map<String, Bool>;
-	var computedTargetCode: Bool;
 
 }

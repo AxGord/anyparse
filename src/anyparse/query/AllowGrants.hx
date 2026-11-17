@@ -7,6 +7,9 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+/** What `AllowGrants.granteeFiles` enumerated: the files a grant opens a member to, or the first path it could not enumerate. */
+typedef Grantees = { final files: Array<String>; final unmatched: Null<String>; };
+
 /**
  * What a Haxe `@:allow` grant actually reaches, read per MEMBER rather than per file.
  *
@@ -93,6 +96,3 @@ final class AllowGrants {
 	}
 
 }
-
-/** What `AllowGrants.granteeFiles` enumerated: the files a grant opens a member to, or the first path it could not enumerate. */
-typedef Grantees = { final files: Array<String>; final unmatched: Null<String>; };

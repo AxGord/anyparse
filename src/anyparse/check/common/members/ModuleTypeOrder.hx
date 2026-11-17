@@ -13,9 +13,10 @@ import haxe.ds.ArraySort;
 /**
  * One top-level type declaration of a module, in source order. `slot` is the source it owns as
  * a movable unit - leading doc comment, metadata and modifier run, the declaration, a comment
- * closing its last line - and is null for a declaration inside a conditional-compilation region,
- * which never moves, and on the report path, which moves nothing. `rank` is its place in the
- * `kindOrder` option, the option's length when unlisted.
+ * closing its last line - and is null on the report path, which moves nothing. `region` names
+ * the conditional-compilation region holding the declaration, 0 for the module's top level: a
+ * reorder moves the declarations of one region among themselves only. `rank` is its place in
+ * the `kindOrder` option, the option's length when unlisted.
  */
 private typedef ModuleType = {
 	final name: String;
@@ -23,6 +24,7 @@ private typedef ModuleType = {
 	final isMain: Bool;
 	final rank: Int;
 	final span: Span;
+	final region: Int;
 	final slot: Null<Span>;
 }
 
@@ -38,8 +40,8 @@ private typedef OrderBreak = { final earlier: ModuleType; final later: ModuleTyp
  * (`RefShape.typeDeclKindWords`); an unlisted kind ranks after every listed one, and an empty
  * list keeps their source order. The fix is a stable permutation of whole slots that keeps the
  * blank-line layout positional, so the gap between the k-th and the next declaration stays what
- * the source wrote there. It is withheld, the finding kept with its reason, when a declaration
- * of the moved range sits inside a conditional region, or when anything but whitespace separates
+ * the source wrote there. It is withheld, the finding kept with its reason, when the moved range
+ * spans more than one conditional region (the top level counting as one), or when anything but whitespace separates
  * two of its slots - a comment no slot owns, a module-level function, a conditional block - since
  * a permutation would carry that to the wrong neighbour.
  */
@@ -112,10 +114,14 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 				final slots: Array<Span> = [];
 				for (type in moved) {
 					final slot: Null<Span> = type.slot;
-					if (slot == null)
+					if (slot == null || type.region != moved[0].region) {
+						// Of two declarations in different regions, the one not on the top level is the one under `#if`.
+						final guarded: ModuleType = type.region == 0 ? moved[0] : type;
 						return decline(
-							violations, '${type.word} ${type.name} sits inside a conditional region the reorder would have to move or cross'
+							violations,
+							'${guarded.word} ${guarded.name} sits inside a conditional region the reorder would have to move or cross'
 						);
+					}
 					slots.push(slot);
 				}
 				final stray: Null<Int> = strayGap(source, slots);
@@ -154,7 +160,8 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 
 	/**
 	 * The module's type declarations in source order: the top level's own, each with its slot when
-	 * `withSlots` (the fix path), and those inside a conditional region at any depth, which carry none.
+	 * `withSlots` (the fix path), and those inside a conditional region at any depth, each region
+	 * numbered apart from the top level and from every other region.
 	 */
 	private static function typesOf(
 		file: String, source: String, tree: QueryNode, plugin: GrammarPlugin, kindOrder: Array<String>, regions: () -> Array<LexRegion>,
@@ -164,11 +171,12 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 		final words: Map<String, String> = shape.typeDeclKindWords ?? [];
 		final mainName: String = RefactorSupport.moduleNameOf(file);
 		final out: Array<ModuleType> = [];
-		function visit(parent: QueryNode, guarded: Bool): Void {
+		var regionCount: Int = 0;
+		function visit(parent: QueryNode, region: Int): Void {
 			for (child in parent.children) {
 				final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(child);
 				if (decl == null) {
-					if (CondRegionScan.isConditionalKind(child.kind, shape)) visit(child, true);
+					if (CondRegionScan.isConditionalKind(child.kind, shape)) visit(child, ++regionCount);
 					continue;
 				}
 				final group: Span = ElementSpan.declGroupSpan(decl.declNode, parent, decl.fullSpan);
@@ -180,11 +188,12 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 					isMain: decl.name == mainName,
 					rank: listed < 0 ? kindOrder.length : listed,
 					span: new Span(decl.fullSpan.from, ElementSpan.trailingTrimmedSpan(source, group, regions).to),
-					slot: guarded || !withSlots ? null : slotSpan(source, group, regions)
+					region: region,
+					slot: withSlots ? slotSpan(source, group, regions) : null
 				});
 			}
 		}
-		visit(tree, false);
+		visit(tree, 0);
 		return out;
 	}
 

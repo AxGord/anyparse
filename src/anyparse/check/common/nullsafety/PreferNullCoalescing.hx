@@ -9,6 +9,15 @@ import anyparse.query.ParenGuard;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 
+/** The resolved seams `PreferNullCoalescing` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final ternaryKind: String;
+	final eqKind: String;
+	final notEqKind: String;
+	final nullKind: String;
+	final unsafeKinds: Array<String>;
+};
+
 /**
  * Flags a null-guarding ternary that the null-coalescing operator `??` replaces —
  * `x != null ? x : y` / `null != x ? x : y` / `x == null ? y : x` / `null == x ? y : x`
@@ -219,12 +228,3 @@ final class PreferNullCoalescing extends RuleBase implements RiskyFix implements
 	}
 
 }
-
-/** The resolved seams `PreferNullCoalescing` reads in both `run` and `fix`. */
-private typedef Seams = {
-	final ternaryKind: String;
-	final eqKind: String;
-	final notEqKind: String;
-	final nullKind: String;
-	final unsafeKinds: Array<String>;
-};

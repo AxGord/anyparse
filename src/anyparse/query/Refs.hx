@@ -9,6 +9,150 @@ import anyparse.runtime.Span;
 using Lambda;
 
 /**
+ * The context `Refs.walkMulti` carries down the tree, as one bit set.
+ *
+ * Three independent booleans that all propagate to children and are all `Bool`. As three
+ * adjacent positional parameters a transposition at the call site compiles clean and silently
+ * mis-walks the whole tree; as one value it is unrepresentable. The abstract IS an `Int`, so
+ * the walker's hottest signature gets cheaper rather than dearer.
+ */
+enum abstract WalkFlags(Int) from Int to Int {
+
+	/** Nothing set — the walk's entry state. */
+	final None = 0;
+
+	/** The node sits at child-index 0 of a `RefShape.writeParentKinds` ctor: an assignment target. */
+	final WriteTarget = 1;
+
+	/** Inside a `RefShape.opaqueKinds` reification, where an identifier is emitted code, not a reference. */
+	final MacroEmit = 2;
+
+	/** Inside a `RefShape.typeAnnotationKinds` subtree, where a decl-host ctor spells a field LABEL. */
+	final InTypeAnnotation = 4;
+
+	public inline function has(flag: WalkFlags): Bool {
+		return (this & (flag: Int)) != 0;
+	}
+
+	public inline function with(flag: WalkFlags, on: Bool): WalkFlags {
+		return on ? this | (flag: Int) : this & ~(flag: Int);
+	}
+
+}
+
+/**
+ * One classified reference site discovered by `Refs.find`.
+ *
+ * `name` is redundant with the search target (the walker only emits
+ * matching nodes) but is kept on the hit so downstream renderers can
+ * be driven by the hit alone without threading the target separately.
+ *
+ * `bindingSpan` is the span of the declaration this hit resolves to, and
+ * `bindingNode` that declaration's own node:
+ *  - Decl hits self-bind (`bindingSpan == span`, `bindingNode` the hit's
+ *    own node) - except a later alternative of `case A(x), B(x):`,
+ *    which binds to the FIRST capture of the arm.
+ *  - Read / Write hits point to the innermost enclosing decl with a
+ *    matching name, or null when unresolved (cross-file / implicit-
+ *    `this` / grammar-gap on the binding's decl site).
+ */
+@:nullSafety(Strict)
+final class RefHit {
+
+	public final kind: RefKind;
+	public final name: String;
+	public final span: Span;
+	public final bindingSpan: Null<Span>;
+
+	/**
+	 * The node that DECLARES `bindingSpan` — the very node the resolving `ScopeFrame` bound the
+	 * name from. `bindingSpan` says WHERE the declaration is; this says WHAT it is, without a
+	 * consumer re-finding it by span arithmetic (which answers for the outermost declaration
+	 * covering the offset, not for the one that actually binds).
+	 *
+	 * Null exactly when `bindingSpan` is, and structurally so rather than by convention: the two
+	 * arrive as ONE optional `RefBinding`, so neither can be supplied without the other.
+	 */
+	public final bindingNode: Null<QueryNode>;
+
+	/**
+	 * Whether the occurrence is a braceless `$name` inside an interpolating string literal
+	 * rather than an ordinary identifier.
+	 *
+	 * A rename-class rewrite needs no special case for the ORDINARY spelling — the identifier
+	 * token sits inside the span and `RefactorSupport.identTokenOffset` finds it. An
+	 * escape-spelled `$` or name (`'\x24p'`) puts no locatable token there, and that one is
+	 * refused (`Rename.uncoveredInterpRead`).
+	 *
+	 * A rewrite substituting a NON-identifier — an inlined expression, an `obj.` qualification,
+	 * an accessor call — must refuse or brace every one of them: `$` binds to a bare identifier
+	 * only, so `$obj.p` reads `obj` and then the literal text `.p`.
+	 */
+	public final interpolated: Bool;
+
+	/**
+	 * Whether the occurrence is a bare name in a `case` pattern whose reading one file cannot
+	 * decide — a capture of a name nothing in the file declares (an imported constant of that name
+	 * would compare instead), or a name a constant declaration may claim (a local of that name
+	 * captures, an `enum abstract` value of the subject's type compares). The hit still carries the
+	 * walk's best answer; a rewrite whose occurrence set holds one must REFUSE rather than splice
+	 * it (`RefactorSupport.undecidedPatternHit`).
+	 */
+	public final patternUndecided: Bool;
+
+	/**
+	 * For an undecided pattern CAPTURE, the span of the binding it hides if it does capture — the
+	 * outer local, parameter or field of the same name. If the pattern compares instead, the arm's
+	 * reads of the name are THAT binding's, so a rewrite of it refuses on this hit too.
+	 */
+	public final patternShadows: Null<Span>;
+
+	public function new(
+		kind: RefKind, name: String, span: Span, ?binding: RefBinding, interpolated: Bool = false, patternUndecided: Bool = false,
+		?patternShadows: Span
+	) {
+		this.kind = kind;
+		this.name = name;
+		this.span = span;
+		bindingSpan = binding?.span;
+		bindingNode = binding?.node;
+		this.interpolated = interpolated;
+		this.patternUndecided = patternUndecided;
+		this.patternShadows = patternShadows;
+	}
+
+}
+
+/**
+ * The declaration a `RefHit` resolves to: the node that spells it and that node's span, as one
+ * value. Passing the pair as a single optional constructor argument is what makes `RefHit`'s
+ * "both or neither" contract structural instead of prose — the shape a `ScopeFrame` binding
+ * already has, so the resolver hands its own record straight over.
+ */
+typedef RefBinding = { final node: QueryNode; final span: Span; };
+
+/**
+ * Reference classification per `docs/cli-query-tool.md` JSON schema.
+ *
+ * Phase 3.3 emits all three variants. `Write` covers any `identKind`
+ * that sits at child-index 0 of a `RefShape.writeParentKinds` ctor —
+ * see the walker docstring for the propagation rule.
+ */
+enum abstract RefKind(Int) {
+	final Decl = 0;
+	final Read = 1;
+	final Write = 2;
+
+	public function toString(): String {
+		return switch (cast this: RefKind) {
+			case Decl: 'decl';
+			case Read: 'read';
+			case Write: 'write';
+		}
+	}
+}
+
+/**
  * Lexical reference / declaration walker for `apq refs`.
  *
  * Walks a `QueryNode` tree and collects every node whose `name` slot
@@ -461,148 +605,4 @@ final class Refs {
 		return span.to;
 	}
 
-}
-
-/**
- * The context `Refs.walkMulti` carries down the tree, as one bit set.
- *
- * Three independent booleans that all propagate to children and are all `Bool`. As three
- * adjacent positional parameters a transposition at the call site compiles clean and silently
- * mis-walks the whole tree; as one value it is unrepresentable. The abstract IS an `Int`, so
- * the walker's hottest signature gets cheaper rather than dearer.
- */
-enum abstract WalkFlags(Int) from Int to Int {
-
-	/** Nothing set — the walk's entry state. */
-	final None = 0;
-
-	/** The node sits at child-index 0 of a `RefShape.writeParentKinds` ctor: an assignment target. */
-	final WriteTarget = 1;
-
-	/** Inside a `RefShape.opaqueKinds` reification, where an identifier is emitted code, not a reference. */
-	final MacroEmit = 2;
-
-	/** Inside a `RefShape.typeAnnotationKinds` subtree, where a decl-host ctor spells a field LABEL. */
-	final InTypeAnnotation = 4;
-
-	public inline function has(flag: WalkFlags): Bool {
-		return (this & (flag: Int)) != 0;
-	}
-
-	public inline function with(flag: WalkFlags, on: Bool): WalkFlags {
-		return on ? this | (flag: Int) : this & ~(flag: Int);
-	}
-
-}
-
-/**
- * One classified reference site discovered by `Refs.find`.
- *
- * `name` is redundant with the search target (the walker only emits
- * matching nodes) but is kept on the hit so downstream renderers can
- * be driven by the hit alone without threading the target separately.
- *
- * `bindingSpan` is the span of the declaration this hit resolves to, and
- * `bindingNode` that declaration's own node:
- *  - Decl hits self-bind (`bindingSpan == span`, `bindingNode` the hit's
- *    own node) - except a later alternative of `case A(x), B(x):`,
- *    which binds to the FIRST capture of the arm.
- *  - Read / Write hits point to the innermost enclosing decl with a
- *    matching name, or null when unresolved (cross-file / implicit-
- *    `this` / grammar-gap on the binding's decl site).
- */
-@:nullSafety(Strict)
-final class RefHit {
-
-	public final kind: RefKind;
-	public final name: String;
-	public final span: Span;
-	public final bindingSpan: Null<Span>;
-
-	/**
-	 * The node that DECLARES `bindingSpan` — the very node the resolving `ScopeFrame` bound the
-	 * name from. `bindingSpan` says WHERE the declaration is; this says WHAT it is, without a
-	 * consumer re-finding it by span arithmetic (which answers for the outermost declaration
-	 * covering the offset, not for the one that actually binds).
-	 *
-	 * Null exactly when `bindingSpan` is, and structurally so rather than by convention: the two
-	 * arrive as ONE optional `RefBinding`, so neither can be supplied without the other.
-	 */
-	public final bindingNode: Null<QueryNode>;
-
-	/**
-	 * Whether the occurrence is a braceless `$name` inside an interpolating string literal
-	 * rather than an ordinary identifier.
-	 *
-	 * A rename-class rewrite needs no special case for the ORDINARY spelling — the identifier
-	 * token sits inside the span and `RefactorSupport.identTokenOffset` finds it. An
-	 * escape-spelled `$` or name (`'\x24p'`) puts no locatable token there, and that one is
-	 * refused (`Rename.uncoveredInterpRead`).
-	 *
-	 * A rewrite substituting a NON-identifier — an inlined expression, an `obj.` qualification,
-	 * an accessor call — must refuse or brace every one of them: `$` binds to a bare identifier
-	 * only, so `$obj.p` reads `obj` and then the literal text `.p`.
-	 */
-	public final interpolated: Bool;
-
-	/**
-	 * Whether the occurrence is a bare name in a `case` pattern whose reading one file cannot
-	 * decide — a capture of a name nothing in the file declares (an imported constant of that name
-	 * would compare instead), or a name a constant declaration may claim (a local of that name
-	 * captures, an `enum abstract` value of the subject's type compares). The hit still carries the
-	 * walk's best answer; a rewrite whose occurrence set holds one must REFUSE rather than splice
-	 * it (`RefactorSupport.undecidedPatternHit`).
-	 */
-	public final patternUndecided: Bool;
-
-	/**
-	 * For an undecided pattern CAPTURE, the span of the binding it hides if it does capture — the
-	 * outer local, parameter or field of the same name. If the pattern compares instead, the arm's
-	 * reads of the name are THAT binding's, so a rewrite of it refuses on this hit too.
-	 */
-	public final patternShadows: Null<Span>;
-
-	public function new(
-		kind: RefKind, name: String, span: Span, ?binding: RefBinding, interpolated: Bool = false, patternUndecided: Bool = false,
-		?patternShadows: Span
-	) {
-		this.kind = kind;
-		this.name = name;
-		this.span = span;
-		bindingSpan = binding?.span;
-		bindingNode = binding?.node;
-		this.interpolated = interpolated;
-		this.patternUndecided = patternUndecided;
-		this.patternShadows = patternShadows;
-	}
-
-}
-
-/**
- * The declaration a `RefHit` resolves to: the node that spells it and that node's span, as one
- * value. Passing the pair as a single optional constructor argument is what makes `RefHit`'s
- * "both or neither" contract structural instead of prose — the shape a `ScopeFrame` binding
- * already has, so the resolver hands its own record straight over.
- */
-typedef RefBinding = { final node: QueryNode; final span: Span; };
-
-/**
- * Reference classification per `docs/cli-query-tool.md` JSON schema.
- *
- * Phase 3.3 emits all three variants. `Write` covers any `identKind`
- * that sits at child-index 0 of a `RefShape.writeParentKinds` ctor —
- * see the walker docstring for the propagation rule.
- */
-enum abstract RefKind(Int) {
-	final Decl = 0;
-	final Read = 1;
-	final Write = 2;
-
-	public function toString(): String {
-		return switch (cast this: RefKind) {
-			case Decl: 'decl';
-			case Read: 'read';
-			case Write: 'write';
-		}
-	}
 }

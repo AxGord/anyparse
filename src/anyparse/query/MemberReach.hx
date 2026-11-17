@@ -173,6 +173,93 @@ typedef MemberRef = {
 
 }
 
+/** What an external target of the implicit walk turns out to be. */
+private enum ImplicitTarget {
+	Harmless;
+	Opaque;
+	Body(node: FnNode);
+}
+
+/**
+ * What the entry runs, as graph facts. `region` is set for a `Region` entry, whose own touches count too.
+ * What `MemberTouchScan.scan` was asked of the member: the walk asks it again of a node it makes (`MemberReach.qualifiedNode`).
+ */
+private typedef TouchQuestion = {
+	final name: String;
+	final declaring: String;
+	final access: ReachAccess;
+	final owns: OwnMethods;
+}
+
+private typedef Seeds = {
+	var file: String;
+	var region: Null<Span>;
+	var edges: Array<CallEdge>;
+	var unresolved: Array<UnresolvedCall>;
+	var access: Array<UnresolvedAccess>;
+}
+
+/**
+ * A site that admits functions the graph cannot name: those called `names`, the value channel (`values`), the
+ * constructors, the implicitly-called functions no syntax narrows (`always`) and those the implicit-call sites
+ * `implicit` may run — re-applied whenever the graph grew.
+ */
+private typedef AdmissionSite = {
+
+	var from: String;
+	var file: String;
+	var span: Null<Span>;
+	var kind: String;
+	var names: Array<String>;
+	var values: Bool;
+	var constructors: Bool;
+	var always: Bool;
+	var implicit: Array<ImplicitSite>;
+
+	/** Every function the admission closure holds: code that reaches members by a name it computes. */
+	@:optional
+	var all: Bool;
+
+	/** These functions: the members of an object handed to code that reaches them by name. */
+	@:optional
+	var ids: Array<String>;
+
+	/** These functions, each the member of the typed type it names: the methods of an object reflection reaches by name. */
+	@:optional
+	var owned: Array<OwnedId>;
+
+	/**
+	 * The facts type of the value an unresolved call calls, where the facts give it: of the functions used as values
+	 * (`values`), only those a value of it may be (`FunctionValueTypes`).
+	 */
+	@:optional
+	var called: Null<String>;
+
+	/** With `called`, for a site the facts place in its function's own code: the range of the expression whose value is called. */
+	@:optional
+	var calledAt: Null<FactPos>;
+
+	/**
+	 * For a call of a `dynamic` method the facts name (`pack.Type.field`): of the functions used as values (`values`), only
+	 * those stored into it, where the facts say which (`FunctionValueTypes.storedIn`).
+	 */
+	@:optional
+	var stored: Null<String>;
+
+	/** Whether the target code admitted may write the member by its name: a blind spot (`MemberReach.externSite`). */
+	@:optional
+	var blind: Bool;
+
+}
+
+/** The names code reads members by (`MemberReach.reflectedNames`), and the graph's size it was read at. */
+private typedef ReflectedNames = {
+	final names: Map<String, Bool>;
+	var any: Bool;
+	final files: Int;
+	final accesses: Int;
+}
+
 /**
  * "May the code this entry runs read / write / mutate member M?" — one analysis with three answers, for
  * every check whose fix is sound only when nothing it cannot see reaches M.
@@ -3217,91 +3304,4 @@ final class MemberReach {
 		return true;
 	}
 
-}
-
-/** What an external target of the implicit walk turns out to be. */
-private enum ImplicitTarget {
-	Harmless;
-	Opaque;
-	Body(node: FnNode);
-}
-
-/**
- * What the entry runs, as graph facts. `region` is set for a `Region` entry, whose own touches count too.
- * What `MemberTouchScan.scan` was asked of the member: the walk asks it again of a node it makes (`MemberReach.qualifiedNode`).
- */
-private typedef TouchQuestion = {
-	final name: String;
-	final declaring: String;
-	final access: ReachAccess;
-	final owns: OwnMethods;
-}
-
-private typedef Seeds = {
-	var file: String;
-	var region: Null<Span>;
-	var edges: Array<CallEdge>;
-	var unresolved: Array<UnresolvedCall>;
-	var access: Array<UnresolvedAccess>;
-}
-
-/**
- * A site that admits functions the graph cannot name: those called `names`, the value channel (`values`), the
- * constructors, the implicitly-called functions no syntax narrows (`always`) and those the implicit-call sites
- * `implicit` may run — re-applied whenever the graph grew.
- */
-private typedef AdmissionSite = {
-
-	var from: String;
-	var file: String;
-	var span: Null<Span>;
-	var kind: String;
-	var names: Array<String>;
-	var values: Bool;
-	var constructors: Bool;
-	var always: Bool;
-	var implicit: Array<ImplicitSite>;
-
-	/** Every function the admission closure holds: code that reaches members by a name it computes. */
-	@:optional
-	var all: Bool;
-
-	/** These functions: the members of an object handed to code that reaches them by name. */
-	@:optional
-	var ids: Array<String>;
-
-	/** These functions, each the member of the typed type it names: the methods of an object reflection reaches by name. */
-	@:optional
-	var owned: Array<OwnedId>;
-
-	/**
-	 * The facts type of the value an unresolved call calls, where the facts give it: of the functions used as values
-	 * (`values`), only those a value of it may be (`FunctionValueTypes`).
-	 */
-	@:optional
-	var called: Null<String>;
-
-	/** With `called`, for a site the facts place in its function's own code: the range of the expression whose value is called. */
-	@:optional
-	var calledAt: Null<FactPos>;
-
-	/**
-	 * For a call of a `dynamic` method the facts name (`pack.Type.field`): of the functions used as values (`values`), only
-	 * those stored into it, where the facts say which (`FunctionValueTypes.storedIn`).
-	 */
-	@:optional
-	var stored: Null<String>;
-
-	/** Whether the target code admitted may write the member by its name: a blind spot (`MemberReach.externSite`). */
-	@:optional
-	var blind: Bool;
-
-}
-
-/** The names code reads members by (`MemberReach.reflectedNames`), and the graph's size it was read at. */
-private typedef ReflectedNames = {
-	final names: Map<String, Bool>;
-	var any: Bool;
-	final files: Int;
-	final accesses: Int;
 }

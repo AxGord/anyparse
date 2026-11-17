@@ -14,6 +14,21 @@ import anyparse.util.Groups;
 
 using Lambda;
 
+/** What `ValueEscapes.memberFacts` reads off the index's members. */
+private typedef MemberFacts = { var operators: Array<String>; var functions: Map<String, Bool>; }
+
+/** What `ValueEscapes` answers: the escaped types (null for any), whether a raw region decided it, and their typed ids. */
+private typedef EscapeAnswer = {
+
+	final types: Null<Array<String>>;
+	final raw: Bool;
+	final ids: Null<Array<String>>;
+
+	/** The function types of the function values that escaped (`FactsEscapes.functionTypes`); null when not known. */
+	final ?functions: Array<FactsType>;
+
+}
+
 /**
  * The run-time types whose instances may reach code with NO static type to say what they are — the other half of
  * `ValueCarriers.valueTypes`: a value statically typed `T` is `T` or one of its subtypes, OR any instance that once
@@ -690,20 +705,5 @@ final class ValueEscapes {
 		final site: Null<{ file: String, span: Span }> = _scope.siteOf(type);
 		return site == null ? null : _scope.index.fileInfo(site.file)?.types.find(d -> d.name == type);
 	}
-
-}
-
-/** What `ValueEscapes.memberFacts` reads off the index's members. */
-private typedef MemberFacts = { var operators: Array<String>; var functions: Map<String, Bool>; }
-
-/** What `ValueEscapes` answers: the escaped types (null for any), whether a raw region decided it, and their typed ids. */
-private typedef EscapeAnswer = {
-
-	final types: Null<Array<String>>;
-	final raw: Bool;
-	final ids: Null<Array<String>>;
-
-	/** The function types of the function values that escaped (`FactsEscapes.functionTypes`); null when not known. */
-	final ?functions: Array<FactsType>;
 
 }
