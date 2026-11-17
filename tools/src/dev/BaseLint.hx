@@ -99,7 +99,10 @@ final class BaseLint {
 	 * no report.
 	 */
 	public static function keep(run: Result, stamp: String, report: String, cache: String): Null<String> {
-		if (!run.out.trim().startsWith('[')) return GateTree.clip('the base lint printed no report: ${GateTree.quote(run)}');
+		if (run.failure != '' || !GateLint.complete(run.out)) {
+			final what: String = run.out.trim() == '' ? 'no report' : 'an incomplete report';
+			return GateTree.clip('the base lint printed $what: ${GateTree.quote(run)}');
+		}
 		File.saveContent(report, run.out);
 		File.saveContent(Path.join([Path.directory(report), STAMP]), stamp);
 		BaseEngine.keep(cache, stamp, staging -> File.copy(report, Path.join([staging, FILE])));
@@ -113,7 +116,7 @@ final class BaseLint {
 	public static function restore(cache: String, stamp: String, logs: String): Bool {
 		final entry: String = Path.join([cache, stamp]);
 		final kept: String = Path.join([entry, FILE]);
-		if (!FileSystem.exists(kept)) return false;
+		if (!whole(kept)) return false;
 		return try {
 			File.copy(kept, Path.join([logs, FILE]));
 			File.saveContent(Path.join([logs, STAMP]), stamp);
@@ -128,7 +131,7 @@ final class BaseLint {
 	private static function kept(gate: GateTree, stamp: String): Null<String> {
 		final report: String = gate.log(FILE);
 		final mark: String = gate.log(STAMP);
-		final own: Bool = FileSystem.exists(report) && FileSystem.exists(mark) && File.getContent(mark) == stamp;
+		final own: Bool = whole(report) && FileSystem.exists(mark) && File.getContent(mark) == stamp;
 		return own || restore(defaultCache(), stamp, gate.logs) ? report : null;
 	}
 
@@ -145,6 +148,13 @@ final class BaseLint {
 			case Passed: null;
 			case Failed(why), NotRun(why), Skipped(why): why;
 		};
+	}
+
+	/**
+	 * Whether the file `report` exists and holds a whole lint report: an entry kept cut short counts as none and is measured again.
+	 */
+	private static function whole(report: String): Bool {
+		return FileSystem.exists(report) && GateLint.complete(File.getContent(report));
 	}
 
 }

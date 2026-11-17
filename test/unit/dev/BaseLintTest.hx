@@ -25,6 +25,7 @@ using StringTools;
 
 /** `dev.BaseLint`: when a gate lints the base for INFRA gate 4, and when it takes the report another run left instead. */
 @:nullSafety(Strict)
+@:access(dev.BaseLint)
 final class BaseLintTest extends Test {
 
 	private static inline final POLL_MS: Int = 50;
@@ -160,18 +161,6 @@ final class BaseLintTest extends Test {
 		}));
 	}
 
-	/** A lint that printed no report keeps nothing: neither in the logs nor in the cache. */
-	@:pin('guard')
-	public function testALintThatPrintedNoReportKeepsNothing(): Void {
-		TempDir.with(dir -> {
-			final cache: String = dir.file('cache');
-			final report: String = dir.file('lint-base.json');
-			Assert.notNull(BaseLint.keep(cmd('echo oops').run(), 's', report, cache));
-			Assert.isFalse(FileSystem.exists(report));
-			Assert.isFalse(BaseLint.restore(cache, 's', dir.path));
-		});
-	}
-
 	/**
 	 * The report a land's warm keeps for the landed commit is the one a rule-code gate based on that commit takes: the gate
 	 * announces no base lint branch and reads the warm's report from the cache the two share.
@@ -196,6 +185,60 @@ final class BaseLintTest extends Test {
 				case Got(report): Assert.equals('[]', File.getContent(report).trim());
 				case NotGot(why): Assert.fail(why);
 			}
+		}));
+	}
+
+	@:pin('control')
+	@:killer('M-BASE-LINT-KEEP-CUT-KEPT')
+	public function testABaseLintThatWasKilledOrCutShortKeepsNothing(): Void {
+		TempDir.with(dir -> {
+			final cache: String = dir.file('cache');
+			final report: String = dir.file('lint-base.json');
+			final cut: Result = new Result('lint', {
+				status: 0,
+				out: '[{"file":"a/B.hx","ru',
+				err: '',
+				failure: '',
+				overflowed: false
+			});
+			final killed: Result = new Result('lint', {
+				status: null,
+				out: '[]',
+				err: '',
+				failure: 'the command timed out after 5 ms',
+				overflowed: false
+			});
+			Assert.stringContains('incomplete', BaseLint.keep(cut, 's', report, cache) ?? '');
+			Assert.notNull(BaseLint.keep(killed, 's', report, cache));
+			Assert.stringContains('no report', BaseLint.keep(cmd('true').run(), 's', report, cache) ?? '');
+			Assert.isFalse(FileSystem.exists(report));
+			Assert.isFalse(BaseLint.restore(cache, 's', dir.path));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-BASE-LINT-RESTORE-CUT-SERVED')
+	public function testACutReportInTheSharedCacheIsNotRestored(): Void {
+		TempDir.with(dir -> {
+			final cache: String = dir.file('cache');
+			FileSystem.createDirectory(Path.join([cache, 's']));
+			File.saveContent(Path.join([cache, 's', BaseLint.FILE]), '[{"file":"a/B.hx","ru');
+			Assert.isFalse(BaseLint.restore(cache, 's', dir.path));
+			File.saveContent(Path.join([cache, 's', BaseLint.FILE]), '[]');
+			Assert.isTrue(BaseLint.restore(cache, 's', dir.path));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-BASE-LINT-KEPT-CUT-SERVED')
+	public function testACutReportInTheGatesLogsIsMeasuredAgain(): Void {
+		TempDir.with(dir -> withCache(dir.file('cache'), () -> {
+			final gate: GateTree = gateOf(dir);
+			File.saveContent(gate.log(BaseLint.FILE), '[{"file":"a/B.hx","ru');
+			File.saveContent(gate.log(BaseLint.STAMP), 's');
+			Assert.isNull(BaseLint.kept(gate, 's'));
+			File.saveContent(gate.log(BaseLint.FILE), '[]');
+			Assert.equals(gate.log(BaseLint.FILE), BaseLint.kept(gate, 's'));
 		}));
 	}
 

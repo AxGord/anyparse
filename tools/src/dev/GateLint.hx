@@ -241,17 +241,23 @@ final class GateLint {
 		return moves.length == 0 ? Passed : Failed('findings moved: ${moves.join(', ')} — ${_gate.log('infra-<k>.txt')}');
 	}
 
-	/** The report of `run`, `lintCommand`'s `lint --format json` of `tree` for `out`, written there; `NotRun` when it printed none. */
+	/**
+	 * The report of `run`, `lintCommand`'s `lint --format json` of `tree` for `out`, written there whole; `NotRun` when it printed
+	 * none, was killed, or printed one cut short — a lint's exit status cannot say so, it fails on findings and on a rejected build.
+	 */
 	private function saveLint(run: Result, tree: String, out: String): Outcome {
-		if (!run.out.trim().startsWith('[')) {
+		if (run.failure != '' || !complete(run.out)) {
 			final errors: String = errLogOf(out);
 			_gate.summary.excerpt(Excerpt.errors(run.out + (FileSystem.exists(errors) ? File.getContent(errors) : '')));
-			final why: String = run.failure.indexOf('timed out') >= 0
-				? 'timeout at load ${hostLoad()}: lint of $tree outlived its limit'
-				: 'lint of $tree printed no report';
+			final why: String = if (run.failure.indexOf('timed out') >= 0)
+				'timeout at load ${hostLoad()}: lint of $tree outlived its limit'
+			else if (run.out.trim() == '')
+				'lint of $tree printed no report'
+			else
+				'lint of $tree printed an incomplete report';
 			return NotRun('$why: ${GateTree.quote(run)} — stderr in $errors');
 		}
-		File.saveContent(out, run.out);
+		replace(out, run.out);
 		return Passed;
 	}
 
@@ -282,11 +288,12 @@ final class GateLint {
 		return moveOf(diff);
 	}
 
-	/** The report an earlier run of the gate cached under `key`, or null. */
+	/** The report an earlier run of the gate cached under `key`, or null — a cut one an earlier gate stored is a miss. */
 	private function cachedLint(key: Null<String>): Null<String> {
 		if (key == null) return null;
 		final file: String = _gate.log('lint-cache/$key.json');
-		return FileSystem.exists(file) ? File.getContent(file) : null;
+		final report: Null<String> = FileSystem.exists(file) ? File.getContent(file) : null;
+		return report != null && complete(report) ? report : null;
 	}
 
 	/** `text` as the cache file of `key` with extension `extension`, staged beside it. */
@@ -294,9 +301,7 @@ final class GateLint {
 		if (key == null) return;
 		final dir: String = _gate.log('lint-cache');
 		FileSystem.createDirectory(dir);
-		final staged: String = Path.join([dir, '$key.${js.Node.process.pid}.$extension.tmp']);
-		File.saveContent(staged, text);
-		FileSystem.rename(staged, Path.join([dir, '$key.$extension']));
+		replace(Path.join([dir, '$key.$extension']), text);
 	}
 
 	/**
@@ -453,9 +458,24 @@ final class GateLint {
 		return rows[0] == 'infra4';
 	}
 
+	/**
+	 * Whether `report` is a whole `lint --format json` report: the parser reads one array and nothing is cut off — a lint whose
+	 * output pipe lost its tail prints the start of one, which is not a report to save, cache or compare.
+	 */
+	public static function complete(report: String): Bool {
+		return try JValueParser.parse(report).match(JArray(_)) catch (_: Exception) false;
+	}
+
 	/** The file the standard error of the lint reporting to `out` goes to. */
 	private static inline function errLogOf(out: String): String {
 		return Path.withExtension(out, 'err');
+	}
+
+	/** `text` as the file `file`, staged beside it and renamed over it, so a reader — or a run killed mid-write — never sees half of it. */
+	private static function replace(file: String, text: String): Void {
+		final staged: String = '$file.${js.Node.process.pid}.tmp';
+		File.saveContent(staged, text);
+		FileSystem.rename(staged, file);
 	}
 
 	/**

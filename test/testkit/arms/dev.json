@@ -3432,6 +3432,53 @@
 			"find": "cores: Lease.NODE_CORES",
 			"replace": "cores: 1",
 			"note": "the post-land whole lint leases one thread for a node engine process, so it runs on more cpus than its lease holds"
+		},
+		{
+			"name": "M-GATE-LINT-REPORT-COMPLETE-BLIND",
+			"type": "dev.GateLint",
+			"method": "complete",
+			"force": "true",
+			"note": "a lint report cut short passes as whole, so the gate saves, caches and diffs it and lint-diff dies on it as an unexpected input"
+		},
+		{
+			"name": "M-GATE-LINT-CACHED-CUT-SERVED",
+			"type": "dev.GateLint",
+			"method": "cachedLint",
+			"find": "report != null && complete(report) ? report : null",
+			"replace": "report",
+			"note": "a cut report an earlier gate cached is served again as the base lint, so every later gate of the slice diffs the same truncated file"
+		},
+		{
+			"name": "M-BASE-LINT-KEEP-CUT-KEPT",
+			"type": "dev.BaseLint",
+			"method": "keep",
+			"find": "run.failure != '' || !GateLint.complete(run.out)",
+			"replace": "!run.out.trim().startsWith('[')",
+			"note": "a base lint cut short, or killed, is kept in the logs and in the cache every slice on that base shares, and infra4 diffs it as the base tree snapshot"
+		},
+		{
+			"name": "M-BASE-LINT-RESTORE-CUT-SERVED",
+			"type": "dev.BaseLint",
+			"method": "restore",
+			"find": "if (!whole(kept)) return false;",
+			"replace": "if (!FileSystem.exists(kept)) return false;",
+			"note": "a cut base lint a gate cached is restored for every later slice on that base instead of being measured again"
+		},
+		{
+			"name": "M-BASE-LINT-KEPT-CUT-SERVED",
+			"type": "dev.BaseLint",
+			"method": "kept",
+			"find": "whole(report) &&",
+			"replace": "FileSystem.exists(report) &&",
+			"note": "a cut base lint left in the gate's logs is read as the base snapshot again"
+		},
+		{
+			"name": "M-GATE-LINT-KILLED-WHOLE-SAVED",
+			"type": "dev.GateLint",
+			"method": "saveLint",
+			"find": "run.failure != '' || ",
+			"replace": "",
+			"note": "a lint the driver killed or that overflowed is saved whenever what it printed parses, though the rest of its report was never printed"
 		}
 	]
 }

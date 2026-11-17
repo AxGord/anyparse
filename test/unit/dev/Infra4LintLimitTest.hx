@@ -51,7 +51,7 @@ final class Infra4LintLimitTest extends Test {
 	}
 
 	/** `body` over the lint rows of a gate on a one-commit tree, leasing from a pool. */
-	private static function withGate(body: GateLint -> Void): Void {
+	public static function withGate(body: GateLint -> Void): Void {
 		TempDir.with(dir -> {
 			final tree: String = dir.file('tree');
 			final logs: String = dir.file('logs');
