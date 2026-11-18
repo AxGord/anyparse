@@ -1,5 +1,7 @@
 package anyparse.check.scan;
 
+import anyparse.check.Check.FixEdit;
+import anyparse.check.LintConfig;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ModuleScan;
 import anyparse.query.RefactorSupport;
@@ -96,6 +98,9 @@ final class UsingScan {
 	 */
 	public static inline final FILE_WIDE_SUBJECT: String = 'a rewritten call';
 
+	/** The rule whose `types` and `addUsing` options say which modules a project spells as extension calls. */
+	public static inline final EXTENSION_RULE_ID: String = 'prefer-static-extension';
+
 	/** The wildcard import kind — the one form that binds names it does not spell out (`headerRebindsName`). */
 	private static final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
 
@@ -109,6 +114,15 @@ final class UsingScan {
 		'ImportWildDecl',
 		USING_DECL_KIND
 	];
+
+	/**
+	 * The modules `config` opts into the extension spelling (`prefer-static-extension`'s `types`), null when it sets none. The
+	 * one answer to "does this project want calls of module M written `recv.m(…)`", read by the rule that rewrites to it and by
+	 * every rule whose fix emits a call of a module, so two rules never disagree about a spelling and ping-pong.
+	 */
+	public static inline function extensionTypes(config: LintConfig): Null<Array<String>> {
+		return config.stringListOption(EXTENSION_RULE_ID, 'types');
+	}
 
 	/**
 	 * The `using` header of `tree`: its top level, paired with the `#if … #end` region that guards the
@@ -231,7 +245,7 @@ final class UsingScan {
 	 * strictly must be, which is the direction that cannot emit a call binding nothing.
 	 */
 	public static function appendUsingInsert(
-		header: UsingHeader, module: String, edits: Array<{ span: Span, text: String }>, violations: Array<Violation>
+		header: UsingHeader, module: String, edits: Array<FixEdit>, violations: Array<Violation>
 	): Bool {
 		final scope: UsingScope = usingScopeAt(header, module, edits.map(e -> e.span.from));
 		if (scope == UsingScope.Guarded) {
@@ -298,9 +312,9 @@ final class UsingScan {
 	 * "inserted": there is no success value to hand back when nothing was produced.
 	 */
 	public static function insertUnlessCovered(
-		header: UsingHeader, module: String, edits: Array<{ span: Span, text: String }>, violations: Array<Violation>
-	): Null<{ span: Span, text: String }> {
-		final insert: { span: Span, text: String } = usingInsertEdit(header, module);
+		header: UsingHeader, module: String, edits: Array<FixEdit>, violations: Array<Violation>
+	): Null<FixEdit> {
+		final insert: FixEdit = usingInsertEdit(header, module);
 		if (!CanonicalEdit.editsOverlapAny([insert], edits)) return insert;
 		noteDeclineWhereUnset(violations, coveredUsingDecline([module]));
 		return null;
@@ -338,7 +352,7 @@ final class UsingScan {
 	 * insert below it — inside the guard included — would outrank it. Only when the file has none does
 	 * the guard's own header take over, which is where the rewrites and their imports live.
 	 */
-	public static function usingInsertEdit(header: UsingHeader, module: String): { span: Span, text: String } {
+	public static function usingInsertEdit(header: UsingHeader, module: String): FixEdit {
 		final unguarded: Null<Span> = firstUsing(header.root);
 		if (unguarded != null) return { span: new Span(unguarded.from, unguarded.from), text: 'using $module;\n' };
 		final guard: Null<QueryNode> = header.guard;
@@ -352,6 +366,16 @@ final class UsingScan {
 		return at == null
 			? { span: new Span(0, 0), text: 'using $module;\n\n' }
 			: { span: new Span(at.to, at.to), text: '\nusing $module;' };
+	}
+
+	/**
+	 * The ONE edit that declares `modules` together: every module's `using` line at the one anchor
+	 * `usingInsertEdit` picks, in the order given. Null when `modules` is empty.
+	 */
+	public static function usingInsertsEdit(header: UsingHeader, modules: Array<String>): Null<FixEdit> {
+		if (modules.length == 0) return null;
+		final inserts: Array<FixEdit> = modules.map(module -> usingInsertEdit(header, module));
+		return { span: inserts[0].span, text: inserts.map(insert -> insert.text).join('') };
 	}
 
 	/**
@@ -483,6 +507,24 @@ final class UsingScan {
 			cur = next;
 		}
 		return cur.type;
+	}
+
+	/** Whether `config` lets a rewrite insert the `using` an extension call needs (`addUsing`, default on). */
+	public static function extensionAddUsing(config: LintConfig): Bool {
+		return config.boolOption(EXTENSION_RULE_ID, 'addUsing') ?? true;
+	}
+
+	/**
+	 * Every `using` that may bind an extension at a call of the file — the header's, those under a `#if` region and the ambient
+	 * ones of `info` (the folder chain's) — what `usingConflict` is asked about.
+	 */
+	public static function reachingUsings(header: UsingHeader, info: Null<FileInfo>): Array<String> {
+		final out: Array<String> = usingModules(header).concat(info == null ? header.ambientUsings : TypeRefIndex.ambientUsings(info));
+		for (guarded in header.guardedUsings) {
+			final name: Null<String> = guarded.decl.name;
+			if (name != null && !out.contains(name)) out.push(name);
+		}
+		return out;
 	}
 
 	/** The graver of two verdicts. */

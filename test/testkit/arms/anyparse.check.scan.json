@@ -1840,6 +1840,30 @@
 			"find": ": f.pathTypes(node)",
 			"replace": ": null",
 			"note": "a path is never typed, so a String path is reported with advice that does not compile"
+		},
+		{
+			"name": "M-PSE-CLOSURE-USING",
+			"type": "anyparse.check.scan.ReceiverShadow",
+			"method": "verdictFor",
+			"find": "\n\t\t\t&& members.closureFreeOfExtensionTypes(receiverType, typing.file, at)",
+			"replace": "",
+			"note": "the structural path ignores @:using on the receiver's type closure"
+		},
+		{
+			"name": "M-RECEIVER-SHADOW-MEMBER",
+			"type": "anyparse.check.scan.ReceiverShadow",
+			"method": "verdictFor",
+			"find": "members.memberShadowsExtension(receiverType, method)",
+			"replace": "false",
+			"note": "a member of the receiver's type is not read as shadowing the extension, so the reason a call stays qualified names the wrong cause"
+		},
+		{
+			"name": "M-RECEIVER-SHADOW-LACKS",
+			"type": "anyparse.check.scan.ReceiverShadow",
+			"method": "verdictFor",
+			"find": "members.typeProvablyLacksMember(receiverType, method, typing.file, at)\n\t\t\t&& members.closureFreeOfExtensionTypes(receiverType, typing.file, at)",
+			"replace": "true",
+			"note": "an unproven receiver type counts as one that lacks the member, so an extension call may bind a member of that type"
 		}
 	]
 }

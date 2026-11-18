@@ -1287,17 +1287,89 @@
 			"name": "M-PREFER-HELPER-IMPORT-UNGROUPED",
 			"type": "anyparse.check.common.design.PreferHelper",
 			"method": "fixGrouped",
-			"find": "group: imports.groupOf(site.template.typePath)",
-			"replace": "group: null",
+			"find": "gGroup : null) : imports.groupOf(site.template.typePath)",
+			"replace": "gGroup : null) : null",
 			"note": "a rewrite and the import it needs are bisected apart, so a reverted rewrite can leave its import behind unused"
 		},
 		{
 			"name": "M-PREFER-HELPER-IMPORTED-GROUPED",
 			"type": "anyparse.check.common.design.PreferHelper",
 			"method": "fixGrouped",
-			"find": "group: imports.groupOf(site.template.typePath)",
-			"replace": "group: imports.groupOf(site.template.typePath) ?? 0",
+			"find": "gGroup : null) : imports.groupOf(site.template.typePath)",
+			"replace": "gGroup : null) : imports.groupOf(site.template.typePath) ?? 0",
 			"note": "a rewrite that needs no import is tied into one group with the file's others, so one rejected rewrite reverts them all"
+		},
+		{
+			"name": "M-PREFER-HELPER-EXT-OFF",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "spellingOf",
+			"find": "extension: reason == null,",
+			"replace": "extension: false,",
+			"note": "a listed module's helper is never spelled as an extension call, so prefer-static-extension keeps asking for what prefer-helper writes"
+		},
+		{
+			"name": "M-PREFER-HELPER-USING-UNGROUPED",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "fixGrouped",
+			"find": "(site.spelling.needsUsing ? usingGroup : null)",
+			"replace": "null",
+			"note": "the using insert has no group with its rewrite, so the oracle's revert of the rewrite leaves a declaration nothing needs"
+		},
+		{
+			"name": "M-PREFER-HELPER-USING-ALWAYS",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "spellingOf",
+			"find": "needsUsing: reason == null && UsingScan.usingScopeAt(ext.header, template.typePath, [span.from]) == UsingScope.Absent,",
+			"replace": "needsUsing: reason == null,",
+			"note": "a using the file already declares is inserted again"
+		},
+		{
+			"name": "M-PREFER-HELPER-UNLISTED-EXT",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "spellingOf",
+			"find": "ext == null || !ext.modules.contains(template.typePath)",
+			"replace": "ext == null",
+			"note": "every helper is spelled as an extension once any helper's module is listed"
+		},
+		{
+			"name": "M-PREFER-HELPER-ADDUSING-OFF",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "qualifiedReason",
+			"find": "scope == UsingScope.Absent && !ext.addUsing ?",
+			"replace": "false ?",
+			"note": "addUsing:false is ignored, so an extension call is written where the file has no using"
+		},
+		{
+			"name": "M-PREFER-HELPER-GUARDED-USING",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "qualifiedReason",
+			"find": "if (scope == UsingScope.Guarded) return UsingScan.guardedUsingDecline(path, 'this call');",
+			"replace": "",
+			"note": "a using only a #if region declares is read as in scope, so an extension call binds nothing in the builds the region is compiled out of"
+		},
+		{
+			"name": "M-PREFER-HELPER-USING-GROUP-COLLIDES",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "fixGrouped",
+			"find": "final usingGroup: Int = imports.edits.length;",
+			"replace": "final usingGroup: Int = 0;",
+			"note": "the using shares the first import's group, so an unlisted module's qualified call is reverted with the extension call's using"
+		},
+		{
+			"name": "M-PREFER-HELPER-EXTENSIBLE-ALWAYS",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "isExtensible",
+			"find": "params.length > 0 && !member.excludedFromExtensions && !calls.exists(params[0])",
+			"replace": "true",
+			"note": "a helper that cannot be called on its first argument is spelled as an extension"
+		},
+		{
+			"name": "M-PREFER-HELPER-USING-CONFLICT-IGNORED",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "qualifiedReason",
+			"find": "if (UsingScan.usingConflict(ext.usings, path, member, ctx.plugin, () -> ext.index, ctx.file) != UsingConflict.Clear)",
+			"replace": "if (false)",
+			"note": "another using that could supply the name no longer keeps the call qualified"
 		}
 	]
 }

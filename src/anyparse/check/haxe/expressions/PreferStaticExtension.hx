@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.haxe.expressions.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.haxe.facts.FactsTypeOracle;
+import anyparse.check.scan.ReceiverShadow;
 import anyparse.check.scan.RunScan;
 import anyparse.check.scan.SpanRender;
 import anyparse.check.scan.UsingScan;
@@ -13,7 +14,6 @@ import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ModuleScan;
 import anyparse.query.ParseGate;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefIndex;
@@ -185,7 +185,7 @@ private typedef Channels = {
  * either deleted region refuses the edit and leaves the site a report-only finding. Every
  * receiver that reaches the fixable set is an identifier, a plain field path, a method call on
  * one of those, or a string literal — all postfix-safe — so the spliced receiver never needs
- * parentheses. That INVARIANT is enforced in `receiverNominal`, by a kind whitelist in front of
+ * parentheses. That INVARIANT is enforced in `ReceiverShadow`, by a kind whitelist in front of
  * the resolution walk rather than by a test here: the walk is shared with a gate whose
  * conservative direction is the opposite one, so its own answer cannot be the guarantee.
  *
@@ -245,7 +245,7 @@ private typedef Channels = {
 final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 
 	/** The rule id, also the `apq.json` option key. */
-	private static inline final RULE_ID: String = 'prefer-static-extension';
+	private static inline final RULE_ID: String = UsingScan.EXTENSION_RULE_ID;
 
 	/** A candidate call has at least [callee, receiver] children. */
 	private static inline final MIN_CALL_CHILDREN: Int = 2;
@@ -420,18 +420,12 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		symbols: () -> Null<SymbolIndex>
 	): Array<Null<Candidate>> {
 		if (sites.length == 0) return [];
-		final declaredTypes: Map<Int, String> = s.typed.declaredTypes(source);
-		// DEEP-mode resolution context (see `receiverNominal`): built once per file, and only for a
-		// file that actually holds a call on a configured module.
-		final chain: ChainTypeContext = {
-			declaredTypeSources: s.typed.declaredTypeSources(source),
-			source: source,
-			typeSyntax: plugin.typeSyntax
-		};
+		// Built once per file, and only for a file that actually holds a call on a configured module.
+		final typing: ReceiverTyping = ReceiverShadow.typingOf(s.typed, plugin, tree, source, file, symbols);
 		// The conflict verdict depends only on (module, method), while a file repeats the same
 		// pair across every call site — and each miss costs a whole-index member-closure query.
 		final conflicts: Map<String, UsingConflict> = [];
-		return sites.map(site -> classify(site, tree, source, file, s, plugin, symbols, declaredTypes, chain, conflicts));
+		return sites.map(site -> classify(site, tree, source, file, s, plugin, symbols, typing, conflicts));
 	}
 
 	/**
@@ -489,12 +483,8 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 
 	/** The per-file `types` / `addUsing` options, with each configured module paired to the simple name a call site is matched by. */
 	private static function readOptions(config: LintConfig): Options {
-		final modules: Array<String> = config.stringListOption(RULE_ID, 'types') ?? ['Lambda', 'StringTools'];
-		return {
-			modules: modules,
-			simpleNames: modules.map(CheckScan.simpleModuleName),
-			addUsing: config.boolOption(RULE_ID, 'addUsing') ?? true
-		};
+		final modules: Array<String> = UsingScan.extensionTypes(config) ?? ['Lambda', 'StringTools'];
+		return { modules: modules, simpleNames: modules.map(CheckScan.simpleModuleName), addUsing: UsingScan.extensionAddUsing(config) };
 	}
 
 	/** Every call in `tree` that cleared the structural + conflict gates, each carrying its receiver verdict and message. */
@@ -528,7 +518,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	 */
 	private static function classify(
 		site: ExtensionSite, root: QueryNode, source: String, file: String, s: Seams, plugin: GrammarPlugin,
-		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, chain: ChainTypeContext, conflicts: Map<String, UsingConflict>
+		symbols: () -> Null<SymbolIndex>, typing: ReceiverTyping, conflicts: Map<String, UsingConflict>
 	): Null<Candidate> {
 		final call: QueryNode = site.call;
 		final method: String = site.method;
@@ -542,12 +532,16 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		final conflict: UsingConflict = conflicts[key] ?? UsingScan.usingConflict(channels.usings, module, method, plugin, symbols, file);
 		conflicts[key] = conflict;
 		if (channels.elsewhere || conflict == UsingConflict.Conflict) return null;
-		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, chain, symbols, file);
-		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
-		if (nominal != null && nominal == s.dynamicTypeName) return null;
-		final structural: Null<Verdict> = verdictFor(nominal, method, symbols, file, callSpan.from);
-		final judged: Null<Verdict> = structural == Verdict.UnresolvedReceiver && nominal == null
-			? factsVerdict(call, recv, root, s, chain, source, file, module, method, plugin, channels.usings)
+		final receiver: ReceiverJudgement = ReceiverShadow.judge(recv, method, typing, callSpan.from);
+		final structural: Null<Verdict> = switch receiver.verdict {
+			// a same-name member wins over the extension; a `Dynamic` receiver dispatches none at RUNTIME while the rewrite compiles
+			case Shadowed, DynamicReceiver: null;
+			case Free: Verdict.Fixable;
+			case UnresolvedReceiver: Verdict.UnresolvedReceiver;
+			case UnresolvedClosure: Verdict.UnresolvedClosure;
+		};
+		final judged: Null<Verdict> = structural == Verdict.UnresolvedReceiver && receiver.nominal == null
+			? factsVerdict(call, recv, root, s, typing.chain, source, file, module, method, plugin, channels.usings)
 			: structural;
 		if (judged == null) return null;
 		final settled: Verdict = judged;
@@ -647,32 +641,6 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	}
 
 	/**
-	 * The receiver verdict for the resolved nominal `nominal`, or null when the site must be
-	 * DROPPED because the receiver type — or a supertype — declares `method` itself: Haxe picks
-	 * that instance member over the extension, so the rewrite would silently retarget. That shadow
-	 * question is `MemberLookup.memberShadowsExtension`, shared with the four `Lambda`-targeting rules
-	 * that emit the same call shape; this rule is the only one that also needs the ABSENCE half,
-	 * because it reports a hedged finding where they simply keep quiet.
-	 */
-	private static function verdictFor(
-		nominal: Null<String>, method: String, symbols: () -> Null<SymbolIndex>, file: String, at: Int
-	): Null<Verdict> {
-		final resolved: Null<SymbolIndex> = symbols();
-		if (nominal == null || resolved == null) return Verdict.UnresolvedReceiver;
-		final receiverType: String = nominal;
-		final index: SymbolIndex = resolved;
-		return if (index.typing.members.memberShadowsExtension(receiverType, method))
-			null
-		else if (
-			index.typing.members.typeProvablyLacksMember(receiverType, method, file, at)
-			&& index.typing.members.closureFreeOfExtensionTypes(receiverType, file, at)
-		)
-			Verdict.Fixable
-		else
-			Verdict.UnresolvedClosure;
-	}
-
-	/**
 	 * The verdict of the compiler's facts on a receiver the structural walk left unresolved (`StaticExtensionFacts`), or
 	 * null to DROP the site when they prove a same-name member or a `Dynamic` receiver. Only an identifier bound to a
 	 * declaration whose type is fixed before the call is typed is asked: one that WRITES its type, or one the facts prove
@@ -704,69 +672,6 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 			case Shadowed, DynamicReceiver: null;
 			case Unproven: Verdict.UnresolvedReceiver;
 		};
-	}
-
-	/**
-	 * The receiver's nominal type name, or null when it does not resolve to one the extension
-	 * gates can reason about. A `stringLiteralKinds` receiver takes its nominal from
-	 * `literalTypeNames`; an identifier, a plain field path or a METHOD CALL on either goes
-	 * through `NominalTypes.expressionTypeNominal`, which reads a call tail's nominal off the
-	 * method's declared return type. A bare self-reference is refused because its meaning differs
-	 * inside an abstract, and a nullable / top-type wrapper (`Null` / `Any`) names no member host —
-	 * both read as unresolved. `Dynamic` passes through so the caller can drop it.
-	 *
-	 * The walk runs in DEEP mode (a `ChainTypeContext`), which adds four resolutions the shallow one
-	 * structurally cannot have: a `for` BINDER's type read off the iterable's element parameter
-	 * (`for (key in Reflect.fields(o)) StringTools.urlEncode(key)` — the binder carries no
-	 * annotation, so shallow answers null and every such site stayed hedged), a TABLED stdlib static
-	 * call's return type, type-argument substitution along a member chain, and a `using`-brought
-	 * STATIC EXTENSION on a call tail (`StringTools.endsWith(s.rtrim(), '()')` — the receiver's own
-	 * type was unresolvable before, so the site stayed hedged). Deep mode is an
-	 * OPT-IN per consumer precisely because a resolved nominal is this rule's licence to ACT: the
-	 * arms above are taken not because they resolve MORE but because each is type-CORRECT and fails
-	 * closed — the element-parameter table carries the obligation that `iterator()` and
-	 * `keyValueIterator()` agree, and the static table is refused for a type any non-std indexed
-	 * file redeclares; and the extension arm answers only after `typeProvablyLacksMember` PROVES the
-	 * receiver's own type declares no such name (a real member BEATS an extension), walks the `using`s in the compiler's reverse
-	 * declaration order, and requires the extension's first parameter to accept the receiver — by
-	 * exact nominal, by proven subtype, or by MEMBERSHIP of the two structural types the type layer
-	 * models, refused there unless the parameter's element is the signature's own free parameter. A future arm that merely
-	 * widens coverage without that guarantee does NOT belong under this opt-in.
-	 *
-	 * The substitution arm is the one whose failure is NOT closed, and the reason it is still safe
-	 * here is a downstream gate rather than the walk: `pathReceiverMemberTypeSource`'s package-blind
-	 * fallback can hand back a verbatim type-PARAMETER name (`T` off a `Box<T>` reached through a
-	 * subtype) after the substituting walk has refused it. What neutralises that is `verdictFor` —
-	 * `typeProvablyLacksMember` requires the nominal to resolve to exactly one indexed declaration,
-	 * which a bare parameter name does not, so the site degrades to report-only instead of Fixable.
-	 * Deep mode makes this strictly BETTER, not worse: with substitution the same receiver resolves
-	 * to the real argument type and the shadow gate can DROP a site the shallow walk called fixable.
-	 *
-	 * The kind whitelist in front of the walk is the POSTFIX-SAFETY invariant made structural: a
-	 * spliced receiver is written verbatim ahead of `.method(`, so only a form that already binds
-	 * tighter than a field access may resolve here. It is not merely a restatement of what
-	 * `expressionTypeNominal` happens to answer today — deep mode resolves MORE of the same kinds,
-	 * never new ones, but a future widening of the shared walk to operators or ternaries would
-	 * otherwise reach this rule as an unparenthesized splice that silently reassociates. No fixture
-	 * can discriminate the whitelist while that widening has not happened — the walk answers null
-	 * for every kind outside it — and that is the point: it is the guard that holds when it does.
-	 */
-	private static function receiverNominal(
-		recv: QueryNode, root: QueryNode, s: Seams, declaredTypes: Map<Int, String>, chain: ChainTypeContext,
-		symbols: () -> Null<SymbolIndex>, file: String
-	): Null<String> {
-		if (!s.stringLiteralKinds.contains(recv.kind) && recv.kind != s.identKind && recv.kind != s.fieldKind && recv.kind != s.callKind)
-			return null;
-		final selfText: Null<String> = s.shape.selfReferenceText;
-		final span: Null<Span> = recv.span;
-		// a bare `this` outside an abstract body stays unresolved (the type doc); inside one it is the underlying value
-		if (recv.kind == s.identKind && selfText != null && recv.name == selfText) {
-			final decl: Null<TypeDeclMatch> = span == null ? null : TypeResolver.enclosingTypeDecl(root, span);
-			if (decl == null || !(s.shape.underlyingThisTypeKinds ?? []).contains(decl.kind)) return null;
-		}
-		final nominal: Null<String> = NominalTypes.expressionTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file, chain);
-		// `Dynamic` is answered as itself (the caller drops it) before any nullable wrapper it may also be listed as
-		return nominal != null && nominal != s.dynamicTypeName && s.nullableWrappers.contains(nominal) ? null : nominal;
 	}
 
 	/**
@@ -814,16 +719,8 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 	 * from "inserted", which is the shape `UsingScan.appendUsingInsert` had on the same branch.
 	 */
 	private static function appendUsingInserts(header: UsingHeader, modules: Array<String>, edits: Array<FixEdit>): Bool {
-		var anchor: Null<Span> = null;
-		var text: String = '';
-		for (module in modules) {
-			final insert: FixEdit = UsingScan.usingInsertEdit(header, module);
-			anchor = insert.span;
-			text += insert.text;
-		}
-		final span: Null<Span> = anchor;
-		if (span == null) return true;
-		final edit: { span: Span, text: String } = { span: span, text: text };
+		final edit: Null<FixEdit> = UsingScan.usingInsertsEdit(header, modules);
+		if (edit == null) return true;
 		if (CanonicalEdit.editsOverlapAny([edit], edits)) return false;
 		edits.push(edit);
 		return true;

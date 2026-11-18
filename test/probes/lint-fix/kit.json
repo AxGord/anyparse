@@ -2900,6 +2900,45 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PH-EXTENSION-FORM-MIXED-MODULES",
+			"note": "prefer-helper with one listed and one unlisted helper module in a body: the listed one becomes an extension call with a using, the unlisted one stays qualified with an import, and the program still prints the same list",
+			"argv": [
+				"hxq",
+				"lint",
+				"src/app/User.hx",
+				"src/util",
+				"--rule",
+				"prefer-helper",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"src/app/User.hx": "package app;\n\nimport haxe.ds.StringMap;\n\nclass User {\n\tpublic function new() {}\n\n\tpublic function f(xs:Array<Int>, x:Int):Void {\n\t\tif (!xs.contains(x)) xs.push(x);\n\t\txs.push(1);\n\t\txs.push(2);\n\t}\n\n\tstatic function main() {\n\t\tfinal xs:Array<Int> = [];\n\t\tnew User().f(xs, 3);\n\t\tSys.println(xs);\n\t}\n}\n",
+				"src/util/Arrays.hx": "package util;\n\nclass Arrays {\n\t@:preferHelper\n\tpublic static function pushTwo<T>(xs:Array<T>, a:T, b:T):Void {\n\t\txs.push(a);\n\t\txs.push(b);\n\t}\n}\n",
+				"src/util/Groups.hx": "package util;\n\nclass Groups {\n\t@:preferHelper\n\tpublic static function pushUnique<T>(xs:Array<T>, x:T):Void {\n\t\tif (!xs.contains(x)) xs.push(x);\n\t}\n}\n",
+				"build.hxml": "-cp src\n-main app.User\n--interp\n",
+				"apq.json": "{\"compilerOracle\":\"build.hxml\",\"rules\":{\"prefer-helper\":{\"marker\":\"@:preferHelper\"},\"prefer-static-extension\":{\"types\":[\"util.Groups\"]}}}\n"
+			},
+			"compile": {
+				"args": [
+					"build.hxml"
+				],
+				"run": true
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "8937ac67dca03b10",
+				"files": "2a26af49a9abaad1",
+				"compiles": [
+					true
+				],
+				"sameRun": [
+					true
+				]
+			}
 		}
 	]
 }

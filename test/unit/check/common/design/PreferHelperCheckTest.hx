@@ -4,6 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
+import anyparse.check.SourceEntry;
 import anyparse.check.common.design.PreferHelper;
 import anyparse.query.CanonicalEdit;
 
@@ -44,6 +45,20 @@ class PreferHelperCheckTest extends Test {
 	private static final DESCENT: String =
 		'for (c in xs) {\n\t\t\tfinal found = name(c);\n\t\t\tif (found != null) return found;\n\t\t}\n\t\treturn null;';
 	private static final PUSH: String = 'final ys = m[k] ?? [];\n\t\tys.push(v);\n\t\tm[k] = ys;';
+
+	/** A marked helper named after a member `Array` declares, so a call on an array reads as the member, not as the helper. */
+	private static final SHADOWED: String = 'package util;\n\nclass Groups {\n\t@:preferHelper\n'
+		+ '\tpublic static function push<T>(xs:Array<T>, x:T):Void {\n\t\tif (!xs.contains(x)) xs.push(x);\n\t}\n}\n';
+
+	/** The std `Array` the receiver resolves to: no `pushUnique`, a `push`. */
+	private static final ARRAY: String =
+		'extern class Array<T> { var length(default, null):Int; function push(x:T):Int; function contains(x:T):Bool; }';
+
+	/** `util.Groups` spelled as an extension, as `prefer-static-extension` is configured to. */
+	private static final EXT: String =
+		'{"rules":{"prefer-helper":{"marker":"@:preferHelper"},"prefer-static-extension":{"types":["util.Groups"]}}}';
+
+	private static final UNIQUE: String = 'if (!xs.contains(x)) xs.push(x);';
 
 	@:pin('control')
 	@:killer('M-PREFER-HELPER-NO-SITE')
@@ -257,8 +272,175 @@ class PreferHelperCheckTest extends Test {
 		Assert.isNull(new PreferHelper().skipReason('app/User.hx', LintConfig.parse(CONFIG)));
 	}
 
+	/** The call of a helper of a module the project spells as an extension becomes `recv.member(…)`, and the file gains its `using`. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-EXT-OFF')
+	public function testAListedModuleIsCalledAsAnExtension(): Void {
+		final vs: Array<Violation> = violationsOf(typed(UNIQUE), EXT);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('as `xs.pushUnique(x)`') != -1, vs[0].message);
+		final out: String = fixResultOf(typed(UNIQUE), EXT);
+		Assert.isTrue(out.indexOf('\t\txs.pushUnique(x);\n') != -1, out);
+		Assert.isTrue(out.indexOf('using util.Groups;\n') != -1, out);
+		Assert.isTrue(out.indexOf('import util.Groups') == -1, out);
+		Assert.isTrue(out.indexOf('Groups.pushUnique') == -1, out);
+	}
+
+	/** The `using` shares the group of its rewrite, so the oracle's revert of the rewrite takes the declaration along. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-USING-UNGROUPED')
+	public function testTheUsingSharesTheGroupOfItsRewrite(): Void {
+		final edits: Array<GroupedEdit> = groupedEditsOf(typed(UNIQUE), EXT);
+		final usings: Array<GroupedEdit> = edits.filter(e -> e.text.indexOf('using ') != -1);
+		final calls: Array<GroupedEdit> = edits.filter(e -> e.text.indexOf('using ') == -1);
+		Assert.equals(2, edits.length);
+		Assert.equals(1, usings.length);
+		Assert.equals(1, calls.length);
+		if (usings.length != 1 || calls.length != 1) return;
+		Assert.notNull(usings[0].group);
+		Assert.equals(usings[0].group, calls[0].group);
+	}
+
+	/** A `using` the file already declares is no edit, so the rewrite stays a bisect unit of its own. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-USING-ALWAYS')
+	public function testADeclaredUsingAddsNoEdit(): Void {
+		final files: Array<SourceEntry> = typed(UNIQUE);
+		final declared: Array<SourceEntry> = [
+			{ file: files[0].file, source: files[0].source.replace('package app;\n', 'package app;\n\nusing util.Groups;\n') }
+		].concat(files.slice(1));
+		final edits: Array<GroupedEdit> = groupedEditsOf(declared, EXT);
+		Assert.equals(1, edits.length);
+		if (edits.length != 1) return;
+		Assert.equals('xs.pushUnique(x);', edits[0].text);
+		Assert.isNull(edits[0].group);
+	}
+
+	/** A helper of a module the project does not list keeps the qualified call and its import, whatever else it lists. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-UNLISTED-EXT')
+	public function testAModuleNotListedStaysQualified(): Void {
+		final files: Array<SourceEntry> = typed(UNIQUE).concat([{ file: 'util/Arrays.hx', source: ARRAYS }]);
+		final config: String = EXT.replace('util.Groups', 'util.Arrays');
+		final vs: Array<Violation> = violationsOf(files, config);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('as `') == -1 && vs[0].message.indexOf('qualified') == -1, vs[0].message);
+		final out: String = fixResultOf(files, config);
+		Assert.isTrue(out.indexOf('\t\tGroups.pushUnique(xs, x);\n') != -1, out);
+		Assert.isTrue(out.indexOf('import util.Groups;\n') != -1, out);
+		Assert.isTrue(out.indexOf('using util') == -1, out);
+	}
+
+	/** An instance member of the receiver's type outranks a static extension, so the call stays qualified and the finding says why. */
+	@:pin('control')
+	@:killer('M-RECEIVER-SHADOW-MEMBER')
+	public function testAReceiverMemberOfTheNameKeepsTheQualifiedCall(): Void {
+		final vs: Array<Violation> = violationsOf(typed(UNIQUE, SHADOWED), EXT);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('qualified: the receiver\'s type declares a member `push`') != -1, vs[0].message);
+		final out: String = fixResultOf(typed(UNIQUE, SHADOWED), EXT);
+		Assert.isTrue(out.indexOf('\t\tGroups.push(xs, x);\n') != -1, out);
+		Assert.isTrue(out.indexOf('import util.Groups;\n') != -1, out);
+		Assert.isTrue(out.indexOf('using util') == -1, out);
+	}
+
+	/** A receiver the index cannot type may declare the name, so the call stays qualified. */
+	@:pin('control')
+	@:killer('M-RECEIVER-SHADOW-LACKS')
+	public function testAnUnresolvedReceiverKeepsTheQualifiedCall(): Void {
+		final vs: Array<Violation> = violationsOf(user(UNIQUE), EXT);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('qualified: the receiver\'s type') != -1, vs[0].message);
+		final out: String = fixResultOf(user(UNIQUE), EXT);
+		Assert.isTrue(out.indexOf('\t\tGroups.pushUnique(xs, x);\n') != -1, out);
+	}
+
+	/** A project that forbids inserting a `using` gets the qualified call where the file declares none. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-ADDUSING-OFF')
+	public function testAddUsingOffKeepsTheQualifiedCall(): Void {
+		final config: String = EXT.replace('"types"', '"addUsing":false,"types"');
+		final vs: Array<Violation> = violationsOf(typed(UNIQUE), config);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('addUsing is off') != -1, vs[0].message);
+		Assert.isTrue(fixResultOf(typed(UNIQUE), config).indexOf('\t\tGroups.pushUnique(xs, x);\n') != -1);
+	}
+
+	/** A `using` only a `#if` region declares does not bind the call outside it, and a second one would change the region's own calls. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-GUARDED-USING')
+	public function testAUsingOnlyARegionDeclaresKeepsTheQualifiedCall(): Void {
+		final files: Array<SourceEntry> = typed(UNIQUE);
+		final guarded: Array<SourceEntry> = [
+			{
+				file: files[0].file,
+				source: files[0].source.replace('package app;\n', 'package app;\n\n#if (sys || nodejs)\nusing util.Groups;\n#end\n')
+			}
+		].concat(files.slice(1));
+		final vs: Array<Violation> = violationsOf(guarded, EXT);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('only inside a `#if` region') != -1, vs[0].message);
+		final texts: Array<String> = editsOf(guarded, EXT).map(e -> e.text);
+		Assert.isTrue(texts.filter(t -> t.endsWith('Groups.pushUnique(xs, x);')).length == 1, texts.join(' | '));
+		Assert.isTrue(texts.filter(t -> t.indexOf('using ') != -1).length == 0, texts.join(' | '));
+	}
+
+	/** A listed and an unlisted module in one body: a `using` for the extension call, an `import` for the qualified one, in two groups. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-USING-GROUP-COLLIDES')
+	public function testAListedAndAnUnlistedSiteEachKeepTheirOwnGroup(): Void {
+		final files: Array<SourceEntry> = typed('if (!xs.contains(x)) xs.push(x);\n\t\txs.push(1);\n\t\txs.push(2);')
+			.concat([{ file: 'util/Arrays.hx', source: ARRAYS }]);
+		final edits: Array<GroupedEdit> = groupedEditsOf(files, EXT);
+		final usings: Array<GroupedEdit> = edits.filter(e -> e.text.indexOf('using util.Groups;') != -1);
+		final imports: Array<GroupedEdit> = edits.filter(e -> e.text.indexOf('import util.Arrays;') != -1);
+		Assert.equals(1, usings.length);
+		Assert.equals(1, imports.length);
+		if (usings.length != 1 || imports.length != 1) return;
+		Assert.notNull(usings[0].group);
+		Assert.notNull(imports[0].group);
+		Assert.notEquals(usings[0].group, imports[0].group);
+		final out: String = fixResultOf(files, EXT);
+		Assert.isTrue(out.indexOf('\t\txs.pushUnique(x);\n') != -1, out);
+		Assert.isTrue(out.indexOf('\t\tArrays.pushTwo(xs, 1, 2);\n') != -1, out);
+		Assert.isTrue(out.indexOf('using util.Groups;\n') != -1, out);
+		Assert.isTrue(out.indexOf('import util.Arrays;\n') != -1, out);
+	}
+
+	/** A helper that cannot be called on its first argument (`@:noUsing`) keeps the qualified call even when its module is listed. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-EXTENSIBLE-ALWAYS')
+	public function testAHelperExcludedFromExtensionsKeepsTheQualifiedCall(): Void {
+		final helpers: String = GROUPS.replace(
+			'\t@:preferHelper\n\tpublic static function pushUnique', '\t@:preferHelper\n\t@:noUsing\n\tpublic static function pushUnique'
+		);
+		final vs: Array<Violation> = violationsOf(typed(UNIQUE, helpers), EXT);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('qualified: the helper cannot be called on its first argument') != -1, vs[0].message);
+		final out: String = fixResultOf(typed(UNIQUE, helpers), EXT);
+		Assert.isTrue(out.indexOf('\t\tGroups.pushUnique(xs, x);\n') != -1, out);
+		Assert.isTrue(out.indexOf('using util') == -1, out);
+	}
+
+	/** Another `using` that could supply the same name would take the call over: the call stays qualified, the finding says why. */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-USING-CONFLICT-IGNORED')
+	public function testAnotherUsingSupplyingTheNameKeepsTheQualifiedCall(): Void {
+		final other: String = 'package util;\n\nclass Other {\n\tpublic static function pushUnique<T>(xs:Array<T>, x:T):Void {}\n}\n';
+		final files: Array<SourceEntry> = typed(UNIQUE);
+		final withOther: Array<SourceEntry> = [
+			{ file: files[0].file, source: files[0].source.replace('package app;\n', 'package app;\n\nusing util.Other;\n') }
+		].concat(files.slice(1)).concat([{ file: 'util/Other.hx', source: other }]);
+		final vs: Array<Violation> = violationsOf(withOther, EXT);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('qualified: another `using` in the file could also supply `pushUnique`') != -1, vs[0].message);
+		final out: String = fixResultOf(withOther, EXT);
+		Assert.isTrue(out.indexOf('\t\tGroups.pushUnique(xs, x);\n') != -1, out);
+		Assert.isTrue(out.indexOf('using util.Groups') == -1, out);
+	}
+
 	/** A finder whose body is `body`, with the function and closing-return helpers and a std `Array` its reads resolve to. */
-	private function finder(body: String): Array<{ file: String, source: String }> {
+	private function finder(body: String): Array<SourceEntry> {
 		final source: String = 'package app;\n\nclass Finder {\n\tpublic function new() {}\n\n'
 			+ '\tfunction g(xs:Array<Int>, v:Int):Null<String> {\n\t\t$body\n\t}\n\n\tfunction name(c:Int):Null<String> {'
 			+ '\n\t\treturn c > 1 ? \'n\' : null;\n\t}\n\n\tfunction n():Int {\n\t\treturn 1;\n\t}\n}\n';
@@ -270,7 +452,7 @@ class PreferHelperCheckTest extends Test {
 	}
 
 	/** The fixture set: the user file first (its findings are the ones fixed), then the helpers. */
-	private function user(body: String, ?helpers: String): Array<{ file: String, source: String }> {
+	private function user(body: String, ?helpers: String): Array<SourceEntry> {
 		final source: String = 'package app;\n\nclass User {\n\tpublic function new() {}\n\n'
 			+ '\tfunction f(m:Map<String, Array<Int>>, k:String, v:Int, xs:Array<Int>, x:Int):Void {\n\t\t$body\n\t}\n\n'
 			+ '\tfunction key():String {\n\t\treturn \'k\';\n\t}\n}\n';
@@ -296,17 +478,19 @@ class PreferHelperCheckTest extends Test {
 	}
 
 	/** `files[0]`'s own findings fixed through `fixGrouped`, each edit with its bisect group. */
-	private function groupedEditsOf(files: Array<{ file: String, source: String }>): Array<GroupedEdit> {
+	private function groupedEditsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<GroupedEdit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final rule: PreferHelper = check(CONFIG);
-		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(CONFIG)).filter(v -> v.file == files[0].file);
+		final rule: PreferHelper = check(config ?? CONFIG);
+		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(config ?? CONFIG))
+			.filter(v -> v.file == files[0].file);
 		return own.length == 0 ? [] : rule.fixGrouped(files[0].source, own, plugin, CheckFixture.index(files, plugin));
 	}
 
-	private function editsOf(files: Array<{ file: String, source: String }>): Array<FixEdit> {
+	private function editsOf(files: Array<{ file: String, source: String }>, ?config: String): Array<FixEdit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final rule: PreferHelper = check(CONFIG);
-		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(CONFIG)).filter(v -> v.file == files[0].file);
+		final rule: PreferHelper = check(config ?? CONFIG);
+		final own: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, resolver(config ?? CONFIG))
+			.filter(v -> v.file == files[0].file);
 		return own.length == 0 ? [] : rule.fix(files[0].source, own, plugin, CheckFixture.index(files, plugin));
 	}
 
@@ -318,14 +502,19 @@ class PreferHelperCheckTest extends Test {
 	}
 
 	/** `files[0]` with its own findings fixed, canonicalised WITHOUT reformatting, exactly as `apq lint --fix` writes it. */
-	private function fixResultOf(files: Array<{ file: String, source: String }>): String {
-		switch CanonicalEdit.canonicalize(files[0].source, editsOf(files), false, new HaxeQueryPlugin()) {
+	private function fixResultOf(files: Array<{ file: String, source: String }>, ?config: String): String {
+		switch CanonicalEdit.canonicalize(files[0].source, editsOf(files, config), false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				return text;
 			case Err(message):
 				Assert.fail('canonicalize Err: $message');
 		}
 		return '';
+	}
+
+	/** The user fixture with the std `Array` its receivers resolve to. */
+	private function typed(body: String, ?helpers: String): Array<SourceEntry> {
+		return user(body, helpers).concat([{ file: 'Array.hx', source: ARRAY }]);
 	}
 
 	/** `config` as the run's per-file resolver, which `Linter.collect` also asks the file gate through. */

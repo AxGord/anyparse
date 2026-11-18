@@ -214,6 +214,14 @@ by name may belong to another type, and a lambda loses the null narrowing a guar
 applies it only under `compilerOracle` and reverts an edit whose build breaks; without an oracle the finding is
 report-only. The helper's type is spelled as the file can see it, and the import it needs rides on the call.
 
+A helper whose module `prefer-static-extension` lists in `types` is written as an extension call instead,
+`Groups.pushUnique(configs, config)` -> `configs.pushUnique(config)`, and the `using` it needs rides on the call in place of an
+import, so the two rules never ask for opposite spellings. The call stays qualified, and the finding says why, when the
+receiver's own type declares a member of the name (an instance member wins over a static extension), the receiver's type is
+unresolved or `Dynamic`, the helper cannot be called on its first argument (`@:noUsing`, or a first parameter that is a function),
+another `using` of the file could supply the name, the file's only `using` of the module sits in a
+`#if` region that leaves the call out, or `addUsing` is `false` and the file has none.
+
 ## `refusal-assert-ignores-message`
 
 A `case` arm over a refusal constructor that passes without reading what the refusal carries — an assertion any

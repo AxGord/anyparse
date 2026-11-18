@@ -8,6 +8,8 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.PurityScan;
+import anyparse.check.scan.ReceiverShadow;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
@@ -58,13 +60,22 @@ private typedef Template = {
 	final file: String;
 	final span: Span;
 
+	/** False when the helper cannot be an extension: `@:noUsing`, or no parameter to be the receiver. */
+	final extensible: Bool;
+
 }
 
 /** The text before and after the value of a template's closing return. */
 private typedef Exit = { final head: String; final tail: String; }
 
-/** One matched copy: the replaced statements and the call's argument texts. */
-private typedef Site = { final span: Span; final template: Template; final args: Array<String>; }
+/** One matched copy: the replaced statements, the call's argument texts and how the call is spelled. */
+private typedef Site = {
+	final span: Span;
+	final template: Template;
+	final args: Array<String>;
+	final spelling: Spelling;
+}
+
 /** What `scanBody` learns of a helper's body. */
 private typedef BodyScan = {
 
@@ -87,6 +98,7 @@ private typedef BodyScan = {
 
 /** The file one site search runs over. */
 private typedef SiteCtx = {
+
 	final file: String;
 	final source: String;
 	final root: QueryNode;
@@ -94,6 +106,37 @@ private typedef SiteCtx = {
 	final regions: () -> Array<LexRegion>;
 	final seams: Seams;
 	final plugin: GrammarPlugin;
+
+	/** Null unless a helper of the file's scope sits in a module the project spells as extension calls. */
+	final extension: Null<ExtensionCtx>;
+
+}
+
+/** The project's choice of the extension spelling: the modules (`prefer-static-extension` `types`) and whether a `using` may be added. */
+private typedef ExtOptions = { final modules: Array<String>; final addUsing: Bool; }
+
+/** What a call's extension spelling is judged on in one file. */
+private typedef ExtensionCtx = {
+	final modules: Array<String>;
+	final addUsing: Bool;
+	final header: UsingHeader;
+	final usings: Array<String>;
+	final typing: Null<ReceiverTyping>;
+	final index: SymbolIndex;
+}
+
+/** How a site's call is spelled. */
+private typedef Spelling = {
+
+	/** `recv.member(rest)` instead of `Type.member(args)`. */
+	final extension: Bool;
+
+	/** The extension call needs a `using` the file does not have yet. */
+	final needsUsing: Bool;
+
+	/** Why a helper of a listed module stayed qualified; null when the module is not listed or the call is an extension. */
+	final note: Null<String>;
+
 }
 
 private typedef Seams = {
@@ -159,7 +202,7 @@ private typedef Seams = {
  * Nothing proves the call typechecks (the site's values must have the helper's parameter types, a name matched literally
  * may belong to another type, a lambda loses the null narrowing its body had in the copy), so the check is a `RiskyFix`:
  * `--fix` applies it only under a compiler oracle, reverting an edit whose build breaks, else report-only.
- * `TypeRefPrinter` spells the helper's type and adds its import.
+ * `TypeRefPrinter` spells the helper's type and its import; a module `prefer-static-extension` lists gets `recv.member(rest)` + `using`.
  *
  * Grammar-agnostic: the ident, parameter, body, local, binder, loop, call, return and lambda kinds of `RefShape` over the
  * plugin's own `parsePattern`; a plugin without `paramKinds`, `blockBodyKind` or `controlExitKinds` makes it a no-op.
@@ -207,12 +250,12 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			if (index == null) return out;
 			final templates: Array<Template> = memo[marker] ?? templatesOf(marker, index, plugin, seams);
 			memo[marker] = templates;
-			for (site in sitesIn(entry.file, entry.source, templates, index, seams, plugin)) out.push({
+			for (site in sitesIn(entry.file, entry.source, templates, index, seams, plugin, extensionOptionsOf(entry.file))) out.push({
 				file: entry.file,
 				span: site.span,
 				rule: RULE_ID,
 				severity: Severity.Info,
-				message: 'repeats the body of ${site.template.helper}(${site.template.params.join(', ')}) — call the helper'
+				message: messageOf(site)
 			});
 		}
 		return out;
@@ -248,17 +291,25 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		);
 		final wanted: Array<String> = RunScan.spanKeys(violations);
 		final sites: Array<Site> = [
-			for (site in sitesIn(file, source, templatesOf(marker, resolved, plugin, seams), resolved, seams, plugin))
-				if (wanted.contains('${site.span.from}:${site.span.to}')) site
+			for (site in sitesIn(
+				file, source, templatesOf(marker, resolved, plugin, seams), resolved, seams, plugin, extensionOptionsOf(file)
+			)) if (wanted.contains('${site.span.from}:${site.span.to}')) site
 		];
-		// The import rides on a rewrite: a file where every site declined gets no edit at all.
+		// The import and the `using` ride on a rewrite: a file where every site declined gets no edit at all.
 		if (sites.length == 0) return [];
 		final texts: Array<String> = sites.map(site -> callText(site, printer));
 		final imports: ImportGroups = printer.importGroups();
+		// The sites that need a `using` share one group with its insert, as a qualified site shares one with its import.
+		final usingGroup: Int = imports.edits.length;
 		final edits: Array<GroupedEdit> = [
-			for (i => site in sites) { span: site.span, text: texts[i], group: imports.groupOf(site.template.typePath) }
+			for (i => site in sites) {
+				span: site.span,
+				text: texts[i],
+				group: site.spelling.extension ? (site.spelling.needsUsing ? usingGroup : null) : imports.groupOf(site.template.typePath)
+			}
 		];
-		return edits.concat(imports.edits);
+		final header: UsingHeader = UsingScan.headerOf(root, source, plugin, resolved.fileInfo(file));
+		return edits.concat(imports.edits).concat(usingInsertOf(sites, header, usingGroup));
 	}
 
 	/** The marker `file`'s config names, or null. */
@@ -281,9 +332,16 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		return out;
 	}
 
+	private function extensionOptionsOf(file: String): ExtOptions {
+		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
+		return { modules: UsingScan.extensionTypes(config) ?? [], addUsing: UsingScan.extensionAddUsing(config) };
+	}
+
 	/** The helper call replacing `site`: a statement, or the helper's own closing return spelled around it. */
 	private static function callText(site: Site, printer: TypeRefPrinter): String {
-		final call: String = '${printer.print(site.template.typePath).text}.${site.template.member}(${site.args.join(', ')})';
+		final call: String = site.spelling.extension
+			? extensionCall(site)
+			: '${printer.print(site.template.typePath).text}.${site.template.member}(${site.args.join(', ')})';
 		final exit: Null<Exit> = site.template.exit;
 		return exit == null ? '$call;' : exit.head + call + exit.tail;
 	}
@@ -323,7 +381,8 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			exit: exit,
 			pattern: pattern,
 			file: file,
-			span: declSpan
+			span: declSpan,
+			extensible: isExtensible(member, params, scan.calls)
 		};
 		problems.push('its body is no pattern');
 		return null;
@@ -537,7 +596,8 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 
 	/** Every site of `templates` in `source`, outer-first and non-overlapping. */
 	private static function sitesIn(
-		file: String, source: String, templates: Array<Template>, index: SymbolIndex, seams: Seams, plugin: GrammarPlugin
+		file: String, source: String, templates: Array<Template>, index: SymbolIndex, seams: Seams, plugin: GrammarPlugin,
+		options: ExtOptions
 	): Array<Site> {
 		if (templates.length == 0) return [];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
@@ -553,7 +613,8 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			purity: purity,
 			regions: ElementSpan.lazyRegions(source, plugin),
 			seams: seams,
-			plugin: plugin
+			plugin: plugin,
+			extension: extensionOf(templates, options, root, source, file, index, plugin)
 		};
 		final found: Array<Site> = [];
 		for (template in templates) for (m in Matcher.search(template.pattern, root)) {
@@ -590,7 +651,12 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			final after: Null<Array<QueryNode>> = siblingsAfter(ctx.root, run[0], run[run.length - 1]);
 			if (after == null || after.exists(s -> mentions(s, localNames, ctx.seams))) return null;
 		}
-		return { span: span, template: template, args: args };
+		return {
+			span: span,
+			template: template,
+			args: args,
+			spelling: spellingOf(template, template.params.length == 0 ? null : m.bindings[template.params[0]], span, ctx)
+		};
 	}
 
 	/** The call's argument for `param`, or null when its binding is no value the call may take in place of the copy's. */
@@ -688,6 +754,89 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 				loopJumpKinds: loopJumps
 			}
 		};
+	}
+
+	/** Whether a call of the helper may be spelled on its first argument: a first parameter that takes a value, `@:noUsing` not set. */
+	private static function isExtensible(member: MemberInfo, params: Array<String>, calls: Map<String, Array<String>>): Bool {
+		return params.length > 0 && !member.excludedFromExtensions && !calls.exists(params[0]);
+	}
+
+	/** The extension judging context of a file, null when no template of its scope sits in a module the project spells as extensions. */
+	private static function extensionOf(
+		templates: Array<Template>, options: ExtOptions, root: QueryNode, source: String, file: String, index: SymbolIndex,
+		plugin: GrammarPlugin
+	): Null<ExtensionCtx> {
+		if (!templates.exists(t -> options.modules.contains(t.typePath))) return null;
+		final info: Null<FileInfo> = index.fileInfo(file);
+		final header: UsingHeader = UsingScan.headerOf(root, source, plugin, info);
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		return {
+			modules: options.modules,
+			addUsing: options.addUsing,
+			header: header,
+			usings: UsingScan.reachingUsings(header, info),
+			typing: provider == null ? null : ReceiverShadow.typingOf(provider, plugin, root, source, file, () -> index),
+			index: index
+		};
+	}
+
+	/** `recv.member(rest)` when the project spells the helper's module as an extension and nothing says it would bind elsewhere. */
+	private static function spellingOf(template: Template, recv: Null<QueryNode>, span: Span, ctx: SiteCtx): Spelling {
+		final ext: Null<ExtensionCtx> = ctx.extension;
+		if (ext == null || !ext.modules.contains(template.typePath)) return { extension: false, needsUsing: false, note: null };
+		final reason: Null<String> = qualifiedReason(template, recv, span, ext, ctx);
+		return {
+			extension: reason == null,
+			needsUsing: reason == null && UsingScan.usingScopeAt(ext.header, template.typePath, [span.from]) == UsingScope.Absent,
+			note: reason
+		};
+	}
+
+	/** Why the call of a helper of a listed module stays qualified, null when the extension spelling binds that helper. */
+	private static function qualifiedReason(
+		template: Template, recv: Null<QueryNode>, span: Span, ext: ExtensionCtx, ctx: SiteCtx
+	): Null<String> {
+		final typing: Null<ReceiverTyping> = ext.typing;
+		final path: String = template.typePath;
+		final member: String = template.member;
+		if (recv == null || typing == null || !template.extensible) return 'the helper cannot be called on its first argument';
+		final shadow: Null<String> = switch ReceiverShadow.judge(recv, member, typing, span.from).verdict {
+			case Free: null;
+			case Shadowed: 'the receiver\'s type declares a member `$member`, which a static extension never overrides';
+			case DynamicReceiver: 'a `Dynamic` receiver dispatches no extension';
+			case UnresolvedReceiver: 'the receiver\'s type is not resolved';
+			case UnresolvedClosure: 'the receiver\'s type may declare `$member` or bring its own extensions';
+		};
+		if (shadow != null) return shadow;
+		if (UsingScan.usingConflict(ext.usings, path, member, ctx.plugin, () -> ext.index, ctx.file) != UsingConflict.Clear)
+			return 'another `using` in the file could also supply `$member`';
+		final scope: UsingScope = UsingScan.usingScopeAt(ext.header, path, [span.from]);
+		if (scope == UsingScope.Guarded) return UsingScan.guardedUsingDecline(path, 'this call');
+		return scope == UsingScope.Absent && !ext.addUsing ? 'the file has no `using $path` and addUsing is off' : null;
+	}
+
+	/** `recv.member(rest)` for a site whose first argument is the receiver. */
+	private static function extensionCall(site: Site): String {
+		return '${site.args[0]}.${site.template.member}(${site.args.slice(1).join(', ')})';
+	}
+
+	private static function messageOf(site: Site): String {
+		final base: String = 'repeats the body of ${site.template.helper}(${site.template.params.join(', ')}) — call the helper';
+		final note: Null<String> = site.spelling.note;
+		return if (site.spelling.extension)
+			'$base as `${extensionCall(site)}`'
+		else if (note == null)
+			base
+		else
+			'$base, qualified: $note';
+	}
+
+	/** The one `using` insert the sites that need it share, grouped with them; none when every site's module is in scope. */
+	private static function usingInsertOf(sites: Array<Site>, header: UsingHeader, group: Int): Array<GroupedEdit> {
+		final modules: Array<String> = [];
+		for (site in sites) if (site.spelling.needsUsing) Groups.pushUnique(modules, site.template.typePath);
+		final insert: Null<FixEdit> = UsingScan.usingInsertsEdit(header, modules);
+		return insert == null ? [] : [{ span: insert.span, text: insert.text, group: group }];
 	}
 
 }

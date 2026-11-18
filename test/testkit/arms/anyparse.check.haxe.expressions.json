@@ -139,14 +139,6 @@
 			"note": "a using inside a conditional region is invisible to the conflict gate"
 		},
 		{
-			"name": "M-PSE-CLOSURE-USING",
-			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
-			"method": "verdictFor",
-			"find": "\n\t\t\t&& index.typing.members.closureFreeOfExtensionTypes(receiverType, file, at)",
-			"replace": "",
-			"note": "the structural path ignores @:using on the receiver's type closure"
-		},
-		{
 			"name": "M-PSE-FACTS-USING-MODULE-WIDE",
 			"type": "anyparse.check.haxe.expressions.StaticExtensionFacts",
 			"method": "usingsSupply",
