@@ -1172,7 +1172,7 @@ final class LandTest extends Test {
 					swept.push(sha);
 					return Passed;
 				},
-				compile: (tree, log) -> {
+				compile: (tree, log, _) -> {
 					compiled.push(tree);
 					makeDirectories('$tree/bin');
 					File.saveContent('$tree/bin/engine.out', 'built\n');

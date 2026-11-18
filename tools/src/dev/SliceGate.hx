@@ -16,6 +16,7 @@ import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
+import devkit.CpuMeter;
 import devkit.Excerpt;
 import devkit.Lease;
 import devkit.LeaseHistory;
@@ -383,14 +384,14 @@ final class SliceGate {
 
 	/** The build every gate needs: both binaries and the developer CLI, at once. A failure ends the run. */
 	private function build(): Bool {
-		final outcome: Outcome = _gate.summary.time(
-			'build', () -> switch Binaries.compileWith(_gate.tree, _gate.log('build.log'), [], _mode) {
+		final outcome: Outcome = _gate.summary.time('build', () -> {
+			return switch Binaries.compileWith(_gate.tree, _gate.log('build.log'), [], _mode, _gate.summary.holding) {
 				case Failed(why):
 					_gate.summary.excerpt(GateExcerpt.compile(File.getContent(_gate.log('build.log'))));
 					Failed(GateTree.clip(why));
 				case other: other;
-			}
-		);
+			};
+		});
 		return outcome.match(Passed);
 	}
 
@@ -747,12 +748,12 @@ final class SliceGate {
 			threads: threads != null && threads > 0 ? threads : null,
 			run: run
 		}, leaseModeOf(rows));
-		return if (rows != null)
-			gate.runBranch(rows.split(','), threadsOption == null)
-		else if (baseline)
-			gate.recordBaseline()
-		else
-			gate.check();
+		if (rows != null) return gate.runBranch(rows.split(','), threadsOption == null);
+		if (baseline) return gate.recordBaseline();
+		CpuMeter.begin(Path.join([logs, 'cpu']));
+		final code: Int = gate.check();
+		CpuMeter.end();
+		return code;
 	}
 
 	/**

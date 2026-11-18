@@ -125,6 +125,20 @@ final class BuildStampTest extends Test {
 		});
 	}
 
+	/** A build the stamp takes holds no thread: the caller is told the threads of the builds that ran, none when none did. */
+	@:pin('control')
+	@:killer('M-BINARIES-HELD-NAMES-ALL-BUILDS')
+	public function testTheThreadsReportedAreThoseOfTheBuildsThatRan(): Void {
+		TempDir.with(dir -> {
+			final tree: Null<String> = project(dir);
+			if (tree == null) return;
+			final reported: Array<Null<Int>> = [];
+			for (name in ['first.log', 'second.log'])
+				Assert.isTrue(Binaries.compileBuilds(tree, dir.file(name), [[HXML]], Held(4), reported.push.bind(_)).match(Passed));
+			Assert.same([4, null], reported, 'the compile held the lease, the stamped build held nothing');
+		});
+	}
+
 	/**
 	 * Build `words` in `tree` and answer whether the stamp took it instead; a failed build fails the test. The log names a line
 	 * taken from the stamp with `Binaries.CURRENT`.

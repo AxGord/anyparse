@@ -134,4 +134,19 @@ final class SummaryTest extends Test {
 		});
 	}
 
+	/** A step carries the threads it reports through `holding`, and a step that reports none inherits nothing from the one before. */
+	@:pin('control')
+	@:killer('M-SUMMARY-STEP-THREADS')
+	@:killer('M-SUMMARY-HELD-STALE')
+	public function testAStepCarriesTheThreadsItHeld(): Void {
+		final summary: Summary = new Summary();
+		Assert.isTrue(summary.time('build', () -> {
+			summary.holding(3);
+			return Passed;
+		}).match(Passed));
+		Assert.isTrue(summary.time('light', () -> Passed).match(Passed));
+		Assert.equals(3, summary.steps()[0].threads);
+		Assert.isNull(summary.steps()[1].threads, 'a step that held nothing records none');
+	}
+
 }

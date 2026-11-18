@@ -46,8 +46,10 @@ final class Binaries {
 	 * `compile`, with each build file of `typechecks` typechecked beside the three (`--no-output`: it writes nothing) — the gate
 	 * of a file no binary reaches —, each compile on a thread `mode` leases for it alone.
 	 */
-	public static function compileWith(tree: String, log: String, typechecks: Array<String>, mode: LeaseMode): Outcome {
-		return compileBuilds(tree, log, HXMLS.map(hxml -> [hxml]).concat(typechecks.map(hxml -> [hxml, '--no-output'])), mode);
+	public static function compileWith(
+		tree: String, log: String, typechecks: Array<String>, mode: LeaseMode, ?held: Null<Int> -> Void
+	): Outcome {
+		return compileBuilds(tree, log, HXMLS.map(hxml -> [hxml]).concat(typechecks.map(hxml -> [hxml, '--no-output'])), mode, held);
 	}
 
 	/**
@@ -57,9 +59,12 @@ final class Binaries {
 	 * configuration a build leaf stands for may be the leaf itself or its `checkOf` typecheck leaf. A `reusable` line whose
 	 * binaries the tree already holds for its content as it stands (`BuildStamp`) is not run again: a land's build stands for
 	 * the battery's over the same candidate; the stamp keys the tree by its real path, so the spelling a caller names it by
-	 * (a symlinked temp root) never splits one tree's stamp.
+	 * (a symlinked temp root) never splits one tree's stamp. `held` is told, before anything runs, the threads the builds that do
+	 * run hold (`heldBy`): none when the stamp takes them all.
 	 */
-	public static function compileBuilds(tree: String, log: String, builds: Array<Array<String>>, mode: LeaseMode): Outcome {
+	public static function compileBuilds(
+		tree: String, log: String, builds: Array<Array<String>>, mode: LeaseMode, ?held: Null<Int> -> Void
+	): Outcome {
 		final real: String = FileIdentity.realPath(tree);
 		final declared: Array<OracleConfig> = plainOracles(tree);
 		final oracles: Array<Null<OracleConfig>> = builds.map(words ->
@@ -73,18 +78,14 @@ final class Binaries {
 		final fingerprints: Array<Null<String>> = oracles.map(
 			oracle -> oracle == null ? null : OracleCache.fingerprint(oracle.hxml, oracle.dir, oracle.defines, read)
 		);
-		final runs: Array<Result> = pending.length == 0
-			? []
-			: Pool.of(pending.length).map(pending, i -> {
-				final words: Array<String> = oracles[i] == null ? builds[i] : ['-v'].concat(builds[i]);
-				return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
-			});
+		if (held != null) held(heldBy(mode, pending.length));
+		final runs: Array<Result> = runPending(tree, builds, oracles, pending, mode);
 		// a -v compile prints a line per parsed file and per macro on stdout: it stays out of the log and of the error a failure quotes
 		final quiet: Array<Result> = [ for (k => run in runs) oracles[pending[k]] == null ? run : run.errorsOnly() ];
-		final held: Array<String> = [
+		final reused: Array<String> = [
 			for (i => words in builds) if (!pending.contains(i)) 'haxe ${words.join(' ')}: $CURRENT'
 		];
-		File.saveContent(log, held.concat(quiet.map(run -> run.out + run.err)).join('\n'));
+		File.saveContent(log, reused.concat(quiet.map(run -> run.out + run.err)).join('\n'));
 		final after: Map<String, String> = [];
 		for (k => run in runs) {
 			final oracle: Null<OracleConfig> = oracles[pending[k]];
@@ -99,6 +100,19 @@ final class Binaries {
 		]);
 		final failed: Null<Result> = quiet.find(run -> !run.ok);
 		return failed == null ? Passed : Failed('${failed.command}: ${failed.firstError()}');
+	}
+
+	/**
+	 * The pool threads `builds` compiles that run at once hold under `mode`: one each when each leases its own (`Own`), what the
+	 * caller's lease holds under `Held`, none unpooled and none when no build runs.
+	 */
+	public static function heldBy(mode: LeaseMode, builds: Int): Null<Int> {
+		if (builds == 0) return null;
+		return switch mode {
+			case Own(_, _): builds;
+			case Held(held): held;
+			case Unpooled: null;
+		};
 	}
 
 	/**
@@ -126,6 +140,18 @@ final class Binaries {
 	 */
 	private static function reusable(words: Array<String>): Bool {
 		return (words.length == 1 && HXMLS.contains(words[0])) || words.contains('--no-output');
+	}
+
+	/** Each build of `pending` (indexes into `builds`), at once, on a thread `mode` leases for it alone; an oracle's with `-v`. */
+	private static function runPending(
+		tree: String, builds: Array<Array<String>>, oracles: Array<Null<OracleConfig>>, pending: Array<Int>, mode: LeaseMode
+	): Array<Result> {
+		return pending.length == 0
+			? []
+			: Pool.of(pending.length).map(pending, i -> {
+				final words: Array<String> = oracles[i] == null ? builds[i] : ['-v'].concat(builds[i]);
+				return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
+			});
 	}
 
 }

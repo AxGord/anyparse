@@ -117,9 +117,12 @@ final class Battery {
 		// the branches run the code this run started with, not the `dev.js` the build is about to replace
 		final self: String = workFile('dev.js');
 		File.copy(FileSystem.fullPath(js.Node.__filename), self);
-		final built: Outcome = _summary.time(
-			'build (parallel)', () -> Binaries.compileWith(_plan.repo, workFile('build.log'), [RECON_HXML], _mode)
-		);
+		final built: Outcome = _summary.time('build (parallel)', () -> {
+			return Binaries.compileWith(
+				_plan.repo, workFile('build.log'), [RECON_HXML],
+				_mode, held -> _summary.holding(BatteryBranch.branchHeld(_plan.ownLease, held))
+			);
+		});
 		if (!built.match(Passed)) {
 			Sys.println(File.getContent(workFile('build.log')));
 			Sys.println('battery: stopping — nothing below can be trusted against a failed build');

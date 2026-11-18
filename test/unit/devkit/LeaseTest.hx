@@ -215,6 +215,21 @@ final class LeaseTest extends Test {
 		});
 	}
 
+	/**
+	 * A lease taker that runs each process on several cpus holds the cpus
+	 * it leased, up to the pool's budget; one that takes none holds none.
+	 */
+	@:pin('control')
+	@:killer('M-LEASE-THREADS-OF-CORES')
+	public function testAnAskForSeveralCpusPerProcessHoldsTheCpus(): Void {
+		final own: LeaseMode = Own('/p/scripts/wf-run', 10);
+		Assert.equals(Lease.NODE_CORES, Lease.threadsOf(own, { min: 1, max: 1, cores: Lease.NODE_CORES }));
+		Assert.equals(4, Lease.threadsOf(own, { min: 1, max: 4 }));
+		Assert.equals(3, Lease.threadsOf(Own('/p/scripts/wf-run', 3), { min: 1, max: 2, cores: 2 }));
+		Assert.isNull(Lease.threadsOf(Unpooled, { min: 1, max: 1 }));
+		Assert.isNull(Lease.threadsOf(Held(4), { min: 1, max: 1 }));
+	}
+
 	/** A workflow plugin root in `dir` whose `scripts/wf-run` is the fake one. */
 	private static function pluginRoot(dir: TempDir): String {
 		final root: String = dir.file('plugin');

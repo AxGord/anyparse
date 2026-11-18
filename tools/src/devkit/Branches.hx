@@ -91,14 +91,19 @@ final class Branches {
 				excerpt: Excerpt.errors(ran.out + ran.err + ran.failure)
 			};
 		}
-		for (name in order) {
+		// a branch with no line in the caller's table (a measurement kept beside it) still holds a lease: its steps go to the ledger
+		final beside: Array<String> = [ for (names in branches) for (name in names) if (!order.contains(name)) name ];
+		for (name in order.concat(beside)) {
 			final step: Null<Step> = steps[name];
 			if (step == null) continue;
 			final waited: Null<Float> = waits[name];
 			if (waited != null) step.wait = waited;
 			final used: Null<Float> = cpus[name];
 			if (used != null) step.cpu = used;
-			into.addStep(step);
+			if (order.contains(name))
+				into.addStep(step)
+			else
+				into.addUnlisted(step);
 		}
 		into.phase(longest);
 		return readings;

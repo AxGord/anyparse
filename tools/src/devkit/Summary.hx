@@ -1,5 +1,6 @@
 package devkit;
 
+import devkit.CpuMeter.CpuStamp;
 import haxe.Exception;
 import haxe.Timer;
 
@@ -76,8 +77,14 @@ final class Summary {
 
 	private final _steps: Array<Step> = [];
 
+	/** The steps of branches that run beside the table's rows and are no line of it, which only the ledger carries. */
+	private final _unlisted: Array<Step> = [];
+
 	/** The longest wait of each fan-out, in milliseconds: fan-outs run one after another, so these add up to at most the wall. */
 	private final _phases: Array<Float> = [];
+
+	/** The pool threads the step `time` is running reports it holds (`holding`); null when it reports none. */
+	private var _held: Null<Int> = null;
 
 	/** The note the step `time` is running has set so far (`detail`). */
 	private var _note: String = '';
@@ -108,9 +115,27 @@ final class Summary {
 		_phases.push(ms);
 	}
 
+	/**
+	 * Inside a step `time` runs: the pool threads it held, which its step then carries. A step that leased nothing never calls
+	 * it, and its threads stay absent.
+	 */
+	public inline function holding(threads: Null<Int>): Void {
+		_held = threads;
+	}
+
 	/** The steps recorded so far, in run order. */
 	public inline function steps(): Array<Step> {
 		return _steps.copy();
+	}
+
+	/** Record `step` of a branch that is no line of the table: it is read by `ledgerSteps`, never printed. */
+	public inline function addUnlisted(step: Step): Void {
+		_unlisted.push(step);
+	}
+
+	/** The steps a ledger records: the table's, then those of the branches that are no line of it. */
+	public inline function ledgerSteps(): Array<Step> {
+		return _steps.concat(_unlisted);
 	}
 
 	/** Record `step` as it is, with the readings (`wait`, `cpu`, `threads`) a branch measured for it. */
@@ -135,13 +160,17 @@ final class Summary {
 	 */
 	public function time(name: String, step: () -> Outcome): Outcome {
 		final started: Float = Timer.stamp();
-		final cpuBefore: Null<Float> = CpuMeter.reading();
+		final before: Null<CpuStamp> = CpuMeter.stamp();
 		_note = '';
 		_excerpt = [];
+		_held = null;
 		final outcome: Outcome = try step() catch (exception: Exception) NotRun(exception.message);
 		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND, _note, _excerpt);
-		final cpuAfter: Null<Float> = CpuMeter.reading();
-		if (cpuBefore != null && cpuAfter != null) _steps[_steps.length - 1].cpu = cpuAfter - cpuBefore;
+		final used: Null<Float> = CpuMeter.since(before);
+		final held: Null<Int> = _held;
+		final recorded: Step = _steps[_steps.length - 1];
+		if (used != null) recorded.cpu = used;
+		if (held != null) recorded.threads = held;
 		return outcome;
 	}
 

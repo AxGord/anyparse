@@ -1,18 +1,15 @@
 package dev;
 
-import anyparse.core.PoolLease;
 import devkit.Args;
 import devkit.Branches;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.CpuMeter;
-import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.LeaseHistory;
 import devkit.Result;
 import devkit.Summary.Outcome;
 import devkit.TmpLifecycle;
-import haxe.Timer;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -50,9 +47,14 @@ final class PostLand {
 	private static inline final MS_PER_SECOND: Float = 1000;
 
 	/**
-	 * The threads the whole lint is leased: a cap on its compile fan-out, not the size of a process.
+	 * What the whole lint is leased: a cap on its compile fan-out, one process on the node engine's cpus, not the size of a process.
 	 */
-	private static inline final LINT_THREADS: Int = 1;
+	private static final LINT_ASK: Ask = {
+		min: 1,
+		max: 1,
+		priority: 0,
+		cores: Lease.NODE_CORES
+	};
 
 	private static final HXCPP_ONLY: String = '--hxcpp-only';
 	private static final HXCPP_CACHE: String = 'hxcpp-compile';
@@ -62,10 +64,6 @@ final class PostLand {
 
 	private static final LOG: String = 'log';
 	private static final PID: String = 'pid';
-
-	/** The suffix of the directory a run keeps the usage files of the processes it starts in. */
-	private static final CPU: String = 'cpu';
-
 	private static final SCRIPT: String = 'dev.js';
 	private static final WORK_PREFIX: String = 'apq-dev';
 
@@ -90,7 +88,6 @@ final class PostLand {
 
 	private static final LINT_START: String = 'echo "$LINT_MARK" >&2; exec "$$@"';
 
-
 	/** The end of the totals line of `dev shard`: its elapsed seconds and the shards it ran on. */
 	private static final SPAN: EReg = ~/ in (\d+(?:\.\d+)?)s across (\d+) shards ---/;
 
@@ -105,6 +102,14 @@ final class PostLand {
 	 */
 	public static inline function phaseMode(): LeaseMode {
 		return Lease.pooled();
+	}
+
+	/**
+	 * `body` as the phase `name` of a post-land run, recorded in the ledger with its wall, the cpu of the processes it started and
+	 * the threads it reports through the function it is given (none when it holds none the pool granted).
+	 */
+	public static inline function timed(cache: String, name: String, body: (Null<Int> -> Void) -> Outcome): Outcome {
+		return DetachedRow.record(cache, DIRECTORY, name, body);
 	}
 
 	/** The commits whose whole suite was started, has not ended and whose process is still there. */
@@ -334,12 +339,7 @@ final class PostLand {
 	 * is bounded from its grant by `PHASE_TIMEOUT_MS`: the driver's default bound for a leased job sits at what an honest whole lint takes.
 	 */
 	public static function lintLeased(mode: LeaseMode, command: Command, label: String): Command {
-		return Lease.take(mode, command.timeout(PHASE_TIMEOUT_MS), {
-			min: LINT_THREADS,
-			max: LINT_THREADS,
-			priority: 0,
-			cores: Lease.NODE_CORES
-		}, label);
+		return Lease.take(mode, command.timeout(PHASE_TIMEOUT_MS), LINT_ASK, label);
 	}
 
 	/** What `launch` left in `dir` for `sha`: the script copy always, the log unless `keepLog`. */
@@ -460,29 +460,6 @@ final class PostLand {
 	}
 
 	/**
-	 * `body` as the phase `name` of a post-land run, recorded in the ledger with its wall, the cpu of the processes it started and
-	 * the threads it reports through the function it is given (none when it holds none the pool granted).
-	 */
-	public static function timed(cache: String, name: String, body: (Int -> Void) -> Outcome): Outcome {
-		final at: Float = Date.now().getTime();
-		final started: Float = Timer.stamp();
-		final cpuBefore: Null<Float> = CpuMeter.reading();
-		var threads: Null<Int> = null;
-		final outcome: Outcome = body(held -> threads = held);
-		final row: LedgerRow = {
-			row: name,
-			phase: DIRECTORY,
-			wallMs: (Timer.stamp() - started) * MS_PER_SECOND,
-			at: at
-		};
-		final cpuAfter: Null<Float> = CpuMeter.reading();
-		if (cpuBefore != null && cpuAfter != null) row.cpuS = cpuAfter - cpuBefore;
-		if (threads != null) row.threads = threads;
-		ExecLedger.under(cache).record(row);
-		return outcome;
-	}
-
-	/**
 	 * The verdict of a whole-suite run from its whole-lint row `linted` (never `Failed` here) and its hxcpp row `compiled`: a red
 	 * hxcpp build is red whatever the lint did, and a lint that never started leaves the run without a verdict rather than green.
 	 */
@@ -519,23 +496,21 @@ final class PostLand {
 		FileSystem.createDirectory(directory(cache));
 		File.saveContent(recordOf(cache, sha, RUNNING), '${fileOf(cache, sha, LOG)}\n');
 		File.saveContent(fileOf(cache, sha, PID), '${js.Node.process.pid}\n');
-		final started: Float = Timer.stamp();
-		CpuMeter.begin(fileOf(cache, sha, CPU));
-		// the suite run holds no lease: its phases take theirs, and the caller's `WF_THREADS` it inherited is none of its own
-		final verdict: Outcome = inWorktree(
-			repo, sha, DIRECTORY, (work, tree) -> suite ? judge(repo, sha, cache, work, tree) : hxcppHeld(tree, cache)
-		);
+
+		// the suite run holds no lease: its phases take theirs, and the caller's `WF_THREADS` it inherited is none of its own;
+		// the hxcpp-only run is one phase under one lease
+		final verdict: Outcome = if (suite) {
+			CpuMeter.begin(fileOf(cache, sha, DetachedRow.METERS));
+			final whole: Outcome = inWorktree(repo, sha, DIRECTORY, (work, tree) -> judge(repo, sha, cache, work, tree));
+			CpuMeter.end();
+			whole;
+		} else {
+			DetachedRow.run(
+				cache, directory(cache), sha, DIRECTORY, HXCPP_ROW,
+				() -> inWorktree(repo, sha, DIRECTORY, (work, tree) -> hxcppHeld(tree, cache))
+			);
+		};
 		settle(cache, sha, verdict);
-		// the hxcpp-only run is one phase under one lease: its wall and the cpu of the processes it started are known only here
-		final threads: Null<Int> = PoolLease.threads();
-		final used: Null<Float> = CpuMeter.reading();
-		CpuMeter.end();
-		if (!suite) {
-			final landed: LedgerRow = { row: HXCPP_ROW, phase: DIRECTORY, wallMs: (Timer.stamp() - started) * MS_PER_SECOND };
-			if (threads != null) landed.threads = threads;
-			if (used != null) landed.cpuS = used;
-			ExecLedger.under(cache).record(landed);
-		}
 		switch verdict {
 			case Failed(why):
 				Sys.println('post-land: $sha RED — $why');
@@ -551,10 +526,9 @@ final class PostLand {
 
 	private static function judge(repo: String, sha: String, cache: String, work: String, tree: String): Outcome {
 		final mode: LeaseMode = phaseMode();
-		final built: Outcome = timed(cache, BUILD_ROW, granted -> {
-			if (mode.match(Own(_, _))) granted(Binaries.HXMLS.length);
-			return Binaries.compileWith(tree, Path.join([work, 'build.log']), [], mode);
-		});
+		final built: Outcome = timed(
+			cache, BUILD_ROW, granted -> Binaries.compileWith(tree, Path.join([work, 'build.log']), [], mode, granted)
+		);
 		switch built {
 			case Failed(why):
 				return Failed('the build of $sha failed: $why');
@@ -563,7 +537,8 @@ final class PostLand {
 		final ran: Outcome = timed(cache, SHARD_ROW, granted -> shardRun(repo, sha, cache, tree, mode, granted));
 		if (ran.match(Failed(_))) return ran;
 		final linted: Outcome = timed(cache, LINT_ROW, granted -> {
-			if (mode.match(Own(_, _))) granted(LINT_THREADS);
+			final held: Null<Int> = Lease.threadsOf(mode, LINT_ASK);
+			if (held != null) granted(held);
 			return wholeLint(repo, sha, cache, tree, mode);
 		});
 		if (linted.match(Failed(_))) return linted;

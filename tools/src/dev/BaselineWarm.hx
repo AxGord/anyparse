@@ -40,6 +40,9 @@ final class BaselineWarm {
 	private static inline final POLL_MS: Int = 5000;
 	private static final DIRECTORY: String = 'baseline-warm';
 
+	/** The ledger row of the whole warm run: the one lease it holds. */
+	private static final WARM_ROW: String = 'warm';
+
 	public static function main(argv: Array<String>): Int {
 		final args: Args = new Args(argv);
 		final repo: Null<String> = args.option('--repo');
@@ -156,7 +159,10 @@ final class BaselineWarm {
 		function tip(): String return cmd('git -C $repo rev-parse HEAD').run().out.trim();
 		final verdict: Outcome = tip() != sha
 			? moved(sha)
-			: PostLand.inWorktree(repo, sha, DIRECTORY, (work, tree) -> judge(sha, recipe, work, tree, tip));
+			: DetachedRow.run(
+				cache, directory(cache), sha, DIRECTORY, WARM_ROW,
+				() -> PostLand.inWorktree(repo, sha, DIRECTORY, (work, tree) -> judge(sha, recipe, work, tree, tip))
+			);
 		Sys.println('baseline-warm: $sha ${why(verdict)}');
 		settle(cache, sha, verdict);
 		return verdict.match(Failed(_)) ? 1 : 0;

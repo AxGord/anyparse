@@ -219,4 +219,34 @@ final class ExecLedgerTest extends Test {
 		Assert.isNull(ExecLedger.spanRow([steps[2]], 500, 7, null).cpuS, 'nothing measured, nothing recorded');
 	}
 
+	/** A land that made the base's snapshot by a battery records that battery's rows and keeps only the overhead of its `base` step. */
+	@:pin('control')
+	@:killer('M-EXECLEDGER-BASE-TWICE')
+	@:killer('M-EXECLEDGER-LAND-DROPS-SNAPSHOT')
+	public function testTheLandBaseStepKeepsOnlyItsOverheadBesideTheSnapshotBattery(): Void {
+		final land: Array<LedgerRow> = [
+			{
+				row: 'base',
+				phase: 'land',
+				wallMs: 100,
+				cpuS: 30
+			},
+			{ row: 'battery', phase: 'land', wallMs: 50 }
+		];
+		final snapshot: Array<LedgerRow> = [
+			{ row: 'suite', phase: 'battery', wallMs: 70 },
+			{
+				row: 'span',
+				phase: 'battery',
+				wallMs: 80,
+				cpuS: 25
+			}
+		];
+		final out: Array<LedgerRow> = ExecLedger.ofLand(land, [], snapshot);
+		Assert.same(['base-overhead', 'battery-overhead', 'suite', 'span'], out.map(row -> row.row));
+		Assert.equals(20.0, out[0].wallMs);
+		Assert.equals(5.0, out[0].cpuS);
+
+	}
+
 }

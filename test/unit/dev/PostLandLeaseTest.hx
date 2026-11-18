@@ -1,5 +1,6 @@
 package unit.dev;
 
+import dev.DetachedRow;
 import dev.PostLand;
 import dev.Shard;
 import devkit.Command;
@@ -109,6 +110,39 @@ final class PostLandLeaseTest extends Test {
 		final tenMinutes: Int = 10 * 60 * 1000;
 		Assert.isTrue(PostLand.lintLeased(Own('/p/scripts/wf-run', 10), lint, 'post-land-lint 0123abcd').limit() > tenMinutes);
 		Assert.isTrue(PostLand.lintLeased(Unpooled, lint, 'post-land-lint 0123abcd').limit() > tenMinutes);
+	}
+
+	/** A detached run (`DetachedRow`) is one ledger row with the threads of the lease its caller granted. */
+	@:pin('control')
+	@:killer('M-DETACHED-ROW-THREADS')
+	public function testADetachedRunRecordsTheThreadsItsLeaseGranted(): Void {
+		final held: String = Sys.getEnv('WF_THREADS') ?? '';
+		CliFixture.always(() -> Sys.putEnv('WF_THREADS', held), () -> {
+			Sys.putEnv('WF_THREADS', '4');
+			TempDir.with(dir -> {
+				Assert.isTrue(DetachedRow.run(dir.path, dir.path, 'abc', 'arm-sweep', 'sweep', () -> Passed).match(Passed));
+				final rows: Array<LedgerRow> = ExecLedger.under(dir.path).rows();
+				Assert.equals(1, rows.length);
+				Assert.equals('sweep', rows[0].row);
+				Assert.equals('arm-sweep', rows[0].phase);
+				Assert.equals(4, rows[0].threads);
+				Assert.notNull(rows[0].at);
+			});
+		});
+	}
+
+	/** Where the platform meters processes, a detached run's row carries their cpu: a reading of zero, not no reading. */
+	@:pin('control')
+	@:killer('M-DETACHED-ROW-CPU')
+	public function testADetachedRunRecordsTheCpuOfItsProcesses(): Void {
+		if (Sys.systemName() != 'Mac') {
+			Assert.pass('only macOS time(1) meters');
+			return;
+		}
+		TempDir.with(dir -> {
+			Assert.isTrue(DetachedRow.run(dir.path, dir.path, 'abc', 'arm-sweep', 'sweep', () -> Passed).match(Passed));
+			Assert.notNull(ExecLedger.under(dir.path).rows()[0].cpuS);
+		});
 	}
 
 }

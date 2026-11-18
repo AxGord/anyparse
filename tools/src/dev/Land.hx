@@ -26,9 +26,9 @@ using StringTools;
 
 /**
  * The build of the three binaries `Land` runs in the candidate tree after the pick: the tree and the log the transcripts go
- * to.
+ * to, and the function the build reports the pool threads it holds through (none when it holds none).
  */
-typedef Compile = (tree: String, log: String) -> Outcome;
+typedef Compile = (tree: String, log: String, held: Null<Int> -> Void) -> Outcome;
 
 /** The battery of a `Land` run: its flags, the snapshot directory that keeps the count of landings, and how often it runs in full. */
 typedef BatteryRequest = {
@@ -225,6 +225,7 @@ final class Land {
 		_branch = options.branch;
 		_logs = options.logs;
 		_compile = options.compile;
+
 		_exec = options.exec;
 		_merged = options.merged;
 		_print = options.print;
@@ -246,13 +247,14 @@ final class Land {
 		final cache: Null<String> = battery?.cache;
 		var landing: Null<Int> = null;
 		final batteryRows: String = Path.join([_logs, 'battery.ledger']);
+		final baseRows: String = Path.join([_logs, 'battery-base.ledger']);
 		// the logs outlive an attempt: an earlier land's battery rows are never this one's
-		if (FileSystem.exists(batteryRows)) FileSystem.deleteFile(batteryRows);
+		for (file in [batteryRows, baseRows]) if (FileSystem.exists(file)) FileSystem.deleteFile(file);
 		final steps: Array<{ name: String, step: () -> Outcome }> = [
 			{ name: 'post-red', step: () -> PostLand.unsettled(cache, _postLand, _repo, _summary.detail) },
 			{ name: 'clean', step: clean },
 			{ name: 'branch', step: shape },
-			{ name: 'base', step: ensureBase.bind(battery) },
+			{ name: 'base', step: ensureBase.bind(battery, baseRows) },
 			{ name: 'pick', step: pick },
 			{ name: 'build', step: build },
 			{ name: 'fmt', step: _format.run },
@@ -283,7 +285,8 @@ final class Land {
 		final left: Null<String> = _candidate.drop();
 		_print(_summary.table());
 		final inner: Array<LedgerRow> = FileSystem.exists(batteryRows) ? new ExecLedger(batteryRows).rows() : [];
-		for (row in ExecLedger.ofLand(ExecLedger.ofSteps(LAND_PHASE, _summary.steps(), Date.now().getTime()), inner)) {
+		final snapshot: Array<LedgerRow> = FileSystem.exists(baseRows) ? new ExecLedger(baseRows).rows() : [];
+		for (row in ExecLedger.ofLand(ExecLedger.ofSteps(LAND_PHASE, _summary.steps(), Date.now().getTime()), inner, snapshot)) {
 			ledger?.record(row);
 			_print(ExecLedger.line(row));
 		}
@@ -374,7 +377,7 @@ final class Land {
 	 * main's checkout.
 	 */
 	private function build(): Outcome {
-		final outcome: Outcome = _compile(_candidate.tree, Path.join([_logs, 'build.log']));
+		final outcome: Outcome = _compile(_candidate.tree, Path.join([_logs, 'build.log']), _summary.holding);
 		_outputs = _candidate.built();
 		final weights: String = Path.join([_repo, Shard.WEIGHTS]);
 		if (FileSystem.exists(weights)) File.copy(weights, Path.join([_candidate.tree, Shard.WEIGHTS]));
@@ -461,15 +464,15 @@ final class Land {
 	 * over a detached tree of that commit that compares nothing; the snapshot is a reading, so a red battery of the base
 	 * still serves — only a base whose battery left no snapshot fails.
 	 */
-	private function ensureBase(request: Null<BatteryRequest>): Outcome {
+	private function ensureBase(request: Null<BatteryRequest>, rows: String): Outcome {
 		if (request == null) return Skipped(NO_BATTERY);
 		final head: String = git(['rev-parse', 'HEAD']).out.trim();
 		_base = Battery.keyOf(_repo, head);
 		final base: Null<String> = _base;
-		return base == null ? Passed : baseSnapshot(request, base, head);
+		return base == null ? Passed : baseSnapshot(request, base, head, rows);
 	}
 
-	private function baseSnapshot(request: BatteryRequest, base: String, head: String): Outcome {
+	private function baseSnapshot(request: BatteryRequest, base: String, head: String, rows: String): Outcome {
 		final file: String = Path.join([request.cache, '$base-suite.txt']);
 		if (FileSystem.exists(file)) return Passed;
 		final tree: String = Path.join([_logs, 'base-$base']);
@@ -477,7 +480,9 @@ final class Land {
 		final added: Result = git(['worktree', 'add', '--detach', tree, head]);
 		if (!added.ok) return Failed('no tree of the base $base to snapshot: ${added.firstError()}');
 		_summary.detail('base $base had no snapshot — made');
-		final flags: Array<String> = batteryFlags(false, true, false, request.leased, []).concat(['--no-base', '--repo', tree]);
+		// the snapshot battery's rows come back through a file of this land's own, as the landing battery's do
+		final flags: Array<String> = batteryFlags(false, true, false, request.leased, [])
+			.concat(['--no-base', '--repo', tree, '--ledger', rows]);
 		final outcome: Outcome = _exec(flags, _repo, Path.join([_logs, 'battery-base.log']));
 		dropTree(tree);
 		if (!FileSystem.exists(file)) return Failed('the snapshot of the base $base could not be made — ${why(outcome)}');
@@ -556,6 +561,7 @@ final class Land {
 		FileSystem.createDirectory(logs);
 		final recipe: WarmRecipe = args.recipe;
 		final warming: Bool = !noBattery && (recipe.frozen.length > 0 || recipe.infra.length > 0);
+		final mode: LeaseMode = Lease.ofEnvironment();
 		return land({
 			repo: repo,
 			branch: branch,
@@ -566,7 +572,7 @@ final class Land {
 			queue: args.queue,
 			skills: home == null ? null : Path.join([home, '.claude/skills']),
 			battery: noBattery ? null : request,
-			compile: (tree, log) -> Binaries.compileWith(tree, log, [], Lease.ofEnvironment()),
+			compile: (tree, log, held) -> Binaries.compileWith(tree, log, [], mode, held),
 			format: LandFormat.engine(),
 			impact: SuiteImpact.ofTree,
 			postLand: PostLand.start,

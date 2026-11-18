@@ -182,6 +182,17 @@ final class Lease {
 			+ '[ "$$WF_THREADS" -ge 1 ] || WF_THREADS=1; export WF_THREADS; fi; exec "$$@"';
 	}
 
+	/**
+	 * The most threads `ask` holds under `mode`: its size, or for an ask whose processes each run on several cpus (`Ask.cores`) the
+	 * cpus it leases, up to the pool's budget; null when `mode` takes no lease of its own for it.
+	 */
+	public static function threadsOf(mode: LeaseMode, ask: Ask): Null<Int> {
+		return switch mode {
+			case Own(_, budget): coresOf(ask) > 1 ? scaled(ask, coresOf(ask), budget).max : ask.max;
+			case _: null;
+		};
+	}
+
 	/** The pool's budget as `wf-run --status` names it, or null when the status does not come. */
 	private static function budgetThrough(wfRun: String): Null<Int> {
 		final status: Result = Command.of([wfRun, '--status']).timeout(STATUS_TIMEOUT_MS).run();

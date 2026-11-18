@@ -330,8 +330,8 @@
 			"name": "M-SUMMARY-STEP-CPU",
 			"type": "devkit.Summary",
 			"method": "time",
-			"find": "_steps[_steps.length - 1].cpu = cpuAfter - cpuBefore;",
-			"replace": "_steps[_steps.length - 1].cpu = 0;",
+			"find": "if (used != null) recorded.cpu = used;",
+			"replace": "if (used != null) recorded.cpu = 0;",
 			"note": "a timed step records no cpu of the processes it started, so a land's phases show as unmetered"
 		},
 		{
@@ -419,6 +419,62 @@
 			"method": "perProcess",
 			"force": "'WF_THREADS=$$(( $${WF_THREADS:-0} / $cores )); [ \"$$WF_THREADS\" -ge 1 ] || WF_THREADS=1; export WF_THREADS; exec \"$$@\"'",
 			"note": "a command with no grant is handed one process in WF_THREADS, so a caller outside any lease reads a lease it never took"
+		},
+		{
+			"name": "M-CPUMETER-SINCE-LOST",
+			"type": "devkit.CpuMeter",
+			"method": "since",
+			"find": "now.lost > from.lost",
+			"replace": "false",
+			"note": "a span in which a process left no usage reads the cpu of the rest, a figure too low to be a reading"
+		},
+		{
+			"name": "M-SUMMARY-STEP-THREADS",
+			"type": "devkit.Summary",
+			"method": "time",
+			"find": "if (held != null) recorded.threads = held;",
+			"replace": "if (held != null) recorded.threads = 0;",
+			"note": "a step that reported the pool threads it held records none, so the ledger cannot say what its cpu was spent against"
+		},
+		{
+			"name": "M-SUMMARY-HELD-STALE",
+			"type": "devkit.Summary",
+			"method": "time",
+			"find": "_held = null;",
+			"replace": "",
+			"note": "the threads one step reported stand on the next step that reports none"
+		},
+		{
+			"name": "M-BRANCHES-UNLISTED-DROPPED",
+			"type": "devkit.Branches",
+			"method": "run",
+			"find": "into.addUnlisted(step)",
+			"replace": "{}",
+			"note": "a branch that is no line of the table (the base lint beside the gate) holds a lease the ledger never sees"
+		},
+		{
+			"name": "M-EXECLEDGER-BASE-TWICE",
+			"type": "devkit.ExecLedger",
+			"method": "ofLand",
+			"find": "made, BASE_ROW, BASE_OVERHEAD_ROW",
+			"replace": "[], BASE_ROW, BASE_OVERHEAD_ROW",
+			"note": "the land's base step keeps the cpu of the snapshot battery it ran, which that battery's rows record again"
+		},
+		{
+			"name": "M-EXECLEDGER-LAND-DROPS-SNAPSHOT",
+			"type": "devkit.ExecLedger",
+			"method": "ofLand",
+			"find": ".concat(inner).concat(made)",
+			"replace": ".concat(inner)",
+			"note": "the rows of the snapshot battery a land ran are recorded nowhere, so the threads that battery held are unread"
+		},
+		{
+			"name": "M-LEASE-THREADS-OF-CORES",
+			"type": "devkit.Lease",
+			"method": "threadsOf",
+			"find": "scaled(ask, coresOf(ask), budget).max",
+			"replace": "ask.max",
+			"note": "a lease taker that runs a process on several cpus is recorded as holding one thread per process, not the cpus it leased"
 		}
 	]
 }

@@ -214,7 +214,7 @@ final class GateReuse {
 			assertions: readings['assertions'] ?? 0,
 			impact: readings[IMPACT],
 			sweep: FileSystem.exists(sweep) ? sweep : null,
-			timings: timingsOf(gate.summary.steps(), Date.now().getTime())
+			timings: timingsOf(gate.summary.ledgerSteps(), Date.now().getTime())
 		};
 		write(gate.log(FILE), record);
 		SuiteReuse.keep(gate.tree, gate.options.logs, record, started == ended);

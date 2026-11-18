@@ -58,6 +58,11 @@ final class ExecLedger {
 
 	public static final OVERHEAD_ROW: String = 'battery-overhead';
 
+	/** The land step that makes the base's snapshot by a battery of its own, and the row it becomes without that battery's rows. */
+	public static final BASE_ROW: String = 'base';
+
+	public static final BASE_OVERHEAD_ROW: String = 'base-overhead';
+
 	/** The battery's own elapsed wall: its branches overlap, so only this row, never the sum of the others, says what the battery took. */
 	public static final SPAN_ROW: String = 'span';
 
@@ -199,7 +204,11 @@ final class ExecLedger {
 	 * and its cpu — so a sum over the land's rows and the span counts the battery once; the battery's other rows overlap and are a
 	 * breakdown, never summed. An overhead below zero is zero.
 	 */
-	public static function withoutDoubleCount(land: Array<LedgerRow>, inner: Array<LedgerRow>): Array<LedgerRow> {
+	public static function withoutDoubleCount(
+		land: Array<LedgerRow>, inner: Array<LedgerRow>, ?step: String, ?becomes: String
+	): Array<LedgerRow> {
+		final target: String = step ?? BATTERY_ROW;
+		final renamed: String = becomes ?? OVERHEAD_ROW;
 		var covered: Float = 0;
 		var coveredCpu: Null<Float> = null;
 		for (row in inner) if (row.row == SPAN_ROW) {
@@ -208,10 +217,10 @@ final class ExecLedger {
 			if (cpu != null) coveredCpu = (coveredCpu ?? 0) + cpu;
 		}
 		return land.map(row ->
-			row.row != BATTERY_ROW
+			row.row != target
 				? row
 				: ({
-					row: OVERHEAD_ROW,
+					row: renamed,
 					phase: row.phase,
 					wallMs: Math.max(0, row.wallMs - covered),
 					waitMs: row.waitMs,
@@ -228,9 +237,13 @@ final class ExecLedger {
 		return '$LINE_TAG\t${encode(entry)}';
 	}
 
-	/** What a land records: its rows cut by `withoutDoubleCount`, then the battery's own rows `inner` as the battery wrote them. */
-	public static function ofLand(land: Array<LedgerRow>, inner: Array<LedgerRow>): Array<LedgerRow> {
-		return withoutDoubleCount(land, inner).concat(inner);
+	/**
+	 * What a land records: its rows cut by `withoutDoubleCount`, then the rows of the battery it ran `inner` and of the battery that
+	 * made the base's snapshot `snapshot`, each as that battery wrote them.
+	 */
+	public static function ofLand(land: Array<LedgerRow>, inner: Array<LedgerRow>, ?snapshot: Array<LedgerRow>): Array<LedgerRow> {
+		final made: Array<LedgerRow> = snapshot ?? [];
+		return withoutDoubleCount(withoutDoubleCount(land, inner), made, BASE_ROW, BASE_OVERHEAD_ROW).concat(inner).concat(made);
 	}
 
 	/**

@@ -45,6 +45,10 @@ final class ArmSweep {
 
 	private static inline final SWEEP_TIMEOUT_MS: Int = 12 * 60 * 60 * 1000;
 	private static final DIRECTORY: String = 'arm-sweep';
+
+	/** The ledger row of the whole sweep: the one lease it holds. */
+	private static final SWEEP_ROW: String = 'sweep';
+
 	private static final RUNNING: String = 'running';
 	private static final PID: String = 'pid';
 	private static final LOG: String = 'log';
@@ -203,8 +207,9 @@ final class ArmSweep {
 		File.saveContent(PostLand.fileIn(dir, sha, RUNNING), '${PostLand.fileIn(dir, sha, LOG)}\n');
 		File.saveContent(PostLand.fileIn(dir, sha, PID), '${js.Node.process.pid}\n');
 		PostLand.remove(PostLand.fileIn(dir, sha, FAILED));
-		final ended: Outcome = PostLand.inWorktree(
-			repo, sha, DIRECTORY, (work, tree) -> sweep(sha, work, tree, PostLand.fileIn(dir, sha, VERDICT))
+		final ended: Outcome = DetachedRow.run(
+			cache, dir, sha, DIRECTORY, SWEEP_ROW,
+			() -> PostLand.inWorktree(repo, sha, DIRECTORY, (work, tree) -> sweep(sha, work, tree, PostLand.fileIn(dir, sha, VERDICT)))
 		);
 		PostLand.remove(PostLand.fileIn(dir, sha, RUNNING));
 		PostLand.remove(PostLand.fileIn(dir, sha, PID));

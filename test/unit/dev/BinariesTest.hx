@@ -104,6 +104,26 @@ final class BinariesTest extends Test {
 		});
 	}
 
+	/** The builds that run at once hold one thread each when each leases its own, the caller's lease under one, and nothing unpooled. */
+	@:pin('control')
+	@:killer('M-BINARIES-HELD-BY-OWN')
+	public function testTheBuildsHoldTheThreadsTheirModeLeases(): Void {
+		Assert.equals(3, Binaries.heldBy(Own('/p/scripts/wf-run', 10), 3));
+		Assert.equals(4, Binaries.heldBy(Held(4), 3));
+		Assert.isNull(Binaries.heldBy(Unpooled, 3));
+	}
+
+	/** The threads of the builds that run: one each under their own lease, the caller's as it stands, none unpooled or with no build. */
+	@:pin('control')
+	@:killer('M-BINARIES-HELD-ZERO-BUILDS')
+	public function testNoBuildHoldsNoThreads(): Void {
+		Assert.equals(3, Binaries.heldBy(Own('/p/scripts/wf-run', 8), 3));
+		Assert.equals(4, Binaries.heldBy(Held(4), 2));
+		Assert.isNull(Binaries.heldBy(Unpooled, 2));
+		Assert.isNull(Binaries.heldBy(Own('/p/scripts/wf-run', 8), 0));
+		Assert.isNull(Binaries.heldBy(Held(4), 0));
+	}
+
 	/** A project of `source` as `Good.hx`, its `check.hxml`, and the `apq.json` that declares that build. */
 	private static function project(dir: TempDir, source: String, config: String = '{"compilerOracle":"check.hxml"}'): String {
 		final tree: String = dir.file('tree');

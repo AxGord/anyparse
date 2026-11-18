@@ -3,6 +3,7 @@ package unit.dev;
 import dev.Battery;
 import dev.BatteryBranch;
 import dev.BatteryPlan;
+import dev.Binaries;
 import devkit.Args;
 import devkit.Command;
 import devkit.Summary.Step;
@@ -117,6 +118,14 @@ final class BatteryBranchTest extends Test {
 			Assert.equals(Battery.branchThreads(probes, quick), BatteryBranch.kitThreads(Battery.branches(), quick));
 		Assert.equals(1, BatteryBranch.kitThreads(Battery.branches(), false), 'the probes branch holds one thread');
 		Assert.equals(2, BatteryBranch.kitThreads([['oracle', 'lint', 'kit probes']], false), 'kits in the oracle branch run on its two');
+	}
+
+	/** The build step carries what the build held only under the battery's own lease: under a held one the span carries it, once. */
+	@:pin('control')
+	@:killer('M-BATTERYBRANCH-LEASE-PER-BRANCH')
+	public function testTheBuildOfASharedLeaseHoldsNoThreadsOfItsOwn(): Void {
+		Assert.isNull(BatteryBranch.branchHeld(false, Binaries.heldBy(Held(12), 4)));
+		Assert.equals(4, BatteryBranch.branchHeld(true, Binaries.heldBy(Own('/p/scripts/wf-run', 12), 4)));
 	}
 
 }

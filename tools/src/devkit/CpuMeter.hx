@@ -6,6 +6,8 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+/** What a meter reads at one moment: the cpu of the processes that ended, and how many started ones have left no usage. */
+typedef CpuStamp = { var used: Float; var lost: Int; }
 /**
  * The one answer to "how much cpu did the processes a tool run started use, between two moments of it": every process the run
  * starts through `Command` or `Pool` is put under time(1), and `reading` is the cpu seconds of those that have ended. A step reads
@@ -112,6 +114,23 @@ final class CpuMeter {
 		job.cmd = program;
 		if (bound > 0 && (job.timeout ?? 0) <= 0) job.timeout = bound;
 		return job;
+	}
+
+	/** The meter's reading now as a stamp; null when no meter is active or this platform has none to wrap with. */
+	public static function stamp(): Null<CpuStamp> {
+		final used: Null<Float> = reading();
+		final meter: Null<CpuMeter> = _active;
+		return used == null || meter == null ? null : { used: used, lost: meter._pending.length };
+	}
+
+	/**
+	 * The cpu seconds used since `from`, or null when it is unknown: no stamp, no meter, or a process of the span that left no
+	 * usage (time(1) killed with its child, so its file stays empty) — a reading that misses a process is unmetered, never low.
+	 */
+	public static function since(from: Null<CpuStamp>): Null<Float> {
+		if (from == null) return null;
+		final now: Null<CpuStamp> = stamp();
+		return now == null || now.lost > from.lost ? null : now.used - from.used;
 	}
 
 	/** What an earlier run, or this one's processes, left in `dir`, removed: the meter owns its directory. */

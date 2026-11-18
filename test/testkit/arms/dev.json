@@ -2918,8 +2918,8 @@
 			"name": "M-LAND-STALE-BATTERY-ROWS",
 			"type": "dev.Land",
 			"method": "run",
-			"find": "if (FileSystem.exists(batteryRows)) FileSystem.deleteFile(batteryRows);",
-			"replace": "",
+			"find": "if (FileSystem.exists(file)) FileSystem.deleteFile(file);",
+			"replace": "{}",
 			"note": "an earlier attempt battery file left in the logs is read back and recorded as this land battery rows"
 		},
 		{
@@ -3053,8 +3053,8 @@
 			"name": "M-POSTLAND-LINT-LEASE-SHARE",
 			"type": "dev.PostLand",
 			"method": "lintLeased",
-			"find": "{\n\t\t\tmin: LINT_THREADS,\n\t\t\tmax: LINT_THREADS,\n\t\t\tpriority: 0,\n\t\t\tcores: Lease.NODE_CORES\n\t\t}",
-			"replace": "{\n\t\t\tmin: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS,\n\t\t\tpriority: 0,\n\t\t\tcores: Lease.NODE_CORES\n\t\t}",
+			"find": "LINT_ASK",
+			"replace": "{ min: Lease.HEAVY_MIN, max: Shard.DEFAULT_SHARDS, priority: 0, cores: Lease.NODE_CORES }",
 			"note": "the whole lint asks the pool for the share of a heavy phase, so one apq.js process holds several threads"
 		},
 		{
@@ -3075,10 +3075,10 @@
 		},
 		{
 			"name": "M-POSTLAND-PHASE-ROW-THREADS",
-			"type": "dev.PostLand",
-			"method": "timed",
-			"find": "if (threads != null) row.threads = threads;",
-			"replace": "row.wallMs = row.wallMs;",
+			"type": "dev.DetachedRow",
+			"method": "record",
+			"find": "if (threads != null) landed.threads = threads;",
+			"replace": "landed.wallMs = landed.wallMs;",
 			"note": "a phase's ledger row never records the threads it held, so thread-minutes of a post-land run vanish from the ledger"
 		},
 		{
@@ -3193,8 +3193,8 @@
 		},
 		{
 			"name": "M-POSTLAND-PHASE-ROW-AT",
-			"type": "dev.PostLand",
-			"method": "timed",
+			"type": "dev.DetachedRow",
+			"method": "record",
 			"find": "at: at",
 			"replace": "at: 0.0",
 			"note": "a phase's ledger row carries no time, so dev exec-ledger --since drops it"
@@ -3429,8 +3429,8 @@
 			"name": "M-POSTLAND-LINT-CORES-ONE",
 			"type": "dev.PostLand",
 			"method": "lintLeased",
-			"find": "cores: Lease.NODE_CORES",
-			"replace": "cores: 1",
+			"find": "LINT_ASK",
+			"replace": "{ min: 1, max: 1, priority: 0, cores: 1 }",
 			"note": "the post-land whole lint leases one thread for a node engine process, so it runs on more cpus than its lease holds"
 		},
 		{
@@ -3581,6 +3581,46 @@
 			"find": "touched.concat(touched.map(baseOf))",
 			"replace": "touched",
 			"note": "a moved file widens only to the folder it is in now, so the modules its old folder's import.hx governs are never linted at base or in the tree"
+		},
+		{
+			"name": "M-BINARIES-HELD-BY-OWN",
+			"type": "dev.Binaries",
+			"method": "heldBy",
+			"find": "case Own(_, _): builds;",
+			"replace": "case Own(_, _): 1;",
+			"note": "the builds that each lease a thread are recorded as one thread, whatever they held at once"
+		},
+		{
+			"name": "M-DETACHED-ROW-THREADS",
+			"type": "dev.DetachedRow",
+			"method": "run",
+			"find": "held(PoolLease.threads());",
+			"replace": "held(null);",
+			"note": "a detached run holds a lease through its whole life and its ledger row names none of it"
+		},
+		{
+			"name": "M-DETACHED-ROW-CPU",
+			"type": "dev.DetachedRow",
+			"method": "record",
+			"find": "if (used != null) landed.cpuS = used;",
+			"replace": "",
+			"note": "a detached run's row carries no cpu, so what it used cannot be set against what it held"
+		},
+		{
+			"name": "M-BINARIES-HELD-NAMES-ALL-BUILDS",
+			"type": "dev.Binaries",
+			"method": "compileBuilds",
+			"find": "held(heldBy(mode, pending.length))",
+			"replace": "held(heldBy(mode, builds.length))",
+			"note": "a build the stamp takes is recorded as holding a thread, so a land's repeated builds read as a lease larger than its use"
+		},
+		{
+			"name": "M-BINARIES-HELD-ZERO-BUILDS",
+			"type": "dev.Binaries",
+			"method": "heldBy",
+			"find": "if (builds == 0) return null;",
+			"replace": "",
+			"note": "no build ran and the caller's lease is still recorded as held by it"
 		}
 	]
 }

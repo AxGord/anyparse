@@ -493,4 +493,46 @@ final class BranchesTest extends Test {
 		Assert.equals('2-5', threadsOf(['heavy']), 'the heavy branch takes what the light ones leave of their cpus');
 	}
 
+	/**
+	 * A branch with no line in the caller's table leaves its step for the
+	 * ledger, with the wait and cpu of its branch, and none in the table.
+	 */
+	@:pin('control')
+	@:killer('M-BRANCHES-UNLISTED-DROPPED')
+	public function testABranchBesideTheTableLeavesItsStepForTheLedger(): Void {
+		TempDir.with(dir -> {
+			final report: Array<String> -> String = names -> Path.join([dir.path, '${names[0]}.json']);
+			final summary: Summary = new Summary();
+			final left: String = Branches.encode('r1', [
+				{
+					name: 'base-lint',
+					outcome: Passed,
+					ms: 5,
+					note: '',
+					excerpt: [],
+					threads: 1
+				}
+			], []);
+			Assert.isFalse(
+				Branches.run(
+					'r1', [['base-lint']],
+					[],
+					names -> Command.of([
+						'node',
+						'-e',
+						'require("fs").writeFileSync(process.argv[1], process.argv[2])',
+						report(names),
+						left
+					]),
+					report, summary
+				)
+					.keys()
+					.hasNext()
+			);
+			Assert.same([], summary.steps(), 'it is no line of the table');
+			Assert.same(['base-lint'], summary.ledgerSteps().map(step -> step.name));
+			Assert.equals(1, summary.ledgerSteps()[0].threads);
+		});
+	}
+
 }
