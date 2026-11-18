@@ -764,6 +764,7 @@ final class SuiteImpact {
 			final module: Null<ImpactModule> = isTestClass(path) ? moduleOf(path) : null;
 			if (module != null) classes.push(module.qualified);
 		}
+		TestTreeReaders.addTo(classes, sources, touched);
 		classes.sort(Compare.compareString);
 		return if (generated == null)
 			Selected(classes)

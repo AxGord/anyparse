@@ -46,6 +46,20 @@ final class SuiteImpactTest extends Test {
 		source('test/unit/dev/GrammarToolTest.hx', 'package unit.dev;\nimport anyparse.grammar.haxe.HxGrammar;')
 	]);
 
+	/** Two guards that walk the test tree through `SourceTree`, one that walks another root, a test, and a source module no test names. */
+	private static final GUARD_TREE: Array<ImpactSource> = [
+		source('test/unit/SourceTree.hx', 'package unit;\nclass SourceTree {}'),
+		source('test/unit/DeadTestGuardTest.hx', 'package unit;\nclass DeadTestGuardTest { function run() SourceTree.collect(\'test\'); }'),
+		source(
+			'test/unit/SweepTest.hx',
+			'package unit;\nclass SweepTest { final roots = [\'src\', \'test\']; function run() for (r in roots) SourceTree.collect(r); }'
+		),
+		source('test/unit/SrcOnlyTest.hx', 'package unit;\nclass SrcOnlyTest { function run() SourceTree.collect(\'src\'); }'),
+		source('test/unit/query/OtherTest.hx', 'package unit.query;\nclass OtherTest {}'),
+		source('test/unit/query/NewTest.hx', 'package unit.query;\nclass NewTest {}'),
+		source('src/anyparse/query/Other.hx', 'package anyparse.query;\nclass Other {}')
+	];
+
 	@:pin('control')
 	@:killer('M-SUITE-IMPACT-NOTHING-REACHED')
 	public function testACheckRuleReachesItsCategoryTestsAndEveryImporterDownToTheEngine(): Void {
@@ -483,6 +497,36 @@ final class SuiteImpactTest extends Test {
 			case other:
 				Assert.fail('$other');
 		}
+	}
+
+	@:pin('control')
+	@:killer('M-TEST-TREE-READERS-NEVER-SELECTED')
+	@:killer('M-TEST-TREE-READERS-ANY-WALKER')
+	public function testAChangedTestFileSelectsTheClassesThatWalkTheTestTree(): Void {
+		Assert.same(
+			Selected(['unit.DeadTestGuardTest', 'unit.SweepTest', 'unit.query.NewTest']),
+			SuiteImpact.scope(GUARD_TREE, [], ['test/unit/query/NewTest.hx'])
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-TEST-TREE-READERS-NEVER-SELECTED')
+	public function testARemovedTestFileSelectsThemToo(): Void {
+		Assert.same(
+			Selected(['unit.DeadTestGuardTest', 'unit.SweepTest']), SuiteImpact.scope(GUARD_TREE, [], ['test/unit/query/GoneTest.hx'])
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-TEST-TREE-READERS-ALWAYS-SELECTED')
+	public function testAChangeOutsideTheTestTreeSelectsNoGuard(): Void {
+		Assert.same(Selected([]), SuiteImpact.scope(GUARD_TREE, [], ['src/anyparse/query/Other.hx']));
+	}
+
+	@:pin('control')
+	@:killer('M-TEST-TREE-READERS-ANY-EXTENSION')
+	public function testADataFileUnderTheTestTreeSelectsNoGuard(): Void {
+		Assert.same(Selected([]), SuiteImpact.scope(GUARD_TREE, [], ['test/unit/query/fixture.json']));
 	}
 
 	private static function source(path: String, text: String): ImpactSource {

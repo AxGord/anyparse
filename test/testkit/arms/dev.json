@@ -3701,6 +3701,38 @@
 			"find": "case 'HUNG':",
 			"replace": "case 'HUNG-':",
 			"note": "a hung verdict spelled apart from MutationSlot.HUNG falls to the error arm and fails the gate"
+		},
+		{
+			"name": "M-TEST-TREE-READERS-NEVER-SELECTED",
+			"type": "dev.TestTreeReaders",
+			"method": "addTo",
+			"find": "if (!touched.exists(path -> SuiteImpact.isTest(path) && path.endsWith('.hx'))) return;",
+			"replace": "return;",
+			"note": "a change under test/ selects no class that walks the test tree, so a guard that reads every test file is left out of an impact suite"
+		},
+		{
+			"name": "M-TEST-TREE-READERS-ALWAYS-SELECTED",
+			"type": "dev.TestTreeReaders",
+			"method": "addTo",
+			"find": "if (!touched.exists(path -> SuiteImpact.isTest(path) && path.endsWith('.hx'))) return;",
+			"replace": "if (touched.length < 0) return;",
+			"note": "every change selects the tree-walking guards, so a change to a module outside test/ pays for classes it cannot move"
+		},
+		{
+			"name": "M-TEST-TREE-READERS-ANY-WALKER",
+			"type": "dev.TestTreeReaders",
+			"method": "holdsRoot",
+			"find": "text.substring(region.from + 1, region.to - 1) == ROOT",
+			"replace": "true",
+			"note": "a class that walks another root is taken for one that reads the test tree, so a source-only guard is selected by every test change"
+		},
+		{
+			"name": "M-TEST-TREE-READERS-ANY-EXTENSION",
+			"type": "dev.TestTreeReaders",
+			"method": "addTo",
+			"find": "SuiteImpact.isTest(path) && path.endsWith('.hx')",
+			"replace": "SuiteImpact.isTest(path)",
+			"note": "a change to a data file under test/ selects the tree-walking guards, which read only .hx files, so every fixture touch pays for them"
 		}
 	]
 }
