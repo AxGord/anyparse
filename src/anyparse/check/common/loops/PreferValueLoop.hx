@@ -4,7 +4,6 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.common.loops.ElementLoopRewrite.BinderChoice;
 import anyparse.check.common.loops.ElementLoopRewrite.ReachGate;
-import anyparse.check.scan.LoopScan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.SymbolIndex;

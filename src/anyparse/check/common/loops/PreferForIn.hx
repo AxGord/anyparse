@@ -1,7 +1,6 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.scan.LoopScan;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
@@ -11,7 +10,6 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 using anyparse.util.Arrays;
-using StringTools;
 
 /** The `RefShape` kinds `PreferForIn` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {

@@ -1,8 +1,9 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.common.control.BranchChain;
-import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.NegationScan;
 import anyparse.query.BinderScan;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
@@ -16,7 +17,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
 
 using anyparse.util.Strings;
-using StringTools;
 
 /** The `RefShape` kinds `PreferComprehension` reads, bundled once so the walkers take one argument. */
 typedef ComprehensionSeams = {
@@ -43,6 +43,11 @@ typedef ComprehensionSeams = {
 	var arrayLiteralKind: Null<String>;
 	var indexAccessKind: Null<String>;
 	var objectFieldKind: Null<String>;
+
+	/** The `continue` statement kind, and the condition inversion a kept guard-continue needs. */
+	var continueKind: Null<String>;
+	var negation: NegationSeams;
+	var support: Null<BooleanLogicSupport>;
 	var elementTypeParams: Map<String, Int>;
 
 	/** `GrammarPlugin.typeSyntax` — how an annotation's element type is read. */
@@ -183,6 +188,17 @@ private typedef Use = {
  * INITIALIZER is not a delimited position: this very fix dissolves it, so it
  * delimits nothing.
  *
+ * ## Kept statements
+ *
+ * What the chain refuses — a local read twice, a local off the eager spine, a leading or mid-body
+ * `if (c) continue;` — is KEPT instead of inlined (`ComprehensionFills.keptBlock`):
+ * `for (x in xs) { final y = f(x); if (y == null) continue; out.push(y); }` becomes
+ * `for (x in xs) { final y = f(x); if (y != null) y; }`. The body is admitted only when every statement ahead of
+ * the push is a single-assignment `final` local or a bare `if (c) continue;`, so nothing runs between them that the
+ * comprehension would reorder; a `var`, a second push or any other statement declines. A guard turns into the
+ * negated `if` around the statements after it, and the locals' initializers and the guards' conditions
+ * go through the self-reference gate below.
+ *
  * ## Comment hoisting
  *
  * A comment sitting in a GAP of the dissolved body's statement list — before the
@@ -213,9 +229,9 @@ private typedef Use = {
  *   `[]` — an array with elements, a `new Array()` or anything else is skipped.
  * - **Push-only body.** Every layer is a `for`, a braced block, a single-branch `if`
  *   (no `else`), or the terminal `a.push(e)`; a second statement is admitted only as
- *   the chain form above, and an `else`, a non-push call or an assignment breaks the
- *   match. A `break` / `continue` therefore cannot hide — it is not a declaration, so
- *   the chain arm rejects it exactly as the single-statement arm does.
+ *   the chain form or the kept-statement form above, and an `else`, a non-push call or an
+ *   assignment breaks the match. A `break` and a `continue` other than the bare guard
+ *   `if (c) continue;` decline.
  * - **The last statement IS the push.** A block ending in `if (a > 0) out.push(a);`
  *   is not a push statement and never matches — which is what refuses a local used
  *   across an `if`-guard boundary, where inlining would move the initializer inside
@@ -400,6 +416,9 @@ final class PreferComprehension extends RuleBase {
 			arrayLiteralKind: shape.arrayLiteralKind,
 			indexAccessKind: shape.indexAccessKind,
 			objectFieldKind: shape.objectFieldKind,
+			continueKind: shape.continueStatementKind,
+			negation: NegationScan.negationSeams(shape),
+			support: plugin.booleanLogicSupport(),
 			elementTypeParams: shape.indexedElementTypeParams ?? [],
 			typeSyntax: plugin.typeSyntax,
 			atomKinds: readAtomKinds(shape),
@@ -736,7 +755,7 @@ final class PreferComprehension extends RuleBase {
 		final nested: Null<String> = ComprehensionFills.nestedBuild(kids, name, ctx, acc);
 		if (nested != null) return nested;
 		final locals: Null<Array<ChainLocal>> = chainLocals(kids, name, ctx);
-		if (locals == null) return null;
+		if (locals == null) return ComprehensionFills.keptBlock(kids, name, ctx, acc);
 		final arg: Null<QueryNode> = pushArgument(kids[kids.length - 1], name, ctx, acc);
 		if (arg == null) return null;
 		final argSpan: Null<Span> = arg.span;

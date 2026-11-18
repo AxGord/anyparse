@@ -713,6 +713,14 @@ final class LoopScan {
 		return isIndexAccessOf(init, collection, s) && bareIdentName(init.children[1], s) == index;
 	}
 
+	/** Whether `stmt` is an else-less `if` whose then-branch is exactly `continue;`, bare or braced-single. */
+	public static function isIfContinue(stmt: QueryNode, ifKinds: Array<String>, blockStmtKind: Null<String>, continueKind: String): Bool {
+		if (!ifKinds.contains(stmt.kind) || BranchChain.hasElse(stmt)) return false;
+		final thenBranch: QueryNode = BranchChain.thenOf(stmt);
+		return thenBranch.kind == continueKind
+			|| (thenBranch.kind == blockStmtKind && thenBranch.children.length == 1 && thenBranch.children[0].kind == continueKind);
+	}
+
 	/** Whether `kind` is one of the two positions that READ a name — plain identifier, or `$name` inside a string. */
 	private static inline function isReadKind(kind: String, s: LoopSeams): Bool {
 		return kind == s.identKind || (s.stringInterpIdentKind != null && kind == s.stringInterpIdentKind);
@@ -787,14 +795,6 @@ final class LoopScan {
 	/** Whether `node` is the l-value of an assignment / increment — the first child of a `writeParentKinds` parent. */
 	private static function isWriteTarget(node: QueryNode, parent: Null<QueryNode>, s: LoopSeams): Bool {
 		return parent != null && s.writeParentKinds.contains(parent.kind) && parent.children.length >= 1 && parent.children[0] == node;
-	}
-
-	/** Whether `stmt` is an else-less `if` whose then-branch is exactly `continue;`, bare or braced-single. */
-	private static function isIfContinue(stmt: QueryNode, ifKinds: Array<String>, blockStmtKind: Null<String>, continueKind: String): Bool {
-		if (!ifKinds.contains(stmt.kind) || BranchChain.hasElse(stmt)) return false;
-		final thenBranch: QueryNode = BranchChain.thenOf(stmt);
-		return thenBranch.kind == continueKind
-			|| (thenBranch.kind == blockStmtKind && thenBranch.children.length == 1 && thenBranch.children[0].kind == continueKind);
 	}
 
 }

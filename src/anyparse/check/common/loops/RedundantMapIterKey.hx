@@ -6,8 +6,6 @@ import anyparse.query.MemberReach;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 
-using StringTools;
-
 /** The grammar seams `redundant-map-iter-key` reads: the loop kind it flags, and the kinds its VALUE binder projects as. */
 private typedef Seams = { var forStmtKind: String; var valueBinderKinds: Array<String>; var shape: RefShape; };
 

@@ -2,7 +2,6 @@ package anyparse.check.common.loops;
 
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
-import anyparse.check.scan.LoopScan;
 import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.IndexScope;
@@ -15,8 +14,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.util.Strings;
-
-using StringTools;
 
 /** The `RefShape` kinds and names this check reads, bundled once by `seamsOf`. */
 private typedef Seams = {

@@ -4,14 +4,12 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.common.loops.ElementLoopRewrite.BinderChoice;
 import anyparse.check.common.loops.ElementLoopRewrite.ReachGate;
-import anyparse.query.SymbolIndex;
-import anyparse.query.TypeSyntax;
-import anyparse.check.scan.LoopScan;
 import anyparse.check.common.naming.ShadowingLocal;
 import anyparse.query.LexicalRegions;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeSyntax;
 
 using anyparse.util.Strings;
-using StringTools;
 
 /** One matched loop: the spans the rewrite splices, the three names it re-spells, and the annotations its type gate reads. */
 private typedef Match = {

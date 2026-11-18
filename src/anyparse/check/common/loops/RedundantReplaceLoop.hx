@@ -2,7 +2,6 @@ package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.common.control.BranchChain;
-import anyparse.check.scan.LoopScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.NodeShape;
@@ -14,8 +13,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.query.TypeResolver;
 import haxe.Exception;
-
-using StringTools;
 
 /** The resolved seams `RedundantReplaceLoop` reads in both `run` and `fix`. */
 private typedef Seams = {

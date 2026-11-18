@@ -2,15 +2,12 @@ package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.common.control.BranchChain;
-import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
-
-using StringTools;
 
 /** The `RefShape` kinds `WhileTrueCondition` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {

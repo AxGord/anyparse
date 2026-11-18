@@ -4,8 +4,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
-using StringTools;
-
 /**
  * Shared engine for the collection-literal checks (`prefer-array-literal`,
  * `prefer-map-literal`): each flags an empty-argument `new <typeName>()` that the

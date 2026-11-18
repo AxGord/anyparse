@@ -813,6 +813,60 @@
 			"find": "LoopScan.countWrites(scope, name, f.seams.core) == 0",
 			"replace": "true",
 			"note": "a path root parameter assigned elsewhere in its scope, by a closure the body calls, no longer refuses, so the rewritten loop iterates an array the body no longer reads"
+		},
+		{
+			"name": "M-KEPT-BLOCK-DECLINED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keptBlock",
+			"force": "null",
+			"note": "the kept-statement arm declines every body, so a local read twice or a guard-continue is left as the loop it was"
+		},
+		{
+			"name": "M-KEPT-GUARD-BLIND",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "isGuard",
+			"force": "false",
+			"note": "no statement is read as a guard-continue, so a body holding one is declined"
+		},
+		{
+			"name": "M-KEPT-ANY-STATEMENT",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keptStatementText",
+			"find": "if (!s.localDeclKinds.contains(stmt.kind) || s.mutableDeclKinds.contains(stmt.kind)) return null;",
+			"replace": "if (s.mutableDeclKinds.contains(stmt.kind)) return null;",
+			"note": "any statement ahead of the push is kept, so a statement such as a call is carried into the comprehension block"
+		},
+		{
+			"name": "M-KEPT-INIT-UNGATED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keptStatementText",
+			"find": "checks.push(stmt.children[0]);",
+			"replace": "",
+			"note": "a kept local initializer skips the self-reference gate, so one reading the array being built folds into a comprehension that cannot read it"
+		},
+		{
+			"name": "M-KEPT-GUARD-UNGATED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keptStatementText",
+			"find": "checks.push(cond);",
+			"replace": "",
+			"note": "a kept guard condition skips the self-reference gate, so one reading the array being built folds into a comprehension that cannot read it"
+		},
+		{
+			"name": "M-KEPT-LOCAL-NAMED-AFTER-ARRAY",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keptStatementText",
+			"find": " || stmt.name == name",
+			"replace": "",
+			"note": "a kept local named after the array is admitted, so the block shadows the array the element reads and the fold changes the result"
+		},
+		{
+			"name": "M-KEPT-MULTI-DECLARATOR",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keptStatementText",
+			"find": " || stmt.children.length != 1",
+			"replace": "",
+			"note": "a multi-declarator local is kept with only its first initializer self-reference checked, so a later declarator reading the array being built folds unchecked"
 		}
 	]
 }

@@ -1,18 +1,17 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
+import anyparse.query.LexicalRegions;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.check.scan.LoopScan;
-import anyparse.check.scan.UsingScan;
-import anyparse.query.LexicalRegions;
-import anyparse.query.ElementSpan;
 
 /** The `RefShape` kinds `DeadBinderCounterLoop` reads on top of the shared `LoopScan` core. */
 private typedef Seams = {

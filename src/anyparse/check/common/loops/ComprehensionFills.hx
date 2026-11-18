@@ -1,16 +1,17 @@
 package anyparse.check.common.loops;
 
+import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionAcc;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionCtx;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionSeams;
-import anyparse.check.scan.LoopScan;
+import anyparse.check.scan.NegationScan;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.SourceText;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
-using StringTools;
+private typedef KeptStep = { var text: String; var terminated: Bool; }
 
 /**
  * The two loop shapes `prefer-comprehension` folds beyond a push-only loop, kept beside the rule so
@@ -120,6 +121,40 @@ final class ComprehensionFills {
 	}
 
 	/**
+	 * The produced element of a KEPT-STATEMENT body — locals and `if (c) continue;` guards ahead of the final
+	 * `name.push(e)` — as a block `{ final y = f(x); if (y != null) y; }`, or null when `kids` is anything else.
+	 * The one answer to "which loop bodies may keep their own statements inside a comprehension": the chain
+	 * form inlines single-use locals first, so this arm sees what the chain refuses (a local read twice, a
+	 * guard).
+	 *
+	 * Statements keep their order and their evaluation, so the body is admitted only when every statement is a
+	 * single-assignment local with one initializer (a `var`, a list, a missing initializer refuse) or a bare
+	 * else-less `if` whose branch is exactly `continue` — nothing else can run between the locals and the
+	 * element. A guard becomes the negated `if` around the rest, braced when a local follows it. The locals'
+	 * initializers and the guards' conditions join the self-reference gate like any element, and a local named
+	 * after the array, or a comment inside a kept statement, refuses.
+	 */
+	public static function keptBlock(kids: Array<QueryNode>, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
+		final s: ComprehensionSeams = ctx.seams;
+		final last: Int = kids.length - 1;
+		final checks: Array<QueryNode> = [];
+		final texts: Array<String> = [];
+		for (i in 0...last) {
+			final text: Null<String> = keptStatementText(kids[i], name, ctx, checks);
+			if (text == null) return null;
+			texts.push(text);
+		}
+		final pushed: Null<QueryNode> = PreferComprehension.pushArgument(kids[last], name, ctx, acc);
+		final element: Null<Span> = pushed?.span;
+		if (element == null) return null;
+		for (c in checks) acc.checks.push(c);
+		var steps: Array<KeptStep> = [{ text: ctx.source.substring(element.from, element.to), terminated: false }];
+		var i: Int = last;
+		while (i-- > 0) steps = isGuard(kids[i], s) ? [guardStep(texts[i], steps)] : [{ text: texts[i], terminated: true }].concat(steps);
+		return steps.length == 1 ? steps[0].text : '{ ${renderSteps(steps)} }';
+	}
+
+	/**
 	 * Whether `name[j] = v` on a binding declared with `annotation` is a plain ARRAY write: no annotation
 	 * (the `[]` initializer types the binding as an array) or one whose head is `Array`. A `Map` annotation
 	 * turns the fold into a compile error, and an abstract `@:from` an array with an `@:arrayAccess` setter
@@ -160,6 +195,41 @@ final class ComprehensionFills {
 		final index: QueryNode = target.children[1];
 		final plain: Bool = receiver.kind == s.identKind && receiver.name == name && index.kind == s.identKind && index.name == binder;
 		return plain ? assign.children[1] : null;
+	}
+
+	/** The source text of one kept statement — a local verbatim, a guard as its NEGATED condition — or null when it is neither. */
+	private static function keptStatementText(
+		stmt: QueryNode, name: String, ctx: ComprehensionCtx, checks: Array<QueryNode>
+	): Null<String> {
+		final s: ComprehensionSeams = ctx.seams;
+		final stmtSpan: Null<Span> = stmt.span;
+		if (stmtSpan == null || LexicalRegions.commentIntersects(stmtSpan.from, stmtSpan.to, ctx.regions)) return null;
+		if (isGuard(stmt, s)) {
+			final cond: QueryNode = BranchChain.condOf(stmt);
+			checks.push(cond);
+			return NegationScan.negateConditionText(cond, ctx.source, s.negation, s.support, null, null, ctx.regions);
+		}
+		if (!s.localDeclKinds.contains(stmt.kind) || s.mutableDeclKinds.contains(stmt.kind)) return null;
+		if (s.continuationKinds.contains(stmt.kind) || stmt.children.length != 1 || stmt.name == name) return null;
+		checks.push(stmt.children[0]);
+		return ctx.source.substring(stmtSpan.from, stmtSpan.to);
+	}
+
+	/** Whether `stmt` is a bare else-less `if (c) continue;` — what a comprehension expresses by skipping the element. */
+	private static function isGuard(stmt: QueryNode, s: ComprehensionSeams): Bool {
+		final continueKind: Null<String> = s.continueKind;
+		return continueKind != null && LoopScan.isIfContinue(stmt, s.ifKinds, s.blockStmtKind, continueKind);
+	}
+
+	/** The guard `if (negated) <rest>` over the statements that follow it: braced when more than one, bare when exactly one. */
+	private static function guardStep(negated: String, rest: Array<KeptStep>): KeptStep {
+		return rest.length == 1
+			? { text: 'if ($negated) ${rest[0].text}', terminated: rest[0].terminated }
+			: { text: 'if ($negated) { ${renderSteps(rest)} }', terminated: true };
+	}
+
+	private static function renderSteps(steps: Array<KeptStep>): String {
+		return steps.map(st -> st.terminated ? st.text : '${st.text};').join(' ');
 	}
 
 }

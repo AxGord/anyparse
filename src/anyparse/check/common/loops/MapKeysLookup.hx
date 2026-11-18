@@ -11,7 +11,6 @@ import anyparse.query.TokenSpans;
 import anyparse.query.TypeInfoProvider;
 
 using anyparse.util.Groups;
-using StringTools;
 
 /** Per-run resolved `RefShape` seams and the optional type provider. */
 private typedef Cfg = {

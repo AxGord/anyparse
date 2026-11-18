@@ -25,6 +25,9 @@ import anyparse.check.common.loops.PreferComprehension;
  * `?.` or an impure node in the host's value region, a `macro`, and a `$name` interpolation the plain
  * identifier scan cannot see.
  *
+ * What the chain refuses — a local read twice, out of order, under a lambda or a `?.` — stays in a BLOCK body
+ * instead (`assertKept`); the kept-statement arm itself is pinned in `PreferComprehensionKeptTest`.
+ *
  * An inlined link keeps its declaration's annotation as an ASCRIPTION unless the array declaration's
  * own ELEMENT type textually restates it at the whole-push-argument position — `Array<Cmd>` around a
  * `c:Cmd` link drops it, `Array<Dynamic>` around a `m:Map<String, Int>` link does not.
@@ -263,23 +266,19 @@ class PreferComprehensionCheckTest extends Test {
 		);
 	}
 
-	public function testMultiUseLocalNotFlagged(): Void {
-		// Inlining a twice-used local would evaluate its initializer twice.
-		Assert.equals(
-			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(a + a);\n\t\t}'))
-				.length
+	public function testMultiUseLocalKept(): Void {
+		// Inlining a twice-used local would evaluate its initializer twice, so the local stays in the block.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(a + a);\n\t\t}', 'final a = f(x);'
 		);
 	}
 
-	public function testOutOfOrderUsesNotFlagged(): Void {
-		// `b` is used before `a`, so inlining would run `g` before `f` — the reverse of the source.
-		Assert.equals(
-			0,
-			violations(fnRet(
-				'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tfinal b = g(x);\n'
-				+ '\t\t\tout.push(h(b, a));\n\t\t}'
-			)).length
+	public function testOutOfOrderUsesKept(): Void {
+		// `b` is used before `a`, so inlining would run `g` before `f`; kept locals keep the source order.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tfinal b = g(x);\n\t\t\tout.push(h(b, a));\n'
+			+ '\t\t}',
+			'final a = f(x); final b = g(x);'
 		);
 	}
 
@@ -300,13 +299,11 @@ class PreferComprehensionCheckTest extends Test {
 		);
 	}
 
-	public function testLambdaCaptureNotFlagged(): Void {
-		// The use sits under a lambda, so the initializer would run when the lambda is called.
-		Assert.equals(
-			0,
-			violations(
-				fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push(m.map(y -> k));\n\t\t}')
-			).length
+	public function testLambdaCaptureKept(): Void {
+		// The use sits under a lambda, so inlining would run the initializer when the lambda is called; the local stays.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push(m.map(y -> k));\n\t\t}',
+			'final k = f(x);'
 		);
 	}
 
@@ -384,48 +381,33 @@ class PreferComprehensionCheckTest extends Test {
 		);
 	}
 
-	public function testUseInsideComprehensionNotFlagged(): Void {
-		// The `for` EXPRESSION on the spine would run the initializer once per inner iteration. The
-		// inner iterable is a bare identifier on purpose: a `0...3` would put an `Interval` before
-		// the use, and the preceding-purity gate — not the spine gate — would be what refuses.
-		Assert.equals(
-			0,
-			violations(
-				fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([for (i in ys) k]);\n\t\t}')
-			).length
+	public function testUseInsideComprehensionKept(): Void {
+		// A `for` expression on the use spine would run the initializer once per inner iteration; the local stays outside it.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([for (i in ys) k]);\n\t\t}',
+			'final k = f(x);'
 		);
 	}
 
-	public function testUseUnderRebindingLoopNotFlagged(): Void {
-		// The inner `for` REBINDS `k`, so that identifier is not the link at all — the use scan
-		// matches on NAME, with no scope awareness.
-		Assert.equals(
-			0,
-			violations(
-				fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([for (k in m) k]);\n\t\t}')
-			).length
+	public function testUseUnderRebindingLoopKept(): Void {
+		// The inner `for` rebinds `k`, so the name scan cannot inline; the local stays.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([for (k in m) k]);\n\t\t}',
+			'final k = f(x);'
 		);
 	}
 
-	public function testUseUnderSafeNavCallNotFlagged(): Void {
-		// `obj?.m` makes a whole argument list conditional, and the `?.` is a SIBLING of the use,
-		// not an ancestor — neither the spine walk nor the preceding-purity walk reaches it when it
-		// sits AFTER the use, so only the region-wide kind scan refuses this one. Conservative,
-		// which is the safe direction for a conditional operand.
-		Assert.equals(
-			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([k, obj?.m]);\n\t\t}'))
-				.length
+	public function testUseUnderSafeNavCallKept(): Void {
+		// A `?.` makes a whole argument list conditional, which refuses inlining; the local stays.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal k = f(x);\n\t\t\tout.push([k, obj?.m]);\n\t\t}', 'final k = f(x);'
 		);
 	}
 
-	public function testImpureCodeBeforeUseNotFlagged(): Void {
-		// Inlining moves `f(x)` to the use position, so `g(x)` — which the declaration used to run
-		// AFTER — would run first.
-		Assert.equals(
-			0,
-			violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(g(x) + a);\n\t\t}'))
-				.length
+	public function testImpureCodeBeforeUseKept(): Void {
+		// Inlining would run `g(x)` before `f(x)`, the reverse of the source; the local stays first.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal a = f(x);\n\t\t\tout.push(g(x) + a);\n\t\t}', 'final a = f(x);'
 		);
 	}
 
@@ -479,16 +461,12 @@ class PreferComprehensionCheckTest extends Test {
 		);
 	}
 
-	public function testInterpolatedUseNotFlagged(): Void {
-		// A simple `$t` projects as the string-interpolation identifier kind, NOT as a plain
-		// identifier, so a scan that matches only the latter counts `t` as single-use and inlines
-		// both links — emitting `compute(x) + 'got $t'`, where `t` is no longer declared.
-		Assert.equals(
-			0,
-			violations(fnRet(
-				"final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = f(x);\n\t\t\tfinal msg = 'got $t';\n"
-				+ '\t\t\tout.push(t + msg);\n\t\t}'
-			)).length
+	public function testInterpolatedUseKept(): Void {
+		// A `$t` interpolation is a use no inlining can rewrite, so both locals stay declared.
+		assertKept(
+			"final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = f(x);\n\t\t\tfinal msg = 'got $t';\n"
+			+ '\t\t\tout.push(t + msg);\n\t\t}',
+			"final t = f(x); final msg = 'got $t';"
 		);
 	}
 
@@ -513,27 +491,19 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(0, violations(fnRet("final out:Array<Int> = [];\n\t\tfor (x in xs) out.push('$out-$x');")).length);
 	}
 
-	public function testImpurePropertyReadBeforeUseNotFlagged(): Void {
-		// A field access is not pure in Haxe — `b.counter` may be a property getter, and the
-		// `b.bump()` the link defers to the use position may be what changes what it returns.
-		Assert.equals(
-			0,
-			violations(
-				fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = b.bump();\n\t\t\tout.push(b.counter + t);\n\t\t}')
-			).length
+	public function testImpurePropertyReadBeforeUseKept(): Void {
+		// A property getter read before the use may depend on the deferred initializer, so the local stays first.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = b.bump();\n\t\t\tout.push(b.counter + t);\n\t\t}',
+			'final t = b.bump();'
 		);
 	}
 
-	public function testCheckedCastBeforeUseNotFlagged(): Void {
-		// `cast(y, T)` THROWS on a non-null mismatch, so it is not pure either — moving the link's
-		// initializer in front of it reorders which effect happens first. The operand is BARE on
-		// purpose: in `cast(y, T).n` the field access wrapping it would already refuse, so only
-		// this shape discriminates the checked cast.
-		Assert.equals(
-			0,
-			violations(
-				fnRet('final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = f(x);\n\t\t\tout.push(cast(y, T) + t);\n\t\t}')
-			).length
+	public function testCheckedCastBeforeUseKept(): Void {
+		// A checked cast throws, so moving the initializer in front of it would reorder effects; the local stays first.
+		assertKept(
+			'final out:Array<Int> = [];\n\t\tfor (x in xs) {\n\t\t\tfinal t = f(x);\n\t\t\tout.push(cast(y, T) + t);\n\t\t}',
+			'final t = f(x);'
 		);
 	}
 
@@ -622,6 +592,12 @@ class PreferComprehensionCheckTest extends Test {
 
 	private function applyFix(source: String): String {
 		return CheckFixture.fixedSource(new PreferComprehension(), source);
+	}
+
+	/** `stmts` is flagged and its fix keeps `declarations` — the locals — at the head of a block body, un-inlined. */
+	private function assertKept(stmts: String, declarations: String): Void {
+		Assert.equals(1, violations(fnRet(stmts)).length);
+		Assert.stringContains('{ $declarations', applyFix(fnRet(stmts)));
 	}
 
 }

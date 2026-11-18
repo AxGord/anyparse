@@ -2,7 +2,6 @@ package anyparse.check.common.loops;
 
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.IfExpressionChain;
-import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;

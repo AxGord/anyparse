@@ -1,7 +1,6 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.scan.LoopScan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberReach;
@@ -10,8 +9,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-
-using StringTools;
 
 /** What `ElementLoopRewrite.gatedEdits` needs besides the loop: the reach thunk, the file, and where a decline is written. */
 typedef ReachGate = {

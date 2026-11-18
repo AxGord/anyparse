@@ -1,6 +1,5 @@
 package anyparse.check.common.loops;
 
-import anyparse.check.scan.LoopScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
@@ -11,8 +10,6 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-
-using StringTools;
 
 /**
  * The `RefShape` kinds `PreferRangeLoop` reads (plus the shape itself
