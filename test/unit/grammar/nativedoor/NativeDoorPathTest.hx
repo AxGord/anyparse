@@ -31,7 +31,7 @@ class NativeDoorPathTest extends Test {
 		};
 		final compact: WriteOptions = JsonFormat.instance.compactWriteOptions;
 		final copy: WriteOptions = Reflect.copy(compact);
-		#if js
+		#if (js || nodejs)
 		Assert.stringContains('"ratio":null', DoorRecordWriter.write(record, compact));
 		Assert.stringContains('"ratio":NaN', DoorRecordWriter.write(record, copy));
 		#else
