@@ -671,6 +671,18 @@ final class GateArmsTest extends Test {
 		});
 	}
 
+	/**
+	 * A kill run makes a build per arm, but the arms a composed build may stand for share one: the threads the row asks for. An
+	 * arm in a macro-read file, in a test, or in a file not known builds alone.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-ARMS-BUILDS-PER-ARM')
+	public function testTheArmsAComposedBuildStandsForShareOneBuild(): Void {
+		Assert.equals(1, GateArms.buildsOf(['src/a/A.hx', 'tools/src/b/B.hx', 'src/a/A.hx'], []));
+		Assert.equals(4, GateArms.buildsOf(['src/a/A.hx', 'src/a/Built.hx', 'test/unit/T.hx', null], ['src/a/Built.hx']));
+		Assert.equals(0, GateArms.buildsOf([], []));
+	}
+
 	private static function select(
 		touched: Array<String>, layout: Array<String>, killers: Array<String>, extra: Array<String>, ?near: Array<String>
 	): ArmSelection {

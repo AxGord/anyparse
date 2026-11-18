@@ -3,6 +3,7 @@ package unit.dev;
 import dev.MutationCheck.TrackRow;
 import dev.MutationSlot;
 import devkit.Cmd.cmd;
+import devkit.Result;
 import devkit.TempDir;
 import haxe.Exception;
 import sys.FileSystem;
@@ -256,6 +257,32 @@ final class MutationSlotTest extends Test {
 		}));
 	}
 
+	/**
+	 * A suite run that starts no test for the stall limit is cut, not waited out to its timeout, and the test it stopped in
+	 * decides its reading: `HUNG` (a kill) inside a test one of the arm's expectations names, `MISMATCH` anywhere else; a run
+	 * that finished is no hang.
+	 */
+	@:pin('control')
+	@:killer('M-MUTSLOT-STALL-UNWATCHED')
+	public function testASuiteThatStopsStartingTestsIsCutAndReadByTheTestItStoppedIn(): Void {
+		stalled(log -> {
+			final run: Result = MutationSlot.watchedSuite(cmd('node -e ${stuckIn('a.KillerTest.testIt')}'), log).run();
+			Assert.isNull(run.status, 'cut for its silence: ${run.failure}');
+			Assert.equals('MISMATCH', MutationSlot.hungOf('b.OtherTest', run, log)?.verdict);
+			Assert.isNull(MutationSlot.hungOf('a.KillerTest', cmd('node -e 0').run(), log), 'a run that ended is no hang');
+		});
+	}
+
+	/** A hang inside a test any expectation of the arm names is a kill. */
+	@:pin('control')
+	@:killer('M-MUTSLOT-HUNG-NEVER-KILLER')
+	public function testAHangInAnExpectedKillerIsAKill(): Void {
+		stalled(log -> {
+			final run: Result = MutationSlot.watchedSuite(cmd('node -e ${stuckIn('a.SecondTest.testIt')}'), log).run();
+			Assert.equals(MutationSlot.HUNG, MutationSlot.hungOf('a.FirstTest, a.SecondTest', run, log)?.verdict);
+		});
+	}
+
 	private static function reading(verdict: String, detail: String, ?full: String): Classified {
 		return { verdict: verdict, detail: detail, full: full };
 	}
@@ -326,6 +353,24 @@ final class MutationSlotTest extends Test {
 		File.saveContent('$slot/a.txt', 'a\n');
 		cmd('git -C $slot -c user.name=t -c user.email=t@t add a.txt').check();
 		cmd('git -C $slot -c user.name=t -c user.email=t@t commit -q -m a').check();
+	}
+
+	/** A script that names `test` as the test it started, then goes silent until it exits on its own well past the stall limit. */
+	private static function stuckIn(test: String): String {
+		return 'require(\'fs\').writeFileSync(process.env.APQ_TEST_PROGRESS, \'$test\');setTimeout(() => process.exit(0), 20000)';
+	}
+
+	/** `body` over a track log in a scratch directory, under a stall limit of one second that is put back after it. */
+	private static function stalled(body: String -> Void): Void {
+		final was: Null<String> = Sys.getEnv('APQ_MUTATION_STALL_TIMEOUT');
+		Sys.putEnv('APQ_MUTATION_STALL_TIMEOUT', '1');
+		try {
+			TempDir.with(dir -> body(dir.file('track.log')));
+		} catch (exception: Exception) {
+			Sys.putEnv('APQ_MUTATION_STALL_TIMEOUT', was ?? '');
+			throw exception;
+		}
+		Sys.putEnv('APQ_MUTATION_STALL_TIMEOUT', was ?? '');
 	}
 
 }

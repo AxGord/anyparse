@@ -1,6 +1,8 @@
 package unit.dev;
 
+import dev.ArmRegistry;
 import dev.ChangedMembers;
+import dev.GateArms;
 import utest.Assert;
 import utest.Test;
 
@@ -36,13 +38,12 @@ final class ChangedMembersTest extends Test {
 			'    - ClassDecl:Gone  3 line(s), base',
 			'M src/a/Cond.hx  declarations  +1 -1',
 			'    - #if  1 line(s)',
-			'M src/a/Order.hx  declarations  +2 -2',
-			'    ~ (module)  +2 -2',
+
 			'M src/a/Param.hx  declarations  +1 -0',
 			'    + Required:arg  1 line(s)',
 			''
 		].join('\n'));
-		for (file in ['Header', 'Whole', 'Gone', 'Cond', 'Order', 'Param']) {
+		for (file in ['Header', 'Whole', 'Gone', 'Cond', 'Param']) {
 			Assert.isTrue(said.exists('src/a/$file.hx'), file);
 			Assert.isNull(said['src/a/$file.hx'], file);
 		}
@@ -282,6 +283,32 @@ final class ChangedMembersTest extends Test {
 			''
 		].join('\n'));
 		Assert.same([], said['src/a/Note.hx']);
+	}
+
+	/** A reorder alone names no member, so the arms row selects no arm of the module it reordered. */
+	@:pin('control')
+	@:killer('M-CHANGED-MEMBERS-REORDER-UNNAMED')
+	public function testAReorderAloneSelectsNoArmOfItsModule(): Void {
+		final report: String = [
+			'changed against main: 2 file(s) — declarations 2',
+			'M src/a/Order.hx  declarations  +9 -9',
+			'    ~ (module)  +9 -9',
+			'        ...',
+			'M src/a/Edited.hx  declarations  +1 -1',
+			'    ~ FnMember:run  +1 -1',
+			''
+		].join('\n');
+		final said: Map<String, Null<Array<String>>> = ChangedMembers.of(report);
+		Assert.same([], said['src/a/Order.hx'], 'a reorder alone changes no member');
+		final arms: Array<ArmRecord> = ArmRegistry.parse(
+			'{"arms": [{"name": "M-ORDER-F", "type": "a.Order", "method": "f", "force": "1"},'
+			+ '{"name": "M-EDITED-RUN", "type": "a.Edited", "method": "run", "force": "1"}]}'
+		);
+		final touches: Array<ModuleTouch> = [
+			{ module: 'a.Order', members: said['src/a/Order.hx'] },
+			{ module: 'a.Edited', members: said['src/a/Edited.hx'] }
+		];
+		Assert.same(['M-EDITED-RUN'], GateArms.select(arms, arms, touches, [], [], [], []).fast);
 	}
 
 }

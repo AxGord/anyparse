@@ -345,16 +345,25 @@ final class MutationArm {
 			&& !built.contains(file);
 	}
 
+	/**
+	 * The one answer to "which source file declares the arm type `type` in `tree`": its module's file under the first of
+	 * `ROOTS` holding it, relative to `tree`, or null when none does.
+	 */
+	public static function fileOf(tree: String, type: String): Null<String> {
+		final relative: String = ArmTypePath.moduleOf(type).split('.').join('/') + '.hx';
+		final root: Null<String> = ROOTS.find(r -> FileSystem.exists(Path.join([tree, r, relative])));
+		return root == null ? null : '$root/$relative';
+	}
+
 	/** Where the arm `name` cuts: the file its `type` lives in under one of `ROOTS` of `gen`, and the member's address. */
 	public static function target(base: String, name: String, type: String, method: String, kind: String, gen: String): ArmTarget {
-		final relative: String = ArmTypePath.moduleOf(type).split('.').join('/') + '.hx';
-		final root: Null<String> = ROOTS.find(r -> FileSystem.exists(Path.join([gen, r, relative])));
+		final file: Null<String> = fileOf(gen, type);
 		return {
 			type: type,
 			method: method,
-			file: root == null ? '' : '$root/$relative',
+			file: file ?? '',
 			selector: ArmTypePath.select(type, '$kind:$method'),
-			failure: root == null ? '$name names $type, which is under none of src/, test/, tools/src/ at $base' : null
+			failure: file == null ? '$name names $type, which is under none of src/, test/, tools/src/ at $base' : null
 		};
 	}
 
@@ -386,6 +395,14 @@ final class MutationArm {
 	 */
 	public static function batchCount(rows: Int, threads: Int): Int {
 		return Std.int(Math.max(threads, Math.ceil(rows / RENDER_BATCH_ROWS)));
+	}
+
+	/** The source files a `hxq meta @:build … --flat` listing `listing` names, each once: the files a `@:build` macro reads. */
+	public static function builtFiles(listing: String): Array<String> {
+		final built: Array<String> = [];
+		final file: EReg = ~/^((?:src|tools\/src)\/[^:]*\.hx):/;
+		for (line in listing.split('\n')) if (file.match(line) && !built.contains(file.matched(1))) built.push(file.matched(1));
+		return built;
 	}
 
 	/** What a batch run printed, as its log keeps it. */
@@ -537,9 +554,7 @@ final class MutationArm {
 		final dir: String = Path.join([workroot, 'schema']);
 		FileSystem.createDirectory(dir);
 		final meta: Result = cmd('sh ${Path.join([job.repo, 'bin/hxq'])} meta @:build src tools/src --flat --limit 100000').at(gen).run();
-		final built: Array<String> = [];
-		final file: EReg = ~/^((?:src|tools\/src)\/[^:]*\.hx):/;
-		for (line in meta.out.split('\n')) if (file.match(line) && !built.contains(file.matched(1))) built.push(file.matched(1));
+		final built: Array<String> = builtFiles(meta.out);
 		final plan: Array<String> = [];
 		final names: Array<String> = [];
 		final candidates: Array<String> = [];

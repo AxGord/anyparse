@@ -81,4 +81,17 @@ final class GateExcerptTest extends Test {
 		Assert.equals('failing: n.1, n.2, n.3, n.4, n.5, … +2 more', Shard.failingLine([ for (i in 1...8) 'n.$i' ]));
 	}
 
+	/** A track that hung inside a test its arm expects held: it is no row of a failed arms run, and it is one the run killed. */
+	@:pin('control')
+	@:killer('M-GATE-EXCERPT-HUNG-UNHELD')
+	public function testAHungTrackHeldAndCountsAsKilled(): Void {
+		final log: String = [
+			'HUNG       M-STUCK filter=unit.a.ATest hung in unit.a.ATest.testIt: no progress for 300 s',
+			'SURVIVED   M-WEAK filter=unit.a.ATest suite green',
+			'2 tracks: 1 killed, 1 survived, 0 mismatch, 0 error, 1 of the killed hung'
+		].join('\n');
+		Assert.same(['M-WEAK'], GateExcerpt.armRows(log).map(row -> row.name));
+		Assert.same(['M-STUCK'], GateExcerpt.killedNames(log));
+	}
+
 }

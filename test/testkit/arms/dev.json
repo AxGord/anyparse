@@ -720,7 +720,7 @@
 			"name": "M-GATE-ARMS-ASK-IGNORES-PLAN",
 			"type": "dev.SliceGate",
 			"method": "armsPhase",
-			"find": "picked.fast.length",
+			"find": "GateArms.threadsOf(_gate, picked.fast)",
 			"replace": "ARMS_THREADS",
 			"note": "the arms lease asks for the top of its range whatever the plan selected, so a one-arm selection waits for a whole share it cannot use and closes the pool to the waiters behind it"
 		},
@@ -1298,7 +1298,7 @@
 			"name": "M-GATE-ARMS-MEMO-SURVIVOR",
 			"type": "dev.GateExcerpt",
 			"method": "killedNames",
-			"find": "TRACK_ROW.matched(1) == 'KILLED'",
+			"find": "KILLS.contains(TRACK_ROW.matched(1))",
 			"replace": "true",
 			"note": "every printed track row counts as a kill, so a survivor or a waived arm is carried by the next gate and never run again"
 		},
@@ -2054,7 +2054,7 @@
 		{
 			"name": "M-ARM-TARGET-SUB-OWN-FILE",
 			"type": "dev.MutationArm",
-			"method": "target",
+			"method": "fileOf",
 			"find": "ArmTypePath.moduleOf(type).split",
 			"replace": "type.split",
 			"note": "the runner looks a sub-module type up as a file of its own, so an arm on one renders no cut"
@@ -3653,6 +3653,54 @@
 			"find": "case Held(_), Unpooled: builds;",
 			"replace": "case Held(_), Unpooled: builds < WIDTH ? builds : WIDTH;",
 			"note": "a caller's lease or no pool also caps the builds started together, so the battery's build and every unpooled compile run serially beyond two"
+		},
+		{
+			"name": "M-CHANGED-MEMBERS-REORDER-UNNAMED",
+			"type": "dev.ChangedMembers",
+			"method": "of",
+			"find": "|| kind == REORDER_ROW",
+			"replace": "|| false",
+			"note": "a reorder alone leaves its file unnamed, so a sweep that only reorders declarations kill-runs every arm of every module it reorders"
+		},
+		{
+			"name": "M-MUTSLOT-STALL-UNWATCHED",
+			"type": "dev.MutationSlot",
+			"method": "watchedSuite",
+			"find": ".watched(stallMs(), progress)",
+			"replace": "",
+			"note": "a suite run that hangs under a cut is waited out to its two-hour timeout, and the arms row holds its lease for it"
+		},
+		{
+			"name": "M-MUTSLOT-HUNG-NEVER-KILLER",
+			"type": "dev.MutationSlot",
+			"method": "hungOf",
+			"find": "final hit: Bool = test != '' &&",
+			"replace": "final hit: Bool = false && test != '' &&",
+			"note": "a run that hangs inside the arm's own pin reads as a mismatch, so a cut its pin never finishes under fails the gate"
+		},
+		{
+			"name": "M-GATE-ARMS-BUILDS-PER-ARM",
+			"type": "dev.GateArms",
+			"method": "buildsOf",
+			"find": "return files.length - composed + (composed > 0 ? 1 : 0);",
+			"replace": "return files.length;",
+			"note": "the arms lease asks a thread per arm though a composed build stands for many, so the row holds threads that wait on one build"
+		},
+		{
+			"name": "M-GATE-EXCERPT-HUNG-UNHELD",
+			"type": "dev.GateExcerpt",
+			"method": "armRows",
+			"find": "!HELD.contains(TRACK_ROW.matched(1))",
+			"replace": "TRACK_ROW.matched(1) != 'KILLED' && TRACK_ROW.matched(1) != 'APPLIES'",
+			"note": "a track that hung inside its pin is a row of a failed arms run, so the gate fails on a kill"
+		},
+		{
+			"name": "M-CHECK-TALLY-HUNG-IS-A-KILL",
+			"type": "dev.MutationCheck",
+			"method": "tally",
+			"find": "case 'HUNG':",
+			"replace": "case 'HUNG-':",
+			"note": "a hung verdict spelled apart from MutationSlot.HUNG falls to the error arm and fails the gate"
 		}
 	]
 }

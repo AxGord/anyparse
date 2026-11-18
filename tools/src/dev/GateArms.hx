@@ -248,6 +248,34 @@ final class GateArms {
 		return root == null || !file.endsWith('.hx') ? '' : file.substring(root.length, file.length - '.hx'.length).replace('/', '.');
 	}
 
+	/**
+	 * The builds a kill run makes for arms cut in `files` (null: a file not known): one per arm, except that every arm a composed
+	 * build may stand for (`MutationArm.composable` over the macro-read `built`) shares one. A track waits on its build and its
+	 * suite run is short, so this is how many threads the run keeps busy at once.
+	 */
+	public static function buildsOf(files: Array<Null<String>>, built: Array<String>): Int {
+		final composed: Int = files.filter(f -> f != null && MutationArm.composable(f, built)).length;
+		return files.length - composed + (composed > 0 ? 1 : 0);
+	}
+
+	/**
+	 * The threads a kill run of `names` over `gate`'s tree can use (`buildsOf`): each arm's file read off its record, the
+	 * macro-read files off `hxq meta`. A listing that cannot be read counts a build per arm.
+	 */
+	public static function threadsOf(gate: GateTree, names: Array<String>): Int {
+		final meta: Result = gate.hxq(gate.tree, ['meta', '@:build', 'src', 'tools/src', '--flat', '--limit', '100000'])
+			.timeout(PLAN_TIMEOUT_MS)
+			.run();
+		if (!meta.ok) return names.length;
+		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
+		final files: Array<Null<String>> = names.map(name -> {
+			final record: Null<ArmRecord> = now.find(r -> r.key == name);
+			final type: Null<String> = record == null ? null : ArmHeadParser.parse(record.text).type;
+			return type == null ? null : MutationArm.fileOf(gate.tree, type);
+		});
+		return buildsOf(files, MutationArm.builtFiles(meta.out));
+	}
+
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
 	private static inline function progressOf(gate: GateTree): String {
 		return gate.branchProgress(SliceGate.ARMS_ROW);

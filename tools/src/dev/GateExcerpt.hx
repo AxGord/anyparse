@@ -23,7 +23,10 @@ final class GateExcerpt {
 	private static final TRACK_ROW: EReg = ~/^([A-Z][A-Z-]*) +(\S+)/;
 
 	/** The verdict words of a track that held. */
-	private static final HELD: Array<String> = ['KILLED', 'APPLIES'];
+	private static final HELD: Array<String> = ['KILLED', MutationSlot.HUNG, 'APPLIES'];
+
+	/** The verdict words of a track whose cut its pin told apart: red, or never finishing inside it. */
+	private static final KILLS: Array<String> = ['KILLED', MutationSlot.HUNG];
 
 	/**
 	 * The error lines of a haxe build `log` (`BuildFailure.errorLines`, continuations included, no warning); the
@@ -79,10 +82,10 @@ final class GateExcerpt {
 		];
 	}
 
-	/** The arms `log` shows killed: only a printed `KILLED` row says so, a track that printed no row is not one. */
+	/** The arms `log` shows killed: only a printed `KILLED` or `HUNG` row says so, a track that printed no row is not one. */
 	public static function killedNames(log: String): Array<String> {
 		return [
-			for (line in Excerpt.linesOf(log)) if (TRACK_ROW.match(line) && TRACK_ROW.matched(1) == 'KILLED') TRACK_ROW.matched(2)
+			for (line in Excerpt.linesOf(log)) if (TRACK_ROW.match(line) && KILLS.contains(TRACK_ROW.matched(1))) TRACK_ROW.matched(2)
 		];
 	}
 

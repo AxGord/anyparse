@@ -45,6 +45,8 @@ typedef TrackRow = {
 	var expected: String;
 }
 
+/** A run's totals: the line it prints and the status it answers. */
+typedef VerdictTally = { var line: String; var status: Int; }
 /** The job slots a run takes: their count and a note when an ask was cut down, or why the ask is refused. */
 enum JobCount {
 	Count(n: Int, note: Null<String>);
@@ -263,6 +265,41 @@ final class MutationCheck {
 		return cmd('node $devJs mutation-check --slot $slot $workroot').env(GateTree.FORK_VAR, '').tethered().timeout(SLOT_TIMEOUT_MS);
 	}
 
+	/**
+	 * The totals line of a run whose tracks ended in `verdicts`, and its status: 0 when every track is KILLED, HUNG (counted
+	 * among the killed and named apart) or APPLIES, else 1.
+	 */
+	public static function tally(verdicts: Array<String>, buildOnly: Bool): VerdictTally {
+		var killed: Int = 0;
+		var applies: Int = 0;
+		var survived: Int = 0;
+		var mismatch: Int = 0;
+		var errors: Int = 0;
+		var hung: Int = 0;
+		for (verdict in verdicts) switch verdict {
+			case 'KILLED':
+				killed++;
+			case 'HUNG':
+				killed++;
+				hung++;
+			case 'APPLIES':
+				applies++;
+			case 'SURVIVED':
+				survived++;
+			case 'MISMATCH':
+				mismatch++;
+			case _:
+				errors++;
+		}
+		return {
+			line: buildOnly
+				? '${verdicts.length} tracks: $applies applies, $errors did not build'
+				: '${verdicts.length} tracks: $killed killed, $survived survived, $mismatch mismatch, $errors error'
+					+ (hung > 0 ? ', $hung of the killed hung' : ''),
+			status: survived + mismatch + errors == 0 ? 0 : 1
+		};
+	}
+
 	/** Make the slots, run every track in them and print the report; answers the exit status. */
 	private static function execute(job: CheckJob, rows: Array<TrackRow>, jobs: Int, workroot: String, slots: Array<Int>): Int {
 		// created one after another: concurrent `git worktree add`s race over `.git/worktrees`
@@ -309,35 +346,17 @@ final class MutationCheck {
 		return report(job, rows, workroot);
 	}
 
-	/** Print a row per track and the totals; answers 0 when every track is KILLED (or APPLIES), else 1. */
+	/** Print a row per track and the totals (`tally`); answers the tally's status. */
 	private static function report(job: CheckJob, rows: Array<TrackRow>, workroot: String): Int {
-		var killed: Int = 0;
-		var applies: Int = 0;
-		var survived: Int = 0;
-		var mismatch: Int = 0;
-		var errors: Int = 0;
+		final verdicts: Array<String> = [];
 		for (row in rows) {
 			final read: Array<String> = MutationSlot.readVerdict(workroot, row.name);
-			switch read[0] {
-				case 'KILLED':
-					killed++;
-				case 'APPLIES':
-					applies++;
-				case 'SURVIVED':
-					survived++;
-				case 'MISMATCH':
-					mismatch++;
-				case _:
-					errors++;
-			}
+			verdicts.push(read[0]);
 			Sys.println(reportRow(read[0], row.name, row.filter, read[1]));
 		}
-		Sys.println(
-			job.buildOnly
-				? '${rows.length} tracks: $applies applies, $errors did not build'
-				: '${rows.length} tracks: $killed killed, $survived survived, $mismatch mismatch, $errors error'
-		);
-		final status: Int = survived + mismatch + errors == 0 ? 0 : 1;
+		final total: VerdictTally = tally(verdicts, job.buildOnly);
+		Sys.println(total.line);
+		final status: Int = total.status;
 		Sys.println(
 			!job.keep && status == 0
 				? 'workroot: $workroot (removed — every track passed; --keep to keep it)'

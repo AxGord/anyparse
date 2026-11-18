@@ -85,6 +85,15 @@ final class MutationSlot {
 	 */
 	public static final FAIL_LOGS_VAR: String = 'APQ_ARMS_FAIL_LOGS';
 
+	/**
+	 * The verdict of a track whose suite never finished inside a test the arm expects to go red: a run that hangs under the cut
+	 * is one a gate reads red, so the pin tells the cut apart, and the track counts as killed.
+	 */
+	public static final HUNG: String = 'HUNG';
+
+	/** The environment variable a suite run's runner rewrites with each test it starts (`RunTests`): the run's sign of life. */
+	public static final TEST_PROGRESS_VAR: String = 'APQ_TEST_PROGRESS';
+
 	/** Seconds a warm build may take before its server counts as hung, unless `APQ_MUTATION_BUILD_TIMEOUT` says otherwise. */
 	private static inline final BUILD_TIMEOUT_S: Int = 300;
 
@@ -93,6 +102,13 @@ final class MutationSlot {
 
 	/** What one suite run may take before it is killed. */
 	private static inline final SUITE_TIMEOUT_MS: Int = 2 * 60 * 60 * 1000;
+
+	/**
+	 * Seconds a suite run may go without starting a test or writing a byte before it counts as hung, unless
+	 * `APQ_MUTATION_STALL_TIMEOUT` says otherwise: past the slowest single test of an unmutated suite with room to spare,
+	 * since a cut may slow a test without hanging it.
+	 */
+	private static inline final STALL_S: Int = 300;
 
 	/** How often a track the composed build may stand for looks whether that build has answered. */
 	private static inline final SCHEMA_POLL_MS: Int = 2000;
@@ -335,6 +351,32 @@ final class MutationSlot {
 		return reading != null && matchedAny(reading, expected) && base == 'SURVIVED';
 	}
 
+	/**
+	 * `suite` watched for a hang: its runner rewrites `<log>.progress` with each test it starts (`TEST_PROGRESS_VAR`), and a run
+	 * that starts no test and writes no byte for the stall limit (`stallMs`) is killed, the file naming the test it stopped in.
+	 */
+	public static function watchedSuite(suite: Command, log: String): Command {
+		final progress: String = '$log.progress';
+		return suite.env(TEST_PROGRESS_VAR, progress).watched(stallMs(), progress);
+	}
+
+	/**
+	 * The reading of a suite `run` whose transcript is `log` when the run never finished (no exit status: it was cut for its
+	 * silence or its timeout), else null. A run that stopped inside a test one of `expected` names is `HUNG`; one that stopped in
+	 * any other test, or before its first, is a `MISMATCH`: the pin the arm names is not what tells the cut apart.
+	 */
+	public static function hungOf(expected: String, run: Result, log: String): Null<Classified> {
+		if (run.status != null) return null;
+		final progress: String = '$log.progress';
+		final test: String = FileSystem.exists(progress) ? File.getContent(progress).trim() : '';
+		final hit: Bool = test != '' && expected.split(',').map(e -> e.trim()).exists(e -> e != '' && test.indexOf(e) >= 0);
+		final where: String = test == '' ? 'before its first test' : 'in $test';
+		final detail: String = 'hung $where: ${oneLine(run.failure)}';
+		return hit
+			? { verdict: HUNG, detail: detail, full: null }
+			: { verdict: 'MISMATCH', detail: '$detail, no test the arm expects', full: null };
+	}
+
 	/** One track in this slot, its verdict left in the workroot. */
 	private static function track(ctx: SlotContext, row: TrackRow): Void {
 		final workroot: String = ctx.workroot;
@@ -472,51 +514,56 @@ final class MutationSlot {
 
 	/**
 	 * The tests of `row`, their transcript at `log`, classified. Under killer-first the pinned tests run alone first, and
-	 * their reading is the verdict whenever it matched an expectation (`matchedAny`); otherwise the filtered run answers —
-	 * dealt into slices run at once when the filter is a plain class list, whose union it is.
+	 * their reading is the verdict whenever it matched an expectation (`matchedAny`) or the run hung (`hungOf`); otherwise the
+	 * filtered run answers — dealt into slices run at once when the filter is a plain class list, whose union it is.
 	 */
-	private static function runTests(ctx: SlotContext, row: TrackRow, suite: String -> Command, log: String): SuiteRun {
+	private static function runTests(ctx: SlotContext, row: TrackRow, suite: (String, String) -> Command, log: String): SuiteRun {
 		if (ctx.killerFirst && row.expected != '') {
 			final killers: String = '$log.killers';
-			saveLog(killers, suite(killerTokens(row.expected)).run());
-			final reading: Null<Classified> = classifyOrNull(row.expected, [killers]);
-			if (reading != null && matchedAny(reading, row.expected)) {
+			final run: Result = suite(killerTokens(row.expected), killers).run();
+			saveLog(killers, run);
+			final reading: Null<Classified> = hungOf(row.expected, run, killers) ?? classifyOrNull(row.expected, [killers]);
+			if (reading != null && (reading.verdict == HUNG || matchedAny(reading, row.expected))) {
 				FileSystem.rename(killers, log);
 				return { phase: 'killers', reading: reading, read: log };
 			}
 			final slices: Null<Array<String>> = fallbackTokens(row.filter, envInt('APQ_MUTATION_FALLBACK_SLICES', FALLBACK_SLICES));
 			if (slices != null) {
 				final logs: Array<String> = [ for (i in 0...slices.length) '$log.slice$i' ];
-				for (i => run in Pool.of(slices.length).map(slices, suite)) saveLog(logs[i], run);
-				final sliced: Null<Classified> = classifyOrNull(row.expected, logs);
+				final runs: Array<Result> = Pool.of(slices.length).map([ for (i in 0...slices.length) i ], i -> suite(slices[i], logs[i]));
+				for (i => run in runs) saveLog(logs[i], run);
+				final hung: Null<Classified> = [ for (i => run in runs) hungOf(row.expected, run, logs[i]) ].find(c -> c != null);
+				final sliced: Null<Classified> = hung ?? classifyOrNull(row.expected, logs);
 				// one transcript to open, the slices in order
 				File.saveContent(log, logs.map(file -> File.getContent(file)).join(''));
 				return { phase: 'sliced', reading: sliced, read: '$log.slice*' };
 			}
 		}
-		saveLog(log, suite(row.filter).run());
-		return { phase: 'filtered', reading: classifyOrNull(row.expected, [log]), read: log };
+		final run: Result = suite(row.filter, log).run();
+		saveLog(log, run);
+		return { phase: 'filtered', reading: hungOf(row.expected, run, log) ?? classifyOrNull(row.expected, [log]), read: log };
 	}
 
 	/**
-	 * One suite run of the runner `testJs` in the slot over an `APQ_TEST` filter (`ALL`: every class), the fixture cache's
-	 * shim first on its `PATH` when the run has one, and the composed build's arm `mutant` switched on when given. A track
-	 * never inherits a filter or an arm from the caller.
+	 * One suite run of the runner `testJs` in the slot over an `APQ_TEST` filter (`ALL`: every class), its transcript bound
+	 * for the log it is given (`watchedSuite`), the fixture cache's shim first on its `PATH` when the run has one, and the
+	 * composed build's arm `mutant` switched on when given. A track never inherits a filter or an arm from the caller.
 	 */
-	private static function suiteCommand(ctx: SlotContext, testJs: String, mutant: Null<String>): String -> Command {
+	private static function suiteCommand(ctx: SlotContext, testJs: String, mutant: Null<String>): (String, String) -> Command {
 		final shim: String = Path.join([ctx.workroot, 'fixture-cache/bin']);
 		final inherited: String = Sys.getEnv(PATH) ?? '';
 		final shimmed: Bool = FileSystem.exists(Path.join([shim, 'haxe']));
 		final path: String = shimmed ? '$shim:$inherited' : inherited;
-		return filter -> Shard.callerGc(
+		return (filter, log) -> Shard.callerGc(watchedSuite(
 			cmd('node $testJs')
 				.at(ctx.wt)
 				.env(PATH, path)
 				.env(ProcessSpawn.ANSWER_ENV, FixtureCache.answer(shimmed ? shim : null))
 				.env('APQ_TEST', filter == 'ALL' ? '' : filter)
 				.env('APQ_MUTANT', mutant ?? '')
-				.timeout(SUITE_TIMEOUT_MS)
-		);
+				.timeout(SUITE_TIMEOUT_MS),
+			log
+		));
 	}
 
 	/** `classify`, or null when a transcript cannot be read. */
@@ -592,7 +639,7 @@ final class MutationSlot {
 		final ran: Float = Sys.time();
 		clock.build += ran - from;
 		if (!built.ok) return false;
-		saveLog(log, suiteCommand(ctx, Path.join([dir, TEST_JS]), null)(filter).run());
+		saveLog(log, suiteCommand(ctx, Path.join([dir, TEST_JS]), null)(filter, log).run());
 		clock.run += Sys.time() - ran;
 		return true;
 	}
@@ -622,6 +669,11 @@ final class MutationSlot {
 			'copy: $own'
 		];
 		return keepFailure(dir, row.name, header, [row.patch, '$buildLog.warm', '$buildLog.restarted', buildLog]);
+	}
+
+	/** The stall limit of one suite run: `STALL_S` unless `APQ_MUTATION_STALL_TIMEOUT` says otherwise. */
+	private static function stallMs(): Int {
+		return envInt('APQ_MUTATION_STALL_TIMEOUT', STALL_S) * MS_PER_SECOND;
 	}
 
 }

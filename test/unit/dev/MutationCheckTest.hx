@@ -2,6 +2,7 @@ package unit.dev;
 
 import dev.GateTree;
 import dev.MutationCheck;
+import dev.MutationSlot;
 import dev.SliceGate;
 import devkit.Result;
 import devkit.TempDir;
@@ -141,6 +142,18 @@ final class MutationCheckTest extends Test {
 				: Count(granted, '--jobs $top exceeds the pool lease of $granted thread(s): running $granted');
 			Assert.same(expected, MutationCheck.jobsFor(top, granted, 16, 64 * gib), 'the top asked under a grant of $granted');
 		}
+	}
+
+	/** A hung track is a kill: it counts among the killed, the tally names it apart, and the run's status stays 0. */
+	@:pin('control')
+	@:killer('M-CHECK-TALLY-HUNG-IS-A-KILL')
+	public function testAHungTrackCountsAsKilledIsNamedApartAndFailsNothing(): Void {
+		final total: VerdictTally = MutationCheck.tally(['KILLED', MutationSlot.HUNG], false);
+		Assert.equals('2 tracks: 2 killed, 0 survived, 0 mismatch, 0 error, 1 of the killed hung', total.line);
+		Assert.equals(0, total.status);
+		Assert.equals(
+			'1 tracks: 1 killed, 0 survived, 0 mismatch, 0 error', MutationCheck.tally(['KILLED'], false).line, 'no hang, no clause'
+		);
 	}
 
 	private static function parsed(text: String): Array<TrackRow> {

@@ -12,7 +12,7 @@ import anyparse.runtime.Span;
  * file did the slice change, or can its report not say". A member whose diff lines differ in comments alone is no change. A file
  * whose change cannot be told member by member (a type's own header, unless likewise comments alone; a type edited or removed as
  * a whole, a conditional block, a parameter, a file that is new, renamed or not read as declarations) has no member list, and a
- * reader of the answer takes every member of it as changed. A layout-only or deleted file names no member.
+ * reader of the answer takes every member of it as changed. A layout-only or deleted file names no member, nor does a reorder.
  */
 @:nullSafety(Strict)
 final class ChangedMembers {
@@ -50,11 +50,15 @@ final class ChangedMembers {
 		'TypedefDecl'
 	];
 
-	/**
-	 * The import rows of a file: they are read by the members that changed. A `(module)` row is no import:
-	 * it is a difference no declaration's own lines show (a member reorder), so it leaves the file unnamed.
-	 */
+	/** The import rows of a file: they are read by the members that changed. */
 	private static final HEADER_KINDS: Array<String> = ['import', 'using'];
+
+	/**
+	 * The row of a difference no declaration's own lines show: declarations reordered, each with its own text as it was, so it
+	 * changes no member. A reorder that changes what the code does (enum constructor indices, static initialisation order) is
+	 * the suite's to see, not an arm's: an arm asks whether its pin still tells its cut apart.
+	 */
+	private static final REORDER_ROW: String = '(module)';
 
 	/**
 	 * The members each file of `report` changed, by path: a file whose report cannot name them maps to null, and a file whose only
@@ -94,6 +98,7 @@ final class ChangedMembers {
 				final sign: String = row.matched(1);
 				if (
 					HEADER_KINDS.contains(kind)
+					|| kind == REORDER_ROW
 					|| (TYPE_KINDS.contains(kind) && sign == '+')
 					|| ((member != null || TYPE_KINDS.contains(kind)) && sign == '~' && commentsOnly(diff))
 				)

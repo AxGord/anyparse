@@ -335,7 +335,7 @@ final class SliceGate {
 	private function armsPhase(self: String, plan: Null<ArmPlan>): Bool {
 		final tracks: Int = switch plan {
 			case Settled(_): return false;
-			case Runs(picked, _): picked.fast.length;
+			case Runs(picked, _): GateArms.threadsOf(_gate, picked.fast);
 			case null: ARMS_THREADS;
 		};
 		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode, tracks));
