@@ -26,6 +26,9 @@ final class MergeBrief {
 	/** The choices a place can be settled with, as `apq merge-file --choices` reads them. */
 	public static final CHOICES: Array<String> = ['ours', 'theirs', 'both'];
 
+	/** The queue file a brief quotes when a landing names none, under the repository. */
+	public static final QUEUE: String = '.claude/batch/wave-D.md';
+
 	/** The places the driver's `output` reports, in order. */
 	public static function placesOf(output: String): Array<MergePlace> {
 		final out: Array<MergePlace> = [];

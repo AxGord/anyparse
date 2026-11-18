@@ -3933,6 +3933,126 @@
 			"find": "?? Sys.getEnv('ANYPARSE_SCRUB_LIST')",
 			"replace": "?? null",
 			"note": "the pipeline's scrub list is not read, so the private-names check is skipped at every land"
+		},
+		{
+			"name": "M-LAND-SWEEP-PICK-NOT-DEFERRED",
+			"type": "dev.Land",
+			"method": "pick",
+			"find": "reapply?.defer(unmerged, conflict) ?? ",
+			"replace": "",
+			"note": "a conflict the pick leaves in a footprint file fails a sweep line as it fails any line, so a parallel landing sends the sweep back to be merged by hand"
+		},
+		{
+			"name": "M-LAND-SWEEP-FOOTPRINT-IS-DIFF",
+			"type": "dev.LandSweep",
+			"method": "onBase",
+			"find": "Listed(picked.filter(path -> files.contains(path)))",
+			"replace": "Listed(picked)",
+			"note": "the footprint is every file of the commit, so the rule the line brings is put back as HEAD has it and the landing drops it"
+		},
+		{
+			"name": "M-LAND-SWEEP-RESIDUE-UNMARKED",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "residue = true;",
+			"replace": "",
+			"note": "findings the command left fail the landing with the plain exit, so a caller cannot tell residue from a broken landing"
+		},
+		{
+			"name": "M-LAND-SWEEP-NOT-NAMED",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "_applied = true;",
+			"replace": "",
+			"note": "the landing commit of a re-applied sweep carries no trailer, so the history does not say its footprint was written by the command"
+		},
+		{
+			"name": "M-LAND-SWEEP-STRAY-CONFLICT",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "if (conflict != null && _unmerged.exists(path -> !footprint.contains(path))) return conflict();",
+			"replace": "",
+			"note": "a conflict in a file outside the footprint is settled by taking HEAD, so the branch change to that file is lost without a word"
+		},
+		{
+			"name": "M-LAND-SWEEP-EMPTY-FOOTPRINT",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "if (footprint.length == 0) return",
+			"replace": "if (false) return",
+			"note": "a commit with no footprint file still gets the command run over the candidate, so a line that swept nothing lands rewrites of files it never touched"
+		},
+		{
+			"name": "M-LAND-SWEEP-FIX-FAILURE-IGNORED",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "if (!fixed.match(Passed)) return fixed;",
+			"replace": "",
+			"note": "a command that did not finish is read as one that left findings, so a broken engine is reported as residue"
+		},
+		{
+			"name": "M-LAND-SWEEP-NO-REBUILD",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "return rebuild();",
+			"replace": "return Passed;",
+			"note": "the binaries main takes were built before the footprint was rewritten, so main runs an engine that is not the build of its tree"
+		},
+		{
+			"name": "M-LAND-SWEEP-MARKER-ANY-ROW",
+			"type": "dev.LandSweep",
+			"method": "commandOf",
+			"find": "if (!trimmed.startsWith(MARKER)) continue;",
+			"replace": "",
+			"note": "any row of a line text is read as its sweep command, so a line without the marker gets the reapply step"
+		},
+		{
+			"name": "M-LAND-SWEEP-FIX-NOT-REQUIRED",
+			"type": "dev.LandSweep",
+			"method": "wordsOf",
+			"find": "&& words.contains(FIX)",
+			"replace": "",
+			"note": "a marker command without --fix is accepted, so the step runs a lint that writes nothing and reports every finding as residue"
+		},
+		{
+			"name": "M-LAND-SWEEP-FOOTPRINT-KEPT",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "final restored: Null<String> = restore(footprint);",
+			"replace": "final restored: Null<String> = null;",
+			"note": "a footprint file lands as the branch has it, so what the worker wrote there by hand, or an older run of the command, is merged instead of re-applied"
+		},
+		{
+			"name": "M-LAND-SWEEP-LISTING-KEEPS-FIX-ONLY",
+			"type": "dev.LandSweep",
+			"method": "listing",
+			"find": "word == FIX_ONLY",
+			"replace": "false",
+			"note": "the listing keeps an option the engine takes with --fix only, so the engine refuses it and a sweep line naming that option never lands"
+		},
+		{
+			"name": "M-LAND-SWEEP-REPORT-OPTION-ACCEPTED",
+			"type": "dev.LandSweep",
+			"method": "wordsOf",
+			"find": "REPORT_SHAPING.exists(option -> word == option || word.startsWith('$option='))",
+			"replace": "false",
+			"note": "a marker command may shape its report or its exit, so the listing reads a narrowed or failing run as the footprint"
+		},
+		{
+			"name": "M-LAND-SWEEP-OUTSIDE-PATH-ACCEPTED",
+			"type": "dev.LandSweep",
+			"method": "wordsOf",
+			"find": "word.startsWith('/') || word.split('/').contains('..')",
+			"replace": "false",
+			"note": "a scope from outside the tree is accepted, so the report names paths no file of the commit equals, the footprint is empty and the sweep is merged as an ordinary pick"
+		},
+		{
+			"name": "M-LAND-SWEEP-CREATED-NOT-STAGED",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": ".concat(created)",
+			"replace": "",
+			"note": "a file the command creates stays untracked, so main advances to a commit that lacks a file of the tree the battery judged"
 		}
 	]
 }

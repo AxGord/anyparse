@@ -1,10 +1,12 @@
 package dev;
 
 import anyparse.core.PoolLease;
+import anyparse.query.ExitCode;
 import dev.ArmSweep.SweepStart;
 import dev.BaselineWarm.WarmRecipe;
 import dev.BaselineWarm.WarmStart;
 import dev.LandFormat.FormatTools;
+import dev.LandSweep.ReapplyTools;
 import dev.MergeBrief.MergePlace;
 import dev.PostLand.PostLandStart;
 import dev.SuiteImpact.SuiteScope;
@@ -87,6 +89,14 @@ typedef LandOptions = {
 	/** The writer runs of the `fmt` step (`LandFormat.engine` for a real landing). */
 	var format: FormatTools;
 
+	/** The sweep command of the line (`LandSweep.commandOf`), re-applied instead of merging its footprint; absent for any other line. */
+	@:optional
+	var reapply: Null<String>;
+
+	/** The runs of the sweep command (`LandSweep.engine` when absent). */
+	@:optional
+	var reapplyTools: ReapplyTools;
+
 	/** Which test classes the merge needs against the commit before it (`SuiteImpact.ofTree`); absent runs the whole suite. */
 	@:optional
 	var impact: Null<ImpactScope>;
@@ -113,7 +123,8 @@ typedef LandOptions = {
  * command that moves the checked-out branch only to a commit the battery judged. In a detached candidate tree of the
  * checked-out commit (`LandCandidate`) the branch's single commit is applied (`git cherry-pick --no-commit`), so the history
  * stays linear, its files merging as their `.gitattributes` say (`docs/decisions.md` by union, source and JSON through their
- * grammar by `apq merge-file`, each merged file a detail line), the three binaries built, the pick's `.hx` files rewritten
+ * grammar by `apq merge-file`, each merged file a detail line), the three binaries built, the footprint of a sweep line
+ * re-applied by its command instead of merged (`LandSweep`), the pick's `.hx` files rewritten
  * as canonical when that is layout only (`LandFormat`), the commit made with a `Slice: <ID>` trailer, and `dev battery` run
  * (quick, or in full when the commit brings in a path where a shard and the one-process suite can diverge, or the number of
  * the landing, counted over every landing that runs the battery, is a multiple of ten — the battery row says which). Only
@@ -149,9 +160,6 @@ final class Land {
 
 	/** The prefix `apq merge-file` reports a merged file with. */
 	private static final MERGED_PREFIX: String = 'auto-merged: ';
-
-	/** The queue file whose lines a merge brief quotes, under the repository, when `--queue` names none. */
-	private static final QUEUE: String = '.claude/batch/wave-D.md';
 
 	/** Where, under the battery's snapshot directory, the landings are counted. */
 	private static final TALLY_DIR: String = 'landings';
@@ -243,7 +251,19 @@ final class Land {
 	 * Every step in turn, each only while the ones before it passed; answers the exit status. The steps up to the battery work
 	 * in the candidate tree, so one that does not pass leaves main as it was; the tree is dropped whatever the outcome.
 	 */
-	private function run(message: Null<String>, battery: Null<BatteryRequest>, warm: Null<WarmStart>, sweep: Null<SweepStart>): Int {
+	private function run(options: LandOptions): Int {
+		final message: Null<String> = options.message;
+		final battery: Null<BatteryRequest> = options.battery;
+		final warm: Null<WarmStart> = options.warm;
+		final sweep: Null<SweepStart> = options.sweep;
+		final command: Null<String> = options.reapply;
+		// the re-application of the line's sweep command, or null for a line that names none
+		final reapply: Null<LandSweep> = command == null
+			? null
+			: new LandSweep(
+				_repo, _branch, Path.join([_logs, 'reapply-base']), command, _candidate, options.reapplyTools ?? LandSweep.engine(),
+				_summary
+			);
 		final cache: Null<String> = battery?.cache;
 		var landing: Null<Int> = null;
 		final batteryRows: String = Path.join([_logs, 'battery.ledger']);
@@ -255,10 +275,17 @@ final class Land {
 			{ name: 'clean', step: clean },
 			{ name: 'branch', step: shape },
 			{ name: 'base', step: ensureBase.bind(battery, baseRows) },
-			{ name: 'pick', step: pick },
-			{ name: 'build', step: build },
+			{ name: 'pick', step: pick.bind(reapply) },
+			{ name: 'build', step: build }
+		];
+		// the first build read the tree before the footprint was taken back and rewritten, so a passed re-apply builds again
+		if (reapply != null) {
+			final again: LandSweep = reapply;
+			steps.push({ name: 'reapply', step: () -> again.run(build) });
+		}
+		final rest: Array<{ name: String, step: () -> Outcome }> = [
 			{ name: 'fmt', step: _format.run },
-			{ name: 'commit', step: commit.bind(message) },
+			{ name: 'commit', step: commit.bind(message, reapply) },
 			{ name: 'battery', step: () -> runBattery(battery, claimed -> landing = claimed, batteryRows) },
 			{ name: 'advance', step: _candidate.advance },
 			{ name: 'binaries', step: install },
@@ -277,6 +304,7 @@ final class Land {
 					ArmSweep.afterwards(sweep, landing, ArmSweep.EVERY, _repo, git(['rev-parse', 'HEAD']).out.trim(), _summary.detail)
 			}
 		];
+		for (step in rest) steps.push(step);
 		final ledger: Null<ExecLedger> = cache == null ? null : ExecLedger.under(cache);
 
 		CpuMeter.begin(Path.join([_logs, CPU_DIR]));
@@ -295,7 +323,12 @@ final class Land {
 		if (left != null) _print('the candidate tree ${_candidate.tree} is left in place: $left');
 		final passed: Bool = _summary.passed();
 		_print('land $_branch: ${passed ? 'PASS' : 'FAIL'} — ${_candidate.standing()} — logs $_logs');
-		return passed ? 0 : 1;
+		return if (passed)
+			0
+		else if (reapply?.residue == true)
+			ExitCode.EXIT_RESIDUE
+		else
+			1;
 	}
 
 	private function clean(): Outcome {
@@ -341,7 +374,7 @@ final class Land {
 	 * merge driver named and the places `--resolve` settled handed to it; every file it merged is a detail line, and a conflict
 	 * it leaves fails the step with a brief.
 	 */
-	private function pick(): Outcome {
+	private function pick(reapply: Null<LandSweep>): Outcome {
 		final opened: Outcome = _candidate.open();
 		if (!opened.match(Passed)) return opened;
 		final apq: String = Path.join([_repo, 'bin/apq.js']);
@@ -359,9 +392,12 @@ final class Land {
 		final unmerged: Array<String> = _candidate.git(['diff', '--name-only', '--diff-filter=U']).lines();
 		if (unmerged.length == 0) return Failed(run.firstError());
 		final places: Array<MergePlace> = MergeBrief.placesOf(said);
-		if (places.length == 0) return Failed('git could not merge ${unmerged.join(', ')}');
-		final brief: String = MergeBrief.write(_repo, _branch, _logs, places, _queue ?? Path.join([_repo, QUEUE]));
-		return Failed('git could not merge ${unmerged.join(', ')} — ${places.length} place(s) to choose, brief $brief');
+		final conflict: () -> Outcome = () -> {
+			if (places.length == 0) return Failed('git could not merge ${unmerged.join(', ')}');
+			final brief: String = MergeBrief.write(_repo, _branch, _logs, places, _queue ?? Path.join([_repo, MergeBrief.QUEUE]));
+			return Failed('git could not merge ${unmerged.join(', ')} — ${places.length} place(s) to choose, brief $brief');
+		};
+		return reapply?.defer(unmerged, conflict) ?? conflict();
 	}
 
 	/** The `--resolve` choices written where `apq merge-file --choices` reads them: `<path>\t<key>\t<choice>` lines. */
@@ -388,7 +424,7 @@ final class Land {
 	 * The pick committed under `message`, or the message of the branch's commit, with the author and date of that commit and
 	 * a `Slice: <ID>` trailer unless the message names a slice already, and the trailers of the run (`metricTrailers`).
 	 */
-	private function commit(message: Null<String>): Outcome {
+	private function commit(message: Null<String>, reapply: Null<LandSweep>): Outcome {
 		final file: String = Path.join([_logs, 'commit-message.txt']);
 		File.saveContent(file, '${(message ?? git(['log', '-1', '--format=%B', _branch]).out).trim()}\n');
 		final trailer: Result = git([
@@ -403,7 +439,9 @@ final class Land {
 		if (!trailer.ok) return Failed(trailer.firstError());
 		final markers: Array<String> = [];
 		final applied: Null<String> = _format.trailer();
-		final named: Array<String> = applied == null ? _trailers : _trailers.concat(['${LandFormat.TRAILER}: $applied']);
+		final swept: Null<String> = reapply?.trailer();
+		final named: Array<String> = _trailers.concat(swept == null ? [] : ['${LandSweep.TRAILER}: $swept'])
+			.concat(applied == null ? [] : ['${LandFormat.TRAILER}: $applied']);
 		for (marker in named) {
 			markers.push('--trailer');
 			markers.push(marker);
@@ -562,6 +600,7 @@ final class Land {
 		final recipe: WarmRecipe = args.recipe;
 		final warming: Bool = !noBattery && (recipe.frozen.length > 0 || recipe.infra.length > 0);
 		final mode: LeaseMode = Lease.ofEnvironment();
+		final queued: String = Path.join([repo, LandSweep.QUEUE]);
 		return land({
 			repo: repo,
 			branch: branch,
@@ -574,6 +613,7 @@ final class Land {
 			battery: noBattery ? null : request,
 			compile: (tree, log, held) -> Binaries.compileWith(tree, log, [], mode, held),
 			format: LandFormat.engine(),
+			reapply: FileSystem.exists(queued) ? LandSweep.commandOf(File.getContent(queued), sliceId(branch)) : null,
 			impact: SuiteImpact.ofTree,
 			postLand: PostLand.start,
 			warm: warming ? (tree, sha) -> BaselineWarm.start(tree, sha, request.cache, recipe) : null,
@@ -586,7 +626,7 @@ final class Land {
 
 	/** The pick, the build and the battery of `options`; answers the exit status. */
 	public static function land(options: LandOptions): Int {
-		return new Land(options).run(options.message, options.battery, options.warm, options.sweep);
+		return new Land(options).run(options);
 	}
 
 	/**
