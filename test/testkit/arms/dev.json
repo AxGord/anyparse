@@ -3781,6 +3781,158 @@
 			"find": "final leased: Command -> Command = lease ?? unleased;",
 			"replace": "final leased: Command -> Command = unleased;",
 			"note": "the macro listing that sizes the kill run runs on no lease, whatever lease the caller hands the plan"
+		},
+		{
+			"name": "M-LESSONS-CLI-REFUSAL",
+			"type": "dev.LessonsFile",
+			"method": "submit",
+			"find": "return run.ok ? null : 'the queue CLI refused it: ${oneLine(run.firstError())}';",
+			"replace": "return null;",
+			"note": "a record the queue CLI refused counts as filed and is in neither the queue nor the triage file"
+		},
+		{
+			"name": "M-LESSONS-DIRECTORY",
+			"type": "dev.LessonsFile",
+			"method": "touchesProblem",
+			"find": "if (FileSystem.isDirectory(full)) return",
+			"replace": "if (false) return",
+			"note": "a directory is filed as a touched path and conflicts with nothing under overlap: files"
+		},
+		{
+			"name": "M-LESSONS-DUPLICATE",
+			"type": "dev.LessonsFile",
+			"method": "duplicateProblem",
+			"find": "return twin == null ? null : 'possible duplicate of ${twin.id}';",
+			"replace": "return null;",
+			"note": "a lesson an open line already holds is filed a second time"
+		},
+		{
+			"name": "M-LESSONS-FILEABLE-ALL",
+			"type": "dev.LessonsFile",
+			"method": "fileable",
+			"find": "return kind == UNVERIFIED || kind == ARM_ROT;",
+			"replace": "return true;",
+			"note": "every class is filed by the script, so a loss or a user call no longer reaches the parent"
+		},
+		{
+			"name": "M-LESSONS-FILED",
+			"type": "dev.LessonsFile",
+			"method": "file",
+			"find": "filed++",
+			"replace": "already++",
+			"note": "an admitted lesson is counted as filed without a count, or not filed"
+		},
+		{
+			"name": "M-LESSONS-ID-TAKEN",
+			"type": "dev.LessonsFile",
+			"method": "judge",
+			"find": "taken.text == composed(lesson) ? Already : Triage('the id is taken by another line (${taken.status})')",
+			"replace": "Already",
+			"note": "a record whose id belongs to a different line is counted as already filed and its brief is lost"
+		},
+		{
+			"name": "M-LESSONS-MISSING-PATH",
+			"type": "dev.LessonsFile",
+			"method": "touchesProblem",
+			"find": "if (!FileSystem.exists(full)) return",
+			"replace": "if (false) return",
+			"note": "a touched path that is not on main and not marked (new) is filed"
+		},
+		{
+			"name": "M-LESSONS-NAMES",
+			"type": "dev.LessonsFile",
+			"method": "namesProblem",
+			"find": "return ScrubGuard.scan('lesson', haystack, rules).length > 0 ? 'it matches a rule of the private-names list' : null;",
+			"replace": "return null;",
+			"note": "a lesson naming a private project is filed into the queue"
+		},
+		{
+			"name": "M-LESSONS-NO-TOUCHES",
+			"type": "dev.LessonsFile",
+			"method": "touchesProblem",
+			"find": "if (touches.length == 0) return 'no touches: a line without them conflicts with every line';",
+			"replace": "if (false) return '';",
+			"note": "a line without touches is filed and conflicts with every line of the queue"
+		},
+		{
+			"name": "M-LESSONS-PRIORITY",
+			"type": "dev.LessonsFile",
+			"method": "mapping",
+			"find": "priority: unverified ? 'low' : 'high',",
+			"replace": "priority: 'high',",
+			"note": "every lesson is filed with priority high, so unverified hunches crowd the real defects in the pick"
+		},
+		{
+			"name": "M-LESSONS-TOO-WIDE",
+			"type": "dev.LessonsFile",
+			"method": "touchesProblem",
+			"find": "if (touches.length > MAX_TOUCHES) return",
+			"replace": "if (false) return",
+			"note": "a line naming dozens of files is filed and conflicts with most of the queue"
+		},
+		{
+			"name": "M-LESSONS-TRIAGE-RERUN",
+			"type": "dev.LessonsFile",
+			"method": "appendTriage",
+			"find": "final fresh: Array<String> = rows.filter(row -> !held.contains(row));",
+			"replace": "final fresh: Array<String> = rows;",
+			"note": "a second run over the same logs dir appends the same triage rows again"
+		},
+		{
+			"name": "M-LESSONS-UNREADABLE-KEPT",
+			"type": "dev.LessonsFile",
+			"method": "read",
+			"find": "unreadable.push('$name unreadable: ${oneLine(exception.message)} :: ${oneLine(content)}');",
+			"replace": "final dropped: Int = 0;",
+			"note": "a record file that does not parse is dropped with no trace and every lesson in it is lost"
+		},
+		{
+			"name": "M-LESSONS-UNVERIFIED-BACKLOG",
+			"type": "dev.LessonsFile",
+			"method": "mapping",
+			"find": "status: unverified ? 'backlog' : null,",
+			"replace": "status: null,",
+			"note": "an unverified lesson is filed pending and a pick runs it before anyone reproduced it"
+		},
+		{
+			"name": "M-LESSONS-SHORT-BRIEF",
+			"type": "dev.LessonsFile",
+			"method": "duplicateProblem",
+			"find": "lesson.text.length >= MIN_SHARED_BRIEF && ",
+			"replace": "",
+			"note": "a one-word brief is a substring of some open line, so unrelated lessons are refused as duplicates"
+		},
+		{
+			"name": "M-LESSONS-TRIAGE-KEEPS-NEW",
+			"type": "dev.LessonsFile",
+			"method": "appendTriage",
+			"find": "final fresh: Array<String> = rows.filter(row -> !held.contains(row));",
+			"replace": "final fresh: Array<String> = held.length > 0 ? [] : rows;",
+			"note": "a rerun whose records changed drops the triage rows the first run never wrote, and they are neither queue lines nor triage rows"
+		},
+		{
+			"name": "M-LESSONS-MAIN-USAGE",
+			"type": "dev.LessonsFile",
+			"method": "main",
+			"find": "if (slice == null) throw new UsageError('missing --slice <ID>');",
+			"replace": "if (slice == null) return 0;",
+			"note": "a call without --slice files the logs under no slice and exits 0 instead of a usage error"
+		},
+		{
+			"name": "M-LESSONS-MAIN-FILES",
+			"type": "dev.LessonsFile",
+			"method": "main",
+			"find": "final report: LessonReport = file(dir, slice, paths);",
+			"replace": "final report: LessonReport = { filed: 0, already: 0, triage: [], namesChecked: true };",
+			"note": "the command the pipeline runs reads its argv but files nothing"
+		},
+		{
+			"name": "M-LESSONS-MAIN-ENV-LIST",
+			"type": "dev.LessonsFile",
+			"method": "main",
+			"find": "?? Sys.getEnv('ANYPARSE_SCRUB_LIST')",
+			"replace": "?? null",
+			"note": "the pipeline's scrub list is not read, so the private-names check is skipped at every land"
 		}
 	]
 }
