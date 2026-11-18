@@ -1710,7 +1710,7 @@
 			"type": "anyparse.macro.StarLoopLowering",
 			"method": "buildPrattBlankRestoreStash",
 			"force": "macro {}",
-			"note": "a rolled-back Star element no longer hands its stash back through `Parser.restorePendingAfterBrace`"
+			"note": "a rolled-back Star element no longer hands its stash back through `Parser.restorePendingAfterGap`"
 		},
 		{
 			"name": "M-TERNARY-THEN-SEP-RUNON",

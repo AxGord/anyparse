@@ -14,13 +14,13 @@ final class GeneratedParserSharingTest extends Test {
 	/** The generated rule method whose source the row reads. */
 	private static final TYPEDEF_RULE: String = 'parseHxTypedefDeclT';
 
-	/** A rolled-back Star element hands its stash back through the runtime's brace check, not an inline back-scan. */
+	/** A rolled-back Star element hands its stash back through the runtime's gap check, not an inline back-scan. */
 	@:pin('control')
 	@:killer('M-PRATT-RESTORE-INLINE')
 	public function testTheRollbackRestoreIsACall(): Void {
 		Assert.isTrue(
-			typedefRuleSource().indexOf('.restorePendingAfterBrace(') >= 0,
-			'$TYPEDEF_RULE no longer calls `restorePendingAfterBrace` - the stash restore is inlined again'
+			typedefRuleSource().indexOf('.restorePendingAfterGap(') >= 0,
+			'$TYPEDEF_RULE no longer calls `restorePendingAfterGap` - the stash restore is inlined again'
 		);
 	}
 

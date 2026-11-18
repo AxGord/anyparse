@@ -183,6 +183,14 @@
 			"find": "return atom == null ? source.length : blank(input, atom.to);",
 			"replace": "return atom == null ? source.length : atom.to;",
 			"note": "the blank after a spliced fragment's condition is not read, so the word after it is never reached"
+		},
+		{
+			"name": "M-RESTORE-GAP-LINE-BREAK-IGNORED",
+			"type": "anyparse.runtime.Parser",
+			"method": "restorePendingAfterGap",
+			"find": "if (lineBreak || (",
+			"replace": "if ((",
+			"note": "a value with no closing `;` loses the blank lines and comments after it: the operator loop consumed that gap into the stash, and the Star rewind drops the stash unless the value ended with `}`"
 		}
 	]
 }

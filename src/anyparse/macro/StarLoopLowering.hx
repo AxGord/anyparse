@@ -297,8 +297,8 @@ final class StarLoopLowering {
 				// signal (left by a brace-terminated value's Pratt / postfix
 				// no-op tail, living in bytes BEFORE `_savedPos` and NOT
 				// re-scannable) would otherwise be lost. Restored on rollback
-				// ONLY when the just-parsed value ended with `}`. See
-				// `buildPrattBlankRestoreStash` for the brace-terminated rule.
+				// ONLY when that gap lies behind `_savedPos`. See
+				// `buildPrattBlankRestoreStash` for the rule.
 				final _savedPending = ctx.pendingTrivia;
 				final _lead = collectTrivia(ctx);
 				// The element's first token, past its leading trivia: the zero-width guard and the branch-trail rewind read it.
@@ -328,12 +328,10 @@ final class StarLoopLowering {
 	}
 
 	private static function buildPrattBlankRestoreStash(): Expr {
-		// ω-keep-pratt-blank: restore the pre-iteration stash only when the
-		// just-parsed value ended with `}` — scan back from `_savedPos` past
-		// trailing whitespace to the last content byte. Brace-terminated →
-		// preserve the source blank to the next sibling (issue_644 /
-		// typedef_fields); otherwise keep the baseline drop (issue_216).
-		return macro ctx.restorePendingAfterBrace(_savedPos, _savedPending);
+		// ω-keep-pratt-blank: restore the pre-iteration stash only when its gap lies behind `_savedPos` — a line break in
+		// the whitespace run before it (a value with no closing `;`) or a closing `}` (issue_644 / typedef_fields); a
+		// `;`-closed value's gap is re-read from the input, so its stash keeps the baseline drop (issue_216).
+		return macro ctx.restorePendingAfterGap(_savedPos, _savedPending);
 	}
 
 	private static function buildTriviaCloseTerminationCheck(closeText: Null<String>): Expr {

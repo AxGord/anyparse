@@ -11,19 +11,26 @@ final class ParserTest extends Test {
 	public function testAStashIsRestoredAfterABraceTerminatedValue(): Void {
 		final ctx: Parser = new Parser(new StringInput('a = {}  \n\n'));
 		final saved: PendingTrivia = stash();
-		ctx.restorePendingAfterBrace(10, saved);
+		ctx.restorePendingAfterGap(10, saved);
 		Assert.equals(saved, ctx.pendingTrivia);
 	}
 
-	public function testAStashStaysDroppedAfterAnyOtherValue(): Void {
+	public function testAStashIsRestoredAfterAValueWhoseLineBreakWasConsumed(): Void {
+		final ctx: Parser = new Parser(new StringInput('a = 1  \n\n'));
+		final saved: PendingTrivia = stash();
+		ctx.restorePendingAfterGap(9, saved);
+		Assert.equals(saved, ctx.pendingTrivia);
+	}
+
+	public function testAStashStaysDroppedAfterAValueWhoseGapIsStillInTheInput(): Void {
 		final ctx: Parser = new Parser(new StringInput('a = 1;  \n\n'));
-		ctx.restorePendingAfterBrace(10, stash());
+		ctx.restorePendingAfterGap(7, stash());
 		Assert.isNull(ctx.pendingTrivia);
 	}
 
 	public function testNoStashLeavesThePendingSlotAlone(): Void {
 		final ctx: Parser = new Parser(new StringInput('{}'));
-		ctx.restorePendingAfterBrace(2, null);
+		ctx.restorePendingAfterGap(2, null);
 		Assert.isNull(ctx.pendingTrivia);
 	}
 

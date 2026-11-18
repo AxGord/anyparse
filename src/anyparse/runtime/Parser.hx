@@ -229,19 +229,24 @@ final class Parser {
 	}
 
 	/**
-	 * Hand `saved` back to the stash when the value that ends at `end` closed with a `}`: the last non-whitespace byte
-	 * before `end` is a close brace. A brace-terminated value keeps the source blank line to its next sibling, which a
-	 * rewind past `collectTrivia` would otherwise lose.
+	 * Hand `saved` back to the stash when the value that ends at `end` left its trailing gap behind the rewind point: the
+	 * whitespace run ending at `end` holds a line break (an operator loop consumed the gap and stashed its blank-line
+	 * signal, so the stash is the gap's only record), or the last non-whitespace byte before `end` is a close brace. A
+	 * value closed by `;` leaves its gap in the input after `end`, where the next scan re-reads it, so its stash drops.
 	 */
-	public function restorePendingAfterBrace(end: Int, saved: Null<PendingTrivia>): Void {
+	public function restorePendingAfterGap(end: Int, saved: Null<PendingTrivia>): Void {
 		if (saved == null) return;
 		var i: Int = end - 1;
+		var lineBreak: Bool = false;
 		while (i > 0) {
 			final c: Int = input.charCodeAt(i);
-			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) break;
+			if (c == '\n'.code)
+				lineBreak = true;
+			else if (c != ' '.code && c != '\t'.code && c != '\r'.code)
+				break;
 			i--;
 		}
-		if (i >= 0 && input.charCodeAt(i) == '}'.code) pendingTrivia = saved;
+		if (lineBreak || (i >= 0 && input.charCodeAt(i) == '}'.code)) pendingTrivia = saved;
 	}
 
 	private static function alwaysFalse(): Bool {

@@ -440,7 +440,7 @@ class AddElementSliceTest extends Test {
 	public function testInsertAfterTypeKeepsItsTrailingComment(): Void {
 		final source: String = 'typedef A = {\n\tvar a:Int;\n} // trailing note about A\n\ntypedef B = {var b:Int;}\n';
 		final expected: String =
-			'typedef A = {var a:Int;} // trailing note about A\ntypedef Mid = {var m:Int;}\ntypedef B = {var b:Int;}\n';
+			'typedef A = {var a:Int;} // trailing note about A\n\ntypedef Mid = {var m:Int;}\ntypedef B = {var b:Int;}\n';
 		assertAdd(source, 1, 1, After, 'typedef Mid = {var m: Int;}', true, expected);
 	}
 
