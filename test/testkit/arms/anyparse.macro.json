@@ -3348,8 +3348,8 @@
 			"type": "anyparse.macro.Lowering",
 			"method": "ruleReturnCT",
 			"find": "pack: synthPackOf(_shape.root, SPANS_SUBPACK),",
-			"replace": "pack: packOf(refName).concat([SPANS_SUBPACK]),",
-			"note": "the parser names a span pair by its rule's package again, so a rule below its root's package fails to find the module the synth side placed at the root"
+			"replace": "pack: _shape.root.indexOf('anyparse.') == 0 ? synthPackOf(_shape.root, SPANS_SUBPACK) : packOf(refName).concat([SPANS_SUBPACK]),",
+			"note": "outside the anyparse. tree the parser names a span pair by its rule's package again, so a rule below its root's package fails to find the module the synth side placed at the root; the in-tree Haxe grammar spans subpackages and keeps the root's, so the suite binary still builds and only the fixture child compile breaks"
 		},
 		{
 			"name": "M-META-DOC-LED-ELEM",
