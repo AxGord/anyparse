@@ -308,8 +308,8 @@ final class SliceGate {
 
 	/**
 	 * Run `branches` at once as `--rows` processes of `self`, their rows in `order`: under a held lease the heavy rows take
-	 * what the lease leaves beside the others' `demand`, and without one each branch takes its own lease of the pool, but one that
-	 * `GateLint.leasesItsOwn` starts unleased, its `demand` still left to it out of the heavy rows' share.
+	 * what the lease leaves beside the others' `demand` (`Branches.perHeavy`); without one each branch takes its own lease of the
+	 * pool, the heavy rows asking up to `Branches.heavyShare`, and one that `GateLint.leasesItsOwn` starts unleased.
 	 */
 	private function fanOut(self: String, branches: Array<Array<String>>, order: Array<String>): Void {
 		final threads: Null<Int> = switch _mode {
@@ -455,7 +455,7 @@ final class SliceGate {
 		}
 		final lines: Array<String> = [];
 		var totals: Null<Tally> = null;
-		final shards: Int = _gate.options.threads ?? Shard.DEFAULT_SHARDS;
+		final shards: Int = Shard.shardCount(null, _gate.options.threads);
 		final status: Int = Shard.run({
 			repo: _gate.tree,
 			testJs: Path.join([_gate.tree, 'bin/test.js']),
@@ -758,7 +758,8 @@ final class SliceGate {
 
 	/**
 	 * The threads the branch running `rows` holds under `facts`: null for the heavy one (the suite), which takes
-	 * what the others leave; one for the short rows; the lint row's two lints (the touched files at the base and now); the
+	 * what the others leave under a held lease and asks up to `Branches.heavyShare` on its own; one for the short rows; the
+	 * lint row's two lints (the touched files at the base and now); the
 	 * jvm probe; the typer probes; a lint per tree INFRA gate 4 reads beside
 	 * the base tree's, which a `--baseline` run lints in its own row —
 	 * each 0 when its rows will skip.

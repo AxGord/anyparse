@@ -71,6 +71,7 @@ process.exitCode = failed;
 	@:killer('M-SHARD-COUNT-IGNORES-LEASE')
 	public function testAShardRunThatNamesNoCountTakesTheThreadsOfItsLease(): Void {
 		Assert.equals(3, Shard.shardCount(null, 3));
+		Assert.equals(1, Shard.shardCount(null, 1), 'a grant of one runs one process');
 		Assert.equals(Shard.DEFAULT_SHARDS, Shard.shardCount(null, null));
 		Assert.equals(2, Shard.shardCount('2', 3));
 		Assert.raises(Shard.shardCount.bind('0', 3), UsageError);

@@ -194,11 +194,12 @@ final class Branches {
 	/**
 	 * `command` of each of `branches` as `mode` runs it. Under `Own` each branch takes a lease of its own: the threads
 	 * `demand` names for its rows (none at 0), and the one branch it answers null for, the heavy one, from `Lease.HEAVY_MIN`
-	 * up to what the budget leaves beside the others (`share`). The light ones queue a priority step ahead of the
+	 * up to its part of the budget at most `Lease.FAN_OUT_KNEE` (`heavyShare`): the light ones end long before it, so what they
+	 * hold when it starts is no size for its whole run. The light ones queue a priority step ahead of the
 	 * heavy one (`Lease.ahead`): on a busy pool the heavy one waits for its whole share with every free thread closed
 	 * behind it, and its own siblings must not wait behind it. A branch's threads go back to the pool as it ends. `cores` names
-	 * the cpus each process of a light branch runs on (`Ask.cores`, one without it), and the heavy share is what is left beside
-	 * the cpus the light ones lease. Under `Held` and `Unpooled` the command is as it was: the caller splits a held lease with
+	 * the cpus each process of a light branch runs on (`Ask.cores`, one without it). Under
+	 * `Held` and `Unpooled` the command is as it was: the caller splits a held lease with
 	 * `share` and `light`.
 	 */
 	public static function leased(
@@ -208,11 +209,7 @@ final class Branches {
 		return switch mode {
 			case Own(_, budget):
 				final coresOf: Array<String> -> Int = cores ?? (_ -> 1);
-				final leasedDemand: Array<String> -> Null<Int> = rows -> {
-					final threads: Null<Int> = demand(rows);
-					return threads == null ? null : threads * coresOf(rows);
-				};
-				final rest: Int = perHeavy(budget, branches, leasedDemand) ?? 1;
+				final rest: Int = heavyShare(budget, branches, demand);
 				final ahead: Int = Lease.ahead();
 				rows -> {
 					final threads: Null<Int> = demand(rows);
@@ -290,6 +287,16 @@ final class Branches {
 	public static function cpuSeconds(text: String): Null<Float> {
 		final reading: EReg = ~/([0-9]+[.,][0-9]+) +user +([0-9]+[.,][0-9]+) +sys/;
 		return reading.match(text) ? seconds(reading.matched(1)) + seconds(reading.matched(2)) : null;
+	}
+
+	/**
+	 * The most threads each heavy branch of `branches` (those `demand` answers null for) asks an own lease of `budget`: its
+	 * part of the whole budget, at least one and at most `Lease.FAN_OUT_KNEE`. The light branches' threads are not taken
+	 * off it: they end long before the heavy one, whose share would otherwise be sized by a moment of its run.
+	 */
+	public static function heavyShare(budget: Int, branches: Array<Array<String>>, demand: Array<String> -> Null<Int>): Int {
+		final heavy: Int = branches.count(rows -> demand(rows) == null);
+		return Std.int(Math.min(Lease.FAN_OUT_KNEE, Math.max(1, Math.floor(budget / Math.max(1, heavy)))));
 	}
 
 	/** The step a report row records; a reading the row has none of stays absent on the step, as on a step nothing measured. */

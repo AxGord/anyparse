@@ -59,6 +59,12 @@ final class Lease {
 	/** The fewest threads a flexible lease (a run's heaviest branch) takes. */
 	public static inline final HEAVY_MIN: Int = 2;
 
+	/**
+	 * The most processes a whole-tree run fans out to: past this knee another process buys no wall time
+	 * (`docs/design-principles.md` § 2), so a flexible lease asks no more and holds no thread it would not use.
+	 */
+	public static inline final FAN_OUT_KNEE: Int = 4;
+
 	/** How long a flexible lease waits for its whole share before it takes what fits, in seconds. */
 	public static inline final WAIT_FULL_SECONDS: Int = 30;
 

@@ -48,7 +48,7 @@ final class BranchesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-BRANCHES-LIGHT-NONE')
-	public function testEachBranchTakesItsOwnLeaseAndTheHeavyOneWhatTheOthersLeave(): Void {
+	public function testEachBranchTakesItsOwnLeaseAndTheHeavyOneItsShareOfTheBudget(): Void {
 		final branches: Array<Array<String>> = [['heavy', 'next'], ['lint'], ['short'], ['skipped']];
 		final demand: Array<String> -> Null<Int> = rows -> {
 			switch rows[0] {
@@ -65,11 +65,11 @@ final class BranchesTest extends Test {
 		};
 		final pool: LeaseMode = Own('/p/scripts/wf-run', 10);
 		Assert.equals(3, Branches.light(branches, demand));
-		Assert.equals('2-7', threadsOf(pool, ['heavy', 'next']));
+		Assert.equals('2-4', threadsOf(pool, ['heavy', 'next']), 'up to the fan-out knee, whatever the light ones hold');
 		Assert.equals('2', threadsOf(pool, ['lint']));
 		Assert.equals('1', threadsOf(pool, ['short']));
 		Assert.equals('none', threadsOf(pool, ['skipped']), 'a branch whose rows skip takes no lease');
-		Assert.equals('1', threadsOf(Own('/p/scripts/wf-run', 4), ['heavy', 'next']), 'the heavy branch never takes less than one');
+		Assert.equals('1', threadsOf(Own('/p/scripts/wf-run', 1), ['heavy', 'next']), 'the heavy branch never takes less than one');
 		Assert.equals('none', threadsOf(Held(10), ['heavy', 'next']), 'a held lease is split by the caller');
 		Assert.equals('none', threadsOf(Unpooled, ['lint']));
 	}
@@ -471,8 +471,7 @@ final class BranchesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-BRANCHES-CORES-UNASKED')
-	@:killer('M-BRANCHES-HEAVY-BESIDE-THREADS')
-	public function testALightBranchLeasesTheCpusOfItsProcessesAndTheHeavyOneWhatIsLeft(): Void {
+	public function testALightBranchLeasesTheCpusOfItsProcessesAndTheHeavyOneUpToTheKnee(): Void {
 		final branches: Array<Array<String>> = [['heavy'], ['lint'], ['short']];
 		final demand: Array<String> -> Null<Int> = rows -> {
 			switch rows[0] {
@@ -490,7 +489,7 @@ final class BranchesTest extends Test {
 		};
 		Assert.equals('4', threadsOf(['lint']));
 		Assert.equals('1', threadsOf(['short']));
-		Assert.equals('2-5', threadsOf(['heavy']), 'the heavy branch takes what the light ones leave of their cpus');
+		Assert.equals('2-4', threadsOf(['heavy']), 'the heavy branch asks up to the fan-out knee, whatever the light ones lease');
 	}
 
 	/**

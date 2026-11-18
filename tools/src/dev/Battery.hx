@@ -785,7 +785,8 @@ final class Battery {
 	}
 
 	/**
-	 * The threads the branch running `rows` holds: null for the quick suite's, which takes what the others leave, and one for a full
+	 * The threads the branch running `rows` holds: null for the quick suite's, which takes what the others leave under a held lease
+	 * and asks up to `Branches.heavyShare` on its own, and one for a full
 	 * run's, whose one shard is the monolith run (`BatteryBranch.suiteShards`); two for the oracle branch, its project lint beside
 	 * the client's; one for each other, the probes branch included, whose kit probes run on that one (`BatteryBranch.kitThreads`).
 	 */

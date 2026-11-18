@@ -398,14 +398,6 @@
 			"note": "a light branch of node engine processes leases one thread per process, so the gate lint runs on more cpus than it holds"
 		},
 		{
-			"name": "M-BRANCHES-HEAVY-BESIDE-THREADS",
-			"type": "devkit.Branches",
-			"method": "leased",
-			"find": "perHeavy(budget, branches, leasedDemand)",
-			"replace": "perHeavy(budget, branches, demand)",
-			"note": "the heavy branch is sized beside the light ones processes, not the cpus they lease, so together they ask for more than the budget"
-		},
-		{
 			"name": "M-LEASE-CORES-PRIORITY-DROPPED",
 			"type": "devkit.Lease",
 			"method": "scaled",
@@ -475,6 +467,22 @@
 			"find": "scaled(ask, coresOf(ask), budget).max",
 			"replace": "ask.max",
 			"note": "a lease taker that runs a process on several cpus is recorded as holding one thread per process, not the cpus it leased"
+		},
+		{
+			"name": "M-BRANCHES-HEAVY-SHARE-UNCAPPED",
+			"type": "devkit.Branches",
+			"method": "heavyShare",
+			"find": "Math.min(Lease.FAN_OUT_KNEE, Math.max(1, Math.floor(budget / Math.max(1, heavy))))",
+			"replace": "Math.max(1, Math.floor(budget / Math.max(1, heavy)))",
+			"note": "the heavy branch asks past the fan-out knee and holds threads its shards never use"
+		},
+		{
+			"name": "M-BRANCHES-HEAVY-SHARE-UNSPLIT",
+			"type": "devkit.Branches",
+			"method": "heavyShare",
+			"find": "budget / Math.max(1, heavy)",
+			"replace": "budget",
+			"note": "two heavy branches each ask the whole budget, so on a small pool they ask more than it holds"
 		}
 	]
 }

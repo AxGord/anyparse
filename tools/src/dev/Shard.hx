@@ -10,6 +10,7 @@ import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.FixtureCache;
+import devkit.Lease;
 import devkit.Pool;
 import devkit.Result;
 import devkit.TmpLifecycle;
@@ -126,7 +127,7 @@ final class Shard {
 		+ '[--timings <tsv>] [--repo <tree>]';
 
 	/** The shard count when `-n` names none. */
-	public static inline final DEFAULT_SHARDS: Int = 4;
+	public static inline final DEFAULT_SHARDS: Int = Lease.FAN_OUT_KNEE;
 
 	/** The last green run's per-class timings: the weights the next plan balances on. */
 	public static inline final WEIGHTS: String = 'bin/.suite-timings.tsv';
