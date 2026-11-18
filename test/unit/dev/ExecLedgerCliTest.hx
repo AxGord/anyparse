@@ -23,7 +23,7 @@ final class ExecLedgerCliTest extends Test {
 		final totals: Array<LedgerTotal> = ExecLedgerCli.summarize([
 			{
 				row: 'suite',
-				phase: 'gate',
+				phase: 'land',
 				wallMs: 60000,
 				waitMs: 2000,
 				cpuS: 120,
@@ -31,7 +31,7 @@ final class ExecLedgerCliTest extends Test {
 			},
 			{
 				row: 'corpus',
-				phase: 'gate',
+				phase: 'land',
 				wallMs: 30000,
 				threads: 4,
 				branch: 'suite'
@@ -67,7 +67,7 @@ final class ExecLedgerCliTest extends Test {
 	@:pin('control')
 	@:killer('M-EXECLEDGERCLI-SINCE-IGNORED')
 	public function testSinceKeepsOnlyRowsRecordedFromThatDay(): Void {
-		final from: Float = ExecLedgerCli.dayStart('2026-11-10');
+		final from: Float = ExecLedgerCli.sinceStart('2026-11-10');
 		final totals: Array<LedgerTotal> = ExecLedgerCli.summarize([
 			{
 				row: 'old',

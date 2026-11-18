@@ -255,6 +255,14 @@
 			"note": "a gate step after its branch first names no branch, so the ledger sums it apart from the cpu its branch used"
 		},
 		{
+			"name": "M-EXECLEDGER-GATE-BRANCHES",
+			"type": "devkit.ExecLedger",
+			"method": "ofSteps",
+			"find": "if (real.length > 0) first = branchIn(step.name, real);",
+			"replace": "",
+			"note": "a gate step is filed under the last earlier step with a lease instead of its real branch, so a corpus row counts under lists"
+		},
+		{
 			"name": "M-EXECLEDGER-BATTERY-TWICE",
 			"type": "devkit.ExecLedger",
 			"method": "withoutDoubleCount",

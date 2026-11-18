@@ -235,7 +235,7 @@ final class GateReuse {
 
 	/** The gate's `steps` as the `ExecLedger` lines of its `gate` phase, recorded at `at`. */
 	public static function timingsOf(steps: Array<Step>, at: Float): Array<String> {
-		return ExecLedger.ofSteps('gate', steps, at).map(ExecLedger.encode);
+		return ExecLedger.ofSteps('gate', steps, at, SliceGate.GATE_BRANCHES).map(ExecLedger.encode);
 	}
 
 }

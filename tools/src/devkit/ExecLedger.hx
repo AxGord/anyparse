@@ -155,8 +155,11 @@ final class ExecLedger {
 	/**
 	 * The rows of a run's `steps` in `phase`, recorded at `at`: a branch starts at a step carrying its lease wait or cpu,
 	 * which only a branch's first step carries, or at a step that held no lease; every later step names that first step.
+	 * When the run's real `branches` are given (each a list of step names that ran as one branch), a step in one names that
+	 * branch's first name, whatever order the table lists the steps in, and a step in none is a branch of its own.
 	 */
-	public static function ofSteps(phase: String, steps: Array<Step>, at: Float): Array<LedgerRow> {
+	public static function ofSteps(phase: String, steps: Array<Step>, at: Float, ?branches: Array<Array<String>>): Array<LedgerRow> {
+		final real: Array<Array<String>> = branches ?? [];
 		final out: Array<LedgerRow> = [];
 		var first: String = '';
 		for (step in steps) {
@@ -164,6 +167,7 @@ final class ExecLedger {
 			final cpu: Null<Float> = step.cpu;
 			final threads: Null<Int> = step.threads;
 			if (wait != null || cpu != null || threads == null) first = step.name;
+			if (real.length > 0) first = branchIn(step.name, real);
 			final row: LedgerRow = {
 				row: step.name,
 				phase: phase,
@@ -177,6 +181,12 @@ final class ExecLedger {
 			out.push(row);
 		}
 		return out;
+	}
+
+	/** The branch step `name` ran in: the first name of the group of `branches` that holds it, or `name` itself when none does. */
+	public static function branchIn(name: String, branches: Array<Array<String>>): String {
+		for (group in branches) if (group.indexOf(name) >= 0) return group[0];
+		return name;
 	}
 
 	/** The ledger of the blast cache `cache`. */

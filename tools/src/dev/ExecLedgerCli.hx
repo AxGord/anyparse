@@ -5,6 +5,8 @@ import devkit.ExecLedger;
 import devkit.Table;
 import haxe.io.Path;
 
+using StringTools;
+
 /** A branch total rows are added to one at a time. */
 private abstract Accrual(LedgerTotal) {
 
@@ -61,33 +63,57 @@ typedef LedgerTotal = {
 @:nullSafety(Strict)
 final class ExecLedgerCli {
 
-	public static inline final USAGE: String = 'usage: dev exec-ledger [--since <YYYY-MM-DD>] [--file <ledger.tsv>]';
+	public static inline final USAGE: String =
+		'usage: dev exec-ledger [--since <YYYY-MM-DD[ HH:MM[:SS]][Z]>] [--until <same>] [--file <ledger.tsv>]';
 
 	/** The branch column of a phase's total line. */
 	public static final TOTAL: String = '(total)';
 
 	private static inline final MS_PER_SECOND: Float = 1000;
+	private static inline final MS_PER_MINUTE: Float = 60000;
 	private static inline final SECONDS_PER_MINUTE: Float = 60;
 	private static inline final HUNDREDTHS: Float = 100;
 
 	/** The text of an unmetered reading. */
 	private static final NONE: String = '-';
 
-	public static function main(argv: Array<String>): Int {
+	public static inline function main(argv: Array<String>): Int {
+		return run(argv, Sys.println);
+	}
+
+	/** `main` with the printed lines handed to `print`: the options are read here, so a test drives them on a literal argv. */
+	public static function run(argv: Array<String>, print: String -> Void): Int {
 		final args: Args = new Args(argv);
 		final since: Null<String> = args.option('--since');
+		final until: Null<String> = args.option('--until');
 		final file: String = args.option('--file') ?? Path.join([Land.cacheDir(Sys.getEnv), ExecLedger.FILE]);
 		args.done();
-		final from: Null<Float> = since == null ? null : dayStart(since);
-		Sys.println(render(summarize(new ExecLedger(file).rows(), from)));
+		final from: Null<Float> = since == null ? null : sinceStart(since);
+		final end: Null<Float> = until == null ? null : sinceStart(until);
+		final rows: Array<LedgerRow> = before(new ExecLedger(file).rows(), end);
+		print(render(summarize(rows, from)));
+		print('');
+		print(LeaseReadout.render(LeaseReadout.read(rows, from)));
 		return 0;
 	}
 
-	/** The start of the day `day` (`YYYY-MM-DD`, local time) in milliseconds since the epoch. */
-	public static function dayStart(day: String): Float {
-		final time: Float = try Date.fromString(day).getTime() catch (_: haxe.Exception) Math.NaN;
-		if (Math.isNaN(time)) throw new UsageError('--since: not a date: $day');
-		return time;
+	/** The rows of `rows` recorded before `end` (all when null); a row with no time is kept, as `summarize` leaves it to `--since`. */
+	public static function before(rows: Array<LedgerRow>, end: Null<Float>): Array<LedgerRow> {
+		return rows.filter(row -> end == null || (row.at ?? end) < end);
+	}
+
+	/**
+	 * The moment `text` names, in milliseconds since the epoch: `YYYY-MM-DD` (the day's start), with an optional time
+	 * `HH:MM[:SS]` after a space or `T`. Local time, or UTC when it ends in `Z`.
+	 */
+	public static function sinceStart(text: String): Float {
+		final utc: Bool = text.endsWith('Z');
+		final trimmed: String = utc ? text.substr(0, text.length - 1) : text;
+		final clean: String = trimmed.replace('T', ' ');
+		final stamp: String = clean.split(' ').length == 2 && clean.split(':').length == 2 ? '$clean:00' : clean;
+		final date: Null<Date> = try Date.fromString(stamp) catch (_: haxe.Exception) null;
+		if (date == null || Math.isNaN(date.getTime())) throw new UsageError('--since/--until: not a date: $text');
+		return date.getTime() - (utc ? date.getTimezoneOffset() * MS_PER_MINUTE : 0);
 	}
 
 	/**
@@ -168,7 +194,7 @@ final class ExecLedgerCli {
 
 	/** The run of a branch `row` adds to: its branch (or, when it names none, itself) recorded at the same time. */
 	private static function runOf(runs: Map<String, LedgerTotal>, order: Array<LedgerTotal>, row: LedgerRow): Accrual {
-		final branch: String = row.branch ?? row.row;
+		final branch: String = LeaseReadout.branchOf(row);
 		final key: String = '${row.phase}\t$branch\t${row.at ?? -1}';
 		final seen: Null<LedgerTotal> = runs[key];
 		if (seen != null) return new Accrual(seen);

@@ -2869,8 +2869,8 @@
 		},
 		{
 			"name": "M-EXECLEDGERCLI-BRANCH-KEY",
-			"type": "dev.ExecLedgerCli",
-			"method": "runOf",
+			"type": "dev.LeaseReadout",
+			"method": "branchOf",
 			"find": "row.branch ?? row.row",
 			"replace": "row.row",
 			"note": "a later row of a branch is summed as its own branch, so the branch cpu sits on its first row and the wall it was spent over is cut short"
@@ -3479,6 +3479,70 @@
 			"find": "run.failure != '' || ",
 			"replace": "",
 			"note": "a lint the driver killed or that overflowed is saved whenever what it printed parses, though the rest of its report was never printed"
+		},
+		{
+			"name": "M-LEASEREADOUT-GAP-ABS",
+			"type": "dev.LeaseReadout",
+			"method": "add",
+			"find": "line.gap += Math.abs(held - used);",
+			"replace": "line.gap += held - used;",
+			"note": "the gap is signed, so a branch idle in one run and over in another averages out to a match"
+		},
+		{
+			"name": "M-LEASEREADOUT-GATE-REGROUP",
+			"type": "dev.LeaseReadout",
+			"method": "branchOf",
+			"find": "row.phase == GATE_PHASE ? ExecLedger.branchIn(row.row, SliceGate.GATE_BRANCHES) : ",
+			"replace": "",
+			"note": "gate rows keep the branch the ledger filed them under, so a corpus row recorded under lists reads as the lists lease"
+		},
+		{
+			"name": "M-LEASEREADOUT-SHARED-LEASE",
+			"type": "dev.LeaseReadout",
+			"method": "sharedLease",
+			"find": "return span.cpuS == null;",
+			"replace": "return false;",
+			"note": "a battery whose branches shared one lease is read branch by branch, each holding the whole lease"
+		},
+		{
+			"name": "M-LEASEREADOUT-UNMETERED-READ",
+			"type": "dev.LeaseReadout",
+			"method": "read",
+			"find": "if (run.leasedMs <= 0 || run.cpuS <= 0) continue;",
+			"replace": "",
+			"note": "a run with no lease or no cpu is read as zero cores or a division by nothing, so the means are no longer over the metered runs"
+		},
+		{
+			"name": "M-LEASEREADOUT-SINCE-TIME",
+			"type": "dev.ExecLedgerCli",
+			"method": "sinceStart",
+			"find": "Date.fromString(stamp)",
+			"replace": "Date.fromString(stamp.substr(0, 10))",
+			"note": "--since drops the time of day, so a before/after window cannot be cut inside a day"
+		},
+		{
+			"name": "M-LEASEREADOUT-UNTIL-EXCLUSIVE",
+			"type": "dev.ExecLedgerCli",
+			"method": "before",
+			"find": "(row.at ?? end) < end",
+			"replace": "(row.at ?? end) <= end",
+			"note": "a row recorded at the end moment is kept, so two adjacent windows both count the run on their boundary"
+		},
+		{
+			"name": "M-LEASEREADOUT-PHASE-LINE",
+			"type": "dev.LeaseReadout",
+			"method": "read",
+			"find": "add(totals[run.phase] ?? all, run);",
+			"replace": "",
+			"note": "a phase's closing line reads no run, so the per-phase mean the census judges by is a hand calculation again"
+		},
+		{
+			"name": "M-LEASEREADOUT-MAIN-WINDOW",
+			"type": "dev.ExecLedgerCli",
+			"method": "run",
+			"find": "final end: Null<Float> = until == null ? null : sinceStart(until);",
+			"replace": "final end: Null<Float> = null;",
+			"note": "--until is read and dropped, so a before/after window reaches to the end of the ledger"
 		}
 	]
 }
