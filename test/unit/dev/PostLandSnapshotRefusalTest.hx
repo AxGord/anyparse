@@ -16,7 +16,7 @@ import utest.Test;
 @:nullSafety(Strict)
 final class PostLandSnapshotRefusalTest extends Test {
 
-	private static final MARKED: String = 'hoist-common-import';
+	private static final MARKED: String = 'unused-return-value';
 	private static final PLAIN: String = 'doc-length';
 	private static final ANON: String = 'anon-type-dup';
 
@@ -72,6 +72,13 @@ final class PostLandSnapshotRefusalTest extends Test {
 		if (CliFixture.engineOrSkip() == null) return;
 		final refusal: String = refusalOf([finding('t.hx', PLAIN, 'doc block')], [], ['t.hx']) ?? '';
 		Assert.stringContains(PLAIN, refusal);
+	}
+
+	@:pin('guard')
+	public function testAnAmbientGovernedRulesMovementOnARelintedFileIsRefused(): Void {
+		if (CliFixture.engineOrSkip() == null) return;
+		final refusal: String = refusalOf([], [finding('t.hx', 'hoist-common-import', 'brought in')], ['t.hx']) ?? '';
+		Assert.stringContains('hoist-common-import', refusal);
 	}
 
 	@:pin('guard')

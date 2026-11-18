@@ -1935,7 +1935,7 @@
 		{
 			"name": "M-LINTSCOPE-LISTING-IGNORES-MARKER",
 			"type": "dev.LintScope",
-			"method": "scopeDependent",
+			"method": "carriedRules",
 			"find": "JValueTools.isTrue(JValueTools.field(record, 'scopeDependent'))",
 			"replace": "true",
 			"note": "every rule of the engine's listing is carried from the base, so a scoped lint replaces nothing"
@@ -1984,8 +1984,8 @@
 			"name": "M-POSTLAND-UNREADABLE-LISTING-COMPARES",
 			"type": "dev.PostLand",
 			"method": "snapshotRefusal",
-			"find": "LintScope.scopeDependent(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out)",
-			"replace": "(LintScope.scopeDependent(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out) ?? [])",
+			"find": "LintScope.carriedRules(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out)",
+			"replace": "(LintScope.carriedRules(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out) ?? [])",
 			"note": "a rule listing the engine could not print compares everything, so the carried findings turn the backstop red without saying why"
 		},
 		{
@@ -2007,7 +2007,7 @@
 			"name": "M-LINTSCOPE-JUDGED-DROPS-OUTSIDE-SCOPE",
 			"type": "dev.LintScope",
 			"method": "judged",
-			"find": "redone.exists(JValueTools.stringAt(record, 'file') ?? '')",
+			"find": "redone.exists(JValueTools.stringAt(record, FILE_KEY) ?? '')",
 			"replace": "true",
 			"note": "a scope-dependent rule leaves the compare on every file, so its movement outside what the land re-linted is never refused"
 		},
@@ -3621,6 +3621,22 @@
 			"find": "if (builds == 0) return null;",
 			"replace": "",
 			"note": "no build ran and the caller's lease is still recorded as held by it"
+		},
+		{
+			"name": "M-LINTSCOPE-CARRIES-AMBIENT-GOVERNED",
+			"type": "dev.LintScope",
+			"method": "carriedRules",
+			"find": "&& !JValueTools.isTrue(JValueTools.field(record, 'ambientGoverned'))",
+			"replace": "&& !JValueTools.isTrue(JValueTools.field(record, 'neverListed'))",
+			"note": "an ambient-governed rule is carried from the base on a re-linted file, so a finding the landed change brings in is neither in its report nor judged by its backstop, and a later unrelated land goes red for it"
+		},
+		{
+			"name": "M-LINTSCOPE-AMBIENT-JUDGED-ON-A-BLIND-FOLDER",
+			"type": "dev.LintScope",
+			"method": "carried",
+			"find": "if (!whole.exists(dir)) whole[dir] = below(dir).foreach(redone.exists);",
+			"replace": "if (!whole.exists(dir)) whole[dir] = true;",
+			"note": "an ambient-governed rule is judged fresh on a re-linted file whose folder has modules outside the scope, where the narrow run weighs no site and reports nothing, so the base's finding is dropped and every later land re-linting that folder turns its backstop red"
 		}
 	]
 }

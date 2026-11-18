@@ -66,6 +66,28 @@ final class PostLandSnapshotRefusalStandInTest extends Test {
 		Assert.isNull(withEngine(SCOPED_ENGINE.join('\n'), wholeLintRefusal));
 	}
 
+	/** The land judged an ambient-governed rule on its own files, so the backstop compares it there instead of leaving it out. */
+	@:pin('control')
+	@:killer('M-LINTSCOPE-CARRIES-AMBIENT-GOVERNED')
+	public function testTheBackstopComparesAnAmbientGovernedRuleOnTheLandsFiles(): Void {
+		final engine: String = [
+			'case "$$1" in',
+			'  lint-diff)',
+			'    if grep -q ambient "$$5"; then printf "lint-diff: 1 added / 0 removed\\n  + t.hx  ambient  m\\n"; exit 1; fi',
+			'    echo "lint-diff: 0 added / 0 removed";;',
+			'  *) echo \'[{"id":"ambient","scopeDependent":true,"ambientGoverned":true}]\';;',
+			'esac'
+		].join('\n');
+		final refusal: Null<String> = withEngine(engine, tree -> {
+			final recorded: String = Path.join([tree, 'recorded.json']);
+			final truth: String = Path.join([tree, 'truth.json']);
+			File.saveContent(recorded, '[]');
+			File.saveContent(truth, '[{"file":"t.hx","rule":"ambient","severity":"warning","message":"m"}]');
+			return PostLand.snapshotRefusal(tree, recorded, truth, ['t.hx']);
+		});
+		Assert.stringContains('+ t.hx  ambient', refusal ?? '');
+	}
+
 	private static function wholeLintRefusal(tree: String): Null<String> {
 		final sha: String = landedCommit(tree);
 		final cache: String = Path.join([tree, 'cache']);

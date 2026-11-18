@@ -783,9 +783,20 @@ interface CrossFileAnchored extends ScopeDependent {
  * import governs) or anchors elsewhere (a clone spread over several files).
  *
  * `dev.LintScope` keeps the base's findings of such a rule for a re-linted file rather than replacing them with the narrower
- * answer of a scoped lint; a tool learns these rules from the `scopeDependent` field of `apq lint --list-rules --format json`.
+ * answer of a scoped lint, unless it is `AmbientGoverned`; a tool learns these rules from the `scopeDependent` field of
+ * `apq lint --list-rules --format json`.
  */
 interface ScopeDependent {}
+/**
+ * A `ScopeDependent` check whose finding in one file depends only on the modules an ambient source at or above the file's
+ * folder governs or would govern, and that weighs such a site only when the run holds every module the site governs: a run
+ * holding every module below a file's folder answers for that folder's site as the whole tree does, and is silent on a wider
+ * site it does not hold whole.
+ *
+ * `dev.LintScope` judges such a rule fresh on a re-linted file; a tool learns these rules from the `ambientGoverned` field of
+ * `apq lint --list-rules --format json`.
+ */
+interface AmbientGoverned extends ScopeDependent {}
 
 /**
  * A check whose finding on a declaration REPLACES another rule's finding on that same declaration: the two rules

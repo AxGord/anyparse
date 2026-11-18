@@ -1,11 +1,11 @@
 package anyparse.check.common.imports;
 
+import anyparse.check.Check.AmbientGoverned;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.ScopeDependent;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.scan.UsingSites;
@@ -163,7 +163,7 @@ private typedef Plans = { final hoists: Array<HoistPlan>; final sinks: Array<Sin
  */
 @:nullSafety(Strict)
 final class HoistCommonImport extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff
-		implements VolatileMessage implements ScopeDependent {
+		implements VolatileMessage implements AmbientGoverned {
 
 	/** The share of a directory's modules a statement must stand in, as a percentage. */
 	public static inline final DEFAULT_THRESHOLD: Int = 50;

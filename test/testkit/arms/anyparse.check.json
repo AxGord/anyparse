@@ -559,6 +559,14 @@
 			"find": "narrow == null ? found : narrow(found)",
 			"replace": "[]",
 			"note": "the risky-fix phase windows every finding out, so a finding on a changed line is never fixed under --changed-since"
+		},
+		{
+			"name": "M-RULE-INDEX-JSON-DROPS-AMBIENT-GOVERNED",
+			"type": "anyparse.check.RuleIndex",
+			"method": "json",
+			"find": "ambientGoverned: c is AmbientGoverned",
+			"replace": "ambientGoverned: false",
+			"note": "the rule listing marks no rule ambient-governed, so a scoped land carries hoist-common-import from its base and never judges the finding its change brings in"
 		}
 	]
 }

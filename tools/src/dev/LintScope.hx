@@ -26,7 +26,8 @@ typedef WholeReport = { report: Null<String>, why: Null<String> }
  * every `.hx` beside them (a rule that counts a folder's files moves a finding filed on a sibling) and every module governed
  * by an `import.hx` up the path to the root (its imports are inherited by every folder under it, and a rule that counts a
  * share of them moves with any module there), and carries the base's findings for every other file, and
- * those of a rule whose answer depends on the report scope (`Check.ScopeDependent`) even for a re-linted file.
+ * those of a rule whose answer depends on the report scope (`Check.ScopeDependent`) even for a re-linted file, except an
+ * ambient-governed one (`Check.AmbientGoverned`) on a re-linted file whose folder the scope holds whole, which is judged fresh.
  * Anything else — or no way to tell — is the whole tree (`null`). `backstop` is the whole lint's check of that carrying.
  */
 final class LintScope {
@@ -34,12 +35,13 @@ final class LintScope {
 	/** The directories the battery lints. */
 	public static final ROOTS: Array<String> = ['src', 'test'];
 
-	/** The engine's rule listing, read by `scopeDependent`. */
+	/** The engine's rule listing, read by `carriedRules`. */
 	public static final RULE_LISTING: Array<String> = ['lint', '--list-rules', '--format', 'json'];
 
 	/** How many moved findings a backstop refusal names. */
 	private static inline final NAMED: Int = 3;
 
+	private static final FILE_KEY: String = 'file';
 	private static final AMBIENT: String = 'import.hx';
 
 	/** The other files a lint reads besides the sources: the oracle's build files, the formatter's config, the library list. */
@@ -94,12 +96,15 @@ final class LintScope {
 
 	/**
 	 * The report of the whole tree, from the base's report `base` and the lint `fresh` of `scope` alone: the base's findings of
-	 * every file outside `scope` that `exists` still and those of a rule in `dependent` (`scopeDependent`: its answer for a re-linted
-	 * file is the narrow run's, so the base's stands), then the fresh ones of every other rule. A `fresh` that is no report (a lint
-	 * that failed) is answered as it is, for the caller to fail on; null when `base` is none.
+	 * every file outside `scope` that `exists` still and those of a rule in `dependent` (`carriedRules`: its answer for a re-linted
+	 * file is the narrow run's, so the base's stands), then the fresh ones of every other rule. A rule in `ambient`
+	 * (`ambientRules`) is judged fresh only on a file whose folder `scope` holds whole — every file `below` it, the seam `governed`
+	 * reads — since the narrow run weighs no site it does not hold; on any other file the base's finding stands. A `fresh` that is
+	 * no report (a lint that failed) is answered as it is, for the caller to fail on; null when `base` is none.
 	 */
 	public static function carried(
-		base: String, fresh: String, scope: Array<String>, exists: String -> Bool, dependent: Array<String>
+		base: String, fresh: String, scope: Array<String>, exists: String -> Bool, dependent: Array<String>, ambient: Array<String>,
+		below: String -> Array<String>
 	): Null<String> {
 		final kept: Null<Array<JValue>> = recordsOf(base);
 		final added: Null<Array<JValue>> = recordsOf(fresh);
@@ -107,9 +112,19 @@ final class LintScope {
 		if (kept == null) return null;
 		final redone: Map<String, Bool> = [ for (file in scope) file => true ];
 		final narrow: Map<String, Bool> = [ for (id in dependent) id => true ];
-		final isNarrow: JValue -> Bool = record -> narrow.exists(JValueTools.stringAt(record, 'rule') ?? '');
+		final governs: Map<String, Bool> = [ for (id in ambient) id => true ];
+		final whole: Map<String, Bool> = [];
+		final held: String -> Bool = file -> {
+			final dir: String = Path.directory(file);
+			if (!whole.exists(dir)) whole[dir] = below(dir).foreach(redone.exists);
+			return whole[dir] == true;
+		};
+		final isNarrow: JValue -> Bool = record -> {
+			final rule: String = JValueTools.stringAt(record, 'rule') ?? '';
+			return narrow.exists(rule) || (governs.exists(rule) && !held(JValueTools.stringAt(record, FILE_KEY) ?? ''));
+		};
 		final stay: Array<JValue> = kept.filter(record -> {
-			final file: String = JValueTools.stringAt(record, 'file') ?? '';
+			final file: String = JValueTools.stringAt(record, FILE_KEY) ?? '';
 			return exists(file) && (!redone.exists(file) || isNarrow(record));
 		});
 		return JValueWriter.write(JArray(stay.concat(added.filter(record -> !isNarrow(record)))), JsonFormat.instance.expandedWriteOptions);
@@ -137,27 +152,42 @@ final class LintScope {
 
 	/**
 	 * The report a landing keeps: `fresh`, the lint of `lintArgs(scope)`, alone for the whole tree (`scope` null or no `base`
-	 * snapshot file to carry), else `carried` with the rules the engine's rule listing — `listing`, asked only then — names
-	 * scope-dependent. `exists` answers whether a repository-relative file is still there. A report that cannot be made answers why.
+	 * snapshot file to carry), else `carried` with the `carriedRules` and `ambientRules` of the engine's rule listing — `listing`,
+	 * asked only then. `exists` answers whether a repository-relative file is still there, `below` the `.hx` files in a directory
+	 * and every directory under it. A report that cannot be made answers why.
 	 */
 	public static function whole(
-		base: Null<String>, scope: Null<Array<String>>, fresh: String, exists: String -> Bool, listing: () -> String
+		base: Null<String>, scope: Null<Array<String>>, fresh: String, exists: String -> Bool, below: String -> Array<String>,
+		listing: () -> String
 	): WholeReport {
 		if (scope == null || base == null) return { report: fresh, why: null };
-		final dependent: Null<Array<String>> = scopeDependent(listing());
+		final listed: String = listing();
+		final dependent: Null<Array<String>> = carriedRules(listed);
 		if (dependent == null)
 			return { report: null, why: 'the engine\'s rule listing printed no report, so the scoped lint cannot be carried' };
-		final report: Null<String> = carried(File.getContent(base), fresh, scope, exists, dependent);
+		final report: Null<String> = carried(File.getContent(base), fresh, scope, exists, dependent, ambientRules(listed) ?? [], below);
 		return { report: report, why: report == null ? 'the base snapshot $base is no lint report to carry' : null };
 	}
 
-	/** The ids of the rules the engine's rule listing `listing` names scope-dependent, or null when `listing` is no listing. */
-	public static function scopeDependent(listing: String): Null<Array<String>> {
-		final records: Null<Array<JValue>> = recordsOf(listing);
-		return records == null ? null : [
-			for (record in records)
-				if (JValueTools.isTrue(JValueTools.field(record, 'scopeDependent'))) JValueTools.stringAt(record, 'id') ?? ''
-		];
+	/**
+	 * The ids of the rules a landing carries from its base on every re-linted file — those the engine's rule listing `listing`
+	 * names scope-dependent and not ambient-governed — or null when `listing` is no listing.
+	 */
+	public static function carriedRules(listing: String): Null<Array<String>> {
+		return markedIn(
+			listing,
+			record ->
+				JValueTools.isTrue(JValueTools.field(record, 'scopeDependent'))
+				&& !JValueTools.isTrue(JValueTools.field(record, 'ambientGoverned'))
+		);
+	}
+
+	/**
+	 * The ids of the rules the engine's rule listing `listing` names ambient-governed (`Check.AmbientGoverned`), or null when
+	 * `listing` is no listing: `carried` judges them fresh on a re-linted file whose folder the scope holds whole.
+	 */
+	public static function ambientRules(listing: String): Null<Array<String>> {
+		return markedIn(listing, record -> JValueTools.isTrue(JValueTools.field(record, 'ambientGoverned')));
 	}
 
 	/**
@@ -171,7 +201,7 @@ final class LintScope {
 		final narrow: Map<String, Bool> = [ for (id in dependent) id => true ];
 		return JValueWriter.write(
 			JArray(records.filter(record -> !(
-				redone.exists(JValueTools.stringAt(record, 'file') ?? '') && narrow.exists(JValueTools.stringAt(record, 'rule') ?? '')
+				redone.exists(JValueTools.stringAt(record, FILE_KEY) ?? '') && narrow.exists(JValueTools.stringAt(record, 'rule') ?? '')
 			))),
 			JsonFormat.instance.expandedWriteOptions
 		);
@@ -190,6 +220,13 @@ final class LintScope {
 		return governed(changed, dir -> hxFilesIn(repo, dir), dir -> hxFilesBelow(repo, dir));
 	}
 
+	/**
+	 * The repository-relative `.hx` files in `dir` of `repo` and every directory under it: the `below` of `ofTree`.
+	 */
+	public static function hxFilesBelow(repo: String, dir: String): Array<String> {
+		return TreeFiles.below(repo, dir, _ -> true).filter(file -> file.endsWith('.hx'));
+	}
+
 	private static function recordsOf(report: String): Null<Array<JValue>> {
 		return report.trim().startsWith('[')
 			? switch JValueParser.parse(report) {
@@ -197,6 +234,13 @@ final class LintScope {
 				case _: null;
 			}
 			: null;
+	}
+
+	private static function markedIn(listing: String, marked: JValue -> Bool): Null<Array<String>> {
+		final records: Null<Array<JValue>> = recordsOf(listing);
+		return records == null ? null : [
+			for (record in records) if (marked(record)) JValueTools.stringAt(record, 'id') ?? ''
+		];
 	}
 
 	private static function inRoots(path: String): Bool {
@@ -221,10 +265,6 @@ final class LintScope {
 			|| name == ConfigFinder.LEGACY_PROJECT_CONFIG
 			|| path.endsWith('.hxml')
 			|| INPUT_FILES.contains(name);
-	}
-
-	private static function hxFilesBelow(repo: String, dir: String): Array<String> {
-		return TreeFiles.below(repo, dir, _ -> true).filter(file -> file.endsWith('.hx'));
 	}
 
 }

@@ -355,14 +355,14 @@ final class PostLand {
 
 	/**
 	 * Why the report `recorded` is not the whole lint `truth` of its tree, or null when `lint-diff` finds them the same. `scope` is what
-	 * the land re-linted (null or empty: nothing was carried); a scope-dependent rule's findings on those files are left out of both,
-	 * since the land carried them unjudged.
+	 * the land re-linted (null or empty: nothing was carried); the findings of a rule it carried there (`LintScope.carriedRules`) are
+	 * left out of both, since the land carried them unjudged.
 	 */
 	public static function snapshotRefusal(tree: String, recorded: String, truth: String, scope: Null<Array<String>>): Null<String> {
 		final linted: Array<String> = scope ?? [];
 		final dependent: Null<Array<String>> = linted.length == 0
 			? []
-			: LintScope.scopeDependent(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out);
+			: LintScope.carriedRules(GateTree.shim(tree, tree, LintScope.RULE_LISTING).run().out);
 		if (dependent == null) return 'the engine\'s rule listing printed no report, so the backstop cannot tell what the land carried';
 		final old: String = judgedCopy(recorded, linted, dependent);
 		final now: String = judgedCopy(truth, linted, dependent);

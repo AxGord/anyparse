@@ -14,7 +14,7 @@ class ScopeDependentListingTest extends Test {
 	@:pin('control')
 	@:killer('M-RULE-INDEX-JSON-DROPS-SCOPE-DEPENDENT')
 	public function testTheListingNamesTheScopeDependentRules(): Void {
-		final marked: Array<String> = scopeDependentIds();
+		final marked: Array<String> = markedIds('scopeDependent');
 		for (id in [
 			'unused-return-value',
 			'hoist-common-import',
@@ -26,14 +26,22 @@ class ScopeDependentListingTest extends Test {
 		Assert.notContains('unused-local', marked);
 	}
 
-	private static function scopeDependentIds(): Array<String> {
+	@:pin('control')
+	@:killer('M-RULE-INDEX-JSON-DROPS-AMBIENT-GOVERNED')
+	public function testTheListingNamesTheAmbientGovernedRules(): Void {
+		final governed: Array<String> = markedIds('ambientGoverned');
+		Assert.contains('hoist-common-import', governed);
+		for (id in ['unused-return-value', 'unused-import', 'anon-type-dup', 'duplicate-code']) Assert.notContains(id, governed, id);
+	}
+
+	/** The ids of the listed rules whose record holds `field` true. */
+	private static function markedIds(field: String): Array<String> {
 		final records: Array<JValue> = switch JValueParser.parse(RuleIndex.json(Linter.builtins())) {
 			case JArray(items): items;
 			case _: [];
 		}
 		return [
-			for (record in records)
-				if (JValueTools.isTrue(JValueTools.field(record, 'scopeDependent'))) JValueTools.stringAt(record, 'id') ?? ''
+			for (record in records) if (JValueTools.isTrue(JValueTools.field(record, field))) JValueTools.stringAt(record, 'id') ?? ''
 		];
 	}
 

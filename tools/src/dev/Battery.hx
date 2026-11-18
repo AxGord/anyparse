@@ -383,7 +383,8 @@ final class Battery {
 		final report: Null<Result> = own == 0 ? null : runs[0];
 		final text: String = report?.out ?? '[]';
 		final carriedReport: WholeReport = LintScope.whole(
-			baseReport, scope, text, file -> FileSystem.exists(Path.join([_plan.repo, file])), () -> hxq(LintScope.RULE_LISTING).run().out
+			baseReport, scope, text, file -> FileSystem.exists(Path.join([_plan.repo, file])),
+			dir -> LintScope.hxFilesBelow(_plan.repo, dir), () -> hxq(LintScope.RULE_LISTING).run().out
 		);
 		final whole: Null<String> = carriedReport.report;
 		if (scope != null) _summary.detail('lint scoped to ${scope.length} file(s), the rest is ${_plan.base ?? 'the base'}\'s');
