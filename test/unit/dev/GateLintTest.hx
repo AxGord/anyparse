@@ -193,7 +193,7 @@ final class GateLintTest extends Test {
 			'test/x/X.hx'
 		], root -> {
 			Assert.same(
-				['test/a/b/c/C.hx', 'test/a/A.hx', 'test/a/b/B.hx', 'test/a/import.hx'],
+				['test/a/A.hx', 'test/a/b/B.hx', 'test/a/b/c/C.hx', 'test/a/import.hx'],
 				GateLint.lintedFiles(root, ['test/a/b/c/C.hx'], same)
 			);
 		});
@@ -203,7 +203,7 @@ final class GateLintTest extends Test {
 	@:killer('M-LINT-ROW-NULL-WHEN-LINT-INPUT')
 	public function testAChangeUnderSrcLintsTheModulesItsImportHxGoverns(): Void {
 		withTree(['src/a/import.hx', 'src/a/A.hx', 'src/a/b/X.hx', 'src/z/Z.hx'], root -> {
-			Assert.same(['src/a/b/X.hx', 'src/a/A.hx', 'src/a/import.hx'], GateLint.lintedFiles(root, ['src/a/b/X.hx'], same));
+			Assert.same(['src/a/A.hx', 'src/a/b/X.hx', 'src/a/import.hx'], GateLint.lintedFiles(root, ['src/a/b/X.hx'], same));
 		});
 	}
 
@@ -219,10 +219,10 @@ final class GateLintTest extends Test {
 		], root -> {
 			Assert.same([
 				'src/a/b/X.hx',
-				'test/t/u/T.hx',
 				'src/a/import.hx',
 				'test/t/V.hx',
-				'test/t/import.hx'
+				'test/t/import.hx',
+				'test/t/u/T.hx'
 			], GateLint.lintedFiles(root, ['src/a/b/X.hx', 'test/t/u/T.hx'], same));
 		});
 	}
@@ -235,6 +235,25 @@ final class GateLintTest extends Test {
 				root, ['test/new/X.hx'], path -> path == 'test/new/X.hx' ? 'test/old/X.hx' : path
 			);
 			Assert.same(['test/new/X.hx', 'test/old/Y.hx', 'test/old/deep/Z.hx', 'test/old/import.hx'], files);
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-LINT-ROW-FILES-UNSORTED')
+	public function testATouchedFileDoesNotComeBeforeAnEarlierSibling(): Void {
+		withTree(['test/z/import.hx', 'test/z/A.hx', 'test/z/Z.hx'], root -> {
+			Assert.same(['test/z/A.hx', 'test/z/Z.hx', 'test/z/import.hx'], GateLint.lintedFiles(root, ['test/z/Z.hx'], same));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-LINT-ROW-FILES-SORTED-BY-NEW-PATH')
+	public function testAMovedFileKeepsItsBasePosition(): Void {
+		withTree(['test/z/import.hx', 'test/z/A.hx', 'test/z/Z.hx'], root -> {
+			Assert.same(
+				['test/z/Z.hx', 'test/z/A.hx', 'test/z/import.hx'],
+				GateLint.lintedFiles(root, ['test/z/Z.hx'], f -> f == 'test/z/Z.hx' ? 'test/z/0.hx' : f)
+			);
 		});
 	}
 

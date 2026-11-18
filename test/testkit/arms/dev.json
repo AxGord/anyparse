@@ -3733,6 +3733,22 @@
 			"find": "SuiteImpact.isTest(path) && path.endsWith('.hx')",
 			"replace": "SuiteImpact.isTest(path)",
 			"note": "a change to a data file under test/ selects the tree-walking guards, which read only .hx files, so every fixture touch pays for them"
+		},
+		{
+			"name": "M-LINT-ROW-FILES-UNSORTED",
+			"type": "dev.GateLint",
+			"method": "lintedFiles",
+			"find": "files.sort((a, b) -> Compare.compareString(baseOf(a), baseOf(b)));",
+			"replace": "",
+			"note": "the tree lints the touched files before the governed modules while the base lints its scope sorted, so a cross-file anchored rule anchors at a touched file in the tree and elsewhere at base and the lint row reports a new finding for any slice touching a file with a shared anon shape"
+		},
+		{
+			"name": "M-LINT-ROW-FILES-SORTED-BY-NEW-PATH",
+			"type": "dev.GateLint",
+			"method": "lintedFiles",
+			"find": "files.sort((a, b) -> Compare.compareString(baseOf(a), baseOf(b)));",
+			"replace": "files.sort(Compare.compareString);",
+			"note": "the tree sorts by current paths while the base sorts by base paths, so a moved file whose new path sorts across a sibling anchors a cross-file rule at a different file on the two sides and the lint row reports a new finding"
 		}
 	]
 }

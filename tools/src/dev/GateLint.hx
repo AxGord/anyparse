@@ -493,13 +493,16 @@ final class GateLint {
 	}
 
 	/**
-	 * The files the lint row lints: the `touched` `.hx` files, then every module `LintScope.governedTree` finds in `repo` for them and
-	 * for the paths `baseOf` gives them (a moved file's old folder). A rule that counts a share of the modules an `import.hx` governs
-	 * moves with any of them, and a change under `src/` widens too: the row has no whole tree to fall back to.
+	 * The files the lint row lints, in the order of their base paths, as the base side sorts its scope (a cross-file anchored rule
+	 * anchors at the earliest occurrence): the `touched` `.hx` files and every module `LintScope.governedTree` finds in `repo` for
+	 * them and for the paths `baseOf` gives them (a moved file's old folder). A rule that counts a share of the modules an
+	 * `import.hx` governs moves with any of them, and a change under `src/` widens too: the row has no whole tree to fall back to.
 	 */
 	public static function lintedFiles(repo: String, touched: Array<String>, baseOf: String -> String): Array<String> {
 		final changed: Array<String> = touched.concat(touched.map(baseOf));
-		return touched.concat(LintScope.governedTree(repo, changed).filter(file -> !touched.contains(file)));
+		final files: Array<String> = touched.concat(LintScope.governedTree(repo, changed).filter(file -> !touched.contains(file)));
+		files.sort((a, b) -> Compare.compareString(baseOf(a), baseOf(b)));
+		return files;
 	}
 
 	/** The file the standard error of the lint reporting to `out` goes to. */
