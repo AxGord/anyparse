@@ -327,9 +327,9 @@
 			"name": "M-UTIL-COMPARE-STRING-MORE",
 			"type": "anyparse.util.Compare",
 			"method": "compareString",
-			"find": "a > b",
-			"replace": "a < b",
-			"note": "the larger string compares as equal"
+			"find": "a > b)\n\t\t\t1",
+			"replace": "a > b)\n\t\t\t2",
+			"note": "the larger string answers 2, not 1: the cut keeps the sign every sorting caller reads, so the macro-time builds it runs under still compile"
 		},
 		{
 			"name": "M-UTIL-COMPARE-STRING-EQUAL",

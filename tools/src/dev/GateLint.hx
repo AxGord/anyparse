@@ -109,13 +109,14 @@ final class GateLint {
 	}
 
 	/**
-	 * The lint row: the touched `.hx` files linted with the oracle, against the same files linted the same way in a
-	 * checkout of the base — one engine, one scope, so the only difference left is the slice's own code. A moved file is
-	 * compared with the path it had at the base; the two lints run at once.
+	 * The lint row: the touched `.hx` files and every module an `import.hx` above one of them governs (`lintedFiles`), linted with the
+	 * oracle, against the same files linted the same way in a checkout of the base — one engine, one scope, so the only difference
+	 * left is the slice's own code. A moved file is compared with the path it had at the base; the two lints run at once.
 	 */
 	public function lintOutcome(): Outcome {
-		final files: Array<String> = _gate.touched.filter(f -> f.endsWith('.hx'));
-		if (files.length == 0) return Skipped('no .hx touched');
+		final touched: Array<String> = _gate.touched.filter(f -> f.endsWith('.hx'));
+		if (touched.length == 0) return Skipped('no .hx touched');
+		final files: Array<String> = lintedFiles(_gate.tree, touched, _gate.baseOf);
 		final atBase: Array<String> = _gate.git(['ls-tree', '-r', '--name-only', _gate.base]).split('\n');
 		final pathsNow: Map<String, String> = [ for (f in files) if (atBase.contains(_gate.baseOf(f))) _gate.baseOf(f) => f ];
 		final scope: Array<String> = [ for (path in pathsNow.keys()) path ];
@@ -489,6 +490,16 @@ final class GateLint {
 	 */
 	public static function complete(report: String): Bool {
 		return try JValueParser.parse(report).match(JArray(_)) catch (_: Exception) false;
+	}
+
+	/**
+	 * The files the lint row lints: the `touched` `.hx` files, then every module `LintScope.governedTree` finds in `repo` for them and
+	 * for the paths `baseOf` gives them (a moved file's old folder). A rule that counts a share of the modules an `import.hx` governs
+	 * moves with any of them, and a change under `src/` widens too: the row has no whole tree to fall back to.
+	 */
+	public static function lintedFiles(repo: String, touched: Array<String>, baseOf: String -> String): Array<String> {
+		final changed: Array<String> = touched.concat(touched.map(baseOf));
+		return touched.concat(LintScope.governedTree(repo, changed).filter(file -> !touched.contains(file)));
 	}
 
 	/** The file the standard error of the lint reporting to `out` goes to. */

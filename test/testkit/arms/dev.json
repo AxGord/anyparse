@@ -3543,6 +3543,44 @@
 			"find": "final end: Null<Float> = until == null ? null : sinceStart(until);",
 			"replace": "final end: Null<Float> = null;",
 			"note": "--until is read and dropped, so a before/after window reaches to the end of the ledger"
+		},
+		{
+			"name": "M-LINT-SCOPE-GOVERNED-SIBLINGS-ONLY",
+			"type": "dev.LintScope",
+			"method": "governed",
+			"find": "for (file in below(dir)) files[file] = true;",
+			"replace": "for (file in own) if (Path.withoutDirectory(file) == AMBIENT) files[file] = true;",
+			"note": "an import.hx above a changed file adds only itself, so a change in a nested folder never re-lints the modules its share is counted over"
+		},
+		{
+			"name": "M-LINT-SCOPE-TREE-BELOW-BLIND",
+			"type": "dev.LintScope",
+			"method": "hxFilesBelow",
+			"force": "[]",
+			"note": "the real tree lists nothing below a folder, so an import.hx widens to its own folder alone on disk while the fake listing of a unit test still passes"
+		},
+		{
+			"name": "M-LINT-ROW-TOUCHED-ONLY",
+			"type": "dev.GateLint",
+			"method": "lintedFiles",
+			"force": "touched",
+			"note": "the lint row lints the touched files only, so a finding a change moves in a module governed by an import.hx above it first shows at the land"
+		},
+		{
+			"name": "M-LINT-ROW-NULL-WHEN-LINT-INPUT",
+			"type": "dev.GateLint",
+			"method": "lintedFiles",
+			"find": "LintScope.governedTree(repo, changed)",
+			"replace": "(LintScope.ofTree(repo, changed) ?? [])",
+			"note": "the lint row reads the battery's whole-tree null as nothing to widen, so a change under src/, an engine input, lints only its touched files and no module its import.hx governs"
+		},
+		{
+			"name": "M-LINT-ROW-BASE-PATHS-DROPPED",
+			"type": "dev.GateLint",
+			"method": "lintedFiles",
+			"find": "touched.concat(touched.map(baseOf))",
+			"replace": "touched",
+			"note": "a moved file widens only to the folder it is in now, so the modules its old folder's import.hx governs are never linted at base or in the tree"
 		}
 	]
 }

@@ -23,8 +23,9 @@ typedef WholeReport = { report: Null<String>, why: Null<String> }
 /**
  * The one answer to "which files must a battery re-lint for a landing, and which findings of the base snapshot does that
  * leave standing": a landing that changes no engine input and no lint configuration re-lints the `.hx` files it changed,
- * every `.hx` beside them (a rule that counts a folder's files moves a finding filed on a sibling) and each `import.hx` up
- * the path to the root (ambient imports are inherited down it), and carries the base's findings for every other file, and
+ * every `.hx` beside them (a rule that counts a folder's files moves a finding filed on a sibling) and every module governed
+ * by an `import.hx` up the path to the root (its imports are inherited by every folder under it, and a rule that counts a
+ * share of them moves with any module there), and carries the base's findings for every other file, and
  * those of a rule whose answer depends on the report scope (`Check.ScopeDependent`) even for a re-linted file.
  * Anything else — or no way to tell — is the whole tree (`null`). `backstop` is the whole lint's check of that carrying.
  */
@@ -48,19 +49,31 @@ final class LintScope {
 	 * The files to re-lint for the paths `changed` — both sides of a rename and every deleted path included — or null for the
 	 * whole tree. `filesIn` answers the repository-relative paths of the `.hx` files directly in a directory, `below` those in it
 	 * and every directory under it (none for a directory that does not exist); a changed `import.hx` widens to `below` its
-	 * folder, since its imports are inherited by every folder under it. Sorted, without repeats, and only inside `ROOTS`.
+	 * folder, since its imports are inherited by every folder under it, as does an `import.hx` above a changed file. Sorted, without
+	 * repeats, and only inside `ROOTS`.
 	 */
 	public static function ofChange(
 		changed: Array<String>, filesIn: String -> Array<String>, below: String -> Array<String>
 	): Null<Array<String>> {
-		if (changed.exists(isLintInput)) return null;
+		return changed.exists(isLintInput) ? null : governed(changed, filesIn, below);
+	}
+
+	/**
+	 * The files a change to `changed` moves the lint of, the whole-tree answer of `ofChange` left out: the `.hx` files beside each
+	 * changed one and every module below each `import.hx` above it. For a caller that lints the changed files anyway and has no
+	 * whole tree to fall back to, so a change to the engine still widens to the modules its folders' ambient imports govern.
+	 */
+	public static function governed(
+		changed: Array<String>, filesIn: String -> Array<String>, below: String -> Array<String>
+	): Array<String> {
 		final files: Map<String, Bool> = [];
 		for (path in changed) if (path.endsWith('.hx') && inRoots(path)) {
 			var dir: String = Path.directory(path);
 			final here: Array<String> = Path.withoutDirectory(path) == AMBIENT ? below(dir) : filesIn(dir);
 			for (file in here) files[file] = true;
 			while (dir != '') {
-				for (file in filesIn(dir)) if (Path.withoutDirectory(file) == AMBIENT) files[file] = true;
+				final own: Array<String> = filesIn(dir);
+				if (own.exists(file -> Path.withoutDirectory(file) == AMBIENT)) for (file in below(dir)) files[file] = true;
 				dir = Path.directory(dir);
 			}
 		}
@@ -76,7 +89,7 @@ final class LintScope {
 	public static function ofImpact(repo: String, base: Null<String>, impact: Bool): Null<Array<String>> {
 		if (!impact || base == null) return null;
 		final diff: Result = cmd('git -C $repo diff --name-only --no-renames $base').run();
-		return diff.ok ? ofChange(diff.lines(), dir -> hxFilesIn(repo, dir), dir -> hxFilesBelow(repo, dir)) : null;
+		return diff.ok ? ofTree(repo, diff.lines()) : null;
 	}
 
 	/**
@@ -162,6 +175,19 @@ final class LintScope {
 			))),
 			JsonFormat.instance.expandedWriteOptions
 		);
+	}
+
+	/**
+	 * The one answer to "which modules does a change to the paths `changed` move the lint of", over the files `repo` holds:
+	 * `ofChange` with the real directory listings.
+	 */
+	public static function ofTree(repo: String, changed: Array<String>): Null<Array<String>> {
+		return ofChange(changed, dir -> hxFilesIn(repo, dir), dir -> hxFilesBelow(repo, dir));
+	}
+
+	/** `governed` over the files `repo`'s working tree holds. */
+	public static function governedTree(repo: String, changed: Array<String>): Array<String> {
+		return governed(changed, dir -> hxFilesIn(repo, dir), dir -> hxFilesBelow(repo, dir));
 	}
 
 	private static function recordsOf(report: String): Null<Array<JValue>> {

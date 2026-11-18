@@ -5,14 +5,33 @@ import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import dev.BaseLint;
 import dev.GateLint;
+import dev.LintScope;
 import devkit.Lease;
 import devkit.Summary.Outcome;
+import haxe.io.Path;
+import sys.FileSystem;
+import sys.io.File;
 import utest.Assert;
 import utest.Test;
 
-/** `dev.GateLint`: a moved file's findings at the base are filed under the path the lint row compares them at. */
+using StringTools;
+
+/**
+ * `dev.GateLint`: a moved file's findings at the base are filed under the path the lint row compares them at, and the row lints every
+ * module an `import.hx` above a touched file governs.
+ */
 @:nullSafety(Strict)
 final class GateLintTest extends Test {
+
+	private static final TREE: Map<String, Array<String>> = [
+		'test/unit/check' => ['test/unit/check/import.hx', 'test/unit/check/ATest.hx'],
+		'test/unit/check/common/imports' => [
+			'test/unit/check/common/imports/import.hx',
+			'test/unit/check/common/imports/XTest.hx'
+		],
+		'test/unit/check/scan' => ['test/unit/check/scan/STest.hx'],
+		'test/unit/query' => ['test/unit/query/QTest.hx']
+	];
 
 	@:pin('control')
 	@:killer('M-GATE-REBASE-NONE')
@@ -150,6 +169,98 @@ final class GateLintTest extends Test {
 		Assert.equals(Lease.NODE_CORES, GateLint.coresOf([BaseLint.ROW]));
 		Assert.equals(1, GateLint.coresOf(['jvm']));
 		Assert.equals(1, GateLint.coresOf(['suite', 'corpus']));
+	}
+
+	@:pin('control')
+	@:killer('M-LINT-SCOPE-GOVERNED-SIBLINGS-ONLY')
+	public function testAChangeUnderANestedFolderLintsTheGoverningImportHxsWholeSet(): Void {
+		final scope: Array<String> = LintScope.ofChange(['test/unit/check/common/imports/XTest.hx'], filesIn, below) ?? [];
+		Assert.contains('test/unit/check/import.hx', scope);
+		Assert.contains('test/unit/check/ATest.hx', scope);
+		Assert.contains('test/unit/check/scan/STest.hx', scope);
+		Assert.contains('test/unit/check/common/imports/import.hx', scope);
+		Assert.notContains('test/unit/query/QTest.hx', scope);
+	}
+
+	@:pin('control')
+	@:killer('M-LINT-SCOPE-TREE-BELOW-BLIND')
+	public function testTheLintRowAddsEveryModuleBelowTheGoverningImportHxFromDisk(): Void {
+		withTree([
+			'test/a/import.hx',
+			'test/a/A.hx',
+			'test/a/b/B.hx',
+			'test/a/b/c/C.hx',
+			'test/x/X.hx'
+		], root -> {
+			Assert.same(
+				['test/a/b/c/C.hx', 'test/a/A.hx', 'test/a/b/B.hx', 'test/a/import.hx'],
+				GateLint.lintedFiles(root, ['test/a/b/c/C.hx'], same)
+			);
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-LINT-ROW-NULL-WHEN-LINT-INPUT')
+	public function testAChangeUnderSrcLintsTheModulesItsImportHxGoverns(): Void {
+		withTree(['src/a/import.hx', 'src/a/A.hx', 'src/a/b/X.hx', 'src/z/Z.hx'], root -> {
+			Assert.same(['src/a/b/X.hx', 'src/a/A.hx', 'src/a/import.hx'], GateLint.lintedFiles(root, ['src/a/b/X.hx'], same));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-LINT-ROW-TOUCHED-ONLY')
+	public function testASourceAndATestChangeWidenBothSides(): Void {
+		withTree([
+			'src/a/import.hx',
+			'src/a/b/X.hx',
+			'test/t/import.hx',
+			'test/t/V.hx',
+			'test/t/u/T.hx'
+		], root -> {
+			Assert.same([
+				'src/a/b/X.hx',
+				'test/t/u/T.hx',
+				'src/a/import.hx',
+				'test/t/V.hx',
+				'test/t/import.hx'
+			], GateLint.lintedFiles(root, ['src/a/b/X.hx', 'test/t/u/T.hx'], same));
+		});
+	}
+
+	@:pin('control')
+	@:killer('M-LINT-ROW-BASE-PATHS-DROPPED')
+	public function testAMovedFilesOldFolderGovernsToo(): Void {
+		withTree(['test/old/import.hx', 'test/old/Y.hx', 'test/old/deep/Z.hx', 'test/new/X.hx'], root -> {
+			final files: Array<String> = GateLint.lintedFiles(
+				root, ['test/new/X.hx'], path -> path == 'test/new/X.hx' ? 'test/old/X.hx' : path
+			);
+			Assert.same(['test/new/X.hx', 'test/old/Y.hx', 'test/old/deep/Z.hx', 'test/old/import.hx'], files);
+		});
+	}
+
+	private static function filesIn(dir: String): Array<String> {
+		return TREE[dir] ?? [];
+	}
+
+	private static function below(dir: String): Array<String> {
+		return [
+			for (folder => files in TREE) if (folder == dir || folder.startsWith('$dir/')) for (file in files) file
+		];
+	}
+
+	private static function same(path: String): String {
+		return path;
+	}
+
+	private static function withTree(files: Array<String>, body: String -> Void): Void {
+		devkit.TempDir.with(dir -> {
+			for (file in files) {
+				final path: String = dir.file(file);
+				FileSystem.createDirectory(Path.directory(path));
+				File.saveContent(path, '');
+			}
+			body(dir.path);
+		});
 	}
 
 }

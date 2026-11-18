@@ -15,7 +15,7 @@ using StringTools;
 final class LintScopeTest extends Test {
 
 	private static final TREE: Map<String, Array<String>> = [
-		'test' => ['test/import.hx', 'test/RunTests.hx'],
+		'test' => ['test/RunTests.hx'],
 		'test/unit' => ['test/unit/import.hx'],
 		'test/unit/dev' => ['test/unit/dev/ATest.hx', 'test/unit/dev/BTest.hx'],
 		'test/unit/other' => ['test/unit/other/CTest.hx'],
@@ -23,12 +23,12 @@ final class LintScopeTest extends Test {
 	];
 
 	@:pin('guard')
-	public function testATestLandLintsItsFolderAndTheImportsAboveIt(): Void {
+	public function testATestLandLintsItsFolderAndEveryModuleAnImportAboveItGoverns(): Void {
 		Assert.same([
-			'test/import.hx',
 			'test/unit/dev/ATest.hx',
 			'test/unit/dev/BTest.hx',
-			'test/unit/import.hx'
+			'test/unit/import.hx',
+			'test/unit/other/CTest.hx'
 		], LintScope.ofChange(['test/unit/dev/ATest.hx', 'docs/testing.md'], filesIn, below));
 	}
 
@@ -36,7 +36,7 @@ final class LintScopeTest extends Test {
 	public function testADeletedFileStillLintsItsFolder(): Void {
 		final scope: Null<Array<String>> = LintScope.ofChange(['test/unit/dev/Gone.hx'], filesIn, below);
 		Assert.contains('test/unit/dev/BTest.hx', scope ?? []);
-		Assert.notContains('test/unit/other/CTest.hx', scope ?? []);
+		Assert.notContains('test/RunTests.hx', scope ?? []);
 	}
 
 	@:pin('guard')
@@ -124,7 +124,6 @@ final class LintScopeTest extends Test {
 		Assert.contains('test/unit/dev/ATest.hx', scope);
 		Assert.contains('test/unit/other/CTest.hx', scope);
 		Assert.contains('test/unit/import.hx', scope);
-		Assert.contains('test/import.hx', scope);
 		Assert.notContains('test/RunTests.hx', scope);
 	}
 
