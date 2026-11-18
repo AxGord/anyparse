@@ -597,12 +597,12 @@
 			"note": "a plan the gate settles in its own process never reaches the table, so a mistyped --arm passes the gate"
 		},
 		{
-			"name": "M-GATE-ARMS-PLAN-THROWS-IN-GATE",
-			"type": "dev.SliceGate",
-			"method": "armsPlan",
-			"find": "return try GateArms.plan(_gate) catch (_: Exception) null;",
-			"replace": "return GateArms.plan(_gate);",
-			"note": "a plan that cannot be made ends the gate after every other row has run, instead of failing the arms row"
+			"name": "M-GATE-PLAN-RUNS-UNLEASED",
+			"type": "dev.GateArms",
+			"method": "planLease",
+			"find": "Lease.take(mode, command, planAsk(), label)",
+			"replace": "command",
+			"note": "the arms plan runs two graph calls and a registry listing in the gate's own process with no lease, about a core for minutes beside the build and the other rows"
 		},
 		{
 			"name": "M-GATE-REGISTRY-REFUSAL-DROPPED",
@@ -720,7 +720,7 @@
 			"name": "M-GATE-ARMS-ASK-IGNORES-PLAN",
 			"type": "dev.SliceGate",
 			"method": "armsPhase",
-			"find": "GateArms.threadsOf(_gate, picked.fast)",
+			"find": "GateArms.threadsOf(_gate, picked.fast, GateArms.planLease(_mode, _gate.tree))",
 			"replace": "ARMS_THREADS",
 			"note": "the arms lease asks for the top of its range whatever the plan selected, so a one-arm selection waits for a whole share it cannot use and closes the pool to the waiters behind it"
 		},
@@ -3749,6 +3749,38 @@
 			"find": "files.sort((a, b) -> Compare.compareString(baseOf(a), baseOf(b)));",
 			"replace": "files.sort(Compare.compareString);",
 			"note": "the tree sorts by current paths while the base sorts by base paths, so a moved file whose new path sorts across a sibling anchors a cross-file rule at a different file on the two sides and the lint row reports a new finding"
+		},
+		{
+			"name": "M-GATE-PLAN-REPORT-UNLEASED",
+			"type": "dev.GateArms",
+			"method": "changedReport",
+			"find": "lease(gate.hxq(gate.tree, ['changed', base].concat(shown)).timeout(PLAN_TIMEOUT_MS))",
+			"replace": "gate.hxq(gate.tree, ['changed', base].concat(shown)).timeout(PLAN_TIMEOUT_MS)",
+			"note": "the plan's changed report runs in the gate's own process on no lease, a core beside the build and the other rows"
+		},
+		{
+			"name": "M-GATE-PLAN-PINS-UNLEASED",
+			"type": "dev.GateArms",
+			"method": "pinListing",
+			"find": "lease(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS))",
+			"replace": "cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS)",
+			"note": "the plan's pin listing loads the whole test bundle in the gate's own process on no lease"
+		},
+		{
+			"name": "M-GATE-PLAN-GRAPH-UNLEASED",
+			"type": "dev.GateArms",
+			"method": "plan",
+			"find": "callNeighbours(gate, gate.base, seen.layout, seen.touches, leased)",
+			"replace": "callNeighbours(gate, gate.base, seen.layout, seen.touches, unleased)",
+			"note": "the plan's two graph runs, minutes of one core on a wide sweep, run on no lease"
+		},
+		{
+			"name": "M-GATE-PLAN-META-UNLEASED",
+			"type": "dev.GateArms",
+			"method": "threadsOf",
+			"find": "final leased: Command -> Command = lease ?? unleased;",
+			"replace": "final leased: Command -> Command = unleased;",
+			"note": "the macro listing that sizes the kill run runs on no lease, whatever lease the caller hands the plan"
 		}
 	]
 }

@@ -24,7 +24,6 @@ import devkit.Pool;
 import devkit.Result;
 import devkit.Summary;
 import devkit.TempDir;
-import haxe.Exception;
 import haxe.Timer;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -74,7 +73,7 @@ final class SliceGate {
 		+ '[--arm <NAME>]... [--allow-arm <NAME>]... [--no-arms] [--allow <gate>]... [--logs <dir>]';
 
 	/** The most threads the arms phase takes. */
-	public static inline final ARMS_THREADS: Int = 6;
+	public static inline final ARMS_THREADS: Int = 3;
 
 	/** The row the arms phase runs. */
 	public static inline final ARMS_ROW: String = 'arms';
@@ -335,7 +334,7 @@ final class SliceGate {
 	private function armsPhase(self: String, plan: Null<ArmPlan>): Bool {
 		final tracks: Int = switch plan {
 			case Settled(_): return false;
-			case Runs(picked, _): GateArms.threadsOf(_gate, picked.fast);
+			case Runs(picked, _): GateArms.threadsOf(_gate, picked.fast, GateArms.planLease(_mode, _gate.tree));
 			case null: ARMS_THREADS;
 		};
 		final command: Array<String> -> Command = branchCommand(self, armsThreads(_mode, tracks));
@@ -658,7 +657,13 @@ final class SliceGate {
 	 * plan never ends the gate after every other row has run.
 	 */
 	private function armsPlan(): Null<ArmPlan> {
-		return try GateArms.plan(_gate) catch (_: Exception) null;
+		var plan: Null<ArmPlan> = null;
+		_gate.summary.timeUnlisted(GateArms.PLAN_ROW, () -> {
+			_gate.summary.holding(GateArms.planThreads(_mode));
+			plan = GateArms.plan(_gate, GateArms.KILL_FLOOR, GateArms.planLease(_mode, _gate.tree));
+			return Passed;
+		});
+		return plan;
 	}
 
 	/**

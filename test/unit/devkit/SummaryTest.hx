@@ -149,4 +149,26 @@ final class SummaryTest extends Test {
 		Assert.isNull(summary.steps()[1].threads, 'a step that held nothing records none');
 	}
 
+	/**
+	 * An unlisted step is timed like a listed one, with the threads it reports, but it is the ledger's alone: the table prints no
+	 * line for it, and one that throws is recorded as not run instead of ending the caller.
+	 */
+	@:pin('control')
+	@:killer('M-SUMMARY-UNLISTED-IN-TABLE')
+	@:killer('M-GATE-ARMS-PLAN-THROWS-IN-GATE')
+	public function testAnUnlistedStepIsTimedForTheLedgerAndLeftOutOfTheTable(): Void {
+		final summary: Summary = new Summary();
+		Assert.isTrue(summary.timeUnlisted('plan', () -> {
+			summary.holding(1);
+			return Passed;
+		}).match(Passed));
+		Assert.isTrue(summary.timeUnlisted('broken', () -> throw new Exception('no graph')).match(NotRun('no graph')));
+		Assert.equals(0, summary.steps().length, 'no line of the table');
+		Assert.equals(-1, summary.table().indexOf('plan'));
+		final recorded: Array<Step> = summary.ledgerSteps();
+		Assert.equals('plan', recorded[0].name);
+		Assert.equals(1, recorded[0].threads);
+		Assert.isNull(recorded[1].threads, 'the threads of one step stand on no other');
+	}
+
 }

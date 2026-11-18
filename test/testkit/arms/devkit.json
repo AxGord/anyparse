@@ -329,7 +329,7 @@
 		{
 			"name": "M-SUMMARY-STEP-CPU",
 			"type": "devkit.Summary",
-			"method": "time",
+			"method": "measured",
 			"find": "if (used != null) recorded.cpu = used;",
 			"replace": "if (used != null) recorded.cpu = 0;",
 			"note": "a timed step records no cpu of the processes it started, so a land's phases show as unmetered"
@@ -423,7 +423,7 @@
 		{
 			"name": "M-SUMMARY-STEP-THREADS",
 			"type": "devkit.Summary",
-			"method": "time",
+			"method": "measured",
 			"find": "if (held != null) recorded.threads = held;",
 			"replace": "if (held != null) recorded.threads = 0;",
 			"note": "a step that reported the pool threads it held records none, so the ledger cannot say what its cpu was spent against"
@@ -431,7 +431,7 @@
 		{
 			"name": "M-SUMMARY-HELD-STALE",
 			"type": "devkit.Summary",
-			"method": "time",
+			"method": "measured",
 			"find": "_held = null;",
 			"replace": "",
 			"note": "the threads one step reported stand on the next step that reports none"
@@ -483,6 +483,22 @@
 			"find": "budget / Math.max(1, heavy)",
 			"replace": "budget",
 			"note": "two heavy branches each ask the whole budget, so on a small pool they ask more than it holds"
+		},
+		{
+			"name": "M-GATE-ARMS-PLAN-THROWS-IN-GATE",
+			"type": "devkit.Summary",
+			"method": "measured",
+			"find": "try step() catch (exception: Exception) NotRun(exception.message)",
+			"replace": "step()",
+			"note": "a plan that cannot be made ends the gate after every other row has run, instead of failing the arms row"
+		},
+		{
+			"name": "M-SUMMARY-UNLISTED-IN-TABLE",
+			"type": "devkit.Summary",
+			"method": "timeUnlisted",
+			"find": "addUnlisted(recorded);",
+			"replace": "addStep(recorded);",
+			"note": "a step meant for the ledger alone is printed as a line of the gate's table"
 		}
 	]
 }

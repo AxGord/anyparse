@@ -159,19 +159,19 @@ final class Summary {
 	 * throws is recorded `NotRun` with the exception's message.
 	 */
 	public function time(name: String, step: () -> Outcome): Outcome {
-		final started: Float = Timer.stamp();
-		final before: Null<CpuStamp> = CpuMeter.stamp();
-		_note = '';
-		_excerpt = [];
-		_held = null;
-		final outcome: Outcome = try step() catch (exception: Exception) NotRun(exception.message);
-		add(name, outcome, (Timer.stamp() - started) * MS_PER_SECOND, _note, _excerpt);
-		final used: Null<Float> = CpuMeter.since(before);
-		final held: Null<Int> = _held;
-		final recorded: Step = _steps[_steps.length - 1];
-		if (used != null) recorded.cpu = used;
-		if (held != null) recorded.threads = held;
-		return outcome;
+		final recorded: Step = measured(name, step);
+		addStep(recorded);
+		return recorded.outcome;
+	}
+
+	/**
+	 * `time` for a step that is no line of the table (the arms plan, run before any row): the same wall, cpu and held threads,
+	 * recorded where `ledgerSteps` reads it and `table` does not print it.
+	 */
+	public function timeUnlisted(name: String, step: () -> Outcome): Outcome {
+		final recorded: Step = measured(name, step);
+		addUnlisted(recorded);
+		return recorded.outcome;
 	}
 
 	/** The seconds the branches waited for their leases in all, as the verdict line shows them; empty when none waited. */
@@ -229,6 +229,27 @@ final class Summary {
 			blocks.push('${step.name}:\n' + Excerpt.cut(step.excerpt).map(line -> '  $line').join('\n'));
 		}
 		return blocks.join('\n');
+	}
+
+	private function measured(name: String, step: () -> Outcome): Step {
+		final started: Float = Timer.stamp();
+		final before: Null<CpuStamp> = CpuMeter.stamp();
+		_note = '';
+		_excerpt = [];
+		_held = null;
+		final outcome: Outcome = try step() catch (exception: Exception) NotRun(exception.message);
+		final recorded: Step = {
+			name: name,
+			outcome: outcome,
+			ms: (Timer.stamp() - started) * MS_PER_SECOND,
+			note: _note,
+			excerpt: _excerpt
+		};
+		final used: Null<Float> = CpuMeter.since(before);
+		final held: Null<Int> = _held;
+		if (used != null) recorded.cpu = used;
+		if (held != null) recorded.threads = held;
+		return recorded;
 	}
 
 	private static function label(outcome: Outcome): String {

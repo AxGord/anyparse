@@ -7,6 +7,8 @@ import anyparse.query.format.json.CodeGraphJsonParser;
 import dev.ArmRegistry.ArmRecord;
 import dev.GateExcerpt.ArmRow;
 import devkit.Cmd.cmd;
+import devkit.Command;
+import devkit.Lease;
 import devkit.Result;
 import devkit.Summary;
 import haxe.Exception;
@@ -80,6 +82,9 @@ final class GateArms {
 	/** The directory of the gate's logs that holds the build log of each arm whose build failed. */
 	public static final FAIL_LOGS: String = 'arm-fail';
 
+	/** The ledger step of the arms plan, a row the gate's table does not print. */
+	public static final PLAN_ROW: String = 'arms plan';
+
 	/** What a command of the plan may run before it is killed: a hung call, not a slow one; the plan runs in the gate's own process. */
 	private static inline final PLAN_TIMEOUT_MS: Int = 10 * 60 * 1000;
 
@@ -99,17 +104,18 @@ final class GateArms {
 	 * What the arms row of `gate` has to do: the outcome it settles without a run (`--no-arms`, a bad name, no arm selected), or
 	 * the selection to run. It spends no kill run, so a caller can ask before it takes a lease for the run.
 	 */
-	public static function plan(gate: GateTree, floor: Int = KILL_FLOOR): ArmPlan {
+	public static function plan(gate: GateTree, floor: Int = KILL_FLOOR, ?lease: Command -> Command): ArmPlan {
+		final leased: Command -> Command = lease ?? unleased;
 		if (gate.options.noArms) return Settled(Skipped('--no-arms'));
 		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
 		final old: Null<Array<ArmRecord>> = recordsAt(gate, gate.base);
-		final seen: Reading = readingOf(gate, gate.base, gate.touched);
-		final pins: Array<String> = pinListing(gate);
-		final near: Array<String> = callNeighbours(gate, gate.base, seen.layout, seen.touches);
+		final seen: Reading = readingOf(gate, gate.base, gate.touched, leased);
+		final pins: Array<String> = pinListing(gate, leased);
+		final near: Array<String> = callNeighbours(gate, gate.base, seen.layout, seen.touches, leased);
 		final chosen: ArmSelection = select(
 			now, old, seen.touches, seen.layout, killersOf(pins, seen.touches), gate.options.arms, near, floor
 		);
-		final skipped: Array<String> = carriedOver(gate, now, chosen.fast, pins);
+		final skipped: Array<String> = carriedOver(gate, now, chosen.fast, pins, leased);
 		final picked: ArmSelection = {
 			fast: chosen.fast.filter(name -> !skipped.contains(name)),
 			applyOnly: chosen.applyOnly,
@@ -262,10 +268,11 @@ final class GateArms {
 	 * The threads a kill run of `names` over `gate`'s tree can use (`buildsOf`): each arm's file read off its record, the
 	 * macro-read files off `hxq meta`. A listing that cannot be read counts a build per arm.
 	 */
-	public static function threadsOf(gate: GateTree, names: Array<String>): Int {
-		final meta: Result = gate.hxq(gate.tree, ['meta', '@:build', 'src', 'tools/src', '--flat', '--limit', '100000'])
-			.timeout(PLAN_TIMEOUT_MS)
-			.run();
+	public static function threadsOf(gate: GateTree, names: Array<String>, ?lease: Command -> Command): Int {
+		final leased: Command -> Command = lease ?? unleased;
+		final meta: Result = leased(
+			gate.hxq(gate.tree, ['meta', '@:build', 'src', 'tools/src', '--flat', '--limit', '100000']).timeout(PLAN_TIMEOUT_MS)
+		).run();
 		if (!meta.ok) return names.length;
 		final now: Array<ArmRecord> = ArmRegistry.read(Path.join([gate.tree, ArmRegistry.DIRECTORY]));
 		final files: Array<Null<String>> = names.map(name -> {
@@ -274,6 +281,21 @@ final class GateArms {
 			return type == null ? null : MutationArm.fileOf(gate.tree, type);
 		});
 		return buildsOf(files, MutationArm.builtFiles(meta.out));
+	}
+
+	/**
+	 * How each command of the arms plan is wrapped under `mode`: a one-thread lease of its own, queued ahead of the run's other
+	 * leases, when `mode` is `Own` (the plan runs before any row, in the gate's own process); as it is under `Held`, whose lease
+	 * covers it, and `Unpooled`.
+	 */
+	public static function planLease(mode: LeaseMode, tree: String): Command -> Command {
+		final label: String = 'slice-gate ${Path.withoutDirectory(tree)} arms plan';
+		return command -> Lease.take(mode, command, planAsk(), label);
+	}
+
+	/** The threads the plan holds under `mode`: one under a lease of its own, none the pool granted otherwise (`Lease.threadsOf`). */
+	public static function planThreads(mode: LeaseMode): Null<Int> {
+		return Lease.threadsOf(mode, planAsk());
 	}
 
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
@@ -318,11 +340,11 @@ final class GateArms {
 	 * `ChangedMembers` tell a header whose comments alone changed), empty when it has none or the
 	 * tool fails: it is read for what is layout only, so an empty report widens the selection and never narrows it.
 	 */
-	private static function changedReport(gate: GateTree, base: String, touched: Array<String>): String {
+	private static function changedReport(gate: GateTree, base: String, touched: Array<String>, lease: Command -> Command): String {
 		final files: Array<String> = touched.filter(f -> f.endsWith('.hx'));
 		if (files.length == 0) return '';
 		final shown: Array<String> = [ for (file in files) for (arg in ['--diff', file]) arg ];
-		final report: Result = gate.hxq(gate.tree, ['changed', base].concat(shown)).timeout(PLAN_TIMEOUT_MS).run();
+		final report: Result = lease(gate.hxq(gate.tree, ['changed', base].concat(shown)).timeout(PLAN_TIMEOUT_MS)).run();
 		return report.ok ? report.out : '';
 	}
 
@@ -330,8 +352,8 @@ final class GateArms {
 	 * What the files `touched` since `base` changed, read off `changedReport`:
 	 * the members of each module, and the modules of layout only.
 	 */
-	private static function readingOf(gate: GateTree, base: String, touched: Array<String>): Reading {
-		final report: String = changedReport(gate, base, touched);
+	private static function readingOf(gate: GateTree, base: String, touched: Array<String>, lease: Command -> Command): Reading {
+		final report: String = changedReport(gate, base, touched, lease);
 		final layout: Array<String> = layoutOf(report).map(moduleOf).filter(m -> m != '');
 		final said: Map<String, Null<Array<String>>> = ChangedMembers.of(report);
 		final touches: Array<ModuleTouch> = touched.map(file -> { module: moduleOf(file), members: said[file] })
@@ -417,8 +439,8 @@ final class GateArms {
 	 * The arms every pin of a touched test class names (`--list-pins`: `Class#method :: role :: ARM,ARM`): a fixture
 	 * weakened in a touched test file must meet its killer even when the arm's own type is untouched.
 	 */
-	private static function pinListing(gate: GateTree): Array<String> {
-		return gate.inTree(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS)).check().lines();
+	private static function pinListing(gate: GateTree, lease: Command -> Command): Array<String> {
+		return gate.inTree(lease(cmd('node bin/test.js --list-pins').timeout(PLAN_TIMEOUT_MS))).check().lines();
 	}
 
 	/** Whether `record` is new or re-encoded since `old`. */
@@ -502,13 +524,10 @@ final class GateArms {
 	 * the row does not run, because no neighbours would quietly narrow the selection.
 	 */
 	private static function callNeighbours(
-		gate: GateTree, base: String, layout: Array<String>, touches: Array<ModuleTouch>
+		gate: GateTree, base: String, layout: Array<String>, touches: Array<ModuleTouch>, lease: Command -> Command
 	): Array<String> {
 		final diff: CodeGraphJson = CodeGraphJsonParser.parse(
-			gate.hxq(gate.tree, ['graph', '--diff', base, 'HEAD'].concat(GRAPH_SCOPE))
-				.timeout(PLAN_TIMEOUT_MS)
-				.check()
-				.out
+			lease(gate.hxq(gate.tree, ['graph', '--diff', base, 'HEAD'].concat(GRAPH_SCOPE)).timeout(PLAN_TIMEOUT_MS)).check().out
 		);
 		final seeds: Array<String> = [
 			for (node in diff.nodes)
@@ -523,10 +542,10 @@ final class GateArms {
 		if (seeds.length == 0) return [];
 		final focus: Array<String> = [ for (seed in seeds) for (arg in ['--focus', seed]) arg ];
 		final around: CodeGraphJson = CodeGraphJsonParser.parse(
-			gate.hxq(gate.tree, ['graph', '--level', 'member', '--edges', 'calls', '--radius', '1'].concat(focus).concat(GRAPH_SCOPE))
-				.timeout(PLAN_TIMEOUT_MS)
-				.check()
-				.out
+			lease(
+				gate.hxq(gate.tree, ['graph', '--level', 'member', '--edges', 'calls', '--radius', '1'].concat(focus).concat(GRAPH_SCOPE))
+					.timeout(PLAN_TIMEOUT_MS)
+			).check().out
 		);
 		return [
 			for (node in around.nodes) if (node.level == 'member' && !seeds.contains(node.name)) node.name
@@ -576,7 +595,9 @@ final class GateArms {
 	 * since that run's commit make (`select` over them) does not name them and their record is as it was. No sidecar, a commit that
 	 * is gone, or any tool of the reading failing carries nothing: a memo never narrows a run it cannot prove about.
 	 */
-	private static function carriedOver(gate: GateTree, now: Array<ArmRecord>, fast: Array<String>, pins: Array<String>): Array<String> {
+	private static function carriedOver(
+		gate: GateTree, now: Array<ArmRecord>, fast: Array<String>, pins: Array<String>, lease: Command -> Command
+	): Array<String> {
 		final file: String = gate.log(KILLED_FILE);
 		if (fast.length == 0 || !FileSystem.exists(file)) return [];
 		final lines: Array<String> = File.getContent(file).split('\n').filter(line -> line != '');
@@ -584,8 +605,8 @@ final class GateArms {
 		try {
 			final last: Null<Array<ArmRecord>> = recordsAt(gate, lines[0]);
 			if (last == null) return [];
-			final seen: Reading = readingOf(gate, lines[0], GateTree.touchedSince(gate.tree, lines[0]).paths);
-			final near: Array<String> = callNeighbours(gate, lines[0], seen.layout, seen.touches);
+			final seen: Reading = readingOf(gate, lines[0], GateTree.touchedSince(gate.tree, lines[0]).paths, lease);
+			final near: Array<String> = callNeighbours(gate, lines[0], seen.layout, seen.touches, lease);
 			final rerun: ArmSelection = select(
 				now, last, seen.touches, seen.layout, killersOf(pins, seen.touches), gate.options.arms, near, now.length
 			);
@@ -602,6 +623,15 @@ final class GateArms {
 	private static function remember(gate: GateTree, killed: Array<String>): Void {
 		if (gate.git(['status', '--porcelain']).trim() != '') return;
 		File.saveContent(gate.log(KILLED_FILE), [gate.git(['rev-parse', 'HEAD']).trim()].concat(killed).join('\n') + '\n');
+	}
+
+	/** The plan's own command, as it is when the caller holds no lease for it. */
+	private static function unleased(command: Command): Command {
+		return command;
+	}
+
+	private static function planAsk(): Ask {
+		return { min: 1, max: 1, priority: Lease.ahead() };
 	}
 
 }

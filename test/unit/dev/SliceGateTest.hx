@@ -68,6 +68,13 @@ final class SliceGateTest extends Test {
 	/** A `bin/hxq` that answers every graph call with an empty graph. */
 	private static inline final GRAPH_HXQ: String = 'echo \'{"nodes": [], "edges": []}\'\n';
 
+	/**
+	 * A `bin/hxq` whose graph of two versions holds one changed member, and every other call an empty graph.
+	 */
+	private static inline final SEEDING_HXQ: String = 'case "$$*" in\n*"graph --diff"*) echo \'{"nodes": [{"id": "m", "level": "member", "name": "a.Other.f", '
+		+ '"label": "f", "external": false, "focus": false, "change": "changed"}], "edges": []}\';;\n'
+		+ '*) echo \'{"nodes": [], "edges": []}\';;\nesac\n';
+
 	/** The arms registry of the scratch tree below: one arm, on a type no slice touches. */
 	private static final BASE_REGISTRY: String = '{"arms": [{"name": "M-SAME", "type": "a.Untouched", "method": "f", "force": "1"}]}';
 
@@ -692,6 +699,28 @@ final class SliceGateTest extends Test {
 				Assert.equals('2,2', threadsOf(), 'the share its caller handed it');
 			});
 		});
+	}
+
+	/**
+	 * Every command of the arms plan the gate runs before any row (the changed report, the pin listing, both graph calls, the macro
+	 * listing of the arms phase) takes a one-thread lease of its own, ahead of the run's others and labelled as the plan's.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-PLAN-REPORT-UNLEASED')
+	@:killer('M-GATE-PLAN-PINS-UNLEASED')
+	@:killer('M-GATE-PLAN-GRAPH-UNLEASED')
+	@:killer('M-GATE-PLAN-META-UNLEASED')
+	public function testEveryCommandOfTheArmsPlanTakesAOneThreadLease(): Void {
+		final ran: GateRan = gateRun(GROWN_REGISTRY, [], SEEDING_HXQ, null, null, 'src/a/Other.hx');
+		final planned: Array<String> = ran.leases.split('\n').filter(line -> line.contains(' arms plan -- '));
+		for (command in [
+			'changed',
+			'test.js --list-pins',
+			'graph --diff',
+			'--focus a.Other.f',
+			'meta @:build'
+		]) Assert.equals(1, planned.count(line -> line.contains(command)), '$command in: ${ran.leases}');
+		Assert.isTrue(planned.foreach(line -> line.contains('--threads 1 ') && line.contains('--priority=')), planned.join('\n'));
 	}
 
 	/**
