@@ -135,7 +135,7 @@
 			"method": "isCompact",
 			"find": "return options == JsonFormat.instance.compactWriteOptions;",
 			"replace": "return false;",
-			"note": "the compact options go to the Doc writer, which does not keep a lone surrogate's escape"
+			"note": "the compact options go to the Doc writer, which spells a number JSON cannot spell (NaN) as written where the door's writer writes null"
 		},
 		{
 			"name": "M-JVALUE-AT-LOOSE-INDEX",

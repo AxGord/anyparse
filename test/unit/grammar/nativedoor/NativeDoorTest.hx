@@ -78,8 +78,7 @@ class NativeDoorTest extends Test {
 	}
 
 	/** A lone surrogate reads as the code unit it escapes and is written escaped again. */
-	@:pin('control')
-	@:killer('M-NATIVE-COMPACT-NEVER')
+	@:pin('guard')
 	public function testALoneSurrogateKeepsItsEscape(): Void {
 		final text: String = GOOD.replace('"name":"a"', '"name":"\\ud800"');
 		final read: DoorRecord = DoorRecordParser.parse(text);
