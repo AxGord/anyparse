@@ -3,6 +3,7 @@ package anyparse.macro;
 #if macro
 import anyparse.core.ShapeTree;
 import anyparse.macro.MacroNames.*;
+import anyparse.util.Compare;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.MacroStringTools;
@@ -63,13 +64,7 @@ final class TriviaPairConverters {
 
 	public static function buildConvertersClass(convertedNames: Array<String>, synthPack: Array<String>): TypeDefinition {
 		final pos: Position = Context.currentPos();
-		// Spelled out, not `Compare.compareString`: under that helper's mutation arm the trivia build failed.
-		convertedNames.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0); // noqa: prefer-compare-function
+		convertedNames.sort(Compare.compareString);
 		final shape: ShapeBuilder.ShapeResult = TriviaTypeSynth.shapes[TriviaTypeSynth.shapes.length - 1];
 		final fns: Array<Field> = [];
 		for (origName in convertedNames) {
