@@ -3586,7 +3586,7 @@
 			"name": "M-BINARIES-HELD-BY-OWN",
 			"type": "dev.Binaries",
 			"method": "heldBy",
-			"find": "case Own(_, _): builds;",
+			"find": "case Own(_, _): width(mode, builds);",
 			"replace": "case Own(_, _): 1;",
 			"note": "the builds that each lease a thread are recorded as one thread, whatever they held at once"
 		},
@@ -3637,6 +3637,22 @@
 			"find": "if (!whole.exists(dir)) whole[dir] = below(dir).foreach(redone.exists);",
 			"replace": "if (!whole.exists(dir)) whole[dir] = true;",
 			"note": "an ambient-governed rule is judged fresh on a re-linted file whose folder has modules outside the scope, where the narrow run weighs no site and reports nothing, so the base's finding is dropped and every later land re-linting that folder turns its backstop red"
+		},
+		{
+			"name": "M-BINARIES-BUILD-WIDTH-UNBOUNDED",
+			"type": "dev.Binaries",
+			"method": "runPending",
+			"find": "Pool.of(width(mode, pending.length))",
+			"replace": "Pool.of(pending.length)",
+			"note": "the builds of a tree under their own leases all start at once, so the row that times them holds a thread for each while the shorter ones have ended"
+		},
+		{
+			"name": "M-BINARIES-WIDTH-CAPS-HELD",
+			"type": "dev.Binaries",
+			"method": "width",
+			"find": "case Held(_), Unpooled: builds;",
+			"replace": "case Held(_), Unpooled: builds < WIDTH ? builds : WIDTH;",
+			"note": "a caller's lease or no pool also caps the builds started together, so the battery's build and every unpooled compile run serially beyond two"
 		}
 	]
 }

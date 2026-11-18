@@ -108,7 +108,8 @@ final class BinariesTest extends Test {
 	@:pin('control')
 	@:killer('M-BINARIES-HELD-BY-OWN')
 	public function testTheBuildsHoldTheThreadsTheirModeLeases(): Void {
-		Assert.equals(3, Binaries.heldBy(Own('/p/scripts/wf-run', 10), 3));
+		Assert.equals(1, Binaries.heldBy(Own('/p/scripts/wf-run', 10), 1));
+		Assert.equals(2, Binaries.heldBy(Own('/p/scripts/wf-run', 10), 3));
 		Assert.equals(4, Binaries.heldBy(Held(4), 3));
 		Assert.isNull(Binaries.heldBy(Unpooled, 3));
 	}
@@ -117,11 +118,49 @@ final class BinariesTest extends Test {
 	@:pin('control')
 	@:killer('M-BINARIES-HELD-ZERO-BUILDS')
 	public function testNoBuildHoldsNoThreads(): Void {
-		Assert.equals(3, Binaries.heldBy(Own('/p/scripts/wf-run', 8), 3));
+		Assert.equals(2, Binaries.heldBy(Own('/p/scripts/wf-run', 8), 3));
 		Assert.equals(4, Binaries.heldBy(Held(4), 2));
 		Assert.isNull(Binaries.heldBy(Unpooled, 2));
 		Assert.isNull(Binaries.heldBy(Own('/p/scripts/wf-run', 8), 0));
 		Assert.isNull(Binaries.heldBy(Held(4), 0));
+	}
+
+	/**
+	 * At most `Binaries.WIDTH` of a tree's builds run at once under their own
+	 * leases: the longest fills the wall, the others follow one another beside it.
+	 */
+	@:pin('control')
+	@:killer('M-BINARIES-BUILD-WIDTH-UNBOUNDED')
+	public function testThreeBuildsRunTwoAtOnceUnderTheirOwnLeases(): Void {
+		TempDir.with(dir -> {
+			final log: String = dir.file('builds.log');
+			final wfRun: String = pausingWfRun(dir, log);
+			final tree: String = dir.file('tree');
+			FileSystem.createDirectory(tree);
+			File.saveContent(Path.join([tree, 'apq.json']), '{}');
+			Assert.isTrue(
+				Binaries.compileBuilds(tree, dir.file('build.log'), [['a.hxml'], ['b.hxml'], ['c.hxml']], Own(wfRun, 8)).match(Passed)
+			);
+			var running: Int = 0;
+			var most: Int = 0;
+			var started: Int = 0;
+			for (line in File.getContent(log).trim().split('\n')) {
+				running += line == 's' ? 1 : -1;
+				if (line == 's') started++;
+				if (running > most) most = running;
+			}
+			Assert.equals(3, started);
+			Assert.equals(Binaries.WIDTH, most);
+		});
+	}
+
+	/** Only builds under their own leases are capped at `Binaries.WIDTH`: a caller's lease or no pool starts every build at once. */
+	@:pin('control')
+	@:killer('M-BINARIES-WIDTH-CAPS-HELD')
+	public function testOnlyOwnLeasesCapTheBuildsStartedTogether(): Void {
+		Assert.equals(2, Binaries.width(Own('/p/scripts/wf-run', 8), 3));
+		Assert.equals(3, Binaries.width(Held(4), 3));
+		Assert.equals(3, Binaries.width(Unpooled, 3));
 	}
 
 	/** A project of `source` as `Good.hx`, its `check.hxml`, and the `apq.json` that declares that build. */
@@ -145,6 +184,17 @@ final class BinariesTest extends Test {
 	private static function held(tree: String, fingerprint: String): Null<OracleOutcome> {
 		final oracle: OracleConfig = TestConfigs.oracles(TestConfigs.discover(Path.join([tree, 'apq.json'])), new HaxeQueryPlugin())[0];
 		return OracleCache.lookup(oracle.hxml, oracle.dir, fingerprint, oracle.defines);
+	}
+
+	/**
+	 * A `wf-run` in `dir` that skips its own options and, in place of the
+	 * build it was asked to run, appends `s` to `log`, pauses and appends `e`.
+	 */
+	private static function pausingWfRun(dir: TempDir, log: String): String {
+		final wfRun: String = dir.file('wf-run');
+		File.saveContent(wfRun, '#!/bin/sh\nwhile [ "$$1" != "--" ]; do shift; done\necho s >> $log\nsleep 1\necho e >> $log\n');
+		js.Syntax.code("require('fs').chmodSync({0}, 0o755)", wfRun);
+		return wfRun;
 	}
 
 }

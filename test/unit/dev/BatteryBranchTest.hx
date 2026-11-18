@@ -125,7 +125,7 @@ final class BatteryBranchTest extends Test {
 	@:killer('M-BATTERYBRANCH-LEASE-PER-BRANCH')
 	public function testTheBuildOfASharedLeaseHoldsNoThreadsOfItsOwn(): Void {
 		Assert.isNull(BatteryBranch.branchHeld(false, Binaries.heldBy(Held(12), 4)));
-		Assert.equals(4, BatteryBranch.branchHeld(true, Binaries.heldBy(Own('/p/scripts/wf-run', 12), 4)));
+		Assert.equals(Binaries.WIDTH, BatteryBranch.branchHeld(true, Binaries.heldBy(Own('/p/scripts/wf-run', 12), 4)));
 	}
 
 }

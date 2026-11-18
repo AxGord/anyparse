@@ -16,9 +16,12 @@ import sys.io.File;
 
 using Lambda;
 
-/** The three binaries a tree's gates and merges run on — `apq.js`, `test.js` and `dev.js` — built at once. */
+/** The three binaries a tree's gates and merges run on — `apq.js`, `test.js` and `dev.js` — built together. */
 @:nullSafety(Strict)
 final class Binaries {
+
+	/** The builds that run at once under per-build leases: `test.js` is the longest and the others end inside its wall. */
+	public static inline final WIDTH: Int = 2;
 
 	/** The build files of the three, from the tree's root. */
 	public static final HXMLS: Array<String> = ['bin/apq-js.hxml', 'test-js.hxml', 'tools/dev.hxml'];
@@ -103,13 +106,24 @@ final class Binaries {
 	}
 
 	/**
-	 * The pool threads `builds` compiles that run at once hold under `mode`: one each when each leases its own (`Own`), what the
-	 * caller's lease holds under `Held`, none unpooled and none when no build runs.
+	 * How many of `builds` compiles run at once under `mode`: under their own leases (`Own`) at most `WIDTH`, so the shorter
+	 * builds follow one another on the second thread while the longest fills the row's wall; all of them otherwise.
+	 */
+	public static function width(mode: LeaseMode, builds: Int): Int {
+		return switch mode {
+			case Own(_, _): builds < WIDTH ? builds : WIDTH;
+			case Held(_), Unpooled: builds;
+		};
+	}
+
+	/**
+	 * The pool threads `builds` compiles that run at once hold under `mode`: `width` of them when each leases its own (`Own`),
+	 * what the caller's lease holds under `Held`, none unpooled and none when no build runs.
 	 */
 	public static function heldBy(mode: LeaseMode, builds: Int): Null<Int> {
 		if (builds == 0) return null;
 		return switch mode {
-			case Own(_, _): builds;
+			case Own(_, _): width(mode, builds);
 			case Held(held): held;
 			case Unpooled: null;
 		};
@@ -142,13 +156,16 @@ final class Binaries {
 		return (words.length == 1 && HXMLS.contains(words[0])) || words.contains('--no-output');
 	}
 
-	/** Each build of `pending` (indexes into `builds`), at once, on a thread `mode` leases for it alone; an oracle's with `-v`. */
+	/**
+	 * Each build of `pending` (indexes into `builds`), at most `width` at a
+	 * time, each on a thread `mode` leases for it alone; an oracle's with `-v`.
+	 */
 	private static function runPending(
 		tree: String, builds: Array<Array<String>>, oracles: Array<Null<OracleConfig>>, pending: Array<Int>, mode: LeaseMode
 	): Array<Result> {
 		return pending.length == 0
 			? []
-			: Pool.of(pending.length).map(pending, i -> {
+			: Pool.of(width(mode, pending.length)).map(pending, i -> {
 				final words: Array<String> = oracles[i] == null ? builds[i] : ['-v'].concat(builds[i]);
 				return Lease.take(mode, cmd('haxe $words').at(tree), { min: 1, max: 1 }, 'haxe ${builds[i].join(' ')}');
 			});
