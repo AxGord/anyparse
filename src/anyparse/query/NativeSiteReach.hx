@@ -3,8 +3,8 @@ package anyparse.query;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.FactsNativeReach.NativeHand;
 import anyparse.query.FactsTypeTree;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** What a native site may do to the question's member (`NativeSiteReach.judge`). */
@@ -116,7 +116,7 @@ final class NativeSiteReach {
 		if (source == null || _view.unchecked().byType(t))
 			into.types = null
 		else
-			Groups.pushUnique(types, source);
+			types.pushUnique(source);
 		return true;
 	}
 

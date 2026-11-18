@@ -8,7 +8,6 @@ import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.query.ShardPlan;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import dev.ArmRegistry.ArmRecord;
 import dev.GateTree.ChangedPaths;
 import devkit.Args;
@@ -18,6 +17,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+using anyparse.util.Groups;
 using Lambda;
 using StringTools;
 
@@ -74,7 +74,7 @@ private final class ImpactGraph {
 				}
 			}
 		}
-		for (output => main in entries) Groups.push(_outputs, main, output);
+		for (output => main in entries) _outputs.push(main, output);
 	}
 
 	/**
@@ -155,7 +155,7 @@ private final class ImpactGraph {
 	/** The module's name and every type its file declares, the names a same-package file uses it by. */
 	private function declared(module: ImpactModule): Array<String> {
 		final names: Array<String> = [module.name];
-		for (name in _declared.types[module.path] ?? []) Groups.pushUnique(names, name);
+		for (name in _declared.types[module.path] ?? []) names.pushUnique(name);
 		return names;
 	}
 
@@ -178,7 +178,7 @@ private final class ImpactGraph {
 	}
 
 	private static function listed(index: Map<String, Array<Int>>, key: String, i: Int): Void {
-		Groups.push(index, key, i);
+		index.push(key, i);
 	}
 
 	/** Group `group` of every match of the global `pattern` in `text`, in order. */
@@ -621,7 +621,7 @@ final class SuiteImpact {
 	public static function stateReaders(path: String, text: String, sources: Array<ImpactSource>): Array<String> {
 		if (!path.endsWith(HX) || isTestClass(path)) return [];
 		final out: Array<String> = [];
-		for (key in envKeys(uncommented(text)) ?? []) for (reader in envReaders(sources, path, key)) Groups.pushUnique(out, reader);
+		for (key in envKeys(uncommented(text)) ?? []) for (reader in envReaders(sources, path, key)) out.pushUnique(reader);
 		return out;
 	}
 
@@ -821,7 +821,7 @@ final class SuiteImpact {
 	/** `touched` and the files that read an environment key a touched file sets. */
 	private static function withReaders(sources: Array<ImpactSource>, touched: Array<String>): Array<String> {
 		final out: Array<String> = touched.copy();
-		for (path in touched) for (reader in stateReaders(path, textOf(sources, path), sources)) Groups.pushUnique(out, reader);
+		for (path in touched) for (reader in stateReaders(path, textOf(sources, path), sources)) out.pushUnique(reader);
 		return out;
 	}
 

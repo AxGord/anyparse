@@ -25,8 +25,8 @@ import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.LineIndex;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -624,8 +624,8 @@ final class LintFixDriver {
 			if (held != null) files.remove(held);
 			final queued: Null<{ file: String, source: String }> = nextActive.find(entry -> entry.file == path);
 			if (queued != null) nextActive.remove(queued);
-			Groups.pushUnique(touchedThisPass, path);
-			Groups.pushUnique(changedFiles, path);
+			touchedThisPass.pushUnique(path);
+			changedFiles.pushUnique(path);
 			countEdits(editsOf, path, 1);
 			removed.push(path);
 		}
@@ -1355,7 +1355,7 @@ final class LintFixDriver {
 		// into files the verified phases never touched.
 		final rewritten: Array<String> = changedSince(files, verifiedOf).map(entry -> entry.file).concat(goneSince(files, verifiedOf));
 		if (rewritten.length == 0) return quiet;
-		for (f in rewritten) Groups.pushUnique(changedFiles, f);
+		for (f in rewritten) changedFiles.pushUnique(f);
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracle, oracles, created, trail);
 		// What the round KEPT: a file its net reverted is back at the verified bytes, so neither it nor its edits are counted —
 		// bar the edits a file the net only split kept.

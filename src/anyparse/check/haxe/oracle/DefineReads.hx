@@ -4,9 +4,9 @@ import anyparse.query.InertRegions;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 
 /**
@@ -52,7 +52,7 @@ final class DefineReads {
 	/** Whether `source` reads one of the defines `names` (either spelling, `-` or `_`), as the class doc describes. */
 	public static function reads(source: String, names: Array<String>, grammar: GrammarPlugin): Bool {
 		final words: Array<String> = [ALL_DEFINES];
-		for (name in names) for (s in spellings(name)) Groups.pushUnique(words, s);
+		for (name in names) for (s in spellings(name)) words.pushUnique(s);
 		if (!words.exists(w -> source.indexOf(w) >= 0)) return false;
 		final root: Null<QueryNode> = try grammar.parseFile(source) catch (exception: Exception) null;
 		if (root == null) return true;

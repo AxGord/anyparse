@@ -6,8 +6,8 @@ import anyparse.query.Cli.RuleEdits;
 import anyparse.query.ConfigFinder;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.OracleProvider.OracleOutcome;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** One per-file pass that rewrote a file: the text it started from and the rule groups whose edits landed. */
@@ -60,7 +60,7 @@ final class LintFixSafeTrail {
 	/** Record that `rule` edited `file` this round. */
 	public function noteRule(file: String, rule: String): Void {
 		final list: Array<String> = _rules[file] ?? [];
-		Groups.pushUnique(list, rule);
+		list.pushUnique(rule);
 		_rules[file] = list;
 	}
 
@@ -158,7 +158,7 @@ final class LintFixSafeTrail {
 	public function noteCrossRule(file: String, rule: String): Void {
 		noteRule(file, rule);
 		final list: Array<String> = _crossRules[file] ?? [];
-		Groups.pushUnique(list, rule);
+		list.pushUnique(rule);
 		_crossRules[file] = list;
 	}
 

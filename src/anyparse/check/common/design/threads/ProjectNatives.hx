@@ -5,8 +5,8 @@ import anyparse.query.MemberKinds;
 import anyparse.query.NominalTypes;
 import anyparse.query.ReachHazards;
 import anyparse.query.RefactorSupport;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /**
@@ -63,7 +63,7 @@ final class ProjectNatives {
 	}
 
 	private inline function push(id: String): Void {
-		Groups.pushUnique(ids, id);
+		ids.pushUnique(id);
 	}
 
 	/**
@@ -90,7 +90,7 @@ final class ProjectNatives {
 		final name: Null<String> = node.name;
 		if (owner != null && name != null && (_shape.fieldDeclKinds ?? []).contains(node.kind) && makesLoaderCall(node, loaders)) {
 			final owners: Array<String> = _loaded[name] ?? [];
-			Groups.pushUnique(owners, owner);
+			owners.pushUnique(owner);
 			_loaded[name] = owners;
 		}
 		for (c in node.children) collectLoaded(c, owner, loaders);

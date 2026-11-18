@@ -1370,6 +1370,13 @@
 			"find": "if (UsingScan.usingConflict(ext.usings, path, member, ctx.plugin, () -> ext.index, ctx.file) != UsingConflict.Clear)",
 			"replace": "if (false)",
 			"note": "another using that could supply the name no longer keeps the call qualified"
+		},
+		{
+			"name": "M-PREFER-HELPER-IDENTITY-RAW",
+			"type": "anyparse.check.common.design.PreferHelper",
+			"method": "messageIdentity",
+			"force": "message",
+			"note": "a finding's message keys the blast radius with the call it quotes, so the same standing finding reads as new once its helper's module is spelled as an extension"
 		}
 	]
 }

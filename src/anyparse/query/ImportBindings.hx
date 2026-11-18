@@ -4,8 +4,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /**
@@ -371,7 +371,7 @@ final class ImportBindings {
 			{ mine: a.typeValues, theirs: b.typeValues },
 			{ mine: a.fieldValues, theirs: b.fieldValues }
 		];
-		return Arrays.findMap(ranks, rank -> rankCollision(rank.mine, pathA, rank.theirs, pathB));
+		return ranks.findMap(rank -> rankCollision(rank.mine, pathA, rank.theirs, pathB));
 	}
 
 	/**

@@ -5,8 +5,8 @@ import anyparse.check.common.design.threads.BoundedRepeats.BoundedRepeat;
 import anyparse.check.common.design.threads.LockTaint.ChainLists;
 import anyparse.ds.Set;
 import anyparse.query.CallGraph;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /**
@@ -236,7 +236,7 @@ final class CallRepetition {
 			if (entry == null) return null;
 			turns *= entry.max;
 			cost = Math.max(cost, entry.costMs);
-			Groups.pushUnique(entries, entry);
+			entries.pushUnique(entry);
 		}
 		return turns * cost < budget ? { turns: turns, cost: cost, entries: entries } : null;
 	}
@@ -428,7 +428,7 @@ final class CallRepetition {
 		) {
 			final loops: Null<Array<Span>> = loopsAround(e);
 			if (loops == null) return 'a call there sits where the tree cannot place it';
-			for (k in boundBy(entry, e, loops)) Groups.pushUnique(found, k);
+			for (k in boundBy(entry, e, loops)) found.pushUnique(k);
 		}
 		if (found.length != 1)
 			return found.length == 0
@@ -494,7 +494,7 @@ final class CallRepetition {
 	}
 
 	private function note(text: String): Void {
-		Groups.pushUnique(_notices, text);
+		_notices.pushUnique(text);
 	}
 
 	private static inline function handKey(edge: CallEdge): String {

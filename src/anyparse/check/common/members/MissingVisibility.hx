@@ -5,7 +5,8 @@ import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.CondDirectives;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** The resolved seams `MissingVisibility` reads in both `run` and `fix`. */
 private typedef Seams = {
@@ -493,7 +494,7 @@ final class MissingVisibility extends RuleBase {
 	 */
 	private static function modifierRunKinds(shape: RefShape, meta: MetaShape): Array<String> {
 		final out: Array<String> = CheckScan.modifierKinds(shape);
-		for (k in meta.metaKinds) Groups.pushUnique(out, k);
+		for (k in meta.metaKinds) out.pushUnique(k);
 		return out;
 	}
 

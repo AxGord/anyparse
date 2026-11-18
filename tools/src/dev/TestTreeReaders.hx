@@ -2,10 +2,10 @@ package dev;
 
 import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.LexicalRegions.LexRegionKind;
-import anyparse.util.Groups;
 import dev.SuiteImpact.ImpactModule;
 import dev.SuiteImpact.ImpactSource;
 
+using anyparse.util.Groups;
 using Lambda;
 using StringTools;
 
@@ -29,7 +29,7 @@ final class TestTreeReaders {
 		for (source in sources) {
 			final module: Null<ImpactModule> = SuiteImpact.isTestClass(source.path) ? SuiteImpact.moduleOf(source.path) : null;
 			if (module != null && SuiteImpact.names(SuiteImpact.uncommented(source.text), WALKER) && holdsRoot(source.text))
-				Groups.pushUnique(classes, module.qualified);
+				classes.pushUnique(module.qualified);
 		}
 	}
 

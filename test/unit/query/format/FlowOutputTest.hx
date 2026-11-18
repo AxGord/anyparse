@@ -8,7 +8,8 @@ import anyparse.query.format.FlowMermaid;
 import anyparse.query.format.FlowText;
 import anyparse.query.graph.FlowBuilder;
 import anyparse.query.graph.FlowGraph;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * The three outputs of a `FlowGraph` — the text report, the Mermaid flowchart and the JSON document — of one function
@@ -58,7 +59,7 @@ class FlowOutputTest extends Test {
 	}
 
 	private static function find(node: QueryNode, kinds: Array<String>): Null<QueryNode> {
-		return kinds.contains(node.kind) ? node : Arrays.findMap(node.children, c -> find(c, kinds));
+		return kinds.contains(node.kind) ? node : node.children.findMap(c -> find(c, kinds));
 	}
 
 }

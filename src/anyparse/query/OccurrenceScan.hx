@@ -7,9 +7,9 @@ import anyparse.query.OccurrenceScan.OccurrenceClass;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import haxe.Exception;
 
+using anyparse.util.Arrays;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -420,7 +420,7 @@ final class OccurrenceScan {
 	public static function unreadableInterpBlock(node: QueryNode, blockKind: String): Null<Span> {
 		return node.kind == blockKind && node.children.length == 0
 			? node.span
-			: Arrays.findMap(node.children, c -> unreadableInterpBlock(c, blockKind));
+			: node.children.findMap(c -> unreadableInterpBlock(c, blockKind));
 	}
 
 	/**

@@ -5,8 +5,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -403,7 +403,7 @@ final class TypeResolver {
 			shape.localDeclExprKinds,
 			shape.staticLocalDeclKinds,
 			shape.moduleValueDeclKinds
-		]) if (family != null) for (kind in family) Groups.pushUnique(kinds, kind);
+		]) if (family != null) for (kind in family) kinds.pushUnique(kind);
 		return kinds;
 	}
 

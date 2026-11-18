@@ -16,8 +16,8 @@ import anyparse.query.SymbolIndex.OverrideFamilyMember;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -596,7 +596,7 @@ final class CrossRenameMember {
 					if (off < 0)
 						error = unlocatableAccess(source, faSpan, memberName);
 					else
-						Groups.pushUnique(out, off);
+						out.pushUnique(off);
 				}
 			}
 			for (c in children) walk(c);
@@ -880,7 +880,7 @@ final class CrossRenameMember {
 		final out: Array<Int> = [];
 		for (candidate in candidates)
 			if (receiverIsSourceType(candidate.subject, proof))
-				for (off in candidate.offsets) Groups.pushUnique(out, off);
+				for (off in candidate.offsets) out.pushUnique(off);
 		return out;
 	}
 

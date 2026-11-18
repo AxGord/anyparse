@@ -29,8 +29,8 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -653,7 +653,7 @@ final class FactsView {
 		for (sub in overriders(type, name)) {
 			final graphed: String = graphType(sub);
 			final id: String = g.ownMember(graphed, name) ?? g.externalNode(graphed, name);
-			Groups.pushUnique(out, id);
+			out.pushUnique(id);
 		}
 		return out;
 	}
@@ -955,7 +955,7 @@ final class FactsView {
 					final base: String = CompilerFacts.baseId(target);
 					final names: Array<String> = built[base] ?? [];
 					final name: String = graphType(id);
-					Groups.pushUnique(names, name);
+					names.pushUnique(name);
 					built[base] = names;
 				}
 			}
@@ -972,7 +972,7 @@ final class FactsView {
 		final out: Map<String, Array<String>> = [];
 		for (id in _table.typeIds()) {
 			final simple: String = graphType(id);
-			Groups.push(out, simple, id);
+			out.push(simple, id);
 		}
 		_bySimpleName = out;
 		return out;
@@ -1351,7 +1351,7 @@ final class FactsView {
 		final declared: Array<String> = [];
 		for (fi in _scope.index.allFiles()) for (t in fi.types) if (t.name == type && !CallGraphNames.selfAlias(t)) {
 			final named: String = declaredId(fi, t);
-			Groups.pushUnique(declared, named);
+			declared.pushUnique(named);
 		}
 		return declared;
 	}

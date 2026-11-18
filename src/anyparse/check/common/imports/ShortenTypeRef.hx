@@ -22,7 +22,8 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.query.ValueDoors;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -671,7 +672,7 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		final out: Array<String> = [];
 		for (occurrence in occurrences) {
 			final type: String = resolved[occurrence.path] ?? occurrence.path;
-			Groups.pushUnique(out, type);
+			out.pushUnique(type);
 		}
 		return out;
 	}

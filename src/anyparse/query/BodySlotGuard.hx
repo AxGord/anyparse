@@ -3,8 +3,9 @@ package anyparse.query;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import haxe.Exception;
+
+using anyparse.util.Arrays;
 
 /**
  * Where a RESULT position came from in the source: `pos` is that source position, and
@@ -140,7 +141,7 @@ final class BodySlotGuard {
 		final hit: Null<String> = kinds.contains(node.kind) ? emptiedChild(node, source, edits, proved, plugin) : null;
 		if (hit != null) return hit;
 		final inner: Bool = statementSlot(node, kinds, blocks, proved);
-		return Arrays.findMap(node.children, child -> scan(child, source, edits, kinds, blocks, inner, plugin));
+		return node.children.findMap(child -> scan(child, source, edits, kinds, blocks, inner, plugin));
 	}
 
 	/**
@@ -327,7 +328,7 @@ final class BodySlotGuard {
 			}
 		}
 		final inner: Bool = statementSlot(node, at.kinds, at.blocks, statementPosition);
-		return Arrays.findMap(node.children, child -> reached(child, inner, at));
+		return node.children.findMap(child -> reached(child, inner, at));
 	}
 
 	/**

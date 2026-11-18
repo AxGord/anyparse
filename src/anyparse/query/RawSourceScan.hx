@@ -6,8 +6,8 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** A type a grant may name to reach a private member: the owner itself or one of its superclasses. */
@@ -109,7 +109,7 @@ final class RawSourceScan {
 		for (fi in files) for (t in fi.types) {
 			final paths: Array<String> = _typePathsByName[t.name] ?? [];
 			final path: String = fi.pkg == '' ? t.name : '${fi.pkg}.${t.name}';
-			Groups.pushUnique(paths, path);
+			paths.pushUnique(path);
 			_typePathsByName[t.name] = paths;
 			_declaredPaths[path] = true;
 		}

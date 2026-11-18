@@ -20,8 +20,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.ParseError;
-import anyparse.util.Groups;
 import haxe.Exception;
+
+using anyparse.util.Groups;
 
 /** The shape, the declared types, the index and the chain context `NominalTypes` reads an expression's type through. */
 private typedef ExpressionTyping = {
@@ -545,7 +546,7 @@ final class CheckScan {
 		final declared: Null<Array<String>> = shape.modifierKinds;
 		if (declared != null) return declared.copy();
 		final out: Array<String> = [ for (m in shape.modifierOrderKinds ?? []) m ];
-		for (m in shape.visibilityModifierKinds ?? []) Groups.pushUnique(out, m);
+		for (m in shape.visibilityModifierKinds ?? []) out.pushUnique(m);
 		for (kind in [
 			shape.externModifierKind,
 			shape.dynamicModifierKind,

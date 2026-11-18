@@ -9,8 +9,8 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 using StringTools;
 
@@ -249,7 +249,7 @@ final class DeadStore extends RuleBase {
 
 	/** Add `name` to the live set, deduplicated. */
 	private static inline function addLive(live: Array<String>, name: String): Void {
-		Groups.pushUnique(live, name);
+		live.pushUnique(name);
 	}
 
 	/**

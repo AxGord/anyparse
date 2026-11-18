@@ -10,8 +10,8 @@ import anyparse.query.FactsTypeTree;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** A file's text and its tree (`FunctionValueTypes.parsed`). */
@@ -252,7 +252,7 @@ final class FunctionValueTypes {
 		final name: Null<String> = node?.name;
 		final owners: Array<String> = type == null ? [] : _view.bySimpleName()[type] ?? [];
 		final hierarchy: Array<String> = [];
-		for (o in owners) for (t in [o].concat(_view._table.subtypesOf(o))) Groups.pushUnique(hierarchy, t);
+		for (o in owners) for (t in [o].concat(_view._table.subtypesOf(o))) hierarchy.pushUnique(t);
 		// a constructor and the pseudo-nodes running a type's initializers are no field any read names
 		final initializers: Bool = name == CallGraph.INIT_NAME
 			|| name == CallGraph.STATIC_INIT_NAME
@@ -473,7 +473,7 @@ final class FunctionValueTypes {
 		final flows: Map<String, Array<String>> = flowGraph();
 		final out: Array<String> = [start];
 		var i: Int = 0;
-		while (i < out.length) for (to in flows[out[i++]] ?? []) Groups.pushUnique(out, to);
+		while (i < out.length) for (to in flows[out[i++]] ?? []) out.pushUnique(to);
 		_typedAs[start] = out;
 		return out;
 	}
@@ -488,7 +488,7 @@ final class FunctionValueTypes {
 			final from: String = FactsTypeText.unwrapNull(f.from);
 			final to: String = FactsTypeText.unwrapNull(f.to);
 			final list: Array<String> = out[from] ?? [];
-			Groups.pushUnique(list, to);
+			list.pushUnique(to);
 			out[from] = list;
 		}
 		_flows = out;
@@ -782,7 +782,7 @@ final class FunctionValueTypes {
 		// a typed call names a class an instance of the hierarchy is: one of it, or a supertype of one — an interface only a
 		// subclass implements among them
 		final callers: Array<String> = hierarchy.copy();
-		for (h in hierarchy) for (s in table.supertypesOf(h)) Groups.pushUnique(callers, s);
+		for (h in hierarchy) for (s in table.supertypesOf(h)) callers.pushUnique(s);
 		for (call in invocationsOf(name)) {
 			final target: String = call.target ?? '';
 			final named: String = CompilerFacts.baseId(SourceText.parentPath(target));
@@ -887,7 +887,7 @@ final class FunctionValueTypes {
 				final target: Null<String> = c.target;
 				if (target == null || !INVOKING.contains(c.access)) continue;
 				final field: String = SourceText.lastSegment(target);
-				Groups.push(built, field, c);
+				built.push(field, c);
 			}
 			_invocations = built;
 			index = built;
@@ -965,7 +965,7 @@ final class FunctionValueTypes {
 		}
 		if (texts.length == 0) return null;
 		final callers: Map<String, Array<String>> = callerSignatures();
-		for (own in ids) for (t in callers[own] ?? []) Groups.pushUnique(texts, t);
+		for (own in ids) for (t in callers[own] ?? []) texts.pushUnique(t);
 		return texts;
 	}
 
@@ -1087,7 +1087,7 @@ final class FunctionValueTypes {
 
 	/** Mark `out` as holding function values that left the type system (`ESCAPED_VALUES`), once. */
 	private static inline function escapedValues(out: Array<FactPos>): Void {
-		Groups.pushUnique(out, ESCAPED_VALUES);
+		out.pushUnique(ESCAPED_VALUES);
 	}
 
 	/** Whether `n` may hold a write whose field name is lost: a reflective writer spliced in, or a marker no reader knows. */

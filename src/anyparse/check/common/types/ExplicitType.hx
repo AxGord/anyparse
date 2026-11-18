@@ -20,8 +20,8 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using anyparse.util.Strings;
 
 /** What one returned value proves about a `macro` function's return type (`ExplicitType.returnProof`). */
@@ -867,7 +867,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final span: Null<Span> = node.span;
 		return functions.contains(node.kind) && node.name == method && span != null && span.from >= typeSpan.from && span.to <= typeSpan.to
 			? node
-			: Arrays.findMap(node.children, c -> memberNamed(c, typeSpan, method, functions));
+			: node.children.findMap(c -> memberNamed(c, typeSpan, method, functions));
 	}
 
 	/**

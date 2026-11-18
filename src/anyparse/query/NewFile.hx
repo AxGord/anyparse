@@ -6,10 +6,10 @@ import anyparse.query.FormatFixedPoint.FormatFixedPointResult;
 import anyparse.query.ImportSpelling.ImportSpelled;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Arrays;
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -381,9 +381,7 @@ final class NewFile {
 	}
 
 	private static function findInterface(node: QueryNode, name: String): Null<QueryNode> {
-		return node.kind == 'InterfaceDecl' && node.name == name
-			? node
-			: Arrays.findMap(node.children, child -> findInterface(child, name));
+		return node.kind == 'InterfaceDecl' && node.name == name ? node : node.children.findMap(child -> findInterface(child, name));
 	}
 
 	/**
@@ -455,7 +453,7 @@ final class NewFile {
 	/** Order-preserving de-duplication of import lines. */
 	private static function dedup(lines: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (line in lines) Groups.pushUnique(out, line);
+		for (line in lines) out.pushUnique(line);
 		return out;
 	}
 
@@ -485,7 +483,7 @@ final class NewFile {
 	private static function typedefError(spec: NewFileSpec): Null<String> {
 		return (spec.bodiesRaw ?? '').indexOf('@@ $MEMBERS_SECTION') >= 0
 			? 'a typedef takes its fields from --field, not from an @@ members block'
-			: Arrays.findMap(spec.fields, structFieldError);
+			: spec.fields.findMap(structFieldError);
 	}
 
 	/**

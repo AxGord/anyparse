@@ -1,8 +1,7 @@
 package anyparse.macro;
 
+using anyparse.util.Groups;
 using StringTools;
-
-import anyparse.util.Groups;
 
 /**
  * The exhaustive set of byte codes a match of a `@:re` terminal's pattern can
@@ -355,7 +354,7 @@ final class RegexFirstBytes {
 		if (add == null) return false;
 		for (code in add) {
 			if (code > MAX_BYTE) return false;
-			Groups.pushUnique(into, code);
+			into.pushUnique(code);
 		}
 		return true;
 	}

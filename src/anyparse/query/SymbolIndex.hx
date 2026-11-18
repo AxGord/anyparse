@@ -3,8 +3,8 @@ package anyparse.query;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -944,7 +944,7 @@ final class SymbolIndex {
 			final type: Null<TypeDeclInfo> = file.types.find(t -> t.name == typeName);
 			if (type == null) continue;
 			final path: String = ModuleScan.pathOfDecl(file, type);
-			Groups.pushUnique(out, path);
+			out.pushUnique(path);
 		}
 		return out;
 	}

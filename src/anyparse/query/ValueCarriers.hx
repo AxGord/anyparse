@@ -2,8 +2,8 @@ package anyparse.query;
 
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** How a value of one type relates to another type's member (`ValueCarriers.relation`). */
@@ -137,7 +137,7 @@ final class ValueCarriers {
 		final out: Array<String> = [nominal];
 		for (s in _scope.index.subtypes.subtypeNames(nominal)) {
 			if (!complete(s)) return null;
-			Groups.pushUnique(out, s);
+			out.pushUnique(s);
 		}
 		return out;
 	}

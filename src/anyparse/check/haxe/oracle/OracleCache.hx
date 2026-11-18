@@ -8,8 +8,9 @@ import anyparse.proc.ProcessSpawn;
 import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import haxe.io.Path;
+
+using anyparse.util.Groups;
 
 /**
  * The compile-input tokens one hxml's TEXT declares: its `-cp` classpath roots, its
@@ -467,12 +468,12 @@ final class OracleCache {
 	): Void {
 		for (classPath in refs.classPaths) {
 			final dir: String = absolute(root, classPath);
-			Groups.pushUnique(classPaths, dir);
+			classPaths.pushUnique(dir);
 		}
-		for (lib in refs.libs) Groups.pushUnique(libs, lib);
+		for (lib in refs.libs) libs.pushUnique(lib);
 		for (include in refs.includes) {
 			final next: String = absolute(root, include);
-			Groups.pushUnique(queue, next);
+			queue.pushUnique(next);
 		}
 	}
 

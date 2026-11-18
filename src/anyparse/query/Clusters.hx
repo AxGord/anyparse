@@ -3,9 +3,9 @@ package anyparse.query;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -222,7 +222,7 @@ final class Clusters {
 	private static function neighborAdd(map: Map<String, Array<String>>, key: String, value: String): Void {
 		final list: Array<String> = map[key] ?? [];
 		if (list.length == 0) map[key] = list;
-		Groups.pushUnique(list, value);
+		list.pushUnique(value);
 	}
 
 	/**

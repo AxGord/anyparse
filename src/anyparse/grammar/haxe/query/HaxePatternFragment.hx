@@ -1,8 +1,8 @@
 package anyparse.grammar.haxe.query;
 
 import anyparse.query.Pattern;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using StringTools;
 
 /**
@@ -135,11 +135,11 @@ final class HaxePatternFragment {
 	}
 
 	private static function findFirstByKind(node: QueryNode, kind: String): Null<QueryNode> {
-		return node.kind == kind ? node : Arrays.findMap(node.children, c -> findFirstByKind(c, kind));
+		return node.kind == kind ? node : node.children.findMap(c -> findFirstByKind(c, kind));
 	}
 
 	private static function findFirstByKindPrefix(node: QueryNode, prefix: String): Null<QueryNode> {
-		return node.kind.startsWith(prefix) ? node : Arrays.findMap(node.children, c -> findFirstByKindPrefix(c, prefix));
+		return node.kind.startsWith(prefix) ? node : node.children.findMap(c -> findFirstByKindPrefix(c, prefix));
 	}
 
 	/** The function body block of a fragment wrapped by `wrapAsStmt`. */

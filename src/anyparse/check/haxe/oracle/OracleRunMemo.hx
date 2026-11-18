@@ -5,9 +5,10 @@ import anyparse.core.ContentHash;
 import anyparse.proc.ProcessRun;
 import anyparse.query.FileIdentity;
 import anyparse.query.ReachLiveness.ReachConfiguration;
-import anyparse.util.Arrays;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
+using anyparse.util.Arrays;
 
 /**
  * What the compiler already answered in THIS run, so a compile of a tree the run has already compiled is not paid twice.
@@ -163,14 +164,14 @@ final class OracleRunMemo implements OracleRunScope {
 			roots.exists(dir -> file.startsWith(dir));
 		});
 		if (inside)
-			Groups.pushUnique(_seen, config);
+			_seen.pushUnique(config);
 		else
 			_blind.push(config);
 	}
 
 	/** The memo the configurations of `oracles` carry, or null when none does — every configuration outside a lint run. */
 	public static function of(oracles: Array<OracleConfig>): Null<OracleRunMemo> {
-		return Arrays.findMap(oracles, oracle -> Std.downcast(oracle.runs, OracleRunMemo));
+		return oracles.findMap(oracle -> Std.downcast(oracle.runs, OracleRunMemo));
 	}
 
 	/** `oracles` carrying `memo`, every other field as it was — the configurations one run compiles with. */

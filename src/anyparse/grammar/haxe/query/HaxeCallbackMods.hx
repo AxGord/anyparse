@@ -4,8 +4,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -65,7 +65,7 @@ final class HaxeCallbackMods {
 
 	private function note(owner: Null<String>, name: String): Void {
 		final k: String = key(owner, name);
-		Groups.pushUnique(_reads, k);
+		_reads.pushUnique(k);
 	}
 
 	/**

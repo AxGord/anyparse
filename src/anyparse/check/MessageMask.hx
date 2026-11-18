@@ -81,6 +81,16 @@ final class MessageMask {
 		return past < 0 || past >= text.length ? text : text.substr(0, past) + MASK;
 	}
 
+	/**
+	 * `text` cut just past the first occurrence of `anchor`, the tail dropped rather than blanked - the form a message needs when
+	 * the quoted tail may be absent, since an empty and a non-empty tail then key alike (`maskRestAfter` leaves an empty one
+	 * as it is, so the two keys differ). An absent or empty anchor leaves the text alone.
+	 */
+	public static function cutAfter(text: String, anchor: String): String {
+		final past: Int = tailStart(text, anchor);
+		return past < 0 ? text : text.substr(0, past);
+	}
+
 	/** Whether `code` is an ASCII decimal digit. Byte-safe: UTF-8 continuation bytes are all >= 0x80. */
 	private static inline function isDigit(code: Int): Bool {
 		return code >= '0'.code && code <= '9'.code;

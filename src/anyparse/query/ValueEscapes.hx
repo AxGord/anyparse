@@ -10,8 +10,8 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** What `ValueEscapes.memberFacts` reads off the index's members. */
@@ -264,8 +264,8 @@ final class ValueEscapes {
 			if (values == null) return false;
 			final holders: Array<String> = values.copy();
 			var hi: Int = 0;
-			while (hi < holders.length) for (s in g.types.supertypesOf(holders[hi++])) Groups.pushUnique(holders, s);
-			for (v in values) Groups.pushUnique(out, v);
+			while (hi < holders.length) for (s in g.types.supertypesOf(holders[hi++])) holders.pushUnique(s);
+			for (v in values) out.pushUnique(v);
 			for (t in holders) {
 				final decl: Null<TypeDeclInfo> = declarationOf(t);
 				if (decl == null) return false;
@@ -304,7 +304,7 @@ final class ValueEscapes {
 		while (qi < queue.length) {
 			final t: String = queue[qi++];
 			if (!_scope.sources.exists(_scope.siteOf(t)?.file ?? '')) return true;
-			for (s in g.types.supertypesOf(t)) Groups.pushUnique(queue, s);
+			for (s in g.types.supertypesOf(t)) queue.pushUnique(s);
 		}
 		return false;
 	}
@@ -341,7 +341,7 @@ final class ValueEscapes {
 			final at: Null<Span> = e.span;
 			if (e.file != file || at == null || !(e.kind == Call || e.kind == New)) continue;
 			final key: String = '${at.from}:${at.to}';
-			Groups.push(edges, key, e);
+			edges.push(key, e);
 		}
 		var ok: Bool = true;
 		function typeOf(raw: QueryNode): Null<String> {

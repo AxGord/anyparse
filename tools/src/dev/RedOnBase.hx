@@ -1,6 +1,5 @@
 package dev;
 
-import anyparse.util.Groups;
 import dev.BaseSuite.BaseSuiteRun;
 import dev.Shard.Tally;
 import devkit.Cmd.cmd;
@@ -9,6 +8,7 @@ import devkit.Result;
 import devkit.Summary.Outcome;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** What a red row of a candidate reads on the candidate's base. */
@@ -60,7 +60,7 @@ final class RedOnBase {
 		for (name in failing) {
 			final dot: Int = name.lastIndexOf('.');
 			final cls: String = dot < 0 ? name : name.substr(0, dot);
-			Groups.pushUnique(classes, cls);
+			classes.pushUnique(cls);
 		}
 		return classes;
 	}

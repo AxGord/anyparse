@@ -8,9 +8,9 @@ import anyparse.runtime.Span.Position;
 import anyparse.runtime.StringInput;
 import anyparse.runtime.UnknownField;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -111,7 +111,7 @@ final class HaxeFormatConfigDiagnostics {
 	}
 
 	private static inline function add(into: Array<String>, issue: String): Void {
-		Groups.pushUnique(into, issue);
+		into.pushUnique(issue);
 	}
 
 	/** Both spellings of the fork's source-layout mode, as `HaxeFormatValues.wrapModeFromString` reads every mode. */

@@ -4,7 +4,8 @@ import anyparse.query.AddMeta;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * `RefactorSupport.accessGrantsOn` reads every `@:access` entry in front of a declaration, across the modifiers mixed into
@@ -39,7 +40,7 @@ class AccessGrantsOnTest extends Test {
 	/** The first node of `kind` under `node`, pre-order. */
 	private static function member(node: QueryNode, kind: String): QueryNode {
 		function find(n: QueryNode): Null<QueryNode> {
-			return n.kind == kind ? n : Arrays.findMap(n.children, find);
+			return n.kind == kind ? n : n.children.findMap(find);
 		}
 		final hit: Null<QueryNode> = find(node);
 		if (hit == null) throw 'no $kind';

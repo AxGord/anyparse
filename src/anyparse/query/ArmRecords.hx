@@ -4,11 +4,11 @@ import anyparse.ds.Set;
 import anyparse.query.PackageDocumentCarry.RegistryDocument;
 import anyparse.query.format.json.ArmRecordText;
 import anyparse.query.format.json.MutationArmRegistryJsonParser;
-import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.ds.Either;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -60,7 +60,7 @@ final class ArmRecords {
 				case Right(source):
 					sources[document] = source;
 			}
-			Groups.pushUnique(touched, document);
+			touched.pushUnique(document);
 		}
 		return Right(touched.map(document -> { file: Path.join([directory, document]), source: sources[document] ?? '' }));
 	}

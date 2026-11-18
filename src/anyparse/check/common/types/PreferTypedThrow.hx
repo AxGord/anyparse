@@ -10,8 +10,8 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 
 /** The resolved grammar seams of one `prefer-typed-throw` run — read once per `run` / `fix` rather than per node. */
@@ -309,7 +309,7 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 		final wrapper: Null<String> = shape.rawThrowWrapperTypePath;
 		if (wrapper != null) {
 			final simple: String = SourceText.lastSegment(wrapper);
-			Groups.pushUnique(blocking, simple);
+			blocking.pushUnique(simple);
 		}
 		return {
 			throwKinds: throwKinds,

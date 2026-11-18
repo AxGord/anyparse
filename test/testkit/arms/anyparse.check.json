@@ -452,15 +452,15 @@
 			"name": "M-ORACLE-SHADOWED-DROPS-LOST",
 			"type": "anyparse.check.LintConfig",
 			"method": "compilerOracles",
-			"find": "for (drop in drops) Groups.pushUnique(_drops, drop);",
-			"replace": "if (nearest == read) for (drop in drops) Groups.pushUnique(_drops, drop);",
+			"find": "for (drop in drops) _drops.pushUnique(drop);",
+			"replace": "if (nearest == read) for (drop in drops) _drops.pushUnique(drop);",
 			"note": "a dropped compilerOracle entry in a document a nearer one overrides is no longer reported, so the mistake goes unsaid until the nearer document is removed"
 		},
 		{
 			"name": "M-ORACLE-READ-DROPS-LOST",
 			"type": "anyparse.check.LintConfig",
 			"method": "compilerOracles",
-			"find": "for (drop in drops) Groups.pushUnique(_drops, drop);",
+			"find": "for (drop in drops) _drops.pushUnique(drop);",
 			"replace": "{}",
 			"note": "a read that drops a compilerOracle entry no longer records it on the config, so a malformed declaration degrades in silence"
 		},
@@ -567,6 +567,13 @@
 			"find": "ambientGoverned: c is AmbientGoverned",
 			"replace": "ambientGoverned: false",
 			"note": "the rule listing marks no rule ambient-governed, so a scoped land carries hoist-common-import from its base and never judges the finding its change brings in"
+		},
+		{
+			"name": "M-MASK-CUT-KEPT",
+			"type": "anyparse.check.MessageMask",
+			"method": "cutAfter",
+			"force": "text",
+			"note": "the tail after an anchor stays in the message identity again, so a finding whose quoted tail is empty in one spelling and present in another keys differently for one standing site"
 		}
 	]
 }

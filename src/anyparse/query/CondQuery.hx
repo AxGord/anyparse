@@ -5,9 +5,9 @@ import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import anyparse.util.Strings;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -395,7 +395,7 @@ final class CondQuery {
 			&& span.to <= body.to
 		) {
 			final row: String = '${node.kind} $name';
-			Groups.pushUnique(out, row);
+			out.pushUnique(row);
 		}
 		for (child in node.children) collectNames(child, body, shape, out);
 	}

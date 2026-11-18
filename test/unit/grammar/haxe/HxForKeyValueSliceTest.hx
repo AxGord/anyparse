@@ -8,8 +8,9 @@ import anyparse.grammar.haxe.stmt.HxForStmt;
 import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import utest.Assert;
+
+using anyparse.util.Arrays;
 
 /**
  * Slice apq-P5-K2: map key-value `for (k => v in m)` iteration.
@@ -160,7 +161,7 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 
 	/** The first node of `kind` in pre-order, or null when the tree holds none. */
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
+		return node.kind == kind ? node : node.children.findMap(c -> firstOfKind(c, kind));
 	}
 
 }

@@ -5,7 +5,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.ShapeVocab;
 import anyparse.query.graph.FlowBuilder;
 import anyparse.query.graph.FlowGraph;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * `FlowBuilder` — the control-flow chart of one function body: consecutive declarations folded into one node, an `if`
@@ -265,7 +266,7 @@ class FlowBuilderTest extends Test {
 	}
 
 	private static function find(node: QueryNode, kinds: Array<String>): Null<QueryNode> {
-		return kinds.contains(node.kind) ? node : Arrays.findMap(node.children, c -> find(c, kinds));
+		return kinds.contains(node.kind) ? node : node.children.findMap(c -> find(c, kinds));
 	}
 
 }

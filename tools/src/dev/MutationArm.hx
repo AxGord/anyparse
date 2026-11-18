@@ -8,7 +8,6 @@ import anyparse.proc.ProcessSpawn;
 import anyparse.query.ArmTypePath;
 import anyparse.query.LexicalRegions;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -21,6 +20,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+using anyparse.util.Groups;
 using Lambda;
 using StringTools;
 
@@ -681,7 +681,7 @@ final class MutationArm {
 
 	private static function add(table: Map<String, Array<String>>, key: String, value: String): Void {
 		final list: Array<String> = table[key] ?? [];
-		Groups.pushUnique(list, value);
+		list.pushUnique(value);
 		table[key] = list;
 	}
 

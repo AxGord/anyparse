@@ -1,8 +1,8 @@
 package anyparse.format;
 
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** The value of one knob: what it is, only its `OptionShape` says. */
@@ -83,7 +83,7 @@ final class OptionsSource {
 			final spelled: String = spell(knob.shape, now, needed);
 			if (spelled == spell(knob.shape, was, [])) continue;
 			out.push({ name: knob.name, source: spelled });
-			for (path in needed) Groups.pushUnique(imports, path);
+			for (path in needed) imports.pushUnique(path);
 		}
 		return out;
 	}
@@ -98,7 +98,7 @@ final class OptionsSource {
 				return quote(Std.string(value));
 			case Constants(type, from, names):
 				for (c in names) if (c.value == value) {
-					Groups.pushUnique(imports, from);
+					imports.pushUnique(from);
 					return '$type.${c.name}';
 				}
 				throw new Exception('$type: no constant holds $value');

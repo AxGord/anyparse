@@ -10,7 +10,8 @@ import anyparse.check.scan.NullFlow;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** One parsed file plus the per-file tables the census reads. */
 private typedef Parsed = {
@@ -269,7 +270,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 	private static function slices(plan: Plan): Array<CrossFileEdits> {
 		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		inline function add(file: String, edit: { span: Span, text: String }): Void {
-			Groups.push(byFile, file, edit);
+			byFile.push(file, edit);
 		}
 		add(plan.declFile, { span: new Span(plan.paramEnd, plan.paramEnd), text: ' = ${plan.constant}' });
 		for (site in plan.sites) add(site.file, { span: new Span(site.cutFrom, site.cutTo), text: '' });
@@ -307,7 +308,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 			if (site == null) return;
 			final key: String = '${member.owner}.${member.name}#$last';
 			final byConstant: Map<String, Array<CallSite>> = census[key] ?? [];
-			Groups.push(byConstant, constant, site);
+			byConstant.push(constant, site);
 			census[key] = byConstant;
 		}, seams);
 	}

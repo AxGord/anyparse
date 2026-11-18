@@ -7,9 +7,9 @@ import anyparse.query.ExitCode;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.OracleProvider;
 import anyparse.query.cli.WriteJournal.JournalState;
-import anyparse.util.Groups;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** One configured build's answer about the written tree: the build as compiled, its verdict, every file it parsed (canonical). */
@@ -77,7 +77,7 @@ final class WriteVerification {
 		final dirs: Array<String> = [];
 		for (path in paths) {
 			final dir: String = Path.directory(path);
-			Groups.pushUnique(dirs, dir);
+			dirs.pushUnique(dir);
 		}
 		final compiler: OracleProvider = compilerOf(paths);
 		final out: Array<OracleConfig> = [];

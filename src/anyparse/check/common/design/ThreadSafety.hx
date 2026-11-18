@@ -44,10 +44,10 @@ import anyparse.check.common.design.threads.ThrowReach;
 import anyparse.query.CallGraph;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.ds.ObjectMap;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** The `FindingData.family` of each kind of `thread-safety` finding, as its class doc letters them. */
@@ -259,7 +259,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			plugin.refShape().accessorMethodPrefixes ?? [], problems, _configNotes
 		);
 		final sinkIds: Array<String> = [];
-		for (lists in sets) for (id in lists.sinkIds) Groups.pushUnique(sinkIds, id);
+		for (lists in sets) for (id in lists.sinkIds) sinkIds.pushUnique(id);
 		// nothing to find, and what the config lost says why
 		if (sinkIds.length == 0) return reportConfigProblems(problems, []);
 		final listsOf: (String) -> ChainLists = listsOfFile.bind(byFile);
@@ -461,8 +461,8 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 					+ coverage.projectOf(entry.file)
 				);
 			final facts: Bool = options.flag('compilerFacts');
-			Groups.pushUnique(factsAsked, facts);
-			for (p in found) Groups.pushUnique(problems, p);
+			factsAsked.pushUnique(facts);
+			for (p in found) problems.pushUnique(p);
 		}
 		if (sets.exists(s -> s.reports)) problems.push(positive.notice());
 		// one graph serves every chain, so the facts one chain asks for (`run`'s `useFacts`) build it for all of them
@@ -580,7 +580,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	/** Union of `graph.matchIds` over `patterns`, deduplicated. */
 	private static function matchAll(graph: CallGraph, patterns: Array<String>): Array<String> {
 		final result: Array<String> = [];
-		for (p in patterns) for (id in graph.matchIds(p)) Groups.pushUnique(result, id);
+		for (p in patterns) for (id in graph.matchIds(p)) result.pushUnique(id);
 		return result;
 	}
 
@@ -594,7 +594,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final out: Map<String, Array<Int>> = [];
 		for (entry in options.spawnArguments) for (id in graph.matchIds(entry.call)) {
 			final known: Array<Int> = out[id] ?? [];
-			for (at in entry.main) Groups.pushUnique(known, at);
+			for (at in entry.main) known.pushUnique(at);
 			out[id] = known;
 		}
 		return out;
@@ -799,7 +799,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			for (escape in a.escapes) {
 				final raiser: Null<CallEdge> = escape.raiser;
 				final shown: String = raiser == null ? 'a throw' : elided(throws.chain(raiser));
-				Groups.pushUnique(evidence, shown);
+				evidence.pushUnique(shown);
 			}
 			final holder: String = a.edge.from;
 			final escapes: String = capped(evidence) + (writes.unsealedNote(a.edge.receiverField, a.lock) ?? '');
@@ -841,7 +841,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 				b.path.join(' -> ')
 			else
 				b.path.slice(0, CHAIN_CAP + 1).concat(['...']).join(' -> ');
-			Groups.pushUnique(evidence, shown);
+			evidence.pushUnique(shown);
 		}
 		return capped(evidence);
 	}

@@ -4,9 +4,9 @@ import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import haxe.Exception;
 
+using anyparse.util.Arrays;
 using anyparse.util.Strings;
 using StringTools;
 using Lambda;
@@ -311,7 +311,7 @@ final class JsonLayoutWriter {
 			final own: Null<KeySep> = cleanKeySep(node);
 			if (own != null) return own;
 		}
-		return Arrays.findMap(node.children, firstKeySep);
+		return node.children.findMap(firstKeySep);
 	}
 
 	/** The inline gaps of the existing non-empty container `model`: before its first entry, between entries, before its closer. */

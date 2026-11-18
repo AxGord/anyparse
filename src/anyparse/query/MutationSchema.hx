@@ -1,9 +1,9 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import haxe.Exception;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /** One declared arm handed to `MutationSchema.compose`: its run id, its address and the whole file with its cut applied. */
@@ -342,7 +342,7 @@ final class MutationSchema {
 
 	/** The node whose children hold `node`, or null. */
 	private static function parentOf(tree: QueryNode, node: QueryNode): Null<QueryNode> {
-		return tree.children.contains(node) ? tree : Arrays.findMap(tree.children, child -> parentOf(child, node));
+		return tree.children.contains(node) ? tree : tree.children.findMap(child -> parentOf(child, node));
 	}
 
 	/** The offset of `type`'s closing brace, or -1 when it has none where its span ends. */

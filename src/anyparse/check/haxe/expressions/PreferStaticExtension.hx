@@ -18,7 +18,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** What the gates concluded about one static-utility call site. */
 enum abstract Verdict(Int) {
@@ -621,7 +622,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 		final paths: Array<String> = [];
 		for (d in decls) {
 			final path: String = ModuleScan.pathOfDecl(d.file, d.type);
-			Groups.pushUnique(paths, path);
+			paths.pushUnique(path);
 		}
 		final bound: Bool = paths.length == 1 && paths[0] == module;
 		final excluded: Bool = bound

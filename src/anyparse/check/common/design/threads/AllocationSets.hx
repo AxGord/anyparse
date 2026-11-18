@@ -5,7 +5,8 @@ import anyparse.query.CallGraphNames;
 import anyparse.query.CondRegionScan;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex.MemberInfo;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** The type names one file's imports bind: by an alias, and by a module path's last segment. */
 private typedef FileImports = { final aliases: Array<String>; final named: Array<String>; }
@@ -106,7 +107,7 @@ final class AllocationSets {
 			if (values == null)
 				sealed = false;
 			else
-				for (v in values) Groups.pushUnique(found, v);
+				for (v in values) found.pushUnique(v);
 		}
 		final answer: Null<Array<String>> = !sealed || found.length == 0 ? null : found;
 		_fields[field] = answer;
@@ -201,7 +202,7 @@ final class AllocationSets {
 		for (p in parts) {
 			final inner: Null<Array<String>> = constructed(p, file);
 			if (inner == null) return null;
-			for (c in inner) Groups.pushUnique(out, c);
+			for (c in inner) out.pushUnique(c);
 		}
 		return out;
 	}

@@ -6,8 +6,8 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /** The element an `iterator()` method yields (`StructuralTypes.iteratorElement`): as `host` writes it on `member`. */
@@ -385,7 +385,7 @@ final class StructuralTypes {
 		// supertype hop below uses; `markSeen` above stops an alias cycle just as it stops a
 		// supertype one. An anon-struct alias is excluded: its fields are the index's own members.
 		if (start.type.kind != SymbolIndex.TYPEDEF_DECL_KIND || start.type.isAnonStruct)
-			return Arrays.findMap(start.type.supertypesRaw, raw -> structuralMemberOf(raw, host, member, seen));
+			return start.type.supertypesRaw.findMap(raw -> structuralMemberOf(raw, host, member, seen));
 		final target: Null<String> = start.type.aliasTargetRaw;
 		return target == null ? null : structuralMemberOf(target, host, member, seen);
 	}

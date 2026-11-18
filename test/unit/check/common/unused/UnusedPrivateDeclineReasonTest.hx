@@ -3,7 +3,8 @@ package unit.check.common.unused;
 import anyparse.check.Severity;
 import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** One gate: the cell that drives it, and the fragment of its sentence that names it. */
 private typedef Gate = { final name: String; final fragment: String; final files: Array<SourceFile>; };
@@ -134,7 +135,7 @@ class UnusedPrivateDeclineReasonTest extends Test {
 	 */
 	public function testTheGatesSpeakDistinctSentences(): Void {
 		final said: Array<String> = [];
-		for (gate in GATES) for (reason in declineReasons(gate.files).reasons) Groups.pushUnique(said, reason);
+		for (gate in GATES) for (reason in declineReasons(gate.files).reasons) said.pushUnique(reason);
 		Assert.equals(GATES.length, said.length, 'two gates share a sentence: ${said.join(' | ')}');
 	}
 

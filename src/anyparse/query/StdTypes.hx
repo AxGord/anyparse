@@ -4,9 +4,9 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -351,7 +351,7 @@ final class StdTypes {
 				modulePaths[module] = true;
 				packages[module.substring(0, Std.int(Math.max(0, module.lastIndexOf('.'))))] = true;
 				final simple: String = SourceText.lastSegment(module);
-				Groups.push(modules, simple, module);
+				modules.push(simple, module);
 			}
 		_modules = modules;
 		return modules;

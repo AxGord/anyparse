@@ -8,8 +8,8 @@ import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService.Resolution;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /** A written type a pattern slot holds. */
@@ -178,7 +178,7 @@ final class CaseSlotTypes {
 	private function typeAt(pattern: QueryNode, expected: SlotType, target: QueryNode): Null<SlotType> {
 		if (pattern == target) return expected;
 		if (pattern.kind == _shape.parenKind || pattern.kind == _shape.orPatternKind)
-			return Arrays.findMap(pattern.children, child -> typeAt(child, expected, target));
+			return pattern.children.findMap(child -> typeAt(child, expected, target));
 		if (pattern.kind != _shape.callKind || !CasePatterns.isNamedCallee(pattern, _shape)) return null;
 		final ctor: Null<String> = pattern.children[0].name;
 		if (ctor == null) return null;

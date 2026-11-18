@@ -7,8 +7,8 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -312,7 +312,7 @@ final class SubtypeGraph {
 		// the types declaring a member of one of `names`, each once, in `_files` / `types` order — the types the full
 		// scan this replaced found a match in, in the order it met them
 		final ordinals: Array<Int> = [];
-		for (name in names) for (ordinal in owners.byName[name] ?? []) Groups.pushUnique(ordinals, ordinal);
+		for (name in names) for (ordinal in owners.byName[name] ?? []) ordinals.pushUnique(ordinal);
 		ordinals.sort((a, b) -> a - b);
 		for (ordinal in ordinals) {
 			final resolved: ResolvedType = owners.types[ordinal];
@@ -474,7 +474,7 @@ final class SubtypeGraph {
 			if (known == null)
 				names[t.name] = t.supertypes.copy()
 			else
-				for (s in t.supertypes) Groups.pushUnique(known, s);
+				for (s in t.supertypes) known.pushUnique(s);
 		}
 		_supertypeNames = names;
 		return names;
@@ -488,7 +488,7 @@ final class SubtypeGraph {
 		final union: Map<String, Array<String>> = supertypeNameUnion();
 		final out: Array<String> = [typeName];
 		var i: Int = 0;
-		while (i < out.length) for (s in union[out[i++]] ?? []) Groups.pushUnique(out, s);
+		while (i < out.length) for (s in union[out[i++]] ?? []) out.pushUnique(s);
 		return out;
 	}
 
@@ -498,7 +498,7 @@ final class SubtypeGraph {
 	 */
 	public function subtypeNamesClosure(owner: String): Array<String> {
 		final out: Array<String> = [owner];
-		for (s in subtypeNames(owner)) Groups.pushUnique(out, s);
+		for (s in subtypeNames(owner)) out.pushUnique(s);
 		return out;
 	}
 
@@ -841,13 +841,13 @@ final class SubtypeGraph {
 					else
 						fileSubtypeOnce(adjacency.unresolved, sup, unresolvedNames, fi, t);
 					var pending: Int = named.length;
-					Groups.pushUnique(named, sup);
+					named.pushUnique(sup);
 					while (pending < named.length) {
 						final denoted: String = named[pending++];
 						fileSubtype(adjacency.simple, denoted, fi, t);
 						if (denoted != sup) fileSubtypeOnce(adjacency.unresolved, denoted, unresolvedNames, fi, t);
-						for (target in aliases[denoted] ?? []) Groups.pushUnique(named, target);
-						for (imported in importAliases[denoted] ?? []) Groups.pushUnique(named, imported);
+						for (target in aliases[denoted] ?? []) named.pushUnique(target);
+						for (imported in importAliases[denoted] ?? []) named.pushUnique(imported);
 					}
 				}
 			}
@@ -864,7 +864,7 @@ final class SubtypeGraph {
 		final params: Map<String, Array<String>> = [];
 		for (f in _files) for (t in f.types) {
 			final declared: Array<String> = params[t.name] ?? [];
-			for (p in t.typeParamNames) Groups.pushUnique(declared, p);
+			for (p in t.typeParamNames) declared.pushUnique(p);
 			params[t.name] = declared;
 			final each: Array<WrittenSupertype> = links[t.name] ?? [];
 			for (s in t.supertypesWritten) if (!each.exists(w -> w.written == s && w.file == f.file))
@@ -900,7 +900,7 @@ final class SubtypeGraph {
 				final target: Null<String> = t.aliasTargetNominal;
 				if (target == null || target == t.name) continue;
 				final bucket: Array<String> = edges[t.name] ?? [];
-				Groups.pushUnique(bucket, target);
+				bucket.pushUnique(target);
 				for (imported in importAliases[target] ?? []) if (imported != t.name && !bucket.contains(imported)) bucket.push(imported);
 				edges[t.name] = bucket;
 			}

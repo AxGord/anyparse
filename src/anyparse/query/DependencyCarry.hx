@@ -13,9 +13,9 @@ import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -250,7 +250,7 @@ final class DependencyCarry {
 			// An ambient statement's span addresses its own file, whose text is not at hand; only an alias reads the
 			// text, for its `as` / `in` keyword, and the compiler takes either.
 			final line: String = DependencyCarry.importLineFor(statement);
-			Groups.pushUnique(carried, line);
+			carried.pushUnique(line);
 		}
 		final wildRefusal: Null<String> = foldWildcardCarry(
 			source, declSpan, cursorInfo, destInfo, destTypeName, files, plugin, carried, guarded, cursorDirectives
@@ -510,7 +510,7 @@ final class DependencyCarry {
 				final group: { condition: String, lines: Array<String> } = guarded.find(g ->
 					g.condition == condition
 				) ?? { condition: condition, lines: [] };
-				Groups.pushUnique(guarded, group);
+				guarded.pushUnique(group);
 				for (imp in imports) {
 					final line: String = DependencyCarry.importLineFor(imp);
 					if (!group.lines.contains(line)) group.lines.push(line);
@@ -721,13 +721,13 @@ final class DependencyCarry {
 			final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 			if (path == null) continue;
 			if (SourceText.lastSegment(imp.raw) == name) {
-				Groups.pushUnique(out, path);
+				out.pushUnique(path);
 				continue;
 			}
 			if (imp.kind == ImportKind.Alias) continue;
 			if (!moduleMayDeclare(path, name, files)) continue;
 			final candidate: String = '$path.$name';
-			Groups.pushUnique(out, candidate);
+			out.pushUnique(candidate);
 		}
 		return out;
 	}
@@ -1004,7 +1004,7 @@ final class DependencyCarry {
 			) != null)
 				continue;
 			final line: String = DependencyCarry.importLineFor(imp);
-			Groups.pushUnique(carried, line);
+			carried.pushUnique(line);
 		}
 		return carried;
 	}
@@ -1159,7 +1159,7 @@ final class DependencyCarry {
 			if (refusal != null) return refusal;
 			if (!provider.imp.guarded) {
 				final line: String = DependencyCarry.importLineFor(provider.imp);
-				Groups.pushUnique(carried, line);
+				carried.pushUnique(line);
 				continue;
 			}
 			// A guarded statement of an ambient file has no `#if` region in THIS file's text to read its condition from.
@@ -1289,7 +1289,7 @@ final class DependencyCarry {
 	): Array<String> {
 		final identKind: String = shape.identKind;
 		final candidates: Array<String> = [];
-		for (provider in providers) for (name in provider.names) Groups.pushUnique(candidates, name);
+		for (provider in providers) for (name in provider.names) candidates.pushUnique(name);
 		final mentioned: Array<String> = [];
 		collectBareMentions(tree, declSpan, identKind, candidates, mentioned);
 		if (mentioned.length == 0) return [];

@@ -7,9 +7,9 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import haxe.ds.Either;
 
+using anyparse.util.Arrays;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -162,7 +162,7 @@ final class ExtractConstantTo {
 	public static function firstContextRead(node: QueryNode, shape: RefShape): Null<QueryNode> {
 		return node.kind == shape.identKind || node.kind == shape.stringInterpIdentKind
 			? node
-			: Arrays.findMap(node.children, child -> firstContextRead(child, shape));
+			: node.children.findMap(child -> firstContextRead(child, shape));
 	}
 
 	/**
@@ -179,7 +179,7 @@ final class ExtractConstantTo {
 		if (namesType && name != null && !name.contains('.') && !StdTypes.declaresToplevel(plugin, name)) return name;
 		final type: Null<QueryNode> = node.type;
 		final fromType: Null<String> = type == null ? null : firstUnseenType(type, plugin);
-		return fromType ?? Arrays.findMap(node.children, child -> firstUnseenType(child, plugin));
+		return fromType ?? node.children.findMap(child -> firstUnseenType(child, plugin));
 	}
 
 	/** Whether `node` declares a local or a data field — an address whose INITIALIZER is the expression. */

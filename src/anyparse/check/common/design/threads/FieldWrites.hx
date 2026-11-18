@@ -12,7 +12,8 @@ import anyparse.query.IndexScope;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** One write of a field-shaped target in a file of the run. */
 typedef FieldWriteSite = {
@@ -234,7 +235,7 @@ final class FieldWrites {
 		for (f in fields) {
 			final name: String = LockSites.memberName(f);
 			final known: Array<String> = _lockFields[name] ?? [];
-			Groups.pushUnique(known, f);
+			known.pushUnique(f);
 			_lockFields[name] = known;
 		}
 	}
@@ -249,7 +250,7 @@ final class FieldWrites {
 			site.reflective && (site.reaches == null ? storesLock(site, _lockFields[name]) : reachesDeclarer(site, name))
 		) {
 			final at: String = site.fn ?? site.file;
-			Groups.pushUnique(out, at);
+			out.pushUnique(at);
 		}
 		return out;
 	}
@@ -408,7 +409,7 @@ final class FieldWrites {
 
 	/** Files `site` under the name `name` it writes. */
 	private function push(name: String, site: FieldWriteSite): Void {
-		Groups.push(_byName, name, site);
+		_byName.push(name, site);
 	}
 
 	/**

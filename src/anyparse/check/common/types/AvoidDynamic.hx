@@ -21,7 +21,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** Mutable accumulator threaded through the local-narrowing use classifier. */
 private typedef NarrowAcc = {
@@ -575,7 +576,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 	/** The distinct values of `xs`, order-preserving. */
 	private static function distinct(xs: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (x in xs) Groups.pushUnique(out, x);
+		for (x in xs) out.pushUnique(x);
 		return out;
 	}
 

@@ -130,4 +130,17 @@ class MessageMaskTest extends Test {
 		Assert.equals('it can be #', MessageMask.maskRestAfter('it can be #', 'it can be '));
 	}
 
+	/** The tail after the first anchor is dropped: an empty and a non-empty tail key alike, which `maskRestAfter` cannot give. */
+	@:pin('control')
+	@:killer('M-MASK-CUT-KEPT')
+	public function testCutAfterDropsTheTail(): Void {
+		final lead: String = ' - call the helper';
+		final cut: String = MessageMask.cutAfter('f(x)$lead as `xs.f(y)`', lead);
+		Assert.equals('f(x)$lead', cut);
+		Assert.equals(cut, MessageMask.cutAfter('f(x)$lead', lead));
+		Assert.equals(cut, MessageMask.cutAfter(cut, lead));
+		Assert.equals('f(x)', MessageMask.cutAfter('f(x)', lead));
+		Assert.equals('f(x)', MessageMask.cutAfter('f(x)', ''));
+	}
+
 }

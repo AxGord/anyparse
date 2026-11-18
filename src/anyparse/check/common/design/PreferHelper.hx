@@ -6,6 +6,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.Check.VolatileMessage;
 import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.ReceiverShadow;
@@ -20,11 +21,11 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
-import anyparse.util.Arrays;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Arrays;
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 
 /** One opted-in helper, its body as a pattern. */
@@ -208,10 +209,14 @@ private typedef Seams = {
  * plugin's own `parsePattern`; a plugin without `paramKinds`, `blockBodyKind` or `controlExitKinds` makes it a no-op.
  */
 @:nullSafety(Strict)
-final class PreferHelper extends RuleBase implements ConfigAware implements FileGated implements RiskyFix implements GroupedFix {
+final class PreferHelper extends RuleBase implements ConfigAware implements FileGated implements RiskyFix implements GroupedFix
+		implements VolatileMessage {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-helper';
+
+	/** What every finding's message says before the call it quotes; `messageIdentity` cuts the quoted call and the spelling note off. */
+	private static final MESSAGE_LEAD: String = ' — call the helper';
 
 	/** The option naming the annotation that marks a template helper. */
 	private static final OPTION_MARKER: String = 'marker';
@@ -310,6 +315,10 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 		];
 		final header: UsingHeader = UsingScan.headerOf(root, source, plugin, resolved.fileInfo(file));
 		return edits.concat(imports.edits).concat(usingInsertOf(sites, header, usingGroup));
+	}
+
+	public function messageIdentity(message: String): String {
+		return MessageMask.cutAfter(message, MESSAGE_LEAD);
 	}
 
 	/** The marker `file`'s config names, or null. */
@@ -478,7 +487,7 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 	private static function declAt(node: QueryNode, member: MemberInfo): Null<QueryNode> {
 		return node.kind == member.kind && node.name == member.name && node.span?.from == member.declFrom
 			? node
-			: Arrays.findMap(node.children, c -> declAt(c, member));
+			: node.children.findMap(c -> declAt(c, member));
 	}
 
 	/**
@@ -509,7 +518,7 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			return false;
 		}
 		scan.reads[name] = (scan.reads[name] ?? 0) + 1;
-		Groups.push(scan.readsAt, name, loopEnd ?? ident.span?.from ?? 0);
+		scan.readsAt.push(name, loopEnd ?? ident.span?.from ?? 0);
 		scan.idents.push(ident);
 		return true;
 	}
@@ -700,7 +709,7 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 	/** The statements after `last` in the child list holding `first`, or null when no node holds it. */
 	private static function siblingsAfter(node: QueryNode, first: QueryNode, last: QueryNode): Null<Array<QueryNode>> {
 		final at: Int = node.children.indexOf(first);
-		if (at == -1) return Arrays.findMap(node.children, c -> siblingsAfter(c, first, last));
+		if (at == -1) return node.children.findMap(c -> siblingsAfter(c, first, last));
 		final end: Int = node.children.indexOf(last);
 		return end < at ? null : node.children.slice(end + 1);
 	}
@@ -821,7 +830,7 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 	}
 
 	private static function messageOf(site: Site): String {
-		final base: String = 'repeats the body of ${site.template.helper}(${site.template.params.join(', ')}) — call the helper';
+		final base: String = 'repeats the body of ${site.template.helper}(${site.template.params.join(', ')})$MESSAGE_LEAD';
 		final note: Null<String> = site.spelling.note;
 		return if (site.spelling.extension)
 			'$base as `${extensionCall(site)}`'
@@ -834,7 +843,7 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 	/** The one `using` insert the sites that need it share, grouped with them; none when every site's module is in scope. */
 	private static function usingInsertOf(sites: Array<Site>, header: UsingHeader, group: Int): Array<GroupedEdit> {
 		final modules: Array<String> = [];
-		for (site in sites) if (site.spelling.needsUsing) Groups.pushUnique(modules, site.template.typePath);
+		for (site in sites) if (site.spelling.needsUsing) modules.pushUnique(site.template.typePath);
 		final insert: Null<FixEdit> = UsingScan.usingInsertsEdit(header, modules);
 		return insert == null ? [] : [{ span: insert.span, text: insert.text, group: group }];
 	}

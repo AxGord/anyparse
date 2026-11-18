@@ -5,8 +5,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** A file a `CallGraphTypes` holds: the index entry its declarations were read from, and the index answering its names. */
@@ -375,7 +375,7 @@ final class CallGraphTypes {
 
 	public static function unionInto(map: Map<String, Array<String>>, key: String, values: Array<String>): Void {
 		final list: Array<String> = map[key] ?? [];
-		for (v in values) Groups.pushUnique(list, v);
+		for (v in values) list.pushUnique(v);
 		map[key] = list;
 	}
 

@@ -14,7 +14,8 @@ import anyparse.query.OracleProvider;
 import anyparse.query.OracleProviders;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * Outcome of a risky-fix verification pass. `baseline` is the typecheck of the
@@ -939,7 +940,7 @@ final class FixVerifier {
 		final configs: Array<OracleConfig> = [];
 		for (candidate in candidates) {
 			write(candidate.entry.file, candidate.fullText);
-			for (config in candidate.verifying) Groups.pushUnique(configs, config);
+			for (config in candidate.verifying) configs.pushUnique(config);
 		}
 		rounds.push(n);
 		final outcome: OracleOutcome = OracleProviders.of(plugin).typecheckAll(configs, false);

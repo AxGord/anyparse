@@ -11,8 +11,8 @@ import anyparse.query.SymbolIndex.ModuleField;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeNameBinding.ImportPath;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** What one `using` path brings as static extensions (`StaticExtensions.usingHosts`). */
@@ -136,7 +136,7 @@ final class StaticExtensions {
 		for (u in usingsOf(fi)) {
 			final hosts: Null<UsingHosts> = usingHosts(u.raw);
 			final names: Array<String> = hosts == null ? [SourceText.lastSegment(u.raw)] : hosts.types.map(t -> t.type.name);
-			for (n in names) Groups.pushUnique(out, n);
+			for (n in names) out.pushUnique(n);
 		}
 		return out;
 	}

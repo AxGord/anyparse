@@ -12,8 +12,8 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeSyntax;
 import anyparse.query.TypingService.TypingHost;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /**
@@ -1105,7 +1105,7 @@ final class NominalTypes {
 				if (binderSpan != null && binderSpan.from == from) return { loop: node, isValueBinder: true };
 			}
 		}
-		return Arrays.findMap(node.children, child -> loopBinderAt(child, from, kinds, valueBinderKinds));
+		return node.children.findMap(child -> loopBinderAt(child, from, kinds, valueBinderKinds));
 	}
 
 	/**

@@ -5,8 +5,8 @@ import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.NativeFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.FactsTypeTree;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -199,7 +199,7 @@ final class FactsNativeReach {
 			final fact: Null<TypeFact> = _table.type(c);
 			if (fact == null) continue;
 			for (f in fact.fields) if (!f.isStatic && !out.contains(f.name)) out.push(f.name);
-			for (code in fact.code) if (code != null) for (x in targetNames(code)) Groups.pushUnique(out, x);
+			for (code in fact.code) if (code != null) for (x in targetNames(code)) out.pushUnique(x);
 		}
 		_members[id] = out;
 		return out;
@@ -249,7 +249,7 @@ final class FactsNativeReach {
 			if (word || start < 0) continue;
 			final name: String = code.substring(start, i);
 			start = -1;
-			Groups.pushUnique(out, name);
+			out.pushUnique(name);
 			if (name.startsWith(MANGLED) && name.length > MANGLED.length && !out.contains(name.substr(MANGLED.length)))
 				out.push(name.substr(MANGLED.length));
 		}

@@ -12,8 +12,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NodeShape;
 import anyparse.query.Refs.RefHit;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /** A file's text and its tree (`NullGuardedCode.parsed`). */
@@ -216,7 +216,7 @@ final class NullGuardedCode {
 		final direct: Null<QueryNode> = comparedWithNull(condition, _shape.notEqKind);
 		return direct != null || condition.kind != _shape.logicalAndKind
 			? direct
-			: Arrays.findMap(condition.children, c -> testedNotNull(unwrap(c)));
+			: condition.children.findMap(c -> testedNotNull(unwrap(c)));
 	}
 
 	/** The identifier `condition`, a comparison of the kind `kind`, compares with the null literal, or null. */

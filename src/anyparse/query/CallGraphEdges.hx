@@ -14,9 +14,9 @@ import anyparse.query.TypingService.TypingHost;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.query.ValueNameBinding.ModuleValues;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using Lambda;
 
 private typedef Frame = {
@@ -283,7 +283,7 @@ final class CallGraphEdges {
 		function readIn(
 			files: Array<String>, written: Null<String>, owner: Null<String>, ?fn: String, ?each: Array<WrittenIn>
 		): Null<String> {
-			for (f in files) Groups.pushUnique(readFrom, f);
+			for (f in files) readFrom.pushUnique(f);
 			final unkeyed: Array<String> = g.types.generics.typeParamsOf(owner ?? '')
 				.concat(fn == null ? [] : g._facts.typeParams[fn] ?? []);
 			return written == null && each != null && each.length > 1
@@ -1219,8 +1219,7 @@ final class CallGraphEdges {
 								// whose declaration typed it wrote (`readFrom`) may be
 								// another type there — resolves the call on its own, whatever the others declare
 								final alternates: Array<String> = g.types.imports.alternateTypesIn([file].concat(readFrom), recv.typeName);
-								for (t in CallGraphKeys.apartFrom(g.types.imports, keyedApart, recv.typeName))
-									Groups.pushUnique(alternates, t);
+								for (t in CallGraphKeys.apartFrom(g.types.imports, keyedApart, recv.typeName)) alternates.pushUnique(t);
 								for (type in [recv.typeName].concat(alternates)) {
 									final target: Null<String> = dispatchOn(
 										{ typeName: type, isValue: recv.isValue, isDynamic: false }, calleeName, span, field, currentType

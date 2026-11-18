@@ -14,7 +14,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** The kinds `PreferIfExpressionChain` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
@@ -413,7 +414,7 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 		if (ternaryKind == null || hostKinds.length == 0) return null;
 		final ifExpressionKinds: Array<String> = shape.ifExpressionKinds ?? [];
 		final chainKinds: Array<String> = ifExpressionKinds.copy();
-		Groups.pushUnique(chainKinds, ternaryKind);
+		chainKinds.pushUnique(ternaryKind);
 		return {
 			ternaryKind: ternaryKind,
 			chainKinds: chainKinds,

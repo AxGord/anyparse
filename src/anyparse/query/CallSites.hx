@@ -5,8 +5,8 @@ import anyparse.query.QualifiedReceiver.ReceiverTarget;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -241,7 +241,7 @@ final class CallSites {
 	 */
 	private static function nameClashKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = MemberKinds.FIELD_MEMBER_KINDS.copy();
-		for (kind in shape.moduleValueDeclKinds.concat(BinderScan.binderKinds(shape))) Groups.pushUnique(out, kind);
+		for (kind in shape.moduleValueDeclKinds.concat(BinderScan.binderKinds(shape))) out.pushUnique(kind);
 		return out;
 	}
 

@@ -3,7 +3,8 @@ package anyparse.check.scan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * One local a fix would leave read with nothing to assign it: the name, and the READ's span
@@ -172,7 +173,7 @@ final class DefiniteAssignmentGuard {
 
 	/** Record `name` as definitely assigned, deduplicated. */
 	private static inline function mark(assigned: Array<String>, name: String): Void {
-		Groups.pushUnique(assigned, name);
+		assigned.pushUnique(name);
 	}
 
 	/** Append every finding of ONE function unit's body to `out`. */

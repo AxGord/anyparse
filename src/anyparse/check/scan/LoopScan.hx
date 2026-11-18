@@ -11,7 +11,8 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * The `RefShape` kinds `LoopScan` reads, bundled once by `seamsOf` so every scan takes one
@@ -625,7 +626,7 @@ final class LoopScan {
 			shape.functionKinds ?? [],
 			shape.lambdaKinds ?? [],
 			shape.localFunctionKinds ?? []
-		]) for (k in grp) Groups.pushUnique(out, k);
+		]) for (k in grp) out.pushUnique(k);
 		return out;
 	}
 

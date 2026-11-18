@@ -4,7 +4,8 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.FieldRename;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * The backing-field rename walk, driven DIRECTLY — without the `trivial-getter` check that used
@@ -92,12 +93,12 @@ class FieldRenameTest extends Test {
 
 	/** The first node of `kind` in pre-order, or null. */
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
+		return node.kind == kind ? node : node.children.findMap(c -> firstOfKind(c, kind));
 	}
 
 	/** The first node of `kind` named `name` in pre-order, or null. */
 	private static function firstNamed(node: QueryNode, kind: String, name: String): Null<QueryNode> {
-		return node.kind == kind && node.name == name ? node : Arrays.findMap(node.children, c -> firstNamed(c, kind, name));
+		return node.kind == kind && node.name == name ? node : node.children.findMap(c -> firstNamed(c, kind, name));
 	}
 
 }

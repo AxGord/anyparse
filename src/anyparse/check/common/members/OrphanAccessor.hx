@@ -8,7 +8,8 @@ import anyparse.query.MemberKinds;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** The accumulated verdict of one inheritance-chain walk for a single property name. */
 private typedef Resolution = {
@@ -405,7 +406,7 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 		final unreadable: Array<String> = scopeIndex.text.skippedFilesMentioning([name, wantGetter
 			? CheckScan.GET_PREFIX
 			: CheckScan.SET_PREFIX]);
-		for (file in scopeIndex.text.skippedFilesMentioning([prop], ownerFile)) Groups.pushUnique(unreadable, file);
+		for (file in scopeIndex.text.skippedFilesMentioning([prop], ownerFile)) unreadable.pushUnique(file);
 		return unreadable.length == 0
 			? null
 			: 'the deletion is unproven: ${unreadable.length} file(s) in scope did not parse, and their text cannot be shown free of a '

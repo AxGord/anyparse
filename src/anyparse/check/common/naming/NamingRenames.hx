@@ -23,8 +23,8 @@ import haxe.Exception;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.ShapeVocab;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /**
@@ -1408,8 +1408,8 @@ final class NamingRenames {
 				if (!out.contains(fi.file)) out.push(fi.file);
 			}
 		}
-		for (file in index.text.privilegedFiles(owner, member)) Groups.pushUnique(out, file);
-		for (file in grantees ?? []) Groups.pushUnique(out, file);
+		for (file in index.text.privilegedFiles(owner, member)) out.pushUnique(file);
+		for (file in grantees ?? []) out.pushUnique(file);
 		return out;
 	}
 
@@ -1565,7 +1565,7 @@ final class NamingRenames {
 			if (off >= 0) bare.push({ off: off, cls: cls });
 		} else {
 			typed.push({ recv: recv, fa: node });
-			Groups.pushUnique(recvNames, rn);
+			recvNames.pushUnique(rn);
 		}
 	}
 

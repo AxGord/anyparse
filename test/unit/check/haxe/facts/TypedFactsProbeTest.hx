@@ -5,10 +5,10 @@ import anyparse.check.haxe.facts.TypedFactsProbe;
 import anyparse.query.FactSites;
 import anyparse.query.FactsTypeTree;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import haxe.io.Path;
 import sys.io.File;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** A scratch directory and the facts of its compile. */
@@ -937,7 +937,7 @@ class TypedFactsProbeTest extends Test {
 				final uses: Array<String> = [];
 				for (f in walked) if (f.field == field && !f.write && f.at.span.from == from) {
 					final use: String = f.use + (f.method == null ? '' : ':${f.method}') + (f.held ? '' : '!');
-					Groups.pushUnique(uses, use);
+					uses.pushUnique(use);
 				}
 				uses.sort(Compare.compareString);
 				return uses.join(',');

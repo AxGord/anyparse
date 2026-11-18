@@ -4,8 +4,8 @@ import anyparse.query.SubtypeGraph.WrittenSupertype;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -70,7 +70,7 @@ final class CallGraphGenerics {
 	): Array<String> {
 		final out: Array<String> = [];
 		function add(key: Int): Void {
-			for (name in declared[key] ?? []) Groups.pushUnique(out, name);
+			for (name in declared[key] ?? []) out.pushUnique(name);
 		}
 		function visit(node: QueryNode): Void {
 			final span: Null<Span> = node.span;

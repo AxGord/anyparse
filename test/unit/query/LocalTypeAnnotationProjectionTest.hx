@@ -2,8 +2,8 @@ package unit.query;
 
 import anyparse.query.QueryNode;
 import anyparse.query.format.Text;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using StringTools;
 
 /**
@@ -152,7 +152,7 @@ class LocalTypeAnnotationProjectionTest extends Test {
 	}
 
 	private static function find(node: QueryNode): Null<QueryNode> {
-		return node.kind == 'VarStmt' || node.kind == 'FinalStmt' ? node : Arrays.findMap(node.children, find);
+		return node.kind == 'VarStmt' || node.kind == 'FinalStmt' ? node : node.children.findMap(find);
 	}
 
 	private static function ast(source: String): String return Text.render(new HaxeQueryPlugin().parseFile(source));

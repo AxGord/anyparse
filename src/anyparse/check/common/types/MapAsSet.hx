@@ -13,7 +13,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeSyntax;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * What `growsInRepetition` asks: the map's name and declaration offset,
@@ -443,9 +444,7 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 
 	/** The declaration whose span starts at `at`. */
 	private static function declarationAt(node: QueryNode, at: Int, declKinds: Array<String>): Null<QueryNode> {
-		return declKinds.contains(node.kind) && node.span?.from == at
-			? node
-			: Arrays.findMap(node.children, c -> declarationAt(c, at, declKinds));
+		return declKinds.contains(node.kind) && node.span?.from == at ? node : node.children.findMap(c -> declarationAt(c, at, declKinds));
 	}
 
 	/** Call `sink` with every declaration of a `declKinds` kind under `node` that carries a name and a span. */

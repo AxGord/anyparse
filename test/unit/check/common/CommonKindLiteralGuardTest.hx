@@ -4,11 +4,11 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /**
@@ -68,7 +68,7 @@ class CommonKindLiteralGuardTest extends Test {
 			if (tree == null) continue;
 			for (text in wholeLiterals(tree, raw, literalKinds)) if (kinds.contains(text)) {
 				final key: String = '$path $text';
-				Groups.pushUnique(seen, key);
+				seen.pushUnique(key);
 				Assert.isTrue(
 					(ACCOUNTED[path] ?? []).contains(text),
 					'$path spells the Haxe node kind \'$text\' - ask RefShape / ShapeVocab for it, or account for it here'

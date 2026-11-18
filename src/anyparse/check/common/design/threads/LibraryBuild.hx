@@ -4,9 +4,9 @@ import anyparse.check.LintConfig.OracleConfig;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
 import anyparse.query.HaxelibResolver;
-import anyparse.util.Groups;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** The tokens of one hxml text a library build is read from (`LibraryBuild.tokens`). */
@@ -165,7 +165,7 @@ final class LibraryBuild {
 		final eq: Int = spec.indexOf('=');
 		final name: String = (eq < 0 ? spec : spec.substring(0, eq)).replace('-', '_');
 		if (name == '') return;
-		Groups.pushUnique(defined, name);
+		defined.pushUnique(name);
 		if (eq >= 0) values[name] = spec.substring(eq + 1);
 	}
 

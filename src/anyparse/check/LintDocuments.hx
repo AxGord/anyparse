@@ -8,9 +8,10 @@ import anyparse.check.config.ApqLintConfigParser;
 import anyparse.check.config.OwnedTypesDeclaration;
 import anyparse.grammar.json.JValue;
 import anyparse.query.NamingPolicy.FrameworkContract;
-import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.io.Path;
+
+using anyparse.util.Groups;
 
 /**
  * `apq.json` documents already parsed in one run, keyed by directory and content (`LintDocuments.parseDocumentIn`),
@@ -223,7 +224,7 @@ final class LintDocuments {
 		final configs: Array<LintConfig> = [];
 		for (file in files) {
 			final config: LintConfig = resolve(file);
-			Groups.pushUnique(configs, config);
+			configs.pushUnique(config);
 		}
 		return configs;
 	}

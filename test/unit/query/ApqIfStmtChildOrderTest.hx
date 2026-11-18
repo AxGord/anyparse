@@ -1,7 +1,8 @@
 package unit.query;
 
 import anyparse.query.QueryNode;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * Dump-order regression test for the `apq ast` S-expr view of
@@ -33,7 +34,7 @@ class ApqIfStmtChildOrderTest extends Test {
 	}
 
 	private static function findByKind(node: QueryNode, kind: String): Null<QueryNode> {
-		return node.kind == kind ? node : Arrays.findMap(node.children, c -> findByKind(c, kind));
+		return node.kind == kind ? node : node.children.findMap(c -> findByKind(c, kind));
 	}
 
 	/** Pre-order position of the first node whose `name` equals `target`. */

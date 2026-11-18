@@ -1,8 +1,8 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /**
@@ -68,7 +68,7 @@ final class TreePath {
 		final at: Null<Span> = root.span;
 		if (at != null && (span.from < at.from || span.to > at.to)) return null;
 		if (accept(root)) return root;
-		return Arrays.findMap(root.children, child -> firstAround(child, span, accept));
+		return root.children.findMap(child -> firstAround(child, span, accept));
 	}
 
 	/**

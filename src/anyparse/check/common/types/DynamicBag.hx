@@ -7,7 +7,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.Refs;
 import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * The value-type unification verdict for a string-keyed `Dynamic` bag: `Real(T)` when every
@@ -390,7 +391,7 @@ final class DynamicBag {
 				hasDynamic = true;
 				continue;
 			}
-			Groups.pushUnique(types, ty);
+			types.pushUnique(ty);
 		}
 		return if (hasDynamic)
 			Typeless

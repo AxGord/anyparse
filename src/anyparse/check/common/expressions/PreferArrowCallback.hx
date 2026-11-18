@@ -10,8 +10,8 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using StringTools;
 
 /** The per-file analysis context threaded through the walk. */
@@ -571,13 +571,10 @@ final class PreferArrowCallback extends RuleBase {
 		}
 		if (declared > 1) return null;
 		if (declared != 1)
-			return Arrays.findMap(
-				rt.type.supertypesRaw,
-				raw ->
-					chainLookup(
-						ctx, idx, idx.resolveTypeRefsFrom(raw, rt.file.file, rt.type.span.from), member, argIndex, argCount, visited,
-						depth + 1
-					)
+			return rt.type.supertypesRaw.findMap(raw ->
+				chainLookup(
+					ctx, idx, idx.resolveTypeRefsFrom(raw, rt.file.file, rt.type.span.from), member, argIndex, argCount, visited, depth + 1
+				)
 			);
 		final valueTypeSrc: Null<String> = declaredTypeSrc;
 		if (valueTypeSrc == null) return memberParamReturnVoid(ctx, idx, rt, member, argIndex, argCount);

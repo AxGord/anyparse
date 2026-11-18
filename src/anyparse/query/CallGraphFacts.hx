@@ -16,8 +16,8 @@ import anyparse.query.CompilerFacts.SpliceFact;
 import anyparse.query.CompilerFacts.TypeFact;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** What a node `CallGraphFacts.qualify` made reads: the graph node `node` as the member of the typed type `owner`. */
@@ -675,7 +675,7 @@ final class CallGraphFacts {
 		}
 		final type: String = view.graphType(dispatch);
 		final targets: Array<String> = g.virtualTargets(type, name);
-		for (v in view.overrides(g, dispatch, name)) Groups.pushUnique(targets, v);
+		for (v in view.overrides(g, dispatch, name)) targets.pushUnique(v);
 		for (v in targets) g.addEdge(node.id, v, kind, null, node.file, span, type);
 	}
 
@@ -783,7 +783,7 @@ final class CallGraphFacts {
 		if (!g._grownTypes.contains(typeName)) g._grownTypes.push(typeName);
 		g.registerMember(typeName, name, id);
 		final ids: Array<String> = g._byMember[name] ?? [];
-		Groups.pushUnique(ids, id);
+		ids.pushUnique(id);
 		g._byMember[name] = ids;
 	}
 

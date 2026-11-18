@@ -12,9 +12,9 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
-import anyparse.query.TypeSyntax;
 import anyparse.query.TypingService;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * A type and where it is written: at `at` of the binder's file, or — `host` set — of the file declaring a callee, whose
@@ -545,7 +545,7 @@ final class OperandBinder {
 	/** The type names the grammar declares built in — a literal's type or a basic value type — each once. */
 	public static function builtinNamesOf(shape: RefShape): Array<String> {
 		final out: Array<String> = [ for (name in shape.literalTypeNames ?? []) name ];
-		for (name in shape.nonNullableTypeNames ?? []) Groups.pushUnique(out, name);
+		for (name in shape.nonNullableTypeNames ?? []) out.pushUnique(name);
 		return out;
 	}
 

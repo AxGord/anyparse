@@ -1,13 +1,13 @@
 package dev;
 
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+using anyparse.util.Groups;
 using Lambda;
 using StringTools;
 
@@ -118,7 +118,7 @@ final class MutationSchemaBuild {
 			final path: String = relative.endsWith('.hx') ? relative.substr(0, relative.length - '.hx'.length) : relative;
 			final module: String = path.split('/').join('.');
 			final typed: String = Path.withoutDirectory(path) == p.owner ? module : '$module.${p.owner}';
-			Groups.pushUnique(modules, typed);
+			modules.pushUnique(typed);
 		}
 		modules.sort(Compare.compareString);
 		return [ for (m in modules) for (arg in ['--macro', '$m.__mutOn(0)']) arg ];

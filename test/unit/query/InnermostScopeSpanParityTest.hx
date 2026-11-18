@@ -5,7 +5,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.Rename;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * The project declares the same walk TWICE — `BindingScope.innermostSpanOfKinds` and
@@ -160,7 +161,7 @@ class InnermostScopeSpanParityTest extends Test {
 	/** The first node in pre-order whose span equals `span`. */
 	private static function nodeAtSpan(node: QueryNode, span: Span): Null<QueryNode> {
 		final own: Null<Span> = node.span;
-		return own != null && own.from == span.from && own.to == span.to ? node : Arrays.findMap(node.children, c -> nodeAtSpan(c, span));
+		return own != null && own.from == span.from && own.to == span.to ? node : node.children.findMap(c -> nodeAtSpan(c, span));
 	}
 
 }

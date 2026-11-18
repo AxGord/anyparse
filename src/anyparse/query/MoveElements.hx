@@ -5,10 +5,11 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import anyparse.util.Compare;
 import haxe.crypto.Md5;
 import haxe.ds.Either;
+
+using anyparse.util.Arrays;
 
 /** What `MoveElements.moveElements` moves: the source array and its 1-based inclusive range, the target array. */
 typedef MoveElementsRequest = {
@@ -291,7 +292,7 @@ final class MoveElements {
 	private static function arrayStartingAt(tree: QueryNode, from: Int, arrayKind: Null<String>): Null<QueryNode> {
 		return tree.kind == arrayKind && tree.span?.from == from
 			? tree
-			: Arrays.findMap(tree.children, child -> arrayStartingAt(child, from, arrayKind));
+			: tree.children.findMap(child -> arrayStartingAt(child, from, arrayKind));
 	}
 
 	/** Whether `a` and `b` hold the same strings in the same order. */

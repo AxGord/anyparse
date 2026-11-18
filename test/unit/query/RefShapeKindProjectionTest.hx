@@ -6,12 +6,12 @@ import anyparse.query.QueryNode;
 import anyparse.query.cli.CliArgs;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.ds.StringMap;
 import sys.FileSystem;
 import sys.io.File;
 
+using anyparse.util.Groups;
 using StringTools;
 using Lambda;
 
@@ -1517,7 +1517,7 @@ final class RefShapeKindProjectionTest extends Test {
 					missed.push('"${row.source}" does not parse: ${exception.message}');
 					continue;
 				}
-				for (kind in emitted) Groups.pushUnique(everything, kind);
+				for (kind in emitted) everything.pushUnique(kind);
 				for (kind in row.kinds) {
 					if (!emitted.contains(kind))
 						missed.push('$kind (the source claiming it no longer emits it)');
@@ -1612,7 +1612,7 @@ final class RefShapeKindProjectionTest extends Test {
 				for (key in (cast value: StringMap<Any>).keys()) names.push(key);
 			else
 				stringsOf(value, names);
-			for (name in names) Groups.pushUnique(out, name);
+			for (name in names) out.pushUnique(name);
 		}
 		out.sort(Compare.compareString);
 		return out;

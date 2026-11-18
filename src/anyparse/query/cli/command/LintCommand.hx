@@ -15,9 +15,9 @@ import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.ExitCode.*;
 import anyparse.query.OracleProvider;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
-import anyparse.util.Groups;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -541,7 +541,7 @@ final class LintCommand implements CliCommand {
 		paths: Array<String>, resolveConfig: (String) -> LintConfig, select: (LintConfig) -> Array<String>
 	): Array<String> {
 		final out: Array<String> = [];
-		for (p in paths) for (s in select(resolveConfig(p))) Groups.pushUnique(out, s);
+		for (p in paths) for (s in select(resolveConfig(p))) out.pushUnique(s);
 		return out;
 	}
 
@@ -618,7 +618,7 @@ final class LintCommand implements CliCommand {
 			if (dir == null)
 				CliIo.stderr('apq lint: resolutionLibs: could not resolve haxelib "$name" (not installed?); skipping\n');
 			else
-				Groups.pushUnique(scanRoots, dir);
+				scanRoots.pushUnique(dir);
 		}
 		// The auto-discovered Haxe std joins the SAME scope as the declared roots / libs
 		// (StdResolver — ONE channel, no hardcoded machine-specific paths): its target-agnostic

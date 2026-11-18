@@ -5,9 +5,9 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
 import haxe.Exception;
 
+using anyparse.util.Arrays;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -774,7 +774,7 @@ final class CtorFieldWrite {
 			final field: Null<QueryNode> = found;
 			if (field != null) return { container: node, field: field };
 		}
-		return Arrays.findMap(node.children, child -> findFieldContainer(child, fieldFrom, classLike, fields));
+		return node.children.findMap(child -> findFieldContainer(child, fieldFrom, classLike, fields));
 	}
 
 	/**

@@ -3,7 +3,8 @@ package unit.check.scan;
 import anyparse.check.scan.LoopScan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * The subtree scans `prefer-value-loop` and `prefer-keyvalue-loop` share, exercised DIRECTLY
@@ -170,7 +171,7 @@ class LoopScanTest extends Test {
 
 	/** The first node of `kind` in document order, or null — the fixtures each hold exactly one. */
 	private function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
+		return node.kind == kind ? node : node.children.findMap(c -> firstOfKind(c, kind));
 	}
 
 }

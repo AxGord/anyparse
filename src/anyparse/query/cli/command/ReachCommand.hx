@@ -5,7 +5,8 @@ import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.ExitCode.*;
 import anyparse.query.cli.CliCallGraph.GraphOutput;
 import anyparse.query.graph.MemberGraphBuilder;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * `apq reach` — shortest call path(s) --from A --to B over the call graph.
@@ -94,7 +95,7 @@ final class ReachCommand implements CliCommand {
 		final sources: Map<String, String> = built.sources;
 		final fromIds: Array<String> = graph.matchIds(fromStr);
 		final toIds: Array<String> = [];
-		for (p in toPatterns) for (id in graph.matchIds(p)) Groups.pushUnique(toIds, id);
+		for (p in toPatterns) for (id in graph.matchIds(p)) toIds.pushUnique(id);
 		if (fromIds.length == 0) {
 			CliIo.stderr('apq reach: no function in scope matches --from "$fromStr"\n');
 			return ctx.emptyExit(true);

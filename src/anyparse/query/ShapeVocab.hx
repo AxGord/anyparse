@@ -1,7 +1,8 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * The grammar's DERIVED vocabulary: every kind set a check reads as a union of `RefShape` seams — all the loops, every
@@ -182,7 +183,7 @@ final class ShapeVocab {
 	/** The kinds of `groups` in order, each once; an unset group adds nothing. */
 	private static function union(groups: Array<Null<Array<String>>>): Array<String> {
 		final out: Array<String> = [];
-		for (g in groups) if (g != null) for (k in g) Groups.pushUnique(out, k);
+		for (g in groups) if (g != null) for (k in g) out.pushUnique(k);
 		return out;
 	}
 

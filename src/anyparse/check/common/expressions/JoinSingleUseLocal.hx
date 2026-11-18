@@ -12,7 +12,8 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** The kinds `JoinSingleUseLocal` reads. */
 private typedef Seams = {
@@ -289,7 +290,7 @@ final class JoinSingleUseLocal extends RuleBase {
 	 */
 	private static function deferringKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = ShapeVocab.functionLikeKinds(shape);
-		for (k in shape.opaqueKinds ?? []) Groups.pushUnique(out, k);
+		for (k in shape.opaqueKinds ?? []) out.pushUnique(k);
 		return out;
 	}
 
@@ -299,7 +300,7 @@ final class JoinSingleUseLocal extends RuleBase {
 	 */
 	private static function barrierKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = deferringKinds(shape);
-		for (k in ShapeVocab.loopKinds(shape)) Groups.pushUnique(out, k);
+		for (k in ShapeVocab.loopKinds(shape)) out.pushUnique(k);
 		return out;
 	}
 

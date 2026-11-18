@@ -4,7 +4,8 @@ import anyparse.ds.Set;
 import anyparse.query.CallGraph;
 import anyparse.query.MemberKinds;
 import anyparse.query.TypeResolver;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** A `final` field a constructor stores a parameter into: the class declaring it, its file, and its name. */
 private typedef StoredField = { final type: String; final file: String; final name: String; }
@@ -186,7 +187,7 @@ final class StoredValues {
 					refused = true;
 					return;
 				}
-				Groups.pushUnique(out, field);
+				out.pushUnique(field);
 			}
 			for (c in node.children) walk(c, node, parent);
 		}

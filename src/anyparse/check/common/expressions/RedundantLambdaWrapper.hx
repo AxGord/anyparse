@@ -20,7 +20,8 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 import anyparse.query.UnchangedLocal;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /** The lambda's forwarded callee plus the parameter count it forwards — `forwarding`'s structural verdict. */
 private typedef Forward = { final callee: QueryNode; final arity: Int; };
@@ -940,7 +941,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 			&& span.from < type.span.to
 			&& type.span.from < span.to
 			? node
-			: Arrays.findMap(node.children, c -> hostNode(c, type, seams));
+			: node.children.findMap(c -> hostNode(c, type, seams));
 	}
 
 	/**

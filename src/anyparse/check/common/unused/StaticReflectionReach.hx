@@ -10,7 +10,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** The per-file facts `walk` reads. */
 private typedef FileScan = {
@@ -226,7 +227,7 @@ final class StaticReflectionReach {
 	/** `owner`, every subtype of it, and every alias of any of those, to a fixed point. */
 	private function chainOf(owner: String, ownerFile: String, index: SymbolIndex): Array<String> {
 		final chain: Array<String> = [owner];
-		for (sub in index.subtypes.subtypeNames(owner, ownerFile)) Groups.pushUnique(chain, sub);
+		for (sub in index.subtypes.subtypeNames(owner, ownerFile)) chain.pushUnique(sub);
 		var i: Int = 0;
 		while (i < chain.length) {
 			final target: String = chain[i++];
@@ -302,7 +303,7 @@ final class StaticReflectionReach {
 		final modules: Array<String> = [];
 		for (scan in scanned)
 			if (scan.macroFile && REIFY_TOKENS.exists(t -> scan.source.indexOf(t) >= 0))
-				for (name in scan.declared) Groups.pushUnique(modules, name);
+				for (name in scan.declared) modules.pushUnique(name);
 		for (scan in scanned)
 			if (modules.exists(m -> !scan.declared.contains(m) && RawSourceScan.mentionsWord(scan.source, m)))
 				for (name in scan.declared)

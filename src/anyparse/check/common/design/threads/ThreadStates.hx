@@ -4,7 +4,8 @@ import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.LockTaint.ChainLists;
 import anyparse.query.CallGraph;
 import anyparse.query.CallGraphKeys;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * One way a thread runs a function: `id` under `valuation` (`EdgeConditions`), on the context bits `ctx`, MAIN first
@@ -173,7 +174,7 @@ final class ThreadStates {
 				parent: (entered & ThreadSafety.CTX_MAIN) != 0 ? parent : null
 			};
 			_states[key] = state;
-			Groups.push(_byNode, id, state);
+			_byNode.push(id, state);
 			contexts[id] = (contexts[id] ?? 0) | entered;
 			_queue.push(state);
 			return;

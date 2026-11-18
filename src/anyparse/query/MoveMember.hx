@@ -16,10 +16,10 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
-import anyparse.util.Groups;
 import haxe.ds.Either;
 
+using anyparse.util.Groups;
+using anyparse.util.Arrays;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -759,7 +759,7 @@ final class MoveMember {
 				// is the same file) and no promotion (the member is landing there).
 				if (isDest) continue;
 				outsideCallersOf[ref.name] = (outsideCallersOf[ref.name] ?? 0) + 1;
-				Groups.pushUnique(callerFilesNeedingImport, file);
+				callerFilesNeedingImport.pushUnique(file);
 			}
 		}
 	}
@@ -964,7 +964,7 @@ final class MoveMember {
 			case CarryErr(message):
 				return message;
 			case CarryOk(lines):
-				for (line in lines) Groups.pushUnique(carried, line);
+				for (line in lines) carried.pushUnique(line);
 		}
 		// Each member's list holds the source's `using` lines in declaration order, the union across members need not
 		// (`[using A]` then `[using B, using A]` reads B after A) — and their order decides which extension wins a name.
@@ -1055,14 +1055,14 @@ final class MoveMember {
 						prep.destDecl, siblingName, prep.destSource, prep.shape, lexicalRegions
 					);
 					if (destField == null || !FINAL_FIELD_KINDS.contains(destField.member.kind))
-						Groups.pushUnique(state.missingDestFields, siblingName);
+						state.missingDestFields.pushUnique(siblingName);
 					else
-						Groups.pushUnique(state.fieldDeps, siblingName);
+						state.fieldDeps.pushUnique(siblingName);
 				} else {
-					Groups.pushUnique(state.mutableDeps, siblingName);
+					state.mutableDeps.pushUnique(siblingName);
 				}
 			} else {
-				Groups.pushUnique(state.staysBehind, siblingName);
+				state.staysBehind.pushUnique(siblingName);
 			}
 		}
 	}
@@ -1252,7 +1252,7 @@ final class MoveMember {
 		if (!prep.index.subtypes.supertypeChainResolved(prep.srcTypeName))
 			return '${head}the supertypes of "${prep.srcTypeName}" do not resolve in scope, and a static they declare would win';
 		final names: Array<String> = DependencyCarry.wildcardBoundNames(prep.destInfo, prep.shape);
-		for (m in prep.moved) if (m.isStatic) Groups.pushUnique(names, m.name);
+		for (m in prep.moved) if (m.isStatic) names.pushUnique(m.name);
 		for (n in names) {
 			final rival: Null<String> = keepBareRival(prep, n);
 			if (rival != null) return '$head$rival "$n", which would win';
@@ -1289,7 +1289,7 @@ final class MoveMember {
 				&& !keptAt.contains(from)
 				&& !insideAnyCut(prep, from)
 				? node
-				: Arrays.findMap(node.children, c -> walk(c));
+				: node.children.findMap(c -> walk(c));
 		}
 		return walk(prep.srcTree);
 	}
@@ -1439,7 +1439,7 @@ final class MoveMember {
 		for (c in candidates) {
 			final cSpan: Null<Span> = c.member.span;
 			final nm: String = c.member.name ?? '';
-			if (cSpan != null && calledFromCuts(hitsByName[nm] ?? [], cSpan, cuts)) Groups.pushUnique(added, nm);
+			if (cSpan != null && calledFromCuts(hitsByName[nm] ?? [], cSpan, cuts)) added.pushUnique(nm);
 		}
 		return added;
 	}

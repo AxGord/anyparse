@@ -9,9 +9,9 @@ import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.OracleProvider;
 import anyparse.query.format.LintFormat;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /**
@@ -270,7 +270,7 @@ final class LintConfig {
 			final drops: Array<String> = [];
 			final read: Array<OracleConfig> = compiler.readDeclaration(declared, drops);
 			if (nearest == null) nearest = read;
-			for (drop in drops) Groups.pushUnique(_drops, drop);
+			for (drop in drops) _drops.pushUnique(drop);
 			final document: Null<String> = declared.document;
 			if (document != null && drops.length > 0)
 				ConfigNotes.note(notes, '$document#compilerOracle', drops.map(drop -> 'apq: $document: $drop\n').join(''));

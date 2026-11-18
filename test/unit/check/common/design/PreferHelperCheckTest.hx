@@ -439,6 +439,29 @@ class PreferHelperCheckTest extends Test {
 		Assert.isTrue(out.indexOf('using util.Groups') == -1, out);
 	}
 
+	/**
+	 * The quoted call and the qualified note leave the blast-radius key: one finding reads alike in every spelling.
+	 */
+	@:pin('control')
+	@:killer('M-PREFER-HELPER-IDENTITY-RAW')
+	public function testMessageIdentityIgnoresTheQuotedCall(): Void {
+		final plain: Array<Violation> = violationsOf(typed(UNIQUE));
+		final ext: Array<Violation> = violationsOf(typed(UNIQUE), EXT);
+		Assert.equals(1, plain.length);
+		Assert.equals(1, ext.length);
+		Assert.notEquals(plain[0].message, ext[0].message);
+		final rule: PreferHelper = new PreferHelper();
+		Assert.equals(rule.messageIdentity(plain[0].message), rule.messageIdentity(ext[0].message));
+		Assert.equals(rule.messageIdentity(ext[0].message), rule.messageIdentity(rule.messageIdentity(ext[0].message)));
+		Assert.isTrue(rule.messageIdentity(ext[0].message).indexOf('repeats the body of util.Groups.pushUnique') == 0, ext[0].message);
+		final held: Array<Violation> = violationsOf(typed(UNIQUE, SHADOWED));
+		final qualified: Array<Violation> = violationsOf(typed(UNIQUE, SHADOWED), EXT);
+		Assert.equals(1, held.length);
+		Assert.equals(1, qualified.length);
+		Assert.isTrue(qualified[0].message.indexOf(', qualified: ') != -1, qualified[0].message);
+		Assert.equals(rule.messageIdentity(held[0].message), rule.messageIdentity(qualified[0].message));
+	}
+
 	/** A finder whose body is `body`, with the function and closing-return helpers and a std `Array` its reads resolve to. */
 	private function finder(body: String): Array<SourceEntry> {
 		final source: String = 'package app;\n\nclass Finder {\n\tpublic function new() {}\n\n'

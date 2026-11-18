@@ -4,8 +4,8 @@ import anyparse.grammar.json.JsonFormat;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.cli.DeclarationDelta;
 import anyparse.query.merge.RecordTree;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** The two documents `DataDelta` walks and the grammar shape that reads both. */
@@ -124,7 +124,7 @@ final class DataDelta {
 		final out: Array<String> = [];
 		for (entry in object.children) {
 			final key: String = entry.name ?? '';
-			Groups.pushUnique(out, key);
+			out.pushUnique(key);
 		}
 		return out;
 	}

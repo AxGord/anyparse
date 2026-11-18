@@ -1578,7 +1578,7 @@
 			"name": "M-OWNER-OVERLAP-RENDER-FORGETS-GROUP",
 			"type": "dev.OwnerOverlap",
 			"method": "render",
-			"find": "Groups.push(groups, key, o);",
+			"find": "groups.push(key, o);",
 			"replace": "",
 			"note": "the report loses the declarations grouped under their owner, so a finding is listed with no owner to name"
 		},
@@ -1634,7 +1634,7 @@
 			"name": "M-REDONBASE-CLASS-REPEATED",
 			"type": "dev.RedOnBase",
 			"method": "classesOf",
-			"find": "Groups.pushUnique(classes, cls);",
+			"find": "classes.pushUnique(cls);",
 			"replace": "classes.push(cls);",
 			"note": "a class with several failing tests is listed once per test, so the note names it again and again"
 		},

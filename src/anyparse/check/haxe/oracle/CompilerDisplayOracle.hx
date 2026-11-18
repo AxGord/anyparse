@@ -10,8 +10,9 @@ import anyparse.query.OracleProvider.DisplayTypeOracle;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.TypingService;
-import anyparse.util.Groups;
 import haxe.io.Path;
+
+using anyparse.util.Groups;
 
 /**
  * The `p="…"` position of a display `<type>` reply — the region the compiler says its answer
@@ -496,7 +497,7 @@ final class CompilerDisplayOracle extends PositionTypeOracle implements DisplayT
 	}
 
 	private static inline function addForm(out: Array<String>, p: String): Void {
-		Groups.pushUnique(out, p);
+		out.pushUnique(p);
 	}
 
 	/** `file` resolved against the process cwd (node-normalised, NOT symlink-followed), or `file` on failure. */

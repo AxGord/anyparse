@@ -5,11 +5,11 @@ import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /**
@@ -82,7 +82,7 @@ class FmtFlagOwnershipTest extends Test {
 		);
 		final named: Map<String, Array<String>> = ownershipScan(root, inventory);
 		final all: Array<String> = [];
-		for (flags in named) for (flag in flags) Groups.pushUnique(all, flag);
+		for (flags in named) for (flag in flags) all.pushUnique(flag);
 		for (flag in inventory)
 			Assert.isTrue(
 				all.contains(flag),
@@ -109,7 +109,7 @@ class FmtFlagOwnershipTest extends Test {
 		}
 		final recorded: Map<String, Array<String>> = readRecord(path);
 		final modules: Array<String> = [ for (module in named.keys()) module ];
-		for (module in recorded.keys()) Groups.pushUnique(modules, module);
+		for (module in recorded.keys()) modules.pushUnique(module);
 		modules.sort(Compare.compareString);
 		for (module in modules) {
 			final actual: Array<String> = named[module] ?? [];
@@ -137,7 +137,7 @@ class FmtFlagOwnershipTest extends Test {
 		final inventory: Array<String> = inventoryFlags(root);
 		final named: Map<String, Array<String>> = ownershipScan(root, HANDLER_ONLY_FLAGS);
 		final all: Array<String> = [];
-		for (flags in named) for (flag in flags) Groups.pushUnique(all, flag);
+		for (flags in named) for (flag in flags) all.pushUnique(flag);
 		for (flag in HANDLER_ONLY_FLAGS) {
 			Assert.isTrue(
 				all.contains(flag),

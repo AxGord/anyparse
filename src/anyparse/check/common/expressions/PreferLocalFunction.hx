@@ -8,9 +8,9 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
-import anyparse.util.Arrays;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
+using anyparse.util.Arrays;
 using anyparse.util.Strings;
 using StringTools;
 
@@ -268,7 +268,7 @@ final class PreferLocalFunction extends RuleBase {
 		final out: Array<String> = [];
 		final fnExprKind: Null<String> = shape.fnExprKind;
 		if (fnExprKind != null) out.push(fnExprKind);
-		for (kind in shape.lambdaKinds ?? []) Groups.pushUnique(out, kind);
+		for (kind in shape.lambdaKinds ?? []) out.pushUnique(kind);
 		return out;
 	}
 
@@ -379,7 +379,7 @@ final class PreferLocalFunction extends RuleBase {
 	private static function findBinding(node: QueryNode, s: Seams): Null<QueryNode> {
 		if (s.opaqueKinds.contains(node.kind) || s.scopeKinds.contains(node.kind) || s.branchKinds.contains(node.kind)) return null;
 		if (isBinding(node, s)) return node;
-		return Arrays.findMap(node.children, c -> findBinding(c, s));
+		return node.children.findMap(c -> findBinding(c, s));
 	}
 
 	/** Whether `node` is a plain `<ident> = <function literal>` assignment. */

@@ -8,7 +8,8 @@ import anyparse.query.NodeShape;
 import anyparse.query.ReachAdmission;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceText;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** One `lockPairs` entry resolved to graph ids: the node that takes the lock and the one that gives it back. */
 typedef LockPair = { final lockId: String; final unlockId: String; }
@@ -279,7 +280,7 @@ final class LockSites {
 		final takes: Array<LockCall> = [];
 		final gives: Array<LockCall> = [];
 		final pairIds: Array<String> = [];
-		for (file in files) for (pair in pairsOf(file)) for (id in [pair.lockId, pair.unlockId]) Groups.pushUnique(pairIds, id);
+		for (file in files) for (pair in pairsOf(file)) for (id in [pair.lockId, pair.unlockId]) pairIds.pushUnique(id);
 		for (edge in graph.edges) if (edge.kind == Call) for (pair in pairsOf(edge.file)) {
 			if (edge.to == pair.lockId) takes.push({ edge: edge, pair: pair });
 			if (edge.to == pair.unlockId) gives.push({ edge: edge, pair: pair });

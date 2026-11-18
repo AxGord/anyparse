@@ -4,8 +4,8 @@ import anyparse.query.BinderScan;
 import anyparse.query.FieldRefScan;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
-import anyparse.util.Arrays;
 
+using anyparse.util.Arrays;
 using StringTools;
 
 /**
@@ -287,7 +287,7 @@ class FieldRefScanTest extends Test {
 
 	/** The first node of `kind` in pre-order, or null. */
 	private static function firstOfKind(node: QueryNode, kind: String): Null<QueryNode> {
-		return node.kind == kind ? node : Arrays.findMap(node.children, c -> firstOfKind(c, kind));
+		return node.kind == kind ? node : node.children.findMap(c -> firstOfKind(c, kind));
 	}
 
 }

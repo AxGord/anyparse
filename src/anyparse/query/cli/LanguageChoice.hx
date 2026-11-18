@@ -1,9 +1,9 @@
 package anyparse.query.cli;
 
 import anyparse.query.cli.LanguageDeclaration.ProjectLanguages;
-import anyparse.util.Groups;
 import sys.FileSystem;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** What `LanguageChoice.choose` answers: the argv of each run, one per grammar the call reads, and stdin if it was read to decide. */
@@ -74,7 +74,7 @@ final class LanguageChoice {
 			if (lang == null)
 				scopes.push(args[i]);
 			else
-				Groups.pushUnique(ofFiles, lang);
+				ofFiles.pushUnique(lang);
 		}
 		// Under a preset a mixed set reads as the preset's grammar, as it did before the preset yielded to extensions.
 		return if (ofFiles.length > 1 && preset == null)

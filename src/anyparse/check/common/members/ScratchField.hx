@@ -17,7 +17,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * The forward must-assign walk behind `scratch-field`'s dominance proof: `dominated` stays true while
@@ -681,7 +682,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	private static function valueTypesOf(shape: RefShape): Array<String> {
 		final out: Array<String> = present(shape.nonNullableTypeNames).copy();
 		final literals: Map<String, String> = shape.literalTypeNames ?? [];
-		for (t in literals) Groups.pushUnique(out, t);
+		for (t in literals) out.pushUnique(t);
 		return out;
 	}
 

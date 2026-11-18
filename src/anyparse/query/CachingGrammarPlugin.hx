@@ -23,8 +23,9 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import haxe.io.Path;
+
+using anyparse.util.Groups;
 
 /**
  * The three views of a resolution scope, kept APART on purpose. `report` is the files the run
@@ -1004,7 +1005,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 			final scope: Array<{ file: String, source: String }> = sources == null ? [] : sources.report.concat(sources.library.entries());
 			for (entry in scope) {
 				final key: String = Path.withoutDirectory(entry.file);
-				Groups.push(built, key, entry);
+				built.push(key, entry);
 			}
 			_scopeByFileName = built;
 			named = built;

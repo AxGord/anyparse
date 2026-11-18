@@ -1,6 +1,5 @@
 package dev;
 
-import anyparse.util.Groups;
 import dev.QueueFile.QueueLine;
 import devkit.Args;
 import devkit.Cmd.cmd;
@@ -11,6 +10,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+using anyparse.util.Groups;
 using Lambda;
 using StringTools;
 
@@ -143,7 +143,7 @@ final class ReconFacts {
 		for (n in names) {
 			final spot: Map<String, String> = spots[n] ?? [];
 			final holding: Array<String> = [];
-			for (path in spot) Groups.pushUnique(holding, path);
+			for (path in spot) holding.pushUnique(path);
 			final count: MentionCount = { hits: spot.count(), files: holding.length };
 			counts[n] = count;
 		}

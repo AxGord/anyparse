@@ -9,7 +9,8 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 private typedef ConstDecl = { final prefix: String; final span: Span; final name: String; };
 
@@ -481,7 +482,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		});
 		if (groups.length == 0) return;
 		final names: Array<String> = [];
-		for (g in groups) for (n in g.members) Groups.pushUnique(names, n);
+		for (g in groups) for (n in g.members) names.pushUnique(n);
 		final sinks: Map<String, Array<String>> = [];
 		computeSinks(tree, source, names, cfg, sinks, -1);
 		for (g in groups) if (interchangeable(g.members, sinks)) out.push({
@@ -777,7 +778,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		if (cur == null)
 			out[sink] = [name];
 		else
-			Groups.pushUnique(cur, name);
+			cur.pushUnique(name);
 	}
 
 	/** Verbatim source of `node`, or empty when unspanned. */

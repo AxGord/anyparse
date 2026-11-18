@@ -8,7 +8,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 /**
  * Test-only `RiskyFix` consumer for the compiler-oracle fix-verification path:
@@ -70,7 +71,7 @@ final class TestRiskyLiteralRewrite implements Check implements RiskyFix {
 	}
 
 	private static function firstLiteralOne(node: QueryNode): Null<QueryNode> {
-		return node.kind == 'IntLit' && node.name == '1' ? node : Arrays.findMap(node.children, firstLiteralOne);
+		return node.kind == 'IntLit' && node.name == '1' ? node : node.children.findMap(firstLiteralOne);
 	}
 
 }

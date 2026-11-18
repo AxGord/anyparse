@@ -38,9 +38,9 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.ValueCarriers.CarryRelation;
 import anyparse.runtime.Span;
-import anyparse.util.Arrays;
-import anyparse.util.Groups;
 
+using anyparse.util.Arrays;
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -1546,7 +1546,7 @@ final class MemberReach {
 		final owner: Null<String> = read?.owner ?? sole;
 		if (owner != null) return _g.rewrittenAs(g, node.file, type, owner);
 		final own: Null<Array<String>> = g.types.declarationCount(type) <= 1 ? null : ownTypes(g, node);
-		return own == null ? _g.rewrittenBy(type) : Arrays.findMap(own, o -> _g.rewrittenAs(g, node.file, type, o));
+		return own == null ? _g.rewrittenBy(type) : own.findMap(o -> _g.rewrittenAs(g, node.file, type, o));
 	}
 
 	/**
@@ -1938,7 +1938,7 @@ final class MemberReach {
 						if (g.declarationsOf(id).exists(d -> facts.keyOf(d.file) == v.file && d.span.from == v.span.from)) id
 				];
 				if (written.length == 0) return null;
-				for (id in written) Groups.pushUnique(toRead, id);
+				for (id in written) toRead.pushUnique(id);
 			}
 			final seen: Map<String, Bool> = [ for (id in toRead) id => true ];
 			final out: Array<ImplicitSite> = [];
@@ -2578,7 +2578,7 @@ final class MemberReach {
 				return;
 			}
 			final ids: Array<String> = site.ids ?? [];
-			for (id in members) Groups.pushUnique(ids, id);
+			for (id in members) ids.pushUnique(id);
 			site.ids = ids;
 		}
 		// the built-in array's own methods, its constructor among them, reach what they hold or are handed only by converting
@@ -2769,7 +2769,7 @@ final class MemberReach {
 		if (owners == null) return true;
 		final related: Array<String> = owners.copy();
 		var i: Int = 0;
-		while (i < related.length) for (s in g.types.supertypesOf(related[i++])) Groups.pushUnique(related, s);
+		while (i < related.length) for (s in g.types.supertypesOf(related[i++])) related.pushUnique(s);
 		function carries(type: FactsType): Bool {
 			return switch type {
 				case Named(id, args):
@@ -3028,7 +3028,7 @@ final class MemberReach {
 				out.all = true;
 				return out;
 			}
-			for (id in members) Groups.pushUnique(ids, id);
+			for (id in members) ids.pushUnique(id);
 		}
 		for (t in types ?? []) {
 			final members: Null<Array<String>> = _g.handedMemberIds(g, t);
@@ -3036,7 +3036,7 @@ final class MemberReach {
 				out.all = true;
 				return out;
 			}
-			for (id in members) Groups.pushUnique(ids, id);
+			for (id in members) ids.pushUnique(id);
 		}
 		if (types == null)
 			out.all = true

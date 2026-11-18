@@ -5,8 +5,8 @@ import anyparse.query.CompilerFacts.FactNode;
 import anyparse.query.CompilerFacts.FieldDeclFact;
 import anyparse.query.CompilerFacts.ParamUse;
 import anyparse.query.CompilerFacts.TypeFact;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -106,7 +106,7 @@ final class ArgumentUses {
 			if (declaring == null) return null;
 			final node: Null<FactNode> = answered(declaring, field, !onInstance);
 			if (node == null) return null;
-			Groups.pushUnique(out, node);
+			out.pushUnique(node);
 		}
 		return out;
 	}

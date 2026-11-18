@@ -3,7 +3,8 @@ package anyparse.query;
 import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.Selector.SelectorSegment;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /**
  * Generic tree-walker operations used by every `apq` subcommand.
@@ -147,7 +148,7 @@ final class Engine {
 		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
 			if (segIdx == sel.segments.length - 1)
-				Groups.pushUnique(out, node);
+				out.pushUnique(node);
 			else if (sel.segments[segIdx + 1].descendant)
 				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
 			else
@@ -166,7 +167,7 @@ final class Engine {
 		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
 			if (segIdx == sel.segments.length - 1)
-				Groups.pushUnique(out, node);
+				out.pushUnique(node);
 			else if (sel.segments[segIdx + 1].descendant)
 				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
 			else

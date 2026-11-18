@@ -3,8 +3,9 @@ package anyparse.check.common.design;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
-import anyparse.util.Groups;
 import haxe.Exception;
+
+using anyparse.util.Groups;
 
 /** One `prefer-api-idiom` entry as declared — see `PreferApiIdiom` for the shape. */
 typedef IdiomSpec = {
@@ -201,7 +202,7 @@ final class RuleDeclaration {
 			return null;
 		}
 		final distinct: Array<String> = [];
-		for (n in declaredFields) Groups.pushUnique(distinct, n);
+		for (n in declaredFields) distinct.pushUnique(n);
 		if (distinct.length != declaredFields.length) {
 			problems.push('$label ("$declaredType") names a field twice — dropped');
 			return null;

@@ -9,8 +9,8 @@ import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TokenSpans;
 import anyparse.query.TypeInfoProvider;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** Per-run resolved `RefShape` seams and the optional type provider. */
@@ -238,7 +238,7 @@ final class MapKeysLookup extends RuleBase {
 	private static function safeAnnotationTypeNames(shape: RefShape): Array<String> {
 		final names: Array<String> = (shape.nonNullableTypeNames ?? []).copy();
 		final literals: Null<Map<String, String>> = shape.literalTypeNames;
-		if (literals != null) for (t in literals) Groups.pushUnique(names, t);
+		if (literals != null) for (t in literals) names.pushUnique(t);
 		return names;
 	}
 

@@ -3,9 +3,9 @@ package unit.query;
 import anyparse.query.NominalTypes;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.util.Arrays;
 import haxe.Exception;
 
+using anyparse.util.Arrays;
 using Lambda;
 
 /** What `NominalTypesTest.probeIn` hands the typer. */
@@ -631,7 +631,7 @@ class NominalTypesTest extends Test {
 
 	/** The value the expression body of the function `fn` under `node` returns. */
 	private static function returnedBy(node: QueryNode, fn: String): Null<QueryNode> {
-		if (node.kind != 'FnMember' || node.name != fn) return Arrays.findMap(node.children, c -> returnedBy(c, fn));
+		if (node.kind != 'FnMember' || node.name != fn) return node.children.findMap(c -> returnedBy(c, fn));
 		// an expression body returns its expression; a block, what its own `return` does, else the first one nested in it
 		final body: Null<QueryNode> = node.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
 		final ret: Null<QueryNode> = if (body == null)
@@ -651,7 +651,7 @@ class NominalTypesTest extends Test {
 
 	/** The first `return` statement nested in `node`, in document order. */
 	private static function nestedReturn(node: QueryNode): Null<QueryNode> {
-		return Arrays.findMap(node.children, c -> c.kind == 'ReturnStmt' ? c : nestedReturn(c));
+		return node.children.findMap(c -> c.kind == 'ReturnStmt' ? c : nestedReturn(c));
 	}
 
 }

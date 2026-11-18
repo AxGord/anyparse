@@ -7,8 +7,8 @@ import anyparse.query.NominalTypes;
 import anyparse.query.SourceText;
 import anyparse.query.TreePath;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** One occurrence of a lock member's name that unseals the member, unless a proven alias accounts for it. */
@@ -118,7 +118,7 @@ final class LockAliases {
 		final sources: Array<String> = [];
 		for (a in _candidates) {
 			final name: String = LockSites.memberName(a.source);
-			Groups.pushUnique(sources, name);
+			sources.pushUnique(name);
 		}
 		return sources;
 	}
@@ -260,7 +260,7 @@ final class LockAliases {
 	private function familyOf(type: String): Array<String> {
 		final family: Array<String> = [type];
 		var i: Int = 0;
-		while (i < family.length) for (sub in _graph.types.subtypesOf(family[i++])) Groups.pushUnique(family, sub);
+		while (i < family.length) for (sub in _graph.types.subtypesOf(family[i++])) family.pushUnique(sub);
 		return family;
 	}
 

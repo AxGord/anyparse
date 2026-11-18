@@ -3,10 +3,10 @@ package anyparse.query;
 import anyparse.grammar.json.JsonNative;
 import anyparse.grammar.json.JsonProjection;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import haxe.Exception;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** One document of a registry kept as a directory: its path and its text. */
@@ -74,7 +74,7 @@ final class PackageDocumentCarry {
 					stay.push(record);
 					continue;
 				}
-				Groups.push(incoming, target, record);
+				incoming.push(target, record);
 				if (!sender.exists(target)) sender[target] = doc;
 			}
 			doc.kept = stay;

@@ -13,8 +13,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Compare;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 
 /**
@@ -80,7 +80,7 @@ final class HelperCopy extends RuleBase implements NoAutofix implements DefaultO
 			final declared: Array<String> = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.stringListOption(RULE_ID, OPTION_HOMES) ?? [];
 			own[entry.file] = declared;
-			for (home in declared) Groups.pushUnique(homes, home);
+			for (home in declared) homes.pushUnique(home);
 		}
 		if (homes.length == 0) return [];
 		final shape: RefShape = plugin.refShape();

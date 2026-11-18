@@ -2,9 +2,9 @@ package anyparse.query.cli;
 
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
-import anyparse.util.Groups;
 import haxe.io.Path;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** One path `git diff --name-status` reports: its status letter, its path now, and its path at the base revision. */
@@ -141,7 +141,7 @@ final class GitRevision {
 		final roots: Array<String> = [];
 		for (spec in specs) {
 			final root: String = Glob.walkRoot(spec);
-			Groups.pushUnique(roots, root);
+			roots.pushUnique(root);
 		}
 		return roots;
 	}

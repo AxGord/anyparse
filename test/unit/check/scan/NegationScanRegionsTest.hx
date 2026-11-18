@@ -6,7 +6,8 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions;
 import anyparse.query.QueryNode;
-import anyparse.util.Arrays;
+
+using anyparse.util.Arrays;
 
 private typedef Run = {
 	final cond: QueryNode;
@@ -72,7 +73,7 @@ class NegationScanRegionsTest extends Test {
 
 	private function find(n: QueryNode, from: Int, to: Int): Null<QueryNode> {
 		final s: Null<Span> = n.span;
-		return s != null && s.from == from && s.to == to ? n : Arrays.findMap(n.children, c -> find(c, from, to));
+		return s != null && s.from == from && s.to == to ? n : n.children.findMap(c -> find(c, from, to));
 	}
 
 }

@@ -6,7 +6,8 @@ import anyparse.check.common.design.threads.HoldGrade.GradedHold;
 import anyparse.check.common.design.threads.LockSites.LockAcquire;
 import anyparse.check.common.design.threads.LockTaint.BlockingEnd;
 import anyparse.check.common.design.threads.LockTaint.BlockingTrail;
-import anyparse.util.Groups;
+
+using anyparse.util.Groups;
 
 /** Why one long call of a warned hold is long: a wait for another lock, a sink call finding (a) warns of, or neither. */
 private enum FoldReason {
@@ -168,7 +169,7 @@ final class RootCauseFold {
 				final path: String = unnamed.length <= ThreadSafety.CHAIN_CAP + 1
 					? unnamed.join(' -> ')
 					: unnamed.slice(0, ThreadSafety.CHAIN_CAP + 1).concat(['...']).join(' -> ');
-				Groups.pushUnique(shown, path);
+				shown.pushUnique(path);
 			case _:
 		}
 		if (shown.length > 0) finding.message += ' — its calls also reach ${named(shown)}, which no warning names';
@@ -447,7 +448,7 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 
 	private static function named(all: Array<String>): String {
 		final members: Array<String> = [];
-		for (m in all) Groups.pushUnique(members, m);
+		for (m in all) members.pushUnique(m);
 		final more: Int = members.length - NAMED_CAP;
 		return members.slice(0, NAMED_CAP).join(', ') + (more > 0 ? ' (+$more more)' : '');
 	}

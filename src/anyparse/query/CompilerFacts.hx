@@ -11,8 +11,8 @@ import anyparse.query.format.json.FactTypeFieldRecord;
 import anyparse.query.format.json.FactTypeRecord;
 import anyparse.query.format.json.FactTypeRecordParser;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -687,7 +687,7 @@ final class CompilerFacts {
 	/** The configurations (indexes into `configurations`) that typed the node `id`; empty when none did. */
 	public function buildsTyping(id: String): Array<Int> {
 		final out: Array<Int> = [];
-		for (line in _nodeLines[id] ?? []) for (b in line.builds) Groups.pushUnique(out, b);
+		for (line in _nodeLines[id] ?? []) for (b in line.builds) out.pushUnique(b);
 		return out;
 	}
 
@@ -720,7 +720,7 @@ final class CompilerFacts {
 				// a nested function's id carries its offset after the field's: `<field id>@<min>`
 				if (dot <= 0 || id.indexOf('@', dot) >= 0) continue;
 				final owner: String = id.substr(0, dot);
-				Groups.push(built, owner, id);
+				built.push(owner, id);
 			}
 			_byOwner = built;
 			byOwner = built;
@@ -1091,10 +1091,10 @@ final class CompilerFacts {
 	private function link(child: String, parent: String): Void {
 		final up: Array<String> = _supers[child] ?? [];
 		_supers[child] = up;
-		Groups.pushUnique(up, parent);
+		up.pushUnique(parent);
 		final down: Array<String> = _subs[parent] ?? [];
 		_subs[parent] = down;
-		Groups.pushUnique(down, child);
+		down.pushUnique(child);
 	}
 
 	private function same(at: Null<FactPos>, file: String, span: Span): Bool {
@@ -1133,7 +1133,7 @@ final class CompilerFacts {
 			throw exception;
 		};
 		_reading = null;
-		for (file in reading.keys()) Groups.push(_madeFrom, file, entry);
+		for (file in reading.keys()) _madeFrom.push(file, entry);
 		return made;
 	}
 

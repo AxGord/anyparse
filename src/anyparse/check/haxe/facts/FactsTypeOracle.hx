@@ -15,8 +15,8 @@ import anyparse.query.FactsTypeTree;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndexHost;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** Why the facts oracle names no type (`OracleType.Declined`): the reasons it gives of its own, besides a disagreement it spells out. */
@@ -165,7 +165,7 @@ final class FactsTypeOracle implements FactsOracle {
 					case _: null;
 				};
 				if (result == null) return Declined(FactsDecline.NoFact);
-				Groups.pushUnique(types, result);
+				types.pushUnique(result);
 			}
 			return agreed(types, scopeOf(nodes[0]), FactsDecline.NoFact);
 		});

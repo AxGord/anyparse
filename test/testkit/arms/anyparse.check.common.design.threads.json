@@ -2311,7 +2311,7 @@
 			"name": "M-TS-WAIVE-OFF",
 			"type": "anyparse.check.common.design.threads.PositiveSinks",
 			"method": "waived",
-			"find": "for (id in removed) Groups.pushUnique(out, id);",
+			"find": "for (id in removed) out.pushUnique(id);",
 			"replace": "",
 			"note": "a nonBlocking entry waives nothing"
 		},
@@ -3380,7 +3380,7 @@
 			"name": "M-TS-MAKES-RESOLVED",
 			"type": "anyparse.check.common.design.threads.ReflectiveReach",
 			"method": "namedTypes",
-			"find": "for (key in keysOf(file, written)) for (t in [key, aliased(key)]) Groups.pushUnique(out, t);",
+			"find": "for (key in keysOf(file, written)) for (t in [key, aliased(key)]) out.pushUnique(t);",
 			"replace": "",
 			"note": "a name made under an import alias or a typedef alias of the class makes none of it (review R3 H1)"
 		},

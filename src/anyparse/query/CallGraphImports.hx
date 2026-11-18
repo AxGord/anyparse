@@ -4,8 +4,8 @@ import anyparse.query.CallGraphTypes.HeldFile;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.TypeNameBinding.NameTarget;
 import anyparse.query.TypeNameBinding.NameTargets;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** A type one declaration writes (null for none), and the file writing it, where its names are read (`CallGraphKeys.keyedIn`). */
@@ -77,7 +77,7 @@ final class CallGraphImports {
 		final out: Array<String> = [];
 		for (index in _indexes) for (d in index.typing.members.memberDeclarationsOf(typeName, member)) {
 			final key: String = CallGraphNames.normalizePath(d.file.file);
-			Groups.pushUnique(out, key);
+			out.pushUnique(key);
 		}
 		return out;
 	}
@@ -106,7 +106,7 @@ final class CallGraphImports {
 		final out: Array<String> = [];
 		for (index in _indexes)
 			for (decl in index.refs.mayDenote(name, null))
-				for (path in TypeNameBinding.namingPaths(decl)) Groups.pushUnique(out, path);
+				for (path in TypeNameBinding.namingPaths(decl)) out.pushUnique(path);
 		_paths[name] = out;
 		return out;
 	}
@@ -156,7 +156,7 @@ final class CallGraphImports {
 		final keyed: Array<String> = [];
 		for (w in written) {
 			final key: String = typeOf(w.file, w.path);
-			Groups.pushUnique(keyed, key);
+			keyed.pushUnique(key);
 		}
 		return keyed.length == 1 ? keyed[0] : simple;
 	}
@@ -186,7 +186,7 @@ final class CallGraphImports {
 		final out: Array<String> = bound == null ? [] : [keyOf(bound, false)];
 		for (t in maybeOf(targets)) {
 			final key: String = keyOf(t, false);
-			Groups.pushUnique(out, key);
+			out.pushUnique(key);
 		}
 		return out;
 	}
@@ -237,7 +237,7 @@ final class CallGraphImports {
 	 */
 	public function alternateTypesIn(files: Array<String>, type: String): Array<String> {
 		final out: Array<String> = [];
-		for (f in files) for (alternate in alternateTypes(f, type)) Groups.pushUnique(out, alternate);
+		for (f in files) for (alternate in alternateTypes(f, type)) out.pushUnique(alternate);
 		return out;
 	}
 

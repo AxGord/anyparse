@@ -414,7 +414,7 @@
 		"prefer-single-pass": true,
 		"prefer-static-extension": {
 			"enabled": true,
-			"types": ["Lambda", "StringTools", "anyparse.util.Strings"]
+			"types": ["Lambda", "StringTools", "anyparse.util.Strings", "anyparse.util.Arrays", "anyparse.util.Groups"]
 		},
 		"prefer-compare-function": {
 			"enabled": true,

@@ -5,8 +5,9 @@ import anyparse.query.format.json.LintFindingJson;
 import anyparse.query.format.json.LintReportJson;
 import anyparse.query.format.json.LintReportJsonParser;
 import anyparse.runtime.ParseError;
-import anyparse.util.Groups;
 import haxe.Exception;
+
+using anyparse.util.Groups;
 
 /**
  * Rule id -> the check's own `messageIdentity`, as `Linter.messageIdentities` builds it by
@@ -231,7 +232,7 @@ final class LintDiff {
 			final message: String = normalizeMessage(f.rule, f.message, root, identities);
 			final data: Null<LintFindingDataJson> = f.data;
 			final key: String = keyFor(file, f.rule, f.severity, message, data);
-			if (data != null) Groups.push(messages, key, message);
+			if (data != null) messages.push(key, message);
 			final seen: Null<Int> = counts[key];
 			if (seen == null) {
 				order.push(key);
@@ -530,7 +531,7 @@ final class LintDiff {
 			for (e in entries) {
 				final name: String = key(e);
 				into[name] = (into[name] ?? 0) + e.count;
-				Groups.pushUnique(names, name);
+				names.pushUnique(name);
 			}
 		}
 		fold(added, addedBy);

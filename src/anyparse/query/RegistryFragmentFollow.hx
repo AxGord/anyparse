@@ -8,9 +8,9 @@ import anyparse.query.TypePathRegistries.MemberRecord;
 import anyparse.query.TypePathRegistries.RegistryEdit;
 import anyparse.query.TypePathRegistries.StringSlot;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 import haxe.Exception;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -426,7 +426,7 @@ final class RegistryFragmentFollow {
 			final replaced: Bool = edge >= 0 && edge < map.length && map[edge] < 0;
 			final wide: Int = isStart ? endOf(map, at) : startOf(map, at, end);
 			final candidates: Array<Int> = replaced ? [wide] : [startOf(map, at, end), endOf(map, at)];
-			for (p in candidates) Groups.pushUnique(out, p);
+			for (p in candidates) out.pushUnique(p);
 		}
 		out.sort((a, b) -> a - b);
 		return out;

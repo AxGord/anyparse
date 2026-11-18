@@ -5,8 +5,8 @@ import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /** One two-file cell: the declaring source, the reaching source, and the route's name. */
@@ -798,7 +798,7 @@ class CrossScopeSoundnessTest extends Test {
 			final seen: Array<String> = every[rule] ?? [];
 			for (edit in edits) if (!seen.contains(edit)) {
 				final tagged: String = '$tag$rule@$cell';
-				Groups.pushUnique(out, tagged);
+				out.pushUnique(tagged);
 				break;
 			}
 		}
@@ -820,7 +820,7 @@ class CrossScopeSoundnessTest extends Test {
 	private function findingsNotUnderCeiling(some: Array<String>, ceiling: Array<String>, cell: String, out: Array<String>): Void {
 		for (key in some) if (!ceiling.exists(top -> coversFinding(top, key))) {
 			final tagged: String = 'report:${key.split('|')[0]}@$cell';
-			Groups.pushUnique(out, tagged);
+			out.pushUnique(tagged);
 		}
 	}
 
@@ -828,7 +828,7 @@ class CrossScopeSoundnessTest extends Test {
 	private function extraFindings(some: Array<String>, every: Array<String>, tag: String, cell: String, out: Array<String>): Void {
 		for (key in some) if (!every.contains(key)) {
 			final tagged: String = '$tag${key.split('|')[0]}@$cell';
-			Groups.pushUnique(out, tagged);
+			out.pushUnique(tagged);
 		}
 	}
 
@@ -980,7 +980,7 @@ class CrossScopeSoundnessTest extends Test {
 		final out: Array<String> = [];
 		for (entry in libsOnlyExtras()) {
 			final rule: String = entry.split(':')[1].split('@')[0];
-			Groups.pushUnique(out, rule);
+			out.pushUnique(rule);
 		}
 		out.sort(Reflect.compare);
 		return out;

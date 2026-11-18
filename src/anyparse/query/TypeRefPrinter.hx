@@ -5,8 +5,8 @@ import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.TypingService.BareBinding;
 import anyparse.runtime.Span;
-import anyparse.util.Groups;
 
+using anyparse.util.Groups;
 using anyparse.util.Strings;
 using Lambda;
 
@@ -208,7 +208,7 @@ final class TypeRefPrinter {
 			return { text: inScope, importPath: null };
 		}
 		if (typeParamBinds(simple, owned) || !canAddImport(canonical, simple, owned)) return { text: canonical, importPath: null };
-		Groups.pushUnique(_pendingImports, canonical);
+		_pendingImports.pushUnique(canonical);
 		return { text: simple, importPath: canonical };
 	}
 
@@ -418,7 +418,7 @@ final class TypeRefPrinter {
 		if (index != null && plugin != null) {
 			final bindings: ImportBindings = new ImportBindings(() -> index, plugin);
 			final paths: Array<String> = _usingModules.copy();
-			for (path in _importMap) Groups.pushUnique(paths, path);
+			for (path in _importMap) paths.pushUnique(path);
 			for (path in paths) {
 				final values: Null<Array<String>> = bindings.valuesSeen(path);
 				final listed: Array<String> = out ?? [];
@@ -426,7 +426,7 @@ final class TypeRefPrinter {
 					out = null;
 					break;
 				}
-				for (name in values) Groups.pushUnique(listed, name);
+				for (name in values) listed.pushUnique(name);
 			}
 		}
 		_importedMemberNames = { names: out };
