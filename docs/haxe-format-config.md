@@ -165,6 +165,7 @@ read it as a POLARITY, `1` for "the signal holds" and `0` for "it does not". An 
 | `hasContainerItems` | some item is an object / array literal — see below the table |
 | `hasMultilineLambdaItems` | some MULTI-LINE item is a function literal — see below the table |
 | `typeParamItemCount >= n` | at least `n` items declare a type with type parameters — see below the table |
+| `moduleOnlyTypedefs` | `value: 1` — every top-level declaration of the module is a typedef; `value: 0` — some is not — see below the table |
 
 Item width is per-construct. For a delimited list (`arrayWrap`, `mapWrap`, `objectLiteral`,
 `callParameter`, `anonType`, …) it includes the separator and the space after it for every
@@ -234,6 +235,23 @@ reads (inline anonymous types in parameters, fields and returns stay on `anonTyp
     "type": "onePerLine" }
 ] }
 ```
+
+**`moduleOnlyTypedefs` is a fact about the module, not a measure of the list.** It holds when every top-level
+declaration of the file is a `typedef`; `package`, `import`, `using` lines and comments do not count, and a `#if`
+region counts by every one of its arms. A class, enum, abstract, interface, function or variable anywhere in the
+module makes it fail. It is read for the fields of an anonymous type (`anonType`, `typedefBody`) and is `false`
+for every other list, so the condition is inert there. A file that holds only typedefs can expand them whatever
+their width, while a typedef in a module that also declares a class keeps the fit rules:
+
+```json
+"typedefBody": { "defaultWrap": "noWrap", "rules": [
+  { "conditions": [ { "cond": "moduleOnlyTypedefs", "value": 1 }, { "cond": "itemCount >= n", "value": 2 } ],
+    "type": "onePerLine" }
+] }
+```
+
+A `> Base` extension counts as an item, so `{ > Base, x:Int }` expands and `{ x:Int }` stays on one line. Without
+the rule nothing moves.
 
 **`containerItemWrap` is a cascade nested in a list's own rules object.** It answers one question for
 each element that is a call-bearing object / array literal (the `complexItemCount` half of the

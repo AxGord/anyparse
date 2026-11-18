@@ -56,7 +56,8 @@ final class TriviaEofLowering {
 		?betweenCtorInfos: Array<WriterLowering.BetweenCtorBlankInfo>, ?transitionAcrossInfos: Array<WriterLowering.TransitionAcrossInfo>,
 		?headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo>, lineCommentTrailBlank: Bool = false, lineCommentLedAddBlank: Bool = false,
 		afterFileHeaderCommentBlanks: Bool = false, betweenMultilineCommentsBlanks: Bool = false,
-		?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>, measuredMultiline: Bool = false
+		?betweenSameCtorIfNotInfos: Array<WriterLowering.BetweenSameCtorIfNotInfo>, measuredMultiline: Bool = false,
+		statesModuleOnlyTypedefs: Bool = false
 	): Expr {
 		final triviaElemCall: Expr = { expr: ECall(macro $i{elemFn}, [macro _t.node, macro opt]), pos: Context.currentPos() };
 		// ω-measured-multiline-decl — the same call with the comprehension
@@ -99,6 +100,20 @@ final class TriviaEofLowering {
 		};
 		final whileExpr: Expr = triviaEofWhileExpr(c);
 		final elseBody: Expr = triviaEofElseBody(c, whileExpr);
+		// The module-level fact is stated into `opt` once, before any element is written, so every nested list reads it.
+		final moduleOnlyTypedefsCall: Expr = WriterLowering.astPredCallT(WriterLowering.MODULE_ONLY_TYPEDEFS_PRED, [macro cast _arr]);
+		final moduleFactExpr: Expr = statesModuleOnlyTypedefs
+			? macro {
+				final opt = if ($moduleOnlyTypedefsCall) {
+					final _mo = _copyOpt(opt);
+					_mo._moduleOnlyTypedefs = true;
+					_mo;
+				} else {
+					opt;
+				};
+				$elseBody;
+			}
+			: elseBody;
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC: Array<String> = $trailLC;
@@ -106,7 +121,7 @@ final class TriviaEofLowering {
 			if (_arr.length == 0 && _trailLC.length == 0)
 				_de()
 			else
-				$elseBody;
+				$moduleFactExpr;
 		};
 	}
 

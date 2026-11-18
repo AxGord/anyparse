@@ -22,6 +22,9 @@ final class SepStarPlan extends StarPlan {
 	/** `@:fmt(typeParamItems)`: the list hands its cascade the grammar's count of items whose type carries type parameters. */
 	public inline function typeParamItems(): Bool return _meta.flag('typeParamItems');
 
+	/** `@:fmt(moduleOnlyTypedefs)`: the list hands its cascade the module-level fact that every top-level declaration is a typedef. */
+	public inline function moduleOnlyTypedefs(): Bool return _meta.flag('moduleOnlyTypedefs');
+
 	public inline function typedefBodyBlanks(): Bool return _meta.flag('typedefBodyBlanks');
 
 	/** `@:fmt(wrapRules('<knob>'))`: the `WrapRules` option the list's wrap cascade reads, or null. */

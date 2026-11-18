@@ -314,6 +314,8 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		// A Star without `@:fmt(typeParamItems)` counts 0, which no `typeParamItemCount >= n` rule with `n >= 1` reads as firing.
 		final typeParamCountCall: Expr = WriterLowering.astPredCallT(WriterLowering.TYPE_PARAM_ITEM_COUNT_PRED, [macro cast _arr]);
 		final typeParamCountExpr: Expr = _plan.typeParamItems() ? typeParamCountCall : macro 0;
+		// A Star without `@:fmt(moduleOnlyTypedefs)` reads `false`, which no `moduleOnlyTypedefs` rule with value 1 takes as firing.
+		final moduleOnlyTypedefsExpr: Expr = _plan.moduleOnlyTypedefs() ? macro opt._moduleOnlyTypedefs : macro false;
 		return if (_plan.wrapRules() != null) {
 			final rulesExpr: Expr = wrapRulesAccess(_plan.wrapRules(), _mapWrap);
 			// ω-arraymatrix-wrap: when the Star opted into
@@ -465,6 +467,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 						complexItemKinds: _complexKinds,
 						containerItemKinds: _containerKinds,
 						typeParamItemCount: $typeParamCountExpr,
+						moduleOnlyTypedefs: $moduleOnlyTypedefsExpr,
 						redecided: $v{_openText == '{'} && _ignoreEmit
 					}
 				);

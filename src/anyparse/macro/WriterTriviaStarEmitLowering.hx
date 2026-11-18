@@ -309,7 +309,7 @@ final class WriterTriviaStarEmitLowering {
 			fieldAccess, trailBBAccess, trailLCAccess, elemFn, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 			cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, lineCommentTrailBlank,
 			lineCommentLedAddBlank, afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks, cascadeInfos.betweenSameCtorIfNotInfos,
-			measuredMultiline
+			measuredMultiline, starNode.fmtHasFlag('statesModuleOnlyTypedefs')
 		));
 	}
 

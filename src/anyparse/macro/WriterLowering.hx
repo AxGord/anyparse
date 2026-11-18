@@ -1313,6 +1313,12 @@ class WriterLowering {
 	private static final TYPE_PARAM_ITEM_COUNT_PRED: String = 'typeParamItemCount';
 
 	/**
+	 * The `AstPreds` name of the module-level fact behind `WrapListOptions.moduleOnlyTypedefs` — whether a module's top-level
+	 * elements are all typedefs — read at the EOF Star that carries `@:fmt(statesModuleOnlyTypedefs)`.
+	 */
+	private static final MODULE_ONLY_TYPEDEFS_PRED: String = 'moduleHoldsOnlyTypedefs';
+
+	/**
 	 * ω-orphan-prefix-member — the first-field escape read at three sites that
 	 * must agree on ONE answer: it also gates `TriviaTypeSynth.isBareNonFirstRef`
 	 * (synthesise the slot) and `StructSeqLowering.computeBeforeSlots` (capture it), so a

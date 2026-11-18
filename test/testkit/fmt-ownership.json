@@ -40,6 +40,7 @@
 		"leftCurly",
 		"mapWrapRules",
 		"matrixCollapseRules",
+		"moduleOnlyTypedefs",
 		"reflowInExprPosition",
 		"reflowSourceMultiline",
 		"rightCurly",
@@ -423,7 +424,8 @@
 		"constructFitSep",
 		"measuredMultilineDecls",
 		"siblingLead",
-		"siblingShare"
+		"siblingShare",
+		"statesModuleOnlyTypedefs"
 	]
 }
 }

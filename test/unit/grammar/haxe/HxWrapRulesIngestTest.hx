@@ -258,4 +258,17 @@ class HxWrapRulesIngestTest extends Test {
 		}
 	}
 
+	/** `moduleOnlyTypedefs` ingests in hxq's spelling and as the enum identifier, with its polarity value. */
+	public function testModuleOnlyTypedefsCondIngested(): Void {
+		for (spelling in ['moduleOnlyTypedefs', 'ModuleOnlyTypedefs']) {
+			final opts: HxModuleWriteOptions = HxWriteOptionsKit.strictJson(
+				'{"wrapping":{"typedefBody":{"rules":[{"type":"onePerLine","conditions":[{"cond":"$spelling","value":1}]}]}}}'
+			);
+			final rules: Array<WrapRule> = opts.typedefBodyWrap.rules;
+			Assert.equals(1, rules.length);
+			Assert.equals(WrapConditionType.ModuleOnlyTypedefs, rules[0].conditions[0].cond);
+			Assert.equals(1, rules[0].conditions[0].value);
+		}
+	}
+
 }

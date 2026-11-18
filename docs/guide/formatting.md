@@ -253,6 +253,15 @@ a default value is not a type. A typedef body lays out by `anonType`, so "four f
 generic" is an `itemCount >= n` 5 rule beside an `itemCount >= n` 4 + `typeParamItemCount >= n` 1 rule, both
 `onePerLine`. Details: `docs/haxe-format-config.md`.
 
+## Files that hold only typedefs: `moduleOnlyTypedefs`
+
+A wrapping rule of `typedefBody` (or `anonType`) may ask whether the module declares nothing but typedefs: `package`,
+`import`, `using` lines and comments do not count, a `#if` region counts by all of its arms, and any class, enum,
+abstract, interface or function makes the answer no. `{ "cond": "moduleOnlyTypedefs", "value": 1 }` beside
+`{ "cond": "itemCount >= n", "value": 2 }` puts every body of two or more items, a `> Base` extension counting as one,
+one item per line in such a file, while a one-field body stays on its line and a typedef next to a class keeps the fit
+rules. Without the rule nothing moves. Details: `docs/haxe-format-config.md`.
+
 ## A simple value `if` on one line: `sameLine.expressionIfFit` and its caps
 
 Under `sameLine.expressionIf: next` every value `if` breaks, each value on its own line. `sameLine.expressionIfFit: true` keeps a chain on one line when it fits, and two caps narrow that to a simple chain; a chain either cap refuses keeps the `next` layout whole, never half-joined:

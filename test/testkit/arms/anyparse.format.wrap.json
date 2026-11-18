@@ -641,6 +641,22 @@
 			"find": "(hug ?? padded)",
 			"replace": "(hug ?? false)",
 			"note": "an absent comprehensionFit no longer follows the bracket padding, so padded brackets stop hugging a sole block body"
+		},
+		{
+			"name": "M-MODULE-ONLY-COND-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "matchesWithLineLengthState",
+			"find": "case ModuleOnlyTypedefs: cond.value == 0 ? !moduleOnlyTypedefs : moduleOnlyTypedefs;",
+			"replace": "case ModuleOnlyTypedefs: false;",
+			"note": "the moduleOnlyTypedefs condition never holds, so a typedef-only module keeps its one-line bodies"
+		},
+		{
+			"name": "M-MODULE-ONLY-POLARITY-IGNORED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "matchesWithLineLengthState",
+			"find": "cond.value == 0 ? !moduleOnlyTypedefs : moduleOnlyTypedefs",
+			"replace": "moduleOnlyTypedefs",
+			"note": "the moduleOnlyTypedefs condition ignores its value, so a rule asking for a module that is not typedef-only fires in a typedef-only one"
 		}
 	]
 }

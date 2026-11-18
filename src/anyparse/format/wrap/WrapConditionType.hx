@@ -24,6 +24,7 @@ package anyparse.format.wrap;
  * § `rules[].conditions[].cond`.
  */
 enum abstract WrapConditionType(Int) from Int to Int {
+
 	final ItemCountLargerThan = 0;
 	final ItemCountLessThan = 1;
 	final AnyItemLengthLargerThan = 2;
@@ -40,4 +41,8 @@ enum abstract WrapConditionType(Int) from Int to Int {
 	final HasContainerItems = 13;
 	final HasMultilineLambdaItems = 14;
 	final TypeParamItemCountLargerThan = 15;
+
+	/** A module-level fact, not a measure of the list: every top-level declaration of the module is a typedef. */
+	final ModuleOnlyTypedefs = 16;
+
 }

@@ -330,6 +330,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			complexItemKindsField(),
 			containerItemKindsField(),
 			typeParamItemCountField(),
+			moduleOnlyTypedefsField(),
 			ternaryBranchHoldsMultilineBlockField(),
 			fnBodyEmptyField('fnBodyEmpty', HX_FN_BODY, ['NoBody']),
 			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, []),
@@ -1292,6 +1293,18 @@ final class HxAstPredLowering extends AstPredLowering {
 			'typeParamItemCount', [{ name: 'items', type: macro : Array<Any> }],
 			macro : Int, macro anyparse.grammar.haxe.glue.HxTypeParamItems.count(items),
 			'How many elements of a delimited list declare a type with type parameters, for `WrapList`\'s `typeParamItemCount` axis.'
+		);
+	}
+
+	/**
+	 * `moduleHoldsOnlyTypedefs(decls) → Bool` — forwards to `HxModuleOnlyTypedefs.holds`, whether every top-level element of a
+	 * module is a typedef (or a `package` / `import` / `using` line). Untyped for the same reason as `complexItemKindsField`.
+	 */
+	private function moduleOnlyTypedefsField(): Field {
+		return predField(
+			'moduleHoldsOnlyTypedefs', [{ name: 'decls', type: macro : Array<Any> }],
+			macro : Bool, macro anyparse.grammar.haxe.glue.HxModuleOnlyTypedefs.holds(decls),
+			'Whether a module declares nothing but typedefs, for `WrapList`\'s `moduleOnlyTypedefs` axis.'
 		);
 	}
 

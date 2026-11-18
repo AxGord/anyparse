@@ -321,6 +321,7 @@
 				"src/anyparse/grammar/haxe/glue/HxComplexItems.hx",
 				"src/anyparse/grammar/haxe/glue/HxTernaryBranchBlocks.hx",
 				"src/anyparse/grammar/haxe/glue/HxTypeParamItems.hx",
+				"src/anyparse/grammar/haxe/glue/HxModuleOnlyTypedefs.hx",
 				"src/anyparse/format/LoopBodyShape.hx",
 				"src/anyparse/format/SingleStmtBraces.hx",
 				"src/anyparse/macro/LexicalLowering.hx",

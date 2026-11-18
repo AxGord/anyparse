@@ -97,6 +97,7 @@ typedef HxModule = {
 	))
 	@:fmt(multilineWhenLeadingTriviaSpansLines('meta', 'decl'))
 	@:fmt(measuredMultilineDecls)
+	@:fmt(statesModuleOnlyTypedefs)
 	@:fmt(blankBeforeOrphanLineCommentTrail)
 	@:fmt(blankBeforeLineCommentLed)
 	@:fmt(afterFileHeaderCommentBlanks)

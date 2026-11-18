@@ -123,6 +123,8 @@ final class HaxeFormatValues {
 			case 'hasMultilineLambdaItems', 'HasMultilineLambdaItems': WrapConditionType.HasMultilineLambdaItems;
 			// No fork counterpart either — see `WrapConditionType.TypeParamItemCountLargerThan`.
 			case 'typeParamItemCount >= n', 'TypeParamItemCountLargerThan': WrapConditionType.TypeParamItemCountLargerThan;
+			// No fork counterpart either — see `WrapConditionType.ModuleOnlyTypedefs`.
+			case 'moduleOnlyTypedefs', 'ModuleOnlyTypedefs': WrapConditionType.ModuleOnlyTypedefs;
 			case _: null;
 		};
 	}

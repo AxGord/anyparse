@@ -298,6 +298,38 @@
 			"find": "_m.length == 0 ? $headType : $recTail;",
 			"replace": "$headType;",
 			"note": "the brace test reads the head type past its `& T` clauses, so `{x:Int} & Base` loses its required `;` and `Base & {x:Int}` keeps an optional one"
+		},
+		{
+			"name": "M-MODULE-ONLY-OTHER-DECL-HOLDS",
+			"type": "anyparse.grammar.haxe.glue.HxModuleOnlyTypedefs",
+			"method": "elementHolds",
+			"find": "case _: false;",
+			"replace": "case _: true;",
+			"note": "a class, enum, abstract, interface or function does not refuse the module, so its typedef bodies break"
+		},
+		{
+			"name": "M-MODULE-ONLY-HEADER-COUNTS",
+			"type": "anyparse.grammar.haxe.glue.HxModuleOnlyTypedefs",
+			"method": "elementHolds",
+			"find": "'TypedefDecl', 'PackageDecl', 'PackageEmpty', 'ImportDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl',",
+			"replace": "'TypedefDecl',",
+			"note": "package and import lines count against the module, so a typedef-only file with a header keeps its one-line bodies"
+		},
+		{
+			"name": "M-MODULE-ONLY-REGION-ARMS-SKIPPED",
+			"type": "anyparse.grammar.haxe.glue.HxModuleOnlyTypedefs",
+			"method": "elementHolds",
+			"find": "case 'Conditional': armsHold(Type.enumParameters(decl)[0], depth + 1);",
+			"replace": "case 'Conditional': true;",
+			"note": "an #if region always holds, so a region with a class in one arm no longer keeps the module off the rule"
+		},
+		{
+			"name": "M-MODULE-ONLY-ELSEIF-ARMS-SKIPPED",
+			"type": "anyparse.grammar.haxe.glue.HxModuleOnlyTypedefs",
+			"method": "armsHold",
+			"find": "(cast elseifs: Array<Any>).foreach(arm -> elementsHold(Reflect.field(unwrap(arm), 'body'), depth))",
+			"replace": "true",
+			"note": "an #elseif arm never refuses, so a region with a class in its #elseif arm no longer keeps the module off the rule"
 		}
 	]
 }

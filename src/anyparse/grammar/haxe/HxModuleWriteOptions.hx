@@ -1010,6 +1010,13 @@ final class HxModuleWriteOptions {
 	public var _inTypedefBody: Bool = false; // noqa: naming
 
 	/**
+	 * Stated once per module by the top-level Star (`@:fmt(statesModuleOnlyTypedefs)` on `HxModule.decls`): every top-level
+	 * declaration is a typedef (`package`, `import` and `using` lines aside). Read by `@:fmt(moduleOnlyTypedefs)` on
+	 * `HxType.Anon.fields`, which hands it to the `moduleOnlyTypedefs` wrap condition.
+	 */
+	public var _moduleOnlyTypedefs: Bool = false; // noqa: naming
+
+	/**
 	 * Set on descent into a type nested in a type argument, parentheses or `#if` arm
 	 * (`@:fmt(propagateNestedType)`) and cleared per anon-body element, whose fields start lines of
 	 * their own. Read by `@:fmt(compactUnlessNested)`: a wrapped function-type signature continues
