@@ -560,4 +560,18 @@ class HxTestHelpers extends Test {
 		};
 	}
 
+	/** The operands of the `&` chain `t`, in written order; `t` alone when it is no intersection, none for null. */
+	private function intersectionOperands(t: Null<HxType>): Array<HxType> {
+		if (t == null) return [];
+		return switch t {
+			case Intersection(left, right): intersectionOperands(left).concat(intersectionOperands(right));
+			case _: [t];
+		};
+	}
+
+	/** The simple names of the `&` chain `t`'s operands, each of which must be a named type. */
+	private function intersectionNames(t: Null<HxType>): Array<String> {
+		return intersectionOperands(t).map(o -> (expectNamedType(o).name: String));
+	}
+
 }

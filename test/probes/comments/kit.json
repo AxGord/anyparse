@@ -25,6 +25,8 @@
 		"w2/p22.hx": "class C { function f() { switch x { case LongPatternNameNumberOne(aaaaaaaa, bbbbbbbbbb), /* mid */ LongPatternNameNumberTwo(cccccccccc, dddddddd), LongPatternNameNumberThree(eeeee): 1; case _: 2; } } }\n",
 		"w2/p23.hx": "typedef T = {\n\tvar a: Int;\n} & /* c */ {\n\tvar b: Int;\n}\n",
 		"w2/p24.hx": "typedef T = A & B // after\n;\n",
+		"w2/p25.hx": "typedef T = A // before amp\n\t& B;\n",
+		"w2/p26.hx": "typedef T = A /* blk */ & B;\n",
 		"w2/q02.hx": "class C { function f() { switch x { case A, B: 1; case _: 2; } } }\n",
 		"w2/q10.hx": "class C { function f() { switch x { case A /* x */ if (y): 1; case _: 2; } } }\n",
 		"w2/q22.hx": "class C { function f() { switch x { case LongPatternNameNumberOne(aaaaaaaa, bbbbbbbbbb), LongPatternNameNumberTwo(cccccccccc, dddddddd), LongPatternNameNumberThree(eeeee): 1; case _: 2; } } }\n",
@@ -542,7 +544,43 @@
 			],
 			"expect": {
 				"exit": 0,
-				"out": "ae0a210972430d9d",
+				"out": "0ebbc93a0ac68818",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p25.hx",
+			"note": "a line comment before the intersection operator rides its operand, the operator opens the next line",
+			"fixpoint": "w2/p25.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p25.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "d56818ee4218bfce",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "w2/p26.hx",
+			"note": "a block comment before the intersection operator stays inline on its operand",
+			"fixpoint": "w2/p26.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"w2/p26.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "6fc75439687414b4",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

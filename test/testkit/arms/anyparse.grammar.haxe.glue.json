@@ -279,25 +279,25 @@
 			"name": "M-TDSEMI-NEVER-DROPS-NOTHING",
 			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
 			"method": "typedefBodyEndsWithBraceField",
-			"find": "_m.length == 0 ? $headType : $recTail;",
-			"replace": "false;",
+			"find": "macro d != null && $headType,",
+			"replace": "macro false,",
 			"note": "`typedefSemicolon: never` reads every typedef body as not brace-ended, so a structure keeps its `;`"
 		},
 		{
 			"name": "M-TDSEMI-NEVER-DROPS-ALL",
 			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
 			"method": "typedefBodyEndsWithBraceField",
-			"find": "_m.length == 0 ? $headType : $recTail;",
-			"replace": "true;",
+			"find": "macro d != null && $headType,",
+			"replace": "macro true,",
 			"note": "`typedefSemicolon: never` drops the `;` the policy keeps after a non-brace body such as `A & B` and `(a:Int) -> Void`"
 		},
 		{
 			"name": "M-TDSEMI-TAIL-IGNORED",
 			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
-			"method": "typedefBodyEndsWithBraceField",
-			"find": "_m.length == 0 ? $headType : $recTail;",
-			"replace": "$headType;",
-			"note": "the brace test reads the head type past its `& T` clauses, so `{x:Int} & Base` loses its required `;` and `Base & {x:Int}` keeps an optional one"
+			"method": "typeEndsWithBraceField",
+			"find": "caseBind(HX_TYPE, 'Intersection', [1 => '_r'], rec(ident('_r'))),",
+			"replace": "",
+			"note": "the brace test stops at an intersection instead of reading its last operand, so `Base & {x:Int}` keeps an optional `;`"
 		},
 		{
 			"name": "M-MODULE-ONLY-OTHER-DECL-HOLDS",

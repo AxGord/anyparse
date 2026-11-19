@@ -23,6 +23,9 @@
 		"forwardNewlineForBody",
 		"trailOptParseGate"
 	],
+	"PrattMeta": [
+		"operandChain"
+	],
 	"PrattPostfixLowering": [
 		"captureChainNewline",
 		"capturePostfixOpSpace",
@@ -120,7 +123,6 @@
 		"lineLengthAwareSeps",
 		"listLayout",
 		"nestBody",
-		"operandBreakAfterMultilineBrace",
 		"padLeading",
 		"padTrailing",
 		"refuseFlatOnComplexExpr",
@@ -135,6 +137,7 @@
 	],
 	"WriterBlankLowering": [
 		"clearTypedefContext",
+		"optFlagForCtor",
 		"propagateArrowLambdaBody",
 		"propagateExprPosition",
 		"statementBodyForCtor"
@@ -357,8 +360,7 @@
 		"suppressCallRestProbe",
 		"suppressComplexItems",
 		"suppressPatternRestProbe",
-		"switchSubjectParensStrip",
-		"typedefIntersectionBreak"
+		"switchSubjectParensStrip"
 	],
 	"WriterStarEmitLowering": [
 		"anonTypeBracesClose",

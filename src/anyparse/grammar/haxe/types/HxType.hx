@@ -147,6 +147,19 @@ enum HxType {
 	Arrow(left: HxType, right: HxType);
 
 	/**
+	 * Intersection `A & B`, at every type position: the level and right associativity of `->`, as the compiler
+	 * reads `A -> B & C` as `A -> (B & C)`. The not-followed-by guard leaves the first `&` of an expression `&&`
+	 * alone, so the type operand of `x is T && y` ends at `T`. The `operandChain` flag writes the whole right spine
+	 * as one chain: one space before each `&`, the named knob after it, and, only in the chain a typedef holds as its
+	 * whole right-hand side (the named option), an operand after a multi-line brace-closed one on its own line
+	 * (`} &` then the operand one indent deeper). The chain capture keeps the comments around each `&`.
+	 */
+	@:infix('&', 0, 'Right')
+	@:notFollowedBy('&')
+	@:fmt(operandChain('typedefIntersection', '_operandChainBreak'), captureChainNewline)
+	Intersection(left: HxType, right: HxType);
+
+	/**
 	 * `@:fmt(typedefBodyBlanks)` (slice ω-typedef-between-fields) opts this
 	 * sep-Star into typedef-scoped blank-line injection. Active only when
 	 * the descendant anon body sees `opt._inTypedefBody == true` (set by

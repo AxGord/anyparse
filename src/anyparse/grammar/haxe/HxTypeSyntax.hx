@@ -36,10 +36,11 @@ final class HxTypeSyntax {
 
 	private function type(t: HxTypeS): TypeSyntax {
 		return switch t {
-			case Named(ref, span): node(span, Nominal(ref.name, [ for (a in ref.params ?? []) argument(a) ]));
+			case Named(ref, span): node(span, Nominal(ref.name, [ for (a in ref.params ?? []) type(a.type) ]));
 			case Parens(inner, span): node(span, type(inner).shape);
 			case Arrow(_, _, span), OptionalArg(Arrow(_, _, _), span): node(span, curried(t));
 			case ArrowFn(fn, span): node(span, Function([ for (a in fn.args) param(a) ], type(fn.ret), false));
+			case Intersection(_, _, span): node(span, Intersection(members(t)));
 			case Anon(members, span): node(span, Structure([ for (m in members) for (f in field(m)) f ]));
 			case ConditionalType(c, span):
 				node(
@@ -54,17 +55,12 @@ final class HxTypeSyntax {
 		};
 	}
 
-	/** A type argument — an `Intersection` when it carries one (`A & B`), spanning its first member to its last. */
-	private function argument(a: HxTypeArgS): TypeSyntax {
-		return intersection(type(a.type), a.intersections);
-	}
-
-	/** `head` alone, or the intersection of `head` and every `clauses` member. */
-	private function intersection(head: TypeSyntax, clauses: Array<HxIntersectionClauseS>): TypeSyntax {
-		if (clauses.length == 0) return head;
-		final members: Array<TypeSyntax> = [head].concat(clauses.map(c -> type(c.type)));
-		final to: Int = members[members.length - 1].span.to;
-		return new TypeSyntax(new Span(head.span.from, to), _text.substring(head.span.from, to), Intersection(members));
+	/** Every operand of the right-folded `&` chain `t`, in source order. */
+	private function members(t: HxTypeS): Array<TypeSyntax> {
+		return switch t {
+			case Intersection(left, right, _): members(left).concat(members(right));
+			case _: [type(t)];
+		};
 	}
 
 	/** The curried chain whose head is `t`: one parameter per left operand on the right spine, the last operand the result. */
@@ -131,7 +127,7 @@ final class HxTypeSyntax {
 		};
 		if (decl == null) return null;
 		final reader: HxTypeSyntax = new HxTypeSyntax(text);
-		return reader.intersection(reader.type(decl.type), decl.intersections);
+		return reader.type(decl.type);
 	}
 
 }

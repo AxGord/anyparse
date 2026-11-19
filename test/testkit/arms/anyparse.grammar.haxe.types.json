@@ -32,11 +32,11 @@
 		},
 		{
 			"name": "M-INTERSECTION-OPERAND-NOT-TYPEDEF-BODY",
-			"type": "anyparse.grammar.haxe.types.HxIntersectionClause",
-			"method": "HxIntersectionClause",
-			"kind": "TypedefDecl",
-			"find": ", captureAfterLead, propagateTypedefContext)",
-			"replace": ", captureAfterLead)",
+			"type": "anyparse.grammar.haxe.types.HxType",
+			"method": "Intersection",
+			"kind": "ParamCtor",
+			"find": "captureChainNewline)",
+			"replace": "captureChainNewline, clearTypedefContext)",
 			"note": "an intersection operand of a typedef body is an ordinary anon type, so a Next left curly no longer lays it out one field per line"
 		},
 		{
@@ -110,6 +110,24 @@
 			"find": "TypeBound(type: HxType);\n\n\t@:queryTransparent\n\t@:trivia\n\t@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\tParenBounds(types: Array<HxType>);",
 			"replace": "@:trivia\n\t@:lead('(')\n\t@:trail(')')\n\t@:sep(',')\n\tParenBounds(types: Array<HxType>);\n\n\t@:queryTransparent\n\tTypeBound(type: HxType);",
 			"note": "the list is tried before the single type, so a function type `(A, B) -> C` after the colon reads as a list and its arrow is unexpected input"
+		},
+		{
+			"name": "M-INTERSECTION-OP-OFF",
+			"type": "anyparse.grammar.haxe.types.HxType",
+			"method": "Intersection",
+			"kind": "ParamCtor",
+			"find": "@:infix('&', 0, 'Right')",
+			"replace": "@:infix('&&&', 0, 'Right')",
+			"note": "the type operator is no longer `&`, so `A & B` stops parsing at every type position"
+		},
+		{
+			"name": "M-INTERSECTION-TAKES-LOGICAL-AND",
+			"type": "anyparse.grammar.haxe.types.HxType",
+			"method": "Intersection",
+			"kind": "ParamCtor",
+			"find": "@:notFollowedBy('&')",
+			"replace": "@:notFollowedBy('#')",
+			"note": "the type `&` is no longer held back before a second `&`, so the type operand of `x is T && y` takes the first `&` of `&&`"
 		}
 	]
 }

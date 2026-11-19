@@ -19,14 +19,9 @@ package anyparse.grammar.haxe.types;
  * segments. A future analysis pass can split on `.` if needed.
  *
  * `params` carries `Array<HxTypeArg>` (not `Array<HxType>`): each
- * element is an `HxType` with an optional structural-intersection tail
- * (`A & B & C` inside `EitherType<…, A & B & C>`). The wrapper exists
- * so intersection composes at the type-arg position without adding `&`
- * to the general `HxType` Pratt op set (see `HxTypeArg` doc). The Alt
- * composes normally inside the wrapper — `Array<Int -> Void>` and
- * `Map<{a:Int}, B>` parse via the `.type` field; the empty-intersection
- * case yields `.intersections == []` and the writer emits nothing
- * extra.
+ * element wraps one `HxType` (see `HxTypeArg` doc), so the Alt
+ * composes normally inside the wrapper — `Array<Int -> Void>`,
+ * `Map<{a:Int}, B>` and `EitherType<A, B & C>` parse via the `.type` field.
  */
 @:peg
 typedef HxTypeRef = {

@@ -1758,6 +1758,7 @@ final class WriterRefFieldLowering {
 			if (clearElseIfBranch) e = macro _clearElseIfBranch($e, opt);
 			e = statementIfBodyOpt(child, fieldAccess, e);
 			e = statementBodyForCtorOpt(child, fieldAccess, e) ?? e;
+			e = optFlagForCtorOpt(child, fieldAccess, e);
 			e = WriterArrowValueIfLowering.arrowValueIfBlockOpt(child, e);
 			e;
 		};

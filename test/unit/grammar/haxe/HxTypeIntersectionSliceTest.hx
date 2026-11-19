@@ -8,21 +8,9 @@ import anyparse.grammar.haxe.types.HxType;
 import utest.Assert;
 
 /**
- * Slice ω-type-intersection — intersection type `A & B` on a typedef
- * right-hand side.
- *
- * `&` is scoped to the typedef RHS (a bare
- * `@:trivia @:tryparse var intersections:Array<HxIntersectionClause>`
- * Star on `HxTypedefDecl`, structural sibling of `HxClassDecl.heritage`)
- * rather than added as an `HxType` Pratt operator: the latter makes the
- * `is`-operator right operand parser greedily eat the first `&` of a
- * following expression-level `&&`. The first operand stays in
- * `td.type`; every subsequent `& Type` is one flat
- * `HxIntersectionClause` (a `{ type:HxType }` struct) in
- * `td.intersections` (no nesting — `A & B & C` → two clauses `B`, `C`).
- *
- * Closes the `typedef X = WriteOptions & {};` parse gap (8 sole-blocker
- * `*WriteOptions.hx` files in the apq dogfood corpus).
+ * Intersection type `A & B` on a typedef right-hand side: the typedef's `type` is one right-folded
+ * `HxType.Intersection` (`A & B & C` is `Intersection(A, Intersection(B, C))`), read here operand by operand.
+ * `@:notFollowedBy('&')` on the operator keeps the type operand of `x is T && y` from taking the first `&`.
  */
 @:nullSafety(Strict)
 class HxTypeIntersectionSliceTest extends HxTestHelpers {
@@ -32,45 +20,45 @@ class HxTypeIntersectionSliceTest extends HxTestHelpers {
 		Assert.equals(1, module.decls.length);
 		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		Assert.equals('X', (td.name: String));
-		Assert.equals('A', (expectNamedType(td.type).name: String));
-		Assert.equals(1, td.intersections.length);
-		Assert.equals('B', (expectNamedType(td.intersections[0].type).name: String));
+		Assert.same(['A', 'B'], intersectionNames(td.type));
 	}
 
 	public function testNamedAndEmptyAnon(): Void {
 		// The dominant corpus shape: `typedef X = WriteOptions & {};`.
 		final module: HxModule = HaxeModuleParser.parse('typedef X = WriteOptions & {};');
 		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('WriteOptions', (expectNamedType(td.type).name: String));
-		Assert.equals(1, td.intersections.length);
-		Assert.equals(0, expectAnonFieldCount(td.intersections[0].type));
+		final operands: Array<HxType> = intersectionOperands(td.type);
+		Assert.equals(2, operands.length);
+		Assert.equals('WriteOptions', (expectNamedType(operands[0]).name: String));
+		Assert.equals(0, expectAnonFieldCount(operands[1]));
 	}
 
 	public function testNamedAndNonEmptyAnon(): Void {
 		final module: HxModule = HaxeModuleParser.parse('typedef X = A & { a:Int };');
 		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('A', (expectNamedType(td.type).name: String));
-		Assert.equals(1, td.intersections.length);
-		Assert.equals(1, expectAnonFieldCount(td.intersections[0].type));
+		final operands: Array<HxType> = intersectionOperands(td.type);
+		Assert.equals(2, operands.length);
+		Assert.equals('A', (expectNamedType(operands[0]).name: String));
+		Assert.equals(1, expectAnonFieldCount(operands[1]));
 	}
 
-	public function testFlatChain(): Void {
-		// `A & B & C` is a flat tail: type=A, intersections=[B, C].
+	public function testChainFoldsRight(): Void {
 		final module: HxModule = HaxeModuleParser.parse('typedef X = A & B & C;');
 		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		Assert.equals('A', (expectNamedType(td.type).name: String));
-		Assert.equals(2, td.intersections.length);
-		Assert.equals('B', (expectNamedType(td.intersections[0].type).name: String));
-		Assert.equals('C', (expectNamedType(td.intersections[1].type).name: String));
+		Assert.same(['A', 'B', 'C'], intersectionNames(td.type));
+		switch td.type {
+			case Intersection(left, Intersection(_, _)):
+				Assert.equals('A', (expectNamedType(left).name: String));
+			case t:
+				Assert.fail('expected Intersection(A, Intersection(B, C)), got $t');
+		}
 	}
 
 	public function testBareTypedefNotAffected(): Void {
-		// A non-intersection typedef RHS still resolves to `Named` with
-		// an empty intersection tail.
+		// A non-intersection typedef RHS still resolves to `Named`.
 		final module: HxModule = HaxeModuleParser.parse('typedef X = Int;');
 		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
 		Assert.equals('Int', (expectNamedType(td.type).name: String));
-		Assert.equals(0, td.intersections.length);
 	}
 
 	public function testWriterEmitsAroundSpacedAmpersand(): Void {
@@ -84,8 +72,7 @@ class HxTypeIntersectionSliceTest extends HxTestHelpers {
 	}
 
 	public function testIsOperatorNotBrokenByAmpersand(): Void {
-		// Regression guard: `is` right operand is HxType (no `&`), so a
-		// following expression-level `&&` is NOT consumed as intersection.
+		// The `is` right operand is an HxType, whose `&` must not take the first `&` of the `&&` after it.
 		final src: String = 'class C { static function m():Void { if (xxxx is SomeType && yyyy is OtherType) trace(0); } }';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(out.indexOf('xxxx is SomeType') != -1, '`is` operand pair stayed glued in: <$out>');

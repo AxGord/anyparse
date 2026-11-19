@@ -10,18 +10,13 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  * `typeParams` roots (`HxClassDecl`, `HxInterfaceDecl`, `HxAbstractDecl`, `HxEnumDecl`,
  * `HxTypedefDecl`, `HxFnDecl`).
  *
- * Shape: `meta* name (':' constraint ('&' more)*)? ('=' defaultValue)?`, mirroring `HxParamBody`. A leading metadata
+ * Shape: `meta* name (':' constraint)? ('=' defaultValue)?`, mirroring `HxParamBody`. A leading metadata
  * run (`<@:const N>`) is the same `@:trivia @:tryparse` Star `HxVarDecl.meta` is, kept inline before the name; a comment
  * after the constraint's `:` or the default's `=` lands in that field's `AfterLead` slot (`@:fmt(captureAfterLead)`).
  * Fields:
- * `name:HxIdentLit`, an optional `@:lead(':')` `Ref` to `HxTypeParamBound` for the first constraint, a
- * bare `@:trivia @:tryparse` Star of `HxIntersectionClause` for the `& Type` tail
- * (structurally identical to `HxTypedefDecl.intersections` — `&` is scoped to this clause
- * rather than `HxType` for the reason given in `HxIntersectionClause`), and an optional
- * `@:lead('=')` `Ref` to `HxType` for the default. The `Ref` fields drive the same Case 5
- * emit path as `HxAnonFieldBody.type` and `HxParamBody.type`; the Star self-terminates when
- * the next token is not `&` (the `=` lead, the `,` outer sep or the `>` outer trail), so a
- * single- or no-constraint param adds no output.
+ * `name:HxIdentLit`, an optional `@:lead(':')` `Ref` to `HxTypeParamBound` for the constraint (a multi-bound
+ * `<T:A & B>` is that bound's one `HxType.Intersection`), and an optional `@:lead('=')` `Ref` to `HxType` for the
+ * default. The `Ref` fields drive the same Case 5 emit path as `HxAnonFieldBody.type` and `HxParamBody.type`.
  *
  * The deprecated Haxe 3 parenthesised multi-bound form `<T:(A, B)>` is the `HxTypeParamBound.ParenBounds` alternative
  * of the constraint slot: the optional `:` lead commits with no backtracking, so the slot itself is the alternation.
@@ -47,11 +42,6 @@ typedef HxTypeParamDecl = {
 	@:fmt(space('typeParamConstraintColon', 'lead'), captureAfterLead)
 	@:lead(':')
 	var constraint: Null<HxTypeParamBound>;
-
-	@:trivia
-	@:tryparse
-	@:fmt(padLeading)
-	var constraintMore: Array<HxIntersectionClause>;
 
 	@:optional
 	@:fmt(typeParamDefaultEquals, captureAfterLead)

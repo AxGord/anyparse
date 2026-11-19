@@ -589,7 +589,10 @@ final class HxModuleWriteOptions {
 	public var trailingCommentAbove: Bool = false;
 
 	public var typedefAssign: WhitespacePolicy = WhitespacePolicy.Both;
+
+	/** The space after the `&` of an intersection type (`A & B`); the one before it is always written. */
 	public var typedefIntersection: WhitespacePolicy = WhitespacePolicy.After; // noqa: prefer-final-public-field
+
 	public var typeParamDefaultEquals: WhitespacePolicy = WhitespacePolicy.Both;
 
 	/**
@@ -1010,6 +1013,13 @@ final class HxModuleWriteOptions {
 	public var _inTypedefBody: Bool = false; // noqa: naming
 
 	/**
+	 * Set for the intersection a typedef holds as its whole right-hand side (`optFlagForCtor` on `HxTypedefDecl.type`):
+	 * only that chain starts the operand after a multi-line brace-closed one on its own line. The chain clears it for
+	 * its operands, so an intersection nested in one keeps every operand on its operator's line.
+	 */
+	public var _operandChainBreak: Bool = false; // noqa: naming, prefer-final-public-field
+
+	/**
 	 * Stated once per module by the top-level Star (`@:fmt(statesModuleOnlyTypedefs)` on `HxModule.decls`): every top-level
 	 * declaration is a typedef (`package`, `import` and `using` lines aside). Read by `@:fmt(moduleOnlyTypedefs)` on
 	 * `HxType.Anon.fields`, which hands it to the `moduleOnlyTypedefs` wrap condition.
@@ -1147,17 +1157,7 @@ final class HxModuleWriteOptions {
 	// "inside an explicit expression paren" signal. A rest-aware chain or ternary is EXCLUDED when
 	// it is set (the paren owns the wrap); the chain emit clears it for its operands.
 	public var _keepChainInParen: Bool = false; // noqa: naming
-	// ω-typedef-intersection-operand-break — set per-element by
-	// `HxTypedefDecl.intersections`'s trivia-Star loop on the opt passed to a
-	// `& Type` clause whose PRECEDING clause rendered multi-line and ended with
-	// a close brace (a broke anon-struct operand: `A & {\n…\n} & B`). The clause
-	// reads it via `@:fmt(typedefIntersectionBreak)` on
-	// `HxIntersectionClause.type` and emits the `&`→operand whitespace as a
-	// hardline + one-tab nest (`} &\n\tB`) instead of the `typedefIntersection`
-	// After space (`} & B`), mirroring fork's `MarkLineEnds` `lineEndAfter` on
-	// the `&` that follows a `BrClose`. Default false → single-line
-	// intersections (`A & B`, `A & {x:Int} & B`) stay glued byte-identically.
-	public var _intersectionOperandBreak: Bool = false; // noqa: naming
+
 	// ω-elseif-body-break: write-time-only signal flagging that the current
 	// statement is being rendered as the direct `else` branch of an enclosing
 	// `if` (i.e. an `else if`). Set by `HxIfStmt.elseBody`'s

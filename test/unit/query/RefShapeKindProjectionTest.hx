@@ -1126,6 +1126,7 @@ final class RefShapeKindProjectionTest extends Test {
 			{ kinds: ['EmptySemiMember'], source: 'class C { ; }' },
 			{ kinds: ['ExtendsField'], source: 'typedef T = { > Base, a: Int }' },
 			{ kinds: ['FnField'], source: 'typedef T = { function f(): Void; }' },
+			{ kinds: ['Intersection'], source: 'class C { var f: A & B; }' },
 			{ kinds: ['FnDecl'], source: 'function f() {}' },
 			{ kinds: ['NamedFnExpr'], source: 'class C { function f() { var g = function h() {}; } }' },
 			{ kinds: ['ArrowFn', 'NamedParam'], source: 'class C { function f(g: (a: Int) -> Void) {} }' },

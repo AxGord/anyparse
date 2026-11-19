@@ -593,21 +593,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		// version reached `isLeafValue(null)` and did nothing.
 		final optional: Bool = isOptional(child);
 		final value: Expr = optional ? ident('_ty') : access;
-		final fallback: Expr = fallbackSpan ?? macro null;
-		final refsCall: Expr = ref != null && _typeRefRules.contains(ref)
-			? call(typeRefsFnName(ref), [value, ident(intoName), fallback])
-			: macro {};
+
 		final walkArm: Expr = block(descendCore(child, value, intoName, typeOutName, 0));
-		final skipArm: Expr = child.hasMeta(QUERY_TYPE_REF_META) ? refsCall : macro if (withTypeRefs) $refsCall;
-		final refsAware: Expr = if (ref == null || !altHasCtor(ref, ANON_CTOR)) {
-			skipArm;
-		} else {
-			final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [ for (_ in 0...ctorArity(ref, ANON_CTOR)) '_' ]);
-			{
-				expr: ESwitch(value, [{ values: [anonPattern], expr: walkArm }, { values: [macro _], expr: skipArm }], null),
-				pos: Context.currentPos()
-			};
-		}
+		final refsAware: Expr = typeFieldArm(child, ref, value, intoName, typeOutName, fallbackSpan ?? macro null);
 
 		// `@:queryType` moves the DEFAULT tree only. Under `withTypeRefs` the arm
 		// is the unchanged one, so `parseFileTypeRefs` - and every consumer keyed
@@ -631,6 +619,50 @@ class QueryWalkerLowering extends PairedShapeLowering {
 				macro if (_ty != null) $core
 			])
 		] : [core];
+	}
+
+	/**
+	 * The pre-`@:queryType` arm of a `type` field holding `value`: a decl host (`Anon`) is walked, anything else is
+	 * skipped, its names going to the type-ref tree only. Where the rule has an operand-chain ctor (`A & B`), each
+	 * operand is that value in turn, so a decl host among the operands is still descended and the chain itself
+	 * projects no node here.
+	 */
+	private function typeFieldArm(
+		child: ShapeNode, ref: Null<String>, value: Expr, intoName: String, typeOutName: String, fallback: Expr
+	): Expr {
+		function skipOf(subject: Expr): Expr {
+			final refsCall: Expr = ref != null && _typeRefRules.contains(ref)
+				? call(typeRefsFnName(ref), [subject, ident(intoName), fallback])
+				: macro {};
+			return child.hasMeta(QUERY_TYPE_REF_META) ? refsCall : macro if (withTypeRefs) $refsCall;
+		}
+		if (ref == null || !altHasCtor(ref, ANON_CTOR)) return skipOf(value);
+		final chain: Null<String> = operandChainCtor(ref);
+		final subject: Expr = chain == null ? value : ident('_operand');
+		final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [ for (_ in 0...ctorArity(ref, ANON_CTOR)) '_' ]);
+		final cases: Array<Case> = [
+			{ values: [anonPattern], expr: block(descendCore(child, subject, intoName, typeOutName, 0)) }
+		];
+		if (chain != null) cases.push({
+			values: [ctorPattern(ref, chain, ['_l', '_r'])],
+			expr: macro {
+				_operandWalk(_l);
+				_operandWalk(_r);
+			}
+		});
+		cases.push({ values: [macro _], expr: skipOf(subject) });
+		final arms: Expr = { expr: ESwitch(subject, cases, null), pos: Context.currentPos() };
+		if (chain == null) return arms;
+		final operandCT: ComplexType = pairedComplexType(ref);
+		return macro {
+			function _operandWalk(_operand: $operandCT): Void $arms;
+			_operandWalk($value);
+		};
+	}
+
+	/** The ctor of `rule` carrying `@:fmt(operandChain)`, whose tree is one flat chain of operands, or null. */
+	private function operandChainCtor(rule: String): Null<String> {
+		return PrattMeta.operandChainBranch(_shape.rules.get(rule))?.annotations.get(AnnotationKeys.BASE_CTOR);
 	}
 
 	/**

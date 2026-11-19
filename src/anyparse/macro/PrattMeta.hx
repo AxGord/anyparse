@@ -18,6 +18,9 @@ using Lambda;
  */
 final class PrattMeta {
 
+	/** The `@:fmt` flag of an infix ctor whose tree is one flat chain of operands (`A & B & C`). */
+	public static final OPERAND_CHAIN: String = 'operandChain';
+
 	public static function hasPrattBranch(node: ShapeNode): Bool {
 		return node.children.exists(
 			branch -> branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
@@ -33,6 +36,16 @@ final class PrattMeta {
 
 	public static function getOperatorText(branch: ShapeNode): String {
 		return (branch.annotations[AnnotationKeys.PRATT_OP]: Null<String>) ?? branch.annotations[AnnotationKeys.TERNARY_OP];
+	}
+
+	/**
+	 * The one answer to "which branch of a rule is its operand chain": the two-operand branch of an `Alt` rule that
+	 * carries `@:fmt(operandChain)`, or null when the rule has none.
+	 */
+	public static function operandChainBranch(rule: Null<ShapeNode>): Null<ShapeNode> {
+		return rule == null || rule.kind != Alt
+			? null
+			: rule.children.find(branch -> branch.children.length == 2 && MetaInspect.fmtHasFlag(branch, OPERAND_CHAIN));
 	}
 
 }

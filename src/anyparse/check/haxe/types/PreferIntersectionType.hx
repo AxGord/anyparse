@@ -24,12 +24,10 @@ private typedef Site = { final span: Span; final text: String; }
  * parameter is left alone. ANY member other than an extension clause (an own field, an annotation, an `#if` region) and
  * any comment inside the body keep the rule silent: an intersection has no place for them.
  *
- * ## Where the grammar reads an intersection
+ * ## Where the rule looks
  *
- * `A & B` parses on a typedef's right-hand side and as a type argument, and nowhere else (`HxIntersectionClause`: `&` is
- * not a type operator, since `x is T && y` would read `&&` greedily). A field, parameter or return type written
- * `{ > A, > B, }` has no intersection spelling the grammar can read, and a structure inside a type argument is not
- * projected as a node; both stay as they are.
+ * `A & B` parses at every type position (`HxType.Intersection`), but the rule reads a typedef's right-hand side only: a
+ * field, parameter or return type written `{ > A, > B, }` and a structure inside a type argument stay as they are.
  *
  * ## Verified, not trusted: `RiskyFix`
  *

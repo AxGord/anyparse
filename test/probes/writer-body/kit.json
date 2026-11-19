@@ -98,7 +98,8 @@
 		"compr-fit-absent/Probe.hx": "class Probe {\n\tstatic function f(xs:Array<Int>):Array<Int> {\n\t\tfinal a = [\n\t\t\tfor (x in xs) {\n\t\t\t\tfinal y = x + 1;\n\t\t\t\ty * 2;\n\t\t\t}\n\t\t];\n\t\tfinal b = [\n\t\t\tfor (x in xs)\n\t\t\t\tif (x > 0) x\n\t\t];\n\t\tfinal c = [for (x in xs) x];\n\t\treturn a.concat(b).concat(c);\n\t}\n}\n",
 		"compr-fit-absent/hxformat.json": "{\"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}",
 		"compr-fit-off/Probe.hx": "class Probe {\n\tstatic function f(xs:Array<Int>):Array<Int> {\n\t\tfinal a = [\n\t\t\tfor (x in xs) {\n\t\t\t\tfinal y = x + 1;\n\t\t\t\ty * 2;\n\t\t\t}\n\t\t];\n\t\tfinal b = [\n\t\t\tfor (x in xs)\n\t\t\t\tif (x > 0) x\n\t\t];\n\t\tfinal c = [for (x in xs) x];\n\t\treturn a.concat(b).concat(c);\n\t}\n}\n",
-		"compr-fit-off/hxformat.json": "{\"wrapping\": {\"comprehensionFit\": false}, \"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}"
+		"compr-fit-off/hxformat.json": "{\"wrapping\": {\"comprehensionFit\": false}, \"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}",
+		"intersection-positions/Probe.hx": "class C { var f:A & B; function g(x:A & B):A & B return x; }\n"
 	},
 	"invocations": [
 		{
@@ -1075,6 +1076,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "185d861e32d46a11",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "intersection-positions/Probe.hx",
+			"note": "an intersection type in a member, a parameter and a return type parses and is written as one chain",
+			"fixpoint": "intersection-positions/Probe.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"intersection-positions/Probe.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "bdd805994dda84b8",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

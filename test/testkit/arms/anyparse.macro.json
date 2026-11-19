@@ -542,10 +542,10 @@
 		{
 			"name": "M-SPANINFO-BOUND-MORE",
 			"type": "anyparse.macro.SpanInfoLowering",
-			"method": "constraintCollect",
-			"find": "out.push(macro for (_cm in $e{field(ident('v'), CONSTRAINT_MORE_FIELD)}) $push);",
+			"method": "operandsPush",
+			"find": "_operands(_r);",
 			"replace": "",
-			"note": "only a type parameter's first bound is kept, the `& Type` tail is dropped"
+			"note": "only the first operand of a type parameter's bound is kept, the `& Type` tail is dropped"
 		},
 		{
 			"name": "M-KWTRAIL-FLAT-GAP-KEPT",
@@ -942,7 +942,7 @@
 		{
 			"name": "M-STMT-LIST-CALLARG-CASE",
 			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "triviaTryparseElemCallExprs",
+			"method": "triviaTryparseElemCallExpr",
 			"find": "WriterOptFanout.statementListElemOpt(macro _writerOpt)",
 			"replace": "macro _writerOpt",
 			"note": "a case-body statement of an arrow-body switch argument bypasses the statement-list barrier and inherits the call-argument chain flag"
@@ -2979,7 +2979,7 @@
 		{
 			"name": "M-CASE-TAIL-STATEMENT-FRAME-OFF",
 			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "triviaTryparseElemCallExprs",
+			"method": "triviaTryparseElemCallExpr",
 			"find": "_setStatementFrame($tailOptExpr)",
 			"replace": "$tailOptExpr",
 			"note": "the tail of a statement-switch case keeps only its force-propagated frame, so its if / else (and one in a loop body under it) stays inline"
@@ -2987,7 +2987,7 @@
 		{
 			"name": "M-CASE-TAIL-STATEMENT-FRAME-ALWAYS",
 			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "triviaTryparseElemCallExprs",
+			"method": "triviaTryparseElemCallExpr",
 			"find": "(opt._inExprPosition ? $tailOptExpr : _setStatementFrame($tailOptExpr))",
 			"replace": "_setStatementFrame($tailOptExpr)",
 			"note": "a value-switch case tail is marked a statement too, so its if / else ladders"
@@ -3577,6 +3577,46 @@
 			"find": "(opt.comprehensionFit ?? (opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After))",
 			"replace": "(opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After)",
 			"note": "the fit cascade keys on the padding again, so comprehensionFit: false still reflows a padded comprehension by fit"
+		},
+		{
+			"name": "M-OPERAND-CHAIN-KNOB-IGNORED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixOperandChain",
+			"find": "knob == null ? macro _dc([_dt($v{opText}), _dop(' ')]) : operandChainOp(opText, knob)",
+			"replace": "macro _dc([_dt($v{opText}), _dop(' ')])",
+			"note": "the chain operator ignores its whitespace knob, so `typedefIntersection: None` still writes the space after `&`"
+		},
+		{
+			"name": "M-OPERAND-CHAIN-LEAD-LINE-OFF",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixOperandChain",
+			"find": "_leadLine.push(_lc != null && !StringTools.startsWith(_lc, '/*'));",
+			"replace": "_leadLine.push(false);",
+			"note": "the operator after an operand that ends in a line comment stays on the comment line and is commented out"
+		},
+		{
+			"name": "M-OPERAND-CHAIN-AFTER-COMMENT-DROPPED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixOperandChain",
+			"find": "_afters.push(_run.length == 0 ? null : leadingCommentsBefore(_run, _dn($cols, _dhl()), opt));",
+			"replace": "_afters.push(null);",
+			"note": "a comment between the chain operator and its right operand is not written"
+		},
+		{
+			"name": "M-QUERY-TYPE-OPERAND-HOST-LOST",
+			"type": "anyparse.macro.QueryWalkerLowering",
+			"method": "typeFieldArm",
+			"find": "_operandWalk(_r);",
+			"replace": "",
+			"note": "the right operand of an intersection in a type slot is not read, so a structure after `&` no longer publishes its fields under the declaration"
+		},
+		{
+			"name": "M-OPERAND-CHAIN-BREAK-INHERITED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "lowerInfixOperandChain",
+			"find": "$target = false;",
+			"replace": "$target = true;",
+			"note": "the operands of the typedef's chain inherit its break grant, so a chain nested in a structure operand breaks after its own brace operand"
 		}
 	]
 }

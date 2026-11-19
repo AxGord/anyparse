@@ -24,9 +24,7 @@ import utest.Assert;
  * compounding blocker (bodyless `catch (e:Any)`). Pure parse-additive:
  * the `var`/`final` keyword and trailing `;` stay on the enclosing
  * ctor, and `more` is empty for every single-binding declaration, so
- * existing single-var sites are transparent. Mirrors the
- * `HxTypedefDecl.intersections` / `HxIntersectionClause` element-Star
- * precedent.
+ * existing single-var sites are transparent.
  *
  * Twin of `HxVarStmtTrailOptSliceTest` — same `parseFunctionBody`
  * helper and `roundTrip` host.

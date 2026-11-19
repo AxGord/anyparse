@@ -12,7 +12,6 @@ import anyparse.grammar.haxe.decl.HxFnDecl;
 import anyparse.grammar.haxe.decl.HxInterfaceDecl;
 import anyparse.grammar.haxe.decl.HxTypedefDecl;
 import anyparse.grammar.haxe.decl.HxVarDecl;
-import anyparse.grammar.haxe.types.HxIntersectionClause;
 import anyparse.grammar.haxe.types.HxType;
 import anyparse.grammar.haxe.types.HxTypeArg;
 import anyparse.grammar.haxe.types.HxTypeParamDecl;
@@ -406,14 +405,13 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals('Iterable', (expectNamedType(boundType(tps[0].constraint)).name: String));
 	}
 
-	// --- Slice 9: multi-bound constraint `<T:A & B>` (constraintMore Star) ---
+	// --- Slice 9: multi-bound constraint `<T:A & B>` (the constraint's own `Intersection`) ---
 
 	public function testMultiBoundConstraintAbsentIsEmpty(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:Iterable>():T {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('Iterable', (expectNamedType(boundType(tps[0].constraint)).name: String));
-		Assert.equals(0, tps[0].constraintMore.length);
+		Assert.same(['Iterable'], intersectionNames(boundType(tps[0].constraint)));
 	}
 
 	public function testMultiBoundConstraintTwo(): Void {
@@ -422,21 +420,14 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
 		Assert.equals('T', (tps[0].name: String));
-		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
-		final more: Array<HxIntersectionClause> = tps[0].constraintMore;
-		Assert.equals(1, more.length);
-		Assert.equals('Bar', (expectNamedType(more[0].type).name: String));
+		Assert.same(['Foo', 'Bar'], intersectionNames(boundType(tps[0].constraint)));
 	}
 
 	public function testMultiBoundConstraintThree(): Void {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:A & B & C>():Void {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('A', (expectNamedType(boundType(tps[0].constraint)).name: String));
-		final more: Array<HxIntersectionClause> = tps[0].constraintMore;
-		Assert.equals(2, more.length);
-		Assert.equals('B', (expectNamedType(more[0].type).name: String));
-		Assert.equals('C', (expectNamedType(more[1].type).name: String));
+		Assert.same(['A', 'B', 'C'], intersectionNames(boundType(tps[0].constraint)));
 	}
 
 	public function testMultiBoundConstraintAnonHead(): Void {
@@ -449,19 +440,16 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		Assert.equals(2, tps.length);
 		Assert.equals('T', (tps[0].name: String));
 		Assert.isNull(boundType(tps[0].constraint));
-		Assert.equals(0, tps[0].constraintMore.length);
 		Assert.equals('O', (tps[1].name: String));
-		final c: Null<HxType> = boundType(tps[1].constraint);
-		Assert.notNull(c);
-		switch c {
+		final operands: Array<HxType> = intersectionOperands(boundType(tps[1].constraint));
+		Assert.equals(2, operands.length);
+		switch operands[0] {
 			case Anon(_):
 				// ok — `{}`
-			case null, _:
+			case c:
 				Assert.fail('expected HxType.Anon for `{}` head, got $c');
 		}
-		final more: Array<HxIntersectionClause> = tps[1].constraintMore;
-		Assert.equals(1, more.length);
-		Assert.equals('T', (expectNamedType(more[0].type).name: String));
+		Assert.equals('T', (expectNamedType(operands[1]).name: String));
 	}
 
 	public function testMultiBoundConstraintOnClass(): Void {
@@ -469,20 +457,15 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final tps: Null<Array<HxTypeParamDecl>> = ast.typeParams;
 		Assert.notNull(tps);
 		Assert.equals(1, tps.length);
-		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
-		Assert.equals(1, tps[0].constraintMore.length);
-		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name: String));
+		Assert.same(['Foo', 'Bar'], intersectionNames(boundType(tps[0].constraint)));
 	}
 
 	public function testMultiBoundConstraintWithDefault(): Void {
-		// Field-ordering check: constraintMore Star precedes the
-		// `@:lead('=')` defaultValue — both must parse.
+		// The intersection ends at the `@:lead('=')` of the default — both must parse.
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar<T:Foo & Bar = Baz>():Void {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
-		Assert.equals(1, tps[0].constraintMore.length);
-		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name: String));
+		Assert.same(['Foo', 'Bar'], intersectionNames(boundType(tps[0].constraint)));
 		Assert.equals('Baz', (expectNamedType(tps[0].defaultValue).name: String));
 	}
 
@@ -490,9 +473,7 @@ class HxTypeParamSliceTest extends HxTestHelpers {
 		final decl: HxFnDecl = parseSingleFnDecl('class Foo { function bar < T : Foo & Bar > ():Void {} }');
 		final tps: Null<Array<HxTypeParamDecl>> = decl.typeParams;
 		Assert.notNull(tps);
-		Assert.equals('Foo', (expectNamedType(boundType(tps[0].constraint)).name: String));
-		Assert.equals(1, tps[0].constraintMore.length);
-		Assert.equals('Bar', (expectNamedType(tps[0].constraintMore[0].type).name: String));
+		Assert.same(['Foo', 'Bar'], intersectionNames(boundType(tps[0].constraint)));
 	}
 
 	public function testModuleQualifiedTwoSegments(): Void {

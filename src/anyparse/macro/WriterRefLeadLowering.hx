@@ -38,40 +38,13 @@ final class WriterRefLeadLowering {
 	/**
 	 * D61: emit a mandatory (non-optional, non-condWrap) `@:lead` literal — tight
 	 * by default, routed through `whitespacePolicyLead` for the configurable-
-	 * spacing leads (objectFieldColon / typeHintColon / typedefAssign / …). The
-	 * `@:fmt(typedefIntersectionBreak)` field makes the `&`→operand whitespace a
-	 * runtime `opt._intersectionOperandBreak` decision. Pushes onto `parts`.
-	 *
+	 * spacing leads (objectFieldColon / typeHintColon / typedefAssign / …). Pushes onto `parts`.
 	 */
 	private static function emitMandatoryLead(
 		child: ShapeNode, parts: Array<Expr>, leadText: String, fieldAccess: Expr, isKeyValueLead: Bool
 	): Void {
-		// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
-		// (`@:lead('&') @:fmt(space(…), typedefIntersectionBreak)`)
-		// makes the `&`→operand whitespace a runtime decision. When the
-		// consuming Star (`HxTypedefDecl.intersections`) sets
-		// `opt._intersectionOperandBreak == true` — this clause follows a
-		// multi-line brace-closed operand (`A & {\n…\n} & B`) — emit the
-		// `&` glued to the preceding `}` line, then a hardline + one-tab
-		// nest before the operand value (`} &\n\tB`). The `Nest(cols, …)`
-		// wraps only the hardline so the newline's trailing indent is
-		// bumped one level; the operand renders right after at base+cols.
-		// Mirrors fork `MarkLineEnds`'s `lineEndAfter` on the `&` that
-		// follows a `BrClose`. Flag false (every single-line intersection)
-		// falls through to the `typedefIntersection` After space, byte-
-		// identical to the pre-slice layout.
 		final knob: Null<String> = spaceKnob(child, 'lead');
-		final leadDoc: Expr = if (child.fmtHasFlag('typedefIntersectionBreak')) {
-			final gluedLead: Expr = whitespacePolicyLead(child, leadText, knob, false, isKeyValueLead);
-			macro opt._intersectionOperandBreak
-				? _dc([
-					_dt($v{leadText}),
-					_dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())
-				])
-				: $gluedLead;
-		} else {
-			whitespacePolicyLead(child, leadText, knob, false, isKeyValueLead);
-		};
+		final leadDoc: Expr = whitespacePolicyLead(child, leadText, knob, false, isKeyValueLead);
 		// ω-switch-subject-parens: drop the switch-subject open `(` when the knob
 		// is on and the subject is not a leading-brace expr (object literal / block
 		// keep their parens). Nothing replaces it — the `switch` keyword already

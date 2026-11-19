@@ -44,7 +44,7 @@ import haxe.macro.Expr;
  * Doc wrappers and opt helpers `WriterCodegen` emits on the generated
  * class (`_dt()` / `_dc()` / `_dn()` / `_de()` / `_dhl()` / `_dwb()` /
  * `_dile()` / `_dohsbh()`, `_copyOpt` / `_clearExprPosition` /
- * `_setIntersectionBreak`, `leadingCommentDocRun` /
+ * `leadingCommentDocRun` /
  * `trailingCommentDoc*`). Rename one of those on either side and the
  * failure surfaces in the generated writer, not here.
  */
@@ -53,7 +53,7 @@ import haxe.macro.Expr;
 	anyparse.macro.WriterTriviaStarEmitLowering)
 final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 
-	private final _elemCalls: { triviaElemCall: Expr, triviaElemCallMaybeBreak: Expr, elemOptInit: Expr };
+	private final _elemCall: Expr;
 	private final _trailBASlot: Expr;
 	private final _metaPolicyExpr: Expr;
 	private final _priorAfterTrail: Null<Expr>;
@@ -147,7 +147,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		);
 		// A forceInlineSep Star owes no cascade blank: its elements always join with one space.
 		_cascadeBlanksCount = _plan.forceInlineSep() ? macro 0 : _cascade.blanksCount;
-		_elemCalls = triviaTryparseElemCallExprs(c.elemFn, _plan.clearExprPositionNonTail(), _plan.operandBreakAfterMultilineBrace());
+		_elemCall = triviaTryparseElemCallExpr(c.elemFn, _plan.clearExprPositionNonTail());
 		_flatGateExpr = triviaTryparseCaseGateExpr(caseBodyFlagNames, false);
 		_fitGateExpr = triviaTryparseCaseGateExpr(caseBodyFlagNames, true);
 		_writerOptExpr = triviaTryparseWriterOptExpr(flatChildOptPairs, _plan.propagateExprPosition());
@@ -234,7 +234,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				var _fi: Int = 0;
 				while (_fi < _fillArr.length) {
 					final _t = _fillArr[_fi];
-					_items.push(${_elemCalls.triviaElemCall});
+					_items.push(${_elemCall});
 					_fi++;
 				}
 				_dwb(anyparse.core.D.fillOnOverflow(_items, opt.lineWidth + 1));
@@ -280,7 +280,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				var _hi: Int = 0;
 				while (_hi < _arr.length) {
 					final _t = _arr[_hi];
-					_items.push(${_elemCalls.triviaElemCall});
+					_items.push(${_elemCall});
 					_hi++;
 				}
 				if (_hasComments) {
@@ -441,8 +441,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				${_cascade.currCompute};
 				$blockEndedSepEmit;
 				$sepCascade;
-				${_elemCalls.elemOptInit};
-				final _elem: anyparse.core.Doc = ${_elemCalls.triviaElemCallMaybeBreak};
+				final _elem: anyparse.core.Doc = $_elemCall;
 				final _tc: Null<String> = _t.trailingComment;
 				_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
 				// ω-cond-indent-policy AlignedNestedIncrease: if this body
@@ -997,15 +996,11 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	}
 
 	/**
-	 * Tryparse-Star element-call Expr group (caseTailOptArg / triviaElemCall /
-	 * triviaElemCallMaybeBreak / elemOptInit). Builds the per-element writer
-	 * call and the operand-break opt init.
+	 * The Tryparse-Star per-element writer call, with the case-tail opt argument.
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	@:access(anyparse.macro.WriterOptFanout)
-	private static function triviaTryparseElemCallExprs(
-		elemFn: String, clearExprPositionNonTail: Bool, operandBreakAfterMultilineBrace: Bool
-	): { triviaElemCall: Expr, triviaElemCallMaybeBreak: Expr, elemOptInit: Expr } {
+	private static function triviaTryparseElemCallExpr(elemFn: String, clearExprPositionNonTail: Bool): Expr {
 		// ω-value-yielded-if-tail-barrier (case-body extension): the per-element
 		// opt argument. When `clearExprPositionNonTail` is set (case / default
 		// body Star), every body statement EXCEPT the tail gets
@@ -1041,33 +1036,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		} else {
 			macro _writerOpt;
 		};
-		final triviaElemCall: Expr = macro $i{elemFn}(_t.node, $caseTailOptArg);
-		// ω-typedef-intersection-operand-break: per-iteration element call for
-		// the MAIN inter-element loop only (the heritage/wrap fast paths keep
-		// `triviaElemCall`/`_writerOpt`). Flag off (every Star but
-		// `HxTypedefDecl.intersections`) ⇒ identical to `triviaElemCall`,
-		// byte-inert. Flag on ⇒ when the prior element rendered multi-line AND
-		// ended with a close delim, hand the element a `_copyOpt` with
-		// `_intersectionOperandBreak = true` so its
-		// `@:fmt(typedefIntersectionBreak)` lead breaks `&\n\t` before the
-		// operand; otherwise the shared `_writerOpt` (stays glued — no copy,
-		// no mutation of the shared opt).
-		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace ? macro $i{elemFn}(_t.node, _elemOpt) : triviaElemCall;
-		// Single `final _elemOpt = …;` declaration spliced at loop scope (NOT a
-		// nested EBlock — that would isolate `_elemOpt` from the element call).
-		// Flag on ⇒ when the prior element rendered multi-line AND ended with a
-		// close delim, fan the opt through `_setIntersectionBreak` (idempotent
-		// `_copyOpt` + flag set), else the shared `_writerOpt` (no copy, shared
-		// opt untouched). Flag off ⇒ `macro {}` (no local — `triviaElemCall`
-		// uses `_writerOpt` directly, byte-identical to the pre-slice loop).
-		final elemOptInit: Expr = operandBreakAfterMultilineBrace
-			? macro final _elemOpt = _priorElemDoc != null
-				&& anyparse.format.wrap.WrapList.flatLength(_priorElemDoc) < 0
-				&& anyparse.format.wrap.WrapList.endsWithCloseDelim(_priorElemDoc)
-				? _setIntersectionBreak(_writerOpt)
-				: _writerOpt
-			: macro {};
-		return { triviaElemCall: triviaElemCall, triviaElemCallMaybeBreak: triviaElemCallMaybeBreak, elemOptInit: elemOptInit };
+		return macro $i{elemFn}(_t.node, $caseTailOptArg);
 	}
 
 	/**

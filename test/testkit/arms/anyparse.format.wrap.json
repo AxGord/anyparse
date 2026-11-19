@@ -657,6 +657,30 @@
 			"find": "cond.value == 0 ? !moduleOnlyTypedefs : moduleOnlyTypedefs",
 			"replace": "moduleOnlyTypedefs",
 			"note": "the moduleOnlyTypedefs condition ignores its value, so a rule asking for a module that is not typedef-only fires in a typedef-only one"
+		},
+		{
+			"name": "M-OPERAND-CHAIN-BREAK-OFF",
+			"type": "anyparse.format.wrap.OperandChainEmit",
+			"method": "emit",
+			"find": "i > 1 && WrapList.flatLength(prior) < 0 && WrapList.endsWithCloseDelim(prior)",
+			"replace": "false",
+			"note": "an operand after a multi-line brace-closed one stays on the closing line"
+		},
+		{
+			"name": "M-OPERAND-CHAIN-HEAD-BREAKS",
+			"type": "anyparse.format.wrap.OperandChainEmit",
+			"method": "emit",
+			"find": "i > 1 && WrapList.flatLength(prior) < 0",
+			"replace": "WrapList.flatLength(prior) < 0",
+			"note": "the chain head counts as a multi-line predecessor too, so the operand after a head body starts its own line"
+		},
+		{
+			"name": "M-OPERAND-CHAIN-BREAK-UNGATED",
+			"type": "anyparse.format.wrap.OperandChainEmit",
+			"method": "emit",
+			"find": "breakAfterBody && i > 1",
+			"replace": "i > 1",
+			"note": "the break after a multi-line brace-closed operand applies at every site, so a type argument, a bound and a member type break too"
 		}
 	]
 }

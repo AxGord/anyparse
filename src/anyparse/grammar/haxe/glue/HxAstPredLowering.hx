@@ -1168,7 +1168,7 @@ final class HxAstPredLowering extends AstPredLowering {
 		final body: Expr = nullSwitch(ident('t'), macro false, [
 			caseOf(HX_TYPE, ['Anon'], macro true),
 			caseBind(HX_TYPE, 'Arrow', [1 => '_r'], rec(ident('_r'))),
-
+			caseBind(HX_TYPE, 'Intersection', [1 => '_r'], rec(ident('_r'))),
 			caseBind(HX_TYPE, 'ArrowFn', [0 => '_f'], rec(field(ident('_f'), 'ret')))
 		], macro false);
 		return predField(TYPE_ENDS_WITH_BRACE, [valueArg('t', HX_TYPE)], macro : Bool, body, 'True iff a type expression ends with `}`.');
@@ -1309,22 +1309,15 @@ final class HxAstPredLowering extends AstPredLowering {
 	}
 
 	/**
-	 * `typedefBodyEndsWithBrace(d)` — the WRITTEN right-hand side of a typedef ends with `}`: its last
-	 * `& Type` clause, or the head type when there is none. Read on the AST the writer receives, so a
-	 * fixer that turns a brace body into an intersection keeps its `;`.
+	 * `typedefBodyEndsWithBrace(d)` — the WRITTEN right-hand side of a typedef ends with `}`: the last
+	 * operand of its type. Read on the AST the writer receives, so a fixer that turns a brace body into
+	 * an intersection keeps its `;`.
 	 */
 	private function typedefBodyEndsWithBraceField(): Field {
-		final tailType: Expr = field(starElem(HX_TYPEDEF_DECL, 'intersections', macro _m[_m.length - 1]), TYPE_FIELD);
-		final recTail: Expr = { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [tailType]), pos: Context.currentPos() };
 		final headType: Expr = { expr: ECall(ident(TYPE_ENDS_WITH_BRACE), [field(ident('d'), TYPE_FIELD)]), pos: Context.currentPos() };
-		final body: Expr = macro {
-			if (d == null) return false;
-			final _m = d.intersections;
-			_m.length == 0 ? $headType : $recTail;
-		};
 		return predField(
 			'typedefBodyEndsWithBrace', [valueArg('d', HX_TYPEDEF_DECL)],
-			macro : Bool, body, 'True iff the written right-hand side of a typedef ends with `}`.'
+			macro : Bool, macro d != null && $headType, 'True iff the written right-hand side of a typedef ends with `}`.'
 		);
 	}
 

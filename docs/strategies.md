@@ -125,7 +125,7 @@ matrixCollapseRules(…), measuredMultilineDecls, metaBlockGlue(…), metaLineEn
 multilineWhenFieldCtorAndOpt(…), multilineWhenFieldNonEmpty(…), multilineWhenFieldShape(…),
 multilineWhenLeadingTriviaSpansLines(…), multilineWhenStarFieldWrapsCascade(…), multiVarWrap(…), nestBody,
 nestBodyOnSourceNewline, nestedIfElseLadder(…), noSiblingFallback(…), objectLiteralBracesClose,
-objectLiteralBracesOpen, operandBreakAfterMultilineBrace, optionalSemicolon(…), padLeading, padTrailing,
+objectLiteralBracesOpen, operandChain(…), optFlagForCtor(…), optionalSemicolon(…), padLeading, padTrailing,
 preWrite(…), propagateAnonFnContext, propagateArrowLambdaBody, propagateElseIfBranch,
 propagateEnumAbstractContext, propagateExprPosition, propagateFieldLevelVar, propagateNestedType, propagateTypedefContext,
 propagateValueIfBranch, reflowCtorOnFitLine(…), reflowFrameThroughWrap(…), reflowInExprPosition, reflowSourceMultiline, refuseFlatOnComplexExpr,
@@ -138,7 +138,7 @@ switchCondParensInsideClose, switchPolicy, switchSubjectNoWrap,
 switchSubjectParensStrip, switchWrapSpace, tight, tightKw, tightLead, tightOnParenOperand(…), trailingComma(…),
 trailingCommaRemovable, trailOptParseGate(…), trailOptShapeGate(…), tryBraceSymmetry(…),
 tryCatchBraceSymmetry(…), tryDeBrace, tryPolicy, typedefBodyBlanks,
-typedefIntersectionBreak, typeParamClose, typeParamDefaultEquals,
+typeParamClose, typeParamDefaultEquals,
 typeParamItems, typeParamOpen, uniformBetween(…), uniformStmtBlanks, valueBraceSymmetry(…), whileCondParensInsideClose,
 whilePolicy, widthAware, wrapRules(…)
 ```

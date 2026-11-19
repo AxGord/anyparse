@@ -29,8 +29,6 @@ final class TryparseStarPlan extends StarPlan {
 
 	public inline function elemSelfTrailsNewline(): Bool return _meta.flag('elemSelfTrailsNewline');
 
-	public inline function operandBreakAfterMultilineBrace(): Bool return _meta.flag('operandBreakAfterMultilineBrace');
-
 	public inline function sepBeforeOpt(): Bool return _meta.flag('sepBeforeOpt');
 
 	public inline function condExprFitBreak(): Bool return _meta.flag('condExprFitBreak');

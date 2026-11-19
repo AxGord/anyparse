@@ -91,10 +91,10 @@ class SpanInfoLowering extends PairedShapeLowering {
 	/** Struct field holding a property's accessor clause. */
 	private static final ACCESS_FIELD: String = 'access';
 
-	/** Struct field that, together with `name`, marks a type-parameter declaration - the `typeParamNames` collect site. */
-	private static final CONSTRAINT_MORE_FIELD: String = 'constraintMore';
-
-	/** Struct field holding a type parameter's first bound - the head of the `typeParamConstraints` collect. */
+	/**
+	 * Struct field holding a type parameter's bound - the `typeParamConstraints` collect; together with `name` it
+	 * marks a type-parameter declaration, the `typeParamNames` collect site.
+	 */
 	private static final CONSTRAINT_FIELD: String = 'constraint';
 
 	/** Struct field holding a type parameter's default type - the `typeParamDefaults` collect site. */
@@ -317,11 +317,11 @@ class SpanInfoLowering extends PairedShapeLowering {
 	/**
 	 * The type-parameter name collect for a `Seq`, or null when it is not one. A
 	 * type-parameter declaration is the shape carrying BOTH a `name` and a
-	 * `constraintMore` - the same pair the reflective scan tested for.
+	 * `constraint`.
 	 */
 	private function typeParamCollect(node: ShapeNode): Null<Expr> {
 		final nameField: Null<ShapeNode> = seqField(node, 'name');
-		if (nameField == null || seqField(node, CONSTRAINT_MORE_FIELD) == null) return null;
+		if (nameField == null || seqField(node, CONSTRAINT_FIELD) == null) return null;
 		final n: Null<Expr> = nominalOperandName(nameField, field(ident('v'), 'name'));
 		if (n == null) return null;
 		// `tp` is the generated function's PARAMETER: inside a `macro {}` block a
@@ -359,32 +359,46 @@ class SpanInfoLowering extends PairedShapeLowering {
 	}
 
 	/**
-	 * The pushes of a type-parameter declaration's bound sources onto `_bounds`: the `constraint` and, per clause
-	 * of `constraintMore`, the clause's `type`, each as the verbatim source its own span covers; a `constraint` that is an
-	 * alternation contributes its ctors' operands (`altBoundsPush`). A slot whose rule has no span helper — a grammar
-	 * shaped otherwise — contributes nothing.
+	 * The pushes of a type-parameter declaration's bound sources onto `_bounds`: each operand of the `constraint`
+	 * (`operandsPush`), as the verbatim source its own span covers; a `constraint` that is an alternation contributes
+	 * its ctors' operands (`altBoundsPush`). A slot whose rule has no span helper — a grammar shaped otherwise —
+	 * contributes nothing.
 	 */
 	private function constraintCollect(node: ShapeNode): Expr {
-		final out: Array<Expr> = [];
 		final first: Null<ShapeNode> = seqField(node, CONSTRAINT_FIELD);
 		final firstRule: Null<String> = first == null ? null : refOf(first);
 		final firstPush: Null<Expr> = if (firstRule == null)
 			null
 		else if (_nominalRules.contains(firstRule))
-			sourcePush(firstRule, ident('_cf'), BOUNDS_LOCAL)
+			operandsPush(firstRule, ident('_cf'), BOUNDS_LOCAL)
 		else
 			altBoundsPush(firstRule, ident('_cf'));
-		if (first != null && firstPush != null) out.push(guardOptional(first, field(ident('v'), CONSTRAINT_FIELD), '_cf', firstPush));
-		final more: Null<ShapeNode> = seqField(node, CONSTRAINT_MORE_FIELD);
-		final clauseRule: Null<String> = more == null || more.kind != Star || more.children.length == 0 ? null : refOf(more.children[0]);
-		final clause: Null<ShapeNode> = clauseRule == null ? null : _shape.rules.get(clauseRule);
-		final clauseType: Null<ShapeNode> = clause == null ? null : seqField(clause, TYPE_FIELD);
-		final clauseTypeRule: Null<String> = clauseType == null ? null : refOf(clauseType);
-		if (clauseType != null && clauseTypeRule != null && _nominalRules.contains(clauseTypeRule) && !isOptional(clauseType)) {
-			final push: Expr = sourcePush(clauseTypeRule, field(ident('_cm'), TYPE_FIELD), BOUNDS_LOCAL);
-			out.push(macro for (_cm in $e{field(ident('v'), CONSTRAINT_MORE_FIELD)}) $push);
-		}
-		return block(out);
+		return first != null && firstPush != null ? guardOptional(first, field(ident('v'), CONSTRAINT_FIELD), '_cf', firstPush) : block([]);
+	}
+
+	/**
+	 * Push onto the local array `list` the source of every operand of `value`: `value` itself, or, when `rule` has an
+	 * `@:fmt(operandChain)` ctor (`A & B & C`), each leaf of the tree that ctor builds, in written order.
+	 */
+	private function operandsPush(rule: String, value: Expr, list: String): Expr {
+		final chain: Null<ShapeNode> = PrattMeta.operandChainBranch(_shape.rules.get(rule));
+		if (chain == null) return sourcePush(rule, value, list);
+		final ct: ComplexType = pairedComplexType(rule);
+		final cases: Array<Case> = [
+			{
+				values: [ctorPattern(rule, chain.annotations.get(AnnotationKeys.BASE_CTOR), ['_l', '_r'])],
+				expr: macro {
+					_operands(_l);
+					_operands(_r);
+				}
+			},
+			{ values: [macro _], expr: sourcePush(rule, ident('_t'), list) }
+		];
+		final walk: Expr = { expr: ESwitch(ident('_t'), cases, null), pos: Context.currentPos() };
+		return macro {
+			function _operands(_t: $ct): Void $walk;
+			_operands($value);
+		};
 	}
 
 	/**
@@ -409,7 +423,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 				}
 				final local: String = '_ab$i';
 				argNames.push(local);
-				body.push(arg.kind == Star ? macro for (_abe in $i{local}) $e{sourcePush(ref, ident('_abe'), BOUNDS_LOCAL)} : sourcePush(
+				body.push(arg.kind == Star ? macro for (_abe in $i{local}) $e{operandsPush(ref, ident('_abe'), BOUNDS_LOCAL)} : operandsPush(
 					ref, ident(local), BOUNDS_LOCAL
 				));
 			}

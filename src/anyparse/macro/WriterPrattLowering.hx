@@ -331,6 +331,7 @@ final class WriterPrattLowering {
 		final isChainBool: Bool = opText == '||' || opText == '&&';
 		final isChainAddSub: Bool = opText == '+' || opText == '-';
 		final isChainNullCoal: Bool = opText == '??';
+		if (branch.fmtHasFlag(OPERAND_CHAIN)) return lowerInfixOperandChain(pc, c);
 		if (isTight || isAssign) return lowerInfixTightAssign(pc, c);
 		if (isChainBool || isChainAddSub || isChainNullCoal) return lowerInfixChain(pc, c);
 		// Asymmetric infix mirror of PrattPostfixLowering.lowerPrattLoop: when the
@@ -1353,6 +1354,94 @@ final class WriterPrattLowering {
 		final only: ShapeNode = children[0];
 		final ref: Null<String> = only.kind == Ref ? only.annotations[AnnotationKeys.BASE_REF] : null;
 		return ref != null && simpleName(ref) == simpleName(typePath);
+	}
+
+	/**
+	 * `@:fmt(operandChain[('<spaceKnob>')])` on a right-associative infix ctor of one rule: the whole right spine is
+	 * written as one chain by `OperandChainEmit`, so an operand knows whether the one before it is the chain's head. The
+	 * operator takes one space before it and, after it, the `WhitespacePolicy` knob's `After` side (a space when no knob
+	 * is named). Under `@:fmt(captureChainNewline)` the comment trailing an operand rides it, and the ones after an
+	 * operator are written before its right operand.
+	 */
+	private static function lowerInfixOperandChain(pc: PrattLoweringCtx, c: WriterLowering.LowerBranchCtx): Expr {
+		final branch: ShapeNode = c.branch;
+		final argNames: Array<String> = c.argNames;
+		final arity: Int = branch.children.length;
+		final prec: Int = (branch.annotations[AnnotationKeys.PRATT_PREC]: Int);
+		final leftCtx: Int = prec + 1;
+		final rightCtx: Int = branch.annotations[AnnotationKeys.PRATT_RIGHT_PREC];
+		final opText: String = getOperatorText(branch);
+		final captures: Bool = pc.ctx.trivia && TriviaPairAltCtor.isInfixChainBranch(branch);
+		final cols: Expr = macro opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final chainArgs: Array<String> = branch.fmtReadStringArgs(OPERAND_CHAIN) ?? [];
+		// The option that grants the break after a multi-line body is the chain's own: its operands never inherit it.
+		final breakFlag: Null<String> = chainArgs[1];
+		final breaks: Expr = breakFlag == null ? macro false : optFieldAccess(breakFlag);
+		final operandOpt: Null<Expr> = typedefClearedOperandOpt(branch, breakFlag == null ? null : macro _operandOpt);
+		inline function leftWrite(value: Expr): Expr
+			return guardOpenLeft(c.writeFnName, value, leftCtx, prec, makeWriteCall(c.writeFnName, value, c.hasPratt, leftCtx, operandOpt));
+		// One gap's comments, pushed in lockstep with the operand that precedes it.
+		function gap(lead: Expr, after: Expr, own: Expr): Expr return macro {
+			final _lc: Null<String> = $lead;
+			if (_lc != null) _items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+			_leadLine.push(_lc != null && !StringTools.startsWith(_lc, '/*'));
+			final _ac: Null<String> = $after;
+			final _run: Array<String> = _ac == null ? $own : [_ac].concat($own);
+			_afters.push(_run.length == 0 ? null : leadingCommentsBefore(_run, _dn($cols, _dhl()), opt));
+		};
+		final plainGap: Expr = macro {
+			_leadLine.push(false);
+			_afters.push(null);
+		};
+		inline function slot(kind: WriterLowering.AltSlot): Expr return altSlotAccess(branch, arity, argNames, kind) ?? macro null;
+		final outerGap: Expr = captures ? gap(slot(ChainLeadComment), slot(ChainAfterComment), slot(ChainOwnComments)) : plainGap;
+		final extra: Int = pc.branchExtraArgs(branch);
+		final innerArgs: Array<Expr> = [macro _l, macro _r];
+		if (captures) for (name in ['_', '_glc', '_gac', '_goc']) innerArgs.push(macro $i{name});
+		while (innerArgs.length < arity + extra) innerArgs.push(macro _);
+		final ctorRef: Expr = MacroStringTools.toFieldExpr(pc.ruleCtorPath(c.typePath, branch.annotations[AnnotationKeys.BASE_CTOR]));
+		final innerCase: Case = {
+			values: [{ expr: ECall(ctorRef, innerArgs), pos: Context.currentPos() }],
+			expr: macro {
+				_items.push(${leftWrite(macro _l)});
+				${captures ? gap(macro _glc, macro _gac, macro _goc) : plainGap};
+				_gather(_r);
+			}
+		};
+		final tailCase: Case = {
+			values: [macro _],
+			expr: macro _items.push(${makeWriteCall(c.writeFnName, macro _e, c.hasPratt, rightCtx, operandOpt)})
+		};
+		final gatherSwitch: Expr = { expr: ESwitch(macro _e, [innerCase, tailCase], null), pos: Context.currentPos() };
+		final argTypeCT: ComplexType = pc.ruleValueCT(c.typePath);
+		final knob: Null<String> = chainArgs[0];
+		final clearBreak: Expr = breakFlag == null ? macro {} : {
+			final target: Expr = { expr: EField(macro _cleared, breakFlag), pos: Context.currentPos() };
+			macro final _operandOpt = if ($breaks) {
+				final _cleared = _copyOpt(opt);
+				$target = false;
+				_cleared;
+			} else {
+				opt;
+			};
+		};
+		final spaced: Expr = knob == null ? macro _dc([_dt($v{opText}), _dop(' ')]) : operandChainOp(opText, knob);
+		return macro {
+			$clearBreak;
+			final _items: Array<anyparse.core.Doc> = [${leftWrite(macro $i{argNames[0]})}];
+			final _afters: Array<Null<anyparse.core.Doc>> = [];
+			final _leadLine: Array<Bool> = [];
+			$outerGap;
+			function _gather(_e: $argTypeCT): Void $gatherSwitch;
+			_gather($i{argNames[1]});
+			final _inner: anyparse.core.Doc = anyparse.format.wrap.OperandChainEmit.emit(
+				_items, $v{opText}, $spaced, _afters, _leadLine, $cols, $breaks
+			);
+			if ($v{prec} < ctxPrec)
+				_dc([_dt('('), _inner, _dt(')')])
+			else
+				_inner;
+		};
 	}
 
 }

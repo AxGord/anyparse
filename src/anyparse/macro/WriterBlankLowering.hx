@@ -245,6 +245,21 @@ final class WriterBlankLowering {
 	}
 
 	/**
+	 * `@:fmt(optFlagForCtor('<optField>', '<ctor>'))` on a Ref field: a value whose runtime ctor is the named one is written
+	 * under a copy of the options with the Bool `<optField>` set, so that ctor's writer knows this site holds it directly.
+	 */
+	private static function optFlagForCtorOpt(child: ShapeNode, value: Expr, e: Expr): Expr {
+		final args: Null<Array<String>> = child.fmtReadStringArgs('optFlagForCtor');
+		if (args == null) return e;
+		final target: Expr = { expr: EField(macro _flagged, args[0]), pos: Context.currentPos() };
+		return macro (Type.enumConstructor($value) == $v{args[1]} ? {
+			final _flagged = _copyOpt($e);
+			$target = true;
+			_flagged;
+		} : $e);
+	}
+
+	/**
 	 * `@:writeNormalize('reindentBlock')` on a `@:rawString` terminal: emit the captured bytes as
 	 * a run of LINES at the writer's own indent instead of one `_dt` whose embedded newlines
 	 * splice the SOURCE indentation verbatim.

@@ -1,19 +1,18 @@
 package anyparse.grammar.haxe.decl;
 
 import anyparse.grammar.haxe.lit.HxIdentLit;
-import anyparse.grammar.haxe.types.HxIntersectionClause;
 import anyparse.grammar.haxe.types.HxType;
 import anyparse.grammar.haxe.types.HxTypeParamDecl;
 
 /**
- * Grammar type for a Haxe typedef declaration: `typedef Name<TypeParams> = Type [& Type]*`.
+ * Grammar type for a Haxe typedef declaration: `typedef Name<TypeParams> = Type`.
  * The `typedef` keyword lives on the `name` field via `@:kw('typedef')` so the generated
  * parser enforces a word boundary; the trailing semicolon lives on the `TypedefDecl` branch
  * in `HxDecl`, not here, matching `HxVarDecl` and `HxFnDecl`. `typeParams` is the
  * close-peek-Star sibling of `HxFnDecl.typeParams` over `HxTypeParamDecl` elements.
  *
- * `type` is a full `HxType`, so struct typedefs and function types compose through
- * `HxType.Anon` and `HxType.Arrow`. Writer-side `=` spacing is driven by
+ * `type` is a full `HxType`, so struct typedefs, function types and intersections compose through
+ * `HxType.Anon`, `HxType.Arrow` and `HxType.Intersection`. Writer-side `=` spacing is driven by
  * `@:fmt(space('typedefAssign', 'lead'))` (ω-typedef-assign): the default `WhitespacePolicy.Both` emits
  * `typedef Foo = Bar;` (haxe-formatter's `binopPolicy` default), `None` the tight form.
  *
@@ -36,14 +35,6 @@ import anyparse.grammar.haxe.types.HxTypeParamDecl;
  * `WrapList.shapeFillLine` to `GroupWithRestProbe` so the per-line fit check subtracts
  * `flatTokenWidthOfRestStack(stack)` from the budget: a fitting-by-itself LHS `<...>` sees
  * the trailing `= Rhs<...>;` content and proactively breaks (the fork's `lengthAfter` bias).
- *
- * `intersections` is a bare `Array<HxIntersectionClause>` annotated `@:trivia @:tryparse
- * @:fmt(padLeading)`, structurally identical to `HxClassDecl.heritage`; it captures the `&
- * Type` tail with the first operand in `type` (scoping `&` here keeps `HxType` free of it —
- * see `HxIntersectionClause`). `@:fmt(operandBreakAfterMultilineBrace)` on the Star makes
- * each `& Type` clause whose PRECEDING clause rendered multi-line and ended with a close
- * brace break onto its own line (`} &\n\tB`), the fork's `lineEndAfter` on the `&` after a
- * `BrClose`; threaded with the per-clause `@:fmt(typedefIntersectionBreak)`.
  */
 @:peg
 @:fmt(multilineWhenFieldCtorAndOpt('type', 'Anon', 'anonTypeLeftCurly', 'anyparse.format.BracePlacement.Next'))
@@ -60,14 +51,9 @@ typedef HxTypedefDecl = {
 	@:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe)
 	var typeParams: Null<Array<HxTypeParamDecl>>;
 
-	@:fmt(space('typedefAssign', 'lead'), propagateTypedefContext, captureAfterLead)
+	@:fmt(space('typedefAssign', 'lead'), propagateTypedefContext, captureAfterLead, optFlagForCtor('_operandChainBreak', 'Intersection'))
 	@:lead('=')
 	@:queryTypeSlot
 	var type: HxType;
-
-	@:trivia
-	@:tryparse
-	@:fmt(padLeading, operandBreakAfterMultilineBrace)
-	var intersections: Array<HxIntersectionClause>;
 
 }

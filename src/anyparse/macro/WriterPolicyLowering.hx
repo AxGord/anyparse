@@ -844,5 +844,18 @@ final class WriterPolicyLowering {
 		return macro _dt(opt.keyValueSpace ? $v{text + ' '} : $v{text});
 	}
 
+	/**
+	 * The operator of an `@:fmt(operandChain('<flagName>'))` chain with its trailing spacing: a space after it under the
+	 * `After` and `Both` sides of `opt.<flagName>:WhitespacePolicy`, bare otherwise. The space before the operator is the
+	 * chain's own, never the knob's.
+	 */
+	private static function operandChainOp(opText: String, flagName: String): Expr {
+		return buildPolicySwitch(
+			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+			[{ values: ['After', 'Both'], expr: macro _dc([_dt($v{opText}), _dop(' ')]) }],
+			macro _dt($v{opText})
+		);
+	}
+
 }
 #end

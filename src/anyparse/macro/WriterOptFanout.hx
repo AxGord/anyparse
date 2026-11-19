@@ -706,35 +706,6 @@ final class WriterOptFanout {
 	}
 
 	/**
-	 * ω-typedef-intersection-operand-break — opt-fanout shim for the per-
-	 * element `& Type`-clause break in `HxTypedefDecl.intersections`.
-	 * Idempotent sister to `_setTypedefBody` — returns `o` unchanged when
-	 * `_intersectionOperandBreak` is already `true`; otherwise returns a
-	 * `_copyOpt(o)` with the flag flipped on. Consumed by the trivia-Star
-	 * loop when the prior `& Type` clause rendered multi-line and ended with
-	 * a close brace, so the next clause's `@:fmt(typedefIntersectionBreak)`
-	 * lead breaks `&\n\t` before the operand. Emitted only when the opt
-	 * typedef declares `_intersectionOperandBreak:Bool`.
-	 */
-	private static function setIntersectionBreakField(optionsCT: ComplexType): Field {
-		return {
-			name: '_setIntersectionBreak',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [{ name: 'o', type: optionsCT }, chainBaseArg(optionsCT)],
-				ret: optionsCT,
-				expr: macro {
-					if (o._intersectionOperandBreak) return o;
-					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
-					_c._intersectionOperandBreak = true;
-					return _c;
-				}
-			}),
-			pos: Context.currentPos()
-		};
-	}
-
-	/**
 	 * ω-fieldlevel-var-value-expr-indent — opt-fanout shim for the
 	 * `propagateFieldLevelVar` meta. Idempotent sister to `_setExprPosition`
 	 * — returns `o` unchanged when `_inFieldLevelVar` is already `true`;
@@ -1307,11 +1278,7 @@ final class WriterOptFanout {
 		// Set-only (an `enum abstract` body nests no further type decl, so no
 		// clear sister is needed). Gated on `_inEnumAbstract:Bool`.
 		if (optionsHasField(optionsTypePath, '_inEnumAbstract')) fields.push(setEnumAbstractField(optionsCT));
-		// ω-typedef-intersection-operand-break: opt-fanout helper for the
-		// per-element `& Type`-clause break in `HxTypedefDecl.intersections`.
-		// Idempotent sister to `_setTypedefBody`. Gated on
-		// `_intersectionOperandBreak:Bool` field presence on the opt typedef.
-		if (optionsHasField(optionsTypePath, '_intersectionOperandBreak')) fields.push(setIntersectionBreakField(optionsCT));
+
 		// ω-fieldlevel-var-value-expr-indent: opt-fanout helper pair for
 		// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` ctor
 		// init dispatch) and the function-body clear. `_setFieldLevelVar`
