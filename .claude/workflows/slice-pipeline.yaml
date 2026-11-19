@@ -153,6 +153,8 @@ states:
     command: sleep 120
     timeout: 150000
     on_success: sweep_lock
+    # A wait that failed (killed, timed out) never runs the line on its own: the parent decides.
+    on_error: sweep_ask
 
   sweep_ask:
     ask: parent
