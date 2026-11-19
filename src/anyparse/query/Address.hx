@@ -773,9 +773,28 @@ final class Address {
 		// The index is built HERE and not by the caller: an ambiguity is the rare path, and every
 		// resolve would otherwise pay for a whole-tree index that the single-match answer discards.
 		final index: AddressIndex = describerFor(tree, equiv);
-		final lines: Array<String> = [ for (i in 0...shown) '  #${i + 1} ${candidateLabel(index, source, nodes[i])}' ];
+		final lines: Array<String> = [
+			for (i in 0...shown) '  #${i + 1} ${candidateLabel(index, source, nodes[i])}${insideMark(nodes, i)}'
+		];
 		final more: String = nodes.length > shown ? '\n  … ${nodes.length - shown} more' : '';
 		return Err('$what matched ${nodes.length} nodes — narrow it or pick one with --nth <k>:\n' + lines.join('\n') + more);
+	}
+
+	/**
+	 * The listing suffix for row `i` when its span lies inside an earlier row's: `--nth` counts every
+	 * match in document order, nested ones included, so the ordinal of a nested row is not its
+	 * top-level rank. Names the NEAREST enclosing row; a row nothing encloses gets no suffix.
+	 */
+	private static function insideMark(nodes: Array<QueryNode>, i: Int): String {
+		final own: Null<Span> = nodes[i].span;
+		if (own == null) return '';
+		var j: Int = i - 1;
+		while (j >= 0) {
+			final outer: Null<Span> = nodes[j].span;
+			if (outer != null && outer.from <= own.from && own.to <= outer.to) return '  (inside #${j + 1})';
+			j--;
+		}
+		return '';
 	}
 
 	/**

@@ -17286,6 +17286,14 @@
 			"find": "case Calls(_, _): escape;",
 			"replace": "case Calls(_, _): null;",
 			"note": "a shared array member asked through call sites is proven without anything being read for a change of the kept array"
+		},
+		{
+			"name": "M-NTH-NESTED-INSIDE-MARK",
+			"type": "anyparse.query.Address",
+			"method": "insideMark",
+			"find": "outer != null && outer.from <= own.from && own.to <= outer.to",
+			"replace": "false",
+			"note": "an ambiguity row nested in an earlier row loses its (inside #k) suffix, so an --nth pick reads as a top-level rank again"
 		}
 	]
 }
