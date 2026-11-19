@@ -1563,6 +1563,14 @@
 			"find": "narrow == null ? found : narrow(found)",
 			"replace": "found",
 			"note": "the oracle-assisted phase ignores the run's window, so a --changed-since fix annotates a standing local on an untouched line"
+		},
+		{
+			"name": "M-ADD-ELEMENT-CLI-STRIPS-PAYLOAD",
+			"type": "anyparse.query.cli.command.AddElementCommand",
+			"method": "runAddElement",
+			"find": "CliArgs.resolveCodeArg('add-element', code, o.fromFile);",
+			"replace": "CliArgs.resolveCodeArg('add-element', code, o.fromFile, true);",
+			"note": "the CLI strips one trailing newline from a --from-file / stdin payload, so a payload ending in a blank line reaches the op without it"
 		}
 	]
 }

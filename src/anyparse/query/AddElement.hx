@@ -10,6 +10,7 @@ import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
 import haxe.ds.Either;
 
+using anyparse.util.Strings;
 using anyparse.util.Arrays;
 using Lambda;
 
@@ -107,6 +108,8 @@ final class AddElement {
 	): EditResult {
 		final trimmed: String = code.trim();
 		if (trimmed.length == 0) return Err(EMPTY_ELEMENT);
+		// A payload that ends in a blank line asks for one between the inserted element and what follows it.
+		final gap: String = code.substr(code.rtrim().length).charCount('\n'.code) >= 2 ? '\n' : '';
 
 		final tree: QueryNode = switch ParseGate.parse(plugin, source, SOURCE_LABEL) {
 			case Unparsed(message): return Err(message);
@@ -184,10 +187,10 @@ final class AddElement {
 		// START of a line — the next declaration's doc, or its first token where a module-level span is
 		// greedy — the element goes first and the break after it, so what followed (that doc above all)
 		// stays at the start of a line instead of trailing the element's last token: `} /** doc *\/`.
-		final afterText: String = SourceText.startsItsLine(source, after) ? '$trimmed\n' : '\n$trimmed';
+		final afterText: String = SourceText.startsItsLine(source, after) ? '$trimmed\n$gap' : '\n$trimmed$gap';
 		final edit: Splice = switch side {
 			case After: { span: new Span(after, after), text: isComma ? ', $trimmed' : afterText };
-			case Before: { span: new Span(before, before), text: isComma ? '$trimmed, ' : '$trimmed\n' };
+			case Before: { span: new Span(before, before), text: isComma ? '$trimmed, ' : '$trimmed\n$gap' };
 		};
 
 		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);

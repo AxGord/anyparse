@@ -107,7 +107,9 @@ final class AddElementCommand implements CliCommand implements PostWriteFix {
 		if (o.errExit != null) return o.errExit;
 		var code: Null<String> = o.code;
 		if (o.fromFile != null || code == '-') {
-			final resolved: Null<String> = CliArgs.resolveCodeArg('add-element', code, o.fromFile, true);
+			// The payload keeps its trailing newlines: the op trims what it does not want, and a payload
+			// ending in a blank line asks for that blank line to survive.
+			final resolved: Null<String> = CliArgs.resolveCodeArg('add-element', code, o.fromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			code = resolved;
 		}

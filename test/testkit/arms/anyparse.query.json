@@ -17294,6 +17294,14 @@
 			"find": "outer != null && outer.from <= own.from && own.to <= outer.to",
 			"replace": "false",
 			"note": "an ambiguity row nested in an earlier row loses its (inside #k) suffix, so an --nth pick reads as a top-level rank again"
+		},
+		{
+			"name": "M-ADD-PAYLOAD-TRAILING-BLANK",
+			"type": "anyparse.query.AddElement",
+			"method": "addElement",
+			"find": "final gap: String = code.substr(code.rtrim().length).charCount('\\n'.code) >= 2 ? '\\n' : '';",
+			"replace": "final gap: String = '';",
+			"note": "a payload's trailing blank line is dropped again, so the inserted element runs into the member that follows it"
 		}
 	]
 }
