@@ -6,6 +6,7 @@ import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.PublicReach;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.CtorFieldFold;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -19,10 +20,10 @@ using StringTools;
 /** One public method that cleared every cheap gate: its name and its own declaration span. */
 private typedef Candidate = {
 
-	/** The method's name — the token the reference test proved absent everywhere else. */
+	/** The member's name — the token the reference test proved absent everywhere else. */
 	final name: String;
 
-	/** The method declaration's own span, which the finding reports and `fix` looks up. */
+	/** The member declaration's own span, which the finding reports and `fix` looks up. */
 	final span: Span;
 
 	/** The declaration node — read to tell whether deleting it would empty a `#if` region. */
@@ -30,6 +31,9 @@ private typedef Candidate = {
 
 	/** Whether the declaration carries `static` — no framework INVOCATION contract can claim one. */
 	final isStatic: Bool;
+
+	/** Whether the member is a class data field (`static var` / `static final`) rather than a method. */
+	final isField: Bool;
 
 };
 
@@ -48,11 +52,15 @@ private typedef Ctx = {
 	/** The project's declared framework contracts, resolved once per run — the roster the reachability predicate is asked with. */
 	final contracts: Array<FrameworkContract>;
 
+	/** The grammar's reference shape — the vocabulary the field-initializer purity gate reads. */
+	final shape: RefShape;
+
 };
 
 /**
- * Flags a PUBLIC METHOD of a class whose NAME occurs NOWHERE in scope outside its own
- * declaration — dead weight that neither the compiler nor the formatter removes, and which
+ * Flags a PUBLIC METHOD or PUBLIC STATIC FIELD (`static var` / `static final`) of a class whose
+ * NAME occurs NOWHERE in scope outside its own declaration — dead weight that neither the
+ * compiler nor the formatter removes, and which
  * still reads like live behaviour. The public-facing sibling of `unused-private`, whose
  * confinement proof stops at the file boundary: a public member can be reached from anywhere,
  * so the only usable proof is that the name is not written anywhere at all. DEFAULT OFF
@@ -103,7 +111,10 @@ private typedef Ctx = {
  * RESETS at every member: a `public` or a `@:keep` written on a preceding FIELD belongs to
  * that field, and reading it as the next method's would both invent and hide findings.
  *
- * - Not a method (`FnMember` / `FinalModifiedMember`).
+ * - Not a method (`FnMember` / `FinalModifiedMember`) and not a STATIC data field (`VarMember` /
+ *   `FinalMember` carrying `static`). An INSTANCE field is deliberately out: its own constructor
+ *   or initializer writes the name (an occurrence), and structural typing, anonymous-structure
+ *   literals and serializers read it by name with no token the scan could count.
  * - No explicit `public` modifier. A Haxe member with no visibility keyword is PRIVATE, and
  *   `unused-private` owns it.
  * - An `override` — reached polymorphically through the supertype's own call.
@@ -144,7 +155,7 @@ private typedef Ctx = {
  *
  * ## Autofix — `RiskyFix`
  *
- * The fix DELETES a public method, and the reachability gate list above is a NEGATIVE one:
+ * The fix DELETES a public member, and the reachability gate list above is a NEGATIVE one:
  * every entry is a shape somebody found leaking, so the next implicitly-called name (the
  * `for`-desugaring and serializer names in `IMPLICIT_NAMES` were exactly that) leaks until
  * someone trips over it. Combined with the concatenated-reflection hole below, that is enough
@@ -167,7 +178,10 @@ private typedef Ctx = {
  * Closing it by asking containment the other way round for every literal would veto far too
  * much; `RiskyFix` plus this paragraph is the answer.
  *
- * `fix` deletes the method with its modifier / metadata run and its leading doc comment,
+ * A static field is deleted only when it has no initializer or an inert one (`MemberKinds.isSideEffectFree`):
+ * a static initializer runs at class load, so a call or construction there leaves the finding report-only.
+ *
+ * `fix` deletes the member with its modifier / metadata run and its leading doc comment,
  * whole-line, so nothing orphaned is left behind. The verdict itself is computed in `run`,
  * where the whole file set is in hand, and read back by span (`_deletable`) — `fix` sees one
  * file, and a `fix` with no preceding `run` edits nothing (fail-closed).
@@ -274,7 +288,8 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 			tokens: PublicReach.tokenCounts(files, wide, plugin),
 			fragments: ReflectionScan.reflectionSurface(files, plugin).fragments,
 			naming: plugin.namingSupport(),
-			contracts: contracts
+			contracts: contracts,
+			shape: plugin.refShape()
 		};
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			// The resolution index carries the report files too, but only when a scope reached the
@@ -292,7 +307,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 	}
 
 	/**
-	 * Delete each flagged method `run` proved deletable — the method with its modifier / metadata
+	 * Delete each flagged member `run` proved deletable — the member with its modifier / metadata
 	 * run (`declGroupSpan`) and its leading doc comment (`docExtendedSpan`), then the whole line
 	 * (`lineExtendedSpan`), so no orphaned doc comment or blank modifier line is left behind. A
 	 * finding absent from `_deletable` (an interpolation fragment naming it, or a bare `fix`)
@@ -302,7 +317,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return CheckScan.deleteMethodsFix(plugin, source, violations, _deletable);
+		return CheckScan.deleteMembersFix(plugin, source, violations, _deletable);
 	}
 
 	/**
@@ -337,9 +352,10 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 				span: candidate.span,
 				rule: RULE_ID,
 				severity: Severity.Warning,
-				message: 'unused public $name: no reference to it anywhere in scope'
+				message: 'unused public ${candidate.isField ? 'static field ' : ''}$name: no reference to it anywhere in scope'
 			});
-			if (noRuntimeNameFragment(ctx, name)) deleting.push(candidate.node);
+			if (noRuntimeNameFragment(ctx, name) && (!candidate.isField || inertInitializer(candidate.node, ctx.shape)))
+				deleting.push(candidate.node);
 		}
 		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
 		// re-parse gate would then drop EVERY edit the pass had for this file — so the question is
@@ -392,7 +408,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 			// enabling — see `MemberBranchScan.joinRuns`. This is also what keeps the old
 			// conservatism for `#if js public #end function f()`: a method public in one build only
 			// is not judged, let alone deleted.
-			if (!certain || !CheckScan.METHOD_KINDS.contains(child.kind)) return;
+			if (!certain || !CheckScan.DELETABLE_MEMBER_KINDS.contains(child.kind)) return;
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
 			if (name == null || span == null) return;
@@ -401,6 +417,10 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 			// merely CARRIES a modifier out makes the run uncertain and the member is skipped above.
 			final mods: MemberRun = PublicReach.readRun(run);
 			if (!mods.isPublic || mods.isOverride || mods.annotated || !reportableName(name)) return;
+			// An INSTANCE field stays out: the constructor that writes it is an occurrence of the name, and
+			// structural typing, anonymous-structure literals and serializers read it by name with no token.
+			final isField: Bool = MemberKinds.isDataFieldKind(child.kind);
+			if (isField && !mods.isStatic) return;
 			// Re-bound: a null-safety narrowing does not reach inside an anonymous structure literal.
 			final memberName: String = name;
 			final memberSpan: Span = span;
@@ -410,7 +430,8 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 				name: memberName,
 				span: memberSpan,
 				node: child,
-				isStatic: mods.isStatic
+				isStatic: mods.isStatic,
+				isField: isField
 			});
 		});
 		return out;
@@ -452,6 +473,16 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 			&& !name.startsWith(CheckScan.GET_PREFIX)
 			&& !name.startsWith(CheckScan.SET_PREFIX)
 			&& !(name.startsWith(DUNDER) && name.endsWith(DUNDER));
+	}
+
+	/**
+	 * Whether deleting the data field `field` drops no behaviour: it has no initializer, or one
+	 * that `MemberKinds.isSideEffectFree` proves inert — a static initializer runs at class load,
+	 * so a call or a construction in it is kept and the finding stays report-only.
+	 */
+	private static function inertInitializer(field: QueryNode, shape: RefShape): Bool {
+		final init: Null<QueryNode> = CtorFieldFold.declInitializer(field, shape);
+		return init == null || MemberKinds.isSideEffectFree(init, shape);
 	}
 
 }

@@ -457,6 +457,124 @@ class UnusedPublicMemberCheckTest extends Test {
 		);
 	}
 
+	// --- public static fields ---
+
+	/**
+	 * A `public static final` / `public static var` nothing names is dead weight like an unused
+	 * method, and the message says it is a field so a census reads it.
+	 */
+	@:pin('control')
+	@:killer('M-UPM-STATIC-FIELD-GATE')
+	public function testUnreferencedStaticFieldsFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tpublic static final zqxwvOne:String = \'one\';\n\tpublic static var zqxwvTwo:Int = 2;\n}'
+		);
+		Assert.equals(2, vs.length);
+		if (vs.length != 2) return;
+		Assert.equals('unused public static field zqxwvOne: no reference to it anywhere in scope', vs[0].message);
+		Assert.equals('unused public static field zqxwvTwo: no reference to it anywhere in scope', vs[1].message);
+	}
+
+	/** The event-constants shape: a subclass of a resolvable base declaring constants nothing reads. */
+	@:pin('control')
+	@:killer('M-UPM-STATIC-FIELD-GATE')
+	public function testConstantsOfASubclassFlagged(): Void {
+		final base: String = 'class Event {\n\tpublic function new() {}\n}';
+		final sub: String = 'class Ev extends Event {\n\tpublic static final zqxwvOpen:String = \'open\';\n'
+			+ '\tpublic static final zqxwvClose:String = \'close\';\n\tpublic function new() {\n\t\tsuper();\n\t}\n}';
+		Assert.equals(2, violationsOf([{ file: 'Event.hx', source: base }, { file: 'Ev.hx', source: sub }]).length);
+	}
+
+	/** An instance field is out of scope: its constructor writes the name, and structural readers never spell it. */
+	@:pin('control')
+	@:killer('M-UPM-INSTANCE-FIELD-OUT')
+	public function testInstanceFieldsNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic var zqxwvOne:Int = 0;\n\tpublic final zqxwvTwo:Int = 1;\n}').length);
+	}
+
+	public function testStaticFieldReadInAnotherFileNotFlagged(): Void {
+		final owner: String = 'class C {\n\tpublic static final zqxwvLimit:Int = 3;\n}';
+		final user: String = 'class U {\n\tpublic static function main():Int return C.zqxwvLimit;\n}';
+		Assert.equals(0, violationsOf([{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]).length);
+	}
+
+	public function testStaticFieldReadInAnotherBranchNotFlagged(): Void {
+		final src: String =
+			'class C {\n\tpublic static final zqxwvShared:Int = 1;\n\t#if cpp\n\tpublic function go():Int return zqxwvShared;\n\t#end\n}';
+		Assert.equals(0, violations(src).filter(v -> v.message.indexOf('zqxwvShared') >= 0).length);
+	}
+
+	public function testStaticFieldReflectionNameNotFlagged(): Void {
+		final owner: String = 'class C {\n\tpublic static var zqxwvDyn:Int = 1;\n}';
+		final user: String = 'class U {\n\tpublic static function main():Dynamic return Reflect.field(C, \'zqxwvDyn\');\n}';
+		Assert.equals(0, violationsOf([{ file: 'C.hx', source: owner }, { file: 'U.hx', source: user }]).length);
+	}
+
+	public function testStaticFieldWithMetadataOrKeptClassNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\t@:keep public static final zqxwvKept:Int = 1;\n}').length);
+		Assert.equals(0, violations('class C {\n\t@:expose public static final zqxwvOut:Int = 1;\n}').length);
+		Assert.equals(0, violations('@:keep class C {\n\tpublic static final zqxwvKept:Int = 1;\n}').length);
+		Assert.equals(0, violations('@:build(M.gen()) class C {\n\tpublic static final zqxwvGen:Int = 1;\n}').length);
+		Assert.equals(0, violations('extern class C {\n\tpublic static final zqxwvForeign:Int;\n}').length);
+	}
+
+	/** A non-public static field is `unused-private`'s, and an enum abstract value is `unused-enum-abstract-value`'s. */
+	public function testPrivateStaticFieldAndEnumAbstractValueNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tstatic final zqxwvPriv:Int = 1;\n}').length);
+		Assert.equals(0, violations('enum abstract E(Int) {\n\tvar zqxwvVal = 1;\n}').length);
+	}
+
+	/** A property's accessor stays `orphan-accessor`'s: only the property itself is reported here. */
+	public function testStaticPropertyReportedOnceWithoutItsAccessor(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tpublic static var zqxwvProp(get, never):Int;\n\tpublic static function get_zqxwvProp():Int return 1;\n}'
+		);
+		Assert.equals(1, vs.length);
+		if (vs.length != 1) return;
+		Assert.equals('unused public static field zqxwvProp: no reference to it anywhere in scope', vs[0].message);
+	}
+
+	/** The fix removes a field whose initializer is inert, with its doc comment and modifier run, or that has none. */
+	@:pin('control')
+	@:killer('M-UPM-DELETABLE-KINDS')
+	public function testFixDeletesInertStaticFields(): Void {
+		Assert.equals(
+			'class C {\n\n}', applyFix('class C {\n\n\t/** The limit. */\n\tpublic static inline final zqxwvLimit:Int = 3 * 2;\n}')
+		);
+		Assert.equals('class C {\n}', applyFix('class C {\n\tpublic static var zqxwvSlot:Int;\n}'));
+	}
+
+	/** A static initializer runs at class load: a construction or a call there keeps the finding report-only. */
+	@:pin('control')
+	@:killer('M-UPM-FIELD-INITIALIZER-PURITY')
+	public function testFixKeepsStaticFieldWithEffectfulInitializer(): Void {
+		final src: String = 'class Reg {\n}\nclass C {\n\tpublic static final zqxwvReg:Reg = new Reg();\n'
+			+ '\tpublic static var zqxwvN:Int = Std.random(3);\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** Deleting a property drops the property line only: its `get_` accessor stays for `orphan-accessor` to claim on its own. */
+	@:pin('control')
+	@:killer('M-UPM-DELETABLE-KINDS')
+	public function testFixDeletesStaticPropertyAndLeavesItsAccessor(): Void {
+		final src: String =
+			'class C {\n\tpublic static var zqxwvProp(get, never):Int;\n\tpublic static function get_zqxwvProp():Int return 1;\n}';
+		Assert.equals('class C {\n\tpublic static function get_zqxwvProp():Int return 1;\n}', applyFix(src));
+	}
+
+	/** The sole member of a `#if` region is reported but never deleted: an emptied region is a shape the grammar does not model. */
+	public function testConditionalSoleStaticFieldReportedButNotDeleted(): Void {
+		final src: String = 'class C {\n\t#if cpp\n\tpublic static final zqxwvGone:Int = 1;\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
+	/** A `public` carried out of a `#if` region makes the field public in one build only, which this rule does not judge. */
+	public function testConditionalCarriedVisibilityRefusesTheStaticField(): Void {
+		Assert.equals(0, violations('class C {\n\t#if js\n\tpublic\n\t#end\n\tstatic final zqxwvHalf:Int = 1;\n}').length);
+	}
+
 	/** Findings over `C.hx` plus a second file whose `main` (implicitly reachable, never flagged) carries `body`. */
 	private function withUser(body: String): Array<Violation> {
 		final owner: String = 'class C {\n\tpublic function orphaned():Void {}\n}';

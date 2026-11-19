@@ -126,6 +126,9 @@ final class CheckScan {
 	/** The class-body member kinds a method declaration projects as — a plain method and a `final` one. */
 	public static final METHOD_KINDS: Array<String> = ['FnMember', 'FinalModifiedMember'];
 
+	/** The member kinds `deleteMembersFix` may remove — the methods plus the data fields (`var` / `final`). */
+	public static final DELETABLE_MEMBER_KINDS: Array<String> = METHOD_KINDS.concat(MemberKinds.DATA_FIELD_KINDS);
+
 	/** The node kinds a string expression projects as — the hosts whose `Literal` children are interpolation fragments. */
 	public static final STRING_EXPR_KINDS: Array<String> = ['SingleStringExpr', 'DoubleStringExpr'];
 
@@ -616,14 +619,16 @@ final class CheckScan {
 
 	/**
 	 * The whole `fix` of a member-DELETING check: for every violation whose span is in `deletable`,
-	 * one edit removing that method with its modifier / metadata run and its leading doc comment.
+	 * one edit removing that method or class data field with its modifier / metadata run and its
+	 * leading doc comment.
 	 *
 	 * Shared verbatim by `orphan-accessor` and `unused-public-member`, which differ only in how `run`
-	 * proved the method dead. Each method's group span is computed against its OWN host, not the
-	 * container: a method written inside a member-position `#if` region has its run one level down,
+	 * proved the member dead; a span names one member, so a caller that reports only methods never
+	 * matches a field. Each member's group span is computed against its OWN host, not the
+	 * container: a member written inside a member-position `#if` region has its run one level down,
 	 * and a span computed against the container would leave it behind as debris that does not parse.
 	 */
-	public static function deleteMethodsFix(
+	public static function deleteMembersFix(
 		plugin: GrammarPlugin, source: String, violations: Array<Violation>, deletable: Array<String>
 	): Array<{ span: Span, text: String }> {
 		final wanted: Array<String> = [];
@@ -639,7 +644,7 @@ final class CheckScan {
 		for (cls in classBodies(tree)) MemberKinds.eachMemberHost(cls, host -> {
 			for (child in host.children) {
 				final span: Null<Span> = child.span;
-				if (span != null && METHOD_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
+				if (span != null && DELETABLE_MEMBER_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
 					edits.push(deletionEdit(source, child, host, span, regions));
 			}
 		});

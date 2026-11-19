@@ -3125,6 +3125,36 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "UPM-STATIC-FIELDS",
+			"note": "unused-public-member reports an unreferenced public static field and nothing else a field can be: a read one, an instance, a private static, one only some builds make public, an enum abstract value, a property (once, its accessor left alone)",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"unused-public-member",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tpublic static final zqUsed:Int = 1;\n\tpublic static final zqOne:Int = 2;\n\tpublic static var zqTwo:Int;\n\tpublic static var zqProp(get, never):Int;\n\tpublic var zqInst:Int = 0;\n\tstatic final zqPriv:Int = 0;\n\t#if dflag\n\tpublic static final zqCond:Int = 3;\n\t#end\n\t#if dflag\n\tpublic\n\t#end\n\tstatic final zqHalf:Int = 4;\n\n\tstatic function get_zqProp():Int return 1;\n\n\tstatic function main() {\n\t\tSys.println(zqUsed);\n\t}\n}\n\nenum abstract Mode(Int) {\n\tpublic static final zqEnumStatic:Int = 5;\n\tvar zqValue = 1;\n}\n",
+				"apq.json": "{\"rules\":{\"unused-public-member\":{\"enabled\":true}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e57fd17b273449ec",
+				"err": "12e81be5ecb3747c",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

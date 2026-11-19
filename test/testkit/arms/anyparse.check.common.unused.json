@@ -327,6 +327,30 @@
 			"find": "plugin.metaShape().metaKinds",
 			"replace": "MemberKinds.META_KINDS",
 			"note": "unused-private reads the annotation kinds from the Haxe table again, so a grammar that spells them otherwise loses its private-constructor finding"
+		},
+		{
+			"name": "M-UPM-STATIC-FIELD-GATE",
+			"type": "anyparse.check.common.unused.UnusedPublicMember",
+			"method": "unreferencedCandidates",
+			"find": "!CheckScan.DELETABLE_MEMBER_KINDS.contains(child.kind)",
+			"replace": "!CheckScan.METHOD_KINDS.contains(child.kind)",
+			"note": "the candidate gate reads methods only again, so a public static final / var nothing names is never reported"
+		},
+		{
+			"name": "M-UPM-INSTANCE-FIELD-OUT",
+			"type": "anyparse.check.common.unused.UnusedPublicMember",
+			"method": "unreferencedCandidates",
+			"find": "if (isField && !mods.isStatic) return;",
+			"replace": "if (isField && !mods.isStatic && false) return;",
+			"note": "an instance field joins the candidates, so a field its own initializer alone names is reported although structural readers reach it with no token"
+		},
+		{
+			"name": "M-UPM-FIELD-INITIALIZER-PURITY",
+			"type": "anyparse.check.common.unused.UnusedPublicMember",
+			"method": "inertInitializer",
+			"find": "return init == null || MemberKinds.isSideEffectFree(init, shape);",
+			"replace": "return true;",
+			"note": "every unreferenced static field is deletable whatever its initializer, so a construction or call that runs at class load is deleted with it"
 		}
 	]
 }

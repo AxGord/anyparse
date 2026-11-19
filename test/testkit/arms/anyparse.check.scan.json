@@ -1864,6 +1864,14 @@
 			"find": "members.typeProvablyLacksMember(receiverType, method, typing.file, at)\n\t\t\t&& members.closureFreeOfExtensionTypes(receiverType, typing.file, at)",
 			"replace": "true",
 			"note": "an unproven receiver type counts as one that lacks the member, so an extension call may bind a member of that type"
+		},
+		{
+			"name": "M-UPM-DELETABLE-KINDS",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "deleteMembersFix",
+			"find": "DELETABLE_MEMBER_KINDS.contains(child.kind)",
+			"replace": "METHOD_KINDS.contains(child.kind)",
+			"note": "the shared member-deleting fix matches methods only again, so a proven-dead static field is reported but its deletion edit is never produced"
 		}
 	]
 }

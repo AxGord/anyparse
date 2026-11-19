@@ -263,7 +263,7 @@ final class OrphanAccessor extends RuleBase implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return CheckScan.deleteMethodsFix(plugin, source, violations, _deletable);
+		return CheckScan.deleteMembersFix(plugin, source, violations, _deletable);
 	}
 
 	/**
