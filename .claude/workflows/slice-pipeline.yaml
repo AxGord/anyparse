@@ -1013,10 +1013,21 @@ states:
       fmt_race_skip: "{{stdout}}"
       fmt_race_files: ""
       fmt_race_patch: ""
-      lock_mode: "--commit"
     cases:
       "0": land
-    default: sweep_probe
+    default: review_lock
+
+  review_lock:
+    station: false
+    type: exec
+    # An action's context_set is applied only after exit 0, and the ordinary end of fmt_race_skip (no fmt-race round)
+    # is not exit 0: the lock mode of the round that goes to review is set here, or sweep_next sends the round to recon.
+    command: "true"
+    timeout: 10000
+    context_set:
+      lock_mode: "--commit"
+    on_success: sweep_probe
+    on_error: sweep_probe
 
   round_not_started:
     max_visits: 2
