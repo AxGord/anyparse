@@ -22,6 +22,12 @@ final class ProcessSpawnTest extends Test {
 	/** Big enough that nothing this test runs can reach it. */
 	private static inline final ROOMY: Int = 8 * 1024 * 1024;
 
+	/**
+	 * How long a job may take to write its child's pid: past a loaded host's lateness,
+	 * well inside the suite's stall cut.
+	 */
+	private static inline final PID_WAIT_MS: Int = 120000;
+
 	/** A run that PRODUCED a verdict carries no `failure`, whatever it exited with. */
 	public function testASuccessfulRunCarriesNoFailure(): Void {
 		final run: ProcessRun = ProcessSpawn.run(['--version'], null, ROOMY);
@@ -400,6 +406,23 @@ final class ProcessSpawnTest extends Test {
 	}
 
 	/**
+	 * A job that starts its child late is waited for, not failed: the pid wait outlasts the five seconds a loaded host
+	 * has been seen to need. The job here writes its pid after six.
+	 */
+	@:pin('control')
+	@:killer('M-PID-WAIT-FIXED-SHORT')
+	public function testThePidWaitOutlastsALateStart(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeDir('spawnlate', []);
+		js.node.ChildProcess.spawn('sh', ['-c', 'sleep 6; echo 4242 > pid.txt'], { cwd: dir, stdio: 'ignore' });
+		Assert.equals(4242, waitForPid('$dir/pid.txt'), 'the late pid was waited for');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('the process driver needs the node target');
+		#end
+	}
+
+	/**
 	 * Start the process driver on the one shell job `shell` in a fresh directory holding `files`, wait for the job to write
 	 * its child's pid to `child.txt`, SIGTERM the driver, and answer how long the child outlived the signal in ms; null when
 	 * it never started or was alive `waitMs` later, when it is SIGKILLed here.
@@ -453,15 +476,19 @@ final class ProcessSpawnTest extends Test {
 		Assert.isTrue(run.failure.indexOf('output buffer') != -1, 'and the sentence names the buffer: ${run.failure}');
 	}
 
-	/** The pid written to `path` once it appears, polling up to five seconds. */
+	/**
+	 * The pid written to `path` once it appears: the file is the event.
+	 * The bound only keeps a job that never started from holding the run until the suite's stall cut.
+	 */
 	private static function waitForPid(path: String): Null<Int> {
-		for (_ in 0...50) {
+		final deadline: Float = Date.now().getTime() + PID_WAIT_MS;
+		while (true) {
 			final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
 			final pid: Null<Int> = Std.parseInt(StringTools.trim(text ?? ''));
 			if (pid != null) return pid;
-			Sleep.pause(100);
+			if (Date.now().getTime() >= deadline) return null;
+			Sleep.pause(50);
 		}
-		return null;
 	}
 
 	/** Whether `pid` answers a signal-0 probe. */

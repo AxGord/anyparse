@@ -1,0 +1,15 @@
+{
+	"$comment": [
+		"Mutation arms cutting the types of package unit.proc. Format and rules: docs/testing.md, Declared arms."
+	],
+	"arms": [
+		{
+			"name": "M-PID-WAIT-FIXED-SHORT",
+			"type": "unit.proc.ProcessSpawnTest",
+			"method": "waitForPid",
+			"find": "+ PID_WAIT_MS;",
+			"replace": "+ 1000;",
+			"note": "the pid wait gives up after a second, so a job that starts its child late is reported as never started on a loaded host"
+		}
+	]
+}
