@@ -2,11 +2,8 @@ package unit.dev;
 
 import anyparse.grammar.json.JsonText;
 import dev.TokenTranscript;
-import devkit.TempDir;
 import haxe.io.Bytes;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

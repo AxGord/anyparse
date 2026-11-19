@@ -3,9 +3,6 @@ package unit.dev;
 import dev.KitsRow;
 import dev.Probe.KitsReport;
 import devkit.Summary;
-import devkit.TempDir;
-import utest.Assert;
-import utest.Test;
 
 /** `dev.KitsRow`: the text a failed kit run leaves for the worker, and the skip of a tree that holds no kit. */
 @:nullSafety(Strict)

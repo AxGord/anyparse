@@ -7,13 +7,10 @@ import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.Cli;
 import dev.ArmRegistry;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

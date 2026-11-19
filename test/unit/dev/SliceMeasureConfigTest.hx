@@ -3,11 +3,8 @@ package unit.dev;
 import anyparse.query.ConfigFinder;
 import dev.SliceMeasure;
 import devkit.Cmd.cmd;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * A reading of an old revision lints its copy under that revision's own project config, whichever name the

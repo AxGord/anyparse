@@ -12,13 +12,10 @@ import dev.SliceGate;
 import devkit.Cmd.cmd;
 import devkit.Lease.LeaseMode;
 import devkit.Summary.Outcome;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 using Lambda;

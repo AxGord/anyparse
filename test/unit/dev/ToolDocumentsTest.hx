@@ -34,10 +34,7 @@ import dev.SweepTrap;
 import dev.TranscriptEntry;
 import dev.TranscriptEntryParser;
 import dev.TranscriptMessage;
-import devkit.TempDir;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The developer tools read and write their JSON files through schema typedefs: a document already on disk, spelled here as

@@ -13,13 +13,10 @@ import dev.GateTree;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Result;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

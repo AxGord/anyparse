@@ -7,12 +7,9 @@ import dev.GateTree;
 import dev.SuiteImpact.SuiteScope;
 import dev.SuiteReuse;
 import devkit.Cmd.cmd;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `SuiteReuse`: a later check of a worktree keeps the pass of a selected class only when the record of the last vouching

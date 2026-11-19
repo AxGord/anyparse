@@ -5,13 +5,10 @@ import anyparse.check.haxe.oracle.OracleCache;
 import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.OracleProvider.OracleOutcome;
 import dev.Binaries;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import testkit.TestConfigs;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

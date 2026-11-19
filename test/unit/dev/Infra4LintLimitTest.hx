@@ -6,12 +6,9 @@ import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Lease.LeaseMode;
 import devkit.Result;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /** `dev.GateLint`: how long one lint of the infra4 row may run, counted from its lease grant, before it is killed, and how a kill reads. */
 @:nullSafety(Strict)

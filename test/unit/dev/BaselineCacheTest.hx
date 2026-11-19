@@ -9,12 +9,9 @@ import dev.BaselineLists;
 import dev.BaselineParser;
 import dev.BaselineWriter;
 import dev.FrozenTree;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /** `dev.BaselineCache`: which `--baseline` run may reuse a kept baseline, and that a reused one carries nothing tree-bound. */
 @:nullSafety(Strict)

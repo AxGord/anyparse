@@ -6,8 +6,6 @@ import dev.Binaries;
 import haxe.io.Path;
 import sys.io.File;
 import testkit.TestConfigs;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

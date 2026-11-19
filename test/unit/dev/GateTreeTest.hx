@@ -4,11 +4,8 @@ import anyparse.query.ShardPlan;
 import dev.GateTree;
 import devkit.Result;
 import devkit.Summary.Outcome;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /** `dev.GateTree`: the paths a slice changed, a renamed one paired with the path it had at the base. */
 @:nullSafety(Strict)

@@ -8,7 +8,7 @@ using StringTools;
 using Lambda;
 
 /** What the slice gate's pool asks fit what its rows were measured to use (`exec-ledger`, gate phase). */
-class GateRowFitTest extends utest.Test {
+class GateRowFitTest extends Test {
 
 	/**
 	 * A wide kill run asks for no more threads than the cap its readings in the ledger fit; a narrow one asks for its tracks.

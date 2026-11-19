@@ -5,11 +5,8 @@ import dev.GateReuse;
 import devkit.Cmd.cmd;
 import devkit.Summary.Outcome;
 import devkit.Summary.Step;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

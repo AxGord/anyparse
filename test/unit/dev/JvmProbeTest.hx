@@ -3,8 +3,6 @@ package unit.dev;
 import dev.JvmProbe;
 import devkit.Args;
 import devkit.Result;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev jvm-portability`'s verdict over a probe run: the gate line holds only when every file was written and none threw,

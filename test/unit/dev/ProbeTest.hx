@@ -5,11 +5,8 @@ import dev.Expectation;
 import dev.Parity.Outcome;
 import dev.Probe;
 import dev.Repo;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev.Probe`: what deviates between a recorded answer and a new one, the run directory and the staged-probe pid normalized out

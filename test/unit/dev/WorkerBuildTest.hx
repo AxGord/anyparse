@@ -2,12 +2,9 @@ package unit.dev;
 
 import dev.WorkerBuild;
 import devkit.Args.UsageError;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev worker-build`'s refusals, each before anything is built: no workdir, an empty one, an unknown target. The build

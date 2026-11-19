@@ -10,8 +10,6 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /** `dev trap-fix-sweep`'s verdict of one probe, which verdicts fail the sweep, and one probe swept end to end. */
 @:nullSafety(Strict)

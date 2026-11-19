@@ -2,12 +2,9 @@ package unit.dev;
 
 import dev.Decision;
 import devkit.Args.UsageError;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev decision`, the only writer of `docs/decisions.md`, over a scratch ledger, and the line shape `dev slice-gate` checks

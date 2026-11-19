@@ -11,8 +11,6 @@ import devkit.Summary.Outcome;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

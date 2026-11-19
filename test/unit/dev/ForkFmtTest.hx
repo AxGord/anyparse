@@ -2,8 +2,6 @@ package unit.dev;
 
 import dev.ForkFmt;
 import devkit.Command;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev.ForkFmt`: the verdict on the fork's tree, read off the verify's output and never off its exit status, and the slice trigger.

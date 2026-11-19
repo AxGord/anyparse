@@ -40,7 +40,7 @@ private typedef Swept = {
  * holding `BAD` and rewrites the word.
  */
 @:nullSafety(Strict)
-final class LandSweepTest extends utest.Test {
+final class LandSweepTest extends Test {
 
 	private static final BRANCH: String = 'batch/hxqb-S1';
 	private static final COMMAND: String = 'hxq lint --rule r --fix src';

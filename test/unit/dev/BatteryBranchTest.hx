@@ -7,8 +7,6 @@ import dev.Binaries;
 import devkit.Args;
 import devkit.Command;
 import devkit.Summary.Step;
-import utest.Assert;
-import utest.Test;
 
 /** `dev.BatteryBranch`: a battery branch runs under time(1) on macOS, and each of its rows carries the threads it held. */
 @:nullSafety(Strict)

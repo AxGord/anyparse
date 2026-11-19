@@ -5,12 +5,9 @@ import dev.ArmSweep;
 import devkit.Cmd.cmd;
 import devkit.Lease.LeaseMode;
 import devkit.Summary.Outcome;
-import devkit.TempDir;
 import haxe.Exception;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev arm-sweep`: which landings a sweep follows, the land step that starts one and never fails the land, the record that

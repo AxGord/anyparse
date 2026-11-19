@@ -4,11 +4,8 @@ import anyparse.util.Compare;
 import dev.SliceMeasure;
 import dev.SliceStats;
 import devkit.Cmd.cmd;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev slice-stats`: which commits of a history land a slice and what each record says, the queue fields beside the trailers,

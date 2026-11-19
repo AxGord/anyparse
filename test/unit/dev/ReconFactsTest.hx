@@ -4,13 +4,10 @@ import dev.Dev;
 import dev.GateTree;
 import dev.ReconFacts;
 import devkit.Cmd.cmd;
-import devkit.TempDir;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

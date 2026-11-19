@@ -6,12 +6,9 @@ import dev.RedOnBase;
 import dev.Repo;
 import devkit.Cmd.cmd;
 import devkit.Summary;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

@@ -2,13 +2,10 @@ package unit.dev;
 
 import dev.SquashCensus;
 import devkit.Command;
-import devkit.TempDir;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

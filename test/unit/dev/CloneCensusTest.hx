@@ -1,11 +1,8 @@
 package unit.dev;
 
 import dev.CloneCensus;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev clone-census` over a hand-made tree whose AST is already in the `--cache` directory, so no `hxq` runs: the report

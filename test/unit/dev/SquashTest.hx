@@ -1,8 +1,6 @@
 package unit.dev;
 
 import dev.Squash;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev.Squash`: a whitespace run holding one newline becomes one space, and nothing the engine reads as a string, a regex, a

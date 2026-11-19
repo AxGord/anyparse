@@ -7,8 +7,6 @@ import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.util.Compare;
 import dev.LintScope;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

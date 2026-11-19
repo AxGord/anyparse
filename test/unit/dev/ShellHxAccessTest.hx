@@ -1,8 +1,6 @@
 package unit.dev;
 
 import dev.ShellHxAccess;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `ShellHxAccess`: which shell commands read or write a repo `.hx` outside hxq — every segment of a pipeline, the directory

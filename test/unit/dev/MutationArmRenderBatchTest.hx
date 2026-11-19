@@ -3,12 +3,9 @@ package unit.dev;
 import dev.ArmRegistry;
 import dev.ArmSweep;
 import dev.MutationArm;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

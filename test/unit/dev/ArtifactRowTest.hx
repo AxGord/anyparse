@@ -2,12 +2,9 @@ package unit.dev;
 
 import dev.ArtifactRow;
 import devkit.Cmd.cmd;
-import devkit.TempDir;
 import haxe.io.Bytes;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

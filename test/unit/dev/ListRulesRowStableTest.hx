@@ -1,8 +1,6 @@
 package unit.dev;
 
 import dev.Probe;
-import utest.Assert;
-import utest.Test;
 
 /** The cli kit pins a rule list by its shape, so a slice that adds a rule leaves the kits row green. */
 @:nullSafety(Strict)

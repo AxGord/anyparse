@@ -2,8 +2,6 @@ package unit.dev;
 
 import dev.ScrubRow;
 import devkit.Result;
-import utest.Assert;
-import utest.Test;
 
 /** The `scrub` row of the slice gate: what it says of the tree scan and the range scan of `scrub-guard`. */
 @:nullSafety(Strict)

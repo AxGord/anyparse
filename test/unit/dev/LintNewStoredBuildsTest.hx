@@ -15,7 +15,7 @@ using StringTools;
  * the rule differently unless the step makes both hold it.
  */
 @:nullSafety(Strict)
-final class LintNewStoredBuildsTest extends utest.Test {
+final class LintNewStoredBuildsTest extends Test {
 
 	private static final MODULE: String = 'class A {\n\tvar a: Int;\n\tfunction f(x) { return x; } // HOIST one\n}\n';
 

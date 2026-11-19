@@ -7,10 +7,7 @@ import devkit.Command;
 import devkit.ExecLedger;
 import devkit.Lease;
 import devkit.LeaseHistory;
-import devkit.TempDir;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

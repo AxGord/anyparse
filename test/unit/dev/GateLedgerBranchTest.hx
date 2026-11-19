@@ -3,8 +3,6 @@ package unit.dev;
 import dev.GateReuse;
 import devkit.ExecLedger;
 import devkit.Summary.Step;
-import utest.Assert;
-import utest.Test;
 
 /** A gate's rows are filed under the real branches of `SliceGate.GATE_BRANCHES`, not under the last earlier row with a lease. */
 @:nullSafety(Strict)

@@ -4,8 +4,6 @@ import dev.SlotServer;
 import unit.check.haxe.oracle.PortHolder.unusedPort;
 import unit.check.haxe.oracle.PortHolder.watching;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /** A slot's warm server takes a port only after `CompilerServer.freePort`, as every other starter does. */
 final class SlotServerTest extends Test {

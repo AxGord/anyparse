@@ -10,8 +10,6 @@ import anyparse.query.ConfigFinder;
 import anyparse.query.LexicalRegions;
 import anyparse.runtime.Span;
 import dev.TyperConformance;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev typer-conformance probes` as a gate: a probe project's run counts only when it read something — every configuration

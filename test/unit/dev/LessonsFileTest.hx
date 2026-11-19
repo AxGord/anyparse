@@ -4,13 +4,10 @@ import dev.LessonsFile;
 import dev.QueueFile.QueueLine;
 import dev.ScrubGuard;
 import devkit.Args.UsageError;
-import devkit.TempDir;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

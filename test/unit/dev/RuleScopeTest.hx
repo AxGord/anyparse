@@ -2,12 +2,9 @@ package unit.dev;
 
 import dev.RuleScope;
 import dev.SuiteImpact.ImpactSource;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

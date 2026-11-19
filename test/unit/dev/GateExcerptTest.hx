@@ -2,8 +2,6 @@ package unit.dev;
 
 import dev.GateExcerpt;
 import dev.Shard;
-import utest.Assert;
-import utest.Test;
 
 /** `dev.GateExcerpt`: the lines a failed gate row prints under the table are the ones that decide it. */
 @:nullSafety(Strict)

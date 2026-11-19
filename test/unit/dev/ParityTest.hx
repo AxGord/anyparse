@@ -4,13 +4,10 @@ import anyparse.util.Compare;
 import dev.Parity;
 import dev.Repo;
 import devkit.Command;
-import devkit.TempDir;
 import haxe.Exception;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

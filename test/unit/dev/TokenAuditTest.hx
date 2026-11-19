@@ -11,11 +11,8 @@ import dev.TokenReportWriter;
 import dev.TokenTranscript;
 import devkit.Args.UsageError;
 import devkit.Cmd.cmd;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

@@ -3,12 +3,9 @@ package unit.dev;
 import dev.GateTree;
 import dev.XconfigFmt;
 import devkit.Command;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 

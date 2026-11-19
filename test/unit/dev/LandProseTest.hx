@@ -3,13 +3,9 @@ package unit.dev;
 import dev.LandProse;
 import devkit.Cmd.cmd;
 import devkit.Summary;
-import devkit.Summary.Outcome;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

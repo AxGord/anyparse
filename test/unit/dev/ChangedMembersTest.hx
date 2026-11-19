@@ -3,8 +3,6 @@ package unit.dev;
 import dev.ArmRegistry;
 import dev.ChangedMembers;
 import dev.GateArms;
-import utest.Assert;
-import utest.Test;
 
 /** What the members of a `hxq changed` report are read as: the names a file changed, or no names when the report cannot say. */
 final class ChangedMembersTest extends Test {

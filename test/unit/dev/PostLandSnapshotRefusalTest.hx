@@ -1,12 +1,9 @@
 package unit.dev;
 
 import dev.PostLand;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.io.File;
 import unit.cli.CliFixture;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev.PostLand.snapshotRefusal` over two report files through the built engine: what the whole lint of a landed commit may differ

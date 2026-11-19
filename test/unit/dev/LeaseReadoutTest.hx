@@ -4,9 +4,6 @@ import dev.ExecLedgerCli;
 import dev.LeaseReadout;
 import devkit.Args.UsageError;
 import devkit.ExecLedger;
-import devkit.TempDir;
-import utest.Assert;
-import utest.Test;
 
 /** `LeaseReadout`: held and used per metered branch run, gate rows regrouped by their real branches, shared battery leases left out. */
 @:nullSafety(Strict)

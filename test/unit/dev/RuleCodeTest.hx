@@ -3,12 +3,9 @@ package unit.dev;
 import dev.Dev;
 import dev.RuleCode;
 import devkit.Cmd.cmd;
-import devkit.TempDir;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /** `dev rule-code`: whether a tree's diff from `merge-base HEAD main` holds code that can move a lint rule's findings. */
 @:nullSafety(Strict)

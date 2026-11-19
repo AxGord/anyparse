@@ -1,8 +1,6 @@
 package unit.dev;
 
 import dev.EdgeDiff;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `dev edge-diff` takes a library file for the library side only when no project file is the same file: identity, never a

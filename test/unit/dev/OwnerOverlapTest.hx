@@ -6,8 +6,6 @@ import anyparse.query.IndexScope;
 import anyparse.query.OwnerIndex;
 import dev.OwnerOverlap;
 import devkit.Args.UsageError;
-import utest.Assert;
-import utest.Test;
 
 using Lambda;
 using StringTools;

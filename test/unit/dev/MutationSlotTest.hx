@@ -4,12 +4,9 @@ import dev.MutationCheck.TrackRow;
 import dev.MutationSlot;
 import devkit.Cmd.cmd;
 import devkit.Result;
-import devkit.TempDir;
 import haxe.Exception;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

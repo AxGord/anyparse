@@ -2,8 +2,6 @@ package unit.dev;
 
 import dev.ArmRegistry.ArmRecord;
 import dev.SuiteImpact;
-import utest.Assert;
-import utest.Test;
 
 /**
  * `SuiteImpact` over a small invented tree: the test classes a change reaches through the names its files spell, and the

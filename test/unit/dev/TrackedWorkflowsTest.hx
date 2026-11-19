@@ -12,7 +12,7 @@ using StringTools;
  * `lib/recon-arm` is the one file the folder leaves ignored, and is not read here.
  */
 @:nullSafety(Strict)
-final class TrackedWorkflowsTest extends utest.Test {
+final class TrackedWorkflowsTest extends Test {
 
 	private static final ROOT: String = '.claude/workflows';
 	private static final MACHINE_PATHS: Array<String> = ['/Users/', '/home/', 'C:\\', '$$HOME/dev', 'mcp-workflow-engine/'];

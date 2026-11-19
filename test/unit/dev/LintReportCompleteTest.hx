@@ -3,8 +3,6 @@ package unit.dev;
 import devkit.Result;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /** `dev.GateLint`: a lint report cut short is never saved, cached or compared; it reads as a lint that did not run. */
 @:nullSafety(Strict)

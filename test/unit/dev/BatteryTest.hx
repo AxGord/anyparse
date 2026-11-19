@@ -11,12 +11,9 @@ import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.StepRecord;
 import devkit.Summary.Outcome;
-import devkit.TempDir;
 import js.node.Fs.Fs;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 using StringTools;
 

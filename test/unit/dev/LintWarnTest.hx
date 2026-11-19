@@ -3,11 +3,8 @@ package unit.dev;
 import anyparse.grammar.json.JsonFormat;
 import dev.HookPayloadWriter;
 import dev.LintWarn;
-import devkit.TempDir;
 import sys.FileSystem;
 import sys.io.File;
-import utest.Assert;
-import utest.Test;
 
 /**
  * The lint-warn hook body's reading of a payload: when it stays silent before linting anything, how it splits a command
