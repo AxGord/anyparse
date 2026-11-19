@@ -906,6 +906,78 @@
 			"find": "final negated: Bool = s.unaryMinusKinds.contains(node.kind) && node.children.length == 1;",
 			"replace": "final negated: Bool = false;",
 			"note": "a negated decimal literal is left as (-1) + 1 instead of folding to 0"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-NEVER",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "loopText",
+			"find": "acc.keyed = mapTypesOf(annotation, ctx.seams.typeSyntax);",
+			"replace": "acc.keyed = null;",
+			"note": "a Map-annotated empty binding filled by key never folds, which is the rule before it learnt the keyed shape"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-RUN-NO-INDEX",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "run",
+			"find": "entry.file, index);",
+			"replace": "entry.file, () -> null);",
+			"note": "the report types an operand with no index while the fix types it with one, so a computed map key is fixed only when something else reported it"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-ANY-CONTAINER",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "loopText",
+			"find": "acc.keyed = mapTypesOf(annotation, ctx.seams.typeSyntax);",
+			"replace": "acc.keyed = annotation == null ? null : { key: 'Int', value: 'Int' };",
+			"note": "an Array or an @:arrayAccess abstract filled by key folds as a map pair, which does not compile or skips the setter"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-VALUE-UNCHECKED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keyedPair",
+			"find": "acc.checks.push(write.value);",
+			"replace": "",
+			"note": "the written value skips the self-reference gate, so `m[k] = m.get(j)` folds to a comprehension reading a different map"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-KEY-UNCHECKED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keyedPair",
+			"find": "acc.checks.push(write.key);",
+			"replace": "",
+			"note": "the written key skips the self-reference gate, so `m[m.size] = v` folds to a comprehension reading a different map"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-WHILE",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "buildInner",
+			"find": "LoopScan.hasWhileShape(node) && acc.keyed == null",
+			"replace": "LoopScan.hasWhileShape(node)",
+			"note": "a while loop writing one map slot folds into a map comprehension"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-KEY-UNPROVEN",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keyedPair",
+			"find": "!isExactly(write.key, types.key, ctx) || ",
+			"replace": "",
+			"note": "a key the typing does not prove exactly the declared key type folds, so a null-narrowed key or an Int for a Float key stops compiling"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-MESSAGE-ARRAY",
+			"type": "anyparse.check.common.loops.PreferComprehension",
+			"method": "run",
+			"find": "message: m.keyed",
+			"replace": "message: m.keyed && m.span == null",
+			"note": "a map site reports the array-comprehension message"
+		},
+		{
+			"name": "M-COMPR-MAPFILL-VALUE-UNPROVEN",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keyedPair",
+			"find": "!isExactly(write.value, types.value, ctx)",
+			"replace": "false",
+			"note": "a value the typing does not prove exactly the declared value type folds, so an Int for a Float map or a subclass for its base stops compiling"
 		}
 	]
 }

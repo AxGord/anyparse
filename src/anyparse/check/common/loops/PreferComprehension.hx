@@ -8,9 +8,11 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.ElementSpan;
+import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
 import anyparse.query.OccurrenceScan;
+import anyparse.query.ParenGuard;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -63,7 +65,12 @@ typedef ComprehensionSeams = {
  * which is also the key the fix looks its edits up by) and the edits that realise it — one for an
  * adjacent pair, two for a gapped one.
  */
-private typedef Match = { var span: Span; var edits: Array<{ span: Span, text: String }>; }
+private typedef Match = {
+	var span: Span;
+	var edits: Array<{ span: Span, text: String }>;
+	var holes: Array<Span>;
+	var keyed: Bool;
+}
 
 /** Per-file inputs the walkers share: the source, the resolved seams and the file's comment tokens (lexed once). */
 typedef ComprehensionCtx = {
@@ -79,14 +86,28 @@ typedef ComprehensionCtx = {
 	var tree: QueryNode;
 	var shape: RefShape;
 
+	/** The written type of an expression, null when the file's typing cannot say; built on first use. */
+	var typeOf: (node: QueryNode) -> Null<String>;
+
 }
 
+/** The declared key and value types of a `Map<K, V>` binding, as written. */
+typedef MapTypes = { var key: String; var value: String; }
 /**
  * Per-match accumulators: nodes the self-reference gate must scan, comment texts to hoist above the
  * result, and the ARRAY declaration's ELEMENT type — the one thing that can restate a link sitting at
- * the whole-push-argument position, letting it drop its own annotation.
+ * the whole-push-argument position, letting it drop its own annotation. `keyed` marks a MAP fill and holds the declared key
+ * and value types: the terminal statement is `name[k] = v` and the produced element is `k => v`, whose length is
+ * `pairLength` and in which `pairHoles` are the ranges spliced from the source, for `ParenGuard` to group.
  */
-typedef ComprehensionAcc = { var checks: Array<QueryNode>; var hoisted: Array<{ from: Int, text: String }>; var elementType: Null<String>; }
+typedef ComprehensionAcc = {
+	var checks: Array<QueryNode>;
+	var hoisted: Array<{ from: Int, text: String }>;
+	var elementType: Null<String>;
+	var keyed: Null<MapTypes>;
+	var pairHoles: Array<Span>;
+	var pairLength: Int;
+}
 
 /**
  * One link of the inlining chain: the declared local, its initializer, the single use the initializer
@@ -341,14 +362,19 @@ final class PreferComprehension extends RuleBase {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
-			for (m in collectMatches(tree, entry.source, seams, plugin.refShape(), plugin.lexicalRegions(entry.source))) violations.push({
-				file: entry.file,
-				span: m.span,
-				rule: 'prefer-comprehension',
-				severity: Severity.Info,
-				message: 'this empty-array declaration and the loop filling it can be an array comprehension ([for] / [while])'
-			});
+			final typeOf: (QueryNode) -> Null<String> = LoopScan.lazyPathTypes(entry.source, plugin, tree, entry.file, index);
+			for (m in collectMatches(tree, entry.source, seams, plugin.refShape(), plugin.lexicalRegions(entry.source), typeOf))
+				violations.push({
+					file: entry.file,
+					span: m.span,
+					rule: 'prefer-comprehension',
+					severity: Severity.Info,
+					message: m.keyed
+						? 'this map declaration and the loop filling it by key can be a map comprehension ([for … k => v])'
+						: 'this empty-array declaration and the loop filling it can be an array comprehension ([for] / [while])'
+				});
 		});
 	}
 
@@ -370,12 +396,21 @@ final class PreferComprehension extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
-			final byKey: Map<String, Array<{ span: Span, text: String }>> = [];
-			for (m in collectMatches(tree, source, seams, plugin.refShape(), plugin.lexicalRegions(source)))
-				byKey['${m.span.from}:${m.span.to}'] = m.edits;
+			final file: String = violations.length > 0 ? violations[0].file : '';
+			final typeOf: (QueryNode) -> Null<String> = LoopScan.lazyPathTypes(source, plugin, tree, file, () -> index);
+			final byKey: Map<String, Match> = [
+				for (m in collectMatches(tree, source, seams, plugin.refShape(), plugin.lexicalRegions(source), typeOf))
+					'${m.span.from}:${m.span.to}' => m
+			];
 			final out: Array<{ span: Span, text: String }> = [];
-			RunScan.eachMatched(violations, byKey, (edits, _) -> for (e in edits) out.push(e));
-			return CanonicalEdit.dropContainedEdits(out);
+			final guarded: Array<GuardedEdit> = [];
+			RunScan.eachMatched(violations, byKey, (m, _) -> {
+				final tail: { span: Span, text: String } = m.edits[m.edits.length - 1];
+				for (e in m.edits) if (e != tail || m.holes.length == 0) out.push(e);
+				if (m.holes.length > 0) guarded.push({ span: tail.span, text: tail.text, holes: m.holes });
+			});
+			// A bare key lands where `=>` binds looser than some key shapes (`cast x`), which only the parser knows.
+			return CanonicalEdit.dropContainedEdits(guarded.length == 0 ? out : out.concat(ParenGuard.guard(source, guarded, plugin)));
 		});
 	}
 
@@ -422,6 +457,7 @@ final class PreferComprehension extends RuleBase {
 			elementTypeParams: shape.indexedElementTypeParams ?? [],
 			typeSyntax: plugin.typeSyntax,
 			atomKinds: readAtomKinds(shape),
+
 			pureKinds: readPureKinds(shape),
 			eagerKinds: readEagerKinds(shape)
 		};
@@ -433,7 +469,8 @@ final class PreferComprehension extends RuleBase {
 	 * `Ctx` — `collectCommentTokens` re-lexes the whole source on every call.
 	 */
 	private static function collectMatches(
-		tree: QueryNode, source: String, s: ComprehensionSeams, shape: RefShape, regions: Array<LexRegion>
+		tree: QueryNode, source: String, s: ComprehensionSeams, shape: RefShape, regions: Array<LexRegion>,
+		typeOf: (QueryNode) -> Null<String>
 	): Array<Match> {
 		final ctx: ComprehensionCtx = {
 			source: source,
@@ -441,7 +478,8 @@ final class PreferComprehension extends RuleBase {
 			comments: SourceComments.collectCommentTokens(regions),
 			regions: regions,
 			tree: tree,
-			shape: shape
+			shape: shape,
+			typeOf: typeOf
 		};
 		final out: Array<Match> = [];
 		walk(tree, ctx, out);
@@ -542,7 +580,14 @@ final class PreferComprehension extends RuleBase {
 		final element: Null<String> = annotation == null
 			? null
 			: NominalTypes.elementTypeSourceOf(annotation, s.elementTypeParams, [], s.typeSyntax);
-		final acc: ComprehensionAcc = { checks: [], hoisted: [], elementType: element };
+		final acc: ComprehensionAcc = {
+			checks: [],
+			hoisted: [],
+			elementType: element,
+			keyed: null,
+			pairHoles: [],
+			pairLength: 0
+		};
 		// A comment on its own line between an ADJACENT pair documents the loop the fix dissolves, so it
 		// is hoisted above the result like a body comment; one trailing the declaration still refuses
 		// (`gapAdmits`), and a gapped pair leaves its gap untouched.
@@ -568,7 +613,8 @@ final class PreferComprehension extends RuleBase {
 		// sibling scope's write of the same name keeps `var`.
 		final upgrade: Bool = keyword == VAR_KEYWORD && !CtorFieldWrite.reassignedInScope(declName, ctx.tree, ctx.shape, scopeSpan);
 		final normalized: String = upgrade ? 'final${prefix.substring(VAR_KEYWORD.length)}' : prefix;
-		return assemble(source, declSpan, forSpan, '$lead$normalized[$inner];', gapped);
+		final head: String = '$lead$normalized[$inner';
+		return assemble(source, declSpan, forSpan, '$head];', gapped, ComprehensionFills.keyHoles(head, acc), acc.keyed != null);
 	}
 
 	/**
@@ -589,12 +635,19 @@ final class PreferComprehension extends RuleBase {
 	}
 
 	/** The match for an assembled replacement `text`: one edit over both statements, or the two of `gappedEdits`. */
-	private static function assemble(source: String, declSpan: Span, forSpan: Span, text: String, gapped: Bool): Null<Match> {
+	private static function assemble(
+		source: String, declSpan: Span, forSpan: Span, text: String, gapped: Bool, holes: Array<Span>, keyed: Bool
+	): Null<Match> {
 		final span: Span = new Span(declSpan.from, forSpan.to);
 		final edits: Null<Array<{ span: Span, text: String }>> = gapped
 			? gappedEdits(source, declSpan, forSpan, text)
 			: [{ span: span, text: text }];
-		return edits == null ? null : { span: span, edits: edits };
+		return edits == null ? null : {
+			span: span,
+			edits: edits,
+			holes: holes,
+			keyed: keyed
+		};
 	}
 
 	/**
@@ -642,7 +695,7 @@ final class PreferComprehension extends RuleBase {
 				: null;
 		}
 		if (node.kind == s.whileStmtKind)
-			return LoopScan.hasWhileShape(node)
+			return LoopScan.hasWhileShape(node) && acc.keyed == null
 				? buildHeaderLayer(node, LoopScan.whileCondition(node), LoopScan.whileBody(node), name, ctx, acc)
 				: null;
 		if (node.kind == s.blockStmtKind) return buildBlock(node, name, ctx, acc);
@@ -650,6 +703,7 @@ final class PreferComprehension extends RuleBase {
 			return BranchChain.hasElse(node)
 				? null
 				: buildHeaderLayer(node, BranchChain.condOf(node), BranchChain.thenOf(node), name, ctx, acc);
+		if (acc.keyed != null) return ComprehensionFills.keyedPair(node, name, ctx, acc);
 		final arg: Null<QueryNode> = pushArgument(node, name, ctx, acc);
 		if (arg == null) return null;
 		final argSpan: Null<Span> = arg.span;
@@ -749,7 +803,7 @@ final class PreferComprehension extends RuleBase {
 	private static function buildBlock(node: QueryNode, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
 		final kids: Array<QueryNode> = node.children;
 		final blockSpan: Null<Span> = node.span;
-		if (kids.length == 0 || blockSpan == null) return null;
+		if (kids.length == 0 || blockSpan == null || (acc.keyed != null && kids.length != 1)) return null;
 		hoistGapComments(kids, blockSpan, ctx, acc);
 		if (kids.length == 1) return buildInner(kids[0], name, ctx, acc);
 		final nested: Null<String> = ComprehensionFills.nestedBuild(kids, name, ctx, acc);

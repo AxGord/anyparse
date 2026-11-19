@@ -119,13 +119,13 @@ class PreferComprehensionIndexFillTest extends Test {
 		);
 	}
 
-	/** A `Map` index write is no append (the fold does not compile), and an `@:arrayAccess` setter would never run. */
+	/** A `@:arrayAccess` setter would never run on an index fill; a `Map` has its own fold, `PreferComprehensionMapFillTest`. */
 	@:pin('control')
 	@:killer('M-COMPR-INDEXFILL-ANY-CONTAINER')
 	public function testAnIndexFillIntoANonArrayIsRefused(): Void {
-		Assert.equals(0, count(fn('final out:Map<Int, String> = [];\n\t\tfor (j in 0...n) out[j] = \'x\';')));
+
 		Assert.equals(0, count(fn('final out:Logged = [];\n\t\tfor (j in 0...n) out[j] = j;')));
-		Assert.equals(0, count(fn(NESTED.replace('final arr:Array<P> = [];', 'final arr:Map<Int, P> = [];'))));
+
 		Assert.equals(0, count(fn(NESTED.replace('final arr:Array<P> = [];', 'final arr:Logged = [];'))));
 	}
 

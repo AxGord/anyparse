@@ -3001,6 +3001,130 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "MAP1",
+			"note": "a plain map fill folds, a filtered one keeps its if",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-comprehension",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tfinal xs = [1, 2, 3, 2];\n\t\tfinal a:Map<Int, String> = [];\n\t\tfor (x in xs) a[x * 2] = 'v$x';\n\t\tfinal b:Map<Int, Int> = [];\n\t\tfor (x in xs) if (x > 1) b[x] = x;\n\t\tSys.println(Std.string([a, b]));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "fb1016e323c396b6",
+				"files": "c3ae34cd07db2be6",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MAP2",
+			"note": "map fills whose value or key the typing does not prove exactly the declared map type (Float, base class, null, lambda, ternary, cast, untyped) stay loops, the proven ones fold, and the file keeps printing the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-comprehension",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "enum Color {\n\tRed;\n\tGreen;\n}\n\ntypedef Opt = {var a:Int; var ?b:String;}\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic function n():String\n\t\treturn 'base';\n}\n\nclass Child extends Base {\n\toverride public function n():String\n\t\treturn 'child';\n}\n\nclass Main {\n\tstatic function main() {\n\t\tfinal xs = [1, 2, 3, 2];\n\t\tvar y = 0;\n\t\tfinal a:Map<Int, Int> = [];\n\t\tfor (x in xs) a[x] = y = x + y;\n\t\tSys.println(Std.string([a, y]));\n\t\tfinal b:Map<Int, Array<Int>> = [];\n\t\tfor (x in xs) b[x] = [];\n\t\tSys.println(Std.string([b]));\n\t\tfinal c:Map<String, Float> = [];\n\t\tfor (x in xs) c['k$x'] = x;\n\t\tSys.println(Std.string([c]));\n\t\tfinal d:Map<Color, Null<Int>> = [];\n\t\tfor (x in xs) d[x > 1 ? Red : Green] = null;\n\t\tSys.println(Std.string([d]));\n\t\tfinal e:Map<Int, Color> = [];\n\t\tfor (x in xs) e[x] = x > 1 ? Red : Green;\n\t\tSys.println(Std.string([e]));\n\t\tfinal f:Map<Int, Int->Int> = [];\n\t\tfor (x in xs) f[x] = v -> v + x;\n\t\tSys.println(Std.string([f[2](1)]));\n\t\tfinal g:Map<Int, Opt> = [];\n\t\tfor (x in xs) g[x] = {a: x};\n\t\tSys.println(Std.string([g]));\n\t\tfinal h:Map<String, Base> = [];\n\t\tfor (x in xs) h['$x'] = new Child();\n\t\tSys.println(Std.string([h['1'].n()]));\n\t\tfinal i:Map<Int, Dynamic> = [];\n\t\tfor (x in xs) i[x] = 'd$x';\n\t\tSys.println(Std.string([i]));\n\t\tfinal j:Map<Int, Map<Int, Int>> = [];\n\t\tfor (x in xs) j[x] = [x => 1];\n\t\tSys.println(Std.string([j]));\n\t\tfinal k:Map<Int, Int> = [];\n\t\t// lead\n\t\tfor (x in xs) /* mid */\n\t\t\tk[y = x] = x; // trail\n\t\tSys.println(Std.string([k, y]));\n\t\tfinal l:Map<Int, Int> = [];\n\t\tfor (x in xs) if (x > 1) for (z in 0...x) l[z] = x;\n\t\tSys.println(Std.string([l]));\n\t\tvar m:Map<Int, Int> = [];\n\t\tfor (x in xs) m[x] = x;\n\t\tm = [];\n\t\tSys.println(Std.string([m]));\n\t\tfinal n:Map<Int, () -> Int> = [];\n\t\tfor (x in xs) n[x] = () -> n.exists(x) ? 1 : 0;\n\t\tSys.println(Std.string([n[1]()]));\n\t\tfinal o:Map<Int, Bool> = [];\n\t\tfor (x in xs) o[x] = x is Int;\n\t\tSys.println(Std.string([o]));\n\t\tfinal p:Map<String, Int> = [];\n\t\tfor (x in xs) p[(x is Int) ? 'a' : 'b'] = x;\n\t\tSys.println(Std.string([p]));\n\t\tfinal q:Map<Int, Int> = [];\n\t\tfor (x in xs) q[x] = x > 1 ? 1 : 2;\n\t\tSys.println(Std.string([q]));\n\t\tfinal r:Map<Int, Int> = [];\n\t\tfor (x in xs) r[x] = cast x;\n\t\tSys.println(Std.string([r]));\n\t\tfinal s:Map<Int, Int> = [];\n\t\tfor (x in xs) s[untyped x] = x;\n\t\tSys.println(Std.string([s]));\n\t\tfinal t:Map<Int, Null<Int>> = [];\n\t\tfor (x in xs) t[x] = a[x] ?? 0;\n\t\tSys.println(Std.string([t]));\n\t\tfinal u:Map<Int, Int> = [];\n\t\tfor (x in xs) u[x] = y += x;\n\t\tSys.println(Std.string([u, y]));\n\t\tfinal w:haxe.ds.Map<Int, Int> = [];\n\t\tfor (x in xs) w[x] = x;\n\t\tSys.println(Std.string([w]));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "bc5ff0143c553546",
+				"files": "85399e7c6168f91a",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MAP3",
+			"note": "map fills whose operands the typing proves (a compound-assignment value, a negated key) fold and compile; an assignment key, an abstract key and an empty iterable stay loops",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-comprehension",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "enum Color {\n\tRed;\n\tGreen;\n}\n\ntypedef Opt = {var a:Int; var ?b:String;}\nabstract Id(Int) from Int to Int {}\n\nclass Main {\n\tstatic function main() {\n\t\tfinal xs = [1, 2, 3, 2];\n\t\tvar y = 0;\n\t\tfinal a:Map<Int, Int> = [];\n\t\tfor (x in xs) a[x] = y = x + y;\n\t\tSys.println(Std.string([a, y]));\n\t\tfinal d:Map<Color, Null<Int>> = [];\n\t\tfor (x in xs) d[x > 1 ? Red : Green] = null;\n\t\tSys.println(Std.string([d]));\n\t\tfinal g:Map<Int, Opt> = [];\n\t\tfor (x in xs) g[x] = {a: x};\n\t\tSys.println(Std.string([g]));\n\t\tfinal i:Map<Int, Dynamic> = [];\n\t\tfor (x in xs) i[x] = 'd$x';\n\t\tSys.println(Std.string([i]));\n\t\tfinal k:Map<Int, Int> = [];\n\t\tfor (x in xs) k[y = x] = x;\n\t\tSys.println(Std.string([k, y]));\n\t\tfinal t:Map<Int, Null<Int>> = [];\n\t\tfor (x in xs) t[x] = x;\n\t\tSys.println(Std.string([t]));\n\t\tfinal u:Map<Int, Int> = [];\n\t\tfor (x in xs) u[x] = y += x;\n\t\tSys.println(Std.string([u, y]));\n\t\tfinal w:Map<Id, Int> = [];\n\t\tfor (x in xs) w[x] = x;\n\t\tSys.println(Std.string([w]));\n\t\tfinal z:Map<Int, Int> = [];\n\t\tfor (x in xs) z[x] = -x;\n\t\tSys.println(Std.string([z]));\n\t\tfinal e:Map<Int, Int> = [];\n\t\tfor (x in []) e[x] = x;\n\t\tSys.println(Std.string([e]));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "fb1016e323c396b6",
+				"files": "75a31a1bd7f85b98",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "MAP4",
+			"note": "a cast key the typing cannot prove stays the loop, never spliced bare",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-comprehension",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tfinal xs = [1, 2, 3, 2];\n\t\tfinal a:Map<Int, Int> = [];\n\t\tfor (x in xs) a[cast x] = x;\n\t\tSys.println(Std.string([a]));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

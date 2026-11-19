@@ -4,6 +4,7 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionAcc;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionCtx;
 import anyparse.check.common.loops.PreferComprehension.ComprehensionSeams;
+import anyparse.check.common.loops.PreferComprehension.MapTypes;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.LexicalRegions;
@@ -13,15 +14,23 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
 private typedef KeptStep = { var text: String; var terminated: Bool; }
 
+private typedef KeyedWrite = { var key: QueryNode; var value: QueryNode; }
+
 /**
- * The two loop shapes `prefer-comprehension` folds beyond a push-only loop, kept beside the rule so
- * its own type stays within budget. Both build the same array a push loop does, and both reuse the
+ * The loop shapes `prefer-comprehension` folds beyond a push-only loop, kept beside the rule so
+ * its own type stays within budget. Each builds the same collection a push loop does and reuses the
  * rule's transcription, comment hoisting and self-reference gate.
  *
  * A SEQUENTIAL INDEX FILL `for (j in 0...n) a[j] = v;` into the still-EMPTY `a` appends at every step:
  * the write at step `k` lands at `a.length == k`. A NESTED BUILD body `final inner = []; <fill>;
  * a.push(inner);` builds one inner array per outer step and pushes it, which `[for (…) [<fill>]]` does
  * in the same order.
+ *
+ * A MAP FILL `for (x in xs) m[k] = v;` into a still-empty `m` declared `Map<K, V>` is `[for (x in xs) k => v]`:
+ * the loop and the comprehension both evaluate the key, then the value, and the later pair for a repeated
+ * key wins in both, so no repeated-key case needs declining. Only the plain `for` and else-less `if`
+ * layers reach the write, and a pair operand the typing cannot show to have the declared key or value
+ * type is ascribed with it.
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.common.loops.PreferComprehension)
@@ -30,16 +39,24 @@ final class ComprehensionFills {
 	/** A nested build body is exactly [inner declaration, fill loop, outer push]. */
 	private static inline final NESTED_BODY_LENGTH: Int = 3;
 
+	private static inline final MAP_ARITY: Int = 2;
+	private static final ARROW: String = ' => ';
+
 	/** The type name whose index write appends — the one container an index fill is admitted for. */
 	private static final ARRAY_HEAD: String = 'Array';
 
+	/** The type name whose keyed write `m[k] = v` a comprehension reproduces as `k => v`, and its key and value arity. */
+	private static final MAP_HEAD: String = 'Map';
+
 	/**
 	 * The comprehension text of the whole loop `loop` building `name`, declared with `annotation`: an index
-	 * fill when the binding indexes like an ARRAY (`indexesLikeArray`), else the push-loop transcription.
+	 * fill when the binding indexes like an ARRAY (`indexesLikeArray`), else the push-loop transcription —
+	 * whose terminal is the keyed write `m[k] = v` instead of a push when the binding is a `Map`.
 	 */
 	public static function loopText(
 		loop: QueryNode, name: String, annotation: Null<String>, ctx: ComprehensionCtx, acc: ComprehensionAcc
 	): Null<String> {
+		acc.keyed = mapTypesOf(annotation, ctx.seams.typeSyntax);
 		final fill: Null<String> = indexesLikeArray(annotation, ctx.seams.typeSyntax) ? indexFill(loop, name, ctx, acc) : null;
 		return fill ?? PreferComprehension.buildInner(loop, name, ctx, acc);
 	}
@@ -110,9 +127,13 @@ final class ComprehensionFills {
 		final innerAcc: ComprehensionAcc = {
 			checks: [],
 			hoisted: [],
+			keyed: null,
+			pairHoles: [],
+			pairLength: 0,
 			elementType: annotation == null ? null : NominalTypes.elementTypeSourceOf(annotation, s.elementTypeParams, [], s.typeSyntax)
 		};
 		final text: Null<String> = loopText(fill, innerName, annotation, ctx, innerAcc);
+		if (innerAcc.keyed != null) return null;
 		if (text == null || innerAcc.checks.exists(cn -> PreferComprehension.referencesName(cn, innerName, s))) return null;
 		if (PreferComprehension.pushArgument(kids[2], name, ctx, acc) == null) return null;
 		for (c in innerAcc.checks) acc.checks.push(c);
@@ -155,6 +176,45 @@ final class ComprehensionFills {
 	}
 
 	/**
+	 * The MAP FILL element `k => v` of a terminal statement `name[k] = v`, or null when `stmt` is anything
+	 * else (a compound write, another receiver). The pair gets the push terminal's treatment: comments outside the key
+	 * and value are hoisted and both join the self-reference gate. Each operand is ascribed with the declared key or
+	 * value type unless the typing proves it already has that type exactly: a map comprehension takes its pair type
+	 * from the pair and is invariant against the declared `Map<K, V>`, so an `Int` value for a `Float` map or a
+	 * null-narrowed key for a `String` key would stop compiling where `m[k] = v` did not. The operands are holes for
+	 * `ParenGuard`, since `c ? a : b => v` and `cast x => v` do not parse.
+	 */
+	public static function keyedPair(stmt: QueryNode, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
+		final write: Null<KeyedWrite> = keyedWrite(stmt, name, ctx.seams);
+		final stmtSpan: Null<Span> = stmt.span;
+		final keySpan: Null<Span> = write?.key.span;
+		final valueSpan: Null<Span> = write?.value.span;
+		final types: Null<MapTypes> = acc.keyed;
+		if (write == null || stmtSpan == null || keySpan == null || valueSpan == null || types == null) return null;
+		if (!isExactly(write.key, types.key, ctx) || !isExactly(write.value, types.value, ctx)) return null;
+		PreferComprehension.hoistCommentsIn(new Span(stmtSpan.from, keySpan.from), ctx, acc);
+		PreferComprehension.hoistCommentsIn(new Span(keySpan.to, valueSpan.from), ctx, acc);
+		PreferComprehension.hoistCommentsIn(new Span(valueSpan.to, stmtSpan.to), ctx, acc);
+		acc.checks.push(write.key);
+		acc.checks.push(write.value);
+		final key: String = ctx.source.substring(keySpan.from, keySpan.to);
+		final value: String = ctx.source.substring(valueSpan.from, valueSpan.to);
+		final pair: String = '$key => $value';
+		acc.pairHoles = [new Span(0, key.length), new Span(key.length + ARROW.length, pair.length)];
+		acc.pairLength = pair.length;
+		return pair;
+	}
+
+	/**
+	 * The character ranges of the pair operands inside the replacement `head + '];'` of a keyed match, which
+	 * `ParenGuard` may wrap: the pair is the last thing `head` holds.
+	 */
+	public static function keyHoles(head: String, acc: ComprehensionAcc): Array<Span> {
+		final from: Int = head.length - acc.pairLength;
+		return acc.pairHoles.map(h -> new Span(from + h.from, from + h.to));
+	}
+
+	/**
 	 * Whether `name[j] = v` on a binding declared with `annotation` is a plain ARRAY write: no annotation
 	 * (the `[]` initializer types the binding as an array) or one whose head is `Array`. A `Map` annotation
 	 * turns the fold into a compile error, and an abstract `@:from` an array with an `@:arrayAccess` setter
@@ -187,14 +247,9 @@ final class ComprehensionFills {
 
 	/** The value `v` of an expression statement `name[binder] = v`, or null when `stmt` is not exactly that. */
 	private static function indexWriteValue(stmt: QueryNode, name: String, binder: String, s: ComprehensionSeams): Null<QueryNode> {
-		final assign: Null<QueryNode> = NodeShape.assignmentOf(stmt, s.exprStmtKind, s.assignKind);
-		if (assign == null) return null;
-		final target: QueryNode = assign.children[0];
-		if (target.kind != s.indexAccessKind || !NodeShape.hasBinaryShape(target)) return null;
-		final receiver: QueryNode = target.children[0];
-		final index: QueryNode = target.children[1];
-		final plain: Bool = receiver.kind == s.identKind && receiver.name == name && index.kind == s.identKind && index.name == binder;
-		return plain ? assign.children[1] : null;
+		final write: Null<KeyedWrite> = keyedWrite(stmt, name, s);
+		final index: Null<QueryNode> = write?.key;
+		return write != null && index != null && index.kind == s.identKind && index.name == binder ? write.value : null;
 	}
 
 	/** The source text of one kept statement — a local verbatim, a guard as its NEGATED condition — or null when it is neither. */
@@ -230,6 +285,34 @@ final class ComprehensionFills {
 
 	private static function renderSteps(steps: Array<KeptStep>): String {
 		return steps.map(st -> st.terminated ? st.text : '${st.text};').join(' ');
+	}
+
+	/** The key and value of an expression statement `name[k] = v` (plain `=` only), or null when `stmt` is not exactly that. */
+	private static function keyedWrite(stmt: QueryNode, name: String, s: ComprehensionSeams): Null<KeyedWrite> {
+		final assign: Null<QueryNode> = NodeShape.assignmentOf(stmt, s.exprStmtKind, s.assignKind);
+		if (assign == null) return null;
+		final target: QueryNode = assign.children[0];
+		if (target.kind != s.indexAccessKind || !NodeShape.hasBinaryShape(target)) return null;
+		final receiver: QueryNode = target.children[0];
+		return receiver.kind == s.identKind && receiver.name == name ? { key: target.children[1], value: assign.children[1] } : null;
+	}
+
+	/** The key and value types of a two-argument `Map` `annotation`: the one declared type a keyed write `m[k] = v` folds into `k => v`. */
+	private static function mapTypesOf(annotation: Null<String>, typeSyntax: TypeSyntaxReader): Null<MapTypes> {
+		if (annotation == null) return null;
+		final written: Null<Array<String>> = switch typeSyntax(annotation)?.shape {
+			case Nominal(MAP_HEAD, args) if (args.length == MAP_ARITY): NominalTypes.typeArgumentSourcesOf(annotation, typeSyntax);
+			case _: null;
+		};
+		return written == null || written.length != MAP_ARITY ? null : { key: written[0], value: written[1] };
+	}
+
+	/**
+	 * A map comprehension is invariant against `Map<K, V>`: an operand folds only when the typing proves it exactly that type.
+	 */
+	private static function isExactly(node: QueryNode, expected: String, ctx: ComprehensionCtx): Bool {
+		final known: Null<String> = ctx.typeOf(node);
+		return known != null && SourceText.withoutSpace(known) == SourceText.withoutSpace(expected);
 	}
 
 }
