@@ -412,7 +412,8 @@ class PreferValueLoopCheckTest extends Test {
 	@:killer('M-REACH-ESCAPE-ARGUMENT')
 	public function testMethodOfAnotherObjectHoldingTheCollectionIsReportOnly(): Void {
 		// `sink` was handed the very array, so `sink.use` changes it without ever naming `items`.
-		final shared: String = owned('sink.held = items;\n\t\tfor (i in 0...items.length) sink.use(items[i].clone());');
+		final shared: String = owned('sink.held = items;\n\t\tfor (i in 0...items.length) sink.use(items[i].clone());')
+			.replace('public function use(a:Item):Void {}', 'public function use(a:Item):Void held.push(a);');
 		Assert.isTrue(StringTools.startsWith(declineOf(shared) ?? '', ElementLoopRewrite.SELF_CALL_DECLINE));
 		assertFixCanonical(
 			owned('for (i in 0...items.length) sink.use(items[i].clone());'), ['for (item in items) sink.use(item.clone());'], []

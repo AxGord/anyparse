@@ -17198,6 +17198,94 @@
 			"find": "provider.module == destInfo.module && destInfo.types.exists(t -> t.isMain && t.name == destTypeName)",
 			"replace": "provider.module == destInfo.module",
 			"note": "any type of the wildcard's module counts as its holder, so a sub-type or a moved-in type reads the main type's statics bare and the written code does not compile"
+		},
+		{
+			"name": "M-READING-EXTENSION-KEPT",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "withReadingExtensions",
+			"find": "reads.push(method);",
+			"replace": "reads.push('');",
+			"note": "a listed reading extension is no longer accepted as a read, so a file reading the member through Lambda.foreach shares it again and the loop's fix is withheld"
+		},
+		{
+			"name": "M-READING-EXTENSION-NEEDS-USING",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "withReadingExtensions",
+			"find": "if (usings.contains(module)) for",
+			"replace": "if (true) for",
+			"note": "a module no using of the file brings is trusted too, so a call the file cannot bind to it counts as a read"
+		},
+		{
+			"name": "M-READING-EXTENSION-CONFLICT",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "withReadingExtensions",
+			"find": "&& UsingScan.usingConflict(usings, module, method, _scope.plugin, symbols, file) == UsingConflict.Clear",
+			"replace": "&& true",
+			"note": "another using that supplies the same name is ignored, so a call the compiler binds to that extension counts as the listed read"
+		},
+		{
+			"name": "M-READING-EXTENSION-SHADOW",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "withReadingExtensions",
+			"find": "&& UsingScan.qualifiedCallReaches(header, module, method, symbols)",
+			"replace": "&& true",
+			"note": "a project type displacing the module is ignored, so its extension counts as the std read"
+		},
+		{
+			"name": "M-READING-EXTENSION-UNLISTED",
+			"type": "anyparse.query.MemberTouchScan",
+			"method": "withReadingExtensions",
+			"find": "return { reads: reads, changes: owns.changes };",
+			"replace": "return { reads: reads.concat(['keepAll']), changes: owns.changes };",
+			"note": "an extension the grammar does not list is accepted as a read, so a call that may retain the member no longer withholds the fix"
+		},
+		{
+			"name": "M-SHARED-MEMBER-REGION-ASKED",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedMemberChange",
+			"find": "if (!isArray) return escape;",
+			"replace": "if (isArray) return escape;",
+			"note": "a shared array member is an escape again whatever the region runs, so a loop whose body changes no array loses its fix"
+		},
+		{
+			"name": "M-SHARED-MEMBER-REGION-CULPRIT",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedMemberChange",
+			"find": "final culprit: Null<Span> = regionCulprit(file, tree, source, fn, region, callees);",
+			"replace": "final culprit: Null<Span> = null;",
+			"note": "the region of a shared array member is no longer read for a change of an array it did not build nor for the calls it makes, so the loop is rewritten over an array its body may grow"
+		},
+		{
+			"name": "M-SHARED-MEMBER-REGION-REACH",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedMemberChange",
+			"find": "case Aliased(_, shared, culpritFile, changed): Aliased(at.file, shared, culpritFile, changed);",
+			"replace": "case Aliased(_, _, _, _): null;",
+			"note": "an array change in code the region calls no longer blocks a shared member, so the loop is rewritten though a callee grows the kept array"
+		},
+		{
+			"name": "M-REACH-QUIET-LIBRARY-BODY",
+			"type": "anyparse.query.MemberReach",
+			"method": "walk",
+			"find": "if (type != null && walked != null && _g.library.runsNoUserCode(g, type, walked, true)) continue;",
+			"replace": "if (type != null && walked != null && false) continue;",
+			"note": "a library body that runs no project code is walked once read, so the target call inside an inlined Array.contains admits every function value and a region that only asks contains reaches a toucher"
+		},
+		{
+			"name": "M-SHARED-MEMBER-NOT-AN-ARRAY",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedMemberChange",
+			"find": "if (!isArray) return escape;",
+			"replace": "if (false) return escape;",
+			"note": "a shared member that is no array is read for array changes only, so a map alias changed in the region passes as proven and the fix is unsound"
+		},
+		{
+			"name": "M-SHARED-MEMBER-CALLS-ENTRY",
+			"type": "anyparse.query.MemberReach",
+			"method": "sharedMemberChange",
+			"find": "case Calls(_, _): escape;",
+			"replace": "case Calls(_, _): null;",
+			"note": "a shared array member asked through call sites is proven without anything being read for a change of the kept array"
 		}
 	]
 }

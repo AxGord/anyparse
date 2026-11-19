@@ -226,7 +226,7 @@ final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 	 */
 	private static function headerOf(tree: QueryNode, seams: Seams): Null<Header> {
 		var declIndex: Int = -1;
-		for (i in 0...tree.children.length) if (seams.typeDecls.contains(tree.children[i].kind)) {
+		for (i => child in tree.children) if (seams.typeDecls.contains(child.kind)) {
 			if (declIndex >= 0) return null;
 			declIndex = i;
 		}

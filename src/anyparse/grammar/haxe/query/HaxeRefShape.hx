@@ -542,6 +542,25 @@ final class HaxeRefShape {
 				'splice',
 				'unshift'
 			],
+			nonRetainingExtensionMethods: [
+				'Lambda' => [
+					'array',
+					'count',
+					'empty',
+					'exists',
+					'find',
+					'findIndex',
+					'flatMap',
+					'flatten',
+					'fold',
+					'foldi',
+					'foreach',
+					'has',
+					'iter',
+					'list',
+					'mapi'
+				]
+			],
 			fixedLengthArrayTypes: ['haxe.ds.Vector'],
 			integerFoldOperators: ['Add' => 'add', 'Sub' => 'subtract', 'Mul' => 'multiply'],
 			orderedComparisonOperators: ['Lt' => 'lt', 'LtEq' => 'le', 'Gt' => 'gt', 'GtEq' => 'ge'],

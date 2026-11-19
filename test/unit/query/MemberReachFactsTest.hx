@@ -3700,7 +3700,7 @@ class MemberReachFactsTest extends Test {
 		assertMatch(truthAsk(files('b', 'a')), r -> r.match(Proven));
 		assertMatch(truthAsk(files('a', 'b')), r -> r.match(Reached(_)));
 		assertMatch(ask(files('b', 'a')), r -> !r.match(Proven));
-		assertMatch(truthAsk(files('b', 'a', ' keep = stuff; ')), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(truthAsk(files('b', 'a', ' keep = stuff; ')), sharedValue);
 		// stored through the expansion of a library macro, which no project text spells: the escape only the facts of the node
 		// read as `b.Grid`'s member show, found after the question checked every escape the project's text and facts hold
 		final macroLibrary: Map<String, String> = [
@@ -4139,7 +4139,7 @@ class MemberReachFactsTest extends Test {
 		final main: String = LOOP_HEAD
 			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t\tkeep();\n\t}\n'
 			+ '\tstatic function calm():Void {}\n\tstatic function keep():Void {\n\t\tvar p = items.push;\n\t\tp(1);\n\t}\n}\n';
-		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(truthAsk(['Main.hx' => growing(main)]), sharedValue);
 		assertMatch(ask(['Main.hx' => main]), r -> r.match(Proven));
 	}
 
@@ -4160,19 +4160,19 @@ class MemberReachFactsTest extends Test {
 			+ 'c == "v") l = other;\n\t\tfor (i => v in l) trace(i + v);\n\t\tvar copy:Array<Int> = l;\n'
 			+ '\t\tfor (x in copy) trace(x + copy.length + copy[0]);\n\t\tUSE\n\t\treturn null;\n\t}\n}\n';
 		function files(use: String, region: String = 'calm();'): Map<String, String> {
-			return ['Main.hx' => main.replace('USE', use).replace('REGION', region)];
+			return ['Main.hx' => growing(main.replace('USE', use).replace('REGION', region))];
 		}
 		// the index is the analysis's word for the classpath, which `Array` would otherwise leave open
 		for (use in ['', '{ var l:Array<Int> = [5]; l.push(6); }'])
 			assertMatch(ask(files(use), null, true, null, true, null, null, null, true), r -> r.match(Proven));
-		assertMatch(ask(files('')), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(ask(files('')), sharedValue);
 		for (use in [
 			'l.push(1);',
 			'copy.push(1);',
 			'{ var l:Array<Int> = [5]; trace(l.length); } l.push(1);'
 		]) assertMatch(compiledTruthAsk(files(use, 'walk("h");')), r -> r.match(Reached(_)));
 		for (use in ['keep(l);', 'var f = () -> copy.length; f();', 'if (c == "r") return l;'])
-			assertMatch(compiledTruthAsk(files(use)), r -> r.match(Unknown(Escape(_, _))));
+			assertMatch(compiledTruthAsk(files(use)), sharedValue);
 	}
 
 	@:pin('control')
@@ -4223,8 +4223,8 @@ class MemberReachFactsTest extends Test {
 			Assert.isTrue(proven.match(Proven), '$store: got $proven');
 			final pushed: ReachResult = compiledTruthAsk(files('l.push(1);', 'walk("h");'));
 			Assert.isTrue(pushed.match(Reached(_)), '$store: got $pushed');
-			final handed: ReachResult = compiledTruthAsk(files('keep(l);'));
-			Assert.isTrue(handed.match(Unknown(Escape(_, _))), '$store: got $handed');
+			final handed: ReachResult = compiledTruthAsk([ for (file => text in files('keep(l);')) file => growing(text) ]);
+			Assert.isTrue(sharedValue(handed), '$store: got $handed');
 		}
 	}
 
@@ -4254,7 +4254,7 @@ class MemberReachFactsTest extends Test {
 			+ 'Keeper extends Reader {\n\tpublic static var held:Array<Int> = null;\n\n\toverride public function read(a:Array<Int>):Int {'
 			+ '\n\t\theld = a;\n\t\treturn 0;\n\t}\n}\n\nextern class Ext {\n\tpublic static function take(a:Array<Int>):Void;\n}\n';
 		function files(use: String, region: String = 'calm();'): Map<String, String> {
-			return ['Main.hx' => main.replace('USE', use).replace('REGION', region)];
+			return ['Main.hx' => growing(main.replace('USE', use).replace('REGION', region))];
 		}
 		for (use in [
 			'sum(items);',
@@ -4267,7 +4267,7 @@ class MemberReachFactsTest extends Test {
 			final proven: ReachResult = ask(files(use), null, true, null, true, null, null, null, true);
 			Assert.isTrue(proven.match(Proven), '$use: got $proven');
 		}
-		assertMatch(ask(files('sum(items);')), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(ask(files('sum(items);')), sharedValue);
 		for (use in [
 			'store(items);',
 			'give(items);',
@@ -4277,7 +4277,7 @@ class MemberReachFactsTest extends Test {
 			'final r:Reader = new Keeper();\n\t\tr.read(items);'
 		]) {
 			final escaped: ReachResult = compiledTruthAsk(files(use));
-			Assert.isTrue(escaped.match(Unknown(Escape(_, _))), '$use: got $escaped');
+			Assert.isTrue(sharedValue(escaped), '$use: got $escaped');
 		}
 		assertMatch(compiledTruthAsk(files('', 'grow(items);')), r -> r.match(Reached(_)));
 	}
@@ -4323,9 +4323,11 @@ class MemberReachFactsTest extends Test {
 			'touch -',
 			'- escape'
 		], [ for (k in known) verdict(k.split(' ')[0], k.split(' ')[1]) ]);
-		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
+		final main: String = growing(
+			'$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\tsum(items);\n\t}\n\n\tstatic function calm():Void {}\n\n\tstatic function sum(a:Array<Int>):Int {\n'
-			+ '\t\tvar n:Int = 0;\n\t\tfor (x in a) n += x;\n\t\treturn n + a.length + a[0];\n\t}\n}\n';
+			+ '\t\tvar n:Int = 0;\n\t\tfor (x in a) n += x;\n\t\treturn n + a.length + a[0];\n\t}\n}\n'
+		);
 		function ask(rewrite: (String, String) -> String): ReachResult {
 			return rewrittenTruth(
 				['Main.hx' => main],
@@ -4336,9 +4338,7 @@ class MemberReachFactsTest extends Test {
 		}
 		assertMatch(ask((id, text) -> text), r -> r.match(Proven));
 		final renamed: EReg = ~/"u":"[A-Za-z]+"/g;
-		assertMatch(
-			ask((id, text) -> id == 'Main.sum' ? renamed.replace(text, '"u":"future"') : text), r -> r.match(Unknown(Escape(_, _)))
-		);
+		assertMatch(ask((id, text) -> id == 'Main.sum' ? renamed.replace(text, '"u":"future"') : text), sharedValue);
 	}
 
 	@:pin('control')
@@ -4346,11 +4346,13 @@ class MemberReachFactsTest extends Test {
 	public function testAMarkerTheFactsReaderDoesNotKnowKeepsItsBodysSyntaxUnderTheTruth(): Void {
 		// a node's markers are a closed list (`FactMarker`): one no reader names may say a fact of the node lost its place, so
 		// `other` keeps its syntax — where `sum(items)`, an argument, escapes — instead of its facts
-		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t\tother();\n'
+		final main: String = growing(
+			'$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t\tother();\n'
 			+ '\t}\n\n\tstatic function calm():Void {}\n\n\tstatic function other():Void {\n\t\tsum(items);\n\t}\n\n'
-			+ '\tstatic function sum(a:Array<Int>):Int return a.length;\n}\n';
+			+ '\tstatic function sum(a:Array<Int>):Int return a.length;\n}\n'
+		);
 		assertMatch(compiledTruthAsk(['Main.hx' => main]), r -> r.match(Proven));
-		assertMatch(rewritten(marking('Main.other'), () -> compiledTruthAsk(['Main.hx' => main])), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(rewritten(marking('Main.other'), () -> compiledTruthAsk(['Main.hx' => main])), sharedValue);
 	}
 
 	@:pin('control')
@@ -4478,7 +4480,7 @@ class MemberReachFactsTest extends Test {
 		// is read by its syntax, where the receiver may be the one holding the member and its value is handed to a call
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\tpoke(null);\n\t}\n\tstatic function calm():Void {}\n\tstatic function poke(d:Dynamic):Void d.items(1);\n}\n';
-		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(truthAsk(['Main.hx' => growing(main)]), sharedValue);
 	}
 
 	@:pin('control')
@@ -4489,8 +4491,8 @@ class MemberReachFactsTest extends Test {
 		final main: String = '$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\treset(true);\n\t}\n\tstatic function calm():Void {}\n\tstatic function reset(c:Bool):Void {\n'
 			+ '\t\titems = c ? [] : null;\n\t}\n}\n';
-		assertMatch(truthAsk(['Main.hx' => main]), r -> r.match(Proven));
-		assertMatch(ask(['Main.hx' => main]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(truthAsk(['Main.hx' => growing(main)]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => growing(main)]), sharedValue);
 	}
 
 	@:pin('control')
@@ -4592,7 +4594,7 @@ class MemberReachFactsTest extends Test {
 	public function testAMethodABuildMacroAddedTheFactsCannotReadTouchesTheMemberUnderTheTruth(): Void {
 		// `Mac.dyn`'s `added` calls what a dynamic value's `items` holds, a call the facts do not read as an access of the
 		// member, and no text holds the body to read instead: it touches the member and lets its value go
-		assertMatch(truthAsk(helperBuiltBy('dyn', 'h.added();')), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(truthAsk(helperBuiltBy('dyn', 'h.added();')), sharedValue);
 	}
 
 	@:pin('control')
@@ -5268,7 +5270,7 @@ class MemberReachFactsTest extends Test {
 		}
 		final points: MemberRef = { owner: 'Main', name: '_points' };
 		for (use in ['Keeper.held = k.push(_points);', 'k.pop(_points);', 'k.it = new Walk(_points);'])
-			assertMatch(ask(fixture(use), null, true, points, false, null, null, null, true), r -> r.match(Unknown(Escape(_, _))));
+			assertMatch(ask(fixture(use), null, true, points, false, null, null, null, true), sharedValue);
 	}
 
 	/**
@@ -5834,6 +5836,21 @@ class MemberReachFactsTest extends Test {
 		final conv: String = '\tstatic function conv():String\n\t\treturn d;\n\n';
 		assertMatch(ask(['Main.hx' => region('conv();', conv)], null, false), r -> r.match(Reached(_)));
 		assertMatch(ask(['Main.hx' => region('inline function named():Int return 1; named();', '')], null, false), r -> r.match(Proven));
+	}
+
+	/**
+	 * `src` with its idle `calm` growing an array of its own: a region that changes an array is what tells a member whose
+	 * value is shared from one that keeps it to itself.
+	 */
+	private static function growing(src: String): String {
+		return src.replace(
+			'static function calm():Void {}', 'static var spare:Array<Int> = [];\n\tstatic function calm():Void spare[spare.length] = 0;'
+		);
+	}
+
+	/** Whether `result` says the member's value is shared: alone, or with the code the region runs that may change it. */
+	private static function sharedValue(result: ReachResult): Bool {
+		return result.match(Unknown(Escape(_, _) | Aliased(_, _, _, _)));
 	}
 
 }

@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.scan.UsingScan;
 import anyparse.query.CallGraph.FnDeclaration;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraphTypes.HeldFile;
@@ -389,6 +390,7 @@ final class MemberTouchScan {
 			return _carriers.relation(known, declaring) != CannotCarry;
 		}
 
+		var ownsInFile: Null<OwnMethods> = null;
 		final lineage: Array<QueryNode> = [];
 		function record(node: QueryNode, parent: Null<QueryNode>, grand: Null<QueryNode>, index: Int, parentIndex: Int): Void {
 			final at: Null<Span> = node.span;
@@ -396,7 +398,9 @@ final class MemberTouchScan {
 			final span: Span = at;
 			// a function read through its compiler facts touches as they say (`recordTyped`), not as its syntax reads
 			if (!_live(file, span) || factsRead.exists(g.functionAt(file, span.from) ?? '')) return;
-			final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, access, owns);
+			final here: OwnMethods = ownsInFile ?? withReadingExtensions(owns, file, source, tree);
+			ownsInFile = here;
+			final verdict: Verdict = classify(node, parent, grand, lineage, index, parentIndex, access, here);
 			if (verdict.escape) out.escapes.push({ file: file, span: span });
 			if (!verdict.touch) return;
 			if (within(span, region) && out.inRegion == null) out.inRegion = {
@@ -865,6 +869,32 @@ final class MemberTouchScan {
 			if (init != null && span != null && !isFresh(init, null)) return { file: site.file, span: span };
 		}
 		return null;
+	}
+
+	/**
+	 * `owns` widened by the static extensions `file` provably binds that only read a container
+	 * (`ExecutionShape.nonRetainingExtensionMethods`): the module is in the file's `using`s, no other `using` supplies the name and
+	 * no project type displaces the module. A container the scan knows no methods of (`owns` empty) may declare the name itself,
+	 * and its own member would win over an extension.
+	 */
+	private function withReadingExtensions(owns: OwnMethods, file: String, source: String, tree: QueryNode): OwnMethods {
+		final listed: Null<Map<String, Array<String>>> = _scope.shape.execution?.nonRetainingExtensionMethods;
+		if (listed == null || (owns.reads.length == 0 && owns.changes.length == 0)) return owns;
+		final info: Null<FileInfo> = _scope.index.fileInfo(file);
+		final header: UsingHeader = UsingScan.headerOf(tree, source, _scope.plugin, info);
+		final usings: Array<String> = UsingScan.reachingUsings(header, info);
+		function symbols(): Null<SymbolIndex> return _scope.index;
+		final reads: Array<String> = owns.reads.copy();
+		for (module => names in listed) if (usings.contains(module)) for (method in names) {
+			if (
+				!reads.contains(method)
+				&& !owns.changes.contains(method)
+				&& UsingScan.usingConflict(usings, module, method, _scope.plugin, symbols, file) == UsingConflict.Clear
+				&& UsingScan.qualifiedCallReaches(header, module, method, symbols)
+			)
+				reads.push(method);
+		}
+		return { reads: reads, changes: owns.changes };
 	}
 
 	/** The own methods of the grammar's built-in array type (`RefShape.arrayTypeNames`). */

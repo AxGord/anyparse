@@ -3640,6 +3640,16 @@ typedef ExecutionShape = {
 	var mutatingArrayMethods: Array<String>;
 
 	/**
+	 * The static extensions of the built-in container types, by the module a `using` brings them from (Haxe `Lambda`), that
+	 * only READ the container handed as their receiver — walk it, answer a number, a flag or a new collection, keep nothing
+	 * of it. A call of one on a container member counts as a read where the file's `using` of the module provably binds
+	 * the name (no other `using` supplies it, no project type shadows the module). Optional; unset leaves every
+	 * extension call on a container an escape.
+	 */
+	@:optional
+	var nonRetainingExtensionMethods: Map<String, Array<String>>;
+
+	/**
 	 * The fully qualified paths of the grammar's FIXED-LENGTH array types (Haxe `haxe.ds.Vector`): a
 	 * construction `new T(n)` holds exactly `n` elements for as long as the value lives, and an index
 	 * write never resizes it. A path, not a simple name, because the simple name is shared — OpenFL's

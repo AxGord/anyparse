@@ -88,7 +88,10 @@ class MemberReachTest extends Test {
 		// `keep` may store the array and a later callee change it through that alias without naming `items`.
 		final src: String = 'class C { var items:Array<Int> = []; function new() Keeper.keep(items); '
 			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
-		assertMatch(ask([src, 'class Keeper { public static function keep(a:Array<Int>):Void {} }']), r -> r.match(Unknown(Escape(_, _))));
+		final keeper: String = 'class Keeper { public static function keep(a:Array<Int>):Void {} }';
+		assertMatch(ask([growing(src), keeper]), r -> r.match(Unknown(Aliased(_, _, _, _))));
+		// a region that changes no array changes none the member shares
+		assertMatch(ask([src, keeper]), r -> r.match(Proven));
 	}
 
 	@:pin('control')
@@ -96,10 +99,10 @@ class MemberReachTest extends Test {
 	public function testStoringASharedValueIsAnEscape(): Void {
 		final shared: String = 'class C { var items:Array<Int> = []; public function set(a:Array<Int>):Void items = a; '
 			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
-		assertMatch(ask([shared]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(ask([growing(shared)]), r -> r.match(Unknown(Aliased(_, _, _, _))));
 		final fresh: String = 'class C { var items:Array<Int> = []; public function reset():Void items = []; '
 			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
-		assertMatch(ask([fresh]), r -> r.match(Proven));
+		assertMatch(ask([growing(fresh)]), r -> r.match(Proven));
 	}
 
 	@:pin('control')
@@ -107,7 +110,7 @@ class MemberReachTest extends Test {
 	public function testSharedInitializerIsAnEscape(): Void {
 		final src: String = 'class C { static final SHARED:Array<Int> = []; var items:Array<Int> = SHARED; '
 			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
-		assertMatch(ask([src]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(ask([growing(src)]), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
 	@:pin('control')
@@ -958,7 +961,7 @@ class MemberReachTest extends Test {
 		// The region runs no call, but `alias` IS `items`: the element write grows the field behind the loop.
 		final src: String = 'class C { static var alias:Array<Int>; var items:Array<Int> = []; public function new() alias = items; '
 			+ 'function f():Void { /*<*/ alias[alias.length] = 0; /*>*/ } }';
-		assertMatch(ask([src]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(ask([src]), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
 	@:pin('control')
@@ -1274,7 +1277,7 @@ class MemberReachTest extends Test {
 		assertMatch(ask([typed, bag]), r -> !r.match(Proven));
 		final shared: String = 'class C { static final SHARED:Array<Int> = [];\n#if other\nvar items:Array<Int> = [];\n#else\n'
 			+ 'var items:Array<Int> = SHARED;\n#end\nfunction f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
-		assertMatch(ask([shared]), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(ask([growing(shared)]), r -> r.match(Unknown(Aliased(_, _, _, _))));
 	}
 
 	@:pin('control')
@@ -1339,6 +1342,33 @@ class MemberReachTest extends Test {
 		final grow: Array<QueryNode> = callsNamed(tree, 'grow');
 		assertMatch(reach.mayReach(Calls('F0.hx', quiet), { owner: 'C', name: 'items' }, Mutate), r -> r.match(Proven));
 		assertReachedAt(reach.mayReach(Calls('F0.hx', grow), { owner: 'C', name: 'items' }, Mutate), 'C.grow');
+	}
+
+	@:pin('control')
+	@:killer('M-SHARED-MEMBER-NOT-AN-ARRAY')
+	public function testASharedMemberThatIsNoArrayStaysAnEscapeOverAQuietRegion(): Void {
+		// the region's reading looks for array changes only: `kept.set(…)` on the kept map is none of them
+		final src: String = 'class C { var items:Map<String, Int> = []; function new() Keeper.keep(items); '
+			+ 'function f():Void { /*<*/ helper(); /*>*/ } function helper():Void {} }';
+		final keeper: String = 'class Keeper { public static function keep(a:Map<String, Int>):Void {} }';
+		assertMatch(ask([src, keeper]), r -> r.match(Unknown(Escape(_, _))));
+	}
+
+	@:pin('control')
+	@:killer('M-SHARED-MEMBER-CALLS-ENTRY')
+	public function testASharedArrayMemberStaysAnEscapeThroughACallsEntry(): Void {
+		// only a region is read for what it runs: the same quiet call asked as a call site keeps the escape
+		final src: String = 'class C { var items:Array<Int> = []; function new() Keeper.keep(items); '
+			+ 'function f():Void { /*<*/ quiet(); /*>*/ } function quiet():Void {} }';
+		final keeper: String = 'class Keeper { public static function keep(a:Array<Int>):Void {} }';
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final files: Array<{ file: String, source: String }> = [{ file: 'F0.hx', source: src }, { file: 'F1.hx', source: keeper }];
+		final reach: MemberReach = new MemberReach(
+			plugin, files, CheckFixture.index(files, plugin), true, MemberReach.MAX_LIBRARY_FILES, MemberReach.MAX_VISITED, null, () -> true
+		);
+		final quiet: Array<QueryNode> = callsNamed(plugin.parseFile(src), 'quiet');
+		assertMatch(reach.mayReach(Calls('F0.hx', quiet), { owner: 'C', name: 'items' }, Mutate), r -> r.match(Unknown(Escape(_, _))));
+		assertMatch(reach.mayReach(Region('F0.hx', regionOf(src)), { owner: 'C', name: 'items' }, Mutate), r -> r.match(Proven));
 	}
 
 	@:pin('control')
@@ -2315,6 +2345,22 @@ class MemberReachTest extends Test {
 		Assert.isNull(scope.siteOf('Absent'));
 	}
 
+	@:pin('control')
+	@:killer('M-REACH-QUIET-LIBRARY-BODY')
+	public function testALibraryBodyThatRunsNoProjectCodeIsNotWalkedOnceRead(): Void {
+		// `loud` takes a value that may run anything, so the walk reads the library type for it, and `quiet` is a body by
+		// then. A call of `StringTools.quiet` runs no project code, so the call its text makes off a dynamic value is none
+		// the region runs; the same text in a type nothing calls quiet runs any function value in play — `grow`
+		final src: String = 'class C { var items:Array<Int> = []; var cb:() -> Void; public function register():Void cb = grow; '
+			+ 'function f():Void { /*<*/ StringTools.loud(null); var q:Bool = StringTools.quiet("a"); /*>*/ } '
+			+ 'function grow():Void items.push(1); }';
+		final lib: String = 'class StringTools { public static function loud(d:Dynamic):Void {} '
+			+ 'public static function quiet(s:String):Bool { var d:Dynamic = s; return d.includes("a"); } }';
+		assertMatch(ask([src], [lib]), r -> r.match(Proven));
+		final plain: String -> String = text -> text.replace('StringTools', 'Tools');
+		assertMatch(ask([plain(src)], [plain(lib)]), r -> !r.match(Proven));
+	}
+
 	/** `ask` under the builds `configurations`. */
 	private function configuredAsk(
 		project: Array<String>, library: Null<Array<String>>, configurations: Array<ReachConfiguration>
@@ -2415,6 +2461,16 @@ class MemberReachTest extends Test {
 			case _:
 				Assert.fail('expected a path ending in $last, got $result');
 		}
+	}
+
+	/**
+	 * `src` with its idle `helper` growing an array of its own: a region that changes an array is what tells a member whose
+	 * value is shared from one that keeps it to itself.
+	 */
+	private static function growing(src: String): String {
+		return src.replace(
+			'function helper():Void {}', 'static var spare:Array<Int> = []; function helper():Void spare[spare.length] = 0;'
+		);
 	}
 
 }

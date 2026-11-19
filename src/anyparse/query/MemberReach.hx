@@ -647,8 +647,8 @@ final class MemberReach {
 		final built: Null<ReachUnknown> = storageHidden(g, entry, entryFile, member, declaring, ownerFile, pinned);
 		if (built != null) return Unknown(built);
 		if (access == Mutate && scan.escapes.length > 0) {
-			final at: Occurrence = scan.escapes[0];
-			return Unknown(Escape(at.file, at.span));
+			final aliased: Null<ReachUnknown> = sharedMemberChange(g, entry, scan.escapes[0], memberIsArray(g, declaring, member.name));
+			if (aliased != null) return Unknown(aliased);
 		}
 		final marked: Null<ReachUnknown> = enterEntry(g, entry);
 		if (marked != null) return Unknown(marked);
@@ -2341,6 +2341,10 @@ final class MemberReach {
 					node = upgraded;
 				}
 				final type: Null<String> = node.typeName;
+				// library code that runs no project code is not walked where its body was read either: unread, `expandExternal`
+				// leaves it alone for the same reason
+				final walked: Null<String> = node.name;
+				if (type != null && walked != null && _g.library.runsNoUserCode(g, type, walked, true)) continue;
 				// code no configuration compiles runs in no build: a node every declaration of which lies there runs nothing
 				final declared: Array<FnDeclaration> = g.declarationsOf(node.id);
 				if (declared.length > 0 && !declared.exists(d -> isLive(g, d.file, d.span))) continue;
@@ -3043,6 +3047,42 @@ final class MemberReach {
 		else
 			out.ids = ids;
 		return out;
+	}
+
+	/**
+	 * Why a member whose value is shared at `at` may be changed through another name while `entry` runs, or null when
+	 * nothing `entry` runs changes any array but one it built itself. Only an ARRAY member entered as a region is asked
+	 * that way (`answerLocal` asks the same of a shared local); any other shared member stays an `Escape`.
+	 */
+	private function sharedMemberChange(g: CallGraph, entry: ReachEntry, at: Occurrence, isArray: Bool): Null<ReachUnknown> {
+		final escape: ReachUnknown = Escape(at.file, at.span);
+		if (!isArray) return escape;
+		return switch entry {
+			case Calls(_, _): escape;
+			case Region(file, region):
+				final tree: Null<QueryNode> = g.treeOf(file);
+				final source: Null<String> = _projectSources[file];
+				final fn: Null<QueryNode> = tree == null ? null : enclosingFunctionNode(tree, region);
+				if (tree == null || source == null || fn == null) return escape;
+				final rebuilt: Null<ReachUnknown> = entryRewritten(g, file, [region]);
+				if (rebuilt != null) return rebuilt;
+				final blind: Null<ReachUnknown> = firstBlind(file, liveHazards(file, tree, source, region)) ?? _scope.facts?.blindIn(
+					file, region
+				);
+				if (blind != null) return blind;
+				// a project file that did not parse may hold a function the language calls implicitly
+				for (skipped in g.skippedFiles) if (_projectSources.exists(skipped)) return SkipParse(skipped);
+				final callees: Array<CallEdge> = [];
+				final culprit: Null<Span> = regionCulprit(file, tree, source, fn, region, callees);
+				if (culprit != null) return Aliased(at.file, at.span, file, culprit);
+				// the walk reports the shared value in the file it entered, which is the region's and not the escape's
+				switch reachedArrayChange(g, file, tree, region, callees, at.span) {
+					case null: null;
+					case Aliased(_, shared, culpritFile, changed): Aliased(at.file, shared, culpritFile, changed);
+					case AliasedUnread(_, shared, member): AliasedUnread(at.file, shared, member);
+					case other: other;
+				}
+		};
 	}
 
 	/**
