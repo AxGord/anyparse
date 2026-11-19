@@ -28,8 +28,15 @@ class PreferCompareFunctionCheckTest extends Test {
 
 	private static final STRING_ONLY: String =
 		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"String":"lib.Order.texts"}}}}';
+	private static final NULLABLE: String =
+		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"String":"lib.Order.nullableTexts"}}}}';
+	private static final FLOATS: String = '{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"Float":"lib.Order.floats"}}}}';
+	private static final NULLABLE_FLOATS: String =
+		'{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"Float":"lib.Order.nullableFloats"}}}}';
 	private static final ORDER: String = 'package lib;\nclass Order {\n\tpublic static function ints(a:Int, b:Int):Int return 0;\n'
-		+ '\tpublic static function texts(a:String, b:String):Int return 0;\n}';
+		+ '\tpublic static function texts(a:String, b:String):Int return 0;\n'
+		+ '\tpublic static function nullableTexts(a:Null<String>, b:Null<String>):Int return 0;\n\tpublic static function floats(a:Float, '
+		+ 'b:Float):Int return 0;\n\tpublic static function nullableFloats(a:Null<Float>, b:Null<Float>):Int return 0;\n}';
 
 	public function testTernaryChainFlaggedAndFixed(): Void {
 		final src: String = ints('xs.sort((a:Int, b:Int) -> a < b ? -1 : a > b ? 1 : 0);');
@@ -702,6 +709,126 @@ class PreferCompareFunctionCheckTest extends Test {
 		}
 	}
 
+	/**
+	 * `Reflect.compare` answers `-1` both ways between `null` and a non-numeric string, so a function whose parameters are
+	 * `Null<T>` takes the call over an operand that may be null; one whose parameters are `T` keeps the no-fix finding.
+	 */
+	@:pin('control')
+	@:killer('M-RCMP-NULLABLE-IGNORED')
+	public function testNullableFunctionMovesReflectCompareOverAMaybeNullOperand(): Void {
+		final call: String = sorted('xs.sort((a:Item, b:Item) -> Reflect.compare(b.s, a.s));');
+		Assert.equals(importing(sorted('xs.sort((a:Item, b:Item) -> Order.nullableTexts(b.s, a.s));')), namedFix(call, NULLABLE));
+
+	}
+
+	/** A function that takes the plain type leaves the same operands without a fix. */
+	@:pin('control')
+	@:killer('M-RCMP-NULLABLE-ANY')
+	public function testPlainFunctionOverAMaybeNullOperandStaysWithoutFix(): Void {
+		final call: String = sorted('xs.sort((a:Item, b:Item) -> Reflect.compare(b.s, a.s));');
+		final found: Array<Violation> = namedRun(call).violations;
+		Assert.equals(1, found.length);
+		Assert.isTrue(found[0].message.indexOf('no fix') >= 0);
+		Assert.equals(call, namedFix(call));
+
+	}
+
+	/** The nullable form needs BOTH parameters `Null<T>` of the key's type, and a return of `Int`. */
+	@:pin('control')
+	@:killer('M-RCMP-HALF-NULLABLE-SIGNATURE')
+	public function testNullableSignatureIsReadFromTheDeclaration(): Void {
+		final call: String = sorted('xs.sort((a:Item, b:Item) -> Reflect.compare(b.s, a.s));');
+		for (member in [
+			'public static function x(a:Null<String>, b:String):Int return 0;',
+			'public static function x(a:String, b:Null<String>):Int return 0;',
+			'public static function x(a:Null<Int>, b:Null<Int>):Int return 0;',
+			'public static function x(a:Null<String>, b:Null<String>):Null<Int> return 0;',
+			'public static function x(a:Null<String>):Int return 0;',
+			'public static function x(a:Null<Null<String>>, b:Null<Null<String>>):Int return 0;'
+		]) {
+			final files: Array<{ file: String, source: String }> = [
+				{ file: 'C.hx', source: call },
+				{ file: 'lib/Bad.hx', source: 'package lib;\nclass Bad {\n\t$member\n}' }
+			];
+			final all: Array<Violation> = CheckFixture.violationsIn(
+				new PreferCompareFunction(), files, null,
+				_ -> LintConfig.parse('{"rules":{"prefer-compare-function":{"enabled":true,"compare":{"String":"lib.Bad.x"}}}}')
+			);
+			Assert.equals(1, all.length, member);
+			Assert.equals(Severity.Error, all[0].severity, member);
+		}
+	}
+
+	/** An `Int` function over `Null<Int>` parameters is read the same way. */
+	public function testNullableIntFunctionIsAccepted(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: ints('xs.sort((a:Int, b:Int) -> Reflect.compare(a, b));') },
+			{
+				file: 'lib/Nul.hx',
+				source: 'package lib;\nclass Nul {\n\tpublic static function x(a:Null<Int>, b:Null<Int>):Int return 0;\n}'
+			}
+		];
+		final all: Array<Violation> = CheckFixture.violationsIn(
+			new PreferCompareFunction(), files, null, _ -> LintConfig.parse(namedInt('lib.Nul.x'))
+		);
+		Assert.equals(1, all.length);
+		Assert.equals(Severity.Info, all[0].severity);
+	}
+
+	/** A `Float` key moves `Reflect.compare` of two `Float`s, and of a field only where the function takes `Null<Float>`. */
+	@:pin('control')
+	@:killer('M-RCMP-FLOAT-KEY')
+	public function testFloatKeyMovesReflectCompare(): Void {
+		Assert.equals(
+			importing(floats('xs.sort(Order.floats);')), namedFix(floats('xs.sort((a:Float, b:Float) -> Reflect.compare(a, b));'), FLOATS)
+		);
+		Assert.equals(
+			importing(sorted('xs.sort((a:Item, b:Item) -> Order.nullableFloats(a.f, b.f));')),
+			namedFix(sorted('xs.sort((a:Item, b:Item) -> Reflect.compare(a.f, b.f));'), NULLABLE_FLOATS)
+		);
+		final field: String = sorted('xs.sort((a:Item, b:Item) -> Reflect.compare(a.f, b.f));');
+		Assert.equals(1, namedRun(field, FLOATS).violations.length);
+		Assert.equals(field, namedFix(field, FLOATS));
+	}
+
+	/** Without a `Float` key nothing is said about a `Float` call, a bare reference or a chain. */
+	@:pin('guard')
+	public function testFloatWithoutTheKeyIsSilent(): Void {
+		for (statement in [
+			'xs.sort((a:Float, b:Float) -> Reflect.compare(a, b));',
+			'xs.sort(Reflect.compare);',
+			'xs.sort((a:Float, b:Float) -> a < b ? -1 : a > b ? 1 : 0);'
+		]) {
+			final src: String = floats(statement);
+			Assert.equals(0, namedRun(src).violations.length, statement);
+			Assert.equals(src, namedFix(src), statement);
+		}
+	}
+
+	/** A `NaN` makes a chain answer `0` where the named function answers as it likes, so a `Float` chain stays silent under the key. */
+	@:pin('control')
+	@:killer('M-RCMP-ANY-OPERAND-TYPE')
+	public function testFloatChainStaysSilentUnderTheKey(): Void {
+		for (json in [FLOATS, NULLABLE_FLOATS]) {
+			final src: String = floats('xs.sort((a:Float, b:Float) -> a < b ? -1 : a > b ? 1 : 0);');
+			Assert.equals(0, namedRun(src, json).violations.length);
+			final field: String = sorted('xs.sort((a:Item, b:Item) -> a.f < b.f ? -1 : a.f > b.f ? 1 : 0);');
+			Assert.equals(0, namedRun(field, json).violations.length);
+		}
+	}
+
+	/** A bare `Reflect.compare` over `String`s outside null safety moves to a `Null<String>` function and stays with a plain one. */
+	@:pin('control')
+	@:killer('M-RCMP-BARE-NULLABLE-IGNORED')
+	public function testNullableFunctionMovesABareReflectCompare(): Void {
+		final bare: String = 'class C {\n\n\tfunction f(xs:Array<String>):Void {\n\t\txs.sort(Reflect.compare);\n\t}\n}';
+		Assert.equals(
+			importing('class C {\n\n\tfunction f(xs:Array<String>):Void {\n\t\txs.sort(Order.nullableTexts);\n\t}\n}'),
+			namedFix(bare, NULLABLE)
+		);
+		Assert.equals(bare, namedFix(bare));
+	}
+
 	private function sorted(statement: String): String {
 		return 'class Item {\n\tpublic var n:Int;\n\tpublic var m:Int;\n\tpublic var f:Float;\n\tpublic var s:String;\n'
 			+ '\tpublic var g(get, never):Int;\n\tfunction get_g():Int return 1;\n}\n\nclass C {\n\n'
@@ -751,6 +878,10 @@ class PreferCompareFunctionCheckTest extends Test {
 
 	private function bare(path: String): LintConfig {
 		return LintConfig.parse(BARE);
+	}
+
+	private function floats(statement: String): String {
+		return 'class C {\n\n\tfunction f(xs:Array<Float>):Void {\n\t\t$statement\n\t}\n}';
 	}
 
 }

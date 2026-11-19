@@ -301,7 +301,7 @@
 			"name": "M-RCMP-FILE-SCOPED",
 			"type": "anyparse.check.haxe.expressions.CompareFunctions",
 			"method": "read",
-			"find": "idx == null ? [] : idx.refs.resolveQualifiedRefAll(named.typePath)",
+			"find": "idx == null ? [] : idx.refs.resolveQualifiedRefAll(typePath)",
 			"replace": "[]",
 			"note": "the configured path resolves to nothing, as it did whenever the scanned file held a guarded or unread import of the package"
 		},
@@ -447,6 +447,46 @@
 			"find": "final tail: Null<QueryNode> = arrowTail(fn, body, s);",
 			"replace": "final tail: Null<QueryNode> = null;",
 			"note": "an arrow block tail is not counted as returned, so a call there is reported without a fix"
+		},
+		{
+			"name": "M-RCMP-NULLABLE-IGNORED",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "movedCalls",
+			"find": "compare.nullable || (t.nonNull(left) && t.nonNull(right))",
+			"replace": "t.nonNull(left) && t.nonNull(right)",
+			"note": "a function taking Null<T> is held to the non-null proof too, so a call over a maybe-null operand is reported without a fix"
+		},
+		{
+			"name": "M-RCMP-NULLABLE-ANY",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "movedCalls",
+			"find": "compare.nullable || (t.nonNull(left) && t.nonNull(right))",
+			"replace": "true",
+			"note": "every named function is treated as taking Null<T>, so a function taking the plain type is fixed over a maybe-null operand"
+		},
+		{
+			"name": "M-RCMP-BARE-NULLABLE-IGNORED",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "fromBareReference",
+			"find": "compare.nullable || t.elementNonNull(type, span)",
+			"replace": "t.elementNonNull(type, span)",
+			"note": "a bare Reflect.compare over a maybe-null element is reported without a fix even for a function taking Null<T>"
+		},
+		{
+			"name": "M-RCMP-HALF-NULLABLE-SIGNATURE",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
+			"method": "spells",
+			"find": "(wrapper == null || bare != source) && ",
+			"replace": "",
+			"note": "a parameter that is not wrapped counts as wrapped, so a function taking Null<T> for one operand and T for the other is accepted and the fix writes a call that does not compile"
+		},
+		{
+			"name": "M-RCMP-FLOAT-KEY",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "compareFunctionsOf",
+			"find": "real == null ? [s.intType, s.stringType] : [s.intType, s.stringType, real]",
+			"replace": "[s.intType, s.stringType]",
+			"note": "a Float key is refused as a configuration error, so Reflect.compare of two Floats is never moved to the named function"
 		}
 	]
 }

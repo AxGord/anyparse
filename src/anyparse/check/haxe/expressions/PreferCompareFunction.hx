@@ -121,8 +121,9 @@ private typedef Operands = { left: String, right: String }
  *   comparator's result is read there, and `Reflect.compare` promises a sign, not `-1` / `1`.
  * - **Two strict comparisons of the SAME two operands in opposite directions**, valued `-1` and `1` in either order, and `0`
  *   for the rest.
- * - **Both operands `Int`, or both `String`.** A `Float` operand is out: a `NaN` makes the chain answer `0` where
- *   `Reflect.compare` answers a sign. An operand of unknown type stays silent.
+ * - **Both operands `Int`, or both `String`.** A `Float` operand is out of a chain, named function or not: a `NaN` makes the
+ *   chain answer `0` where `Reflect.compare` answers a sign and the function answers as it likes. An operand of unknown type
+ *   stays silent.
  * - **Pure operands**, since the chain reads each twice and the call once, and **no comment in the replaced text**.
  *
  * ## Where the fix is offered
@@ -130,10 +131,12 @@ private typedef Operands = { left: String, right: String }
  * On `null`, `Reflect.compare` answers `-1` in both argument orders where the chain answers `0`, so the fix is offered only where
  * both operands are proved non-null by `TypeResolver.isProvablyNonNull`; any other site is reported without a fix.
  * A chain rewritten to the project's named function has no such caveat: the project names that function as its order, so it is fixed.
+ * Nor does a `Reflect.compare` moved to a function whose parameters are `Null<T>`: it answers for `null` itself.
  *
  * ## Option
  *
- * `compare` names the project's functions by operand type, `{ "Int": "a.b.C.fn", "String": "a.b.C.fn" }`. A named one takes the
+ * `compare` names the project's functions by operand type, `{ "Int": "a.b.C.fn", "String": "a.b.C.fn", "Float": "a.b.C.fn" }`.
+ * A function takes either `(T, T)` or `(Null<T>, Null<T>)`, read from its declaration. A named one takes the
  * place of `Reflect.compare` in every rewrite, with its import, and an existing `Reflect.compare` or `inline Reflect.compare` in a
  * sort callback, or passed bare to a receiver of a proved element type, moves to it; a call the callback does not return
  * is reported without a fix, since only the sign of the result is read. A name the resolution index cannot find, or
@@ -258,9 +261,11 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	}
 
 	private function compareFunctionsOf(file: String, plugin: GrammarPlugin, s: Seams, index: () -> Null<SymbolIndex>): CompareFunctions {
+		final real: Null<String> = s.shape.coreValueTypes?.real;
 		return new CompareFunctions(
-			LintConfig.resolveWith(_resolveConfig, file).jsonOption(RULE_ID, OPTION_COMPARE), OPTION_COMPARE, [s.intType, s.stringType],
-			s.intType, plugin.typeSyntax, index
+			LintConfig.resolveWith(_resolveConfig, file).jsonOption(RULE_ID, OPTION_COMPARE), OPTION_COMPARE,
+			real == null ? [s.intType, s.stringType] : [s.intType, s.stringType, real], s.intType, s.shape.optionalValueTypeName,
+			plugin.typeSyntax, index
 		);
 	}
 
@@ -511,6 +516,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		final intType: Null<String> = shape.coreValueTypes?.integer;
 		final stringType: Null<String> = TypingService.stringType(shape);
+
 		return lt == null
 			|| gt == null
 			|| callKind == null
@@ -594,7 +600,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		if (t == null || !t.isStdReflect(reference.children[0]) || receiver == null || span == null) return;
 		final type: Null<String> = t.element(receiver);
 		final compare: Null<NamedCompare> = named.of(type);
-		if (type != null && compare != null) out.push(moved(span, compare, null, t.elementNonNull(type, span) ? null : MAY_BE_NULL));
+		if (type != null && compare != null)
+			out.push(moved(span, compare, null, compare.nullable || t.elementNonNull(type, span) ? null : MAY_BE_NULL));
 	}
 
 	/**
@@ -623,7 +630,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final operands: Null<Operands> = whole == null ? { left: textOf(left, source), right: textOf(right, source) } : null;
 		final noFix: Null<String> = if (!results.contains(call))
 			NOT_RETURNED
-		else if (t.nonNull(left) && t.nonNull(right))
+		else if (compare.nullable || (t.nonNull(left) && t.nonNull(right)))
 			null
 		else
 			MAY_BE_NULL;

@@ -4,13 +4,16 @@ import anyparse.grammar.json.JValue;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
-/** A static function a project names to compare two values of one type. */
-typedef NamedCompare = { final typePath: String; final member: String; }
+/**
+ * A static function a project names to compare two values of one type; `nullable` when it takes the type as `Null<T>`, so it
+ * answers for a `null` operand itself.
+ */
+typedef NamedCompare = { final typePath: String; final member: String; final nullable: Bool; }
 
 /**
  * The compare functions one config chain names, each checked against the resolution index: the one answer to "which
  * function compares two values of this type in this file". A name the index cannot find, or whose signature is not
- * `(T, T): Int`, is a `problems` line and not an entry, so a caller never falls back silently.
+ * `(T, T): Int` or `(Null<T>, Null<T>): Int`, is a `problems` line and not an entry, so a caller never falls back silently.
  */
 @:nullSafety(Strict)
 final class CompareFunctions {
@@ -27,8 +30,8 @@ final class CompareFunctions {
 
 	/** The function named for each of the `types` `option` spells; a qualified path means the same from every file. */
 	public function new(
-		option: Null<JValue>, key: String, types: Array<String>, intType: String, typeSyntax: TypeSyntaxReader,
-		index: () -> Null<SymbolIndex>
+		option: Null<JValue>, key: String, types: Array<String>, intType: String, nullableWrapper: Null<String>,
+		typeSyntax: TypeSyntaxReader, index: () -> Null<SymbolIndex>
 	) {
 		if (option == null) return;
 		switch option {
@@ -40,7 +43,7 @@ final class CompareFunctions {
 						continue;
 					}
 					switch field.value {
-						case JString(path): read(key, type, path, intType, typeSyntax, index);
+						case JString(path): read(key, type, path, intType, nullableWrapper, typeSyntax, index);
 						case _: problems.push('$key.$type is not a string');
 					}
 				}
@@ -59,21 +62,23 @@ final class CompareFunctions {
 	}
 
 	private function read(
-		key: String, type: String, path: String, intType: String, typeSyntax: TypeSyntaxReader, index: () -> Null<SymbolIndex>
+		key: String, type: String, path: String, intType: String, nullableWrapper: Null<String>, typeSyntax: TypeSyntaxReader,
+		index: () -> Null<SymbolIndex>
 	): Void {
 		final dot: Int = path.lastIndexOf('.');
 		if (dot <= 0 || dot == path.length - 1) {
 			problems.push('$key.$type: "$path" is not a path of the form a.b.C.fn');
 			return;
 		}
-		final named: NamedCompare = { typePath: path.substring(0, dot), member: path.substring(dot + 1) };
+		final typePath: String = path.substring(0, dot);
+		final member: String = path.substring(dot + 1);
 		final idx: Null<SymbolIndex> = index();
-		final types: Array<ResolvedType> = idx == null ? [] : idx.refs.resolveQualifiedRefAll(named.typePath);
+		final types: Array<ResolvedType> = idx == null ? [] : idx.refs.resolveQualifiedRefAll(typePath);
 		if (types.length != 1) {
 			problems.push(
 				types.length == 0
-					? '$key.$type: "$path" names no type: the resolution index declares no "${named.typePath}"'
-					: '$key.$type: "$path" is ambiguous: "${named.typePath}" names ${types.length} types in the resolution index'
+					? '$key.$type: "$path" names no type: the resolution index declares no "$typePath"'
+					: '$key.$type: "$path" is ambiguous: "$typePath" names ${types.length} types in the resolution index'
 			);
 			return;
 		}
@@ -81,16 +86,25 @@ final class CompareFunctions {
 			problems.push('$key.$type: "$path" names a private type, which no other file can call');
 			return;
 		}
-		final found: Array<MemberInfo> = types[0].type.members.filter(m -> m.name == named.member);
+		final found: Array<MemberInfo> = types[0].type.members.filter(m -> m.name == member);
+		final plain: Bool = found.length == 1 && isCompareOf(found[0], type, intType, null, typeSyntax);
+		final nullable: Bool = !plain
+			&& found.length == 1
+			&& nullableWrapper != null
+			&& isCompareOf(found[0], type, intType, nullableWrapper, typeSyntax);
+		final named: NamedCompare = { typePath: typePath, member: member, nullable: nullable };
 		if (found.length == 0)
 			problems.push('$key.$type: the resolution index declares no "$path"');
-		else if (found.length == 1 && isCompareOf(found[0], type, intType, typeSyntax))
+		else if (plain || nullable)
 			_named[type] = named;
 		else
 			problems.push('$key.$type: "$path" is not one public static function ($type, $type): $intType');
 	}
 
-	private static function isCompareOf(m: MemberInfo, type: String, intType: String, typeSyntax: TypeSyntaxReader): Bool {
+	/** `wrapper` set asks for both parameters as `wrapper<type>`, null for both as the bare `type`. */
+	private static function isCompareOf(
+		m: MemberInfo, type: String, intType: String, wrapper: Null<String>, typeSyntax: TypeSyntaxReader
+	): Bool {
 		return m.isStatic
 			&& m.visibility == PUBLIC_VISIBILITY
 			&& !m.guarded
@@ -101,12 +115,14 @@ final class CompareFunctions {
 			&& !m.paramRest
 			&& m.paramSkippableFrom == OPERANDS
 			&& m.paramTypeSources.length == OPERANDS
-			&& m.paramTypeSources.foreach(source -> spells(source, type, typeSyntax))
-			&& spells(m.returnSource, intType, typeSyntax);
+			&& m.paramTypeSources.foreach(source -> spells(source, type, wrapper, typeSyntax))
+			&& spells(m.returnSource, intType, null, typeSyntax);
 	}
 
-	private static function spells(source: Null<String>, type: String, typeSyntax: TypeSyntaxReader): Bool {
-		return source != null && NominalTypes.outerNominalOf(source, typeSyntax) == type;
+	private static function spells(source: Null<String>, type: String, wrapper: Null<String>, typeSyntax: TypeSyntaxReader): Bool {
+		if (source == null) return false;
+		final bare: String = wrapper == null ? source : NominalTypes.unwrapNullable(source, [wrapper], typeSyntax);
+		return (wrapper == null || bare != source) && NominalTypes.outerNominalOf(bare, typeSyntax) == type;
 	}
 
 }
