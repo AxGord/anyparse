@@ -247,7 +247,7 @@ loops and the collection / map idioms they spell.
 | [`prefer-keyvalue-loop`](guide/lint/loops.md#prefer-keyvalue-loop) | any | off | an indexed for whose body opens by binding X[i], replaceable with for (i => v in X) |
 | [`prefer-map`](guide/lint/loops.md#prefer-map) | haxe | off | an array comprehension mapping each element, replaceable with xs.map(f.bind(a)) or xs.map(x -> body) |
 | [`prefer-map-literal`](guide/lint/loops.md#prefer-map-literal) | haxe | on | a new Map() construction replaceable with the map literal [] |
-| [`prefer-range-loop`](guide/lint/loops.md#prefer-range-loop) | any | on | a var-counter while loop (var i = A; while (i < B) { … i++; }) replaceable with for (i in A...B) |
+| [`prefer-range-loop`](guide/lint/loops.md#prefer-range-loop) | any | on | a var-counter while loop (var i = A; while (i < B) { … i++; } or while (i++ < B) …) replaceable with for (i in A...B) |
 | [`prefer-single-pass`](guide/lint/loops.md#prefer-single-pass) | haxe | off | an Array method chain (filter.map, map.map, filter.filter, map.filter) that one pass can do |
 | [`prefer-value-loop`](guide/lint/loops.md#prefer-value-loop) | any | off | an indexed for whose index only reads X[i], replaceable with for (v in X) |
 | [`redundant-map-exists`](guide/lint/loops.md#redundant-map-exists) | any | off | a map exists-then-index ternary (m.exists(k) ? m[k] : d) replaceable with the null-coalescing lookup (m[k] ?? d) |

@@ -2939,6 +2939,68 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "F-STEP",
+			"note": "the four step-in-condition counter forms with untouched statements between and a negated literal init: fixed to range loops that print the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-range-loop",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function main() {\n\t\tvar n = 4;\n\t\tvar a = 0;\n\t\tp('x');\n\t\twhile (a++ < n) p('a' + a);\n\t\tvar b = -1;\n\t\twhile (++b < n) p('b' + b);\n\t\tvar c = 1;\n\t\twhile (c++ <= n) p('c' + c);\n\t\tvar d = 2;\n\t\twhile (++d <= n) p('d' + d);\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "14942a029b68c777",
+				"files": "c742f26726699925",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "D-STEP-SHADOW",
+			"note": "the initializer names a variable a between statement re-declares: evaluated at the while it would read the inner one, so the loop is refused",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-range-loop",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function p(s:String):Void {\n\t\tSys.println(s);\n\t}\n\n\tstatic function main() {\n\t\tvar k = 1;\n\t\tvar n = 3;\n\t\t{\n\t\t\tvar i = k;\n\t\t\tvar k = 50;\n\t\t\twhile (i++ < n) p(Std.string(i + k));\n\t\t}\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

@@ -174,6 +174,99 @@ class PreferRangeLoopCheckTest extends Test {
 		]) Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\t$capture\n\t\t\ti++;\n\t\t}')).length, capture);
 	}
 
+	public function testStepInConditionFourFormsFixAndFold(): Void {
+		for (c in [
+			{ cond: 'a++ < 36', range: '9...37' },
+			{ cond: '++a < 36', range: '9...36' },
+			{ cond: 'a++ <= 36', range: '9...38' },
+			{ cond: '++a <= 36', range: '9...37' }
+		])
+			assertFixCanonical(
+				wrapFn('var a:Int = 8;\n\t\tlog.add(x);\n\t\twhile (${c.cond})\n\t\t\tlog.add(f(a));'), 'for (a in ${c.range})', 'var a'
+			);
+	}
+
+	public function testStepInConditionNonLiteralBounds(): Void {
+		assertFixCanonical(
+			wrapFn('var a = start + 2;\n\t\twhile (a++ < n) {\n\t\t\twork(a);\n\t\t}'), 'for (a in (start + 2) + 1...n + 1)', 'while'
+		);
+		assertFixCanonical(wrapFn('var a = 0;\n\t\twhile (++a <= n) {\n\t\t\twork(a);\n\t\t}'), 'for (a in 1...n + 1)', 'while');
+	}
+
+	public function testStepInConditionRefusals(): Void {
+		for (src in [
+			'var a = 0;\n\t\twhile (a++ < n) work(a);\n\t\tuse(a);',
+			'var a = 0;\n\t\twhile (a++ < n) {\n\t\t\ta = 5;\n\t\t}',
+			'var a = 0;\n\t\tlog(a);\n\t\twhile (a++ < n) work(a);',
+			'var a = 0;\n\t\ta = 3;\n\t\twhile (a++ < n) work(a);',
+			'var a = n;\n\t\tn = 3;\n\t\twhile (a++ < 9) work(a);',
+			'var a = 0;\n\t\twhile (a++ < n) {\n\t\t\tn--;\n\t\t}',
+			'var a = 0;\n\t\twhile (a++ < f(n)) work(a);'
+		]) Assert.equals(0, violations(wrapFn(src)).length, src);
+	}
+
+	public function testStepInConditionKeepsUntouchedStatementsAndContinue(): Void {
+		assertFixCanonical(
+			wrapFn('var a = 0;\n\t\tlog(x);\n\t\twhile (a++ < n) {\n\t\t\tif (a > 2) continue;\n\t\t\twork(a);\n\t\t}'),
+			'log(x);\n\t\tfor (a in 1...n + 1) {', 'var a'
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-PRL-STEP-BETWEEN-READ-IGNORED')
+	public function testStepBetweenStatementReadingCounterRefused(): Void {
+		Assert.equals(0, violations(wrapFn('var a = 0;\n\t\tlog(a);\n\t\twhile (a++ < n) work(a);')).length);
+	}
+
+	@:pin('control')
+	@:killer('M-PRL-STEP-BODY-WRITE-IGNORED')
+	public function testStepBodyWritingCounterRefused(): Void {
+		Assert.equals(0, violations(wrapFn('var a = 0;\n\t\twhile (a++ < n) {\n\t\t\ta = 5;\n\t\t}')).length);
+	}
+
+	@:pin('control')
+	@:killer('M-PRL-READ-AFTER-IGNORED')
+	public function testStepCounterReadAfterLoopRefused(): Void {
+		Assert.equals(0, violations(wrapFn('var a = 0;\n\t\twhile (a++ < n) work(a);\n\t\tuse(a);')).length);
+	}
+
+	@:pin('control')
+	@:killer('M-PRL-INIT-SURVIVES-ANYTHING')
+	public function testStepInitRedeclaredBetweenRefused(): Void {
+		Assert.equals(
+			0,
+			violations(wrapFn('var k = 1;\n\t\t{\n\t\t\tvar i = k;\n\t\t\tvar k = 50;\n\t\t\twhile (i++ < n) work(i + k);\n\t\t}')).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-PRL-INIT-SURVIVES-ANYTHING')
+	public function testStepInitFieldWithCallBetweenRefused(): Void {
+		final src: String = 'class C {\n\tvar s:Int = 0;\n\tfunction bump():Void {\n\t\ts = 10;\n\t}\n\tfunction f(n:Int):Void {\n'
+			+ '\t\tvar i = s;\n\t\tbump();\n\t\twhile (i++ < n) work(i);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	@:pin('control')
+	@:killer('M-PRL-INIT-SURVIVES-ANYTHING')
+	public function testStepInitLocalWrittenByClosureRefused(): Void {
+		Assert.equals(
+			0, violations(wrapFn('var s = 0;\n\t\tfunction inc() s = 10;\n\t\tvar i = s;\n\t\tinc();\n\t\twhile (i++ < n) work(i);')).length
+		);
+	}
+
+	@:pin('control')
+	@:killer('M-PRL-NEGATED-LITERAL-UNFOLDED')
+	public function testStepNegatedLiteralInitFolds(): Void {
+		assertFixCanonical(wrapFn('var i = -1;\n\t\twhile (++i < n) {\n\t\t\twork(i);\n\t\t}'), 'for (i in 0...n)', 'while');
+	}
+
+	public function testStepUntouchedLocalInitSurvivesBetween(): Void {
+		assertFixCanonical(
+			wrapFn('var k = 2;\n\t\tvar i = k;\n\t\tlog(x);\n\t\twhile (i++ < n) work(i);'), 'for (i in k + 1...n + 1)', 'var i'
+		);
+	}
+
 	private function wrapFn(body: String): String {
 		return 'class C {\n\tfunction f(n:Int):Void {\n\t\t$body\n\t}\n}';
 	}

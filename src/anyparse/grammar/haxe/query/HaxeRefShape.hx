@@ -841,6 +841,7 @@ final class HaxeRefShape {
 		table.whileStmtKind = 'WhileStmt';
 		table.whileExprKind = 'WhileExpr';
 		table.ltKind = 'Lt';
+		table.lteKind = 'LtEq';
 		table.postIncrKind = 'PostIncr';
 		table.preIncrKind = 'PreIncr';
 		table.andLowerPrecedenceKinds = [

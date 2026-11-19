@@ -2681,6 +2681,13 @@ final class RefShape {
 	public var postIncrKind: Null<String>;
 
 	/**
+	 * The less-than-or-equal comparison node kind (Haxe `LtEq`) — `prefer-range-loop` reads
+	 * it for the `while (i++ <= B)` / `while (++i <= B)` step-in-condition forms. Optional;
+	 * unset turns those two forms off.
+	 */
+	public var lteKind: Null<String>;
+
+	/**
 	 * The pre-increment node kind (Haxe `PreIncr`, `++i`) — `prefer-count` accepts it beside
 	 * `postIncrKind` as the counter's step. Optional; unset narrows that rule to `i++` / `i += 1`.
 	 */

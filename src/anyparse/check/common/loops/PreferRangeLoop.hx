@@ -10,6 +10,7 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
+import anyparse.query.UnchangedLocal;
 
 /**
  * The `RefShape` kinds `PreferRangeLoop` reads (plus the shape itself
@@ -19,7 +20,9 @@ private typedef Seams = {
 	var shape: RefShape;
 	var whileStmtKind: String;
 	var ltKind: String;
+	var lteKind: Null<String>;
 	var postIncrKind: String;
+	var preIncrKind: Null<String>;
 	var identKind: String;
 	var blockStmtKind: String;
 	var exprStmtKind: String;
@@ -28,9 +31,26 @@ private typedef Seams = {
 	var localDeclKinds: Array<String>;
 	var writeParentKinds: Array<String>;
 	var numericLiteralKinds: Array<String>;
+	var unaryMinusKinds: Array<String>;
 	var closureKinds: Array<String>;
 	var atomicKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+}
+
+/**
+ * One matched counter loop: the loop variable, its init and bound nodes, the `while` and
+ * its body. `hiOffset` is what the range's upper end adds to the bound, `stepInCondition`
+ * marks the `while (i++ < B)` family (the `var` is dropped, the `while` header rewritten).
+ */
+private typedef RangeMatch = {
+	var declSpan: Span;
+	var loopVar: String;
+	var initNode: QueryNode;
+	var boundNode: QueryNode;
+	var whileNode: QueryNode;
+	var body: QueryNode;
+	var hiOffset: Int;
+	var stepInCondition: Bool;
 }
 
 /**
@@ -49,6 +69,14 @@ private typedef Seams = {
  * initializer `A` is any expression, then a `while (i < B)` whose braced body ends
  * with exactly `i++;`. The suggestion transcribes `A` and `B` verbatim from source
  * as the range bounds — `for (i in A...B)`.
+ *
+ * ## The step-in-condition form
+ *
+ * `var i = A;`, statements that neither read nor write `i`, then `while (i++ < B) body`
+ * (also `++i`, `<=`): the `for` replaces the `while` in place and the `var` is dropped.
+ * `i` must not be written in the body or read after the loop, and with statements in
+ * between `A` (evaluated later) must be a literal or an untouched, uncaptured local (`initSurvivesBetween`).
+ * Decimal literal bounds fold (`var i = 8; while (i++ < 36)` → `9...37`).
  *
  * ## Soundness gates (all required for a flag)
  *
@@ -107,9 +135,13 @@ final class PreferRangeLoop extends RuleBase {
 	/** The `Int` nominal every range operand must not provably differ from. */
 	private static final INT_TYPE: String = 'Int';
 
+	/** A decimal literal small enough to fold without overflow. */
+	private static final DECIMAL_INT: EReg = ~/^[0-9]{1,9}$/;
+
 	public function new() {
 		super(
-			'prefer-range-loop', 'a var-counter while loop (var i = A; while (i < B) { … i++; }) replaceable with for (i in A...B)',
+			'prefer-range-loop',
+			'a var-counter while loop (var i = A; while (i < B) { … i++; } or while (i++ < B) …) replaceable with for (i in A...B)',
 			RuleCategory.Loops
 		);
 	}
@@ -183,7 +215,9 @@ final class PreferRangeLoop extends RuleBase {
 			shape: shape,
 			whileStmtKind: whileStmtKind,
 			ltKind: ltKind,
+			lteKind: shape.lteKind,
 			postIncrKind: postIncrKind,
+			preIncrKind: shape.preIncrKind,
 			identKind: shape.identKind,
 			blockStmtKind: blockStmtKind,
 			exprStmtKind: exprStmtKind,
@@ -192,6 +226,7 @@ final class PreferRangeLoop extends RuleBase {
 			localDeclKinds: shape.localDeclKinds ?? [],
 			writeParentKinds: shape.writeParentKinds,
 			numericLiteralKinds: shape.numericLiteralKinds ?? [],
+			unaryMinusKinds: shape.unaryMinusKinds ?? [],
 			closureKinds: closureKinds,
 			atomicKinds: atomicKinds,
 			opaqueKinds: shape.opaqueKinds ?? []
@@ -212,6 +247,7 @@ final class PreferRangeLoop extends RuleBase {
 			final v: Null<Violation> = tryMatch(kids[i], kids[i + 1], node, root, file, source, dt, s);
 			if (v != null) out.push(v);
 		}
+		forEachStepMatch(kids, node, root, source, dt, s, m -> out.push(violationOf(m, file, source, s)));
 		for (c in kids) walk(c, root, file, source, dt, s, out);
 	}
 
@@ -223,11 +259,14 @@ final class PreferRangeLoop extends RuleBase {
 		decl: QueryNode, whileNode: QueryNode, scope: QueryNode, root: QueryNode, file: String, source: String, dt: Null<Map<Int, String>>,
 		s: Seams
 	): Null<Violation> {
-		final m = analyze(decl, whileNode, scope, root, source, dt, s);
-		if (m == null) return null;
-		final initSpan: Null<Span> = m.initNode.span;
-		final boundSpan: Null<Span> = m.boundNode.span;
-		if (initSpan == null || boundSpan == null) return null;
+		final m: Null<RangeMatch> = analyze(decl, whileNode, scope, root, source, dt, s);
+		return m == null ? null : violationOf(m, file, source, s);
+	}
+
+	/** The `Info` finding for `m`, spelling the range the way the fix writes it. */
+	private static function violationOf(m: RangeMatch, file: String, source: String, s: Seams): Violation {
+		final initSpan: Span = m.initNode.span ?? m.declSpan;
+		final boundSpan: Span = m.boundNode.span ?? m.declSpan;
 		final a: String = excerpt(source.substring(initSpan.from, initSpan.to));
 		final b: String = excerpt(source.substring(boundSpan.from, boundSpan.to));
 		return {
@@ -235,8 +274,28 @@ final class PreferRangeLoop extends RuleBase {
 			span: m.declSpan,
 			rule: 'prefer-range-loop',
 			severity: Severity.Info,
-			message: 'this var-counter while loop can be for (${m.loopVar} in $a...$b)'
+			message: m.stepInCondition
+				? 'this var-counter while loop can be ${excerpt(stepHeader(m, source, s))})'
+				: 'this var-counter while loop can be for (${m.loopVar} in $a...$b)'
 		};
+	}
+
+	/**
+	 * Call `found` for each `var i = A;` among `kids` with a later step-in-condition `while`
+	 * of the same block that `analyzeStep` admits (the first such loop of a declaration).
+	 */
+	private static function forEachStepMatch(
+		kids: Array<QueryNode>, scope: QueryNode, root: QueryNode, source: String, dt: Null<Map<Int, String>>, s: Seams,
+		found: RangeMatch -> Void
+	): Void {
+		for (j in 0...kids.length) if (s.mutableKinds.contains(kids[j].kind)) for (k in j + 1...kids.length) if (
+			kids[k].kind == s.whileStmtKind
+		) {
+			final m: Null<RangeMatch> = analyzeStep(kids[j], kids.slice(j + 1, k), kids[k], scope, root, source, dt, s);
+			if (m == null) continue;
+			found(m);
+			break;
+		}
 	}
 
 	/** Whether `stmt` is exactly `<loopVar>++;` — an expression statement wrapping a post-increment of the loop variable. */
@@ -279,12 +338,7 @@ final class PreferRangeLoop extends RuleBase {
 		final cond: QueryNode = LoopScan.whileCondition(whileNode);
 		if (cond.kind != s.ltKind || !NodeShape.hasComparisonShape(cond)) return null;
 		final left: QueryNode = cond.children[0];
-		if (left.kind != s.identKind || left.name != loopVar) return null;
-		final bound: QueryNode = cond.children[1];
-		final boundName: Null<String> = boundIdentName(bound, s);
-		final notSimpleBound: Bool = boundName == null && !s.numericLiteralKinds.contains(bound.kind);
-		final boundReadsCounter: Bool = boundName != null && boundName == loopVar;
-		return notSimpleBound || boundReadsCounter ? null : bound;
+		return left.kind != s.identKind || left.name != loopVar ? null : simpleBound(cond.children[1], loopVar, s);
 	}
 
 	/**
@@ -313,45 +367,46 @@ final class PreferRangeLoop extends RuleBase {
 	 */
 	private static function analyze(
 		decl: QueryNode, whileNode: QueryNode, scope: QueryNode, root: QueryNode, source: String, dt: Null<Map<Int, String>>, s: Seams
-	): Null<{
-		declSpan: Span,
-		loopVar: String,
-		initNode: QueryNode,
-		boundNode: QueryNode,
-		whileNode: QueryNode,
-		body: QueryNode
-	}> {
+	): Null<RangeMatch> {
 		final loopVar: Null<String> = matchCounterDecl(decl, source, s);
 		if (loopVar == null) return null;
 		final bound: Null<QueryNode> = matchCondition(whileNode, loopVar, s);
 		if (bound == null) return null;
 		final body: QueryNode = LoopScan.whileBody(whileNode);
-		if (!bodyIsRangeConvertible(body, loopVar, bound, s)) return null;
+		return bodyIsRangeConvertible(body, loopVar, bound, s)
+			? rangeMatch(decl, loopVar, bound, whileNode, scope, root, source, dt, s, 0, false)
+			: null;
+	}
+
+	/**
+	 * The counter loop whose step sits IN the condition — `var i = A;`, statements that
+	 * never touch `i` (`between`), then `while (i++ < B)` / `++i` / `<=` — or null when any
+	 * gate fails. The body is free of writes to `i` (the condition is the only step); `A` is
+	 * evaluated where the `while` stood, so with statements in between it must survive them
+	 * (`initSurvivesBetween`).
+	 */
+	private static function analyzeStep(
+		decl: QueryNode, between: Array<QueryNode>, whileNode: QueryNode, scope: QueryNode, root: QueryNode, source: String,
+		dt: Null<Map<Int, String>>, s: Seams
+	): Null<RangeMatch> {
+		final loopVar: Null<String> = matchCounterDecl(decl, source, s);
+		if (loopVar == null) return null;
+		final step: Null<{ bound: QueryNode, hiOffset: Int }> = matchStepCondition(whileNode, loopVar, s);
+		if (step == null) return null;
+		final body: QueryNode = LoopScan.whileBody(whileNode);
+		final boundName: Null<String> = boundIdentName(step.bound, s);
+		final boundWritten: Bool = boundName != null && LoopScan.countWrites(body, boundName, s) != 0;
+		if (boundWritten || LoopScan.countWrites(body, loopVar, s) != 0 || LoopScan.declares(body, loopVar, s)) return null;
 		final declSpan: Null<Span> = decl.span;
-		final initSpan: Null<Span> = decl.children[0].span;
 		final whileSpan: Null<Span> = whileNode.span;
-		final scopeSpan: Null<Span> = scope.span;
-		return if (declSpan == null || initSpan == null || whileSpan == null || scopeSpan == null || bound.span == null)
+		if (declSpan == null || whileSpan == null) return null;
+		final region: Span = new Span(declSpan.to, whileSpan.from);
+		return if (!initSurvivesBetween(decl.children[0], between, region, root, source, s))
 			null
-		else if (declaredNonInt(declSpan.from, dt))
-			null
-		else if (provablyNonInt(decl.children[0], root, source, dt, s))
-			null
-		else if (provablyNonInt(bound, root, source, dt, s))
-			null
-		else if (OccurrenceScan.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, []))
-			null
-		else if (LoopScan.capturedByClosure(scope, source, loopVar, s))
+		else if (OccurrenceScan.referencedInRange(source, loopVar, region.from, region.to, []))
 			null
 		else
-			{
-				declSpan: declSpan,
-				loopVar: loopVar,
-				initNode: decl.children[0],
-				boundNode: bound,
-				whileNode: whileNode,
-				body: body
-			};
+			rangeMatch(decl, loopVar, step.bound, whileNode, scope, root, source, dt, s, step.hiOffset, true);
 	}
 
 	/** Mirror of `walk` for the fix path: emit the range-loop rewrite for each wanted, convertible loop. */
@@ -362,11 +417,16 @@ final class PreferRangeLoop extends RuleBase {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length - 1) {
-			final m = analyze(kids[i], kids[i + 1], node, root, source, dt, s);
-			if (!(m != null && wanted.contains('${m.declSpan.from}:${m.declSpan.to}'))) continue;
+			final m: Null<RangeMatch> = analyze(kids[i], kids[i + 1], node, root, source, dt, s);
+			if (m == null || !wanted.contains('${m.declSpan.from}:${m.declSpan.to}')) continue;
 			final e: Null<{ span: Span, text: String }> = buildRangeEdit(m, source, regions(), s);
 			if (e != null) out.push(e);
 		}
+		forEachStepMatch(kids, node, root, source, dt, s, m -> {
+			if (!wanted.contains('${m.declSpan.from}:${m.declSpan.to}')) return;
+			final es: Null<Array<{ span: Span, text: String }>> = buildStepEdits(m, source, regions(), s);
+			if (es != null) for (e in es) out.push(e);
+		});
 		for (c in kids) fixWalk(c, root, source, regions, dt, s, wanted, out);
 	}
 
@@ -380,15 +440,7 @@ final class PreferRangeLoop extends RuleBase {
 	 *
 	 */
 	private static function buildRangeEdit(
-		m: {
-			declSpan: Span,
-			loopVar: String,
-			initNode: QueryNode,
-			boundNode: QueryNode,
-			whileNode: QueryNode,
-			body: QueryNode
-		},
-		source: String, regions: Array<LexRegion>, s: Seams
+		m: RangeMatch, source: String, regions: Array<LexRegion>, s: Seams
 	): Null<{ span: Span, text: String }> {
 		final incr: QueryNode = m.body.children[m.body.children.length - 1];
 		final bodySpan: Null<Span> = m.body.span;
@@ -435,6 +487,132 @@ final class PreferRangeLoop extends RuleBase {
 		return !text.startsWith('0x')
 			&& !text.startsWith('0X')
 			&& (text.indexOf('.') != -1 || text.indexOf('e') != -1 || text.indexOf('E') != -1);
+	}
+
+	/** The gates both loop shapes share: `Int`-provable operands, `i` not read after the loop, no capturing closure. */
+	private static function rangeMatch(
+		decl: QueryNode, loopVar: String, bound: QueryNode, whileNode: QueryNode, scope: QueryNode, root: QueryNode, source: String,
+		dt: Null<Map<Int, String>>, s: Seams, hiOffset: Int, stepInCondition: Bool
+	): Null<RangeMatch> {
+		final declSpan: Null<Span> = decl.span;
+		final whileSpan: Null<Span> = whileNode.span;
+		final scopeSpan: Null<Span> = scope.span;
+		return if (declSpan == null || whileSpan == null || scopeSpan == null || bound.span == null)
+			null
+		else if (declaredNonInt(declSpan.from, dt))
+			null
+		else if (provablyNonInt(decl.children[0], root, source, dt, s))
+			null
+		else if (provablyNonInt(bound, root, source, dt, s))
+			null
+		else if (OccurrenceScan.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, []))
+			null
+		else if (LoopScan.capturedByClosure(scope, source, loopVar, s))
+			null
+		else
+			{
+				declSpan: declSpan,
+				loopVar: loopVar,
+				initNode: decl.children[0],
+				boundNode: bound,
+				whileNode: whileNode,
+				body: LoopScan.whileBody(whileNode),
+				hiOffset: hiOffset,
+				stepInCondition: stepInCondition
+			};
+	}
+
+	/**
+	 * The bound and the range's upper offset of `while (i++ < B)` / `++i < B` / `i++ <= B` /
+	 * `++i <= B` over `loopVar`, or null. The offset is the post-increment (1) plus the
+	 * inclusive comparison (1): the body sees `A+1` first, and the last value it sees is
+	 * `B - 1 + offset`.
+	 */
+	private static function matchStepCondition(whileNode: QueryNode, loopVar: String, s: Seams): Null<{ bound: QueryNode, hiOffset: Int }> {
+		if (whileNode.kind != s.whileStmtKind || !LoopScan.hasWhileShape(whileNode)) return null;
+		final cond: QueryNode = LoopScan.whileCondition(whileNode);
+		final inclusive: Bool = s.lteKind != null && cond.kind == s.lteKind;
+		if (!(cond.kind == s.ltKind || inclusive) || !NodeShape.hasComparisonShape(cond)) return null;
+		final step: QueryNode = cond.children[0];
+		final post: Bool = step.kind == s.postIncrKind;
+		if (!(post || (s.preIncrKind != null && step.kind == s.preIncrKind)) || step.children.length < 1) return null;
+		final target: QueryNode = step.children[0];
+		if (target.kind != s.identKind || target.name != loopVar) return null;
+		final bound: Null<QueryNode> = simpleBound(cond.children[1], loopVar, s);
+		return bound == null ? null : { bound: bound, hiOffset: (post ? 1 : 0) + (inclusive ? 1 : 0) };
+	}
+
+	/** `bound` when it is a numeric literal or a plain identifier other than `loopVar`, else null. */
+	private static function simpleBound(bound: QueryNode, loopVar: String, s: Seams): Null<QueryNode> {
+		final boundName: Null<String> = boundIdentName(bound, s);
+		final notSimpleBound: Bool = boundName == null && !s.numericLiteralKinds.contains(bound.kind);
+		return notSimpleBound || boundName == loopVar ? null : bound;
+	}
+
+	/**
+	 * Whether `init`, evaluated after the `between` statements instead of before them, yields the
+	 * same value: a literal, or an identifier `UnchangedLocal` holds across `region` (a local or
+	 * parameter no write there and no function literal can change) that no between statement
+	 * re-declares. A field or an unresolved name may change behind a call, so it refuses.
+	 */
+	private static function initSurvivesBetween(
+		init: QueryNode, between: Array<QueryNode>, region: Span, root: QueryNode, source: String, s: Seams
+	): Bool {
+		if (between.length == 0 || foldedInt(init, source, s) != null) return true;
+		final name: Null<String> = init.kind == s.identKind ? init.name : null;
+		return name != null
+			&& between.foreach(stmt -> !LoopScan.declares(stmt, name, s))
+			&& new UnchangedLocal(root, s.shape).holds(init, region);
+	}
+
+	/** `node` plus `offset`: a decimal Int literal (negated or not) folds, else `node + offset`, parenthesised if not atomic. */
+	private static function offsetBound(node: QueryNode, offset: Int, source: String, s: Seams): String {
+		final span: Null<Span> = node.span;
+		if (span == null) return '';
+		final literal: Null<Int> = foldedInt(node, source, s);
+		if (literal != null) return '${literal + offset}';
+		final raw: String = source.substring(span.from, span.to);
+		return offset == 0 ? raw : (s.atomicKinds.contains(node.kind) ? raw : '($raw)') + ' + $offset';
+	}
+
+	/** The value of a decimal Int literal, or of one under a unary minus; null for any other node. */
+	private static function foldedInt(node: QueryNode, source: String, s: Seams): Null<Int> {
+		final negated: Bool = s.unaryMinusKinds.contains(node.kind) && node.children.length == 1;
+		final literal: QueryNode = negated ? node.children[0] : node;
+		final span: Null<Span> = literal.span;
+		if (span == null || !s.numericLiteralKinds.contains(literal.kind)) return null;
+		final raw: String = source.substring(span.from, span.to);
+		final value: Null<Int> = DECIMAL_INT.match(raw) ? Std.parseInt(raw) : null;
+		return if (value == null)
+			null
+		else if (negated)
+			-value
+		else
+			value;
+	}
+
+	/** The `for` header for a step-in-condition match: `for (i in A + 1...B + k)`, bounds folded when literal. */
+	private static function stepHeader(m: RangeMatch, source: String, s: Seams): String {
+		return 'for (${m.loopVar} in ${offsetBound(m.initNode, 1, source, s)}...${offsetBound(m.boundNode, m.hiOffset, source, s)}';
+	}
+
+	/**
+	 * The two edits of a step-in-condition match: the counter declaration's lines dropped and
+	 * the `while (` header up to the condition's end replaced by the `for (` header (the `)`
+	 * and the body stay verbatim). Null when a comment sits in a dropped region.
+	 */
+	private static function buildStepEdits(
+		m: RangeMatch, source: String, regions: Array<LexRegion>, s: Seams
+	): Null<Array<{ span: Span, text: String }>> {
+		final whileSpan: Null<Span> = m.whileNode.span;
+		final condSpan: Null<Span> = LoopScan.whileCondition(m.whileNode).span;
+		if (whileSpan == null || condSpan == null) return null;
+		if (LexicalRegions.commentIntersects(m.declSpan.from, m.declSpan.to, regions)) return null;
+		if (LexicalRegions.commentIntersects(whileSpan.from, condSpan.to, regions)) return null;
+		return [
+			{ span: ElementSpan.lineExtendedSpan(source, m.declSpan), text: '' },
+			{ span: new Span(whileSpan.from, condSpan.to), text: stepHeader(m, source, s) }
+		];
 	}
 
 }

@@ -867,6 +867,45 @@
 			"find": " || stmt.children.length != 1",
 			"replace": "",
 			"note": "a multi-declarator local is kept with only its first initializer self-reference checked, so a later declarator reading the array being built folds unchecked"
+		},
+		{
+			"name": "M-PRL-STEP-BETWEEN-READ-IGNORED",
+			"type": "anyparse.check.common.loops.PreferRangeLoop",
+			"method": "analyzeStep",
+			"find": "OccurrenceScan.referencedInRange(source, loopVar, region.from, region.to, [])",
+			"replace": "false",
+			"note": "a statement between the var and the while that reads the counter no longer refuses the step-in-condition form, so the var is dropped under a live read"
+		},
+		{
+			"name": "M-PRL-STEP-BODY-WRITE-IGNORED",
+			"type": "anyparse.check.common.loops.PreferRangeLoop",
+			"method": "analyzeStep",
+			"find": "LoopScan.countWrites(body, loopVar, s) != 0 ||",
+			"replace": "",
+			"note": "a body that writes the counter is rewritten into a for whose binder is rewritten per iteration, so the loop runs a different number of times"
+		},
+		{
+			"name": "M-PRL-READ-AFTER-IGNORED",
+			"type": "anyparse.check.common.loops.PreferRangeLoop",
+			"method": "rangeMatch",
+			"find": "else if (OccurrenceScan.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, []))",
+			"replace": "else if (false)",
+			"note": "a counter read after the loop is dropped with its var, though the while leaves a different exit value visible there"
+		},
+		{
+			"name": "M-PRL-INIT-SURVIVES-ANYTHING",
+			"type": "anyparse.check.common.loops.PreferRangeLoop",
+			"method": "initSurvivesBetween",
+			"force": "true",
+			"note": "an initializer a between statement can change (a re-declared name, a field behind a call, a closure-written local) is evaluated at the while instead of the var, so the range starts elsewhere"
+		},
+		{
+			"name": "M-PRL-NEGATED-LITERAL-UNFOLDED",
+			"type": "anyparse.check.common.loops.PreferRangeLoop",
+			"method": "foldedInt",
+			"find": "final negated: Bool = s.unaryMinusKinds.contains(node.kind) && node.children.length == 1;",
+			"replace": "final negated: Bool = false;",
+			"note": "a negated decimal literal is left as (-1) + 1 instead of folding to 0"
 		}
 	]
 }
