@@ -188,8 +188,8 @@ final class GateLint {
 	private function lintPair(
 		files: Array<String>, checkout: Null<String>, scope: Array<String>, key: Null<String>, cached: Null<String>
 	): Outcome {
-		final commands: Array<Command> = [lintCommand(_gate.tree, files, _oracle, _gate.log(TOUCHED_REPORT))];
-		if (checkout != null) commands.push(lintCommand(checkout, scope, _oracle, _gate.log(TOUCHED_BASE_REPORT)));
+		final commands: Array<Command> = [lintCommand(_gate.tree, files, _oracle, _gate.log(TOUCHED_REPORT), null, true)];
+		if (checkout != null) commands.push(lintCommand(checkout, scope, _oracle, _gate.log(TOUCHED_BASE_REPORT), null, true));
 		final runs: Array<Result> = Pool.of(commands.length).run(commands);
 		final now: Outcome = saveLint(runs[0], _gate.tree, _gate.log(TOUCHED_REPORT));
 		if (!now.match(Passed)) return now;
@@ -290,10 +290,13 @@ final class GateLint {
 	/**
 	 * A `lint` of `scope` in `dir` that will report to `out`, its standard error in the file beside it (`errLogOf`): a lint
 	 * whose oracle is unavailable is chatty there, more than a pipe can be trusted to carry. `oracle` is
-	 * false for a tree that has no project to build.
+	 * false for a tree that has no project to build; `pairedWithBase` says the report is compared with a lint of the base in a
+	 * checkout, which can never find builds stored for the tree (`lintArgs`).
 	 */
-	private function lintCommand(dir: String, scope: Array<String>, oracle: Bool, out: String, ?rules: Array<String>): Command {
-		return _gate.hxqLogged(dir, lintArgs(scope, oracle, rules), errLogOf(out));
+	private function lintCommand(
+		dir: String, scope: Array<String>, oracle: Bool, out: String, ?rules: Array<String>, pairedWithBase: Bool = false
+	): Command {
+		return _gate.hxqLogged(dir, lintArgs(scope, oracle, rules, pairedWithBase), errLogOf(out));
 	}
 
 	/**
@@ -386,14 +389,20 @@ final class GateLint {
 		}
 	}
 
-	/** The arguments of a `lint --all --format json` of `scope`, with the compiler oracle unless `oracle` is false. */
-	public static function lintArgs(scope: Array<String>, oracle: Bool, ?rules: Array<String>): Array<String> {
+	/**
+	 * The arguments of a `lint --all --format json` of `scope`, with the compiler oracle unless `oracle` is false. A run without it
+	 * that is `pairedWithBase` reads no stored builds either: the builds an oracle run stored belong to the tree's own compile
+	 * input, so only its side of the pair would judge what the other holds, and the held base findings would read as new.
+	 */
+	public static function lintArgs(
+		scope: Array<String>, oracle: Bool, ?rules: Array<String>, pairedWithBase: Bool = false
+	): Array<String> {
 		final only: Array<String> = [ for (id in rules ?? []) for (arg in ['--rule', id]) arg ];
 		return ['lint']
 			.concat(scope)
 			.concat(['--all', '--format', 'json'])
 			.concat(only)
-			.concat(oracle ? [] : ['--no-oracle']);
+			.concat(oracle ? [] : ['--no-oracle'].concat(pairedWithBase ? ['--no-stored-builds'] : []));
 	}
 
 	/**

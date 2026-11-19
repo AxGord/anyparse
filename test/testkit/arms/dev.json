@@ -1420,6 +1420,14 @@
 			"note": "the base a caller names is dropped for the merge-base with main, so lint-new answers against another commit than the one asked"
 		},
 		{
+			"name": "M-LINT-NEW-STORED-BUILDS-READ",
+			"type": "dev.GateLint",
+			"method": "lintArgs",
+			"find": "pairedWithBase ? ['--no-stored-builds'] : []",
+			"replace": "[]",
+			"note": "the cheap lint of a tree and of its base checkout is no longer told to read no stored builds, so the tree judges from the builds an oracle lint stored for it while the base holds, and the held base findings read as new"
+		},
+		{
 			"name": "M-LINT-NEW-ORACLE-ALWAYS",
 			"type": "dev.GateLint",
 			"method": "lintPair",

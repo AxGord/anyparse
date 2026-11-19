@@ -70,12 +70,14 @@ final class LintOracleRun {
 	 * An oracle list not declared complete vouches for nothing, since a build it leaves out may compile code no listed
 	 * one does. The builds probed are stored under the fingerprint of the input they read (`ReachBuildsCache`), which
 	 * a run under `--no-oracle` — compiling nothing — reads instead (`withStoredBuilds`). A run whose paths name different
-	 * lists reads no builds, and when one of them `declared` its list complete still carries the hold (`buildsHeld`).
+	 * lists reads no builds, and when one of them `declared` its list complete still carries the hold (`buildsHeld`). A `--no-oracle`
+	 * run that is not to `readStored` holds the same way whether or not builds were stored, so two such runs over trees that
+	 * differ in nothing the rules read answer alike.
 	 * Unchanged with no oracle.
 	 */
 	public static function withReachConfigurations(
 		compiler: OracleProvider, resolution: Null<ResolutionScope>, oracles: Array<OracleConfig>, noOracle: Bool, complete: Bool,
-		ahead: AheadBuilds, ?reflective: Array<String>, ?holders: Array<String>, declared: Bool = false
+		ahead: AheadBuilds, ?reflective: Array<String>, ?holders: Array<String>, declared: Bool = false, readStored: Bool = true
 	): Null<ResolutionScope> {
 		if (resolution == null || oracles.length == 0) return resolution;
 		// a path declared its list complete, so no proof may fall back on what a run with no declared list would read
@@ -87,7 +89,7 @@ final class LintOracleRun {
 					buildsHeld: heldNote('the linted paths name different compilerOracle lists, so the run reads none as complete')
 				}
 				: resolution;
-		if (noOracle) return withStoredBuilds(compiler, resolution, oracles, reflective, holders);
+		if (noOracle) return withStoredBuilds(compiler, resolution, oracles, reflective, holders, readStored);
 		var probed: Bool = false;
 		var builds: Null<ReachBuilds> = null;
 		// once the run writes, the builds are compiled on demand, as they read the tree then: none starts ahead of a write
@@ -292,14 +294,14 @@ final class LintOracleRun {
 	 */
 	private static function withStoredBuilds(
 		compiler: OracleProvider, resolution: ResolutionScope, oracles: Array<OracleConfig>, reflective: Null<Array<String>>,
-		holders: Null<Array<String>>
+		holders: Null<Array<String>>, readStored: Bool
 	): ResolutionScope {
 		var read: Bool = false;
 		var builds: Null<ReachBuilds> = null;
 		function load(): Null<ReachBuilds> {
 			if (!read) {
 				read = true;
-				builds = bounded(compiler.storedBuilds(oracles), reflective, holders);
+				builds = readStored ? bounded(compiler.storedBuilds(oracles), reflective, holders) : null;
 			}
 			return builds;
 		}
@@ -307,7 +309,11 @@ final class LintOracleRun {
 			declared: resolution.declared,
 			sources: resolution.sources,
 			builds: load,
-			buildsHeld: heldNote('this --no-oracle run found no builds stored for its exact input — a run with the oracle stores them')
+			buildsHeld: heldNote(
+				readStored
+					? 'this --no-oracle run found no builds stored for its exact input — a run with the oracle stores them'
+					: 'this --no-oracle run was told to read no stored builds (--no-stored-builds)'
+			)
 		};
 	}
 

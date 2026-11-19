@@ -647,10 +647,18 @@
 			"note": "the edits two cross-file fixes make in one file are merged unchecked, so where they overlap the later silently swallows the earlier and the run reports both as landed"
 		},
 		{
+			"name": "M-REACH-STORED-BUILDS-FORCED-READ",
+			"type": "anyparse.query.cli.command.LintOracleRun",
+			"method": "withStoredBuilds",
+			"find": "builds = readStored ? bounded(compiler.storedBuilds(oracles), reflective, holders) : null;",
+			"replace": "builds = bounded(compiler.storedBuilds(oracles), reflective, holders);",
+			"note": "a --no-oracle run told to read no stored builds reads them anyway, so it judges what the other run of a compared pair holds"
+		},
+		{
 			"name": "M-REACH-STORED-UNREAD",
 			"type": "anyparse.query.cli.command.LintOracleRun",
 			"method": "withReachConfigurations",
-			"find": "if (noOracle) return withStoredBuilds(compiler, resolution, oracles, reflective, holders);",
+			"find": "if (noOracle) return withStoredBuilds(compiler, resolution, oracles, reflective, holders, readStored);",
 			"replace": "if (noOracle) return resolution;",
 			"note": "a run that compiles nothing never reads the builds an oracle run stored, so it knows no build and the alias branch no build takes is read again"
 		},

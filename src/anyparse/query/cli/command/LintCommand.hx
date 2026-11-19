@@ -73,6 +73,9 @@ typedef LintOpts = {
 	var fix: Bool;
 	var noOracle: Bool;
 
+	/** `--no-stored-builds` — a `--no-oracle` run reads no stored reach builds (`LintOracleRun.withReachConfigurations`). */
+	var noStoredBuilds: Bool;
+
 	/** `--fix-probes` — the typechecks the `--fix` safe-pass net may spend isolating culprits in one run. */
 	var fixProbes: Int;
 
@@ -159,6 +162,7 @@ final class LintCommand implements CliCommand {
 				'--full',
 				'--list-rules',
 				'--no-oracle',
+				'--no-stored-builds',
 				'--summary',
 				'--verbose',
 				'-a'
@@ -315,7 +319,7 @@ final class LintCommand implements CliCommand {
 			compiler,
 			LintOracleRun.withReachConfigurations(
 				compiler, unconfigured, oracles, o.noOracle, LintOracleRun.reachComplete(compiler, paths, resolveConfig, ledger), ahead,
-				reflective, holders, paths.exists(path -> resolveConfig(path).reachConfigurationsComplete())
+				reflective, holders, paths.exists(path -> resolveConfig(path).reachConfigurationsComplete()), !o.noStoredBuilds
 			),
 			oracles, early, reflective, holders, ahead, o
 		);

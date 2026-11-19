@@ -86,6 +86,26 @@ class HoistCommonImportBuildsE2ETest extends Test {
 		#end
 	}
 
+	/** `--no-stored-builds` makes a `--no-oracle` run hold what only the builds vouch for even when an oracle run stored them. */
+	@:pin('control')
+	@:killer('M-REACH-STORED-BUILDS-FORCED-READ')
+	public function testNoStoredBuildsHoldsWhereTheStoredBuildsExist(): Void {
+		#if nodejs
+		final dir: Null<String> = tree();
+		if (dir == null) return;
+		Assert.equals(HOISTED, lint(dir, false).hoisted);
+		final stored: LintOutcome = lint(dir, true);
+		Assert.equals(HOISTED, stored.hoisted, 'the builds are stored, so a plain --no-oracle run reads them');
+		final held: LintOutcome = lint(dir, true, ['--no-stored-builds']);
+		Assert.equals('', held.hoisted);
+		Assert.isTrue(held.err.indexOf(HELD_NOTE) >= 0, held.err);
+		Assert.isTrue(held.err.indexOf('--no-stored-builds') >= 0, held.err);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('stdout capture needs the node target');
+		#end
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * Four modules of `aqq`, three importing `qqz.Zqqwwee`, all compiled by `check.hxml`, under a config declaring `oracles`
@@ -126,9 +146,10 @@ class HoistCommonImportBuildsE2ETest extends Test {
 	}
 
 	/** The hoists a `hoist-common-import` lint of `dir` reports, as `<module>:<statement>` sorted, and what it said on stderr. */
-	private static function lint(dir: String, noOracle: Bool): LintOutcome {
+	private static function lint(dir: String, noOracle: Bool, ?extra: Array<String>): LintOutcome {
 		final args: Array<String> = ['lint', '--rule', 'hoist-common-import', '--flat']
 			.concat(noOracle ? ['--no-oracle'] : [])
+			.concat(extra ?? [])
 			.concat([dir]);
 		var err: String = '';
 		final out: String = CliFixture.captureStdout(() -> err = CliFixture.captureStderr(Cli.run.bind(args)));

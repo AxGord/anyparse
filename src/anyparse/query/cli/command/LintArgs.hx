@@ -239,6 +239,10 @@ final class LintArgs {
 		CliIo.sysPrint('                    is NOT reverted, RiskyFix rules stay report-only and\n');
 		CliIo.sysPrint('                    OracleAssisted rules are inert. Use it in an iteration loop\n');
 		CliIo.sysPrint('                    (the only way to see the fixer raw), NEVER in a gate\n');
+		CliIo.sysPrint('  --no-stored-builds  With --no-oracle: do not read the builds an oracle run\n');
+		CliIo.sysPrint('                    stored for the tree, so a rule only the builds can vouch\n');
+		CliIo.sysPrint('                    for is held whether or not they exist: two runs compared\n');
+		CliIo.sysPrint('                    (a tree and its base checkout) then answer alike\n');
 		CliIo.sysPrint('  --format <fmt>    Output format: text (default), json, checkstyle; with an\n');
 		CliIo.sysPrint('                    unscoped --list-rules, markdown prints the rule index by\n');
 		CliIo.sysPrint('                    category and json one {id, category, description,\n');
@@ -296,6 +300,7 @@ final class LintArgs {
 		var includeInfo: Bool = false;
 		var fix: Bool = false;
 		var noOracle: Bool = false;
+		var noStoredBuilds: Bool = false;
 		var fixProbes: Int = LintFixSafePass.PROBE_CAP;
 		var reviewBudget: Null<Int> = null;
 		var failOn: Null<Severity> = null;
@@ -328,6 +333,8 @@ final class LintArgs {
 					fix = true;
 				case '--no-oracle':
 					noOracle = true;
+				case '--no-stored-builds':
+					noStoredBuilds = true;
 				case '--fix-probes':
 					final count: Int = arg.intValue();
 					if (count < 0) {
@@ -400,6 +407,7 @@ final class LintArgs {
 			includeInfo: includeInfo,
 			fix: fix,
 			noOracle: noOracle,
+			noStoredBuilds: noStoredBuilds,
 			fixProbes: fixProbes,
 			reviewBudget: reviewBudget,
 			failOn: failOn,
@@ -499,6 +507,7 @@ final class LintArgs {
 			includeInfo: false,
 			fix: false,
 			noOracle: false,
+			noStoredBuilds: false,
 			fixProbes: LintFixSafePass.PROBE_CAP,
 			reviewBudget: null,
 			failOn: null,
@@ -641,6 +650,7 @@ final class LintArgs {
 			{ flag: '--all', set: o.includeInfo },
 			{ flag: '--flat', set: o.flat },
 			{ flag: '--no-oracle', set: o.noOracle },
+			{ flag: '--no-stored-builds', set: o.noStoredBuilds },
 			{ flag: '--fail-on', set: o.failOn != null },
 			{
 				flag: '--format',
