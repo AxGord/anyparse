@@ -18,6 +18,7 @@ typedef QueueLine = {
 	final ended: String;
 	final base: String;
 	final touches: Array<String>;
+	final sweep: String;
 	final after: Array<String>;
 	final notes: Array<QueueNote>;
 }
@@ -77,6 +78,7 @@ final class QueueFile {
 			ended: fields['ended'] ?? '',
 			base: fields['base'] ?? '',
 			touches: list(fields['touches'] ?? ''),
+			sweep: fields['sweep'] ?? '',
 			after: list(fields['after'] ?? ''),
 			notes: notes
 		};

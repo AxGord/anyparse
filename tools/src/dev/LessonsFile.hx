@@ -218,6 +218,11 @@ final class LessonsFile {
 		return 'Lesson of ${lesson.slice}. ${lesson.text} Repro: ${lesson.repro}';
 	}
 
+	public static function queueCli(): String {
+		final root: Null<String> = Sys.getEnv('WF_PLUGIN_ROOT');
+		return root == null || root == '' ? 'wf-queue' : Path.join([root, 'scripts', 'wf-queue']);
+	}
+
 	private static inline function fileable(kind: String): Bool {
 		return kind == UNVERIFIED || kind == ARM_ROT;
 	}
@@ -316,11 +321,6 @@ final class LessonsFile {
 	 */
 	private static function privateRules(file: Null<String>): Null<Array<Rule>> {
 		return file == null || !FileSystem.exists(file) ? null : ScrubGuard.loadRules(File.getContent(file));
-	}
-
-	private static function queueCli(): String {
-		final root: Null<String> = Sys.getEnv('WF_PLUGIN_ROOT');
-		return root == null || root == '' ? 'wf-queue' : Path.join([root, 'scripts', 'wf-queue']);
 	}
 
 	private static function oneLine(text: String): String {

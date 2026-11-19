@@ -90,4 +90,12 @@ final class QueueFileTest extends Test {
 		Assert.equals(0, QueueFile.read('  - id: A-1\n    status: done\n').length);
 	}
 
+	@:pin('control')
+	@:killer('M-QUEUEFILE-SWEEP-KEY')
+	public function testTheSweepKeyIsReadAsWritten(): Void {
+		final queue: String =
+			'tasks:\n  - id: K-1\n    status: running\n    sweep: hxq lint --rule k --fix src\n    text: |-\n      brief\n';
+		Assert.equals('hxq lint --rule k --fix src', QueueFile.find(queue, 'K-1')?.sweep);
+	}
+
 }

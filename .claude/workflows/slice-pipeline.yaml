@@ -79,7 +79,8 @@ states:
     timeout: 60000
     context_set:
       wt: "{{stdout}}"
-    on_success: recon_route
+      lock_mode: ""
+    on_success: sweep_probe
     on_error: prepare_failed
 
   prepare_failed:
@@ -96,6 +97,89 @@ states:
     transitions:
       retry: prepare
       release: released
+
+  sweep_probe:
+    station: false
+    type: exec
+    cwd: "{{project_root}}"
+    # Both entries pass here first: a line without a sweep command (exit 0) goes straight on and takes no pool lease and
+    # no lock; a sweep line (exit 15) and any other exit — a failed probe fails closed — go to the leased, locked compute.
+    command: node bin/dev.js sweep-lock "$SLICE" --tree "$WT" --probe
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+    timeout: 60000
+    max_output: 4096
+    cases:
+      "0": sweep_next
+    default: sweep_lock
+
+  sweep_lock:
+    station: false
+    type: exec
+    cwd: "{{project_root}}"
+    # A sweep line holds the files its command will change (`dev sweep-lock`: its declared touches plus the footprint)
+    # instead of running alone; a line with no sweep command passes unchanged. Before the work the footprint is the
+    # command's listing, after the slice's commit (lock_mode --commit, set where the review is entered) the files the
+    # commit changed. One compute at a time machine-wide: reading the other running lines' touches and writing this
+    # line's never interleave. Exit 0 held or no sweep, 10 nothing to sweep, 14 the rule is not on main yet (the
+    # worker's commit step locks), 11 a running line holds a footprint file (nothing written: wait, then ask),
+    # 12 the footprint could not be read, 13 the queue refused the write.
+    command: |-
+      node bin/dev.js sweep-lock "$SLICE" --tree "$WT" --engine "$WF_PROJECT_ROOT" $MODE
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+      MODE: "{{context.lock_mode}}"
+    timeout: 600000
+    resource: { threads: { min: 1, max: 2 }, locks: ["anyparse-sweep-lock"] }
+    max_output: 4096
+    context_set:
+      lock_note: "{{stdout}}"
+    cases:
+      "0": sweep_next
+      "10": sweep_next
+      "14": sweep_next
+      "11": sweep_wait
+    default: sweep_ask
+
+  sweep_wait:
+    station: false
+    type: exec
+    # The line that holds the file is running: it ends (or its own footprint changes) inside minutes to hours. Twelve
+    # waits are about half an hour, then the parent decides; the line never runs beside the holder on its own.
+    max_visits: 12
+    on_exhausted: sweep_ask
+    command: sleep 120
+    timeout: 150000
+    on_success: sweep_lock
+
+  sweep_ask:
+    ask: parent
+    prompt: |-
+      A slice driver: reply NEEDS-PARENT and take NO transition — the parent picks it.
+      `dev sweep-lock` for {{context.slice}} did not hold its footprint: {{context.lock_note}} {{stderr}}
+      `blocked_reason: footprint overlaps <id>` (after the waits): another running line holds a file this sweep will
+      change; `retry` once that line ended, `skip` runs the line holding only its declared touches (the land's
+      re-apply is the net), `stop` ends it. `the footprint could not be read`: the listing failed (never read as an
+      empty one); fix the cause (the command, the engine) and `retry`, or `skip`/`stop`. `the queue refused the
+      write`: read the queue CLI's message above; `retry` or `stop`.
+    transitions:
+      retry: sweep_lock
+      skip: sweep_next
+      stop: mark_stopped
+
+  sweep_next:
+    station: false
+    type: exec
+    command: '[ "$MODE" = "--commit" ] && exit 10; exit 0'
+    env:
+      MODE: "{{context.lock_mode}}"
+    timeout: 10000
+    cases:
+      "0": recon_route
+      "10": review
+    default: recon_route
 
   recon_route:
     station: false
@@ -642,8 +726,33 @@ states:
       "failed", note: "<the reasons (review or triage)>; tip <sha>"})`; keep the worktree {{context.wt}} and the
       branch for the user. Transition `close`, or `stop` when the next lines depend on it.
     transitions:
-      close: closed
-      stop: stopped
+      close: reject_close
+      stop: reject_stop
+
+  reject_close:
+    station: false
+    type: exec
+    # A rejected sweep line gives its footprint back (`dev sweep-lock --release`): a line the parent re-queues starts
+    # from its declared touches. A failed release never stops the close.
+    command: &sweep_release |-
+      node "$WF_PROJECT_ROOT/bin/dev.js" sweep-lock "$SLICE" --tree "$WT" --release || true
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+    timeout: 60000
+    on_success: closed
+    on_error: closed
+
+  reject_stop:
+    station: false
+    type: exec
+    command: *sweep_release
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+    timeout: 60000
+    on_success: stopped
+    on_error: stopped
 
   blocked:
     ask: parent
@@ -705,10 +814,12 @@ states:
     # A blocked line is marked `[!]` only when the parent closes it: marked earlier, a regate that follows runs on
     # a slot the pick already counts as free, and the window overfills.
     command: &mark_failed |-
+      node "$WF_PROJECT_ROOT/bin/dev.js" sweep-lock "$SLICE" --tree "$WT" --release || echo "sweep-lock --release failed: the line keeps its footprint touches until a recompute" >&2
       "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --failed "$SLICE" --note "${NOTE:-worker blocked}"
     env:
       QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
       SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
       NOTE: "{{context.fail_note}}"
     timeout: 60000
     on_success: closed
@@ -721,6 +832,7 @@ states:
     env:
       QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
       SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
       NOTE: "{{context.fail_note}}"
     timeout: 60000
     on_success: closed
@@ -732,6 +844,7 @@ states:
     env:
       QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
       SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
       NOTE: "{{context.fail_note}}"
     timeout: 60000
     on_success: stopped
@@ -898,9 +1011,10 @@ states:
       fmt_race_skip: "{{stdout}}"
       fmt_race_files: ""
       fmt_race_patch: ""
+      lock_mode: "--commit"
     cases:
       "0": land
-    default: review
+    default: sweep_probe
 
   round_not_started:
     max_visits: 2

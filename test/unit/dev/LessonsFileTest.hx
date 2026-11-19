@@ -277,6 +277,7 @@ final class LessonsFileTest extends Test {
 			ended: '',
 			base: '',
 			touches: touches,
+			sweep: '',
 			after: [],
 			notes: []
 		};

@@ -255,6 +255,16 @@ final class LandSweepTest extends Test {
 		utest.Assert.isTrue(LandSweep.filesOf('apq lint: unknown rule "r"').match(Unlisted(_)));
 	}
 
+	@:pin('control')
+	@:killer('M-LAND-SWEEP-KEY-IGNORED')
+	public function testTheSweepKeyIsReadBeforeTheMarkerRow(): Void {
+		final queue: String = 'tasks:\n  - id: K1\n    status: running\n    sweep: hxq lint --rule k --fix src\n    text: |-\n'
+			+ '      sweep: hxq lint --rule m --fix src\n  - id: K2\n    status: running\n    text: |-\n'
+			+ '      sweep: hxq lint --rule m --fix src\n';
+		utest.Assert.equals('hxq lint --rule k --fix src', LandSweep.commandOf(queue, 'K1'));
+		utest.Assert.equals('hxq lint --rule m --fix src', LandSweep.commandOf(queue, 'K2'));
+	}
+
 	/**
 	 * The stand-in command; it leaves the findings of `stubborn` alone, does not finish at all when `dies`, and makes the file
 	 * `creates` when one is named.

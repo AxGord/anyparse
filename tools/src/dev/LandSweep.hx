@@ -3,6 +3,7 @@ package dev;
 import anyparse.query.ExitCode;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
+import dev.QueueFile.QueueLine;
 import devkit.Cmd.cmd;
 import devkit.Result;
 import devkit.Summary;
@@ -187,10 +188,16 @@ final class LandSweep {
 		return _candidate.git(['ls-files', '--others', '--exclude-standard']).lines();
 	}
 
-	/** The command of the marker row in the text of line `id` of the queue document `queue`, or null when the line has none. */
+	/** The sweep command of line `id` of the queue document `queue` (`commandIn`), or null when the line has none. */
 	public static function commandOf(queue: String, id: String): Null<String> {
-		final text: String = QueueFile.find(queue, id)?.text ?? '';
-		for (row in text.split('\n')) {
+		return commandIn(QueueFile.find(queue, id));
+	}
+
+	/** The sweep command of a queue line: its `sweep:` key, else the first marker row of its text; null for a line without one. */
+	public static function commandIn(line: Null<QueueLine>): Null<String> {
+		final keyed: String = (line?.sweep ?? '').trim();
+		if (keyed != '') return keyed;
+		for (row in (line?.text ?? '').split('\n')) {
 			final trimmed: String = row.trim();
 			if (!trimmed.startsWith(MARKER)) continue;
 			final command: String = trimmed.substr(MARKER.length).trim();

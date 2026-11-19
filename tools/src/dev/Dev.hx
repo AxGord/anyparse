@@ -46,6 +46,7 @@ final class Dev {
 		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
 		{ name: 'lessons-file', main: LessonsFile.main, usage: LessonsFile.USAGE },
 		{ name: 'recon-facts', main: ReconFacts.main, usage: ReconFacts.USAGE },
+		{ name: 'sweep-lock', main: SweepLock.main, usage: SweepLock.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },
 		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },
 		{ name: 'jvm-portability', main: JvmProbe.main, usage: JvmProbe.USAGE },

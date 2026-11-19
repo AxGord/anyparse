@@ -654,6 +654,9 @@ states:
       if [ "$n" -eq 0 ]; then git commit -q -F "$logs/message.txt" || exit 4
       else git commit -q --amend -F "$logs/message.txt" || exit 4; fi
       echo "COMMITTED $(git log --oneline -1 | cut -c1-120)"
+      # A sweep line holds the files this commit changes from here on (dev sweep-lock; a line without a sweep command is a no-op).
+      # Best effort: the pipeline runs the same lock, serialised, before the review, and that run decides.
+      echo "--- the line's lock: $(node "$WF_PROJECT_ROOT/bin/dev.js" sweep-lock "${tree##*/}" --tree "$tree" --commit --engine "$WF_PROJECT_ROOT" 2>&1 | tail -2 | tr '\n' ' ')"
       if [ "$before" != "$after" ]; then
         echo "--- what fmt / the safe autofixes changed in your files (re-read only these):"
         git diff --stat "$before" "$after" | tail -25

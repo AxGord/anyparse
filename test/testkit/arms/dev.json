@@ -4009,7 +4009,7 @@
 		{
 			"name": "M-LAND-SWEEP-MARKER-ANY-ROW",
 			"type": "dev.LandSweep",
-			"method": "commandOf",
+			"method": "commandIn",
 			"find": "if (!trimmed.startsWith(MARKER)) continue;",
 			"replace": "",
 			"note": "any row of a line text is read as its sweep command, so a line without the marker gets the reapply step"
@@ -4061,6 +4061,182 @@
 			"find": ".concat(created)",
 			"replace": "",
 			"note": "a file the command creates stays untracked, so main advances to a commit that lacks a file of the tree the battery judged"
+		},
+		{
+			"name": "M-SWEEP-LOCK-OVERLAP-WRITTEN",
+			"type": "dev.SweepLock",
+			"method": "settle",
+			"find": "return Overlap(other.id, file);",
+			"replace": "continue;",
+			"note": "a footprint file another running line holds is written anyway, so two lines run on one file"
+		},
+		{
+			"name": "M-SWEEP-LOCK-DIRECTORY-HOLDS-NOTHING",
+			"type": "dev.SweepLock",
+			"method": "holds",
+			"find": " || file.startsWith(Path.addTrailingSlash(held))",
+			"replace": "",
+			"note": "a directory entry of a running line holds nothing, so a sweep runs beside a line that owns the directory"
+		},
+		{
+			"name": "M-SWEEP-LOCK-PENDING-HOLDS",
+			"type": "dev.SweepLock",
+			"method": "settle",
+			"find": "other.status == 'running' && ",
+			"replace": "",
+			"note": "a pending or finished line holds its files, so a sweep waits for a line that is not running"
+		},
+		{
+			"name": "M-SWEEP-LOCK-DECLARED-DROPPED",
+			"type": "dev.SweepLock",
+			"method": "settle",
+			"find": "final wanted: Array<String> = declared.copy();",
+			"replace": "final wanted: Array<String> = [];",
+			"note": "the footprint replaces the declared touches, so the rule files of a rule-plus-sweep line fall out of its lock"
+		},
+		{
+			"name": "M-SWEEP-LOCK-RECOMPUTE-FROM-CURRENT",
+			"type": "dev.SweepLock",
+			"method": "declaredOf",
+			"find": "if (FileSystem.exists(saved)) return File.getContent(saved).split('\\n').filter(entry -> entry != '');",
+			"replace": "",
+			"note": "the declared touches are re-read from the queue on every run, so a stale footprint is kept forever"
+		},
+		{
+			"name": "M-SWEEP-LOCK-FAILED-LISTING-READS-EMPTY",
+			"type": "dev.SweepLock",
+			"method": "lock",
+			"find": ": Unread(why);",
+			"replace": ": Barren;",
+			"note": "a listing that fails reads as an empty one, so the line runs with its footprint unlocked"
+		},
+		{
+			"name": "M-SWEEP-LOCK-UNKNOWN-RULE-FAILS",
+			"type": "dev.SweepLock",
+			"method": "lock",
+			"find": "why.contains(UNKNOWN_RULE) ?",
+			"replace": "false ?",
+			"note": "a rule the engine does not know yet fails the lock, so a rule-plus-sweep line cannot start"
+		},
+		{
+			"name": "M-SWEEP-LOCK-EMPTY-LISTING-LOCKS",
+			"type": "dev.SweepLock",
+			"method": "settle",
+			"find": "files.length == 0 ? Barren : ",
+			"replace": "",
+			"note": "an empty footprint reads as a lock, so the caller never learns there is nothing to sweep"
+		},
+		{
+			"name": "M-SWEEP-LOCK-COMMIT-MODE-LISTS",
+			"type": "dev.SweepLock",
+			"method": "footprint",
+			"find": "if (request.mode == OnCommit) return Listed(tools.changed(request.tree));",
+			"replace": "",
+			"note": "after the commit the footprint is listed again, and the swept tree reports nothing"
+		},
+		{
+			"name": "M-SWEEP-LOCK-PLAIN-LINE-LOCKED",
+			"type": "dev.SweepLock",
+			"method": "lock",
+			"find": "if (command == null) return Plain;",
+			"replace": "if (command == null) return Barren;",
+			"note": "a line without a sweep command is treated as a sweep line with nothing to sweep"
+		},
+		{
+			"name": "M-SWEEP-LOCK-RELEASE-KEEPS-FOOTPRINT",
+			"type": "dev.SweepLock",
+			"method": "release",
+			"find": "sameSet(line.touches, declared) ? null : tools.edit(line.id, declared)",
+			"replace": "null",
+			"note": "a released line keeps its footprint touches, so the narrow list is admitted beside a line it must not run with"
+		},
+		{
+			"name": "M-SWEEP-LOCK-REFUSAL-IGNORED",
+			"type": "dev.SweepLock",
+			"method": "settle",
+			"find": "if (refused != null) return Refused(refused);",
+			"replace": "",
+			"note": "a write the queue refuses reads as a held lock"
+		},
+		{
+			"name": "M-LAND-SWEEP-KEY-IGNORED",
+			"type": "dev.LandSweep",
+			"method": "commandIn",
+			"find": "if (keyed != '') return keyed;",
+			"replace": "",
+			"note": "the sweep key of a queue line is ignored, so a keyed line lands without its re-apply"
+		},
+		{
+			"name": "M-QUEUEFILE-SWEEP-KEY",
+			"type": "dev.QueueFile",
+			"method": "entry",
+			"find": "sweep: fields['sweep'] ?? '',",
+			"replace": "sweep: '',",
+			"note": "the sweep key is read as empty, so a keyed line has no sweep command"
+		},
+		{
+			"name": "M-SWEEP-LOCK-HELD-FILES-UNCHECKED",
+			"type": "dev.SweepLock",
+			"method": "settle",
+			"find": "for (file in wanted) for (other in others)",
+			"replace": "for (file in wanted.filter(entry -> !line.touches.contains(entry))) for (other in others)",
+			"note": "a file the line already holds is not checked, so two lines that computed at once keep running on one file"
+		},
+		{
+			"name": "M-SWEEP-LOCK-PROBE-LISTS",
+			"type": "dev.SweepLock",
+			"method": "lock",
+			"find": "if (request.mode == Probe) return Sweeps;",
+			"replace": "",
+			"note": "a probe goes on into the listing and the declared-touches file, so the cheap question runs the whole compute"
+		},
+		{
+			"name": "M-SWEEP-LOCK-ARGV-RELEASE-IGNORED",
+			"type": "dev.SweepLock",
+			"method": "main",
+			"find": "probe ? Probe : release ? Release : commit",
+			"replace": "probe ? Probe : commit",
+			"note": "the --release flag of the command line is dropped, so a rejected line keeps its footprint"
+		},
+		{
+			"name": "M-SWEEP-LOCK-ARGV-LOGS-NOT-BESIDE-TREE",
+			"type": "dev.SweepLock",
+			"method": "main",
+			"find": "logs: '${Path.removeTrailingSlashes(tree)}-logs'",
+			"replace": "logs: tree",
+			"note": "the declared touches are looked for outside the <tree>-logs directory the workflows keep them in"
+		},
+		{
+			"name": "M-SWEEP-LOCK-ARGV-COMMIT-IGNORED",
+			"type": "dev.SweepLock",
+			"method": "main",
+			"find": "commit ? OnCommit : OnTree",
+			"replace": "OnTree",
+			"note": "the --commit flag of the command line is dropped, so a line is locked from a listing that now reads empty"
+		},
+		{
+			"name": "M-SWEEP-LOCK-ARGV-PROBE-IGNORED",
+			"type": "dev.SweepLock",
+			"method": "main",
+			"find": "probe ? Probe : release",
+			"replace": "release",
+			"note": "the --probe flag of the command line is dropped, so a probe runs the whole compute"
+		},
+		{
+			"name": "M-SWEEP-LOCK-ARGV-MODES-EXCLUSIVE",
+			"type": "dev.SweepLock",
+			"method": "main",
+			"find": "[commit, release, probe].filter(on -> on).length > 1",
+			"replace": "false",
+			"note": "two modes of one run are accepted and one of them silently wins"
+		},
+		{
+			"name": "M-SWEEP-LOCK-ARGV-TREE-OPTIONAL",
+			"type": "dev.SweepLock",
+			"method": "main",
+			"find": "?? throw new UsageError('missing --tree <worktree>')",
+			"replace": "?? ''",
+			"note": "a run without --tree goes on with an empty tree"
 		}
 	]
 }
