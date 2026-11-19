@@ -1,0 +1,834 @@
+name: slice-worker
+description: >-
+  One anyparse slice in its own worktree (the session cwd: <root>/<ID> made by
+  slice-pipeline, default <parent of the main checkout>/.wt/anyparse/<ID>; or /tmp/hxqb-<ID> made by
+  the older slice-campaign): orient → baseline [exec] → implement → gate [exec
+  dev slice-gate] → fix ×3 → report. The engine runs every heavy command; the
+  agent writes code and transitions.
+initial: orient
+max_transitions: 60
+
+states:
+  orient:
+    stale_after: 3600
+    prompt: |-
+      Slice worktree: {{context.cwd}} — your slice ID is its directory name (a `/tmp/hxqb-<ID>` tree: the part
+      after `hxqb-`); your branch is `batch/hxqb-<ID>`.
+      CLAUDE.md is already in your context — do not open it; mind its (§ Non-negotiable invariants, § What a comment may say,
+      § Test framework). Read the user's standing principles whole: {{project_root}}/.claude/workflows/lib/principles.md;
+      and YOUR task in {{project_root}}/.claude/batch/queue.yaml (`awk '/^  - id: <ID>$/{f=1;print;next} f&&/^  - /{exit} f' …`) —
+      never the other tasks or the header (the parent's dispatch history).
+
+      If the parent's message is a REVIEW FIX LIST, this is a fix round: the list is your task, the
+      baseline already exists, amend the slice commit.
+
+      Never `git stash`, push, or `pkill -f` in any step (the full Safety list is in `implement`).
+
+      Not a fix round and {{context.cwd}}-logs/recon.md exists → a recon read your line on this base: read it first, whole.
+      Its premises, owners and file:line facts are checked — do not look them up again, ask only what it leaves open;
+      its line-1 score is a first guess like the line's, yours decides.
+      Reuse first (one question — one component): before any code, name in one line the question your
+      change answers and find who already answers it (`hxq callers`/`uses`/`refs`, docs/architecture.md,
+      the central components: typing and names → `anyparse.query.TypingService`).
+      The worktree has no engine before `isolate`: every `hxq` in this step runs as `HXQ_BIN={{project_root}}/bin/apq.js hxq …`, main's engine, reading only (a failure while main lands: run it again); never `worker-build` here.
+      First ask the tree: `hxq owner "<the question in plain words>" src` — read the top 10, and ask again in a
+      second phrasing (ranking is word-based, a paraphrase can miss); `hxq owner --list src` prints every
+      question a doc says its type is the one answer to. A hit that answers it is your owner.
+      A NEW rule, component or helper of an old rule has no owner for its own question; its pieces do. List the helpers you expect to write
+      (walk a chain, compare two operands, peel parentheses, trim a span, a schema typedef for a document a command already prints) and ask `hxq owner` once per helper, in that
+      helper's words; for a rule, over src/anyparse/check. `owner` names each piece's owner or `new`.
+      An existing owner is CALLED or extended in place; new logic only when nothing answers, as a reusable
+      component in the package that owns the concept — and its class doc then states `the one answer to
+      "<the question>"`, so the next worker's `hxq owner` finds it (a fresh type nobody names yet ranks low).
+
+      Context is the cost (each turn re-reads everything you have read): one or two hxq calls with short
+      output — run them yourself; a CHAIN of lookups (owner → callers → tests → arms, tracing a behaviour across
+      files, sifting many hits) — hand it to a RECON agent and keep only its answer: Agent, model sonnet,
+      effort medium (haiku/low when it only extracts named declarations), prompt =
+      your questions + "answer with hxq (owner/mentions/callers/show --select/ast) in this worktree
+      {{context.cwd}}, HXQ_BIN={{project_root}}/bin/apq.js; read-only; reply ≤ 60 lines: each fact with
+      file:line, signatures and the few lines that matter, no file dumps". The call returns at once and it runs in the background: end your turn, no Monitor, no sleep, no poll; its hand-back wakes you, and a timer you leave running wakes you again after your run has ended. A gap in its answer → ask it again
+      (SendMessage), do not go reading yourself. You read only the declarations you will edit.
+
+      Keys for the `set` of your NEXT transition, ONE call — `transition({session_id, transition: "<name>", set: {question: "…", owner: "…", …}})` (all or nothing: a refused key refuses the transition and the error names it; never a separate context_set beside it):
+        question  — the question, one line
+        owner     — the component that answers it, or `new: <package> — why none fits`
+        rule_code — `yes` if you will touch src/anyparse/check or src/anyparse/query outside cli/, else `no`
+      This is the plan stage, and it prices the slice: score the work you now see by the anchors in
+      {{project_root}}/.claude/workflows/lib/difficulty.md and add `difficulty_seen` to that `set` (the line's own number is
+      a guess made without the code; yours decides). Skip this on a fix round. When {{context.cwd}}-logs/plan.md exists the plan
+      stage is over: read that file, it is your plan and your owner, do not redo it and never transition `rescore`; take
+      `question`, `owner`, `rule_code` from it (into the same `set`) and go on. Score ≥9, or your line says to split it when planned → the split is your plan: no `rescore`, transition `blocked`, and `blocked_reason` starts `SPLIT:` and holds the queue lines (each with difficulty, touches, owner, a recount, and its split type cut as difficulty.md "How to cut a split" says; a flip is never split). Score ≤6 → you are the right worker: carry on. Score 7 or 8 → the execution needs opus:
+      transition `rescore` with, in the same `set`, `rescore` = the number and `rescore_note` = your plan, ≤10 lines with no `|` (question, owner, files, approach,
+      the anchor); the next stage executes it, you stop here without writing code.
+      Write no tracked file before `isolate`: its baseline measures this tree as it stands. Then transition `isolate`. A premise of your line that does not hold → `blocked`. A FIRST census your line asks for
+      runs here, before `isolate` (a git-log script, seconds): its count goes in your plan, counted in the line's own words ("inside one unit" is not "inside some edited line"; a range is its whole range, not its head), and a change that would reach
+      under a quarter of the census cases (or under a floor the line names) → `blocked` with the count; the parent weighs it.
+    transitions:
+      isolate: sync_start
+      rescore: rescore_wip
+      blocked: blocked
+
+  sync_start:
+    station: false
+    type: exec
+    # A lease-free probe: on main (or a dirty tree) is the common answer and costs no threads; only a real rebase + rebuild waits for the pool.
+    command: &sync_probe |-
+      if [ -n "$(git status --porcelain)" ]; then echo "sync skipped: the tree has uncommitted changes"; exit 0; fi
+      base=$(git merge-base HEAD main); tip=$(git rev-parse main)
+      [ "$base" = "$tip" ] && { echo "sync: on main $(git rev-parse --short main)"; exit 0; }
+      exit 10
+    timeout: 30000
+    context_set:
+      sync_from: start
+      sync_report: "{{stdout}}"
+    cases:
+      "0": baseline_kept
+      "10": sync_start_run
+    default: sync_failed
+
+  sync_start_run:
+    station: false
+    type: exec
+    # A point with a clean tree (a new session, a fix round's start): main's slices come in here, not mid-edit.
+    command: &sync_cmd |-
+      tree=$(pwd -P); mkdir -p "$tree-logs"
+      export OCAMLRUNPARAM="${OCAMLRUNPARAM:-s=16M,o=400}"  # the setting HaxeSpawn gives its own compiles; a plain `haxe` here has none
+      if [ -n "$(git status --porcelain)" ]; then echo "sync skipped: the tree has uncommitted changes"; exit 0; fi
+      base=$(git merge-base HEAD main); tip=$(git rev-parse main)
+      [ "$base" = "$tip" ] && { echo "sync: on main $(git rev-parse --short main)"; exit 0; }
+      came=$(git log --format='  %h %s' "$base..main" | cut -c1-120)
+      both=$(git diff --name-only "$base..HEAD" | sort > "$tree-logs/sync-mine.txt"; git diff --name-only "$base..main" | sort | comm -12 "$tree-logs/sync-mine.txt" -)
+      if ! git -c "merge.anyparse.driver=node '$WF_PROJECT_ROOT/bin/apq.js' merge-file %O %A %B --path %P" rebase -q main > "$tree-logs/sync-rebase.log" 2>&1; then
+        echo "SYNC CONFLICT rebasing onto main $(git rev-parse --short main) — the rebase is STOPPED, not aborted:"
+        git diff --name-only --diff-filter=U | sed 's/^/  conflict: /'
+        echo "came from main:"; echo "$came"
+        exit 7
+      fi
+      { haxe tools/dev.hxml && haxe bin/apq-js.hxml && haxe test-js.hxml; } > "$tree-logs/sync-build.log" 2>&1 || { echo "sync: rebased, but the rebuild failed — $tree-logs/sync-build.log"; tail -15 "$tree-logs/sync-build.log"; exit 8; }
+      echo "SYNCED onto main $(git rev-parse --short main); came from main:"; echo "$came"
+      [ -n "$both" ] && { echo "files you touch that main changed too — re-read them before editing:"; echo "$both" | sed 's/^/  /'; }
+      exit 0
+    timeout: 900000
+    resource: { threads: { min: 1, max: 2 } }
+    context_set:
+      sync_from: start
+      sync_report: "{{stdout}}"
+    cases:
+      "0": baseline_kept
+      "7": sync_conflict
+    default: sync_failed
+
+  sync_gate:
+    station: false
+    type: exec
+    command: *sync_probe
+    timeout: 30000
+    context_set:
+      sync_from: gate
+      sync_report: "{{stdout}}"
+    cases:
+      "0": gate_baseline
+      "10": sync_gate_run
+    default: sync_failed
+
+  sync_gate_run:
+    station: false
+    type: exec
+    command: *sync_cmd
+    timeout: 900000
+    resource: { threads: { min: 1, max: 2 } }
+    context_set:
+      sync_from: gate
+      sync_report: "{{stdout}}"
+    cases:
+      "0": gate_baseline
+      "7": sync_conflict
+    default: sync_failed
+
+  sync_conflict:
+    prompt: |-
+      {{stdout}}
+      Resolve each conflict in {{context.cwd}} (rules as in `implement`: .hx through hxq ops; a layout-only conflict
+      → keep your side, then `apq fmt --write` that file; a `test/testkit/arms/*.json` document keeps both sides' records), `git add`
+      them, `git rebase --continue`; then rebuild both (`haxe bin/apq-js.hxml && haxe test-js.hxml`) and re-read the
+      files main changed under you. Done → `resume` (you came from: {{context.sync_from}} — the engine routes it).
+      Not resolvable inside your slice → `git rebase --abort`, then `blocked` with the conflict list.
+    transitions:
+      resume: sync_resume
+      blocked: blocked
+
+  sync_resume:
+    type: exec
+    command: |-
+      [ -d "$(git rev-parse --git-path rebase-merge)" ] || [ -d "$(git rev-parse --git-path rebase-apply)" ] && { echo "a rebase is still in progress — finish it (git rebase --continue) first"; exit 2; }
+      [ -z "$(git status --porcelain)" ] || { echo "the tree is not clean after the rebase"; git status --short | head -20; exit 2; }
+      [ "$FROM" = gate ] && exit 20; exit 10
+    env:
+      FROM: "{{context.sync_from}}"
+    timeout: 30000
+    cases:
+      "10": baseline_kept
+      "20": gate_baseline
+    default: sync_conflict
+
+  sync_failed:
+    prompt: |-
+      The sync step failed (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      A rebuild failure after a clean rebase is main's code meeting yours: fix it like a gate row, then transition `commit`
+      (the commit step amends the slice commit, never `git commit` by hand, and syncs again; you came from: {{context.sync_from}},
+      and the gate runs next either way). `retry` only when you changed nothing. Anything else → `blocked`.
+    transitions:
+      commit: commit
+      retry: sync_resume
+      blocked: blocked
+
+  gate_baseline:
+    station: false
+    type: exec
+    # The gate compares against a baseline taken on the branch's base; a base moved by a sync makes it stale.
+    command: |-
+      tree=$(pwd -P); f="$tree-logs/slice-gate/baseline.json"
+      [ -f "$f" ] || exit 10
+      want=$(git merge-base HEAD main)
+      have=$(node -e 'try{console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).base||"")}catch(e){console.log("")}' "$f")
+      # A slice whose diff grew into rule code after the first baseline needs the infra trees in it (else infra4 is not run).
+      infra=$(node -e 'try{console.log((JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).infra||[]).length)}catch(e){console.log(0)}' "$f")
+      rule=$(node "$WF_PROJECT_ROOT/bin/dev.js" rule-code "$tree")
+      if [ "$have" = "$want" ]; then
+        [ "$rule" = yes ] && [ "$infra" = 0 ] || { echo "baseline on $(git rev-parse --short "$want") kept"; exit 0; }
+        mv "$f" "$tree-logs/slice-gate/baseline-noinfra.json"
+        echo "the slice now touches rule code, but the baseline recorded no --infra-tree — retaking with it"; exit 10
+      fi
+      mv "$f" "$tree-logs/slice-gate/baseline-${have:-unknown}.json"
+      echo "baseline was on ${have:-?}, the branch is now on $(git rev-parse --short "$want") — retaking"; exit 10
+    timeout: 30000
+    cases:
+      "0": gate
+      "10": rebaseline
+    default: rebaseline
+
+  baseline_kept:
+    station: false
+    type: exec
+    # No lease: a recorded baseline (fix rounds, re-entry) needs no threads — only a new one waits for the pool.
+    command: |-
+      tree=$(pwd -P)
+      f="$tree-logs/slice-gate/baseline.json"
+      [ -f "$f" ] || exit 10
+      want=$(git merge-base HEAD main)
+      have=$(node -e 'try{console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).base||"")}catch(e){console.log("")}' "$f")
+      if [ "$have" = "$want" ]; then echo "baseline kept: $f"; git log --oneline -1; exit 0; fi
+      mv "$f" "$tree-logs/slice-gate/baseline-${have:-unknown}.json"
+      echo "baseline was on ${have:-?}, the branch is now on $(git rev-parse --short "$want") — retaking on the base"; exit 11
+    timeout: 30000
+    cases:
+      "0": repro_route
+      "10": isolate
+      "11": rebaseline_start
+    default: isolate
+
+  isolate:
+    type: exec
+    # Idempotent: a recorded baseline is kept (fix rounds, re-entry). The worktree itself is the parent's
+    # `prepare` exec — start({cwd}) needs an existing directory.
+    command: &baseline_cmd |-
+      tree=$(pwd -P)
+      case "$tree" in
+        /private/tmp/hxqb-*|/tmp/hxqb-*) id=${tree##*/hxqb-};;
+        */.wt/anyparse/*) id=${tree##*/};;
+        *) echo "refused: session cwd $tree is not a slice worktree (<root>/.wt/anyparse/<ID> or /tmp/hxqb-<ID>)"; exit 2;;
+      esac
+      case "$id" in ''|*[!A-Za-z0-9-]*) echo "refused: slice id '$id' from $tree"; exit 2;; esac
+      top=$(cd "$(git rev-parse --show-toplevel)" && pwd -P)
+      [ "$top" = "$tree" ] || { echo "refused: $tree is not a worktree top ($top)"; exit 2; }
+      branch=$(git symbolic-ref --short HEAD)
+      [ "$branch" = "batch/hxqb-$id" ] || { echo "refused: branch $branch, expected batch/hxqb-$id"; exit 2; }
+      logs="$tree-logs/slice-gate"; mkdir -p "$logs"
+      if [ -f "$logs/baseline.json" ]; then echo "baseline kept: $logs/baseline.json"; git log --oneline -1; exit 0; fi
+      [ -z "$(git status --porcelain)" ] || { echo "refused: the tree has edits, and a baseline measures the commit:"; git status --short | head -10; exit 3; }
+      haxe tools/dev.hxml > "$tree-logs/dev-build.log" 2>&1 || { echo "bin/dev.js build failed — $tree-logs/dev-build.log"; tail -5 "$tree-logs/dev-build.log"; exit 1; }
+      set --; if [ -n "$ANYPARSE_PONY" ]; then set -- --frozen "$ANYPARSE_PONY"; else echo "skipped: ANYPARSE_PONY unset, no frozen tree"; fi
+      if [ "$RULE_CODE" = yes ]; then
+        for t in $ANYPARSE_INFRA_TREES; do set -- "$@" --infra-tree "$t"; done; [ -n "$ANYPARSE_INFRA_TREES" ] || echo "skipped: ANYPARSE_INFRA_TREES unset, no infra trees"
+      fi
+      node bin/dev.js slice-gate "$tree" --baseline "$@" > "$logs/baseline-table.txt" 2>&1; rc=$?
+      cat "$logs/baseline-table.txt"
+      exit $rc
+    env:
+      RULE_CODE: "{{context.rule_code}}"
+    timeout: 1800000
+    cases:
+      "0": repro_route
+    default: isolate_failed
+
+  rebaseline:
+    type: exec
+    # The baseline on the branch's NEW base, measured in a detached throwaway worktree at that commit and
+    # written into this slice's logs (`--logs`): measured at HEAD it would hold the slice itself, and the
+    # gate would compare the slice with itself.
+    command: &rebase_cmd |-
+      tree=$(pwd -P); logs="$tree-logs/slice-gate"; mkdir -p "$logs"
+      want=$(git merge-base HEAD main) || { echo "no merge base with main"; exit 1; }
+      tmp="$tree-rebase"
+      git worktree remove --force "$tmp" > /dev/null 2>&1; rm -rf "$tmp"
+      git worktree add -q --detach "$tmp" "$want" || { echo "could not make $tmp at $want"; exit 1; }
+      ( cd "$tmp" && haxe tools/dev.hxml ) > "$tree-logs/rebase-dev-build.log" 2>&1 || {
+        echo "bin/dev.js build failed on $want — $tree-logs/rebase-dev-build.log"; tail -5 "$tree-logs/rebase-dev-build.log"
+        git worktree remove --force "$tmp"; exit 1; }
+      set --; if [ -n "$ANYPARSE_PONY" ]; then set -- --frozen "$ANYPARSE_PONY"; else echo "skipped: ANYPARSE_PONY unset, no frozen tree"; fi
+      # the infra trees follow the SLICE's rule code (its whole diff from the base), not this round's claim
+      [ "$(node "$WF_PROJECT_ROOT/bin/dev.js" rule-code "$tree")" = yes ] && RULE_CODE=yes
+      if [ "$RULE_CODE" = yes ]; then
+        for t in $ANYPARSE_INFRA_TREES; do set -- "$@" --infra-tree "$t"; done; [ -n "$ANYPARSE_INFRA_TREES" ] || echo "skipped: ANYPARSE_INFRA_TREES unset, no infra trees"
+      fi
+      ( cd "$tmp" && node bin/dev.js slice-gate "$tmp" --baseline "$@" --logs "$logs" ) > "$logs/baseline-table.txt" 2>&1; rc=$?
+      git worktree remove --force "$tmp"
+      cat "$logs/baseline-table.txt"
+      got=$(node -e 'try{console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).base||"")}catch(e){console.log("")}' "$logs/baseline.json")
+      [ $rc -eq 0 ] && [ "$got" != "$want" ] && { echo "refused: the new baseline is on '$got', not the branch's base $want"; exit 1; }
+      exit $rc
+    env:
+      RULE_CODE: "{{context.rule_code}}"
+    timeout: 3600000
+    # No step lease, as in `isolate` and `gate`: slice-gate leases each branch itself, a baseline the cache holds asks no threads, and a branch's wait counts in this timeout.
+    cases:
+      "0": gate
+    default: isolate_failed
+
+  rebaseline_start:
+    type: exec
+    # A fix round whose sync moved the base: the same throwaway-worktree baseline, then back to work.
+    command: *rebase_cmd
+    env:
+      RULE_CODE: "{{context.rule_code}}"
+    timeout: 3600000
+    # No step lease, as in `isolate` and `gate`: slice-gate leases each branch itself, a baseline the cache holds asks no threads, and a branch's wait counts in this timeout.
+    cases:
+      "0": repro_route
+    default: isolate_failed
+
+  isolate_failed:
+    prompt: |-
+      The baseline did not come up (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      A refusal naming edits in the tree: `git -C {{context.cwd}} add -A && git -C {{context.cwd}} diff --cached --binary > {{context.cwd}}-logs/pre-isolate.patch && git -C {{context.cwd}} reset -q --hard`, `retry`, and `git -C {{context.cwd}} apply {{context.cwd}}-logs/pre-isolate.patch` once the baseline stands.
+      Any other refusal or an environment fault is not yours to work around (never build in the main tree, never
+      re-create the worktree): transition `blocked` with the quoted line. Name where a message comes from only with the search that found it (`rg -nF '<words>' src tools/src`); otherwise end the attribution "(unverified)". A transient failure (timeout 124, or only the `suite` row red, on one test: main's battery passed this base)
+      → `retry` once and name that test in open_items; red again → `blocked`.
+    transitions:
+      retry: isolate
+      blocked: blocked
+
+  repro_route:
+    station: false
+    type: exec
+    # Which lines take the reproduce step: `kind: bug`, read from the queue line by this worktree's slice id
+    # (no driver sets a kind). Every other line, and a bug line whose step is over (repro-verdict.txt: a fix
+    # round or a re-score's next session), goes to `implement` with the previous step's output unchanged.
+    command: |-
+      tree=$(pwd -P); id=${tree##*/}; id=${id#hxqb-}; logs="$tree-logs"
+      kind=$(awk -v id="$id" '$0=="  - id: " id {f=1; next} f && /^  - /{exit} f && /^    kind: /{print $2; exit}' "$QUEUE" 2>/dev/null)
+      if [ "$kind" = bug ] && [ ! -f "$logs/repro-verdict.txt" ]; then
+        base=$(git merge-base HEAD main)
+        changed=$( { git diff --name-only "$base" -- src tools/src; git ls-files --others --exclude-standard -- src tools/src; } | sort -u)
+        if [ -z "$changed" ]; then echo "kind: bug and no reproduction on record — the reproduce step"; exit 10; fi
+        mkdir -p "$logs"; { echo "skipped: the branch already changed source before the reproduce step existed for it"; echo "$changed"; } > "$logs/repro-verdict.txt"
+      fi
+      printf '%s' "$PREV_STDOUT"
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      PREV_STDOUT: "{{stdout}}"
+    timeout: 30000
+    max_output: 16384
+    cases:
+      "0": implement
+      "10": repro
+    default: implement
+
+  repro:
+    # A bug line is reproduced before any source edit: repro.txt (what was run) and a failing test; `repro_check` is the judge.
+    full_on_revisit: true
+    max_visits: 5
+    on_exhausted: repro_stop
+    prompt: |-
+      Output of the last step:
+      {{stdout}}
+
+      Your line is `kind: bug`: reproduce it BEFORE any source edit. In {{context.cwd}} (visit {{visits.repro}} of 5):
+      1. Run the symptom your line describes (the real command, not a search of the source) and record it: `{ echo '$ <the command>'; <the command>; } >
+         {{context.cwd}}-logs/repro.txt 2>&1`, the first line the command, then its output.
+      2. Write a test that FAILS on this tree and holds the symptom by executing the behaviour the line names (a test that only reads source text reproduces a guess at the cause, not the symptom): a new `test/unit/<pkg>/<Name>Test.hx`, one test class, created with
+         `hxq new <path> --raw - --write` (load the skills `hxq` and `hxq-write`; `HXQ_BIN={{project_root}}/bin/apq.js`).
+         Plain asserts now: its pin and arm come in `implement`, and the test stays in your slice commit. Touch nothing under src/ or tools/src/ here; the check refuses a difference from the base. Never
+         `git stash`, push, or a build of the main tree.
+      3. ONE `transition` `check` with `set: {repro_test: <its fully-qualified class (`unit.<pkg>.<Name>Test`, the APQ_TEST filter; one class, no comma)>}`.
+      The engine answers here: it builds, runs that test on the base tree and requires it red. `REFUSED` → fix what it names, then `check` again. `NOT-REPRODUCED` (the test passes on the base) → either the test misses the symptom (fix the test, `check`) or the symptom is not there: transition `not_reproduced`, the line then closes with what you ran.
+      A symptom no test can hold (an environment fault, a hang, a timing window): make repro.txt's FIRST line `untestable: <why, one line>` (then what you ran), no test, transition `check`; the reviewer judges the reason.
+      Anything else that stops you (a premise of your line that does not hold) → `blocked`.
+    transitions:
+      check: repro_check
+      not_reproduced: repro_stop
+      blocked: blocked
+
+  repro_check:
+    type: exec
+    # The reproduce step's verdict: repro.txt, no source difference from the base, and the named test red on the base.
+    # The classifier is the one `dev mutation-check` uses (hxq mutation-verdict), so a typo'd filter is NO-TESTS, never a green reading.
+    command: |-
+      tree=$(pwd -P); logs="$tree-logs/repro"; mkdir -p "$logs"; f="$tree-logs/repro.txt"
+      export OCAMLRUNPARAM="${OCAMLRUNPARAM:-s=16M,o=400}"
+      base=$(git merge-base HEAD main) || { echo "REFUSED: no merge base with main"; exit 2; }
+      [ -s "$f" ] || { echo "REFUSED: $f is missing or empty: write the command and its output there first"; exit 11; }
+      changed=$( { git diff --name-only "$base" -- src tools/src; git ls-files --others --exclude-standard -- src tools/src; } | sort -u)
+      [ -z "$changed" ] || { echo "REFUSED: source differs from the base $(git rev-parse --short "$base"); a bug is reproduced before any source edit:"; echo "$changed" | head -20; exit 12; }
+      case "$(head -1 "$f")" in
+        untestable:*) { echo "$(head -1 "$f")"; echo "the reviewer judges this reason: $f"; } > "$tree-logs/repro-verdict.txt"; echo "UNTESTABLE (the reviewer judges the reason): $(head -1 "$f")"; exit 0;;
+      esac
+      case "$REPRO_TEST" in ''|*[!A-Za-z0-9._]*) echo "REFUSED: context_set repro_test to the fully-qualified test class (got '$REPRO_TEST')"; exit 13;; esac
+      if ! haxe test-js.hxml > "$logs/build.log" 2>&1; then
+        echo "REFUSED: the test does not compile:"; grep -m 20 -E ':[0-9]+: ' "$logs/build.log" || tail -20 "$logs/build.log"; exit 14
+      fi
+      APQ_TEST="$REPRO_TEST" node bin/test.js > "$logs/test.log" 2>&1
+      out=$(node "$WF_PROJECT_ROOT/bin/apq.js" mutation-verdict "$logs/test.log" --expect "$REPRO_TEST") || { echo "REFUSED: could not classify $logs/test.log: $out"; exit 15; }
+      v=$(printf '%s\n' "$out" | head -1); d=$(printf '%s\n' "$out" | sed -n 2p)
+      case "$v" in
+        KILLED)
+          # A warning row alone (a test with no assertions) goes red by utest's own predicate, and holds no symptom.
+          grep -qE ': (FAILURE|ERROR) ' "$logs/test.log" || { echo "REFUSED: $REPRO_TEST is red only by a warning (a test with no assertions holds no symptom): $d"; exit 13; }
+          { echo "reproduced: $REPRO_TEST is red on the base $(git rev-parse --short "$base"): $d"; echo "repro: $f"; } > "$tree-logs/repro-verdict.txt"; echo "REPRODUCED: $REPRO_TEST red on the base — $d. The test stays in your commit; now fix the cause."; exit 0;;
+        SURVIVED) echo "NOT-REPRODUCED: $REPRO_TEST passes on the base ($d): full log $logs/test.log"; exit 20;;
+        NO-TESTS) echo "REFUSED: the filter $REPRO_TEST matched no test class: $d"; exit 13;;
+        *) echo "REFUSED: the run gives no reading ($v): $d — $logs/test.log"; exit 15;;
+      esac
+    env:
+      REPRO_TEST: "{{context.repro_test}}"
+    timeout: 1800000
+    resource: { threads: { min: 1, max: 2 } }
+    max_output: 12288
+    on_timeout: repro
+    cases:
+      "0": implement
+    default: repro
+
+  repro_stop:
+    prompt: |-
+      The reproduce step ended without a reproduction ({{visits.repro}} visit(s)):
+      {{stdout}}
+      Remove your uncommitted test so the worktree is clean (`git -C {{context.cwd}} status --short`; delete the new test file, `git checkout -- <path>` for an edited one): a closed line lands nothing. {{context.cwd}}-logs/repro.txt stays.
+      ONE `transition` `stop` with `set: {blocked_reason: …}`: its first line `NOT REPRODUCED: <the command> → <what it showed>`, then the other commands you ran and why no test could hold it.
+    transitions:
+      stop: blocked_tree
+
+  implement:
+    full_on_revisit: true
+    prompt: |-
+      Output of the last step (the baseline on entry; a `check` verdict on return):
+      {{stdout}}
+      Main against your branch (the last sync): {{context.sync_report}}
+
+      Implement your line in {{context.cwd}} (question: {{context.question}} → owner: {{context.owner}}).
+      Every behaviour your report will claim ("X now does Y", "Z no longer happens") is held by a test or a gate
+      row — a claim only a reader can check is a missing test.
+
+      - Every shell call: `cd {{context.cwd}} && export HXQ_BIN={{context.cwd}}/bin/apq.js && …`; absolute paths
+        for every write; logs into {{context.cwd}}-logs/, never inside the worktree.
+      - .hx: load the `hxq` and `hxq-write` skills; read `hxq show --select`, edit `hxq patch … --write --fix`, create `hxq new`.
+        Never Edit/Write/grep/sed/cat on .hx. A mechanical finding → `--fix`, never by hand; a false positive
+        of a check is a tool defect, not a code churn. After a src/ change rebuild BOTH:
+        `haxe bin/apq-js.hxml && haxe test-js.hxml`. Never HXQ_QUIET=1.
+      - Edit loop: `hxq lint <files> --all --no-oracle`; tests ONLY through the `check` step below — never
+        `node bin/test.js` by hand (its log is not yours to read).
+      - Tokens (every call's output is re-read on each later turn): a `transition` reply IS the next prompt —
+        never call `status` after it; read code by declaration (`hxq show --select`), never a whole file over
+        ~300 lines and never `git diff` on .hx (`hxq changed`, `hxq show`); never `cat`/`tail` a whole log —
+        `grep -m 20 '<the failing name>'`.
+      - Long commands and waits: a command you wait for runs in the FOREGROUND with `timeout: 600000` (a build, a
+        filtered suite, an op over many files fit), never with `run_in_background`. One that may outlast a call you
+        start detached with a done-marker, from your logs dir and NOT chained after a `cd … &&` (the `&` would put the
+        whole chain in the background): `nohup sh -c '<cmd>; echo $? > L.done' > L.log 2>&1 & echo $! > L.pid`, then
+        wait in FOREGROUND calls of
+        `i=0; until [ -s L.done ] || ! kill -0 "$(cat L.pid)" 2>/dev/null || [ $i -ge 540 ]; do sleep 1; i=$((i+1)); done; cat L.done`
+        (it ends on the marker, on the process's death or on its own count, never `sleep` alone), re-issued until
+        L.done exists; a dead pid without L.done is a failure: `tail -30 L.log`, never `cat` a whole log. Never start
+        a `Monitor` for a command you wait for. A call the harness moved to the background at its timeout: TaskStop
+        it, or wait on its output in the same kind of FOREGROUND until-loop, before any end of turn. Never end your
+        turn while anything you started is alive, mid-run as well as at your last line: each such stop wakes your
+        driver and the main conversation, a paid turn of both. After you have delivered your last line, answer ONLY
+        a harness `[handback-send-enforce]` prompt with the plain-text line `DELIVERED <your slice id>` (never
+        SendMessage to main, never the report again); a `Driver ping` that asks for your line gets the line.
+      - Tests: a new test is a file `*Test.hx` with exactly one test class (the build refuses anything else; a
+        helper or base never ends in `Test`); no runner edit, no list to update. Each property your line names (its Pins, a behaviour your report claims) is pinned `control`, its arm cutting the code that holds it; `guard` only for a fixture no cut can flip. `@:pin('control')` carries `@:killer('<ARM>')` with a record in
+        test/testkit/arms/<package>.json (the document of the arm's type's package); the gate runs the arms — never run them, the suite, slice-gate,
+        land or the battery yourself.
+      - Comments: invariant / contract / non-obvious why, 1–3 sentences, no measurements. A refuted premise:
+        `node bin/dev.js decision --slice <ID> "<what → why not>"` from your tree (no bin/dev.js yet: `haxe tools/dev.hxml` first; main's binary writes main's ledger, and nothing of yours touches the main tree) (≤300 chars); never open docs/decisions.md.
+      - Every mechanism your line states is a hypothesis: reproduce, diagnose from code, keep the number.
+      - Before the first `gate`: each property your line names is held by a test, not by your reading. Run your line's `Prove:` once — without one, the slice's real entry (a new command or flag through `node bin/apq.js`/`node bin/dev.js`, a new gate or land path on a real tree), never only in-process — and quote its output in `mechanism`; what only a land can show goes in `open_items`. Every `check` also runs the structural guards (arm addresses, flag ownership, rule guide, grammar-agnostic seams): a red guard there is yours to fix before the gate. A corpus gain your line forecasts → `--allow corpus` in `gate_flags` before the first gate: the row refuses a gain too. Read its `allowed:` detail in the table: a loss there is yours, not a forecast.
+      - Safety: Pony ($ANYPARSE_PONY) read-only — a probe goes on `cp -R` to /tmp/pony-<ID>;
+        public repo — no client names, paths or code anywhere committed; never push, `git stash`,
+        `pkill -f`/`killall` (kill only PIDs you started); no reviewer and no second worker of your own (the pipeline's own reviewer reads the slice after your report; a worker-spawned reviewer doubled a slice's cost); the ONE sub-agent you may spawn is the read-only RECON agent for a chain of lookups, exactly as the orient step describes it; delete
+        only paths ending in your `-<ID>`.
+      - Never `git commit` yourself — the `commit` step does it: ONE `transition` `gate` with `set: {commit_message: …}` (a lowercase
+        mechanism-first subject, a blank line, the body: the whole slice, never this round; its LAST line `Co-Authored-By: <your model> <noreply@anthropic.com>`;
+        `gate_flags`, when you need them, in the same `set`). The engine formats your touched .hx, applies the SAFE autofixes to them, formats again,
+        commits ONE commit (fix rounds: amends it, author from the global config) and shows you what the tools changed.
+
+      - Checks mid-work: ONE `transition` `check` with `set: {test_filter: …, check_build: …}` — `test_filter` the families
+        your change can reach, comma-separated `APQ_TEST` prefixes, e.g. `unit.grammar.haxe.HxChain,unit.format.`;
+        `check_build` `both` after a src/ change, `test` after tests only, `none`: the engine builds and runs them
+        under the pool and hands back the verdict and the failures only — no log to grep. Your own commands are
+        pooled by a hook too; a gate, the arms, the battery or a land typed by hand are refused.
+        The hook leases only the commands it knows (a build, a test run): a script of yours that starts processes
+        (a load or stress generator, a fan-out loop) runs BESIDE the pool and takes other projects' cores. Never
+        reproduce a race by overloading the machine: make it deterministic in the test (a controlled delay or
+        order), or run load and test together under one lease of their real size,
+        `wf-run --threads <N> -- <script>` (the engine's `scripts/wf-run`, also the `wf-run` bin of its package), N at most 6.
+
+      Optional gate flags: `gate_flags` (e.g. `--arm NAME --allow corpus`) in that `set` — an `--allow` only
+      for a movement your line names. Nothing of yours running → that transition `gate`.
+
+      Harder than its score? You are on sonnet and the slice turns out to need opus (an anchor ≥7 you now see: a new shared
+      component, a cause you still cannot name after two attempts, a change several owners must make together): do not grind.
+      ONE `transition` `rescore` with `set: {rescore: <the number>, rescore_note: …}`, the note ≤10 lines with no `|`: what is done, what is left (a review fix list
+      verbatim), why. The engine commits your work in progress and the next agent continues from your tip
+      on opus. On opus already → `blocked` with what to split.
+    transitions:
+      check: check
+      gate: commit
+      rescore: rescore_wip
+      blocked: blocked
+
+  check:
+    type: exec
+    # The edit loop's test run as a step: a lease, a build, the named families, a short verdict.
+    command: |-
+      tree=$(pwd -P); logs="$tree-logs/check"; mkdir -p "$logs"
+      export OCAMLRUNPARAM="${OCAMLRUNPARAM:-s=16M,o=400}"  # the setting HaxeSpawn gives its own compiles; a plain `haxe` here has none
+      case "$CHECK_BUILD" in
+        none) ;;
+        test) haxe test-js.hxml > "$logs/build.log" 2>&1 || { echo "BUILD FAILED (test-js.hxml):"; grep -m 20 -E ':[0-9]+: ' "$logs/build.log" || tail -20 "$logs/build.log"; exit 3; } ;;
+        *) { haxe bin/apq-js.hxml && haxe test-js.hxml; } > "$logs/build.log" 2>&1 || { echo "BUILD FAILED:"; grep -m 20 -E ':[0-9]+: ' "$logs/build.log" || tail -20 "$logs/build.log"; exit 3; } ;;
+      esac
+      [ -n "$TEST_FILTER" ] || { echo "built; no test_filter set — nothing run"; exit 0; }
+      guards=unit.MutationArmAddressTest,unit.lowering.FmtFlagOwnershipTest,unit.check.BuildMacroMetaSeamTest,unit.query.LexicalRegionsSeamTest,unit.check.RuleGuideTest,unit.check.RuleCategoryTest
+      APQ_TEST="$TEST_FILTER,$guards" node bin/test.js > "$logs/test.log" 2>&1; rc=$?
+      echo "APQ_TEST=$TEST_FILTER plus the guards exit $rc — full log $logs/test.log"
+      grep -E -B1 -A4 '(FAILURE|ERROR|Error:|failed)' "$logs/test.log" | head -60
+      tail -6 "$logs/test.log"
+      if [ -f bin/apq.js ]; then
+        base=$(git merge-base HEAD main)
+        echo "--- lint findings new against the base (dev lint-new: the gate's lint row without the oracle, info included); full: $logs/lint-new.txt"
+        HXQ_BIN="$tree/bin/apq.js" node "$WF_PROJECT_ROOT/bin/dev.js" lint-new "$base" --tree "$tree" --logs "$logs/lint-new" --no-oracle > "$logs/lint-new.txt" 2>&1
+        tail -16 "$logs/lint-new.txt"
+      fi
+      exit $rc
+    env:
+      TEST_FILTER: "{{context.test_filter}}"
+      CHECK_BUILD: "{{context.check_build}}"
+    timeout: 1800000
+    resource: { threads: { min: 1, max: 2 } }
+    max_output: 12288
+    on_success: implement
+    on_error: implement
+
+  gate:
+    type: exec
+    command: |-
+      tree=$(pwd -P)
+      case "$tree" in /private/tmp/hxqb-*|/tmp/hxqb-*|*/.wt/anyparse/*) ;; *) echo "refused: session cwd $tree is not a slice worktree"; exit 2;; esac
+      logs="$tree-logs/slice-gate"; mkdir -p "$logs"
+      set -f; rc=0
+      for w in $GATE_FLAGS; do
+        case "$w" in --arm|--allow|--allow-arm) ;; -*|*[!A-Za-z0-9._-]*) echo "refused gate flag: $w"; rc=2;; esac
+      done
+      if [ "$rc" -eq 0 ]; then
+        # A hand rebase leaves bin/dev.js older than the tools; the gate runs the script it starts with.
+        [ -z "$(find tools/src -name '*.hx' -newer bin/dev.js -print -quit)" ] || haxe tools/dev.hxml > "$logs/dev-rebuild.log" 2>&1 || { echo "bin/dev.js is stale and its rebuild failed — $logs/dev-rebuild.log"; exit 2; }
+        node bin/dev.js slice-gate "$tree" $GATE_FLAGS > "$logs/table.txt" 2>&1; rc=$?
+        cat "$logs/table.txt"
+      fi
+      if [ "$rc" -ne 0 ] && [ "${FIX_ROUNDS:-0}" -ge 3 ]; then exit 90; fi
+      exit $rc
+    env:
+      GATE_FLAGS: "{{context.gate_flags}}"
+      FIX_ROUNDS: "{{visits.fix}}"
+    # A wide move pulls in a thousand arms beside a loaded suite. Every branch has its own no-progress watchdog, so this
+    # bound stops only a gate that still moves: under load the arms phase may start on one thread.
+    timeout: 9000000
+    # No step lease: slice-gate leases each branch itself (suite/lint/infra, then the arms on one to two
+    # threads), so an outer lease would hold threads through phases that do not use them.
+    context_set:
+      gate_table: "{{stdout}}"
+    on_timeout: gate_timeout
+    cases:
+      "0": report
+      "90": gate_exhausted
+    default: fix
+
+  gate_timeout:
+    max_visits: 2
+    on_exhausted: blocked
+    prompt: |-
+      The gate was killed by its timeout (124, try {{visits.gate_timeout}} of 2): a loaded machine, not a defect of
+      your code — this is NOT a fix round, change nothing. Transition `retry` (the gate runs again as it was;
+      a third timeout lands in `blocked`).
+    transitions:
+      retry: gate
+
+  fix:
+    full_on_revisit: true
+    prompt: |-
+      Gate FAILED (exit {{exit_code}}; fix round {{visits.fix}} of 3; table also in {{context.cwd}}-logs/slice-gate/table.txt,
+      logs beside it):
+      {{stdout}}
+      {{stderr}}
+      Main against your branch before this gate: {{context.sync_report}}
+
+      Fix the cause from the failed row and its log — `grep -m 20` the failing name in that row's log, never the whole
+      log (rules as in `implement`); re-set `commit_message` only if
+      the meaning changed; transition `gate` (the commit step amends the slice commit). A fix that added or edited a test: transition `check` first with `set: {test_filter: …, check_build: …}` (it returns to `implement`, whose `gate` commits as here), then `gate`. A row that legitimately moves and that your line names → context_set `gate_flags`
+      with `--allow <gate>`. An `infra4` row reading `base tree +N` (or an infra tree's name) is YOUR ENGINE's lint of the BASE checkout against the base engine's report: nothing in your worktree reaches it, so never `--fix` for it. A move your line's change explains → `--allow infra4` with the reason in the report; one it does not → fix the engine. A refusal line → `blocked`. A failing test in a file you did not touch is not yet outside your slice: every test on main passed its land's battery unless that land allowed the row, so read that test and name what your change does to it (a rule you added, a fixture it now refuses). `blocked` only with that answer.
+
+      Harder than its score? You are on sonnet and the slice turns out to need opus (an anchor ≥7 you now see: a new shared
+      component, a cause you still cannot name after two attempts, a change several owners must make together): do not grind.
+      ONE `transition` `rescore` with `set: {rescore: <the number>, rescore_note: …}`, the note ≤10 lines with no `|`: what is done, what is left (a review fix list
+      verbatim), why. The engine commits your work in progress and the next agent continues from your tip
+      on opus. On opus already → `blocked` with what to split.
+    transitions:
+      gate: commit
+      check: check
+      rescore: rescore_wip
+      blocked: blocked
+
+  commit:
+    type: exec
+    # The mechanics of a commit: canonical form, the safe autofixes, one commit on the base. The meaning (the
+    # message) is the agent's. Formatting first: the fixer refuses a file that is not in canonical form.
+    command: &commit_slice |-
+      tree=$(pwd -P); logs="$tree-logs/commit"; mkdir -p "$logs"
+      case "$tree" in /private/tmp/hxqb-*|/tmp/hxqb-*|*/.wt/anyparse/*) ;; *) echo "refused: $tree is not a slice worktree"; exit 2;; esac
+      [ -n "$COMMIT_MESSAGE" ] || { echo "refused: context_set commit_message first"; exit 2; }
+      printf '%s\n' "$COMMIT_MESSAGE" > "$logs/message.txt"
+      tail -1 "$logs/message.txt" | grep -q '^Co-Authored-By: ' || { echo "refused: the message's last line must be your Co-Authored-By line"; exit 2; }
+      base=$(git merge-base HEAD main); n=$(git rev-list --count "$base..HEAD")
+      [ "$n" -le 1 ] || { echo "refused: $n commits on the base — the slice is ONE commit"; exit 2; }
+      [ -f "$tree/bin/apq.js" ] || haxe bin/apq-js.hxml > "$logs/apq-build.log" 2>&1 || { echo "bin/apq.js build failed — $logs/apq-build.log"; tail -8 "$logs/apq-build.log"; exit 3; }
+      export HXQ_BIN="$tree/bin/apq.js"
+      git add -A; before=$(git write-tree)
+      files=$( { git diff --name-only --cached "$base" -- '*.hx'; } | sort -u | while read -r f; do [ -f "$f" ] && echo "$f"; done)
+      if [ -n "$files" ]; then
+        hxq fmt $files --write --lang haxe > "$logs/fmt-1.txt" 2>&1 || { echo "fmt failed:"; tail -15 "$logs/fmt-1.txt"; exit 3; }
+        # A file whose change against the base is layout only (a format sweep the line asked for) is not the slice's code:
+        # no autofix on it. `hxq changed` runs without paths (a long path list answers 0 files).
+        hxq changed "$base" > "$logs/changed.txt" 2>&1 || : > "$logs/changed.txt"
+        awk '$1=="M" && $NF=="layout" {print $2}' "$logs/changed.txt" > "$logs/layout.txt"
+        own=$(printf '%s\n' $files | grep -vxF -f "$logs/layout.txt")
+        echo "commit: $(printf '%s\n' $files | wc -l | tr -d ' ') file(s), $(wc -l < "$logs/layout.txt" | tr -d ' ') layout-only left to the writer" > "$logs/own.txt"
+        # The safe autofix touches only the lines the slice changed against the base (a standing finding on an untouched
+        # member stays: LINT-FIX-CHANGED-LINES); an engine older than the flag fixes whole files as before.
+        narrow=""; hxq lint --help 2>&1 | grep -q -- '--changed-since' && narrow="--changed-since $base"
+        frc=0; [ -z "$own" ] || { hxq lint $own --fix --no-oracle $narrow > "$logs/fix.txt" 2>&1; frc=$?; }
+        [ "$frc" -ne 3 ] || { echo "refused: lint --fix left findings on lines its own writes changed (exit 3, EXIT_RESIDUE) — fix each by hand, then commit again:"; tail -15 "$logs/fix.txt"; exit 3; }
+        [ "$frc" -le 1 ] || { echo "lint --fix failed (exit $frc):"; tail -15 "$logs/fix.txt"; exit 3; }
+        # A RiskyFix stays report-only under --no-oracle, and the gate's lint row refuses it: the oracle run only when one is there.
+        if [ -n "$own" ] && hxq lint $own --rule redundant-import --no-oracle 2>&1 | grep -q '(redundant-import)$'; then
+          hxq lint $own --rule redundant-import --fix $narrow > "$logs/fix-imports.txt" 2>&1
+        fi
+        hxq fmt $files --write --lang haxe > "$logs/fmt-2.txt" 2>&1 || { echo "fmt failed:"; tail -15 "$logs/fmt-2.txt"; exit 3; }
+        if [ -n "$LINT_REFUSE" ] && [ -n "$own" ]; then
+          # The gate's own lint row, alone and without the oracle (dev lint-new): findings new against the base by its
+          # rename-aware multiset, info included — a finding the base already held is never refused here.
+          git add -A
+          node "$WF_PROJECT_ROOT/bin/dev.js" lint-new "$base" --tree "$tree" --logs "$logs/lint-new" --no-oracle > "$logs/lint-new.txt" 2>&1; lrc=$?
+          waived=0; prev=; set -f; for w in $GATE_FLAGS; do [ "$prev" = "--allow" ] && [ "$w" = lint ] && waived=1; prev=$w; done; set +f
+          if [ "$lrc" -eq 1 ] && [ "$waived" -eq 1 ]; then echo "lint-new findings waived by gate_flags --allow lint (the gate and the land honour it; the gate's waiver row is what the reviewer sees):"; tail -8 "$logs/lint-new.txt"; lrc=0; fi
+          [ "$lrc" -eq 0 ] || { [ "$lrc" -eq 1 ] && echo "refused: lint findings new against the base — the gate's lint row fails on each, info included:" || echo "refused: dev lint-new could not tell (exit $lrc) — read $logs/lint-new.txt:"; tail -16 "$logs/lint-new.txt"; exit 5; }
+        fi
+      fi
+      git add -A; after=$(git write-tree)
+      [ "$after" != "$(git rev-parse "$base^{tree}")" ] || { echo "refused: nothing to commit against the base"; exit 2; }
+      if [ "$n" -eq 0 ]; then git commit -q -F "$logs/message.txt" || exit 4
+      else git commit -q --amend -F "$logs/message.txt" || exit 4; fi
+      echo "COMMITTED $(git log --oneline -1 | cut -c1-120)"
+      if [ "$before" != "$after" ]; then
+        echo "--- what fmt / the safe autofixes changed in your files (re-read only these):"
+        git diff --stat "$before" "$after" | tail -25
+        grep -E '^[0-9]+ edit|fixed|applied' "$logs/fix.txt" | head -5
+      else echo "--- fmt and the safe autofixes changed nothing"; fi
+      echo "--- the slice by meaning (hxq changed; full: $logs/changed.txt)"
+      hxq changed "$base..HEAD" > "$logs/changed.txt" 2>&1
+      awk -f "$WF_PROJECT_ROOT/.claude/workflows/lib/changed-compact.awk" "$logs/changed.txt" | head -80
+    env:
+      COMMIT_MESSAGE: "{{context.commit_message}}"
+      LINT_REFUSE: "1"
+      GATE_FLAGS: "{{context.gate_flags}}"
+    timeout: 900000
+    resource: { threads: { min: 1, max: 2 } }
+    max_output: 12288
+    cases:
+      "0": sync_gate
+    default: commit_failed
+
+  commit_failed:
+    prompt: |-
+      The commit step refused or failed (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      Fix the cause (a refused message → context_set `commit_message` again; a tool failure on your files → fix the
+      file as in `implement`; a lint finding on a line you added → clear it as in `implement`, the gate would fail on it), then transition `commit`. A cause outside your slice → `blocked`.
+    transitions:
+      commit: commit
+      blocked: blocked
+
+  report:
+    prompt: |-
+      Gate PASS:
+      {{stdout}}
+
+      Keys for the `set` of the ONE `transition` `done` below (no context_set calls):
+        sha        —`git -C {{context.cwd}} rev-parse HEAD`
+        base       — the baseline's base commit
+        reuse      — one line per function or type you ADDED outside tests (`hxq changed <base>..HEAD` lists them):
+                     its question → `hxq owner "<question>" src tools/src --limit 3` top hit → called, or `new: <why the hit
+                     does not answer>`. A hit that answers it → swap to it and gate again before this report.
+        mechanism  — the line's hypothesis right/wrong, the number that decided it
+        open_items — what you did not do of THIS slice and why, one line each (T-ids from your line). A defect you saw
+                     but do not own and a tool defect do NOT go here: each is a record in `lessons` (next key).
+        lessons    — one record per defect seen but not owned and per tool defect (its `repro` names the command you
+                     ran, the fixture path and what it printed: exit code or the refusal line; `kind: unverified` for
+                     one you saw without running a command). Omit the key ONLY when you saw none. A STRING holding one JSON document: {"lessons": [{"id": "UPPER-CASE-ID", "kind": "<class>", "touches": ["file that exists on main", "path (new)"], "repro": "one line that shows it", "text": "the brief"}]}. kind (the dispatcher's words): unverified = not reproduced on a real tree, not a loss, not a user call (the script files it backlog, priority low); reproduced-on-real-tree = a defect you reproduced on a real tree or under a shipped config; loss = wrong code, a dropped comment, fmt refusing real code; arm-rot-on-base = a gate waived an arm, or you routed around it (the script files it pending, priority high); process = about the workflow, not code. Only unverified and arm-rot-on-base are filed by the script; the others go to the parent's triage file. touches: 1-8 FILES, never a directory or glob; no client project names. Prose in open_items stays for what is not a lesson.
+      And two more keys in the same `set` (never the Write tool, never a shell redirect: the engine writes the files):
+        report_text  — your full report (≤40 lines): branch, tip, porcelain, the gate verdict line, reuse,
+                       mechanism verdict with its number, open items. It is what the reviewer and the parent read.
+        handoff_text — for whoever continues this slice WITHOUT your context (a fix round may be a fresh agent):
+                       the decisions you took and why; approaches you tried and dropped, and why; where the change
+                       lives (files, declarations); the claims you are LEAST sure of, what you ran against each and what it showed, and any refuter you could not run and why; anything a fix round must know (fixtures, probes, commands that reproduce).
+      Then ONE call: `transition({session_id, transition: "done", set: {sha: …, base: …, reuse: …, mechanism: …, open_items: …, lessons: …, report_text: …, handoff_text: …}})` (the keys are written first; an exec then writes report_text and handoff_text to {{context.cwd}}-logs/report.md and handoff.md; a refused call writes nothing: fix what its error names and send it again).
+    transitions:
+      done: write_report
+
+  write_report:
+    station: false
+    type: exec
+    # Subagents may not Write report files (the harness refuses); the text lives in the session, the engine files it.
+    command: |-
+      logs="$(pwd -P)-logs"; mkdir -p "$logs"
+      printf '%s\n' "$REPORT_TEXT" > "$logs/report.md"; case "$REUSE" in ''|*context.reuse*) ;; *) grep -qiE '^[ #*-]*reuse' "$logs/report.md" || printf '\nreuse: %s\n' "$REUSE" >> "$logs/report.md";; esac; printf '%s\n' "$HANDOFF_TEXT" > "$logs/handoff.md"; printf '%s\n' "$OPEN_ITEMS" > "$logs/open-items.txt"; case "$LESSONS" in ''|*context.lessons*) ;; *) printf '%s\n' "$LESSONS" > "$logs/lessons.json";; esac
+      echo "wrote $logs/report.md and handoff.md"
+    env:
+      LESSONS: "{{context.lessons}}"
+      REPORT_TEXT: "{{context.report_text}}"
+      HANDOFF_TEXT: "{{context.handoff_text}}"
+      OPEN_ITEMS: "{{context.open_items}}"
+      REUSE: "{{context.reuse}}"
+    timeout: 30000
+    on_success: finish
+    on_error: finish
+
+  gate_exhausted:
+    prompt: |-
+      The gate still fails after 3 fix rounds:
+      {{stdout}}
+      ONE `transition` `stop` with `set: {blocked_reason: <the failing row and what you tried>, sha: …, open_items: …}`.
+    transitions:
+      stop: blocked_tree
+
+  blocked:
+    prompt: |-
+      ONE `transition` `stop` with `set: {blocked_reason: …}` (≤20 lines) — what blocks you, the quoted line or number, what is done and left
+      (the engine refuses to end on an uncommitted tree: the parent continues from your tip, never from loose edits).
+    transitions:
+      stop: blocked_tree
+
+  blocked_tree:
+    type: exec
+    # A blocked worker's edits are what the parent regates or sends into a fix round; left uncommitted they are
+    # invisible to the regate, the review digest and the land.
+    command: |-
+      if [ -z "$(git status --porcelain)" ]; then
+        logs="$(pwd -P)-logs"; mkdir -p "$logs"
+        printf 'BLOCKED at %s\n%s\n' "$(git rev-parse --short HEAD)" "$BLOCKED_REASON" > "$logs/report.md"
+        echo "tree clean at $(git rev-parse --short HEAD)"; exit 0
+      fi
+      echo "refused: the worktree has uncommitted changes:"; git status --short | head -20; exit 3
+    env:
+      BLOCKED_REASON: "{{context.blocked_reason}}"
+    timeout: 30000
+    on_success: failed
+    on_error: blocked_dirty
+
+  blocked_dirty:
+    max_visits: 3
+    on_exhausted: failed
+    prompt: |-
+      {{stdout}}
+      Keep what the parent should continue from: transition `commit` (fmt, the safe autofixes and one amended slice
+      commit with your `commit_message` — context_set it first if unset; no gate runs), or drop the changes
+      (`git checkout -- <path>`; delete only new files of yours) and transition `recheck`.
+    transitions:
+      commit: blocked_commit
+      recheck: blocked_tree
+
+  blocked_commit:
+    type: exec
+    command: *commit_slice
+    env:
+      COMMIT_MESSAGE: "{{context.commit_message}}"
+    timeout: 900000
+    resource: { threads: { min: 1, max: 2 } }
+    max_output: 12288
+    cases:
+      "0": blocked_tree
+    default: blocked_dirty
+
+  finish:
+    terminal: true
+    outcome: complete
+    prompt: |-
+      Your LAST message to the parent is ONE line: `DONE session={{session_id}} tip=<sha> gate=<the gate verdict line>
+      report={{context.cwd}}-logs/report.md handoff={{context.cwd}}-logs/handoff.md` — the full report lives in the
+      file, never in the message. Nothing of yours may still run (background jobs, Monitors).
+
+  rescore_wip:
+    type: exec
+    # The next stage continues from the branch tip: loose edits would break its sync, and its commit step amends this one.
+    # A rescore with no number would end the session complete, and the pipeline would read that as a finished slice.
+    command: |-
+      [ -n "$RESCORE" ] && [ -n "$RESCORE_NOTE" ] || { echo "rescore or rescore_note is not recorded"; exit 5; }
+      git add -A
+      git diff --cached --quiet || git commit -q -m "work in progress: handed to the next stage"
+      git log --oneline -1
+    env:
+      RESCORE: "{{context.rescore}}"
+      RESCORE_NOTE: "{{context.rescore_note}}"
+    timeout: 60000
+    cases:
+      "0": rescored
+      "5": rescore_refused
+    default: blocked
+
+  rescore_refused:
+    prompt: |-
+      The rescore was not recorded. ONE `transition` `rescore` with `set: {rescore: <the number>, rescore_note: <your
+      plan, no `|`>}`.
+    transitions:
+      rescore: rescore_wip
+      blocked: blocked
+
+  rescored:
+    terminal: true
+    outcome: complete
+    prompt: |-
+      Your LAST message to the parent is ONE line: `RESCORE session={{session_id}} difficulty={{context.rescore}}`. You wrote no
+      code and started no baseline. Nothing of yours may still run.
+
+  failed:
+    terminal: true
+    outcome: fail
+    prompt: |-
+      Your LAST message to the parent is ONE line: `BLOCKED session={{session_id}}
+      report={{context.cwd}}-logs/report.md` (the engine wrote it from `blocked_reason`). Nothing of yours may still run.

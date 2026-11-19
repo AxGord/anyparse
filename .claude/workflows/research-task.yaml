@@ -1,0 +1,386 @@
+name: research-task
+description: >-
+  One anyparse research line (`kind: research`, `workflow: research-task`, a child session of the
+  dispatcher driven by a driver agent): claim → prepare [exec: a worktree detached at a pinned commit, no
+  build] → investigate (one read-only agent: report.md, the question check first) → check [exec: the
+  report's shape and asked-for counts] → verify (one independent agent; one fix round at most) → close
+  [exec: the line is marked done, the slot frees, logs copied to .claude/backups/slice-logs/<ID>/,
+  worktree removed] → present (hand-back: the parent relays `## For the user` in Russian; nothing is queued
+  before the user answers). No code, no arms, no battery, no land.
+initial: claim
+max_transitions: 60
+# difficulty (the queue line's, 1..10) → the two agents' models. The verifier is where past research lines earned
+# their keep (14 of 14 review items came from a state like it), so it is not the cheap stage.
+model_table:
+  stages:
+    # `execute` is required by the loader; here it only sets the fallback `model` / `effort` (a line without a difficulty).
+    execute:
+      - { upto: 4, model: sonnet, effort: high }
+      - { upto: 10, model: fable, effort: medium }
+    investigate:
+      - { upto: 4, model: sonnet, effort: high }
+      - { upto: 10, model: fable, effort: medium }
+    verify:
+      - { upto: 10, model: fable, effort: medium }
+
+# The line's DRIVER (engine docs/queue.md § driver): start() answers with its exact Agent call.
+driver:
+  model: haiku
+  effort: medium
+  prompt_ref: task-driver
+
+states:
+  claim:
+    prompt: |-
+      Research line {{session_id}} (dispatcher {{parent_session_id}}). The picker already marked the line `[>]`.
+      context_set on THIS session (session_id {{session_id}}), each its own call:
+        slice  — the ID from the picker's line (letters, digits, `-`)
+        difficulty — the line's difficulty (1..10) when it has one: the engine then sets the agents' models from
+                 this workflow's model_table (its reply names them) — do NOT set them yourself
+        model  — ONLY without a difficulty: its model column; effort — its effort column (`-` → high)
+      Then transition `prepare` (an exec: the worktree at the pinned commit is made before any agent starts).
+    transitions:
+      prepare: prepare
+
+  prepare:
+    station: false
+    type: exec
+    cwd: "{{project_root}}"
+    # A worktree detached at main's commit of now: every number the report gives is a reading of that commit. No build
+    # (a `dev base-engine <sha>` is the only engine the agents may build). stdout is the worktree path alone.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'" >&2; exit 2;; esac
+      root=${WT_ROOT:-$(dirname "$WF_PROJECT_ROOT")/.wt/anyparse}
+      case "$root" in /*) ;; *) echo "refused worktree root (not absolute): $root" >&2; exit 2;; esac
+      wt=$root/$SLICE
+      if [ -d "$wt" ]; then
+        echo "kept $wt (@ $(git -C "$wt" rev-parse --short HEAD))" >&2
+      else
+        mkdir -p "$root" || exit 1
+        sha=$(git rev-parse HEAD)
+        git worktree add -q --detach "$wt" "$sha" >&2 || exit 1
+        echo "made $wt detached at $(git rev-parse --short "$sha")" >&2
+      fi
+      mkdir -p "$wt-logs" || exit 1
+      [ -f "$wt-logs/pinned.txt" ] || git -C "$wt" rev-parse HEAD > "$wt-logs/pinned.txt"
+      printf %s "$wt"
+    env:
+      SLICE: "{{context.slice}}"
+      WT_ROOT: "{{context.wt_root}}"
+    timeout: 60000
+    context_set:
+      wt: "{{stdout}}"
+    on_success: investigate
+    on_error: prepare_failed
+
+  prepare_failed:
+    ask: parent
+    prompt: |-
+      The worktree for {{context.slice}} was not made (exit {{exit_code}}):
+      {{stderr}}
+      A stale directory or branch: decide and `retry`. Otherwise `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml",
+      id: "{{context.slice}}", to: "released"})` (back to `[ ]`, nothing was made), then `release`.
+    transitions:
+      retry: prepare
+      release: released
+
+  investigate:
+    full_on_revisit: true
+    max_visits: 3
+    on_exhausted: blocked
+    prompt: |-
+      {{stderr}}
+      Research line {{context.slice}}: one investigator reads its line, answers the question in a report. Worktree {{context.wt}}, detached at the commit in {{context.wt}}-logs/pinned.txt.
+      1. Spawn ONE investigator: Agent (plain, no `subagent_type`), model {{context.model_investigate}}, effort {{context.effort_investigate}} (both empty → {{context.model}}, {{context.effort}}), `run_in_background: true`, prompt exactly:
+
+           You are the INVESTIGATOR of anyparse research line {{context.slice}}. The deliverable is a report for a decision, no code.
+           READ-ONLY by rule (nothing stops you but this rule, so keep it): change no tracked file and no queue, call no workflow tool (no mcp__plugin_workflow_wf__*) but the ONE context_set that delivers your report, no commit, no sub-agent. No build and no test run UNLESS your line asks for a measurement by running (single-class runs, timings, a profile; user 2026-11-14): then, through the pool only, `node {{project_root}}/bin/dev.js worker-build {{context.wt}}` once (the worktree's own apq.js + test.js), then in {{context.wt}} single-class `APQ_TEST=<one class> node bin/test.js` runs, `apq` / `hxq` (HXQ_BIN={{context.wt}}/bin/apq.js) commands over a sample you name, and `node --cpu-prof` of one such command; each reading with its command and wall time in the report. Never the whole suite, `dev shard`, a gate, the battery, an arm, `--fix` or `--write` on any tree; a run a hook refuses goes under not measured with the refusal quoted; scripts and scratch files go ONLY under {{context.wt}}-logs/ (absolute paths; a Bash heredoc naming a .hx file is refused by the hxq hook). The report itself is never a file you write (the Write tool refuses report files for sub-agents): it goes into the session context, below.
+           Your line: `awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{project_root}}/.claude/batch/queue.yaml` — read only that. What it asks your report to hold (its `Report:` sentence) is the body of your report; do not widen the scope.
+           The tree is {{context.wt}} at the commit in {{context.wt}}-logs/pinned.txt: every number you give is a reading of that commit, named with it. Read code with hxq (`HXQ_BIN={{project_root}}/bin/apq.js hxq owner|mentions|callers|refs|show --select|source --select|ast`): grep, sed and awk on .hx are refused by a hook; Read only non-.hx files. An engine of another commit, when a comparison needs one: `node {{project_root}}/bin/dev.js base-engine <sha>` prints its apq.js; never build anything else.
+           STEP 1, before anything else, the QUESTION CHECK: the user's own words the line quotes, the question as the line asks it, and whether they are the same question. When they are not the same, stop there: the whole report is that one finding (the shape below still applies).
+           Your report, in English, in exactly this order (an exec writes it to {{context.wt}}-logs/report.md and checks the shape):
+             `## Question check` — the next line exactly `same-question: yes` or `same-question: no`; then the user's words quoted, the question as the line states it, and when they differ what the user's words ask instead.
+             `## Asks` — one line per count the line asks for by number, `- <what> | section: <its heading text, exact> | count: <N>` (that section then holds a table with exactly N data rows), or the single line `none`.
+             Your findings: the sections the line's `Report:` names, each number with what it is a reading of (the commit, the date, the command).
+             `## For the parent` — the exact docs/decisions.md line when the report refutes a hypothesis (one line, its text ≤300 characters, ending `→ {{context.slice}}`; none otherwise) and, verbatim, any CLAUDE.md edit the line itself names (which file, which section). You edit neither: the parent does. `none` when there is nothing.
+             `## For the user`, the LAST section, for a reader who has not seen the queue: `### 1. The answer` (two sentences); `### 2. Question check` (the same question as asked: yes or no, and what the user's words wanted); `### 3. Headline numbers` (each with its commit, date and command); `### 4. What would make the answer wrong` (what you could not check, the blind spots that remain); `### 5. The choices` (each one line, then a recommendation with its reason); `### 6. Proposed lines` (a table: id | one sentence | size | expected effect and how it is measured | what is lost if skipped; or the word none). No internal vocabulary here (`queue`, `slice`, `gate`).
+           Deliver it: ToolSearch query `select:mcp__plugin_workflow_wf__context_set` (max_results 1), then ONE call `context_set({session_id: "{{session_id}}", key: "report_text", value: <the whole report, its first line `## Question check`>, force: true})`. A later fix sets it again, whole.
+           Your LAST message is exactly `REPORT context report_text`.
+
+      2. context_set `investigator_agent` = the id Agent returned. END your turn on this line with the WAITING line. On its notification, context_set `tokens_worker` (digits only, the notification's context size), then transition `reported`.
+      A later visit of this state means the previous investigator is gone (a restart or an agent that left no report): spawn it again the same way.
+    transitions:
+      reported: check
+
+  check:
+    type: exec
+    # The report's shape and the counts the line asked for: no content judgement. The file's own `## Asks` names what to count.
+    command: |-
+      f="$WT-logs/report.md"
+      # The investigator delivers the report through the context (a sub-agent may not write report files); this writes it.
+      case "$REPORT_TEXT" in ''|'{{'*) ;; *) printf '%s\n' "$REPORT_TEXT" > "$f";; esac
+      [ -s "$f" ] || { echo "NO REPORT: $f is missing or empty (context report_text unset)"; exit 30; }
+      node -e '
+        const fs = require("fs");
+        const lines = fs.readFileSync(process.argv[1], "utf8").split("\n");
+        const errors = [];
+        const next = (i) => { while (i < lines.length && lines[i].trim() === "") i++; return i; };
+        const heading = (l) => /^(#{2,3}) +(.*\S) *$/.exec(l);
+        // the section starting at the heading line index: up to the next heading of the same or a higher level
+        const sectionEnd = (i) => {
+          const lvl = heading(lines[i])[1].length;
+          for (let j = i + 1; j < lines.length; j++) { const h = heading(lines[j]); if (h && h[1].length <= lvl) return j; }
+          return lines.length;
+        };
+        const find = (level, text) => lines.findIndex((l) => { const h = heading(l); return h && h[1].length === level && h[2] === text; });
+        const first = next(0);
+        if (lines[first] !== "## Question check") errors.push("the first non-blank line must be exactly: ## Question check");
+        else if (!/^same-question: (yes|no)\b/.test(lines[next(first + 1)] || "")) errors.push("the line after `## Question check` must start: same-question: yes|no");
+        const asksAt = find(2, "Asks"), parentAt = find(2, "For the parent"), userAt = find(2, "For the user");
+        if (asksAt < 0) errors.push("no `## Asks` section");
+        if (parentAt < 0) errors.push("no `## For the parent` section");
+        if (userAt < 0) errors.push("no `## For the user` section");
+        if (userAt >= 0) {
+          if (parentAt > userAt) errors.push("`## For the parent` must come before `## For the user`");
+          const end = sectionEnd(userAt);
+          if (end !== lines.length) errors.push("`## For the user` must be the last section");
+          let at = userAt;
+          for (let n = 1; n <= 6; n++) {
+            let k = -1;
+            for (let j = at + 1; j < end; j++) if (lines[j].startsWith("### " + n + ".")) { k = j; break; }
+            if (k < 0) { errors.push("`## For the user` has no `### " + n + ".` in order"); break; }
+            at = k;
+          }
+        }
+        if (asksAt >= 0) {
+          const body = lines.slice(asksAt + 1, sectionEnd(asksAt)).map((l) => l.trim()).filter((l) => l !== "");
+          if (body.length === 0) errors.push("`## Asks` is empty: one line per count, or `none`");
+          else if (!(body.length === 1 && body[0] === "none")) for (const l of body) {
+            const m = /^- .*\| *section: *(.+?) *\| *count: *(\d+) *$/.exec(l);
+            if (!m) { errors.push("bad `## Asks` line: " + l); continue; }
+            const want = Number(m[2]);
+            const at = lines.findIndex((x) => { const h = heading(x); return h && h[2] === m[1]; });
+            if (at < 0) { errors.push("`## Asks` names a section that does not exist: " + m[1]); continue; }
+            const rows = lines.slice(at + 1, sectionEnd(at)).filter((x) => x.trimStart().startsWith("|"));
+            const data = Math.max(0, rows.length - (rows.length >= 2 && /^[\s|:-]+$/.test(rows[1]) ? 2 : 1));
+            if (data !== want) errors.push("`" + m[1] + "`: the line asks for " + want + " rows, the table has " + data);
+          }
+        }
+        if (errors.length) { console.log("REPORT SHAPE:\n- " + errors.join("\n- ")); process.exit(1); }
+        console.log("report shape OK: " + process.argv[1]);
+      ' "$f"
+    env:
+      WT: "{{context.wt}}"
+      REPORT_TEXT: "{{context.report_text}}"
+    timeout: 30000
+    cases:
+      "0": verify
+      "30": report_missing
+    default: check_failed
+
+  report_missing:
+    max_visits: 3
+    on_exhausted: blocked
+    prompt: |-
+      {{stdout}}
+      Still running (no notification yet)? END your turn; on its notification, transition `recheck`.
+      Gone (a restart, or it ended without the file) → `again` (a new investigator).
+    transitions:
+      recheck: check
+      again: investigate
+
+  check_failed:
+    max_visits: 2
+    on_exhausted: blocked
+    prompt: |-
+      The report of {{context.slice}} does not have the required shape:
+      {{stdout}}
+      SendMessage `{{context.investigator_agent}}` (an agent that no longer answers: transition `again`): "Your report {{context.wt}}-logs/report.md does not have the required shape: <the lines above>. Fix the shape; do not redo the reading. Set report_text again, whole, with the same context_set. Reply REPORT context report_text." END your turn. On its line, transition `recheck`.
+    transitions:
+      recheck: check
+      again: investigate
+
+  verify:
+    full_on_revisit: true
+    max_visits: 3
+    on_exhausted: blocked
+    prompt: |-
+      Research line {{context.slice}}: the report has the required shape ({{stdout}}). One independent verifier reads it.
+      1. Spawn ONE verifier: Agent (plain, no `subagent_type`), model {{context.model_verify}}, effort {{context.effort_verify}} (both empty → {{context.model}}, {{context.effort}}), `run_in_background: true`, prompt exactly:
+
+           You are the VERIFIER of anyparse research line {{context.slice}}, independent of the investigator who wrote the report. READ-ONLY by rule (nothing stops you but this rule): change no tracked file and no queue, call no workflow tool (no mcp__plugin_workflow_wf__*), no build, no test or gate run, no commit, no sub-agent; you write ONLY {{context.wt}}-logs/verify.md (Write tool, absolute path).
+           Read: your line (`awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{project_root}}/.claude/batch/queue.yaml`), {{context.wt}}-logs/report.md whole, and {{context.wt}}-logs/verify.md when it exists (your earlier list: a fix round's report must answer it).
+           The data is the tree {{context.wt}} at the commit in {{context.wt}}-logs/pinned.txt; read code with hxq (`HXQ_BIN={{project_root}}/bin/apq.js hxq …`; grep, sed and awk on .hx are refused by a hook).
+           Required, each with what you ran and what it showed:
+             1. Re-derive at least one headline number from the data yourself; state the report's number and yours; a disagreement is a finding.
+             2. One candidate search WIDER than the investigator's: name the search the report ran, run one that covers a shape it excluded (another construct, directory or keyword family, a blind spot the report admits), list what it finds that the report misses. Nothing found is a result too: say what you ran.
+             3. Reconcile the counts the report states against each other (totals against per-family rows; each count in `## Asks` against its table).
+             4. The right question: do the user's words the line quotes ask what the report answers? An answer to a different question is a finding even when every number is right.
+             5. Read `## For the user`: can a reader decide from it alone, and does the body support each claim in it.
+           Write {{context.wt}}-logs/verify.md: line 1 exactly `verdict: OK` or `verdict: FIXES`; line 2 `right-question: yes` or `right-question: no`; then `## Re-derived`, `## Wider search`, `## Counts`, `## Question`, and for FIXES `## Fixes` (numbered, each: the part of the report, what is wrong, what fixes it). Your LAST message is exactly `VERDICT <OK|FIXES> verify={{context.wt}}-logs/verify.md`.
+
+      2. context_set `verifier_agent` = the id Agent returned. END your turn on this line with the WAITING line. On its notification, context_set `tokens_review` (digits only, the notification's context size), then transition `verified` — the engine reads the file.
+    transitions:
+      verified: verify_end
+
+  verify_end:
+    station: false
+    type: exec
+    # The verifier's verdict is read from its file, never from a driver's reading of a message.
+    command: |-
+      f="$WT-logs/verify.md"
+      [ -s "$f" ] || { echo "no $f: the verifier wrote nothing"; exit 30; }
+      h=$(head -1 "$f")
+      echo "$h ($f)"
+      case "$h" in "verdict: OK") exit 0;; "verdict: FIXES") exit 10;; esac
+      echo "line 1 of $f is not 'verdict: OK' or 'verdict: FIXES'"; exit 30
+    env:
+      WT: "{{context.wt}}"
+    timeout: 10000
+    cases:
+      "0": close
+      "10": fix_round
+      "30": verify_missing
+    default: verify_missing
+
+  verify_missing:
+    max_visits: 2
+    on_exhausted: blocked
+    prompt: |-
+      {{stdout}}
+      Still running (no notification yet)? END your turn; on its notification, transition `recheck`. Gone (a restart, or it ended without a usable file) → `again` (a new verifier).
+    transitions:
+      recheck: verify_end
+      again: verify
+
+  fix_round:
+    # At most one fix round: a second FIXES from the verifier goes on to `close` and is relayed beside the report.
+    full_on_revisit: true
+    max_visits: 1
+    on_exhausted: close
+    prompt: |-
+      The verifier of {{context.slice}} asks for fixes ({{stdout}}). The ONE fix round:
+      SendMessage `{{context.investigator_agent}}` (an agent that no longer answers: a fresh investigator as `investigate` spawned it, with the same prompt): "Fix round: read {{context.wt}}-logs/verify.md whole; answer every item in your report ({{context.wt}}-logs/report.md is its current text), the same shape, set report_text again, whole, with the same context_set (ToolSearch `select:mcp__plugin_workflow_wf__context_set`; session_id {{session_id}}, force: true), then reply REPORT context report_text. This is the only fix round." END your turn with the WAITING line. On its REPORT line, transition `reported`.
+    transitions:
+      reported: check
+
+  close:
+    type: exec
+    cwd: "{{project_root}}"
+    # The line closes before the user answers; what is proposed stays in the report. Logs first, then the mark, then the worktree:
+    # a failure leaves the report kept and the line unmarked, never the reverse. present.md is the parent's instruction sheet.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      case "$WT" in /*/"$SLICE") ;; *) echo "refused worktree path: '$WT'"; exit 2;; esac
+      keep="$WF_PROJECT_ROOT/.claude/backups/slice-logs/$SLICE"; mkdir -p "$keep" || exit 1
+      if [ -d "$WT-logs" ]; then
+        if [ "$(du -sk "$WT-logs" | cut -f1)" -le 40000 ]; then cp -Rp "$WT-logs/." "$keep/" || exit 1
+        else for n in report.md verify.md pinned.txt; do [ -f "$WT-logs/$n" ] && cp -p "$WT-logs/$n" "$keep/"; done; fi
+      fi
+      [ -s "$keep/report.md" ] || { echo "no report in $keep: nothing closed"; exit 2; }
+      verdict=$(head -2 "$keep/verify.md" 2>/dev/null | tr '\n' ' ')
+      deps=$(awk -v id="$SLICE" '$0 ~ /^  - id: /{cur=$3} /^    after:/{ if ($0 ~ "(^|[^A-Za-z0-9-])" id "([^A-Za-z0-9-]|$)") print cur}' "$QUEUE" | sed 's/^/  - /')
+      [ -n "$deps" ] || deps="  none"
+      {
+        printf '# Research line %s: what the parent does\n\n' "$SLICE"
+        printf 'Report: %s/report.md (pinned commit in pinned.txt beside it). Verifier: %s/verify.md, %s.\n\n' "$keep" "$keep" "${verdict:-no verdict file}"
+        printf '1. Lines with `after:` on this one become admissible once this line is done: park or re-point any the report changes BEFORE `slot_free`:\n%s\n\n' "$deps"
+        printf '2. The line is closed (done) and the slot is free: `slot_free`; do not hold it for the answer.\n\n'
+        printf '3. Relay to the user, in Russian, from the report'"'"'s `## For the user`: (1) the answer, (4) what would make it wrong, (5) the choices and the recommendation, and the proposed-lines table. No queue vocabulary; ids only in the table. A verifier verdict of FIXES on the second pass goes beside (4). Nothing proposed is queued before the user answers.\n\n'
+        printf '4. The report'"'"'s `## For the parent`: the docs/decisions.md line (only when the report refutes a hypothesis, through `node bin/dev.js decision --slice %s`) and any CLAUDE.md edit the line names are yours, on main.\n' "$SLICE"
+      } > "$keep/present.md"
+      "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --done "$SLICE" --note "RESEARCH report $(date +%F): ${verdict:-no verifier verdict}; read $keep/report.md" || { echo "the line was not marked done: $keep kept"; exit 3; }
+      if [ -d "$WT" ]; then
+        dirty=$(git -C "$WT" status --porcelain)
+        if [ -z "$dirty" ]; then git worktree remove --force "$WT" || echo "worktree $WT not removed"; rm -rf "$WT-logs"
+        else echo "kept $WT: not clean"; echo "$dirty" | head -5; fi
+      fi
+      echo "closed $SLICE, logs in $keep"
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+    timeout: 120000
+    on_success: present
+    on_error: close_failed
+
+  close_failed:
+    ask: parent
+    prompt: |-
+      Closing {{context.slice}} failed (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      Hand back NEEDS-PARENT slice={{context.slice}} session={{session_id}} reason=the research line did not close see=this session, and take NO transition: the parent reads the state of {{project_root}}/.claude/backups/slice-logs/{{context.slice}}/ and the queue line, then messages you `retry`, or `close` after it marked the line by hand (`queue_mark` to "failed" or "done").
+    transitions:
+      retry: close
+      close: closed
+
+  present:
+    prompt: |-
+      Research line {{context.slice}} is closed and its report is kept:
+      {{stdout}}
+      Do this in order, each its own call: `context_set({session_id: "{{session_id}}", key: "ask_parent", value: "research report of {{context.slice}} ready for the user"})`, then transition `done`, then SubagentHandback with EXACTLY this one line (the parent reads the named file and relays it; a research line has no landed sha):
+      NEEDS-PARENT slice={{context.slice}} session={{session_id}} reason=research report ready, the line is closed and its slot is free see={{project_root}}/.claude/backups/slice-logs/{{context.slice}}/present.md
+    transitions:
+      done: presented
+
+  blocked:
+    ask: parent
+    prompt: |-
+      A driver: context_set `fail_note` on THIS session (one line, the reason: no `|`, no `⏸`, no leading `word:`), then hand back NEEDS-PARENT and take NO transition: the parent picks it.
+      Research line {{context.slice}} could not produce a checked report (a stage ran out of tries). Keep the worktree {{context.wt}} and {{context.wt}}-logs. The parent messages you `close` (`[!]` with your note) or `stop`.
+    transitions:
+      close: mark_closed
+      stop: mark_stopped
+
+  mark_closed:
+    type: exec
+    command: &mark_failed |-
+      "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --failed "$SLICE" --note "${NOTE:-research line blocked}"
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      SLICE: "{{context.slice}}"
+      NOTE: "{{context.fail_note}}"
+    timeout: 60000
+    on_success: closed
+    on_error: mark_by_hand
+
+  mark_stopped:
+    type: exec
+    command: *mark_failed
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      SLICE: "{{context.slice}}"
+      NOTE: "{{context.fail_note}}"
+    timeout: 60000
+    on_success: stopped
+    on_error: mark_by_hand
+
+  mark_by_hand:
+    prompt: |-
+      wf-queue refused to mark {{context.slice}} failed (exit {{exit_code}}): {{stderr}}
+      `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml", id: "{{context.slice}}", to: "failed", note: "<the reason, one line>"})`, then `close`, or `stop` if the parent said stop.
+    transitions:
+      close: closed
+      stop: stopped
+
+  presented:
+    terminal: true
+    outcome: complete
+    prompt: "Research line {{context.slice}} presented: hand back the NEEDS-PARENT line from the previous step and stop; its slot is the parent's to free."
+
+  closed:
+    terminal: true
+    outcome: complete
+    prompt: "Research line {{context.slice}} closed without a report (`[!]`): its slot is free — in the dispatcher session {{parent_session_id}} transition `slot_free`."
+
+  released:
+    terminal: true
+    outcome: complete
+    prompt: "Research line {{context.slice}} released before any work: in the dispatcher session {{parent_session_id}} transition `slot_free`."
+
+  stopped:
+    terminal: true
+    outcome: fail
+    prompt: |-
+      Research line {{context.slice}} STOPPED: report to the user the line and the reason. In the dispatcher session {{parent_session_id}} transition `stop`.

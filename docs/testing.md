@@ -264,6 +264,23 @@ more words (`src/TopLevelPanel.hx`) does.
 The row names the root by its position on the command line, never the path. A `regex:` rule is a JavaScript regular expression; a leading Python inline-flag group (`(?i)`) becomes
 its flags, and a rule JavaScript cannot compile is a usage error naming its number. Usage errors exit 2.
 
+## The slice workflows are portable
+
+`.claude/workflows/` is tracked (the rest of `.claude/` is not; `lib/recon-arm`, a per-machine toggle, stays ignored). It
+names no path of one machine: the checkout is `{{project_root}}` in a prompt, `cwd` or `env:` value and
+the quoted `"$WF_PROJECT_ROOT"` in an exec command (a path with a space must not split), and the worktrees default to `<parent of the checkout>/.wt/anyparse`. A tree outside the
+checkout comes from an environment variable, set in `.claude/settings.local.json` `env`; an unset one skips its row with an
+echoed note and never fails the step:
+
+| variable | names | unset |
+|---|---|---|
+| `ANYPARSE_HXFORMAT_FORK` | the formatter corpus fork | the corpus layer skips |
+| `ANYPARSE_PONY` | the read-only downstream tree the gate's `frozen` row guards | no `--frozen` tree |
+| `ANYPARSE_INFRA_TREES` | space-separated downstream trees for the `infra` rows | no `--infra-tree` |
+| `ANYPARSE_SCRUB_LIST` | the private scrub map (above) | the scrub guard says so and passes |
+
+`unit.dev.TrackedWorkflowsTest` holds that no file of the folder names a machine path and that no exec command interpolates `{{project_root}}` unquoted.
+
 ## Mutation checks: testing the tests
 
 The six layers all answer the same question from different angles: does the code do what it is supposed to do? A mutation check asks the inverted question: if the code *stopped* doing it, would anything go red? A green suite is not evidence that the suite covers anything — a mechanism can be exercised by no fixture at all and still sit inside a passing run, and the only reliable way to find such a vacuum is to break the mechanism on purpose and watch what the suite does.

@@ -1,0 +1,975 @@
+name: slice-pipeline
+description: >-
+  One anyparse slice, a child session of slice-dispatch driven by the dispatcher
+  agent itself: claim → prepare [exec worktree] → work (slice-worker agent) →
+  review (slice-review agent) → land [exec dev land under the anyparse-land lock] →
+  bookkeeping → cleanup [exec] → done. The worker's and reviewer's sessions are
+  started HERE and linked to their agents, so a resume names who to wake.
+initial: claim
+max_transitions: 80
+# difficulty (the queue line's, 1..10) → model/effort per stage; a line without one keeps its own columns.
+# Arm (r): a line of difficulty ≥4 gets a read-only recon before any worker while lib/recon-arm exists (recon_route).
+model_table:
+  stages:
+    recon:
+      - { upto: 10, model: sonnet, effort: medium }
+    plan:
+      - { upto: 10, model: sonnet, effort: high }
+    execute:
+      - { upto: 6, model: sonnet, effort: high }
+      - { upto: 10, model: fable, effort: medium }
+    review:
+      - { upto: 10, model: fable, effort: medium }
+    review_verify:
+      - { upto: 10, model: fable, effort: medium }
+    fix:
+      - { upto: 6, model: sonnet, effort: high }
+      - { upto: 10, model: fable, effort: medium }
+
+# The slice's DRIVER (engine docs/queue.md § driver): start() answers with its exact Agent call, which the
+# dispatcher copies; its rules are the plugin's driver agent (agents/driver.md).
+driver:
+  model: haiku
+  effort: medium
+  prompt_ref: task-driver
+
+states:
+  claim:
+    prompt: |-
+      Slice pipeline {{session_id}} (dispatcher {{parent_session_id}}). The picker already marked the line `[>]`.
+      Set these keys on THIS session (session_id {{session_id}}) in the `set` of the ONE `transition` `prepare` below:
+        slice  — the ID from the picker's line (letters, digits, `-`)
+        difficulty — the line's difficulty (1..10) when it has one: the engine then sets `model` and `effort` from
+                 this workflow's model_table — do NOT set them yourself
+        model  — ONLY without a difficulty: its model column; effort — its effort column (`-` → task-delegation: high
+                 for code, medium for routine)
+        wt_root — ONLY when the user named another worktree root (default `<parent of the main checkout>/.wt/anyparse`)
+      Then `transition({session_id: "{{session_id}}", transition: "prepare", set: {<those keys>}})` (an exec: the
+      worktree is made before any agent starts; `set` is written first, so the exec reads the keys).
+    transitions:
+      prepare: prepare
+
+  prepare:
+    station: false
+    type: exec
+    cwd: "{{project_root}}"
+    # stdout is the worktree path alone (no newline) — it becomes context.wt; the messages go to stderr.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'" >&2; exit 2;; esac
+      t=$(awk -v id="$SLICE" '$0=="  - id: " id {f=1; next} f && /^  - /{exit} f && /^    touches: /{sub(/^    touches: \[ ?/, ""); sub(/ ?\]$/, ""); print; exit}' "$WF_PROJECT_ROOT/.claude/batch/queue.yaml")
+      if [ -n "$t" ] && ! printf '%s\n' "$t" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v -E '^\.claude/workflows/lib/recon-arm$' | sed 's#^\.claude/workflows/#tracked-workflows/#' | grep -v -E "^(\.claude|~/\.claude|$HOME/\.claude)(/|\$)" | grep -q .; then
+        echo "refused: every touches: path of $SLICE is git-ignored (.claude/ outside workflows/) — no commit can carry it; the parent applies such a line" >&2; exit 3
+      fi
+      root=${WT_ROOT:-$(dirname "$WF_PROJECT_ROOT")/.wt/anyparse}
+      case "$root" in /*) ;; *) echo "refused worktree root (not absolute): $root" >&2; exit 2;; esac
+      wt=$root/$SLICE
+      if [ -d "$wt" ]; then
+        echo "kept $wt ($(git -C "$wt" symbolic-ref --short HEAD) @ $(git -C "$wt" rev-parse --short HEAD))" >&2
+      else
+        mkdir -p "$root" || exit 1
+        base=$(git rev-parse HEAD)
+        git worktree add "$wt" -b "batch/hxqb-$SLICE" "$base" >&2 || exit 1
+        echo "made $wt on batch/hxqb-$SLICE @ $(git rev-parse --short "$base")" >&2
+      fi
+      mkdir -p "$wt-logs" || exit 1
+      printf %s "$wt"
+    env:
+      SLICE: "{{context.slice}}"
+      WT_ROOT: "{{context.wt_root}}"
+    timeout: 60000
+    context_set:
+      wt: "{{stdout}}"
+    on_success: recon_route
+    on_error: prepare_failed
+
+  prepare_failed:
+    ask: parent
+    prompt: |-
+      The worktree for {{context.slice}} was not made (exit {{exit_code}}):
+      {{stderr}}
+      Exit 3 on a `kind: research` line: queue_edit its `workflow: research-task` and `queue_mark` it `released` (research-task needs no tracked touches), then `release`. Exit 3 (every touches path git-ignored): `queue_mark` to "failed", note "parent applies: .claude-only line",
+      then `release`; a driver replies NEEDS-PARENT reason=parent-applies.
+      A stale branch without its directory: decide (delete the branch only if it holds nothing unmerged) and
+      `retry`. Otherwise `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml", id:
+      "{{context.slice}}", to: "released"})` (back to `[ ]`, nothing was made) or `to: "failed", note: "<reason>"`,
+      then `release`.
+    transitions:
+      retry: prepare
+      release: released
+
+  recon_route:
+    station: false
+    type: exec
+    # Arm (r): a line of difficulty ≥4 is read by a cheap read-only recon before any worker. The switch is the file
+    # lib/recon-arm, read at run time. dev recon-facts decides whether the recon on disk (kept worktree) still holds:
+    # skip reuses it; full / update run a recon session (slice-recon) whose prompt carries the facts. A plan made
+    # before an update is stale: it moves aside so the plan stage runs again.
+    command: |-
+      [ -f "$ARM" ] || { [ -f "$WT-logs/plan.md" ] && echo "plan on disk, recon arm off" >&2; exit 0; }
+      case "$D" in ''|*[!0-9]*) exit 0;; esac
+      [ "$D" -ge 4 ] || exit 0
+      cd "$WF_PROJECT_ROOT" || exit 2
+      node bin/dev.js recon-facts "$SLICE" "$WT" --holder "$SID" > "$WT-logs/recon-facts.out" 2>&1; rc=$?
+      grep '^route:' "$WT-logs/recon-facts.out" | tail -1 >&2
+      case "$rc" in
+        0|10) [ -f "$WT-logs/plan.md" ] && mv "$WT-logs/plan.md" "$WT-logs/plan.stale.md" && echo "plan.md moved to plan.stale.md: the recon runs again" >&2; exit 20;;
+        11) [ -f "$WT-logs/plan.md" ] && exit 0; exit 10;;
+        12) exit 12;;
+        *) tail -5 "$WT-logs/recon-facts.out" >&2; exit 2;;
+      esac
+    env:
+      WT: "{{context.wt}}"
+      D: "{{context.difficulty}}"
+      SLICE: "{{context.slice}}"
+      SID: "{{session_id}}"
+      ARM: "{{project_root}}/.claude/workflows/lib/recon-arm"
+    timeout: 120000
+    cases:
+      "0": work
+      "10": recon_end
+      "12": recon_locked
+      "20": recon
+    default: recon_route_failed
+
+  recon_locked:
+    ask: parent
+    prompt: |-
+      {{stderr}}
+      Another run holds the recon lock of {{context.slice}} ({{context.wt}}-logs/recon.lock, younger than an hour, no
+      recon.md after it). A slice driver replies NEEDS-PARENT reason=recon-locked and takes NO transition. The parent
+      picks `retry` (after that run's recon ended), or `skip` (the plan stage runs without a recon).
+    transitions:
+      retry: recon_route
+      skip: work
+
+  recon_route_failed:
+    ask: parent
+    prompt: |-
+      dev recon-facts failed for {{context.slice}} (exit {{exit_code}}):
+      {{stderr}}
+      Full output: {{context.wt}}-logs/recon-facts.out. A slice driver replies NEEDS-PARENT reason=recon-facts-failed
+      and takes NO transition. The parent picks `retry` or `skip` (the plan stage runs without a recon).
+    transitions:
+      retry: recon_route
+      skip: work
+
+  recon:
+    max_visits: 2
+    on_exhausted: work
+    prompt: |-
+      {{stderr}}
+      Arm (r): line {{context.slice}} (difficulty {{context.difficulty}}) gets a read-only recon before any worker; the
+      engine collected its facts into {{context.wt}}-logs/facts.md and hands them to the recon's own session.
+      If context `recon_session` is set and `status({session_id: "<it>"})` is not completed: hand back NEEDS-PARENT `recon session <it> still open` and take no transition (a driver has no abort; the parent ends it).
+      `start({workflow: "slice-recon", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", reply: "id", context: {slice: "{{context.slice}}", wt: "{{context.wt}}"}})`;
+      then ONE `transition` `started` with `set: {recon_session: <its id>}`. Nothing else.
+    transitions:
+      started: recon_spawn
+
+  recon_spawn:
+    prompt: |-
+      1. Spawn ONE recon agent: Agent with NO subagent_type (general-purpose: the read-only `workflow:recon` type has no
+         workflow tools and cannot drive its session), model {{context.model_recon}}, effort {{context.effort_recon}}, prompt exactly:
+
+           You are the RECON of anyparse slice {{context.slice}}. Your workflow session is {{context.recon_session}} (already started — do NOT
+           call start()): first `status({session_id: "{{context.recon_session}}"})` — it holds your prompt with the facts; drive it to its
+           terminal, passing that session_id in every call. The workflow tools may be deferred: load them first with ToolSearch query
+           "+plugin_workflow_wf" (max_results 20).
+
+      2. `link_agent({session_id: "{{context.recon_session}}", agent_id: <the id Agent returned>})`; context_set `recon_agent`.
+      Then END your turn on this pipeline (other pipelines may move meanwhile). On its notification (its line `score: …`),
+      transition `done` — the engine reads the file. After a restart wake it with SendMessage: "Continue: call
+      status({ session_id: '{{context.recon_session}}' }) — your own session, picked up after a restart".
+    transitions:
+      done: recon_end
+
+  recon_end:
+    type: exec
+    # The recon's verdict is read from its file, never from the driver's reading of a message.
+    command: |-
+      f="$WT-logs/recon.md"
+      [ -s "$f" ] || { echo "no $f: the recon wrote nothing"; exit 30; }
+      [ ! -f "$WT-logs/facts.md" ] || [ "$f" -nt "$WT-logs/facts.md" ] || { echo "$f is older than this run's facts.md: the recon of this run did not finish"; exit 30; }
+      h=$(head -1 "$f")
+      s=$(printf '%s\n' "$h" | sed -n 's/^score: \([0-9][0-9]*\) premise: .*/\1/p')
+      case "$s" in ''|*[!0-9]*) echo "line 1 of $f is not 'score: N premise: …': $h"; exit 30;; esac
+      printf '%s (%s lines)\n' "$h" "$(wc -l < "$f" | tr -d ' ')"
+      case "$h" in *"premise: fail"*) exit 11;; esac
+      [ "$s" -ge 9 ] && exit 12
+      exit 0
+    env:
+      WT: "{{context.wt}}"
+    timeout: 10000
+    cases:
+      "0": recon_scored
+      "11": recon_blocked
+      "12": recon_blocked
+      "30": recon_missing
+    default: recon_missing
+
+  recon_scored:
+    prompt: |-
+      Recon of {{context.slice}}: `{{stdout}}` — {{context.wt}}-logs/recon.md.
+      When the number after `score:` differs from the line's difficulty, first:
+      `queue_edit({file: "{{project_root}}/.claude/batch/queue.yaml", id: "{{context.slice}}", set:
+      {difficulty: "<the number>"}})`. Then ONE `transition` `plan` on THIS session with `set: {recon_score: <the number
+      after `score:`>, recon_premise: "ok", difficulty: <that number>}` (the engine rewrites every stage's `model` and
+      `effort`): the worker reads recon.md first and still scores in `orient`.
+    transitions:
+      plan: work
+
+  recon_blocked:
+    ask: parent
+    prompt: |-
+      Recon of {{context.slice}} stopped the line before any worker: `{{stdout}}` — {{context.wt}}-logs/recon.md
+      (a premise that fails, or a score ≥9 whose proposed lines are under `## split`). No worker session exists.
+      A slice driver: context_set on THIS session, each its own call: `recon_score` = the number after `score:`,
+      `recon_premise` = `ok` or `fail`, `fail_note` = one line (`recon scored N, split proposed` or `recon premise
+      failed — …`; no `|`, no `⏸`); reply NEEDS-PARENT see={{context.wt}}-logs/recon.md and take NO transition. The
+      parent picks: `split` when it queues the proposed lines (marked `[!]` like `close`; the ledger counts the visit
+      `mark_split`, so every split is measured), `close` for a premise fail (the line is marked `[!]` with the note),
+      `stop` for a hard fail, or `proceed` when it overrides the recon (the plan stage runs and reads recon.md first).
+    transitions:
+      split: mark_split
+      close: mark_closed
+      stop: mark_stopped
+      proceed: work
+
+  recon_missing:
+    max_visits: 2
+    on_exhausted: work
+    prompt: |-
+      {{stdout}}
+      The recon left no usable {{context.wt}}-logs/recon.md. Still running (no notification yet)? END your turn and
+      transition `recheck` on its notification. After a restart, first wake recon agent {{context.recon_agent}} on its
+      session {{context.recon_session}} (SendMessage "Continue: call status({ session_id: '{{context.recon_session}}' })"),
+      then `recheck` on its notification. Ended without the file → `again` (one new recon session), or `skip` (the plan
+      stage runs without one).
+    transitions:
+      recheck: recon_end
+      again: recon
+      skip: work
+
+  work:
+    full_on_revisit: true
+    prompt: |-
+      {{stderr}}
+      Worktree {{context.wt}}. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context: {plan_row: "{{context.model_plan}}/{{context.effort_plan}}"}})`;
+      then ONE `transition` `started` with `set: {worker_session: <its id>}`. Nothing else.
+    transitions:
+      started: plan_route
+
+  plan_route:
+    station: false
+    type: exec
+    # A plan on disk means the plan stage is over: the execute stage runs on the model the plan's price asked for.
+    command: |-
+      f="$HOME/.claude/workflow-state/$W.json"
+      if [ ! -f "$f" ] || node -e 'process.exit(require(process.argv[1]).outcome?0:1)' "$f"; then
+        echo "worker_session $W has already ended: start a NEW slice-worker session as below." >&2; exit 20
+      fi
+      [ -f "$WT-logs/plan.md" ] && exit 10
+      # A recon score of 7 or 8 already priced the execute stage: recon.md is the plan, no plan agent re-reads it.
+      case "$SCORE" in 7|8) printf 'plan stage skipped: the recon scored %s; %s-logs/recon.md is your plan (question, owner, rule_code are in it)\n' "$SCORE" "$WT" > "$WT-logs/plan.md"; exit 10;; esac
+      exit 0
+    env:
+      WT: "{{context.wt}}"
+      W: "{{context.worker_session}}"
+      SCORE: "{{context.recon_score}}"
+    timeout: 10000
+    cases:
+      "0": plan_spawn
+      "10": work_spawn
+      "20": work
+    default: plan_spawn
+
+  plan_spawn:
+    # The plan runs on the table's plan row; a plan agent whose row is not the ≤6 execute row hands its plan on (orient).
+    prompt: |-
+      1. Spawn ONE worker: Agent with NO subagent_type (general-purpose: a `workflow:*` type lacks Bash/Edit or the workflow tools), model {{context.model_plan}}, effort {{context.effort_plan}}, prompt exactly:
+
+           You are the worker of anyparse slice {{context.slice}}. Your workflow session is {{context.worker_session}} (already started — do NOT
+           call start()): first `status({session_id: "{{context.worker_session}}"})` — it holds your current prompt; drive it to its terminal,
+           passing that session_id in every call. Your line is {{context.slice}} in
+           {{project_root}}/.claude/batch/queue.yaml. Write your report in English. Scratch files go under {{context.wt}}-logs/ by absolute path, never your start directory (the main checkout); chain a `cd` with `&&`.
+
+      2. `link_agent({session_id: "{{context.worker_session}}", agent_id: <the id Agent returned>})`; context_set `worker_agent`.
+      Then END your turn on this pipeline (other pipelines may move meanwhile). On the worker's task-notification (it comes ~2 s AFTER its hand-back message, which carries no number):
+      ONE `transition` `worker_done` with `set: {tokens_worker: <its `<subagent_tokens>`, digits only, never 0>}` — the engine reads the worker's own
+      outcome and routes (complete → review, a plan that needs opus → the execute stage, failed → blocked, still running → wait).
+    transitions:
+      worker_done: worker_end
+
+  work_spawn:
+    prompt: |-
+      1. Spawn ONE worker: Agent with NO subagent_type (general-purpose: a `workflow:*` type lacks Bash/Edit or the workflow tools), model {{context.model}}, effort {{context.effort}},
+         prompt exactly:
+
+           You are the worker of anyparse slice {{context.slice}}. Your workflow session is {{context.worker_session}} (already started — do NOT
+           call start()): first `status({session_id: "{{context.worker_session}}"})` — it holds your current prompt; drive it to its terminal,
+           passing that session_id in every call. Your line is {{context.slice}} in
+           {{project_root}}/.claude/batch/queue.yaml. Write your report in English. Scratch files go under {{context.wt}}-logs/ by absolute path, never your start directory (the main checkout); chain a `cd` with `&&`.
+
+      2. `link_agent({session_id: "{{context.worker_session}}", agent_id: <the id Agent returned>})`; context_set `worker_agent`.
+      Then END your turn on this pipeline (other pipelines may move meanwhile). On the worker's task-notification (it comes ~2 s AFTER its hand-back message, which carries no number):
+      ONE `transition` `worker_done` with `set: {tokens_worker: <its `<subagent_tokens>`, digits only, never 0>}` — the engine reads the worker's own
+      outcome and routes (complete → review, failed → blocked, still running → wait).
+    transitions:
+      worker_done: worker_end
+
+  review:
+    full_on_revisit: true
+    prompt: |-
+      {{stderr}}
+      Review of {{context.slice}} (worktree {{context.wt}}); every slice is reviewed.
+      `start({workflow: "slice-review", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}"})` (its first state, a
+      light exec, runs inside that call); then ONE `transition` `started` with `set: {review_session: <its id>}` (the start reply's prompt is the reviewer's, not yours).
+    transitions:
+      started: review_route
+      land: land
+      fixes: fixes
+      reject: reject
+
+  review_route:
+    type: exec
+    # A warm round re-asks the reviewer that holds the slice; a design verdict or a first round needs a fresh one.
+    command: |-
+      f="$HOME/.claude/workflow-state/$R.json"
+      if [ ! -f "$f" ] || node -e 'process.exit(require(process.argv[1]).outcome?0:1)' "$f"; then
+        echo "review_session $R has already ended: start a NEW slice-review session as below." >&2; exit 20
+      fi
+      case "$VERDICT" in *design=yes*) exit 0;; esac
+      [ -n "$REVIEWER" ] && exit 10; exit 0
+    env:
+      VERDICT: "{{context.verdict}}"
+      REVIEWER: "{{context.reviewer_agent}}"
+      R: "{{context.review_session}}"
+    timeout: 10000
+    cases:
+      "0": review_spawn
+      "10": review_warm
+      "20": review
+    default: review_spawn
+
+  review_spawn:
+    full_on_revisit: true
+    prompt: |-
+      Spawn ONE reviewer: Agent with NO subagent_type (general-purpose: a `workflow:*` type lacks Bash/Edit or the workflow tools), model {{context.model_review}}, effort {{context.effort_review}} on round 1, model
+      {{context.model_review_verify}}, effort {{context.effort_review_verify}} on a later round (sonnet/medium either way
+      when the slice touches only tests, docs or tools/ under a full gate), prompt exactly:
+
+           You review anyparse slice {{context.slice}}, read-only. Your workflow session is {{context.review_session}} (already started — do NOT
+           call start()): first `status({session_id: "{{context.review_session}}"})`; drive it to its terminal, passing that session_id in
+           every call. Write your verdict in English. Scratch files go under {{context.wt}}-logs/ by absolute path, never your start directory (the main checkout); chain a `cd` with `&&`. The worker's report: read {{context.wt}}-logs/report.md whole; {{context.wt}}-logs/decisions.md, when present, holds the parent's binding calls.
+
+      Then `link_agent({session_id: "{{context.review_session}}", agent_id: <the id Agent returned>})`; context_set
+      `reviewer_agent` = that id. END your turn on this pipeline.
+      On its notification (the last message carries the verdict; `status({session_id: "{{context.review_session}}",
+      key: "fixes"})` gives the fix list whole): ONE `transition` by the verdict with `set: {verdict: <MERGE|FIXES|REJECT>,
+      tokens_review: <digits only>}` (the notification's number is that agent's context size: it REPLACES the value, for
+      a fresh agent too). MERGE → `land`; FIXES → `fixes`; REJECT → `reject`. The keys ride on the transition (`set`):
+      written first, in the same call — never a separate context_set beside it in one parallel batch.
+    transitions:
+      land: land
+      fixes: fixes
+      reject: reject
+
+  review_warm:
+    full_on_revisit: true
+    prompt: |-
+      A warm round: SendMessage `{{context.reviewer_agent}}`:
+
+           Fix round for {{context.slice}}: the worker committed its fixes (tip <sha>). Your NEW session is {{context.review_session}}
+           (already started — do NOT call start()): `status({session_id: "{{context.review_session}}"})`, drive it to its terminal. Re-check
+           YOUR earlier fix list against the fix diff only (`git diff <your reviewed tip>..<sha>`), then anything
+           that diff newly touches; do not re-read the unchanged slice. A parent call in {{context.wt}}-logs/decisions.md binds your verdict.
+
+      and `link_agent({session_id: "{{context.review_session}}", agent_id: "{{context.reviewer_agent}}"})`. END your turn on this
+      pipeline. `no_verdict` (a fresh spawn) only for a reviewer that ended with no VERDICT line or no longer answers.
+      On its notification (the last message carries the verdict; `status({session_id: "{{context.review_session}}",
+      key: "fixes"})` gives the fix list whole): ONE `transition` by the verdict with `set: {verdict: <MERGE|FIXES|REJECT>,
+      tokens_review: <digits only>}` (the notification's number is that agent's context size: it REPLACES the value, for
+      a fresh agent too). MERGE → `land`; FIXES → `fixes`; REJECT → `reject`. The keys ride on the transition (`set`):
+      written first, in the same call — never a separate context_set beside it in one parallel batch.
+    transitions:
+      land: land
+      fixes: fixes
+      reject: reject
+      no_verdict: review_spawn
+
+  fixes:
+    full_on_revisit: true
+    max_visits: 3
+    on_exhausted: reject
+    prompt: |-
+      Review round {{visits.fixes}} of 3 (a fourth FIXES verdict lands in `reject`).
+      1. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context:
+         {gate_flags: "{{context.gate_flags}}"}})` → W2 (its gate runs with the flags this slice already carries,
+         a parent waiver included); context_set `worker_session` = W2;
+         `link_agent({session_id: W2, agent_id: "{{context.worker_agent}}"})`.
+      2. `tokens_worker` is {{context.tokens_worker}}. Above 250000, or a worker that no longer answers → NO SendMessage: spawn a fresh worker (Agent with NO subagent_type (general-purpose: a `workflow:*` type lacks Bash/Edit or the workflow tools), model {{context.model_fix}}, effort {{context.effort_fix}}) with the text below, then link_agent it to W2 and context_set `worker_agent`. Otherwise SendMessage `{{context.worker_agent}}`:
+
+           Review fix round: <the reviewer's fix list verbatim>. Your NEW session is W2 (already started — do NOT
+           call start()): `status({session_id: "W2"})`, drive it to its terminal — this is a fix round.
+
+      END your turn on this pipeline (`WAITING …`) — no transition before W2's own DONE/BLOCKED line. On its
+      report: ONE `transition` `worker_done` with `set: {tokens_worker: <digits only>}` (the task-notification's `<subagent_tokens>`, which follows the hand-back, is that agent's context size: it
+      REPLACES the value, for a fresh agent too; the engine reads W2's outcome,
+      carries its gate_flags, and routes).
+    transitions:
+      worker_done: worker_end
+      reject: reject
+
+  land:
+    type: exec
+    cwd: "{{project_root}}"
+    # One land at a time machine-wide: the merge into main and its battery never interleave with another slice's.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      # A file nothing tracks in the main checkout is a stray write (an agent whose cd failed wrote there): the land
+      # stops and names it, the parent finds whose it is; nothing is moved or deleted here.
+      stray=$(git -C "$WF_PROJECT_ROOT" status --porcelain --untracked-files=normal | sed -n 's/^?? //p')
+      if [ -n "$stray" ]; then echo "land refused: untracked files in the main checkout $WF_PROJECT_ROOT:"; echo "$stray"; exit 77; fi
+      # The battery rows the slice's own gate sanctioned (`--allow <row>` in gate_flags); a gate-only row
+      # (lists, infra4, scrub) is not a battery row and is dropped, never passed.
+      allow=""; prev=""
+      for w in $GATE_FLAGS; do
+        if [ "$prev" = "--allow" ]; then
+          case "$w" in suite|corpus|fmt|oracle|lint|blast) allow="$allow --allow $w";; esac
+        fi
+        prev="$w"
+      done
+      [ -n "$allow" ] && echo "land: battery rows sanctioned by the slice's gate:$allow"
+      # Review rounds and tokens go on the landed commit as trailers (dev slice-stats reads them); a value
+      # that is not a count, or a 0 token reading (set from a hand-back, never a context size), is left out.
+      metrics=""
+      case "$ROUNDS" in ''|*[!0-9]*) ;; *) metrics="--rounds $ROUNDS";; esac
+      case "$TOKENS_WORKER$TOKENS_REVIEW" in *[!0-9]*) ;; *) [ "${TOKENS_WORKER:-0}" -gt 0 ] && [ "${TOKENS_REVIEW:-0}" -gt 0 ] && metrics="$metrics --tokens $((TOKENS_WORKER + TOKENS_REVIEW))";; esac
+      # Places the merge driver left, decided by the parent from the brief: one `<path>#<key>=<choice>` per
+      # line (a key may hold a space, e.g. `CondDirectives (head)`), each passed as one argument.
+      set --
+      while IFS= read -r r; do [ -n "$r" ] && set -- "$@" --resolve "$r"; done <<RESOLVE_EOF
+      $LAND_RESOLVE
+      RESOLVE_EOF
+      node bin/dev.js land "batch/hxqb-$SLICE" --allow-blast --snapshot $allow $metrics "$@"
+    env:
+      LAND_RESOLVE: "{{context.land_resolve}}"
+      SLICE: "{{context.slice}}"
+      GATE_FLAGS: "{{context.gate_flags}}"
+      ROUNDS: "{{visits.review}}"
+      TOKENS_WORKER: "{{context.tokens_worker}}"
+      TOKENS_REVIEW: "{{context.tokens_review}}"
+    timeout: 5400000
+    resource: { priority: 1, locks: ["anyparse-land"] }
+    max_output: 16384
+    context_set:
+      land_table: "{{stdout}}"
+    on_timeout: land_timeout
+    cases:
+      "0": mark_landed
+      "77": land_stray
+    default: triage
+
+  land_stray:
+    prompt: |-
+      A slice driver: reply NEEDS-PARENT and take NO transition — the parent picks it.
+      `land` refused before merging anything: files nothing tracks sit in the main checkout:
+      {{context.land_table}}
+      Reply `NEEDS-PARENT slice={{context.slice}} session={{session_id}} reason=untracked files in main: <the list>`.
+      The parent finds whose they are (a stray write is removed or moved by the parent or the user, never by you), then
+      picks `retry` (main is clean again) or `stop`.
+    transitions:
+      retry: land
+      stop: stopped
+
+  land_timeout:
+    max_visits: 2
+    on_exhausted: stopped
+    prompt: |-
+      `dev land batch/hxqb-{{context.slice}}` was killed by its timeout (124, try {{visits.land_timeout}} of 2) —
+      a loaded machine, not a defect of the branch: never a fix round.
+      Before `retry`, read main: `git -C {{project_root}} log --oneline -3` and `status --porcelain`.
+      - main is as before the land (no `Merge batch/hxqb-{{context.slice}}` on top, clean) → `retry`.
+      - the merge is on main (the kill came after it) or the tree is dirty → `stop` and report main's exact state.
+    transitions:
+      retry: land
+      stop: stopped
+
+  triage:
+    ask: parent
+    prompt: |-
+      A slice driver: reply NEEDS-PARENT and take NO transition — the parent picks it.
+      `dev land batch/hxqb-{{context.slice}}` FAILED (exit {{exit_code}}; logs $TMPDIR/anyparse-land/batch-hxqb-{{context.slice}}/):
+      {{stdout}}
+      {{stderr}}
+
+      Read the failed row first. Never `git stash`, never push, never `cd` into a worktree to merge.
+      - the pick stopped with "place(s) to choose, brief <path>" (the grammar merge driver left places) → read
+        the brief: each place shows both sides, the slices behind them and its `--resolve` lines. Where the two
+        intents are independent (both added, one side only reshaped) choose `ours` / `theirs` / `both`:
+        ONE `transition` `land` with `set: {land_resolve: <the `<path>#<key>=<choice>` entries ONE PER LINE (a key may hold a space)>}`.
+        A question about MEANING (both sides changed the same behaviour differently) → tell the user and `stop`;
+        the branch should be rebuilt on the new main → `fixes` with the brief's path as the fix list.
+      - merge / build aborted, or a step after the merge threw (land takes the merge back) → main is as it was:
+        the cause is the branch → `fixes` (send the cause to the worker as its fix list) or `reject`.
+      - battery red → main is UNTOUCHED (the land judges a candidate worktree and moves main only on green;
+        the verdict reads `main untouched at <sha>, candidate <sha>`): the row above quotes only battery.log's FIRST shard line, green when the red row is another: `grep FAILED $TMPDIR/anyparse-land/batch-hxqb-{{context.slice}}/battery.log` names the red row; find the cause there; the
+        branch's own defect → `fixes` with the failing row as the fix list (or `reject`); a red that main
+        itself carries (the same row red on main, not the branch's) → tell the user and `stop` — main needs its
+        own fix first, then the slice lands again.
+      - a `fmt-race <files>` verdict under the table (only main's drift is red) → the parent context_sets
+        `fmt_race_files` = those files space-separated and `fmt_race_patch` = the output of
+        `sh {{project_root}}/.claude/workflows/lib/fmt-race-skip.sh patch {{context.wt}} "<files>"` (on the tip
+        the review judged, before the round), then `fixes` with the verdict's fix lines as the fix list; a round that only
+        re-formats those files goes to land without a re-review (fmt_race_skip). Every other `fixes` from this triage:
+        first context_set `fmt_race_files` = "" (a key left by an earlier fmt-race round lets a round that changed
+        nothing skip the re-review).
+    transitions:
+      land: land
+      fixes: fixes
+      reject: reject
+      bookkeeping: mark_landed
+      stop: stopped
+
+  mark_landed:
+    station: false
+    type: exec
+    cwd: "{{project_root}}"
+    # The engine writes the mark, so no driver can skip it: an unmarked landed line holds its `after:` lines back.
+    command: |-
+      sha=$(git log main --format=%h --grep "^Slice: $SLICE\$" -1)
+      [ -n "$sha" ] || { echo "no commit on main carries Slice: $SLICE"; exit 2; }
+      battery=$(printf '%s\n' "$LAND_TABLE" | sed -n 's/^battery  *[a-zA-Z]*  *[0-9.]*s  *//p' | head -1)
+      # The battery's own reuse verdict: the land row says only that a gate record was offered.
+      reuse=$(sed -n -E 's/^battery: ((reused gate|gate record not reused|the gate record covers) .*)$/\1/p' "${TMPDIR%/}/anyparse-land/batch-hxqb-$SLICE/battery.log" 2>/dev/null | head -1)
+      "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --done "$SLICE" --note "LANDED $sha $(date +%F); ${battery:-battery row not read}; ${reuse:-gate reuse not read}; review $VERDICT, $ROUNDS review(s); tokens: worker $TOKENS_WORKER, review $TOKENS_REVIEW"
+      rc=$?; cat "$WT-logs/open-items.txt" 2>/dev/null; sed -n '/Notes (non-blocking)/,/^$/p' "$WT-logs/review.md" 2>/dev/null | head -12; cat "$WT-logs/probe-additions.txt" 2>/dev/null; node bin/dev.js lessons-file "$WT-logs" --slice "$SLICE" --queue "$QUEUE" 2>&1 || echo "lessons=not run (exit $?)"; exit $rc
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      SLICE: "{{context.slice}}"
+      LAND_TABLE: "{{context.land_table}}"
+      VERDICT: "{{context.verdict}}"
+      ROUNDS: "{{visits.review}}"
+      TOKENS_WORKER: "{{context.tokens_worker}}"
+      TOKENS_REVIEW: "{{context.tokens_review}}"
+      WT: "{{context.wt}}"
+    timeout: 60000
+    on_success: bookkeeping
+    on_error: mark_landed_by_hand
+
+  mark_landed_by_hand:
+    prompt: |-
+      The engine did not mark {{context.slice}} landed (exit {{exit_code}}): {{stdout}} {{stderr}}
+      Unless its line is already `[x]`: `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml", id: "{{context.slice}}", to:
+      "done", note: "LANDED <merge sha> <date>; battery …; review verdict; tokens: worker {{context.tokens_worker}}, review
+      {{context.tokens_review}}"})`, one line with no `|`, no `⏸`, no leading `key:`. Then transition `bookkeeping`.
+    transitions:
+      bookkeeping: bookkeeping
+
+  bookkeeping:
+    prompt: |-
+      Landed {{context.slice}}, and the engine marked its queue line:
+      {{context.land_table}}
+      Your LANDED line's rounds= is {{visits.review}} (the commit's Review-Rounds); never count it yourself.
+
+      - hxq-bugs.md: out-of-slice findings only → § `⛔ COLD LIST` (the commit body and the queue note are the record).
+      - FB-* slice (client feedback): SendMessage to the session named `ready-made-download-by-practice-id`
+        (ListAgents shows it): slice id, merge SHA, one line of what changed for them. Never name the
+        client project in anything committed to anyparse.
+      - Do not commit the batch files; never push.
+      The worker's open items and the review's notes (cleanup files them in lessons-pending.txt; copy nothing). Its `lessons=filed N, triage M` line goes into your LANDED line verbatim; the filed lines need no read:
+      {{stdout}}
+      Then transition `cleanup`.
+    transitions:
+      cleanup: cleanup
+
+  cleanup:
+    station: false
+    type: exec
+    cwd: "{{project_root}}"
+    # Exact paths of this slice only — never a prefix glob; the path must end in the slice id.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      case "$WT" in /*/"$SLICE") ;; *) echo "refused worktree path: '$WT'"; exit 2;; esac
+      if [ -d "$WT" ]; then
+        dirty=$(git -C "$WT" status --porcelain)
+        [ -z "$dirty" ] || { echo "kept $WT: not clean"; echo "$dirty" | head -5; exit 1; }
+        git worktree remove --force "$WT" || exit 1
+      fi
+      # A merge-landed branch is an ancestor of main; a cherry-picked one (land since LAND-2) is found by its trailer.
+      if git merge-base --is-ancestor "batch/hxqb-$SLICE" main; then
+        git branch -d "batch/hxqb-$SLICE" || exit 1
+      elif git log main --format=%H --grep "^Slice: $SLICE\$" | grep -q .; then
+        git branch -D "batch/hxqb-$SLICE" || exit 1
+      else
+        echo "batch/hxqb-$SLICE is not on main (no merge, no 'Slice: $SLICE' trailer): branch kept"; exit 1
+      fi
+      keep=.claude/backups/slice-logs/$SLICE; mkdir -p "$keep" && for n in report.md handoff.md review.md decisions.md open-items.txt lessons.json review-lessons.json probe-additions.txt repro.txt repro-verdict.txt; do [ -f "$WT-logs/$n" ] && cp -p "$WT-logs/$n" "$keep/"; done
+      [ -f "$WT-logs/slice-gate/table.txt" ] && cp -p "$WT-logs/slice-gate/table.txt" "$keep/gate-table.txt"
+      [ -f "$WT-logs/slice-gate/lint-touched.err" ] && grep -h 'compiler oracle' "$WT-logs/slice-gate/lint-touched.err" > "$keep/gate-oracle.txt"
+      [ -f "$WT-logs/commit/fix.txt" ] && grep -h 'edit(s) in' "$WT-logs/commit/fix.txt" > "$keep/commit-fix.txt"
+      [ -f "$WT-logs/commit/fix-imports.txt" ] && grep -h 'edit(s) in' "$WT-logs/commit/fix-imports.txt" > "$keep/commit-fix-imports.txt"
+      # A failed arm build's kept log (GATE-ARMS-KEEP-FAIL-LOG) outlives the worktree's logs.
+      for d in $(find "$WT-logs" -type d -name arm-fail 2>/dev/null); do mkdir -p "$keep/arm-fail" && cp -p "$d"/* "$keep/arm-fail/" 2>/dev/null; done
+      b="${TMPDIR:-/tmp}/anyparse-land/batch-hxqb-$SLICE/battery.log"; [ -f "$b" ] && sed -n "/^build/,\$p" "$b" > "$keep/battery-table.txt"
+      [ -f "$keep/battery-table.txt" ] || printf '%s\n' "$LAND_TABLE" > "$keep/land-table.txt"
+      [ -f "$WT-logs/probe-additions.txt" ] && [ -d "$WT-logs/review-probe" ] && [ "$(du -sk "$WT-logs/review-probe" | cut -f1)" -le 20000 ] && cp -Rp "$WT-logs/review-probe" "$keep/"
+      { echo "== $SLICE"; cat "$keep/open-items.txt" "$keep/probe-additions.txt" 2>/dev/null; sed -n '/^Open for the parent/p;/Notes (non-blocking)/,/^$/p' "$keep/review.md" 2>/dev/null; } >> .claude/backups/slice-logs/lessons-pending.txt
+      rm -rf "$WT-logs" "/tmp/pony-$SLICE"
+      echo "removed $WT, batch/hxqb-$SLICE, its logs"
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+      LAND_TABLE: "{{context.land_table}}"
+    timeout: 120000
+    on_success: done
+    on_error: cleanup_failed
+
+  cleanup_failed:
+    prompt: |-
+      Cleanup of {{context.slice}} refused (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      Leave what it kept, note it on the queue line, transition `done`.
+    transitions:
+      done: done
+
+  reject:
+    ask: parent
+    prompt: |-
+      A slice driver: do this prompt's queue_mark, then reply NEEDS-PARENT and take NO transition — the parent picks it.
+      `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml", id: "{{context.slice}}", to:
+      "failed", note: "<the reasons (review or triage)>; tip <sha>"})`; keep the worktree {{context.wt}} and the
+      branch for the user. Transition `close`, or `stop` when the next lines depend on it.
+    transitions:
+      close: closed
+      stop: stopped
+
+  blocked:
+    ask: parent
+    prompt: |-
+      A slice driver: context_set `fail_note` on THIS session (one line, the reason: no `|`, no `⏸`, no leading
+      `word:`), then reply NEEDS-PARENT and take NO transition — the parent picks it. Do NOT queue_mark: the line
+      stays `[>]` while the parent decides (the slot is still held — a `regate` continues this slice); `close` and
+      `stop` write `[!]` with your note themselves.
+      The worker of {{context.slice}} ended BLOCKED: read `status({session_id: "{{context.worker_session}}", key:
+      "blocked_reason"})` and its last message. Keep the worktree. Transition `close`, or `stop` for a hard fail, or
+      `split` when blocked_reason is the worker's split (its proposed queue lines) and the parent queues them: marked
+      `[!]` like `close`, and the ledger counts the visit `mark_split`.
+      A block that is the BASELINE's, not the branch's (`infra4 not run — … the baseline recorded no --infra-tree`, a
+      baseline taken on a different base) → `regate`: the engine re-takes the baseline on the base commit and re-runs
+      the gate through the pool; a block whose cause was fixed on main since → the parent's `rebase_regate` rebases
+      the tip onto main first. Never run slice-gate or a baseline in plain Bash — that bypasses the pool.
+      Before `regate`: context_set `gate_flags` on THIS session to the worker's own `gate_flags` (status of its
+      session, key gate_flags) — a movement the slice line sanctions (`--allow corpus`) must not fail the re-gate.
+      Drop an `--allow` the worker added only for the baseline block. Never `queue_mark … retry: true` here: retry
+      raises the line's difficulty.
+      A block naming a prerequisite whose repro the worker ran only on its patched tree is not a main line (user
+      2026-11-13: a writer defect the slice's own change exposes is fixed inside that slice): run that repro with
+      main's bin/apq.js first; main converges → widen this line (queue_edit touches) and transition `decided` with
+      the WIP kept.
+      The parent names the choice and SendMessages the driver (with the gate_flags value to set, if any): it never calls `transition` on P itself. An exec route (`regate`, `rebase_regate`) runs the whole gate inside the caller's MCP call, so the driver must make that call; it answers the driver directly, with no wake needed.
+    transitions:
+      close: mark_closed
+      split: mark_split
+      stop: mark_stopped
+      regate: regate
+      rebase_regate: rebase_regate
+      decided: decided
+
+  decided:
+    # A parent/user design call ends a block that needs more worker work; its own counter, review rounds untouched.
+    full_on_revisit: true
+    max_visits: 2
+    on_exhausted: stopped
+    prompt: |-
+      Parent decision {{visits.decided}} of 2 on a blocked worker (the parent's message holds the call).
+      1. Append to {{context.wt}}-logs/decisions.md: `## parent call (supersedes any earlier block on this choice)` /
+         `decision: <the call verbatim>` / `why: parent`. The reviewer and the worker read that file.
+      2. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context:
+         {gate_flags: "{{context.gate_flags}}", plan_row: "{{context.model_plan}}/{{context.effort_plan}}"}})` → W2; context_set `worker_session` = W2;
+         `link_agent({session_id: W2, agent_id: "{{context.worker_agent}}"})`.
+      3. SendMessage `{{context.worker_agent}}`: «The parent decided your block: <the call verbatim>. Read
+         {{context.wt}}-logs/decisions.md whole. Your NEW session is W2 (already started — do NOT call start()):
+         `status({session_id: "W2"})`, drive it to its terminal — a fix round; with no {{context.wt}}-logs/plan.md
+         your plan stage is not over: score in `orient`.» `tokens_worker` {{context.tokens_worker}} above 250000 (then NO SendMessage), or a worker that no longer answers →
+         spawn a fresh one (Agent with NO subagent_type (general-purpose: a `workflow:*` type lacks Bash/Edit or the workflow tools), model {{context.model_fix}}, effort {{context.effort_fix}}) with
+         the same text, then link_agent it to W2 and context_set `worker_agent`.
+      END your turn on this pipeline (`WAITING …`) — no transition before W2's own DONE/BLOCKED line. On its
+      report: ONE `transition` `worker_done` with `set: {tokens_worker: <digits only>}`.
+    transitions:
+      worker_done: worker_end
+
+  mark_closed:
+    type: exec
+    # A blocked line is marked `[!]` only when the parent closes it: marked earlier, a regate that follows runs on
+    # a slot the pick already counts as free, and the window overfills.
+    command: &mark_failed |-
+      "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --failed "$SLICE" --note "${NOTE:-worker blocked}"
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      SLICE: "{{context.slice}}"
+      NOTE: "{{context.fail_note}}"
+    timeout: 60000
+    on_success: closed
+    on_error: mark_by_hand
+
+  mark_split:
+    type: exec
+    # Same mark as mark_closed; its own state so the ledger's `visits` counts every split, recon's and the worker's.
+    command: *mark_failed
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      SLICE: "{{context.slice}}"
+      NOTE: "{{context.fail_note}}"
+    timeout: 60000
+    on_success: closed
+    on_error: mark_by_hand
+
+  mark_stopped:
+    type: exec
+    command: *mark_failed
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      SLICE: "{{context.slice}}"
+      NOTE: "{{context.fail_note}}"
+    timeout: 60000
+    on_success: stopped
+    on_error: mark_by_hand
+
+  mark_by_hand:
+    prompt: |-
+      wf-queue refused to mark {{context.slice}} failed (exit {{exit_code}}): {{stderr}}
+      `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml", id: "{{context.slice}}", to:
+      "failed", note: "<the reason, one line>"})`, then `close`, or `stop` if the parent said stop.
+    transitions:
+      close: closed
+      stop: stopped
+
+  rebase_regate:
+    type: exec
+    cwd: "{{project_root}}"
+    # The parent's route when the block's cause was fixed on main: the unchanged tip is rebased onto main, then `regate`.
+    # A conflict aborts the rebase (tip untouched) and goes to regate_failed: `gate_fix` hands it to a worker's sync.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      case "$WT" in /*/"$SLICE") ;; *) echo "refused worktree path: '$WT'"; exit 2;; esac
+      [ -z "$(git -C "$WT" status --porcelain)" ] || { echo "the tree has uncommitted changes"; git -C "$WT" status --short | head -20; exit 2; }
+      mkdir -p "$WT-logs"; before=$(git -C "$WT" merge-base HEAD main) || exit 1
+      [ "$before" = "$(git rev-parse main)" ] && { echo "already on main $(git rev-parse --short main)"; exit 0; }
+      if ! git -C "$WT" -c "merge.anyparse.driver=node '$WF_PROJECT_ROOT/bin/apq.js' merge-file %O %A %B --path %P" rebase -q main > "$WT-logs/sync-rebase.log" 2>&1; then
+        git -C "$WT" diff --name-only --diff-filter=U | sed 's/^/  conflict: /'; tail -5 "$WT-logs/sync-rebase.log"
+        git -C "$WT" rebase --abort 2>/dev/null
+        echo "conflicts rebasing onto main $(git rev-parse --short main): rebase aborted, tip unchanged"; exit 7
+      fi
+      (cd "$WT" && haxe tools/dev.hxml) > "$WT-logs/sync-build.log" 2>&1 || { echo "rebased; dev.js rebuild failed: $WT-logs/sync-build.log"; exit 8; }
+      echo "rebased onto main $(git rev-parse --short main); came from main:"; git log --format='  %h %s' "$before..main" | cut -c1-120
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+    timeout: 900000
+    on_success: regate
+    on_error: regate_failed
+
+  regate:
+    type: exec
+    cwd: "{{project_root}}"
+    # The baseline is taken on the BASE commit in a throwaway worktree beside the slice (`<wt>-base`), with the
+    # infra trees, into the slice's own logs; then the slice's gate runs against it.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      case "$WT" in /*/"$SLICE") ;; *) echo "refused worktree path: '$WT'"; exit 2;; esac
+      base=$(git -C "$WT" merge-base HEAD main) || exit 1
+      bwt="$WT-base"; logs="$WT-logs/slice-gate"; mkdir -p "$logs"
+      [ -d "$bwt" ] && git worktree remove --force "$bwt"
+      git worktree add -q --detach "$bwt" "$base" || exit 1
+      set --; if [ -n "$ANYPARSE_PONY" ]; then set -- --frozen "$ANYPARSE_PONY"; else echo "skipped: ANYPARSE_PONY unset, no frozen tree"; fi
+      for t in $ANYPARSE_INFRA_TREES; do set -- "$@" --infra-tree "$t"; done; [ -n "$ANYPARSE_INFRA_TREES" ] || echo "skipped: ANYPARSE_INFRA_TREES unset, no infra trees"
+      (cd "$bwt" && haxe tools/dev.hxml > "$WT-logs/base-dev-build.log" 2>&1 && node bin/dev.js slice-gate "$bwt" --baseline "$@" --logs "$logs") > "$logs/baseline-table.txt" 2>&1; brc=$?
+      git worktree remove --force "$bwt"
+      echo "--- baseline on $(git rev-parse --short "$base") (exit $brc)"; cat "$logs/baseline-table.txt"
+      [ "$brc" -eq 0 ] || exit 1
+      set -f; flags=""
+      for w in $GATE_FLAGS; do case "$w" in --arm|--allow|--allow-arm) ;; -*|*[!A-Za-z0-9._-]*) echo "refused gate flag: $w"; exit 2;; esac; flags="$flags $w"; done
+      (cd "$WT" && node bin/dev.js slice-gate "$WT" $flags) > "$logs/table.txt" 2>&1; rc=$?
+      echo "--- gate"; cat "$logs/table.txt"
+      exit $rc
+    env:
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+      GATE_FLAGS: "{{context.gate_flags}}"
+    timeout: 5400000
+    max_output: 16384
+    cases:
+      "0": review
+    default: regate_failed
+
+  regate_failed:
+    ask: parent
+    prompt: |-
+      A slice driver: reply NEEDS-PARENT and take NO transition — the parent picks it.
+      The parent's re-gate of {{context.slice}} did not pass (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      A row the branch owns → `gate_fix` (the failed row is the worker's fix list); a row that failed only because the
+      re-gate's gate_flags lacked a waiver the slice already carries (the worker's `--allow …`) → the parent sets
+      `gate_flags` on THIS session and the driver takes `regate`; a cause outside the slice that main has fixed since
+      the tip was cut → `rebase_regate` (the engine rebases the tip onto main, then re-gates); the baseline itself failed or a cause outside the
+      slice → `close` with the reason on the queue line, or `stop`.
+    transitions:
+      gate_fix: gate_fix
+      regate: regate
+      rebase_regate: rebase_regate
+      close: closed
+      stop: stopped
+
+  gate_fix:
+    # A gate row, not a review verdict: its own counter, so it never spends a review round.
+    max_visits: 2
+    on_exhausted: stopped
+    prompt: |-
+      Gate fix {{visits.gate_fix}} of 2 (the failed re-gate row is the fix list; review rounds are untouched).
+      1. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context:
+         {gate_flags: "{{context.gate_flags}}"}})` → W2 (its gate runs with the flags this slice already carries,
+         a parent waiver included); context_set `worker_session` = W2;
+         `link_agent({session_id: W2, agent_id: "{{context.worker_agent}}"})`.
+      2. SendMessage `{{context.worker_agent}}`: the failed row and its log path, then «Your NEW session is W2 (already
+         started — do NOT call start()): `status({session_id: "W2"})`, drive it to its terminal».
+         `tokens_worker` {{context.tokens_worker}} above 250000 (then NO SendMessage), or a worker that no longer answers → spawn a fresh one (Agent with NO subagent_type (general-purpose: a `workflow:*` type lacks Bash/Edit or the workflow tools), model {{context.model_fix}}, effort {{context.effort_fix}}) with the same text, then link_agent it to W2 and context_set `worker_agent`.
+      END your turn on this pipeline (`WAITING …`) — no transition before W2's own DONE/BLOCKED line. On its
+      report: ONE `transition` `worker_done` with `set: {tokens_worker: <digits only>}` (the task-notification's `<subagent_tokens>`, which follows the hand-back, is that agent's context size: it
+      REPLACES the value, for a fresh agent too; the engine reads W2's outcome,
+      carries its gate_flags, and routes).
+    transitions:
+      worker_done: worker_end
+
+  worker_end:
+    station: false
+    type: exec
+    # A round's end is read from the worker's own session, never from the driver's reading of a message: a driver
+    # that moved on while the fix worker still ran sent a failed round to review.
+    command: |-
+      case "$W" in ''|*[!0-9a-f]*) echo "refused worker session id: '$W'"; exit 2;; esac
+      # The session a review already judged never ends a new round: worker_done came before the round's W2 existed.
+      [ "$W" = "$REVIEWED" ] && { echo "worker_session $W is the round the review already judged: no new round was started."; exit 5; }
+      f="${STATE_DIR:-$HOME/.claude/workflow-state}/$W.json"
+      [ -f "$f" ] || { echo "no session file $f"; exit 2; }
+      node -e '
+        const s = require(process.argv[1]);
+        const at = (s.stack[s.active_frame] || s.stack[s.stack.length - 1] || {}).current_state || "?";
+        if (s.outcome === "completed" && (s.context || {}).rescore && (s.history || []).some(h => h.to === "rescore_wip")) {
+          const fs = require("fs"), logs = process.env.WT + "-logs";
+          fs.mkdirSync(logs, { recursive: true });
+          fs.writeFileSync(logs + "/plan.md", String(s.context.rescore_note || "") + "\n");
+          console.log(s.context.rescore); process.exit(4);
+        }
+        if (s.outcome === "completed") { console.log((s.context || {}).gate_flags || ""); process.exit(0); }
+        if (s.outcome === "failed" || s.outcome === "abandoned") { console.log("worker " + s.session_id + " ended " + s.outcome); process.exit(1); }
+        console.log("worker " + s.session_id + " is still at " + at); process.exit(3);' "$f"
+    env:
+      W: "{{context.worker_session}}"
+      WT: "{{context.wt}}"
+      REVIEWED: "{{context.reviewed_worker}}"
+    timeout: 30000
+    context_set:
+      gate_flags: "{{stdout}}"
+      reviewed_worker: "{{context.worker_session}}"
+    cases:
+      "0": fmt_race_skip
+      "1": blocked
+      "3": worker_running
+      "4": rescored
+      "5": round_not_started
+    default: worker_end_unknown
+
+  fmt_race_skip:
+    station: false
+    type: exec
+    # A fix round that only re-formatted main's files for a land `fmt-race` verdict goes to land without a re-review
+    # (user yes 2026-11-10): the slice's own diff keeps the patch-id the review judged, and `hxq changed` classes every
+    # listed file `layout`. Anything else, or no fmt-race round (fmt_race_files unset), is the normal re-review.
+    command: sh "$WF_PROJECT_ROOT/.claude/workflows/lib/fmt-race-skip.sh" check "$WT" "$FILES" "$PID"
+    env:
+      WT: "{{context.wt}}"
+      FILES: "{{context.fmt_race_files}}"
+      PID: "{{context.fmt_race_patch}}"
+    timeout: 120000
+    context_set:
+      fmt_race_skip: "{{stdout}}"
+      fmt_race_files: ""
+      fmt_race_patch: ""
+    cases:
+      "0": land
+    default: review
+
+  round_not_started:
+    max_visits: 2
+    on_exhausted: blocked
+    prompt: |-
+      {{stdout}}
+      You transitioned `worker_done` before the fix round's worker existed. Start it now, then wait:
+      1. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context:
+         {gate_flags: "{{context.gate_flags}}"}})` → W2; context_set `worker_session` = W2;
+         `link_agent({session_id: W2, agent_id: "{{context.worker_agent}}"})`.
+      2. SendMessage `{{context.worker_agent}}`: «Review fix round: read {{context.wt}}-logs/review.md whole (the list:
+         `status({session_id: "{{context.review_session}}", key: "fixes"})`). Your NEW session is W2 (already started — do NOT
+         call start()): `status({session_id: "W2"})`, drive it to its terminal — this is a fix round.»
+      END your turn (`WAITING …`) — no transition before W2's own DONE/BLOCKED line; then ONE `transition`
+      `worker_done` with `set: {tokens_worker: <digits only>}`.
+    transitions:
+      worker_done: worker_end
+
+  rescored:
+    # The plan stage ended: the slice goes on to the execute stage on the model its price asks for, with no parent and no re-queue.
+    max_visits: 1
+    on_exhausted: blocked
+    prompt: |-
+      The plan of {{context.slice}} scored difficulty {{stdout}}: the next stage executes it.
+      1. `queue_edit({file: "{{project_root}}/.claude/batch/queue.yaml", id: "{{context.slice}}", set: {difficulty: "{{stdout}}"}})`.
+      2. ONE `transition` `execute` on THIS session with `set: {difficulty: {{stdout}}, plan_handoff: "yes"}` (the engine
+         rewrites `model` and `effort`; `plan_handoff` is the ledger's record that the plan went to another executor;
+         the engine already filed the plan as {{context.wt}}-logs/plan.md).
+    transitions:
+      execute: work
+
+  worker_running:
+    max_visits: 8
+    on_exhausted: worker_end_unknown
+    prompt: |-
+      {{stdout}}
+      The worker of {{context.slice}} has not reached its terminal: END your turn (`WAITING …`). On its notification,
+      or a relayed DONE/BLOCKED line, transition `recheck` — never `review` or `blocked` by hand.
+    transitions:
+      recheck: worker_end
+
+  worker_end_unknown:
+    prompt: |-
+      The worker's end could not be read (exit {{exit_code}}): {{stdout}}{{stderr}}
+      `status({session_id: "{{context.worker_session}}"})`: outcome complete → `review`; failed → `blocked`; still
+      running → END your turn and transition `recheck` on its line.
+    transitions:
+      review: review
+      blocked: blocked
+      recheck: worker_end
+
+  done:
+    terminal: true
+    outcome: complete
+    prompt: "Pipeline {{context.slice}} landed and cleaned: its slot is free — in the dispatcher session {{parent_session_id}} transition `slot_free`."
+
+  closed:
+    terminal: true
+    outcome: complete
+    prompt: "Pipeline {{context.slice}} closed without landing (`[!]`): its slot is free — in the dispatcher session {{parent_session_id}} transition `slot_free`."
+
+  released:
+    terminal: true
+    outcome: complete
+    prompt: "Pipeline {{context.slice}} released before any work: in the dispatcher session {{parent_session_id}} transition `slot_free`."
+
+  stopped:
+    terminal: true
+    outcome: fail
+    prompt: |-
+      Pipeline {{context.slice}} STOPPED: report to the user the slice, the reason, and the exact state of main
+      (`git log --oneline -3`, `git status`). In the dispatcher session {{parent_session_id}} transition `stop`.

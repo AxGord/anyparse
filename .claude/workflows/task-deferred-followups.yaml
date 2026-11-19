@@ -1,0 +1,80 @@
+name: task-deferred-followups
+description: Close the 8 deferred lint-campaign follow-ups with one parallel
+  agent wave, suite+corpus verified, committed
+initial: wave
+states:
+  wave:
+    prompt: >-
+      Spawn 4 parallel agents (worktree isolation) covering the 8 deferred items
+      with DISJOINT file ownership:
+
+      A config-resolver seam: per-file LintConfig resolver shared by Cli AND
+      option-reading checks (Complexity/MagicNumber/ThreadSafety) without global
+      mutable state; + applyEnablement default foot-gun (owns Cli.hx, Linter.hx,
+      LintConfig.hx, the three checks, their tests).
+
+      B naming/rename cross-file reflection-string guard + per-owner confinement
+      memo (owns Naming.hx, HaxeNamingSupport.hx, NamingCheckTest.hx; must NOT
+      touch RefactorSupport).
+
+      C ExplicitType internals: lazy castTargets, closure-capture refactor of
+      collectVoidEdits, RefactorSupport.subtreeContainsKind stop-set overload,
+      shared macro-preceded-member predicate reused by CallGraph (owns
+      ExplicitType.hx, RefactorSupport.hx, CallGraph.hx, their tests).
+
+      D test-infra + docs: CliFixture.removeDir + migrate inline cleanups
+      (EXCLUDING files A owns), seam-overlap docs in
+      GrammarPlugin.hx/HaxeQueryPlugin.hx.
+
+      Every agent's FIRST worktree action: `git reset --hard main` (worktrees
+      fork from session-start HEAD — recorded lesson) and report `git log
+      --oneline -1`. Then merge patches sequentially (git apply --3way), rebuild
+      both binaries. Transition verify.
+    transitions:
+      verify: verify
+      abort: failed
+    task: "Deferred follow-ups: parallel wave + merge"
+  verify:
+    type: exec
+    command: cd {{context.cwd}} && haxe bin/apq-js.hxml && haxe test-js.hxml && node
+      bin/test.js > bin/suite-run.out 2>&1; rc=$?; hxq test-summary
+      bin/suite-run.out; grep 'sweep totals' bin/suite-run.out; exit $rc
+    timeout: 900000
+    max_output: 8192
+    on_success: review
+    on_error: fixloop
+    success_prompt: |-
+      Suite green:
+      {{stdout}}
+    error_prompt: |-
+      Suite FAILED (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+  fixloop:
+    prompt: Suite failed after the merge. Bisect by agent patch, fix in main tree
+      via hxq ops (HXQ_QUIET=1 for interim inconsistent states), rebuild.
+      Transition verify.
+    transitions:
+      verify: verify
+      abort: failed
+    max_visits: 4
+  review:
+    prompt: "Final gate: 1) `hxq fmt -l src/ test/` empty; 2) re-lint counts per dir
+      unchanged or improved; 3) focused review of the merged diff (the
+      config-seam and reflection-guard are the risky parts — verify
+      thread-safety invariant: no new global mutable state); 4) commit in
+      logical chunks (Co-Authored-By trailer, no push); 5) update the campaign
+      memory topic file (mark follow-ups DONE, note surprises); 6) report to
+      user. Transition done."
+    transitions:
+      done: finish
+      abort: failed
+    task: Review + commit + report
+  finish:
+    terminal: true
+    outcome: complete
+  failed:
+    prompt: Report what completed, what failed, exact working-tree state (git status
+      + diff --stat).
+    terminal: true
+    outcome: fail

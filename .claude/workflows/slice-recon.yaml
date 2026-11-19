@@ -1,0 +1,155 @@
+name: slice-recon
+description: >-
+  Read-only recon of one anyparse slice line (session cwd = its worktree), a child session of slice-pipeline:
+  load [exec: the engine hands the facts dev recon-facts collected straight to the recon's prompt] → recon (one
+  agent writes <wt>-logs/recon.md; an update reads the previous one first) → check [exec: the file was rewritten
+  this run and line 1 has its shape] → done. The pipeline's recon_end reads the verdict from the file.
+initial: load
+max_transitions: 12
+
+states:
+  load:
+    station: false
+    type: exec
+    # facts.md is written by slice-pipeline's recon_route (dev recon-facts) for this run; its content becomes the
+    # recon's prompt here, so no agent carries it. The start reply goes to the driver with reply "id" only.
+    command: |-
+      f="$WT-logs/facts.md"
+      [ -s "$f" ] || { echo "no $f: recon_route did not collect facts for this run" >&2; exit 2; }
+      # What the main checkout and the worktree look like BEFORE the recon: `check` compares, so a probe file or a
+      # config the recon wrote outside its scratch directory is named instead of being read by the next land.
+      rm -f "$WT-logs/main-dirty.ack" "$WT-logs/main-dirty.txt"; mkdir -p "$WT-logs/scratch"
+      git -C "$MAIN" status --porcelain 2>/dev/null | sort > "$WT-logs/main-porcelain.before"
+      git -C "$WT" status --porcelain 2>/dev/null | sort > "$WT-logs/wt-porcelain.before"
+      if [ -s "$WT-logs/recon.md" ]; then echo "MODE: update — a previous recon.md exists"; else echo "MODE: full — no previous recon.md"; fi
+      cat "$f"
+    env:
+      WT: "{{context.wt}}"
+      MAIN: "{{project_root}}"
+    timeout: 10000
+    max_output: 65536
+    context_set:
+      facts: "{{stdout}}"
+    on_success: recon
+    on_error: failed
+
+  recon:
+    prompt: |-
+      You are the RECON of anyparse slice {{context.slice}}, read-only: you write ONE file, {{context.wt}}-logs/recon.md,
+      and change nothing else — no tracked file, no queue, no build, gate or test run, no sub-agent. The only workflow
+      calls you make are on THIS session ({{session_id}}). SCRATCH RULE: every probe file and every config you write
+      goes under {{context.wt}}-logs/scratch/ by absolute path (it exists), never your start directory (the main
+      checkout {{project_root}}) and never the worktree root; an `hxq fmt` probe gets its hxformat.json in
+      a directory there beside the probe file, never a tree's own hxformat.json (a config at a tree root reformats
+      every land and battery that reads it). The engine compares both trees' `git status` before and after you and
+      refuses a recon that left a file there. Chain a `cd` with `&&`.
+      Every command runs in the FOREGROUND (`timeout` up to 600000), never `run_in_background`, never a Monitor; never
+      end your turn while anything you started is alive. After your last line is delivered, answer ONLY a harness
+      `[handback-send-enforce]` prompt with the plain-text line `DELIVERED {{context.slice}}`, never the report again.
+      Worktree {{context.wt}} is main at the slice base; every hxq runs as `HXQ_BIN={{project_root}}/bin/apq.js hxq …`
+      (owner / mentions / callers / refs / importers / show --select / source --select / ast).
+
+      The engine already collected these facts (`node bin/dev.js recon-facts`, also in {{context.wt}}-logs/facts.md).
+      Do NOT re-collect them — the line text, whether each touches path exists, `hxq owner` of its owner, mention counts
+      of its backticked names, the commits on main since its base, its `after:` slices' messages, same-owner siblings:
+      start from them and spend your turns on what they cannot answer.
+      ----- facts -----
+      {{context.facts}}
+      ----- end of facts -----
+      MODE update: read the previous {{context.wt}}-logs/recon.md FIRST. Keep every finding the facts do not touch;
+      re-check only what the `route:` reason and the new commits, line hash or siblings changed, and rewrite the file
+      whole (same format) — say under `## update` what changed since the previous recon and why.
+      MODE full: no previous recon; do all steps.
+
+      1. Premises: each `touches:` path and `owner:` type exists here (the facts say which); each number or claim of the
+         line about how the code or a tool behaves today, re-checked cheaply (hxq or a git-log one-liner, seconds), those
+         the line does NOT mark as measured first: its author may not have checked them, and the worker takes them as
+         fact. A claim you cannot check in seconds goes under `## unchecked` for the worker to verify first; a claim the
+         line itself labels a hypothesis is not a premise. A writer output the line quotes as today's is not unchecked:
+         write the line's input to a directory under {{context.wt}}-logs/scratch/ with an hxformat.json of the options it names, then run
+         `HXQ_BIN={{project_root}}/bin/apq.js hxq fmt <file>` twice, once as named and once with the knob the
+         line blames flipped; same output both times → `premise: fail — <knob> does not produce the quoted output`. `premise: fail` only for work already on main, a target that
+         is gone, a claim the whole change stands on found false, a target the predecessor's commit message keeps, or a
+         re-count past a limit the line sets (counted over the shapes the line targets, never every match); a side claim
+         found false is a note under `## premises`, and so is a renamed path or file. If the line claims an `after:` slice
+         left a target dead, unused or gated off, read that slice's commit message (the facts quote its head; the whole
+         one: `git log --grep '^Slice: <after-id>$' -1 --format=%B`): a sentence in it naming that target as staying
+         (kept, a separate decision, "until <later slice>") is `premise: fail — <the sentence>`. A parity with the fork is
+         a fact about today's code, never a reason (`CLAUDE.md` § References): report that the default exists and what
+         flipping it costs; do not steer the worker to keep it.
+         A clause the line attributes to the user (`решение пользователя`, `user decision`, `user call`, a `Tn` taste call) is a premise: name the construct in one or two words and run `rg -n -i '<construct>' "$HOME/.claude/projects/$(printf %s "{{project_root}}" | tr / -)/memory/"` (the project memory directory) and `git log --oneline -i --grep '<construct>' -15`; compare VALUES, not topics. A later call or commit giving the construct another layout or value, or a `SUPERSEDED` beside the line's value, is `premise: fail — <that call or commit, quoted>`; no hit or agreeing hits → a `## premises` note `user decision <construct>: no later call`.
+      2. The question the line answers: `hxq owner "<it>" src` in two phrasings (the facts hold the owner's); the files,
+         owners and callers the change reaches, each as file:line.
+      3. Score the WORK by {{project_root}}/.claude/workflows/lib/difficulty.md — the highest anchor that applies.
+         A scope you would hand the worker to cut (migration: a new contract, callers moved, old deleted, across
+         packages) is a split: score 9 and write `## split`. An `## unchecked` item that decides whether the line is one
+         change (a capability the macro lacks, a producer count) is read in code before you score (curator 100 P2).
+      recon.md: ≤60 lines, facts with file:line, no file dumps. Line 1 exactly `score: <1-10> premise: ok` or
+      `score: <1-10> premise: fail — <the premise, what you measured>`; then `question: …`, `owner: …` (or
+      `new: <package> — why`), `rule_code: yes|no`. Score ≥9: the proposed queue lines under `## split` (each: ID,
+      difficulty, touches, owner, its split type — sweep / migration / independent / re-score, cut as difficulty.md
+      "How to cut a split" says for it; a flip is never split — one-sentence scope, and one clause naming what keeps that
+      line green alone at its land, per difficulty.md). A split line that deletes a member or makes a parameter required names the
+      `hxq callers <member> src tools/src` count you ran and, for each caller found that is not itself deleted, its
+      callers one hop on; each caller falls in an earlier line's scope or gets its own line; a caller claim you did not
+      count goes under `## unchecked`. Write recon.md with the Write tool at that absolute path: a Bash heredoc naming a .hx file is
+      refused by the hxq gate hook, and a relative path after `cd` lands in the worktree.
+      Then transition `written` on session {{session_id}}.
+    transitions:
+      written: check
+
+  check:
+    station: false
+    type: exec
+    # The file must be this run's: a recon.md older than this run's facts.md is the previous recon, not a new one.
+    command: |-
+      f="$WT-logs/recon.md"
+      [ -s "$f" ] || { echo "no $f: write it with the Write tool at that absolute path"; exit 30; }
+      [ "$f" -nt "$WT-logs/facts.md" ] || { echo "$f is older than this run's facts.md: rewrite it whole"; exit 31; }
+      h=$(head -1 "$f")
+      printf '%s\n' "$h" | grep -q -E '^score: [0-9]+ premise: (ok|fail)' || { echo "line 1 of $f is not 'score: N premise: ok|fail …': $h"; exit 32; }
+      # Entries of `git status` that are new since `load`, in the main checkout and in the worktree. Refused ONCE
+      # (the recon restores what it wrote); what still differs after that is another process's and is left for the
+      # parent in main-dirty.txt, so a concurrent edit of the main tree never loops or gets reverted here.
+      if [ -f "$WT-logs/main-porcelain.before" ]; then
+        new=$( { git -C "$MAIN" status --porcelain 2>/dev/null | sort | comm -13 "$WT-logs/main-porcelain.before" - | sed "s|^|$MAIN: |"; git -C "$WT" status --porcelain 2>/dev/null | sort | comm -13 "$WT-logs/wt-porcelain.before" - | sed "s|^|$WT: |"; } )
+        if [ -n "$new" ]; then
+          printf '%s\n' "$new" > "$WT-logs/main-dirty.txt"
+          if [ ! -f "$WT-logs/main-dirty.ack" ]; then
+            : > "$WT-logs/main-dirty.ack"
+            echo "these entries of git status appeared outside $WT-logs/scratch during your recon:"; printf '%s\n' "$new"
+            echo "A file YOU wrote or overwrote: undo it now (a tracked file you changed: git -C <tree> checkout -- <path>; a file you created: rm it) and redo that probe under $WT-logs/scratch/. A file you did NOT touch: leave it exactly as it is and add one line under '## unchecked' of recon.md: 'tree changed by another process: <path>'. Never restore a file you did not write."
+            exit 33
+          fi
+          echo "still differs after the recon's fix, left for the parent: $WT-logs/main-dirty.txt" >&2
+        fi
+      fi
+      echo "$h"
+    env:
+      WT: "{{context.wt}}"
+      MAIN: "{{project_root}}"
+    timeout: 10000
+    cases:
+      "0": done
+    default: redo
+
+  redo:
+    max_visits: 2
+    on_exhausted: failed
+    prompt: |-
+      check refused recon.md: {{stdout}}
+      Fix {{context.wt}}-logs/recon.md as the recon step says, then transition `written`.
+    transitions:
+      written: check
+
+  done:
+    terminal: true
+    outcome: complete
+    prompt: |-
+      Your LAST message is recon.md's line 1 (`{{stdout}}`), nothing else.
+
+  failed:
+    terminal: true
+    outcome: fail
+    prompt: |-
+      The recon could not finish ({{stdout}}{{stderr}}). Your LAST message is one line: `RECON FAILED <the reason>`.

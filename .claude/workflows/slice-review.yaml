@@ -1,0 +1,199 @@
+name: slice-review
+description: >-
+  Read-only review of one anyparse slice branch (session cwd = its worktree,
+  <root>/.wt/anyparse/<ID> or /tmp/hxqb-<ID>): collect [exec] → read → axes →
+  verdict MERGE|FIXES|REJECT.
+initial: collect
+max_transitions: 20
+
+states:
+  collect:
+    station: false
+    type: exec
+    # Its hxq runs (changed, mentions, a whole-tree duplicate-code lint) are sequential, one process at a time: one thread.
+    resource: { threads: { min: 1, max: 1 } }
+    # Light, read-only: what every review starts from, in one output. Tail-truncated, so the gate table comes last.
+    command: |-
+      tree=$(pwd -P)
+      case "$tree" in /private/tmp/hxqb-*|/tmp/hxqb-*|*/.wt/anyparse/*) ;; *) echo "refused: session cwd $tree is not a slice worktree (<root>/.wt/anyparse/<ID> or /tmp/hxqb-<ID>)"; exit 2;; esac
+      logs="$tree-logs/slice-gate"
+      # Probe rows describe the tip their round reviewed: this round re-runs them or they are dropped.
+      if [ -f "$tree-logs/probe-additions.txt" ]; then mv "$tree-logs/probe-additions.txt" "$tree-logs/probe-additions.prev.txt"; fi
+      base=$(git merge-base HEAD main)
+      # The whole digest goes to a file the reviewer reads; stdout (which also reaches whoever starts the review)
+      # carries only the slice's identity and the gate verdict.
+      {
+      echo "branch $(git symbolic-ref --short HEAD)  base $(git rev-parse --short "$base")  tip $(git rev-parse --short HEAD)"
+      echo "porcelain: $(git status --porcelain | wc -l | tr -d ' ') entr(ies)"
+      git log --format='%h %s' "$base..HEAD"
+      echo "--- diff --stat main...HEAD (first 40 files)"
+      git diff --stat=160 "$base..HEAD" | awk -v n="$(git diff --name-only "$base..HEAD" | wc -l | tr -d ' ')" 'NR<=40 || /files? changed/{print} END{if(n>40) print " … " n-40 " more file(s): git diff --stat"}' 
+      echo "--- decisions lines added"
+      git diff "$base..HEAD" -- docs/decisions.md | grep '^+[^+]' || echo "(none)"
+      if [ -f "$tree-logs/repro.txt" ] || [ -f "$tree-logs/repro-verdict.txt" ]; then
+        echo "--- reproduce step of this kind: bug line ($tree-logs/repro-verdict.txt, $tree-logs/repro.txt)"
+        cat "$tree-logs/repro-verdict.txt" 2>/dev/null
+        head -30 "$tree-logs/repro.txt" 2>/dev/null | cut -c1-200
+        echo "(a verdict starting untestable: is the worker's reason no test can hold this symptom: judge whether it stands, a FIXES item when it does not; a skipped: verdict means the branch changed source before this step existed)"
+      fi
+      export HXQ_BIN="$tree/bin/apq.js"
+      echo "--- changed by meaning (hxq changed $base..HEAD; full: $logs/changed.txt)"
+      hxq changed "$base..HEAD" > "$logs/changed.txt" 2>&1 || echo "(hxq changed exited $?)"
+      # layout / imports / renamed files collapse into counts and move groups; others keep 12 detail lines
+      awk -f "$WF_PROJECT_ROOT/.claude/workflows/lib/changed-compact.awk" "$logs/changed.txt"
+      names=$(hxq changed "$base..HEAD" --names 2>/dev/null)
+      if [ -n "$names" ]; then
+        echo "--- who mentions each changed declaration (files, hits; full: $logs/mentions.txt)"
+        hxq mentions $names -- src test tools/src --flat --limit 1000000 > "$logs/mentions.txt" 2>&1
+        awk -F: '/^=== /{flush();name=$0;sub(/^=== /,"",name);sub(/ ===$/,"",name);n=0;delete hits;next}
+          /^[^ #][^:]*:[0-9]+:[0-9]+:/{if(!($1 in hits))order[++n]=$1;hits[$1]++}
+          function flush(i,l){if(name=="")return;l=sprintf("  %s: %d file(s)",name,n);for(i=1;i<=n&&i<=8;i++)l=l sprintf("%s %s (%d)",i==1?"":",",order[i],hits[order[i]]);if(n>8)l=l sprintf(", +%d more",n-8);print l}
+          END{flush()}' "$logs/mentions.txt" | cut -c1-240
+      fi
+      touched=$(git diff --name-only "$base..HEAD" -- '*.hx')
+      if [ -n "$touched" ]; then
+        echo "--- clones the slice introduced: an end within ~10 lines of a changed hunk (all clones: $logs/clones.txt)"
+        hxq lint src test tools/src --rule duplicate-code --rule duplicate-code-renamed --no-oracle --flat --all --full > "$logs/clones.txt" 2>&1
+        # Changed line ranges on the tip side, one `file start end` per hunk.
+        git diff -U0 "$base..HEAD" -- '*.hx' | awk '/^\+\+\+ b\//{f=substr($0,7)} /^@@/{split($3,a,","); s=substr(a[1],2)+0; n=(a[2]==""?1:a[2]+0); if(n>0) print f, s, s+n-1}' > "$logs/hunks.txt"
+        awk 'NR==FNR{h[NR]=$0; hn=NR; next}
+          function near(file,line,  i,p){for(i=1;i<=hn;i++){split(h[i],p," "); if(p[1]==file && line+10>=p[2] && line<=p[3]) return 1} return 0}
+          /^apq lint/{next}
+          { split($0,a,":"); hit=near(a[1],a[2]+0)
+            if(!hit && match($0,/duplicated from [^ ]+:[0-9]+/)){ref=substr($0,RSTART+16,RLENGTH-16); split(ref,b,":"); hit=near(b[1],b[2]+0)}
+            if(!hit && match($0,/duplicated from line [0-9]+/)){hit=near(a[1],substr($0,RSTART+21,RLENGTH-21)+0)}
+            if(hit) print substr($0,1,240) }' "$logs/hunks.txt" "$logs/clones.txt" | grep . || echo "(none)"
+      fi
+      echo "--- baseline table ($logs/baseline-table.txt)"
+      cat "$logs/baseline-table.txt" 2>/dev/null || echo "(missing)"
+      echo "--- gate table ($logs/table.txt; logs beside it)"
+      cat "$logs/table.txt" 2>/dev/null || echo "(missing — the gate never ran)"
+      } > "$logs/review-digest.txt" 2>&1
+      head -n 3 "$logs/review-digest.txt"
+      tail -n 1 "$logs/table.txt" 2>/dev/null || echo "(gate table missing — the gate never ran)"
+      echo "digest: $logs/review-digest.txt ($(wc -l < "$logs/review-digest.txt" | tr -d ' ') lines)"
+    timeout: 600000
+    max_output: 49152
+    on_success: read
+    on_error: read
+
+  read:
+    prompt: |-
+      Slice under review — {{context.cwd}} (exit {{exit_code}}):
+      {{stdout}}
+      FIRST read the digest file named above, whole (Read tool): commits, diff stat, decisions lines, `hxq changed`
+      by meaning, who mentions each changed declaration, clones the slice introduced, baseline and gate tables.
+      First load two skills (Skill tool): `lang-haxe` (Haxe semantic traps — read the index; open a reference only
+      when the diff touches its topic) and `architecture` (simplicity thresholds for the reuse/design axis).
+
+      You are READ-ONLY: no edits, commits, `--fix`, `git stash`, `pkill -f` (a process you start, e.g. a
+      `haxe --wait` probe server, you stop by the pid you recorded: `kill <pid>`); a probe file goes under {{context.cwd}}-logs/review-probe/, the session scratchpad is shared, and you delete only there; never run slice-gate, land,
+      the battery or the arms — the gate table in the digest is the reading, its logs (suite.log, lint-touched.txt,
+      arms.log, jvm.log, infra-*.txt) sit in {{context.cwd}}-logs/slice-gate/.
+      Every command runs in the FOREGROUND: never `run_in_background`, never Monitor, never end a turn to wait. A Bash
+      call takes `timeout` up to 600000; split a longer probe into several calls. Your turn ends only with your VERDICT
+      line (a reviewer waiting on background work lets the harness end its driver, and the verdict lands on the parent).
+      A command that would outlast one call (a whole suite, a wait for a pool lease) you do not run: name it in your
+      verdict as unverified, with the command. A call the harness moved to the background at its timeout: TaskStop it
+      before any end of turn. After your VERDICT line is delivered, answer ONLY a harness `[handback-send-enforce]`
+      prompt with the plain-text line `DELIVERED <the slice id>`, never the verdict again, never SendMessage to main.
+      Add no synthetic load (no CPU burners): other slices' gates share this machine.
+      CLAUDE.md is already in your context (do not open it). Read: the principles ({{project_root}}/.claude/workflows/lib/principles.md, whole)
+      and this slice's task in {{project_root}}/.claude/batch/queue.yaml (`awk '/^  - id: <ID>$/{f=1;print;next} f&&/^  - /{exit} f' …`) (your cwd is the worktree, where .claude/batch does not exist); the worker's report (your brief) — when it is
+      only a one-line DONE, read {{context.cwd}}-logs/report.md and {{context.cwd}}-logs/handoff.md (its "least sure"
+      claims are where to push first).
+      The digest (`hxq changed`) decides what you read: files marked `layout` / `imports` / `renamed` — do NOT
+      read them (the gate and the digest prove them); for `declarations` / `new` / `text` read ONLY the listed
+      declarations (`hxq show <file> --select '<address>'`, `HXQ_BIN={{context.cwd}}/bin/apq.js`) and, where a change
+      can affect a caller, the callers the mentions list names. Never `git diff` on .hx — `hxq show --select` the
+      listed declarations (a non-.hx file — json, md, yaml — may be diffed, verbatim with `rtk proxy git diff`).
+      Tokens: a `transition` reply IS the next prompt — never call `status` after it; never `cat`/`tail` a whole log —
+      `grep -m 20` what you look for.
+      Behaviour parity, when the slice touches src/anyparse/query/cli or any command: run
+      `node {{project_root}}/bin/dev.js parity <base-sha> {{context.cwd}}/bin/apq.js --out {{context.cwd}}-logs/parity`
+      (it builds/caches the base engine itself; `dev base-engine <sha>` alone gives you a base apq.js for your own probes).
+      Quote its last line; each DIFF block is either the slice's named intended change or a finding. Never hand-write a
+      parity script or rebuild a base engine from `git archive`.
+      Probe kits: for each area under {{project_root}}/test/probes/ the slice touches (`ls` it), run
+      `node {{project_root}}/bin/dev.js probe {{context.cwd}}/test/probes/<area>/kit.json --engine {{context.cwd}}/bin/apq.js --compile`
+      (the WORKTREE's kit — main's misses the rows this slice added) BEFORE
+      writing probes of your own; quote its last line. A deviating row is a finding unless it is the slice's intended
+      change; a moved known-defect row is checked fixed (exit 0, compiles) not merely changed. Probes you still need: a row showing THIS slice's change (base wrong, tip right) when your verdict is FIXES anyway → a fix-list item `add kit row <invocation> to test/probes/<area>, fixture <path>` (the worker records it with `dev probe <area> --record`); every other row → {{context.cwd}}-logs/probe-additions.txt (the invocation + why, fixtures under {{context.cwd}}-logs/review-probe) for the parent. An earlier round's rows, when {{context.cwd}}-logs/probe-additions.prev.txt exists: re-run each on this tip; copy into probe-additions.txt only those that still deviate.
+      Then transition `axes`.
+    transitions:
+      axes: axes
+
+  axes:
+    prompt: |-
+      Judge each axis (reference: {{project_root}}/.claude/workflows/lib/reviewer-brief.md § The axes):
+      Axes 3–5 are gate rows (arms KILLED, `allowed:` rows, decisions + lint touched) — look only at an anomaly.
+      1. Correctness — every claim of the report reproduced or refuted with a number; where the line asks for a census ("each other X - find them"),
+         the report's list or its claim about the rest is such a claim: re-derive it once with hxq at round 1;
+         a mechanism the line
+         named is a hypothesis: did it hold?
+         The fork (haxe-formatter) is a reference, never a finding. A finding is tip ≠ base on a form the line does
+         not name as intended, or a false claim. A false claim is fixed by correcting it; a tip ≠ base deviation by
+         restoring base — never by naming or pinning it. When restoring needs a choice (widen an owner, accept the
+         loss), the item is design=yes. A line that promises identical behaviour, a refactor or Δ0 makes every lost
+         result (base reports, tip silent) such an item. On a security or allow-list line, a bypass outside the
+         families the line names is an open item for a follow-up line, not a FIXES item. Where tip = base, a
+         difference from the fork is no finding and no acceptance criterion: one line in the report's open items.
+      2. Reuse — the `reuse:` section: the question each new piece answers; does an existing component
+         (docs/architecture.md, TypingService, devkit) already answer it? A re-derivation beside an owner, or a new
+         mechanism an owner could take: a FIXES item per copy (file, selector, the owner's call); a false `no owner`
+         in the report is an item too; design=yes when the swap needs a choice between designs.
+         New or moved code that reads the text of a language this project has a grammar for, to find what a construct is
+         or where it ends (a char loop, indexOf or split over syntax, a keyword test on runs of text), is parsing outside
+         the engine: name the AST node or grammar declaration that already knows it. Known: a FIXES item (read the node,
+         or generate the reader from the declaration), also when the diff only merges earlier scanners into one. None:
+         the report says so, design=yes.
+      3. Tests — each new pin RED on the unfixed code (its `@:killer` arm KILLED in arms.log); no assertion
+         the unchanged input already satisfies. Every concrete yes/no property you verified by READING
+         (a flag disables only X, a rollback leaves Y, a sum stays under Z) — name the test that holds it; none
+         → a FIXES item "add a test for <property>". Your review leaves tests behind, not just a verdict.
+         A command-line option the slice adds or reorders is pinned on a literal argv through the command's own parser
+         (its main or args class), never through a recipe the test builds; none, while an open item has the parent pass
+         that option to a pipeline command → a FIXES item.
+      4. Waivers — every `allowed:` row carries a reason the slice line names.
+      5. Prose — comments without measurements; decisions lines end `→ <SLICE-ID>`, added by `dev decision`.
+      Then transition `verdict`.
+    transitions:
+      verdict: verdict
+
+  verdict:
+    prompt: |-
+      Keys for the `set` of the ONE `transition` `done` below (no context_set calls):
+        verdict —MERGE | FIXES | REJECT. A list you can write item by item is FIXES, whatever its length. REJECT only
+                  when no such list exists: the line's premise is false, an owner already answers its whole question,
+                  or the change has to be redone from its design.
+        fixes   — FIXES: the exact fix list (each item: file, selector, what and why); else omit
+        reasons — REJECT: why; else omit
+        review_text — `session {{session_id}}`, the verdict, the full fix list (each item: file, selector, what and
+                  why) or the reject reasons, one line per axis, and the readings you quoted (parity, kits). Never the
+                  Write tool or a shell redirect: the engine writes it to {{context.cwd}}-logs/review.md (a later round overwrites).
+        review_lessons — YOUR OWN lessons only, omit when none; else a STRING holding one JSON document: {"lessons": [{"id": "UPPER-CASE-ID", "kind": "<class>", "touches": ["file that exists on main", "path (new)"], "repro": "one line that shows it", "text": "the brief"}]}. kind: unverified (not reproduced on a real tree; the script files it backlog, low) | reproduced-on-real-tree | loss (wrong code, a dropped comment, fmt refusing real code) | arm-rot-on-base (a gate waived an arm or it was routed around; filed pending, high) | process (about the workflow). touches: 1-8 FILES, never a directory or glob; no client project names.
+      docs/decisions.md and test/testkit/arms/*.json merge by themselves at land — not a finding.
+      Then ONE call: `transition({session_id, transition: "done", set: {verdict: …, fixes: …, reasons: …, review_text: …, review_lessons: …}})` — only the keys that apply (the keys are written first; an exec then writes review_text to the file; a refused call writes nothing: fix what its error names and send it again).
+    transitions:
+      done: write_review
+
+  write_review:
+    station: false
+    type: exec
+    # Subagents may not Write report files (the harness refuses); the text lives in the session, the engine files it.
+    command: |-
+      logs="$(pwd -P)-logs"; mkdir -p "$logs"; printf '%s\n' "$REVIEW_TEXT" > "$logs/review.md"; case "$REVIEW_LESSONS" in ''|*context.review_lessons*) ;; *) printf '%s\n' "$REVIEW_LESSONS" > "$logs/review-lessons.json";; esac; echo "wrote $logs/review.md"
+    env:
+      REVIEW_LESSONS: "{{context.review_lessons}}"
+      REVIEW_TEXT: "{{context.review_text}}"
+    timeout: 30000
+    on_success: finish
+    on_error: finish
+
+  finish:
+    terminal: true
+    outcome: complete
+    prompt: |-
+      Your LAST message to the parent is ONE line:
+      `VERDICT {{context.verdict}} session={{session_id}} review={{context.cwd}}-logs/review.md` — plus, only for
+      FIXES, ` design=yes` when an item needs a choice between designs (the parent decides those), else ` design=no`.

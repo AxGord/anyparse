@@ -1,0 +1,12 @@
+{
+  "rules": [
+    { "match": "/^git\\s+(-C\\s+\\S+\\s+)?stash\\b/", "deny": "git stash is forbidden for every agent (a stash hides the diff from the gate and the commit step; a pop after a rebase can drop work): leave the tree as is and say what you needed" },
+    { "match": "/^(pkill|killall)\\b/", "deny": "pkill/killall match by name and reach other agents' processes: kill only the PIDs you started (`kill <pid>`, the pid from `$!` or `pgrep -f <your own scratch path>`)" },
+    { "match": "/^node\\s+\\S*bin\\/dev\\.js\\s+(slice-gate|battery|land|mutation-arm|mutation-check)\\b/", "deny": "a gate, the battery, a land and the arms are workflow steps (they take the pool's lease and keep the verdict): commit and transition `gate` — never run them by hand" },
+    { "match": "/^node\\s+\\S*bin\\/test\\.js\\b/", "threads": "1-2" },
+    { "match": "/^node\\s+\\S*bin\\/dev\\.js\\s+shard\\b/", "threads": "2-4", "pass": "-n $WF_THREADS" },
+    { "match": "/^node\\s+\\S*bin\\/dev\\.js\\s+(worker-build|jvm-portability)\\b/", "threads": "1-2" },
+    { "match": "/^hxq\\s+(lint|oracle)\\b(?!.*(--no-oracle|--help|-h\\b))/", "threads": "1-3", "pass": "env:APQ_ORACLE_PARALLEL" },
+    { "match": "haxe", "threads": "1-2" }
+  ]
+}

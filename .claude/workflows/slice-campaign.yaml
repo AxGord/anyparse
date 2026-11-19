@@ -1,0 +1,205 @@
+name: slice-campaign
+description: >-
+  The parent's loop over .claude/batch/queue.yaml, one agent at a time: pick →
+  prepare [exec worktree] → work (slice-worker agent) → review (slice-review
+  agent) → land [exec dev land + battery] → bookkeeping → cleanup [exec] → pick.
+initial: pick
+max_transitions: 1000
+
+states:
+  pick:
+    prompt: |-
+      Queue: {{project_root}}/.claude/batch/queue.yaml (header above `## Tasks` — re-read only when it
+      changed). Pick the first `- [ ]` line whose every `after:` id is `[x]`; skip `⏸` lines. None → `all_done`.
+      Re-measure any number of the line the worker will build on (on main, read-only) and correct the line.
+      Mark it `[>]`. context_set (each its own call):
+        slice — its ID (letters, digits, `-` only)
+        model — its `model:` field (opus when unset)
+        effort — its `effort:` field (unset → task-delegation table: high for code, medium for routine)
+      Then transition `prepare`.
+    transitions:
+      prepare: prepare
+      all_done: all_done
+
+  prepare:
+    type: exec
+    cwd: "{{project_root}}"
+    # The worker's session cwd must exist before its start(), so the worktree is made here. Kept when present.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      wt=/tmp/hxqb-$SLICE
+      if [ -d "$wt" ]; then echo "kept $wt ($(git -C "$wt" symbolic-ref --short HEAD) @ $(git -C "$wt" rev-parse --short HEAD))"; exit 0; fi
+      base=$(git rev-parse HEAD)
+      git worktree add "$wt" -b "batch/hxqb-$SLICE" "$base" || exit 1
+      mkdir -p "$wt-logs"
+      echo "made $wt on batch/hxqb-$SLICE @ $(git rev-parse --short "$base")"
+    env:
+      SLICE: "{{context.slice}}"
+    timeout: 60000
+    on_success: work
+    on_error: prepare_failed
+
+  prepare_failed:
+    prompt: |-
+      The worktree for {{context.slice}} was not made (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      A stale branch without its directory: decide (delete the branch only if it holds nothing unmerged) and
+      `retry`; otherwise mark the line `[!]` with the reason and `pick`, or `stop`.
+    transitions:
+      retry: prepare
+      pick: pick
+      stop: stopped
+
+  work:
+    prompt: |-
+      {{stdout}}
+      Spawn ONE worker (Agent, model {{context.model}}, effort {{context.effort}}, foreground or wait for its notification) with exactly:
+
+        You are the worker of anyparse slice {{context.slice}}. Your FIRST action (not start() without arguments):
+        mcp__plugin_workflow_wf__start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "/tmp/hxqb-{{context.slice}}"}).
+        Then drive that workflow to its terminal. Your line is {{context.slice}} in {{project_root}}/.claude/batch/queue.yaml.
+
+      Its last message names its session: read `status(<that id>)` (outcome + context; values are cut — the
+      gate table is /tmp/hxqb-{{context.slice}}-logs/slice-gate/table.txt). context_set `worker_agent` (agent id,
+      for SendMessage), `worker_session`, `tokens_worker` (from the agent notification).
+      Outcome complete → `review`; failed (blocked / gate exhausted) → `blocked`.
+    transitions:
+      review: review
+      blocked: blocked
+
+  review:
+    prompt: |-
+      Spawn ONE reviewer (Agent, model opus, effort high; sonnet/medium when the slice touches only tests, docs or tools/ under a full gate) with exactly:
+
+        You are the reviewer of anyparse slice {{context.slice}}, read-only. Your FIRST action (not start() without arguments):
+        mcp__plugin_workflow_wf__start({workflow: "slice-review", parent_session_id: "{{session_id}}", cwd: "/tmp/hxqb-{{context.slice}}"}).
+        The worker's report: <paste the worker's last message>.
+
+      Its last message carries the verdict and the full fix list. context_set `verdict`, `tokens_review`.
+      MERGE → `land`; FIXES → `fixes`; REJECT → `reject`.
+    transitions:
+      land: land
+      fixes: fixes
+      reject: reject
+
+  fixes:
+    prompt: |-
+      Review round {{visits.fixes}} (a third FIXES verdict → `reject` instead). SendMessage `{{context.worker_agent}}`:
+
+        Review fix round: <the reviewer's fix list verbatim>. Start a NEW session:
+        start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "/tmp/hxqb-{{context.slice}}"}) — this is the fix round.
+
+      Wait for its report, read `status(<new session>)`; complete → `review`, failed → `blocked`.
+    transitions:
+      review: review
+      blocked: blocked
+      reject: reject
+
+  land:
+    type: exec
+    cwd: "{{project_root}}"
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      node bin/dev.js land "batch/hxqb-$SLICE" --allow-blast --snapshot
+    env:
+      SLICE: "{{context.slice}}"
+    timeout: 5400000
+    resource: { priority: 1, locks: ["anyparse-land"] }
+    max_output: 16384
+    context_set:
+      land_table: "{{stdout}}"
+    cases:
+      "0": bookkeeping
+    default: triage
+
+  triage:
+    prompt: |-
+      `dev land batch/hxqb-{{context.slice}}` FAILED (exit {{exit_code}}; logs $TMPDIR/anyparse-land/batch-hxqb-{{context.slice}}/):
+      {{stdout}}
+      {{stderr}}
+
+      Read the failed row first. Never `git stash`, never push, never `cd` into a worktree to merge.
+      - merge / build aborted → main is as it was: the cause is the branch → `fixes` (send the
+        cause to the worker as its fix list) or `reject`.
+      - battery red → the merge commit STAYS on main: find the cause from battery.log; a fix the branch
+        should carry → tell the user before touching main's history and `stop`; a known, explained
+        movement → record it and `bookkeeping`.
+    transitions:
+      fixes: fixes
+      reject: reject
+      bookkeeping: bookkeeping
+      stop: stopped
+
+  bookkeeping:
+    prompt: |-
+      Landed {{context.slice}}:
+      {{context.land_table}}
+
+      - queue.yaml: the line → `[x] {{context.slice}} | LANDED <merge sha> <date>; battery …; review verdict; tokens:
+        worker {{context.tokens_worker}}, review {{context.tokens_review}}` (+ open items routed to their lines).
+      - hxq-bugs.md: the slice record; out-of-slice findings → § `⛔ COLD LIST`.
+      - FB-* slice (client feedback): SendMessage to the session named `ready-made-download-by-practice-id`
+        (ListAgents shows it): slice id, merge SHA, one line of what changed for them. Never name the
+        client project in anything committed to anyparse.
+      - Do not commit the batch files; never push.
+      Then transition `cleanup`.
+    transitions:
+      cleanup: cleanup
+
+  cleanup:
+    type: exec
+    cwd: "{{project_root}}"
+    # Exact paths of this slice only — never a prefix glob.
+    command: |-
+      case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'"; exit 2;; esac
+      wt=/tmp/hxqb-$SLICE
+      if [ -d "$wt" ]; then
+        dirty=$(git -C "$wt" status --porcelain)
+        [ -z "$dirty" ] || { echo "kept $wt: not clean"; echo "$dirty" | head -5; exit 1; }
+        git worktree remove --force "$wt" || exit 1
+      fi
+      git branch -d "batch/hxqb-$SLICE" || exit 1
+      rm -rf "/tmp/hxqb-$SLICE-logs" "/tmp/pony-$SLICE"
+      echo "removed $wt, batch/hxqb-$SLICE, its logs"
+    env:
+      SLICE: "{{context.slice}}"
+    timeout: 120000
+    on_success: pick
+    on_error: cleanup_failed
+
+  cleanup_failed:
+    prompt: |-
+      Cleanup of {{context.slice}} refused (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      Leave what it kept, note it in the queue line, transition `pick`.
+    transitions:
+      pick: pick
+
+  reject:
+    prompt: |-
+      Mark {{context.slice}} `[!]` in queue.yaml with the reasons (review or triage) and the tip SHA; keep the
+      worktree and branch for the user. Transition `pick`, or `stop` when the next lines depend on it.
+    transitions:
+      pick: pick
+      stop: stopped
+
+  blocked:
+    prompt: |-
+      The worker of {{context.slice}} ended BLOCKED: read `blocked_reason` from status(<its session>) and its last
+      message. Mark the line `[!]` with the reason, keep the worktree. Transition `pick`, or `stop` for a
+      hard fail.
+    transitions:
+      pick: pick
+      stop: stopped
+
+  all_done:
+    terminal: true
+    outcome: complete
+    prompt: "Queue exhausted: report to the user what landed, what is `[!]`, and the tokens per slice."
+
+  stopped:
+    terminal: true
+    outcome: fail
+    prompt: "Stopped: report to the user the slice, the reason, and the exact state of main (`git log --oneline -3`, `git status`)."

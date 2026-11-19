@@ -1,0 +1,95 @@
+name: slice-dispatch
+extends: batch
+max_transitions: 100000
+description: >-
+  Slice campaign over .claude/batch/queue.yaml — a heir of the engine's `batch`: the engine's pick
+  (wf-queue / queue_next: batch_size, after:, touches:, owner:, ⏸, pause = batch_size 0) admits the
+  next lines, each admitted slice runs as its own child session `slice-pipeline` that this agent
+  drives, and every freed slot re-runs the pick. Every slice is reviewed before it lands, so the
+  base's combined cross-check is skipped.
+
+states:
+  plan_queue:
+    station: false
+    type: exec
+    # The queue is fixed for this campaign; every pick re-reads it.
+    command: |-
+      [ -f "$QUEUE" ] || { echo "queue missing: $QUEUE"; exit 2; }
+      echo "queue $QUEUE"
+    env:
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+    timeout: 10000
+    context_set:
+      queue_file: "{{project_root}}/.claude/batch/queue.yaml"
+      task_workflow: slice-pipeline
+    on_success: pick
+    on_error: pick_failed
+
+  dispatch:
+    # Each slice is driven by a cheap DRIVER agent, not by this (expensive, long-context) session:
+    # the parent starts the pipeline and the driver, then only handles what a driver hands back.
+    # No revisit_prompt: a dispatcher agent that takes this session over mid-run never saw the first visit, and a
+    # short "same steps" reply let it guess the workflow of an admitted line. The full recipe rides on every visit.
+    prompt: |-
+      The pick admitted (and marked `[>]` in {{context.queue_file}}) one line per free slot, `ID model effort repo workflow difficulty`:
+      {{stdout}}
+      {{stderr}}
+
+      For EACH admitted line:
+      1. `start({workflow: <its workflow column, the 5th, COPIED (`engine-task`, `research-task`, …); ONLY a `-` there → "slice-pipeline">, parent_session_id: "{{session_id}}",
+         cwd: "<its repo column, the 4th>", reply: "id", context: {task: "<ID>", queue_file: "{{context.queue_file}}", difficulty: "<its difficulty column, the 6th>"}})`
+         → session P (now at `claim`) and its DRIVER block. Do NOT drive P yourself. Never guess the workflow from the id or the repo.
+      2. Spawn the DRIVER exactly as that block writes it (one recipe for every task workflow: model, effort,
+         `subagent_type`, `run_in_background`, prompt verbatim).
+
+      3. In ONE message: `link_agent({session_id: P, agent_id: <the driver's id>})`, context_set `tasks` on THIS session (one `ID=P driver=<agent id>` per running slice, all of them), transition `dispatched`. END your turn.
+    transitions:
+      dispatched: collect
+
+  collect:
+    prompt: |-
+      Slices run on drivers: `status({session_id: "{{session_id}}", key: "tasks"})`. Last pick:
+      {{stderr}}
+
+      Woken by a DRIVER's one-line report:
+      - `LANDED <sha> slice=<ID> …` — the driver already marked the queue and wrote the record. `lessons=filed N, triage M` in its line: the slice's lesson records are already filed by `dev lessons-file` (unverified → backlog/low, arm-rot-on-base → pending/high); read nothing for them. A prose row of its `== <ID>` block in .claude/backups/slice-logs/lessons-pending.txt (a slice without records, or `lessons=not run`) still → a queue line (queue_add), a memory note, or nothing (say which in one phrase). The triage file .claude/backups/slice-logs/lessons-triage.txt is read in a batch, EVERY 5 LANDS and BEFORE ANY CURATOR RUN, never per land: each row (`id [kind] reason :: text :: repro :: touches`) → queue_add by the rule below, a memory note or nothing; then empty the file. Every queue_add (here and below) carries `touches:` (files that exist on main, `(new)` for a file the slice creates; a directory conflicts with nothing under `overlap: files`, so name the files a line will edit — curator 101 F3, lib/difficulty.md "Before writing a line"): a line without it conflicts with every anyparse line (engine src/queue.ts `conflict`, "no touches:") and runs alone. Status and priority (user 2026-11-13): `high` = an enabler (it makes many later lines cheaper: macro simplification, infrastructure, one owner instead of copies) or a goal the user named; `normal` = a defect reproduced on a real tree (anyparse, Pony, the fork corpus) or under a shipped config, or a loss (wrong code, a dropped comment, `fmt` refusing real code); `low` = everything else, the default for a review lesson. A lesson neither reproduced on a real tree nor a loss nor a user call goes in as `status: backlog` with its one-line repro, not pending. Before an `after:` names a line, check it is not closed `[!]`: a requeued line is named by its new id. A row naming an arm that is rot on base (a gate waived it, or the worker routed around it) queues its repair line with priority: high: every slice whose gate selects that arm pays a waiver until it lands. `decided=<file>`
+        → read that file (the decider's choices, a few lines) and queue a correction if one is wrong. In ONE message: the queue_add rows of that block, context_set `tasks` (all running), `slot_free` (no call depends on another's result); under a dispatcher agent the `tasks` update and `slot_free` are already done by it: only the queue_add rows. Nothing runs before that message but the lessons-block read: a slice's $ is its ledger row (spend.usd); token-audit, post-land status or any other measurement goes after the next dispatch, if at all.
+        Under a dispatcher agent this branch is read by the main conversation at a `LESSONS` message: do it once per line of that block, then `node bin/dev.js arm-sweep status` once per block: a NEW `<sha>.verdict.txt` naming arms that did not hold → one repair line per arm (priority: high, as a rot on base); a `<sha>.failed` → read its log once and say so to the user. Without a dispatcher: after that dispatch, the same command.
+      - `NEEDS-PARENT slice=<ID> session=<P> reason=… see=<file>` — read only the named file. Decide:
+        a design choice → SendMessage the driver your decision and tell it to continue (it relays it verbatim);
+        a rejected or blocked slice → decide whether to queue a follow-up line (queue_add) and free the slot
+        (a rejected line is already `[!]`; a blocked one stays `[>]` until you message its driver `close`/`stop`,
+        which writes `[!]`; then `slot_free`; a `regate` keeps the slot); anything that needs the user → tell the user, keep the
+        slot. Never take over the slice's work yourself.
+      - `WAITING slice=<ID> session=<P> agent=<A> step=<S>` — the driver waits on A; nothing to do.
+      - a driver's notification "waiting on its own background work" twice with no state change on its P for 20 min →
+        SendMessage that driver "probe your agent"; never read it as "the worker is still running".
+      - a worker or reviewer line (`DONE …`, `BLOCKED …`, a verdict) — it reached you instead of its driver:
+        SendMessage it verbatim to that slice's driver (`tasks`: its `driver=`) with "relayed — route it
+        (agents/driver.md § resumed after your last line)". Do not act on it yourself.
+      Nothing ended → END your turn here, no transition. None of YOURS runs and the last pick admitted nothing
+      → `stalled`. A task session ended `stopped` → `stop`.
+    transitions:
+      slot_free: pick
+      stalled: cross_check
+      stop: report
+
+  cross_check:
+    type: exec
+    # Each slice had its own review (slice-review) before `dev land`; no second pass over the sum.
+    command: "true"
+    timeout: 10000
+    on_success: report
+    on_error: report
+
+  report:
+    task: "Campaign summary"
+    prompt: |-
+      The campaign window is empty. Last pick (exit {{exit_code}}):
+      {{stderr}}
+      `sessions` → `abort` any orphaned child session of {{session_id}}. Report to the user from
+      {{context.queue_file}}: what landed (merge SHA, battery, review verdict, tokens per slice), what is `[!]`
+      and why, and why the remaining `[ ]` lines were not admitted (the pick's per-line reasons above:
+      after:, ⏸, overlap with a `[>]` line no one of ours runs, parent-run, pause). Then `done`.
+    transitions:
+      done: finish

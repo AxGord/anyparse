@@ -1,0 +1,218 @@
+name: task-lint-cleanup
+description: "Three-phase lint-debt cleanup: config policy + delete-subset
+  fixes, parallel hxq autofix development, parallel residual cleanup, verified
+  by full JS suite between phases"
+initial: phase0
+states:
+  phase0:
+    prompt: >-
+      Phase 0 — policy + free wins (sequential, main tree):
+
+      1. Create test/apqlint.json disabling magic-number for the test/ scope
+      (walk-up config discovery makes it apply to test files only). Verify: `hxq
+      lint test/ --format json | jq length` drops by ~830.
+
+      2. Apply the delete-subset autofix with WIDE scope (cross-file resolution
+      needs src/+test/ together — see feedback memory): run `hxq lint` --fix
+      scoped per rule (unused-import first). Verify lint accepts multiple paths;
+      if not, use project root as scope.
+
+      3. If src/ was touched, rebuild engine: `haxe bin/apq-js.hxml`.
+
+      Then transition verify0.
+    transitions:
+      verify0: verify0
+      abort: failed
+    task: "Phase 0: lint policy config + delete-subset autofix"
+  verify0:
+    type: exec
+    command: cd {{context.cwd}} && haxe test-js.hxml && node bin/test.js
+    timeout: 900000
+    max_output: 8192
+    on_success: phase1
+    on_error: fix0
+    success_prompt: |-
+      Suite green after phase 0:
+      {{stdout}}
+    error_prompt: |-
+      Suite FAILED after phase 0 (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+  fix0:
+    prompt: "Suite failed after phase 0. Diagnose from the output. Likely cause: a
+      false-flagged import was removed (cross-file resolution) — restore via
+      `hxq add-import`. Fix, then transition verify0."
+    transitions:
+      verify0: verify0
+      abort: failed
+    max_visits: 3
+  phase1:
+    prompt: >-
+      Phase 1 — develop three hxq autofixes with PARALLEL agents (worktree
+      isolation, model per user preference Opus/Sonnet, never Haiku). Spawn all
+      three in ONE message, run_in_background. Each agent prompt must include:
+      the analytical-subagent workflow preamble (task-delegation skill),
+      verify-then-complete discipline, worktree rules (build BOTH binaries
+      inside the worktree: `haxe bin/apq-js.hxml` and `haxe test-js.hxml`; hxq
+      shim keys off git toplevel — CWD inside worktree), hxq-ops-only editing,
+      register new test classes in test/RunTests.hx (import + addCase via the
+      two name-addressed ops recipe), run APQ_TEST-filtered tests then full JS
+      suite in the worktree.
+
+      Agent A: fix() for missing-visibility — insert the CURRENT effective
+      visibility explicitly (private default in classes; skip interfaces,
+      externs, @:publicFields classes, enum abstract members —
+      behavior-preserving only).
+
+      Agent B: fix() for naming — underscore-prefix private var/final instance
+      fields via the in-file scope-correct rename backend; collision-guarded
+      (existing _name → skip, report).
+
+      Agent C: fix() for explicit-type — conservative: annotate only when the
+      initializer type is statically certain (new T(...) → :T;
+      string/int/float/bool literals; typed sibling patterns already used by
+      declaredTypeSources). Anything uncertain → no fix.
+
+      After all three complete: collect each worktree's `git diff`, apply
+      sequentially to the main tree (RunTests.hx registration conflicts resolved
+      via hxq ops), rebuild both binaries in main. Then transition verify1.
+    transitions:
+      verify1: verify1
+      abort: failed
+    task: "Phase 1: three parallel autofix implementations"
+  verify1:
+    type: exec
+    command: cd {{context.cwd}} && haxe bin/apq-js.hxml && haxe test-js.hxml && node
+      bin/test.js
+    timeout: 900000
+    max_output: 8192
+    on_success: phase1_apply
+    on_error: fix1
+    success_prompt: |-
+      Suite green after phase 1 merge:
+      {{stdout}}
+    error_prompt: |-
+      Suite FAILED after phase 1 merge (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+  fix1:
+    prompt: Suite failed after the phase-1 merge. Diagnose (merge conflict residue
+      in RunTests.hx, cross-agent seam, stale binary). Fix in main tree, then
+      transition verify1.
+    transitions:
+      verify1: verify1
+      abort: failed
+    max_visits: 4
+  phase1_apply:
+    prompt: "Apply the new autofixes mechanically over test/ (and src/ only if
+      findings exist there): `hxq lint test/ --fix --rule missing-visibility`,
+      then `--rule naming`, then `--rule explicit-type` — one rule at a time,
+      `git diff --stat` spot-check between each, re-lint counts after each.
+      Rebuild binaries if the fixes touched src/. Then transition verify2."
+    transitions:
+      verify2: verify2
+      abort: failed
+    task: "Phase 1 apply: run new autofixes over test/"
+  verify2:
+    type: exec
+    command: cd {{context.cwd}} && haxe test-js.hxml && node bin/test.js
+    timeout: 900000
+    max_output: 8192
+    on_success: phase2
+    on_error: fix2
+    success_prompt: |-
+      Suite green after autofix application:
+      {{stdout}}
+    error_prompt: |-
+      Suite FAILED after autofix application (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+  fix2:
+    prompt: Suite failed after applying autofixes. A fix produced
+      parseable-but-wrong code or broke a test expectation. Identify the
+      offending rule via git diff per rule batch, revert that batch or fix the
+      check's fix(), re-apply. Then transition verify2.
+    transitions:
+      verify2: verify2
+      abort: failed
+    max_visits: 4
+  phase2:
+    prompt: >-
+      Phase 2 — residual cleanup with parallel batch agents:
+
+      1. Re-measure: `hxq lint src/ test/ --format json` → group remaining
+      warnings by file.
+
+      2. Partition into batches (~8 files each, NO file in two batches). src/
+      residual (magic-number 38 / complexity 26 irreducible floors) is OUT of
+      scope unless trivially fixable.
+
+      3. Spawn parallel agents (worktree isolation, one per batch): fix via hxq
+      ops only (patch/replace-node/set-modifier), judgment allowed (naming
+      constants for real magic numbers, splitting complex fns), noqa only with
+      justification. Each agent: APQ_TEST=<touched test classes> for the fast
+      loop, then full JS suite in its worktree.
+
+      4. Merge diffs sequentially into main, rebuild.
+
+      5. If ANYPARSE_HXFORMAT_FORK is set (check env first), run the corpus
+      harness — require Δ0 vs baseline 766/119/59.
+
+      Then transition verify3.
+    transitions:
+      verify3: verify3
+      abort: failed
+    task: "Phase 2: parallel residual cleanup"
+  verify3:
+    type: exec
+    command: cd {{context.cwd}} && haxe test-js.hxml && node bin/test.js
+    timeout: 900000
+    max_output: 8192
+    on_success: review
+    on_error: fix3
+    success_prompt: |-
+      Suite green after phase 2:
+      {{stdout}}
+    error_prompt: |-
+      Suite FAILED after phase 2 (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+  fix3:
+    prompt: Suite failed after phase-2 merge. Bisect by batch (git diff per batch),
+      fix or revert the offending batch. Then transition verify3.
+    transitions:
+      verify3: verify3
+      abort: failed
+    max_visits: 4
+  review:
+    prompt: >-
+      Final gate:
+
+      1. Before/after lint counts table (src/ and test/, warning+info).
+
+      2. Review the full working-tree diff for quality (spawn a review agent or
+      /code-review medium); apply confirmed findings; re-run suite if anything
+      changed. NOTE: review agents must NOT run `git checkout` on shared files
+      (wipes uncommitted work) — verify RunTests.hx registrations survived after
+      review.
+
+      3. Update project memory (topic file + one MEMORY.md line): what shipped,
+      gotchas, residual debt.
+
+      4. Report to user: counts, files touched, suite/corpus results. Do NOT
+      commit or push — the user batch-pushes.
+
+      Then transition done.
+    transitions:
+      done: finish
+      abort: failed
+    task: Final review + report
+  finish:
+    terminal: true
+    outcome: complete
+  failed:
+    prompt: Cleanup aborted. Report to the user what was completed, what failed, and
+      the exact state of the working tree (git status + diff --stat) so nothing
+      is lost.
+    terminal: true
+    outcome: fail

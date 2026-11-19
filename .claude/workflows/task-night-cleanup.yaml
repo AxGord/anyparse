@@ -1,0 +1,107 @@
+name: task-night-cleanup
+description: "Overnight sequential opus-agent cleanup campaign: one scoped
+  iteration per agent, verified (suite + corpus + lint ratchets) and committed
+  between iterations. Queue + protocol live in the plan file
+  ({{context.plan_file}})."
+initial: init
+max_transitions: 200
+states:
+  init:
+    prompt: >-
+      Night-cleanup INIT. Plan file: {{context.plan_file}} — read it (queue +
+      protocol).
+
+      1. Check env: ANYPARSE_HXFORMAT_FORK must be set for the corpus gate
+      (check first — don't blindly export). If unset, locate the fork path from
+      project memory and use a per-command env prefix all night.
+
+      2. Rebuild both binaries: haxe bin/apq-js.hxml && haxe test-js.hxml.
+
+      3. Baseline full suite: node bin/test.js >
+      <plan-file-dir>/baseline-suite.txt 2>&1; hxq test-summary <that file>.
+      Must be 0 failures; corpus counts get recorded as the Δ0 reference.
+
+      4. Confirm lint baseline matches the plan file (hxq lint src/ test/
+      --all).
+
+      Green → transition `ready`. Broken baseline → transition `broken` (report;
+      do NOT start fixing an un-green baseline overnight).
+    transitions:
+      ready: pick
+      broken: failed
+    max_visits: 5
+  pick:
+    prompt: >-
+      Night-cleanup PICK. Open {{context.plan_file}}: take the FIRST unmarked
+      queue item; mark it in_progress there.
+
+      Spawn exactly ONE background general-purpose agent, model opus, prompt
+      built from the plan file's template (analytical preamble with
+      parent_session_id + item task + discipline block verbatim). For
+      decomposition items: include the honesty rule — clusters first, cohesive
+      components only, infeasible-honestly is a valid outcome.
+
+      Then ScheduleWakeup delaySeconds 2700 (hang fallback; completion
+      notification is the primary signal) and END TURN.
+
+      Queue exhausted (or the user explicitly stops the campaign) → transition
+      `queue_done`. NO clock cutoff — the queue runs to exhaustion (standing user mandate); a fresh user message adding
+      work items goes INTO the queue, it does not end the campaign.
+    transitions:
+      spawned: await
+      queue_done: report
+    max_visits: 40
+  await:
+    prompt: >-
+      Night-cleanup AWAIT. You were woken by an agent completion notification or
+      the fallback wakeup.
+
+      - Agent still running (verify via live processes / tree mtimes, NOT log
+      mtime; check its workflow session) → reschedule ScheduleWakeup 2700s, END
+      TURN, stay in this state.
+
+      - Agent finished → verify ARTIFACTS per the plan file's orchestrator
+      checklist (diff scope sanity; rebuild BOTH binaries; full suite 0 failures
+      + corpus Δ0 vs baseline-suite.txt; lint ratchets ≤ baseline; fmt --list
+      clean on touched files).
+
+      - Green → commit (global-config author, Co-Authored-By Claude Fable 5),
+      mark item [x] in plan file, transition `next`. Session cleanup: abort a
+      leftover workflow session ONLY if its PID is dead AND it is provably your
+      finished worker's own session. NEVER pass force on a live-PID session —
+      the engine's "PID still alive" warning is a STOP (it may be the user's
+      parallel session or a shared long-lived process); stale sessions are
+      harmless, a killed foreign one is not. Prevention beats cleanup: worker
+      prompts must tell the worker to abort ITS OWN session (the session_id its
+      start() returned) before finishing.
+
+      - Honest-infeasible or empty result → mark [-] with reason, transition
+      `next`.
+
+      - Broken and not trivially repairable inline → reset to last green commit,
+      mark [!] with reason, transition `next`.
+
+      - Repository unrecoverable (cannot reach a green state) → transition
+      `hard_fail`.
+    transitions:
+      next: pick
+      hard_fail: failed
+    max_visits: 60
+  report:
+    prompt: "Night-cleanup REPORT. Compose the morning summary: git log
+      <baseline>..HEAD --oneline; lint counts before → after; suite + corpus
+      verdicts; per-item queue outcomes incl. skipped/failed reasons; hxq gaps
+      encountered. Update project memory (topic file + one MEMORY.md index
+      line). Leave the tree green and committed. Do NOT push."
+    transitions:
+      done: finish
+    task: Morning report
+  finish:
+    terminal: true
+    outcome: complete
+  failed:
+    prompt: Campaign failed. Restore the last green commit (git reset --hard
+      <last-green> only if the tree is broken — never discard verified green
+      commits), report what broke with verbatim evidence, update memory.
+    terminal: true
+    outcome: fail

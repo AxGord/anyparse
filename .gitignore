@@ -12,7 +12,10 @@ dump/
 *.n.map
 *.js.map
 .DS_Store
-.claude/
+!.claude/
+.claude/*
+!.claude/workflows/
+.claude/workflows/lib/recon-arm
 bin/parse-prof-cpp/
 bin/hxcpp-portability/
 bin/.suite-timings.tsv
