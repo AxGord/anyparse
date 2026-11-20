@@ -262,6 +262,10 @@ them lays that list out by its rules and otherwise flat, without reading source 
 values (`onePerLine`, `fillLine`, …) an object literal and an anonymous type also lay out by the cascade alone, so a
 source-broken short `{x: 1, y: 2, z: 3}` or `{x:Int, y:Int, z:Int}` glues onto one line; only an array or a map literal
 still keeps a break the source put between its items. A typedef's body keeps its source lines until its own decision.
+With no `wrapping.objectLiteral` key, an object literal of at most four fields, none longer than 30 characters and 60 in
+all, that overflows only by what stands around it (the text before it, its siblings and closers after it) breaks at its
+braces and keeps its fields on one line inside them; so does such a literal a source trailing `,` keeps open under
+`trailingCommas.objectLiteralDefault`. When that line does not fit, or the literal is longer, it goes one field per line.
 
 A `fillLine` / `fillLineWithLeadingBreak` list and a filled operator chain keep an item on its row while the row, its
 `,` or closing delimiters included, is at most `maxLineLength` wide: a row of exactly the limit fits, one column more

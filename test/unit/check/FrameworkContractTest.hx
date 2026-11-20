@@ -144,8 +144,7 @@ class FrameworkContractTest extends Test {
 	public function testAContractNamingAFieldNominatesNothing(): Void {
 		final src: String = 'class Player extends Node {\n\tprivate var badField:Int = 0;\n}';
 		final files: Array<{ file: String, source: String }> = [{
-			file: 'godot/Node.hx',
-			source: ROOT_SRC
+			file: 'godot/Node.hx', source: ROOT_SRC
 		}, { file: DRIVER_FILE, source: src }];
 		final check: Naming = new Naming();
 		check.setConfigResolver(_ -> LintConfig.parse('{"frameworks":[{"root":"Node","names":["badField"]}]}'));

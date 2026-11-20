@@ -66,9 +66,7 @@ final class LibraryBodies {
 		files = sources.length - graph.skippedFiles.length;
 		skipped = graph.skippedFiles.length;
 		final found: { ids: Array<String>, chains: Map<String, Array<String>>, waivers: Array<String> } = {
-			ids: ids,
-			chains: _chains,
-			waivers: _waivers
+			ids: ids, chains: _chains, waivers: _waivers
 		};
 		final summary: { natives: Int, sinks: Int } = PhaseTimings.measure(
 			'library summary', () -> summarise(project, graph, plugin, options, found)

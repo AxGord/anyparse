@@ -205,9 +205,12 @@ final class HaxeFormat implements TextFormat {
 	 * Default `WrapRules` cascade for `HxObjectLit.fields` — ported
 	 * from haxe-formatter's `wrapping.objectLiteral` rule set
 	 * in `resources/default-hxformat.json` (AxGord fork), with `Ignore`
-	 * as the fallback so a source break never keeps a list open. Returned as a
-	 * fresh struct on each call so test code that mutates the
-	 * `defaultWriteOptions.objectLiteralWrap` substruct doesn't corrupt
+	 * as the fallback so a source break never keeps a list open. The
+	 * item-length and item-count rows are the complexity measure: a literal
+	 * that passes them and overflows only by its context packs its fields on
+	 * one line inside the broken braces, one per line when that line does not fit.
+	 * Returned as a fresh struct on each call so test code that mutates the
+	 * `defaultWriteOptions.objectLiteralWrap` substruct does not corrupt
 	 * the singleton.
 	 */
 	public static function defaultObjectLiteralWrap(): WrapRules {
@@ -223,7 +226,7 @@ final class HaxeFormat implements TextFormat {
 				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.AnyItemLengthLargerThan, value: 30 }] },
 				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 60 }] },
 				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }] },
-				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
+				{ mode: WrapMode.PackedOrOnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
 			defaultMode: WrapMode.Ignore
 		};

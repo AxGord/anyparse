@@ -288,8 +288,7 @@ final class MoveWildcardImportCarryTest extends Test {
 		var result: MoveResult = Err('the fixture did not run');
 		#if (sys || nodejs)
 		final tree: Array<{ name: String, source: String }> = extra.concat([{
-			name: 'src/p/Host.hx',
-			source: host
+			name: 'src/p/Host.hx', source: host
 		}, { name: destName, source: dest }]);
 		final root: String = CliFixture.writeTree('apq_move_wildcard', tree);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {

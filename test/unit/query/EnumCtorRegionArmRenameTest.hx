@@ -71,8 +71,7 @@ class EnumCtorRegionArmRenameTest extends Test {
 	private static function run(userSource: String): CrossRenameResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final files: Array<{ file: String, source: String }> = [{
-			file: 'pkg/Col.hx',
-			source: ENUM
+			file: 'pkg/Col.hx', source: ENUM
 		}, { file: 'pkg/U.hx', source: userSource }];
 		return CrossRenameMember.crossRenameMember('pkg/Col.hx', ENUM, 6, 2, 'Verde', files, plugin, plugin.refShape());
 	}

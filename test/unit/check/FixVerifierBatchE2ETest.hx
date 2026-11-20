@@ -331,8 +331,7 @@ final class FixVerifierBatchE2ETest extends Test {
 		return CliFixture.writeDir(
 			'fixverifbatch',
 			[ for (i => source in sources) {
-				name: '${NAMES[i]}.hx',
-				source: source
+				name: '${NAMES[i]}.hx', source: source
 			} ].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }])
 		);
 	}

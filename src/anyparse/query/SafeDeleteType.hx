@@ -86,8 +86,7 @@ final class SafeDeleteType {
 		final removed: Null<String> = sole ? null : cutDeclaration(src.source, decl, reformat, plugin, optsJson, reasons);
 		if (reasons.length > 0) return Refused(reasons);
 		final remaining: Array<{ file: String, text: String }> = [ for (p in parse.parsed) if (p.file != srcFile) {
-			file: p.file,
-			text: p.source
+			file: p.file, text: p.source
 		} ];
 		if (removed != null) remaining.push({ file: srcFile, text: removed });
 		final notes: Array<String> = notesOf(srcFile, src.tree, typeName, remaining, plugin, shape, scopeLabel, sole ? companions : []);

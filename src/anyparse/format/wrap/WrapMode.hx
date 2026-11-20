@@ -60,9 +60,10 @@ enum abstract WrapMode(Int) from Int to Int {
 	 * it promises would already be several, and the renderer's own fit
 	 * probe cannot settle that (it re-flattens the nested list's `Group`).
 	 *
-	 * anyparse extension — the fork has no `WrappingType` counterpart, so
-	 * no corpus fixture can select it; it reaches the engine only from a
-	 * JSON config that names it (`"packedOrOnePerLine"`).
+	 * anyparse extension — the fork has no `WrappingType` counterpart. It is
+	 * the overflow row of the default object-literal cascade, so every config
+	 * without a `wrapping.objectLiteral` key reaches it; otherwise a JSON
+	 * config selects it by name (`"packedOrOnePerLine"`).
 	 */
 	final PackedOrOnePerLine = 7;
 

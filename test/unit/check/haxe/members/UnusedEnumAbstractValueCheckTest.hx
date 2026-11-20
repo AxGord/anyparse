@@ -358,9 +358,7 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 				return null;
 			}
 			final oracles: Array<OracleConfig> = [ for (d in configurations) {
-				hxml: 'build.hxml',
-				dir: dir,
-				defines: d
+				hxml: 'build.hxml', dir: dir, defines: d
 			} ]; // noqa: prefer-map
 			table = TypedFactsProbe.probeAll(oracles);
 			if (table == null || table.configurations.length != configurations.length) {

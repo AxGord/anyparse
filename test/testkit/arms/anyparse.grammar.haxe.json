@@ -109,6 +109,14 @@
 			"find": "MemberGap.headingAdds(beforeCommented, next.leading)",
 			"replace": "false",
 			"note": "the member-gap policy no longer asks the blank line fmt writes in front of a headed member, so member-order accepts the glued source"
+		},
+		{
+			"name": "M-OBJECT-LIT-SIMPLE-FILL",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultObjectLiteralWrap",
+			"find": "WrapMode.PackedOrOnePerLine",
+			"replace": "WrapMode.OnePerLine",
+			"note": "an object literal of simple fields that overflows only by its context goes one field per line again instead of packing its fields inside the broken braces"
 		}
 	]
 }

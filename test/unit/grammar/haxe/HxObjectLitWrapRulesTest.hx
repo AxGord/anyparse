@@ -91,9 +91,9 @@ final class HxObjectLitWrapRulesTest extends Test {
 		Assert.equals(WrapMode.OnePerLine, decide(rules, 3, 25, 65, true));
 	}
 
-	public function testDecideOnePerLineWhenExceedsLine(): Void {
+	public function testDecidePackedOrOnePerLineWhenOnlyExceedsLine(): Void {
 		final rules: WrapRules = HaxeFormat.defaultObjectLiteralWrap();
-		Assert.equals(WrapMode.OnePerLine, decide(rules, 1, 5, 5, true));
+		Assert.equals(WrapMode.PackedOrOnePerLine, decide(rules, 1, 5, 5, true));
 	}
 
 	public function testDecideRespectsCustomDefaultMode(): Void {

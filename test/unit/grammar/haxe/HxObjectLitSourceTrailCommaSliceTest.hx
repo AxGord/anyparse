@@ -70,19 +70,12 @@ final class HxObjectLitSourceTrailCommaSliceTest extends Test {
 	}
 
 	public function testSourceTrailingCommaMultiFieldKnobOn(): Void {
-		// Three-field literal — short enough to flatten by default
-		// (count <= 3, total < 60, no item >= 30). Source trailing `,`
-		// + knob on → forceExceeds → OnePerLine, with appendTrailingComma
-		// emitting the closing `,` after the last field.
+		// A source trailing `,` with the knob on forces the literal open at its braces; its simple fields then fill one line
+		// inside them, by the same default row as a literal that overflows, and the closing `,` follows the last field.
 		final src: String = 'class M {\n\tfunction f():Void {\n\t\tvar x:Dynamic = {a: 1, b: 2, c: 3,}\n\t}\n}';
 		final out: String = formatWithKnob(src, true);
-		// `,\n` (sep + hardline) anchors on break-mode layout — flat
-		// output emits `, ` (sep + space) between siblings, never `,\n`,
-		// so the assertion catches a cascade-collapse regression that
-		// looser per-field substring matches would miss.
 		Assert.isTrue(
-			out.indexOf('a: 1,\n') != -1 && out.indexOf('b: 2,\n') != -1 && out.indexOf('c: 3,\n') != -1,
-			'expected each field followed by `,\\n` in OnePerLine layout, got: <$out>'
+			out.indexOf('{\n\t\t\ta: 1, b: 2, c: 3,\n\t\t}') != -1, 'expected the fields packed inside the open braces, got: <$out>'
 		);
 	}
 

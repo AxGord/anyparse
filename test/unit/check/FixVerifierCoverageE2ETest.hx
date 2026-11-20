@@ -160,8 +160,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 		#if (sys || nodejs)
 		final dir: String = pairDir(MAIN);
 		final files: Array<{ file: String, source: String }> = [{
-			file: '$dir/Main.hx',
-			source: MAIN
+			file: '$dir/Main.hx', source: MAIN
 		}, { file: '$dir/Other.hx', source: OTHER }];
 		final result: FixVerifyResult = FixVerifier.verify(
 			files, [new AvoidDynamic()],
@@ -294,8 +293,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 		]);
 		if (skipWithoutHaxe(dir)) return;
 		final files: Array<{ file: String, source: String }> = [{
-			file: '$dir/Live.hx',
-			source: LIVE
+			file: '$dir/Live.hx', source: LIVE
 		}, { file: '$dir/Dead.hx', source: DEAD }];
 		final result: FixVerifyResult = FixVerifier.verify(
 			files, [new AvoidDynamic()], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
@@ -343,8 +341,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 	/** One `avoid-dynamic` verification pass over both files of `dir`, coverage probed for real. */
 	private static function verifyPair(dir: String, main: String): FixVerifyResult {
 		final files: Array<{ file: String, source: String }> = [{
-			file: '$dir/Main.hx',
-			source: main
+			file: '$dir/Main.hx', source: main
 		}, { file: '$dir/Other.hx', source: OTHER }];
 		return FixVerifier.verify(
 			files, [new AvoidDynamic()], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent

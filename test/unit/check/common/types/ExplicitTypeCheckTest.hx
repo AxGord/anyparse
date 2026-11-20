@@ -677,8 +677,7 @@ class ExplicitTypeCheckTest extends Test {
 	 */
 	private function scopedFix(impl: String, ?decls: Array<{ file: String, source: String }>): String {
 		final files: Array<{ file: String, source: String }> = [{
-			file: 'Impl.hx',
-			source: impl
+			file: 'Impl.hx', source: impl
 		}].concat(decls ?? [{ file: 'I.hx', source: IFACE }]);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: ExplicitType = new ExplicitType();

@@ -486,8 +486,7 @@ class PreferStaticExtensionFactsTest extends Test {
 	public function testTheFactsWeighTheConfiguredModulesNeighbours(): Void {
 		#if (sys || nodejs)
 		final entries: Array<{ name: String, source: String }> = [{
-			name: 'Main.hx',
-			source: SUBTYPE_MAIN
+			name: 'Main.hx', source: SUBTYPE_MAIN
 		}, { name: 'build.hxml', source: BUILD }];
 		for (name => text in selfModules()) entries.push({ name: name, source: text });
 		final dir: String = CliFixture.writeTree('pse_facts_self', entries);

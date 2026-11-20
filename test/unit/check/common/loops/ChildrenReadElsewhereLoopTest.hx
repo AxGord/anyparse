@@ -39,8 +39,7 @@ class ChildrenReadElsewhereLoopTest extends Test {
 		final vs: Array<Violation> = CheckFixture.violations(check, WRITING);
 		Assert.equals(1, vs.length);
 		final plugin: CachingGrammarPlugin = QueryTestHelpers.projectPlugin([{
-			file: 'C.hx',
-			source: WRITING
+			file: 'C.hx', source: WRITING
 		}, { file: 'Reader.hx', source: READER }]);
 		final edits: Array<FixEdit> = CheckFixture.fixOf(check, WRITING, vs, plugin);
 		Assert.isTrue(edits.length > 0, vs[0].declineReason ?? 'no decline reason');

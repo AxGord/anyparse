@@ -1064,8 +1064,7 @@ class MoveSymbolSliceTest extends Test {
 	public function testTheSameUnnameableImportOnBothSidesIsNotACollision(): Void {
 		inline function move(mover: String, host: String, dep: String): Void {
 			final files: Array<{ file: String, source: String }> = [{
-				file: 'p/Mover.hx',
-				source: mover
+				file: 'p/Mover.hx', source: mover
 			}, { file: 'p/Host.hx', source: host }];
 			switch MoveSymbol.moveType('p/Mover.hx', 7, 7, 'p/Host.hx', files, plugin(), typeRefShape()) {
 				case Ok(changes, _):
