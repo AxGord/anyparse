@@ -549,7 +549,7 @@ final class CheckScan {
 		final declared: Null<Array<String>> = shape.modifierKinds;
 		if (declared != null) return declared.copy();
 		final out: Array<String> = [ for (m in shape.modifierOrderKinds ?? []) m ];
-		for (m in shape.visibilityModifierKinds ?? []) out.pushUnique(m);
+		if (shape.visibilityModifierKinds != null) out.pushAllUnique(shape.visibilityModifierKinds);
 		for (kind in [
 			shape.externModifierKind,
 			shape.dynamicModifierKind,

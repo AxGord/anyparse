@@ -2,16 +2,14 @@ package anyparse.check.common.nullsafety;
 
 import anyparse.check.Check.VersionGated;
 import anyparse.check.common.control.BranchChain;
+import anyparse.check.scan.PlainReadProof;
 import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
-import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
-import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
 
 using StringTools;
 
@@ -27,22 +25,14 @@ private typedef Seams = {
 	var exprStmtKind: String;
 	var blockStmtKind: String;
 	var parenKind: Null<String>;
-	var scopeKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var localDeclKinds: Array<String>;
-	var paramKinds: Array<String>;
 	var andKind: Null<String>;
 	var ternaryKind: Null<String>;
 	var eqKind: Null<String>;
 	var chainKinds: Array<String>;
 	var selfText: Null<String>;
 	var assignKind: Null<String>;
-
-	/** The member kinds that project a PHYSICAL field (Haxe `VarMember` / `FinalMember`) — the field-receiver proof's whitelist. */
-	var fieldDeclKinds: Array<String>;
-
-	/** The extern-modifier node kind, a preceding sibling of the type it marks — an extern host refuses the field-receiver proof. */
-	var externKind: Null<String>;
 
 	/**
 	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children the
@@ -80,9 +70,6 @@ private typedef AssignGuard = {
 	var rootIdent: QueryNode;
 	var nullLiteral: QueryNode;
 }
-
-/** One type declaration's lexical extent: the span it covers, the node hosting its members, and whether `extern` marks it. */
-private typedef TypeScope = { var span: Span; var host: QueryNode; var isExtern: Bool; }
 
 /**
  * Flags a null guard that safe navigation (`?.`) replaces. Three arms:
@@ -130,7 +117,7 @@ private typedef TypeScope = { var span: Span; var host: QueryNode; var isExtern:
  *   with no read accessor. A Haxe field cannot be redeclared by a subtype, so a plain field
  *   stays plain at every use of the type — the double read is a no-op there too. A
  *   `(get, …)` / `dynamic` property, a member of any other kind, a name the enclosing type
- *   does not itself declare, and an `extern` host all refuse (see `fieldProver`).
+ *   does not itself declare, and an `extern` host all refuse (see `PlainReadProof`).
  *
  * A one-step path reads BOTH parts twice, so it needs the root proof AND a second one for
  * the step: `TypeResolver.isPlainFieldRead` against the run's resolution-scoped index,
@@ -233,18 +220,11 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final getIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
-		final shape: RefShape = plugin.refShape();
+
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
-			final bindings: Array<{ name: String, scope: Span, declEnd: Int }> = [];
-			collectBindings(tree, null, seams, bindings);
-			final declaredTypes: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
-			final plainRead: QueryNode -> Bool = subject -> {
-				final index: Null<SymbolIndex> = getIndex();
-				return index != null && TypeResolver.isPlainFieldRead(subject, tree, shape, declaredTypes(), index);
-			};
 			walk(
-				tree, violations, entry.file, entry.source, ElementSpan.lazyRegions(entry.source, plugin), bindings,
-				fieldProver(tree, entry.source, plugin, seams), plainRead, seams
+				tree, violations, entry.file, entry.source, ElementSpan.lazyRegions(entry.source, plugin),
+				PlainReadProof.prover(tree, entry.source, plugin, getIndex), seams
 			);
 		});
 	}
@@ -324,20 +304,17 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 			exprStmtKind: exprStmtKind,
 			blockStmtKind: blockStmtKind,
 			parenKind: shape.parenKind,
-			scopeKinds: shape.scopeKinds,
+
 			opaqueKinds: shape.opaqueKinds ?? [],
 			localDeclKinds: shape.localDeclKinds ?? [],
-			paramKinds: shape.paramKinds ?? [],
+
 			andKind: shape.logicalAndKind,
 			ternaryKind: shape.ternaryKind,
 			eqKind: shape.eqKind,
 			chainKinds: chainKinds,
 			selfText: shape.selfReferenceText,
 			assignKind: shape.assignKind,
-			// The extern gate is what keeps a foreign slot's read out of the field proof, so a
-			// grammar that cannot name its extern modifier gets no field receivers at all.
-			fieldDeclKinds: shape.externModifierKind == null ? [] : shape.fieldDeclKinds ?? [],
-			externKind: shape.externModifierKind,
+
 			blockKinds: plugin.controlFlowSupport()?.blockKinds() ?? []
 		};
 	}
@@ -348,19 +325,18 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * (a null-initialized declaration immediately followed by its guarded assignment).
 	 */
 	private static function walk(
-		node: QueryNode, out: Array<Violation>, file: String, source: String, regions: () -> Array<LexRegion>,
-		bindings: Array<{ name: String, scope: Span, declEnd: Int }>, fieldOk: (String, Span) -> Bool, plainRead: QueryNode -> Bool,
+		node: QueryNode, out: Array<Violation>, file: String, source: String, regions: () -> Array<LexRegion>, accepted: QueryNode -> Bool,
 		s: Seams
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		final m: Null<Candidate> = candidate(node, source, regions, s);
-		if (m != null && acceptedReceiver(m.condIdent, bindings, fieldOk, plainRead, s)) report(node, out, file);
+		if (m != null && accepted(m.condIdent)) report(node, out, file);
 		final kids: Array<QueryNode> = node.children;
 		if (s.blockKinds.contains(node.kind)) for (i in 0...kids.length - 1) {
 			final a: Null<AssignGuard> = assignGuard(kids[i], kids[i + 1], source, regions, s);
-			if (a != null && acceptedReceiver(a.condIdent, bindings, fieldOk, plainRead, s)) report(kids[i + 1], out, file);
+			if (a != null && accepted(a.condIdent)) report(kids[i + 1], out, file);
 		}
-		for (c in kids) walk(c, out, file, source, regions, bindings, fieldOk, plainRead, s);
+		for (c in kids) walk(c, out, file, source, regions, accepted, s);
 	}
 
 	/** Push the `Info` finding anchored at `node` — the guarding `if` statement, or the guarding ternary. */
@@ -619,137 +595,6 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 			rootIdent: root,
 			restCond: rest
 		};
-	}
-
-	/**
-	 * Whether `subject` is a receiver whose double read is provably free: the self reference
-	 * (a keyword, never an accessor), a local / param binding whose scope encloses it and
-	 * that lexically precedes it, or a field `fieldOk` proves physical.
-	 *
-	 * A one-step `<root>.<field>` path reads BOTH parts twice, so it needs both proofs: `root`
-	 * accepted on its own terms, and `plainRead` — the resolution index proving the step itself
-	 * resolves to a physical member rather than a property whose read runs a getter.
-	 */
-	private static function acceptedReceiver(
-		subject: QueryNode, bindings: Array<{ name: String, scope: Span, declEnd: Int }>, fieldOk: (String, Span) -> Bool,
-		plainRead: QueryNode -> Bool, s: Seams
-	): Bool {
-		if (subject.kind == s.fieldAccessKind)
-			return acceptedReceiver(subject.children[0], bindings, fieldOk, plainRead, s) && plainRead(subject);
-		final name: Null<String> = subject.name;
-		final span: Null<Span> = subject.span;
-		if (name == null || span == null) return false;
-		if (name == s.selfText) return true;
-		final useName: String = name;
-		final useSpan: Span = span;
-		final bound: Bool = bindings.exists(
-			b -> b.name == useName && b.scope.from <= useSpan.from && useSpan.to <= b.scope.to && b.declEnd <= useSpan.from
-		);
-		return bound || fieldOk(useName, useSpan);
-	}
-
-	/**
-	 * The per-file predicate deciding whether a NON-local receiver named `name` at `span` is a
-	 * field whose double read is a provable no-op: it must be a PHYSICAL `var` / `final`
-	 * (`fieldDeclKinds`) with no read accessor, declared directly by the type declaration that
-	 * lexically encloses the use.
-	 *
-	 * A Haxe field cannot be redeclared by a subtype, and property accessors resolve from the
-	 * STATIC type — so a plain field stays plain at every use of the declaring type. That, and only
-	 * that, is what makes `if (f != null) f.m()` (two reads) and `f?.m()` (one) the same
-	 * observation. Everything unproven refuses: a get-accessor property (`(get, …)` / `dynamic`,
-	 * whose read RUNS code), a member of any other kind (a method value), a name the enclosing type
-	 * does not itself declare (an inherited member, a static import, an out-of-scope local — none of
-	 * which this proof can see), an EXTERN host (a foreign slot whose read may run host code), and a
-	 * grammar with no accessor information at all (`TypeInfoProvider` absent — every property would
-	 * then read as plain) or no extern modifier to name (`readSeams` empties `fieldDeclKinds`).
-	 *
-	 * Coverage is deliberately the enclosing type's OWN members. A resolution index that can prove
-	 * the same facts about an INHERITED member widens this predicate without changing any caller —
-	 * but the extern gate MUST move with it: `collectTypeScopes` reads only this file, so an
-	 * inherited field whose declaring type is an `extern` class in another module would pass a gate
-	 * that never saw it.
-	 */
-	private static function fieldProver(tree: QueryNode, source: String, plugin: GrammarPlugin, s: Seams): (String, Span) -> Bool {
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		if (provider == null || s.fieldDeclKinds.length == 0) return (_, _) -> false;
-		final accessors: Map<Int, Bool> = provider.propertyAccessors(source);
-		final scopes: Array<TypeScope> = [];
-		collectTypeScopes(tree, false, s, scopes);
-		return (name, span) -> {
-			final host: Null<TypeScope> = innermostScope(scopes, span);
-			return host != null && !host.isExtern && declaresPlainField(host.host, name, accessors, s);
-		};
-	}
-
-	/** The innermost type declaration whose span contains `span`, or null when `span` sits outside every type. */
-	private static function innermostScope(scopes: Array<TypeScope>, span: Span): Null<TypeScope> {
-		var best: Null<TypeScope> = null;
-		for (t in scopes) if (t.span.from <= span.from && span.to <= t.span.to && (best == null || t.span.from >= best.span.from)) best = t;
-		return best;
-	}
-
-	/**
-	 * Every type declaration under `node`, with the span it occupies and whether an extern
-	 * modifier precedes it. `pendingExtern` carries an `extern` keyword forward across the
-	 * modifier / metadata siblings that may sit between it and the declaration it marks — and
-	 * into nested regions, since over-attaching it only ever REFUSES more.
-	 */
-	private static function collectTypeScopes(node: QueryNode, pendingExtern: Bool, s: Seams, out: Array<TypeScope>): Void {
-		if (s.opaqueKinds.contains(node.kind)) return;
-		var marked: Bool = pendingExtern;
-		for (child in node.children) {
-			if (child.kind == s.externKind) {
-				marked = true;
-				continue;
-			}
-			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(child);
-			if (decl != null) {
-				out.push({ span: decl.fullSpan, host: decl.nameNode, isExtern: marked });
-				marked = false;
-			}
-			collectTypeScopes(child, marked, s, out);
-		}
-	}
-
-	/**
-	 * Whether `host` declares `name` as a physical field with no read accessor. A member of that
-	 * name whose kind is not a field kind, or that carries a getter, REFUSES outright rather than
-	 * being ignored — two same-named members cannot both be the receiver, so a single unproven
-	 * declaration is enough to lose the proof.
-	 */
-	private static function declaresPlainField(host: QueryNode, name: String, accessors: Map<Int, Bool>, s: Seams): Bool {
-		var proven: Bool = false;
-		var refused: Bool = false;
-		MemberKinds.eachMemberHost(host, memberHost -> {
-			for (child in memberHost.children) if (child.name == name && MemberKinds.isMemberDeclNode(child)) {
-				final span: Null<Span> = child.span;
-				if (span == null || !s.fieldDeclKinds.contains(child.kind) || accessors[span.from] == true)
-					refused = true;
-				else
-					proven = true;
-			}
-		});
-		return proven && !refused;
-	}
-
-	/**
-	 * Walk `node`, tracking the innermost enclosing scope, recording every local
-	 * declaration (`localDeclKinds`) and parameter (`paramKinds`) with the span of
-	 * its enclosing scope. A reification subtree (`opaqueKinds`) is skipped wholesale.
-	 */
-	private static function collectBindings(
-		node: QueryNode, enclosingScope: Null<QueryNode>, s: Seams, out: Array<{ name: String, scope: Span, declEnd: Int }>
-	): Void {
-		if (s.opaqueKinds.contains(node.kind)) return;
-		if (s.localDeclKinds.contains(node.kind) || s.paramKinds.contains(node.kind)) {
-			final name: Null<String> = node.name;
-			final declSpan: Null<Span> = node.span;
-			final scope: Null<Span> = enclosingScope?.span;
-			if (name != null && declSpan != null && scope != null) out.push({ name: name, scope: scope, declEnd: declSpan.to });
-		}
-		final childScope: Null<QueryNode> = s.scopeKinds.contains(node.kind) ? node : enclosingScope;
-		for (c in node.children) collectBindings(c, childScope, s, out);
 	}
 
 	/** The guard SUBJECT of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */

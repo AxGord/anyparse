@@ -155,7 +155,7 @@ final class ReachDefinesProbe {
 	/** End the compiles `start` began, unread, and delete their probe directories: a run that never asked the builds. */
 	public static function abandon(probe: DefinesProbe): Void {
 		probe.runs?.cancel();
-		for (p in probe.ready ?? []) discard(p.dir);
+		if (probe.ready != null) for (p in probe.ready) discard(p.dir);
 	}
 
 	/**
@@ -352,7 +352,7 @@ final class ReachDefinesProbe {
 		oracles: Array<OracleConfig>, held: Array<Null<ReachConfiguration>>, ready: Null<Array<{ dir: String, args: Array<String> }>>,
 		runs: Array<ProcessRun>
 	): Null<ReachBuilds> {
-		for (p in ready ?? []) discard(p.dir);
+		if (ready != null) for (p in ready) discard(p.dir);
 		if (runs.length != unheld(oracles, held).length || oracles.length == 0) return null;
 		final out: Array<ReachConfiguration> = [];
 		var next: Int = 0;

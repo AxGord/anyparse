@@ -208,7 +208,7 @@ final class Parity {
 		final parsed: SuiteFile = SuiteFileParser.parse(File.getContent(file));
 		final files: Map<String, String> = filesOf(parsed.files);
 		final invocations: Array<Invocation> = [];
-		for (given in parsed.invocations ?? []) {
+		if (parsed.invocations != null) for (given in parsed.invocations) {
 			if (given.argv.length == 0 || !SHIMS.contains(given.argv[0]))
 				throw new UsageError('invocation ${given.name} of $file runs `${given.argv.join(' ')}`, not `apq|hxq …`');
 			final commits: Array<Map<String, String>> = (given.commits ?? []).map(filesOf);

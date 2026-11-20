@@ -222,7 +222,7 @@ final class OracleGeneration {
 		for (input in inputs) if (hashIn(recordedInputs, input) != hashOf(input, memo)) return '$input changed';
 		final recordedOutputs: Array<FileHash> = record.outputs ?? [];
 		for (hxml in group.hxmls) if (hashIn(recordedOutputs, hxml) != hashOf(hxml, memo)) return '$hxml changed since it was generated';
-		for (held in record.implicit ?? []) if (hashOf(held.path, memo) != held.hash) return '${held.path} changed';
+		if (record.implicit != null) for (held in record.implicit) if (hashOf(held.path, memo) != held.hash) return '${held.path} changed';
 		return null;
 		#else
 		return 'no filesystem on this target';

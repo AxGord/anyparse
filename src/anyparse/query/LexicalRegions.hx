@@ -248,7 +248,7 @@ final class LexicalRegions {
 			case LineComment, BlockComment:
 				onComment(region.from, region.to);
 			case StringLit, RegexLit:
-				for (hole in region.holes ?? []) eachComment(hole.regions, onComment);
+				if (region.holes != null) for (hole in region.holes) eachComment(hole.regions, onComment);
 		}
 	}
 

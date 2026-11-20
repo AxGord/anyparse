@@ -462,7 +462,7 @@ final class OccurrenceScan {
 			case StringLit, RegexLit: true;
 		};
 		var at: Int = region.from;
-		for (hole in region.holes ?? []) {
+		if (region.holes != null) for (hole in region.holes) {
 			onRegion(at, hole.from, literal);
 			for (inner in hole.regions) reportInert(inner, onRegion);
 			at = hole.to;

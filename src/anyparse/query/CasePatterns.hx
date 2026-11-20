@@ -378,8 +378,8 @@ final class CasePatterns {
 		final leaves: Array<String> = [];
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		if (fieldAccessKind != null) leaves.push(fieldAccessKind);
-		for (kind in shape.stringLiteralKinds ?? []) leaves.push(kind);
-		for (kind in shape.numericLiteralKinds ?? []) leaves.push(kind);
+		if (shape.stringLiteralKinds != null) for (kind in shape.stringLiteralKinds) leaves.push(kind);
+		if (shape.numericLiteralKinds != null) for (kind in shape.numericLiteralKinds) leaves.push(kind);
 		final boolKind: Null<String> = shape.boolLitKind;
 		if (boolKind != null) leaves.push(boolKind);
 		final nullKind: Null<String> = shape.nullLiteralKind;

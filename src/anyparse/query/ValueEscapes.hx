@@ -257,7 +257,7 @@ final class ValueEscapes {
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, typeSyntax);
 			// a container written without its arguments holds what nothing here says: `Array` is any `Array<T>`
 			if ((args ?? []).length < g.types.generics.typeParamsOf(nominal).length) return false;
-			for (arg in args ?? []) work.push(arg);
+			if (args != null) for (arg in args) work.push(arg);
 			if (seen.exists(source)) continue;
 			seen[source] = true;
 			final values: Null<Array<String>> = _carriers.declaredValueTypes(source);

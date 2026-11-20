@@ -443,7 +443,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		final out: Array<String> = [];
 		final paren: Null<String> = shape.parenKind;
 		if (paren != null) out.push(paren);
-		for (k in shape.switchKinds ?? []) out.push(k);
+		if (shape.switchKinds != null) for (k in shape.switchKinds) out.push(k);
 		final caseBranch: Null<String> = shape.caseBranchKind;
 		if (caseBranch != null) out.push(caseBranch);
 		return out;

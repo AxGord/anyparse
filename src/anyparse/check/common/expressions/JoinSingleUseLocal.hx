@@ -290,7 +290,7 @@ final class JoinSingleUseLocal extends RuleBase {
 	 */
 	private static function deferringKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = ShapeVocab.functionLikeKinds(shape);
-		for (k in shape.opaqueKinds ?? []) out.pushUnique(k);
+		if (shape.opaqueKinds != null) out.pushAllUnique(shape.opaqueKinds);
 		return out;
 	}
 

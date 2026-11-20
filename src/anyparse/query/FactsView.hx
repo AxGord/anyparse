@@ -829,7 +829,9 @@ final class FactsView {
 
 	/** The property an accessor name serves (`get_x` -> `x`), or null for a name no accessor prefix starts. */
 	public function accessorProperty(name: String): Null<String> {
-		for (prefix in _scope.shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) return name.substr(prefix.length);
+		if (_scope.shape.accessorMethodPrefixes != null)
+			for (prefix in _scope.shape.accessorMethodPrefixes)
+				if (name.startsWith(prefix)) return name.substr(prefix.length);
 		return null;
 	}
 
@@ -900,7 +902,7 @@ final class FactsView {
 		final key: String = _table.keyOf(file);
 		final facts: Null<Array<FieldFact>> = _table.within(file, span, n -> n.fields, f -> f.at, true, harmlessSplice.bind(g));
 		var owner: Null<String> = null;
-		for (f in facts ?? []) if (f.field == name && f.at.file == key && sameRange(f.at.span, span)) {
+		if (facts != null) for (f in facts) if (f.field == name && f.at.file == key && sameRange(f.at.span, span)) {
 			final declared: Null<String> = f.owner;
 			final root: Null<String> = declared == null ? null : rootOf(declared);
 			if (root == null || (owner != null && owner != root)) return null;
@@ -1495,7 +1497,8 @@ final class FactsView {
 		final out: Map<String, Bool> = [];
 		for (f in _scope.files) for (t in _scope.index.fileInfo(f.file)?.types ?? []) for (m in t.members) if (m.guarded) {
 			out[m.name] = true;
-			for (prefix in _scope.shape.accessorMethodPrefixes ?? []) out[prefix + m.name] = true;
+			if (_scope.shape.accessorMethodPrefixes != null) for (prefix in _scope.shape.accessorMethodPrefixes)
+				out[prefix + m.name] = true;
 		}
 		_guarded = out;
 		return out;

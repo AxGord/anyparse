@@ -337,10 +337,10 @@ final class MemberKinds {
 		final out: Array<String> = constantLiteralKinds(shape);
 		inline function add(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
 		add(shape.stringInterpTextKind);
-		for (kind in shape.stringInterpInertSegmentKinds ?? []) add(kind);
+		if (shape.stringInterpInertSegmentKinds != null) for (kind in shape.stringInterpInertSegmentKinds) add(kind);
 		add(shape.identKind);
 		add(shape.parenKind);
-		for (kind in shape.pureOperatorKinds ?? []) add(kind);
+		if (shape.pureOperatorKinds != null) for (kind in shape.pureOperatorKinds) add(kind);
 		return out;
 	}
 
@@ -354,7 +354,7 @@ final class MemberKinds {
 	 */
 	public static function parenFreeRootKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = atomicRootKinds(shape);
-		for (kind in shape.maximalPrecedenceRootKinds ?? []) out.pushUnique(kind);
+		if (shape.maximalPrecedenceRootKinds != null) out.pushAllUnique(shape.maximalPrecedenceRootKinds);
 		return out;
 	}
 
@@ -371,8 +371,8 @@ final class MemberKinds {
 	public static function constantLiteralKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = [];
 		inline function add(kind: Null<String>): Void if (kind != null && !out.contains(kind)) out.push(kind);
-		for (kind in shape.numericLiteralKinds ?? []) add(kind);
-		for (kind in shape.stringLiteralKinds ?? []) add(kind);
+		if (shape.numericLiteralKinds != null) for (kind in shape.numericLiteralKinds) add(kind);
+		if (shape.stringLiteralKinds != null) for (kind in shape.stringLiteralKinds) add(kind);
 		add(shape.boolLitKind);
 		add(shape.nullLiteralKind);
 		return out;

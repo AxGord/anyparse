@@ -1409,7 +1409,7 @@ final class NamingRenames {
 			}
 		}
 		for (file in index.text.privilegedFiles(owner, member)) out.pushUnique(file);
-		for (file in grantees ?? []) out.pushUnique(file);
+		if (grantees != null) out.pushAllUnique(grantees);
 		return out;
 	}
 

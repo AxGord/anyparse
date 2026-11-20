@@ -235,7 +235,7 @@ final class ReachGraph {
 			}
 			if (library.inertType(source)) continue;
 			final args: Null<Array<String>> = NominalTypes.typeArgumentSourcesOf(source, typeSyntax);
-			for (arg in args ?? []) written.push(arg);
+			if (args != null) for (arg in args) written.push(arg);
 			if (seen.exists(nominal)) continue;
 			seen[nominal] = true;
 			final decl: Null<TypeDeclInfo> = _scope.declarationOf(nominal);
@@ -337,8 +337,8 @@ final class ReachGraph {
 			for (list in owned) for (id in list ?? []) ids.push(id);
 		else if (typesAt(g, at) == null)
 			return facts.implicitUnheldAnywhere(members).find(id -> textlessInPlay(facts, id));
-		else
-			for (o in at.owners ?? []) if (o != null) {
+		else if (at.owners != null)
+			for (o in at.owners) if (o != null) {
 				ids.push(o);
 				for (sub in facts.subtypesOf(o)) ids.push(sub);
 			}

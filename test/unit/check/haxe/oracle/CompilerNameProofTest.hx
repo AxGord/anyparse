@@ -270,7 +270,8 @@ final class CompilerNameProofTest extends Test {
 					{ content: local, at: local.indexOf('F.make') }
 				]
 			])[0];
-			for (answer in answers ?? []) named.push(answer == null ? 'none' : answer.file.endsWith('a/F.hx') ? 'a.F' : 'own');
+			if (answers != null) for (answer in answers)
+				named.push(answer == null ? 'none' : answer.file.endsWith('a/F.hx') ? 'a.F' : 'own');
 			true;
 		}));
 		Assert.same(['own', 'a.F', 'own'], named);

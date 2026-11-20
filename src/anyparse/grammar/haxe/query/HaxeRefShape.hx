@@ -1363,6 +1363,7 @@ final class HaxeRefShape {
 		// `Array` and `haxe.ds.List` walk one index / node chain in both iterators; a map's
 		// key-value iterator re-reads by key, so it diverges once the body removes an entry.
 		table.valueIterationTypes = ['Array' => 'Array', 'List' => 'haxe.ds.List'];
+		table.emptyLiteralTypes = ['Array'];
 		// equal to the value iteration — in values and order — on --interp, js and hxcpp for a map the
 		// loop leaves unchanged (docs/decisions.md); `WeakMap` is not, its iterators are null off hxcpp
 		table.keyedIterationTypes = [

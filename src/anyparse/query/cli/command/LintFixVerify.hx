@@ -201,8 +201,9 @@ final class LintFixVerify {
 			entry.handedOffReasons = [];
 		}
 		// Findings the run did report, on a file no fix was tried on: `reported` alone, so no decline row charges the rule.
-		for (row in verified.notCanonical ?? []) if (!armRules.contains(row.rule))
-			LintFixDriver.ledgerFor(ledger, row.rule).reported += row.findings;
+		if (verified.notCanonical != null)
+			for (row in verified.notCanonical)
+				if (!armRules.contains(row.rule)) LintFixDriver.ledgerFor(ledger, row.rule).reported += row.findings;
 		for (tally in verified.tallies) {
 			final entry: RuleFixOutcome = LintFixDriver.ledgerFor(ledger, tally.rule);
 			if (!armRules.contains(tally.rule)) entry.reported += tally.findings;

@@ -277,8 +277,8 @@ final class NewFile {
 	private static function abstractHeader(spec: NewFileSpec, imports: Array<String>): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add('(${simpleNameWithImport(spec.underlying ?? 'Dynamic', spec.pkg, imports)})');
-		for (from in spec.fromList ?? []) buf.add(' from ${simpleNameWithImport(from, spec.pkg, imports)}');
-		for (to in spec.toList ?? []) buf.add(' to ${simpleNameWithImport(to, spec.pkg, imports)}');
+		if (spec.fromList != null) for (from in spec.fromList) buf.add(' from ${simpleNameWithImport(from, spec.pkg, imports)}');
+		if (spec.toList != null) for (to in spec.toList) buf.add(' to ${simpleNameWithImport(to, spec.pkg, imports)}');
 		return buf.toString();
 	}
 

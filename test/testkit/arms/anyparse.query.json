@@ -1237,7 +1237,7 @@
 			"name": "M-LIT-CONTENT-KINDS-SEGMENT-ONLY",
 			"type": "anyparse.query.Lit",
 			"method": "contentKinds",
-			"find": "for (kind in shape.stringLiteralKinds ?? []) if (!segmented.contains(kind) && !out.contains(kind)) out.push(kind);",
+			"find": "if (shape.stringLiteralKinds != null)\n\t\t\tfor (kind in shape.stringLiteralKinds)\n\t\t\t\tif (!segmented.contains(kind) && !out.contains(kind)) out.push(kind);",
 			"replace": "",
 			"note": "the content vocabulary shrinks back to the interpolating literal's text segment alone — the one kind `apq lit` used to hardcode — so a query over a scope holding the same needle in both quote spellings prints half its matches and says nothing about the other half"
 		},
@@ -1260,7 +1260,7 @@
 			"name": "M-INERT-SEGMENT-KINDS-HARDCODED",
 			"type": "anyparse.query.InertRegions",
 			"method": "textSegmentKinds",
-			"find": "for (kind in shape.stringInterpInertSegmentKinds ?? []) out.push(kind);",
+			"find": "for (kind in shape.stringInterpInertSegmentKinds) out.push(kind);",
 			"replace": "for (kind in ['Dollar', 'LoneDollar']) out.push(kind);",
 			"note": "the inert segment kinds go back to Haxe ctor names inside the agnostic masker - the THIRD vocabulary of this class, the one the multi-pair arm on `collectLiterals` does not reach - so the segment split no longer follows the declaration"
 		},
@@ -1391,7 +1391,7 @@
 			"name": "M-SIDE-EFFECT-FREE-DROPS-OPERATORS",
 			"type": "anyparse.query.MemberKinds",
 			"method": "sideEffectFreeExprKinds",
-			"find": "\tfor (kind in shape.pureOperatorKinds ?? []) add(kind);\n",
+			"find": "\tif (shape.pureOperatorKinds != null) for (kind in shape.pureOperatorKinds) add(kind);\n",
 			"replace": "",
 			"note": "the declared pure operators stop reaching the side-effect-free vocabulary, so every operator expression becomes impure: `inline` refuses an `a + b` initializer it used to substitute, and the 25 operator names go back to being unreachable from any declaration"
 		},
@@ -2677,7 +2677,7 @@
 			"name": "M-GRAPH-ACCESS-COUNTED",
 			"type": "anyparse.query.CallGraph",
 			"method": "unresolvedAccessesRunning",
-			"find": "for (prefix in _shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) names.push(name.substr(prefix.length));",
+			"find": "if (_shape.accessorMethodPrefixes != null)\n\t\t\t\tfor (prefix in _shape.accessorMethodPrefixes)\n\t\t\t\t\tif (name.startsWith(prefix)) names.push(name.substr(prefix.length));",
 			"replace": "",
 			"note": "an accessor's untyped accesses are not counted as blind sites of it"
 		},
@@ -15914,7 +15914,7 @@
 			"name": "M-LEX-EACHCOMMENT-SKIPS-HOLES",
 			"type": "anyparse.query.LexicalRegions",
 			"method": "eachComment",
-			"find": "for (hole in region.holes ?? []) eachComment(hole.regions, onComment);",
+			"find": "if (region.holes != null) for (hole in region.holes) eachComment(hole.regions, onComment);",
 			"replace": "",
 			"note": "a comment written inside an interpolation hole is not reported, so the comment-loss guard never sees it and a writer that drops it passes"
 		},

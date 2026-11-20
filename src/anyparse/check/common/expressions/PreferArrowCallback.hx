@@ -323,8 +323,8 @@ final class PreferArrowCallback extends RuleBase {
 	/** Statement kinds that are `Void`-typed by construction when they close a block body. */
 	private static function voidTailKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = ShapeVocab.statementLoopKinds(shape);
-		for (k in shape.localDeclKinds ?? []) out.push(k);
-		for (k in shape.localFunctionKinds ?? []) out.push(k);
+		if (shape.localDeclKinds != null) for (k in shape.localDeclKinds) out.push(k);
+		if (shape.localFunctionKinds != null) for (k in shape.localFunctionKinds) out.push(k);
 		final empty: Null<String> = shape.emptyStmtKind;
 		if (empty != null) out.push(empty);
 		return out;

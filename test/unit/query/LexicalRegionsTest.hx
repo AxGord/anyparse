@@ -232,7 +232,7 @@ class LexicalRegionsTest extends Test {
 
 	/** Whether every hole of `region` lies within it and every region of a hole within that hole, at every depth. */
 	private function nestsWithin(region: LexRegion): Bool {
-		for (hole in region.holes ?? []) {
+		if (region.holes != null) for (hole in region.holes) {
 			if (hole.from < region.from || hole.to > region.to) return false;
 			for (inner in hole.regions) if (inner.from < hole.from || inner.to > hole.to || !nestsWithin(inner)) return false;
 		}

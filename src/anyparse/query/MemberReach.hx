@@ -2013,7 +2013,7 @@ final class MemberReach {
 				ids.push(id);
 			}
 			if (site.all == true) for (id in admission.closure.keys()) if (g.node(id)?.isExternal == false) admit(id);
-			for (id in site.ids ?? []) if (admission.closure.exists(id)) admit(id);
+			if (site.ids != null) for (id in site.ids) if (admission.closure.exists(id)) admit(id);
 			for (n in site.names) for (target in g.resolveTarget(n)) if (admission.closure.exists(target.id)) admit(target.id);
 			if (site.constructors) for (c in admission.constructors) admit(c);
 			final implicit: Array<String> = site.always ? _g.alwaysIds(g).copy() : [];
@@ -2039,7 +2039,7 @@ final class MemberReach {
 					);
 			}
 			// the methods of an object reflection reaches by name are each the member of the type the facts name
-			for (o in site.owned ?? []) owned.push(o);
+			if (site.owned != null) for (o in site.owned) owned.push(o);
 			for (id in implicit) if (admission.closure.exists(id)) admit(id);
 
 			function step(id: String): ReachStep {
@@ -3034,7 +3034,7 @@ final class MemberReach {
 			}
 			ids.pushAllUnique(members);
 		}
-		for (t in types ?? []) {
+		if (types != null) for (t in types) {
 			final members: Null<Array<String>> = _g.handedMemberIds(g, t);
 			if (members == null) {
 				out.all = true;

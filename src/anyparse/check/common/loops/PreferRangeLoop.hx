@@ -210,7 +210,7 @@ final class PreferRangeLoop extends RuleBase {
 				shape.boolLitKind
 			]) if (k != null) k
 		];
-		for (n in shape.numericLiteralKinds ?? []) atomicKinds.push(n);
+		if (shape.numericLiteralKinds != null) for (n in shape.numericLiteralKinds) atomicKinds.push(n);
 		return mutableKinds.length == 0 ? null : {
 			shape: shape,
 			whileStmtKind: whileStmtKind,

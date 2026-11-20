@@ -556,7 +556,9 @@ final class CallGraph {
 			final name: Null<String> = t.name;
 			if (name == null) continue;
 			names.push(name);
-			for (prefix in _shape.accessorMethodPrefixes ?? []) if (name.startsWith(prefix)) names.push(name.substr(prefix.length));
+			if (_shape.accessorMethodPrefixes != null)
+				for (prefix in _shape.accessorMethodPrefixes)
+					if (name.startsWith(prefix)) names.push(name.substr(prefix.length));
 		}
 		return [ for (a in unresolvedAccess) if (names.contains(a.member)) a ];
 	}

@@ -273,7 +273,7 @@ final class RedundantBraces extends RuleBase implements DefaultOff implements Qu
 			shape.staticLocalDeclKinds,
 			shape.localFunctionKinds,
 			shape.inlineFunctionKinds
-		]) for (kind in kinds ?? []) kept.push(kind);
+		]) if (kinds != null) for (kind in kinds) kept.push(kind);
 		return {
 			ifKinds: chain.ifKinds,
 			loopKinds: ShapeVocab.statementLoopKinds(shape),

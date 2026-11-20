@@ -435,7 +435,9 @@ final class CondQuery {
 	 */
 	private static function isMetadataName(name: String, shape: RefShape): Bool {
 		var longest: Int = -1;
-		for (prefix in shape.metadataNamePrefixes ?? []) if (name.startsWith(prefix) && prefix.length > longest) longest = prefix.length;
+		if (shape.metadataNamePrefixes != null)
+			for (prefix in shape.metadataNamePrefixes)
+				if (name.startsWith(prefix) && prefix.length > longest) longest = prefix.length;
 		return longest >= 0 && isSymbolName(name.substr(longest));
 	}
 

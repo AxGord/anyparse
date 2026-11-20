@@ -120,7 +120,7 @@ class LiteralClassificationTest extends Test {
 		final text: Null<String> = SHAPE.stringInterpTextKind;
 		final segments: Array<String> = [];
 		if (text != null) segments.push(text);
-		for (kind in SHAPE.stringInterpInertSegmentKinds ?? []) segments.push(kind);
+		if (SHAPE.stringInterpInertSegmentKinds != null) for (kind in SHAPE.stringInterpInertSegmentKinds) segments.push(kind);
 		Assert.isTrue(segments.length > 1, 'the Haxe grammar must declare a text fragment and at least one inert trigger');
 		assertClassifies('MemberKinds.sideEffectFreeExprKinds (segments)', segments, MemberKinds.sideEffectFreeExprKinds(SHAPE));
 	}
@@ -329,7 +329,7 @@ class LiteralClassificationTest extends Test {
 		Assert.isTrue(MemberKinds.isSideEffectFree(initializerOf('1 + 2'), SHAPE), 'while the real grammar still admits it');
 		// Every operator the grammar declares pure must be one the purity predicate admits, and none
 		// may be a store: an admitted assignment is the wrong-rewrite direction.
-		for (kind in SHAPE.pureOperatorKinds ?? []) {
+		if (SHAPE.pureOperatorKinds != null) for (kind in SHAPE.pureOperatorKinds) {
 			Assert.isTrue(MemberKinds.isSafeKind(kind, SHAPE), 'a declared pure operator ($kind) must be side-effect-free');
 			Assert.isFalse(kind == SHAPE.assignKind, 'the assignment kind must never be declared a pure operator');
 			Assert.isFalse(kind == SHAPE.addAssignKind, 'nor the compound assignment kind');

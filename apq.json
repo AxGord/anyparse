@@ -412,6 +412,7 @@
 		"prefer-line-comment": true,
 		"prefer-lpad": true,
 		"prefer-map": true,
+		"prefer-null-guarded-loop": true,
 		"prefer-single-pass": true,
 		"prefer-static-extension": {
 			"enabled": true,

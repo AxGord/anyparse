@@ -181,6 +181,7 @@ import anyparse.check.common.nullsafety.NullDereference;
 import anyparse.check.common.nullsafety.NullableSwitchMissingNull;
 import anyparse.check.common.nullsafety.PossibleNullDereference;
 import anyparse.check.common.nullsafety.PreferNullCoalescing;
+import anyparse.check.common.nullsafety.PreferNullGuardedLoop;
 import anyparse.check.common.nullsafety.PreferSafeNav;
 import anyparse.check.common.nullsafety.PreferSafeNavComparison;
 import anyparse.check.common.nullsafety.RedundantNarrowingCopy;
@@ -329,6 +330,7 @@ final class Linter {
 			new DoubleNegation(),
 			new InvertNegatedIfElse(),
 			new PreferNullCoalescing(),
+			new PreferNullGuardedLoop(),
 			new PreferArrayLiteral(),
 			new PreferMapLiteral(),
 			new PreferMap(),

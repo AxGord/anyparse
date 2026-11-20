@@ -218,7 +218,7 @@ final class MutationArm {
 	public static function cuts(text: String, names: Array<String>, registry: String): Map<String, ArmCut> {
 		final table: ArmTable = ArmTableParser.parse(text);
 		final byName: Map<String, ArmRecordJson> = [];
-		for (arm in table.arms ?? []) if (!byName.exists(arm.name)) byName[arm.name] = arm;
+		if (table.arms != null) for (arm in table.arms) if (!byName.exists(arm.name)) byName[arm.name] = arm;
 		final out: Map<String, ArmCut> = [];
 		for (name in names) {
 			final arm: Null<ArmRecordJson> = byName[name];

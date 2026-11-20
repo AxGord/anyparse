@@ -201,7 +201,7 @@ final class HoistEmbeddedAssignment extends RuleBase implements DefaultOff imple
 		if (assign == null || exprStmt == null) return null;
 		final continuations: Array<String> = shape.localDeclContinuationKinds ?? [];
 		final hosts: Array<String> = [exprStmt];
-		for (kind in shape.localDeclKinds ?? []) if (!continuations.contains(kind)) hosts.push(kind);
+		if (shape.localDeclKinds != null) for (kind in shape.localDeclKinds) if (!continuations.contains(kind)) hosts.push(kind);
 		final containers: Array<String> = [];
 		final array: Null<String> = shape.arrayLiteralKind;
 		final object: Null<String> = shape.objectLiteralKind;

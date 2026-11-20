@@ -1163,7 +1163,7 @@ final class CompilerFacts {
 		id: String, node: FactNode, record: FactNodeRecord, home: String, paths: Array<Null<String>>, seen: Map<String, Bool>
 	): Void {
 		FactMerge.variant(node.variants, record.t, [ for (p in record.params ?? []) { name: p.n, type: p.t } ]);
-		for (channel in record.inc ?? []) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
+		if (record.inc != null) for (channel in record.inc) if (!node.incomplete.contains(channel)) node.incomplete.push(channel);
 
 		// a fact whose file the table cannot read any more — rewritten, or of another text — is lost to the node: say so. A
 		// position the record leaves out is none
@@ -1182,7 +1182,7 @@ final class CompilerFacts {
 		}
 		FactNodeRecords.collectFacts(id, node, record, place, fresh);
 		FactNodeRecords.collectExpansions(node, record, place, fresh);
-		for (f in record.fns ?? []) if (!node.fns.contains(f)) node.fns.push(f);
+		if (record.fns != null) for (f in record.fns) if (!node.fns.contains(f)) node.fns.push(f);
 	}
 
 	/**
@@ -1194,7 +1194,7 @@ final class CompilerFacts {
 		dumps: Array<FactsDump>, read: (String) -> Null<String>, key: (String) -> String, ?dropped: Array<{ name: String, reason: String }>
 	): CompilerFacts {
 		final facts: CompilerFacts = create(read, key);
-		for (d in dropped ?? []) facts.dropped.push(d);
+		if (dropped != null) for (d in dropped) facts.dropped.push(d);
 		for (dump in dumps) facts.add(dump);
 		return facts;
 	}

@@ -66,7 +66,7 @@ final class InertRegions {
 	private static function textSegmentKinds(shape: RefShape): Array<String> {
 		final text: Null<String> = shape.stringInterpTextKind;
 		final out: Array<String> = text == null ? [] : [text];
-		for (kind in shape.stringInterpInertSegmentKinds ?? []) out.push(kind);
+		if (shape.stringInterpInertSegmentKinds != null) for (kind in shape.stringInterpInertSegmentKinds) out.push(kind);
 		return out;
 	}
 

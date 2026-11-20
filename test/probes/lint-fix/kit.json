@@ -3155,6 +3155,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "NGL1",
+			"note": "prefer-null-guarded-loop under an oracle: a plain field chain is rewritten to the guard; a getter-backed value and a loop an else follows are reported and kept",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-null-guarded-loop",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Q {\n\tpublic var items(get, never):Null<Array<Int>>;\n\n\tvar n:Int = 0;\n\n\tpublic function new() {}\n\n\tfunction get_items():Null<Array<Int>> {\n\t\treturn n++ == 0 ? [1] : null;\n\t}\n}\n\nclass Box {\n\tpublic var list:Null<Array<Int>>;\n\n\tpublic function new(l:Null<Array<Int>>) {\n\t\tlist = l;\n\t}\n}\n\nclass Main {\n\tstatic function run(box:Box, q:Q, c:Bool):Void {\n\t\tfor (x in box.list ?? []) Sys.println('chain ' + x);\n\t\tfor (x in q.items ?? []) Sys.println('getter ' + x);\n\t\tif (c)\n\t\t\tfor (x in box.list ?? []) Sys.println('then ' + x);\n\t\telse\n\t\t\tSys.println('else');\n\t}\n\n\tstatic function main() {\n\t\trun(new Box([1, 2]), new Q(), true);\n\t\trun(new Box(null), new Q(), false);\n\t}\n}\n",
+				"build.hxml": "-cp .\n-main Main\n--no-output\n",
+				"apq.json": "{\"compilerOracle\": \"build.hxml\", \"rules\": {\"prefer-null-guarded-loop\": true}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "e7e61e57bddc3b75",
+				"files": "5ac602e2d1736147",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

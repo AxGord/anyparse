@@ -56,8 +56,9 @@ final class FactNodeRecords {
 	public static function parseLine(text: String): FactNodeRecord {
 		final raw: DynamicAccess<Any> = Json.parse(text); // noqa: avoid-haxe-json, avoid-any
 		final reads: Null<Array<Array<Any>>> = raw['reads']; // noqa: avoid-any
-		for (tuple in reads ?? []) for (i in 0...tuple.length)
-			tuple[i] = JsonNative.value(tuple[i]) ?? throw new Exception('a read tuple holds an object');
+		if (reads != null)
+			for (tuple in reads)
+				for (i in 0...tuple.length) tuple[i] = JsonNative.value(tuple[i]) ?? throw new Exception('a read tuple holds an object');
 		return cast raw;
 	}
 
@@ -249,7 +250,7 @@ final class FactNodeRecords {
 	public static function collectExpansions(
 		node: FactNode, record: FactNodeRecord, place: (Null<Array<Int>>) -> Null<FactPos>, fresh: (String, String, FactPos) -> Bool
 	): Void {
-		for (x in record.exps ?? []) {
+		if (record.exps != null) for (x in record.exps) {
 			final root: Null<FactPos> = place(x.p);
 			final anchor: Null<FactPos> = place(x.a);
 			final declared: Null<FactPos> = place(x.d);

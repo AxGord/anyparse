@@ -173,7 +173,7 @@ final class AbstractReach {
 
 	/** A member whose type is inferred has the type of its own code: what that code spells, reads and builds. */
 	private function inferred(refs: Null<Array<InferredRef>>): Void {
-		for (r in refs ?? []) {
+		if (refs != null) for (r in refs) {
 			final code: Null<{ words: Array<String>, reads: Array<MemberRead> }> = _inferred(r);
 			if (code == null) {
 				for (t in _literals.concat(_everything())) add(t);

@@ -2870,6 +2870,13 @@ final class RefShape {
 	public var valueIterationTypes: Null<Map<String, String>>;
 
 	/**
+	 * The containers, by SIMPLE name, that an empty collection literal stands for — `[]` in Haxe is an `Array`. A loop
+	 * over `e ?? []` whose `e` resolves to another container is not a plain "skip when null" (`prefer-null-guarded-loop`
+	 * leaves it report-only). Optional; unset makes that check a no-op.
+	 */
+	public var emptyLiteralTypes: Null<Array<String>>;
+
+	/**
 	 * The containers whose key-value iteration RE-READS each value by key (a map), keyed by SIMPLE
 	 * name and mapped to the standard path exactly as `valueIterationTypes` is. Their single-binder
 	 * iteration yields the same values in the same order only while nothing changes the container:

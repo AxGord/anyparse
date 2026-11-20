@@ -343,7 +343,7 @@ class ShardPlanTest extends Test {
 			final token: ShardToken = ShardFilter.parse(ShardFilter.render('unit.SomeTest', part, 3));
 			final slice: Null<Array<String>> = ShardFilter.selected('unit.SomeTest', names, [token]);
 			Assert.equals(Std.string(slice), Std.string(ShardFilter.selected('unit.SomeTest', reversed, [token])));
-			for (name in slice ?? []) {
+			if (slice != null) for (name in slice) {
 				Assert.isFalse(seen.contains(name), '$name selected by two slices');
 				seen.push(name);
 			}

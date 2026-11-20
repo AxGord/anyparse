@@ -161,7 +161,9 @@ final class FieldRefScan {
 	private static function fnScopeKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = ShapeVocab.nestedFunctionKinds(shape);
 		final localOrModule: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.moduleValueDeclKinds);
-		for (kind in shape.functionKinds ?? []) if (!localOrModule.contains(kind) && !out.contains(kind)) out.push(kind);
+		if (shape.functionKinds != null)
+			for (kind in shape.functionKinds)
+				if (!localOrModule.contains(kind) && !out.contains(kind)) out.push(kind);
 		return out;
 	}
 

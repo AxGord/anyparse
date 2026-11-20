@@ -762,7 +762,7 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 	 */
 	private static function stringTypeName(shape: RefShape): Null<String> {
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
-		for (k in shape.stringLiteralKinds ?? []) {
+		if (shape.stringLiteralKinds != null) for (k in shape.stringLiteralKinds) {
 			final t: Null<String> = literalTypes[k];
 			if (t != null) return t;
 		}

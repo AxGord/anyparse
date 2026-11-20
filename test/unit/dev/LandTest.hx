@@ -1295,7 +1295,7 @@ final class LandTest extends Test {
 		write(repo, shape.onSide ?? []);
 		git(repo, ['add', '.']);
 		git(repo, ['commit', '-q', '-m', shape.sideMessage ?? 'side']);
-		for (edit in shape.moreCommits ?? []) {
+		if (shape.moreCommits != null) for (edit in shape.moreCommits) {
 			write(repo, [edit]);
 			git(repo, ['add', '.']);
 			git(repo, ['commit', '-q', '-m', 'more']);

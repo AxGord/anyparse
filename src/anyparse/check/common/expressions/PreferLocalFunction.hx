@@ -268,7 +268,7 @@ final class PreferLocalFunction extends RuleBase {
 		final out: Array<String> = [];
 		final fnExprKind: Null<String> = shape.fnExprKind;
 		if (fnExprKind != null) out.push(fnExprKind);
-		for (kind in shape.lambdaKinds ?? []) out.pushUnique(kind);
+		if (shape.lambdaKinds != null) out.pushAllUnique(shape.lambdaKinds);
 		return out;
 	}
 

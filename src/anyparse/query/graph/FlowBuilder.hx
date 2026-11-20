@@ -114,7 +114,7 @@ final class FlowBuilder {
 	}
 
 	private function register(kinds: Null<Array<Null<String>>>, cls: FlowStatement): Void {
-		for (kind in kinds ?? []) if (kind != null && !_classes.exists(kind)) _classes[kind] = cls;
+		if (kinds != null) for (kind in kinds) if (kind != null && !_classes.exists(kind)) _classes[kind] = cls;
 	}
 
 	/** Whether `body` holds bodies to choose between (a conditional-compilation body) rather than statements to run in turn. */

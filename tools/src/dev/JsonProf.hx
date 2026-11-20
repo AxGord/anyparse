@@ -141,9 +141,9 @@ final class JsonProf {
 	private static function identityStd(nodes: Array<FactNodeRecord>): Int {
 		var bytes: Int = 0;
 		for (node in nodes) {
-			for (c in node.calls ?? []) bytes += haxe.Json.stringify(c).length; // noqa: avoid-haxe-json
-			for (f in node.fields ?? []) bytes += haxe.Json.stringify(f).length; // noqa: avoid-haxe-json
-			for (v in node.vars ?? []) bytes += haxe.Json.stringify(v).length; // noqa: avoid-haxe-json
+			if (node.calls != null) for (c in node.calls) bytes += haxe.Json.stringify(c).length; // noqa: avoid-haxe-json
+			if (node.fields != null) for (f in node.fields) bytes += haxe.Json.stringify(f).length; // noqa: avoid-haxe-json
+			if (node.vars != null) for (v in node.vars) bytes += haxe.Json.stringify(v).length; // noqa: avoid-haxe-json
 		}
 		return bytes;
 	}
@@ -151,9 +151,9 @@ final class JsonProf {
 	private static function identityTyped(nodes: Array<FactNodeRecord>): Int {
 		var bytes: Int = 0;
 		for (node in nodes) {
-			for (c in node.calls ?? []) bytes += FactNodeRecordText.compactFactCallRecord(c).length;
-			for (f in node.fields ?? []) bytes += FactNodeRecordText.compactFactFieldRecord(f).length;
-			for (v in node.vars ?? []) bytes += FactNodeRecordText.compactFactVarRecord(v).length;
+			if (node.calls != null) for (c in node.calls) bytes += FactNodeRecordText.compactFactCallRecord(c).length;
+			if (node.fields != null) for (f in node.fields) bytes += FactNodeRecordText.compactFactFieldRecord(f).length;
+			if (node.vars != null) for (v in node.vars) bytes += FactNodeRecordText.compactFactVarRecord(v).length;
 		}
 		return bytes;
 	}

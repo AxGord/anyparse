@@ -141,6 +141,7 @@
 	"prefer-map-literal",
 	"prefer-map-type",
 	"prefer-null-coalescing",
+	"prefer-null-guarded-loop",
 	"prefer-range-loop",
 	"prefer-read-only-field",
 	"prefer-safe-nav",

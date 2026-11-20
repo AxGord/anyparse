@@ -234,7 +234,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 			shape.conditionalRegionKinds,
 			shape.opaqueKinds
 		];
-		for (list in lists) for (k in list ?? []) leaving.push(k);
+		for (list in lists) if (list != null) for (k in list) leaving.push(k);
 		return {
 			arrayLiteralKind: comprehension.arrayLiteralKind,
 			callKind: callKind,

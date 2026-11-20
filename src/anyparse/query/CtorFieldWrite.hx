@@ -743,7 +743,7 @@ final class CtorFieldWrite {
 		admit(shape.objectLiteralKind);
 		admit(shape.objectFieldKind);
 		admit(shape.assignKind);
-		for (kind in shape.localDeclKinds ?? []) admit(kind);
+		if (shape.localDeclKinds != null) for (kind in shape.localDeclKinds) admit(kind);
 		return kinds;
 	}
 

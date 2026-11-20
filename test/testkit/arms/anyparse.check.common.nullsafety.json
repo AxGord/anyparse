@@ -368,6 +368,93 @@
 			"find": "final leftOut: Null<String> = _leftOut;",
 			"replace": "final leftOut: Null<String> = null;",
 			"note": "a run over part of a project whose config closes the world says nothing about the coverage it lacks"
+		},
+		{
+			"name": "M-GUARDED-LOOP-FIX",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fix",
+			"force": "[]",
+			"note": "a loop over a null fallback is reported and never rewritten to the guard"
+		},
+		{
+			"name": "M-GUARDED-LOOP-TWICE",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbackOf",
+			"find": "s.unsafeKinds.exists(k -> MemberKinds.subtreeContainsKind(value, k))",
+			"replace": "false",
+			"note": "a call in the iterable is evaluated twice by the guard"
+		},
+		{
+			"name": "M-GUARDED-LOOP-INDEX",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbackOf",
+			"find": "indexKind != null && MemberKinds.subtreeContainsKind(value, indexKind)",
+			"replace": "false",
+			"note": "an index read is rewritten to a guard the compiler does not narrow and that looks the element up twice"
+		},
+		{
+			"name": "M-GUARDED-LOOP-ELSE",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbackOf",
+			"find": "elseEnds.contains(loopSpan.to)",
+			"replace": "false",
+			"note": "the else that followed the loop binds to the new guard"
+		},
+		{
+			"name": "M-GUARDED-LOOP-COMMENT",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbackOf",
+			"find": "LexicalRegions.commentIntersects(span.from, span.to, regions())",
+			"replace": "false",
+			"note": "a comment inside the iterable is dropped or duplicated by the rewrite"
+		},
+		{
+			"name": "M-GUARDED-LOOP-CONTAINER",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "otherContainer",
+			"find": "!s.emptyTypes.contains(type)",
+			"replace": "false",
+			"note": "a map or other container the empty literal does not stand for is rewritten to the guard"
+		},
+		{
+			"name": "M-GUARDED-LOOP-FALLBACK-KIND",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbackOf",
+			"find": "fallback.kind != s.arrayKind",
+			"replace": "false",
+			"note": "a loop over another fallback value is flagged, and its fix would drop the fallback"
+		},
+		{
+			"name": "M-GUARDED-LOOP-FALLBACK-EMPTY",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbackOf",
+			"find": "fallback.children.length != 0",
+			"replace": "false",
+			"note": "a loop over a non-empty fallback literal is flagged, and its fix would drop the elements"
+		},
+		{
+			"name": "M-GUARDED-LOOP-SAFE-NAV",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbackOf",
+			"find": "safeAccessKind != null && MemberKinds.subtreeContainsKind(value, safeAccessKind)",
+			"replace": "false",
+			"note": "a safe-navigation read is rewritten to a guard the compiler does not narrow"
+		},
+		{
+			"name": "M-GUARDED-LOOP-GETTER",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbacks",
+			"find": "!plainRead(f.value)",
+			"replace": "false",
+			"note": "a property getter or an unproven step in the iterable is run twice by the guard"
+		},
+		{
+			"name": "M-GUARDED-LOOP-PLAIN-FIELD",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fallbacks",
+			"find": "!plainRead(f.value)",
+			"replace": "true",
+			"note": "a chain of plain fields is no longer rewritten: the proof refuses everything"
 		}
 	]
 }

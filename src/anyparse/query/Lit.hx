@@ -124,7 +124,9 @@ final class Lit {
 		final text: Null<String> = shape.stringInterpTextKind;
 		final segmented: Array<String> = shape.interpolatingStringKinds ?? [];
 		final out: Array<String> = text == null ? [] : [text];
-		for (kind in shape.stringLiteralKinds ?? []) if (!segmented.contains(kind) && !out.contains(kind)) out.push(kind);
+		if (shape.stringLiteralKinds != null)
+			for (kind in shape.stringLiteralKinds)
+				if (!segmented.contains(kind) && !out.contains(kind)) out.push(kind);
 		return out;
 	}
 

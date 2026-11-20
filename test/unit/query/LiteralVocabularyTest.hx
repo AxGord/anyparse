@@ -112,7 +112,7 @@ class LiteralVocabularyTest extends Test {
 		final segment: Null<String> = SHAPE.stringInterpTextKind;
 		Assert.notNull(segment, 'the Haxe grammar must declare a text-segment kind');
 		if (segment != null) Assert.isTrue(kinds.contains(segment), 'the segment kind must be in the content set: $kinds');
-		for (segmented in SHAPE.interpolatingStringKinds ?? [])
+		if (SHAPE.interpolatingStringKinds != null) for (segmented in SHAPE.interpolatingStringKinds)
 			Assert.isFalse(kinds.contains(segmented), 'a segmented literal carries no content in its own name slot: $segmented');
 		for (whole in (SHAPE.stringLiteralDelimiters ?? []).keys())
 			Assert.isTrue(kinds.contains(whole), 'a quoted whole literal carries content and must be in the set: $whole');

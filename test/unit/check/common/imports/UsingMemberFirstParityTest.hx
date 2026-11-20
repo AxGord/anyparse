@@ -170,7 +170,7 @@ class UsingMemberFirstParityTest extends Test {
 	): Void {
 		final src: String = 'package p;\n\nusing $path;\n\nclass Src {\n\tpublic static function $member\n}\n';
 		final scope: Array<{ file: String, source: String }> = [{ file: 'p/Src.hx', source: src }, { file: 'p/Dest.hx', source: DEST }];
-		for (e in extra ?? []) scope.push(e);
+		if (extra != null) for (e in extra) scope.push(e);
 		if (types != null) {
 			scope.push({ file: 'p/D.hx', source: 'package p;\n\n$types\n' });
 			scope.push({ file: 'p/Ext.hx', source: EXT });

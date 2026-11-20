@@ -2383,7 +2383,7 @@
 			"name": "M-TS-NATIVE-CODE-CALLS",
 			"type": "anyparse.check.common.design.threads.ProjectNatives",
 			"method": "new",
-			"find": "for (p in execution.nativeCodeCalls ?? []) for (id in graph.matchIds(p)) if (graph.node(id)?.isExternal == true) push(id);",
+			"find": "if (execution.nativeCodeCalls != null)\n\t\t\tfor (p in execution.nativeCodeCalls)\n\t\t\t\tfor (id in graph.matchIds(p))\n\t\t\t\t\tif (graph.node(id)?.isExternal == true) push(id);",
 			"replace": "",
 			"note": "cpp.Syntax.code is a library call, not the project's native code"
 		},
