@@ -17,7 +17,7 @@ model_table:
       - { upto: 10, model: sonnet, effort: high }
     # Haiku trial (user 2026-11-20): execute/fix d1-2 on haiku; revert = drop the upto-2 rows.
     execute:
-      - { upto: 2, model: haiku, effort: high }
+      - { upto: 2, model: haiku, effort: xhigh }
       - { upto: 6, model: sonnet, effort: high }
       - { upto: 10, model: opus, effort: high }
     review:
@@ -27,7 +27,7 @@ model_table:
       - { upto: 3, model: sonnet, effort: high }
       - { upto: 10, model: opus, effort: high }
     fix:
-      - { upto: 2, model: haiku, effort: high }
+      - { upto: 2, model: haiku, effort: xhigh }
       - { upto: 6, model: sonnet, effort: high }
       - { upto: 10, model: opus, effort: high }
 
