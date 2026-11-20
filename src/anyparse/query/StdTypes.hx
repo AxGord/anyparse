@@ -311,12 +311,7 @@ final class StdTypes {
 		}
 		if (imported != null) return imported;
 		final sibling: String = info.pkg == '' ? name : '${info.pkg}.$name';
-		return if (modulePaths.exists(sibling))
-			sibling
-		else if (modulePaths.exists(name))
-			name
-		else
-			null;
+		return if (modulePaths.exists(sibling)) sibling else if (modulePaths.exists(name)) name else null;
 	}
 
 	/** The module a type path lives in: the path itself when it names a module, else the path without its last segment. */

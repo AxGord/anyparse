@@ -416,10 +416,7 @@ final class NativeDocLowering {
 			final element: ShapeNode = node.children[0];
 			final each: Expr = outValue(element, macro $i{item});
 			final held: Expr = element.annotations[AnnotationKeys.BASE_OPTIONAL] == true
-				? macro if ($i{item} == null)
-					null
-				else
-					$each
+				? macro if ($i{item} == null) null else $each
 				: each;
 			return macro [ for ($i{item} in $value) ($held: Any) ];
 		}

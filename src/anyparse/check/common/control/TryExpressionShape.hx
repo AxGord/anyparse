@@ -269,12 +269,7 @@ final class TryExpressionShape {
 	 */
 	private static function operand(source: String, node: QueryNode, s: TrySeams): Null<String> {
 		final src: Null<String> = slice(source, node);
-		return if (src == null)
-			null
-		else if (endsOpen(node, s.tryKinds))
-			'($src)'
-		else
-			src;
+		return if (src == null) null else if (endsOpen(node, s.tryKinds)) '($src)' else src;
 	}
 
 }

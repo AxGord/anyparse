@@ -95,12 +95,7 @@ final class NodeShape {
 		final left: QueryNode = BoolExprShape.unwrapParens(node.children[0], parenKind);
 		final right: QueryNode = BoolExprShape.unwrapParens(node.children[1], parenKind);
 		final leftIsNull: Bool = left.kind == nullLitKind;
-		return if (leftIsNull == (right.kind == nullLitKind))
-			null
-		else if (leftIsNull)
-			right
-		else
-			left;
+		return if (leftIsNull == (right.kind == nullLitKind)) null else if (leftIsNull) right else left;
 	}
 
 	/** `nullComparedSide` when the operand it answers is an identifier of `identKind`, else null. */

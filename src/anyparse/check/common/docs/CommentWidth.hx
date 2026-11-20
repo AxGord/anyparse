@@ -321,12 +321,7 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 
 	/** `at` pulled inside `[from, to]` — a comment unit's ends reach past the line it is being read on. */
 	private static function clamp(at: Int, from: Int, to: Int): Int {
-		return if (at < from)
-			from
-		else if (at > to)
-			to
-		else
-			at;
+		return if (at < from) from else if (at > to) to else at;
 	}
 
 	/** Every raw `#if` region of `source`, or null when it does not parse — the fail-closed answer. */

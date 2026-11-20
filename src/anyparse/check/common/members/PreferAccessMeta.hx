@@ -160,12 +160,7 @@ final class PreferAccessMeta extends RuleBase implements DefaultOff implements R
 		function walk(node: QueryNode, member: Null<QueryNode>, owner: Null<TypeDeclMatch>): Void {
 			final decl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			final inType: Null<TypeDeclMatch> = decl ?? owner;
-			final inMember: Null<QueryNode> = if (decl != null)
-				null
-			else if (s.memberKinds.contains(node.kind))
-				node
-			else
-				member;
+			final inMember: Null<QueryNode> = if (decl != null) null else if (s.memberKinds.contains(node.kind)) node else member;
 			if (s.annotatedKinds.contains(node.kind) && node.children.length == ANNOTATED_CHILDREN) {
 				final meta: QueryNode = node.children[0];
 				if (s.metaKinds.contains(meta.kind) && meta.name == s.waiver) out.push({

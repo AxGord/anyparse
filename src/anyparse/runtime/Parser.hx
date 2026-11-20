@@ -159,12 +159,7 @@ final class Parser {
 		memoRuns++;
 		if (handed != null && handed.leadingComments.length < handedComments) return;
 		final left: Null<PendingTrivia> = pendingTrivia;
-		final exit: MemoExit = if (left == null)
-			Nothing
-		else if (left == handed)
-			Handed
-		else
-			Own;
+		final exit: MemoExit = if (left == null) Nothing else if (left == handed) Handed else Own;
 		final entry: MemoEntry = new MemoEntry(
 			pos, value, error, handed == null ? null : copyTrivia(handed, handedComments), exit,
 			left == null || exit == Handed ? null : copyTrivia(left, 0)

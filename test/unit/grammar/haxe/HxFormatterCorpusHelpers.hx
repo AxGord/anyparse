@@ -144,12 +144,7 @@ final class HxFormatterCorpusHelpers {
 	public static function forkRoot(): Null<String> {
 		#if (sys || nodejs)
 		final root: Null<String> = Sys.getEnv(ENV_KEY);
-		return if (root == null || root == '')
-			null
-		else if (!FileSystem.exists(root) || !FileSystem.isDirectory(root))
-			null
-		else
-			root;
+		return if (root == null || root == '') null else if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) null else root;
 		#else
 		return null;
 		#end

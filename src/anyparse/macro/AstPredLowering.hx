@@ -278,12 +278,7 @@ class AstPredLowering {
 		// passing both has confused its build context — fail at macro
 		// time instead of silently preferring one family.
 		if (trivia && spans) Context.fatalError('AstPredLowering: a build cannot be both trivia and spans', Context.currentPos());
-		final suffix: String = if (spans)
-			'S'
-		else if (trivia)
-			'T'
-		else
-			'';
+		final suffix: String = if (spans) 'S' else if (trivia) 'T' else '';
 		return markerPack(rootTypePath).concat(['$CLASS_BASE_NAME$suffix']);
 	}
 

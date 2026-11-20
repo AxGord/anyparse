@@ -414,12 +414,7 @@ class SingleStmtBraces {
 		// omega-brace-symmetry: verdict 2 IS the de-brace direction, so symmetry-only
 		// can never reach it - a group with a braced member is repaired upward (1) and
 		// one with none is left alone (0).
-		return if (drop && allDeBrace)
-			2
-		else if (anyBraced)
-			1
-		else
-			0;
+		return if (drop && allDeBrace) 2 else if (anyBraced) 1 else 0;
 	}
 
 	/**

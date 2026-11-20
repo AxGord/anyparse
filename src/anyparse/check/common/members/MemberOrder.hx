@@ -235,12 +235,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * conditional member sorts to the END of its own section, never across one.
 	 */
 	private static inline function sectionOf(rank: MemberRank): Int {
-		return if (rank < Constructor)
-			0
-		else if (rank == Constructor)
-			1
-		else
-			2;
+		return if (rank < Constructor) 0 else if (rank == Constructor) 1 else 2;
 	}
 
 	/**
@@ -296,12 +291,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * member of a content-ranked block -1 when the block leads its rank, 1 when it trails the plain members.
 	 */
 	private static inline function blockStep(m: OrderedMember, ordinal: Null<Int>, plan: SortPlan): Int {
-		return if (ordinal == null)
-			0
-		else if (leadsRank(m, plan))
-			-1
-		else
-			1;
+		return if (ordinal == null) 0 else if (leadsRank(m, plan)) -1 else 1;
 	}
 
 	/**

@@ -8253,7 +8253,7 @@
 			"name": "M-SHARD-FILTER-SLICE-UNSORTED",
 			"type": "anyparse.query.ShardFilter",
 			"method": "selected",
-			"find": "sorted.sort((a, b) ->\n\t\t\tif (a < b)\n\t\t\t\t-1\n\t\t\telse if (a > b)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\t0\n\t\t);",
+			"find": "sorted.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);",
 			"replace": "",
 			"note": "a slice is cut from the names in the order the runner lists them, so two processes listing them differently can run a test twice or never"
 		},

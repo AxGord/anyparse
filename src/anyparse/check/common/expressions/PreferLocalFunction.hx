@@ -395,12 +395,7 @@ final class PreferLocalFunction extends RuleBase {
 		for (i in 0...index) {
 			final st: QueryNode = kids[i];
 			if (!s.localDeclKinds.contains(st.kind) || st.name != name) continue;
-			return if (SourceText.isMultiDeclarator(st, s.localDeclContinuationKinds))
-				null
-			else if (declarationIsBare(st, s))
-				st
-			else
-				null;
+			return if (SourceText.isMultiDeclarator(st, s.localDeclContinuationKinds)) null else if (declarationIsBare(st, s)) st else null;
 		}
 		return null;
 	}

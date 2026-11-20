@@ -288,12 +288,7 @@ final class TypingService {
 		if (!file.ambientImportsBounded) return Other;
 		if (_refs.names.tierOf(name, file).match(Tier.Unknown)) return Unreadable;
 		final std: Null<String> = StdTypes.toplevelPath(name);
-		return if (std == null)
-			Unbound
-		else if (std == canonical)
-			Same
-		else
-			Other;
+		return if (std == null) Unbound else if (std == canonical) Same else Other;
 	}
 
 	/**

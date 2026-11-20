@@ -583,12 +583,7 @@ final class PreferRangeLoop extends RuleBase {
 		if (span == null || !s.numericLiteralKinds.contains(literal.kind)) return null;
 		final raw: String = source.substring(span.from, span.to);
 		final value: Null<Int> = DECIMAL_INT.match(raw) ? Std.parseInt(raw) : null;
-		return if (value == null)
-			null
-		else if (negated)
-			-value
-		else
-			value;
+		return if (value == null) null else if (negated) -value else value;
 	}
 
 	/** The `for` header for a step-in-condition match: `for (i in A + 1...B + k)`, bounds folded when literal. */

@@ -294,14 +294,7 @@ final class ParseProf {
 		final out: Array<String> = [];
 		if (sys.FileSystem.isDirectory(target)) {
 			collect(target, out);
-			out.sort((a, b) ->
-				if (a < b)
-					-1
-				else if (a > b)
-					1
-				else
-					0
-			);
+			out.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
 			return out;
 		}
 		for (line in sys.io.File.getContent(target).split('\n')) {

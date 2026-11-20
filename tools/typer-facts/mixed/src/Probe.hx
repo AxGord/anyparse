@@ -128,10 +128,7 @@ class Probe {
 		var t2 = c ? n : 1;
 		var t3 = c ? 1 : n;
 		var t4 = c ? new SubA() : new SubB();
-		var t5 = if (c)
-			1
-		else
-			2.0;
+		var t5 = if (c) 1 else 2.0;
 		var t6 = c ? nf : 1;
 		var dd: Dynamic = [1, "a"];
 		var dm: Dynamic = ["a" => 1];

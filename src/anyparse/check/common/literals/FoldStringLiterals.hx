@@ -609,12 +609,7 @@ private class BoundaryRank {
 
 	/** The bracket that closes `open`; `open` is one of the three `isOpen` answers. */
 	private static inline function closerFor(open: Int): Int {
-		return if (open == '('.code)
-			')'.code
-		else if (open == '['.code)
-			']'.code
-		else
-			'}'.code;
+		return if (open == '('.code) ')'.code else if (open == '['.code) ']'.code else '}'.code;
 	}
 
 	/**

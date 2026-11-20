@@ -345,12 +345,7 @@ final class Unification {
 
 	/** `Fits` when some answer of `all` is, `Misfits` when every one is (none at all included), else `MayFit`. */
 	private static function anyOf(all: Array<ArgumentFit>): ArgumentFit {
-		return if (all.contains(Fits))
-			Fits
-		else if (all.contains(MayFit))
-			MayFit
-		else
-			Misfits;
+		return if (all.contains(Fits)) Fits else if (all.contains(MayFit)) MayFit else Misfits;
 	}
 
 	/** One answer every branch gives — `Fits` or `Misfits` — else `MayFit`. */

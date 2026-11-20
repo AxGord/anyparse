@@ -165,12 +165,7 @@ final class InlineMethod {
 	 */
 	public static function argText(source: String, arg: QueryNode, parenFreeRoots: Array<String>): Null<String> {
 		final raw: Null<String> = SourceText.nodeText(arg, source);
-		return if (raw == null)
-			null
-		else if (parenFreeRoots.contains(arg.kind))
-			raw
-		else
-			'($raw)';
+		return if (raw == null) null else if (parenFreeRoots.contains(arg.kind)) raw else '($raw)';
 	}
 
 	/** Count identifier nodes named `name` in `node`'s subtree. */

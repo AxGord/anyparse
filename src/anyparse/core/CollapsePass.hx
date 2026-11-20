@@ -1054,12 +1054,7 @@ final class CollapsePass {
 			case WrapBoundary(Group(IfFullLineExceeds(_, _, fl))): fl;
 			case _: null;
 		};
-		return if (flat == null)
-			null
-		else if (subtreeOpens(flat, decisions))
-			flat
-		else
-			null;
+		return if (flat == null) null else if (subtreeOpens(flat, decisions)) flat else null;
 	}
 
 	/**

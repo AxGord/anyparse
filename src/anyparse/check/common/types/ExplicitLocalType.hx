@@ -724,12 +724,7 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 		final call: Null<MethodCall> = NodeShape.methodCall(init, faKind);
 		if (call == null) return null;
 		final ret: Null<String> = table[call.method];
-		return if (ret == null)
-			null
-		else if (receiverIsString(call.receiver, shape, tree, declaredTypeSources, typeSyntax))
-			ret
-		else
-			null;
+		return if (ret == null) null else if (receiverIsString(call.receiver, shape, tree, declaredTypeSources, typeSyntax)) ret else null;
 	}
 
 	/**

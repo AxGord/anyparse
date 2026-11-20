@@ -731,12 +731,7 @@ final class WriterCascadeLowering {
 		// Base var/fn/other kind mapping for the TOP-level classify switch:
 		// var family → `1`, fn → `2`, everything else → `0`.
 		inline function kindFor(ctorName: String): Expr {
-			return if (varCtors.contains(ctorName))
-				macro 1;
-			else if (fnCtors.contains(ctorName))
-				macro 2;
-			else
-				macro 0;
+			return if (varCtors.contains(ctorName)) macro 1; else if (fnCtors.contains(ctorName)) macro 2; else macro 0;
 		}
 		// `case <Ctor>(_, …):` pattern for one enum variant, binding the
 		// single ctor arg to `_inner` when `bindInner` (the look-through

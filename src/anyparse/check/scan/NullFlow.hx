@@ -1823,12 +1823,7 @@ final class NullFlow {
 		while (i < names.length) {
 			final n: String = names[i];
 			for (al in base.aliases) {
-				final other: Null<String> = if (al.a == n)
-					al.b
-				else if (al.b == n)
-					al.a
-				else
-					null;
+				final other: Null<String> = if (al.a == n) al.b else if (al.b == n) al.a else null;
 				if (other != null && !names.contains(other)) names.push(other);
 			}
 			i++;

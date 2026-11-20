@@ -185,14 +185,7 @@ class MutationVerdict {
 			seen.add(name);
 			out.push(name);
 		}
-		out.sort((a, b) ->
-			if (a < b)
-				-1
-			else if (a > b)
-				1
-			else
-				0
-		);
+		out.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
 		return out;
 	}
 

@@ -831,14 +831,7 @@ class HoistCommonImportTest extends Test {
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final rendered: Array<String> = reportOf(tree, root, libraries, parsing, buildsUnknown)
 				.map(v -> '${relative(v.file, root)}:${quoted(v.message, 0)}@${relative(quoted(v.message, 1), root)}');
-			rendered.sort((a, b) ->
-				if (a < b)
-					-1
-				else if (a > b)
-					1
-				else
-					0
-			);
+			rendered.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
 			out = rendered.join(',');
 		});
 		return out;
@@ -857,14 +850,7 @@ class HoistCommonImportTest extends Test {
 				for (v in reportOf(tree, root))
 					if (v.message.indexOf(' is read by ') >= 0) '${relative(v.file, root)}:${quoted(v.message, 0)}'
 			];
-			rendered.sort((a, b) ->
-				if (a < b)
-					-1
-				else if (a > b)
-					1
-				else
-					0
-			);
+			rendered.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
 			out = rendered.join(',');
 		});
 		return out;
@@ -1102,14 +1088,7 @@ class HoistCommonImportTest extends Test {
 			else if (name.endsWith('.hx'))
 				out.push(path);
 		}
-		out.sort((a, b) ->
-			if (a < b)
-				-1
-			else if (a > b)
-				1
-			else
-				0
-		);
+		out.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
 		return out;
 	}
 	#end

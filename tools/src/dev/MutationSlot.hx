@@ -328,12 +328,7 @@ final class MutationSlot {
 			final dot: Int = want.lastIndexOf('.');
 			// a bare name has no owner: `substr(0, -1)` would read as the name minus its last character
 			final owner: String = dot > 0 ? want.substr(0, dot) : '';
-			final cls: Null<String> = if (isClass(want))
-				want
-			else if (owner != '' && isClass(owner))
-				owner
-			else
-				null;
+			final cls: Null<String> = if (isClass(want)) want else if (owner != '' && isClass(owner)) owner else null;
 			if (cls == null) return null;
 			classes.pushUnique(cls);
 		}

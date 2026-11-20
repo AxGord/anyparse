@@ -227,12 +227,7 @@ final class CodeCacheLauncher {
 		final options: CachedScriptOptions = { filename: binary };
 		if (cached != null) options.cachedData = cached;
 		final script: CachedScript = new CachedScript(WRAP_HEAD + source.toString('utf8') + WRAP_TAIL, options);
-		final cache: CacheUse = if (cached == null)
-			Miss
-		else if (script.cachedDataRejected == true)
-			Rejected
-		else
-			Hit;
+		final cache: CacheUse = if (cached == null) Miss else if (script.cachedDataRejected == true) Rejected else Hit;
 		return {
 			script: script,
 			key: key,

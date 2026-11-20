@@ -363,12 +363,7 @@ final class ImportOrder {
 			final fb: String = b.toLowerCase();
 			if (fa != fb) return fa < fb ? -1 : 1;
 		}
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
+		return if (a < b) -1 else if (a > b) 1 else 0;
 	}
 
 	/**

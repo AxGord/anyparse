@@ -194,6 +194,9 @@
 		"functionBody": "fitLine",
 		"returnBody": "fitLine",
 		"returnBodySingleLine": "fitLine",
-		"expressionIf": "next"
+		"expressionIf": "next",
+		"expressionIfFit": true,
+		"expressionIfFitMaxBranches": 3,
+		"expressionIfFitMaxValueWidth": 8
 	}
 }

@@ -823,12 +823,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		if ((node.kind != 'Eq' && node.kind != 'NotEq') || node.children.length != 2) return null;
 		final l: QueryNode = node.children[0];
 		final r: QueryNode = node.children[1];
-		return if (l.kind == 'NullLit')
-			r
-		else if (r.kind == 'NullLit')
-			l
-		else
-			null;
+		return if (l.kind == 'NullLit') r else if (r.kind == 'NullLit') l else null;
 	}
 
 }

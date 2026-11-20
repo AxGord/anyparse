@@ -650,12 +650,7 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 			if (fa == fb) return blocks[a.b][a.i].span.from - blocks[b.b][b.i].span.from;
 			final pa: String = perFile[fa].file;
 			final pb: String = perFile[fb].file;
-			return if (pa < pb)
-				-1
-			else if (pa > pb)
-				1
-			else
-				fa - fb;
+			return if (pa < pb) -1 else if (pa > pb) 1 else fa - fb;
 		});
 		final anchor: DupPos = bucket[0];
 		final anchorFile: Int = blockFile[anchor.b];

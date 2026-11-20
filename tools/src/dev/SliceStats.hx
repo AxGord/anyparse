@@ -205,12 +205,7 @@ final class SliceStats {
 		for (line in numstat) {
 			final cells: Array<String> = line.split('\t');
 			if (cells.length < 3) continue;
-			final into: Null<LineCount> = if (cells[2].startsWith('src/'))
-				src
-			else if (cells[2].startsWith('test/'))
-				test
-			else
-				null;
+			final into: Null<LineCount> = if (cells[2].startsWith('src/')) src else if (cells[2].startsWith('test/')) test else null;
 			if (into == null) continue;
 			into.added += Std.parseInt(cells[0]) ?? 0;
 			into.deleted += Std.parseInt(cells[1]) ?? 0;

@@ -401,21 +401,11 @@ final class IfExpressionChain {
 			// different statements from the one it makes where it stands. Otherwise the single space
 			// `buildValue` does not supply goes on the side the slot needs it.
 			final own: Bool = crossesLine(source, gap.from, tok.from) && !prev.endsWith('\n');
-			final head: String = if (own)
-				'\n'
-			else if (gap.before)
-				''
-			else
-				' ';
+			final head: String = if (own) '\n' else if (gap.before) '' else ' ';
 			// A LINE comment runs to the end of its line, so whatever the rebuild welds after it has
 			// to start on the next one — that newline is the only legal layout, and the writer
 			// re-flows the spliced file anyway. A block comment rides inline.
-			final tail: String = if (tok.isLine)
-				'\n'
-			else if (gap.before)
-				' '
-			else
-				'';
+			final tail: String = if (tok.isLine) '\n' else if (gap.before) ' ' else '';
 			map[gap.key] = '$prev$head$text$tail';
 		}
 		return carried;

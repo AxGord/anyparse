@@ -429,12 +429,7 @@ final class OwnedTypes extends RuleBase implements ConfigAware implements FileGa
 		final nominal: Null<String> = receiverType(scan, tree, receiver);
 		if (nominal == null) return null;
 		final typed: Array<ResolvedType> = scan.index.refs.resolveTypeRefAll(nominal, scan.info);
-		return if (typed.length > 0)
-			typed
-		else if (nominal == subject.simple)
-			[]
-		else
-			null;
+		return if (typed.length > 0) typed else if (nominal == subject.simple) [] else null;
 	}
 
 	/** What a TYPE receiver denotes (`typesNamed`); null for a receiver that is no path or is a value. */

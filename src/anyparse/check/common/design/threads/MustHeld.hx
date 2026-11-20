@@ -53,12 +53,7 @@ private final class BodyFacts {
 		final b: Null<Bool> = decided(kids[1], id, valuation);
 		final and: Bool = kind == _shape.logicalAndKind;
 		// either side settling the operator settles it; else both sides must be known
-		return if (a == !and || b == !and)
-			!and
-		else if (a != null && b != null)
-			and
-		else
-			null;
+		return if (a == !and || b == !and) !and else if (a != null && b != null) and else null;
 	}
 
 	/**

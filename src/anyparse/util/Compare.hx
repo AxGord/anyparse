@@ -12,22 +12,12 @@ final class Compare {
 	 * (`compareInt(2147483647, -1)` would turn negative); the branches are the portable form.
 	 */
 	public static inline function compareInt(a: Int, b: Int): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
+		return if (a < b) -1 else if (a > b) 1 else 0;
 	}
 
 	/** Order of two strings by the target's String order: -1, 0 or 1. */
 	public static inline function compareString(a: String, b: String): Int {
-		return if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0;
+		return if (a < b) -1 else if (a > b) 1 else 0;
 	}
 
 }

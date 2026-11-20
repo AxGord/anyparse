@@ -130,14 +130,7 @@ final class LandProse {
 		final dirs: Array<String> = [
 			for (dir => empty in emptied) if (empty && emptied[Path.directory(dir)] != true) dir
 		];
-		dirs.sort((a, b) ->
-			if (a < b)
-				-1
-			else if (a > b)
-				1
-			else
-				0
-		);
+		dirs.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
 		return { files: files, dirs: dirs };
 	}
 

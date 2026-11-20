@@ -205,12 +205,7 @@ final class OwnerOverlap {
 			}
 		}
 		if (best == null || top < threshold) return null;
-		final confidence: Confidence = if (best.question != null)
-			High
-		else if (top >= NEAR_IDENTICAL)
-			Medium
-		else
-			Low;
+		final confidence: Confidence = if (best.question != null) High else if (top >= NEAR_IDENTICAL) Medium else Low;
 		return {
 			entry: entry,
 			owner: best,

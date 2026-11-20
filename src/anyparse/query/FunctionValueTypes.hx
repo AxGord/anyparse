@@ -330,12 +330,7 @@ final class FunctionValueTypes {
 		final out: Array<FactPos> = [];
 		// an object that left the type system may have the field written by its name too
 		final left: Bool = escaped.exists(e -> hierarchy.contains(e));
-		return if (left && !untypedStores(name, hierarchy, out))
-			null
-		else if (typedStores(name, related, left, out))
-			out
-		else
-			null;
+		return if (left && !untypedStores(name, hierarchy, out)) null else if (typedStores(name, related, left, out)) out else null;
 	}
 
 	/**

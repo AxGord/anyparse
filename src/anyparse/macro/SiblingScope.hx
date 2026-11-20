@@ -71,12 +71,7 @@ final class SiblingScope {
 	private static function step(child: ShapeNode): Array<String> {
 		final ctor: Null<String> = child.annotations[AnnotationKeys.BASE_CTOR];
 		final field: Null<String> = child.annotations[AnnotationKeys.BASE_FIELD_NAME];
-		return if (ctor != null)
-			[ctor]
-		else if (field != null)
-			[field]
-		else
-			[];
+		return if (ctor != null) [ctor] else if (field != null) [field] else [];
 	}
 
 	private static function simpleName(typePath: String): String {

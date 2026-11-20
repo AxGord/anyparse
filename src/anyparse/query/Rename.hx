@@ -602,12 +602,7 @@ final class Rename {
 				}
 		}
 		scan(host);
-		return if (isStatic)
-			false
-		else if (instance)
-			true
-		else
-			null;
+		return if (isStatic) false else if (instance) true else null;
 	}
 
 	/**

@@ -164,10 +164,7 @@ class Probe {
 		var i2 = il[1.5];
 		var t1 = c ? new SubA() : new Base();
 		var t2 = c ? "a" : null;
-		var t3 = if (c)
-			1
-		else
-			n;
+		var t3 = if (c) 1 else n;
 		var cmp = Color.Red == Color.Green;
 		var cadd = Color.Red + 1;
 		trace([dd, di, g, cm, cc, ca, kv, kw, o1, s1, i1, i2, t1, t2, t3, cmp, cadd]);

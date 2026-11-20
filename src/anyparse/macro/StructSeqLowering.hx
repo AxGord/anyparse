@@ -589,12 +589,7 @@ final class StructSeqLowering {
 					expr: ECall(macro $i{sc.parseFnName(inner.annotations[AnnotationKeys.BASE_REF])}, [macro ctx]),
 					pos: Context.currentPos()
 				};
-				inner.annotations[AnnotationKeys.BASE_OPTIONAL] == true
-					? macro if (${nullMatchExpr(sc)})
-						null
-					else
-						$call
-					: call;
+				inner.annotations[AnnotationKeys.BASE_OPTIONAL] == true ? macro if (${nullMatchExpr(sc)}) null else $call : call;
 			case _:
 				Context.fatalError(
 					'Lowering: ByName Array<T> field "$fieldName" element kind ${inner.kind} is not supported '
