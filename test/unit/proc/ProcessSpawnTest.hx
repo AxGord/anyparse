@@ -2,6 +2,7 @@ package unit.proc;
 
 import anyparse.proc.Sleep;
 import anyparse.proc.SpawnJob;
+import unit.check.ProcessProbe;
 
 using StringTools;
 
@@ -27,6 +28,18 @@ final class ProcessSpawnTest extends Test {
 	 * well inside the suite's stall cut.
 	 */
 	private static inline final PID_WAIT_MS: Int = 120000;
+
+	/**
+	 * How long a killed job's command may take to die after the driver's SIGTERM: the driver's own grace plus a loaded
+	 * host's lateness, well inside the suite's stall cut.
+	 */
+	private static inline final KILL_WAIT_MS: Int = 20000;
+
+	/**
+	 * How long a job that ignores the SIGTERM may live: past the driver's grace, under its last-resort kill of every
+	 * group, so a driver without the grace's SIGKILL still fails the test.
+	 */
+	private static inline final HARD_KILL_WAIT_MS: Int = 5000;
 
 	/** A run that PRODUCED a verdict carries no `failure`, whatever it exited with. */
 	public function testASuccessfulRunCarriesNoFailure(): Void {
@@ -281,13 +294,15 @@ final class ProcessSpawnTest extends Test {
 	@:killer('M-DRIVER-KILLS-WITHOUT-GRACE')
 	public function testAKilledJobForwardsItsEndToItsOwnGroup(): Void {
 		#if nodejs
+		// the pid is announced only once the handlers exist: a SIGTERM that lands between the two would kill the forwarder
+		// by default and leave its command running, which is the test's own race, not the driver's
 		final forwarder: String = 'const cp = require("child_process");const c = cp.spawn("sleep", ["30"], {'
-			+ ' detached: true, stdio: "ignore" });require("fs").writeFileSync("child.txt", String(c.pid));'
+			+ ' detached: true, stdio: "ignore" });'
 			+ 'for (const s of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(s, () => { try { process.kill(-c.pid, s); } catch (err) {} });'
-			+ 'c.on("exit", code => process.exit(code === null ? 1 : code));';
+			+ 'c.on("exit", code => process.exit(code === null ? 1 : code));require("fs").writeFileSync("child.txt", String(c.pid));';
 		final shell: String = 'exec \'${js.Node.process.execPath}\' forward.js';
-		final outlived: Null<Float> = childOutlivesDriver('spawnforward', [{ name: 'forward.js', source: forwarder }], shell, 5000);
-		Assert.notNull(outlived, 'the command the job started in its own group died with the driver');
+		final died: Bool = childDiesWithDriver('spawnforward', [{ name: 'forward.js', source: forwarder }], shell);
+		Assert.isTrue(died, 'the command the job started in its own group died with the driver');
 		#else
 		Assert.pass('the process driver needs the node target');
 		#end
@@ -301,8 +316,10 @@ final class ProcessSpawnTest extends Test {
 	@:killer('M-DRIVER-NO-HARD-KILL')
 	public function testAJobIgnoringTheTermIsKilledAfterTheGrace(): Void {
 		#if nodejs
-		final outlived: Null<Float> = childOutlivesDriver('spawnstubborn', [], "trap '' TERM; sleep 30 & echo $! > child.txt; wait", 5000);
-		Assert.notNull(outlived, 'the job\'s child died once the grace was out');
+		final died: Bool = childDiesWithDriver(
+			'spawnstubborn', [], "trap '' TERM; sleep 30 & echo $! > child.txt; wait", HARD_KILL_WAIT_MS
+		);
+		Assert.isTrue(died, 'the job\'s child died once the grace was out');
 		#else
 		Assert.pass('the process driver needs the node target');
 		#end
@@ -323,7 +340,7 @@ final class ProcessSpawnTest extends Test {
 		final line: EReg = ~/orphan held output: (\d+) sleep 93/;
 		final named: Bool = line.match(runs[0].err);
 		final pid: Null<Int> = named ? Std.parseInt(line.matched(1)) : null;
-		final alive: Bool = signalable(pid);
+		final alive: Bool = pid != null && ProcessProbe.awaitGone([pid], KILL_WAIT_MS).length > 0;
 		if (pid != null && alive) js.Syntax.code('process.kill({0}, "SIGKILL")', pid);
 		Assert.equals(0, runs[0].status);
 		Assert.isTrue(named, 'the holder is named in the job\'s err: ${runs[0].err}');
@@ -424,12 +441,12 @@ final class ProcessSpawnTest extends Test {
 
 	/**
 	 * Start the process driver on the one shell job `shell` in a fresh directory holding `files`, wait for the job to write
-	 * its child's pid to `child.txt`, SIGTERM the driver, and answer how long the child outlived the signal in ms; null when
-	 * it never started or was alive `waitMs` later, when it is SIGKILLed here.
+	 * its child's pid to `child.txt`, SIGTERM the driver, and answer whether the child was gone within `waitMs`; false when
+	 * it never started or was alive then, when it is SIGKILLed here.
 	 */
-	private static function childOutlivesDriver(
-		prefix: String, files: Array<{ name: String, source: String }>, shell: String, waitMs: Int
-	): Null<Float> {
+	private static function childDiesWithDriver(
+		prefix: String, files: Array<{ name: String, source: String }>, shell: String, waitMs: Int = KILL_WAIT_MS
+	): Bool {
 		#if nodejs
 		final dir: String = CliFixture.writeDir(prefix, files);
 		sys.io.File.saveContent('$dir/jobs.json', ProcessSpawn.jobsText([{ args: [], cwd: dir, shell: shell }]));
@@ -440,22 +457,15 @@ final class ProcessSpawnTest extends Test {
 		if (child == null) {
 			driver.kill('SIGKILL');
 			CliFixture.removeDir(dir);
-			return null;
+			return false;
 		}
-		final signalled: Float = Date.now().getTime();
 		driver.kill('SIGTERM');
-		var outlived: Null<Float> = null;
-		while (outlived == null && Date.now().getTime() - signalled < waitMs) {
-			if (signalable(child))
-				Sleep.pause(100);
-			else
-				outlived = Date.now().getTime() - signalled;
-		}
-		if (outlived == null) js.Syntax.code('process.kill({0}, "SIGKILL")', child);
+		final died: Bool = ProcessProbe.awaitGone([child], waitMs).length == 0;
+		if (!died) js.Syntax.code('process.kill({0}, "SIGKILL")', child);
 		CliFixture.removeDir(dir);
-		return outlived;
+		return died;
 		#else
-		return null;
+		return false;
 		#end
 	}
 
