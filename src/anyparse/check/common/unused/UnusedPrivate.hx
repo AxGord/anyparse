@@ -5,7 +5,6 @@ import anyparse.check.Check.FrameworkAware;
 import anyparse.check.FactsOracle;
 import anyparse.check.scan.EnumAbstractForms;
 import anyparse.check.scan.ReflectionScan;
-import anyparse.query.IndexScope;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberLookup.SupertypeProof;
 import anyparse.query.NamingPolicy.FrameworkContract;

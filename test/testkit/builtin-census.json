@@ -230,6 +230,7 @@
 	"unused-private",
 	"unused-public-member",
 	"unused-return-value",
+	"unused-type",
 	"while-true-condition",
 	"zero-count-unparsed-fixture"
 ]

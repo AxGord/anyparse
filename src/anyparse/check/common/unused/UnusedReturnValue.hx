@@ -3,7 +3,6 @@ package anyparse.check.common.unused;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.ScopeDependent;
-import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;

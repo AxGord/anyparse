@@ -219,6 +219,7 @@ import anyparse.check.common.unused.UnusedParameter;
 import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.check.common.unused.UnusedPublicMember;
 import anyparse.check.common.unused.UnusedReturnValue;
+import anyparse.check.common.unused.UnusedType;
 import anyparse.check.haxe.design.HandSourceScanner;
 import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.check.haxe.expressions.PreferSplitPart;
@@ -642,6 +643,7 @@ final class Linter {
 			// claim the same method: this rule skips every `get_` / `set_`-prefixed name outright, and
 			// that check claims nothing else. Registry order is therefore free.
 			new UnusedPublicMember(),
+			new UnusedType(),
 			new FieldInitAtDeclaration(),
 			// The mirror direction, and the two can never claim the same field: that rule needs a
 			// field with NO declaration initializer, this one a field that has one. Registry order

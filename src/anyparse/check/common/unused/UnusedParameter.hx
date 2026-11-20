@@ -3,7 +3,6 @@ package anyparse.check.common.unused;
 import anyparse.check.Check.ConfigAware;
 import anyparse.query.CallSites;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.IndexScope;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveParam;

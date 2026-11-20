@@ -2,7 +2,6 @@ package anyparse.check.common.unused;
 
 import anyparse.check.scan.NullFlow;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.ElementSpan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ShapeVocab;

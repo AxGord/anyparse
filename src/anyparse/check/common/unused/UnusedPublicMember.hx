@@ -7,8 +7,6 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.PublicReach;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CtorFieldFold;
-import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.FrameworkContract;

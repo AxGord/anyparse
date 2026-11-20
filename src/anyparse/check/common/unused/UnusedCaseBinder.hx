@@ -2,8 +2,6 @@ package anyparse.check.common.unused;
 
 import anyparse.check.scan.CasePatternScan;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.PatternNameScope;
 import anyparse.query.SymbolIndex;

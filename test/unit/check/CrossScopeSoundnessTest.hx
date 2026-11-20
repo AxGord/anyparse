@@ -394,7 +394,7 @@ class CrossScopeSoundnessTest extends Test {
 	 * or reflects the field keeps it from being reported at all, and its fix is a `RiskyFix` that this
 	 * fixture's narrow arm never applies, so no edit of it reaches either writer census.
 	 */
-	private static final SCOPE_GATED_REFUSERS: Array<String> = ['prefer-typed-throw', 'scratch-field'];
+	private static final SCOPE_GATED_REFUSERS: Array<String> = ['prefer-typed-throw', 'scratch-field', 'unused-type'];
 
 	/**
 	 * What a project declaring `resolutionLibs` and NO `resolutionRoots` loses — the one list in
@@ -435,6 +435,9 @@ class CrossScopeSoundnessTest extends Test {
 	 * - `scratch-field@…` (report only) — the sibling that mentions, writes or reflects the field is
 	 *   gone, so the field reads as one method's scratch value; its fix is a `RiskyFix` and stays
 	 *   report-only on this arm, which is why no `edit:` line joins it.
+	 *
+	 * - `report:unused-type@…` — the sibling that names the type is gone, so it reads as unreferenced; report only, the
+	 *   removal stays the explicit `safe-delete`.
 	 *
 	 * `allow-grant` is absent by right: the `@:allow` sits in the DECLARING file, so the narrow
 	 * report scope sees the grant without help and both arms refuse alike.
@@ -491,7 +494,24 @@ class CrossScopeSoundnessTest extends Test {
 		'report:unused-parameter@subtype',
 		'report:unused-parameter@subtype-override',
 		'report:unused-private@access-grant-unread-in-file',
-		'report:unused-public-member@string-catch'
+		'report:unused-public-member@string-catch',
+		'report:unused-type@access-grant',
+		'report:unused-type@access-grant-unread-in-file',
+		'report:unused-type@access-write',
+		'report:unused-type@accessor-call',
+		'report:unused-type@allow-grant',
+		'report:unused-type@constant-reflection',
+		'report:unused-type@public-internal-write',
+		'report:unused-type@public-write',
+		'report:unused-type@reflection',
+		'report:unused-type@reflection-method',
+		'report:unused-type@reflection-unread-in-file',
+		'report:unused-type@string-catch',
+		'report:unused-type@subtype',
+		'report:unused-type@subtype-backing-field',
+		'report:unused-type@subtype-constant',
+		'report:unused-type@subtype-map-write',
+		'report:unused-type@subtype-override'
 	];
 
 	/** Several tests compare the same (files, placement) answers; they are read-only values, computed once per run. */

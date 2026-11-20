@@ -116,7 +116,7 @@ class LintSliceTest extends Test {
 		Assert.isNull(Linter.byId('does-not-exist'));
 
 		final files: Array<{ source: String, file: String }> = [
-			{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\n/** A class. */\n@:nullSafety(Strict)\nclass C {}' }
+			{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\n/** A class. */\n@:keep\n@:nullSafety(Strict)\nclass C {}' }
 		];
 		final viaDefault: Array<Violation> = Linter.run(files, plugin(), null, _ -> LintConfig.parse(NO_RULES));
 		Assert.equals(1, viaDefault.length);

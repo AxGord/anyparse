@@ -162,7 +162,6 @@ class BuiltinFixClassCensusTest extends Test {
 			'impossible-cast',
 			'loop-bound-length-mismatch',
 			'magic-number',
-
 			'null-dereference',
 			'nullable-switch-missing-null',
 			'oversized-type',
@@ -179,6 +178,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'unguarded-nullable-deref',
 			'unresolved-type-name',
 			'unused-return-value',
+			'unused-type',
 			'zero-count-unparsed-fixture'
 		], idsImplementing(c -> c is NoAutofix));
 	}

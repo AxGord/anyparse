@@ -351,6 +351,46 @@
 			"find": "return init == null || MemberKinds.isSideEffectFree(init, shape);",
 			"replace": "return true;",
 			"note": "every unreferenced static field is deletable whatever its initializer, so a construction or call that runs at class load is deleted with it"
+		},
+		{
+			"name": "M-UNUSED-TYPE-ENTRY-POINT",
+			"type": "anyparse.check.common.unused.UnusedType",
+			"method": "drivenWithoutReference",
+			"find": "if (name == ENTRY_POINT) return true;",
+			"replace": "",
+			"note": "a class holding the build's entry function is no longer exempt, so a -main class nothing writes a reference to is reported dead"
+		},
+		{
+			"name": "M-UNUSED-TYPE-FRAMEWORK-REACH",
+			"type": "anyparse.check.common.unused.UnusedType",
+			"method": "drivenWithoutReference",
+			"find": "if (CheckScan.frameworkReachableMethod(naming, name, typeName, span, () -> scope, contracts, false)) return true;",
+			"replace": "",
+			"note": "a test class its framework drives by name is no longer exempt, so every utest class with no written reference is reported dead"
+		},
+		{
+			"name": "M-UNUSED-TYPE-NO-WHOLE-SCOPE-PROOF",
+			"type": "anyparse.check.common.unused.UnusedType",
+			"method": "run",
+			"find": "if (verdict.match(Refused(_))) continue;",
+			"replace": "",
+			"note": "the safe-delete verdict is ignored, so an enum whose constructor is spelled bare elsewhere (no written type name) is reported dead"
+		},
+		{
+			"name": "M-UNUSED-TYPE-BUILD-NAMED",
+			"type": "anyparse.check.common.unused.UnusedType",
+			"method": "run",
+			"find": "if (build.names(declared.name, host.pkg)) continue;",
+			"replace": "",
+			"note": "a type an hxml names with no written reference (the -main module, a --macro target, an include(pkg) package) is no longer exempt, so safe-delete of the reported type breaks that build"
+		},
+		{
+			"name": "M-UNUSED-TYPE-BUILD-ROOT-ONLY",
+			"type": "anyparse.check.common.unused.BuildNamedTypes",
+			"method": "read",
+			"find": "hxmlFiles(rootOf(ConfigFinder.absolute(files[0].file)))",
+			"replace": "hxmlFiles(Path.removeTrailingSlashes(Sys.getCwd()))",
+			"note": "the working directory is walked even when the project has a root, so an hxml the lint was merely started beside silences a type of an unrelated project"
 		}
 	]
 }

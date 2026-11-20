@@ -2,7 +2,6 @@ package anyparse.check.common.unused;
 
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
-import anyparse.query.ElementSpan;
 import anyparse.query.SymbolIndex;
 
 /**

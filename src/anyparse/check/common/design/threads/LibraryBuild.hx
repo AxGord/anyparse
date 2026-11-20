@@ -19,6 +19,12 @@ typedef HxmlTokens = {
 	final defines: Array<String>;
 	final includes: Array<String>;
 
+	/** Each `-main` value as written (`pkg.Main`): the entry module the build names with no reference in any source. */
+	final mains: Array<String>;
+
+	/** Each `--macro` argument as written (`Init.run()`, `include('pkg')`): code the build runs, naming types and packages by text. */
+	final macros: Array<String>;
+
 	/** The target the hxml compiles to (`cpp`, `js`, …), null when it names none. */
 	final target: Null<String>;
 
@@ -124,6 +130,8 @@ final class LibraryBuild {
 		final libs: Array<String> = [];
 		final defines: Array<String> = [];
 		final includes: Array<String> = [];
+		final mains: Array<String> = [];
+		final macros: Array<String> = [];
 		var target: Null<String> = null;
 		for (rawLine in text.split('\n')) {
 			final line: String = rawLine.trim();
@@ -142,6 +150,12 @@ final class LibraryBuild {
 					case '-lib', '-L', '--library':
 						if (value != null) libs.push(value.split(':')[0]);
 						i += 2;
+					case '-main', '-m', '--main':
+						if (value != null) mains.push(value);
+						i += 2;
+					case '--macro':
+						macros.push(words.slice(i + 1).join(' '));
+						i = words.length;
 					case '-D', '--define':
 						if (value != null) defines.push(value);
 						i += 2;
@@ -156,6 +170,8 @@ final class LibraryBuild {
 			libs: libs,
 			defines: defines,
 			includes: includes,
+			mains: mains,
+			macros: macros,
 			target: target
 		};
 	}
@@ -277,6 +293,8 @@ final class LibraryBuild {
 			libs: libs,
 			defines: defines,
 			includes: queue.slice(1),
+			mains: [],
+			macros: [],
 			target: target
 		};
 	}

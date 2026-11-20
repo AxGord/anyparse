@@ -445,6 +445,7 @@
 		"try-catch-null-guard": true,
 		"unused-loop-binder": true,
 		"unused-public-member": true,
+		"unused-type": true,
 		"while-true-condition": true
 	}
 }

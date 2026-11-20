@@ -1,7 +1,6 @@
 package anyparse.check.common.unused;
 
 import anyparse.check.Check.VolatileMessage;
-import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ModuleScan;
 import anyparse.query.OccurrenceScan;
