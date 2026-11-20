@@ -17410,6 +17410,22 @@
 			"find": "if (!type.isPrivate && !type.isMain && hasStatic)",
 			"replace": "if (false)",
 			"note": "a using of the module no longer reaches its static-extension sub-type, so the type is deleted and the extension calls stop binding"
+		},
+		{
+			"name": "M-FACT-LINE-NARROWED",
+			"type": "anyparse.query.FactText",
+			"method": "detached",
+			"find": ".test({0})', line)",
+			"replace": ".test({0}) || true', line)",
+			"note": "a node line cut from a two-byte dump is kept two bytes per character"
+		},
+		{
+			"name": "M-FACT-LINE-LATIN1-KEPT",
+			"type": "anyparse.query.FactText",
+			"method": "detached",
+			"find": ".toString('latin1')",
+			"replace": ".toString('utf8')",
+			"note": "a narrowed node line is re-decoded as UTF-8, so a Latin-1 character above ASCII comes back as a replacement character"
 		}
 	]
 }

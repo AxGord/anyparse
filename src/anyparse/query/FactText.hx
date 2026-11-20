@@ -85,9 +85,16 @@ final class FactText {
 		return '${bytes.length}:${haxe.crypto.Md5.make(bytes).toHex()}';
 	}
 
-	/** A line the table keeps, detached from the dump it was cut from so the dump's text can be freed. */
+	/**
+	 * A line the table keeps, detached from the dump it was cut from so the dump's text can be freed, and no wider than
+	 * its own characters: one character outside Latin-1 makes a whole dump a two-byte string, and every plain copy of
+	 * a line cut from it keeps that width.
+	 */
 	public static function detached(line: String): String {
-		return #if js js.Syntax.code('(" " + {0}).slice(1)', line) #else line #end;
+		return #if nodejs js.Syntax.code('/[^\\x00-\\xff]/.test({0})', line)
+			? js.Syntax.code('(" " + {0}).slice(1)', line)
+			: js.node.Buffer.from(line, 'latin1')
+				.toString('latin1') #elseif js js.Syntax.code('(" " + {0}).slice(1)', line) #else line #end;
 	}
 
 	/** Whether `text` is a bare identifier. */
