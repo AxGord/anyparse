@@ -52,21 +52,24 @@ private class DropText implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final found: Array<Violation> = [];
-		for (entry in files) {
-			final unless: Null<String> = _unless;
-			if (unless != null && entry.source.indexOf(unless) >= 0) continue;
-			final text: Null<String> = _texts.find(t -> entry.source.indexOf(t) >= 0);
-			if (text == null) continue;
-			final at: Int = entry.source.indexOf(text);
-			found.push({
-				file: entry.file,
-				span: new Span(at, at + text.length),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'a declaration'
-			});
-		}
+		final found: Array<Violation> = [
+			for (entry in files) {
+				final unless: Null<String> = _unless;
+				if (unless == null || !(entry.source.indexOf(unless) >= 0)) {
+					final text: Null<String> = _texts.find(t -> entry.source.indexOf(t) >= 0);
+					if (text != null) {
+						final at: Int = entry.source.indexOf(text);
+						{
+							file: entry.file,
+							span: new Span(at, at + text.length),
+							rule: id(),
+							severity: Severity.Warning,
+							message: 'a declaration'
+						};
+					}
+				}
+			}
+		];
 		return found;
 	}
 

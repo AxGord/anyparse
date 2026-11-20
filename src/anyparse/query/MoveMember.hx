@@ -703,14 +703,14 @@ final class MoveMember {
 	 * inside the cut move along and stay bare.
 	 */
 	private static function collectBareCallerHits(prep: MovePrep, plugin: GrammarPlugin): Array<BareHit> {
-		final out: Array<BareHit> = [];
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(prep.moved.map(m -> m.name), prep.srcTree, plugin.refShape());
-		for (m in prep.moved) for (hit in hitsByName[m.name] ?? []) if (hit.kind != RefKind.Decl) {
-			final binding: Null<Span> = hit.bindingSpan;
-			if (binding == null || binding.from != m.span.from) continue;
-			if (insideAnyCut(prep, hit.span.from)) continue;
-			out.push({ m: m, offset: hit.span.from, interp: hit.interpolated ? hit.span : null });
-		}
+		final out: Array<BareHit> = [
+			for (m in prep.moved) for (hit in hitsByName[m.name] ?? []) if (hit.kind != RefKind.Decl) {
+				final binding: Null<Span> = hit.bindingSpan;
+				if (binding != null && binding.from == m.span.from) if (!insideAnyCut(prep, hit.span.from))
+					{ m: m, offset: hit.span.from, interp: hit.interpolated ? hit.span : null };
+			}
+		];
 		return out;
 	}
 

@@ -137,16 +137,16 @@
 			"name": "M-DECLTERN-NARROWING",
 			"type": "anyparse.check.common.control.PreferTernaryAssignment",
 			"method": "declEdits",
-			"find": "if (BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)) continue;",
-			"replace": "",
+			"find": "BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)",
+			"replace": "false",
 			"note": "the decl arm collapses a null-narrowing guard onto bool literals, which the boolean simplification then flattens out of its narrowing"
 		},
 		{
 			"name": "M-DECLTERN-COMMENT",
 			"type": "anyparse.check.common.control.PreferTernaryAssignment",
 			"method": "declEdits",
-			"find": "if (IfExpressionChain.droppedComment(m.region, kept, comments)) continue;",
-			"replace": "",
+			"find": "IfExpressionChain.droppedComment(m.region, kept, comments)",
+			"replace": "false",
 			"note": "the decl arm ignores comments outside its copied spans, so one in the `if` header is dropped by the rebuild"
 		},
 		{

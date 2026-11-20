@@ -135,8 +135,7 @@ final class ListenerSymmetry extends RuleBase {
 	): Void {
 		final members: Array<ListenerMember> = [];
 		collect(members, container, cfg);
-		final byName: Map<String, ListenerMember> = [];
-		for (m in members) if (m.isMethod) byName[m.name] = m;
+		final byName: Map<String, ListenerMember> = [ for (m in members) if (m.isMethod) m.name => m ];
 		for (m in members) if (m.isMethod) {
 			final twinName: Null<String> = twinOf(m.name, cfg);
 			if (twinName == null) continue;

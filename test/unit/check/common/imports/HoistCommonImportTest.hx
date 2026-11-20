@@ -792,8 +792,7 @@ class HoistCommonImportTest extends Test {
 		final root: String = CliFixture.writeTree('apq_hoist_applied', tree);
 		var out: Array<TreeFile> = tree;
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
-			final byName: Map<String, String> = [];
-			for (entry in tree) byName[entry.name] = entry.source;
+			final byName: Map<String, String> = [ for (entry in tree) entry.name => entry.source ];
 			for (slice in fixOf(tree, root)) for (part in slice) {
 				final name: String = relative(part.file, root);
 				final created: Null<String> = part.create;

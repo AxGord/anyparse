@@ -155,24 +155,27 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 			final refusal: Null<String> = line?.refusal;
 			if (refusal != null) v.declineReason = refusal;
 		}
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (unit in ownersOf(wide)) {
-			final open: Array<Int> = [
-				for (w in wide) if (w.owner.from == unit.from && w.refusal == null && wanted.contains(w.from)) w.body
-			];
-			if (open.length == 0) continue;
-			final bodySpan: Span = SourceComments.commentBody(source, unit);
-			final body: String = source.substring(bodySpan.from, bodySpan.to);
-			final continuation: String = SourceComments.commentContinuation(source, unit);
-			final next: String = reflow(source, unit, body, open, metrics, unit.to - bodySpan.to);
-			if (next == body) continue;
-			// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the
-			// last content line and the writer eats the space before that line's star. The block's
-			// own guards do the rest: a plain `/* … *\/` body does not start on a star, and a
-			// continuation with no gutter is handed back untouched.
-			final grown: Bool = body.indexOf('\n') < 0 && next.indexOf('\n') >= 0;
-			edits.push({ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next });
-		}
+		// A ONE-LINE doc block that has just grown has to be re-opened, or its closer rides the
+		// last content line and the writer eats the space before that line's star. The block's
+		// own guards do the rest: a plain `/* … *\/` body does not start on a star, and a
+		// continuation with no gutter is handed back untouched.
+		final edits: Array<{ span: Span, text: String }> = [
+			for (unit in ownersOf(wide)) {
+				final open: Array<Int> = [
+					for (w in wide) if (w.owner.from == unit.from && w.refusal == null && wanted.contains(w.from)) w.body
+				];
+				if (open.length != 0) {
+					final bodySpan: Span = SourceComments.commentBody(source, unit);
+					final body: String = source.substring(bodySpan.from, bodySpan.to);
+					final continuation: String = SourceComments.commentContinuation(source, unit);
+					final next: String = reflow(source, unit, body, open, metrics, unit.to - bodySpan.to);
+					if (next != body) {
+						final grown: Bool = body.indexOf('\n') < 0 && next.indexOf('\n') >= 0;
+						{ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next };
+					}
+				}
+			}
+		];
 		return edits;
 	}
 

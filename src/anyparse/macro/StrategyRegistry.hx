@@ -72,8 +72,7 @@ class StrategyRegistry {
 	}
 
 	private static function buildIncomingEdges(list: Array<Strategy>): Map<String, Array<String>> {
-		final byName: Map<String, Strategy> = [];
-		for (s in list) byName[s.name] = s;
+		final byName: Map<String, Strategy> = [ for (s in list) s.name => s ];
 
 		final incoming: Map<String, Array<String>> = [];
 		for (s in list) incoming[s.name] = [];
@@ -92,8 +91,7 @@ class StrategyRegistry {
 	}
 
 	private static function drainReady(list: Array<Strategy>, incoming: Map<String, Array<String>>): Array<Strategy> {
-		final byName: Map<String, Strategy> = [];
-		for (s in list) byName[s.name] = s;
+		final byName: Map<String, Strategy> = [ for (s in list) s.name => s ];
 
 		final result: Array<Strategy> = [];
 		final ready: Array<String> = [];

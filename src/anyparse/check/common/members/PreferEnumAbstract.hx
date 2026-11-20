@@ -393,20 +393,23 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 * whose value is a numeric literal and whose name carries a `_`-delimited prefix.
 	 */
 	private static function collectConsts(container: QueryNode, cfg: EnumAbstractCfg): Array<ConstDecl> {
-		final out: Array<ConstDecl> = [];
 		final kids: Array<QueryNode> = container.children;
-		for (i in 0...kids.length) {
-			final node: QueryNode = kids[i];
-			if (!cfg.constKinds.contains(node.kind) || !precededByStatic(kids, i, cfg) || !hasNumericValue(node, cfg)) continue;
-			final name: Null<String> = node.name;
-			final span: Null<Span> = node.span;
-			final prefix: Null<String> = name != null ? prefixOf(name) : null;
-			if (prefix == null || span == null || name == null) continue;
-			final prefixValue: String = prefix;
-			final spanValue: Span = span;
-			final nameValue: String = name;
-			out.push({ prefix: prefixValue, span: spanValue, name: nameValue });
-		}
+		final out: Array<ConstDecl> = [
+			for (i in 0...kids.length) {
+				final node: QueryNode = kids[i];
+				if (cfg.constKinds.contains(node.kind) && precededByStatic(kids, i, cfg) && hasNumericValue(node, cfg)) {
+					final name: Null<String> = node.name;
+					final span: Null<Span> = node.span;
+					final prefix: Null<String> = name != null ? prefixOf(name) : null;
+					if (prefix != null && span != null && name != null) {
+						final prefixValue: String = prefix;
+						final spanValue: Span = span;
+						final nameValue: String = name;
+						{ prefix: prefixValue, span: spanValue, name: nameValue };
+					}
+				}
+			}
+		];
 		return out;
 	}
 

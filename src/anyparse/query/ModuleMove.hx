@@ -398,11 +398,12 @@ final class ModuleMove {
 	private static function registryRefusals(
 		registries: Array<TypePathRegistry>, textOf: Map<String, String>, planned: Array<PlannedMove>
 	): Array<String> {
-		final moved: Array<TypePathMove> = [];
-		for (p in planned) for (t in p.info.types) if (!t.isPrivate) {
-			final suffix: String = t.isMain ? '' : '.${t.name}';
-			moved.push({ oldPath: p.rename.oldPath + suffix, newPath: p.rename.newPath + suffix });
-		}
+		final moved: Array<TypePathMove> = [
+			for (p in planned) for (t in p.info.types) if (!t.isPrivate) {
+				final suffix: String = t.isMain ? '' : '.${t.name}';
+				{ oldPath: p.rename.oldPath + suffix, newPath: p.rename.newPath + suffix };
+			}
+		];
 		final out: Array<String> = [];
 		for (registry in registries) {
 			final json: Null<String> = textOf[registry.file];

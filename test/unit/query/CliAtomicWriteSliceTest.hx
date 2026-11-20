@@ -403,8 +403,9 @@ final class CliAtomicWriteSliceTest extends Test {
 
 	/** Every `.hx` under `dir`, by path. */
 	private static function snapshot(dir: String): Map<String, String> {
-		final out: Map<String, String> = [];
-		for (entry in FileSystem.readDirectory(dir)) if (entry.endsWith('.hx')) out['$dir/$entry'] = File.getContent('$dir/$entry');
+		final out: Map<String, String> = [
+			for (entry in FileSystem.readDirectory(dir)) if (entry.endsWith('.hx')) '$dir/$entry' => File.getContent('$dir/$entry')
+		];
 		return out;
 	}
 

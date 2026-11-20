@@ -422,14 +422,15 @@ class ShapeBuilder {
 		if (!a.meta.has(':enum')) return null;
 		if (a.impl == null) return null;
 		final impl: ClassType = a.impl.get();
-		final values: Array<{ name: String, value: String }> = [];
-		for (f in impl.statics.get()) if (!f.kind.match(FMethod(_))) {
-			final texpr: Null<TypedExpr> = FormatReader.initializerExpr(f);
-			if (texpr == null) continue;
-			final s: Null<String> = extractStringConst(texpr);
-			if (s == null) continue;
-			values.push({ name: f.name, value: s });
-		}
+		final values: Array<{ name: String, value: String }> = [
+			for (f in impl.statics.get()) if (!f.kind.match(FMethod(_))) {
+				final texpr: Null<TypedExpr> = FormatReader.initializerExpr(f);
+				if (texpr != null) {
+					final s: Null<String> = extractStringConst(texpr);
+					if (s != null) { name: f.name, value: s };
+				}
+			}
+		];
 		return values.length == 0 ? null : values;
 	}
 

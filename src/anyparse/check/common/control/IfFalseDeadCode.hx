@@ -137,8 +137,9 @@ final class IfFalseDeadCode extends RuleBase {
 	/** One file's directives and the offsets its `#if` openers start at. */
 	private static function scanOf(source: String, seams: Seams, plugin: GrammarPlugin): Scan {
 		final directives: Array<CondDirective> = CondDirectives.scan(source, seams.shape, plugin.lexicalRegions.bind(source));
-		final openers: Map<Int, Bool> = [];
-		for (directive in directives) if (directive.keyword == seams.ifKeyword) openers[directive.span.from] = true;
+		final openers: Map<Int, Bool> = [
+			for (directive in directives) if (directive.keyword == seams.ifKeyword) directive.span.from => true
+		];
 		return {
 			source: source,
 			seams: seams,

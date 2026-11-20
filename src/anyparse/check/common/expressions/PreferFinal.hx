@@ -112,14 +112,15 @@ final class PreferFinal extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final keyword: String = 'var';
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final end: Int = span.from + keyword.length;
-			if (source.substring(span.from, end) != keyword) continue;
-			edits.push({ span: new Span(span.from, end), text: 'final' });
-		}
+		final edits: Array<{ span: Span, text: String }> = [
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span != null) {
+					final end: Int = span.from + keyword.length;
+					if (source.substring(span.from, end) == keyword) { span: new Span(span.from, end), text: 'final' };
+				}
+			}
+		];
 		return edits;
 	}
 

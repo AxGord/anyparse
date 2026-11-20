@@ -120,16 +120,18 @@ final class UnstoredProperty extends RuleBase implements RiskyFix {
 
 	/** Turn the read accessor of each fixable finding's property into `never`. */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		final edits: Array<FixEdit> = [];
 		final clauses: Map<Int, AccessorClause> = RunScan.accessorClausesOf(plugin, source);
-		for (v in violations) {
-			final at: Null<Span> = v.span;
-			if (at == null || v.declineReason != null || v.severity != Severity.Info) continue;
-			final span: Span = at;
-			final clause: Null<AccessorClause> = clauses[span.from];
-			if (clause == null || !clause.readsFieldWritesThroughSetter()) continue;
-			edits.push({ span: clause.readSpan(), text: AccessorClause.NEVER_ACCESSOR });
-		}
+		final edits: Array<FixEdit> = [
+			for (v in violations) {
+				final at: Null<Span> = v.span;
+				if (at != null && v.declineReason == null && v.severity == Severity.Info) {
+					final span: Span = at;
+					final clause: Null<AccessorClause> = clauses[span.from];
+					if (clause != null && clause.readsFieldWritesThroughSetter())
+						{ span: clause.readSpan(), text: AccessorClause.NEVER_ACCESSOR };
+				}
+			}
+		];
 		return edits;
 	}
 

@@ -91,18 +91,19 @@ final class LintFixLedger {
 			verdict: String,
 			detail: Array<String>,
 			declared: Bool
-		}> = [];
-		for (rule => entry in ledger) if (entry.declined != 0) {
-			final declared: Null<String> = noAutofixReasons[rule];
-			rows.push({
-				rule: rule,
-				count: entry.declined,
-				reported: entry.reported,
-				verdict: unfixedVerdict(entry, declared, oracleAssistedIds.contains(rule), crossFile.contains(rule)),
-				detail: declared != null ? [] : reasonLines(entry.reasons, entry.declined),
-				declared: declared != null || entry.reasons.length > 0
-			});
-		}
+		}> = [
+			for (rule => entry in ledger) if (entry.declined != 0) {
+				final declared: Null<String> = noAutofixReasons[rule];
+				{
+					rule: rule,
+					count: entry.declined,
+					reported: entry.reported,
+					verdict: unfixedVerdict(entry, declared, oracleAssistedIds.contains(rule), crossFile.contains(rule)),
+					detail: declared != null ? [] : reasonLines(entry.reasons, entry.declined),
+					declared: declared != null || entry.reasons.length > 0
+				};
+			}
+		];
 		// Its own block, NOT rows here: these counts are edit SETS refused over every pass, and the
 		// rows above count first-pass FINDINGS. Summing the two into one header would state a number
 		// that means neither.

@@ -164,20 +164,22 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 			final byKey: Map<String, Candidate> = [];
 			for (c in collect(fileCtxOf(tree, source, file, s, plugin, symbols))) byKey['${c.span.from}:${c.span.to}'] = c;
 			var reach: Null<MemberReach> = null;
-			final edits: Array<FixEdit> = [];
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				final c: Null<Candidate> = span == null ? null : byKey['${span.from}:${span.to}'];
-				if (c == null) continue;
-				final keyed: Null<KeyedLoop> = c.keyed;
-				// a map's key goes only where the reach proves the body leaves the map unchanged; else it is renamed
-				final proved: Bool = v.message == c.message && (keyed == null || {
-					final built: MemberReach = reach ?? MemberReach.forRun(plugin, file, source);
-					reach = built;
-					ValueIterationProof.keyedDecline(built, file, keyed.iterable, keyed.body, s.shape) == null;
-				});
-				edits.push(proved ? c.edit : c.fallback ?? c.edit);
-			}
+			// a map's key goes only where the reach proves the body leaves the map unchanged; else it is renamed
+			final edits: Array<FixEdit> = [
+				for (v in violations) {
+					final span: Null<Span> = v.span;
+					final c: Null<Candidate> = span == null ? null : byKey['${span.from}:${span.to}'];
+					if (c != null) {
+						final keyed: Null<KeyedLoop> = c.keyed;
+						final proved: Bool = v.message == c.message && (keyed == null || {
+							final built: MemberReach = reach ?? MemberReach.forRun(plugin, file, source);
+							reach = built;
+							ValueIterationProof.keyedDecline(built, file, keyed.iterable, keyed.body, s.shape) == null;
+						});
+						proved ? c.edit : c.fallback ?? c.edit;
+					}
+				}
+			];
 			return CanonicalEdit.dropContainedEdits(edits);
 		});
 	}

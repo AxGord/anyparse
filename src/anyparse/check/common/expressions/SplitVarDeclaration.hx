@@ -162,8 +162,7 @@ final class SplitVarDeclaration extends RuleBase {
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final matches: Array<Match> = [];
 			collectMatches(tree, source, blockedRegions(source, seams, plugin.lexicalRegions(source)), seams, matches);
-			final byKey: Map<String, Match> = [];
-			for (m in matches) byKey['${m.span.from}:${m.span.to}'] = m;
+			final byKey: Map<String, Match> = [ for (m in matches) '${m.span.from}:${m.span.to}' => m ];
 
 			return CanonicalEdit.dropContainedEdits(
 				CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.span, text: m.text }))

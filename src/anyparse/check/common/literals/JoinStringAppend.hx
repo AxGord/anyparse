@@ -187,8 +187,7 @@ final class JoinStringAppend extends RuleBase implements DefaultOff {
 				final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 				final matches: Array<Match> = [];
 				collectMatches(tree, tree, source, comments, seams, declaredTypeSources, matches);
-				final byKey: Map<String, Match> = [];
-				for (m in matches) byKey['${m.anchorSpan.from}:${m.anchorSpan.to}'] = m;
+				final byKey: Map<String, Match> = [ for (m in matches) '${m.anchorSpan.from}:${m.anchorSpan.to}' => m ];
 
 				return CanonicalEdit.dropContainedEdits(
 					CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.replacementText }))

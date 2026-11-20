@@ -100,18 +100,19 @@ final class HxComplexItems {
 	 * element of a list by its own item count and nesting rather than by its kind alone.
 	 */
 	public static function containerItemKinds(elements: Array<Any>): Array<Null<Array<Int>>> {
-		final out: Array<Null<Array<Int>>> = [];
-		for (element in elements) {
-			final node: Null<Any> = nodeOf(element);
-			final own: Null<Array<Any>> = node == null
-				? null
-				: switch Type.enumConstructor(node) {
-					case 'ArrayExpr': Type.enumParameters(node)[0];
-					case 'ObjectLit': objectFieldValues(Type.enumParameters(node)[0]);
-					case _: null;
-				};
-			out.push(own == null ? null : kinds(own));
-		}
+		final out: Array<Null<Array<Int>>> = [
+			for (element in elements) {
+				final node: Null<Any> = nodeOf(element);
+				final own: Null<Array<Any>> = node == null
+					? null
+					: switch Type.enumConstructor(node) {
+						case 'ArrayExpr': Type.enumParameters(node)[0];
+						case 'ObjectLit': objectFieldValues(Type.enumParameters(node)[0]);
+						case _: null;
+					};
+				own == null ? null : kinds(own);
+			}
+		];
 		return out;
 	}
 

@@ -151,20 +151,21 @@ final class CondDirectives {
 		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
 		final endKeyword: Null<String> = shape.conditionalEndKeyword;
 		if (ifKeyword == null || endKeyword == null) return [];
-		final out: Array<CondBlock> = [];
-		for (region in ownRegions(directives, ifKeyword, shape.conditionalElseKeywords ?? [], endKeyword)) {
-			final open: CondDirective = region.directives[0];
-			final close: CondDirective = region.directives[region.directives.length - 1];
-			out.push({
-				span: new Span(open.span.from, close.span.to),
-				condition: open.condition,
-				headerEnd: open.span.to,
-				closeFrom: close.span.from,
-				singleBranch: region.directives.length == 2,
-				flat: !region.nested,
-				linewise: endsItsLine(source, open.span.to) && SourceText.startsItsLine(source, close.span.from)
-			});
-		}
+		final out: Array<CondBlock> = [
+			for (region in ownRegions(directives, ifKeyword, shape.conditionalElseKeywords ?? [], endKeyword)) {
+				final open: CondDirective = region.directives[0];
+				final close: CondDirective = region.directives[region.directives.length - 1];
+				{
+					span: new Span(open.span.from, close.span.to),
+					condition: open.condition,
+					headerEnd: open.span.to,
+					closeFrom: close.span.from,
+					singleBranch: region.directives.length == 2,
+					flat: !region.nested,
+					linewise: endsItsLine(source, open.span.to) && SourceText.startsItsLine(source, close.span.from)
+				};
+			}
+		];
 		return out;
 	}
 

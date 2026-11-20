@@ -331,8 +331,7 @@ final class CommentOwnerGuard {
 	): CommentAlignment {
 		final sorted: Array<{ span: Span, text: String }> = edits.copy();
 		sorted.sort((a, b) -> a.span.from != b.span.from ? a.span.from - b.span.from : a.span.to - b.span.to);
-		final blockOf: Map<Int, Int> = [];
-		for (b in 0...before.length) for (span in before[b]) blockOf[span.from] = b;
+		final blockOf: Map<Int, Int> = [ for (b in 0...before.length) for (span in before[b]) span.from => b ];
 		final placed: Array<PlacedEdit> = [];
 		var shift: Int = 0;
 		for (edit in sorted) {

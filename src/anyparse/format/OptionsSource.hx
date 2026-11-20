@@ -122,12 +122,12 @@ final class OptionsSource {
 	private static function spellRecord(
 		fields: Array<OptionField>, value: OptionValue, imports: Array<String>, records: Map<String, Array<OptionField>>
 	): String {
-		final parts: Array<String> = [];
-		for (f in fields) {
-			final v: OptionValue = Reflect.field(value, f.name);
-			if (f.optional && v == null) continue;
-			parts.push('${f.name}: ${spellIn(f.shape, v, imports, records)}');
-		}
+		final parts: Array<String> = [
+			for (f in fields) {
+				final v: OptionValue = Reflect.field(value, f.name);
+				if (!f.optional || v != null) '${f.name}: ${spellIn(f.shape, v, imports, records)}';
+			}
+		];
 		return parts.length == 0 ? '{}' : '{ ' + parts.join(', ') + ' }';
 	}
 

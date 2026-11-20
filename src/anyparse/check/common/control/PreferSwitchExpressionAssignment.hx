@@ -174,8 +174,7 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 			final matches: Array<Match> = [];
 			collectMatches(tree, tree, source, comments, seams, matches);
-			final byKey: Map<String, Match> = [];
-			for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+			final byKey: Map<String, Match> = [ for (m in matches) '${m.declSpan.from}:${m.declSpan.to}' => m ];
 
 			return CanonicalEdit.dropContainedEdits(
 				CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: m.text }))

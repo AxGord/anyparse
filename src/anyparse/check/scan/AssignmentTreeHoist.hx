@@ -648,16 +648,18 @@ final class AssignmentTreeHoist {
 	 * it belongs to whatever the enclosing rule welds on (a `;` a line comment would swallow).
 	 */
 	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminalSpan: Null<Span>): Array<CarryGap> {
-		final seats: Array<CarrySeat> = [];
-		for (i => part in parts) {
-			final cond: Null<Span> = part.cond;
-			final atom: Null<Span> = part.atom;
-			final next: Null<Span> = i + 1 < parts.length ? parts[i + 1].cond : terminalSpan;
-			if (cond == null || atom == null || next == null) continue;
-			// Re-bind: a narrowed Null<T> does not carry its narrowing into a struct literal.
-			final value: Span = atom;
-			seats.push({ condEnd: cond.to, value: value, nextStart: next.from });
-		}
+		// Re-bind: a narrowed Null<T> does not carry its narrowing into a struct literal.
+		final seats: Array<CarrySeat> = [
+			for (i => part in parts) {
+				final cond: Null<Span> = part.cond;
+				final atom: Null<Span> = part.atom;
+				final next: Null<Span> = i + 1 < parts.length ? parts[i + 1].cond : terminalSpan;
+				if (cond != null && atom != null && next != null) {
+					final value: Span = atom;
+					{ condEnd: cond.to, value: value, nextStart: next.from };
+				}
+			}
+		];
 		return IfExpressionChain.carryGaps(seats);
 	}
 

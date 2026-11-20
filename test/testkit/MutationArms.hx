@@ -353,11 +353,12 @@ final class MutationArms {
 			'$at declares ${fragments.length} "find" fragment(s) against ${replacements.length} "replace" — every pair of a'
 				+ ' multi-pair cut replaces its own fragment, so the two lists are the same length'
 		];
-		final out: Array<String> = [];
-		for (index => piece in fragments) if (piece == replacements[index]) {
-			final pair: String = fragments.length > 1 ? ' in pair ${index + 1}' : '';
-			out.push('$at declares the same text as "find" and "replace"$pair — `apq patch` refuses a pair that changes nothing');
-		}
+		final out: Array<String> = [
+			for (index => piece in fragments) if (piece == replacements[index]) {
+				final pair: String = fragments.length > 1 ? ' in pair ${index + 1}' : '';
+				'$at declares the same text as "find" and "replace"$pair — `apq patch` refuses a pair that changes nothing';
+			}
+		];
 		return out;
 	}
 

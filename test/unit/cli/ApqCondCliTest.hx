@@ -267,11 +267,12 @@ class ApqCondCliTest extends Test {
 
 	/** Just the directive-and-tags part of each `--flat` head line, so a fixture path never enters the expectation. */
 	private static function heads(printed: String, file: String): Array<String> {
-		final out: Array<String> = [];
-		for (line in lines(printed)) if (line.indexOf('$file:') == 0) {
-			final colon: Int = line.indexOf(': ', file.length + 1);
-			out.push(line.substr(colon + 2));
-		}
+		final out: Array<String> = [
+			for (line in lines(printed)) if (line.indexOf('$file:') == 0) {
+				final colon: Int = line.indexOf(': ', file.length + 1);
+				line.substr(colon + 2);
+			}
+		];
 		return out;
 	}
 	#end

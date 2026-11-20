@@ -219,15 +219,15 @@ final class Summary {
 	 * such step has one.
 	 */
 	public function excerpts(): String {
-		final blocks: Array<String> = [];
-		for (step in _steps) {
-			final failing: Bool = switch step.outcome {
-				case Failed(_), NotRun(_): true;
-				case Passed, Skipped(_): false;
-			};
-			if (!failing || step.excerpt.length == 0) continue;
-			blocks.push('${step.name}:\n' + Excerpt.cut(step.excerpt).map(line -> '  $line').join('\n'));
-		}
+		final blocks: Array<String> = [
+			for (step in _steps) {
+				final failing: Bool = switch step.outcome {
+					case Failed(_), NotRun(_): true;
+					case Passed, Skipped(_): false;
+				};
+				if (failing && step.excerpt.length != 0) '${step.name}:\n' + Excerpt.cut(step.excerpt).map(line -> '  $line').join('\n');
+			}
+		];
 		return blocks.join('\n');
 	}
 

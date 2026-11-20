@@ -150,12 +150,12 @@ final class CtorFieldFold {
 	 */
 	public static function varKeywordToFinalEdits(source: String, spans: Array<Null<Span>>): Array<{ span: Span, text: String }> {
 		final keyword: String = 'var';
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (span in spans) if (span != null) {
-			final end: Int = span.from + keyword.length;
-			if (source.substring(span.from, end) != keyword) continue;
-			edits.push({ span: new Span(span.from, end), text: 'final' });
-		}
+		final edits: Array<{ span: Span, text: String }> = [
+			for (span in spans) if (span != null) {
+				final end: Int = span.from + keyword.length;
+				if (source.substring(span.from, end) == keyword) { span: new Span(span.from, end), text: 'final' };
+			}
+		];
 		return edits;
 	}
 

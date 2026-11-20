@@ -64,15 +64,18 @@ final class UnnecessarySafeNav extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final marker: String = '?.';
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final rel: Int = source.substring(span.from, span.to).indexOf(marker);
-			if (rel < 0) continue;
-			final at: Int = span.from + rel;
-			edits.push({ span: new Span(at, at + marker.length), text: '.' });
-		}
+		final edits: Array<{ span: Span, text: String }> = [
+			for (v in violations) {
+				final span: Null<Span> = v.span;
+				if (span != null) {
+					final rel: Int = source.substring(span.from, span.to).indexOf(marker);
+					if (!(rel < 0)) {
+						final at: Int = span.from + rel;
+						{ span: new Span(at, at + marker.length), text: '.' };
+					}
+				}
+			}
+		];
 		return edits;
 	}
 

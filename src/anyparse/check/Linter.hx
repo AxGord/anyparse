@@ -842,8 +842,9 @@ final class Linter {
 	 * the same offset as one of ITS surviving findings. A run holding no such check returns `found` itself.
 	 */
 	public static function withoutSuperseded(found: Array<Violation>, checks: Array<Check>): Array<Violation> {
-		final replaced: Map<String, Array<String>> = [];
-		for (check in checks) if (check is Supersedes) replaced[check.id()] = (cast check: Supersedes).supersedes();
+		final replaced: Map<String, Array<String>> = [
+			for (check in checks) if (check is Supersedes) check.id() => (cast check: Supersedes).supersedes()
+		];
 		if (!replaced.keys().hasNext()) return found;
 		final claimed: Array<String> = [];
 		for (v in found) {

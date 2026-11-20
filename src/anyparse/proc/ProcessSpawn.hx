@@ -714,11 +714,12 @@ final class ProcessSpawn {
 
 	/** `env` as the `env` of a `SpawnJob`. A variable held as null stays null: that is how a command takes one away. */
 	public static function environment(env: DynamicAccess<String>): JValue {
-		final entries: Array<JEntry> = [];
-		for (key in env.keys()) {
-			final value: Null<String> = env[key];
-			entries.push(JValueTools.entry(key, value == null ? JNull : JString(value)));
-		}
+		final entries: Array<JEntry> = [
+			for (key in env.keys()) {
+				final value: Null<String> = env[key];
+				JValueTools.entry(key, value == null ? JNull : JString(value));
+			}
+		];
 		return JObject(entries);
 	}
 

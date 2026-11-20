@@ -76,8 +76,7 @@ final class QuietLocks {
 	private function uncontended(edge: CallEdge): Bool {
 		var known: Null<Map<String, Bool>> = _uncontended;
 		if (known == null) {
-			final built: Map<String, Bool> = [];
-			for (a in _sites.acquires) if (a.uncontended) built[keyOf(a.edge)] = true;
+			final built: Map<String, Bool> = [ for (a in _sites.acquires) if (a.uncontended) keyOf(a.edge) => true ];
 			_uncontended = built;
 			known = built;
 		}

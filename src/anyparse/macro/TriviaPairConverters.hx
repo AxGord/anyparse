@@ -195,13 +195,14 @@ final class TriviaPairConverters {
 			for (_ in 0...extraCount) binders.push({ expr: EConst(CIdent('_')), pos: pos });
 			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
 			// Body: RawType.CtorName(unwrap(arg0), unwrap(arg1), ...)
-			final unwrapArgs: Array<Expr> = [];
-			for (i in 0...origArgCount) {
-				final argNode: ShapeNode = branch.children[i];
-				final argName: String = argNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
-				final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
-				unwrapArgs.push(shapePairedToRawUnwrap(argAccess, argNode, pos));
-			}
+			final unwrapArgs: Array<Expr> = [
+				for (i in 0...origArgCount) {
+					final argNode: ShapeNode = branch.children[i];
+					final argName: String = argNode.annotations[AnnotationKeys.BASE_FIELD_NAME];
+					final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
+					shapePairedToRawUnwrap(argAccess, argNode, pos);
+				}
+			];
 			final rawCtorFn: Expr = MacroStringTools.toFieldExpr(rawPack.concat([rawSimple, ctorName]));
 			final body: Expr = { expr: ECall(rawCtorFn, unwrapArgs), pos: pos };
 			cases.push({ values: [pattern], guard: null, expr: body });

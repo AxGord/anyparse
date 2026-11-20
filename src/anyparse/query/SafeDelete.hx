@@ -61,14 +61,15 @@ final class SafeDelete {
 		srcFile: String, srcTypeName: String, memberName: String, reformat: Bool, scopeFiles: Array<{ file: String, source: String }>,
 		plugin: GrammarPlugin, refShape: RefShape, ?optsJson: String
 	): EditResult {
-		final parsed: Array<Parsed> = [];
-		for (entry in scopeFiles) {
-			final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
-				case Unparsed(_): return Err('cannot check references: ${entry.file} does not parse');
-				case Parsed(read): read;
-			};
-			parsed.push({ file: entry.file, source: entry.source, tree: tree });
-		}
+		final parsed: Array<Parsed> = [
+			for (entry in scopeFiles) {
+				final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
+					case Unparsed(_): return Err('cannot check references: ${entry.file} does not parse');
+					case Parsed(read): read;
+				};
+				{ file: entry.file, source: entry.source, tree: tree };
+			}
+		];
 
 		final srcEntry: Null<Parsed> = parsed.find(p -> p.file == srcFile);
 		if (srcEntry == null) return Err('source file $srcFile is not in the scope file set');
@@ -104,14 +105,15 @@ final class SafeDelete {
 		refShape: RefShape, ?index: () -> Null<SymbolIndex>
 	): Null<String> {
 		final self: String = FileIdentity.realPath(srcFile);
-		final parsed: Array<Parsed> = [];
-		for (entry in scopeFiles) if (entry.source.indexOf(memberName) >= 0 && FileIdentity.realPath(entry.file) != self) {
-			final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
-				case Unparsed(_): return 'cannot check references: ${entry.file} does not parse';
-				case Parsed(read): read;
-			};
-			parsed.push({ file: entry.file, source: entry.source, tree: tree });
-		}
+		final parsed: Array<Parsed> = [
+			for (entry in scopeFiles) if (entry.source.indexOf(memberName) >= 0 && FileIdentity.realPath(entry.file) != self) {
+				final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
+					case Unparsed(_): return 'cannot check references: ${entry.file} does not parse';
+					case Parsed(read): read;
+				};
+				{ file: entry.file, source: entry.source, tree: tree };
+			}
+		];
 		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parsed, memberName, refShape, 'removing "$memberName"');
 		if (opaque != null) return opaque;
 		final refs: Array<{ file: String, count: Int }> = collectReferences(

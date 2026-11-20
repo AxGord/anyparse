@@ -198,18 +198,22 @@ class LexicalLowering {
 		shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, schemaTypePath: String
 	): Array<LexRegionSpec> {
 		final kinds: Array<String> = kindNames();
-		final out: Array<LexRegionSpec> = [];
-		for (name in sortedRuleNames(shape)) {
-			final node: Null<ShapeNode> = shape.rules[name];
-			if (node == null) continue;
-			final kind: Null<String> = kindArgOf(node, ':lexical', name, kinds);
-			if (kind == null) continue;
-			out.push( switch node.kind {
-				case Terminal: atomicSpec(node, kind, name);
-				case Seq: delimitedSpec(shape, node, kind, name);
-				case _: fail('LexicalLowering: @:lexical on $name needs a @:re terminal or a @:lead/@:trail rule');
-			});
-		}
+		final out: Array<LexRegionSpec> = [
+			for (name in sortedRuleNames(shape)) {
+				final node: Null<ShapeNode> = shape.rules[name];
+				if (node != null) {
+					final kind: Null<String> = kindArgOf(node, ':lexical', name, kinds);
+					if (kind != null) switch node.kind {
+						case Terminal:
+							atomicSpec(node, kind, name);
+						case Seq:
+							delimitedSpec(shape, node, kind, name);
+						case _:
+							fail('LexicalLowering: @:lexical on $name needs a @:re terminal or a @:lead/@:trail rule');
+					};
+				}
+			}
+		];
 		for (p in formatInfo.commentPatterns) out.push({
 			kind: p.lineTerminated ? 'LineComment' : 'BlockComment',
 			open: p.open,
@@ -294,17 +298,20 @@ class LexicalLowering {
 	/** Every terminal tagged `@:token(<Kind>)`, in rule-name order. */
 	private static function tokenTerminals(shape: ShapeBuilder.ShapeResult): Array<LexTokenTerminal> {
 		final kinds: Array<String> = constructorNames('anyparse.query.TokenSpans.TokenKind').filter(kind -> !READER_KINDS.contains(kind));
-		final out: Array<LexTokenTerminal> = [];
-		for (name in sortedRuleNames(shape)) {
-			final node: Null<ShapeNode> = shape.rules[name];
-			if (node == null) continue;
-			final kind: Null<String> = kindArgOf(node, ':token', name, kinds);
-			if (kind == null) continue;
-			final pattern: String = node.kind == Terminal
-				? patternOf(node) ?? fail('LexicalLowering: @:token on $name needs a @:re pattern to match its tokens by')
-				: fail('LexicalLowering: @:token on $name needs a @:re terminal');
-			out.push({ kind: kind, pattern: pattern, origin: name });
-		}
+		final out: Array<LexTokenTerminal> = [
+			for (name in sortedRuleNames(shape)) {
+				final node: Null<ShapeNode> = shape.rules[name];
+				if (node != null) {
+					final kind: Null<String> = kindArgOf(node, ':token', name, kinds);
+					if (kind != null) {
+						final pattern: String = node.kind == Terminal
+							? patternOf(node) ?? fail('LexicalLowering: @:token on $name needs a @:re pattern to match its tokens by')
+							: fail('LexicalLowering: @:token on $name needs a @:re terminal');
+						{ kind: kind, pattern: pattern, origin: name };
+					}
+				}
+			}
+		];
 		return out;
 	}
 

@@ -646,20 +646,22 @@ final class LintDiff {
 
 	/** What `pool` holds unspent, one entry per key in its tally's order, named by a message one of its occurrences carried. */
 	private static function leftovers(pool: LintDiffPool): Array<LintDiffEntry> {
-		final out: Array<LintDiffEntry> = [];
-		for (key in pool.tally.order) {
-			final count: Int = pool.counts[key] ?? 0;
-			if (count <= 0) continue;
-			final row: LintDiffRow = rowOf(pool.tally, key);
-			out.push({
-				file: row.file,
-				rule: row.rule,
-				message: (pool.messages[key] ?? [])[0] ?? row.message,
-				severity: row.severity,
-				identity: row.identity,
-				count: count
-			});
-		}
+		final out: Array<LintDiffEntry> = [
+			for (key in pool.tally.order) {
+				final count: Int = pool.counts[key] ?? 0;
+				if (!(count <= 0)) {
+					final row: LintDiffRow = rowOf(pool.tally, key);
+					{
+						file: row.file,
+						rule: row.rule,
+						message: (pool.messages[key] ?? [])[0] ?? row.message,
+						severity: row.severity,
+						identity: row.identity,
+						count: count
+					};
+				}
+			}
+		];
 		return out;
 	}
 
