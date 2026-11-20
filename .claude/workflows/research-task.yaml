@@ -16,12 +16,12 @@ model_table:
     # `execute` is required by the loader; here it only sets the fallback `model` / `effort` (a line without a difficulty).
     execute:
       - { upto: 4, model: sonnet, effort: high }
-      - { upto: 10, model: fable, effort: medium }
+      - { upto: 10, model: opus, effort: high }
     investigate:
       - { upto: 4, model: sonnet, effort: high }
-      - { upto: 10, model: fable, effort: medium }
+      - { upto: 10, model: opus, effort: high }
     verify:
-      - { upto: 10, model: fable, effort: medium }
+      - { upto: 10, model: opus, effort: high }
 
 # The line's DRIVER (engine docs/queue.md § driver): start() answers with its exact Agent call.
 driver:

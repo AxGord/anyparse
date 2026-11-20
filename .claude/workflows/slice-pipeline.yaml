@@ -17,14 +17,14 @@ model_table:
       - { upto: 10, model: sonnet, effort: high }
     execute:
       - { upto: 6, model: sonnet, effort: high }
-      - { upto: 10, model: fable, effort: medium }
+      - { upto: 10, model: opus, effort: high }
     review:
-      - { upto: 10, model: fable, effort: medium }
+      - { upto: 10, model: opus, effort: high }
     review_verify:
-      - { upto: 10, model: fable, effort: medium }
+      - { upto: 10, model: opus, effort: high }
     fix:
       - { upto: 6, model: sonnet, effort: high }
-      - { upto: 10, model: fable, effort: medium }
+      - { upto: 10, model: opus, effort: high }
 
 # The slice's DRIVER (engine docs/queue.md § driver): start() answers with its exact Agent call, which the
 # dispatcher copies; its rules are the plugin's driver agent (agents/driver.md).
