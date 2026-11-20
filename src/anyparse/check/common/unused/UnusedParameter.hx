@@ -430,11 +430,8 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 				for (pi in 0...params.length) {
 					final pspan: Null<Span> = params[pi].span;
 					if (pspan == null || !flagged.contains('${pspan.from}:${pspan.to}')) continue;
-					final result: {
-						edits: Array<{ span: Span, text: String }>,
-						error: Null<String>,
-						callSites: Int
-					} = RemoveParam.paramSlotEdits(source, root, node, pi, fnName, fnSpan.from, shape);
+					final result: { edits: Array<{ span: Span, text: String }>, error: Null<String>, callSites: Int } =
+						RemoveParam.paramSlotEdits(source, root, node, pi, fnName, fnSpan.from, shape);
 					if (result.error == null) {
 						for (e in result.edits) edits.push(e);
 						handled.push(fnSpan.from);

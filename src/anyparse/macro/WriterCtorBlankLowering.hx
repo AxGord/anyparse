@@ -608,11 +608,8 @@ final class WriterCtorBlankLowering {
 		final enumRule: ShapeNode = r.enumRule;
 		final enumRuleName: String = r.enumRuleName;
 		final pos: Position = Context.currentPos();
-		final built: {
-			patterns: Array<WriterLowering.BetweenCtorPattern>,
-			matched: Array<String>,
-			transparentMatched: Array<String>
-		} = buildBetweenCtorPatterns(enumRule, ctorNames, transparentCtorNames, pos);
+		final built: { patterns: Array<WriterLowering.BetweenCtorPattern>, matched: Array<String>, transparentMatched: Array<String> } =
+			buildBetweenCtorPatterns(enumRule, ctorNames, transparentCtorNames, pos);
 		for (name in ctorNames) if (built.matched.indexOf(name) < 0)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$name" not found in enum $enumRuleName', Context.currentPos()

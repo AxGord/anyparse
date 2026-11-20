@@ -96,6 +96,13 @@ private typedef RestSibling = {
 	 */
 	final ?glue: Int;
 
+	/**
+	 * Set for the second ask of a group that yields to its rest (`Doc.GroupWithRestProbe`): `col` is where the
+	 * asker's FLAT layout leaves the rest, so a fill that does not fit from its column wraps on this very line and
+	 * the line ends after the fill's first item.
+	 */
+	final ?flatAsker: Bool;
+
 };
 
 /**
@@ -2668,7 +2675,7 @@ class Renderer {
 					stack.push(new Frame(f.indent, MFlat, inner));
 				else
 					stack.push(new Frame(f.indent, MBreak, inner));
-			case GroupWithRestProbe(inner):
+			case GroupWithRestProbe(inner, yieldsToRest):
 				// ω-group-rest-probe: Group variant whose fit decision
 				// subtracts `flatTokenWidthOfRestStack(stack)` from the
 				// budget — same-line content emitted AFTER this Group by
@@ -2718,19 +2725,34 @@ class Renderer {
 				// of the rest: `DocMeasure.brokenCloseRun`), so each "does not fit"
 				// holds for the flat layout as well and the line this group keeps
 				// flat is never wider than the limit.
+				//
+				// A group that yields to its rest and fits by itself asks once more
+				// from the column its FLAT layout leaves the rest at: a construct
+				// that does not fit from there breaks by itself when this group
+				// stays flat, so the rest ends at that break and the group keeps
+				// its line. Each verdict of that walk is taken at the flat layout's
+				// own column, so the line kept is within the limit. The group it
+				// keeps is flat as a WHOLE: a rest-aware group nested in it would
+				// ask the old way and take the very break this one just yielded.
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
 				} else {
-					final restW: Int = flatTokenWidthOfRestStack(stack, {
+					inline function restFrom(restCol: Int, flatAsker: Bool): Int return flatTokenWidthOfRestStack(stack, {
 						width: width,
-						col: (f.indent < col ? f.indent : col) + DocMeasure.brokenCloseRun(inner),
+						col: restCol,
 						exactCol: true,
-						groupAsker: true
+						groupAsker: true,
+						flatAsker: flatAsker
 					});
-					if (fitsFlat(width - col - pendingSpace - restW, f.indent, inner))
-						stack.push(new Frame(f.indent, MFlat, inner));
-					else
-						stack.push(new Frame(f.indent, MBreak, inner));
+					final own: Int = width - col - pendingSpace;
+					final restW: Int = restFrom((f.indent < col ? f.indent : col) + DocMeasure.brokenCloseRun(inner), false);
+					final flat: Bool = fitsFlat(own - restW, f.indent, inner);
+					var whole: Bool = false;
+					if (!flat && yieldsToRest == true && fitsFlat(own, f.indent, inner)) {
+						final flatRest: Int = restFrom(col + pendingSpace + DocMeasure.flatTokenWidth(inner), true);
+						whole = fitsFlat(own - flatRest, f.indent, inner);
+					}
+					stack.push(whole ? new Frame(f.indent, MFlat, inner, true, true) : new Frame(f.indent, flat ? MFlat : MBreak, inner));
 				}
 			case Flatten(inner):
 				// ω-force-flat-engine slice B: enter force-flat region.
@@ -3995,6 +4017,9 @@ class Renderer {
 	 *  - For an asker whose break is a lone line break (`lineEnd`), a later probe of
 	 *    that shape breaks when the whole flat line reaches its threshold, and a fill
 	 *    on a line past the width wraps after an item, so the line ends at either.
+	 *  - For the second ask of a group that yields to its rest (`flatAsker`) the
+	 *    columns are the flat layout's own, so a fill that does not fit from its
+	 *    column wraps on this very line, which ends after the fill's first item.
 	 *  - A `Flatten` / `HardFlatten` region renders flat whatever it holds, so
 	 *    nothing in it is a break point: it is measured without these rules.
 	 */
@@ -4012,6 +4037,11 @@ class Renderer {
 				IfNaturalFirstLineExceeds(_, _, _) if (sibling.glue != null && renderCol >= 0):
 				ungluedRestStep(node.doc, inner, sibling, renderCol, penCol);
 			case GroupWithRestProbe(innerDoc) if (renderCol >= 0): fitsFlat(sibling.width - penCol, 0, innerDoc) ? null : broken(innerDoc);
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _),
+				FillBreakAfterWrap(items, sep, _) if (sibling.flatAsker == true && renderCol >= 0 && items.length > 1):
+				fitsFlat(sibling.width - penCol, 0, node.doc)
+					? null
+					: { add: DocMeasure.flatTokenWidth(items[0]) + DocMeasure.flatTokenWidth(sep), aborted: true };
 			case IfWidthExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
 				renderCol + DocMeasure.flatTokenWidth(flatDoc) >= n ? broken(breakDoc) : null;
 			case IfFirstLineExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):

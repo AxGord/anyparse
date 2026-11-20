@@ -1149,11 +1149,9 @@ final class SymbolIndex {
 	public static function build(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?thirdPartyFiles: Array<String>
 	): SymbolIndex {
-		final extracted: {
-			files: Array<FileInfo>,
-			skipped: Array<String>,
-			sources: Map<String, String>
-		} = SymbolIndexBuilder.extract(files, plugin);
+		final extracted: { files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String> } = SymbolIndexBuilder.extract(
+			files, plugin
+		);
 		final thirdParty: Map<String, Bool> = [ for (file in thirdPartyFiles ?? []) file => true ];
 		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources, plugin, thirdParty);
 	}

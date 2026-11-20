@@ -199,10 +199,13 @@ final class WriterRefFieldLowering {
 		// `issue_147_between_fields_with_comments`) went byte-fail.
 		final boolFlagArgs: Null<Array<String>> = readBoolFlagStarCtorArgs(child);
 		final optArgExpr: Expr = boolFlagArgs != null ? (macro _wo) : optionalRefOptArgExpr(ctx, child, node, elseChainSuppressExpr);
-		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(
-			ctx, boolFlagArgs,
-			{ expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]), pos: Context.currentPos() },
-			site.typePath, child.fmtHasFlag('propagateExprPosition')
+		final rawWriteCall: Expr = yieldsToRestOpt(
+			child,
+			buildBoolFlagRawWriteCall(
+				ctx, boolFlagArgs,
+				{ expr: ECall(macro $i{writeFn}, [macro _optVal, optArgExpr]), pos: Context.currentPos() },
+				site.typePath, child.fmtHasFlag('propagateExprPosition')
+			)
 		);
 		// ω-indent-objectliteral / ω-expr-body-indent-objectliteral: the additive
 		// `maybeIndentValueIfCtor` Nest is SKIPPED when a same-field

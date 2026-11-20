@@ -150,7 +150,7 @@ final class BinaryChainEmit {
 				case Nest(_, inner): Nest(0, inner);
 				case Concat([head, Nest(_, tail)]): Concat([head, Nest(0, tail)]);
 				case Group(inner): Group(spine(inner));
-				case GroupWithRestProbe(inner): GroupWithRestProbe(spine(inner));
+				case GroupWithRestProbe(inner, yieldsToRest): GroupWithRestProbe(spine(inner), yieldsToRest);
 				case CollapseBoolProbe(inner): CollapseBoolProbe(spine(inner));
 				case CollapseAddProbe(inner): CollapseAddProbe(spine(inner));
 				case IfBreak(brk, fl): IfBreak(spine(brk), spine(fl));

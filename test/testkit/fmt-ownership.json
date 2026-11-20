@@ -264,7 +264,8 @@
 		"blockShape",
 		"bodyAwareCompactIndent",
 		"bodyPolicy",
-		"compactUnlessNested"
+		"compactUnlessNested",
+		"yieldsToRest"
 	],
 	"WriterMetaLineEndLowering": [
 		"metaLineEndInline",

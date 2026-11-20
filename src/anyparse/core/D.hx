@@ -222,7 +222,7 @@ class D {
 				d;
 			case Nest(n, inner): Nest(n, f(inner));
 			case Group(inner): Group(f(inner));
-			case GroupWithRestProbe(inner): GroupWithRestProbe(f(inner));
+			case GroupWithRestProbe(inner, yieldsToRest): GroupWithRestProbe(f(inner), yieldsToRest);
 			case BodyGroup(inner): BodyGroup(f(inner));
 			case Flatten(inner): Flatten(f(inner));
 			case WrapBoundary(inner): WrapBoundary(f(inner));
@@ -291,6 +291,20 @@ class D {
 			r;
 		});
 		return changed ? out : d;
+	}
+
+	/**
+	 * `d` with its outermost rest-aware group told to yield to the rest of its line (`Doc.GroupWithRestProbe`'s
+	 * `yieldsToRest`), reached through the wrappers that only place it; any other shape is returned unchanged.
+	 */
+	public static function yieldsToRest(d: Doc): Doc {
+		return switch d {
+			case GroupWithRestProbe(inner, _): GroupWithRestProbe(inner, true);
+			case WrapBoundary(inner): WrapBoundary(yieldsToRest(inner));
+			case Nest(n, inner): Nest(n, yieldsToRest(inner));
+			case BreakCommit(brk, flat, token): BreakCommit(yieldsToRest(brk), yieldsToRest(flat), token);
+			case _: d;
+		};
 	}
 
 	/**

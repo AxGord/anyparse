@@ -4392,7 +4392,7 @@ class WrapList {
 				d;
 			case BodyGroup(inner): flatLength(inner) >= 0 ? Group(groupifyShared(inner, memo)) : BodyGroup(groupifyShared(inner, memo));
 			case Group(inner): Group(groupifyShared(inner, memo));
-			case GroupWithRestProbe(inner): GroupWithRestProbe(groupifyShared(inner, memo));
+			case GroupWithRestProbe(inner, yieldsToRest): GroupWithRestProbe(groupifyShared(inner, memo), yieldsToRest);
 			case Nest(n, inner): Nest(n, groupifyShared(inner, memo));
 			case Flatten(inner): Flatten(groupifyShared(inner, memo));
 			case WrapBoundary(inner): WrapBoundary(groupifyShared(inner, memo));

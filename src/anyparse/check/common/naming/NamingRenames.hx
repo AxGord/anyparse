@@ -1214,11 +1214,9 @@ final class NamingRenames {
 		// and the completeness gate below vetoes the whole rename - which is how an override family used
 		// to be refused rather than renamed.
 		final family: Array<Span> = familySpans ?? [];
-		final refs: {
-			bareBound: Array<Span>,
-			typedBound: Array<Span>,
-			ignore: Array<Span>
-		} = inheritedFieldRefSpans(source, tree, name, ownerName, plugin, shape, resolutionIndex);
+		final refs: { bareBound: Array<Span>, typedBound: Array<Span>, ignore: Array<Span> } = inheritedFieldRefSpans(
+			source, tree, name, ownerName, plugin, shape, resolutionIndex
+		);
 		// Occurrences bound to ANOTHER declaration of the name in this file - an unrelated class's own
 		// same-named member, a local, a parameter - are that declaration's, not this member's.
 		final foreign: Array<Span> = foreignBoundSpans(source, tree, name, ownerName, plugin, support, shape, resolutionIndex, file);

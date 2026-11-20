@@ -498,5 +498,13 @@ final class WriterLoweringSupport {
 		};
 	}
 
+	/**
+	 * `@:fmt(yieldsToRest)`: the field's own group stays whole while what follows it on the line can break by
+	 * itself (a type hint ahead of its initializer). `e` unchanged without the flag.
+	 */
+	private static function yieldsToRestOpt(child: ShapeNode, e: Expr): Expr {
+		return child.fmtHasFlag('yieldsToRest') ? macro anyparse.core.D.yieldsToRest($e) : e;
+	}
+
 }
 #end

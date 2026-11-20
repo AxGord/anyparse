@@ -64,7 +64,7 @@ typedef HxVarDecl = {
 	var access: Null<HxAccessClause>;
 
 	@:optional
-	@:fmt(space('typeHintColon', 'lead'), indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
+	@:fmt(space('typeHintColon', 'lead'), indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'), yieldsToRest)
 	@:lead(':')
 	@:queryTypeSlot
 	var type: Null<HxType>;

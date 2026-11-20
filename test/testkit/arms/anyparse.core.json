@@ -315,8 +315,8 @@
 			"name": "M-RESTPROBE-COLUMN-FLAT",
 			"type": "anyparse.core.Renderer",
 			"method": "pushStructural",
-			"find": "col: (f.indent < col ? f.indent : col) + DocMeasure.brokenCloseRun(inner),",
-			"replace": "col: col + pendingSpace + DocMeasure.flatTokenWidth(inner),",
+			"find": "restFrom((f.indent < col ? f.indent : col) + DocMeasure.brokenCloseRun(inner), false)",
+			"replace": "restFrom(col + pendingSpace + DocMeasure.flatTokenWidth(inner), false)",
 			"note": "a rest-aware group predicts the rest from its flat-layout column, so a trailing list that breaks only because the group stayed flat is taken as a break of its own and the group stays flat over it"
 		},
 		{
@@ -1123,6 +1123,30 @@
 			"find": "(reach == n && !Frame.lineEndsAfter(stack, flatDoc, firstLine, n == width && pendingSpace == 0))",
 			"replace": "reach == n",
 			"note": "a first-line probe whose flat form ends its line exactly at the limit still crosses, so a call operand a fill packs flush at the limit splits its own arguments"
+		},
+		{
+			"name": "M-GROUP-YIELDS-TO-REST",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "yieldsToRest == true && fitsFlat(own, f.indent, inner)",
+			"replace": "false",
+			"note": "a group told to yield to its rest never asks from its flat-layout column, so a type hint that fits by itself breaks ahead of an initializer that has a seam of its own"
+		},
+		{
+			"name": "M-FLAT-ASKER-FILL-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "sibling.flatAsker == true && renderCol >= 0 && items.length > 1",
+			"replace": "false",
+			"note": "a yielding group's second ask measures a fill flat, so an argument list that wraps on the hint's own line is no seam and the type hint breaks ahead of a call"
+		},
+		{
+			"name": "M-YIELDED-HINT-NOT-WHOLE",
+			"type": "anyparse.core.Renderer",
+			"method": "pushStructural",
+			"find": "whole ? new Frame(f.indent, MFlat, inner, true, true)",
+			"replace": "whole ? new Frame(f.indent, MFlat, inner)",
+			"note": "a group kept flat for yielding to its rest does not hold its descendants flat, so a rest-aware group nested in a type hint asks the old way and breaks inside the hint while the initializer stays on one line"
 		}
 	]
 }

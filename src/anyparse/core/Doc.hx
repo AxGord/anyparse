@@ -167,8 +167,12 @@ enum Doc {
 	 * `flatLength`, `hasLeadingHardline`, …) treat this primitive
 	 * identically to `Group(inner)` — semantic difference is rendering-time
 	 * only.
+	 *
+	 * `yieldsToRest` (`D.yieldsToRest`) turns the bias around for a group that fits by itself: it stays flat
+	 * while a later construct on its line breaks by itself from the column the flat group leaves it at, so the
+	 * right-hand seam opens first and this group breaks only for a rest that has no seam of its own.
 	 */
-	GroupWithRestProbe(inner: Doc);
+	GroupWithRestProbe(inner: Doc, ?yieldsToRest: Bool);
 	Concat(items: Array<Doc>);
 
 	/**

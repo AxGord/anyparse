@@ -435,11 +435,9 @@ final class LintCommand implements CliCommand {
 				final memoisedRoots: Null<Array<{ file: String, source: String }>> = projectRoots;
 				final memoised: Null<Array<{ file: String, source: String }>> = library;
 				if (memoisedRoots == null || memoised == null) {
-					final read: {
-						files: Array<{ file: String, source: String }>,
-						matched: Bool,
-						allMatched: Bool
-					} = readResolutionRoots(lang, roots, reportPaths, ledger);
+					final read: { files: Array<{ file: String, source: String }>, matched: Bool, allMatched: Bool } = readResolutionRoots(
+						lang, roots, reportPaths, ledger
+					);
 					final rootFiles: Array<{ file: String, source: String }> = read.files;
 					rootsMatched = read.matched;
 					rootsAllMatched = read.allMatched;
@@ -447,10 +445,8 @@ final class LintCommand implements CliCommand {
 					// The library half stays the WHOLE read-only scope — project roots included — so the
 					// process-scoped parse tier keeps promoting exactly what it did, and it stays ONE
 					// memoised array instance (`SharedParseTier.promote` keys on the instance).
-					final libraryRead: {
-						declared: Array<{ file: String, source: String }>,
-						std: Array<{ file: String, source: String }>
-					} = readResolutionLibrary(lang, libNames, stdEnabled, reportPaths, rootFiles);
+					final libraryRead: { declared: Array<{ file: String, source: String }>, std: Array<{ file: String, source: String }> } =
+						readResolutionLibrary(lang, libNames, stdEnabled, reportPaths, rootFiles);
 					declaredLibrary = rootFiles.concat(libraryRead.declared);
 					library = rootFiles.concat(libraryRead.declared).concat(libraryRead.std);
 				}

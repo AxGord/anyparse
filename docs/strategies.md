@@ -140,7 +140,7 @@ trailingCommaRemovable, trailOptParseGate(…), trailOptShapeGate(…), tryBrace
 tryCatchBraceSymmetry(…), tryDeBrace, tryPolicy, typedefBodyBlanks,
 typeParamClose, typeParamDefaultEquals,
 typeParamItems, typeParamOpen, uniformBetween(…), uniformStmtBlanks, valueBraceSymmetry(…), whileCondParensInsideClose,
-whilePolicy, widthAware, wrapRules(…)
+whilePolicy, widthAware, wrapRules(…), yieldsToRest
 ```
 
 Regenerate it with `apq meta '@:fmt' src/anyparse/grammar --limit 500 --flat` and collect

@@ -99,7 +99,9 @@
 		"compr-fit-absent/hxformat.json": "{\"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}",
 		"compr-fit-off/Probe.hx": "class Probe {\n\tstatic function f(xs:Array<Int>):Array<Int> {\n\t\tfinal a = [\n\t\t\tfor (x in xs) {\n\t\t\t\tfinal y = x + 1;\n\t\t\t\ty * 2;\n\t\t\t}\n\t\t];\n\t\tfinal b = [\n\t\t\tfor (x in xs)\n\t\t\t\tif (x > 0) x\n\t\t];\n\t\tfinal c = [for (x in xs) x];\n\t\treturn a.concat(b).concat(c);\n\t}\n}\n",
 		"compr-fit-off/hxformat.json": "{\"wrapping\": {\"comprehensionFit\": false}, \"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}",
-		"intersection-positions/Probe.hx": "class C { var f:A & B; function g(x:A & B):A & B return x; }\n"
+		"intersection-positions/Probe.hx": "class C { var f:A & B; function g(x:A & B):A & B return x; }\n",
+		"var-hint-nested/N.hx": "class N {\n\tfunction f():Void {\n\t\tfinal hit:{pos:{x:Int, y:Int}, name:String} = { pos: locate(_target, _origin), name: describeTheTarget(_target, _locale, _fallbackName, true) };\n\t\tfinal box:{pos:{x:Int, y:Int}, name:String} = computeTheBox(_target, _origin, describeTheTarget(_target, _locale), _fallbackName, true);\n\t\tfinal fn:{ready:Bool, cb:(Int, String) -> Void} = makeHandler(_target, _origin, describeTheTarget(_target, _locale), _fallbackName, tr);\n\t\tfinal arr:{items:Array<{id:Int, tag:String}>, n:Int} = collectAll(_target, _origin, describeTheTarget(_target, _locale), _fallbackN, 1);\n\t}\n}\n",
+		"var-hint-nested/hxformat.json": "{\"wrapping\": {\"maxLineLength\": 140,\n \"anonType\": {\"defaultWrap\": \"ignore\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}, {\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"packedOrOnePerLine\"}]},\n \"objectLiteral\": {\"defaultWrap\": \"ignore\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}, {\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"packedOrOnePerLine\"}]}}}\n"
 	},
 	"invocations": [
 		{
@@ -1094,6 +1096,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "bdd805994dda84b8",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "var-hint-nested/N.hx",
+			"note": "a var type hint that fits by itself and holds a nested rest-aware group (an inner anon type, a function type, type parameters around an anon type) stays on one line as a whole, and the initializer breaks at its own seam",
+			"fixpoint": "var-hint-nested/N.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"var-hint-nested/N.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "ebb2e6be5eeb3827",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

@@ -228,17 +228,17 @@ final class LitCommand implements CliCommand implements LeadingQuery {
 		// that already ships would change what an existing query prints.
 		final scanDirectives: Bool = o.includeDirectives || (kindFilter != null && kindFilter.contains(DIRECTIVE_KIND));
 
-		final collected: {
-			entries: Array<{ file: String, source: String, hits: Array<LitHit> }>,
-			autoWidened: Bool
-		} = litEntriesFor(parsed, plugin, shape.stringLiteralDelimiters, {
-			target: targetStr,
-			exact: o.exact,
-			kinds: effectiveKindFilter,
-			kindWasDefault: kindFilter == null,
-			scanComments: scanComments,
-			scanDirectives: scanDirectives
-		});
+		final collected: { entries: Array<{ file: String, source: String, hits: Array<LitHit> }>, autoWidened: Bool } = litEntriesFor(
+			parsed, plugin, shape.stringLiteralDelimiters,
+			{
+				target: targetStr,
+				exact: o.exact,
+				kinds: effectiveKindFilter,
+				kindWasDefault: kindFilter == null,
+				scanComments: scanComments,
+				scanDirectives: scanDirectives
+			}
+		);
 		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = collected.entries;
 
 		// An EXPLICIT `--kind` naming only SOME of the grammar's string-content kinds is a
