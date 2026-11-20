@@ -3187,6 +3187,41 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "ATD-NAMED-TYPEDEF",
+			"note": "anon-type-dup with a named structure: the typedef module is created in its package, imports the field type the first occurrence reaches through its own package with no import written, and an occurrence inside the typedef package gets the short name with no import of it; the result compiles",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"anon-type-dup",
+				"--all",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"apq.json": "{\"rules\":{\"anon-type-dup\":{\"enabled\":true,\"named\":{\"types.Receivers\":[\"actions: Array<Array<Item>>\",\"manager: Array<Array<Item>>\",\"object: Item\"]}}}}\n",
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\tnew app.A().two(null);\n\t\ttypes.B.three(null);\n\t}\n}\n",
+				"app/A.hx": "package app;\n\nclass A {\n\tpublic function new() {}\n\n\tpublic function one():{actions:Array<Array<Item>>, manager:Array<Array<Item>>, object:Item} {\n\t\treturn null;\n\t}\n\n\tpublic function two(p:{actions:Array<Array<Item>>, manager:Array<Array<Item>>, object:Item}):Void {}\n}\n",
+				"app/Item.hx": "package app;\n\nclass Item {}\n",
+				"types/B.hx": "package types;\n\nimport app.Item;\n\nclass B {\n\tpublic static function three(p:{actions:Array<Array<Item>>, manager:Array<Array<Item>>, object:Item}):Void {}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "64effbc2daeefea1",
+				"files": "79cc17be673473d6",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

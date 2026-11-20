@@ -2,12 +2,24 @@ package anyparse.check.common.design;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileAnchored;
+import anyparse.check.Check.CrossFileEdits;
+import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.IndexScope;
+import anyparse.query.ModuleMove;
+import anyparse.query.ModuleScan;
+import anyparse.query.NewFile;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeRefPrinter;
+import anyparse.util.Compare;
+import haxe.io.Path;
 
+using anyparse.util.Groups;
 using StringTools;
 
 /** The resolved kind sets threaded through the walk, built once per run. */
@@ -19,15 +31,29 @@ typedef AnonCtx = {
 	final typeDeclKinds: Array<String>;
 };
 
-/** One written-out occurrence of a shape: the file it sits in, its span, and that file's source the report quotes. */
-private typedef Occurrence = { final file: String; final at: Span; final source: String; };
+/**
+ * One written-out occurrence of a shape: the file it sits in, its span, and that file's source the report quotes;
+ * `fields` the whitespace-free text of each field in WRITTEN order, `typeNames` the simple type names it spells.
+ */
+private typedef Occurrence = {
+	final file: String;
+	final at: Span;
+	final source: String;
+	final fields: Array<String>;
+	final typeNames: Array<String>;
+};
+
+/** A structure the config names: the typedef's full path, its fields as configured and their whitespace-free signature. */
+private typedef NamedType = { final path: String; final spelled: Array<String>; final signature: String; };
+
+/** The occurrences one finding's fix rewrites, and the typedef they become. */
+private typedef Plan = { final named: NamedType; final hits: Array<Occurrence>; };
 
 /**
  * Flags an anonymous structure TYPE that is written out three or more times
  * (configurable) across the lint scope — a shape that has earned a name.
- * Report-only: like `string-literal-dup` and `magic-number`, the NAME is intent
- * a human supplies, so `fix` produces no edits. `extract-typedef` is the
- * operation half.
+ * The NAME is intent a human supplies, so the fix runs only for a structure the config names
+ * (`named`, below); `extract-typedef` is the operation half for the rest.
  *
  * ## The key is STRUCTURAL, never textual
  *
@@ -82,9 +108,13 @@ private typedef Occurrence = { final file: String; final at: Span; final source:
  * (default 2), read from a discovered `apq.json` against the FIRST file of
  * the run — the grouping is cross-file, so a per-file threshold would make the
  * verdict depend on which occurrence happened to come first.
+ *
+ * `anon-type-dup.named` maps a typedef path to its field list, `{"pkg.Name": ["a: Int", "?b: Array<X>"]}`,
+ * and is the only thing that makes the fix run: it creates `pkg/Name` and rewrites every occurrence that
+ * matches EXACTLY (fields, optionality, written order, compared as text with whitespace removed).
  */
 @:nullSafety(Strict)
-final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigAware implements DefaultOff implements VolatileMessage
+final class AnonTypeDup extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff implements VolatileMessage
 		implements CrossFileAnchored {
 
 	/** Least occurrences of one shape before the group is flagged. */
@@ -99,6 +129,9 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'anon-type-dup';
 
+	/** The option mapping a typedef's full path to the field list of the structure it names. */
+	private static final OPTION_NAMED: String = 'named';
+
 	/**
 	 * The fragment that precedes the OCCURRENCE TALLY in a message, shared by the builder and
 	 * by `messageIdentity` so the mask anchor cannot drift from the wording it points at.
@@ -107,6 +140,9 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 
 	/** The same, for the DISTINCT-FILE tally of the cross-file wording. */
 	private static final ACROSS_LEAD: String = 'across ';
+
+	/** The fix plan of each finding, keyed by its anchor (`file:from`) — rebuilt by every `run`, read by `crossFileFix`. */
+	private final _plans: Map<String, Plan> = [];
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -141,27 +177,82 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 		// occurrence sits, so a scope spanning two config chains holds each file to its own.
 		final minOccOf: Map<String, Int> = [];
 		final groups: Map<String, Array<Occurrence>> = [];
+		final namedOf: Map<String, Array<NamedType>> = [];
+		_plans.clear();
 		final order: Array<String> = [];
 		for (entry in files) {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			minOccOf[entry.file] = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
+			final problems: Array<String> = [];
+			namedOf[entry.file] = namedTypesOf(config, problems);
+			for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
 			final minFields: Int = positiveOr(config.intOption(RULE_ID, 'minFields'), DEFAULT_MIN_FIELDS);
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			collect(tree, null, entry.file, entry.source, ctx, minFields, groups, order);
 		}
-		return report(groups, order, minOccOf, _reportable);
+		return report(groups, order, minOccOf, namedOf, _reportable);
 	}
 
-	/** No mechanical autofix — the typedef's name is intent a human supplies (like `string-literal-dup`). */
+	/** The per-file seam has nothing to say: a structure's occurrences sit in many files and the typedef is a new one. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
 	}
 
-	public function noAutofixReason(): String {
-		return 'the typedef needs a NAME, and which concept the repeated structure stands for is the author\'s call';
+	/**
+	 * One atomic group per finding whose structure the config names: the typedef module created, every exactly matching
+	 * occurrence rewritten to it with the imports each file needs. A finding naming nothing has no group.
+	 */
+	public function crossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<Array<CrossFileEdits>> {
+		final out: Array<Array<CrossFileEdits>> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			final plan: Null<Plan> = span == null ? null : _plans['${v.file}:${span.from}'];
+			final slices: Null<Array<CrossFileEdits>> = plan == null ? null : slicesOf(plan, files, plugin, index);
+			if (slices != null) out.push(slices);
+		}
+		return out;
+	}
+
+	/**
+	 * One `Info` per group that reaches the `minOccurrences` of one of its occurrences' files, anchored at the
+	 * scope-earliest such occurrence whose file `reportable` accepts (see `Check.CrossFileAnchored`). `order` is
+	 * first-seen order over the scope's files, so the report does not depend on map iteration order.
+	 */
+	private function report(
+		groups: Map<String, Array<Occurrence>>, order: Array<String>, minOccOf: Map<String, Int>, namedOf: Map<String, Array<NamedType>>,
+		reportable: Null<(String) -> Bool>
+	): Array<Violation> {
+		final out: Array<Violation> = [];
+		for (key in order) {
+			final hits: Null<Array<Occurrence>> = groups[key];
+			if (hits == null) continue;
+			final anchor: Null<Occurrence> = hits.find(
+				hit -> hits.length >= (minOccOf[hit.file] ?? DEFAULT_MIN_OCCURRENCES) && (reportable == null || reportable(hit.file))
+			);
+			if (anchor == null) continue;
+			final files: Array<String> = [];
+			for (hit in hits) if (!files.contains(hit.file)) files.push(hit.file);
+			final quoted: String = collapse(anchor.source.substring(anchor.at.from, anchor.at.to));
+			final where: String = files.length == 1 ? 'in this file' : '$ACROSS_LEAD${files.length} files';
+			final plan: Null<Plan> = planOf(hits, namedOf[anchor.file] ?? []);
+			if (plan != null) _plans['${anchor.file}:${anchor.at.from}'] = plan;
+			final tail: String = plan == null
+				? 'extract a typedef, or name it under "$OPTION_NAMED" of $RULE_ID in apq.json to fix it'
+				: 'extract typedef ${plan.named.path}';
+			out.push({
+				file: anchor.file,
+				span: anchor.at,
+				rule: RULE_ID,
+				severity: Severity.Info,
+				message: 'anonymous structure ${preview(quoted)}$WRITTEN_LEAD${hits.length} times $where — $tail'
+			});
+		}
+		return out;
 	}
 
 	/**
@@ -184,12 +275,7 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 		// Sorted: Haxe structural typing makes two field orders THE SAME type, so a
 		// key that preserved source order would split a group and lose the very
 		// candidate the rule exists to find.
-		fields.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		fields.sort(Compare.compareString);
 		return '{ ${fields.join(', ')} }';
 	}
 
@@ -260,47 +346,25 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 				// Re-bound: a narrowed local never reaches an anonymous-structure literal
 				// whose expected field type is non-nullable.
 				final at: Span = span;
+				final typeNames: Array<String> = [];
+				collectTypeNames(node, ctx, typeNames);
+				final hit: Occurrence = {
+					file: file,
+					at: at,
+					source: source,
+					fields: fieldTexts(node, source),
+					typeNames: typeNames
+				};
 				final bucket: Null<Array<Occurrence>> = groups[key];
 				if (bucket == null) {
-					groups[key] = [{ file: file, at: at, source: source }];
+					groups[key] = [hit];
 					order.push(key);
 				} else {
-					bucket.push({ file: file, at: at, source: source });
+					bucket.push(hit);
 				}
 			}
 		}
 		for (child in node.children) collect(child, node.kind, file, source, ctx, minFields, groups, order);
-	}
-
-	/**
-	 * One `Info` per group that reaches the `minOccurrences` of one of its occurrences' files, anchored at the
-	 * scope-earliest such occurrence whose file `reportable` accepts (see `Check.CrossFileAnchored`). `order` is
-	 * first-seen order over the scope's files, so the report does not depend on map iteration order.
-	 */
-	private static function report(
-		groups: Map<String, Array<Occurrence>>, order: Array<String>, minOccOf: Map<String, Int>, reportable: Null<(String) -> Bool>
-	): Array<Violation> {
-		final out: Array<Violation> = [];
-		for (key in order) {
-			final hits: Null<Array<Occurrence>> = groups[key];
-			if (hits == null) continue;
-			final anchor: Null<Occurrence> = hits.find(
-				hit -> hits.length >= (minOccOf[hit.file] ?? DEFAULT_MIN_OCCURRENCES) && (reportable == null || reportable(hit.file))
-			);
-			if (anchor == null) continue;
-			final files: Array<String> = [];
-			for (hit in hits) if (!files.contains(hit.file)) files.push(hit.file);
-			final quoted: String = collapse(anchor.source.substring(anchor.at.from, anchor.at.to));
-			final where: String = files.length == 1 ? 'in this file' : '$ACROSS_LEAD${files.length} files';
-			out.push({
-				file: anchor.file,
-				span: anchor.at,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: 'anonymous structure ${preview(quoted)}$WRITTEN_LEAD${hits.length} times $where — extract a typedef'
-			});
-		}
-		return out;
 	}
 
 	/** `text` elided to `MESSAGE_PREVIEW` characters so a wide structure does not bloat the report. */
@@ -328,6 +392,149 @@ final class AnonTypeDup extends RuleBase implements NoAutofix implements ConfigA
 			out.addChar(c);
 		}
 		return out.toString();
+	}
+
+	/** The structures `config` names under `named`: a typedef path mapped to a list of `name: Type` field strings. */
+	private static function namedTypesOf(config: LintConfig, problems: Array<String>): Array<NamedType> {
+		return RuleDeclaration.namedFields(config, RULE_ID, OPTION_NAMED, problems)
+			.map(named -> { path: named.path, spelled: named.fields, signature: named.fields.map(squeeze).join('\n') });
+	}
+
+	/** The first named structure some of `hits` match EXACTLY — same fields, same optionality, same written order. */
+	private static function planOf(hits: Array<Occurrence>, named: Array<NamedType>): Null<Plan> {
+		for (candidate in named) {
+			final matched: Array<Occurrence> = hits.filter(hit -> hit.fields.join('\n') == candidate.signature);
+			if (matched.length > 0) return { named: candidate, hits: matched };
+		}
+		return null;
+	}
+
+	/** `text` with every whitespace run removed: two spellings of one field compare equal. */
+	private static function squeeze(text: String): String {
+		return ~/\s+/g.replace(text, '');
+	}
+
+	/** The whitespace-free text of each field of `anon`, in written order; empty when a field has no span. */
+	private static function fieldTexts(anon: QueryNode, source: String): Array<String> {
+		final out: Array<String> = [];
+		for (child in anon.children) {
+			final span: Null<Span> = child.span;
+			if (span == null) return [];
+			out.push(squeeze(source.substring(span.from, span.to)));
+		}
+		return out;
+	}
+
+	/** The simple names of every type reference under `node`, each once. */
+	private static function collectTypeNames(node: QueryNode, ctx: AnonCtx, out: Array<String>): Void {
+		for (child in node.children) {
+			final name: Null<String> = child.name;
+			if (name != null && ctx.typeRefKinds.contains(child.kind) && name.indexOf('.') < 0 && !out.contains(name)) out.push(name);
+			collectTypeNames(child, ctx, out);
+		}
+	}
+
+	/**
+	 * The create slice of the named typedef plus one rewrite slice per file holding an occurrence, or null when the module
+	 * cannot be placed, already exists, or cannot be written. The occurrences are printed against an index that already
+	 * holds the new module, so a same-package file needs no import and a shadowed name falls back to the full path.
+	 */
+	private static function slicesOf(
+		plan: Plan, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>
+	): Null<Array<CrossFileEdits>> {
+		final known: SymbolIndex = index ?? IndexScope.report(files, plugin);
+		final found: Null<String> = targetFileOf(plan, known);
+		if (found == null || files.exists(f -> f.file == found)) return null;
+		final target: String = found;
+		final created: Null<String> = createdSource(plan, known, plugin);
+		if (created == null) return null;
+		// A host of its own, with no resolution scope: the new module exists only in `grown`, and the run's resolution index
+		// (which cannot know it) would make the printer refuse the import it needs.
+		final host: GrammarPlugin = new CachingGrammarPlugin(plugin);
+		final grown: SymbolIndex = IndexScope.over(files.concat([{ file: target, source: created }]), host);
+		final out: Array<CrossFileEdits> = [{ file: target, edits: [], create: created }];
+		final done: Array<String> = [];
+		for (hit in plan.hits) if (!done.contains(hit.file)) {
+			done.push(hit.file);
+			final slice: Null<CrossFileEdits> = rewriteOf(plan, hit, grown, host);
+			if (slice == null) return null;
+			out.push(slice);
+		}
+		return out;
+	}
+
+	/** Where the typedef's module goes: its package directories under the source root the first occurrence's file sits in. */
+	private static function targetFileOf(plan: Plan, index: SymbolIndex): Null<String> {
+		final first: Occurrence = plan.hits[0];
+		final info: Null<FileInfo> = index.fileInfo(first.file);
+		if (info == null) return null;
+		final dir: String = Path.directory(first.file);
+		final root: Null<String> = info.pkg == '' ? dir : ModuleMove.sourceRootOf(dir, info.pkg);
+		if (root == null) return null;
+		final pkg: String = packageOf(plan.named.path);
+		final name: String = plan.named.path.substr(pkg == '' ? 0 : pkg.length + 1);
+		return Path.join([
+			root,
+			pkg.split('.').join('/'),
+			Path.withExtension(name, Path.extension(first.file))
+		]);
+	}
+
+	/** The package part of a dotted type path, empty for a root-package type. */
+	private static function packageOf(path: String): String {
+		final cut: Int = path.lastIndexOf('.');
+		return cut < 0 ? '' : path.substr(0, cut);
+	}
+
+	/** The new module's source, built by `NewFile` (the backend of `new`) from the configured fields and the imports they need. */
+	private static function createdSource(plan: Plan, index: SymbolIndex, plugin: GrammarPlugin): Null<String> {
+		final pkg: String = packageOf(plan.named.path);
+		final imports: Array<String> = importsFor(plan.hits[0], pkg, index, plugin);
+		final built: NewFileResult = NewFile.create({
+			className: plan.named.path.substr(pkg == '' ? 0 : pkg.length + 1),
+			pkg: pkg,
+			kind: 'typedef',
+			fields: plan.named.spelled,
+			bodiesRaw: imports.length == 0 ? null : '@@ imports\n${imports.join('\n')}'
+		}, plugin);
+		return switch built.result {
+			case Ok(text, _): text;
+			case Err(_): null;
+		};
+	}
+
+	/** The import statements the structure of `hit` needs in package `pkg`: each type it names, as the file it sits in sees it. */
+	private static function importsFor(hit: Occurrence, pkg: String, index: SymbolIndex, plugin: GrammarPlugin): Array<String> {
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final written: Map<String, String> = provider == null ? [] : provider.importMap(hit.source, hit.file);
+		final out: Array<String> = [];
+		for (name in hit.typeNames) {
+			var path: Null<String> = written[name];
+			if (path == null) {
+				final found: Array<{ file: FileInfo, type: TypeDeclInfo }> = index.resolveTypeRefsFrom(name, hit.file);
+				if (found.length == 1 && found[0].file.pkg != '') path = ModuleScan.pathOfDecl(found[0].file, found[0].type);
+			}
+			if (path == null || packageOf(path) == pkg) continue;
+			final statement: String = 'import $path;';
+			out.pushUnique(statement);
+		}
+		return out;
+	}
+
+	/** The rewrite of every occurrence in `first`'s file to the typedef's name, with the import the printer decides it needs. */
+	private static function rewriteOf(plan: Plan, first: Occurrence, index: SymbolIndex, plugin: GrammarPlugin): Null<CrossFileEdits> {
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, first.source);
+		if (tree == null) return null;
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
+			first.file, first.source, tree, provider == null ? [] : provider.importMap(first.source, first.file), plugin, index
+		);
+		final printed: PrintedTypeRef = printer.print(plan.named.path);
+		final edits: Array<{ span: Span, text: String }> = [
+			for (hit in plan.hits) if (hit.file == first.file) { span: hit.at, text: printed.text }
+		];
+		edits.sort((a, b) -> a.span.from - b.span.from);
+		return { file: first.file, edits: edits.concat(printer.pendingImportEdits().map(e -> { span: e.span, text: e.text })) };
 	}
 
 }

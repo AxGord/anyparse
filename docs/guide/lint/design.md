@@ -5,9 +5,10 @@ Metrics, duplication, project contracts, concurrency. One section per rule, by i
 ## `anon-type-dup`
 
 An anonymous structure type written out at least `minOccurrences` times (default `3`) across the
-lint run — a shape that has earned a name. `Info`, DEFAULT OFF and report-only: the typedef's name is a
-human's choice, and `apq extract-typedef` performs the extraction. One finding per shape, at its
-earliest occurrence, with the count and the number of files.
+lint run — a shape that has earned a name. `Info` and DEFAULT OFF. The typedef's name is a human's
+choice, so the finding is report-only until the config names the structure (below); `apq extract-typedef`
+performs an extraction by hand. One finding per shape, at its earliest occurrence, with the count and the
+number of files.
 
 Shapes are compared structurally: field order, separators and whitespace do not matter, an optional
 field differs from a required one, and nested structures compare the same way. A structure with
@@ -20,6 +21,25 @@ function a():{ x:Int, y:Int } …
 function b(p:{ y:Int, x:Int }) …
 var c:Array<{ x:Int, y:Int }>;   // one finding: 3 occurrences of { x:Int, y:Int }
 ```
+
+### Naming a structure: `named`
+
+`lint --fix` extracts a structure only when the config names it. `named` maps the full path of the typedef
+to create onto the structure's fields, each written as `name: Type` (a leading `?` marks an optional one):
+
+```json
+{ "rules": { "anon-type-dup": { "enabled": true, "named": {
+  "pkg.Receivers": ["actions: Array<Array<Item>>", "manager: Array<Array<Item>>", "object: Item"]
+} } } }
+```
+
+The fix creates `pkg/Receivers.hx` under the source root the occurrences' files sit in, with the imports
+its fields need, and rewrites every matching occurrence to `Receivers`, adding the import each file needs.
+An occurrence matches only when its fields equal the list exactly — same names, types, optionality and
+written order, whitespace aside — so a structure differing in one optional field, or spelling the same
+fields in another order, is left as it is. The files that change are written together or not at all. A
+module already at that path is never overwritten: the finding stays a report. Without a `named` entry
+the message says how to name the structure.
 
 ## `complexity`
 

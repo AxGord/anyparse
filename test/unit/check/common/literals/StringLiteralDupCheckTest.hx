@@ -3,7 +3,6 @@ package unit.check.common.literals;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
-import anyparse.check.common.design.AnonTypeDup;
 import anyparse.check.common.literals.StringLiteralDup;
 import sys.FileSystem;
 import sys.io.File;
@@ -42,9 +41,6 @@ class StringLiteralDupCheckTest extends Test {
 		Assert.isTrue(check is NoAutofix);
 		final reason: String = check.noAutofixReason();
 		Assert.isTrue(reason.contains('extract-constant'));
-		final twin: String = new AnonTypeDup().noAutofixReason();
-		Assert.isTrue(twin.length > 0);
-		Assert.notEquals(reason, twin);
 	}
 
 	public function testThreeOccurrencesFlagged(): Void {

@@ -22,6 +22,8 @@ typedef EventSpec = { final eventBase: String; final typeAbstract: String; final
 /** One mutation arm of a registry: its name and the member it cuts. */
 typedef ArmTarget = { final name: String; final type: String; final method: String; }
 
+/** One structure a rule's config names: the typedef path it is to get and the `name: Type` fields it is written with. */
+typedef NamedFields = { final path: String; final fields: Array<String>; }
 /**
  * The readers of the rule options that DECLARE framework knowledge rather than tune a threshold —
  * `prefer-api-idiom`'s `idioms` and `typed-event-constant`'s event types — and of the mutation-arm
@@ -125,6 +127,35 @@ final class RuleDeclaration {
 				}
 			case _:
 				problems.push('$label holds no "$ARMS_KEY" array');
+		}
+		return out;
+	}
+
+	/**
+	 * The structures rule `ruleId` names under `key` in `config`: an object mapping a typedef path to a non-empty list of
+	 * field strings, in declared order. An entry of any other shape is dropped with a line in `problems`.
+	 */
+	public static function namedFields(config: LintConfig, ruleId: String, key: String, problems: Array<String>): Array<NamedFields> {
+		final out: Array<NamedFields> = [];
+		switch config.jsonOption(ruleId, key) {
+			case null:
+			case JObject(entries):
+				for (entry in entries) {
+					final path: String = entry.key;
+					final fields: Array<String> = switch entry.value {
+						case JArray(items): items.map(item -> switch item {
+							case JString(v): v;
+							case _: '';
+						});
+						case _: [];
+					};
+					if (fields.length == 0 || fields.contains(''))
+						problems.push('"$key" entry "$path" is not a non-empty list of field strings — ignored');
+					else
+						out.push({ path: path, fields: fields });
+				}
+			case _:
+				problems.push('"$key" is not an object — ignored');
 		}
 		return out;
 	}

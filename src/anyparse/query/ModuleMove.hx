@@ -182,6 +182,21 @@ final class ModuleMove {
 		return out;
 	}
 
+	/** The source root `dir` sits in when its trailing directories spell `pkg`, else null. */
+	public static function sourceRootOf(dir: String, pkg: String): Null<String> {
+		var at: String = Path.removeTrailingSlashes(dir);
+		final segments: Array<String> = pkg.split('.');
+		var i: Int = segments.length - 1;
+		while (i >= 0) {
+			if (Path.withoutDirectory(at) != segments[i]) return null;
+			final up: String = Path.removeTrailingSlashes(Path.directory(at));
+			if (up == at) return null;
+			at = up;
+			i--;
+		}
+		return at;
+	}
+
 	/** Whether the package `pkg` holds the module path `module` (directly or in a sub-package). */
 	private static inline function covers(pkg: String, module: String): Bool {
 		return module.startsWith('$pkg.');
@@ -252,21 +267,6 @@ final class ModuleMove {
 			oldPackage: info.pkg,
 			info: info
 		});
-	}
-
-	/** The source root `dir` sits in when its trailing directories spell `pkg`, else null. */
-	private static function sourceRootOf(dir: String, pkg: String): Null<String> {
-		var at: String = Path.removeTrailingSlashes(dir);
-		final segments: Array<String> = pkg.split('.');
-		var i: Int = segments.length - 1;
-		while (i >= 0) {
-			if (Path.withoutDirectory(at) != segments[i]) return null;
-			final up: String = Path.removeTrailingSlashes(Path.directory(at));
-			if (up == at) return null;
-			at = up;
-			i--;
-		}
-		return at;
 	}
 
 	/**

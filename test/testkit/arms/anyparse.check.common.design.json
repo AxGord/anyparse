@@ -1377,6 +1377,61 @@
 			"method": "messageIdentity",
 			"force": "message",
 			"note": "a finding's message keys the blast radius with the call it quotes, so the same standing finding reads as new once its helper's module is spelled as an extension"
+		},
+		{
+			"name": "M-ANON-NO-PLAN",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "planOf",
+			"force": "null",
+			"note": "no structure matches a configured name, so a named structure gets no typedef and no occurrence is rewritten"
+		},
+		{
+			"name": "M-ANON-ORDER-LOOSE",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "planOf",
+			"find": "hit.fields.join('\\n') == candidate.signature",
+			"replace": "hit.fields.length == candidate.spelled.length",
+			"note": "an occurrence matches a configured structure by its field count alone, so a reordered spelling of the type is rewritten too"
+		},
+		{
+			"name": "M-ANON-EXISTING-TARGET",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "slicesOf",
+			"find": "if (found == null || files.exists(f -> f.file == found)) return null;",
+			"replace": "if (found == null) return null;",
+			"note": "a module already sitting at the configured path is offered a create again, so the fix would overwrite it"
+		},
+		{
+			"name": "M-ANON-PRINTER-HOST",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "slicesOf",
+			"find": "final host: GrammarPlugin = new CachingGrammarPlugin(plugin);",
+			"replace": "final host: GrammarPlugin = plugin;",
+			"note": "the printer asks the run's resolution index about the module the fix creates, which cannot know it, so every occurrence is written with the full path and no import"
+		},
+		{
+			"name": "M-ANON-UNNAMED-FIXED",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "planOf",
+			"find": "for (candidate in named) {",
+			"replace": "for (candidate in (named.length == 0 ? [{ path: 'types.Receivers', spelled: hits[0].fields, signature: hits[0].fields.join('\\n') }] : named)) {",
+			"note": "a finding whose config names no structure is given one anyway, so the fix extracts it under an invented name"
+		},
+		{
+			"name": "M-ANON-NOTES-DROPPED",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "run",
+			"find": "ConfiguredTypes.warn(_configNotes, RULE_ID, p)",
+			"replace": "ConfiguredTypes.warn(null, RULE_ID, p)",
+			"note": "a malformed `named` entry is printed from inside the rule through the stderr fallback again, and the command whose notes it should reach never says it"
+		},
+		{
+			"name": "M-ANON-IMPORT-INDEX-OFF",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "importsFor",
+			"find": "index.resolveTypeRefsFrom(name, hit.file)",
+			"replace": "[]",
+			"note": "a field type the first occurrence reaches through its own package, with no import written, is not imported by the created module, so it does not compile"
 		}
 	]
 }

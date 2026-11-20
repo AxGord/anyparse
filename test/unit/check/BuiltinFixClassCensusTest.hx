@@ -144,7 +144,6 @@ class BuiltinFixClassCensusTest extends Test {
 
 	public function testTheseRulesDeclareNoAutofixAtAll(): Void {
 		Assert.same([
-			'anon-type-dup',
 			'assignment-in-condition',
 			'avoid-any',
 			'avoid-haxe-json',

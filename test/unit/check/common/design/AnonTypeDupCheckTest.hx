@@ -1,16 +1,23 @@
 package unit.check.common.design;
 
+import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.LintConfig;
 import anyparse.check.Severity;
+import anyparse.check.SourceEntry;
 import anyparse.check.common.design.AnonTypeDup;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CanonicalEdit;
+import sys.io.File;
+import unit.cli.CliFixture;
 
 using StringTools;
 
 /**
  * The `anon-type-dup` check: an anonymous structure TYPE written out three or
  * more times across the lint scope is flagged `Info` once, at its
- * scope-earliest occurrence. Report-only — the typedef's NAME is intent a human
- * supplies — and OFF by default, like every new rule.
+ * scope-earliest occurrence. The typedef's NAME is intent a human supplies, so
+ * the fix runs only for a structure the config names — and the rule is OFF by
+ * default, like every new rule.
  *
  * The load-bearing property is that the grouping key is STRUCTURAL: two field
  * orders are the SAME Haxe type and must group, while two different field TYPES
@@ -20,6 +27,9 @@ using StringTools;
 class AnonTypeDupCheckTest extends Test {
 
 	private static inline final SHAPE: String = 'class C { var a:{ xml:Xml, text:String }; }';
+	private static inline final NAMED: String = '{ actions: Array<Array<Item>>, manager: Array<Array<Item>>, object: Item }';
+	private static inline final CONFIG: String = '{"rules":{"anon-type-dup":{"enabled":true,"named":{"types.Receivers":'
+		+ '["actions: Array<Array<Item>>","manager: Array<Array<Item>>","object: Item"]}}}}';
 
 	public function testThreeOccurrencesFlaggedOnce(): Void {
 		final vs: Array<Violation> = violations([SHAPE, SHAPE, SHAPE]);
@@ -159,14 +169,6 @@ class AnonTypeDupCheckTest extends Test {
 		Assert.equals(0, violations(['class Bad { function f() { ']).length);
 	}
 
-	/** No autofix — the typedef's name is a human's choice. */
-	public function testNoFixEdits(): Void {
-		final files: Array<{ file: String, source: String }> = [ for (i in 0...3) { file: 'a$i.hx', source: SHAPE } ];
-		final check: AnonTypeDup = new AnonTypeDup();
-		Assert.isTrue(CheckFixture.violationsIn(check, files).length > 0);
-		for (f in files) Assert.equals(0, CheckFixture.fixRun(check, files, f.file).edits.length);
-	}
-
 	public function testMessageIdentityMasksBothTallies(): Void {
 		// THE 1-TO-32 AMPLIFIER, closed. Both numbers in this message are PROJECT-WIDE
 		// populations, so one new anonymous structure anywhere re-keyed every finding the rule
@@ -230,8 +232,227 @@ class AnonTypeDupCheckTest extends Test {
 		}
 	}
 
+	/** A structure the config names is created as its own module and every occurrence, in every file, becomes that type. */
+	@:pin('control')
+	@:killer('M-ANON-NO-PLAN')
+	public function testANamedStructureIsExtractedAcrossFiles(): Void {
+		final files: Array<SourceEntry> = project();
+		final groups: Array<Array<CrossFileEdits>> = fixGroups(files, CONFIG);
+		Assert.equals(1, groups.length);
+		Assert.same(['src/types/Receivers.hx', 'src/app/A.hx', 'src/app/B.hx'], groups[0].map(s -> s.file));
+		final after: Map<String, String> = applied(files, groups[0]);
+		final created: String = after['src/types/Receivers.hx'] ?? '';
+		Assert.isTrue(
+			created.contains('package types;') && created.contains('typedef Receivers') && created.contains('import lib.Item;'), created
+		);
+		for (file in ['src/app/A.hx', 'src/app/B.hx']) {
+			final text: String = after[file] ?? '';
+			Assert.isFalse(text.contains('actions:'), text);
+			Assert.isTrue(text.contains('import types.Receivers;') && text.contains(': Receivers'), text);
+		}
+		Assert.equals(2, (after['src/app/A.hx'] ?? '').split(': Receivers').length - 1);
+		Assert.equals(
+			0,
+			fixGroups(
+				files.map(f -> { file: f.file, source: after[f.file] ?? f.source })
+					.concat([{ file: 'src/types/Receivers.hx', source: created }]),
+				CONFIG
+			).length
+		);
+	}
+
+	/** A structure differing in one optional field is a different type: it is not in the group and its file is untouched. */
+	@:pin('guard')
+	public function testADifferentOptionalFieldIsUntouched(): Void {
+		final variant: String = '{ ?actions: Array<Array<Item>>, manager: Array<Array<Item>>, object: Item }';
+		final other: Array<SourceEntry> = [
+			{
+				file: 'src/app/C.hx',
+				source: 'package app;\n\nimport lib.Item;\n\nclass C {\n\tpublic function four(p: $variant): Void {}\n}\n'
+			}
+		];
+		final files: Array<SourceEntry> = project(other);
+		final groups: Array<Array<CrossFileEdits>> = fixGroups(files, CONFIG);
+		Assert.equals(1, groups.length);
+		Assert.isFalse(groups[0].map(s -> s.file).contains('src/app/C.hx'));
+	}
+
+	/** The written field order is part of the match: a reordered spelling of the same type stays as it is. */
+	@:pin('control')
+	@:killer('M-ANON-ORDER-LOOSE')
+	public function testAReorderedStructureIsNotRewritten(): Void {
+		final reordered: String = '{ object: Item, actions: Array<Array<Item>>, manager: Array<Array<Item>> }';
+		final other: Array<SourceEntry> = [
+			{
+				file: 'src/app/C.hx',
+				source: 'package app;\n\nimport lib.Item;\n\nclass C {\n\tpublic function four(p: $reordered): Void {}\n}\n'
+			}
+		];
+		final groups: Array<Array<CrossFileEdits>> = fixGroups(project(other), CONFIG);
+		Assert.equals(1, groups.length);
+		Assert.isFalse(groups[0].map(s -> s.file).contains('src/app/C.hx'));
+	}
+
+	/** Without a name in the config the finding stays a report that says how to name the structure, and no fix is offered. */
+	@:pin('control')
+	@:killer('M-ANON-UNNAMED-FIXED')
+	public function testWithoutANameThereIsNoFix(): Void {
+		final files: Array<SourceEntry> = project();
+		Assert.equals(0, fixGroups(files, null).length);
+		final found: Array<Violation> = CheckFixture.violationsIn(new AnonTypeDup(), files);
+		Assert.equals(1, found.length);
+		Assert.isTrue(found[0].message.contains('named'), found[0].message);
+	}
+
+	/** A module already at the configured path is never overwritten: no group is offered. */
+	@:pin('control')
+	@:killer('M-ANON-EXISTING-TARGET')
+	public function testAnExistingModuleIsNotOverwritten(): Void {
+		final taken: Array<SourceEntry> = [
+			{ file: 'src/types/Receivers.hx', source: 'package types;\n\nclass Receivers {}\n' }
+		];
+		Assert.equals(0, fixGroups(project(taken), CONFIG).length);
+	}
+
+	/** The per-file seam offers nothing: the structure's occurrences sit in many files and the typedef is new. */
+	public function testThePerFileSeamHasNoEdits(): Void {
+		final files: Array<SourceEntry> = [ for (i in 0...3) { file: 'a$i.hx', source: SHAPE } ];
+		final check: AnonTypeDup = new AnonTypeDup();
+		Assert.isTrue(CheckFixture.violationsIn(check, files).length > 0);
+		for (f in files) Assert.equals(0, CheckFixture.fixRun(check, files, f.file).edits.length);
+	}
+
+	/**
+	 * The real `lint --fix` path, where the run's resolution index cannot know the module the fix creates: every file still
+	 * gets the short name and the import, and the new module carries the imports its fields need.
+	 */
+	@:pin('control')
+	@:killer('M-ANON-PRINTER-HOST')
+	public function testTheCliFixImportsTheNewTypeInEveryFile(): Void {
+		final shape: String = '{actions:Array<Array<Item>>, manager:Array<Array<Item>>, object:Item}';
+		final dir: String = CliFixture.writeTree('anon-type-dup-fix', [
+			{ name: 'apq.json', source: CONFIG },
+			{ name: 'src/lib/Item.hx', source: 'package lib;\n\nclass Item {}\n' },
+			{
+				name: 'src/app/A.hx',
+				source: 'package app;\n\nimport lib.Item;\n\nclass A {\n\tpublic function one():$shape {\n\t\treturn null;\n\t}\n\n'
+				+ '\tpublic function two(p:$shape):Void {}\n}\n'
+			},
+			{
+				name: 'src/app/B.hx',
+				source: 'package app;\n\nimport lib.Item;\n\nclass B {\n\tpublic function three(p:$shape):Void {}\n}\n'
+			}
+		]);
+		CliFixture.always(CliFixture.removeDir.bind(dir), () -> {
+			CliFixture.runIn(dir, ['lint', 'src', '--rule', 'anon-type-dup', '--all', '--fix']);
+			final created: String = File.getContent('$dir/src/types/Receivers.hx');
+			Assert.isTrue(created.contains('package types;') && created.contains('import lib.Item;'), created);
+			for (name in ['A', 'B']) {
+				final text: String = File.getContent('$dir/src/app/$name.hx');
+				Assert.isTrue(
+					text.contains('import types.Receivers;') && !text.contains('actions:') && !text.contains('types.Receivers:'), text
+				);
+			}
+		});
+	}
+
+	/**
+	 * A malformed `named` option reaches the run's notes, never dropped: the command says each distinct line once, and a session
+	 * editing the key needs to be told what was ignored.
+	 */
+	@:pin('control')
+	@:killer('M-ANON-NOTES-DROPPED')
+	public function testAMalformedNamedEntryIsSaidThroughTheRunsNotes(): Void {
+		final wrongEntry: String = '{"rules":{"anon-type-dup":{"enabled":true,"named":{"types.Receivers":["a: Int",5]}}}}';
+		final wrongKey: String = '{"rules":{"anon-type-dup":{"enabled":true,"named":3}}}';
+		Assert.same([
+			'apq lint: anon-type-dup: "named" entry "types.Receivers" is not a non-empty list of field strings — ignored\n'
+		], notesOf(wrongEntry));
+		Assert.same(['apq lint: anon-type-dup: "named" is not an object — ignored\n'], notesOf(wrongKey));
+		Assert.same([], notesOf(CONFIG));
+	}
+
+	/**
+	 * The new module's imports come from the first occurrence: a type its package reaches without an import is found through the
+	 * resolution index, and an occurrence inside the typedef's own package gets the short name with no import of it.
+	 */
+	@:pin('control')
+	@:killer('M-ANON-IMPORT-INDEX-OFF')
+	public function testAnImportIsResolvedThroughTheIndexAndTheOwnPackageNeedsNone(): Void {
+		final shape: String = '{actions:Array<Array<Item>>, manager:Array<Array<Item>>, object:Item}';
+		final files: Array<SourceEntry> = [
+			{ file: 'src/app/Item.hx', source: 'package app;\n\nclass Item {}\n' },
+			{
+				file: 'src/app/A.hx',
+				source: 'package app;\n\nclass A {\n\tpublic function one():$shape {\n\t\treturn null;\n\t}\n\n\tpublic function two(p:'
+					+ '$shape):Void {}\n}\n'
+			},
+			{
+				file: 'src/types/B.hx',
+				source: 'package types;\n\nimport app.Item;\n\nclass B {\n\tpublic static function three(p:$shape):Void {}\n}\n'
+			}
+		];
+		final groups: Array<Array<CrossFileEdits>> = fixGroups(files, CONFIG);
+		Assert.equals(1, groups.length);
+		final after: Map<String, String> = applied(files, groups[0]);
+		final created: String = after['src/types/Receivers.hx'] ?? '';
+		Assert.isTrue(created.contains('import app.Item;'), created);
+		final own: String = after['src/types/B.hx'] ?? '';
+		Assert.isTrue(own.contains(':Receivers') && !own.contains('import types.Receivers;') && !own.contains('actions:'), own);
+		final other: String = after['src/app/A.hx'] ?? '';
+		Assert.isTrue(other.contains('import types.Receivers;') && !other.contains('actions:'), other);
+	}
+
 	private function violations(sources: Array<String>): Array<Violation> {
 		return CheckFixture.violationsIn(new AnonTypeDup(), [ for (i in 0...sources.length) { file: 'a$i.hx', source: sources[i] } ]);
+	}
+
+	/** The slices of the one fix group over `files` under `config`, or none when the rule offers no fix. */
+	private function fixGroups(files: Array<SourceEntry>, config: Null<String>): Array<Array<CrossFileEdits>> {
+		final check: AnonTypeDup = new AnonTypeDup();
+		final resolve: (String) -> LintConfig = _ -> LintConfig.parse(config ?? '{"rules":{"anon-type-dup":{"enabled":true}}}');
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final found: Array<Violation> = CheckFixture.violationsIn(check, files, plugin, resolve);
+		return check.crossFileFix(files, found, plugin, CheckFixture.index(files, plugin));
+	}
+
+	/** The notes a run over the three-occurrence project collects under `config`. */
+	private function notesOf(config: String): Array<String> {
+		final notes: Array<ConfigNote> = [];
+		final found: Array<Violation> = Linter.run(
+			project(), new HaxeQueryPlugin(), [new AnonTypeDup()], _ -> LintConfig.parse(config), false, null, notes
+		);
+		Assert.equals(1, found.length);
+		final said: Array<String> = [];
+		for (n in notes) if (!said.contains(n.message)) said.push(n.message);
+		return said;
+	}
+
+	/** A project: the type the structure spells, two files using it (three occurrences) and a bystander with a different shape. */
+	private static function project(?extra: Array<SourceEntry>): Array<SourceEntry> {
+		final files: Array<SourceEntry> = [
+			{ file: 'src/lib/Item.hx', source: 'package lib;\n\nclass Item {}\n' },
+			{
+				file: 'src/app/A.hx',
+				source: 'package app;\n\nimport lib.Item;\n\nclass A {\n\tpublic function one(): $NAMED return null;\n'
+					+ '\tpublic function two(p: $NAMED): Void {}\n}\n'
+			},
+			{
+				file: 'src/app/B.hx',
+				source: 'package app;\n\nimport lib.Item;\n\nclass B {\n\tpublic function three(p: $NAMED): Void {}\n}\n'
+			}
+		];
+		return extra == null ? files : files.concat(extra);
+	}
+
+	/** `files` with the slices applied: a create adds its file, an edit list is spliced into the file's source. */
+	private static function applied(files: Array<SourceEntry>, slices: Array<CrossFileEdits>): Map<String, String> {
+		final out: Map<String, String> = [ for (f in files) f.file => f.source ];
+		for (slice in slices) {
+			final created: Null<String> = slice.create;
+			out[slice.file] = created ?? CanonicalEdit.applyEdits(out[slice.file] ?? '', slice.edits);
+		}
+		return out;
 	}
 
 }
