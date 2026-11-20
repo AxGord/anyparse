@@ -86,14 +86,14 @@ final class SliceGate {
 
 	/**
 	 * The branches of a gate run, all at once, each running its rows in order: `corpus` reads the sweep `suite` wrote; the
-	 * three short rows share one branch, so they hold one thread between them. `arms` is not among them: it is the phase
+	 * short rows share one branch, so they hold one thread between them. `arms` is not among them: it is the phase
 	 * that runs before them (`ARMS_BRANCHES`). A whole-suite gate whose base suite is not yet read adds the `base` branch beside them
 	 * (`BaseSuite.plan`): the suite row and the corpus row wait for it where they need the base; a gate whose `infra4` row will
 	 * compare with a base lint not yet kept adds the `base-lint` branch (`BaseLint.plan`), and that row waits for it.
 	 */
 	public static final GATE_BRANCHES: Array<Array<String>> = [
 		['suite', 'corpus'],
-		['lists', 'fmt', 'scrub', 'artifacts'],
+		['lists', 'fmt', 'scrub', 'artifacts', 'workflows'],
 		['lint'],
 		['jvm'],
 		['infra4'],
@@ -126,6 +126,7 @@ final class SliceGate {
 		'infra4',
 		'scrub',
 		'artifacts',
+		'workflows',
 		'kits',
 		'typer probes'
 	];
@@ -276,6 +277,11 @@ final class SliceGate {
 			case 'arms': GateArms.outcome.bind(_gate);
 			case 'scrub': scrubOutcome;
 			case 'artifacts': artifactsOutcome;
+			case 'workflows':
+				() ->
+					WorkflowsRow.reached(_gate.touched)
+						? WorkflowsRow.outcome(_gate.tree, Sys.getEnv('WF_PLUGIN_ROOT'), _gate.summary)
+						: Skipped('no workflow file changed');
 			case 'kits':
 				() ->
 					KitsRow.reached(_gate.touched)

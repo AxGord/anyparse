@@ -4237,6 +4237,30 @@
 			"find": "?? throw new UsageError('missing --tree <worktree>')",
 			"replace": "?? ''",
 			"note": "a run without --tree goes on with an empty tree"
+		},
+		{
+			"name": "M-WORKFLOWS-ROW-REACHED-BY-ANY-FILE",
+			"type": "dev.WorkflowsRow",
+			"method": "reached",
+			"find": "file.startsWith('$FOLDER/')",
+			"replace": "true",
+			"note": "every slice runs the workflow loader, so a diff with no workflow file in it is judged by a row that cannot move"
+		},
+		{
+			"name": "M-WORKFLOWS-ROW-STATUS-IGNORED",
+			"type": "dev.WorkflowsRow",
+			"method": "verdict",
+			"find": "if (run.ok) return Passed;",
+			"replace": "if (true) return Passed;",
+			"note": "the loader's refusal is not read, so a workflow file the engine cannot load passes the gate and the land"
+		},
+		{
+			"name": "M-WORKFLOWS-ROW-NO-LOADER-PASSES",
+			"type": "dev.WorkflowsRow",
+			"method": "outcome",
+			"find": "if (script == null) return unavailable();",
+			"replace": "if (script == null) return Passed;",
+			"note": "a machine with no workflow engine passes the row unjudged, so a file nobody could load reads as loaded"
 		}
 	]
 }

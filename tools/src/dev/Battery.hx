@@ -185,6 +185,7 @@ final class Battery {
 			case 'oracle': oracle;
 			case 'lint': lint;
 			case 'blast': blast;
+			case 'workflows': () -> WorkflowsRow.outcome(_plan.repo, Sys.getEnv('WF_PLUGIN_ROOT'), _summary);
 			case 'kit probes': () -> {
 				var failed: Array<String> = [];
 				final outcome: Outcome = KitsRow.outcome(
@@ -537,13 +538,14 @@ final class Battery {
 	/**
 	 * The branches, all at once, each running its steps in order: a step reads what the one before it wrote. The kit probes read
 	 * nothing of the oracle's branch, so they run beside it rather than after its lint, the longest row of a battery that runs no
-	 * whole suite.
+	 * whole suite. The workflows step loads the candidate tree's workflow files, so a merge that made a file neither side had is judged
+	 * before main moves.
 	 */
 	public static function branches(): Array<Array<String>> {
 		return [
 			[SUITE_ROW, CORPUS_ROW],
 			['fmt', 'fmt xconfig', 'fmt squash'],
-			['typer probes', 'jvm probe', 'kit probes'],
+			['typer probes', 'jvm probe', 'kit probes', 'workflows'],
 			['oracle', 'lint', 'blast']
 		];
 	}
