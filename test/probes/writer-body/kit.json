@@ -101,7 +101,9 @@
 		"compr-fit-off/hxformat.json": "{\"wrapping\": {\"comprehensionFit\": false}, \"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"onlyBefore\"}}}}",
 		"intersection-positions/Probe.hx": "class C { var f:A & B; function g(x:A & B):A & B return x; }\n",
 		"var-hint-nested/N.hx": "class N {\n\tfunction f():Void {\n\t\tfinal hit:{pos:{x:Int, y:Int}, name:String} = { pos: locate(_target, _origin), name: describeTheTarget(_target, _locale, _fallbackName, true) };\n\t\tfinal box:{pos:{x:Int, y:Int}, name:String} = computeTheBox(_target, _origin, describeTheTarget(_target, _locale), _fallbackName, true);\n\t\tfinal fn:{ready:Bool, cb:(Int, String) -> Void} = makeHandler(_target, _origin, describeTheTarget(_target, _locale), _fallbackName, tr);\n\t\tfinal arr:{items:Array<{id:Int, tag:String}>, n:Int} = collectAll(_target, _origin, describeTheTarget(_target, _locale), _fallbackN, 1);\n\t}\n}\n",
-		"var-hint-nested/hxformat.json": "{\"wrapping\": {\"maxLineLength\": 140,\n \"anonType\": {\"defaultWrap\": \"ignore\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}, {\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"packedOrOnePerLine\"}]},\n \"objectLiteral\": {\"defaultWrap\": \"ignore\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}, {\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"packedOrOnePerLine\"}]}}}\n"
+		"var-hint-nested/hxformat.json": "{\"wrapping\": {\"maxLineLength\": 140,\n \"anonType\": {\"defaultWrap\": \"ignore\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}, {\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"packedOrOnePerLine\"}]},\n \"objectLiteral\": {\"defaultWrap\": \"ignore\", \"rules\": [{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"}, {\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"packedOrOnePerLine\"}]}}}\n",
+		"tt/T.hx": "class T {\n\tfunction f() {\n\t\tcallback(ready ? [] : updates.map(u -> {a: 1, b: 2, c: 3, d: 4}));\n\t\tcallback(ready ? [] : updates.map(u -> {a: 1, b: 2}));\n\t\tcallback(ready ? [] : updates.map(u -> {aaaaaaaaaaaaaaaaaaaaaaa: 1, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 2, ccccccccccccccccccccc: 3}));\n\t\tvar v = ready ? null : make({aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 1, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 2, cccccccccccccccc: 3});\n\t}\n}\n",
+		"tt/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140}, \"sameLine\": {\"ternaryTailBlockMaxThenLength\": 20}}"
 	},
 	"invocations": [
 		{
@@ -1114,6 +1116,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "ebb2e6be5eeb3827",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "tt/T.hx",
+			"note": "sameLine.ternaryTailBlockMaxThenLength: a ternary hugs the object-literal lambda body its else branch ends in when an itemCount rule breaks the literal; a literal that breaks only by width keeps the ladder",
+			"fixpoint": "tt/T.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"tt/T.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "af2d8504e5a9c3c6",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

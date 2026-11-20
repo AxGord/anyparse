@@ -1191,6 +1191,7 @@ final class WriterPrattLowering {
 		// slice (no current fixture demands it).
 		final rulesExpr: Expr = optFieldAccess('ternaryWrap');
 		final inlineBranchExpr: Expr = multilineBranchInlineExpr(pc, branch, argNames);
+		final tailBlockExpr: Expr = tailBlockHugExpr(pc, branch, argNames);
 		// ω-keep-ternary-operand-comment: the two operand-trailing slots grown by
 		// `@:fmt(captureTernaryTrail)`. Each attaches to its operand's Doc so the
 		// comment travels with the operand under EVERY shape the cascade can pick.
@@ -1265,7 +1266,8 @@ final class WriterPrattLowering {
 				: null;
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $rulesExpr, false, false, _ternaryBreaks, _forceKeep, null,
-				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc, $inlineBranchExpr
+				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc,
+				$inlineBranchExpr, null, null, null, $tailBlockExpr
 			);
 			if ($v{tPrec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])
@@ -1282,16 +1284,41 @@ final class WriterPrattLowering {
 	 * is a constant `false` and the emit is byte-identical.
 	 */
 	private static function multilineBranchInlineExpr(pc: PrattLoweringCtx, branch: ShapeNode, argNames: Array<String>): Expr {
-		final args: Null<Array<String>> = branch.fmtReadStringArgs('multilineBranchInline');
-		if (args == null) return macro false;
+		final read: Null<{ opt: Expr, pred: Expr }> = optPredArgs(pc, branch, 'multilineBranchInline', 'optBoolField');
+		if (read == null) return macro false;
+		final optAccess: Expr = read.opt;
+		final pred: Expr = read.pred;
+		return macro $optAccess && ($pred($i{argNames[1]}) || $pred($i{argNames[2]}));
+	}
+
+	/**
+	 * The option access and the grammar predicate a ternary `@:fmt(<flag>('<option>', '<predicate>'))`
+	 * names, or null when the branch carries no such flag; any other argument count is a fatal error.
+	 */
+	private static function optPredArgs(
+		pc: PrattLoweringCtx, branch: ShapeNode, flag: String, optRole: String
+	): Null<{ opt: Expr, pred: Expr }> {
+		final args: Null<Array<String>> = branch.fmtReadStringArgs(flag);
+		if (args == null) return null;
 		if (args.length != 2)
 			Context.fatalError(
-				'WriterLowering: @:fmt(multilineBranchInline) expects 2 string args (optBoolField, predicate), got ${args.length}',
-				Context.currentPos()
+				'WriterLowering: @:fmt($flag) expects 2 string args ($optRole, predicate), got ${args.length}', Context.currentPos()
 			);
-		final pred: Expr = AstPredLowering.predFnExpr(pc.shape.root, pc.ctx.trivia, false, args[1]);
-		final optAccess: Expr = optFieldAccess(args[0]);
-		return macro $optAccess && ($pred($i{argNames[1]}) || $pred($i{argNames[2]}));
+		return { opt: optFieldAccess(args[0]), pred: AstPredLowering.predFnExpr(pc.shape.root, pc.ctx.trivia, false, args[1]) };
+	}
+
+	/**
+	 * The ternary's `tailBlockMaxThen` for `BinaryChainEmit.emit`, read off
+	 * `@:fmt(tailBlockHug('<optIntField>', '<predicate>'))`: the option's cap when it is positive AND the
+	 * grammar's predicate finds the else operand ending in a tail block, else `0`, the hug off. Only the
+	 * else operand is asked: a block ending the then branch would hide the `: else` behind it.
+	 */
+	private static function tailBlockHugExpr(pc: PrattLoweringCtx, branch: ShapeNode, argNames: Array<String>): Expr {
+		final read: Null<{ opt: Expr, pred: Expr }> = optPredArgs(pc, branch, 'tailBlockHug', 'optIntField');
+		if (read == null) return macro 0;
+		final optAccess: Expr = read.opt;
+		final pred: Expr = read.pred;
+		return macro $optAccess > 0 && $pred($i{argNames[2]}) ? $optAccess : 0;
 	}
 
 	/**

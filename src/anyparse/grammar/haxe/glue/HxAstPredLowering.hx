@@ -332,6 +332,11 @@ final class HxAstPredLowering extends AstPredLowering {
 			typeParamItemCountField(),
 			moduleOnlyTypedefsField(),
 			ternaryBranchHoldsMultilineBlockField(),
+			predField(
+				'ternaryBranchEndsInTailBlock', [valueArg('e', HX_EXPR)],
+				macro : Bool, macro anyparse.grammar.haxe.glue.HxTernaryBranchBlocks.endsInTailBlock(e),
+				'True iff a ternary operand ends in a non-empty block or collection with no block ahead of it.'
+			),
 			fnBodyEmptyField('fnBodyEmpty', HX_FN_BODY, ['NoBody']),
 			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, []),
 			memberBeyondValueField(),

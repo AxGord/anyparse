@@ -330,6 +330,14 @@
 			"find": "(cast elseifs: Array<Any>).foreach(arm -> elementsHold(Reflect.field(unwrap(arm), 'body'), depth))",
 			"replace": "true",
 			"note": "an #elseif arm never refuses, so a region with a class in its #elseif arm no longer keeps the module off the rule"
+		},
+		{
+			"name": "M-TERNARY-TAIL-HUG-BLOCK-AHEAD",
+			"type": "anyparse.grammar.haxe.glue.HxTernaryBranchBlocks",
+			"method": "lastPlainArg",
+			"find": "if (holdsBlock(list[i], 0)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a block in an argument before the tail is not seen, so the ternary hugs a call whose earlier argument breaks too"
 		}
 	]
 }

@@ -786,6 +786,11 @@ final class HxModuleWriteOptions {
 	// `wrapping.ternaryMultilineBranch` (`"inline"` → true, `"break"` → false); read through the Ternary
 	// ctor's `@:fmt(multilineBranchInline)`.
 	public var ternaryMultilineBranchInline: Bool = false;
+	// The widest then branch that lets a ternary keep `cond ? then : f(a -> {` on one line when its else branch ends in the
+	// block or collection that is its only multi-line part (`HxTernaryBranchBlocks.endsInTailBlock`): the block breaks, the
+	// ternary does not. `0` (the default) is off. Fed by `sameLine.ternaryTailBlockMaxThenLength`; read through the Ternary
+	// ctor's `@:fmt(tailBlockHug)`.
+	public var ternaryTailBlockMaxThenLength: Int = 0;
 	public var functionSignatureWrap: WrapRules = HaxeFormat.defaultFunctionSignatureWrap();
 	public var anonFunctionSignatureWrap: WrapRules = HaxeFormat.defaultAnonFunctionSignatureWrap();
 	public var metadataCallParameterWrap: WrapRules = HaxeFormat.defaultMetadataCallParameterWrap();

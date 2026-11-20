@@ -3681,6 +3681,14 @@
 			"find": " || ${headingAdds ?? macro false})",
 			"replace": ")",
 			"note": "a headed typedef field stays in the cascade layout, which writes no blank line in front of it"
+		},
+		{
+			"name": "M-TERNARY-TAIL-HUG-OPTION-IGNORED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "tailBlockHugExpr",
+			"find": "return macro $optAccess > 0 && $pred($i{argNames[2]}) ? $optAccess : 0;",
+			"replace": "return macro $pred($i{argNames[2]}) ? 20 : 0;",
+			"note": "the option is not consulted, so an unset key hugs the tail block as if it were set"
 		}
 	]
 }

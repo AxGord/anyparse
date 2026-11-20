@@ -25,8 +25,9 @@ private enum abstract DocTailScan(Int) {
 /**
  * The three facts `DocMeasure.scanTailAt` records about the closing line it
  * finds, when a caller asks for them: the `Nest` depth that line starts at,
- * whether the LEFTMOST closer opening it is a brace, and how wide the closer
- * run is. All three are meaningful only alongside a `TailBreak` verdict.
+ * the LEFTMOST closer opening it (a char code, `-1` before one is seen), and
+ * how wide the closer run is. All three are meaningful only alongside a
+ * `TailBreak` verdict.
  *
  * A mutable carrier rather than a return value, on purpose. The walk visits
  * every node of the tail spine, and `endsWithForcedCloseLine` — the
@@ -34,7 +35,7 @@ private enum abstract DocTailScan(Int) {
  * three, so it passes `null` and the walk allocates nothing at all.
  * Returning a struct from every node instead is slower over a whole format pass.
  */
-private typedef TailOut = { var nest: Int; var braceCloser: Bool; var closeWidth: Int; }
+private typedef TailOut = { var nest: Int; var closer: Int; var closeWidth: Int; }
 
 /**
  * The lines a glued ternary `c ? a : b` leaves after its condition's head: `width` is the closing line of the condition
@@ -774,8 +775,8 @@ final class DocMeasure {
 	 * which owns its own multi-line layout and dedents to the caller's indent.
 	 */
 	public static function breakTailCloseNest(d: Doc): Int {
-		final out: TailOut = { nest: 0, braceCloser: false, closeWidth: 0 };
-		return scanTailAt(d, 0, true, out) == TailBreak && out.braceCloser ? out.nest : -1;
+		final out: TailOut = { nest: 0, closer: -1, closeWidth: 0 };
+		return scanTailAt(d, 0, true, out) == TailBreak && out.closer == '}'.code ? out.nest : -1;
 	}
 
 	/**
@@ -799,8 +800,8 @@ final class DocMeasure {
 	 * gluing text after the run gets that padding flushed, not dropped.
 	 */
 	public static function breakTailCloseRun(d: Doc): Int {
-		final out: TailOut = { nest: 0, braceCloser: false, closeWidth: 0 };
-		return scanTailAt(d, 0, true, out) == TailBreak && out.braceCloser ? out.closeWidth : -1;
+		final out: TailOut = { nest: 0, closer: -1, closeWidth: 0 };
+		return scanTailAt(d, 0, true, out) == TailBreak && out.closer == '}'.code ? out.closeWidth : -1;
 	}
 
 	/**
@@ -809,7 +810,7 @@ final class DocMeasure {
 	 * text after a paren or bracket that closes under its own opener pays for the closers already on that line.
 	 */
 	public static function closeLineRun(d: Doc): Int {
-		final out: TailOut = { nest: 0, braceCloser: false, closeWidth: 0 };
+		final out: TailOut = { nest: 0, closer: -1, closeWidth: 0 };
 		return scanTailAt(d, 0, true, out) == TailBreak && out.nest == 0 ? out.closeWidth : -1;
 	}
 
@@ -857,6 +858,16 @@ final class DocMeasure {
 				parts.length == 5 && parts[1].match(Text(' ? ')) && parts[3].match(Text(' : '));
 			case _: false;
 		};
+	}
+
+	/**
+	 * `breakTailCloseNest` with a bracket admitted beside the brace: the depth of `d`'s forced closing line when the leftmost
+	 * closer opening it is `}` or `]`, else `-1`. For a host that keeps its head glued to a collection or block `d` ends in,
+	 * which owns its multi-line layout whichever of the two it is; a `)`-led line means a call before it broke instead.
+	 */
+	public static function breakTailCollectionCloseNest(d: Doc): Int {
+		final out: TailOut = { nest: 0, closer: -1, closeWidth: 0 };
+		return scanTailAt(d, 0, true, out) == TailBreak && (out.closer == '}'.code || out.closer == ']'.code) ? out.nest : -1;
 	}
 
 	/**
@@ -1011,7 +1022,7 @@ final class DocMeasure {
 					// instead. Trimming would also under-count a run split across
 					// leaves, where the padding IS its own leaf and trims to nothing.
 					final c: Int = firstVisibleChar(s);
-					if (out != null && c >= 0) out.braceCloser = c == '}'.code;
+					if (out != null && c >= 0) out.closer = c;
 					if (out != null) out.closeWidth += s.length;
 					TailCloses;
 				} else {

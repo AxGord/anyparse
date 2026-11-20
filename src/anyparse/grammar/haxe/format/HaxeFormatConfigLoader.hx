@@ -293,6 +293,7 @@ final class HaxeFormatConfigLoader {
 		// a value-if chain that is the direct body of an arrow lambda.
 		if (section.expressionIfArrowBodyReflow != null) opt.expressionIfArrowBodyReflow = section.expressionIfArrowBodyReflow;
 		applyValueIfFit(section, opt);
+		if (section.ternaryTailBlockMaxThenLength != null) opt.ternaryTailBlockMaxThenLength = section.ternaryTailBlockMaxThenLength;
 		// omega-elseif-comment-reflow: an independent Bool knob on the `elseIf`
 		// glue path - it changes no body policy, it decides whether ONE interposed
 		// line comment may move to the nested if's head line.

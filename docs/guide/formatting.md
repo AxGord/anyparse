@@ -310,6 +310,26 @@ else
 	make(x, y);
 ```
 
+## A ternary that ends in a block: `sameLine.ternaryTailBlockMaxThenLength`
+
+A ternary whose else branch ends in a multi-line block breaks at `?` and `:` by default. With
+`"ternaryTailBlockMaxThenLength": 20` a then branch of at most 20 columns keeps the head on one line and the block
+breaks instead:
+
+```haxe
+callback(ready ? [] : updates.map(u -> {
+	id: u.id,
+	name: u.name
+}));
+```
+
+The block is a lambda body, an object or array literal, or the last argument of a call ending in one, and it must be
+multi-line on its own: a function or statement body, or a literal a wrap rule lays out one item per line
+(`onePerLine`, an `itemCount` rule). A literal that breaks only because it is too wide for the line keeps the ladder.
+The ladder also stays when the then branch is wider, when the head line does not fit, when the else branch breaks
+before its block (call arguments laid one per line), when an argument before the block holds a block, and when the
+block is in the then branch (`c ? {…} : x` would hide `: x`). `0` (the default) is off.
+
 ## Metadata placed by width: `lineEnds.metadata*: fit`
 
 `fit` is a value of `lineEnds.metadataType`, `metadataFunction`, `metadataVar` and `metadataOther`, not part of

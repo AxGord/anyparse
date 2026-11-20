@@ -497,9 +497,11 @@ enum HxExpr {
 	Or(left: HxExpr, right: HxExpr);
 
 	// `multilineBranchInline`: `wrapping.ternaryMultilineBranch: "inline"` keeps a branch's
-	// multi-line block on the condition's line (`cond ? macro {`) while that line fits.
+	// multi-line block on the condition's line (`cond ? macro {`) while that line fits. `tailBlockHug`:
+	// `sameLine.ternaryTailBlockMaxThenLength` keeps `cond ? x : f(a -> {` on one line for a short `x`.
 	@:ternary('?', ':', 1)
-	@:fmt(captureTernaryTrail, multilineBranchInline('ternaryMultilineBranchInline', 'ternaryBranchHoldsMultilineBlock'))
+	@:fmt(captureTernaryTrail, multilineBranchInline('ternaryMultilineBranchInline', 'ternaryBranchHoldsMultilineBlock'),
+		tailBlockHug('ternaryTailBlockMaxThenLength', 'ternaryBranchEndsInTailBlock'))
 	Ternary(cond: HxExpr, thenExpr: HxExpr, elseExpr: HxExpr);
 
 	// ASYMMETRIC (probed on 4.3.7): Haxe's tightest binary operator on its LEFT — `a + b in c` is

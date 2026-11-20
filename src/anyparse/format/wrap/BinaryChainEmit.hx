@@ -118,12 +118,15 @@ final class BinaryChainEmit {
 	 * `inlineMultilineBranch` is the caller's verdict that a ternary's hardline comes from a block inside a branch and that its
 	 * config keeps such a block on the condition's line: the hardline then no longer commits the chain to its break shape, and
 	 * the cascade answers for the first line alone (`hardlineChainShape`).
+	 *
+	 * `tailBlockMaxThen` is the caller's verdict that a ternary's else branch ends in the block or collection that
+	 * is its only multi-line part, as the widest then branch that still lets the head hug that block; `0` is no hug.
 	 */
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, forceKeep: Bool = false, ?afterComments: Array<Null<Doc>>,
 		restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>, inlineMultilineBranch: Bool = false,
-		?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList
+		?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList, tailBlockMaxThen: Int = 0
 	): Doc {
 		final items: Array<Doc> = isTernaryOps(ops)
 			? items.map(item -> WrapList.namedThresholdLiteral(item, true))
@@ -131,7 +134,7 @@ final class BinaryChainEmit {
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
 				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, forceKeep, afterComments, restAware,
-				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list
+				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list, tailBlockMaxThen
 			);
 		}
 		return BreakCommits.offerItemBreaks(
@@ -280,7 +283,8 @@ final class BinaryChainEmit {
 		?ownComments: Array<Null<Doc>>,
 		?aboveComments: Array<Null<Doc>>,
 		// The list this chain writes (`ElemChainEmit`). Null for every plain chain.
-		?list: ChainList
+		?list: ChainList,
+		tailBlockMaxThen: Int = 0
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -416,7 +420,9 @@ final class BinaryChainEmit {
 				{ own: ownComments, above: aboveComments, lineWidth: opt.lineWidth }
 			))
 		else if (anyHardline)
-			WrapBoundary(hardlineChainShape(items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt, inlineMultilineBranch))
+			WrapBoundary(hardlineChainShape(
+				items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt, inlineMultilineBranch, tailBlockMaxThen
+			))
 		else if (pivotHugIdx >= 0)
 			WrapBoundary(IfLineExceeds(
 				opt.lineWidth + 1, ternaryHugShape(pivotHugIdx, items, ops, opt, evalAt, shapeAt),
@@ -625,7 +631,7 @@ final class BinaryChainEmit {
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, extraThresholds: Array<Int>,
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
 		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc,
-		inlineMultilineBranch: Bool
+		inlineMultilineBranch: Bool, tailBlockMaxThen: Int
 	): Doc {
 		if (extraThresholds.length == 0) {
 			final hugIdx: Int = ternaryHugCollectionBranchIndex(items, ops);
@@ -635,6 +641,12 @@ final class BinaryChainEmit {
 		}
 		final broken: Doc = thresholdTree(extraThresholds, [], true, evalAt, shapeAt);
 		if (inlineMultilineBranch) return IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(items, ops));
+		// The else branch breaks only inside the block it ends in: the head keeps `cond ? then : f(a -> {` on one line when
+		// that line fits and ends at the block's opener, so the block breaks and the ternary does not.
+		if (hugsTailBlock(items, ops, tailBlockMaxThen)) {
+			final hug: Doc = shapeNoWrap(items, ops);
+			return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, broken, hug);
+		}
 		// Only the LAST operand breaks and the cascade keeps a fitting chain on one line: the chain hugs that operand
 		// (`a && xs.exists(x -> {`, `|| [`) when the glued line up to its break fits and ends at a delimiter the operand
 		// opened, rather than counting the operand's own break as the chain's overflow. A break of another kind (a line
@@ -1486,6 +1498,22 @@ final class BinaryChainEmit {
 			};
 		}
 		return walk(d) ?? false;
+	}
+
+	/**
+	 * True iff a ternary may hug its else branch's tail block: `maxThen` is positive (the caller found that block), the
+	 * condition and a then branch no wider than `maxThen` render flat, and the else branch closes on a line led by the brace
+	 * or bracket of that block at its own indent (`DocMeasure.breakTailCollectionCloseNest`), so nothing before the block
+	 * broke around it.
+	 */
+	private static function hugsTailBlock(items: Array<Doc>, ops: Array<String>, maxThen: Int): Bool {
+		if (maxThen <= 0 || items.length != 3 || !isTernaryOps(ops)) return false;
+		final thenWidth: Int = WrapList.flatLength(items[1]);
+
+		return thenWidth >= 0
+			&& thenWidth <= maxThen
+			&& WrapList.flatLength(items[0]) >= 0
+			&& DocMeasure.breakTailCollectionCloseNest(items[2]) == 0; // noqa: magic-number
 	}
 
 }

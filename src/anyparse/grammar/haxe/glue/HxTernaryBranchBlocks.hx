@@ -18,6 +18,9 @@ using Lambda;
  * `cond ? [] : […]`) keeps that group on the line of its `?` / `:`, so the group is skipped and
  * only what follows it is searched — the exception set of haxe-formatter's
  * `MarkWrapping.hasMultilineBlockBranch`, so both tools act on the same ternaries.
+ *
+ * `endsInTailBlock` answers the narrower question `sameLine.ternaryTailBlockMaxThenLength` asks of
+ * an else branch: does it break only inside the block or collection it ends in.
  */
 final class HxTernaryBranchBlocks {
 
@@ -48,8 +51,51 @@ final class HxTernaryBranchBlocks {
 		return false;
 	}
 
+	/**
+	 * True iff `branch` ENDS in a non-empty block or collection that is its only multi-line part: the
+	 * branch is that group, a lambda whose body ends in one, or a call or `new` whose LAST argument
+	 * does, while the callee and every earlier argument hold no block. A collection before the tail may
+	 * still break; the writer refuses that hug on the rendered shape (`BinaryChainEmit.hugsTailBlock`).
+	 */
+	public static function endsInTailBlock(branch: Null<Any>): Bool {
+		var node: Null<Any> = unwrap(branch);
+		for (_ in 0...MAX_DEPTH) {
+			if (node == null || !Reflect.isEnumValue(node)) return false;
+			final params: Array<Any> = Type.enumParameters(node);
+			switch Type.enumConstructor(node) {
+				case 'BlockExpr', 'ArrayExpr':
+					return nonEmpty(params[0]);
+				case 'ObjectLit':
+					return nonEmpty(Reflect.field(params[0], 'fields'));
+				case 'BlockBody':
+					return nonEmpty(Reflect.field(params[0], 'stmts'));
+				case 'ThinArrow':
+					node = unwrap(params[1]);
+				case 'ExprBody':
+					node = unwrap(params[0]);
+				case 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'FnExpr':
+					node = unwrap(Reflect.field(params[0], 'body'));
+				case 'Call':
+					node = holdsBlock(params[0], 0) ? null : lastPlainArg(params[1]);
+				case 'NewExpr':
+					node = lastPlainArg(Reflect.field(params[0], 'args'));
+				case _:
+					return false;
+			}
+		}
+		return false;
+	}
+
 	private static inline function nonEmpty(v: Null<Any>): Bool {
 		return Std.isOfType(v, Array) && (cast v: Array<Any>).length > 0;
+	}
+
+	/** The last of `args`, or null when there is none or an argument before it holds a block. */
+	private static function lastPlainArg(args: Null<Any>): Null<Any> {
+		if (!nonEmpty(args)) return null;
+		final list: Array<Any> = cast args;
+		for (i in 0...list.length - 1) if (holdsBlock(list[i], 0)) return null;
+		return unwrap(list[list.length - 1]);
 	}
 
 	/** True iff `v`'s subtree holds a non-empty block, `v` included. */

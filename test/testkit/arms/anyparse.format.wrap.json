@@ -681,6 +681,38 @@
 			"find": "breakAfterBody && i > 1",
 			"replace": "i > 1",
 			"note": "the break after a multi-line brace-closed operand applies at every site, so a type argument, a bound and a member type break too"
+		},
+		{
+			"name": "M-TERNARY-TAIL-HUG-NONE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "if (hugsTailBlock(items, ops, tailBlockMaxThen)) {",
+			"replace": "if (false) {",
+			"note": "the tail-block verdict is never read, so a short-then ternary breaks at `?` and `:` around the block its else branch ends in"
+		},
+		{
+			"name": "M-TERNARY-TAIL-HUG-NO-THEN-CAP",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hugsTailBlock",
+			"find": "&& thenWidth <= maxThen",
+			"replace": "&& maxThen > 0",
+			"note": "the then branch's width is not capped, so a long then branch hugs the else branch's tail block too"
+		},
+		{
+			"name": "M-TERNARY-TAIL-HUG-ANY-TAIL-CLOSE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hugsTailBlock",
+			"find": "&& DocMeasure.breakTailCollectionCloseNest(items[2]) == 0",
+			"replace": "&& true",
+			"note": "the else branch's closing line is not read, so a prefix whose call arguments break one per line hugs at the call's `(`"
+		},
+		{
+			"name": "M-TERNARY-TAIL-HUG-NO-WIDTH-GUARD",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "hardlineChainShape",
+			"find": "return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, broken, hug);",
+			"replace": "return hug;",
+			"note": "the hug ignores the width, so a head line past the limit overflows instead of breaking at `?` and `:`"
 		}
 	]
 }

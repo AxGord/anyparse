@@ -1147,6 +1147,14 @@
 			"find": "whole ? new Frame(f.indent, MFlat, inner, true, true)",
 			"replace": "whole ? new Frame(f.indent, MFlat, inner)",
 			"note": "a group kept flat for yielding to its rest does not hold its descendants flat, so a rest-aware group nested in a type hint asks the old way and breaks inside the hint while the initializer stays on one line"
+		},
+		{
+			"name": "M-TERNARY-TAIL-HUG-ARRAY-CLOSE",
+			"type": "anyparse.core.DocMeasure",
+			"method": "breakTailCollectionCloseNest",
+			"find": "|| out.closer == ']'.code",
+			"replace": "|| false",
+			"note": "a bracket-led closing line is not admitted, so a ternary whose else branch ends in an array literal keeps the ladder"
 		}
 	]
 }

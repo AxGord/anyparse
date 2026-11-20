@@ -179,6 +179,13 @@ typedef HxFormatSameLineSection = {
 	@:optional
 	var expressionIfFitMaxValueWidth: Int;
 
+	/**
+	 * Widest then branch that lets a ternary hug the block its else branch ends in
+	 * (`cond ? [] : xs.map(x -> {`) instead of breaking at `?` and `:`; `0` (default) is off.
+	 */
+	@:optional
+	var ternaryTailBlockMaxThenLength: Int;
+
 	@:optional
 	var elseIfCommentReflow: Bool;
 
