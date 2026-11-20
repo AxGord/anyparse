@@ -93,6 +93,7 @@ typedef ScanCtx = {
 	var selfText: Null<String>;
 	var opaque: Array<String>;
 	var untypedKinds: Array<String>;
+	var metaKinds: Array<String>;
 	var assignKind: Null<String>;
 	var indexKind: Null<String>;
 	var literalTypes: Map<String, String>;
@@ -418,6 +419,7 @@ final class FieldWriteIndex {
 				selfText: shape.selfReferenceText,
 				opaque: shape.opaqueKinds ?? [],
 				untypedKinds: shape.untypedKinds ?? [],
+				metaKinds: plugin.metaShape().metaKinds,
 				assignKind: shape.assignKind,
 				indexKind: shape.indexAccessKind,
 				literalTypes: literalTypes,
@@ -469,6 +471,7 @@ final class FieldWriteIndex {
 			}
 		}
 		if (c.writeKinds.contains(node.kind)) classify(node, ctx, opaque, c);
+		if (c.metaKinds.contains(node.kind)) markGeneratedWrites(node, false, c);
 		for (child in node.children) scan(child, ctx, opaque, c);
 	}
 
@@ -796,6 +799,19 @@ final class FieldWriteIndex {
 		final out: Map<String, Bool> = [];
 		if (paths != null) for (p in paths) out[p] = true;
 		return out;
+	}
+
+	/**
+	 * Record every string handed to a CALL inside the metadata node `node` as an unresolved write of the field it names. A macro turns
+	 * such an argument (`@:fmt(optFlagForCtor('flag', 'X'))`) into an assignment target, so no source text writes the field and the
+	 * name is the only evidence. The metadata's own string arguments (`@:native('x')`) are not call arguments and stay out.
+	 */
+	private static function markGeneratedWrites(node: QueryNode, inCall: Bool, c: ScanCtx): Void {
+		for (child in node.children) {
+			final text: Null<String> = inCall ? Lit.plainStringValue(child, c.shape) : null;
+			if (text != null) markUnresolved(c, text, null);
+			markGeneratedWrites(child, inCall || child.kind == c.shape.callKind, c);
+		}
 	}
 
 }

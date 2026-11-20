@@ -17426,6 +17426,22 @@
 			"find": ".toString('latin1')",
 			"replace": ".toString('utf8')",
 			"note": "a narrowed node line is re-decoded as UTF-8, so a Latin-1 character above ASCII comes back as a replacement character"
+		},
+		{
+			"name": "M-GENERATED-WRITE-UNMARKED",
+			"type": "anyparse.query.FieldWriteIndex",
+			"method": "scan",
+			"find": "if (c.metaKinds.contains(node.kind)) markGeneratedWrites(node, false, c);",
+			"replace": "",
+			"note": "a string handed to a call inside metadata no longer counts as a write of the field it names, so a field only a macro assigns is reported as never reassigned"
+		},
+		{
+			"name": "M-GENERATED-WRITE-DIRECT-ARG",
+			"type": "anyparse.query.FieldWriteIndex",
+			"method": "markGeneratedWrites",
+			"find": "inCall ? Lit.plainStringValue(child, c.shape) : null",
+			"replace": "Lit.plainStringValue(child, c.shape)",
+			"note": "a metadata's own direct string argument counts as a write too, so a field named like a native name is no longer reported"
 		}
 	]
 }

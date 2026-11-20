@@ -1042,7 +1042,7 @@ final class HxModuleWriteOptions {
 	 * only that chain starts the operand after a multi-line brace-closed one on its own line. The chain clears it for
 	 * its operands, so an intersection nested in one keeps every operand on its operator's line.
 	 */
-	public var _operandChainBreak: Bool = false; // noqa: naming, prefer-final-public-field
+	public var _operandChainBreak: Bool = false; // noqa: naming
 
 	/**
 	 * Stated once per module by the top-level Star (`@:fmt(statesModuleOnlyTypedefs)` on `HxModule.decls`): every top-level
