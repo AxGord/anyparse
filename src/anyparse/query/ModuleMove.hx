@@ -163,6 +163,25 @@ final class ModuleMove {
 		};
 	}
 
+	/**
+	 * The declared test companions of the module at `file` that exist (`exists`): the files each `mirrors` layout names for it,
+	 * which a relocation carries along and a deletion only names.
+	 */
+	public static function companionsOf(file: String, mirrors: Array<TestMirror>, exists: String -> Bool): Array<String> {
+		final out: Array<String> = [];
+		final dir: String = Path.directory(file);
+		final module: String = Path.withoutExtension(Path.withoutDirectory(file));
+		for (mirror in mirrors) {
+			final rel: Null<String> = relativeTo(dir, mirror.source);
+			if (rel == null) continue;
+			for (suffix in mirror.suffixes) {
+				final companion: String = companionPath(mirror, rel, module, suffix, Path.extension(file));
+				if (exists(companion)) out.push(companion);
+			}
+		}
+		return out;
+	}
+
 	/** Whether the package `pkg` holds the module path `module` (directly or in a sub-package). */
 	private static inline function covers(pkg: String, module: String): Bool {
 		return module.startsWith('$pkg.');
@@ -171,6 +190,11 @@ final class ModuleMove {
 	/** `template` (a `RefShape` statement spelling, `%` for the path) applied to `path`, or null when the grammar has none. */
 	private static inline function statementOf(template: Null<String>, path: String): Null<String> {
 		return template?.replace('%', path);
+	}
+
+	/** The companion of module `module` under `mirror`, at the directory `rel` of the layout's source root, for one `suffix`. */
+	private static inline function companionPath(mirror: TestMirror, rel: String, module: String, suffix: String, ext: String): String {
+		return Path.join([mirror.test, rel, '$module$suffix.$ext']);
 	}
 
 	/** `moves` plus, for each declared mirror, the moved module's own test when the analysed set holds it. */
@@ -185,9 +209,9 @@ final class ModuleMove {
 			final module: String = Path.withoutExtension(Path.withoutDirectory(m.from));
 			final ext: String = Path.extension(m.from);
 			for (suffix in mirror.suffixes) {
-				final testFrom: String = Path.join([mirror.test, fromRel, '$module$suffix.$ext']);
+				final testFrom: String = companionPath(mirror, fromRel, module, suffix, ext);
 				if (!sourceOf.exists(testFrom) || out.exists(o -> o.from == testFrom)) continue;
-				out.push({ from: testFrom, to: Path.join([mirror.test, toRel, '$module$suffix.$ext']) });
+				out.push({ from: testFrom, to: companionPath(mirror, toRel, module, suffix, ext) });
 			}
 		}
 		return out;

@@ -455,6 +455,35 @@ final class OccurrenceScan {
 		return (source, onRegion) -> for (region in plugin.lexicalRegions(source)) reportInert(region, onRegion);
 	}
 
+	/**
+	 * Is the token starting at `at` the TAIL of a dotted path — its preceding
+	 * non-whitespace character a qualification `.`? Whitespace is skipped
+	 * backwards, since a path may be broken across lines (`haxe.macro\n\t.Context`).
+	 * A null `commentRegions` disables the test entirely (the plain
+	 * `referencedInRange` scan, which counts every occurrence).
+	 *
+	 * Two dots are NOT one: a dot preceded by another belongs to `...` (range /
+	 * rest), never to a field access, so `0...Limit.MAX` reads `Limit` as the bare
+	 * reference it is. And a dot inside a COMMENT qualifies nothing — the period
+	 * ending `// … before the process dies.` sits directly before the next line's
+	 * first token and would otherwise mark a live call as a qualified tail. Only a
+	 * LINE comment can end in a bare `.` that way — every other inert construct
+	 * closes with its own delimiter — but the mask is exact for all of them.
+	 *
+	 * WHITESPACE only, not trivia: a comment spliced between the dot and the name
+	 * stops the walk short, so that occurrence reads as unqualified and COUNTS.
+	 * The over-counting direction — an import kept, never one deleted.
+	 */
+	public static function qualifiedBefore(source: String, at: Int, commentRegions: Null<Array<Span>>): Bool {
+		if (commentRegions == null) return false;
+		var j: Int = at - 1;
+		while (j >= 0 && SourceText.isSpace(source.fastCodeAt(j))) j--;
+		return j >= 0
+			&& source.fastCodeAt(j) == '.'.code
+			&& (j <= 0 || source.fastCodeAt(j - 1) != '.'.code)
+			&& !offsetWithinAny(j, commentRegions);
+	}
+
 	/** `region` to an `InertScan` reader in source order: its text spans, then each hole's own regions between them. */
 	private static function reportInert(region: LexRegion, onRegion: (start: Int, end: Int, literal: Bool) -> Void): Void {
 		final literal: Bool = switch region.kind {
@@ -523,35 +552,6 @@ final class OccurrenceScan {
 			i = at + 1;
 		}
 		return false;
-	}
-
-	/**
-	 * Is the token starting at `at` the TAIL of a dotted path — its preceding
-	 * non-whitespace character a qualification `.`? Whitespace is skipped
-	 * backwards, since a path may be broken across lines (`haxe.macro\n\t.Context`).
-	 * A null `commentRegions` disables the test entirely (the plain
-	 * `referencedInRange` scan, which counts every occurrence).
-	 *
-	 * Two dots are NOT one: a dot preceded by another belongs to `...` (range /
-	 * rest), never to a field access, so `0...Limit.MAX` reads `Limit` as the bare
-	 * reference it is. And a dot inside a COMMENT qualifies nothing — the period
-	 * ending `// … before the process dies.` sits directly before the next line's
-	 * first token and would otherwise mark a live call as a qualified tail. Only a
-	 * LINE comment can end in a bare `.` that way — every other inert construct
-	 * closes with its own delimiter — but the mask is exact for all of them.
-	 *
-	 * WHITESPACE only, not trivia: a comment spliced between the dot and the name
-	 * stops the walk short, so that occurrence reads as unqualified and COUNTS.
-	 * The over-counting direction — an import kept, never one deleted.
-	 */
-	private static function qualifiedBefore(source: String, at: Int, commentRegions: Null<Array<Span>>): Bool {
-		if (commentRegions == null) return false;
-		var j: Int = at - 1;
-		while (j >= 0 && SourceText.isSpace(source.fastCodeAt(j))) j--;
-		return j >= 0
-			&& source.fastCodeAt(j) == '.'.code
-			&& (j <= 0 || source.fastCodeAt(j - 1) != '.'.code)
-			&& !offsetWithinAny(j, commentRegions);
 	}
 
 	/**

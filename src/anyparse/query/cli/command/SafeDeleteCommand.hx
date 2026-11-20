@@ -2,6 +2,7 @@ package anyparse.query.cli.command;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExitCode.*;
+import anyparse.query.ModuleMove.TestMirror;
 
 /**
  * `apq safe-delete` — remove a member only if unreferenced across the scope.
@@ -19,7 +20,7 @@ final class SafeDeleteCommand implements CliCommand {
 	}
 
 	public function summary(): String {
-		return 'Remove a member only if unreferenced across the scope';
+		return 'Remove a member, or a whole type, only if unreferenced across the scope';
 	}
 
 	public function flags(): CliFlags {
@@ -70,13 +71,12 @@ final class SafeDeleteCommand implements CliCommand {
 					}
 			}
 		}
-		if (srcFile == null || memberName == null || scopeDir == null) {
-			CliIo.stderr('apq safe-delete: missing required arguments (need <srcFile> <member> --scope <dir>)\n');
+		if (srcFile == null || scopeDir == null) {
+			CliIo.stderr('apq safe-delete: missing required arguments (need <srcFile> [<member>] --scope <dir>)\n');
 			printSafeDeleteUsage();
 			return EXIT_USAGE;
 		}
 		final srcFileNN: String = srcFile;
-		final memberNameNN: String = memberName;
 		final srcTypeName: String = srcType ?? CliArgs.typeNameOfFile(lang, srcFileNN);
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 
@@ -94,6 +94,9 @@ final class SafeDeleteCommand implements CliCommand {
 		// command had just produced; `--reformat` then re-canonicalised under the defaults,
 		// so the escape hatch de-formatted the file.
 		final optsJson: Null<String> = CliArgs.discoverFormatConfig(srcFileNN, ledger);
+		if (memberName == null)
+			return runSafeDeleteType(op, srcFileNN, srcTypeName, reformat, write, scopeDir, scopeFiles, plugin, optsJson);
+		final memberNameNN: String = memberName;
 		final result: EditResult = SafeDelete.safeDelete(
 			srcFileNN, srcTypeName, memberNameNN, reformat, scopeFiles, plugin, plugin.refShape(), optsJson
 		);
@@ -113,15 +116,68 @@ final class SafeDeleteCommand implements CliCommand {
 	}
 
 	private static function printSafeDeleteUsage(): Void {
-		CliIo.sysPrint('Usage: apq safe-delete <srcFile> <member> --scope <dir> [options]\n\n');
+		CliIo.sysPrint('Usage: apq safe-delete <srcFile> [<member>] --scope <dir> [options]\n\n');
 		CliIo.sysPrint('Remove a member only when no reference to it survives under the scope —\n');
 		CliIo.sysPrint('the guarded, cross-file, any-visibility form of remove-member. Any\n');
 		CliIo.sysPrint('x.member field access or bare in-type reference blocks the deletion and\n');
 		CliIo.sysPrint('is listed. Self-references (recursion) do not count.\n\n');
+		CliIo.sysPrint('Without <member> the TYPE is removed the same way: every type position, new,\n');
+		CliIo.sysPrint('static access, import / using, #if branch, reflective string and a retain /\n');
+		CliIo.sysPrint('export annotation refuses and is listed, and so does an enum constructor (or enum\n');
+		CliIo.sysPrint('abstract value) named bare and a using of the module of a type with a static\n');
+		CliIo.sysPrint('function (a static extension). The only type of its module takes the file\n');
+
+		CliIo.sysPrint('with it; a type among others loses its declaration alone. Comments,\n');
+		CliIo.sysPrint('directives, ambient import sources and test companions are named, never\n');
+		CliIo.sysPrint('removed.\n\n');
 		CliIo.sysPrint('Options:\n');
-		CliIo.sysPrint('  --type <Src>   Declaring type name (default: the file\'s main type)\n');
+		CliIo.sysPrint('  --type <Src>   Declaring type name (default: the file\'s main type); the type to remove without <member>\n');
 		CliIo.sysPrint('  --scope <dir>  Reference-check scope (dir/glob; srcFile auto-included)\n');
 		CliUsage.printShortReformatWriteLangHelp();
+	}
+
+	/**
+	 * The type form: no `<member>` was given, so `typeName` of `srcFile` is removed — the whole file when it is the module's only
+	 * type, its declaration alone otherwise — after `SafeDeleteType` has listed nothing that still reaches it.
+	 */
+	private static function runSafeDeleteType(
+		op: String, srcFile: String, typeName: String, reformat: Bool, write: Bool, scopeDir: String,
+		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, optsJson: Null<String>
+	): Int {
+		final mirrors: Array<TestMirror> = switch ModuleMoveCli.declarationFor(srcFile) {
+			case Left(message):
+				CliIo.stderr('apq $op: $message\n');
+				return EXIT_RUNTIME;
+			case Right(declaration): declaration.mirrors;
+		};
+		final companions: Array<String> = ModuleMove.companionsOf(ConfigFinder.absolute(srcFile), mirrors, ConfigFinder.fileExists);
+		switch SafeDeleteType.safeDeleteType(srcFile, typeName, reformat, scopeFiles, plugin, scopeDir, companions, optsJson) {
+			case Refused(reasons):
+				for (r in reasons) CliIo.stderr('apq $op: $r\n');
+				CliIo.stderr('apq $op: refusing to delete "$typeName" — ${reasons.length} reason(s), nothing written\n');
+				return EXIT_RUNTIME;
+			case RemoveFile(file, notes):
+				for (n in notes) CliIo.stderr('apq $op: note: $n\n');
+				if (!write) {
+					CliIo.sysPrint('apq $op: would delete $file (the only type of its module)\n');
+					return EXIT_OK;
+				}
+				if (!CliIo.deletePath(file)) {
+					CliIo.stderr('apq $op: could not delete $file\n');
+					return EXIT_RUNTIME;
+				}
+				CliIo.stderr('apq $op: deleted $file\n');
+				return EXIT_OK;
+			case RemoveDeclaration(file, text, notes):
+				for (n in notes) CliIo.stderr('apq $op: note: $n\n');
+				if (write) {
+					RegistryFollowCommand.writeFollowed(op, [{ path: file, content: text }], plugin);
+					CliIo.stderr('apq $op: removed "$typeName" from $file\n');
+				} else {
+					CliEdit.previewEdit(op, file, text);
+				}
+				return EXIT_OK;
+		}
 	}
 
 }

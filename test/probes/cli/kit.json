@@ -55,7 +55,11 @@
 		"cond/ClosedMember.hx": "class A {\n\t#if false {} #end function b() {}\n}\n",
 		"pkg/Notes.hx": "class C {\n\tfunction f():Void {\n\t\ta(); // t1\n\t\tb(); // t2\n\t\tc();\n\t}\n}\n",
 		"narrowingcopy/M.hx": "@:nullSafety class M {\n\tpublic var onChange:Null<M->Void> = null;\n\tpublic var o:Null<O> = null;\n\tpublic function new() {}\n\tprivate inline function notify():Void {\n\t\tfinal listener:Null<M->Void> = onChange;\n\t\tif (listener != null) listener(this);\n\t}\n\tprivate function notify2():Void {\n\t\tfinal listener:Null<M->Void> = onChange;\n\t\tif (listener != null) listener(this);\n\t}\n\tprivate function useO():Void {\n\t\tfinal l:Null<O> = o;\n\t\tif (l != null) l.x = 1;\n\t}\n}\nclass O { public var x:Int = 0; public function new() {} }\n",
-		"narrowingcopy/apqlint.json": "{\"rules\":{}}"
+		"narrowingcopy/apqlint.json": "{\"rules\":{}}",
+		"a/pkg/M.hx": "package pkg;\n\nclass M {\n\tpublic static function f() {\n\t\treturn Red;\n\t}\n}\n\nenum Color {\n\tRed;\n\tGreen;\n}\n",
+		"a/pkg/User.hx": "package pkg;\n\nimport pkg.M;\n\nclass User {\n\tstatic function main() {\n\t\tvar x = Green;\n\t\ttrace(x, M.f());\n\t}\n}\n",
+		"b/pkg/M.hx": "package pkg;\n\nclass M {\n\tpublic static function f() return 1;\n}\n\nclass MTools {\n\tpublic static function twice(i: Int): Int return i * 2;\n}\n",
+		"b/pkg/User.hx": "package pkg;\n\nusing pkg.M;\n\nclass User {\n\tstatic function main() {\n\t\ttrace(3.twice());\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -616,7 +620,7 @@
 			"expect": {
 				"exit": 2,
 				"out": "e3b0c44298fc1c14",
-				"err": "d712025fa1683e7c",
+				"err": "c6dd893426b4c5e8",
 				"files": "e3b0c44298fc1c14"
 			}
 		},
@@ -9564,6 +9568,80 @@
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
 				"err": "c2eb6e0a3e4a610d",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq safe-delete a/pkg/M.hx --scope a --type Color",
+			"argv": [
+				"apq",
+				"safe-delete",
+				"a/pkg/M.hx",
+				"--scope",
+				"a",
+				"--type",
+				"Color"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "69919d82c47e43b2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq safe-delete b/pkg/M.hx --scope b --type MTools --reformat",
+			"argv": [
+				"apq",
+				"safe-delete",
+				"b/pkg/M.hx",
+				"--scope",
+				"b",
+				"--type",
+				"MTools",
+				"--reformat"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "2b4d65165aa7762b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq safe-delete a/pkg/M.hx --scope a --type Color",
+			"argv": [
+				"hxq",
+				"safe-delete",
+				"a/pkg/M.hx",
+				"--scope",
+				"a",
+				"--type",
+				"Color"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "69919d82c47e43b2",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq safe-delete b/pkg/M.hx --scope b --type MTools --reformat",
+			"argv": [
+				"hxq",
+				"safe-delete",
+				"b/pkg/M.hx",
+				"--scope",
+				"b",
+				"--type",
+				"MTools",
+				"--reformat"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "2b4d65165aa7762b",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

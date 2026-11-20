@@ -17302,6 +17302,114 @@
 			"find": "final gap: String = code.substr(code.rtrim().length).charCount('\\n'.code) >= 2 ? '\\n' : '';",
 			"replace": "final gap: String = '';",
 			"note": "a payload's trailing blank line is dropped again, so the inserted element runs into the member that follows it"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-SOLE-FILE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "isOnlyType",
+			"force": "false",
+			"note": "no type reads as alone in its module, so a dead sole type is cut out of its file instead of taking the file"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-SUB-DECLARATION",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "isOnlyType",
+			"force": "true",
+			"note": "every type reads as alone in its module, so a dead sub-type takes the whole module file with it"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-CUT-TEXT",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "cutDeclaration",
+			"find": "case Ok(text): text;",
+			"replace": "case Ok(text): source;",
+			"note": "the cut hands back the module unchanged, so the removed sub-type stays in its file"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-SELF-REFERENCE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "references",
+			"find": "if (inside) continue;",
+			"replace": "",
+			"note": "a name inside the type own declaration counts, so a type that mentions itself is never dead"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-REFERENCES",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "references",
+			"force": "[]",
+			"note": "no occurrence of the type counts, so a type used by new, a type position, static access, an import or a conditional branch is deleted"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-REFLECTIVE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "reflectiveReasons",
+			"find": "else if (reach.staticReachable(typeName, src.file, typeName, index))",
+			"replace": "else if (false)",
+			"note": "a string naming the type for Type.resolveClass no longer reaches it, so the type is deleted"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-ANNOTATED",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "reflectiveReasons",
+			"find": ".contains(decl.declNode.span?.from ?? -1)",
+			"replace": ".contains(-2)",
+			"note": "a type carrying keep or expose is no longer recognised, so it is deleted"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-UNIQUE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "safeDeleteType",
+			"find": "if (uniqueness != null) return Refused([uniqueness]);",
+			"replace": "",
+			"note": "a same-named type of another package is no longer refused as ambiguous"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-COMMENT-NOTE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "notesOf",
+			"find": "if (comments != null) out.push(comments);",
+			"replace": "",
+			"note": "the comments still naming the removed type are no longer reported"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-DIRECTIVE-NOTE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "notesOf",
+			"find": "if (directives > 0)",
+			"replace": "if (false)",
+			"note": "the directives still spelling the removed type are no longer reported"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-COMPANION-NOTE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "notesOf",
+			"find": "for (c in companions) out.push('$c (a declared test companion of the module) is left in place');",
+			"replace": "",
+			"note": "the declared test companions of the removed module are no longer named"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-AMBIENT-NOTE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "notesOf",
+			"find": "if (RawSourceScan.mentionsWord(source.source, typeName))",
+			"replace": "if (false)",
+			"note": "the ambient import sources of the removed module are no longer named"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-BARE-CONSTRUCTOR",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "bareValueUses",
+			"force": "[]",
+			"note": "no bare spelling of an enum constructor counts, so an enum whose constructors are used without its name is deleted"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-MODULE-USING",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "reachThroughScope",
+			"find": "if (!type.isPrivate && !type.isMain && hasStatic)",
+			"replace": "if (false)",
+			"note": "a using of the module no longer reaches its static-extension sub-type, so the type is deleted and the extension calls stop binding"
 		}
 	]
 }

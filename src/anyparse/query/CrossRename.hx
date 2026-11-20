@@ -203,27 +203,6 @@ final class CrossRename {
 	}
 
 	/**
-	 * The dotted path an import statement names — its name slot, or for an alias import (whose name
-	 * slot is the ALIAS) the aliased path its node carries as `target`.
-	 */
-	private static inline function importedPath(node: QueryNode): String {
-		return node.target ?? node.name ?? '';
-	}
-
-	/**
-	 * Resolve the cursor to the type declaration it sits on, returning the
-	 * node that carries the type NAME (the decl node itself, or the inner
-	 * `ClassForm` of a `final class`). The rest of the rename reads
-	 * `.name` off it. Final-aware via
-	 * `RefactorSupport.resolveTypeDeclAtCursor`. Returns null when the
-	 * cursor is not on a type declaration.
-	 */
-	private static function resolveTypeDeclAtCursor(tree: QueryNode, cursor: Int, source: String): Null<QueryNode> {
-		final m: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(tree, cursor, source);
-		return m?.nameNode;
-	}
-
-	/**
 	 * Gather every occurrence-token span of `typeName` in one file:
 	 *
 	 *  a. Type positions — `Uses.find` on the `parseFileTypeRefs` tree
@@ -249,7 +228,7 @@ final class CrossRename {
 	 * Spans are deduped by `from` offset (a node can be matched by more
 	 * than one collector).
 	 */
-	private static function collectOccurrences(
+	public static function collectOccurrences(
 		source: String, typeName: String, tree: QueryNode, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape,
 		module: ModulePath
 	): Array<Span> {
@@ -301,6 +280,27 @@ final class CrossRename {
 		walk(tree);
 
 		return out;
+	}
+
+	/**
+	 * The dotted path an import statement names — its name slot, or for an alias import (whose name
+	 * slot is the ALIAS) the aliased path its node carries as `target`.
+	 */
+	private static inline function importedPath(node: QueryNode): String {
+		return node.target ?? node.name ?? '';
+	}
+
+	/**
+	 * Resolve the cursor to the type declaration it sits on, returning the
+	 * node that carries the type NAME (the decl node itself, or the inner
+	 * `ClassForm` of a `final class`). The rest of the rename reads
+	 * `.name` off it. Final-aware via
+	 * `RefactorSupport.resolveTypeDeclAtCursor`. Returns null when the
+	 * cursor is not on a type declaration.
+	 */
+	private static function resolveTypeDeclAtCursor(tree: QueryNode, cursor: Int, source: String): Null<QueryNode> {
+		final m: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(tree, cursor, source);
+		return m?.nameNode;
 	}
 
 	/**

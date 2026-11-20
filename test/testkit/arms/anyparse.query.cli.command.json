@@ -1571,6 +1571,46 @@
 			"find": "CliArgs.resolveCodeArg('add-element', code, o.fromFile);",
 			"replace": "CliArgs.resolveCodeArg('add-element', code, o.fromFile, true);",
 			"note": "the CLI strips one trailing newline from a --from-file / stdin payload, so a payload ending in a blank line reaches the op without it"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-CLI-DELETES-FILE",
+			"type": "anyparse.query.cli.command.SafeDeleteCommand",
+			"method": "runSafeDeleteType",
+			"find": "if (!CliIo.deletePath(file)) {",
+			"replace": "if (false) {",
+			"note": "a write no longer deletes the file of the only type of its module"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-CLI-PREVIEW",
+			"type": "anyparse.query.cli.command.SafeDeleteCommand",
+			"method": "runSafeDeleteType",
+			"find": "if (!write) {",
+			"replace": "if (false) {",
+			"note": "a run without write deletes the file as well"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-CLI-WRITES-DECLARATION",
+			"type": "anyparse.query.cli.command.SafeDeleteCommand",
+			"method": "runSafeDeleteType",
+			"find": "RegistryFollowCommand.writeFollowed(op, [{ path: file, content: text }], plugin);",
+			"replace": "",
+			"note": "a write no longer rewrites the file a sub-type was cut out of"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-CLI-LISTS-REASONS",
+			"type": "anyparse.query.cli.command.SafeDeleteCommand",
+			"method": "runSafeDeleteType",
+			"find": "for (r in reasons) CliIo.stderr('apq $op: $r\\n');",
+			"replace": "",
+			"note": "a refusal no longer lists what still reaches the type"
+		},
+		{
+			"name": "M-SAFE-DELETE-TYPE-CLI-COMPANIONS",
+			"type": "anyparse.query.cli.command.SafeDeleteCommand",
+			"method": "runSafeDeleteType",
+			"find": "final companions: Array<String> = ModuleMove.companionsOf(ConfigFinder.absolute(srcFile), mirrors, ConfigFinder.fileExists);",
+			"replace": "final companions: Array<String> = [];",
+			"note": "the test companions a project declares are no longer named"
 		}
 	]
 }
