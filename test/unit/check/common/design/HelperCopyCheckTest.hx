@@ -2,13 +2,12 @@ package unit.check.common.design;
 
 import anyparse.check.Check;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.SourceEntry;
 import anyparse.check.common.design.HelperCopy;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
-
-using StringTools;
 
 /**
  * The `helper-copy` check: a function repeating, up to the names of its bindings, a function declared under a

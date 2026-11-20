@@ -1,6 +1,5 @@
 package unit.check.haxe.expressions;
 
-import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.query.CachingGrammarPlugin;

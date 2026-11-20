@@ -4,13 +4,9 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.common.literals.ConstantReadSlots.ChildSlot;
 import anyparse.check.common.literals.ConstantReadSlots.ConstantReadSlots;
 import anyparse.check.scan.NativeCodeScan;
-import anyparse.check.scan.RunScan;
 import anyparse.macro.CppLiteralGuard;
-import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-
-using StringTools;
 
 private typedef Seams = {
 

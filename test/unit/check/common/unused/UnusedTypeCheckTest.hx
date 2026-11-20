@@ -2,6 +2,7 @@ package unit.check.common.unused;
 
 import anyparse.check.Check;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.unused.UnusedType;
 import haxe.io.Path;

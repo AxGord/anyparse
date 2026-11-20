@@ -1,6 +1,7 @@
 package unit.check.common.literals;
 
 import anyparse.check.Check;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.literals.RedundantToString;
 import anyparse.query.CanonicalEdit;

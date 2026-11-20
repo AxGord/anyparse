@@ -1,15 +1,12 @@
 package anyparse.check.haxe.loops;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
 import anyparse.check.haxe.loops.MappedComprehension.Mapping;
-import anyparse.check.scan.RunScan;
 import anyparse.query.BinderScan;
-import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

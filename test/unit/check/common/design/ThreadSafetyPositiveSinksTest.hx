@@ -5,7 +5,6 @@ import anyparse.query.StdResolver;
 import anyparse.query.StdTypes;
 import unit.cli.CliFixture;
 
-using StringTools;
 using Lambda;
 
 /**

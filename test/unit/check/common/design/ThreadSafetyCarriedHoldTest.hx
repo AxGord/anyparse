@@ -1,11 +1,10 @@
 package unit.check.common.design;
 
+import anyparse.check.Linter;
 import anyparse.check.common.design.ThreadSafety;
 import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
-
-using StringTools;
 
 /**
  * A hold judged across its callees: the lock it holds, on the object it holds it on, is carried into each call made on

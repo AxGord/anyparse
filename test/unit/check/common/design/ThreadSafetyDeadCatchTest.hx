@@ -1,7 +1,5 @@
 package unit.check.common.design;
 
-using StringTools;
-
 /**
  * A `catch` whose `try` runs only `nonThrowing` calls is no path (`DeadCatches`): the client's
  * `StoreNativeExtensions.getMTime` wraps hxcpp's `FileSystem.stat` — which builds a zeroed record for a missing

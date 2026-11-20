@@ -1,13 +1,11 @@
 package anyparse.check.config;
 
 import anyparse.check.LintConfig.OracleConfig;
-import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
 import anyparse.query.FileIdentity;
 import haxe.io.Path;
 
 using anyparse.util.Groups;
-using StringTools;
 using Lambda;
 
 /**

@@ -3,6 +3,7 @@ package unit.check.common.naming;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.naming.ShadowingParameter;
 

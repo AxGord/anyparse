@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check;
+import anyparse.check.Linter;
 import anyparse.grammar.json.JValueParser;
 import anyparse.grammar.json.JValueTools;
 import anyparse.util.Compare;

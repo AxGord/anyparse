@@ -1,12 +1,11 @@
 package unit.check.common.design;
 
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.OwnedTypes;
 import anyparse.check.config.OwnedTypesDeclaration.TypeOwnership;
 import anyparse.query.StdResolver;
-
-using StringTools;
 
 /** One source file of a fixture project. */
 private typedef FixtureFile = { file: String, source: String };

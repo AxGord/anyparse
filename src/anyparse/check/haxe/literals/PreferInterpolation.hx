@@ -4,20 +4,14 @@ import anyparse.check.common.literals.FoldStringLiterals;
 import anyparse.check.common.literals.MacroGate.CallRef;
 import anyparse.check.common.literals.MacroGate.MacroGate;
 import anyparse.check.common.literals.MacroGate.MacroIndex;
-import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
-import anyparse.query.SourceText;
 import anyparse.query.StdResolver;
 import anyparse.query.StringFold.ConcatSegment;
-import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypingService;
-
-using StringTools;
 
 /** The resolved seams `PreferInterpolation` reads in both `run` and `fix`. */
 private typedef Seams = {

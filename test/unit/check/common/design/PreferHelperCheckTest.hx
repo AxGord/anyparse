@@ -8,8 +8,6 @@ import anyparse.check.SourceEntry;
 import anyparse.check.common.design.PreferHelper;
 import anyparse.query.CanonicalEdit;
 
-using StringTools;
-
 /**
  * The `prefer-helper` check: a run of statements repeating the body of a helper carrying the configured marker, its
  * parameters and top-level locals as holes, becomes a call of that helper (`final ys = m[k] ?? []; ys.push(v); m[k] = ys;`

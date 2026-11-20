@@ -1,10 +1,10 @@
 package unit.check.common.design;
 
+import anyparse.check.Linter;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.LongLockExplain.LongLockReason;
 import unit.cli.CliFixture;
 
-using StringTools;
 using Lambda;
 
 /**

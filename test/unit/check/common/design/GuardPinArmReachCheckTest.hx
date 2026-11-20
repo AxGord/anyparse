@@ -5,8 +5,6 @@ import anyparse.check.common.design.GuardPinArmReach;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 
-using StringTools;
-
 /**
  * The `guard-pin-arm-reach` check: a guard-pinned test naming both the type and the member an arm of its class cuts is
  * reported; an arm the guard names as its own killer and a same-named member of another type are not; what the registry

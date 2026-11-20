@@ -1,5 +1,6 @@
 package unit.check.common.unused;
 
+import anyparse.check.Linter;
 import anyparse.check.common.unused.DeadStore;
 import anyparse.check.scan.NullFlow;
 import anyparse.query.CanonicalEdit;

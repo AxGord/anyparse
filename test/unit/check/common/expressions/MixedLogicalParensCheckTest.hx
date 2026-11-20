@@ -1,6 +1,7 @@
 package unit.check.common.expressions;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.expressions.MixedLogicalParens;
 import anyparse.check.common.expressions.RedundantParens;

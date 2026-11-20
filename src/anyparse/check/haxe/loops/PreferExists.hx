@@ -1,7 +1,6 @@
 package anyparse.check.haxe.loops;
 
 import anyparse.check.Check.GroupedFix;
-import anyparse.check.Check.RiskyFix;
 import anyparse.check.haxe.loops.LambdaLoopScan.LambdaLoopKind;
 import anyparse.query.SymbolIndex;
 

@@ -1,5 +1,6 @@
 package unit.check.common.loops;
 
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.loops.LoopBoundLengthMismatch;
 

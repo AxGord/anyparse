@@ -2,6 +2,7 @@ package unit.check.common.imports;
 
 import anyparse.check.Check;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.ImportBlockOrder;
 import anyparse.proc.ProcessRun;

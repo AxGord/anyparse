@@ -1,7 +1,6 @@
 package anyparse.check.haxe.types;
 
 import anyparse.check.Check.VersionGated;
-import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ParenGuard;

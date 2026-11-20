@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check.LanguageBound;
+import anyparse.check.Linter;
 
 /**
  * Where a builtin rule lives says what it is about: its package is `anyparse.check.<axis>.<category>`, the last segment

@@ -7,8 +7,6 @@ import anyparse.grammar.haxe.checkstyle.CheckstyleConfigLoader;
 import sys.FileSystem;
 import sys.io.File;
 
-using StringTools;
-
 /**
  * The `complexity` check: a function whose cyclomatic complexity (1 + decision
  * points) exceeds the default threshold (20) is flagged `Warning`; a simpler

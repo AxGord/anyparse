@@ -2,7 +2,6 @@ package anyparse.check.haxe.types;
 
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.RiskyFix;
-import anyparse.check.scan.RunScan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;

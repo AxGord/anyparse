@@ -3,7 +3,6 @@ package unit.check.haxe.expressions;
 #if (sys || nodejs)
 import sys.io.File;
 #end
-import anyparse.check.LintConfig;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.expressions.StaticExtensionFacts;
 import anyparse.check.haxe.facts.FactsTypeOracle;

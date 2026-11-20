@@ -1,9 +1,6 @@
 package anyparse.check.config;
 
-import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
-
-using StringTools;
 
 /**
  * One `ownedTypes` declaration of `apq.json`: the types and members a layer of the project OWNS, the code that

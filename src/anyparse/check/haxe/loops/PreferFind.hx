@@ -2,11 +2,9 @@ package anyparse.check.haxe.loops;
 
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.LoopScan;
-import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;

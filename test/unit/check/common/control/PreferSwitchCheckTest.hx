@@ -1,5 +1,6 @@
 package unit.check.common.control;
 
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.control.PreferSwitch;
 import anyparse.query.CachingGrammarPlugin;

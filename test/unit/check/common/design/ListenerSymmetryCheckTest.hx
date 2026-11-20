@@ -1,9 +1,8 @@
 package unit.check.common.design;
 
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.ListenerSymmetry;
-
-using StringTools;
 
 /**
  * The `listener-symmetry` check: an `add<Xxx>Listener(s)` method should have a

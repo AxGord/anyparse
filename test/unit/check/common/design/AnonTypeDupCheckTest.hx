@@ -2,6 +2,7 @@ package unit.check.common.design;
 
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.SourceEntry;
 import anyparse.check.common.design.AnonTypeDup;
@@ -9,8 +10,6 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import sys.io.File;
 import unit.cli.CliFixture;
-
-using StringTools;
 
 /**
  * The `anon-type-dup` check: an anonymous structure TYPE written out three or

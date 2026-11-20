@@ -1,6 +1,7 @@
 package unit.check.common.imports;
 
 import anyparse.check.Check;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.ImportOutsideGuard;
 import anyparse.query.CanonicalEdit;

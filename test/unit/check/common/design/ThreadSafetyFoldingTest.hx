@@ -1,6 +1,5 @@
 package unit.check.common.design;
 
-using StringTools;
 using Lambda;
 
 /**

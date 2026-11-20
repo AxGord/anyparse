@@ -2,6 +2,7 @@ package unit.check.common.control;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.control.CasePatternSeparator;
 import anyparse.query.CanonicalEdit;

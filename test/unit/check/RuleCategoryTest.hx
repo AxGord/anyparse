@@ -1,5 +1,6 @@
 package unit.check;
 
+import anyparse.check.Linter;
 import anyparse.check.RuleCategory;
 import anyparse.check.RuleIndex;
 

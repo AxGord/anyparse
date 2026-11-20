@@ -1,12 +1,9 @@
 package anyparse.check.haxe.loops;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.check.Check.RiskyFix;
 import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.scan.PurityScan;
-import anyparse.check.scan.RunScan;
 import anyparse.check.scan.ThrowFreeScan;
-import anyparse.query.ElementSpan;
 import anyparse.query.InlineMethod;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;

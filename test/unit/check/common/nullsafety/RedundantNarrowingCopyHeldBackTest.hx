@@ -1,6 +1,7 @@
 package unit.check.common.nullsafety;
 
 import anyparse.check.LintConfig.ConfigNote;
+import anyparse.check.Linter;
 import anyparse.check.common.nullsafety.RedundantNarrowingCopy;
 import unit.cli.CliFixture;
 

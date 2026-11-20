@@ -2,8 +2,6 @@ package unit.check.common.design;
 
 import anyparse.check.Severity;
 
-using StringTools;
-
 /**
  * One warning per root cause (`RootCauseFold`, `MainSinkReport`): a hold long only by waiting for a lock whose long
  * holds warn themselves, or by work another warned hold does too, is info naming them; sink calls one main-thread way

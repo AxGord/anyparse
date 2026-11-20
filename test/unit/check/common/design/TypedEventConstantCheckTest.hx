@@ -1,12 +1,11 @@
 package unit.check.common.design;
 
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.RuleDeclaration;
 import anyparse.check.common.design.TypedEventConstant;
 import anyparse.runtime.Span;
-
-using StringTools;
 
 /**
  * The `typed-event-constant` check: a `String` constant of an event class, used as a listener's or an event's type, is

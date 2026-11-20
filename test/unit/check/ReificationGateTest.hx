@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check;
+import anyparse.check.Linter;
 import anyparse.check.ReificationScan;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;

@@ -1,10 +1,9 @@
 package unit.check.common.design;
 
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.DuplicateCode;
-
-using StringTools;
 
 /**
  * The cross-file axis of the `duplicate-code` check: three or more consecutive statements

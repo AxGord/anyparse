@@ -1,6 +1,7 @@
 package unit.check.haxe.members;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.haxe.members.StaticInitOrder;
 

@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.imports.UnusedImport;
 import anyparse.check.haxe.oracle.OracleDeclaration;

@@ -1,6 +1,7 @@
 package unit.check;
 
 import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Linter;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.SymbolIndex;

@@ -1,6 +1,7 @@
 package unit.check.common.control;
 
 import anyparse.check.Check;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.control.CollapseNestedSwitch;
 import anyparse.query.CanonicalEdit;

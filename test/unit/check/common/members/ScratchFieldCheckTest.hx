@@ -1,5 +1,6 @@
 package unit.check.common.members;
 
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.members.ScratchField;
 import anyparse.proc.ProcessRun;

@@ -1,6 +1,7 @@
 package unit.check.common.nullsafety;
 
 import anyparse.check.LintConfig.ConfigNote;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.nullsafety.DeadSafeNav;
 import unit.cli.CliFixture;

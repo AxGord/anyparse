@@ -1,7 +1,5 @@
 package unit.check.common.design;
 
-using StringTools;
-
 /**
  * The structured identity (`Check.FindingData`) every `thread-safety` finding carries: its family, the member it sits
  * in, its subject, and the whole chain the message caps. A tool keys findings by the first three, so they must not

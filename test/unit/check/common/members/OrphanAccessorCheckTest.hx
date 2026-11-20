@@ -1,6 +1,7 @@
 package unit.check.common.members;
 
 import anyparse.check.Check;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.query.CachingGrammarPlugin;
 

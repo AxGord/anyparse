@@ -1,5 +1,6 @@
 package unit.check.common.design;
 
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.PositiveSinks;
@@ -7,7 +8,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.ReachLiveness.ReachConfiguration;
 import unit.cli.CliFixture;
 
-using StringTools;
 using Lambda;
 
 /**

@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.Check;
 import anyparse.check.FixVerifier;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.RuleCategory;
 import anyparse.check.Severity;
 import anyparse.query.CachingGrammarPlugin;

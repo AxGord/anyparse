@@ -3,6 +3,7 @@ package testkit;
 import anyparse.query.ArmTypePath;
 import anyparse.query.PackageDocuments;
 import anyparse.query.RegistryFiles;
+import haxe.Exception;
 import haxe.Json;
 import haxe.io.Path;
 #if (sys || nodejs)

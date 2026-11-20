@@ -5,8 +5,6 @@ import anyparse.check.Severity;
 import anyparse.check.haxe.literals.PreferLpad;
 import anyparse.query.CanonicalEdit;
 
-using StringTools;
-
 /**
  * The `prefer-lpad` check: a hand-written zero-pad `if`-ladder becomes one `lpad` call.
  *

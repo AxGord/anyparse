@@ -4,7 +4,6 @@ import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.HoistedConstant;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
-import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NamingPolicy.PropertyClause;
 import anyparse.query.SymbolIndex;
 

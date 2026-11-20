@@ -1,6 +1,7 @@
 package unit.check.common.design;
 
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.OversizedType;
 import anyparse.grammar.json.JsonText;
@@ -9,7 +10,6 @@ import sys.FileSystem;
 import sys.io.File;
 
 using Lambda;
-using StringTools;
 
 /**
  * The `oversized-type` check: a type whose member count or line extent exceeds

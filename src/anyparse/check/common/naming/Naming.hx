@@ -20,7 +20,6 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.IndexScope;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingPolicy;
-import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.NamingPolicy.PropertyClause;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;

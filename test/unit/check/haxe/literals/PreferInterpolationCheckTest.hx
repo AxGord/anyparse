@@ -1,14 +1,11 @@
 package unit.check.haxe.literals;
 
 import anyparse.check.Severity;
-import anyparse.check.common.literals.FoldStringLiterals;
 import anyparse.check.common.literals.MacroGate;
 import anyparse.check.haxe.literals.PreferInterpolation;
 import anyparse.query.cli.command.LintArgs;
 import sys.FileSystem;
 import sys.io.File;
-
-using StringTools;
 
 /**
  * The `prefer-interpolation` check: a single-argument `Std.string(x)` is flagged `Info` and rewritten to string interpolation

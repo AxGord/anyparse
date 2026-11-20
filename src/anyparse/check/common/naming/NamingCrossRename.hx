@@ -10,7 +10,6 @@ import anyparse.query.IndexScope;
 import anyparse.query.Meta;
 import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamingCategory;
-import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;

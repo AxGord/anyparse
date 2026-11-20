@@ -8,7 +8,6 @@ import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.ImplicitReach;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.NamingPolicy.NamingPolicy;
-import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;

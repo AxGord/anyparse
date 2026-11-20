@@ -2,6 +2,7 @@ package unit.check;
 
 import anyparse.check.ConfigDisagreement;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.cli.command.LintArgs;

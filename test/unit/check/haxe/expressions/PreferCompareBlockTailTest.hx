@@ -1,6 +1,5 @@
 package unit.check.haxe.expressions;
 
-import anyparse.check.LintConfig;
 import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.query.CanonicalEdit;
 

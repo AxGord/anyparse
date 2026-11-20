@@ -1,7 +1,5 @@
 package unit.check.common.design;
 
-using StringTools;
-
 /**
  * A callback handed to a `registers` call (`addEventListener`) runs later, as a run of its own, once per event however
  * often it was registered: a loop around the registration repeats nothing, nor does anything up the way to it.

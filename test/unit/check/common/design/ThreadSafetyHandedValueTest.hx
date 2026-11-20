@@ -1,7 +1,5 @@
 package unit.check.common.design;
 
-using StringTools;
-
 /**
  * A function value handed to a call that runs it runs where it is handed: under the hold around that call, and as often
  * as that call repeats it (`Lambda.iter` runs it per element). Before, a hold's taint followed only invocations, so a

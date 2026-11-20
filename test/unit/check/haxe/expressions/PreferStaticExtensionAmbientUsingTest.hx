@@ -1,7 +1,6 @@
 package unit.check.haxe.expressions;
 
 import anyparse.check.Check;
-import anyparse.check.LintConfig;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
 import anyparse.check.haxe.loops.PreferExists;
 import anyparse.query.CanonicalEdit;

@@ -1,6 +1,7 @@
 package unit.check.common.loops;
 
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.loops.RedundantReplaceLoop;
 import anyparse.query.CanonicalEdit;

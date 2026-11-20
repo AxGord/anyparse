@@ -1,5 +1,6 @@
 package unit.check.common.design;
 
+import anyparse.check.Linter;
 import anyparse.check.common.design.ThreadSafety;
 import unit.cli.CliFixture;
 

@@ -2,6 +2,10 @@ package anyparse.proc;
 
 import anyparse.core.PhaseTimings;
 import anyparse.core.PoolLease;
+
+using Lambda;
+using StringTools;
+
 #if nodejs
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JEntry;

@@ -3,7 +3,6 @@ package anyparse.check.haxe.types;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
-import anyparse.check.scan.RunScan;
 import anyparse.query.IndexScope;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeNameBinding;

@@ -1,5 +1,6 @@
 package unit.check.common.members;
 
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.members.UnstoredProperty;
 import anyparse.check.scan.ReflectionScan.ScopeFile;

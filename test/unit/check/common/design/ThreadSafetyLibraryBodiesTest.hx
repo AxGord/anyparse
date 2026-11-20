@@ -1,11 +1,11 @@
 package unit.check.common.design;
 
 import anyparse.check.LintConfig.ConfigNote;
+import anyparse.check.Linter;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.PositiveSinks;
 import unit.cli.CliFixture;
 
-using StringTools;
 using Lambda;
 
 /**

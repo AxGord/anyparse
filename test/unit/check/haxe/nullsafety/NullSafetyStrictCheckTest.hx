@@ -2,6 +2,7 @@ package unit.check.haxe.nullsafety;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.RiskyFix;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
 

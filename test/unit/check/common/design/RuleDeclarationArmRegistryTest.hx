@@ -2,8 +2,6 @@ package unit.check.common.design;
 
 import anyparse.check.common.design.RuleDeclaration;
 
-using StringTools;
-
 /** `RuleDeclaration.armRegistry`: the arms by name, a registry's other keys skipped, and a line in `problems` for what it cannot use. */
 class RuleDeclarationArmRegistryTest extends Test {
 

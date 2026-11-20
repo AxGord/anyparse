@@ -1,5 +1,6 @@
 package unit.check.common.design;
 
+import anyparse.check.Linter;
 import anyparse.check.common.design.ThreadSafety;
 import anyparse.check.common.design.threads.LongLockExplain.LongLock;
 import anyparse.check.common.design.threads.LongLockExplain.LongLockKind;
@@ -8,7 +9,6 @@ import anyparse.check.common.design.threads.LongLockExplain.LongLockReport;
 import unit.cli.CliFixture;
 
 using Lambda;
-using StringTools;
 
 /**
  * `thread-safety`'s `--explain-long` evidence (`LongLockExplain`): for every long lock, EVERY reason it is long at

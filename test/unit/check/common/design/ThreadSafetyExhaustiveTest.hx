@@ -1,7 +1,5 @@
 package unit.check.common.design;
 
-using StringTools;
-
 /**
  * The catch-all of a `switch` over a closed `enum abstract` whose every value an earlier case names is no path
  * (`ExhaustiveSwitches`): the client's `RowList.reload` throws in the `case _` of a switch over `ListViewType` (LIST, GRID),

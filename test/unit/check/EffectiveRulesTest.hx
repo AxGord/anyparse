@@ -7,6 +7,7 @@ import sys.io.File;
 import anyparse.check.Check;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.query.Cli;
 import testkit.TestConfigs;

@@ -1,5 +1,6 @@
 package unit.check;
 
+import anyparse.check.Linter;
 import anyparse.check.RuleIndex;
 import anyparse.check.common.literals.MagicNumber;
 import anyparse.check.haxe.literals.PreferLpad;

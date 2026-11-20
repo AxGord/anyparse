@@ -3,15 +3,9 @@ package anyparse.check.haxe.literals;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.scan.LoopScan;
-import anyparse.check.scan.RunScan;
 import anyparse.check.scan.UsingScan;
-import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
-
-using StringTools;
 
 /** The node kinds `PreferLpad` reads, resolved once per run by `readSeams`. */
 typedef LpadSeams = {

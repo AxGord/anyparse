@@ -1,7 +1,6 @@
 package unit.check.haxe.literals;
 
 import anyparse.check.Severity;
-import anyparse.check.common.literals.FoldStringLiterals;
 import anyparse.check.haxe.literals.TrigraphInString;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.macro.CppLiteralGuard;

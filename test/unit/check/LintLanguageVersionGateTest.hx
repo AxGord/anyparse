@@ -4,6 +4,7 @@ package unit.check;
 import sys.io.File;
 #end
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.query.Cli;
 import unit.cli.CliFixture;
 

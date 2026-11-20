@@ -1,6 +1,7 @@
 package unit.check.common.unused;
 
 import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Linter;
 import anyparse.check.common.unused.UnusedPrivate;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.SymbolIndex;

@@ -17,10 +17,8 @@ import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.PurityScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.check.common.loops.DeadBinderCounterLoop;
-import anyparse.check.scan.RunScan;
 import anyparse.query.NominalTypes;
 import anyparse.check.common.control.BranchChain;
-import anyparse.query.ElementSpan;
 
 /**
  * Which of the three loop directions a scan claims — disjoint by the sink: the

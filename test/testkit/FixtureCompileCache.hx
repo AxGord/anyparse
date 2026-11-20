@@ -1,6 +1,7 @@
 package testkit;
 
 import haxe.DynamicAccess;
+import haxe.Exception;
 import haxe.Json;
 import haxe.io.Path;
 import js.Node;

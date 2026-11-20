@@ -3,6 +3,10 @@ package anyparse.proc;
 import anyparse.core.PhaseTimings;
 import anyparse.proc.ProcessSpawn;
 import haxe.Exception;
+
+using Lambda;
+using StringTools;
+
 #if nodejs
 import haxe.io.Path;
 #end

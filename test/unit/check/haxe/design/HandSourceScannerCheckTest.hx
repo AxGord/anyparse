@@ -2,6 +2,7 @@ package unit.check.haxe.design;
 
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.LintConfig;
+import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.haxe.design.HandSourceScanner;
 

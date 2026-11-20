@@ -1,7 +1,5 @@
 package unit.check.common.design;
 
-using StringTools;
-
 /**
  * A `catch` that throws its own variable again lets what its `try` raised go on (`ThrowReach`): the function raises,
  * and a lock its caller holds across it is left held by that throw (finding (c)). So does one throwing anything

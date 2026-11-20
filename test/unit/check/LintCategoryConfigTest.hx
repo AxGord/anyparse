@@ -3,6 +3,7 @@ package unit.check;
 import anyparse.check.EffectiveRules;
 import anyparse.check.LintConfig;
 import anyparse.check.LintDocuments;
+import anyparse.check.Linter;
 import anyparse.check.common.docs.CommentWidth;
 import anyparse.check.common.docs.DocLength;
 import anyparse.check.common.docs.DocMeasurementClaim;

@@ -1,6 +1,7 @@
 package unit.check.common.members;
 
 import anyparse.check.Check;
+import anyparse.check.Linter;
 import anyparse.check.common.members.FieldInitAtDeclaration;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.Cli.RuleEdits;

@@ -10,8 +10,6 @@ import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.OracleOutcome;
 import unit.cli.CliFixture;
 
-using StringTools;
-
 /**
  * `thread-safety` reads its graph through the run's compiler facts when the
  * project asks (`compilerFacts`) and it has them (`SymbolIndexHost.compilerFacts`):

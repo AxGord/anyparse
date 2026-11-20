@@ -157,6 +157,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/config/ApqLintConfig.hx',
 			'src/anyparse/check/config/OracleDeclarationReader.hx',
 			'src/anyparse/check/config/OwnedTypesDeclaration.hx',
+			'src/anyparse/check/config/import.hx',
 			'src/anyparse/check/haxe/expressions/CompareFunctions.hx',
 			'src/anyparse/check/haxe/expressions/PreferSplitPart.hx',
 			'src/anyparse/check/haxe/facts/TypedFactsMacro.hx',

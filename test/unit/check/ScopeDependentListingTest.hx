@@ -1,5 +1,6 @@
 package unit.check;
 
+import anyparse.check.Linter;
 import anyparse.check.RuleIndex;
 import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueParser;

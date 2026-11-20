@@ -3,6 +3,7 @@ package testkit;
 import anyparse.query.ArmTypePath;
 import anyparse.util.Compare;
 import devkit.NarrowBuild;
+import haxe.Exception;
 import haxe.io.Path;
 import haxe.macro.Context;
 import haxe.macro.Expr;
