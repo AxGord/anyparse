@@ -116,8 +116,8 @@ final class ArmSweep {
 	 * The start of a sweep of `sha` whose records live in `dir`, by `launch`, which answers the pid it started. Refused while
 	 * the process of an earlier sweep is alive; the record `running` exists before the process does.
 	 */
-	public static function begin(dir: String, sha: String, launch: () -> Int): Outcome {
-		final busy: Null<String> = underway(dir);
+	public static function begin(dir: String, sha: String, launch: () -> Int, ?ours: (Int, String) -> Bool): Outcome {
+		final busy: Null<String> = underway(dir, ours);
 		if (busy != null) return Skipped('the arm sweep of $busy is still running');
 		FileSystem.createDirectory(dir);
 		File.saveContent(PostLand.fileIn(dir, sha, RUNNING), '${PostLand.fileIn(dir, sha, LOG)}\n');
@@ -131,15 +131,29 @@ final class ArmSweep {
 	 * The commit of the sweep recorded in `dir` whose process is alive, or null. A record whose process is gone is a sweep
 	 * that will never end: it is removed, so it holds no later start.
 	 */
-	public static function underway(dir: String): Null<String> {
+	public static function underway(dir: String, ?ours: (Int, String) -> Bool): Null<String> {
 		for (sha in PostLand.recorded(dir, RUNNING)) {
-			final file: String = PostLand.fileIn(dir, sha, PID);
-			final pid: Null<Int> = FileSystem.exists(file) ? Std.parseInt(File.getContent(file).trim()) : null;
-			if (pid != null && MutationSlot.alive(pid)) return sha;
+			if (alive(dir, sha, ours)) return sha;
 			PostLand.remove(PostLand.fileIn(dir, sha, RUNNING));
-			PostLand.remove(file);
+			PostLand.remove(PostLand.fileIn(dir, sha, PID));
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `pid` is the process of the sweep of `sha`, not a program that took the pid after it: alive, and its command
+	 * line names `arm-sweep` and `sha`. A process `ps` cannot answer for is taken as the sweep.
+	 */
+	public static function runs(pid: Int, sha: String): Bool {
+		if (!MutationSlot.alive(pid)) return false;
+		final id: String = '$pid';
+		final listed: Result = cmd('ps -o command= -p $id').run();
+		return switch listed.status {
+			case 0:
+				listed.out.contains(DIRECTORY) && listed.out.contains(sha);
+			case 1: false;
+			case _: true;
+		};
 	}
 
 	/** The command line of the detached run: this tool's own copy `script`, behind the low-priority pool lease `mode` grants. */
@@ -192,10 +206,10 @@ final class ArmSweep {
 	}
 
 	/** One line per sweep recorded in `dir`: the one running, each verdict written, each sweep that could not run. */
-	public static function statusLines(dir: String): Array<String> {
+	public static function statusLines(dir: String, ?ours: (Int, String) -> Bool): Array<String> {
 		final failed: Array<String> = PostLand.recorded(dir, FAILED);
 		final lines: Array<String> = PostLand.recorded(dir, RUNNING)
-			.map(sha -> 'arm-sweep: $sha running')
+			.map(sha -> alive(dir, sha, ours) ? 'arm-sweep: $sha running' : dead(dir, sha))
 			.concat(PostLand.recorded(dir, VERDICT).map(sha -> 'arm-sweep: $sha verdict ${PostLand.fileIn(dir, sha, VERDICT)}'))
 			.concat(failed.map(sha -> 'arm-sweep: $sha did not run — ${File.getContent(PostLand.fileIn(dir, sha, FAILED)).trim()}'));
 		return lines.length == 0 ? ['arm-sweep: no record'] : lines;
@@ -245,6 +259,18 @@ final class ArmSweep {
 		if (refused != null) return Failed(refused);
 		File.saveContent(verdictFile, verdict(log, records));
 		return Passed;
+	}
+
+	/** The status line of a record whose process is gone: what it left, and what runs the sweep of its commit again. */
+	private static function dead(dir: String, sha: String): String {
+		return 'arm-sweep: $sha dead — no process, no verdict; log ${PostLand.fileIn(dir, sha, LOG)}; the next due landing starts a '
+			+ 'sweep of its own head, `node bin/dev.js arm-sweep run $sha` sweeps this one';
+	}
+
+	private static function alive(dir: String, sha: String, ?ours: (Int, String) -> Bool): Bool {
+		final file: String = PostLand.fileIn(dir, sha, PID);
+		final pid: Null<Int> = FileSystem.exists(file) ? Std.parseInt(File.getContent(file).trim()) : null;
+		return pid != null && (ours ?? runs)(pid, sha);
 	}
 
 	private static function directory(cache: String): String {

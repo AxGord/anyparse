@@ -4261,6 +4261,38 @@
 			"find": "if (script == null) return unavailable();",
 			"replace": "if (script == null) return Passed;",
 			"note": "a machine with no workflow engine passes the row unjudged, so a file nobody could load reads as loaded"
+		},
+		{
+			"name": "M-SWEEP-STATUS-DEAD-READS-RUNNING",
+			"type": "dev.ArmSweep",
+			"method": "statusLines",
+			"find": "alive(dir, sha, ours) ? 'arm-sweep: $sha running' : dead(dir, sha)",
+			"replace": "'arm-sweep: $sha running'",
+			"note": "a sweep whose process is gone reads as running, so the parent never learns its arms went unswept"
+		},
+		{
+			"name": "M-SWEEP-DEAD-LINE-NO-LOG",
+			"type": "dev.ArmSweep",
+			"method": "dead",
+			"find": "; log ${PostLand.fileIn(dir, sha, LOG)};",
+			"replace": ";",
+			"note": "a dead sweep is reported without its log, so the reason it left no verdict is not found"
+		},
+		{
+			"name": "M-SWEEP-PID-REUSE-TRUSTED",
+			"type": "dev.ArmSweep",
+			"method": "runs",
+			"find": "listed.out.contains(DIRECTORY) && listed.out.contains(sha)",
+			"replace": "true",
+			"note": "any live process with the recorded pid reads as the sweep, so a pid reused after a reboot keeps a dead sweep running forever and blocks the next one"
+		},
+		{
+			"name": "M-SWEEP-LIVE-SWEEP-NOT-RECOGNISED",
+			"type": "dev.ArmSweep",
+			"method": "runs",
+			"find": "listed.out.contains(DIRECTORY) && listed.out.contains(sha)",
+			"replace": "false",
+			"note": "a live sweep reads as another program, so begin reaps its record and starts a second sweep of the whole registry beside it"
 		}
 	]
 }

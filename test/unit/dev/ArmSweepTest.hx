@@ -68,11 +68,11 @@ final class ArmSweepTest extends Test {
 			File.saveContent(dir.file('aaa.running'), 'log\n');
 			File.saveContent(dir.file('aaa.pid'), '${js.Node.process.pid}\n');
 			var launches: Int = 0;
-			final outcome: Outcome = ArmSweep.begin(dir.path, 'bbb', () -> ++launches);
+			final outcome: Outcome = ArmSweep.begin(dir.path, 'bbb', () -> ++launches, (pid, sha) -> true);
 			Assert.isTrue(outcome.match(Skipped(_)), '$outcome');
 			Assert.equals(0, launches);
 			Assert.isFalse(FileSystem.exists(dir.file('bbb.running')));
-			Assert.same(['arm-sweep: aaa running'], ArmSweep.statusLines(dir.path));
+			Assert.same(['arm-sweep: aaa running'], ArmSweep.statusLines(dir.path, (pid, sha) -> true));
 		});
 	}
 
