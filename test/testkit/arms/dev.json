@@ -3976,6 +3976,30 @@
 			"note": "findings the command left fail the landing with the plain exit, so a caller cannot tell residue from a broken landing"
 		},
 		{
+			"name": "M-LAND-SWEEP-DECLINED-NOT-CARRIED",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "standing = split(left, tip);",
+			"replace": "standing = { fresh: left, carried: [] };",
+			"note": "a site the fix declines on purpose, which the branch tip carries too, fails the landing as residue though the sweep brief leaves it standing"
+		},
+		{
+			"name": "M-LAND-SWEEP-EVERYTHING-CARRIED",
+			"type": "dev.LandSweep",
+			"method": "split",
+			"find": "LintDiff.spendOwn(pool, key, message)",
+			"replace": "true",
+			"note": "every finding the re-run leaves counts as carried by the tip, so a finding the tip lacks lands instead of failing as residue"
+		},
+		{
+			"name": "M-LAND-SWEEP-SPLIT-NOT-SPENT",
+			"type": "dev.LandSweep",
+			"method": "split",
+			"find": "LintDiff.spendOwn(pool, key, message)",
+			"replace": "(pool.counts[key] ?? 0) > 0",
+			"note": "one carried finding on the tip excuses every identical one the re-run leaves, so a surplus copy lands as carried instead of residue"
+		},
+		{
 			"name": "M-LAND-SWEEP-NOT-NAMED",
 			"type": "dev.LandSweep",
 			"method": "run",

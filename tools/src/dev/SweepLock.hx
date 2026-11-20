@@ -183,7 +183,7 @@ final class SweepLock {
 	/** The tools of a real run: the command's listing, the commit's files against `main`, the queue CLI `script` over `queue`. */
 	public static function tools(queue: String, script: String): LockTools {
 		return {
-			listing: LandSweep.engine().findings,
+			listing: (engine, tree, command) -> LandSweep.listed(LandSweep.engine().findings(engine, tree, command)),
 			changed: tree -> {
 				final base: Result = cmd('git -C $tree merge-base HEAD main').run();
 				if (!base.ok) throw new Exception('no merge base of $tree and main: ${base.firstError()}');

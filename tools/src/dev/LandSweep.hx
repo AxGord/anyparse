@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.check.Linter;
 import anyparse.query.ExitCode;
 import anyparse.query.LintDiff;
 import anyparse.query.format.json.LintFindingJson;
@@ -20,13 +21,22 @@ enum Listing {
 	Unlisted(why: String);
 }
 
+/** What a run of a sweep command's listing answered: the findings it reports, or why it could not be read. */
+enum Report {
+	Reported(findings: Array<LintFindingJson>);
+	Unreported(why: String);
+}
+
+/** The findings a sweep's re-run leaves, told apart by whether the branch tip carries them too. */
+typedef Standing = { var fresh: Array<LintFindingJson>; var carried: Array<LintFindingJson>; }
+
 /**
  * The two runs of a sweep command a landing's `reapply` step makes. `findings` is the command without its write, run by the
  * engine of the tree `engine` over the tree `tree`; `fix` is the command as the line wrote it, in `tree`. `command` is the
  * engine's argument list (`LandSweep.wordsOf`).
  */
 typedef ReapplyTools = {
-	var findings: (engine: String, tree: String, command: Array<String>) -> Listing;
+	var findings: (engine: String, tree: String, command: Array<String>) -> Report;
 	var fix: (tree: String, command: Array<String>) -> Outcome;
 }
 
@@ -34,7 +44,8 @@ typedef ReapplyTools = {
  * The one answer to "how does a landing carry a sweep line's commit over files a parallel landing changed": it never merges
  * them, it runs the sweep again. A line whose text holds a marker row `sweep: <command>` lands with its footprint — the files
  * of its commit the command reports on the commit's own base tree — put back as the candidate's HEAD has them, the command
- * run in the candidate tree, and the result staged; a finding the command leaves fails the step as residue. Files of the
+ * run in the candidate tree, and the result staged; a finding the command leaves fails the step as
+ * residue unless the branch's own tip carries it too, a site the fix declines on purpose. Files of the
  * commit outside the footprint (the rule itself, its tests) merge as any pick does.
  */
 @:nullSafety(Strict)
@@ -132,16 +143,26 @@ final class LandSweep {
 			final staging: Result = _candidate.git(['add', '--'].concat(changed));
 			if (!staging.ok) return Failed('could not stage what the sweep command wrote: ${staging.firstError()}');
 		}
+		var standing: Standing = { fresh: [], carried: [] };
 		switch _tools.findings(_candidate.tree, _candidate.tree, words) {
-			case Unlisted(why):
+			case Unreported(why):
 				return Failed('the sweep command could not be read after its run: $why');
-			case Listed(left) if (left.length > 0):
-				residue = true;
-				return Failed('${left.length} file(s) still carry findings after the sweep command, first ${left[0]}');
-			case Listed(_):
+			case Reported(left) if (left.length > 0):
+				// a site the fix declines on purpose stands on the branch's own tip too; only a finding the tip lacks is residue
+				switch reportAt(_branch, words) {
+					case Unreported(why): return Failed('the sweep command could not be read on the tip of `$_branch`: $why');
+					case Reported(tip): standing = split(left, tip);
+				}
+			case Reported(_):
+		}
+		final carried: String = carriedNote(standing.carried);
+		if (standing.fresh.length > 0) {
+			residue = true;
+			final files: Array<String> = filesIn(standing.fresh);
+			return Failed('${files.length} file(s) still carry findings after the sweep command, first ${files[0]}$carried');
 		}
 		_applied = true;
-		_summary.detail('${footprint.length} footprint file(s) taken from HEAD, ${changed.length} rewritten by `$_command`');
+		_summary.detail('${footprint.length} footprint file(s) taken from HEAD, ${changed.length} rewritten by `$_command`$carried');
 		return rebuild();
 	}
 
@@ -156,16 +177,26 @@ final class LandSweep {
 	 */
 	private function onBase(words: Array<String>): Listing {
 		final parent: String = '$_branch^';
-		final gone: Result = cmd('git -C $_repo worktree remove --force $_base').run();
-		final opened: Result = cmd('git -C $_repo worktree add --force --detach $_base $parent').run();
-		if (!opened.ok) return Unlisted('no tree of $parent (${opened.firstError()}${gone.ok ? '' : ', after an earlier one stayed'})');
-		final listed: Listing = try _tools.findings(_candidate.tree, _base, words) catch (exception: Exception) Unlisted(exception.message);
-		cmd('git -C $_repo worktree remove --force $_base').run();
-		final picked: Array<String> = cmd('git -C $_repo diff --name-only $parent $_branch').run().lines();
-		return switch listed {
-			case Listed(files): Listed(picked.filter(path -> files.contains(path)));
-			case Unlisted(_): listed;
+		return switch reportAt(parent, words) {
+			case Reported(findings):
+				final picked: Array<String> = cmd('git -C $_repo diff --name-only $parent $_branch').run().lines();
+				final files: Array<String> = filesIn(findings);
+				Listed(picked.filter(path -> files.contains(path)));
+			case Unreported(why): Unlisted(why);
 		};
+	}
+
+	/** What the command reports on the tree of `rev`, opened in the scratch directory and removed here. */
+	private function reportAt(rev: String, words: Array<String>): Report {
+		final gone: Result = cmd('git -C $_repo worktree remove --force $_base').run();
+		final opened: Result = cmd('git -C $_repo worktree add --force --detach $_base $rev').run();
+		if (!opened.ok) return Unreported('no tree of $rev (${opened.firstError()}${gone.ok ? '' : ', after an earlier one stayed'})');
+		final reported: Report = try
+			_tools.findings(_candidate.tree, _base, words)
+		catch (exception: Exception)
+			Unreported(exception.message);
+		cmd('git -C $_repo worktree remove --force $_base').run();
+		return reported;
 	}
 
 	/** `paths` in the candidate's index and files as its HEAD has them (absent when HEAD has none); the first error, or null. */
@@ -186,6 +217,13 @@ final class LandSweep {
 	/** The files of the candidate tree git neither tracks nor ignores. */
 	private function untracked(): Array<String> {
 		return _candidate.git(['ls-files', '--others', '--exclude-standard']).lines();
+	}
+
+	/** The step's line on the findings the branch's own tip carries too, which stay as they are; empty when there are none. */
+	private function carriedNote(carried: Array<LintFindingJson>): String {
+		return carried.length == 0
+			? ''
+			: ', ${carried.length} finding(s) the tip of `$_branch` carries too left as they are, first ${filesIn(carried)[0]}';
 	}
 
 	/** The sweep command of line `id` of the queue document `queue` (`commandIn`), or null when the line has none. */
@@ -243,13 +281,48 @@ final class LandSweep {
 
 	/** The files of the findings in the JSON report `report` of a lint run, each once, as paths from the tree's root. */
 	public static function filesOf(report: String): Listing {
-		final files: Array<String> = [];
-		final records: Array<LintFindingJson> = try
-			LintDiff.parseReport(report)
+		return listed(reportOf(report));
+	}
+
+	/** The files `report` names, each once, or why it could not be read. */
+	public static function listed(report: Report): Listing {
+		return switch report {
+			case Reported(findings): Listed(filesIn(findings));
+			case Unreported(why): Unlisted(why);
+		};
+	}
+
+	/** The findings of the JSON report `report` of a lint run, or why it is not one. */
+	public static function reportOf(report: String): Report {
+		return try
+			Reported(LintDiff.parseReport(report))
 		catch (exception: Exception)
-			return Unlisted('its report is not a lint report (${exception.message})');
-		for (record in records) files.pushUnique(Path.normalize(record.file));
-		return Listed(files);
+			Unreported('its report is not a lint report (${exception.message})');
+	}
+
+	/** The files of `findings`, each once, as paths from the tree's root. */
+	public static function filesIn(findings: Array<LintFindingJson>): Array<String> {
+		final files: Array<String> = [];
+		for (record in findings) files.pushUnique(Path.normalize(record.file));
+		return files;
+	}
+
+	/**
+	 * `left` told apart by `tip`: a finding the tip carries too — spent one for one against it, as a multiset on the keys
+	 * `lint-diff` compares by, so a moved line is the same finding — is `carried`, the rest `fresh`.
+	 */
+	public static function split(left: Array<LintFindingJson>, tip: Array<LintFindingJson>): Standing {
+		final identities: LintMessageIdentities = Linter.messageIdentities();
+		final pool: LintDiffPool = LintDiff.pool(LintDiff.tally(tip, '', identities));
+		final standing: Standing = { fresh: [], carried: [] };
+		for (record in left) {
+			final message: String = LintDiff.normalizeMessage(record.rule, record.message, '', identities);
+			final key: String = LintDiff.keyFor(
+				LintDiff.normalizePath(record.file, ''), record.rule, record.severity, message, record.data
+			);
+			(LintDiff.spendOwn(pool, key, message) ? standing.carried : standing.fresh).push(record);
+		}
+		return standing;
 	}
 
 	/** The sweep of a landing as the candidate's own engine runs it. */
@@ -257,7 +330,7 @@ final class LandSweep {
 		return {
 			findings: (engine, tree, command) -> {
 				final run: Result = GateTree.shim(engine, tree, listing(command)).timeout(TIMEOUT_MS).run();
-				run.ok ? filesOf(run.out) : Unlisted(run.firstError());
+				run.ok ? reportOf(run.out) : Unreported(run.firstError());
 			},
 			fix: (tree, command) -> {
 				final run: Result = GateTree.shim(tree, tree, command).timeout(TIMEOUT_MS).run();

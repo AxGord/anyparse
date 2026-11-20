@@ -1,6 +1,7 @@
 package unit.dev;
 
 import anyparse.query.ExitCode;
+import anyparse.query.format.json.LintFindingJson;
 import anyparse.util.Compare;
 import dev.Land;
 import dev.LandSweep;
@@ -14,7 +15,7 @@ using StringTools;
 private typedef Change = { var path: String; var content: String; }
 
 /** What a `Land.land` run of a sweep line over a scratch repository left behind. */
-private typedef Swept = {
+typedef Swept = {
 
 	var status: Int;
 	var output: String;
@@ -41,6 +42,9 @@ private typedef Swept = {
  */
 @:nullSafety(Strict)
 final class LandSweepTest extends Test {
+
+	/** The word that makes the stand-in command leave a file's finding alone, as a fix declines a site on purpose. */
+	public static final DECLINED: String = 'KEEP';
 
 	private static final BRANCH: String = 'batch/hxqb-S1';
 	private static final COMMAND: String = 'hxq lint --rule r --fix src';
@@ -149,7 +153,7 @@ final class LandSweepTest extends Test {
 	}
 
 	public function testAFootprintThatCannotBeListedFailsTheStep(): Void {
-		final blind: ReapplyTools = { findings: (engine, tree, command) -> Unlisted('unknown rule "r"'), fix: (tree, command) -> Passed };
+		final blind: ReapplyTools = { findings: (engine, tree, command) -> Unreported('unknown rule "r"'), fix: (tree, command) -> Passed };
 		final run: Swept = landing(SWEPT, [], COMMAND, blind);
 		utest.Assert.equals(1, run.status, run.output);
 		utest.Assert.isFalse(run.moved);
@@ -266,15 +270,16 @@ final class LandSweepTest extends Test {
 	}
 
 	/**
-	 * The stand-in command; it leaves the findings of `stubborn` alone, does not finish at all when `dies`, and makes the file
+	 * The stand-in command; it leaves the findings of `stubborn` and of a file
+	 * holding `DECLINED` alone, does not finish at all when `dies`, and makes the file
 	 * `creates` when one is named.
 	 */
-	private static function sweeping(?stubborn: String, dies: Bool = false, ?creates: String): ReapplyTools {
+	public static function sweeping(?stubborn: String, dies: Bool = false, ?creates: String): ReapplyTools {
 		return {
-			findings: (engine, tree, command) -> Listed(carrying(tree)),
+			findings: (engine, tree, command) -> Reported(carrying(tree).map(file -> finding(file, 'BAD'))),
 			fix: (tree, command) -> {
 				if (dies) return Failed('the engine died');
-				for (path in carrying(tree)) if (path != stubborn)
+				for (path in carrying(tree)) if (path != stubborn && !File.getContent('$tree/$path').contains(DECLINED))
 					File.saveContent('$tree/$path', File.getContent('$tree/$path').replace('BAD', 'GOOD'));
 				if (creates != null) File.saveContent('$tree/$creates', 'ambient\n');
 				return Passed;
@@ -282,20 +287,11 @@ final class LandSweepTest extends Test {
 		};
 	}
 
-	/** The files of `tree`'s `src` that hold a finding, in name order. */
-	private static function carrying(tree: String): Array<String> {
-		final names: Array<String> = FileSystem.readDirectory('$tree/src');
-		names.sort(Compare.compareString);
-		return [
-			for (name in names) if (File.getContent('$tree/src/$name').contains('BAD')) 'src/$name'
-		];
-	}
-
 	/**
 	 * The branch whose one commit writes `side` landed on a main that `parallel` moved since (not at all when empty), as the
 	 * landing of a line whose sweep command is `command` (none when null).
 	 */
-	private static function landing(side: Array<Change>, parallel: Array<Change>, command: Null<String>, tools: ReapplyTools): Swept {
+	public static function landing(side: Array<Change>, parallel: Array<Change>, command: Null<String>, tools: ReapplyTools): Swept {
 		return devkit.TempDir.with(dir -> {
 			final repo: String = dir.file('repo');
 			FileSystem.createDirectory('$repo/src');
@@ -348,6 +344,25 @@ final class LandSweepTest extends Test {
 				files: [ for (name in names) name => File.getContent('$repo/$name') ]
 			};
 		});
+	}
+
+	/** One report record of rule `r` at `file`, saying `message`. */
+	public static function finding(file: String, message: String): LintFindingJson {
+		return {
+			file: file,
+			severity: 'warning',
+			rule: 'r',
+			message: message
+		};
+	}
+
+	/** The files of `tree`'s `src` that hold a finding, in name order. */
+	private static function carrying(tree: String): Array<String> {
+		final names: Array<String> = FileSystem.readDirectory('$tree/src');
+		names.sort(Compare.compareString);
+		return [
+			for (name in names) if (File.getContent('$tree/src/$name').contains('BAD')) 'src/$name'
+		];
 	}
 
 	private static function write(repo: String, changes: Array<Change>): Void {
