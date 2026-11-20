@@ -11,6 +11,7 @@ typedef QueueNote = { final from: String; final date: String; final text: String
 
 /** One line of the queue file, the fields every consumer asks for; a field the line lacks is empty. */
 typedef QueueLine = {
+
 	final id: String;
 	final status: String;
 	final owner: String;
@@ -21,6 +22,10 @@ typedef QueueLine = {
 	final sweep: String;
 	final after: Array<String>;
 	final notes: Array<QueueNote>;
+
+	/** The line runs alone (`exclusive: true`). */
+	final exclusive: Bool;
+
 }
 
 /**
@@ -80,7 +85,8 @@ final class QueueFile {
 			touches: list(fields['touches'] ?? ''),
 			sweep: fields['sweep'] ?? '',
 			after: list(fields['after'] ?? ''),
-			notes: notes
+			notes: notes,
+			exclusive: fields['exclusive'] == 'true'
 		};
 	}
 

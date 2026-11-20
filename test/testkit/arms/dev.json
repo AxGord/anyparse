@@ -4293,6 +4293,208 @@
 			"find": "listed.out.contains(DIRECTORY) && listed.out.contains(sha)",
 			"replace": "false",
 			"note": "a live sweep reads as another program, so begin reaps its record and starts a second sweep of the whole registry beside it"
+		},
+		{
+			"name": "M-MODELTABLE-BAND-FROM",
+			"type": "dev.ModelTable",
+			"method": "read",
+			"find": "from = row.upto + 1;",
+			"replace": "from = 1;",
+			"note": "every band of a stage starts at difficulty 1, so a band reaches below the row before it and a difficulty falls in two bands"
+		},
+		{
+			"name": "M-CURATOR-WRITE-ONE-HOUR",
+			"type": "dev.CuratorReport",
+			"method": "agentUsd",
+			"find": [
+				"write5m: 0,",
+				"write1h: Std.int(number(JValueTools.field(agent, 'cache_write')) ?? 0)"
+			],
+			"replace": [
+				"write5m: Std.int(number(JValueTools.field(agent, 'cache_write')) ?? 0),",
+				"write1h: 0"
+			],
+			"note": "a ledger cache write is priced at the five-minute multiple, so every land costs less than its transcripts say"
+		},
+		{
+			"name": "M-CURATOR-LANDS-FROM",
+			"type": "dev.CuratorReport",
+			"method": "landsFrom",
+			"find": "landed[landed.length - lands - 1].ended",
+			"replace": "landed[landed.length - lands].ended",
+			"note": "a window of the last N lands starts at the end of its own first land, so it holds N - 1"
+		},
+		{
+			"name": "M-CURATOR-LANDED-DONE",
+			"type": "dev.CuratorReport",
+			"method": "sessionOf",
+			"find": " || JValueTools.at(row, 'visits.mark_done') != null",
+			"replace": "",
+			"note": "an engine task marked done is no land, so the parent is pro-rated over the slice lands alone"
+		},
+		{
+			"name": "M-CURATOR-PARENT-ROOTS",
+			"type": "dev.CuratorReport",
+			"method": "summarize",
+			"find": "s.landed && roots.contains(s.root)",
+			"replace": "s.landed",
+			"note": "the parent is pro-rated over the lands of every dispatch tree in the window, another conversation's included"
+		},
+		{
+			"name": "M-CURATOR-CELL-BAND",
+			"type": "dev.CuratorReport",
+			"method": "cellsOf",
+			"find": "band.from <= row.difficulty && ",
+			"replace": "",
+			"note": "a band takes every row below its top, so a low-difficulty land is counted again in every higher band"
+		},
+		{
+			"name": "M-CURATOR-PLAN-HANDOVER",
+			"type": "dev.CuratorReport",
+			"method": "agentOf",
+			"find": "stage: handedOver && stage == PLAN ? EXECUTE : stage,",
+			"replace": "stage: stage,",
+			"note": "a slice its plan agent executed shows no execute stage, so the execute cells lose every slice of the lower bands"
+		},
+		{
+			"name": "M-CURATOR-IDLE-NO-START",
+			"type": "dev.CuratorReport",
+			"method": "idleOf",
+			"find": "if (after - before >= NO_START_HOURS * MS_PER_HOUR)",
+			"replace": "if (false)",
+			"note": "a dispatcher that started nothing for hours leaves its free slots under other, so a dead dispatcher is never named"
+		},
+		{
+			"name": "M-CURATOR-IDLE-EXCLUSIVE",
+			"type": "dev.CuratorReport",
+			"method": "idleOf",
+			"find": "else if (running.exists(s -> exclusive.contains(s.task)))",
+			"replace": "else if (false)",
+			"note": "a slot left free beside a running exclusive line counts as other, so the exclusive cost is never named"
+		},
+		{
+			"name": "M-CURATOR-PEAK-SLOTS",
+			"type": "dev.CuratorReport",
+			"method": "peakOf",
+			"force": "0",
+			"note": "a report with no slot count has no slots, so it reports no idle at all"
+		},
+		{
+			"name": "M-CURATOR-FLAG-IDLE",
+			"type": "dev.CuratorReport",
+			"method": "flagsOf",
+			"find": "cause.slotHours / all > FLAG_IDLE_SHARE",
+			"replace": "false",
+			"note": "an idle cause holding most of the idle raises no flag"
+		},
+		{
+			"name": "M-CURATOR-MOVE-BEFORE-COMMIT",
+			"type": "dev.CuratorReport",
+			"method": "movesOf",
+			"find": "s -> s.started < change.at && ",
+			"replace": "s -> ",
+			"note": "the previous arm's side of a table move takes slices begun after the commit too"
+		},
+		{
+			"name": "M-CURATOR-COVERAGE",
+			"type": "dev.CuratorReport",
+			"method": "coverageOf",
+			"force": "[]",
+			"note": "the coverage section is empty, so a cell of the table with no data is silent"
+		},
+		{
+			"name": "M-CURATOR-FLAG-USD",
+			"type": "dev.CuratorReport",
+			"method": "flagsOf",
+			"find": "if (Math.abs(share) > FLAG_USD_SHARE)",
+			"replace": "if (false)",
+			"note": "a table move that changed the median dollars per land raises no flag"
+		},
+		{
+			"name": "M-CURATOR-FLAG-ROUNDS",
+			"type": "dev.CuratorReport",
+			"method": "flagsOf",
+			"find": ">= Math.round(FLAG_ROUNDS * PERCENT)",
+			"replace": "> Math.round(FLAG_ROUNDS * PERCENT)",
+			"note": "a move of the rounds by exactly the threshold raises no flag"
+		},
+		{
+			"name": "M-CURATOR-FLAG-MIN-N",
+			"type": "dev.CuratorReport",
+			"method": "flagsOf",
+			"find": "if (move.before.n >= FLAG_MIN_N && move.after.n >= FLAG_MIN_N)",
+			"replace": "if (true)",
+			"note": "a move with a handful of slices on a side raises flags from noise"
+		},
+		{
+			"name": "M-CURATOR-FIX-ITEMS",
+			"type": "dev.CuratorReport",
+			"method": "fixItems",
+			"find": "${items + 1}",
+			"replace": "1",
+			"note": "a fix round counts as one finding whatever its numbered list holds"
+		},
+		{
+			"name": "M-CURATOR-FIX-PLACEHOLDER",
+			"type": "dev.CuratorReport",
+			"method": "findingsIn",
+			"find": ".filter(round -> !PLACEHOLDER.match(round))",
+			"replace": "",
+			"note": "a driver's prompt that names the fix list as a placeholder counts as a finding of its own"
+		},
+		{
+			"name": "M-TRANSCRIPT-TOOL-RESULT-TEXT",
+			"type": "dev.TokenTranscript",
+			"method": "userTexts",
+			"find": "block.text ?? JValueTools.string(block.content) ?? ''",
+			"replace": "block.text ?? ''",
+			"note": "a fix round that reached its agent as a tool result is not read"
+		},
+		{
+			"name": "M-CURATOR-LIVE",
+			"type": "dev.CuratorReport",
+			"method": "liveOf",
+			"force": "null",
+			"note": "a session still running is not read, so the slots it holds count as idle"
+		},
+		{
+			"name": "M-CURATOR-JSON",
+			"type": "dev.CuratorReport",
+			"method": "json",
+			"force": "'{}'",
+			"note": "the --json document drops every section"
+		},
+		{
+			"name": "M-QUEUEFILE-EXCLUSIVE",
+			"type": "dev.QueueFile",
+			"method": "entry",
+			"find": "exclusive: fields['exclusive'] == 'true'",
+			"replace": "exclusive: false",
+			"note": "a line that runs alone reads as one that shares the slots, so its idle cost lands under other"
+		},
+		{
+			"name": "M-CURATOR-COVERAGE-WIDTH",
+			"type": "dev.CuratorReport",
+			"method": "coverageOf",
+			"find": "cell.from == from && cell.upto == upto && ",
+			"replace": "cell.from == from && ",
+			"note": "a previous arm's coverage cell is dropped beside a table cell of the same stage, start and arm but another width"
+		},
+		{
+			"name": "M-CURATOR-ONE-WINDOW",
+			"type": "dev.CuratorReport",
+			"method": "main",
+			"find": "if (since != null && landsArg != null) throw",
+			"replace": "if (false) throw",
+			"note": "--since and --lands together are taken instead of refused"
+		},
+		{
+			"name": "M-CURATOR-LANDS-COUNT",
+			"type": "dev.CuratorReport",
+			"method": "count",
+			"find": "parsed < 0 || '$parsed' != value",
+			"replace": "parsed < 0",
+			"note": "a count with trailing letters such as 2x is read as its leading number"
 		}
 	]
 }

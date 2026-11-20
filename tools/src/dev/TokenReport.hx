@@ -60,6 +60,12 @@ final class TokenReport {
 			input: 0.1,
 			output: 0.5,
 			read: 0.01
+		},
+		{
+			family: 'fable',
+			input: 8,
+			output: 40,
+			read: 0.2
 		}
 	];
 
@@ -121,24 +127,25 @@ final class TokenReport {
 
 	/** The cache rewrites of one agent, in turn order: its first turn only fills the cache, so it is never one. */
 	public static function rewritesOf(agent: AgentReading): Array<Rewrite> {
-		final found: Array<Rewrite> = [];
-		for (i in 1...agent.turns.length) {
-			final turn: TurnReading = agent.turns[i];
-			final written: Int = turn.write5m + turn.write1h;
-			final context: Int = turn.input + turn.cacheRead + written;
-			if (context < REWRITE_MIN_CONTEXT || written < REWRITE_SHARE * context) continue;
-			final price: Null<Price> = priceOf(turn.model);
-			found.push({
-				agent: agent.id,
-				slice: agent.slice,
-				model: turn.model,
-				tokens: written,
-				context: context,
-				gapSeconds: (turn.start - agent.turns[i - 1].end) / MS_PER_SECOND,
-				extraCost: price == null ? 0 : round(costOfWrite(turn, price) - written * price.read / PER_MTOK)
-			});
-		}
-		return found;
+		return [
+			for (i in 1...agent.turns.length) {
+				final turn: TurnReading = agent.turns[i];
+				final written: Int = turn.write5m + turn.write1h;
+				final context: Int = turn.input + turn.cacheRead + written;
+				if (context >= REWRITE_MIN_CONTEXT && !(written < REWRITE_SHARE * context)) {
+					final price: Null<Price> = priceOf(turn.model);
+					{
+						agent: agent.id,
+						slice: agent.slice,
+						model: turn.model,
+						tokens: written,
+						context: context,
+						gapSeconds: (turn.start - agent.turns[i - 1].end) / MS_PER_SECOND,
+						extraCost: price == null ? 0 : round(costOfWrite(turn, price) - written * price.read / PER_MTOK)
+					};
+				}
+			}
+		];
 	}
 
 	private static inline function costOfWrite(turn: TurnReading, price: Price): Float {

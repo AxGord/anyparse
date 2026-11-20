@@ -227,15 +227,7 @@ final class TokenTranscript {
 	 * transcript of any size reads in the memory of its largest line.
 	 */
 	public static function readFile(id: String, path: String, description: Null<String>): AgentReading {
-		final input: FileInput = File.read(path, false);
-		try {
-			final agent: AgentReading = readLines(id, lineReader(input), description);
-			input.close();
-			return agent;
-		} catch (exception: Exception) {
-			input.close();
-			throw exception;
-		}
+		return withLines(path, nextLine -> readLines(id, nextLine, description));
 	}
 
 	/** The reading of the transcript whose lines `nextLine` yields in order, null at the end. A line that is not JSON is skipped. */
@@ -257,15 +249,9 @@ final class TokenTranscript {
 		final pending: Map<String, PendingCall> = [];
 		final byMessage: Map<String, Int> = [];
 		var promptSeen: Bool = false;
-		while (true) {
-			final line: Null<String> = nextLine();
-			if (line == null) break;
-			final entry: Null<TranscriptEntry> = line == '' ? null : parse(line);
-			final message: Null<TranscriptMessage> = entry?.message;
-			if (entry == null || message == null) continue;
+		eachMessage(nextLine, (entry, message) -> {
 			switch entry.type {
-				case 'assistant':
-					readAssistant(agent, entry, message, pending, byMessage);
+				case 'assistant': readAssistant(agent, entry, message, pending, byMessage);
 				case 'user':
 					if (!promptSeen) {
 						promptSeen = true;
@@ -276,13 +262,31 @@ final class TokenTranscript {
 					readResults(agent, message.content, pending);
 				case _:
 			}
-		}
+		});
 		return agent;
 	}
 
 	/** The slice id the prompt `prompt` names (`slice <ID>` or its Russian spelling), or null. */
 	public static function sliceOfPrompt(prompt: String): Null<String> {
 		return PROMPT_SLICE.match(prompt) ? PROMPT_SLICE.matched(1) : null;
+	}
+
+	/** The text of every user message of the transcript at `path`, in order: the prompt, each agent message, each tool result. */
+	public static function userTexts(path: String): Array<String> {
+		return withLines(path, nextLine -> {
+			final texts: Array<String> = [];
+			eachMessage(
+				nextLine,
+				(entry, message) ->
+					if (entry.type == 'user')
+						texts.push(
+							JValueTools.string(message.content) ?? blocksOf(message.content)
+								.map(block -> block.text ?? JValueTools.string(block.content) ?? '')
+								.join('')
+						)
+			);
+			texts;
+		});
 	}
 
 	/** The first slice-shaped word of an agent's one-line task, or null. */
@@ -500,6 +504,30 @@ final class TokenTranscript {
 			content: JValueTools.stringAt(value, 'content'),
 			json: JValueWriter.write(value, JsonFormat.instance.compactWriteOptions)
 		};
+	}
+
+	/** `read` over the lines of the file at `path`, the file closed whether it returns or throws. */
+	private static function withLines<T>(path: String, read: (() -> Null<String>) -> T): T {
+		final input: FileInput = File.read(path, false);
+		try {
+			final out: T = read(lineReader(input));
+			input.close();
+			return out;
+		} catch (exception: Exception) {
+			input.close();
+			throw exception;
+		}
+	}
+
+	/** `visit` on every line `nextLine` yields that is a JSON entry with a message, in order; any other line is skipped. */
+	private static function eachMessage(nextLine: () -> Null<String>, visit: (TranscriptEntry, TranscriptMessage) -> Void): Void {
+		while (true) {
+			final line: Null<String> = nextLine();
+			if (line == null) break;
+			final entry: Null<TranscriptEntry> = line == '' ? null : parse(line);
+			final message: Null<TranscriptMessage> = entry?.message;
+			if (entry != null && message != null) visit(entry, message);
+		}
 	}
 
 	/**

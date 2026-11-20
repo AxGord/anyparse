@@ -372,6 +372,17 @@ final class SliceStats {
 		return new js.lib.Date(seconds * THOUSAND).toISOString().substr(0, ISO_DAY_LENGTH);
 	}
 
+	/**
+	 * The median of `values`, 0 for none.
+	 */
+	public static function median(values: Array<Float>): Float {
+		if (values.length == 0) return 0;
+		final sorted: Array<Float> = values.copy();
+		sorted.sort(Reflect.compare);
+		final mid: Int = sorted.length >> 1;
+		return sorted.length % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+	}
+
 	/** `value` with one decimal digit. */
 	private static inline function decimal(value: Float): String {
 		return js.Syntax.code('{0}.toFixed(1)', value);
@@ -422,14 +433,6 @@ final class SliceStats {
 	private static function count(text: String): Null<Int> {
 		final digits: String = text.split(',')[0].replace('_', '').trim();
 		return digits == '' ? null : Std.parseInt(digits);
-	}
-
-	private static function median(values: Array<Float>): Float {
-		if (values.length == 0) return 0;
-		final sorted: Array<Float> = values.copy();
-		sorted.sort(Reflect.compare);
-		final mid: Int = sorted.length >> 1;
-		return sorted.length % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 	}
 
 	private static function optional(value: Null<Int>): String {

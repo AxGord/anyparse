@@ -279,7 +279,8 @@ final class LessonsFileTest extends Test {
 			touches: touches,
 			sweep: '',
 			after: [],
-			notes: []
+			notes: [],
+			exclusive: false
 		};
 	}
 

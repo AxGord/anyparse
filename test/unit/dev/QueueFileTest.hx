@@ -14,6 +14,7 @@ final class QueueFileTest extends Test {
 		'    owner: Own',
 		'    ended: 2026-11-08',
 		'    base: abc123',
+		'    exclusive: true',
 		'    touches: [ src/a, test/b ]',
 		'    after: [ X-1, X-2 ]',
 		'    text: |-',
@@ -57,6 +58,13 @@ final class QueueFileTest extends Test {
 		Assert.equals('Own', line?.owner);
 		Assert.equals('2026-11-08', line?.ended);
 		Assert.equals('abc123', line?.base);
+	}
+
+	@:pin('control')
+	@:killer('M-QUEUEFILE-EXCLUSIVE')
+	public function testAnExclusiveLineIsReadAsOneAndAnyOtherAsNot(): Void {
+		Assert.isTrue(QueueFile.find(QUEUE, 'A-1')?.exclusive ?? false);
+		Assert.isFalse(QueueFile.find(QUEUE, 'B-2')?.exclusive ?? true);
 	}
 
 	@:pin('control')

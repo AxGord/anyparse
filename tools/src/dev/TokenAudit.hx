@@ -191,6 +191,12 @@ final class TokenAudit {
 		];
 	}
 
+	/** The commit time of `rev` in `tree`, in ms since the epoch. */
+	public static function commitMillis(tree: String, rev: String): Float {
+		final seconds: Float = Std.parseFloat(cmd('git -C $tree log -1 --format=%ct $rev').check().out.trim());
+		return seconds * MS_PER_SECOND;
+	}
+
 	private static inline function usd(amount: Float): String {
 		return '$$${amount}';
 	}
@@ -266,12 +272,6 @@ final class TokenAudit {
 	/** `tokens` in thousands, with a `k`. */
 	private static function thousands(tokens: Int): String {
 		return '${Math.round(tokens / THOUSAND)}k';
-	}
-
-	/** The commit time of `rev` in `tree`, in ms since the epoch. */
-	private static function commitMillis(tree: String, rev: String): Float {
-		final seconds: Float = Std.parseFloat(cmd('git -C $tree log -1 --format=%ct $rev').check().out.trim());
-		return seconds * MS_PER_SECOND;
 	}
 
 }
