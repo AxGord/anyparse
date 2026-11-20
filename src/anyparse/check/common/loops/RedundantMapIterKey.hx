@@ -1,7 +1,6 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.common.loops.ValueIterationProof.ValueIteration;
-import anyparse.query.IndexScope;
 import anyparse.query.MemberReach;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;

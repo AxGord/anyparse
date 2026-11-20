@@ -80,6 +80,13 @@ final class CollapsibleIf extends RuleBase implements QuotationAware {
 		});
 	}
 
+	/** Unwrap single-statement `{ … }` layers to reach the wrapped statement. */
+	public static function unwrapBlock(node: QueryNode, blockStmtKind: Null<String>): QueryNode {
+		var n: QueryNode = node;
+		while (blockStmtKind != null && n.kind == blockStmtKind && n.children.length == 1) n = n.children[0];
+		return n;
+	}
+
 	/**
 	 * Walk `node`; when an `if` with no `else` has a nested `if` with no `else` as its sole
 	 * then-branch, flag the outer and STOP (the merge subsumes its subtree; a deeper nested
@@ -105,13 +112,6 @@ final class CollapsibleIf extends RuleBase implements QuotationAware {
 			}
 		}
 		for (c in node.children) walk(out, file, c, ifKinds, blockStmtKind);
-	}
-
-	/** Unwrap single-statement `{ … }` layers to reach the wrapped statement. */
-	private static function unwrapBlock(node: QueryNode, blockStmtKind: Null<String>): QueryNode {
-		var n: QueryNode = node;
-		while (blockStmtKind != null && n.kind == blockStmtKind && n.children.length == 1) n = n.children[0];
-		return n;
 	}
 
 	/** Parenthesize `src` iff `node`'s kind binds no tighter than `&&`. */

@@ -165,6 +165,25 @@ final class PurityScan {
 	}
 
 	/**
+	 * `contextOf`, built on the FIRST ask and at most once: forcing the symbol index is the cost, and most files
+	 * hold no candidate that needs a purity answer. A null index leaves the answer null.
+	 */
+	public static function lazyContextOf(
+		plugin: GrammarPlugin, source: String, root: QueryNode, symbols: () -> Null<SymbolIndex>, file: String
+	): () -> Null<PurityCtx> {
+		var ctx: Null<PurityCtx> = null;
+		var built: Bool = false;
+		return () -> {
+			if (!built) {
+				built = true;
+				final index: Null<SymbolIndex> = symbols();
+				ctx = index == null ? null : contextOf(plugin, source, root, index, file);
+			}
+			return ctx;
+		};
+	}
+
+	/**
 	 * Whether a `callKind` node's callee is a referentially transparent stdlib function — the one
 	 * table `StdlibPurity` holds, so this scan and the deletion predicates
 	 * (`TypeResolver.isDeletionPure`) can never disagree about which `Math` / `Std` / `StringTools` /

@@ -5,7 +5,6 @@ import anyparse.check.scan.UsingScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.RefactorSupport;

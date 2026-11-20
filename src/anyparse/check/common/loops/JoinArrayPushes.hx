@@ -5,7 +5,6 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.FieldWriteIndex;
-import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;

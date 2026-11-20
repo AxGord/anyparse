@@ -1170,7 +1170,7 @@
 			"expect": {
 				"exit": 3,
 				"out": "e3b0c44298fc1c14",
-				"err": "b2aa9e91f11c37a5",
+				"err": "145a2771594f6250",
 				"files": "90fc96979480c2c1",
 				"compiles": [
 					true,
@@ -1712,7 +1712,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "0665852ed11d3696",
+				"err": "81321c61ff98b891",
 				"files": "5ac73425cffbf6fb",
 				"compiles": [
 					false,

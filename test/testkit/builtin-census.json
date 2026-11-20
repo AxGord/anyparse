@@ -169,6 +169,7 @@
 	"redundant-cast-type",
 	"redundant-condcomp-parens",
 	"redundant-else-after-return",
+	"redundant-if-before-while",
 	"redundant-import",
 	"redundant-is-check",
 	"redundant-isvar",

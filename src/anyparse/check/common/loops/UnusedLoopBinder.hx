@@ -6,7 +6,6 @@ import anyparse.check.common.loops.ValueIterationProof.ValueIteration;
 import anyparse.check.scan.NativeCodeScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;

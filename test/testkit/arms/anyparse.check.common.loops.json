@@ -978,6 +978,54 @@
 			"find": "!isExactly(write.value, types.value, ctx)",
 			"replace": "false",
 			"note": "a value the typing does not prove exactly the declared value type folds, so an Int for a Float map or a subclass for its base stops compiling"
+		},
+		{
+			"name": "M-RIBW-EQUAL-ALWAYS",
+			"type": "anyparse.check.common.loops.RedundantIfBeforeWhile",
+			"method": "matchIf",
+			"find": "if (!MemberKinds.structurallyEqual(cond, LoopScan.whileCondition(loop))) return null;",
+			"replace": "",
+			"note": "every if whose then-statement is a while is flagged, whatever its condition: a differing or wider condition is reported and the fix drops a guard that decided something"
+		},
+		{
+			"name": "M-RIBW-IMPURE-OK",
+			"type": "anyparse.check.common.loops.RedundantIfBeforeWhile",
+			"method": "refusal",
+			"find": "return purity != null && PurityScan.isPure(cond, purity) ? '' : IMPURE_NOTE;",
+			"replace": "return '';",
+			"note": "a condition holding a call not proven pure is fixed too, so the merge drops an evaluation that had an effect"
+		},
+		{
+			"name": "M-RIBW-COMMENT-LOST",
+			"type": "anyparse.check.common.loops.RedundantIfBeforeWhile",
+			"method": "refusal",
+			"find": "return COMMENT_NOTE;",
+			"replace": "continue;",
+			"note": "a comment between the if and the while no longer refuses the fix, so the merge deletes it with the if"
+		},
+		{
+			"name": "M-RIBW-ELSE-IGNORED",
+			"type": "anyparse.check.common.loops.RedundantIfBeforeWhile",
+			"method": "walk",
+			"find": " && !BranchChain.hasElse(node)",
+			"replace": "",
+			"note": "an if with an else is matched on its then-branch alone, so the fix deletes the else arm with the if"
+		},
+		{
+			"name": "M-RIBW-ANY-STATEMENT",
+			"type": "anyparse.check.common.loops.RedundantIfBeforeWhile",
+			"method": "matchIf",
+			"find": "loop.kind != ctx.seams.whileKind || ",
+			"replace": "",
+			"note": "any two-child statement counts as the loop, so a nested if with the same condition (collapsible-if's) is flagged and rewritten"
+		},
+		{
+			"name": "M-RIBW-FIX-TEXT-EMPTY",
+			"type": "anyparse.check.common.loops.RedundantIfBeforeWhile",
+			"method": "matchIf",
+			"find": "edit: note == '' ? { span: span, text: replacement } : null",
+			"replace": "edit: note == '' ? { span: span, text: '' } : null",
+			"note": "the fix replaces the if with nothing instead of the while it held"
 		}
 	]
 }

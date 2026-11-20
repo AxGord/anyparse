@@ -1,7 +1,6 @@
 package anyparse.check.common.loops;
 
 import anyparse.query.BoolExprShape;
-import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;

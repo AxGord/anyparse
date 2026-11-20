@@ -5,7 +5,6 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.loops.MapValueScan.ValueSeams;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ParenGuard;

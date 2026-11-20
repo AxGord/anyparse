@@ -137,6 +137,7 @@ import anyparse.check.common.loops.PreferIndexAccess;
 import anyparse.check.common.loops.PreferKeyValueLoop;
 import anyparse.check.common.loops.PreferRangeLoop;
 import anyparse.check.common.loops.PreferValueLoop;
+import anyparse.check.common.loops.RedundantIfBeforeWhile;
 import anyparse.check.common.loops.RedundantMapExists;
 import anyparse.check.common.loops.RedundantMapIterKey;
 import anyparse.check.common.loops.RedundantReplaceLoop;
@@ -568,6 +569,7 @@ final class Linter {
 			// `redundant-map-iter-key`'s, so registry order is free.
 			new UnusedLoopBinder(),
 			new RedundantReplaceLoop(),
+			new RedundantIfBeforeWhile(),
 			new LoopBoundLengthMismatch(),
 			new ScratchField(),
 			new TrivialGetter(),

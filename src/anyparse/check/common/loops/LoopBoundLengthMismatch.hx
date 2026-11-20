@@ -4,7 +4,6 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.AccessorClause;
 import anyparse.query.CtorFieldWrite;
-import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.NodeShape;

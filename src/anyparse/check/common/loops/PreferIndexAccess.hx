@@ -3,7 +3,6 @@ package anyparse.check.common.loops;
 import anyparse.check.common.control.BranchChain;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
-import anyparse.query.IndexScope;
 import anyparse.query.NodeShape;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;

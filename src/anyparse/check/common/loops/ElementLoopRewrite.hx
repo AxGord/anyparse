@@ -1,7 +1,6 @@
 package anyparse.check.common.loops;
 
 import anyparse.check.Check.FixEdit;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberReach;
 import anyparse.query.OccurrenceScan;

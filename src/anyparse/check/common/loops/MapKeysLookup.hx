@@ -2,7 +2,6 @@ package anyparse.check.common.loops;
 
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
