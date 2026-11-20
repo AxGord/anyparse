@@ -3427,11 +3427,20 @@
 			"note": "a lint killed at its limit reads as one that printed no report, not as a timeout under load"
 		},
 		{
-			"name": "M-GATE-LINT-CORES-ONE",
-			"type": "dev.GateLint",
-			"method": "coresOf",
-			"force": "1",
-			"note": "the gate lint branches lease one thread per node engine process, so the lint runs on more cpus than its lease holds"
+			"name": "M-GATE-LINT-ROW-FOUR-THREADS",
+			"type": "dev.SliceGate",
+			"method": "demandOf",
+			"find": "case 'lint': facts.touchedHx ? LINT_THREADS : 0;",
+			"replace": "case 'lint': facts.touchedHx ? 4 : 0;",
+			"note": "the lint row leases the cpus of two node engines per pair of lints, so the pool lends it a thread each of its lints leaves idle"
+		},
+		{
+			"name": "M-GATE-BASE-LINT-TWO-THREADS",
+			"type": "dev.SliceGate",
+			"method": "demandOf",
+			"find": "case BaseLint.ROW: BASE_LINT_THREADS;",
+			"replace": "case BaseLint.ROW: 2;",
+			"note": "the base lint branch leases two threads for its one serial lint, so the pool lends it a thread it never uses"
 		},
 		{
 			"name": "M-POSTLAND-LINT-CORES-ONE",

@@ -139,9 +139,9 @@ final class SliceGateTest extends Test {
 	/**
 	 * What every branch of a gate run but the heavy one holds is one thread for the short
 	 * rows, the kits row's when the engine or a kit moved, one for the typer probes
-	 * when the engine, a probe or the harness moved, two for the lint row when a
+	 * when the engine, a probe or the harness moved, three for the lint row when a
 	 * `.hx` file moved, one for the jvm probe when it runs, and the base tree's lint plus one per infra tree when rule code
-	 * moved.
+	 * moved (the base lint branch itself holds one).
 	 */
 	@:pin('control')
 	@:killer('M-GATE-DEMAND-LISTS-NONE')
@@ -157,9 +157,9 @@ final class SliceGateTest extends Test {
 					typerMoved: typerMoved,
 					ruleInfra: ruleInfra
 				};
-				final expected: Int = 1 + (kitsMoved ? Probe.GATE_THREADS : 0) + (typerMoved ? 1 : 0) + (touchedHx ? 2 : 0) + (
-					jvmMoved ? 1 : 0
-				) + (ruleInfra == null ? 0 : 1 + ruleInfra);
+				final expected: Int = 1 + (kitsMoved ? Probe.GATE_THREADS : 0) + (typerMoved ? 1 : 0) + (
+					touchedHx ? SliceGate.LINT_THREADS : 0
+				) + (jvmMoved ? 1 : 0) + (ruleInfra == null ? 0 : 1 + ruleInfra);
 				Assert.equals(expected, Branches.light(SliceGate.GATE_BRANCHES, rows -> SliceGate.demandOf(facts, rows)), '$facts');
 			}
 		Assert.isNull(SliceGate.demandOf({

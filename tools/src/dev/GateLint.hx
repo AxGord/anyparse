@@ -406,17 +406,6 @@ final class GateLint {
 	}
 
 	/**
-	 * The cpus each process of the slice gate's branch `rows` runs on (`Ask.cores`): a lint row's lint is a node engine
-	 * (`Lease.NODE_CORES`), every other branch one.
-	 */
-	public static function coresOf(rows: Array<String>): Int {
-		return switch rows[0] {
-			case 'lint', BaseLint.ROW: Lease.NODE_CORES;
-			case _: 1;
-		};
-	}
-
-	/**
 	 * The verdict of INFRA gate 4: the `scoped` comparison's when it passes, else the `whole` one's — a movement among the rules
 	 * of a scope is decided by every rule, since a rule linted alone (one another rule supersedes) can differ from its run in the
 	 * whole set. Without a scoped comparison only `whole` runs.

@@ -75,6 +75,15 @@ final class SliceGate {
 	/** The most threads the arms phase takes. */
 	public static inline final ARMS_THREADS: Int = 3;
 
+	/**
+	 * The threads the lint row holds for its pair of lints (the touched files now and at the base): a node engine lint does not
+	 * keep two cpus busy, so a lease of `Lease.NODE_CORES` per lint holds what no lint uses.
+	 */
+	public static inline final LINT_THREADS: Int = 3;
+
+	/** The threads the base lint branch holds: one serial lint of the whole base tree. */
+	public static inline final BASE_LINT_THREADS: Int = 1;
+
 	/** The row the arms phase runs. */
 	public static inline final ARMS_ROW: String = 'arms';
 
@@ -324,7 +333,7 @@ final class SliceGate {
 		final command: Array<String> -> Command = branchCommand(self, threads);
 		final leased: Array<String> -> Command = Branches.leased(
 			_mode, branches, demand, command, 'slice-gate ${Path.withoutDirectory(_gate.tree)}',
-			LeaseHistory.under(Land.cacheDir(Sys.getEnv)), GateLint.coresOf
+			LeaseHistory.under(Land.cacheDir(Sys.getEnv))
 		);
 		final started: Array<String> -> Command = rows -> GateLint.leasesItsOwn(rows) ? command(rows) : leased(rows);
 		for (name => value in Branches.run(_gate.options.run, branches, order, started, branchReport, _gate.summary))
@@ -770,17 +779,17 @@ final class SliceGate {
 	/**
 	 * The threads the branch running `rows` holds under `facts`: null for the heavy one (the suite), which takes
 	 * what the others leave under a held lease and asks up to `Branches.heavyShare` on its own; one for the short rows; the
-	 * lint row's two lints (the touched files at the base and now); the
-	 * jvm probe; the typer probes; a lint per tree INFRA gate 4 reads beside
+	 * lint row's `LINT_THREADS` for its two lints (the touched files at the base and now); the base tree's lint, serial,
+	 * one; the jvm probe; the typer probes; a lint per tree INFRA gate 4 reads beside
 	 * the base tree's, which a `--baseline` run lints in its own row —
 	 * each 0 when its rows will skip.
 	 */
 	public static function demandOf(facts: GateDemand, rows: Array<String>): Null<Int> {
 		return switch rows[0] {
 			case 'suite', BaseSuite.ROW: null;
-			case BaseLint.ROW: 1;
+			case BaseLint.ROW: BASE_LINT_THREADS;
 			case 'lists': facts.recording ? 0 : 1;
-			case 'lint': facts.touchedHx ? 2 : 0;
+			case 'lint': facts.touchedHx ? LINT_THREADS : 0;
 			case 'jvm': facts.jvmMoved ? 1 : 0;
 			case 'kits': facts.recording || !facts.kitsMoved ? 0 : Probe.GATE_THREADS;
 			case 'typer probes': facts.recording || !facts.typerMoved ? 0 : 1;

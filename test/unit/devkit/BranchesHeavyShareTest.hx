@@ -2,7 +2,6 @@ package unit.devkit;
 
 import dev.BaseLint;
 import dev.BaseSuite;
-import dev.GateLint;
 import dev.SliceGate;
 import devkit.Branches;
 import devkit.Command;
@@ -40,7 +39,7 @@ final class BranchesHeavyShareTest extends Test {
 		final branches: Array<Array<String>> = SliceGate.GATE_BRANCHES.concat([[BaseSuite.ROW], [BaseLint.ROW]]);
 		final pool: LeaseMode = Own('/p/scripts/wf-run', budget);
 		final argv: Array<String> = Branches.leased(
-			pool, branches, rows -> SliceGate.demandOf(BUSY, rows), rows -> Command.of(['node', rows[0]]), 'gate', null, GateLint.coresOf
+			pool, branches, rows -> SliceGate.demandOf(BUSY, rows), rows -> Command.of(['node', rows[0]]), 'gate'
 		)(['suite', 'corpus']).argv;
 		return argv[argv.indexOf('--threads') + 1];
 	}
