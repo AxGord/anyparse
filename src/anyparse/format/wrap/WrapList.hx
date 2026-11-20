@@ -2124,12 +2124,9 @@ class WrapList {
 		// 2401). Gated to `(`-delimited constructs (call / new); a plain `if` (no
 		// else) / `switch` / `for` / `while` / `{ }`-block body has no top-level
 		// `else` and stays hugged, preserving the landed block/statement-body hugs.
-		// Only a BARE-ident arrow (`p -> …`, a leading-edge `Concat` recognised by
-		// `bareArrowSplit`) is handled; a paren-param arrow (`(p) -> …`) lowers to a
-		// `WrapBoundary` marker for which `bareArrowSplit` returns null, so it is
-		// excluded and keeps its current layout.
+		// Both arrow forms are split by `ifElseArrowSplit`.
 		if (open == '(' && items.length == 1) {
-			final ifElseSplit: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
+			final ifElseSplit: Null<{ head: Doc, body: Doc }> = ifElseArrowSplit(items[0]);
 			if (ifElseSplit != null && arrowBodyIsBrokenIfElse(ifElseSplit.body))
 				return bareArrowGlueShape(open, close, openInside, closeInside, ifElseSplit.head, ifElseSplit.body, cols);
 		}
@@ -4676,6 +4673,29 @@ class WrapList {
 			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
 		else
 			WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
+	}
+
+	/**
+	 * Split a sole arrow argument into the head the glue shape keeps on the open paren and the body it breaks to: a bare-ident
+	 * arrow through `bareArrowSplit`, a paren-param arrow (`(params) -> body`, whose `->` is not a top-level Text) at its trailing
+	 * arrow-body marker. The body is the marker's flat side, because the glue shape breaks after `->` itself and the marker's own
+	 * break side would add a second break and indent. Null when `item` is no arrow.
+	 */
+	private static function ifElseArrowSplit(item: Doc): Null<{ head: Doc, body: Doc }> {
+		final bare: Null<{ head: Doc, body: Doc }> = bareArrowSplit(item);
+		if (bare != null) return { head: bare.head, body: arrowBodyDoc(bare.body) ?? bare.body };
+		switch item {
+			case Concat(arr) if (arr.length > 1):
+				final init: Array<Doc> = arr.slice(0, arr.length - 1);
+				switch arr[arr.length - 1] {
+					case WrapBoundary(IfResidualLineExceeds(_, _, flat)): return { head: Concat(init), body: flat };
+					case last:
+						final sub: Null<{ head: Doc, body: Doc }> = ifElseArrowSplit(last);
+						return sub == null ? null : { head: Concat(init.concat([sub.head])), body: sub.body };
+				}
+			case _:
+				return null;
+		}
 	}
 
 }

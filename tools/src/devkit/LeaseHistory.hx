@@ -92,12 +92,14 @@ final class LeaseHistory {
 	public static function p90(times: Array<Float>): Null<Float> {
 		if (times.length < MIN_RUNS) return null;
 		final sorted: Array<Float> = times.copy();
-		sorted.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		sorted.sort((a, b) ->
+			if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0
+		);
 		return sorted[Math.ceil(PERCENTILE * sorted.length) - 1];
 	}
 

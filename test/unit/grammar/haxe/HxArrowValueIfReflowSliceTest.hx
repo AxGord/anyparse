@@ -25,8 +25,9 @@ import utest.Test;
  * nothing - each of the four must equal the knob-off output byte for byte.
  *
  * Config `expressionIf: "next"` + `ifBody: "fitLine"` reproduces the reported
- * setup: without the knob every branch value drops below its condition and
- * the `else` arms sit at the OUTER indent, even when the whole statement fits.
+ * setup: without the knob every branch value drops below its condition, the
+ * head breaks after `->` and the call's `)` takes its own line, even when the
+ * whole statement fits.
  */
 @:nullSafety(Strict)
 final class HxArrowValueIfReflowSliceTest extends Test {
@@ -59,8 +60,8 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 	private static final FLAT_SRC: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if ('
 		+ 'p.orderKeyVal < q.orderKeyVal) -1 else if (p.orderKeyVal > q.orderKeyVal) 1 else 0);\n\t}\n}';
 	private static final FLAT_KEPT: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\titems.rank((p:Item, q:Item) -> if (p.orderKeyVal < q.orderKeyVal)\n\t\t\t-1\n'
-		+ '\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t1\n\t\telse\n\t\t\t0);\n\t}\n}';
+		+ '\t\titems.rank((p:Item, q:Item) ->\n\t\t\tif (p.orderKeyVal < q.orderKeyVal)\n\t\t\t\t-1\n'
+		+ '\t\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\t0\n\t\t);\n\t}\n}';
 	private static final WIDE_SRC: String = 'class C {\n\tfunction test() {\n'
 		+ '\t\titemCollection.rankEntries((primaryEntry:ItemEntry, secondaryEntry:ItemEntry) -> if (primaryEntry.orderKeyValue < '
 		+ 'secondaryEntry.orderKeyValue) -1 else if (primaryEntry.orderKeyValue > secondaryEntry.orderKeyValue) 1 else 0);\n\t}\n}';
@@ -79,18 +80,18 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 		+ 'secondary:ItemEntry) ->\n\t\t\tif (primary.orderKeyValue < secondary.orderKeyValue) -1 else if ('
 		+ 'primary.orderKeyValue > secondary.orderKeyValue) 1 else 0\n'
 		+ '\t\t);\n\t}\n}';
-	private static final COMMENT_OUTER_SRC: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if ('
-		+ 'p.orderKeyVal < q.orderKeyVal)\n\t\t\t// ascending\n\t\t\t-1\n'
-		+ '\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t1\n\t\telse\n\t\t\t0);\n\t}\n}';
+	private static final COMMENT_OUTER_SRC: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) ->\n'
+		+ '\t\t\tif (p.orderKeyVal < q.orderKeyVal)\n\t\t\t\t// ascending\n\t\t\t\t-1\n'
+		+ '\t\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\t0\n\t\t);\n\t}\n}';
 	private static final COMMENT_INNER_COND_SRC: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\titems.rank((p:Item, q:Item) -> if (p.orderKeyVal < q.orderKeyVal)\n\t\t\t-1\n'
-		+ '\t\telse if (p.orderKeyVal > q.orderKeyVal) // descending\n\t\t\t1\n\t\telse\n\t\t\t0);\n\t}\n}';
+		+ '\t\titems.rank((p:Item, q:Item) ->\n\t\t\tif (p.orderKeyVal < q.orderKeyVal)\n\t\t\t\t-1\n'
+		+ '\t\t\telse if (p.orderKeyVal > q.orderKeyVal) // descending\n\t\t\t\t1\n\t\t\telse\n\t\t\t\t0\n\t\t);\n\t}\n}';
 	private static final COMMENT_INNER_VALUE_SRC: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\titems.rank((p:Item, q:Item) -> if (p.orderKeyVal < q.orderKeyVal)\n\t\t\t-1\n\t\telse if ('
-		+ 'p.orderKeyVal > q.orderKeyVal)\n\t\t\t// descending\n\t\t\t1\n\t\telse\n\t\t\t0);\n\t}\n}';
+		+ '\t\titems.rank((p:Item, q:Item) ->\n\t\t\tif (p.orderKeyVal < q.orderKeyVal)\n\t\t\t\t-1\n\t\t\telse if ('
+		+ 'p.orderKeyVal > q.orderKeyVal)\n\t\t\t\t// descending\n\t\t\t\t1\n\t\t\telse\n\t\t\t\t0\n\t\t);\n\t}\n}';
 	private static final COMMENT_TAIL_SRC: String = 'class C {\n\tfunction test() {\n'
-		+ '\t\titems.rank((p:Item, q:Item) -> if (p.orderKeyVal < q.orderKeyVal)\n\t\t\t-1\n'
-		+ '\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t1\n\t\telse\n\t\t\t// equal\n\t\t\t0);\n\t}\n}';
+		+ '\t\titems.rank((p:Item, q:Item) ->\n\t\t\tif (p.orderKeyVal < q.orderKeyVal)\n\t\t\t\t-1\n'
+		+ '\t\t\telse if (p.orderKeyVal > q.orderKeyVal)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\t// equal\n\t\t\t\t0\n\t\t);\n\t}\n}';
 
 	/**
 	 * The trailing comment sits after the chain's LAST value, which is the one
@@ -108,8 +109,8 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 
 	private static final BLOCK_SRC: String =
 		'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok) { first(); } else { second(); });\n\t}\n}';
-	private static final BLOCK_CANON: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok) {\n'
-		+ '\t\t\tfirst();\n\t\t} else {\n\t\t\tsecond();\n\t\t});\n\t}\n}';
+	private static final BLOCK_CANON: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) ->\n'
+		+ '\t\t\tif (p.ok) {\n\t\t\t\tfirst();\n\t\t\t} else {\n\t\t\t\tsecond();\n\t\t\t}\n\t\t);\n\t}\n}';
 	private static final OTHER_SRC: String = 'class C {\n\tfunction test() {\n\t\tfinal direct = if (flag) 1 else 0;\n'
 		+ '\t\tfinal ternary = items.rank((p:Item, q:Item) -> p.orderKeyVal < q.orderKeyVal ? -1 : 1);\n'
 		+ '\t\titems.rank((p:Item, q:Item) -> {\n\t\t\tif (p.orderKeyVal < q.orderKeyVal) return -1;\n\t\t\treturn 0;\n\t\t});\n\t}\n}';
@@ -118,9 +119,9 @@ final class HxArrowValueIfReflowSliceTest extends Test {
 		+ '\t\titems.rank((p:Item, q:Item) -> {\n\t\t\tif (p.orderKeyVal < q.orderKeyVal) return -1;\n\t\t\treturn 0;\n\t\t});\n\t}\n}';
 	private static final OBJECT_SRC: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok)\n\t\t\t// pick '
 		+ 'first\n\t\t\t{ alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{ alpha: q.a, beta: q.b });\n\t}\n}';
-	private static final OBJECT_CANON: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) -> if (p.ok)\n'
-		+ '\t\t\t// pick first\n\t\t\t{ alpha: p.a, beta: p.b }\n\t\telse\n\t\t\t{ alpha: q.a, beta: q.b });\n'
-		+ '\t}\n}';
+	private static final OBJECT_CANON: String = 'class C {\n\tfunction test() {\n\t\titems.rank((p:Item, q:Item) ->\n'
+		+ '\t\t\tif (p.ok)\n\t\t\t\t// pick first\n\t\t\t\t{ alpha: p.a, beta: p.b }\n\t\t\telse\n\t\t\t\t{ alpha: q.a, beta: q.b }\n'
+		+ '\t\t);\n\t}\n}';
 	private static final NO_ELSE_SRC: String =
 		'class C {\n\tfunction test() {\n\t\tfinal kept = items.map(p -> if (p.orderKeyVal > 0) p.orderKeyVal);\n\t}\n}';
 	private static final NO_ELSE_CANON: String =

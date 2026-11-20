@@ -713,6 +713,22 @@
 			"find": "return IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, broken, hug);",
 			"replace": "return hug;",
 			"note": "the hug ignores the width, so a head line past the limit overflows instead of breaking at `?` and `:`"
+		},
+		{
+			"name": "M-PAREN-ARROW-SPLIT-OFF",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "ifElseArrowSplit",
+			"find": "return { head: Concat(init), body: flat };",
+			"replace": "return null;",
+			"note": "a paren-param arrow never splits at its arrow-body marker, so a multi-line if/else body keeps its head glued to `->` with the ladder at the statement's indent and the call's `)` on the last line"
+		},
+		{
+			"name": "M-ARROW-GLUE-BODY-KEEPS-MARKER",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "ifElseArrowSplit",
+			"find": "if (bare != null) return { head: bare.head, body: arrowBodyDoc(bare.body) ?? bare.body };",
+			"replace": "if (bare != null) return bare;",
+			"note": "the glue shape takes the arrow marker itself as its body, so a head wide enough to overflow the marker's own probe breaks after `->` twice and indents the ladder a second level"
 		}
 	]
 }

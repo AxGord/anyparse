@@ -348,12 +348,14 @@ final class CloneCensus {
 			final keptBare: Int = kept.filter(bare).length;
 			final removedFamilies: Array<Finding> = [];
 			for (f in removed) if (!removedFamilies.exists(r -> familyOf(r) == familyOf(f))) removedFamilies.push(f);
-			removedFamilies.sort((a, b) -> if (a.origFile == b.origFile)
-				a.origLine - b.origLine
-			else if (a.origFile < b.origFile)
-				-1
-			else
-				1);
+			removedFamilies.sort((a, b) ->
+				if (a.origFile == b.origFile)
+					a.origLine - b.origLine
+				else if (a.origFile < b.origFile)
+					-1
+				else
+					1
+			);
 			out.push(
 				'[$label] $rule removed=${removed.length} findings / ${removedFamilies.length} families, added=${added.length}, '
 				+ 'kept=${kept.length}; regex agrees: removed&bare=$removedBare removed&logic=${removed.length - removedBare} '

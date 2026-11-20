@@ -103,12 +103,14 @@ class ProfTop {
 		}
 		final rows: Array<{ label: String, us: Float }> = [ for (key => us in self) { label: key, us: us } ];
 		// a tie is broken by label: the rows come out of a map, whose order is the target's
-		rows.sort((a, b) -> if (b.us > a.us)
-			1
-		else if (b.us < a.us)
-			-1
-		else
-			Reflect.compare(a.label, b.label));
+		rows.sort((a, b) ->
+			if (b.us > a.us)
+				1
+			else if (b.us < a.us)
+				-1
+			else
+				Reflect.compare(a.label, b.label)
+		);
 		final scope: String = (under == '' ? '' : ' (under $under)') + (notUnder == '' ? '' : ' (not under $notUnder)');
 		Sys.println('total ${round(total / US_PER_MS)} ms across ${samples.length} samples$scope');
 		final shown: Int = rows.length < top ? rows.length : top;

@@ -149,12 +149,14 @@ final class SelfStatusCommand implements CliCommand {
 			return EXIT_RUNTIME;
 		}
 		final walk: SelfStatusWalk = walkSelfStatus(io.plugin, io.paths, opts.showSource);
-		walk.skipLines.sort((a, b) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0);
+		walk.skipLines.sort((a, b) ->
+			if (a < b)
+				-1
+			else if (a > b)
+				1
+			else
+				0
+		);
 		for (line in walk.skipLines) CliIo.sysPrint('$line\n');
 		final total: Int = walk.parseable + walk.skipParse;
 		CliIo.sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');

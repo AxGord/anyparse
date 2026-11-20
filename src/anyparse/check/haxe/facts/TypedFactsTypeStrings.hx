@@ -76,12 +76,14 @@ final class TypedFactsTypeStrings {
 					case AAbstractStatics(ab): 'Abstract<' + ab.toString() + '>';
 					case _:
 						final fields: Array<ClassField> = anon.fields.copy();
-						fields.sort((x, y) -> if (x.name < y.name)
-							-1
-						else if (x.name > y.name)
-							1
-						else
-							0);
+						fields.sort((x, y) ->
+							if (x.name < y.name)
+								-1
+							else if (x.name > y.name)
+								1
+							else
+								0
+						);
 						'{'
 							+ [
 								for (f in fields) (f.meta.has(':optional') ? '?' : '') + f.name + ':' + typeString(f.type, depth + 1)
