@@ -280,6 +280,7 @@ echoed note and never fails the step:
 | `ANYPARSE_SCRUB_LIST` | the private scrub map (above) | the scrub guard says so and passes |
 
 `unit.dev.TrackedWorkflowsTest` holds that no file of the folder names a machine path and that no exec command interpolates `{{project_root}}` unquoted.
+`unit.dev.TrackedWorkflowRoutesTest` holds the routes as data (`unit.dev.WorkflowRoutes` reads each `states:` block): the engine applies an exec state's `context_set` only on exit 0, so no state reachable from a non-zero exit may read a key that state sets (`context.<key>`) unless another state on the route sets it first, and the two entries of the lock chain — a finished round `worker_end → fmt_race_skip → review_lock → sweep_probe → sweep_next → review`, a fresh line `prepare → sweep_probe → sweep_next → recon_route` — are followed with that same rule. It cannot see a key an agent sets through `transition set:`, a key preloaded at `start`, a read through `{{stdout}}`, or an earlier successful visit that left the key; a read that is by design (an accumulator, an informational print) is an entry of its `TOLERATED` map with the reason.
 
 ## Mutation checks: testing the tests
 

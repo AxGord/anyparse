@@ -134,8 +134,6 @@ states:
     timeout: 600000
     resource: { threads: { min: 1, max: 2 }, locks: ["anyparse-sweep-lock"] }
     max_output: 4096
-    context_set:
-      lock_note: "{{stdout}}"
     cases:
       "0": sweep_next
       "10": sweep_next
@@ -160,7 +158,9 @@ states:
     ask: parent
     prompt: |-
       A slice driver: reply NEEDS-PARENT and take NO transition — the parent picks it.
-      `dev sweep-lock` for {{context.slice}} did not hold its footprint: {{context.lock_note}} {{stderr}}
+      `dev sweep-lock` for {{context.slice}} did not hold its footprint: {{stdout}} {{stderr}}
+      (the output of the step that sent you here: a context key set by `sweep_lock` would exist only after exit 0; an
+      empty note after a wait means the `sleep` itself failed)
       `blocked_reason: footprint overlaps <id>` (after the waits): another running line holds a file this sweep will
       change; `retry` once that line ended, `skip` runs the line holding only its declared touches (the land's
       re-apply is the net), `stop` ends it. `the footprint could not be read`: the listing failed (never read as an
@@ -560,7 +560,7 @@ states:
     prompt: |-
       A slice driver: reply NEEDS-PARENT and take NO transition — the parent picks it.
       `land` refused before merging anything: files nothing tracks sit in the main checkout:
-      {{context.land_table}}
+      {{stdout}}
       Reply `NEEDS-PARENT slice={{context.slice}} session={{session_id}} reason=untracked files in main: <the list>`.
       The parent finds whose they are (a stray write is removed or moved by the parent or the user, never by you), then
       picks `retry` (main is clean again) or `stop`.
