@@ -83,7 +83,7 @@ final class OptionsSource {
 			final spelled: String = spell(knob.shape, now, needed);
 			if (spelled == spell(knob.shape, was, [])) continue;
 			out.push({ name: knob.name, source: spelled });
-			for (path in needed) imports.pushUnique(path);
+			imports.pushAllUnique(needed);
 		}
 		return out;
 	}

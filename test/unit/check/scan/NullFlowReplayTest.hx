@@ -169,7 +169,7 @@ final class NullFlowReplayTest extends Test {
 		final collected: Array<String> = [];
 		RefsCache.collectNames(tree, collected);
 		final names: Array<String> = [];
-		for (name in collected) names.pushUnique(name);
+		names.pushAllUnique(collected);
 		names.sort(Compare.compareString);
 		final out: Array<String> = [];
 		NullFlow.analyze(tree, shape, source, (node, facts) -> {

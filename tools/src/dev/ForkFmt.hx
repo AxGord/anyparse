@@ -37,7 +37,7 @@ final class ForkFmt {
 		final shown: Array<String> = lines.filter(line -> line.indexOf(VERIFY_LINE) >= 0);
 		final why: Array<String> = [];
 		if (text.indexOf(DIVERGED) >= 0) {
-			for (line in lines) shown.pushUnique(line);
+			shown.pushAllUnique(lines);
 			why.push('fmt --verify found a non-whitespace divergence in $src');
 		}
 		if (text.indexOf(ONE_PASS) >= 0) {

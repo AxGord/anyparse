@@ -494,7 +494,7 @@ final class MissingVisibility extends RuleBase {
 	 */
 	private static function modifierRunKinds(shape: RefShape, meta: MetaShape): Array<String> {
 		final out: Array<String> = CheckScan.modifierKinds(shape);
-		for (k in meta.metaKinds) out.pushUnique(k);
+		out.pushAllUnique(meta.metaKinds);
 		return out;
 	}
 

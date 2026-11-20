@@ -682,7 +682,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 	private static function valueTypesOf(shape: RefShape): Array<String> {
 		final out: Array<String> = present(shape.nonNullableTypeNames).copy();
 		final literals: Map<String, String> = shape.literalTypeNames ?? [];
-		for (t in literals) out.pushUnique(t);
+		out.pushAllUnique(literals);
 		return out;
 	}
 

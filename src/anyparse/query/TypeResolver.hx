@@ -403,7 +403,7 @@ final class TypeResolver {
 			shape.localDeclExprKinds,
 			shape.staticLocalDeclKinds,
 			shape.moduleValueDeclKinds
-		]) if (family != null) for (kind in family) kinds.pushUnique(kind);
+		]) if (family != null) kinds.pushAllUnique(family);
 		return kinds;
 	}
 

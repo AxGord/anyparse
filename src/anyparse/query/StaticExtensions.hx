@@ -136,7 +136,7 @@ final class StaticExtensions {
 		for (u in usingsOf(fi)) {
 			final hosts: Null<UsingHosts> = usingHosts(u.raw);
 			final names: Array<String> = hosts == null ? [SourceText.lastSegment(u.raw)] : hosts.types.map(t -> t.type.name);
-			for (n in names) out.pushUnique(n);
+			out.pushAllUnique(names);
 		}
 		return out;
 	}

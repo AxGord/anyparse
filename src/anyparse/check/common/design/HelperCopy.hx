@@ -80,7 +80,7 @@ final class HelperCopy extends RuleBase implements NoAutofix implements DefaultO
 			final declared: Array<String> = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.stringListOption(RULE_ID, OPTION_HOMES) ?? [];
 			own[entry.file] = declared;
-			for (home in declared) homes.pushUnique(home);
+			homes.pushAllUnique(declared);
 		}
 		if (homes.length == 0) return [];
 		final shape: RefShape = plugin.refShape();

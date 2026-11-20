@@ -183,7 +183,7 @@ final class ShapeVocab {
 	/** The kinds of `groups` in order, each once; an unset group adds nothing. */
 	private static function union(groups: Array<Null<Array<String>>>): Array<String> {
 		final out: Array<String> = [];
-		for (g in groups) if (g != null) for (k in g) out.pushUnique(k);
+		for (g in groups) if (g != null) out.pushAllUnique(g);
 		return out;
 	}
 

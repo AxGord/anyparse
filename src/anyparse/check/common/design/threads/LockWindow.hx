@@ -146,8 +146,8 @@ final class LockWindow {
 			reset(acquireFrom, releaseFroms, raisingFroms);
 			if (sequence(fn.children, false) == true) _leaks = true;
 			leaks = leaks || _leaks;
-			for (n in _held) held.pushUnique(n);
-			for (n in _escapes) escapes.pushUnique(n);
+			held.pushAllUnique(_held);
+			escapes.pushAllUnique(_escapes);
 		}
 		_decided = [];
 		return { held: held, leaks: leaks, escapes: escapes };

@@ -2311,7 +2311,7 @@
 			"name": "M-TS-WAIVE-OFF",
 			"type": "anyparse.check.common.design.threads.PositiveSinks",
 			"method": "waived",
-			"find": "for (id in removed) out.pushUnique(id);",
+			"find": "out.pushAllUnique(removed);",
 			"replace": "",
 			"note": "a nonBlocking entry waives nothing"
 		},

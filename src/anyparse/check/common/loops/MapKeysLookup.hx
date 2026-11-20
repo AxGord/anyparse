@@ -237,7 +237,7 @@ final class MapKeysLookup extends RuleBase {
 	private static function safeAnnotationTypeNames(shape: RefShape): Array<String> {
 		final names: Array<String> = (shape.nonNullableTypeNames ?? []).copy();
 		final literals: Null<Map<String, String>> = shape.literalTypeNames;
-		if (literals != null) for (t in literals) names.pushUnique(t);
+		if (literals != null) names.pushAllUnique(literals);
 		return names;
 	}
 

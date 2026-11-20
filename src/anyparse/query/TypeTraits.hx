@@ -83,7 +83,7 @@ final class TypeTraits {
 			i++;
 			for (f in _files) for (t in f.types) if (t.name == name) {
 				if (t.hasRtti) return true;
-				for (s in t.supertypes) seen.pushUnique(s);
+				seen.pushAllUnique(t.supertypes);
 			}
 		}
 		return false;

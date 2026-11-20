@@ -470,7 +470,7 @@ final class OracleCache {
 			final dir: String = absolute(root, classPath);
 			classPaths.pushUnique(dir);
 		}
-		for (lib in refs.libs) libs.pushUnique(lib);
+		libs.pushAllUnique(refs.libs);
 		for (include in refs.includes) {
 			final next: String = absolute(root, include);
 			queue.pushUnique(next);

@@ -143,7 +143,7 @@ final class ReconFacts {
 		for (n in names) {
 			final spot: Map<String, String> = spots[n] ?? [];
 			final holding: Array<String> = [];
-			for (path in spot) holding.pushUnique(path);
+			holding.pushAllUnique(spot);
 			final count: MentionCount = { hits: spot.count(), files: holding.length };
 			counts[n] = count;
 		}

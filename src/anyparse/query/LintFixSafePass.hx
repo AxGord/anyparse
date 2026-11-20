@@ -687,7 +687,7 @@ final class LintFixSafePass {
 		if (!green(text)) return null;
 		for (i in failers) if (green(seat.replay(file, keptRules.concat([rules[i]])))) return null;
 		final dropped: Array<String> = failers.map(i -> rules[i]);
-		for (rule in later) dropped.pushUnique(rule);
+		dropped.pushAllUnique(later);
 		return {
 			file: file,
 			rules: dropped,

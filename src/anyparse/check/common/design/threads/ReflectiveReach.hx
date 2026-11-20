@@ -209,7 +209,7 @@ final class ReflectiveReach {
 			if (outer != null && outer == _shape.voidTypeName) continue;
 			final reach: Null<Array<String>> = reachOf(outer);
 			if (reach == null) return null;
-			for (t in reach) out.pushUnique(t);
+			out.pushAllUnique(reach);
 		}
 		return out;
 	}
@@ -254,7 +254,7 @@ final class ReflectiveReach {
 			}
 			final reach: Null<Array<String>> = reachOfSources(forwarded ?? [arg]);
 			if (reach == null) return null;
-			for (t in reach) out.pushUnique(t);
+			out.pushAllUnique(reach);
 		}
 		return free.foreach(neverMade) ? out : null;
 	}

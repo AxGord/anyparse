@@ -301,9 +301,8 @@ final class StaticReflectionReach {
 	 */
 	private static function noteReified(scanned: Array<FileScan>, state: ScanState): Void {
 		final modules: Array<String> = [];
-		for (scan in scanned)
-			if (scan.macroFile && REIFY_TOKENS.exists(t -> scan.source.indexOf(t) >= 0))
-				for (name in scan.declared) modules.pushUnique(name);
+		for (scan in scanned) if (scan.macroFile && REIFY_TOKENS.exists(t -> scan.source.indexOf(t) >= 0))
+			modules.pushAllUnique(scan.declared);
 		for (scan in scanned)
 			if (modules.exists(m -> !scan.declared.contains(m) && RawSourceScan.mentionsWord(scan.source, m)))
 				for (name in scan.declared)

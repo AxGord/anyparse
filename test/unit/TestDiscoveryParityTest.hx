@@ -65,7 +65,7 @@ class TestDiscoveryParityTest extends Test {
 	public function testNoClassIsRegisteredTwice(): Void {
 		final names: Array<String> = TestRegistry.classNames();
 		final seen: Array<String> = [];
-		for (name in names) seen.pushUnique(name);
+		seen.pushAllUnique(names);
 		Assert.equals(names.length, seen.length, 'a duplicate registration makes utest throw at run start');
 	}
 

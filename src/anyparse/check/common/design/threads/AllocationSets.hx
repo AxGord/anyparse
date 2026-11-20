@@ -107,7 +107,7 @@ final class AllocationSets {
 			if (values == null)
 				sealed = false;
 			else
-				for (v in values) found.pushUnique(v);
+				found.pushAllUnique(values);
 		}
 		final answer: Null<Array<String>> = !sealed || found.length == 0 ? null : found;
 		_fields[field] = answer;
@@ -202,7 +202,7 @@ final class AllocationSets {
 		for (p in parts) {
 			final inner: Null<Array<String>> = constructed(p, file);
 			if (inner == null) return null;
-			for (c in inner) out.pushUnique(c);
+			out.pushAllUnique(inner);
 		}
 		return out;
 	}

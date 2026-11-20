@@ -222,7 +222,7 @@ final class SweepLock {
 		request: LockRequest, line: QueueLine, declared: Array<String>, files: Array<String>, tools: LockTools
 	): LockVerdict {
 		final wanted: Array<String> = declared.copy();
-		for (file in files) wanted.pushUnique(file);
+		wanted.pushAllUnique(files);
 
 		final others: Array<QueueLine> = QueueFile.read(File.getContent(request.queue))
 			.filter(other -> other.status == 'running' && other.id != line.id);

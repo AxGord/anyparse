@@ -498,6 +498,22 @@
 			"find": "c == ' '.code || c == '\\t'.code",
 			"replace": "c == ' '.code || c == '\\t'.code || c == '\\r'.code",
 			"note": "a carriage return counts as a blank within a line"
+		},
+		{
+			"name": "M-UTIL-PUSH-ALL-UNIQUE-REPEAT",
+			"type": "anyparse.util.Groups",
+			"method": "pushAllUnique",
+			"find": "xs.pushUnique(x)",
+			"replace": "xs.push(x)",
+			"note": "a value the target already holds, or that the source repeats, is appended again instead of once"
+		},
+		{
+			"name": "M-UTIL-PUSH-ALL-UNIQUE-ORDER",
+			"type": "anyparse.util.Groups",
+			"method": "pushAllUnique",
+			"find": "for (x in items) xs.pushUnique(x);",
+			"replace": "for (x in items) if (!xs.contains(x)) xs.insert(0, x);",
+			"note": "new values land at the front, so the source's first-seen order is reversed in the target"
 		}
 	]
 }

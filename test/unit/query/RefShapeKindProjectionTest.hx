@@ -1518,7 +1518,7 @@ final class RefShapeKindProjectionTest extends Test {
 					missed.push('"${row.source}" does not parse: ${exception.message}');
 					continue;
 				}
-				for (kind in emitted) everything.pushUnique(kind);
+				everything.pushAllUnique(emitted);
 				for (kind in row.kinds) {
 					if (!emitted.contains(kind))
 						missed.push('$kind (the source claiming it no longer emits it)');
@@ -1613,7 +1613,7 @@ final class RefShapeKindProjectionTest extends Test {
 				for (key in (cast value: StringMap<Any>).keys()) names.push(key);
 			else
 				stringsOf(value, names);
-			for (name in names) out.pushUnique(name);
+			out.pushAllUnique(names);
 		}
 		out.sort(Compare.compareString);
 		return out;

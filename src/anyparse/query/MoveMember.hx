@@ -964,7 +964,7 @@ final class MoveMember {
 			case CarryErr(message):
 				return message;
 			case CarryOk(lines):
-				for (line in lines) carried.pushUnique(line);
+				carried.pushAllUnique(lines);
 		}
 		// Each member's list holds the source's `using` lines in declaration order, the union across members need not
 		// (`[using A]` then `[using B, using A]` reads B after A) — and their order decides which extension wins a name.

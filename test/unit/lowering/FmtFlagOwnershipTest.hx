@@ -82,7 +82,7 @@ class FmtFlagOwnershipTest extends Test {
 		);
 		final named: Map<String, Array<String>> = ownershipScan(root, inventory);
 		final all: Array<String> = [];
-		for (flags in named) for (flag in flags) all.pushUnique(flag);
+		for (flags in named) all.pushAllUnique(flags);
 		for (flag in inventory)
 			Assert.isTrue(
 				all.contains(flag),
@@ -137,7 +137,7 @@ class FmtFlagOwnershipTest extends Test {
 		final inventory: Array<String> = inventoryFlags(root);
 		final named: Map<String, Array<String>> = ownershipScan(root, HANDLER_ONLY_FLAGS);
 		final all: Array<String> = [];
-		for (flags in named) for (flag in flags) all.pushUnique(flag);
+		for (flags in named) all.pushAllUnique(flags);
 		for (flag in HANDLER_ONLY_FLAGS) {
 			Assert.isTrue(
 				all.contains(flag),

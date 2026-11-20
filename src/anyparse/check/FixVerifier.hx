@@ -940,7 +940,7 @@ final class FixVerifier {
 		final configs: Array<OracleConfig> = [];
 		for (candidate in candidates) {
 			write(candidate.entry.file, candidate.fullText);
-			for (config in candidate.verifying) configs.pushUnique(config);
+			configs.pushAllUnique(candidate.verifying);
 		}
 		rounds.push(n);
 		final outcome: OracleOutcome = OracleProviders.of(plugin).typecheckAll(configs, false);

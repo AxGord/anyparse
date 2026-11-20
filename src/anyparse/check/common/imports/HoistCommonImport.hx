@@ -588,7 +588,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			final ladder: Array<String> = plugin.ambientImportSites(info.file, info.pkg);
 			if (ladder.length == 0) continue;
 			ladderOf[info.file] = ladder;
-			for (site in ladder) order.pushUnique(site);
+			order.pushAllUnique(ladder);
 		}
 		final governedAt: Map<String, Array<String>> = [];
 		for (site in order) {

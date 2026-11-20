@@ -10424,7 +10424,7 @@
 			"name": "M-VOCAB-UNION-DUPLICATES",
 			"type": "anyparse.query.ShapeVocab",
 			"method": "union",
-			"find": "for (k in g) out.pushUnique(k);",
+			"find": "out.pushAllUnique(g);",
 			"replace": "for (k in g) out.push(k);",
 			"note": "a kind two seams both name is answered twice, so every derived set carries a duplicate where the grammar's seams overlap"
 		},

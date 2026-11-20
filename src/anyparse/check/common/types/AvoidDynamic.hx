@@ -576,7 +576,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 	/** The distinct values of `xs`, order-preserving. */
 	private static function distinct(xs: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (x in xs) out.pushUnique(x);
+		out.pushAllUnique(xs);
 		return out;
 	}
 

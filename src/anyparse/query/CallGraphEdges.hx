@@ -283,7 +283,7 @@ final class CallGraphEdges {
 		function readIn(
 			files: Array<String>, written: Null<String>, owner: Null<String>, ?fn: String, ?each: Array<WrittenIn>
 		): Null<String> {
-			for (f in files) readFrom.pushUnique(f);
+			readFrom.pushAllUnique(files);
 			final unkeyed: Array<String> = g.types.generics.typeParamsOf(owner ?? '')
 				.concat(fn == null ? [] : g._facts.typeParams[fn] ?? []);
 			return written == null && each != null && each.length > 1

@@ -482,7 +482,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 		});
 		if (groups.length == 0) return;
 		final names: Array<String> = [];
-		for (g in groups) for (n in g.members) names.pushUnique(n);
+		for (g in groups) names.pushAllUnique(g.members);
 		final sinks: Map<String, Array<String>> = [];
 		computeSinks(tree, source, names, cfg, sinks, -1);
 		for (g in groups) if (interchangeable(g.members, sinks)) out.push({

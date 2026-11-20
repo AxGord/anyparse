@@ -1289,7 +1289,7 @@ final class DependencyCarry {
 	): Array<String> {
 		final identKind: String = shape.identKind;
 		final candidates: Array<String> = [];
-		for (provider in providers) for (name in provider.names) candidates.pushUnique(name);
+		for (provider in providers) candidates.pushAllUnique(provider.names);
 		final mentioned: Array<String> = [];
 		collectBareMentions(tree, declSpan, identKind, candidates, mentioned);
 		if (mentioned.length == 0) return [];

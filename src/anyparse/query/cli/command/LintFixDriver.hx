@@ -1355,7 +1355,7 @@ final class LintFixDriver {
 		// into files the verified phases never touched.
 		final rewritten: Array<String> = changedSince(files, verifiedOf).map(entry -> entry.file).concat(goneSince(files, verifiedOf));
 		if (rewritten.length == 0) return quiet;
-		for (f in rewritten) changedFiles.pushUnique(f);
+		changedFiles.pushAllUnique(rewritten);
 		final pass: SafePassOutcome = commitSafeWrites(files, rewritten, verifiedOf, coupled, oracle, oracles, created, trail);
 		// What the round KEPT: a file its net reverted is back at the verified bytes, so neither it nor its edits are counted —
 		// bar the edits a file the net only split kept.

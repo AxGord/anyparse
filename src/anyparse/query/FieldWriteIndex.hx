@@ -388,7 +388,7 @@ final class FieldWriteIndex {
 		final symbols: SymbolIndex = index ?? IndexScope.report(files, plugin);
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
 		final builtinNames: Array<String> = [];
-		for (v in literalTypes) builtinNames.pushUnique(v);
+		builtinNames.pushAllUnique(literalTypes);
 		final unwrapNames: Array<String> = shape.nullableReturnMarkerTypes ?? [];
 		final rejectNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
 		final typeParams: Map<String, Array<String>> = [];
@@ -788,7 +788,7 @@ final class FieldWriteIndex {
 		if (cur == null)
 			map[owner] = params;
 		else
-			for (p in params) cur.pushUnique(p);
+			cur.pushAllUnique(params);
 	}
 
 	/** `paths` as a membership set — null (no partition supplied) is the empty set, where nothing is third-party. */

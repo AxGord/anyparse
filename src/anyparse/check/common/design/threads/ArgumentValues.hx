@@ -295,7 +295,7 @@ final class ArgumentValues {
 				: valueOf(arg, call, keepStrings);
 			final part: Null<Array<String>> = atomsOf(value);
 			if (part == null) return UNKNOWN;
-			for (a in part) atoms.pushUnique(a);
+			atoms.pushAllUnique(part);
 		}
 		return spell(atoms, keepStrings);
 	}

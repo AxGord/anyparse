@@ -467,7 +467,7 @@ final class OwnerIndex {
 
 	private static function distinct(items: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (item in items) out.pushUnique(item);
+		out.pushAllUnique(items);
 		return out;
 	}
 

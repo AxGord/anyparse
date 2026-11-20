@@ -306,7 +306,7 @@ final class MemberBranchScan {
 		eachRegion(seams, container, region -> {
 			final members: Array<QueryNode> = regionMembers(region, isMember);
 			if (members.length == 0 || members.exists(m -> !deleting.contains(m))) return;
-			for (m in members) refused.pushUnique(m);
+			refused.pushAllUnique(members);
 		});
 		return deleting.filter(m -> !refused.contains(m));
 	}

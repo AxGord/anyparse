@@ -626,7 +626,7 @@ final class LoopScan {
 			shape.functionKinds ?? [],
 			shape.lambdaKinds ?? [],
 			shape.localFunctionKinds ?? []
-		]) for (k in grp) out.pushUnique(k);
+		]) out.pushAllUnique(grp);
 		return out;
 	}
 

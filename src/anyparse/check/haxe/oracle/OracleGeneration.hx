@@ -683,7 +683,7 @@ final class OracleGeneration {
 			paths.push(path);
 			collectHxml(path, cwd, root, paths, names, libraries, depth + 1);
 		}
-		for (lib in refs.libs) names.pushUnique(lib);
+		names.pushAllUnique(refs.libs);
 		for (classPath in refs.classPaths) {
 			final dir: String = absolute(cwd, classPath);
 			if (dir == root || dir.startsWith('$root/')) continue;

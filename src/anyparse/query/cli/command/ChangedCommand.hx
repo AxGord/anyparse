@@ -85,7 +85,7 @@ final class ChangedCommand implements CliCommand implements LanguageFree {
 				CliIo.stderr('apq changed: ${read.failure}\n');
 				return ExitCode.EXIT_RUNTIME;
 			}
-			for (name in read.names) names.pushUnique(name);
+			names.pushAllUnique(read.names);
 			final label: String = labelOf(entry, delta);
 			tally[label] = (tally[label] ?? 0) + 1;
 			final shown: Array<DeclarationChange> = shownOf(entry, delta, opts.selector);

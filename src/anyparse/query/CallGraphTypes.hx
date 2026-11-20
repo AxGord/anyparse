@@ -375,7 +375,7 @@ final class CallGraphTypes {
 
 	public static function unionInto(map: Map<String, Array<String>>, key: String, values: Array<String>): Void {
 		final list: Array<String> = map[key] ?? [];
-		for (v in values) list.pushUnique(v);
+		list.pushAllUnique(values);
 		map[key] = list;
 	}
 

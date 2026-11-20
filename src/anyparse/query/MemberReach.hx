@@ -1938,7 +1938,7 @@ final class MemberReach {
 						if (g.declarationsOf(id).exists(d -> facts.keyOf(d.file) == v.file && d.span.from == v.span.from)) id
 				];
 				if (written.length == 0) return null;
-				for (id in written) toRead.pushUnique(id);
+				toRead.pushAllUnique(written);
 			}
 			final seen: Map<String, Bool> = [ for (id in toRead) id => true ];
 			final out: Array<ImplicitSite> = [];
@@ -2582,7 +2582,7 @@ final class MemberReach {
 				return;
 			}
 			final ids: Array<String> = site.ids ?? [];
-			for (id in members) ids.pushUnique(id);
+			ids.pushAllUnique(members);
 			site.ids = ids;
 		}
 		// the built-in array's own methods, its constructor among them, reach what they hold or are handed only by converting
@@ -3032,7 +3032,7 @@ final class MemberReach {
 				out.all = true;
 				return out;
 			}
-			for (id in members) ids.pushUnique(id);
+			ids.pushAllUnique(members);
 		}
 		for (t in types ?? []) {
 			final members: Null<Array<String>> = _g.handedMemberIds(g, t);
@@ -3040,7 +3040,7 @@ final class MemberReach {
 				out.all = true;
 				return out;
 			}
-			for (id in members) ids.pushUnique(id);
+			ids.pushAllUnique(members);
 		}
 		if (types == null)
 			out.all = true

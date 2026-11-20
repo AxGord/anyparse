@@ -91,7 +91,7 @@ final class RuleScope {
 		for (path in SuiteImpact.reached(sources, touched, [REGISTRY], declared)) if (path.startsWith(ENGINE_DIR) && path != REGISTRY) {
 			final own: Null<Array<String>> = reachedIds(path, texts[path] ?? '', declared.types[path] ?? [], registered, registry);
 			if (own == null) return null;
-			for (id in own) ids.pushUnique(id);
+			ids.pushAllUnique(own);
 		}
 		final created: Array<String> = touched.map(moduleOf);
 		final registryOk: Bool = !touched.contains(REGISTRY) || gainsOnly(registryDiff, created);

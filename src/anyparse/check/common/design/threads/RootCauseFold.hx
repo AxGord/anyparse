@@ -448,7 +448,7 @@ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d
 
 	private static function named(all: Array<String>): String {
 		final members: Array<String> = [];
-		for (m in all) members.pushUnique(m);
+		members.pushAllUnique(all);
 		final more: Int = members.length - NAMED_CAP;
 		return members.slice(0, NAMED_CAP).join(', ') + (more > 0 ? ' (+$more more)' : '');
 	}

@@ -134,7 +134,7 @@ final class LintFixVerify {
 					ledgered: false,
 					coverage: verified.coverage
 				};
-				for (f in verified.applied) changedFiles.pushUnique(f);
+				changedFiles.pushAllUnique(verified.applied);
 				ledgerRiskyTallies(ledger, verified, [ for (c in riskyChecks) if (c is RiskyArm) c.id() ]);
 				// The three clauses in a local, so the sentence above keeps the shape it had: the
 				// declined / excluded / bisect tails are each empty on an ordinary run, and spelled

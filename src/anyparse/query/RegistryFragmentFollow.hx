@@ -426,7 +426,7 @@ final class RegistryFragmentFollow {
 			final replaced: Bool = edge >= 0 && edge < map.length && map[edge] < 0;
 			final wide: Int = isStart ? endOf(map, at) : startOf(map, at, end);
 			final candidates: Array<Int> = replaced ? [wide] : [startOf(map, at, end), endOf(map, at)];
-			for (p in candidates) out.pushUnique(p);
+			out.pushAllUnique(candidates);
 		}
 		out.sort((a, b) -> a - b);
 		return out;

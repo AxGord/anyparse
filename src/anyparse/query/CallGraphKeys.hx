@@ -57,7 +57,7 @@ final class CallGraphKeys {
 		_tree = tree;
 		_functionKinds = functionKinds ?? [];
 		_typeParams = provider == null ? [] : provider.typeParamNames(source);
-		for (names in _typeParams) for (n in names) _paramNames.pushUnique(n);
+		for (names in _typeParams) _paramNames.pushAllUnique(names);
 		final writtenSources: Map<Int, String> = provider == null ? [] : provider.declaredTypeSources(source);
 		for (at => written in writtenSources) typeSources[at] = keyed(written, at);
 	}

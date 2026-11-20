@@ -259,7 +259,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 			plugin.refShape().accessorMethodPrefixes ?? [], problems, _configNotes
 		);
 		final sinkIds: Array<String> = [];
-		for (lists in sets) for (id in lists.sinkIds) sinkIds.pushUnique(id);
+		for (lists in sets) sinkIds.pushAllUnique(lists.sinkIds);
 		// nothing to find, and what the config lost says why
 		if (sinkIds.length == 0) return reportConfigProblems(problems, []);
 		final listsOf: (String) -> ChainLists = listsOfFile.bind(byFile);
@@ -462,7 +462,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 				);
 			final facts: Bool = options.flag('compilerFacts');
 			factsAsked.pushUnique(facts);
-			for (p in found) problems.pushUnique(p);
+			problems.pushAllUnique(found);
 		}
 		if (sets.exists(s -> s.reports)) problems.push(positive.notice());
 		// one graph serves every chain, so the facts one chain asks for (`run`'s `useFacts`) build it for all of them
@@ -594,7 +594,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final out: Map<String, Array<Int>> = [];
 		for (entry in options.spawnArguments) for (id in graph.matchIds(entry.call)) {
 			final known: Array<Int> = out[id] ?? [];
-			for (at in entry.main) known.pushUnique(at);
+			known.pushAllUnique(entry.main);
 			out[id] = known;
 		}
 		return out;

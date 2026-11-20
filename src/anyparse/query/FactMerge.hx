@@ -84,7 +84,7 @@ final class FactMerge {
 
 	/** Add to `into` each of `from` it does not hold yet. */
 	public static function absent<T>(into: Array<T>, from: Array<T>): Void {
-		for (x in from) into.pushUnique(x);
+		into.pushAllUnique(from);
 	}
 
 	/** Whether two parameter lists name the same parameters in the same order. */

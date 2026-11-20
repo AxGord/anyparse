@@ -91,10 +91,10 @@ final class PositiveSinks {
 					+ ' — kept: a call of the library one the graph cannot tell apart from it resolves there'
 				);
 			final removed: Array<String> = [ for (id in hit) if (!shadowing.contains(id)) id ];
-			for (id in removed) out.pushUnique(id);
+			out.pushAllUnique(removed);
 			// what the run's notice counts
 			if ((removed.length > 0 || walked?.waives(pattern) == true) && !_removers.contains(pattern)) _removers.push(pattern);
-			for (id in removed) _removed.pushUnique(id);
+			_removed.pushAllUnique(removed);
 		}
 		return out;
 	}

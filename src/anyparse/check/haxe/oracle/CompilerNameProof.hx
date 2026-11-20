@@ -55,7 +55,7 @@ final class CompilerNameProof implements NameProof {
 		if (usable.stop != null) return [ for (_ in sites) false ];
 		final asked: Array<Array<OracleConfig>> = sites.map(site -> compiling(usable, file, before, site.before, plugin));
 		final configs: Array<OracleConfig> = [];
-		for (row in asked) for (config in row) configs.pushUnique(config);
+		for (row in asked) configs.pushAllUnique(row);
 		// the sites each configuration is asked about, by index into `sites`; its answers come in pairs, before then after
 		final sitesOf: Array<Array<Int>> = [ for (config in configs) [ for (j => row in asked) if (row.contains(config)) j ] ];
 		final answers: Array<Null<Array<Null<TypeReplyPosition>>>> = positionsOf(

@@ -452,7 +452,7 @@ final class ReflectiveValues {
 		for (s in sources) {
 			final types: Null<Array<String>> = valueTypes(s.file, s.fn, s.node, typer, visiting);
 			if (types == null) return null;
-			for (t in types) out.pushUnique(t);
+			out.pushAllUnique(types);
 		}
 		return out;
 	}

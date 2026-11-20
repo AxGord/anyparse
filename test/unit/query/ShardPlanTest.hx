@@ -507,7 +507,7 @@ class ShardPlanTest extends Test {
 
 	private function distinct(input: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (name in input) out.pushUnique(name);
+		out.pushAllUnique(input);
 		return out;
 	}
 

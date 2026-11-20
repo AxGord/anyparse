@@ -202,7 +202,7 @@ final class RuleDeclaration {
 			return null;
 		}
 		final distinct: Array<String> = [];
-		for (n in declaredFields) distinct.pushUnique(n);
+		distinct.pushAllUnique(declaredFields);
 		if (distinct.length != declaredFields.length) {
 			problems.push('$label ("$declaredType") names a field twice — dropped');
 			return null;

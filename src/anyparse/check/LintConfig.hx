@@ -270,7 +270,7 @@ final class LintConfig {
 			final drops: Array<String> = [];
 			final read: Array<OracleConfig> = compiler.readDeclaration(declared, drops);
 			if (nearest == null) nearest = read;
-			for (drop in drops) _drops.pushUnique(drop);
+			_drops.pushAllUnique(drops);
 			final document: Null<String> = declared.document;
 			if (document != null && drops.length > 0)
 				ConfigNotes.note(notes, '$document#compilerOracle', drops.map(drop -> 'apq: $document: $drop\n').join(''));

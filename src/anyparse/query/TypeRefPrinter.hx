@@ -418,7 +418,7 @@ final class TypeRefPrinter {
 		if (index != null && plugin != null) {
 			final bindings: ImportBindings = new ImportBindings(() -> index, plugin);
 			final paths: Array<String> = _usingModules.copy();
-			for (path in _importMap) paths.pushUnique(path);
+			paths.pushAllUnique(_importMap);
 			for (path in paths) {
 				final values: Null<Array<String>> = bindings.valuesSeen(path);
 				final listed: Array<String> = out ?? [];
@@ -426,7 +426,7 @@ final class TypeRefPrinter {
 					out = null;
 					break;
 				}
-				for (name in values) listed.pushUnique(name);
+				listed.pushAllUnique(values);
 			}
 		}
 		_importedMemberNames = { names: out };

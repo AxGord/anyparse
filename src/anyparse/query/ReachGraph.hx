@@ -959,11 +959,11 @@ final class ReachGraph {
 			if (at.family == Text && library.inertType(t)) continue;
 			final types: Null<Array<String>> = at.exact ? exactTypes(g, t) : runtimeTypes(g, t, at.family);
 			if (types == null) return null;
-			for (x in types) out.pushUnique(x);
+			out.pushAllUnique(types);
 			if (at.family == Iteration) for (x in types) {
 				final more: Null<Array<String>> = iteratorTypes(g, x, iterables, at.family);
 				if (more == null) return null;
-				for (y in more) out.pushUnique(y);
+				out.pushAllUnique(more);
 			}
 		}
 		return out;

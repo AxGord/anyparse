@@ -453,7 +453,7 @@ final class NewFile {
 	/** Order-preserving de-duplication of import lines. */
 	private static function dedup(lines: Array<String>): Array<String> {
 		final out: Array<String> = [];
-		for (line in lines) out.pushUnique(line);
+		out.pushAllUnique(lines);
 		return out;
 	}
 

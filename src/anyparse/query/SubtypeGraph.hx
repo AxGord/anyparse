@@ -474,7 +474,7 @@ final class SubtypeGraph {
 			if (known == null)
 				names[t.name] = t.supertypes.copy()
 			else
-				for (s in t.supertypes) known.pushUnique(s);
+				known.pushAllUnique(t.supertypes);
 		}
 		_supertypeNames = names;
 		return names;
@@ -864,7 +864,7 @@ final class SubtypeGraph {
 		final params: Map<String, Array<String>> = [];
 		for (f in _files) for (t in f.types) {
 			final declared: Array<String> = params[t.name] ?? [];
-			for (p in t.typeParamNames) declared.pushUnique(p);
+			declared.pushAllUnique(t.typeParamNames);
 			params[t.name] = declared;
 			final each: Array<WrittenSupertype> = links[t.name] ?? [];
 			for (s in t.supertypesWritten) if (!each.exists(w -> w.written == s && w.file == f.file))

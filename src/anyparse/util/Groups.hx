@@ -1,5 +1,7 @@
 package anyparse.util;
 
+using anyparse.util.Groups;
+
 /**
  * The one answer to "how is a value added to a group": a map of keys to arrays of values, or an array kept free of
  * repeats. Each helper is marked `@:preferHelper`, so the `prefer-helper` rule finds every inlined copy of its body and
@@ -20,6 +22,12 @@ final class Groups {
 	@:preferHelper
 	public static inline function pushUnique<T>(xs: Array<T>, x: T): Void {
 		if (!xs.contains(x)) xs.push(x);
+	}
+
+	/** `pushUnique` for every element of `items` in iteration order, so the first sighting of each value fixes its place. */
+	@:preferHelper
+	public static inline function pushAllUnique<T>(xs: Array<T>, items: Iterable<T>): Void {
+		for (x in items) xs.pushUnique(x);
 	}
 
 }

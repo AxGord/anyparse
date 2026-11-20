@@ -265,7 +265,7 @@ final class ValueEscapes {
 			final holders: Array<String> = values.copy();
 			var hi: Int = 0;
 			while (hi < holders.length) for (s in g.types.supertypesOf(holders[hi++])) holders.pushUnique(s);
-			for (v in values) out.pushUnique(v);
+			out.pushAllUnique(values);
 			for (t in holders) {
 				final decl: Null<TypeDeclInfo> = declarationOf(t);
 				if (decl == null) return false;

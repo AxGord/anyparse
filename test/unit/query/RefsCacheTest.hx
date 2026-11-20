@@ -82,7 +82,7 @@ class RefsCacheTest extends Test {
 		final names: Array<String> = [];
 		RefsCache.collectNames(tree, names);
 		final seen: Array<String> = [];
-		for (n in names) seen.pushUnique(n);
+		seen.pushAllUnique(names);
 
 		Assert.isTrue(seen.length > 0, 'fixture must contain at least one name');
 

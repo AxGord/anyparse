@@ -276,7 +276,7 @@ final class FixVerifierCrossFile {
 			}
 			if (!covered) return null;
 		}
-		for (config in judge.usable.unknown) out.pushUnique(config);
+		out.pushAllUnique(judge.usable.unknown);
 		return out;
 	}
 
