@@ -104,6 +104,9 @@ class HxFormatterCorpusTest extends Test {
 	/** Listed fork-authorial fixtures that pass: stale entries of the list. */
 	private static final sweepAuthorialPassing: Array<String> = [];
 
+	/** Listed fork-lossy fixtures that pass: stale entries of the list. */
+	private static final sweepLossyPassing: Array<String> = [];
+
 	// ω-sweep-delta — process-wide accumulator across every per-category
 	// `runCategory` invocation. The per-category prints stay (legacy
 	// behavior), and a single end-of-process aggregate prints the totals
@@ -124,6 +127,9 @@ class HxFormatterCorpusTest extends Test {
 
 	/** Failing fixtures `HxFormatterCorpusHelpers.FORK_AUTHORIAL` lists: part of the fail column, not a defect. */
 	private static var sweepAuthorial: Int = 0;
+
+	/** Failing fixtures `HxFormatterCorpusHelpers.FORK_LOSSY` lists: the fork's expected text loses source content. */
+	private static var sweepLossy: Int = 0;
 
 	public function new(): Void {
 		super();
@@ -267,15 +273,14 @@ class HxFormatterCorpusTest extends Test {
 			final actualRaw: String = FormatterOff.restore(tc.input, emitted, HaxeLexicalRegions.scanComments);
 			assertTokensKept(relPath, tc.input, actualRaw);
 			final actual: String = stripTrailingNewline(actualRaw);
-			final authorial: Bool = HxFormatterCorpusHelpers.FORK_AUTHORIAL.contains(relPath);
-			if (actual == tc.expected) {
+			final passed: Bool = actual == tc.expected;
+			final forkTag: String = tallyKnownFork(relPath, passed);
+			if (passed) {
 				pass++;
-				if (authorial) sweepAuthorialPassing.push(relPath);
 				sweepFixtures.push({ path: relPath, status: 'PASS' });
 			} else {
 				fail++;
-				if (authorial) sweepAuthorial++;
-				failLines.push('  [$name]${authorial ? ' (fork-authorial)' : ''} ${describeDiff(tc.expected, actual)}');
+				failLines.push('  [$name]$forkTag ${describeDiff(tc.expected, actual)}');
 				sweepFixtures.push({ path: relPath, status: 'FAIL' });
 			}
 		}
@@ -319,6 +324,28 @@ class HxFormatterCorpusTest extends Test {
 	private static inline function signed(n: Int): String return n > 0 ? '+$n' : '$n';
 
 	/**
+	 * Counts a fixture listed in `FORK_AUTHORIAL` / `FORK_LOSSY` — a pass of a listed one is a stale entry, a fail
+	 * is not a defect — and returns the fail line's tag (empty for an unlisted one).
+	 */
+	private static function tallyKnownFork(relPath: String, passed: Bool): String {
+		final authorial: Bool = HxFormatterCorpusHelpers.FORK_AUTHORIAL.contains(relPath);
+		final lossy: Bool = HxFormatterCorpusHelpers.FORK_LOSSY.contains(relPath);
+		if (passed) {
+			if (authorial) sweepAuthorialPassing.push(relPath);
+			if (lossy) sweepLossyPassing.push(relPath);
+			return '';
+		}
+		if (authorial) sweepAuthorial++;
+		if (lossy) sweepLossy++;
+		return if (authorial)
+			' (fork-authorial)'
+		else if (lossy)
+			' (fork-lossy)'
+		else
+			'';
+	}
+
+	/**
 	 * Aggregate-totals + delta-vs-baseline report. Reads the previous
 	 * sweep's JSON (if any), formats the Δ triple, then overwrites the
 	 * file with the current run's totals. Guards against the no-fork run
@@ -354,6 +381,8 @@ class HxFormatterCorpusTest extends Test {
 		);
 		Sys.println(deltaStr);
 		Sys.println('  fork-authorial: $sweepAuthorial of the fail column (HxFormatterCorpusHelpers.FORK_AUTHORIAL)');
+		Sys.println('  fork-lossy: $sweepLossy of the fail column (HxFormatterCorpusHelpers.FORK_LOSSY)');
+		if (sweepLossyPassing.length > 0) Sys.println('  listed fork-lossy but passing: ${sweepLossyPassing.join(', ')}');
 		if (sweepAuthorialPassing.length > 0) Sys.println('  listed fork-authorial but passing: ${sweepAuthorialPassing.join(', ')}');
 		try {
 			// `fixtures` array carries the per-fixture status map that

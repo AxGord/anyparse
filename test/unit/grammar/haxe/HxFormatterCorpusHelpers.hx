@@ -119,6 +119,16 @@ final class HxFormatterCorpusHelpers {
 		'test/testcases/indentation/object_literal.hxtest'
 	];
 
+	/**
+	 * The one answer to "which corpus fixtures expect a text that loses what the source says": the fork's expected
+	 * section drops authorial content (a blank line between declarations) the writer keeps on purpose, so the
+	 * fixture is the fork's defect, not the writer's. The opposite direction of `FORK_AUTHORIAL`; one that passes
+	 * no longer belongs here.
+	 */
+	public static final FORK_LOSSY: Array<String> = [
+		'test/testcases/lineends/issue_216_typedef_without_semicolon_unstable_comments.hxtest'
+	];
+
 	private static inline final EXPECTED_SECTIONS: Int = 3;
 	private static final ENV_KEY: String = 'ANYPARSE_HXFORMAT_FORK';
 	private static final SECTION_SEP: String = '\n---\n';
