@@ -162,12 +162,14 @@ class TestDiscovery {
 		collectModules(root, [], modules, testFiles);
 		// Not `Compare.compareString`: a module that imports a synthesised type fails to load before the build that
 		// defines it has run, so a walk ordered by the comparator an arm cuts would fail every such build.
-		modules.sort((a: String, b: String) -> if (a < b)
-			-1
-		else if (a > b)
-			1
-		else
-			0); // noqa: prefer-compare-function
+		modules.sort((a: String, b: String) ->
+			if (a < b)
+				-1 // noqa: prefer-compare-function
+			else if (a > b)
+				1
+			else
+				0
+		);
 		final census: TestCensus = {
 			registered: [],
 			dead: [],
