@@ -20,8 +20,10 @@ model_table:
       - { upto: 2, model: haiku, effort: xhigh }
       - { upto: 6, model: sonnet, effort: high }
       - { upto: 10, model: opus, effort: high }
+    # Effort arm (user 2026-11-20): review d4-6 on opus/medium; revert = drop the upto-6 row.
     review:
       - { upto: 3, model: sonnet, effort: high }
+      - { upto: 6, model: opus, effort: medium }
       - { upto: 10, model: opus, effort: high }
     review_verify:
       - { upto: 3, model: sonnet, effort: high }
