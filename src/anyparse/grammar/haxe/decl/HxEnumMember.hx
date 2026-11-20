@@ -43,7 +43,7 @@ typedef HxEnumMember = {
 
 	@:trivia
 	@:tryparse
-	@:fmt(metaLineEndSimple('metadataIsSimple'))
+	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'))
 	var meta: Array<HxMetadata>;
 

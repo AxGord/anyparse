@@ -23,18 +23,22 @@ typedef ChainWalk = { final decls: Array<Expr>; final pattern: Expr; }
  * annotations are built from. `@:fmt(metaLineEndSimple('<predicate>'))` names the generated AST
  * predicate that tells a simple annotation, which the `Fit` policy may place by width; a chain names
  * the wrapper's annotation field after it. A site that names none has no simple annotation.
+ * `@:fmt(metaLineEndInlineMax('<optField>'))` names the Int knob that caps the written width of a lone simple
+ * annotation kept on its declaration's line; `0` is no cap, and so is a site that names none.
  */
 @:access(anyparse.macro.WriterCtorPatternLowering, anyparse.macro.WriterLoweringSupport)
 final class WriterMetaLineEndLowering {
 
 	private static final SIMPLE_META: String = 'metaLineEndSimple';
 	private static final CHAIN_META: String = 'metaLineEndChain';
+	private static final INLINE_MAX_META: String = 'metaLineEndInlineMax';
 
 	/**
 	 * The runtime locals of a metadata run under its knob `raw`: `_metaFit` is `1` for one simple element, which
 	 * keeps the declaration's line when that line fits, `2` for several, which share one row of their own when it
 	 * fits, and `0` otherwise; `_metaPolicy` is the knob with `Fit` read as `After` (when `_metaFit` is `0`) or `AfterLast`. A run
 	 * holding a comment (`broken`) is never fit: its row breaks as under `After`. `pred` is `simplePred`'s answer.
+	 * `_metaFit` stays assignable for `fitInlineCapExpr`, which reads the element once it is written.
 	 */
 	public static function fitDecls(pred: Null<Expr>, raw: Expr, arr: Expr, elemNode: Expr -> Expr, broken: Expr): Expr {
 		final pos: Position = Context.currentPos();
@@ -64,7 +68,7 @@ final class WriterMetaLineEndLowering {
 					name: '_metaFit',
 					type: macro : Int,
 					expr: fit,
-					isFinal: true
+					isFinal: false
 				},
 				{
 					name: '_metaPolicy',
@@ -75,6 +79,16 @@ final class WriterMetaLineEndLowering {
 			]),
 			pos: pos
 		};
+	}
+
+	/**
+	 * The statement that takes a lone simple element off its declaration's line once its written `elemDoc` is wider
+	 * than the cap `field` names: `_metaFit` falls to `0`, so the element breaks as under `After`. A lone element has
+	 * no separator, so `_metaPolicy` needs no second reading. A no-op when the field names no cap.
+	 */
+	public static function fitInlineCapExpr(field: ShapeNode, elemDoc: Expr): Expr {
+		final wide: Null<Expr> = overInlineMaxExpr(field, elemDoc);
+		return wide == null ? macro {} : macro if (_metaFit == 1 && $wide) _metaFit = 0;
 	}
 
 	/** The separator between two elements of a run that does not break after each: a soft line inside a `Fit` row. */
@@ -133,11 +147,12 @@ final class WriterMetaLineEndLowering {
 	 * of a chain follows the source. Under `Fit` the outermost link decides for the whole chain (`chainOptExpr` hands its
 	 * answer down): a lone simple annotation joins the declaration when the line fits, several simple ones are one group
 	 * of soft lines whose closing break stays outside its measure, and a complex one breaks after each. A chain whose
-	 * tail no arm names is no metadata site: `sourceSep` stands.
+	 * tail no arm names is no metadata site: `sourceSep` stands. `writeFnFor` names the writer of a rule: a lone simple
+	 * annotation wider than the field's inline cap is written once more to be measured, and breaks.
 	 */
 	public static function chainJoinExpr(
 		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, fieldAccess: Expr, sourceSep: Expr, trivia: Bool,
-		doc: Expr
+		doc: Expr, writeFnFor: String -> String
 	): Null<Expr> {
 		final walk: Null<ChainWalk> = chainWalk(ctx, field, typePath, fieldAccess, trivia);
 		if (walk == null) return null;
@@ -145,6 +160,12 @@ final class WriterMetaLineEndLowering {
 		final policy: Null<Expr> = policyExpr(ctx, field, typePath, macro _tail);
 		if (policy == null) Context.fatalError('WriterLowering: @:fmt(metaLineEndChain) needs a metaLineEndIfCtor on $typePath', pos);
 		final chainPat: Expr = walk.pattern;
+		final simple: Null<Array<String>> = MetaInspect.fmtReadStringArgs(field, SIMPLE_META);
+		final ownWide: Expr = simple == null || simple.length != 2 ? macro false : {
+			final own: Expr = { expr: EField(macro value, simple[1]), pos: pos };
+			final ownDoc: Expr = { expr: ECall(macro $i{writeFnFor(fieldRefName(ctx, typePath, simple[1]))}, [own, macro opt]), pos: pos };
+			overInlineMaxExpr(field, ownDoc) ?? macro false;
+		};
 		final decide: Expr = macro {
 			final _policy: anyparse.format.MetadataLineEndPolicy = $policy;
 			final _link: Bool = $fieldAccess.match($chainPat);
@@ -154,7 +175,7 @@ final class WriterMetaLineEndLowering {
 				switch (opt._metaChain) {
 					case 0 if (_chainSimple && _link):
 						_dg(_dc([_dl(), $doc]));
-					case 0 if (_chainSimple):
+					case 0 if (_chainSimple && !$ownWide):
 						_dc([_dile(opt.lineWidth + 1, _dhl(), _dt(' ')), $doc]);
 					case 1 if (_link):
 						_dc([_dl(), $doc]);
@@ -264,6 +285,14 @@ final class WriterMetaLineEndLowering {
 			};
 		}
 		return test;
+	}
+
+	/** Whether the written `doc` of one annotation is wider than the cap `field` names, or `null` when it names none. */
+	private static function overInlineMaxExpr(field: ShapeNode, doc: Expr): Null<Expr> {
+		final knob: Null<String> = MetaInspect.fmtReadString(field, INLINE_MAX_META);
+		if (knob == null) return null;
+		final max: Expr = WriterLoweringSupport.optFieldAccess(knob);
+		return macro $max > 0 && anyparse.core.DocMeasure.flatTokenWidth($doc) > $max;
 	}
 
 	/**

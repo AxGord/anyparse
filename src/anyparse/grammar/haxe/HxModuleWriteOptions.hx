@@ -922,6 +922,14 @@ final class HxModuleWriteOptions {
 	public var metadataOtherLineEnd: MetadataLineEndPolicy = MetadataLineEndPolicy.After;
 
 	/**
+	 * The widest one simple metadata may be written and still stay on its declaration's line under `Fit`, on every
+	 * `metadata*LineEnd` site (`lineEnds.metadataInlineMaxLength`): a wider one takes a line of its own above the
+	 * declaration. The width is that of the written metadata, its `@` included. `0` (default) is no limit. A row
+	 * of several simple metadata is not measured by it.
+	 */
+	public var metadataInlineMaxLength: Int = 0;
+
+	/**
 	 * Set when descending through an expression-position parent (`HxCaseBranch.body` /
 	 * `HxDefaultBranch.stmts`, the value-switch ctors, via `@:fmt(propagateExprPosition)`). Read by
 	 * the dual-flag `bodyPolicy('caseBody', 'expressionCase')` flat gate: a case nested inside

@@ -397,6 +397,7 @@ final class HaxeFormatConfigLoader {
 		if (section.metadataType != null) opt.metadataTypeLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataType);
 		if (section.metadataVar != null) opt.metadataVarLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataVar);
 		if (section.metadataOther != null) opt.metadataOtherLineEnd = HaxeFormatValues.metadataLineEndToRuntime(section.metadataOther);
+		if (section.metadataInlineMaxLength != null) opt.metadataInlineMaxLength = section.metadataInlineMaxLength;
 		// ω-lineend-character: `lineEnds.lineEndCharacter` → `opt.lineEnd`
 		// (base WriteOptions String). `"LF"` / `"CRLF"` / `"CR"` map to
 		// `\n` / `\r\n` / `\r`; `"Auto"` falls back to `\n` because the

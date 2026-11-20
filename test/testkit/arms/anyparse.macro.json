@@ -3617,6 +3617,46 @@
 			"find": "$target = false;",
 			"replace": "$target = true;",
 			"note": "the operands of the typedef's chain inherit its break grant, so a chain nested in a structure operand breaks after its own brace operand"
+		},
+		{
+			"name": "M-META-INLINE-MAX-RUN-IGNORED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitInlineCapExpr",
+			"find": ": macro if (_metaFit == 1 && $wide) _metaFit = 0",
+			"replace": ": macro {}",
+			"note": "a metadata run never reads the inline cap, so a lone simple metadata wider than it stays on the declaration's line"
+		},
+		{
+			"name": "M-META-INLINE-MAX-ROW-CAPPED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitInlineCapExpr",
+			"find": "_metaFit == 1 && $wide",
+			"replace": "$wide",
+			"note": "the inline cap also measures a row of several simple metadata, which then breaks one per line"
+		},
+		{
+			"name": "M-META-INLINE-MAX-OFF-BY-ONE",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "overInlineMaxExpr",
+			"find": "flatTokenWidth($doc) > $max",
+			"replace": "flatTokenWidth($doc) >= $max",
+			"note": "a lone simple metadata of exactly the cap's width leaves the declaration's line"
+		},
+		{
+			"name": "M-META-INLINE-MAX-ZERO-CAPS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "overInlineMaxExpr",
+			"find": "$max > 0 && ",
+			"replace": "",
+			"note": "an unset cap reads as a cap of zero, so every lone simple metadata leaves the declaration's line"
+		},
+		{
+			"name": "M-META-INLINE-MAX-CHAIN-IGNORED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainJoinExpr",
+			"find": "case 0 if (_chainSimple && !$ownWide):",
+			"replace": "case 0 if (_chainSimple):",
+			"note": "a local's lone simple metadata wider than the inline cap stays on the var's line"
 		}
 	]
 }

@@ -56,6 +56,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	private final _elemCall: Expr;
 	private final _trailBASlot: Expr;
 	private final _metaPolicyExpr: Expr;
+	private final _metaInlineCap: Expr;
 	private final _priorAfterTrail: Null<Expr>;
 	private final _elemCondFn: Null<Expr>;
 	private final _cascade: WriterLowering.CascadeEmit;
@@ -123,6 +124,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 			WriterMetaLineEndLowering.simplePred(starNode, ctx.ctorPat.shape.root, true), metaLineEndPolicy ?? macro -1, macro _arr,
 			e -> macro $e.node, macro $gapComment || $runComment
 		);
+		_metaInlineCap = WriterMetaLineEndLowering.fitInlineCapExpr(starNode, macro _elem);
 		final cascadeInfos: CascadeInfos = WriterCtorBlankLowering.readCascadeInfosFromStar(ctx.ctorBlank, starNode, c.elemRefName);
 		_priorAfterTrail = c.prevTrailFieldName == null
 			? null
@@ -442,6 +444,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				$blockEndedSepEmit;
 				$sepCascade;
 				final _elem: anyparse.core.Doc = $_elemCall;
+				$_metaInlineCap;
 				final _tc: Null<String> = _t.trailingComment;
 				_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
 				// ω-cond-indent-policy AlignedNestedIncrease: if this body

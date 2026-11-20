@@ -640,6 +640,14 @@
 			"find": "if (opt.comprehensionFit == null) opt.comprehensionFit = true;",
 			"replace": "opt.comprehensionFit = true;",
 			"note": "comprehensionFor: fitLine overwrites an explicit wrapping.comprehensionFit: false, so a padded block-body comprehension hugs again"
+		},
+		{
+			"name": "M-META-INLINE-MAX-UNMAPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyLineEnds",
+			"find": "if (section.metadataInlineMaxLength != null) opt.metadataInlineMaxLength = section.metadataInlineMaxLength;",
+			"replace": "",
+			"note": "lineEnds.metadataInlineMaxLength never reaches the writer option"
 		}
 	]
 }

@@ -54,6 +54,9 @@ typedef HxFormatLineEndsSection = {
 	var metadataOther: HxFormatMetadataLineEndPolicy;
 
 	@:optional
+	var metadataInlineMaxLength: Int;
+
+	@:optional
 	var lineEndCharacter: HxFormatLineEndCharacter;
 
 };

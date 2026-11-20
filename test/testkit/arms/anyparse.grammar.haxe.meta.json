@@ -17,9 +17,18 @@
 			"type": "anyparse.grammar.haxe.meta.HxMetaExpr",
 			"method": "HxMetaExpr",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple', 'meta'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple', 'meta'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "a local var's metadata names no simplicity predicate, so fit breaks it"
+		},
+		{
+			"name": "M-META-INLINE-MAX-CHAIN-UNWIRED",
+			"type": "anyparse.grammar.haxe.meta.HxMetaExpr",
+			"method": "HxMetaExpr",
+			"kind": "TypedefDecl",
+			"find": ", metaLineEndInlineMax('metadataInlineMaxLength')",
+			"replace": "",
+			"note": "a local's metadata names no inline cap, so a wide lone metadata stays on the var's line"
 		}
 	]
 }

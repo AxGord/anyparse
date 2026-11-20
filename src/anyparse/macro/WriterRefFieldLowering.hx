@@ -1480,7 +1480,7 @@ final class WriterRefFieldLowering {
 				? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
 				: macro _dt(' ');
 			final policyJoined: Expr = WriterMetaLineEndLowering.chainJoinExpr(
-				ctx.ctorPat, child, typePath, fieldAccess, sepExpr, trivia, macro _doc
+				ctx.ctorPat, child, typePath, fieldAccess, sepExpr, trivia, macro _doc, ctx.writeFnFor
 			) ?? macro _dc([$sepExpr, _doc]);
 			// A comment in the gap keeps the source layout around it, whatever the metadata line-end policy says:
 			// own-line stays own-line, same-line stays inline.

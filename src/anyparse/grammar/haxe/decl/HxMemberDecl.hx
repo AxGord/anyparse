@@ -43,7 +43,7 @@ typedef HxMemberDecl = {
 
 	@:trivia
 	@:tryparse
-	@:fmt(metaLineEndSimple('metadataIsSimple'))
+	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'),
 		metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),
 		metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'))

@@ -143,7 +143,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxTopLevelDecl",
 			"method": "HxTopLevelDecl",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "module-level metadata names no simplicity predicate, so fit breaks it one per line"
 		},
@@ -152,7 +152,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxMemberDecl",
 			"method": "HxMemberDecl",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "member metadata names no simplicity predicate, so fit breaks it one per line"
 		},
@@ -161,7 +161,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxEnumMember",
 			"method": "HxEnumMember",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "enum constructor metadata names no simplicity predicate, so fit breaks it one per line"
 		},
@@ -170,7 +170,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxAnonMember",
 			"method": "HxAnonMember",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "anon field metadata names no simplicity predicate, so fit breaks it one per line"
 		},
@@ -191,6 +191,42 @@
 			"find": "@:fmt(leftCurly('blockLeftCurly'), ctorKwTrivia)",
 			"replace": "@:fmt(leftCurly('blockLeftCurly'))",
 			"note": "the untyped block grows no kw-trivia slots, so a comment between `untyped` and its `{` is dropped at parse"
+		},
+		{
+			"name": "M-META-INLINE-MAX-MEMBER-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxMemberDecl",
+			"method": "HxMemberDecl",
+			"kind": "TypedefDecl",
+			"find": ", metaLineEndInlineMax('metadataInlineMaxLength')",
+			"replace": "",
+			"note": "member metadata names no inline cap, so a wide lone metadata stays on a function's or a var's line"
+		},
+		{
+			"name": "M-META-INLINE-MAX-TYPE-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxTopLevelDecl",
+			"method": "HxTopLevelDecl",
+			"kind": "TypedefDecl",
+			"find": ", metaLineEndInlineMax('metadataInlineMaxLength')",
+			"replace": "",
+			"note": "module-level metadata names no inline cap, so a wide lone metadata stays on a type's line"
+		},
+		{
+			"name": "M-META-INLINE-MAX-ENUM-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxEnumMember",
+			"method": "HxEnumMember",
+			"kind": "TypedefDecl",
+			"find": ", metaLineEndInlineMax('metadataInlineMaxLength')",
+			"replace": "",
+			"note": "enum constructor metadata names no inline cap, so a wide lone metadata stays on the constructor's line"
+		},
+		{
+			"name": "M-META-INLINE-MAX-ANON-UNWIRED",
+			"type": "anyparse.grammar.haxe.decl.HxAnonMember",
+			"method": "HxAnonMember",
+			"kind": "TypedefDecl",
+			"find": ", metaLineEndInlineMax('metadataInlineMaxLength')",
+			"replace": "",
+			"note": "anon field metadata names no inline cap, so a wide lone metadata stays on the field's line"
 		}
 	]
 }

@@ -126,6 +126,7 @@ final class WriterStarPadLowering {
 			: macro (_metaPolicy == anyparse.format.MetadataLineEndPolicy.After ? _dhl() : $fitSep);
 		final rowWrap: Expr = metaPolicy == null ? macro {} : WriterMetaLineEndLowering.fitRowWrapExpr(macro 0);
 		final fitAfterLast: Expr = WriterMetaLineEndLowering.fitAfterLastExpr();
+		final inlineCap: Expr = metaPolicy == null ? macro {} : WriterMetaLineEndLowering.fitInlineCapExpr(f.metaNode, macro _elem);
 		final afterLast: Expr = metaPolicy == null ? macro {} : macro if (
 			_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0
 		)
@@ -136,7 +137,9 @@ final class WriterStarPadLowering {
 			$policyDecl;
 			var _si: Int = 0;
 			while (_si < _arr.length) {
-				_docs.push($elemCall);
+				final _elem: anyparse.core.Doc = $elemCall;
+				$inlineCap;
+				_docs.push(_elem);
 				if (_si < _arr.length - 1 && !$nextGlued) _docs.push($elemSep);
 				_si++;
 			}

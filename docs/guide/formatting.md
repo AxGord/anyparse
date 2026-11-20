@@ -284,7 +284,8 @@ else
 `fit` is a value of `lineEnds.metadataType`, `metadataFunction`, `metadataVar` and `metadataOther`, not part of
 haxe-formatter's schema. It is decided by width and never reads the source layout:
 
-- one simple metadata stays on the declaration's line when that line fits `wrapping.maxLineLength`, else takes a line of its own;
+- one simple metadata stays on the declaration's line when that line fits `wrapping.maxLineLength`, else takes a line of its own —
+  and, when `lineEnds.metadataInlineMaxLength` is set, also when the metadata itself is wider than that (below);
 - several simple metadata share one line above the declaration when that row fits, and are never joined to the declaration itself;
 - otherwise — a complex metadata, a row that does not fit, a comment between metadata or after the last one, a `#if` in the run — one per line, as `after`.
 
@@ -304,3 +305,21 @@ abstract class C {
 ```
 
 A local `var` or `final` follows the same rules: `@:a @:b var x = 1;` puts `@:a @:b` on a line of its own above the `var`.
+
+### A width limit for the one metadata on the declaration's line: `lineEnds.metadataInlineMaxLength`
+
+An integer, not part of haxe-formatter's schema. Under `fit` — on all four `metadata*` keys and on a local `var` —
+the one simple metadata stays on its declaration's line only when its own written text, the `@` included, is at
+most this many characters; a wider one takes a line of its own above the declaration. Unset or `0` is no limit.
+A row of several simple metadata is not measured by it, and nothing changes for a key that is not `fit`.
+
+```json
+{ "lineEnds": { "metadataFunction": "fit", "metadataInlineMaxLength": 20 } }
+```
+
+```haxe
+@:nullSafety(Strict) function f() {}
+
+@:describe('a sentence in plain words')
+function g() {}
+```
