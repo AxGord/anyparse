@@ -97,7 +97,7 @@ forms; everything else is bare.
 accessBrackets, afterFieldsWithDocComments[(…)], afterFileHeaderCommentBlanks, allmanIndentForCtor(…),
 anonFuncParens, anonTypeBracesClose, anonTypeBracesOpen, arrayMatrixWrap, arrowBodyLineWrap,
 arrowBodyOpenPadSuppress, arrowValueIfElemTrail, arrowValueIfReflow(…), arrowValueIfReflowSite,
-atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
+atomOperand, atomOperandWhen(…), bareBodyBreaks(…), bareRefSepWhenPresent, beforeCommentedFields(…), beforeDocCommentEmptyLines, beforeDocCondLookThrough(…),
 beforeNewlineSlotFirst, belowWrappedLabel, beginEndType[(…)], beginEndTypeIfDoc(…), betweenMultilineCommentsBlanks,
 blankBeforeFinalDocCommentInLeading, blankBeforeLineCommentLed, blankBeforeOrphanLineCommentTrail,
 blankLinesAfterCtor(…), blankLinesAfterCtorIf(…), blankLinesAfterCtorIfTailLeafNull(…),

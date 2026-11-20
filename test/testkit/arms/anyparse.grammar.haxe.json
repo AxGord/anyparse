@@ -101,6 +101,14 @@
 			"find": "OptionalSemicolon = OptionalSemicolon.Preserve",
 			"replace": "OptionalSemicolon = OptionalSemicolon.Never",
 			"note": "a config without the key drops the `;` after a structure typedef, so the default is no longer byte-inert"
+		},
+		{
+			"name": "M-HEADING-MEMBER-GAP",
+			"type": "anyparse.grammar.haxe.HaxeMemberGap",
+			"method": "body",
+			"find": "MemberGap.headingAdds(beforeCommented, next.leading)",
+			"replace": "false",
+			"note": "the member-gap policy no longer asks the blank line fmt writes in front of a headed member, so member-order accepts the glued source"
 		}
 	]
 }

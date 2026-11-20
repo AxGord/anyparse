@@ -3657,6 +3657,30 @@
 			"find": "case 0 if (_chainSimple && !$ownWide):",
 			"replace": "case 0 if (_chainSimple):",
 			"note": "a local's lone simple metadata wider than the inline cap stays on the var's line"
+		},
+		{
+			"name": "M-HEADING-ADDS-ELEM",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "headingAddsExpr",
+			"find": "return macro anyparse.format.MemberGap.headingAdds($count, _t.leadingComments);",
+			"replace": "return macro false;",
+			"note": "a member headed by a line-comment run no longer takes its blank line under beforeCommentedFields"
+		},
+		{
+			"name": "M-HEADING-FIRST-MEMBER",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockBlankBeforeAssemblyExpr",
+			"find": "if (_si > 0 && (_sourceBlank || _addBlank)) {",
+			"replace": "if (_sourceBlank || _addBlank) {",
+			"note": "the first member of a body takes the between-member blank too, so a heading over it is pushed off the opening brace"
+		},
+		{
+			"name": "M-HEADING-TYPEDEF-FORCE-MULTI",
+			"type": "anyparse.macro.TriviaSepLowering",
+			"method": "triviaSepInlineableLeadExpr",
+			"find": " || ${headingAdds ?? macro false})",
+			"replace": ")",
+			"note": "a headed typedef field stays in the cascade layout, which writes no blank line in front of it"
 		}
 	]
 }

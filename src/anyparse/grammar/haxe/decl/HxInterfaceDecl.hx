@@ -45,8 +45,8 @@ typedef HxInterfaceDecl = {
 
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('interfaceBeginType', 'interfaceEndType'), afterFieldsWithDocComments,
 		existingBetweenFields('interfaceExistingBetweenFields'), beforeDocCommentEmptyLines,
-		metadataCountsAsDoc('meta', 'metadataCountsAsDocComment'), beforeDocCondLookThrough('member', 'Conditional', 'body'),
-		blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
+		metadataCountsAsDoc('meta', 'metadataCountsAsDocComment'), beforeCommentedFields('beforeCommentedFields'),
+		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),

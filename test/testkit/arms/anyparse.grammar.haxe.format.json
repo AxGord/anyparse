@@ -648,6 +648,14 @@
 			"find": "if (section.metadataInlineMaxLength != null) opt.metadataInlineMaxLength = section.metadataInlineMaxLength;",
 			"replace": "",
 			"note": "lineEnds.metadataInlineMaxLength never reaches the writer option"
+		},
+		{
+			"name": "M-HEADING-CONFIG-ENUM-ABSTRACT",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyTypeBodyDocEdges",
+			"find": "section.enumAbstractEmptyLines?.beforeCommentedFields",
+			"replace": "null",
+			"note": "the enumAbstractEmptyLines.beforeCommentedFields key no longer reaches its knob"
 		}
 	]
 }

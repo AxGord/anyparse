@@ -61,4 +61,7 @@ typedef HxFormatTypedefEmptyLinesConfig = {
 	@:optional
 	var metadataCountsAsDocComment: Bool;
 
+	@:optional
+	var beforeCommentedFields: Int;
+
 };

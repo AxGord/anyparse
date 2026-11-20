@@ -201,6 +201,37 @@ doc comment and metadata still takes one blank line, not two. The metadata is re
 { "emptyLines": { "typedefEmptyLines": { "metadataCountsAsDocComment": true } } }
 ```
 
+## A blank line before a commented group: `emptyLines.<kind>.beforeCommentedFields`
+
+`beforeCommentedFields` (`0` or `1`) in `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines`, and at
+`emptyLines` level for class, interface and plain `abstract` bodies. With `1`, a member that whole-line `//` comments sit
+directly above takes one blank line in front of it, so a heading comment opens its group instead of sticking to the
+previous one:
+
+```haxe
+enum abstract Align(String) {
+	// align each item
+	final NONE = 'none';
+
+	// use item size
+	final HORIZONTAL = 'horizontal';
+	final VERTICAL = 'vertical';
+}
+```
+
+The first member of the body is left to `beginType`. The comment stays on its member, and the other members of the
+group follow by the kind's own keys. Only a run of `//` comments counts: a trailing comment on the previous member's
+line, a `/* */` comment and a doc comment do not (a doc comment has `beforeDocCommentEmptyLines` and
+`afterFieldsWithDocComments`), and `beforeDocCommentEmptyLines: none` on a member that counts as documented still
+wins. `0` by default, which writes what the other keys say (haxe-formatter has no such key):
+
+```json
+{ "emptyLines": { "enumAbstractEmptyLines": { "existingBetweenFields": "remove", "beforeCommentedFields": 1 } } }
+```
+
+An `enum abstract` body that `abstractRulesUnlessValueList` hands to the abstract rules reads the `emptyLines` level
+key, as it reads every other abstract key.
+
 ## An `enum abstract` with more than values: `emptyLines.enumAbstractEmptyLines.abstractRulesUnlessValueList`
 
 `false` by default. Set, an `enum abstract` body holding a method, a property, a `static` member or a `//` comment in

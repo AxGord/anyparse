@@ -101,8 +101,9 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		_openInsideDoc = openInsideExpr ?? macro _de();
 		_closeInsideDoc = closeInsideExpr ?? macro _de();
 		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
+		final headingAdds: Null<Expr> = WriterTriviaStarDispatch.headingAddsExpr(plan.beforeCommentedFields());
 		_blanks = triviaSepTypedefBlanksExprs(
-			plan.beforeDocCommentEmptyLines(), plan.typedefBodyBlanks(), plan.uniformStmtBlanks(), afterDocPolicy, docLedReads
+			plan.beforeDocCommentEmptyLines(), plan.typedefBodyBlanks(), plan.uniformStmtBlanks(), afterDocPolicy, docLedReads, headingAdds
 		);
 		// ω-typedef-anon-force-multi: an element write ends the typedef-body context, so a nested anon reverts to its own
 		// fit-driven wrap; the same write ends a nested-type context (`_inNestedType`).
@@ -134,7 +135,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		_noTriviaBranch = triviaSepNoTriviaBranch();
 		_forceMultiColsExpr = forceMultiColsFor(plan.wrapRules(), mapWrap, sepText, _suppressExpr);
 		_predicateScan = triviaSepPredicateScanExpr(
-			plan.uniformStmtBlanks(), _elemCall, plan.relocateTrailingComments(), plan.typedefBodyBlanks(), docLedReads
+			plan.uniformStmtBlanks(), _elemCall, plan.relocateTrailingComments(), plan.typedefBodyBlanks(), docLedReads, headingAdds
 		);
 		_matrixSucc = triviaSepMatrixSucceedsExpr(
 			plan.arrayMatrixWrap(), openText, closeText, sepText, _trail.appendTrailingCommaExpr, _elemCall
@@ -749,11 +750,11 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 	 */
 	private static function triviaSepTypedefBlanksExprs(
 		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool, afterDocPolicy: Null<Expr>,
-		?reads: WriterTriviaStarDispatch.DocLedReads
+		?reads: WriterTriviaStarDispatch.DocLedReads, ?headingAdds: Expr
 	): WriterLowering.SepStarBlanks {
 		final curly: WriterLowering.SepStarKeepCurly = triviaSepKeepCurlyExprs(typedefBodyBlanks, reads);
 		final blankBeforeExpr: Expr = triviaSepBlankBeforeExpr(
-			beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks, afterDocPolicy, reads
+			beforeDocCommentEmptyLines, typedefBodyBlanks, uniformStmtBlanks, afterDocPolicy, reads, headingAdds
 		);
 		// One `var` expression: a block wrapping the two would scope them away from the loop that reads them.
 		final initCurrDocCommentExpr: Expr = switch [beforeDocCommentEmptyLines, afterDocPolicy != null] {
@@ -995,10 +996,10 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 	 */
 	private static function triviaSepPredicateScanExpr(
 		uniformStmtBlanks: Bool, triviaElemCall: Expr, relocateTrailingComments: Bool, typedefBodyBlanks: Bool,
-		?reads: WriterTriviaStarDispatch.DocLedReads
+		?reads: WriterTriviaStarDispatch.DocLedReads, ?headingAdds: Expr
 	): Expr {
 		final blankHardlineExpr: Expr = triviaSepBlankHardlineExpr(uniformStmtBlanks, typedefBodyBlanks);
-		final inlineableLeadExpr: Expr = triviaSepInlineableLeadExpr(relocateTrailingComments, typedefBodyBlanks, reads);
+		final inlineableLeadExpr: Expr = triviaSepInlineableLeadExpr(relocateTrailingComments, typedefBodyBlanks, reads, headingAdds);
 		final statedBlanksExpr: Expr = triviaSepTypedefStatedBlanksExpr(typedefBodyBlanks, reads);
 
 		return macro {
@@ -1054,13 +1055,14 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 	 * comment rides along.
 	 */
 	private static function triviaSepInlineableLeadExpr(
-		relocateTrailingComments: Bool, typedefBodyBlanks: Bool, ?reads: WriterTriviaStarDispatch.DocLedReads
+		relocateTrailingComments: Bool, typedefBodyBlanks: Bool, ?reads: WriterTriviaStarDispatch.DocLedReads, ?headingAdds: Expr
 	): Expr {
 		final inlineLead: Expr = relocateTrailingComments ? triviaSepInlineLeadExpr() : macro true;
 		// The typedef body's doc-keyed blank lines (`typedefEmptyLines.*IfDocComments`, `beforeDocCommentEmptyLines`) are
-		// laid out only by the force-multi loop, so a doc-led typedef field takes that layout instead of the cascade.
+		// laid out only by the force-multi loop, so a doc-led typedef field takes that layout instead of the cascade; so
+		// does a field whose line-comment heading asks for a blank line.
 		final typedefDocLed: Expr = typedefBodyBlanks
-			? macro opt._inTypedefBody && ${WriterTriviaStarDispatch.docLedExpr(reads)}
+			? macro opt._inTypedefBody && (${WriterTriviaStarDispatch.docLedExpr(reads)} || ${headingAdds ?? macro false})
 			: macro false;
 		return macro _ignoreEmit && $inlineLead && (!_noWrapRules || $e{triviaSepGluedLeadExpr()}) && !$typedefDocLed;
 	}
@@ -1206,7 +1208,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaSepBlankBeforeExpr(
 		beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool, uniformStmtBlanks: Bool, afterDocPolicy: Null<Expr>,
-		?reads: WriterTriviaStarDispatch.DocLedReads
+		?reads: WriterTriviaStarDispatch.DocLedReads, ?headingAdds: Expr
 	): Expr {
 		// noqa: complexity
 		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
@@ -1218,7 +1220,8 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		// byte-identical to pre-slice behaviour.
 		// The doc-comment rule is the shared runtime policy (`anyparse.format.MemberGap`), composed as the block Star
 		// composes it; each half the Star carries no flag for reads as "not doc-led" under `Ignore`.
-		final docRule: Bool = beforeDocCommentEmptyLines || afterDocPolicy != null;
+		final docRule: Bool = beforeDocCommentEmptyLines || afterDocPolicy != null || headingAdds != null;
+		final addByHeadingExpr: Expr = headingAdds ?? macro false;
 		final prevDocExpr: Expr = afterDocPolicy != null ? macro _prevHadDocComment : macro false;
 		final currDocExpr: Expr = beforeDocCommentEmptyLines ? macro _currHasDocComment : macro false;
 		final afterExpr: Expr = afterDocPolicy ?? macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
@@ -1227,7 +1230,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 			: macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
 		final stripByCurrDocExpr: Expr = macro anyparse.format.MemberGap.docStrips($prevDocExpr, $currDocExpr, $afterExpr, $beforeExpr);
 		final addByCurrDocExpr: Expr = macro !anyparse.format.MemberGap.docVetoes($currDocExpr, $beforeExpr)
-			&& anyparse.format.MemberGap.docAdds($prevDocExpr, $currDocExpr, $afterExpr, $beforeExpr);
+			&& (anyparse.format.MemberGap.docAdds($prevDocExpr, $currDocExpr, $afterExpr, $beforeExpr) || $addByHeadingExpr);
 		final currHasDocComputeExpr: Expr = beforeDocCommentEmptyLines
 			? macro _currHasDocComment = ${WriterTriviaStarDispatch.docLedExpr(reads)}
 			: macro {};

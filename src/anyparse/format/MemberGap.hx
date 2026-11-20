@@ -83,6 +83,11 @@ final class MemberGap {
 		return stated ?? (policy == Keep && sourceBlank ? 1 : 0);
 	}
 
+	/** The verdict on a gap once the heading rule joins the doc-comment one (`doc`): a heading's blank yields only to the doc veto. */
+	public static inline function headedGap(doc: DocGapVerdict, headingAdds: Bool): DocGapVerdict {
+		return headingAdds && doc != NoBlank ? Blank : doc;
+	}
+
 	/**
 	 * The `stated` count of a type body edge (`bodyEdge`'s first argument) once the body's doc comments are read:
 	 * `ifDoc`, the kind's `…TypeIfDocComments` count, replaces it when the body holds a doc comment (`bodyHasDoc`);
@@ -112,6 +117,19 @@ final class MemberGap {
 	/** Whether a member's leading comments carry a line comment (`//`), the kind that labels a group of members. */
 	public static function lineCommentLed(leadingComments: Array<String>): Bool {
 		return leadingComments.exists(c -> c.startsWith(LINE_OPEN));
+	}
+
+	/**
+	 * Whether a member's leading comments are a run of line comments (`//`) and nothing else: a heading over a group
+	 * of members, which no doc-comment rule owns.
+	 */
+	public static function lineCommentRun(leadingComments: Array<String>): Bool {
+		return leadingComments.length > 0 && !leadingComments.exists(c -> !c.startsWith(LINE_OPEN));
+	}
+
+	/** Whether a member takes the blank line a heading asks for: `count` is above 0 and a `lineCommentRun` leads the member. */
+	public static function headingAdds(count: Int, leadingComments: Array<String>): Bool {
+		return count > 0 && lineCommentRun(leadingComments);
 	}
 
 	/**

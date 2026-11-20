@@ -56,11 +56,13 @@ final class HaxeMemberGap {
 			else
 				null;
 		}
-		final cls: MemberGapPolicy = body(opt, opt.metadataCountsAsDocComment, opt.afterFieldsWithDocComments, multiline, forKind);
+		final cls: MemberGapPolicy = body(
+			opt, opt.metadataCountsAsDocComment, opt.afterFieldsWithDocComments, opt.beforeCommentedFields, multiline, forKind
+		);
 		classBody = cls;
 		enumAbstractBody = body(
 			opt, opt.enumAbstractMetadataCountsAsDocComment, opt.enumAbstractAfterFieldsWithDocComments ?? opt.afterFieldsWithDocComments,
-			multiline, forKind
+			opt.enumAbstractBeforeCommentedFields, multiline, forKind
 		);
 		return cls;
 	}
@@ -81,17 +83,21 @@ final class HaxeMemberGap {
 		};
 	}
 
-	/** One body kind's policy: the doc-led notion under `metaCountsAsDoc` and the after-doc policy `after`. */
+	/**
+	 * One body kind's policy: the doc-led notion under `metaCountsAsDoc`, the after-doc policy `after` and the blank a
+	 * line-comment heading asks for under `beforeCommented`.
+	 */
 	private static function body(
-		opt: HxModuleWriteOptions, metaCountsAsDoc: Bool, after: CommentEmptyLinesPolicy, multiline: (slot: String) -> Null<Bool>,
-		forKind: (kind: String) -> Null<MemberGapPolicy>
+		opt: HxModuleWriteOptions, metaCountsAsDoc: Bool, after: CommentEmptyLinesPolicy, beforeCommented: Int,
+		multiline: (slot: String) -> Null<Bool>, forKind: (kind: String) -> Null<MemberGapPolicy>
 	): MemberGapPolicy {
 		inline function docLed(head: MemberGapHead): Bool {
 			return MemberGap.docLed(head.leading) || (metaCountsAsDoc && head.hasMeta);
 		}
 		inline function docGap(prev: MemberGapHead, next: MemberGapHead): DocGapVerdict {
-			return MemberGap.docGap(
-				docLed(prev), docLed(next), after, opt.beforeDocCommentEmptyLines, MemberGap.docSplitLead(next.leading)
+			return MemberGap.headedGap(
+				MemberGap.docGap(docLed(prev), docLed(next), after, opt.beforeDocCommentEmptyLines, MemberGap.docSplitLead(next.leading)),
+				MemberGap.headingAdds(beforeCommented, next.leading)
 			);
 		}
 		return {

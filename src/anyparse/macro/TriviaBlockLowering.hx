@@ -20,6 +20,7 @@ typedef BlankGateExprs = {
 	final stripByExistingExpr: Expr;
 	final vetoByDocExpr: Expr;
 	final addByDocExpr: Expr;
+	final addByHeadingExpr: Expr;
 	final addByInterMemberExpr: Expr;
 	final addByUniformBetweenExpr: Expr;
 };
@@ -102,6 +103,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = source == null
 			? null
 			: WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
+		final headingAdds: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.headingAddsExpr(plan.beforeCommentedFields());
 		final existingBetweenFields: Null<Expr> = source == null
 			? null
 			: WriterTriviaStarDispatch.starKnobReads(BlockStarPlan.EXISTING_BETWEEN_FIELDS, plan.existingBetweenFields(), 1)?.pop();
@@ -134,12 +136,13 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments != null
 			|| existingBetweenFields != null
 			|| plan.beforeDocCommentEmptyLines()
+			|| headingAdds != null
 			|| interMember
 			|| uniformBetween;
 		_blankBeforeExpr = triviaBlockBlankBeforeExpr(
 			afterFieldsWithDocComments, existingBetweenFields, plan.beforeDocCommentEmptyLines(), infos?.condLeadingDocInfo, interMember,
 			interMemberInfo, staticVarSubdivInfo != null, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,
-			plan.uniformStmtBlanks(), docLedReads
+			plan.uniformStmtBlanks(), docLedReads, headingAdds
 		);
 		_beginEnd = triviaBlockBeginEndExpr(
 			plan.beginEndType(), plan.keepCurlyBlanks(), beginTypeAccess ?? macro null, endTypeAccess ?? macro null
@@ -422,7 +425,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>, interMember: Bool,
 		interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
-		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool, docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>
+		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool, docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>, headingAdds: Null<Expr>
 	): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
@@ -468,6 +471,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			vetoByDocExpr: vetoByDocExpr,
 
 			addByDocExpr: addByDocExpr,
+			addByHeadingExpr: headingAdds ?? macro false,
 
 			addByInterMemberExpr: addByInterMemberExpr,
 			addByUniformBetweenExpr: addByUniformBetweenExpr
@@ -550,6 +554,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final vetoByDocExpr: Expr = g.vetoByDocExpr;
 
 		final addByDocExpr: Expr = g.addByDocExpr;
+		final addByHeadingExpr: Expr = g.addByHeadingExpr;
 		final addByInterMemberExpr: Expr = g.addByInterMemberExpr;
 		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
@@ -568,7 +573,8 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			// Byte-inert when the Star carries no `beforeDocCommentEmptyLines` flag
 			// (`$vetoByDocExpr` is the compile-time literal `false`) or the
 			// runtime policy is not `None`.
-			final _addBlank: Bool = !$vetoByDocExpr && ($addByDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
+			final _addBlank: Bool = !$vetoByDocExpr
+				&& ($addByDocExpr || $addByHeadingExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
 			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) {
 				_inner.push(_dhl());

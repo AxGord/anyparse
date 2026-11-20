@@ -75,6 +75,7 @@ typedef HxAbstractDecl = {
 		existingBetweenFields('abstractExistingBetweenFields', '_inEnumAbstract', 'enumAbstractExistingBetweenFields'),
 		beforeDocCommentEmptyLines,
 		metadataCountsAsDoc('meta', 'metadataCountsAsDocComment', '_inEnumAbstract', 'enumAbstractMetadataCountsAsDocComment'),
+		beforeCommentedFields('beforeCommentedFields', '_inEnumAbstract', 'enumAbstractBeforeCommentedFields'),
 		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading,
 		blankBeforeOrphanLineCommentTrail('_inEnumAbstract'),
 		interMemberBlankLines(

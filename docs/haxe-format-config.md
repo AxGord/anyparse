@@ -737,6 +737,24 @@ Runtime: `WriterTriviaStarDispatch.docLedReads`.
 {"emptyLines": {"metadataCountsAsDocComment": true, "typedefEmptyLines": {"metadataCountsAsDocComment": true}}}
 ```
 
+## `emptyLines.beforeCommentedFields` / `emptyLines.<kind>.beforeCommentedFields`
+
+anyparse-only, an Int, `0` by default. At `emptyLines` level it covers class, interface and plain
+`abstract` bodies; `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines` each carry
+their own. Above `0`, a member led by a run of line comments (`//`) and nothing else — a heading
+over a group of members — takes one blank line in front of it, the first member of the body
+aside (`beginType` owns that edge). A trailing comment of the previous member, a block comment
+and a doc comment are not a heading; the doc-comment keys keep their members, and their veto
+(`beforeDocCommentEmptyLines: none` on a member counted as documented) outranks the heading. An
+`enum abstract` body handed to the abstract rules by `abstractRulesUnlessValueList` reads the
+`emptyLines` level key. The `member-order` check reads the same keys (`MemberGapPolicy.forKind`).
+Runtime: `MemberGap.headingAdds`, spliced by `WriterTriviaStarDispatch.headingAddsExpr` for a
+body Star's `@:fmt(beforeCommentedFields('<knob>'[, '<flag>', '<alt>']))`.
+
+```json
+{"emptyLines": {"enumAbstractEmptyLines": {"existingBetweenFields": "remove", "beforeCommentedFields": 1}}}
+```
+
 ## `comments.*`
 
 The fork has a `comments` section holding only `blockCommentBodyIndent`, which hxq accepts and does not read. `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only and additive.

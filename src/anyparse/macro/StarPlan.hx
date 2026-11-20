@@ -45,6 +45,12 @@ class StarPlan {
 	 */
 	public inline function metadataCountsAsDoc(): Null<Array<String>> return flagArgs('metadataCountsAsDoc');
 
+	/**
+	 * `@:fmt(beforeCommentedFields('<knob>'[, '<flag>', '<alt>']))`: the `opt` Int that asks a blank line in front of a member
+	 * headed by a line-comment run; null when the Star carries no such flag.
+	 */
+	public inline function beforeCommentedFields(): Null<Array<String>> return flagArgs('beforeCommentedFields');
+
 	/** The separator text of `@:sep('text', …)`, or null. */
 	public inline function sepText(): Null<String> return _meta.annotation(AnnotationKeys.LIT_SEP_TEXT);
 

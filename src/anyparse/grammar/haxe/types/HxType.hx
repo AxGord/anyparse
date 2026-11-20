@@ -185,6 +185,7 @@ enum HxType {
 	@:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'), typedefWrapRules('typedefBodyWrap'),
 		leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines,
 		metadataCountsAsDoc('meta', '', '_inTypedefBody', 'typedefMetadataCountsAsDocComment'),
+		beforeCommentedFields('', '_inTypedefBody', 'typedefBeforeCommentedFields'),
 		afterFieldsWithDocComments('', '_inTypedefBody', 'typedefAfterFieldsWithDocComments'), forceMultiInTypedef, keepCurlyBlanks,
 		typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'), typeParamItems, moduleOnlyTypedefs)
 	Anon(fields: Array<HxAnonMember>);

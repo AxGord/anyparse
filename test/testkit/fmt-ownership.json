@@ -66,6 +66,7 @@
 		"sepBeforeOpt"
 	],
 	"StarPlan": [
+		"beforeCommentedFields",
 		"beforeDocCommentEmptyLines",
 		"clearExprPositionNonTail",
 		"propagateExprPosition",

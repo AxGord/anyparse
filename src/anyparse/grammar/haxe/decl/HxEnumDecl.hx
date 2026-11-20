@@ -45,7 +45,8 @@ typedef HxEnumDecl = {
 
 	@:fmt(beginEndType('enumBeginType', 'enumEndType'), beginEndTypeIfDoc('enumBeginTypeIfDocComments', 'enumEndTypeIfDocComments'),
 		existingBetweenFields('enumExistingBetweenFields'), afterFieldsWithDocComments('enumAfterFieldsWithDocComments'),
-		uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines, metadataCountsAsDoc('meta', 'enumMetadataCountsAsDocComment'))
+		uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines, metadataCountsAsDoc('meta', 'enumMetadataCountsAsDocComment'),
+		beforeCommentedFields('enumBeforeCommentedFields'))
 	@:lead('{')
 	@:trail('}')
 	@:trivia

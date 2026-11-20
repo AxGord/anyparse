@@ -709,6 +709,22 @@
 			"find": "return plainCtors.contains(Type.enumConstructor(value))",
 			"replace": "return true",
 			"note": "a call branch counts as a plain value, so a value-tail chain with a call stays inline"
+		},
+		{
+			"name": "M-HEADING-LINE-RUN-ONLY",
+			"type": "anyparse.format.MemberGap",
+			"method": "lineCommentRun",
+			"find": "!leadingComments.exists(c -> !c.startsWith(LINE_OPEN))",
+			"replace": "true",
+			"note": "any leading comment counts as a heading, so a block or doc comment takes the beforeCommentedFields blank"
+		},
+		{
+			"name": "M-HEADING-YIELDS-TO-VETO",
+			"type": "anyparse.format.MemberGap",
+			"method": "headedGap",
+			"find": "headingAdds && doc != NoBlank",
+			"replace": "headingAdds",
+			"note": "a heading asks its blank line over the doc veto, so the policy demands a blank fmt does not write"
 		}
 	]
 }

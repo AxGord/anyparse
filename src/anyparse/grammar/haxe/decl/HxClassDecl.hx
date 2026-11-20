@@ -58,7 +58,8 @@ typedef HxClassDecl = {
 	@:fmt(leftCurly, emptyCurlyBreak, beginEndType('beginType', 'endType', '_classExtern', 'externClassBeginType', 'externClassEndType'),
 		afterFieldsWithDocComments, existingBetweenFields('existingBetweenFields', '_classExtern', 'externExistingBetweenFields'),
 		beforeDocCommentEmptyLines, metadataCountsAsDoc('meta', 'metadataCountsAsDocComment'),
-		beforeDocCondLookThrough('member', 'Conditional', 'body'), blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
+		beforeCommentedFields('beforeCommentedFields'), beforeDocCondLookThrough('member', 'Conditional', 'body'),
+		blankBeforeFinalDocCommentInLeading, blankBeforeOrphanLineCommentTrail,
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember|FinalModifiedMember', 'betweenVars', 'betweenFunctions', 'afterVars',
 			'_classExtern', 'externClassBetweenVars', 'externClassBetweenFunctions', 'externClassAfterVars'

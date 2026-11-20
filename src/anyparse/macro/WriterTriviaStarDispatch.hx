@@ -96,6 +96,24 @@ final class WriterTriviaStarDispatch {
 		return { elem: macro ($on && $elemList.length > 0), body: macro ($on && Lambda.exists(_arr, _m -> $memberList.length > 0)) };
 	}
 
+	/**
+	 * The runtime read of `@:fmt(beforeCommentedFields('<knob>'[, '<flag>', '<alt>']))` (`args`, null without the flag):
+	 * whether the element `_t` takes the blank line a line-comment heading asks for. `<knob>` is an `opt` Int, `''` for
+	 * off; under `opt.<flag>` the `<alt>` Int decides instead. Null without the flag: the Star splices no heading rule.
+	 */
+	public static function headingAddsExpr(args: Null<Array<String>>): Null<Expr> {
+		if (args == null) return null;
+		if (args.length != 1 && args.length != 3)
+			Context.fatalError(
+				'@:fmt(beforeCommentedFields) names its knob, optionally followed by a flag and the knob it switches to, got $args',
+				Context.currentPos()
+			);
+		final off: Expr = macro 0;
+		final own: Expr = args[0] == '' ? off : knobRead(args[0]);
+		final count: Expr = args.length == 1 ? own : macro (${knobRead(args[1])} ? ${args[2] == '' ? off : knobRead(args[2])} : $own);
+		return macro anyparse.format.MemberGap.headingAdds($count, _t.leadingComments);
+	}
+
 	/** The element `_t` is doc-led: a `/**` among its leading comments, or `reads.elem` when the Star counts metadata. */
 	public static function docLedExpr(reads: Null<DocLedReads>): Expr {
 		final byDoc: Expr = macro anyparse.format.MemberGap.docLed(_t.leadingComments);

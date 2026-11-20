@@ -528,6 +528,18 @@ final class HxModuleWriteOptions {
 	public var typedefMetadataCountsAsDocComment: Bool = false;
 
 	/**
+	 * Whether a member headed by a run of line comments (`//`, a heading over a group of members) takes one blank line in
+	 * front of it, the first member of the body aside — named by its body Star's `@:fmt(beforeCommentedFields(...))`. Any
+	 * count above 0 asks for that one blank line. `beforeCommentedFields` is the class, interface and abstract body's; the
+	 * other three are their kind's. 0 by default: the fork has none.
+	 */
+	public var beforeCommentedFields: Int = 0;
+
+	public var enumBeforeCommentedFields: Int = 0;
+	public var enumAbstractBeforeCommentedFields: Int = 0;
+	public var typedefBeforeCommentedFields: Int = 0;
+
+	/**
 	 * Whether an `enum abstract` body that is more than a list of values reads the plain `abstract` blank-line knobs (its
 	 * class rule set) instead of the `enumAbstract*` ones — the `enumAbstractEmptyLines.abstractRulesUnlessValueList` key,
 	 * named by `HxDecl.EnumAbstractDecl`'s `@:fmt(propagateEnumAbstractContext(...))`. Off by default: every body reads

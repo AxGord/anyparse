@@ -57,4 +57,7 @@ typedef HxFormatEnumEmptyLinesConfig = {
 	@:optional
 	var metadataCountsAsDocComment: Bool;
 
+	@:optional
+	var beforeCommentedFields: Int;
+
 };
