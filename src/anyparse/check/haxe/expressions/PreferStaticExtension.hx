@@ -1,16 +1,13 @@
 package anyparse.check.haxe.expressions;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.FixEdit;
 import anyparse.check.haxe.expressions.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.check.scan.ReceiverShadow;
-import anyparse.check.scan.RunScan;
 import anyparse.check.scan.SpanRender;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ModuleScan;
 import anyparse.query.ParseGate;

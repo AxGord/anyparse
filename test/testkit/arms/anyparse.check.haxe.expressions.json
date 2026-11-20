@@ -487,6 +487,54 @@
 			"find": "real == null ? [s.intType, s.stringType] : [s.intType, s.stringType, real]",
 			"replace": "[s.intType, s.stringType]",
 			"note": "a Float key is refused as a configuration error, so Reflect.compare of two Floats is never moved to the named function"
+		},
+		{
+			"name": "M-PAC-ABSENT-FORM",
+			"type": "anyparse.check.haxe.expressions.PreferArrayContains",
+			"method": "rewrite",
+			"find": "(site.absent ? NEGATION : '')",
+			"replace": "''",
+			"note": "an absence test is written without its negation, so a not-found comparison reads as presence"
+		},
+		{
+			"name": "M-PAC-MIRROR",
+			"type": "anyparse.check.haxe.expressions.PreferArrayContains",
+			"method": "siteAt",
+			"find": "leftSearch == null ? MIRROR[comparison] ?? comparison : comparison",
+			"replace": "comparison",
+			"note": "a call on the right keeps the comparison unmirrored, so the sides-swapped forms read as their opposite"
+		},
+		{
+			"name": "M-PAC-ANY-RECEIVER",
+			"type": "anyparse.check.haxe.expressions.PreferArrayContains",
+			"method": "proved",
+			"find": "sites.filter(site -> nominal(site.search.receiver) == ARRAY_TYPE)",
+			"replace": "sites",
+			"note": "every indexOf receiver counts as an Array, so a String or Dynamic one is rewritten"
+		},
+		{
+			"name": "M-PAC-FROM-INDEX",
+			"type": "anyparse.check.haxe.expressions.PreferArrayContains",
+			"method": "searchOf",
+			"find": "!NodeShape.hasOneArgCallShape(node)",
+			"replace": "node.children.length < 2",
+			"note": "an indexOf with a start index counts as the one-argument search"
+		},
+		{
+			"name": "M-PAC-ANY-BOUND",
+			"type": "anyparse.check.haxe.expressions.PreferArrayContains",
+			"method": "integerOf",
+			"find": "return isNumber(node, ZERO, source, s) ? 0 : null;",
+			"replace": "return 0;",
+			"note": "any other operand counts as zero, so an indexOf result compared with a variable reads as a membership test"
+		},
+		{
+			"name": "M-PAC-COMMENT",
+			"type": "anyparse.check.haxe.expressions.PreferArrayContains",
+			"method": "siteAt",
+			"find": " || LexicalRegions.commentIntersects(span.from, span.to, regions())",
+			"replace": "",
+			"note": "a comment inside the comparison no longer blocks the rewrite, which would drop it"
 		}
 	]
 }

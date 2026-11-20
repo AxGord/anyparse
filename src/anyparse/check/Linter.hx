@@ -221,6 +221,7 @@ import anyparse.check.common.unused.UnusedPublicMember;
 import anyparse.check.common.unused.UnusedReturnValue;
 import anyparse.check.common.unused.UnusedType;
 import anyparse.check.haxe.design.HandSourceScanner;
+import anyparse.check.haxe.expressions.PreferArrayContains;
 import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.check.haxe.expressions.PreferSplitPart;
 import anyparse.check.haxe.expressions.PreferStaticExtension;
@@ -302,6 +303,7 @@ final class Linter {
 			new AvoidHaxeJson(),
 			new PreferCompareFunction(),
 			new PreferSplitPart(),
+			new PreferArrayContains(),
 			new StaticInitOrder(),
 			new UnusedEnumAbstractValue(),
 			new NullSafetyStrict(),

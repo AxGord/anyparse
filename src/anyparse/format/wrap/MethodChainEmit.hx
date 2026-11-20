@@ -137,7 +137,7 @@ class MethodChainEmit {
 		final commentForcedBreak: Array<Bool> = [
 			for (i in 0...segments.length) WrapList.endsWithLineComment(i == 0 ? receiver : segments[i - 1])
 		];
-		final hasCommentBreak: Bool = commentForcedBreak.indexOf(true) != -1;
+		final hasCommentBreak: Bool = commentForcedBreak.contains(true);
 
 		// Token-text width metric: chain segment length is the segment's
 		// rendered width with `BodyGroup` content deferred (mirrors
@@ -474,7 +474,7 @@ class MethodChainEmit {
 			for (i in 1...segs.length)
 				endsWithMultilineClose(i == 1 ? Concat([receiver, segs[0]]) : segs[i - 1], committed == i || (i == 1 && committed == 0))
 		] : [];
-		if (cuddle.indexOf(true) != -1) return Concat(cuddledRuns([segs[0]], segs, 1, cuddle, cols));
+		if (cuddle.contains(true)) return Concat(cuddledRuns([segs[0]], segs, 1, cuddle, cols));
 		final tail: Array<Doc> = [];
 		for (i in 1...segs.length) {
 			tail.push(Line('\n'));
@@ -563,7 +563,7 @@ class MethodChainEmit {
 		final cuddle: Array<Bool> = cuddledLinks ? [
 			for (i in 0...segs.length) endsWithMultilineClose(i == 0 ? receiver : segs[i - 1], committed == i)
 		] : [];
-		if (cuddle.indexOf(true) != -1) return Concat(cuddledRuns([], segs, 0, cuddle, cols));
+		if (cuddle.contains(true)) return Concat(cuddledRuns([], segs, 0, cuddle, cols));
 		final tail: Array<Doc> = [];
 		for (s in segs) {
 			tail.push(Line('\n'));

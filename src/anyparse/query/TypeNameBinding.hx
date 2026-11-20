@@ -629,7 +629,7 @@ final class TypeNameBinding {
 	 * statement is in another file and guards nothing here.
 	 */
 	private function coGuarded(imp: ImportInfo, fi: FileInfo, use: Null<Array<CondFrame>>): Bool {
-		return use != null && fi.imports.indexOf(imp) >= 0 && CondBranchPath.within(use, branchPathAt(fi, imp.span.from));
+		return use != null && fi.imports.contains(imp) && CondBranchPath.within(use, branchPathAt(fi, imp.span.from));
 	}
 
 	/** `splitPath(path)`, memoised for this binding (`_importPaths`). */

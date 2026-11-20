@@ -591,7 +591,7 @@ class WrapList {
 	public static function collectExtraLineLengthThresholds(rules: WrapRules, lineWidth: Int): Array<Int> {
 		final out: Array<Int> = [];
 		for (rule in rules.rules) for (cond in rule.conditions) {
-			if (cond.cond == LineLengthLargerThan && cond.value != lineWidth && out.indexOf(cond.value) < 0) out.push(cond.value);
+			if (cond.cond == LineLengthLargerThan && cond.value != lineWidth && !out.contains(cond.value)) out.push(cond.value);
 		}
 		return out;
 	}

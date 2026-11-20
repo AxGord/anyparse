@@ -112,7 +112,7 @@ class StrategyRegistry {
 				final idx: Int = deps.indexOf(pick);
 				if (idx == -1) continue;
 				deps.splice(idx, 1);
-				if (deps.length != 0 || ready.indexOf(other.name) != -1 || result.indexOf(other) != -1) continue;
+				if (deps.length != 0 || ready.contains(other.name) || result.contains(other)) continue;
 				ready.push(other.name);
 			}
 		}

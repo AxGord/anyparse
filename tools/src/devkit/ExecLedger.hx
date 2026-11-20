@@ -190,7 +190,7 @@ final class ExecLedger {
 
 	/** The branch step `name` ran in: the first name of the group of `branches` that holds it, or `name` itself when none does. */
 	public static function branchIn(name: String, branches: Array<Array<String>>): String {
-		for (group in branches) if (group.indexOf(name) >= 0) return group[0];
+		for (group in branches) if (group.contains(name)) return group[0];
 		return name;
 	}
 

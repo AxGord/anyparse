@@ -2652,7 +2652,7 @@ class WriterLowering {
 	 * token. Evaluated at macro time against `formatInfo.spacedLeads`.
 	 */
 	private function isSpacedLead(openText: Null<String>): Bool {
-		return openText != null && _formatInfo.spacedLeads.indexOf(openText) != -1;
+		return openText != null && _formatInfo.spacedLeads.contains(openText);
 	}
 
 	/**
@@ -2663,7 +2663,7 @@ class WriterLowering {
 	 * spaces like keyword leads (`else`, `catch`).
 	 */
 	private function isTightLead(leadText: Null<String>): Bool {
-		return leadText != null && _formatInfo.tightLeads.indexOf(leadText) != -1;
+		return leadText != null && _formatInfo.tightLeads.contains(leadText);
 	}
 
 	/** Whether `leadText` is the format's key-value separator: a lead `keyValueSpace` decides the space after. */

@@ -685,8 +685,8 @@ final class WriterCascadeLowering {
 			if (ctorName == null) continue;
 			final arity: Int = branch.children.length;
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			final isMatch: Bool = ctorNames.indexOf(ctorName) >= 0;
-			final isTransparent: Bool = !isMatch && transparentCtorNames.indexOf(ctorName) >= 0;
+			final isMatch: Bool = ctorNames.contains(ctorName);
+			final isTransparent: Bool = !isMatch && transparentCtorNames.contains(ctorName);
 			if (isMatch) {
 				if (arity < 1)
 					Context.fatalError(
@@ -827,19 +827,19 @@ final class WriterCascadeLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires at least one ctor on each side of "|"', Context.currentPos()
 			);
-		for (name in ctorNamesA) if (ctorNamesB.indexOf(name) >= 0)
+		for (name in ctorNamesA) if (ctorNamesB.contains(name))
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name'
 				+ '" appears in both subset A and subset B — must be in exactly one',
 				Context.currentPos()
 			);
-		for (name in ctorNamesA) if (transparentCtorNames.indexOf(name) >= 0)
+		for (name in ctorNamesA) if (transparentCtorNames.contains(name))
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name'
 				+ '" appears both as a matched (subset A) and transparent ctor on the same Star — must be one or the other',
 				Context.currentPos()
 			);
-		for (name in ctorNamesB) if (transparentCtorNames.indexOf(name) >= 0)
+		for (name in ctorNamesB) if (transparentCtorNames.contains(name))
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name'
 				+ '" appears both as a matched (subset B) and transparent ctor on the same Star — must be one or the other',

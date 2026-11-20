@@ -202,7 +202,7 @@ class MisplacedTypeDocCheckTest extends Test {
 	 */
 	public function testRegisteredBeforeImportOrder(): Void {
 		final ids: Array<String> = CheckFixture.builtinIds();
-		Assert.isTrue(ids.indexOf('misplaced-type-doc') >= 0);
+		Assert.isTrue(ids.contains('misplaced-type-doc'));
 		Assert.isTrue(
 			ids.indexOf('misplaced-type-doc') < ids.indexOf('import-order'), 'misplaced-type-doc must precede import-order in the registry'
 		);

@@ -105,6 +105,7 @@
 	"possible-null-dereference",
 	"prefer-access-meta",
 	"prefer-api-idiom",
+	"prefer-array-contains",
 	"prefer-array-literal",
 	"prefer-arrow-callback",
 	"prefer-bind",

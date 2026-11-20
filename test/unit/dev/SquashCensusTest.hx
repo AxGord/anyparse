@@ -201,7 +201,7 @@ final class SquashCensusTest extends Test {
 	 * `C`; the squashed copies need a second rewrite for `A` and `B`; `--write` changes nothing.
 	 */
 	private static function fakeEngine(args: Array<String>): Command {
-		if (args.indexOf('--one-pass') < 0) return Command.of(['true']);
+		if (!args.contains('--one-pass')) return Command.of(['true']);
 		final target: String = args[args.length - 1];
 		final root: String = Path.directory(target);
 		final twice: String = ': the writer needed 2 rewrites to reach its fixed point';

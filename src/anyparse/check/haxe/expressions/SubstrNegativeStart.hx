@@ -1,10 +1,7 @@
 package anyparse.check.haxe.expressions;
 
-import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.scan.OrderGuards;
-import anyparse.check.scan.RunScan;
-import anyparse.query.IndexScope;
 import anyparse.query.StdlibPurity;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypingService;

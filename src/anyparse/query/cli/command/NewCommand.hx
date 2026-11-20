@@ -206,7 +206,7 @@ final class NewCommand implements CliCommand {
 			printNewUsage();
 			return EXIT_USAGE;
 		}
-		if (!o.raw && ['class', 'interface', 'enum', 'typedef', 'abstract'].indexOf(o.kind) < 0) {
+		if (!o.raw && !['class', 'interface', 'enum', 'typedef', 'abstract'].contains(o.kind)) {
 			CliIo.stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "${o.kind}")\n');
 			return EXIT_USAGE;
 		}

@@ -205,7 +205,7 @@ final class WriterCtorBlankLowering {
 			entry = { ctors: [], tailAdapter: null, headAdapter: null };
 			transparentByClassifier[cf] = entry;
 		}
-		if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
+		if (!entry.ctors.contains(ctor)) entry.ctors.push(ctor);
 		if (isTail) {
 			if (entry.tailAdapter != null && entry.tailAdapter != adapter)
 				Context.fatalError(
@@ -596,7 +596,7 @@ final class WriterCtorBlankLowering {
 		// matched and transparent sets. A ctor in both lists would be
 		// ambiguous (kind=1/path=_v0 wins or transparent adapter call?).
 		// Reject at compile time so the grammar author resolves it.
-		for (name in ctorNames) if (transparentCtorNames.indexOf(name) >= 0)
+		for (name in ctorNames) if (transparentCtorNames.contains(name))
 			Context.fatalError(
 				'WriterLowering: ctor "$name" appears both in @:fmt(blankLinesBetweenSameCtorByLevel) matched set and in '
 				+ '@:fmt(blankLinesBetweenSameCtorTailTransparent) transparent set on the same Star — must be one or the other',
@@ -671,17 +671,17 @@ final class WriterCtorBlankLowering {
 			ctorNamesB: ctorNamesB,
 			transparentCtorNames: transparentCtorNames
 		});
-		for (name in ctorNamesA) if (built.matchedA.indexOf(name) < 0)
+		for (name in ctorNamesA) if (!built.matchedA.contains(name))
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) subset A ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
-		for (name in ctorNamesB) if (built.matchedB.indexOf(name) < 0)
+		for (name in ctorNamesB) if (!built.matchedB.contains(name))
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) subset B ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
-		for (name in transparentCtorNames) if (built.transparentMatched.indexOf(name) < 0)
+		for (name in transparentCtorNames) if (!built.transparentMatched.contains(name))
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
@@ -725,9 +725,9 @@ final class WriterCtorBlankLowering {
 			// returns 0 outside trivia mode or for non-bearing enums.
 			final arity: Int = shapeArity + cb.branchSynthExtraArity(c.enumRuleName, branch);
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			final inA: Bool = c.ctorNamesA.indexOf(ctorName) >= 0;
-			final inB: Bool = !inA && c.ctorNamesB.indexOf(ctorName) >= 0;
-			final isTransparent: Bool = !inA && !inB && c.transparentCtorNames.indexOf(ctorName) >= 0;
+			final inA: Bool = c.ctorNamesA.contains(ctorName);
+			final inB: Bool = !inA && c.ctorNamesB.contains(ctorName);
+			final isTransparent: Bool = !inA && !inB && c.transparentCtorNames.contains(ctorName);
 			if (inA) {
 				matchedA.push(ctorName);
 				patterns.push({ pattern: transitionPattern(ctorIdent, arity, true, pos), subset: 1 });
@@ -844,7 +844,7 @@ final class WriterCtorBlankLowering {
 			final arity: Int = branch.children.length + cb.branchSynthExtraArity(enumRuleName, branch);
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
 			final pattern: Expr = arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, [ for (_ in 0...arity) macro _ ]), pos: pos };
-			final isMatch: Bool = ctorNames.indexOf(ctorName) >= 0;
+			final isMatch: Bool = ctorNames.contains(ctorName);
 			if (isMatch) matched.push(ctorName);
 			final kindExpr: Expr = if (!isMatch)
 				macro 0;
@@ -873,7 +873,7 @@ final class WriterCtorBlankLowering {
 		// that is only a prefix takes part in no blank-line cascade. Mirrors
 		// `buildInterMemberClassifyCases`'s member-scope arm.
 		cases.push({ values: [macro null], guard: null, expr: macro 0 });
-		for (name in ctorNames) if (matched.indexOf(name) < 0)
+		for (name in ctorNames) if (!matched.contains(name))
 			Context.fatalError('WriterLowering: @:fmt($metaName) ctor "$name" not found in enum $enumRuleName', Context.currentPos());
 		return { fieldName: fieldName, cases: cases, optField: optField };
 	}

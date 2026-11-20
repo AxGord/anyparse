@@ -127,7 +127,7 @@ class TriviaAnalysis {
 	private static function collectRefsInto(node: ShapeNode, out: Array<String>): Void {
 		if (node.kind == Ref) {
 			final r: Null<String> = node.annotations[AnnotationKeys.BASE_REF];
-			if (r != null && out.indexOf(r) == -1) out.push(r);
+			if (r != null && !out.contains(r)) out.push(r);
 		}
 		for (child in node.children) collectRefsInto(child, out);
 	}

@@ -121,7 +121,7 @@ final class WriterCtorPatternLowering {
 		if (node == null || node.kind != Alt) return ctors;
 		for (branch in node.children) {
 			final ctor: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
-			if (ctor == null || lcCtorNames.indexOf(ctor) != -1) continue;
+			if (ctor == null || lcCtorNames.contains(ctor)) continue;
 			if (branch.annotations.get(AnnotationKeys.LIT_LIT_LIST) != null) continue;
 			if (branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT) != null) continue;
 			if (branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT) != null) continue;

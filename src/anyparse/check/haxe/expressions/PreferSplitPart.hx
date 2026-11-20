@@ -2,13 +2,10 @@ package anyparse.check.haxe.expressions;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
-import anyparse.check.scan.RunScan;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ElementSpan;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;

@@ -13,7 +13,7 @@ final class GateLedgerBranchTest extends Test {
 	public function testAGateRowsFollowTheirRealBranches(): Void {
 		final first: Array<String> = ['suite', 'lists', 'lint', 'jvm', 'infra4'];
 		final names: Array<String> = ['suite', 'lists', 'corpus', 'fmt', 'lint', 'jvm', 'infra4', 'scrub', 'artifacts'];
-		final steps: Array<Step> = names.map(name -> step(name, first.indexOf(name) >= 0));
+		final steps: Array<Step> = names.map(name -> step(name, first.contains(name)));
 		final rows: Array<LedgerRow> = ExecLedger.decodeAll(GateReuse.timingsOf(steps, 7));
 		final branches: Map<String, String> = [ for (row in rows) row.row => row.branch ?? row.row ];
 		Assert.equals('suite', branches['corpus']);

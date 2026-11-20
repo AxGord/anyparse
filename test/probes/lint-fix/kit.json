@@ -1170,7 +1170,7 @@
 			"expect": {
 				"exit": 3,
 				"out": "e3b0c44298fc1c14",
-				"err": "145a2771594f6250",
+				"err": "e24b476e04cdc15b",
 				"files": "90fc96979480c2c1",
 				"compiles": [
 					true,
@@ -1712,7 +1712,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "81321c61ff98b891",
+				"err": "947887eb8523d732",
 				"files": "5ac73425cffbf6fb",
 				"compiles": [
 					false,
@@ -3213,6 +3213,37 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "64effbc2daeefea1",
 				"files": "79cc17be673473d6",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "PAC-MEMBERSHIP",
+			"note": "prefer-array-contains rewrites every indexOf not-found comparison over a proved Array (both sides, nested in the value, under !, &&, a ternary condition, == true) and leaves typedef aliases of String-like, abstracts over Array, String, Dynamic, Null<Array>, comprehensions and <= -1 alone; the fixed program compiles and prints what it printed",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-array-contains",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "typedef Names = Array<String>;\n\nabstract Wrap(Array<Int>) from Array<Int> {\n\tpublic function indexOf(v:Int):Int\n\t\treturn this.indexOf(v);\n}\n\nclass Main {\n\tvar items:Array<Int> = [];\n\n\tstatic function get():Array<Int>\n\t\treturn [1];\n\n\tpublic function new() {}\n\n\tstatic function main() {\n\t\tfinal xs:Array<Int> = [1, 2];\n\t\tfinal ys = [1, 2];\n\t\tfinal n:Names = ['a'];\n\t\tfinal w:Wrap = [1];\n\t\tfinal s:String = 'abc';\n\t\tfinal d:Dynamic = [1];\n\t\tfinal nx:Null<Array<Int>> = [3];\n\t\tfinal v = 1;\n\t\ttrace(!(xs.indexOf(v) < 0));\n\t\ttrace(true && xs.indexOf(v) == -1);\n\t\ttrace(get().indexOf(v) < 0);\n\t\ttrace(ys.indexOf(v) >= 0);\n\t\ttrace(n.indexOf('a') < 0);\n\t\ttrace(w.indexOf(1) < 0);\n\t\ttrace(s.indexOf('a') < 0);\n\t\ttrace(d.indexOf(1) < 0);\n\t\ttrace(nx.indexOf(1) != -1);\n\t\ttrace(-1 != xs.indexOf(v));\n\t\ttrace(xs.indexOf(v) <= -1);\n\t\ttrace(xs.indexOf(xs.indexOf(v) < 0 ? 1 : 2) > -1);\n\t\ttrace(new Main().items.indexOf(v) == -1);\n\t\ttrace((xs.indexOf(v) < 0) == false);\n\t\tfinal b = xs.indexOf(v) < 0 ? 'no' : 'yes';\n\t\ttrace(b);\n\t\ttrace([for (i in 0...3) i].indexOf(v) < 0);\n\t\ttrace(xs.indexOf(v + 1) < 0);\n\t\ttrace(xs.indexOf(v) == -1);\n\t\ttrace(xs.indexOf(v) < 0 && ys.indexOf(v) >= 0);\n\t\ttrace(xs.indexOf(v) < 0 == true);\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "b4f73bc2e585b419",
+				"files": "f0f3baf30890b333",
 				"compiles": [
 					true,
 					true

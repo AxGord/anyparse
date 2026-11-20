@@ -228,8 +228,8 @@ class CondQueryTest extends Test {
 		final found: Array<CondRegion> = regionsOf(src, 'nodejs');
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
 		final first: Array<String> = CondQuery.namesIn(tree, found[0].branches[0].body, SHAPE);
-		Assert.isTrue(first.indexOf('VarStmt v') >= 0, 'the declaration is missing: $first');
-		Assert.isTrue(first.indexOf('IdentExpr use') >= 0, 'the call target is missing: $first');
+		Assert.isTrue(first.contains('VarStmt v'), 'the declaration is missing: $first');
+		Assert.isTrue(first.contains('IdentExpr use'), 'the call target is missing: $first');
 		Assert.same(['IdentExpr other'], CondQuery.namesIn(tree, found[0].branches[1].body, SHAPE));
 	}
 

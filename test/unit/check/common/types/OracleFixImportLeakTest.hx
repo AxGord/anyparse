@@ -87,7 +87,7 @@ final class OracleFixImportLeakTest extends Test {
 	 */
 	public function testARejectedLocalLeavesNoImportBehind(): Void {
 		final texts: Array<String> = localEditTexts(['leak' => 'Map<pkg.deep.Foo, Dynamic>', 'kept' => 'Int']);
-		Assert.isTrue(texts.indexOf(':Int') != -1, 'the admissible candidate is annotated, got: $texts');
+		Assert.isTrue(texts.contains(':Int'), 'the admissible candidate is annotated, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') == -1, 'no import for the rejected candidate, got: $texts');
 	}
 
@@ -99,7 +99,7 @@ final class OracleFixImportLeakTest extends Test {
 	 */
 	public function testAnEarlierPromiseSurvivesALaterRollback(): Void {
 		final texts: Array<String> = localEditTexts(['leak' => 'pkg.deep.Foo', 'kept' => 'Map<pkg.other.Bar, Dynamic>']);
-		Assert.isTrue(texts.indexOf(':Foo') != -1, 'the earlier candidate is annotated, got: $texts');
+		Assert.isTrue(texts.contains(':Foo'), 'the earlier candidate is annotated, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') != -1, 'its promise survives, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('pkg.other.Bar') == -1, 'the later rejection is rolled back, got: $texts');
 	}
@@ -107,7 +107,7 @@ final class OracleFixImportLeakTest extends Test {
 	/** The control: an import the SURVIVING annotation needs is still emitted. */
 	public function testAnAdmissibleLocalStillGetsItsImport(): Void {
 		final texts: Array<String> = localEditTexts(['leak' => 'Int', 'kept' => 'pkg.deep.Foo']);
-		Assert.isTrue(texts.indexOf(':Foo') != -1, 'the qualified answer is shortened, got: $texts');
+		Assert.isTrue(texts.contains(':Foo'), 'the qualified answer is shortened, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') != -1, 'its import is emitted, got: $texts');
 	}
 
@@ -122,7 +122,7 @@ final class OracleFixImportLeakTest extends Test {
 	 */
 	public function testAGuardedLocalTakesTheQualifiedPathAndNoImport(): Void {
 		final texts: Array<String> = localEditTexts(['leak' => 'pkg.deep.Foo', 'kept' => 'Int'], GUARDED_LOCALS);
-		Assert.isTrue(texts.indexOf(':pkg.deep.Foo') != -1, 'the guarded local keeps the qualified path, got: $texts');
+		Assert.isTrue(texts.contains(':pkg.deep.Foo'), 'the guarded local keeps the qualified path, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') == -1, 'it buys no import, got: $texts');
 	}
 
@@ -134,14 +134,14 @@ final class OracleFixImportLeakTest extends Test {
 	 */
 	public function testABodyGuardedLocalStillEarnsItsImport(): Void {
 		final texts: Array<String> = localEditTexts(['leak' => 'pkg.deep.Foo', 'kept' => 'Int'], BODY_GUARDED_LOCALS);
-		Assert.isTrue(texts.indexOf(':Foo') != -1, 'the guarded-body local is shortened, got: $texts');
+		Assert.isTrue(texts.contains(':Foo'), 'the guarded-body local is shortened, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') != -1, 'its import is emitted, got: $texts');
 	}
 
 	/** The `explicit-type` twin: a return type inside a member-position `#if` region buys no module-level import either. */
 	public function testAGuardedReturnTypeTakesTheQualifiedPathAndNoImport(): Void {
 		final texts: Array<String> = returnEditTexts(['bad' => '() -> Int', 'good' => '() -> pkg.deep.Foo'], GUARDED_RETURNS);
-		Assert.isTrue(texts.indexOf(':pkg.deep.Foo') != -1, 'the guarded return type keeps the qualified path, got: $texts');
+		Assert.isTrue(texts.contains(':pkg.deep.Foo'), 'the guarded return type keeps the qualified path, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') == -1, 'it buys no import, got: $texts');
 	}
 
@@ -154,7 +154,7 @@ final class OracleFixImportLeakTest extends Test {
 	 */
 	public function testARejectedReturnTypeNeverPromisedAnImport(): Void {
 		final texts: Array<String> = returnEditTexts(['bad' => '() -> Array<pkg.deep.Bar<Unknown<0>>>', 'good' => '() -> pkg.deep.Foo']);
-		Assert.isTrue(texts.indexOf(':Foo') != -1, 'the admissible return type is annotated, got: $texts');
+		Assert.isTrue(texts.contains(':Foo'), 'the admissible return type is annotated, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('import pkg.deep.Foo;') != -1, 'its import is emitted, got: $texts');
 		Assert.isTrue(texts.join('|').indexOf('pkg.deep.Bar') == -1, 'the refused return type promised nothing, got: $texts');
 	}

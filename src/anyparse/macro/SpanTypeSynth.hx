@@ -7,6 +7,7 @@ import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using anyparse.util.Groups;
 using anyparse.macro.MetaInspect;
 
 /**
@@ -66,7 +67,7 @@ class SpanTypeSynth {
 	private static final defined: Set<String> = new Set<String>();
 
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
-		if (shapes.indexOf(shape) == -1) shapes.push(shape);
+		shapes.pushUnique(shape);
 		final synthPack: Array<String> = synthPackOf(shape.root, SPANS_SUBPACK);
 		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired: Array<TypeDefinition> = [];

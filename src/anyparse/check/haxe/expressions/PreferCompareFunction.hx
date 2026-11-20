@@ -2,7 +2,6 @@ package anyparse.check.haxe.expressions;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Supersedes;
@@ -10,9 +9,7 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.check.haxe.expressions.CompareFunctions.NamedCompare;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.PurityScan;
-import anyparse.check.scan.RunScan;
 import anyparse.query.DeclaredNullity;
-import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;

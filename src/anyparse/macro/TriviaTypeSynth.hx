@@ -6,6 +6,7 @@ import anyparse.macro.MacroNames.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using anyparse.util.Groups;
 using Lambda;
 
 /**
@@ -458,7 +459,7 @@ class TriviaTypeSynth {
 	private static final defined: Map<String, Bool> = [];
 
 	public static function arm(shape: ShapeBuilder.ShapeResult): Void {
-		if (shapes.indexOf(shape) == -1) shapes.push(shape);
+		shapes.pushUnique(shape);
 		final synthPack: Array<String> = synthPackOf(shape.root, TRIVIA_SUBPACK);
 		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired: Array<TypeDefinition> = [];

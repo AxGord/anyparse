@@ -101,7 +101,7 @@ class ShapeBuilder {
 
 	private function enqueue(name: String, t: Type): Void {
 		if (_shaped.exists(name)) return;
-		if (_inFlight.indexOf(name) != -1) return;
+		if (_inFlight.contains(name)) return;
 		for (p in _pending) if (p.name == name) return;
 		_pending.push({ name: name, type: t });
 	}
