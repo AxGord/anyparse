@@ -19,8 +19,10 @@ model_table:
       - { upto: 6, model: sonnet, effort: high }
       - { upto: 10, model: opus, effort: high }
     review:
+      - { upto: 3, model: sonnet, effort: high }
       - { upto: 10, model: opus, effort: high }
     review_verify:
+      - { upto: 3, model: sonnet, effort: high }
       - { upto: 10, model: opus, effort: high }
     fix:
       - { upto: 6, model: sonnet, effort: high }
