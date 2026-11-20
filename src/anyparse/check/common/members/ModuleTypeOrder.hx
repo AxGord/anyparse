@@ -2,6 +2,7 @@ package anyparse.check.common.members;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.common.design.ConfiguredTypes;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
@@ -10,19 +11,23 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import haxe.ds.ArraySort;
 
+using anyparse.util.Groups;
+
 /**
  * One top-level type declaration of a module, in source order. `slot` is the source it owns as
  * a movable unit - leading doc comment, metadata and modifier run, the declaration, a comment
  * closing its last line - and is null on the report path, which moves nothing. `region` names
  * the conditional-compilation region holding the declaration, 0 for the module's top level: a
  * reorder moves the declarations of one region among themselves only. `rank` is its place in
- * the `kindOrder` option, the option's length when unlisted.
+ * the `kindOrder` option, the option's length when unlisted; `after` says a secondary type's
+ * word is in the `afterMainKinds` option.
  */
 private typedef ModuleType = {
 	final name: String;
 	final word: String;
 	final isMain: Bool;
 	final rank: Int;
+	final after: Bool;
 	final span: Span;
 	final region: Int;
 	final slot: Null<Span>;
@@ -38,7 +43,10 @@ private typedef OrderBreak = { final earlier: ModuleType; final later: ModuleTyp
  * type precedes it; `first`; or `any`, which leaves it where it is), and the secondary types
  * follow the `kindOrder` option, a list of the grammar's declaration words
  * (`RefShape.typeDeclKindWords`); an unlisted kind ranks after every listed one, and an empty
- * list keeps their source order. The fix is a stable permutation of whole slots that keeps the
+ * list keeps their source order. With `mainType` `last` and a main type present, the
+ * `afterMainKinds` option names the words whose types go after the main type instead, every
+ * other secondary type staying before it; `kindOrder` then orders each
+ * side apart. The fix is a stable permutation of whole slots that keeps the
  * blank-line layout positional, so the gap between the k-th and the next declaration stays what
  * the source wrote there. It is withheld, the finding kept with its reason, when the moved range
  * spans more than one conditional region (the top level counting as one), or when anything but whitespace separates
@@ -60,6 +68,9 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 	/** The option ordering the secondary types by declaration word. */
 	private static final OPTION_KINDS: String = 'kindOrder';
 
+	/** The option naming the declaration words whose secondary types go after the main type. */
+	private static final OPTION_AFTER: String = 'afterMainKinds';
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -79,8 +90,11 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			warnUnknownAfterKinds(config, plugin);
 			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(entry.source, plugin);
-			final types: Array<ModuleType> = typesOf(entry.file, entry.source, tree, plugin, kindOrderOf(config), regions, false);
+			final types: Array<ModuleType> = typesOf(
+				entry.file, entry.source, tree, plugin, kindOrderOf(config), afterKindsOf(config), regions, false
+			);
 			final broken: Null<OrderBreak> = firstBreak(types, mainPlacement(config));
 			if (broken == null) return;
 			violations.push({
@@ -102,7 +116,9 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 				final file: String = violations[0].file;
 				final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
 				final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
-				final types: Array<ModuleType> = typesOf(file, source, tree, plugin, kindOrderOf(config), regions, true);
+				final types: Array<ModuleType> = typesOf(
+					file, source, tree, plugin, kindOrderOf(config), afterKindsOf(config), regions, true
+				);
 				final sorted: Array<ModuleType> = canonicalOrder(types, mainPlacement(config));
 				var lo: Int = 0;
 				while (lo < types.length && types[lo] == sorted[lo]) lo++;
@@ -144,8 +160,28 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 			});
 	}
 
+	/** Refuses, as a config diagnostic, each `afterMainKinds` word the grammar does not declare a type kind under. */
+	private function warnUnknownAfterKinds(config: LintConfig, plugin: GrammarPlugin): Void {
+		final known: Array<String> = [];
+		for (word in (plugin.refShape().typeDeclKindWords ?? [])) known.pushUnique(word);
+		ArraySort.sort(known, Reflect.compare);
+		for (word in afterKindsOf(config)) if (!known.contains(word))
+			ConfiguredTypes.warn(
+				_configNotes, RULE_ID, '$OPTION_AFTER names "$word", which is not a type declaration word (${known.join(', ')})'
+			);
+	}
+
 	private static inline function kindOrderOf(config: LintConfig): Array<String> {
 		return config.stringListOption(RULE_ID, OPTION_KINDS) ?? [];
+	}
+
+	private static inline function afterKindsOf(config: LintConfig): Array<String> {
+		return config.stringListOption(RULE_ID, OPTION_AFTER) ?? [];
+	}
+
+	/** Whether `afterMainKinds` applies: the main type goes last and the module has one to go after. */
+	private static inline function splitsAroundMain(types: Array<ModuleType>, main: String): Bool {
+		return main == MAIN_LAST && types.exists(t -> t.isMain);
 	}
 
 	/** The `mainType` option; an unrecognised value reads as the default `last`. */
@@ -164,8 +200,8 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 	 * numbered apart from the top level and from every other region.
 	 */
 	private static function typesOf(
-		file: String, source: String, tree: QueryNode, plugin: GrammarPlugin, kindOrder: Array<String>, regions: () -> Array<LexRegion>,
-		withSlots: Bool
+		file: String, source: String, tree: QueryNode, plugin: GrammarPlugin, kindOrder: Array<String>, afterKinds: Array<String>,
+		regions: () -> Array<LexRegion>, withSlots: Bool
 	): Array<ModuleType> {
 		final shape: RefShape = plugin.refShape();
 		final words: Map<String, String> = shape.typeDeclKindWords ?? [];
@@ -182,11 +218,13 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 				final group: Span = ElementSpan.declGroupSpan(decl.declNode, parent, decl.fullSpan);
 				final word: String = words[decl.kind] ?? decl.kind;
 				final listed: Int = kindOrder.indexOf(word);
+				final isMain: Bool = decl.name == mainName;
 				out.push({
 					name: decl.name,
 					word: word,
-					isMain: decl.name == mainName,
+					isMain: isMain,
 					rank: listed < 0 ? kindOrder.length : listed,
+					after: !isMain && afterKinds.contains(word),
 					span: new Span(decl.fullSpan.from, ElementSpan.trailingTrimmedSpan(source, group, regions).to),
 					region: region,
 					slot: withSlots ? slotSpan(source, group, regions) : null
@@ -205,37 +243,46 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 
 	/**
 	 * The first forbidden pair in source order of its LATER member. The main type is compared
-	 * only by `mainType`, the secondary types only by rank.
+	 * only by `mainType`, the secondary types by side of the main type, then by rank.
 	 */
 	private static function firstBreak(types: Array<ModuleType>, main: String): Null<OrderBreak> {
+		final split: Bool = splitsAroundMain(types, main);
 		for (j in 1...types.length) for (i in 0...j) {
-			final reason: Null<String> = breakReason(types[i], types[j], main);
+			final reason: Null<String> = breakReason(types[i], types[j], main, split);
 			if (reason != null) return { earlier: types[i], later: types[j], reason: reason };
 		}
 		return null;
 	}
 
-	private static function breakReason(earlier: ModuleType, later: ModuleType, main: String): Null<String> {
+	private static function breakReason(earlier: ModuleType, later: ModuleType, main: String, split: Bool): Null<String> {
 		if (earlier.isMain && later.isMain) return null;
-		if (earlier.isMain) return main == MAIN_LAST ? 'mainType "last" puts every other type before the main type' : null;
-		if (later.isMain) return main == MAIN_FIRST ? 'mainType "first" puts the main type before every other type' : null;
+		if (earlier.isMain)
+			return main == MAIN_LAST && !(split && later.after) ? 'mainType "last" puts every other type before the main type' : null;
+		final afterReason: String = 'afterMainKinds puts ${earlier.word} after the main type';
+		if (later.isMain) {
+			if (split && earlier.after) return afterReason;
+			return main == MAIN_FIRST ? 'mainType "first" puts the main type before every other type' : null;
+		}
+		if (split && earlier.after != later.after) return earlier.after ? afterReason : null;
 		return earlier.rank > later.rank ? 'kindOrder puts ${later.word} before ${earlier.word}' : null;
 	}
 
 	/**
-	 * `types` in the order the options ask: the secondary types stably sorted by rank, the main
-	 * type appended (`last`), prepended (`first`) or kept at its own index (`any`). It holds no
+	 * `types` in the order the options ask: the secondary types stably sorted by rank (the
+	 * `afterMainKinds` ones behind the rest when the main type goes last), the main type placed
+	 * after the others (`last`; before the `afterMainKinds` ones), prepended (`first`) or kept at its own index (`any`). It holds no
 	 * pair `firstBreak` reports, so one fix pass converges.
 	 */
 	private static function canonicalOrder(types: Array<ModuleType>, main: String): Array<ModuleType> {
 		final mains: Array<ModuleType> = types.filter(t -> t.isMain);
 		final others: Array<ModuleType> = types.filter(t -> !t.isMain);
-		ArraySort.sort(others, (a, b) -> a.rank - b.rank);
+		final split: Bool = splitsAroundMain(types, main);
+		ArraySort.sort(others, (a, b) -> split && a.after != b.after ? (a.after ? 1 : -1) : a.rank - b.rank);
 		if (mains.length == 0) return others;
 		final at: Int = switch (main) {
 			case MAIN_FIRST: 0;
 			case MAIN_ANY: types.indexOf(mains[0]);
-			case _: others.length;
+			case _: others.filter(t -> !t.after).length;
 		};
 		return others.slice(0, at).concat(mains).concat(others.slice(at));
 	}

@@ -1283,7 +1283,7 @@
 			"name": "M-MTO-MAIN-LAST-UNREAD",
 			"type": "anyparse.check.common.members.ModuleTypeOrder",
 			"method": "breakReason",
-			"find": "main == MAIN_LAST ?",
+			"find": "main == MAIN_LAST && !(split && later.after) ?",
 			"replace": "main == MAIN_ANY ?",
 			"note": "the default mainType last stops placing the main type after the others, so a secondary type written after it is no longer reported"
 		},
@@ -1366,6 +1366,54 @@
 			"find": "rank: listed < 0 ? kindOrder.length : listed",
 			"replace": "rank: listed < 0 ? -1 : listed",
 			"note": "a kind kindOrder does not list ranks before every listed one, so an enum ahead of a listed typedef is accepted"
+		},
+		{
+			"name": "M-MTO-AFTER-BREAK-UNREAD",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "breakReason",
+			"find": "if (split && earlier.after) return afterReason;",
+			"replace": "if (split && earlier.rank < 0) return afterReason;",
+			"note": "a secondary class written before the main type is no longer reported under afterMainKinds"
+		},
+		{
+			"name": "M-MTO-AFTER-SPLIT-SORT",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "canonicalOrder",
+			"find": "split && a.after != b.after ?",
+			"replace": "split && a.rank < 0 ?",
+			"note": "the sort stops grouping the afterMainKinds types behind the rest"
+		},
+		{
+			"name": "M-MTO-AFTER-AT-ALL-BEFORE",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "canonicalOrder",
+			"find": "case _: others.filter(t -> !t.after).length;",
+			"replace": "case _: others.length;",
+			"note": "the main type is placed behind every secondary type again, afterMainKinds included"
+		},
+		{
+			"name": "M-MTO-AFTER-EMPTY-ALL",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "typesOf",
+			"find": "after: !isMain && afterKinds.contains(word),",
+			"replace": "after: !isMain,",
+			"note": "every secondary type counts as an afterMainKinds one, listed or not"
+		},
+		{
+			"name": "M-MTO-AFTER-RANK-IN-GROUP",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "canonicalOrder",
+			"find": ": a.rank - b.rank);",
+			"replace": ": 0);",
+			"note": "kindOrder stops ordering the types inside a side of the main type"
+		},
+		{
+			"name": "M-MTO-AFTER-WORD-UNKNOWN",
+			"type": "anyparse.check.common.members.ModuleTypeOrder",
+			"method": "warnUnknownAfterKinds",
+			"find": "if (!known.contains(word))",
+			"replace": "if (known.contains(word))",
+			"note": "an afterMainKinds word the grammar does not declare is no longer said"
 		}
 	]
 }

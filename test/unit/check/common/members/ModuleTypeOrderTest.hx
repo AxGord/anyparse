@@ -1,5 +1,6 @@
 package unit.check.common.members;
 
+import anyparse.check.LintConfig;
 import anyparse.check.Severity;
 import anyparse.check.common.members.ModuleTypeOrder;
 
@@ -19,6 +20,7 @@ final class ModuleTypeOrderTest extends Test {
 	private static inline final MAIN_ANY: String = '{"rules":{"module-type-order":{"mainType":"any"}}}';
 	private static inline final KIND_ORDER: String =
 		'{"rules":{"module-type-order":{"kindOrder":["typedef","enum","abstract","interface","class"]}}}';
+	private static inline final AFTER_CLASS: String = '{"rules":{"module-type-order":{"afterMainKinds":["class"]}}}';
 
 	/** Under the default, the types after the main one are flagged once and moved before it, in their own order. */
 	@:killer('M-MTO-MAIN-LAST-UNREAD')
@@ -187,6 +189,105 @@ final class ModuleTypeOrderTest extends Test {
 		Assert.equals(0, run.edits.length);
 		final reason: String = run.violations[0].declineReason ?? '';
 		Assert.isTrue(reason.indexOf('class C sits inside a conditional region') >= 0, reason);
+	}
+
+	/** `afterMainKinds: ["class"]` flags a main class written after a secondary one and moves the secondary class behind it. */
+	@:killer('M-MTO-AFTER-BREAK-UNREAD')
+	@:pin('control')
+	public function testASecondaryClassGoesAfterAClassMain(): Void {
+		final src: String = 'package p;\n\nclass D {}\n\nclass C {}\n';
+		Assert.equals(0, CheckFixture.violations(new ModuleTypeOrder(), src).length, 'the default accepts it');
+		final run: FixRun = CheckFixture.fixRunUnder(new ModuleTypeOrder(), src, AFTER_CLASS);
+		Assert.equals(1, run.violations.length);
+		Assert.equals('class C follows class D: afterMainKinds puts class after the main type', run.violations[0].message);
+		Assert.equals('package p;\n\nclass C {}\n\nclass D {}\n', CheckFixture.fixedUnder(new ModuleTypeOrder(), src, AFTER_CLASS));
+	}
+
+	/** An enum main type has the secondary class behind it and the typedef before it. */
+	@:killer('M-MTO-AFTER-SPLIT-SORT')
+	@:pin('control')
+	public function testASecondaryClassGoesAfterAnEnumMain(): Void {
+		final src: String = 'package p;\n\nenum C {\n\tA;\n}\n\nclass D {}\n\ntypedef T = Int;\n';
+		final run: FixRun = CheckFixture.fixRunUnder(new ModuleTypeOrder(), src, AFTER_CLASS);
+		Assert.equals(1, run.violations.length);
+		Assert.equals('typedef T follows enum C: mainType "last" puts every other type before the main type', run.violations[0].message);
+		final fixed: String = CheckFixture.fixedUnder(new ModuleTypeOrder(), src, AFTER_CLASS);
+		Assert.equals('package p;\n\ntypedef T = Int;\n\nenum C {\n\tA;\n}\n\nclass D {}\n', fixed);
+		Assert.equals(
+			0,
+			CheckFixture.violationsIn(new ModuleTypeOrder(), [{ file: 'C.hx', source: fixed }], null, _ -> LintConfig.parse(AFTER_CLASS))
+				.length
+		);
+	}
+
+	/** A typedef stays before the main class while a class goes behind it. */
+	@:killer('M-MTO-AFTER-AT-ALL-BEFORE')
+	@:pin('control')
+	public function testATypedefStaysBeforeTheMainType(): Void {
+		final src: String = 'package p;\n\nclass C {}\n\ntypedef T = Int;\n\nclass D {}\n';
+		Assert.equals(
+			'package p;\n\ntypedef T = Int;\n\nclass C {}\n\nclass D {}\n', CheckFixture.fixedUnder(new ModuleTypeOrder(), src, AFTER_CLASS)
+		);
+	}
+
+	/** An empty list changes nothing against the option's absence. */
+	@:killer('M-MTO-AFTER-EMPTY-ALL')
+	@:pin('control')
+	public function testAnEmptyAfterListChangesNothing(): Void {
+		final src: String = 'package p;\n\nclass C {}\n\nclass D {}\n\ntypedef T = Int;\n';
+		final expected: String = 'package p;\n\nclass D {}\n\ntypedef T = Int;\n\nclass C {}\n';
+		Assert.equals(expected, CheckFixture.fixedUnder(new ModuleTypeOrder(), src, '{}'));
+		Assert.equals(
+			expected, CheckFixture.fixedUnder(new ModuleTypeOrder(), src, '{"rules":{"module-type-order":{"afterMainKinds":[]}}}')
+		);
+	}
+
+	/** `kindOrder` orders the types before the main one and, apart, the types after it. */
+	@:killer('M-MTO-AFTER-RANK-IN-GROUP')
+	@:pin('control')
+	public function testKindOrderAppliesInsideEachGroup(): Void {
+		final json: String =
+			'{"rules":{"module-type-order":{"afterMainKinds":["class","interface"],"kindOrder":["typedef","enum","interface","class"]}}}';
+		final src: String = 'package p;\n\nclass D {}\n\nclass C {}\n\ninterface I {}\n\nenum E {\n\tA;\n}\n\ntypedef T = Int;\n';
+		Assert.equals(
+			'package p;\n\ntypedef T = Int;\n\nenum E {\n\tA;\n}\n\nclass C {}\n\ninterface I {}\n\nclass D {}\n',
+			CheckFixture.fixedUnder(new ModuleTypeOrder(), src, json)
+		);
+	}
+
+	/** An `afterMainKinds` word that is no declaration word of the grammar is said once as a config diagnostic, a known one is not. */
+	@:killer('M-MTO-AFTER-WORD-UNKNOWN')
+	@:pin('control')
+	public function testAnUnknownAfterWordIsRefused(): Void {
+		final notes: Array<ConfigNote> = [];
+		final rule: ModuleTypeOrder = new ModuleTypeOrder();
+		rule.setConfigNotes(notes);
+		final json: String = '{"rules":{"module-type-order":{"afterMainKinds":["class","struct"]}}}';
+		CheckFixture.violationsIn(rule, [{ file: 'C.hx', source: 'package p;\n\nclass C {}\n' }], null, _ -> LintConfig.parse(json));
+		final said: String = notes.map(n -> n.message).join('');
+		Assert.isTrue(said.indexOf('afterMainKinds names "struct", which is not a type declaration word') != -1, said);
+		Assert.isTrue(said.indexOf('names "class"') == -1, said);
+	}
+
+	/** `afterMainKinds` binds only when the main type goes last and the module has one. */
+	public function testAfterMainKindsNeedsAMainTypeGoingLast(): Void {
+		final first: String = '{"rules":{"module-type-order":{"mainType":"first","afterMainKinds":["class"]}}}';
+		Assert.equals(
+			0,
+			CheckFixture.violationsIn(
+				new ModuleTypeOrder(), [{ file: 'C.hx', source: 'package p;\n\nclass C {}\n\nclass D {}\n' }],
+				null, _ -> LintConfig.parse(first)
+			)
+				.length
+		);
+		Assert.equals(
+			0,
+			CheckFixture.violationsIn(
+				new ModuleTypeOrder(), [{ file: 'C.hx', source: 'package p;\n\nclass D {}\n\ntypedef T = Int;\n' }],
+				null, _ -> LintConfig.parse(AFTER_CLASS)
+			)
+				.length
+		);
 	}
 
 }
