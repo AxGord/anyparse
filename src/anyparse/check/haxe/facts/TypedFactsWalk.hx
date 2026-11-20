@@ -1016,7 +1016,7 @@ final class TypedFactsWalk {
 			add('native', '{"w":"syntax","n":${q(targetName)},"p":$where$code${handedText(args)}}');
 		}
 		final chained: Bool = nativeChain(callee, args);
-		walkReceiver(receiver, Call(access.field));
+		walkReceiver(receiver, declaring == 'Array' && FactKinds.ARRAY_ELEMENT_METHODS.contains(access.field) ? Index : Call(access.field));
 		if (chained) _nativeChain = null;
 		instantiated(fa, callee.t, callee.pos);
 		switch fa {
@@ -1048,7 +1048,9 @@ final class TypedFactsWalk {
 		for (i in 0...args.length) {
 			// a rest parameter takes the arguments into an array the compiler builds, which no parameter use follows
 			if (declared == null || i >= declared.length || TypedFactsShapes.restElement(declared[i].t) != null) handed = false;
-			if (handed && to != null)
+			if (handed && to != null && i == 0 && FactKinds.ARRAY_ELEMENT_FUNCTIONS.contains(to))
+				walkAs(args[i], Index)
+			else if (handed && to != null)
 				walkAs(args[i], Argument(to, handedVia, i))
 			else
 				walk(args[i]);

@@ -49,7 +49,7 @@ class MemberReachFactsTest extends Test {
 	/** The library declaration of the built-in array type the index resolves against. */
 	private static inline final STD_ARRAY: String = 'extern class Array<T> { public var length(default, null):Int; '
 		+ 'public function push(x:T):Int; public function pop():Null<T>; public function indexOf(x:T, ?fromIndex:Int):Int; '
-		+ 'public function join(sep:String):String; public function new():Void; }';
+		+ 'public function join(sep:String):String; public function map<S>(f:T->S):Array<S>; public function new():Void; }';
 
 	/**
 	 * The library declarations every fixture's index holds in place of the std's: the array type, and the std classes the
@@ -5851,6 +5851,20 @@ class MemberReachFactsTest extends Test {
 	/** Whether `result` says the member's value is shared: alone, or with the code the region runs that may change it. */
 	private static function sharedValue(result: ReachResult): Bool {
 		return result.match(Unknown(Escape(_, _) | Aliased(_, _, _, _)));
+	}
+
+	@:pin('control')
+	@:killer('M-FACTS-ARRAY-ELEMENT-FUNCTION')
+	public function testAnElementReadInATargetsNativeSpellingThroughALocalIsNoTouchUnderTheTruth(): Void {
+		// hxcpp reads the elements of an inlined `map` over a local holding `items` through `cpp.NativeArray.unsafeGet`, the
+		// array its first argument: a read, which neither changes `items` nor lets its value go
+		final main: String = 'class Main {\n\tpublic static var items:Array<Main> = [];\n\tpublic function new() {}\n'
+			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ peek(); /*>*/ }\n\t}\n'
+			+ '\tstatic function peek():Int {\n\t\tfinal xs:Array<Main> = items;\n\t\tvar n:Int = 0;\n\t\tfor (x in xs) '
+			+ 'n += x == null ? 0 : 1;\n\t\tfinal ys:Array<Main> = xs.map(m -> m);\n\t\tn += ys.length;\n\t\treturn n;\n\t}\n}\n';
+		final std: String = StdResolver.stdDir() ?? '';
+		final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std, 'cpp/NativeArray.hx']));
+		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main], [path => sys.io.File.getContent(path)]), r -> r.match(Proven));
 	}
 
 }

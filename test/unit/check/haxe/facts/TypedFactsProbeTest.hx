@@ -1,7 +1,5 @@
 package unit.check.haxe.facts;
 
-import anyparse.check.LintConfig.OracleConfig;
-import anyparse.check.haxe.facts.TypedFactsProbe;
 import anyparse.query.FactSites;
 import anyparse.query.FactsTypeTree;
 import anyparse.util.Compare;

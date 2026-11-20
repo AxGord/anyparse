@@ -1245,6 +1245,30 @@
 			"find": "enumValue(enumAbstractOf(e.t), inner, e.pos);",
 			"replace": "enumValue(null, inner, e.pos);",
 			"note": "a value read as an expression records no read, so a qualified read leaves its value unread"
+		},
+		{
+			"name": "M-FACTS-ARRAY-ELEMENT-FUNCTION",
+			"type": "anyparse.check.haxe.facts.TypedFactsWalk",
+			"method": "walkArguments",
+			"find": "walkAs(args[i], Index)",
+			"replace": "walkAs(args[i], Argument(to, handedVia, i))",
+			"note": "the array a target reads an element from is handed to the read function again, so a pure read of a member through a local touches and escapes it"
+		},
+		{
+			"name": "M-FACTS-ARRAY-ELEMENT-METHOD",
+			"type": "anyparse.check.haxe.facts.TypedFactsWalk",
+			"method": "fieldCall",
+			"find": "declaring == 'Array' && FactKinds.ARRAY_ELEMENT_METHODS.contains(access.field) ? Index : Call(access.field)",
+			"replace": "Call(access.field)",
+			"note": "a target element read through the array method is a call of the array again, so a pure read of a member through a local touches it"
+		},
+		{
+			"name": "M-FACTS-ARRAY-ELEMENT-FUNCTION-ANY",
+			"type": "anyparse.check.haxe.facts.TypedFactsWalk",
+			"method": "walkArguments",
+			"find": "if (handed && to != null && i == 0 && FactKinds.ARRAY_ELEMENT_FUNCTIONS.contains(to))",
+			"replace": "if (handed && to != null)",
+			"note": "the first argument of every declared function is an index read, so an array handed on reads as no escape"
 		}
 	]
 }

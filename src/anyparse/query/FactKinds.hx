@@ -105,6 +105,12 @@ final class FactKinds {
 	/** The `*.Syntax` members that paste their first argument into the output as target code. */
 	public static final SYNTAX_CODE_MEMBERS: Array<String> = ['code', 'plainCode'];
 
+	/** The methods of the built-in array that read one element, a target's own spelling of `a[i]`. */
+	public static final ARRAY_ELEMENT_METHODS: Array<String> = ['__get'];
+
+	/** The static functions that read an element of the array their first argument holds, where a target has no index syntax. */
+	public static final ARRAY_ELEMENT_FUNCTIONS: Array<String> = ['cpp.NativeArray.unsafeGet'];
+
 	/** The target intrinsics whose first argument is target code pasted into the output. */
 	public static final CODE_INTRINSICS: Array<String> = [
 		'__cpp__',
