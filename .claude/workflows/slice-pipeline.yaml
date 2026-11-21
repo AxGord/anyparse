@@ -13,7 +13,10 @@ model_table:
   stages:
     recon:
       - { upto: 10, model: sonnet, effort: medium }
+    # Haiku trial, plan row (user 2026-11-21 «Давай попробуем»): the worker is spawned on the PLAN row and finishes a
+    # d<=6 slice itself, so d1-2 runs on haiku only when this row says so; revert = drop the upto-2 row.
     plan:
+      - { upto: 2, model: haiku, effort: xhigh }
       - { upto: 10, model: sonnet, effort: high }
     # Haiku trial (user 2026-11-20): execute/fix d1-2 on haiku; revert = drop the upto-2 rows.
     execute:
