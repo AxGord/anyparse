@@ -75,9 +75,7 @@ class LintLanguageVersionGateTest extends Test {
 	public function testAnExplicitRuleSelectionKeepsTheVersionFloor(): Void {
 		final config: LintConfig = new LintConfig([], null, null, null, null, null, '4.0');
 		final found: Array<Violation> = Linter.run([{ file: 'V.hx', source: SOURCE }], new HaxeQueryPlugin(), null, _ -> config, false);
-		Assert.same([], [
-			for (v in found) if (v.rule == 'prefer-null-coalescing' || v.rule == 'catch-dynamic') v.rule
-		]);
+		Assert.same([], [ for (v in found) if (v.rule == 'prefer-null-coalescing' || v.rule == 'catch-dynamic') v.rule ]);
 		#if (sys || nodejs)
 		for (version => rewrites in ['4.0' => false, '4.3' => true]) {
 			final dir: String = CliFixture.writeDir('versionrule', [

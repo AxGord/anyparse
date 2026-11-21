@@ -329,6 +329,12 @@ final class HxAstPredLowering extends AstPredLowering {
 			keepsBlankLeafClassifierField(),
 			complexItemKindsField(),
 			containerItemKindsField(),
+			// Which element of a delimited list is an array comprehension, for `WrapList`'s `comprehensionItems` axis.
+			predField(
+				'comprehensionItems', [{ name: 'items', type: macro : Array<Any> }],
+				macro : Array<Bool>, macro anyparse.grammar.haxe.glue.HxComplexItems.comprehensionItems(items),
+				'Which element of a delimited list is an array comprehension, for `WrapList`\'s `comprehensionItems` axis.'
+			),
 			typeParamItemCountField(),
 			moduleOnlyTypedefsField(),
 			ternaryBranchHoldsMultilineBlockField(),

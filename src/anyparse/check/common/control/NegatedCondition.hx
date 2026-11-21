@@ -175,13 +175,9 @@ final class NegatedCondition {
 				config: config,
 				negation: negation,
 				support: plugin.booleanLogicSupport(),
-				turnableKinds: [
-					for (k in negation.atomicKinds) if (k != shape.boolLitKind && k != shape.parenKind) k
-				].concat(equality),
+				turnableKinds: [ for (k in negation.atomicKinds) if (k != shape.boolLitKind && k != shape.parenKind) k ].concat(equality),
 				negationKinds: [notKind].concat(equality),
-				interpolationKinds: [
-					for (k in [shape.stringInterpIdentKind, shape.stringInterpBlockKind]) if (k != null) k
-				]
+				interpolationKinds: [ for (k in [shape.stringInterpIdentKind, shape.stringInterpBlockKind]) if (k != null) k ]
 			}
 		};
 	}

@@ -311,15 +311,13 @@ final class PreferIfExpressionChain extends RuleBase implements QuotationAware {
 		// ONE operator table for the run, as the switch rule it defers to builds it: a per-file one saw no overload a
 		// sibling module declares, and read a chain the switch refuses as claimed.
 		final selection: Null<OperatorSelection> = OperatorSelection.of(plugin, files);
-		return [
-			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection)) {
-				file: entry.file,
-				span: m.span,
-				rule: 'prefer-if-expression-chain',
-				severity: Severity.Info,
-				message: 'this nested ternary chain can be an if-expression chain'
-			}
-		];
+		return [ for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex, selection)) {
+			file: entry.file,
+			span: m.span,
+			rule: 'prefer-if-expression-chain',
+			severity: Severity.Info,
+			message: 'this nested ternary chain can be an if-expression chain'
+		} ];
 	}
 
 	public function fix(

@@ -48,9 +48,7 @@ final class ImportAliasTargetTest extends Test {
 	private static function projected(source: String): Array<String> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(new HaxeQueryPlugin(), source);
 		Assert.notNull(tree);
-		return tree == null ? [] : [
-			for (c in tree.children) if (c.kind != 'ClassDecl') '${c.kind} ${c.name} ${c.target}'
-		];
+		return tree == null ? [] : [ for (c in tree.children) if (c.kind != 'ClassDecl') '${c.kind} ${c.name} ${c.target}' ];
 	}
 
 }

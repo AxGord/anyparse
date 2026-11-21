@@ -211,15 +211,12 @@ final class MoveToHelper {
 			.filter(g -> isPrivateConstant(g) && !prep.moved.exists(m -> m.name == g.member.name));
 		if (candidates.length == 0) return [];
 		final hits: Map<String, Array<RefHit>> = Refs.findMulti(candidates.map(c -> c.member.name ?? ''), prep.srcTree, prep.shape);
-		return [
-			for (c in candidates) {
-				final name: String = c.member.name ?? '';
-				final declFrom: Int = c.member.span?.from ?? -1;
-				final refs: Array<RefHit> = (hits[name] ?? []).filter(h -> h.kind != RefKind.Decl && h.bindingSpan?.from == declFrom);
-				if (refs.length > 0 && refs.foreach(h -> MoveMember.insideAnyCut(prep, h.span.from)) && !qualifiedOutsideCuts(prep, name))
-					name;
-			}
-		];
+		return [ for (c in candidates) {
+			final name: String = c.member.name ?? '';
+			final declFrom: Int = c.member.span?.from ?? -1;
+			final refs: Array<RefHit> = (hits[name] ?? []).filter(h -> h.kind != RefKind.Decl && h.bindingSpan?.from == declFrom);
+			if (refs.length > 0 && refs.foreach(h -> MoveMember.insideAnyCut(prep, h.span.from)) && !qualifiedOutsideCuts(prep, name)) name;
+		} ];
 	}
 
 	private static function isPrivateConstant(g: MemberGroup): Bool {

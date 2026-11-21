@@ -53,13 +53,17 @@ class ThreadSafetyHelperHoldsTest extends Test {
 	public function testTheTwinsGiveLeavesDominanceStanding(): Void {
 		#if (sys || nodejs)
 		// a take of a long lock folds into the main thread's other take of it; a dominated one is short on its own
-		Assert.same([true], [
-			for (v in run(
-				'takeBoth(); Sys.sleep(1); giveBoth();',
-				'public function useA():Void { b.acquire(); takeA(); b.release(); } function takeA():Void { a.acquire(); a.release(); }',
-				'h.useA();', null, CLOSED
-			)) if (v.data?.member == 'H.takeA') v.message.indexOf(' — short: ') >= 0
-		]);
+		Assert.same(
+			[true],
+			[
+				for (v in run(
+					'takeBoth(); Sys.sleep(1); giveBoth();',
+					'public function useA():Void { b.acquire(); takeA(); b.release(); } function takeA():Void {'
+					+ ' a.acquire(); a.release(); }',
+					'h.useA();', null, CLOSED
+				)) if (v.data?.member == 'H.takeA') v.message.indexOf(' — short: ') >= 0
+			]
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -112,9 +116,10 @@ class ThreadSafetyHelperHoldsTest extends Test {
 		);
 		Assert.same(['warning B S.lockBoth | S._a'], holds(found));
 		// no helper, its take hands the lock off on its own: a helper's would be its caller's
-		Assert.same([true], [
-			for (v in found) if (v.data?.family == 'B') v.message.indexOf(' — and no path of the function gives it back') >= 0
-		]);
+		Assert.same(
+			[true],
+			[ for (v in found) if (v.data?.family == 'B') v.message.indexOf(' — and no path of the function gives it back') >= 0 ]
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -243,11 +248,14 @@ class ThreadSafetyHelperHoldsTest extends Test {
 		#if (sys || nodejs)
 		final found: Array<Violation> = crossed('b.acquire(); a.acquire();');
 		Assert.same(['info B H.viaBoth | H.a', 'warning B H.viaBoth | H.b'], holds(found).filter(g -> g.indexOf('viaBoth') >= 0));
-		Assert.same([true], [
-			for (v in found)
-				if (v.data?.member == 'H.viaBoth' && v.data?.subject == 'H.a')
-					v.message.indexOf(' — taken after the hold of H.b by the same call of H.takeBoth, ') >= 0
-		]);
+		Assert.same(
+			[true],
+			[
+				for (v in found)
+					if (v.data?.member == 'H.viaBoth' && v.data?.subject == 'H.a')
+						v.message.indexOf(' — taken after the hold of H.b by the same call of H.takeBoth, ') >= 0
+			]
+		);
 		Assert.same(
 			['info B H.viaBoth | H.b', 'warning B H.viaBoth | H.a'],
 			holds(crossed('a.acquire(); b.acquire();')).filter(g -> g.indexOf('viaBoth') >= 0), 'the other order'
@@ -282,11 +290,14 @@ class ThreadSafetyHelperHoldsTest extends Test {
 			'warning B H.slowA | H.a',
 			'warning B H.viaBoth | H.b'
 		], holds(found));
-		Assert.same([true], [
-			for (v in found)
-				if (v.data?.member == 'H.takeBoth')
-					v.message.indexOf(' — long only through waiting for H.a, held long by H.slowA, H.viaBoth, reported there') >= 0
-		]);
+		Assert.same(
+			[true],
+			[
+				for (v in found)
+					if (v.data?.member == 'H.takeBoth')
+						v.message.indexOf(' — long only through waiting for H.a, held long by H.slowA, H.viaBoth, reported there') >= 0
+			]
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -353,12 +364,10 @@ class ThreadSafetyHelperHoldsTest extends Test {
 
 	/** The findings of `found` of `family` as `<severity> <family> <member> | <subject>`, sorted. */
 	private static function graded(found: Array<Violation>, family: String): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == family) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == family) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

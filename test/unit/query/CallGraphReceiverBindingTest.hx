@@ -124,9 +124,7 @@ class CallGraphReceiverBindingTest extends Test {
 			+ ' static function placed(s:sys.thread.Lock, u:utils.Lock):Void A.skip(0, s, u).wait(); }'
 		]);
 		function waits(from: String): Array<String> {
-			final out: Array<String> = [
-				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
-			];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to ];
 			out.sort(Compare.compareString);
 			return out;
 		}
@@ -172,9 +170,7 @@ class CallGraphReceiverBindingTest extends Test {
 			+ ' static function noType():Void D.lock.wait(); }'
 		]);
 		function waits(from: String): Array<String> {
-			final out: Array<String> = [
-				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
-			];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to ];
 			out.sort(Compare.compareString);
 			return out;
 		}

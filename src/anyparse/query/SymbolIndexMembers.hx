@@ -340,12 +340,10 @@ final class SymbolIndexMembers {
 	private static function signatureOf(fn: QueryNode, maps: SpanTypeInfo, seams: MemberSeams): Null<CallSignature> {
 		final span: Null<Span> = fn.span;
 		if (span == null) return null;
-		final params: Array<SignatureParam> = [
-			for (c in fn.children) if (seams.paramKinds.contains(c.kind)) {
-				final at: Null<Span> = c.span;
-				{ type: at == null ? null : maps.declaredTypeSources[at.from], form: paramFormOf(c, seams) };
-			}
-		];
+		final params: Array<SignatureParam> = [ for (c in fn.children) if (seams.paramKinds.contains(c.kind)) {
+			final at: Null<Span> = c.span;
+			{ type: at == null ? null : maps.declaredTypeSources[at.from], form: paramFormOf(c, seams) };
+		} ];
 		return {
 			params: params,
 			returnSource: maps.returnTypeSources[span.from]?.trim(),

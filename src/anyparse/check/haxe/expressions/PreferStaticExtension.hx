@@ -496,9 +496,7 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 			final site: Null<ExtensionSite> = extensionSite(call, tree, s, options, plugin);
 			if (site != null) sites.push(site);
 		}
-		return [
-			for (candidate in judgeSites(sites, tree, source, file, s, plugin, symbols)) if (candidate != null) candidate
-		];
+		return [ for (candidate in judgeSites(sites, tree, source, file, s, plugin, symbols)) if (candidate != null) candidate ];
 	}
 
 	/** Append every call node in `node`'s subtree to `out`, skipping reification / conditional subtrees. */

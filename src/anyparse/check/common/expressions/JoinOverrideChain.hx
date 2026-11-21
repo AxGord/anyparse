@@ -130,15 +130,13 @@ final class JoinOverrideChain extends RuleBase implements DefaultOff {
 		if (seams == null) return [];
 		final resolved: Seams = seams;
 		final index: SymbolIndex = IndexScope.report(files, plugin);
-		return [
-			for (entry in files) for (m in matches(entry.source, plugin, resolved, index, entry.file)) {
-				file: entry.file,
-				span: m.declSpan,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: MESSAGE
-			}
-		];
+		return [ for (entry in files) for (m in matches(entry.source, plugin, resolved, index, entry.file)) {
+			file: entry.file,
+			span: m.declSpan,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: MESSAGE
+		} ];
 	}
 
 	/**

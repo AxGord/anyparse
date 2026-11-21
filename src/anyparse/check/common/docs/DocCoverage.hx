@@ -204,9 +204,7 @@ final class DocCoverage extends RuleBase implements ConfigAware implements NoAut
 
 	/** Each declaration's leading run among `node`'s direct children, keyed by the declaration's start. */
 	private static function runsByDecl(node: QueryNode, seams: Seams): Map<Int, LeadingRun> {
-		return [
-			for (run in CheckScan.leadingRuns(node, [], seams.isRunEntry)) run.span.to => run
-		];
+		return [ for (run in CheckScan.leadingRuns(node, [], seams.isRunEntry)) run.span.to => run ];
 	}
 
 	/**

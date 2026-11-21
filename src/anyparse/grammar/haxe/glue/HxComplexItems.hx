@@ -100,30 +100,43 @@ final class HxComplexItems {
 	 * element of a list by its own item count and nesting rather than by its kind alone.
 	 */
 	public static function containerItemKinds(elements: Array<Any>): Array<Null<Array<Int>>> {
-		return [
-			for (element in elements) {
-				final node: Null<Any> = nodeOf(element);
-				final own: Null<Array<Any>> = node == null
-					? null
-					: switch Type.enumConstructor(node) {
-						case 'ArrayExpr': Type.enumParameters(node)[0];
-						case 'ObjectLit': objectFieldValues(Type.enumParameters(node)[0]);
-						case _: null;
-					};
-				own == null ? null : kinds(own);
-			}
-		];
+		return [ for (element in elements) {
+			final node: Null<Any> = nodeOf(element);
+			final own: Null<Array<Any>> = node == null
+				? null
+				: switch Type.enumConstructor(node) {
+					case 'ObjectLit': objectFieldValues(Type.enumParameters(node)[0]);
+					case _: arrayElements(node);
+				};
+			own == null ? null : kinds(own);
+		} ];
+	}
+
+	/**
+	 * One flag per element, length-aligned with the writer's item Docs: true iff the element is an array comprehension, an
+	 * array literal whose first element is a generator (`HaxeFormat.isComprehensionGenerator`). The input of
+	 * `WrapListOptions.comprehensionItems`.
+	 */
+	public static function comprehensionItems(elements: Array<Any>): Array<Bool> {
+		return [ for (element in elements) {
+			final node: Null<Any> = nodeOf(element);
+			final own: Null<Array<Any>> = node == null ? null : arrayElements(node);
+			own != null && own.length > 0 && HaxeFormat.isComprehensionGenerator(own[0]);
+		} ];
 	}
 
 	/** The value expression of each field of an object literal; a field that is not a plain `name: value` stays itself. */
 	private static function objectFieldValues(lit: Null<Any>): Null<Array<Any>> {
 		final fields: Null<Array<Any>> = lit == null ? null : Reflect.field(lit, 'fields');
-		return fields == null ? null : [
-			for (field in fields) {
-				final node: Null<Any> = nodeOf(field);
-				node != null && Type.enumConstructor(node) == 'Field' ? Reflect.field(Type.enumParameters(node)[0], 'value') : field;
-			}
-		];
+		return fields == null ? null : [ for (field in fields) {
+			final node: Null<Any> = nodeOf(field);
+			node != null && Type.enumConstructor(node) == 'Field' ? Reflect.field(Type.enumParameters(node)[0], 'value') : field;
+		} ];
+	}
+
+	/** The elements of an array literal node; `null` for any other node. */
+	private static function arrayElements(node: Any): Null<Array<Any>> {
+		return Type.enumConstructor(node) == 'ArrayExpr' ? Type.enumParameters(node)[0] : null;
 	}
 
 	/** The enum value an element carries — the bare node, or the `node` of a trivia-synth `{node: …}` wrapper; else `null`. */

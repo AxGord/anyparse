@@ -224,16 +224,14 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final plans: Plans = planFor(files, plugin, null);
-		final out: Array<Violation> = [
-			for (plan in plans.hoists) for (spelled in plan.from) {
-				file: spelled.file,
-				span: spelled.span,
-				rule: RULE_ID,
-				severity: Severity.Warning,
-				message: '${plan.statement.isUsing ? USING_WORD : IMPORT_WORD} \'${plan.statement.path}\'$SHARE_LEAD${plan.holders} of '
-					+ '${plan.governed} module(s) governed by \'${plan.site}\' — it belongs there'
-			}
-		];
+		final out: Array<Violation> = [ for (plan in plans.hoists) for (spelled in plan.from) {
+			file: spelled.file,
+			span: spelled.span,
+			rule: RULE_ID,
+			severity: Severity.Warning,
+			message: '${plan.statement.isUsing ? USING_WORD : IMPORT_WORD} \'${plan.statement.path}\'$SHARE_LEAD${plan.holders} of '
+				+ '${plan.governed} module(s) governed by \'${plan.site}\' — it belongs there'
+		} ];
 		for (plan in plans.sinks) out.push({
 			file: plan.site,
 			span: plan.span,
@@ -467,14 +465,12 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 			if (!sites.contains(plan.site)) sites.push(plan.site);
 		}
 		if (sites.length == 0) return null;
-		final out: Array<CrossFileEdits> = [
-			for (site in sites) {
-				final spans: Array<Span> = leaving[site] ?? [];
-				remainsBlank(sourceOf[site] ?? '', spans)
-					? { file: site, edits: [], remove: true }
-					: { file: site, edits: spans.map(span -> { span: span, text: '' }) };
-			}
-		];
+		final out: Array<CrossFileEdits> = [ for (site in sites) {
+			final spans: Array<Span> = leaving[site] ?? [];
+			remainsBlank(sourceOf[site] ?? '', spans)
+				? { file: site, edits: [], remove: true }
+				: { file: site, edits: spans.map(span -> { span: span, text: '' }) };
+		} ];
 		for (file in readers) out.push({ file: file, edits: [narrowedEdit(sourceOf[file] ?? '', textOf[file] ?? '')] });
 		return out;
 	}
@@ -677,11 +673,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		final at: Int = ladder.indexOf(site);
 		return at < 0
 			? []
-			: [
-				for (i in at ... ladder.length) for (imp in ctx.existingAt[ladder[i]] ?? []) statementKeyOf(imp)
-			].concat([
-				for (i in at ... ladder.length) for (statement in ctx.decided[ladder[i]] ?? []) keyOf(statement)
-			]);
+			: [ for (i in at ... ladder.length) for (imp in ctx.existingAt[ladder[i]] ?? []) statementKeyOf(imp) ].concat(
+				[ for (i in at ... ladder.length) for (statement in ctx.decided[ladder[i]] ?? []) keyOf(statement) ]
+			);
 	}
 
 	/**
@@ -690,9 +684,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	 * that is missing the statement.
 	 */
 	private static function inForce(info: FileInfo): Array<String> {
-		return [
-			for (group in info.ambientImports) for (imp in group.imports) statementKeyOf(imp)
-		];
+		return [ for (group in info.ambientImports) for (imp in group.imports) statementKeyOf(imp) ];
 	}
 
 	/**

@@ -652,12 +652,10 @@ final class TypeNameBinding {
 
 		if (_skipped.exists(f -> f == '$module.hx' || f.endsWith('/$module.hx'))) return Unknown;
 		final order: StatementOrder = orderOf(fi, at);
-		final asked: Array<{ path: String, guarded: Bool, listed: Bool }> = [
-			for (w in order.wildcards) {
-				final pkg: String = SourceText.parentPath(w.raw);
-				{ path: '$pkg.$module', guarded: w.guarded && !coGuarded(w, fi, order.use), listed: tables().packages.exists(pkg) }
-			}
-		];
+		final asked: Array<{ path: String, guarded: Bool, listed: Bool }> = [ for (w in order.wildcards) {
+			final pkg: String = SourceText.parentPath(w.raw);
+			{ path: '$pkg.$module', guarded: w.guarded && !coGuarded(w, fi, order.use), listed: tables().packages.exists(pkg) }
+		} ];
 		var scope: String = fi.pkg;
 		while (true) {
 			asked.push({ path: scope == '' ? module : '$scope.$module', guarded: false, listed: true });
@@ -762,9 +760,9 @@ final class TypeNameBinding {
 		if (rootLength < 0 || dirs.slice(rootLength).join('/') != segments.join('/')) return true;
 		final root: String = dirs.slice(0, rootLength).join('/');
 		final moduleFile: String = '$typeName.${Path.extension(file)}';
-		return [ for (depth in fromDepth ... segments.length + 1) depth ].exists(depth ->
-			FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile])))
-		);
+		return [
+			for (depth in fromDepth ... segments.length + 1) depth
+		].exists(depth -> FileSystem.exists(Path.join([root].concat(segments.slice(0, depth)).concat([moduleFile]))));
 	}
 
 	/** Whether two answers name the same declarations, as files and spans. */

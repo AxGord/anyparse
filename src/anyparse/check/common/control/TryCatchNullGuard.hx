@@ -160,15 +160,13 @@ final class TryCatchNullGuard extends RuleBase implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		return seams == null ? [] : [
-			for (entry in files) for (m in collect(plugin, entry.source, seams)) {
-				file: entry.file,
-				span: m.keySpan,
-				rule: 'try-catch-null-guard',
-				severity: Severity.Info,
-				message: MESSAGE
-			}
-		];
+		return seams == null ? [] : [ for (entry in files) for (m in collect(plugin, entry.source, seams)) {
+			file: entry.file,
+			span: m.keySpan,
+			rule: 'try-catch-null-guard',
+			severity: Severity.Info,
+			message: MESSAGE
+		} ];
 	}
 
 	public function fix(

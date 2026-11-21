@@ -412,9 +412,7 @@ final class MemberSlots {
 			branchBefore: false,
 			gapOpenFrom: -1,
 			gapCloseTo: -1,
-			leadComments: [
-				for (c in comments) if (c.from >= full.from && c.to <= own.from) source.substring(c.from, c.to)
-			]
+			leadComments: [ for (c in comments) if (c.from >= full.from && c.to <= own.from) source.substring(c.from, c.to) ]
 		});
 	}
 

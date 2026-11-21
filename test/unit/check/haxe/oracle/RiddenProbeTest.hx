@@ -51,9 +51,11 @@ final class RiddenProbeTest extends Test {
 		final shared: Array<String> = factsIn(facts, dir);
 		Assert.isTrue(shared.length > 0, 'the facts hold the fixture');
 		Assert.same(factsIn(TypedFactsProbe.probeAll(plain(dir)), dir), shared, 'the facts the plain facts compile types');
-		Assert.same([MAIN.indexOf('a.length')], [
-			for (f in facts?.node('Main.main')?.fields ?? []) if (f.field == 'length') f.at.span.from
-		], 'the inlined body keeps the callee\'s range');
+		Assert.same(
+			[MAIN.indexOf('a.length')],
+			[ for (f in facts?.node('Main.main')?.fields ?? []) if (f.field == 'length') f.at.span.from ],
+			'the inlined body keeps the callee\'s range'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -174,23 +176,17 @@ final class RiddenProbeTest extends Test {
 	}
 	/** Every node the compile typed in the fixture's `Main.hx`, with each call and field access it holds and their ranges. */
 	private static function factsIn(facts: Null<CompilerFacts>, dir: String): Array<String> {
-		return [
-			for (node in facts?.nodesIn('$dir/Main.hx') ?? []) {
-				final calls: Array<String> = [
-					for (c in node.calls) '${c.target} ${c.access} ${c.result} ${c.at.span.from}-${c.at.span.to}'
-				];
-				final fields: Array<String> = [
-					for (f in node.fields) '${f.field} ${f.access} ${f.type} ${f.at.span.from}-${f.at.span.to}'
-				];
-				[
-					node.id,
-					node.signature,
-					'${node.at.span.from}-${node.at.span.to}',
-					calls.join(', '),
-					fields.join(', ')
-				].join(' | ');
-			}
-		];
+		return [ for (node in facts?.nodesIn('$dir/Main.hx') ?? []) {
+			final calls: Array<String> = [ for (c in node.calls) '${c.target} ${c.access} ${c.result} ${c.at.span.from}-${c.at.span.to}' ];
+			final fields: Array<String> = [ for (f in node.fields) '${f.field} ${f.access} ${f.type} ${f.at.span.from}-${f.at.span.to}' ];
+			[
+				node.id,
+				node.signature,
+				'${node.at.span.from}-${node.at.span.to}',
+				calls.join(', '),
+				fields.join(', ')
+			].join(' | ');
+		} ];
 	}
 
 	/**

@@ -14,35 +14,31 @@ final class GraphJson {
 	/** The schema value of `graph`, nodes and edges in the graph's order. */
 	public static function document(graph: CodeGraph): CodeGraphJson {
 		return {
-			nodes: [
-				for (n in graph.nodes()) {
-					final node: CodeGraphNodeJson = {
-						id: n.id,
-						level: n.level,
-						name: n.name,
-						label: n.label,
-						external: n.external,
-						focus: n.focus
-					};
-					if (n.parent != null) node.parent = n.parent;
-					if (n.change != null) node.change = n.change;
-					node;
-				}
-			],
-			edges: [
-				for (e in graph.edges()) {
-					final edge: CodeGraphEdgeJson = {
-						from: e.from,
-						to: e.to,
-						kind: e.kind,
-						weight: e.weight
-					};
-					if (graph.isMutual(e)) edge.mutual = true;
-					if (e.change != null) edge.change = e.change;
-					if (e.before != null) edge.before = e.before;
-					edge;
-				}
-			]
+			nodes: [ for (n in graph.nodes()) {
+				final node: CodeGraphNodeJson = {
+					id: n.id,
+					level: n.level,
+					name: n.name,
+					label: n.label,
+					external: n.external,
+					focus: n.focus
+				};
+				if (n.parent != null) node.parent = n.parent;
+				if (n.change != null) node.change = n.change;
+				node;
+			} ],
+			edges: [ for (e in graph.edges()) {
+				final edge: CodeGraphEdgeJson = {
+					from: e.from,
+					to: e.to,
+					kind: e.kind,
+					weight: e.weight
+				};
+				if (graph.isMutual(e)) edge.mutual = true;
+				if (e.change != null) edge.change = e.change;
+				if (e.before != null) edge.before = e.before;
+				edge;
+			} ]
 		};
 	}
 

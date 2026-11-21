@@ -176,9 +176,9 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 			addAssignKind: shape.addAssignKind,
 			incrementKinds: [ for (kind in [shape.postIncrKind, shape.preIncrKind]) if (kind != null) kind ],
 			parenKind: shape.parenKind,
-			comparedHostKinds: (shape.equalityKinds ?? []).concat([
-				for (kind in [shape.plainCasePatternKind, shape.orPatternKind]) if (kind != null) kind
-			])
+			comparedHostKinds: (shape.equalityKinds ?? []).concat(
+				[ for (kind in [shape.plainCasePatternKind, shape.orPatternKind]) if (kind != null) kind ]
+			)
 		};
 	}
 

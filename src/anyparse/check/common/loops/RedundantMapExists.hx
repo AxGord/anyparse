@@ -211,9 +211,11 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 				}
 			);
 			// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
-			return ParenGuard.guard(source, [
-				for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
-			], plugin);
+			return ParenGuard.guard(
+				source,
+				[ for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i] ],
+				plugin
+			);
 		});
 	}
 

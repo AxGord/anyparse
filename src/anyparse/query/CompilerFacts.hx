@@ -698,9 +698,7 @@ final class CompilerFacts {
 	public function nodeAsBuiltBy(id: String, builds: Array<Int>): Null<FactNode> {
 		final key: String = '$id|${builds.join(',')}';
 		if (_builtCache.exists(key)) return _builtCache[key];
-		final lines: Array<NodeLine> = [
-			for (line in _nodeLines[id] ?? []) if (line.builds.exists(b -> builds.contains(b))) line
-		];
+		final lines: Array<NodeLine> = [ for (line in _nodeLines[id] ?? []) if (line.builds.exists(b -> builds.contains(b))) line ];
 		final made: Null<FactNode> = lines.length == 0 ? null : materializeAs(BUILT_ENTRY + key, id, lines);
 		_builtCache[key] = made;
 		return made;
@@ -755,9 +753,7 @@ final class CompilerFacts {
 
 	/** Every call site at exactly `span` in `file` — one per distinct answer the configurations gave. */
 	public function callsAt(file: String, span: Span): Array<CallFact> {
-		return [
-			for (n in nodesAround(file, span)) for (c in n.calls) if (same(c.at, file, span)) c
-		];
+		return [ for (n in nodesAround(file, span)) for (c in n.calls) if (same(c.at, file, span)) c ];
 	}
 
 	/**
@@ -835,9 +831,7 @@ final class CompilerFacts {
 	 * read it there (`nodeAsBuiltBy` reads a node as those alone typed it); empty when none typed it.
 	 */
 	public function typeHomes(id: String): Array<TypeHome> {
-		return [
-			for (h in _typeHomes[id] ?? []) { file: h.home, at: position(h.home, h.p, []), builds: h.builds.copy() }
-		];
+		return [ for (h in _typeHomes[id] ?? []) { file: h.home, at: position(h.home, h.p, []), builds: h.builds.copy() } ];
 	}
 
 	/** Add one configuration's facts; a dump that is not a complete facts file joins `dropped` instead. */
@@ -997,9 +991,9 @@ final class CompilerFacts {
 		final key: String = '$id@$home';
 		if (_builtCache.exists(key)) return _builtCache[key];
 		// a line homed here first: the node is placed where the first line places it
-		final kept: Array<NodeLine> = [ for (l in lines) if (l.home == home) l ].concat([ for (l in lines) if (
-			l.home != home && own(l)
-		) l ]);
+		final kept: Array<NodeLine> = [ for (l in lines) if (l.home == home) l ].concat(
+			[ for (l in lines) if (l.home != home && own(l)) l ]
+		);
 		final made: Null<FactNode> = kept.length == 0 ? null : materializeAs(BUILT_ENTRY + key, id, kept);
 		_builtCache[key] = made;
 		return made;

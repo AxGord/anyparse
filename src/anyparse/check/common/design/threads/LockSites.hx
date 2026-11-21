@@ -285,9 +285,7 @@ final class LockSites {
 			if (edge.to == pair.lockId) takes.push({ edge: edge, pair: pair });
 			if (edge.to == pair.unlockId) gives.push({ edge: edge, pair: pair });
 		}
-		collectUnsealed(files, plugin, [
-			for (t in takes.concat(gives)) if (t.edge.receiverField != null) t.edge.receiverField
-		], writes);
+		collectUnsealed(files, plugin, [ for (t in takes.concat(gives)) if (t.edge.receiverField != null) t.edge.receiverField ], writes);
 		final unresolved: Array<String> = [ for (u in graph.unresolved) for (n in ReachAdmission.admittedNames(u)) n ];
 		for (site in inferWrappers(takes, gives, pairIds, unresolved)) (site.wrapper.takes ? takes : gives).push(site.call);
 		for (take in takes) {
@@ -376,17 +374,15 @@ final class LockSites {
 
 	/** The starts of the `gives` of `pair` in `edge`'s function that may give back `lock` (an unknown one: any of them). */
 	private function releasesOf(edge: CallEdge, pair: LockPair, lock: Null<String>, gives: Array<LockCall>): Array<Int> {
-		return [
-			for (g in gives) {
-				final at: Null<Span> = g.edge.span;
-				final other: Null<String> = lockOf(g.edge);
-				if (
-					at != null && g.pair == pair && g.edge.from == edge.from && g.edge.file == edge.file
-					&& (lock == null || other == null || other == lock)
-				)
-					at.from;
-			}
-		];
+		return [ for (g in gives) {
+			final at: Null<Span> = g.edge.span;
+			final other: Null<String> = lockOf(g.edge);
+			if (
+				at != null && g.pair == pair && g.edge.from == edge.from && g.edge.file == edge.file
+				&& (lock == null || other == null || other == lock)
+			)
+				at.from;
+		} ];
 	}
 
 	/** The hold of `lock` (`pair`) the call `edge` opens, closed by the calls starting at `releases` on their own paths. */
@@ -398,9 +394,9 @@ final class LockSites {
 			: _walker.trace(fn, start, releases, _throws.raisingFroms(edge), edge.from);
 		final held: Array<CallEdge> = heldEdges(edge, start, releases, traced);
 		final leaks: Bool = traced == null || traced.leaks;
-		final unresolved: Array<BlindCall> = traced == null ? [] : [
-			for (n in traced.held) for (call in unresolvedCalls(n, edge, start, releases)) call
-		];
+		final unresolved: Array<BlindCall> = traced == null
+			? []
+			: [ for (n in traced.held) for (call in unresolvedCalls(n, edge, start, releases)) call ];
 		return {
 			edge: edge,
 			pair: pair,
@@ -422,21 +418,17 @@ final class LockSites {
 	 * the acquire at `start` and the `releases` excepted.
 	 */
 	private function heldEdges(edge: CallEdge, start: Int, releases: Array<Int>, traced: Null<HeldWindow>): Array<CallEdge> {
-		final heldSpans: Array<Span> = traced == null ? [] : [
-			for (n in traced.held) {
-				final at: Null<Span> = n.span;
-				if (at != null) at;
-			}
-		];
+		final heldSpans: Array<Span> = traced == null ? [] : [ for (n in traced.held) {
+			final at: Null<Span> = n.span;
+			if (at != null) at;
+		} ];
 		function heldAt(at: Span): Bool {
 			return traced == null ? at.from > start : heldSpans.exists(h -> at.from >= h.from && at.to <= h.to);
 		}
-		return [
-			for (e in _graph.outEdges(edge.from)) {
-				final at: Null<Span> = e.span;
-				if (e.file == edge.file && at != null && at.from != start && !releases.contains(at.from) && heldAt(at)) e;
-			}
-		];
+		return [ for (e in _graph.outEdges(edge.from)) {
+			final at: Null<Span> = e.span;
+			if (e.file == edge.file && at != null && at.from != start && !releases.contains(at.from) && heldAt(at)) e;
+		} ];
 	}
 
 	/**
@@ -628,12 +620,10 @@ final class LockSites {
 		});
 		for (o in opened) {
 			final lock: Null<String> = lockOf(o.op.edge);
-			final releases: Array<Int> = releasesOf(o.call, o.op.pair, lock, gives).concat([
-				for (c in closed) {
-					final at: Null<Span> = c.call.span;
-					if (at != null && c.call.from == o.call.from && c.call.file == o.call.file && lockOf(c.op.edge) == lock) at.from;
-				}
-			]);
+			final releases: Array<Int> = releasesOf(o.call, o.op.pair, lock, gives).concat([ for (c in closed) {
+				final at: Null<Span> = c.call.span;
+				if (at != null && c.call.from == o.call.from && c.call.file == o.call.file && lockOf(c.op.edge) == lock) at.from;
+			} ]);
 			helperHolds.push(hold(o.call, o.op.pair, lock, releases, o.op.edge));
 		}
 	}
@@ -759,9 +749,7 @@ final class LockSites {
 		for (id => wrapper in wrappers) for (e in _graph.inEdges(id)) {
 			final key: Null<String> = siteKey(e);
 			if (key == null || sites.exists(key) || refused.contains(key)) continue;
-			final at: Array<CallEdge> = [
-				for (o in _graph.outEdges(e.from)) if (o.kind.isInvocation() && siteKey(o) == key) o
-			];
+			final at: Array<CallEdge> = [ for (o in _graph.outEdges(e.from)) if (o.kind.isInvocation() && siteKey(o) == key) o ];
 			if (at.foreach(o -> WrapperOps.sameWrapper(wrappers[o.to], wrapper) || passesThrough(o.to)))
 				sites[key] = { call: { edge: at.find(o -> o.kind == Call) ?? e, pair: wrapper.pair }, wrapper: wrapper };
 			else

@@ -159,13 +159,10 @@ final class WhileTrueCondition extends RuleBase implements DefaultOff {
 		final s: Seams = seams;
 		final file: String = violations.length == 0 ? '' : violations[0].file;
 		return CheckScan.applyTextMatches(
-			plugin, source, violations,
-			(tree, src) -> [
-				for (m in collectMatches(tree, src, s, plugin, file, index)) {
-					final text: Null<String> = m.text;
-					if (text != null) ({ span: m.span, text: text });
-				}
-			]
+			plugin, source, violations, (tree, src) -> [ for (m in collectMatches(tree, src, s, plugin, file, index)) {
+				final text: Null<String> = m.text;
+				if (text != null) ({ span: m.span, text: text });
+			} ]
 		);
 	}
 

@@ -480,9 +480,7 @@ class CallGraphTest extends Test {
 		// The body is the default; a reassignment runs another function, so both are recorded.
 		final g: CallGraph = graphOf(['class A { dynamic function d():Void {} function a():Void d(); }']);
 		Assert.equals(1, edges(g, 'A.a', 'A.d', Call).length);
-		Assert.equals(1, [
-			for (u in g.unresolved) if (u.from == 'A.a' && u.reason.match(FunctionValue('d'))) u
-		].length);
+		Assert.equals(1, [ for (u in g.unresolved) if (u.from == 'A.a' && u.reason.match(FunctionValue('d'))) u ].length);
 	}
 
 	@:pin('control')
@@ -727,9 +725,7 @@ class CallGraphTest extends Test {
 		]);
 		Assert.equals(1, edges(g, 'G.viaArg', 'W.w', Call).length);
 		Assert.isNull(g.node('T.w'));
-		Assert.equals(1, [
-			for (u in g.unresolved) if (u.from == 'G.viaParam' && u.reason.match(UnresolvedReceiver('w'))) u
-		].length);
+		Assert.equals(1, [ for (u in g.unresolved) if (u.from == 'G.viaParam' && u.reason.match(UnresolvedReceiver('w'))) u ].length);
 	}
 
 	@:pin('control')
@@ -1258,9 +1254,7 @@ class CallGraphTest extends Test {
 			'package app; class C { static function field():Void Hold.lock.wait(); static function call():Void Hold.make().wait(); }'
 		]);
 		function waits(from: String): Array<String> {
-			final out: Array<String> = [
-				for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to
-			];
+			final out: Array<String> = [ for (e in g.outEdges(from)) if (e.kind == Call && e.to.indexOf('wait') >= 0) e.to ];
 			out.sort(Reflect.compare);
 			return out;
 		}

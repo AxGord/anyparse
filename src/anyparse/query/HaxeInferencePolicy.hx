@@ -79,9 +79,7 @@ final class HaxeInferencePolicy implements InferencePolicy {
 		if (cell != null) return Mono(cell);
 		return switch shape {
 			case Nominal(path, args): Of(headOf(path, file, at), [ for (a in args) termOf(a.text, file, at, cells) ], written);
-			case _: Opaque(written, [
-				for (name => id in cells) if (CallGraphNames.mentionsTypeName(written, [name], _typeSyntax)) id
-			]);
+			case _: Opaque(written, [ for (name => id in cells) if (CallGraphNames.mentionsTypeName(written, [name], _typeSyntax)) id ]);
 		};
 	}
 

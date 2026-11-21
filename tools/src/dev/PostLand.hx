@@ -449,9 +449,7 @@ final class PostLand {
 	public static function recorded(dir: String, state: String = RUNNING): Array<String> {
 		if (!FileSystem.exists(dir)) return [];
 		final suffix: String = '.$state';
-		return [
-			for (name in FileSystem.readDirectory(dir)) if (name.endsWith(suffix)) name.substr(0, name.length - suffix.length)
-		];
+		return [ for (name in FileSystem.readDirectory(dir)) if (name.endsWith(suffix)) name.substr(0, name.length - suffix.length) ];
 	}
 
 	/** Deletes `path` when it exists. */

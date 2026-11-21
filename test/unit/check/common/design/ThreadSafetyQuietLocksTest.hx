@@ -77,13 +77,11 @@ class ThreadSafetyQuietLocksTest extends Test {
 
 	/** The warnings and infos of `found` of families A and B as `<severity> <family> <member> | <subject>`, sorted. */
 	private static function graded(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && (data.family == 'A' || data.family == 'B') && data.subject != 'Sys.sleep')
-					'${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && (data.family == 'A' || data.family == 'B') && data.subject != 'Sys.sleep')
+				'${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

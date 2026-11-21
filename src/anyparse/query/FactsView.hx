@@ -455,15 +455,13 @@ final class FactsView {
 		if (strings == null || iterations == null || calls == null) return null;
 		final converted: Null<Array<ImplicitSite>> = conversionSitesIn(file, span, harmless);
 		if (converted == null) return null;
-		final out: Array<ImplicitSite> = [
-			for (s in strings) {
-				family: Text,
-				span: s.at.span,
-				types: [simpleSource(s.operand)],
-				exact: s.exact,
-				owners: [typedOwner(s.operand)]
-			}
-		];
+		final out: Array<ImplicitSite> = [ for (s in strings) {
+			family: Text,
+			span: s.at.span,
+			types: [simpleSource(s.operand)],
+			exact: s.exact,
+			owners: [typedOwner(s.operand)]
+		} ];
 		for (c in calls) {
 			final target: Null<String> = c.target;
 			if (target == null || !convertsToString(target)) continue;
@@ -530,9 +528,7 @@ final class FactsView {
 			return [ for (c in n.calls) if (targets.contains(c.target ?? '')) c ];
 		}
 		function constructionsOf(n: FactNode): Array<NewFact> {
-			return [
-				for (x in n.news) if (targets.contains('${CompilerFacts.baseId(x.type)}.$constructor')) x
-			];
+			return [ for (x in n.news) if (targets.contains('${CompilerFacts.baseId(x.type)}.$constructor')) x ];
 		}
 		final hands: Null<Array<HandFact>> = _table.within(file, span, handedTo, h -> h.at, true);
 		final calls: Null<Array<CallFact>> = _table.within(file, span, callsOf, c -> c.at, true);
@@ -1677,13 +1673,11 @@ final class FactsView {
 	 * public spelling of the id, or `impl` itself when it is not spelled so.
 	 */
 	private function implemented(impl: String): String {
-		final byImpl: Map<String, String> = _implementing ?? [
-			for (id in _table.typeIds()) {
-				final fact: Null<TypeFact> = _table.type(id);
-				final implementation: Null<String> = fact?.kind == FactKinds.ABSTRACT ? fact?.implementation : null;
-				if (implementation != null) CompilerFacts.baseId(implementation) => id;
-			}
-		];
+		final byImpl: Map<String, String> = _implementing ?? [ for (id in _table.typeIds()) {
+			final fact: Null<TypeFact> = _table.type(id);
+			final implementation: Null<String> = fact?.kind == FactKinds.ABSTRACT ? fact?.implementation : null;
+			if (implementation != null) CompilerFacts.baseId(implementation) => id;
+		} ];
 		_implementing = byImpl;
 		final typed: Null<String> = byImpl[impl];
 		if (typed != null) return typed;

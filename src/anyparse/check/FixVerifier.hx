@@ -926,17 +926,15 @@ final class FixVerifier {
 		}
 		final judged: Array<EntryVerdict> = judgeBatch(candidates, plugin, write, rounds);
 		var next: Int = 0;
-		return [
-			for (p in pending) {
-				final prep: Null<EntryPrep> = p.prep;
-				if (prep == null)
-					null
-				else switch prep {
-					case Settled(settled): settled;
-					case Ready(_): judged[next++];
-				};
-			}
-		];
+		return [ for (p in pending) {
+			final prep: Null<EntryPrep> = p.prep;
+			if (prep == null)
+				null
+			else switch prep {
+				case Settled(settled): settled;
+				case Ready(_): judged[next++];
+			};
+		} ];
 	}
 
 	/**
@@ -961,9 +959,7 @@ final class FixVerifier {
 			final open: Array<EntryCandidate> = [ for (i => c in candidates) if (!known[i]) c ];
 			final settled: Array<EntryVerdict> = judgeBatch(open, plugin, write, rounds);
 			var nextSettled: Int = 0;
-			return [
-				for (i => c in candidates) known[i] ? judgeAlone(c, plugin, write, rounds) : settled[nextSettled++]
-			];
+			return [ for (i => c in candidates) known[i] ? judgeAlone(c, plugin, write, rounds) : settled[nextSettled++] ];
 		}
 		final configs: Array<OracleConfig> = [];
 		for (candidate in candidates) {

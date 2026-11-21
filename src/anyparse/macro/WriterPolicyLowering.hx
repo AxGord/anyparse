@@ -140,9 +140,7 @@ final class WriterPolicyLowering {
 	): Expr {
 		final cases: Array<Case> = [
 			for (spec in caseSpecs) {
-				values: [
-					for (name in spec.values) MacroStringTools.toFieldExpr(policyModule.concat([name]))
-				],
+				values: [ for (name in spec.values) MacroStringTools.toFieldExpr(policyModule.concat([name])) ],
 				expr: spec.expr,
 				guard: null
 			}

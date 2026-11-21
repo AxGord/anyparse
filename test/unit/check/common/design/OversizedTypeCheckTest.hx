@@ -673,9 +673,7 @@ class OversizedTypeCheckTest extends Test {
 	/** `n` methods in ONE blob: each calls the next two, wrapping, so hub extraction cannot cut it. */
 	private static function blob(n: Int): String {
 		return 'class C {\n'
-			+ [
-				for (i in 0...n) '\tfunction m$i():Int { return m${(i + 1) % n}() + m${(i + 2) % n}(); }'
-			].join('\n')
+			+ [ for (i in 0...n) '\tfunction m$i():Int { return m${(i + 1) % n}() + m${(i + 2) % n}(); }' ].join('\n')
 			+ '\n}';
 	}
 
@@ -683,13 +681,11 @@ class OversizedTypeCheckTest extends Test {
 	private static function halves(n: Int): String {
 		final cut: Int = Std.int(n / 2);
 		return 'class C {\n'
-			+ [
-				for (i in 0...n) {
-					final low: Int = i < cut ? 0 : cut;
-					final high: Int = i < cut ? cut : n;
-					'\tfunction m$i():Int { return m${low + (i - low + 1) % (high - low)}(); }';
-				}
-			].join('\n')
+			+ [ for (i in 0...n) {
+				final low: Int = i < cut ? 0 : cut;
+				final high: Int = i < cut ? cut : n;
+				'\tfunction m$i():Int { return m${low + (i - low + 1) % (high - low)}(); }';
+			} ].join('\n')
 			+ '\n}';
 	}
 
@@ -706,9 +702,7 @@ class OversizedTypeCheckTest extends Test {
 
 	/** A class named `C`: 60 constants, each under a one-line doc, then `methods` one-line methods. */
 	private static function documentedTable(methods: Int): String {
-		final consts: String = [
-			for (i in 0...60) '\t/** Constant $i. */\n\tpublic static inline final K$i:Int = $i;'
-		].join('\n');
+		final consts: String = [ for (i in 0...60) '\t/** Constant $i. */\n\tpublic static inline final K$i:Int = $i;' ].join('\n');
 		final fns: String = [ for (i in 0...methods) '\n\tfunction m$i():Void {}' ].join('');
 		return 'class C {\n$consts$fns\n\tpublic function new() {}\n}';
 	}

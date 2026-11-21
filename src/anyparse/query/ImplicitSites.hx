@@ -108,9 +108,7 @@ final class ImplicitSites {
 
 	/** The sites of `tree` (the text of `file` is `source`) inside `span`, in document order. */
 	public function sitesIn(file: String, tree: QueryNode, source: String, span: Span): Array<ImplicitSite> {
-		return [
-			for (s in sitesOfFile(file, tree, source)) if (s.span.from >= span.from && s.span.to <= span.to) s
-		];
+		return [ for (s in sitesOfFile(file, tree, source)) if (s.span.from >= span.from && s.span.to <= span.to) s ];
 	}
 
 	private function declaredOf(file: String, source: String): Map<Int, String> {

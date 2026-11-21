@@ -48,9 +48,7 @@ final class AllowGrants {
 		if (written.length == 0) return [];
 		final hits: Array<MetaHit> = Meta.find(tree, plugin.metaShape(), source).filter(h -> h.annotation == TAG);
 		return written.foreach(at -> hits.exists(h -> h.metaSpan != null && h.metaSpan.from == at))
-			? ([
-				for (hit in hits) if (reachesMember(hit, member, owner)) for (path in hit.args) path.trim()
-			]: Array<String>)
+			? ([ for (hit in hits) if (reachesMember(hit, member, owner)) for (path in hit.args) path.trim() ]: Array<String>)
 			: null;
 	}
 

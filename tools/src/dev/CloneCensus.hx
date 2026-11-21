@@ -363,13 +363,11 @@ final class CloneCensus {
 			);
 			for (f in added) out.push('[$label] $rule ADDED ${f.file}:${f.line} n=${f.n} from ${f.origFile}:${f.origLine}');
 			if (removedPath == null) continue;
-			final rows: Array<String> = [
-				for (fam in removedFamilies) {
-					final members: Array<Finding> = removed.filter(f -> familyOf(f) == familyOf(fam));
-					final reading: String = bare(members[0]) ? 'regex-bare' : 'regex-logic';
-					'$label $rule ${fam.origFile}:${fam.origLine} x${members.length} n=${members[0].n} $reading\n';
-				}
-			];
+			final rows: Array<String> = [ for (fam in removedFamilies) {
+				final members: Array<Finding> = removed.filter(f -> familyOf(f) == familyOf(fam));
+				final reading: String = bare(members[0]) ? 'regex-bare' : 'regex-logic';
+				'$label $rule ${fam.origFile}:${fam.origLine} x${members.length} n=${members[0].n} $reading\n';
+			} ];
 			// `sys.io.File.append` on node writes at the offset it counts itself, not at the end: a second append overwrites
 			js.node.Fs.appendFileSync(removedPath, rows.join(''));
 		}

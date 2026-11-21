@@ -518,9 +518,8 @@ final class FactsEscapes {
 			case Named(name, args): Named(name, [ for (a in args) substitute(a, bound) ]);
 			case Function(args, result):
 				Function([ for (a in args) { optional: a.optional, type: substitute(a.type, bound) } ], substitute(result, bound));
-			case Structure(fields): Structure([
-				for (f in fields) { optional: f.optional, name: f.name, type: substitute(f.type, bound) }
-			]);
+			case Structure(fields):
+				Structure([ for (f in fields) { optional: f.optional, name: f.name, type: substitute(f.type, bound) } ]);
 			case Unknown: Unknown;
 		};
 	}
@@ -546,12 +545,10 @@ final class FactsEscapes {
 	/** The typed classes of `table` (`CLASS_KINDS`) whose qualified name one of `globs` matches (`Glob.qualifiedNames`). */
 	private static function declaredClasses(table: CompilerFacts, globs: Array<String>): Array<String> {
 		final patterns: Array<EReg> = globs.map(Glob.qualifiedNames);
-		return [
-			for (id in table.typeIds()) {
-				final fact: Null<TypeFact> = table.type(id);
-				if (fact != null && CLASS_KINDS.contains(fact.kind) && patterns.exists(p -> p.match(id))) id;
-			}
-		];
+		return [ for (id in table.typeIds()) {
+			final fact: Null<TypeFact> = table.type(id);
+			if (fact != null && CLASS_KINDS.contains(fact.kind) && patterns.exists(p -> p.match(id))) id;
+		} ];
 	}
 
 	/** Whether the type `text` is a function type, nullable or not: a value of it is a function value, which holds no object. */

@@ -82,9 +82,7 @@ final class TrapFixSweep {
 	 */
 	public static function sweep(catalog: String, engine: String, ruleArgs: Array<String>): Array<SweptProbe> {
 		final read: SweepCatalog = SweepCatalogParser.parse(File.getContent(catalog));
-		return [
-			for (trap in read.traps) for (probe in trap.probes) sweepProbe(trap, probe, engine, ruleArgs)
-		];
+		return [ for (trap in read.traps) for (probe in trap.probes) sweepProbe(trap, probe, engine, ruleArgs) ];
 	}
 
 	/**

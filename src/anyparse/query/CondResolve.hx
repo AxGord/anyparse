@@ -187,9 +187,7 @@ final class CondResolve {
 	 */
 	private static function outermost(regions: Array<CondRegion>): Array<CondRegion> {
 		final placeholders: Array<{ span: Span, text: String }> = regions.map(region -> { span: region.span, text: '' });
-		return [
-			for (i in 0...regions.length) if (!CanonicalEdit.isContainedEdit(placeholders, i)) regions[i]
-		];
+		return [ for (i in 0...regions.length) if (!CanonicalEdit.isContainedEdit(placeholders, i)) regions[i] ];
 	}
 
 	/**

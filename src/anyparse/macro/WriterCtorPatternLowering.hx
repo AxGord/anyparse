@@ -163,9 +163,9 @@ final class WriterCtorPatternLowering {
 	 */
 	private static function collectBlockCtorPatterns(ctx: CtorPatternCtx, bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = ctx.shape.rules[bodyTypePath];
-		return rule == null || rule.kind != Alt ? [] : [
-			for (branch in rule.children) if (isBlockCtorBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch)
-		];
+		return rule == null || rule.kind != Alt
+			? []
+			: [ for (branch in rule.children) if (isBlockCtorBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch) ];
 	}
 
 	/**
@@ -179,9 +179,9 @@ final class WriterCtorPatternLowering {
 	 */
 	private static function collectCurlyBlockCtorPatterns(ctx: CtorPatternCtx, bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = ctx.shape.rules[bodyTypePath];
-		return rule == null || rule.kind != Alt ? [] : [
-			for (branch in rule.children) if (isCurlyBlockCtorBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch)
-		];
+		return rule == null || rule.kind != Alt
+			? []
+			: [ for (branch in rule.children) if (isCurlyBlockCtorBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch) ];
 	}
 
 	private static function collectNonCurlyBlockCtorPatterns(ctx: CtorPatternCtx, bodyTypePath: String): Array<Expr> {
@@ -215,9 +215,9 @@ final class WriterCtorPatternLowering {
 
 	private static function collectBlockShapeEquivalentPatterns(ctx: CtorPatternCtx, bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = ctx.shape.rules[bodyTypePath];
-		return rule == null || rule.kind != Alt ? [] : [
-			for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch)
-		];
+		return rule == null || rule.kind != Alt
+			? []
+			: [ for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch) ];
 	}
 
 	/**
@@ -251,9 +251,9 @@ final class WriterCtorPatternLowering {
 	 */
 	private static function collectBracketBlockCtorPatterns(ctx: CtorPatternCtx, bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = ctx.shape.rules[bodyTypePath];
-		return rule == null || rule.kind != Alt ? [] : [
-			for (branch in rule.children) if (isBracketBlockCtorBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch)
-		];
+		return rule == null || rule.kind != Alt
+			? []
+			: [ for (branch in rule.children) if (isBracketBlockCtorBranch(branch)) branchCtorPattern(ctx, bodyTypePath, branch) ];
 	}
 
 	/**

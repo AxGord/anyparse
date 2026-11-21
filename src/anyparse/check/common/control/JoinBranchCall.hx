@@ -208,14 +208,15 @@ final class JoinBranchCall extends RuleBase {
 		final files: Array<{ file: String, source: String }> = [{ file: violations[0].file, source: source }];
 		final ctx: Null<Ctx> = contextOf(plugin, source, seams, IndexScope.lazySymbolIndex(files, plugin, index), violations[0].file);
 		if (ctx == null) return [];
-		final edits: Array<{ span: Span, text: String }> =
-			CheckScan.applyBySpan(plugin, source, violations, [ for (kind in seams.byKind.keys()) kind ], (node, span) -> {
+		final edits: Array<{ span: Span, text: String }> = CheckScan.applyBySpan(
+			plugin, source, violations, [ for (kind in seams.byKind.keys()) kind ], (node, span) -> {
 				final pos: Null<IfPosition> = positionOf(node, ctx.seams);
 				// The index was built from `byKind`'s own keys, so every node reaching here has one.
 				if (pos == null) throw new Exception('join-branch-call: no claimed position for indexed kind ${node.kind}');
 				final m: Null<Match> = match(node, ctx, pos);
 				return m == null ? null : { span: span, text: buildText(m, pos) };
-			});
+			}
+		);
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
 
@@ -454,9 +455,7 @@ final class JoinBranchCall extends RuleBase {
 		return IfExpressionChain.droppedComment(headSpan, kept, ctx.comments) ? null : {
 			prefix: slice(ctx.source, prefix),
 			suffix: slice(ctx.source, suffix),
-			pairs: [
-				for (i in 0...conditions.length) { cond: slice(ctx.source, conditions[i]), value: slice(ctx.source, values[i]) }
-			],
+			pairs: [ for (i in 0...conditions.length) { cond: slice(ctx.source, conditions[i]), value: slice(ctx.source, values[i]) } ],
 			terminal: slice(ctx.source, values[values.length - 1])
 		};
 	}

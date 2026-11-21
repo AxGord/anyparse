@@ -145,27 +145,25 @@ final class Branches {
 
 	/** `steps` and `readings` of the run `id` as the JSON of a branch report. */
 	public static function encode(id: String, steps: Array<Step>, readings: Map<String, Int>, ?started: Float): String {
-		final rows: Array<StepRecord> = [
-			for (step in steps) {
-				final kind: Array<String> = switch step.outcome {
-					case Passed: ['passed', ''];
-					case Failed(why): ['failed', why];
-					case NotRun(why): ['not run', why];
-					case Skipped(why): ['skipped', why];
-				};
-				{
-					name: step.name,
-					outcome: kind[0],
-					why: kind[1],
-					ms: step.ms,
-					note: step.note,
-					excerpt: step.excerpt,
-					wait: step.wait,
-					cpu: step.cpu,
-					threads: step.threads
-				};
-			}
-		];
+		final rows: Array<StepRecord> = [ for (step in steps) {
+			final kind: Array<String> = switch step.outcome {
+				case Passed: ['passed', ''];
+				case Failed(why): ['failed', why];
+				case NotRun(why): ['not run', why];
+				case Skipped(why): ['skipped', why];
+			};
+			{
+				name: step.name,
+				outcome: kind[0],
+				why: kind[1],
+				ms: step.ms,
+				note: step.note,
+				excerpt: step.excerpt,
+				wait: step.wait,
+				cpu: step.cpu,
+				threads: step.threads
+			};
+		} ];
 		final counts: Array<Reading> = [ for (name => value in readings) { name: name, value: value } ];
 		return BranchReportJsonWriter.write({
 			run: id,

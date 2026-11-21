@@ -487,12 +487,10 @@ private final class UnknownCauses {
 		_tree = tree;
 		_shape = shape;
 		_index = index;
-		_lambdaKinds = (shape.lambdaKinds ?? []).concat([
-			for (k in [shape.fnExprKind, shape.namedFnExprKind, shape.parenLambdaKind]) if (k != null) k
-		]);
-		_accessKinds = [
-			for (k in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (k != null) k
-		];
+		_lambdaKinds = (shape.lambdaKinds ?? []).concat(
+			[ for (k in [shape.fnExprKind, shape.namedFnExprKind, shape.parenLambdaKind]) if (k != null) k ]
+		);
+		_accessKinds = [ for (k in [shape.fieldAccessKind, shape.nullSafeAccessKind, shape.forceFieldAccessKind]) if (k != null) k ];
 		final stack: Array<QueryNode> = [tree];
 		while (stack.length > 0) {
 			final n: QueryNode = stack.pop() ?? tree;

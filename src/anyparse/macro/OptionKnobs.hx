@@ -90,12 +90,10 @@ final class OptionKnobs {
 		if (parts[parts.length - 1] != a.name) parts.push(a.name);
 		final impl: Null<Ref<ClassType>> = a.impl;
 		if (impl == null) return opaque(type);
-		final names: Array<Expr> = [
-			for (s in impl.get().statics.get()) if (s.meta.has(':enum')) {
-				final path: Array<String> = parts.concat([s.name]);
-				macro { name: $v{s.name}, value: ($p{path}: Dynamic) };
-			}
-		];
+		final names: Array<Expr> = [ for (s in impl.get().statics.get()) if (s.meta.has(':enum')) {
+			final path: Array<String> = parts.concat([s.name]);
+			macro { name: $v{s.name}, value: ($p{path}: Dynamic) };
+		} ];
 		return macro anyparse.format.OptionsSource.OptionShape.Constants($v{a.name}, $v{importPath}, $a{names});
 	}
 

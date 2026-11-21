@@ -249,9 +249,7 @@ final class LintFixLedger {
 		final riskyIds: Array<String> = riskyLedgered ? [] : [ for (c in risky) if (!(c is RiskyArm)) c.id() ];
 		riskyIds.sort(anyparse.util.Compare.compareString);
 		final oracleIds: Array<String> = oracleAssisted.map(c -> c.id());
-		final reasons: Map<String, String> = [
-			for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason()
-		];
+		final reasons: Map<String, String> = [ for (c in checks) if (c is NoAutofix) c.id() => (cast c: NoAutofix).noAutofixReason() ];
 		// Read off the check objects rather than passed in: the caller has no list of them, and a rule
 		// that gains the seam without touching `Cli` would otherwise keep the wrong verdict silently.
 		final crossFileIds: Array<String> = [ for (c in checks) if (c is CrossFileFix) c.id() ];

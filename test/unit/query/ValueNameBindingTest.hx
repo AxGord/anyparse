@@ -271,12 +271,10 @@ class ValueNameBindingTest extends Test {
 	/** The field aliases of `file`, as `alias=Owner.member` (`?` for an undecoded path). */
 	private static function aliases(index: SymbolIndex, file: String): String {
 		final found: Array<FieldAlias> = index.values.fieldAliases(fileOf(index, file));
-		return [
-			for (a in found) {
-				final target: Null<ImportedStatic> = a.target;
-				'${a.alias}=${target == null ? '?' : '${target.owner}.${target.member}'}';
-			}
-		].join(' ');
+		return [ for (a in found) {
+			final target: Null<ImportedStatic> = a.target;
+			'${a.alias}=${target == null ? '?' : '${target.owner}.${target.member}'}';
+		} ].join(' ');
 	}
 
 	private static function render(s: ImportedStatic): String {

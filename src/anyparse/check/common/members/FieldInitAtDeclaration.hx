@@ -1196,9 +1196,7 @@ final class FieldInitAtDeclaration extends RuleBase implements NotedFix {
 				shape.stringInterpIdentKind
 			]) if (k != null) k
 		];
-		final faultingKinds: Array<String> = [
-			for (k in [shape.fieldAccessKind, shape.indexAccessKind, shape.callKind]) if (k != null) k
-		];
+		final faultingKinds: Array<String> = [ for (k in [shape.fieldAccessKind, shape.indexAccessKind, shape.callKind]) if (k != null) k ];
 		final classLike: Array<String> = MemberKinds.classLikeContainerKinds(shape);
 		final tryKinds: Array<String> = ShapeVocab.tryKinds(shape);
 		for (entry in scope) if (RawSourceScan.mentionsWord(entry.source, name)) {

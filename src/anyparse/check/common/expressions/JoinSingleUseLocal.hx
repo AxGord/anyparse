@@ -259,9 +259,9 @@ final class JoinSingleUseLocal extends RuleBase {
 			blockKinds: support.blockKinds(),
 			barrierKinds: barriers,
 			deferringKinds: deferringKinds(shape),
-			invariantBinderKinds: [
-				for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k
-			].concat(shape.paramKinds ?? []),
+			invariantBinderKinds: [ for (k in localDeclKinds) if (!mutableKinds.contains(k) && !continuationKinds.contains(k)) k ].concat(
+				shape.paramKinds ?? []
+			),
 			branchKinds: shape.branchKinds ?? [],
 			memberNamingKinds: memberNamingKinds(shape),
 			shape: shape

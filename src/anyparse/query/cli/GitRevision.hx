@@ -80,9 +80,9 @@ final class GitRevision {
 	public static function renamedBetween(from: String, to: String, specs: Array<String>): Null<Map<String, String>> {
 		if (from.startsWith('-') || to.startsWith('-')) return null;
 		final listed: ProcessRun = diffNameStatus([from, to], rootsOf(specs.map(cwdRelative)));
-		return listed.failure != '' || listed.status != 0 ? null : [
-			for (entry in parseNameStatus(listed.out)) if (entry.status == 'R') entry.path => entry.basePath
-		];
+		return listed.failure != '' || listed.status != 0
+			? null
+			: [ for (entry in parseNameStatus(listed.out)) if (entry.status == 'R') entry.path => entry.basePath ];
 	}
 
 	/**

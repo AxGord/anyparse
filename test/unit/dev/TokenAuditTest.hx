@@ -82,16 +82,19 @@ final class TokenAuditTest extends Test {
 	}
 
 	public function testEachRoleRowIsFollowedByItsOwnCallsEvenWhenAKeyHadANewline(): Void {
-		final agent: AgentReading = TokenTranscript.read('a', '{"type":"user","message":{"role":"user","content":"x"}}\n' + [
-			for (i => command in ['hxq show two.hx', '**\nfoo bar', 'date']) {
+		final agent: AgentReading = TokenTranscript.read(
+			'a',
+			'{"type":"user","message":{"role":"user","content":"x"}}\n'
+			+ [ for (i => command in ['hxq show two.hx', '**\nfoo bar', 'date']) {
 				final size: Int = [400, 200, 40][i];
 				'{"type":"assistant","message":{"id":"m$i","content":[{"type":"tool_use","id":"t$i","name":"Bash","input":'
 					+ '{"command":${JsonText.quote(command)}}'
 					+ '}]}}\n{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t$i","content":"'
 					+ ''.lpad('x', size)
 					+ '"}]}}';
-			}
-		].join('\n'), null);
+			} ].join('\n'),
+			null
+		);
 		final lines: Array<String> = TokenAudit.render(TokenReport.summarize([agent], null), 5).split('\n');
 		var at: Int = -1;
 		for (i => line in lines) if (line.startsWith('other') && line.contains('hxq show')) at = i;

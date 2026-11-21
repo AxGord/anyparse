@@ -619,9 +619,7 @@ class TriviaTypeSynth {
 					fields: []
 				};
 			case Alt:
-				final fields: Array<Field> = [
-					for (branch in origNode.children) TriviaPairAltCtor.buildEnumCtor(branch, pos, synthPack)
-				];
+				final fields: Array<Field> = [ for (branch in origNode.children) TriviaPairAltCtor.buildEnumCtor(branch, pos, synthPack) ];
 				{
 					pos: pos,
 					pack: synthPack,

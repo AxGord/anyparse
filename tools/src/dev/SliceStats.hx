@@ -307,23 +307,21 @@ final class SliceStats {
 		];
 		if (edges) header.push('edges ->old');
 		if (clones) header.push('dup');
-		final cells: Array<Array<String>> = [
-			for (row in rows) {
-				final line: Array<String> = [
-					row.landing.id,
-					dayOf(row.landing.landed),
-					decimal(row.hours),
-					optional(row.landing.rounds),
-					thousands(row.landing.tokens),
-					'+${row.src.added}/-${row.src.deleted}',
-					'+${row.test.added}/-${row.test.deleted}',
-					'${row.fresh}/${row.edited}'
-				];
-				if (edges) line.push(edgeCell(row.edges));
-				if (clones) line.push(signed(row.clones));
-				line;
-			}
-		];
+		final cells: Array<Array<String>> = [ for (row in rows) {
+			final line: Array<String> = [
+				row.landing.id,
+				dayOf(row.landing.landed),
+				decimal(row.hours),
+				optional(row.landing.rounds),
+				thousands(row.landing.tokens),
+				'+${row.src.added}/-${row.src.deleted}',
+				'+${row.test.added}/-${row.test.deleted}',
+				'${row.fresh}/${row.edited}'
+			];
+			if (edges) line.push(edgeCell(row.edges));
+			if (clones) line.push(signed(row.clones));
+			line;
+		} ];
 		return Table.render(header, cells);
 	}
 
@@ -341,24 +339,22 @@ final class SliceStats {
 		];
 		if (edges) header.push('edges ->old');
 		if (clones) header.push('dup');
-		final cells: Array<Array<String>> = [
-			for (week in weeks) {
-				final rounds: Null<Float> = week.rounds;
-				final line: Array<String> = [
-					week.week,
-					'${week.slices}',
-					decimal(week.hours),
-					rounds == null ? NONE : decimal(rounds),
-					thousands(week.tokens),
-					'${week.src}',
-					'${week.test}',
-					'${week.fresh}/${week.edited}'
-				];
-				if (edges) line.push(edgeCell(week.edges));
-				if (clones) line.push(signed(week.clones));
-				line;
-			}
-		];
+		final cells: Array<Array<String>> = [ for (week in weeks) {
+			final rounds: Null<Float> = week.rounds;
+			final line: Array<String> = [
+				week.week,
+				'${week.slices}',
+				decimal(week.hours),
+				rounds == null ? NONE : decimal(rounds),
+				thousands(week.tokens),
+				'${week.src}',
+				'${week.test}',
+				'${week.fresh}/${week.edited}'
+			];
+			if (edges) line.push(edgeCell(week.edges));
+			if (clones) line.push(signed(week.clones));
+			line;
+		} ];
 		return Table.render(header, cells);
 	}
 

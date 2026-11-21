@@ -44,12 +44,10 @@ class TestChild {
 				final configs: Array<OracleConfig> = [ for (c in TestChildDocumentParser.parse(input).configs ?? []) oracleConfig(c) ];
 				final ready: Array<OracleConfig> = OracleGeneration.prepare(configs).oracles;
 				OracleGeneration.release(ready);
-				final unavailable: Array<JValue> = [
-					for (c in ready) {
-						final why: Null<String> = c.unavailable;
-						why == null ? JNull : JString(why);
-					}
-				];
+				final unavailable: Array<JValue> = [ for (c in ready) {
+					final why: Null<String> = c.unavailable;
+					why == null ? JNull : JString(why);
+				} ];
 				sys.io.File.saveContent(
 					Sys.getEnv('APQ_TEST_CHILD_OUTPUT') ?? '',
 					JValueWriter.write(JArray(unavailable), JsonFormat.instance.compactWriteOptions)

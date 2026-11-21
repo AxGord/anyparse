@@ -72,9 +72,7 @@ final class DeclarationTree {
 		var whole: String = prefix;
 		for (line in from ... end) whole += lineText(version, line);
 		final lead: String = blankLead(whole);
-		final written: Array<String> = [
-			for (line in from ... end) if (version.lines[line].trim() != '') version.lines[line].trim()
-		];
+		final written: Array<String> = [ for (line in from ... end) if (version.lines[line].trim() != '') version.lines[line].trim() ];
 		final tree: Null<MergeTree> = version.units.exists(u -> u.parent == top) ? container(version, top, from, end, prefix) : null;
 		return {
 			key: count == 0 ? name : '$name#${count + 1}',

@@ -249,12 +249,10 @@ final class CliEdit {
 	public static function sourceWindows(
 		tree: QueryNode, nodes: Array<QueryNode>, source: String, regions: () -> Array<LexRegion>
 	): Array<Null<Span>> {
-		return [
-			for (n in nodes) {
-				final raw: Null<Span> = n.span;
-				raw == null ? null : ElementSpan.declEditSpan(source, tree, n, raw, regions);
-			}
-		];
+		return [ for (n in nodes) {
+			final raw: Null<Span> = n.span;
+			raw == null ? null : ElementSpan.declEditSpan(source, tree, n, raw, regions);
+		} ];
 	}
 
 	/**

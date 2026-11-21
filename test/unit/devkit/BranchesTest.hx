@@ -428,15 +428,13 @@ final class BranchesTest extends Test {
 	public function testTheCpuOfAMeteredBranchIsOnItsFirstStepOnly(): Void {
 		TempDir.with(dir -> {
 			final report: String = dir.file('a.json');
-			final left: String = Branches.encode('r1', [
-				for (name in ['a', 'b']) {
-					name: name,
-					outcome: Passed,
-					ms: 0,
-					note: '',
-					excerpt: []
-				}
-			], []);
+			final left: String = Branches.encode('r1', [ for (name in ['a', 'b']) {
+				name: name,
+				outcome: Passed,
+				ms: 0,
+				note: '',
+				excerpt: []
+			} ], []);
 			final spin: String = 'const used = () => { const u = process.cpuUsage(); return u.user + u.system; }; while (used() '
 				+ '< 400000) {} require("fs").writeFileSync(process.argv[1], process.argv[2])';
 			final run: Command -> Array<Step> = command -> {

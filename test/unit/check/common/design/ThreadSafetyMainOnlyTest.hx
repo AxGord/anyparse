@@ -70,12 +70,10 @@ class ThreadSafetyMainOnlyTest extends Test {
 	}
 
 	private static function holds(found: Array<Violation>): Array<String> {
-		return [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
-			}
-		];
+		return [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
+		} ];
 	}
 	#end
 

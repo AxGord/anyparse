@@ -435,26 +435,24 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 	 * language idiom outside any policy (`NamedDecl.reservedName`).
 	 */
 	public static function violationsFor(file: String, decls: Array<NamedDecl>, policy: NamingPolicy): Array<Violation> {
-		return [
-			for (decl in decls) {
-				final span: Null<Span> = decl.span;
-				if (span != null && decl.reservedName != true && decl.contractName != true) {
-					final rule: Null<NamingRule> = applicableRule(decl, policy);
-					if (rule != null) {
-						final artifact: Null<String> = artifactCorrection(decl.name, rule);
-						if (artifact != null || !rule.format.match(decl.name)) {
-							file: file,
-							span: span,
-							rule: 'naming',
-							severity: Severity.Warning,
-							message: artifact == null
-								? '${rule.label}: \'${decl.name}\''
-								: 'all-caps tail after a lowercase head (normalizer artifact): \'${decl.name}\''
-						};
-					}
+		return [ for (decl in decls) {
+			final span: Null<Span> = decl.span;
+			if (span != null && decl.reservedName != true && decl.contractName != true) {
+				final rule: Null<NamingRule> = applicableRule(decl, policy);
+				if (rule != null) {
+					final artifact: Null<String> = artifactCorrection(decl.name, rule);
+					if (artifact != null || !rule.format.match(decl.name)) {
+						file: file,
+						span: span,
+						rule: 'naming',
+						severity: Severity.Warning,
+						message: artifact == null
+							? '${rule.label}: \'${decl.name}\''
+							: 'all-caps tail after a lowercase head (normalizer artifact): \'${decl.name}\''
+					};
 				}
 			}
-		];
+		} ];
 	}
 
 	/**

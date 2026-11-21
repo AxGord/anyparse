@@ -160,9 +160,7 @@ private final class ImpactGraph {
 	}
 
 	private function mentioning(needles: Array<String>): Array<Int> {
-		return [
-			for (i => text in _texts) if (needles.exists(needle -> SuiteImpact.names(text, needle))) i
-		];
+		return [ for (i => text in _texts) if (needles.exists(needle -> SuiteImpact.names(text, needle))) i ];
 	}
 
 	private function wordsOf(i: Int): Map<String, Bool> {
@@ -648,9 +646,7 @@ final class SuiteImpact {
 			sources.map(source -> { file: source.path, source: source.text }), new CachingGrammarPlugin(new HaxeQueryPlugin())
 		);
 		return {
-			types: [
-				for (info in index.allFiles()) info.file => [ for (type in info.types) type.name ]
-			],
+			types: [ for (info in index.allFiles()) info.file => [ for (type in info.types) type.name ] ],
 			unparsed: index.skippedFiles()
 		};
 	}
@@ -827,9 +823,7 @@ final class SuiteImpact {
 
 	/** The files other than `writer` whose code spells `key` as a whole name. */
 	private static function envReaders(sources: Array<ImpactSource>, writer: String, key: String): Array<String> {
-		return [
-			for (s in sources) if (s.path != writer && names(s.text, key) && names(uncommented(s.text), key)) s.path
-		];
+		return [ for (s in sources) if (s.path != writer && names(s.text, key) && names(uncommented(s.text), key)) s.path ];
 	}
 
 	private static function textOf(sources: Array<ImpactSource>, path: String): String {

@@ -148,9 +148,7 @@ final class TokenAudit {
 		if (!FileSystem.exists(project) || !FileSystem.isDirectory(project)) throw new UsageError('no project directory $project');
 		final names: Array<String> = FileSystem.readDirectory(project);
 		names.sort(Compare.compareString);
-		return [
-			for (name in names) if (FileSystem.exists(Path.join([project, name, SUBAGENTS]))) Path.join([project, name, SUBAGENTS])
-		];
+		return [ for (name in names) if (FileSystem.exists(Path.join([project, name, SUBAGENTS]))) Path.join([project, name, SUBAGENTS]) ];
 	}
 
 	/** The Claude Code project directory of the tree `tree`: its path with every character outside `[A-Za-z0-9]` turned into `-`. */

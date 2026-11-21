@@ -111,9 +111,7 @@ final class LockWindow {
 		_tryKinds = ShapeVocab.tryKinds(shape);
 		_switchKinds = shape.switchKinds ?? [];
 		_declKinds = inPlaceKindsOf(shape);
-		_jumpKinds = [
-			for (k in [shape.breakStatementKind, shape.continueStatementKind]) if (k != null) k
-		];
+		_jumpKinds = [ for (k in [shape.breakStatementKind, shape.continueStatementKind]) if (k != null) k ];
 		_breakKind = shape.breakStatementKind;
 		_branchKinds = ShapeVocab.switchArmKinds(shape);
 		_nestedFnKinds = ShapeVocab.nestedFunctionKinds(shape);

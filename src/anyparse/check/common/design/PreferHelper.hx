@@ -687,12 +687,10 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 
 	/** The names `m` binds the name holes `holes` to, skipping one it leaves unbound. */
 	private static function boundNames(m: Match, holes: Array<String>): Array<String> {
-		return [
-			for (h in holes) {
-				final name: Null<String> = m.bindings[h]?.name;
-				if (name != null) name;
-			}
-		];
+		return [ for (h in holes) {
+			final name: Null<String> = m.bindings[h]?.name;
+			if (name != null) name;
+		} ];
 	}
 
 	/**

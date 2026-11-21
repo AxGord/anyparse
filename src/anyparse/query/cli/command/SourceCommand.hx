@@ -766,15 +766,13 @@ final class SourceCommand implements CliCommand {
 		// thousand-line entry, and an entry past the read budget is marked as such
 		// rather than quietly offered as if it were a narrowing.
 		final windows: Array<Null<Span>> = CliEdit.sourceWindows(tree, nodes, source, plugin.lexicalRegions.bind(source));
-		final found: Array<{ selector: String, from: Int, to: Int }> = [
-			for (i => node in nodes) {
-				final window: Null<Span> = windows[i] ?? node.span;
-				if (window != null) {
-					final bounds: LineRange = lineRange(window, source);
-					{ selector: index.describe(source, node), from: bounds.from, to: bounds.to };
-				}
+		final found: Array<{ selector: String, from: Int, to: Int }> = [ for (i => node in nodes) {
+			final window: Null<Span> = windows[i] ?? node.span;
+			if (window != null) {
+				final bounds: LineRange = lineRange(window, source);
+				{ selector: index.describe(source, node), from: bounds.from, to: bounds.to };
 			}
-		];
+		} ];
 		// A node spanning ONE line is not worth addressing: whoever reads its
 		// neighbour reads it too, and on a Haxe module the one-liners are the
 		// package, every import, every modifier annotation and every typedef field —

@@ -147,12 +147,10 @@ class ThreadSafetyDeadCatchTest extends Test {
 	}
 
 	private static function holds(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

@@ -179,9 +179,7 @@ class ParseDiskCacheTest extends Test {
 		withPrivateTemp(root -> {
 			final file: String = CliFixture.write('diskcacheblocked', SOURCE);
 			Assert.notNull(stored(file, SOURCE).lookup(file, SOURCE), 'the cache works while its directory can be made');
-			final names: Array<String> = [
-				for (name in FileSystem.readDirectory(root)) if (name.startsWith('apq-parse-cache-')) name
-			];
+			final names: Array<String> = [ for (name in FileSystem.readDirectory(root)) if (name.startsWith('apq-parse-cache-')) name ];
 			Assert.equals(1, names.length, 'the engine directory was made under the private root');
 			final taken: String = '$root/${names[0]}';
 			CliFixture.removeDir(taken);

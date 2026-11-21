@@ -218,9 +218,7 @@ class TransformLowering {
 
 		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
 		final pattern: Expr = { expr: ECall(ctorRef, [ for (name in argNames) macro $i{name} ]), pos: Context.currentPos() };
-		final rebuiltArgs: Array<Expr> = [
-			for (i in 0...branch.children.length) rebuildExpr(branch.children[i], macro $i{argNames[i]})
-		];
+		final rebuiltArgs: Array<Expr> = [ for (i in 0...branch.children.length) rebuildExpr(branch.children[i], macro $i{argNames[i]}) ];
 		final rebuilt: Expr = { expr: ECall(ctorRef, rebuiltArgs), pos: Context.currentPos() };
 		return { values: [pattern], expr: rebuilt };
 	}
@@ -298,13 +296,11 @@ class TransformLowering {
 	 * copied via plain field access; only transformable fields recurse.
 	 */
 	private function rebuildStruct(node: ShapeNode, valueExpr: Expr): Expr {
-		final objFields: Array<ObjectField> = [
-			for (child in node.children) {
-				final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
-				final access: Expr = { expr: EField(valueExpr, fieldName), pos: Context.currentPos() };
-				{ field: fieldName, expr: rebuildExpr(child, access) };
-			}
-		];
+		final objFields: Array<ObjectField> = [ for (child in node.children) {
+			final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+			final access: Expr = { expr: EField(valueExpr, fieldName), pos: Context.currentPos() };
+			{ field: fieldName, expr: rebuildExpr(child, access) };
+		} ];
 		return { expr: EObjectDecl(objFields), pos: Context.currentPos() };
 	}
 

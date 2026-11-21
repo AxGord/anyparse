@@ -565,12 +565,10 @@ final class Shard {
 	 * run — a red or partial one under-weights what it never finished.
 	 */
 	private static function refreshTimings(job: ShardJob, work: String, verdict: Verdict): Void {
-		final merged: String = mergeTimings([
-			for (s in 0...job.shards) {
-				final file: String = Path.join([work, 'shard$s.timing']);
-				FileSystem.exists(file) ? File.getContent(file) : '';
-			}
-		].join('\n'));
+		final merged: String = mergeTimings([ for (s in 0...job.shards) {
+			final file: String = Path.join([work, 'shard$s.timing']);
+			FileSystem.exists(file) ? File.getContent(file) : '';
+		} ].join('\n'));
 		final timings: Null<String> = job.timings;
 		if (timings != null) File.saveContent(timings, merged);
 		if (verdict.red || verdict.partial || merged == '' || job.only != null) return;

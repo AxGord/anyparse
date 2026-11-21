@@ -280,12 +280,10 @@ final class ReachDefinesProbe {
 		});
 		if (configuration == null) return none;
 		final early: Array<String> = configuration.defined;
-		final added: Array<String> = [
-			for (d in rider.defines) {
-				final spelled: Array<String> = DefineReads.spellings(d);
-				if (!spelled.exists(s -> early.contains(s))) for (s in spelled) s;
-			}
-		];
+		final added: Array<String> = [ for (d in rider.defines) {
+			final spelled: Array<String> = DefineReads.spellings(d);
+			if (!spelled.exists(s -> early.contains(s))) for (s in spelled) s;
+		} ];
 		if (DefineReads.anyReads(configuration.parsed ?? [], added, grammar, known)) return none;
 		configuration.everDefined = [ for (d in configuration.everDefined) if (!added.contains(d)) d ];
 		final verbose: ProcessRun = {
@@ -427,15 +425,9 @@ final class ReachDefinesProbe {
 		final root: String = oracle.dir ?? Sys.getCwd();
 		// the probe's own macro is not the build's code
 		final own: String = '$MACRO_CLASS.hx';
-		read.compiled = [
-			for (path in read.compiled) if (!path.endsWith(own)) FileIdentity.canonical(root, path)
-		];
-		read.types = [
-			for (t in read.types) if (!t.file.endsWith(own)) { name: t.name, file: FileIdentity.canonical(root, t.file) }
-		];
-		read.parsed = [
-			for (path in read.parsed ?? []) if (!path.endsWith(own)) FileIdentity.canonical(root, path)
-		];
+		read.compiled = [ for (path in read.compiled) if (!path.endsWith(own)) FileIdentity.canonical(root, path) ];
+		read.types = [ for (t in read.types) if (!t.file.endsWith(own)) { name: t.name, file: FileIdentity.canonical(root, t.file) } ];
+		read.parsed = [ for (path in read.parsed ?? []) if (!path.endsWith(own)) FileIdentity.canonical(root, path) ];
 		return read;
 	}
 

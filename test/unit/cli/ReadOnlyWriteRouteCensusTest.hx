@@ -90,9 +90,7 @@ final class ReadOnlyWriteRouteCensusTest extends Test {
 				unread.push('$path: ${exception.message}');
 			}
 		}
-		final unlisted: Array<String> = [
-			for (type => found in hits) if (!SANCTIONED.exists(type)) '$type: ${found.join(', ')}'
-		];
+		final unlisted: Array<String> = [ for (type => found in hits) if (!SANCTIONED.exists(type)) '$type: ${found.join(', ')}' ];
 		final stale: Array<String> = [ for (type in SANCTIONED.keys()) if (!hits.exists(type)) type ];
 		unlisted.sort(anyparse.util.Compare.compareString);
 		stale.sort(anyparse.util.Compare.compareString);

@@ -500,8 +500,9 @@ class SimplifyNegatedCompoundCheckTest extends Test {
 	private function fixedWith(source: String, model: String): String {
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
 		// One module per model class, each its module's main type: a sub-type is invisible by its bare name.
-		final library: Array<{ file: String, source: String }> =
-			QueryTestHelpers.rootModules([ for (i => piece in model.split('\nclass ')) i == 0 ? piece : 'class $piece' ]);
+		final library: Array<{ file: String, source: String }> = QueryTestHelpers.rootModules(
+			[ for (i => piece in model.split('\nclass ')) i == 0 ? piece : 'class $piece' ]
+		);
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope(
 			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }

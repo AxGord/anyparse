@@ -53,9 +53,9 @@ class JsonQuoteTest extends Test {
 	}
 
 	public function testACompactDocumentIsOneLineAndReadsBack(): Void {
-		final document: JValue = JObject([
-			for (i in 0...2000) JValueTools.entry('key$i', JArray([JString('value $i'), JObject([JValueTools.entry('n', JNumber(i))])]))
-		]);
+		final document: JValue = JObject(
+			[ for (i in 0...2000) JValueTools.entry('key$i', JArray([JString('value $i'), JObject([JValueTools.entry('n', JNumber(i))])])) ]
+		);
 		final compact: String = JValueWriter.write(document, JsonFormat.instance.compactWriteOptions);
 		Assert.equals(-1, compact.indexOf('\n'));
 		Assert.isTrue(JValueTools.equals(document, JValueParser.parse(compact)));

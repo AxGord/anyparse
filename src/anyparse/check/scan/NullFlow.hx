@@ -706,13 +706,11 @@ final class NullFlow {
 		final returned: Null<QueryNode> = soleReturnedExpr(fn, shape);
 		if (returned == null || (shape.writeParentKinds ?? []).exists(k -> MemberKinds.subtreeContainsKind(returned, k))) return null;
 		final nonNullParams: Array<Int> = nonNullConjuncts(returned, params, shape, identKind, notEqKind);
-		final paramTypes: Array<Null<String>> = [
-			for (p in params) {
-				final span: Null<Span> = p.span;
-				final written: Null<String> = span == null ? null : typeSources[span.from];
-				written == null ? null : TypeResolver.stripWs(written);
-			}
-		];
+		final paramTypes: Array<Null<String>> = [ for (p in params) {
+			final span: Null<Span> = p.span;
+			final written: Null<String> = span == null ? null : typeSources[span.from];
+			written == null ? null : TypeResolver.stripWs(written);
+		} ];
 		return nonNullParams.length == 0 ? null : {
 			name: name,
 			body: bodySpan,

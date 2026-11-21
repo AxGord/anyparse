@@ -560,9 +560,7 @@ final class ArgumentValues {
 
 	/** The kinds of a value built where it is written, never null: a construction, an object or array literal. */
 	private static function builtKindsOf(shape: RefShape): Array<String> {
-		return [
-			for (k in [shape.newExprKind, shape.objectLiteralKind, shape.arrayLiteralKind]) if (k != null) k
-		];
+		return [ for (k in [shape.newExprKind, shape.objectLiteralKind, shape.arrayLiteralKind]) if (k != null) k ];
 	}
 
 }

@@ -32,9 +32,7 @@ final class CalleeResolver {
 		_tree = tree;
 		_shape = shape;
 		_index = index;
-		_identKinds = [
-			for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind
-		];
+		_identKinds = [ for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind ];
 	}
 
 	/** The members `callee` names (`resolve`), or null. */

@@ -76,17 +76,15 @@ final class ImportersCommand implements CliCommand implements LeadingQuery {
 		}
 		final plugin: GrammarPlugin = io.plugin;
 
-		final files: Array<{ file: String, source: String }> = [
-			for (path in paths) {
-				file: path,
-				source: (try {
-					CliIo.readSourceForParse(path);
-				} catch (exception: Exception) {
-					CliIo.stderr('apq importers: $path: ${exception.message}\n');
-					return EXIT_RUNTIME;
-				}: String)
-			}
-		];
+		final files: Array<{ file: String, source: String }> = [ for (path in paths) {
+			file: path,
+			source: (try {
+				CliIo.readSourceForParse(path);
+			} catch (exception: Exception) {
+				CliIo.stderr('apq importers: $path: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			}: String)
+		} ];
 
 		final hits: Array<String> = SymbolQuery.importers(files, plugin, modulePath);
 		for (path in hits) CliIo.sysPrint('$path\n');

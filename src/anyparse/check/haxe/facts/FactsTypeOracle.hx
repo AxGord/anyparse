@@ -530,9 +530,7 @@ final class FactsTypeOracle implements FactsOracle {
 	/** The ids of the types the builds typed named `owner` and declared in `file`. */
 	private function typedIds(file: String, owner: String): Array<String> {
 		final key: String = facts.keyOf(file);
-		return [
-			for (id in facts.typeIds()) if (SourceText.lastSegment(id) == owner && facts.typePosition(id)?.file == key) id
-		];
+		return [ for (id in facts.typeIds()) if (SourceText.lastSegment(id) == owner && facts.typePosition(id)?.file == key) id ];
 	}
 
 	/**

@@ -180,9 +180,7 @@ final class ParenGuard {
 			plugin: plugin,
 			sites: sites,
 			allLegal: allLegal,
-			refs: [
-				for (i in 0...sites.length) nodeAtSpan(refBuild.text, refTree, refBuild.spans[i])
-			],
+			refs: [ for (i in 0...sites.length) nodeAtSpan(refBuild.text, refTree, refBuild.spans[i]) ],
 			refText: refBuild.text,
 			refPairs: refBuild.pairs,
 			closer: shape.exprEndingCloser,

@@ -121,13 +121,11 @@ class ThreadSafetyFoldingTest extends Test {
 
 	/** The findings of `found` of `family` as `<severity> <family> <member> | <subject>`, sorted. */
 	private static function graded(found: Array<Violation>, ?family: String): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && (family == null || data.family == family))
-					'${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && (family == null || data.family == family))
+				'${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

@@ -159,23 +159,21 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 		// last content line and the writer eats the space before that line's star. The block's
 		// own guards do the rest: a plain `/* … *\/` body does not start on a star, and a
 		// continuation with no gutter is handed back untouched.
-		return [
-			for (unit in ownersOf(wide)) {
-				final open: Array<Int> = [
-					for (w in wide) if (w.owner.from == unit.from && w.refusal == null && wanted.contains(w.from)) w.body
-				];
-				if (open.length != 0) {
-					final bodySpan: Span = SourceComments.commentBody(source, unit);
-					final body: String = source.substring(bodySpan.from, bodySpan.to);
-					final continuation: String = SourceComments.commentContinuation(source, unit);
-					final next: String = reflow(source, unit, body, open, metrics, unit.to - bodySpan.to);
-					if (next != body) {
-						final grown: Bool = body.indexOf('\n') < 0 && next.indexOf('\n') >= 0;
-						{ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next };
-					}
+		return [ for (unit in ownersOf(wide)) {
+			final open: Array<Int> = [
+				for (w in wide) if (w.owner.from == unit.from && w.refusal == null && wanted.contains(w.from)) w.body
+			];
+			if (open.length != 0) {
+				final bodySpan: Span = SourceComments.commentBody(source, unit);
+				final body: String = source.substring(bodySpan.from, bodySpan.to);
+				final continuation: String = SourceComments.commentContinuation(source, unit);
+				final next: String = reflow(source, unit, body, open, metrics, unit.to - bodySpan.to);
+				if (next != body) {
+					final grown: Bool = body.indexOf('\n') < 0 && next.indexOf('\n') >= 0;
+					{ span: bodySpan, text: grown ? SourceComments.openGrownDocBlock(next, continuation) : next };
 				}
 			}
-		];
+		} ];
 	}
 
 	/** `wide`'s owning units, first occurrence first — one entry per comment unit that carries a finding. */

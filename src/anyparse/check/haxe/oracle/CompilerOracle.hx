@@ -72,9 +72,10 @@ final class CompilerOracle {
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		if (memo != null) return [ for (r in remembered(memo, oracles, stopAfterFailure, verbose)) r.outcome ];
 		final asked: Array<OracleConfig> = [ for (oracle in oracles) if (oracle.unavailable == null) oracle ];
-		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
-			for (oracle in asked) { args: oracleArgs(oracle.hxml, oracle.defines), cwd: oracle.dir }
-		], ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure);
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll(
+			[ for (oracle in asked) { args: oracleArgs(oracle.hxml, oracle.defines), cwd: oracle.dir } ],
+			ORACLE_BUFFER, ProcessSpawn.parallelism(), stopAfterFailure
+		);
 		for (run in runs) if (run.unstarted != true) invocations++;
 		final out: Array<Null<OracleOutcome>> = [];
 		var next: Int = 0;
@@ -248,12 +249,10 @@ final class CompilerOracle {
 	): Array<OracleReading> {
 		final before: Array<Null<String>> = memo.fingerprints(oracles);
 		final out: Array<Null<OracleOutcome>> = heldOutcomes(memo, oracles, before);
-		final parsed: Array<Null<Array<String>>> = [
-			for (i in 0...oracles.length) {
-				final held: Null<ProcessRun> = out[i] == null ? null : memo.run(oracles[i], true, before[i]);
-				held == null ? null : OracleCoverage.parsedPaths(held.out);
-			}
-		];
+		final parsed: Array<Null<Array<String>>> = [ for (i in 0...oracles.length) {
+			final held: Null<ProcessRun> = out[i] == null ? null : memo.run(oracles[i], true, before[i]);
+			held == null ? null : OracleCoverage.parsedPaths(held.out);
+		} ];
 		final decided: Int = stopAfterFailure ? firstHeldFailure(oracles, out) : oracles.length;
 		final compiled: Array<Int> = [ for (i in 0...oracles.length) if (out[i] == null && i < decided) i ];
 		final asked: Array<OracleConfig> = [ for (i in compiled) oracles[i] ];
@@ -301,12 +300,10 @@ final class CompilerOracle {
 	private static function heldOutcomes(
 		memo: OracleRunMemo, oracles: Array<OracleConfig>, before: Array<Null<String>>
 	): Array<Null<OracleOutcome>> {
-		return [
-			for (i in 0...oracles.length) {
-				final unavailable: Null<String> = oracles[i].unavailable;
-				unavailable != null ? Unavailable(unavailable) : heldVerdict(memo, oracles[i], before[i]);
-			}
-		];
+		return [ for (i in 0...oracles.length) {
+			final unavailable: Null<String> = oracles[i].unavailable;
+			unavailable != null ? Unavailable(unavailable) : heldVerdict(memo, oracles[i], before[i]);
+		} ];
 	}
 
 	/**

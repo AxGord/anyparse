@@ -64,16 +64,14 @@ final class QueryTestHelpers {
 			];
 			final compiled: Array<String> = all.map(f -> FileIdentity.canonical(cwd, f.file));
 			return {
-				configurations: [
-					for (c in declared) {
-						name: c.name,
-						defined: c.defined,
-						everDefined: c.everDefined,
-						values: c.values,
-						compiled: compiled,
-						types: types
-					}
-				],
+				configurations: [ for (c in declared) {
+					name: c.name,
+					defined: c.defined,
+					everDefined: c.everDefined,
+					values: c.values,
+					compiled: compiled,
+					types: types
+				} ],
 				library: libraryFiles
 			};
 		}
@@ -102,21 +100,19 @@ final class QueryTestHelpers {
 		final declaration: EReg = ~/(class|interface|typedef|enum|abstract)\s+([A-Z][A-Za-z0-9_]*)/;
 		final packageDecl: EReg = ~/^\s*package\s+([a-z0-9_.]+)\s*;/;
 		final taken: Array<String> = [];
-		return [
-			for (i in 0...sources.length) {
-				final dir: String = packageDecl.match(sources[i]) ? packageDecl.matched(1).split('.').join('/') + '/' : '';
-				final named: String = declaration.match(sources[i]) ? '$dir${declaration.matched(2)}.hx' : '';
-				// A second source of one module is that module on another class path, as the compiler would see two.
-				final file: String = if (named == '')
-					'F$i.hx'
-				else if (taken.contains(named))
-					'cp$i/$named'
-				else
-					named;
-				taken.push(file);
-				{ file: file, source: sources[i] };
-			}
-		];
+		return [ for (i in 0...sources.length) {
+			final dir: String = packageDecl.match(sources[i]) ? packageDecl.matched(1).split('.').join('/') + '/' : '';
+			final named: String = declaration.match(sources[i]) ? '$dir${declaration.matched(2)}.hx' : '';
+			// A second source of one module is that module on another class path, as the compiler would see two.
+			final file: String = if (named == '')
+				'F$i.hx'
+			else if (taken.contains(named))
+				'cp$i/$named'
+			else
+				named;
+			taken.push(file);
+			{ file: file, source: sources[i] };
+		} ];
 	}
 
 }

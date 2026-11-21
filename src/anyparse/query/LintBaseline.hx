@@ -63,9 +63,7 @@ final class LintBaseline {
 		final pool: LintDiffPool = LintDiff.pool(baseline);
 		final messages: Array<String> = all.map(v -> LintDiff.normalizeMessage(v.rule, v.message, root, identities));
 		// every finding spends its own key before any spends across `data`, so the answer does not hang on the run's order
-		final spent: Array<Bool> = [
-			for (i in 0...all.length) LintDiff.spendOwn(pool, keyOf(all[i], root, identities), messages[i])
-		];
+		final spent: Array<Bool> = [ for (i in 0...all.length) LintDiff.spendOwn(pool, keyOf(all[i], root, identities), messages[i]) ];
 		for (i => v in all) if (!spent[i])
 			spent[i] = LintDiff.spendAcross(
 				pool, LintDiff.normalizePath(v.file, root), v.rule, v.severity.label(), messages[i], v.data != null

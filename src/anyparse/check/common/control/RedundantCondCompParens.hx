@@ -75,15 +75,13 @@ final class RedundantCondCompParens extends RuleBase {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) for (site in sites(entry.source, plugin)) {
-				file: entry.file,
-				span: site.condition,
-				rule: ID,
-				severity: Severity.Info,
-				message: 'redundant parentheses around the conditional-compilation flag `${site.flag}`'
-			}
-		];
+		return [ for (entry in files) for (site in sites(entry.source, plugin)) {
+			file: entry.file,
+			span: site.condition,
+			rule: ID,
+			severity: Severity.Info,
+			message: 'redundant parentheses around the conditional-compilation flag `${site.flag}`'
+		} ];
 	}
 
 	/** Replace each flagged condition with its bare flag, re-separated from its neighbours when the parentheses were the separator. */
@@ -92,32 +90,28 @@ final class RedundantCondCompParens extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final flagged: Array<String> = RunScan.spanKeys(violations);
-		return [
-			for (site in sites(source, plugin)) if (flagged.contains('${site.condition.from}:${site.condition.to}')) {
-				final lead: String = CondDirectives.isIdentCharAt(source, site.condition.from - 1) ? ' ' : '';
-				final trail: String = CondDirectives.isIdentCharAt(source, site.condition.to) ? ' ' : '';
-				{ span: site.condition, text: '$lead${site.flag}$trail' };
-			}
-		];
+		return [ for (site in sites(source, plugin)) if (flagged.contains('${site.condition.from}:${site.condition.to}')) {
+			final lead: String = CondDirectives.isIdentCharAt(source, site.condition.from - 1) ? ' ' : '';
+			final trail: String = CondDirectives.isIdentCharAt(source, site.condition.to) ? ' ' : '';
+			{ span: site.condition, text: '$lead${site.flag}$trail' };
+		} ];
 	}
 
 	/** Every parenthesised-single-flag condition in `source`, in source order. */
 	private static function sites(source: String, plugin: GrammarPlugin): Array<FlagParens> {
 		// Re-bound to non-null locals: strict null-safety narrowing does not reach into an
 		// anonymous struct literal.
-		return [
-			for (directive in CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source))) {
-				final condition: Null<Span> = directive.condition;
-				if (condition != null) {
-					final span: Span = condition;
-					final flag: Null<String> = soleFlag(source, span);
-					if (flag != null) {
-						final name: String = flag;
-						{ condition: span, flag: name };
-					}
+		return [ for (directive in CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source))) {
+			final condition: Null<Span> = directive.condition;
+			if (condition != null) {
+				final span: Span = condition;
+				final flag: Null<String> = soleFlag(source, span);
+				if (flag != null) {
+					final name: String = flag;
+					{ condition: span, flag: name };
 				}
 			}
-		];
+		} ];
 	}
 
 	/**

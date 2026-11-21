@@ -40,15 +40,13 @@ private class LoadBearingRemove implements Check implements CrossFileFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) if (plugin.ambientImportGovernance(entry.file) != null) {
-				file: entry.file,
-				span: new Span(0, entry.source.length),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'an ambient source'
-			}
-		];
+		return [ for (entry in files) if (plugin.ambientImportGovernance(entry.file) != null) {
+			file: entry.file,
+			span: new Span(0, entry.source.length),
+			rule: id(),
+			severity: Severity.Warning,
+			message: 'an ambient source'
+		} ];
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
@@ -119,15 +117,13 @@ private class OverlappingPair implements Check implements CrossFileFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) if (entry.file.endsWith('/Mqq.hx')) {
-				file: entry.file,
-				span: new Span(0, 1),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'a module'
-			}
-		];
+		return [ for (entry in files) if (entry.file.endsWith('/Mqq.hx')) {
+			file: entry.file,
+			span: new Span(0, 1),
+			rule: id(),
+			severity: Severity.Warning,
+			message: 'a module'
+		} ];
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {

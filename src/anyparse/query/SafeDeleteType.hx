@@ -85,9 +85,9 @@ final class SafeDeleteType {
 		final sole: Bool = isOnlyType(src.tree, decl, plugin, shape);
 		final removed: Null<String> = sole ? null : cutDeclaration(src.source, decl, reformat, plugin, optsJson, reasons);
 		if (reasons.length > 0) return Refused(reasons);
-		final remaining: Array<{ file: String, text: String }> = [ for (p in parse.parsed) if (p.file != srcFile) {
-			file: p.file, text: p.source
-		} ];
+		final remaining: Array<{ file: String, text: String }> = [
+			for (p in parse.parsed) if (p.file != srcFile) { file: p.file, text: p.source }
+		];
 		if (removed != null) remaining.push({ file: srcFile, text: removed });
 		final notes: Array<String> = notesOf(srcFile, src.tree, typeName, remaining, plugin, shape, scopeLabel, sole ? companions : []);
 		return removed == null ? RemoveFile(srcFile, notes) : RemoveDeclaration(srcFile, removed, notes);
@@ -181,9 +181,7 @@ final class SafeDeleteType {
 		index: Null<SymbolIndex>, out: Array<String>
 	): Void {
 		final shape: RefShape = plugin.refShape();
-		final kept: Array<String> = [
-			for (name in [shape.retainedDeclMetaName, shape.exportedDeclMetaName]) if (name != null) name
-		];
+		final kept: Array<String> = [ for (name in [shape.retainedDeclMetaName, shape.exportedDeclMetaName]) if (name != null) name ];
 		if (AnnotatedDeclScan.typeStartsAny(plugin, src.tree, kept).contains(decl.declNode.span?.from ?? -1))
 			out.push('"$typeName" carries ${kept.join(' / ')} — its readers are outside the scope');
 		final surface: ReflectionSurface = ReflectionScan.reflectionSurface(scopeFiles, plugin);

@@ -226,9 +226,7 @@ final class CliArgs {
 	 * `MermaidQueryPluginTest` hold them against their own projections instead.
 	 */
 	public static function langNames(): Array<String> {
-		return [
-			for (entry in grammars()) if (entry.make().refShape().typeDeclKinds != null) entry.lang
-		];
+		return [ for (entry in grammars()) if (entry.make().refShape().typeDeclKinds != null) entry.lang ];
 	}
 
 	public static function pickPlugin(lang: String): GrammarPlugin {
@@ -247,12 +245,10 @@ final class CliArgs {
 
 	/** The `--lang` of the one grammar whose content test accepts `text`, or null when none or several do. */
 	public static function langOfContent(text: String): Null<String> {
-		final langs: Array<String> = [
-			for (entry in grammars()) {
-				final recognises: Null<String -> Bool> = entry.recognises;
-				if (recognises != null && recognises(text)) entry.lang;
-			}
-		];
+		final langs: Array<String> = [ for (entry in grammars()) {
+			final recognises: Null<String -> Bool> = entry.recognises;
+			if (recognises != null && recognises(text)) entry.lang;
+		} ];
 		return langs.length == 1 ? langs[0] : null;
 	}
 
@@ -404,17 +400,15 @@ final class CliArgs {
 				paths[at] = extra;
 			}
 		}
-		return ([
-			for (path in paths) {
-				file: path,
-				source: (try {
-					CliIo.readSourceForParse(path);
-				} catch (exception: Exception) {
-					CliIo.stderr('apq $cmd: $path: ${exception.message}\n');
-					return null;
-				}: String)
-			}
-		]: Array<{ file: String, source: String }>);
+		return ([ for (path in paths) {
+			file: path,
+			source: (try {
+				CliIo.readSourceForParse(path);
+			} catch (exception: Exception) {
+				CliIo.stderr('apq $cmd: $path: ${exception.message}\n');
+				return null;
+			}: String)
+		} ]: Array<{ file: String, source: String }>);
 	}
 
 	/**

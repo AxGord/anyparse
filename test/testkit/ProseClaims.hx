@@ -126,12 +126,10 @@ final class ProseClaims {
 	 */
 	public static function normalize(doc: Null<String>): String {
 		if (doc == null) return '';
-		final parts: Array<String> = [
-			for (line in doc.split('\n')) {
-				final trimmed: String = line.trim();
-				trimmed.startsWith('*') ? trimmed.substr(1).trim() : trimmed;
-			}
-		];
+		final parts: Array<String> = [ for (line in doc.split('\n')) {
+			final trimmed: String = line.trim();
+			trimmed.startsWith('*') ? trimmed.substr(1).trim() : trimmed;
+		} ];
 		final words: Array<String> = parts.join(' ').replace('\t', ' ').split(' ');
 		return words.filter(word -> word != '').join(' ');
 	}

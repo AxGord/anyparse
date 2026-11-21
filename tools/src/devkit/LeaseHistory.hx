@@ -73,9 +73,7 @@ final class LeaseHistory {
 			if (p != null) known[threads] = p;
 		}
 		final fitted: Null<Map<Int, Float>> = curve(known, min, max);
-		return fitted == null ? null : [
-			for (threads => ms in fitted) threads => Std.int(Math.max(1, Math.ceil(ms / MS_PER_SECOND)))
-		];
+		return fitted == null ? null : [ for (threads => ms in fitted) threads => Std.int(Math.max(1, Math.ceil(ms / MS_PER_SECOND))) ];
 	}
 
 	/** The history kept in the cache directory `cache`. */

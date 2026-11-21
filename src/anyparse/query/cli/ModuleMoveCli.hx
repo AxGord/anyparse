@@ -153,9 +153,9 @@ final class ModuleMoveCli {
 		final out: Array<String> = [];
 		for (entry in d.text) {
 			if (!exists(entry)) return Left('the "move" section declares text "$entry", which does not exist');
-			final found: Array<String> = ConfigFinder.fileExists(entry) ? [entry] : [
-				for (e in d.textExtensions.map(x -> '.$x').concat([ext])) for (p in Glob.expand(entry, e)) p
-			];
+			final found: Array<String> = ConfigFinder.fileExists(entry)
+				? [entry]
+				: [ for (e in d.textExtensions.map(x -> '.$x').concat([ext])) for (p in Glob.expand(entry, e)) p ];
 			for (p in found) {
 				final abs: String = ConfigFinder.absolute(p);
 				if (!out.contains(abs) && !d.textExclude.exists(x -> abs == x || abs.startsWith('$x/'))) out.push(abs);
@@ -343,9 +343,7 @@ final class ModuleMoveCli {
 
 	/** The declared registries with each directory one names replaced by the documents inside it. */
 	private static function registriesOf(d: MoveDeclarationData): Array<TypePathRegistry> {
-		return [
-			for (r in d.registries) for (file in RegistryFiles.of(r.file)) { file: file, keys: r.keys, byPackage: r.byPackage }
-		];
+		return [ for (r in d.registries) for (file in RegistryFiles.of(r.file)) { file: file, keys: r.keys, byPackage: r.byPackage } ];
 	}
 
 }

@@ -238,9 +238,7 @@ final class LintScope {
 
 	private static function markedIn(listing: String, marked: JValue -> Bool): Null<Array<String>> {
 		final records: Null<Array<JValue>> = recordsOf(listing);
-		return records == null ? null : [
-			for (record in records) if (marked(record)) JValueTools.stringAt(record, 'id') ?? ''
-		];
+		return records == null ? null : [ for (record in records) if (marked(record)) JValueTools.stringAt(record, 'id') ?? '' ];
 	}
 
 	private static function inRoots(path: String): Bool {
@@ -249,9 +247,9 @@ final class LintScope {
 
 	private static function hxFilesIn(repo: String, dir: String): Array<String> {
 		final full: String = Path.join([repo, dir]);
-		return !FileSystem.exists(full) || !FileSystem.isDirectory(full) ? [] : [
-			for (name in FileSystem.readDirectory(full)) if (name.endsWith('.hx')) Path.join([dir, name])
-		];
+		return !FileSystem.exists(full) || !FileSystem.isDirectory(full)
+			? []
+			: [ for (name in FileSystem.readDirectory(full)) if (name.endsWith('.hx')) Path.join([dir, name]) ];
 	}
 
 	/**

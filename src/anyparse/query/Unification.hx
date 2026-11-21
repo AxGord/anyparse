@@ -173,9 +173,7 @@ final class Unification {
 		final graph: Null<CastGraph> = graphOf(e);
 		return graph == null
 			? MayFit
-			: agreed([
-				for (b in graph.branches) !b.transitive && !allowCast ? Misfits : anyOf([ for (t in side(b)) through(b, t) ])
-			]);
+			: agreed([ for (b in graph.branches) !b.transitive && !allowCast ? Misfits : anyOf([ for (t in side(b)) through(b, t) ]) ]);
 	}
 
 	/**
@@ -214,12 +212,10 @@ final class Unification {
 		final graph: Null<CastGraph> = graphOf(e);
 		return graph == null
 			? MayFit
-			: agreed([
-				for (b in graph.branches) {
-					final first: Null<TypeEnd> = side(b).find(t -> !AbstractCasts.same(t, e));
-					first == null ? Misfits : through(first);
-				}
-			]);
+			: agreed([ for (b in graph.branches) {
+				final first: Null<TypeEnd> = side(b).find(t -> !AbstractCasts.same(t, e));
+				first == null ? Misfits : through(first);
+			} ]);
 	}
 
 	/** Whether a `@:from` member of the abstract `wanted` takes a type `given` unifies with (`find_field_from`). */

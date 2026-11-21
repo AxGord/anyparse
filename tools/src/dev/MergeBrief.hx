@@ -31,22 +31,16 @@ final class MergeBrief {
 
 	/** The places the driver's `output` reports, in order. */
 	public static function placesOf(output: String): Array<MergePlace> {
-		return [
-			for (raw in output.split('\n')) {
-				final line: String = raw.trim();
-				if (line.startsWith(CONFLICT_PREFIX)) {
-					final rest: String = line.substr(CONFLICT_PREFIX.length);
-					final space: Int = rest.indexOf(' ');
-					final open: Int = rest.lastIndexOf(' (');
-					if (space >= 0 && open > space)
-						{
-							path: rest.substr(0, space),
-							key: rest.substring(space + 1, open),
-							sides: rest.substring(open + 2, rest.length - 1)
-						};
-				}
+		return [ for (raw in output.split('\n')) {
+			final line: String = raw.trim();
+			if (line.startsWith(CONFLICT_PREFIX)) {
+				final rest: String = line.substr(CONFLICT_PREFIX.length);
+				final space: Int = rest.indexOf(' ');
+				final open: Int = rest.lastIndexOf(' (');
+				if (space >= 0 && open > space)
+					{ path: rest.substr(0, space), key: rest.substring(space + 1, open), sides: rest.substring(open + 2, rest.length - 1) };
 			}
-		];
+		} ];
 	}
 
 	/**

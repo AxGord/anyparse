@@ -570,12 +570,10 @@ final class SliceGateTest extends Test {
 	@:killer('M-SLICE-GATE-TREE-SHARES-BASE')
 	public function testTwoTreesMadeInOneSecondShareNoCommit(): Void {
 		TempDir.with(first -> TempDir.with(second -> {
-			final bases: Array<String> = [
-				for (dir in [first, second]) {
-					final tree: String = scratchTree(dir, BASE_REGISTRY, GRAPH_HXQ);
-					cmd('git rev-parse HEAD~1^{tree}').at(tree).check().out.trim();
-				}
-			];
+			final bases: Array<String> = [ for (dir in [first, second]) {
+				final tree: String = scratchTree(dir, BASE_REGISTRY, GRAPH_HXQ);
+				cmd('git rev-parse HEAD~1^{tree}').at(tree).check().out.trim();
+			} ];
 			Assert.notEquals(bases[0], bases[1], 'the base trees are one');
 		}));
 	}

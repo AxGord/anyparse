@@ -190,16 +190,14 @@ final class Probe {
 		final rows: Array<SuiteInvocation> = raw.invocations ?? [];
 		return {
 			invocations: invocations,
-			cases: [
-				for (row in rows) {
-					compile: row.compile ?? raw.compile,
-					expect: row.expect,
-					knownDefect: row.knownDefect,
-					fixpoint: row.fixpoint,
-					outShape: row.outShape,
-					outMinLines: row.outMinLines
-				}
-			]
+			cases: [ for (row in rows) {
+				compile: row.compile ?? raw.compile,
+				expect: row.expect,
+				knownDefect: row.knownDefect,
+				fixpoint: row.fixpoint,
+				outShape: row.outShape,
+				outMinLines: row.outMinLines
+			} ]
 		};
 	}
 
@@ -210,17 +208,15 @@ final class Probe {
 	public static function observe(shimTree: String, engine: String, kit: Kit, compile: Bool, threads: Int, oneProcess: Bool): Array<Seen> {
 		return TempDir.with(work -> {
 			final outcomes: Array<Outcome> = Parity.side(shimTree, engine, kit.invocations, work, threads, oneProcess);
-			final seen: Array<Seen> = [
-				for (i => outcome in outcomes) {
-					final dir: String = work.file('$i');
-					{
-						answer: answerOf(kit.invocations[i].files, outcome, dir, kit.cases[i].outShape, kit.cases[i].outMinLines),
-						out: normalize(outcome.out, dir),
-						err: normalize(outcome.err, dir),
-						failure: outcome.failure
-					};
-				}
-			];
+			final seen: Array<Seen> = [ for (i => outcome in outcomes) {
+				final dir: String = work.file('$i');
+				{
+					answer: answerOf(kit.invocations[i].files, outcome, dir, kit.cases[i].outShape, kit.cases[i].outMinLines),
+					out: normalize(outcome.out, dir),
+					err: normalize(outcome.err, dir),
+					failure: outcome.failure
+				};
+			} ];
 			if (compile) compileAll(kit, outcomes, seen, work, threads);
 			rerun(shimTree, engine, kit, outcomes, seen, threads, oneProcess);
 			seen;
@@ -468,24 +464,20 @@ final class Probe {
 	private static function rerun(
 		shimTree: String, engine: String, kit: Kit, outcomes: Array<Outcome>, seen: Array<Seen>, threads: Int, oneProcess: Bool
 	): Void {
-		final rows: Array<Int> = [
-			for (i => probeCase in kit.cases) if (probeCase.fixpoint != null && outcomes[i].status == 0) i
-		];
+		final rows: Array<Int> = [ for (i => probeCase in kit.cases) if (probeCase.fixpoint != null && outcomes[i].status == 0) i ];
 		if (rows.length == 0) return;
-		final again: Array<Invocation> = [
-			for (i in rows) {
-				final invocation: Invocation = kit.invocations[i];
-				final files: Map<String, String> = invocation.files.copy();
-				files[kit.cases[i].fixpoint ?? ''] = outcomes[i].out;
-				{
-					name: invocation.name,
-					argv: invocation.argv,
-					stdin: invocation.stdin,
-					files: files,
-					commits: invocation.commits
-				};
-			}
-		];
+		final again: Array<Invocation> = [ for (i in rows) {
+			final invocation: Invocation = kit.invocations[i];
+			final files: Map<String, String> = invocation.files.copy();
+			files[kit.cases[i].fixpoint ?? ''] = outcomes[i].out;
+			{
+				name: invocation.name,
+				argv: invocation.argv,
+				stdin: invocation.stdin,
+				files: files,
+				commits: invocation.commits
+			};
+		} ];
 		TempDir.with(work -> {
 			final second: Array<Outcome> = Parity.side(shimTree, engine, again, work, threads, oneProcess);
 			for (j => i in rows) {
@@ -499,10 +491,11 @@ final class Probe {
 	/** The kit `kit` with the `expect` of each invocation replaced by the answer `seen` holds for it, every other key kept as it stands. */
 	private static function recorded(kit: JValue, seen: Array<Seen>): JValue {
 		return switch kit {
-			case JObject(entries): JObject([
-				for (entry in entries)
-					entry.key == 'invocations' ? JValueTools.entry('invocations', withExpectations(entry.value, seen)) : entry
-			]);
+			case JObject(entries):
+				JObject([
+					for (entry in entries)
+						entry.key == 'invocations' ? JValueTools.entry('invocations', withExpectations(entry.value, seen)) : entry
+				]);
 			case _: kit;
 		}
 	}
@@ -532,15 +525,13 @@ final class Probe {
 
 	/** `outcomes` with both streams normalized against the fixture directory each ran in under `work`. */
 	private static function normalized(outcomes: Array<Outcome>, work: TempDir): Array<Outcome> {
-		return [
-			for (i => outcome in outcomes) {
-				status: outcome.status,
-				out: normalize(outcome.out, work.file('$i')),
-				err: normalize(outcome.err, work.file('$i')),
-				failure: outcome.failure,
-				files: outcome.files
-			}
-		];
+		return [ for (i => outcome in outcomes) {
+			status: outcome.status,
+			out: normalize(outcome.out, work.file('$i')),
+			err: normalize(outcome.err, work.file('$i')),
+			failure: outcome.failure,
+			files: outcome.files
+		} ];
 	}
 
 }

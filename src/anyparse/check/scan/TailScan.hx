@@ -168,9 +168,7 @@ final class TailScan {
 	 */
 	public static function flaggedEdits<C: RewriteSite>(found: Array<C>, violations: Array<Violation>): Array<FixEdit> {
 		final flagged: Array<String> = RunScan.spanKeys(violations);
-		final applied: Array<C> = [
-			for (c in found) if (c.edits.length != 0 && flagged.contains('${c.span.from}:${c.span.to}')) c
-		];
+		final applied: Array<C> = [ for (c in found) if (c.edits.length != 0 && flagged.contains('${c.span.from}:${c.span.to}')) c ];
 		return [
 			for (c in applied) if (!applied.exists(o -> o.chain != c.chain && TreePath.covers(o.chain, c.chain.span))) for (e in c.edits) e
 		];

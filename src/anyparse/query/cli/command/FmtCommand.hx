@@ -301,34 +301,32 @@ final class FmtCommand implements CliCommand {
 		// Asked only once a region exists: the lexical scan is a second pass over the file, and
 		// the overwhelmingly common answer above is the empty array.
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-		return [
-			for (opaque in regions) {
-				// The bytes the writer re-emits verbatim are the GAPS, not the whole region. A
-				// region whose node kept CHILDREN inside it is unbalanced in its scaffolding only —
-				// `CondSharedBodyDecl` keeps two class headers and the `#else` / `#end` markers raw
-				// around a member list it formats — so quoting from the first raw byte to the last
-				// ran the sentence over code the writer reformats. A wholly raw region has exactly
-				// one gap and its quote is unchanged.
-				//
-				// No projection carries a comment node anywhere, so a comment between the `#end` and
-				// the continuation lands in a gap and used to close the quote. Trimmed for the
-				// COORDINATE as well as the quote: a comment before the `#if` moves the line the
-				// note names off the directive it is about. A gap that was ONLY a comment trims to
-				// nothing and drops out; if every one of them does, the region itself is the quote.
-				final trimmed: Array<Span> = opaque.gaps.map(SourceComments.trimTrivia.bind(source, _, comments));
-				final raw: Array<Span> = trimmed.filter(s -> s.to > s.from);
-				final quoted: Array<Span> = raw.length > 0 ? raw : [SourceComments.trimTrivia(source, opaque.region, comments)];
-				final at: Position = quoted[0].lineCol(source);
-				final excerpt: String = SourceText.regionsExcerpt(source, quoted);
-				opaque.formatted.length > 0
-					? 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region formatted only in part - '
-						+ '"$excerpt" is not a balanced subtree in its position, so the parser captured those bytes raw and the'
-						+ ' writer re-emits them byte-for-byte; what the quote elides is formatted like any other subtree'
-					: 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
-						+ '"$excerpt" is not a balanced subtree, so the parser captured it raw'
-						+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
-			}
-		];
+		return [ for (opaque in regions) {
+			// The bytes the writer re-emits verbatim are the GAPS, not the whole region. A
+			// region whose node kept CHILDREN inside it is unbalanced in its scaffolding only —
+			// `CondSharedBodyDecl` keeps two class headers and the `#else` / `#end` markers raw
+			// around a member list it formats — so quoting from the first raw byte to the last
+			// ran the sentence over code the writer reformats. A wholly raw region has exactly
+			// one gap and its quote is unchanged.
+			//
+			// No projection carries a comment node anywhere, so a comment between the `#end` and
+			// the continuation lands in a gap and used to close the quote. Trimmed for the
+			// COORDINATE as well as the quote: a comment before the `#if` moves the line the
+			// note names off the directive it is about. A gap that was ONLY a comment trims to
+			// nothing and drops out; if every one of them does, the region itself is the quote.
+			final trimmed: Array<Span> = opaque.gaps.map(SourceComments.trimTrivia.bind(source, _, comments));
+			final raw: Array<Span> = trimmed.filter(s -> s.to > s.from);
+			final quoted: Array<Span> = raw.length > 0 ? raw : [SourceComments.trimTrivia(source, opaque.region, comments)];
+			final at: Position = quoted[0].lineCol(source);
+			final excerpt: String = SourceText.regionsExcerpt(source, quoted);
+			opaque.formatted.length > 0
+				? 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region formatted only in part - '
+					+ '"$excerpt" is not a balanced subtree in its position, so the parser captured those bytes raw and the'
+					+ ' writer re-emits them byte-for-byte; what the quote elides is formatted like any other subtree'
+				: 'apq fmt: $path:${at.line}:${at.col}: conditional-compilation region left unformatted - '
+					+ '"$excerpt" is not a balanced subtree, so the parser captured it raw'
+					+ ' and the writer re-emits it byte-for-byte; restructure it into a balanced #if to have it formatted';
+		} ];
 	}
 
 	private static inline function fmtParseExit(code: Int): FmtOpts {

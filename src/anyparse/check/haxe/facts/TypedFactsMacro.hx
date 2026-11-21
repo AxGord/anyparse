@@ -264,9 +264,7 @@ final class TypedFactsMacro {
 				classType(c);
 			case TEnumDecl(r):
 				final e: EnumType = r.get();
-				final ctors: Array<String> = [
-					for (name in e.names) '{"n":${q(name)},"t":${q(typeString(e.constructs[name]?.type, 0))}}'
-				];
+				final ctors: Array<String> = [ for (name in e.names) '{"n":${q(name)},"t":${q(typeString(e.constructs[name]?.type, 0))}}' ];
 				typeLine(e.pack, e.name, FactKinds.ENUM, e.pos, e.params, e.meta.get(), e.isExtern, [',"ctors":' + arr(ctors)]);
 			case TTypeDecl(r):
 				final d: DefType = r.get();

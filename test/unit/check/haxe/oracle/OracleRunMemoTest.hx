@@ -126,9 +126,7 @@ final class OracleRunMemoTest extends Test {
 		pool?.start(oracles);
 		final ports: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
 		Assert.equals(1, ports.length, 'one server started');
-		final servers: Array<Int> = [
-			for (port in ports) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
-		];
+		final servers: Array<Int> = [ for (port in ports) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid ];
 		final driver: Null<Int> = pool == null ? null : [ for (batch in pool._batches) batch._pid ][0];
 		Assert.isTrue(servers.length > 0, 'the server runs');
 		Assert.notNull(driver, 'the servers have a driver');
@@ -228,9 +226,7 @@ final class OracleRunMemoTest extends Test {
 		pool?.start(oracles);
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first server compiles the first text');
 		final first: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
-		final replaced: Array<Int> = [
-			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
-		];
+		final replaced: Array<Int> = [ for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid ];
 		for (pad in pads) save(pad, 'b');
 		final stamp: Date = js.node.Fs.statSync(main).mtime;
 		save(main, BAD);
@@ -316,9 +312,7 @@ final class OracleRunMemoTest extends Test {
 		pool?.start(oracles);
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first server compiles the first text');
 		final first: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
-		final replaced: Array<Int> = [
-			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
-		];
+		final replaced: Array<Int> = [ for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid ];
 		for (pad in pads) save(pad, 'b');
 		pool?.positionIn(oracles[0], main, GOOD, GOOD.indexOf('trace'));
 		final second: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
@@ -485,9 +479,7 @@ final class OracleRunMemoTest extends Test {
 		pool?.start(oracles);
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the first compile is green');
 		final first: Array<Int> = pool == null ? [] : [ for (server in pool._servers) server.port ];
-		final running: Array<Int> = [
-			for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid
-		];
+		final running: Array<Int> = [ for (port in first) for (pid in ProcessProbe.pidsRunning('haxe --wait $port')) pid ];
 		Assert.equals(1, first.length, 'a server came up');
 		pool?.positionIn(oracles[0], main, GOOD, GOOD.indexOf('trace'));
 		Assert.equals(0, pool?.compile(oracles)[0]?.status, 'the compile after the position round is green');

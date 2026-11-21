@@ -184,9 +184,9 @@ final class StdTypes {
 	 */
 	public static function moduleNamesIn(pkg: String): Null<Array<String>> {
 		final modules: Map<String, Array<String>> = listed();
-		return packages.exists(pkg) ? [
-			for (name => paths in modules) if (paths.exists(p -> SourceText.parentPath(p) == pkg)) name
-		] : null;
+		return packages.exists(pkg)
+			? [ for (name => paths in modules) if (paths.exists(p -> SourceText.parentPath(p) == pkg)) name ]
+			: null;
 	}
 
 	/**
@@ -197,9 +197,9 @@ final class StdTypes {
 		plugin: GrammarPlugin, typeName: String, member: String, reads: Bool, writes: Bool, prefixes: Array<String>
 	): Array<String> {
 		final m: Null<StdMember> = memberOf(plugin, typeName, member);
-		return m == null || m.isFunction ? [] : [
-			for (i in 0...2) if ((i == 0 ? reads && m.hasGetter : writes && m.hasSetter) && i < prefixes.length) prefixes[i] + member
-		];
+		return m == null || m.isFunction
+			? []
+			: [ for (i in 0...2) if ((i == 0 ? reads && m.hasGetter : writes && m.hasSetter) && i < prefixes.length) prefixes[i] + member ];
 	}
 
 	/** TEST-ONLY seam: forget the listing and the modules read, so a test that moves the std reads it again. */

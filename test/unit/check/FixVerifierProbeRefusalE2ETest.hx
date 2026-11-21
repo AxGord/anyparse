@@ -51,27 +51,23 @@ private class TableFake implements Check implements RiskyFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) {
-				file: entry.file,
-				span: null,
-				rule: RULE_ID,
-				severity: Severity.Warning,
-				message: 'test double finding'
-			}
-		];
+		return [ for (entry in files) {
+			file: entry.file,
+			span: null,
+			rule: RULE_ID,
+			severity: Severity.Warning,
+			message: 'test double finding'
+		} ];
 	}
 
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (entry in _table) {
-				final at: Int = source.indexOf(entry.find);
-				if (at < 0) throw new Exception('the fixture no longer contains ${entry.find}');
-				{ span: new Span(at, at + entry.find.length), text: entry.text };
-			}
-		];
+		return [ for (entry in _table) {
+			final at: Int = source.indexOf(entry.find);
+			if (at < 0) throw new Exception('the fixture no longer contains ${entry.find}');
+			{ span: new Span(at, at + entry.find.length), text: entry.text };
+		} ];
 	}
 
 }

@@ -138,9 +138,7 @@ class OracleBatchRevertReasonTest extends Test {
 
 	/** `n` candidates named `f0.hx`…, each rewritten from `before <k>` to `after <k>`. */
 	private static function batch(dir: String, n: Int): Array<{ file: String, before: String, after: String }> {
-		return [
-			for (k in 0...n) { file: '$dir/f$k.hx', before: 'before $k\n', after: 'after $k\n' }
-		];
+		return [ for (k in 0...n) { file: '$dir/f$k.hx', before: 'before $k\n', after: 'after $k\n' } ];
 	}
 
 	private static function makeDir(n: Int): String {

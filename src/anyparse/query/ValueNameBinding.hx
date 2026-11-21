@@ -374,16 +374,12 @@ final class ValueNameBinding {
 
 	/** The import statements of `fi`: its own, then each group of its ambient chain, nearest first. */
 	private static function importsOf(fi: FileInfo): Array<ImportInfo> {
-		return [
-			for (imports in [fi.imports].concat(fi.ambientImports.map(group -> group.imports))) for (imp in imports) imp
-		];
+		return [ for (imports in [fi.imports].concat(fi.ambientImports.map(group -> group.imports))) for (imp in imports) imp ];
 	}
 
 	/** The non-private types named `name` that `files`, the files of one module, declare. */
 	private static function typesOf(files: Array<FileInfo>, name: String): Array<ResolvedType> {
-		return [
-			for (f in files) for (t in f.types) if (t.name == name && !t.isPrivate) { file: f, type: t }
-		];
+		return [ for (f in files) for (t in f.types) if (t.name == name && !t.isPrivate) { file: f, type: t } ];
 	}
 
 	/** Add `found` to `out`, once per owner and member. */

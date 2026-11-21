@@ -357,9 +357,9 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 				Assert.pass('haxe unavailable — skipped');
 				return null;
 			}
-			final oracles: Array<OracleConfig> = [ for (d in configurations) {
-				hxml: 'build.hxml', dir: dir, defines: d
-			} ]; // noqa: prefer-map
+			final oracles: Array<OracleConfig> = [
+				for (d in configurations) { hxml: 'build.hxml', dir: dir, defines: d }
+			]; // noqa: prefer-map
 			table = TypedFactsProbe.probeAll(oracles);
 			if (table == null || table.configurations.length != configurations.length) {
 				CliFixture.removeDir(dir);
@@ -367,10 +367,9 @@ class UnusedEnumAbstractValueCheckTest extends Test {
 				return null;
 			}
 		}
-		final sources: Array<{ file: String, source: String }> = [ for (name => text in files) {
-			file: Path.join([dir, name]),
-			source: text
-		} ];
+		final sources: Array<{ file: String, source: String }> = [
+			for (name => text in files) { file: Path.join([dir, name]), source: text }
+		];
 		final held: Null<CompilerFacts> = table;
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope({

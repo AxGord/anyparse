@@ -108,16 +108,14 @@ final class Rewrite {
 		for (m in accepted) for (part in m.unwritten) return Err(unwrittenRefusal(source, part));
 		final trailers: Array<String> = accepted.map(m -> trailer(source, m.node));
 		final mixed: Bool = trailers.exists(t -> t != trailers[0]);
-		final edits: Array<GuardedEdit> = [
-			for (k => m in accepted) {
-				final expansion: Expansion = switch expand(m) {
-					case Refused(message): return Err(message);
-					case Spliced(text, holes): { text: text, holes: holes };
-				};
-				final aligned: Expansion = mixed ? alignTrailer(expansion, trailers[k], trailers) : expansion;
-				{ span: m.span, text: aligned.text, holes: aligned.holes };
-			}
-		];
+		final edits: Array<GuardedEdit> = [ for (k => m in accepted) {
+			final expansion: Expansion = switch expand(m) {
+				case Refused(message): return Err(message);
+				case Spliced(text, holes): { text: text, holes: holes };
+			};
+			final aligned: Expansion = mixed ? alignTrailer(expansion, trailers[k], trailers) : expansion;
+			{ span: m.span, text: aligned.text, holes: aligned.holes };
+		} ];
 		// A template is written in AST terms (`$A * 2` reads "the capture, times
 		// two") but expands as TEXT, and text has no precedence. `ParenGuard`
 		// puts back the fewest parentheses that make the spliced fragments parse

@@ -7,7 +7,7 @@ import utest.Test;
  * `wrapping.comprehensionFit` decouples a comprehension's layout from its bracket padding. Absent, it follows
  * `whitespace.bracketConfig.comprehensionBrackets` (the fork's `comprehensionFor: fitLine` coupling): padded
  * brackets take the fit cascade and hug a sole block body. `false` keeps the padding as whitespace only, so a
- * multi-line comprehension keeps `[` / `for` / `]` on their own lines; this repository formats under that.
+ * multi-line comprehension keeps `[` / `for` / `]` on their own lines.
  */
 @:nullSafety(Strict)
 final class HxComprehensionFitKeyTest extends Test {

@@ -144,15 +144,13 @@ class GraphViewChangeTest extends Test {
 
 	/** Each edge of `graph` by its ends' names, kind and weight, then its change or `-`, then any earlier weight. */
 	private static function edges(graph: CodeGraph): String {
-		final out: Array<String> = [
-			for (e in graph.edges()) {
-				final change: Null<GraphChange> = e.change;
-				final before: Null<Int> = e.before;
-				final was: String = before == null ? '' : ' was $before';
-				final how: String = change ?? '-';
-				'${graph.node(e.from)?.name} -> ${graph.node(e.to)?.name} ${e.kind} ${e.weight} $how$was';
-			}
-		];
+		final out: Array<String> = [ for (e in graph.edges()) {
+			final change: Null<GraphChange> = e.change;
+			final before: Null<Int> = e.before;
+			final was: String = before == null ? '' : ' was $before';
+			final how: String = change ?? '-';
+			'${graph.node(e.from)?.name} -> ${graph.node(e.to)?.name} ${e.kind} ${e.weight} $how$was';
+		} ];
 		return out.join('|');
 	}
 

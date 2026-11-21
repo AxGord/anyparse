@@ -153,9 +153,9 @@ final class WriterCtorBlankLowering {
 			transition: Array<WriterLowering.TransitionAcrossInfo>
 		} = buildCtorBlankInfos(cb, elemRefName, betweenCtorAllArgs, transitionAcrossAllArgs, transparentByClassifier);
 		final headCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAtHeadIfCtor');
-		final headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo> = [ for (args in headCtorAllArgs) buildHeadCtorBlankInfo(
-			cb, elemRefName, args
-		) ];
+		final headCtorInfos: Array<WriterLowering.HeadCtorBlankInfo> = [
+			for (args in headCtorAllArgs) buildHeadCtorBlankInfo(cb, elemRefName, args)
+		];
 		// NB: the trivia-multiline override is intentionally NOT threaded into
 		// `blankLinesBetweenSameCtorIfNot` (betweenSingleLineTypes, inverted).
 		// That rule's blank between two single-line type pairs is OWNED by it
@@ -235,20 +235,16 @@ final class WriterCtorBlankLowering {
 		cb: CtorBlankCtx, elemRefName: String, betweenCtorAllArgs: Array<Array<String>>, transitionAcrossAllArgs: Array<Array<String>>,
 		transparentByClassifier: Map<String, WriterLowering.TransparentEntry>
 	): { between: Array<WriterLowering.BetweenCtorBlankInfo>, transition: Array<WriterLowering.TransitionAcrossInfo> } {
-		final betweenCtorInfos: Array<WriterLowering.BetweenCtorBlankInfo> = [
-			for (args in betweenCtorAllArgs) {
-				final classifier: String = args[0];
-				final tt: Null<WriterLowering.TransparentEntry> = transparentByClassifier[classifier];
-				buildBetweenCtorBlankInfo(cb, elemRefName, args, tt != null ? tt.ctors : [], tt?.tailAdapter, tt?.headAdapter);
-			}
-		];
-		final transitionAcrossInfos: Array<WriterLowering.TransitionAcrossInfo> = [
-			for (args in transitionAcrossAllArgs) {
-				final classifier: String = args[0];
-				final tt: Null<WriterLowering.TransparentEntry> = transparentByClassifier[classifier];
-				buildTransitionAcrossInfo(cb, elemRefName, args, tt != null ? tt.ctors : [], tt?.tailAdapter, tt?.headAdapter);
-			}
-		];
+		final betweenCtorInfos: Array<WriterLowering.BetweenCtorBlankInfo> = [ for (args in betweenCtorAllArgs) {
+			final classifier: String = args[0];
+			final tt: Null<WriterLowering.TransparentEntry> = transparentByClassifier[classifier];
+			buildBetweenCtorBlankInfo(cb, elemRefName, args, tt != null ? tt.ctors : [], tt?.tailAdapter, tt?.headAdapter);
+		} ];
+		final transitionAcrossInfos: Array<WriterLowering.TransitionAcrossInfo> = [ for (args in transitionAcrossAllArgs) {
+			final classifier: String = args[0];
+			final tt: Null<WriterLowering.TransparentEntry> = transparentByClassifier[classifier];
+			buildTransitionAcrossInfo(cb, elemRefName, args, tt != null ? tt.ctors : [], tt?.tailAdapter, tt?.headAdapter);
+		} ];
 		for (cf in transparentByClassifier.keys()) {
 			final hasBetween: Bool = betweenCtorInfos.exists(info -> info.classifierFieldName == cf);
 			final hasTransition: Bool = transitionAcrossInfos.exists(info -> info.classifierFieldName == cf);

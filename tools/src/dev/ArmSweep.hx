@@ -181,12 +181,10 @@ final class ArmSweep {
 			final type: Null<String> = ArmHeadParser.parse(record.text).type;
 			if (type != null) types[record.key] = type;
 		}
-		return [
-			for (row in GateExcerpt.armRows(log)) {
-				final killer: String = KILLER.match(row.line) ? KILLER.matched(1) : '-';
-				'${row.verdict} ${row.name} type=${types[row.name] ?? '-'} killer=$killer';
-			}
-		];
+		return [ for (row in GateExcerpt.armRows(log)) {
+			final killer: String = KILLER.match(row.line) ? KILLER.matched(1) : '-';
+			'${row.verdict} ${row.name} type=${types[row.name] ?? '-'} killer=$killer';
+		} ];
 	}
 
 	/**

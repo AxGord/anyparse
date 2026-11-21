@@ -172,9 +172,7 @@ final class LintArgs {
 			// A `RiskyArm` check keeps its place in the safe loop below (its safe arm declines the
 			// findings the risky arm owns) and joins the verified set only when there is an oracle to
 			// verify with - without one its risky arm is report-only and the run never mentions it.
-			risky: [
-				for (c in checks) if ((c is RiskyFix && !relaxableNoOracle(c)) || (oracleConfigured && c is RiskyArm)) c
-			],
+			risky: [ for (c in checks) if ((c is RiskyFix && !relaxableNoOracle(c)) || (oracleConfigured && c is RiskyArm)) c ],
 			safe: safeChecks,
 			activeScope: [ for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c ],
 			fullScope: [ for (c in safeChecks) if (fullScopeIds.contains(c.id())) c ]

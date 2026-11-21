@@ -519,13 +519,11 @@ final class SliceGate {
 	/** The lists row: every registry's count beside the baseline's, and no dead fixture. */
 	private function listsOutcome(): Outcome {
 		final listed: Map<String, Array<String>> = listings();
-		final readings: Array<String> = [
-			for (name in LISTINGS) {
-				final was: Null<Int> = _gate.baseline == null ? null : BaselineLists.count(_gate.baseline.lists, name);
-				final now: Int = listed[name]?.length ?? 0;
-				was == null || was == now ? '$name $now' : '$name $now (${GateTree.signed(now - was)})';
-			}
-		];
+		final readings: Array<String> = [ for (name in LISTINGS) {
+			final was: Null<Int> = _gate.baseline == null ? null : BaselineLists.count(_gate.baseline.lists, name);
+			final now: Int = listed[name]?.length ?? 0;
+			was == null || was == now ? '$name $now' : '$name $now (${GateTree.signed(now - was)})';
+		} ];
 		_gate.summary.detail(readings.join(' '));
 		final dead: Array<String> = listed['dead'] ?? [];
 		if (dead.length == 0) return Passed;

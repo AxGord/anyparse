@@ -57,9 +57,7 @@ final class PositiveSinks {
 		natives = projectNatives.ids;
 		this.library = library;
 		final named: Array<String> = calls.map(CallGraphNames.lastSegments.bind(_, 2));
-		shadowing = [
-			for (id in natives) if (named.contains(id) || named.contains('${graph.node(id)?.typeName}.*')) id
-		];
+		shadowing = [ for (id in natives) if (named.contains(id) || named.contains('${graph.node(id)?.typeName}.*')) id ];
 	}
 
 	/** The library calls whose bodies block, for a chain whose `options` walk the libraries (`libraryBodies`); none otherwise. */
@@ -78,9 +76,7 @@ final class PositiveSinks {
 		final blocking: Array<String> = libraryFor(options);
 		for (pattern in options.nonBlocking) {
 			final ids: Array<String> = graph.matchIds(pattern);
-			final hit: Array<String> = [
-				for (id in ids) if (builtin.contains(id) || natives.contains(id) || blocking.contains(id)) id
-			];
+			final hit: Array<String> = [ for (id in ids) if (builtin.contains(id) || natives.contains(id) || blocking.contains(id)) id ];
 			if (hit.length == 0 && walked?.waives(pattern) != true)
 				found.push('nonBlocking entry "$pattern" waives no builtin sink or project native of the run');
 			if (ids.exists(id -> configured.contains(id)))

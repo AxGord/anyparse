@@ -251,8 +251,8 @@
 			"name": "M-PAREN-SIBLING-OFF-PATH",
 			"type": "anyparse.core.Renderer",
 			"method": "siblingRestStep",
-			"find": "case IfFullLineExceeds(_, breakDoc, _) if (onPath && !sibling.groupAsker):",
-			"replace": "case IfFullLineExceeds(_, breakDoc, _) if (!sibling.groupAsker):",
+			"find": "case IfFullLineExceeds(_, breakDoc, _) if (onPath && (!sibling.groupAsker || sibling.flatAsker == true)):",
+			"replace": "case IfFullLineExceeds(_, breakDoc, _) if ((!sibling.groupAsker || sibling.flatAsker == true)):",
 			"note": "a paren on the flat side of an unresolved probe counts as a break point, though render may take that probe's break side and run the line on"
 		},
 		{
@@ -1155,6 +1155,22 @@
 			"find": "|| out.closer == ']'.code",
 			"replace": "|| false",
 			"note": "a bracket-led closing line is not admitted, so a ternary whose else branch ends in an array literal keeps the ladder"
+		},
+		{
+			"name": "M-YIELD-PAREN-NO-SEAM",
+			"type": "anyparse.core.Renderer",
+			"method": "siblingRestStep",
+			"find": "(!sibling.groupAsker || sibling.flatAsker == true)",
+			"replace": "!sibling.groupAsker",
+			"note": "a yielding group's second ask measures a later paren-open probe flat, so the paren is no seam and the group breaks instead"
+		},
+		{
+			"name": "M-HUG-HEAD-PAST-BREAKS",
+			"type": "anyparse.core.DocMeasure",
+			"method": "flatFirstLineThroughBodyGroup",
+			"find": "if (D.isHardline(flat)) return { width: total, opensAtBreak: lastOpen };",
+			"replace": "",
+			"note": "the head width runs on past the forced break after the body's `{` through the whole body, so a block-body comprehension with a fitting head stops hugging"
 		}
 	]
 }

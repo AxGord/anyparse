@@ -75,9 +75,9 @@ final class OracleDeclaration {
 	private static function relativeClasspaths(hxml: String): Array<String> {
 		#if (sys || nodejs)
 		final content: Null<String> = try sys.io.File.getContent(hxml) catch (exception: Exception) null;
-		return content == null ? [] : [
-			for (path in OracleCache.hxmlRefs(content).classPaths) if (path != '' && !Path.isAbsolute(path)) path
-		];
+		return content == null
+			? []
+			: [ for (path in OracleCache.hxmlRefs(content).classPaths) if (path != '' && !Path.isAbsolute(path)) path ];
 		#else
 		return [];
 		#end

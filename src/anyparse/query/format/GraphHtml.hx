@@ -223,9 +223,7 @@ final class GraphHtml {
 
 	/** The nodes of `shown` a reader can open: each holds nodes in `graph` and none in `shown`. */
 	private static function openable(shown: CodeGraph, graph: CodeGraph): Array<String> {
-		return [
-			for (n in shown.nodes()) if (graph.held(n.id).length > 0 && shown.held(n.id).length == 0) n.id
-		];
+		return [ for (n in shown.nodes()) if (graph.held(n.id).length > 0 && shown.held(n.id).length == 0) n.id ];
 	}
 
 	/** Mark every node holding `n` open in `open`. */

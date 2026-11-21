@@ -590,19 +590,17 @@ final class OracleGenerationTest extends Test {
 	public function testTwoRunsOverTwoStaleGenerationsDoNotDeadlock(): Void {
 		#if nodejs
 		final dir: String = fixture();
-		final configs: Array<OracleConfig> = [
-			for (name in ['g1', 'g2']) {
-				hxml: '$dir/$name.hxml',
-				dir: dir,
-				defines: [],
-				generate: {
-					command: "sleep 1 && printf '%s\\n' '-cp .' '-main Main' > " + name + '.hxml && echo run >> runs.txt',
-					root: dir,
-					inputs: ['$dir/$name.input'],
-					probeDir: false
-				}
+		final configs: Array<OracleConfig> = [ for (name in ['g1', 'g2']) {
+			hxml: '$dir/$name.hxml',
+			dir: dir,
+			defines: [],
+			generate: {
+				command: "sleep 1 && printf '%s\\n' '-cp .' '-main Main' > " + name + '.hxml && echo run >> runs.txt',
+				root: dir,
+				inputs: ['$dir/$name.input'],
+				probeDir: false
 			}
-		];
+		} ];
 		// Each generation already ran once and its (large) input then changed: judging it hashes that input under the
 		// shared hold, which keeps both runs judging long enough to overlap — the window the deadlock needs.
 		for (name in ['g1', 'g2']) js.node.ChildProcess.spawnSync('dd', ['if=/dev/zero', 'of=$dir/$name.input', 'bs=1048576', 'count=64']);

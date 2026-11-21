@@ -138,9 +138,7 @@ final class RootCauseFold {
 		}
 		final doing: Map<String, Array<SiteDoer>> = doers(reasons);
 		// a hold long by work no other warned hold does too is kept
-		final state: Array<FoldState> = [
-			for (i => r in reasons) r.length == 0 || r.exists(x -> uncoverable(x, i, doing)) ? Kept : Open
-		];
+		final state: Array<FoldState> = [ for (i => r in reasons) r.length == 0 || r.exists(x -> uncoverable(x, i, doing)) ? Kept : Open ];
 		// what is left covers itself round a cycle: the one nearest its work stays, then the first by place, the rest fold onto it
 		while (settle(reasons, doing, state)) {
 			var pick: Int = -1;
@@ -292,9 +290,10 @@ final class RootCauseFold {
 			case Waits(lock):
 				parts.push('waiting for $lock, held long by ${named([ for (m in _makers[lock] ?? []) memberOf(_holds[m]) ])}');
 			case Site(key, _, mayRepeat, way, _):
-				parts.push('work ${named([
-for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d.at])
-])} also holds a lock across');
+				parts.push(
+					'work ${named([ for (d in doing[key] ?? []) if (covers(d, i, mayRepeat, way)) memberOf(_warned[d.at]) ])}'
+					+ ' also holds a lock across'
+				);
 			case Uncovered:
 		}
 		finding.severity = Severity.Info;

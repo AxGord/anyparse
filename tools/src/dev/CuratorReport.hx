@@ -420,29 +420,27 @@ final class CuratorReport {
 	 * their difficulty, begun before the commit, against the slices on the new arm begun after it.
 	 */
 	public static function movesOf(history: Array<LedgerSession>, changes: Array<TableChange>): Array<TableMove> {
-		return [
-			for (change in changes) for (row in change.after) {
-				final now: String = '${row.model}/${row.effort}';
-				final previous: Array<String> = distinct([
-					for (difficulty in row.from ... row.upto + 1) armAt(change.before, row.stage, difficulty) ?? continue
-				]);
-				if (previous.length != 0 && (previous.length != 1 || previous[0] != now)) {
-					final inBand: Array<LedgerSession> = history.filter(s ->
-						s.difficulty != null && row.from <= s.difficulty && s.difficulty <= row.upto
-					);
-					final before: Array<LedgerSession> = inBand.filter(
-						s -> s.started < change.at && armOf(s, row.stage) == armAt(change.before, row.stage, s.difficulty ?? 0)
-					);
-					final after: Array<LedgerSession> = inBand.filter(s -> s.started >= change.at && armOf(s, row.stage) == now);
-					{
-						commit: change.commit,
-						at: change.at,
-						before: cellOf(row.stage, row, previous.join('|'), before, []),
-						after: cellOf(row.stage, row, now, after, [])
-					};
-				}
+		return [ for (change in changes) for (row in change.after) {
+			final now: String = '${row.model}/${row.effort}';
+			final previous: Array<String> = distinct(
+				[ for (difficulty in row.from ... row.upto + 1) armAt(change.before, row.stage, difficulty) ?? continue ]
+			);
+			if (previous.length != 0 && (previous.length != 1 || previous[0] != now)) {
+				final inBand: Array<LedgerSession> = history.filter(s ->
+					s.difficulty != null && row.from <= s.difficulty && s.difficulty <= row.upto
+				);
+				final before: Array<LedgerSession> = inBand.filter(
+					s -> s.started < change.at && armOf(s, row.stage) == armAt(change.before, row.stage, s.difficulty ?? 0)
+				);
+				final after: Array<LedgerSession> = inBand.filter(s -> s.started >= change.at && armOf(s, row.stage) == now);
+				{
+					commit: change.commit,
+					at: change.at,
+					before: cellOf(row.stage, row, previous.join('|'), before, []),
+					after: cellOf(row.stage, row, now, after, [])
+				};
 			}
-		];
+		} ];
 	}
 
 	/** Every cell of `table`, and the previous arm of each move, with the landed slices of `history` on it. */
@@ -554,9 +552,9 @@ final class CuratorReport {
 	 * driver's prompt quotes the round with a `<placeholder>` where the list goes; that is the template, not a round.
 	 */
 	public static function findingsIn(messages: Array<String>): Int {
-		final rounds: Array<String> = distinct([
-			for (message in messages) if (message.indexOf(FIX_ROUND) >= 0) message.substr(message.indexOf(FIX_ROUND))
-		]).filter(round -> !PLACEHOLDER.match(round));
+		final rounds: Array<String> = distinct(
+			[ for (message in messages) if (message.indexOf(FIX_ROUND) >= 0) message.substr(message.indexOf(FIX_ROUND)) ]
+		).filter(round -> !PLACEHOLDER.match(round));
 		return rounds.fold((round, sum) -> sum + fixItems(round), 0);
 	}
 
@@ -623,9 +621,10 @@ final class CuratorReport {
 				)
 		);
 		lines.push('coverage (landed slices of the whole ledger to the window end):');
-		for (stage in distinct(summary.coverage.map(cell -> cell.stage))) lines.push('  $stage: ' + [
-			for (cell in summary.coverage) if (cell.stage == stage) '${band(cell)} ${cell.arm} ${cell.n}'
-		].join(', '));
+		for (stage in distinct(summary.coverage.map(cell -> cell.stage)))
+			lines.push(
+				'  $stage: ' + [ for (cell in summary.coverage) if (cell.stage == stage) '${band(cell)} ${cell.arm} ${cell.n}' ].join(', ')
+			);
 		final thin: Array<String> = [
 			for (cell in summary.coverage) if (cell.n < THIN_N) '${cell.stage} ${band(cell)} ${cell.arm} ${cell.n}'
 		];

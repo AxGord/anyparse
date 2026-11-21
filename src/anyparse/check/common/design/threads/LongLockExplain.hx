@@ -149,21 +149,19 @@ final class LongLockExplain {
 			for (reason in spans) if (reason.via != lock) add(lock, reason);
 			circular[lock] = distinct(spans.filter(r -> r.via == lock)).length;
 		}
-		final out: Array<LongLock> = [
-			for (lock in order) {
-				final reasons: Array<LongLockReason> = byLock[lock] ?? [];
-				final own: Bool = long.contains(lock) && reasons.exists(r -> r.kind != SpansBlocking);
-				{
-					lock: lock,
-					reasons: reasons,
-					circular: circular[lock] ?? 0,
-					aside: own ? distinct(spansBlocking(acquires, lock, aside(lock)).filter(r -> r.via != lock)) : null
-				};
-			}
-		];
-		final dominated: Array<{ lock: String, by: Array<String> }> = [ for (lock => by in dominators) if (by.length > 0) {
-			lock: lock, by: by.copy()
+		final out: Array<LongLock> = [ for (lock in order) {
+			final reasons: Array<LongLockReason> = byLock[lock] ?? [];
+			final own: Bool = long.contains(lock) && reasons.exists(r -> r.kind != SpansBlocking);
+			{
+				lock: lock,
+				reasons: reasons,
+				circular: circular[lock] ?? 0,
+				aside: own ? distinct(spansBlocking(acquires, lock, aside(lock)).filter(r -> r.via != lock)) : null
+			};
 		} ];
+		final dominated: Array<{ lock: String, by: Array<String> }> = [
+			for (lock => by in dominators) if (by.length > 0) { lock: lock, by: by.copy() }
+		];
 		dominated.sort((a, b) -> Reflect.compare(a.lock, b.lock));
 		return { long: out, mainShort: shortTakes(mainTakes, long), dominated: dominated };
 	}
@@ -181,9 +179,7 @@ final class LongLockExplain {
 
 	/** The crossing releases of `sites` but a multi-lock helper's, whose gives are its callers' releases. */
 	private static function crossings(sites: LockSites): Array<{ lock: String, edge: CallEdge }> {
-		return [
-			for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) { lock: c.lock, edge: c.edge }
-		];
+		return [ for (c in sites.crossing) if (!sites.helpers.contains(c.edge.from)) { lock: c.lock, edge: c.edge } ];
 	}
 
 	/**

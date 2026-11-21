@@ -106,9 +106,7 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 			facts: OracleProviders.of(plugin).factsForFiles(plugin, scope, () -> null),
 			values: CaseValueKey.seamsOf(shape),
 			memberKinds: shape.memberDeclKinds ?? [],
-			pins: [
-				for (name in [shape.retainedDeclMetaName, shape.exportedDeclMetaName]) if (name != null) name
-			]
+			pins: [ for (name in [shape.retainedDeclMetaName, shape.exportedDeclMetaName]) if (name != null) name ]
 		};
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			final info: Null<FileInfo> = index.fileInfo(entry.file);
@@ -120,12 +118,10 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		final wanted: Array<String> = [
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				if (span != null && _deletable.contains(spanKey(v.file, span))) '${span.from}:${span.to}';
-			}
-		];
+		final wanted: Array<String> = [ for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null && _deletable.contains(spanKey(v.file, span))) '${span.from}:${span.to}';
+		} ];
 		if (wanted.length == 0) return [];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];

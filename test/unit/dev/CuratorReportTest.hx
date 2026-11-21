@@ -126,10 +126,13 @@ final class CuratorReportTest extends Test {
 		final rows: Array<LedgerSession> = CuratorReport.readLedger(
 			pipeline('a', 0, 1, 2, 1, '"plan":{"model":"sonnet","effort":"high"}', [agent('a1', 'plan', 'sonnet', 100000)])
 		);
-		Assert.same(['execute sonnet/high 1'], [
-			for (cell in CuratorReport.cellsOf(rows, ModelTable.read(TABLE), []))
-				if (cell.stage == 'execute') '${cell.stage} ${cell.arm} ${cell.n}'
-		]);
+		Assert.same(
+			['execute sonnet/high 1'],
+			[
+				for (cell in CuratorReport.cellsOf(rows, ModelTable.read(TABLE), []))
+					if (cell.stage == 'execute') '${cell.stage} ${cell.arm} ${cell.n}'
+			]
+		);
 	}
 
 	@:pin('control')

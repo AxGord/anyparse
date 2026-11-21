@@ -376,9 +376,7 @@ final class NominalTypes {
 			final declarations: Array<MemberDeclaration> = host == null
 				? []
 				: index.typing.members.memberDeclarationsOf(host, path[path.length - 1]);
-			final params: Array<String> = [
-				for (d in declarations) for (p in d.type.typeParamNames.concat(d.member.typeParamNames)) p
-			];
+			final params: Array<String> = [ for (d in declarations) for (p in d.type.typeParamNames.concat(d.member.typeParamNames)) p ];
 			final alike: Bool = index.refs.readsAlikeFromEach(blind, declarations.map(d -> d.file), fromFile, params, index.typeSyntax);
 			return !alike || !answerableType(blind, index.typeSyntax) || CallGraphNames.mentionsTypeName(blind, params, index.typeSyntax)
 				? null
@@ -1192,9 +1190,7 @@ final class NominalTypes {
 	 * (`AncestorTable.completed`'s scope).
 	 */
 	private static function writtenTypeParams(fi: FileInfo): Array<String> {
-		return [
-			for (t in fi.types) for (p in t.typeParamNames.concat([ for (m in t.members) for (q in m.typeParamNames) q ])) p
-		];
+		return [ for (t in fi.types) for (p in t.typeParamNames.concat([ for (m in t.members) for (q in m.typeParamNames) q ])) p ];
 	}
 
 	/** Whether a node of `kind` starts at `from` under `node`, descending only into the nodes whose range holds `from`. */

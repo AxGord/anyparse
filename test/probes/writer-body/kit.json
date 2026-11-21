@@ -105,7 +105,9 @@
 		"tt/T.hx": "class T {\n\tfunction f() {\n\t\tcallback(ready ? [] : updates.map(u -> {a: 1, b: 2, c: 3, d: 4}));\n\t\tcallback(ready ? [] : updates.map(u -> {a: 1, b: 2}));\n\t\tcallback(ready ? [] : updates.map(u -> {aaaaaaaaaaaaaaaaaaaaaaa: 1, bbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 2, ccccccccccccccccccccc: 3}));\n\t\tvar v = ready ? null : make({aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 1, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 2, cccccccccccccccc: 3});\n\t}\n}\n",
 		"tt/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140}, \"sameLine\": {\"ternaryTailBlockMaxThenLength\": 20}}",
 		"anonlit/Probe.hx": "class Probe {\n\tfunction f() {\n\t\tfinal found: { ids: Array<String>, chains: Map<String, Array<String>>, waivers: Array<String> } = { ids: ids, chains: _chains, waivers: _waivers };\n\t}\n}\n",
-		"anonlit/hxformat.json": "{\"wrapping\": {\"maxLineLength\": 120}}"
+		"anonlit/hxformat.json": "{\"wrapping\": {\"maxLineLength\": 120}}",
+		"compfit/G.hx": "class D {\n\tfunction g() {\n\t\tfinal candidates: Array<MemberGroup> = [ for (sibling in membersOf(\n\t\t\tprep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions\n\t\t)) {\n\t\t\tfinal siblingName: Null<String> = sibling.member.name;\n\t\t\tsibling;\n\t\t} ];\n\t}\n}\n",
+		"compfit/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140, \"comprehensionFit\": true}}"
 	},
 	"invocations": [
 		{
@@ -1154,6 +1156,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "c651da6f334f6344",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "compfit/G.hx",
+			"note": "comprehensionFit: a block-body comprehension whose generator head runs past the bracket line drops the hug for `[` / the head flat on its own line / `]` (base: the hug with the head's call arguments wrapped)",
+			"fixpoint": "compfit/G.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"compfit/G.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "210db44524300e1e",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

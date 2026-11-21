@@ -259,12 +259,10 @@ final class LintFormat {
 			chain: call == null ? null : r.chain,
 			via: call == null ? null : via == null ? JNull : JString(via),
 			errorPath: call == null ? null : r.errorPath,
-			unresolved: r.kind == LongLockKind.Blind ? [
-				for (c in r.unresolved) {
-					final at: Position = index.lineColAt(c.span.from);
-					{ name: c.name, line: at.line, col: at.col };
-				}
-			] : null
+			unresolved: r.kind == LongLockKind.Blind ? [ for (c in r.unresolved) {
+				final at: Position = index.lineColAt(c.span.from);
+				{ name: c.name, line: at.line, col: at.col };
+			} ] : null
 		};
 	}
 

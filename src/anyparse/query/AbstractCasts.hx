@@ -408,9 +408,7 @@ final class AbstractCasts {
 
 	/** The members of `r` the branch `b` declares: those whose declaration starts inside its range. */
 	private static function membersOf(r: ResolvedType, b: DeclBranch): Array<MemberInfo> {
-		return [
-			for (m in r.type.members) if (b.span.from <= m.declFrom && m.declFrom < b.span.to) m
-		];
+		return [ for (m in r.type.members) if (b.span.from <= m.declFrom && m.declFrom < b.span.to) m ];
 	}
 
 }

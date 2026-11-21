@@ -140,12 +140,10 @@ final class HoldGrade {
 	 * The locks the main thread takes somewhere, of `acquires`, by `takenKey`: a lock only ever taken shared stalls no one.
 	 */
 	public static function mainTaken(acquires: Array<LockAcquire>, states: ThreadStates, taints: LockTaint): Array<String> {
-		return [
-			for (a in acquires) {
-				final key: String = takenKey(a);
-				if ((states.edgeContext(a.edge) & ThreadSafety.CTX_MAIN) != 0 && (a.lock == null || !taints.quiet.sharedOnly(key))) key;
-			}
-		];
+		return [ for (a in acquires) {
+			final key: String = takenKey(a);
+			if ((states.edgeContext(a.edge) & ThreadSafety.CTX_MAIN) != 0 && (a.lock == null || !taints.quiet.sharedOnly(key))) key;
+		} ];
 	}
 
 	/**

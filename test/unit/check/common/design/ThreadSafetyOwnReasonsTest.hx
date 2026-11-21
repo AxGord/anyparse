@@ -117,12 +117,10 @@ class ThreadSafetyOwnReasonsTest extends Test {
 
 	/** The findings of `found` of `family` as `<severity> <family> <member> | <subject>`, sorted. */
 	private static function graded(found: Array<Violation>, family: String): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == family) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == family) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}
@@ -137,9 +135,7 @@ class ThreadSafetyOwnReasonsTest extends Test {
 
 	/** The members of the findings of `found` saying their hold is handed off. */
 	private static function handedOff(found: Array<Violation>): Array<String> {
-		return [
-			for (v in found) if (v.data != null && v.message.indexOf('no path of the function gives it back') >= 0) v.data.member
-		];
+		return [ for (v in found) if (v.data != null && v.message.indexOf('no path of the function gives it back') >= 0) v.data.member ];
 	}
 	#end
 

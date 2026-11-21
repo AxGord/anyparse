@@ -489,20 +489,16 @@ final class MutationArm {
 			case _:
 		}
 		forcePayloads(job, cuts, targets, gen, workroot, cores);
-		final live: Array<String> = [
-			for (name in job.names) if (targets[name]?.failure == null && targets.exists(name)) name
-		];
-		final rows: Array<String> = [
-			for (name in live) {
-				final t: Null<ArmTarget> = targets[name];
-				if (t != null) [
-					t.file,
-					t.selector,
-					Path.join([workroot, '$name.payload']),
-					Path.join([workroot, '$name.new'])
-				].join('\t');
-			}
-		];
+		final live: Array<String> = [ for (name in job.names) if (targets[name]?.failure == null && targets.exists(name)) name ];
+		final rows: Array<String> = [ for (name in live) {
+			final t: Null<ArmTarget> = targets[name];
+			if (t != null) [
+				t.file,
+				t.selector,
+				Path.join([workroot, '$name.payload']),
+				Path.join([workroot, '$name.new'])
+			].join('\t');
+		} ];
 		final batches: Array<Array<String>> = deal(rows, batchCount(rows.length, cores), RENDER_CHUNK);
 		final files: Array<String> = [ for (b => _ in batches) Path.join([workroot, 'render-batch.$b']) ];
 		for (b => batch in batches) File.saveContent(files[b], batch.map(row -> '$row\n').join(''));

@@ -402,9 +402,7 @@ final class ReachGraph {
 	 * is a call or a construction they name, an edge. Every such member that may run at all (`counts`).
 	 */
 	public function typedImplicitIds(g: CallGraph): Array<String> {
-		return idsOf(g, [
-			for (c in indexImplicit()) if (c.family.match(TextMember | IterationMember) && counts(c)) c
-		]);
+		return idsOf(g, [ for (c in indexImplicit()) if (c.family.match(TextMember | IterationMember) && counts(c)) c ]);
 	}
 
 	/**
@@ -555,9 +553,7 @@ final class ReachGraph {
 		final type: Null<String> = node.typeName;
 		final name: Null<String> = node.name;
 		if (type == null || name == null) return false;
-		final copies: Array<ResolvedType> = [
-			for (d in _scope.index.refs.mayDenote(type, null)) if (!CallGraphNames.selfAlias(d.type)) d
-		];
+		final copies: Array<ResolvedType> = [ for (d in _scope.index.refs.mayDenote(type, null)) if (!CallGraphNames.selfAlias(d.type)) d ];
 		final paths: Array<String> = [];
 		for (d in copies) {
 			final path: String = TypeNameBinding.canonicalPath(d);

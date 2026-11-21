@@ -661,12 +661,10 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 	private static function parenthesizeMixed(source: String, whole: Span, text: String, file: String, plugin: GrammarPlugin): String {
 		final spliced: String = source.substring(0, whole.from) + text + source.substring(whole.to);
 		final rule: MixedLogicalParens = new MixedLogicalParens();
-		final inside: Array<Violation> = [
-			for (found in rule.run([{ file: file, source: spliced }], plugin)) {
-				final span: Null<Span> = found.span;
-				if (span != null && span.from >= whole.from && span.to <= whole.from + text.length) found;
-			}
-		];
+		final inside: Array<Violation> = [ for (found in rule.run([{ file: file, source: spliced }], plugin)) {
+			final span: Null<Span> = found.span;
+			if (span != null && span.from >= whole.from && span.to <= whole.from + text.length) found;
+		} ];
 		final edits: Array<FixEdit> = rule.fix(spliced, inside, plugin);
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var out: String = text;

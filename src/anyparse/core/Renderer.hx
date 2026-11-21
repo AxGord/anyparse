@@ -71,7 +71,9 @@ private typedef EmbeddedLineWidths = { final first: Int; final last: Int; final 
  * not a break point: it opens on the width of its whole line, which holds the
  * group's own flat content, so it may open only BECAUSE the group stayed flat,
  * and charging the group just its head would trade the group's break for a
- * worse one later on the line. And a later rest-aware group keeps the column:
+ * worse one later on the line. A group that yields to its rest (`flatAsker`)
+ * asks for exactly that trade, so on its second ask the probe is a break point.
+ * And a later rest-aware group keeps the column:
  * it renders flat as measured, or it breaks and so ends the asker's line before
  * anything after it, where no column matters to the asker any more.
  */
@@ -4049,7 +4051,7 @@ class Renderer {
 			case IfLineExceeds(n, breakDoc, _) if (sibling.lineEnd != null && renderCol >= 0 && breaksLineAlone(breakDoc)):
 				sibling.lineEnd >= n ? { add: 0, aborted: true } : null;
 
-			case IfFullLineExceeds(_, breakDoc, _) if (onPath && !sibling.groupAsker):
+			case IfFullLineExceeds(_, breakDoc, _) if (onPath && (!sibling.groupAsker || sibling.flatAsker == true)):
 				final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 				open.broke && findCollapseProbe(breakDoc) == null ? { add: open.width, aborted: true } : null;
 			case Flatten(innerDoc), HardFlatten(innerDoc):

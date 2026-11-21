@@ -80,9 +80,7 @@ final class LintWarn {
 		if (input.indexOf(': wrote ') < 0 && input.indexOf(': rewrote ') < 0) return null;
 		final payload: HookPayload = HookPayloadParser.parse(input);
 		final said: String = (payload.toolResponse?.stdout ?? '') + '\n' + (payload.toolResponse?.stderr ?? '');
-		final wrote: Array<String> = [
-			for (line in said.split('\n')) if (WROTE.match(line) && !WROTE_NOTHING.match(line)) line
-		];
+		final wrote: Array<String> = [ for (line in said.split('\n')) if (WROTE.match(line) && !WROTE_NOTHING.match(line)) line ];
 		final project: Null<String> = mainTree(own);
 		if (wrote.length == 0 || project == null) return null;
 		final command: String = payload.toolInput?.command ?? '';

@@ -292,12 +292,10 @@ final class LintFixVerify {
 			counts[size] = (seen ?? 0) + 1;
 		}
 		sizes.sort((a, b) -> b - a);
-		final parts: Array<String> = [
-			for (size in sizes) {
-				final times: Int = counts[size] ?? 0;
-				times == 1 ? '$size' : '${size}x$times';
-			}
-		];
+		final parts: Array<String> = [ for (size in sizes) {
+			final times: Int = counts[size] ?? 0;
+			times == 1 ? '$size' : '${size}x$times';
+		} ];
 		return ', ${rounds.length} oracle round(s) (candidate files per round: ${parts.join(', ')})';
 	}
 
@@ -863,9 +861,7 @@ final class LintFixVerify {
 	): (RuleEdits) -> Array<RuleEdits> {
 		return group -> {
 			final byCheck: Null<{ check: Check, all: Array<Violation> }> = findingsByCheck.find(b -> b.check.id() == group.rule);
-			return byCheck == null ? [] : [
-				for (v in group.findings) assistedGroup(byCheck.check, source, [v], plugin, oracle)
-			];
+			return byCheck == null ? [] : [ for (v in group.findings) assistedGroup(byCheck.check, source, [v], plugin, oracle) ];
 		};
 	}
 
@@ -1032,9 +1028,7 @@ final class LintFixVerify {
 	 * just before, so these are cache hits rather than a second parse of the tree.
 	 */
 	public static function unparseableFiles(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<String> {
-		return [
-			for (entry in files) if (ParseGate.parseOrNull(plugin, entry.source) == null) entry.file
-		];
+		return [ for (entry in files) if (ParseGate.parseOrNull(plugin, entry.source) == null) entry.file ];
 	}
 
 	/**
@@ -1043,21 +1037,19 @@ final class LintFixVerify {
 	 * that build could revert a sound fix. Report mode keeps asking it, with the note that named the race.
 	 */
 	public static function verifiable(oracles: Array<OracleConfig>): Array<OracleConfig> {
-		return [
-			for (oracle in oracles) {
-				final raced: Null<String> = oracle.raced;
-				if (raced == null || oracle.unavailable != null)
-					oracle
-				else
-					{
-						hxml: oracle.hxml,
-						dir: oracle.dir,
-						defines: oracle.defines,
-						generate: oracle.generate,
-						unavailable: 'not asked to verify fixes — $raced'
-					};
-			}
-		];
+		return [ for (oracle in oracles) {
+			final raced: Null<String> = oracle.raced;
+			if (raced == null || oracle.unavailable != null)
+				oracle
+			else
+				{
+					hxml: oracle.hxml,
+					dir: oracle.dir,
+					defines: oracle.defines,
+					generate: oracle.generate,
+					unavailable: 'not asked to verify fixes — $raced'
+				};
+		} ];
 	}
 
 	/** The clause for files no risky fix was attempted on because the writer would reformat them; empty when there are none. */

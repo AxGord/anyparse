@@ -105,9 +105,7 @@ final class ReachHazards {
 
 	/** The hazards of `tree` (the text of `file` is `source`) inside `span`, in document order. */
 	public function hazardsIn(file: String, tree: QueryNode, source: String, span: Span): Array<ReachHazard> {
-		return [
-			for (h in hazardsOfFile(file, tree, source)) if (h.span.from >= span.from && h.span.to <= span.to) h
-		];
+		return [ for (h in hazardsOfFile(file, tree, source)) if (h.span.from >= span.from && h.span.to <= span.to) h ];
 	}
 
 	/**
@@ -125,9 +123,7 @@ final class ReachHazards {
 		final named: Map<String, Int> = _shape.execution?.reflectiveNameCalls ?? [];
 		// every build's fact of a reflective access by name at exactly `at`: what each says of the object it acts on
 		function receiversAt(at: Span): Array<ReflectionFact> {
-			return [
-				for (r in typed.reflection) if (named[r.target] == RECEIVER_NAME_INDEX && same(r.at.span, at)) r
-			];
+			return [ for (r in typed.reflection) if (named[r.target] == RECEIVER_NAME_INDEX && same(r.at.span, at)) r ];
 		}
 		// the member every build's fact at `at` names by the literal its name argument holds (`ReflectionFact.memberName`)
 		function literalAt(at: Span): Null<String> {

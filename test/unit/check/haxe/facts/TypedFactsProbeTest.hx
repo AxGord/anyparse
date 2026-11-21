@@ -484,9 +484,7 @@ class TypedFactsProbeTest extends Test {
 		final scratch: Scratch = compile(['Main.hx' => source], null, '-cp .\n-main Main\n--jvm out.jar\n');
 		final facts: Null<CompilerFacts> = scratch.facts;
 		Assert.equals(1, facts?.node('Main.ov~1')?.overloadIndex, 'dropped: ${[ for (d in facts?.dropped ?? []) d.reason ]}');
-		final chosen: Array<Null<String>> = [
-			for (c in facts?.node('Main.main')?.calls ?? []) if (c.target == 'Main.ov') c.signature
-		];
+		final chosen: Array<Null<String>> = [ for (c in facts?.node('Main.main')?.calls ?? []) if (c.target == 'Main.ov') c.signature ];
 		Assert.isTrue(chosen.contains('(Int)->Void') && chosen.contains('(String)->Void'), 'chosen: $chosen');
 		scratch.remove();
 	}

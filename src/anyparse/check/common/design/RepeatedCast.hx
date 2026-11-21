@@ -349,12 +349,10 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 		final lead: String = scan.source.substring(lineStart, at.from);
 		final glue: String = lead.trim().length == 0 ? '\n$lead' : ' ';
 		final text: String = 'final $name: ${first.typeText} = ${scan.source.substring(first.span.from, first.span.to)};$glue';
-		final out: Array<FixEdit> = [
-			for (c in run) {
-				final head: String = c == first && at.from == c.span.from ? text : '';
-				{ span: c.span, text: head + name };
-			}
-		];
+		final out: Array<FixEdit> = [ for (c in run) {
+			final head: String = c == first && at.from == c.span.from ? text : '';
+			{ span: c.span, text: head + name };
+		} ];
 		if (at.from != first.span.from) out.push({ span: new Span(at.from, at.from), text: text });
 		return out;
 	}

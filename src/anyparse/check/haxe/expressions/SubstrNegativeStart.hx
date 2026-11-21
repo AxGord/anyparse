@@ -37,9 +37,7 @@ final class SubstrNegativeStart extends HaxeRule implements NoAutofix {
 		final shape: RefShape = plugin.refShape();
 		final callKind: Null<String> = shape.callKind;
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
-		final subtractKinds: Array<String> = [
-			for (kind => op in shape.execution?.integerFoldOperators ?? []) if (op == 'subtract') kind
-		];
+		final subtractKinds: Array<String> = [ for (kind => op in shape.execution?.integerFoldOperators ?? []) if (op == 'subtract') kind ];
 		final guards: OrderSeams = OrderGuards.seamsOf(shape);
 		final index: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final text: Null<String> = TypingService.stringType(shape);

@@ -97,9 +97,7 @@ final class WriteVerification {
 	private static function judge(op: String, journal: WriteJournal, oracles: Array<OracleConfig>, changed: Array<String>, exit: Int): Int {
 		final parallel: Int = ProcessSpawn.unleasedParallelism(UNLEASED_COMPILES);
 		final compiler: OracleProvider = compilerOf(changed);
-		final sources: Array<String> = [
-			for (path in changed) if (compiler.isSource(path) && ConfigFinder.fileExists(path)) path
-		];
+		final sources: Array<String> = [ for (path in changed) if (compiler.isSource(path) && ConfigFinder.fileExists(path)) path ];
 		final created: Array<String> = createdAmong(journal, sources);
 		// a run of created modules only: a build whose class paths hold none of them cannot read any
 		final onlyCreated: Bool = created.length > 0 && created.length == changed.length;
@@ -132,16 +130,14 @@ final class WriteVerification {
 		final readings: Array<OracleReading> = compiler.typecheckEachReading(
 			oracles, false, parallel, errors -> created.exists(file -> LintFixSafePass.blames(errors, file))
 		);
-		return [
-			for (i => oracle in oracles) {
-				final base: String = oracle.dir ?? Sys.getCwd();
-				{
-					oracle: oracle,
-					outcome: readings[i].outcome,
-					parsed: [ for (path in readings[i].parsed ?? []) FileIdentity.canonical(base, path) ]
-				};
-			}
-		];
+		return [ for (i => oracle in oracles) {
+			final base: String = oracle.dir ?? Sys.getCwd();
+			{
+				oracle: oracle,
+				outcome: readings[i].outcome,
+				parsed: [ for (path in readings[i].parsed ?? []) FileIdentity.canonical(base, path) ]
+			};
+		} ];
 	}
 
 	/** Each of `oracles` whose explicit class path holds one of `files`, naming those files' modules on its command line. */

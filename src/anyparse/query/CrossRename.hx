@@ -401,9 +401,7 @@ final class CrossRename {
 			absolute: typeName == module.base ? module.path : '${module.path}.$typeName',
 			grant: module.pkg == '' ? typeName : '${module.pkg}.$typeName',
 			grantMetas: grantMetas,
-			shadowedRoots: [
-				for (root in roots) for (off in RefactorSupport.valueBoundOffsets(root, tree, refShape)) off
-			]
+			shadowedRoots: [ for (root in roots) for (off in RefactorSupport.valueBoundOffsets(root, tree, refShape)) off ]
 		};
 	}
 

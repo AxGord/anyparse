@@ -629,9 +629,7 @@ class ThreadSafetyCheckTest extends Test {
 				'class P { public var v(get, never):Int; function get_v():Int { Sys.sleep(1); return 1; } }',
 				'class Mut { public function lock():Void {} public function unlock():Void {} }'
 			]);
-		Assert.equals(1, [
-			for (v in vs) if (v.message.indexOf('holds') != -1 && v.message.indexOf('P.get_v') != -1) v
-		].length);
+		Assert.equals(1, [ for (v in vs) if (v.message.indexOf('holds') != -1 && v.message.indexOf('P.get_v') != -1) v ].length);
 		#else
 		Assert.pass('non-sys target');
 		#end

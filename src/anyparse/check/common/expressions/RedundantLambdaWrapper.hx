@@ -867,9 +867,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 			localFunctionKinds: shape.localFunctionKinds ?? [],
 			inlineFunctionKinds: shape.inlineFunctionKinds ?? [],
 			// every binder shadows a bare callee except the local functions, which ARE callees (`localFns`)
-			binderKinds: [
-				for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k
-			],
+			binderKinds: [ for (k in BinderScan.binderKinds(shape)) if (!ShapeVocab.localFunctionScopeKinds(shape).contains(k)) k ],
 			reducibleBinderKinds: (shape.paramKinds ?? []).filter(k -> k != shape.optionalParamKind && k != shape.restParamKind)
 				.concat(shape.localDeclKinds ?? []),
 			modifierKinds: modifiers,

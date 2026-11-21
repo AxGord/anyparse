@@ -640,9 +640,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final sources: Null<ResolutionSources> = scopeSources();
 		if (sources == null) return [];
 		final roots: Map<String, Bool> = [ for (entry in sources.projectRoots) entry.file => true ];
-		return [
-			for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file
-		];
+		return [ for (entry in sources.library.entries()) if (!roots.exists(entry.file)) entry.file ];
 	}
 
 	/**

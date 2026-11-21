@@ -158,9 +158,7 @@ class ThreadSafetyPositiveSinksTest extends Test {
 				'builtin sinks applied: 63 blocking calls of the runtime library (2 of them called in this run) and 1 project native(s)'
 				+ ' — "sinks" adds to them, "nonBlocking" removes from them'
 			],
-			[
-				for (v in found) if (v.file == '' && v.message.startsWith(PositiveSinks.NOTICE)) v.message
-			]
+			[ for (v in found) if (v.file == '' && v.message.startsWith(PositiveSinks.NOTICE)) v.message ]
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -487,12 +485,10 @@ class ThreadSafetyPositiveSinksTest extends Test {
 	#if (sys || nodejs)
 	/** The findings of `found` with data as `<severity> <family> <member> | <subject>`, sorted. */
 	private static function graded(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

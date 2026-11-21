@@ -43,15 +43,13 @@ private class AppendFake implements Check implements RiskyFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) if (_tails.exists(Path.withoutDirectory(entry.file))) {
-				file: entry.file,
-				span: null,
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'test double finding'
-			}
-		];
+		return [ for (entry in files) if (_tails.exists(Path.withoutDirectory(entry.file))) {
+			file: entry.file,
+			span: null,
+			rule: id(),
+			severity: Severity.Warning,
+			message: 'test double finding'
+		} ];
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
@@ -234,15 +232,13 @@ final class FixVerifierBatchE2ETest extends Test {
 			unavailable: 'no compiler in this test'
 		};
 		final rounds: Array<Int> = [];
-		final verdicts: Array<String> = FixVerifier.judgeBatch([
-			for (name in NAMES) {
-				entry: { file: '$name.hx', source: plain(name) },
-				edits: [{ span: new Span(0, 0), text: '// x\n', group: null }],
-				opts: null,
-				fullText: '// x\n${plain(name)}',
-				verifying: [unavailable]
-			}
-		], new HaxeQueryPlugin(), (file, text) -> disk[file] = text, rounds)
+		final verdicts: Array<String> = FixVerifier.judgeBatch([ for (name in NAMES) {
+			entry: { file: '$name.hx', source: plain(name) },
+			edits: [{ span: new Span(0, 0), text: '// x\n', group: null }],
+			opts: null,
+			fullText: '// x\n${plain(name)}',
+			verifying: [unavailable]
+		} ], new HaxeQueryPlugin(), (file, text) -> disk[file] = text, rounds)
 			.map(Std.string);
 		Assert.equals('[4,1,1,1,1]', Std.string(rounds), 'the batch round, then each file alone — no halves');
 		for (verdict in verdicts) Assert.equals('Reverted(OracleUnavailable(no compiler in this test))', verdict);
@@ -328,12 +324,9 @@ final class FixVerifierBatchE2ETest extends Test {
 	}
 
 	private static function fixture(sources: Array<String>, ?main: String): String {
-		return CliFixture.writeDir(
-			'fixverifbatch',
-			[ for (i => source in sources) {
-				name: '${NAMES[i]}.hx', source: source
-			} ].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }])
-		);
+		return CliFixture.writeDir('fixverifbatch', [
+			for (i => source in sources) { name: '${NAMES[i]}.hx', source: source }
+		].concat([{ name: 'Main.hx', source: main ?? MAIN }, { name: 'check.hxml', source: HXML }]));
 	}
 
 	private static function verify(dir: String, sources: Array<String>, check: Check): FixVerifyResult {

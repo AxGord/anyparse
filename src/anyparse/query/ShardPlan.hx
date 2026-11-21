@@ -291,9 +291,7 @@ final class ShardPlan {
 	public static function renderFilters(placements: Array<ShardPlacement>, shards: Int): String {
 		final buf: StringBuf = new StringBuf();
 		for (s in 0...shards) {
-			final names: Array<String> = [
-				for (p in placements) if (p.shard == s) ShardFilter.render(p.cls, p.part, p.parts)
-			];
+			final names: Array<String> = [ for (p in placements) if (p.shard == s) ShardFilter.render(p.cls, p.part, p.parts) ];
 			buf.add('${names.join(',')}\n');
 		}
 		return buf.toString();

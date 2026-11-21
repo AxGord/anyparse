@@ -84,9 +84,9 @@ class ResolveTrapsTest extends Test {
 
 	/** The index over the trap's files and the probe's own. */
 	private static function indexOf(trap: SweepTrap, probe: SweepProbe): SymbolIndex {
-		return CheckFixture.index([
-			for (file => source in TrapFixSweep.filesOf(trap, probe)) { file: file, source: source }
-		], new HaxeQueryPlugin());
+		return CheckFixture.index(
+			[ for (file => source in TrapFixSweep.filesOf(trap, probe)) { file: file, source: source } ], new HaxeQueryPlugin()
+		);
 	}
 
 	/** The offset the probe asks at: its marker's first occurrence in its file, moved by its `offset`. */

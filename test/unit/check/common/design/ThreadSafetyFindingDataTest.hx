@@ -13,9 +13,7 @@ class ThreadSafetyFindingDataTest extends Test {
 	public function testMainSinkDataCarriesTheWholeChain(): Void {
 		#if (sys || nodejs)
 		final hops: Int = 12;
-		final calls: String = [
-			for (i in 0...hops) 'function f$i():Void ${i + 1 < hops ? 'f${i + 1}()' : 'Sys.sleep(1)'};'
-		].join(' ');
+		final calls: String = [ for (i in 0...hops) 'function f$i():Void ${i + 1 < hops ? 'f${i + 1}()' : 'Sys.sleep(1)'};' ].join(' ');
 		final found: Array<Violation> = ThreadSafetyCheckTest.violations(
 			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', ['class A { $calls }']
 		);
@@ -121,9 +119,7 @@ class ThreadSafetyFindingDataTest extends Test {
 			'class K { static function fetch(u:String):Void Net.get(u); static function viaA(xs:Array<String>):Void for (x in xs) fetch(x);'
 			+ ' public static function main():Void { viaA(["a"]); fetch("c"); } }'
 		]);
-		final warned: Null<Violation> = [
-			for (v in fetched) if (v.severity.label() == 'warning' && v.data?.member == 'K.fetch') v
-		][0];
+		final warned: Null<Violation> = [ for (v in fetched) if (v.severity.label() == 'warning' && v.data?.member == 'K.fetch') v ][0];
 		Assert.isTrue(warned?.message.endsWith(' — repeated by K.viaA') == true, warned?.message);
 		Assert.same([{ member: 'K.viaA', at: 'for (x in xs)' }], warned?.data?.repeatedBy);
 		#else
@@ -307,9 +303,10 @@ class ThreadSafetyFindingDataTest extends Test {
 					+ 'releaseMutation(); } public function wrap():Void save(); public function save():Void'
 				)
 			);
-		Assert.same(['Fs.save'], [
-			for (v in ThreadSafetyCheckTest.orderFindings(sources)) if (v.data?.subject == 'Db._batch / Fs._mutation') v.data?.member
-		]);
+		Assert.same(
+			['Fs.save'],
+			[ for (v in ThreadSafetyCheckTest.orderFindings(sources)) if (v.data?.subject == 'Db._batch / Fs._mutation') v.data?.member ]
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

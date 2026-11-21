@@ -421,9 +421,7 @@ final class TypeRefIndex {
 	 * binds through it.
 	 */
 	public static function ambientUsings(fi: FileInfo): Array<String> {
-		return [
-			for (group in fi.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using) imp.raw
-		];
+		return [ for (group in fi.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using) imp.raw ];
 	}
 
 	/** The paths of the `using` statements `fi` itself writes, a guarded one included — the extensions it brings in by name. */
@@ -433,9 +431,7 @@ final class TypeRefIndex {
 
 	/** The packages the file's package wildcards (`import p.*;`) name, the `.*` dropped. */
 	public static function wildcardPackages(fi: FileInfo): Array<String> {
-		return [
-			for (imp in fi.imports) if (imp.kind == ImportKind.Wild) imp.raw.substr(0, imp.raw.lastIndexOf('.'))
-		];
+		return [ for (imp in fi.imports) if (imp.kind == ImportKind.Wild) imp.raw.substr(0, imp.raw.lastIndexOf('.')) ];
 	}
 
 	/** The dotted paths the file's alias imports (`import p.T as U;`) bind their aliases to, an undecodable one left out. */
@@ -497,9 +493,7 @@ final class TypeRefIndex {
 
 	/** The paths of the UNGUARDED `using` statements `fi` receives from its ambient chain — those that bind in every build. */
 	public static function unguardedAmbientUsings(fi: FileInfo): Array<String> {
-		return [
-			for (group in fi.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using && !imp.guarded) imp.raw
-		];
+		return [ for (group in fi.ambientImports) for (imp in group.imports) if (imp.kind == ImportKind.Using && !imp.guarded) imp.raw ];
 	}
 
 }

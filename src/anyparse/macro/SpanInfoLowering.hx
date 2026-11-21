@@ -542,14 +542,12 @@ class SpanInfoLowering extends PairedShapeLowering {
 
 	/** Body of `_spanOf<Leaf>S`: a paired ctor always carries its own `_span`, so every arm returns it. */
 	private function lowerSpanOf(rule: String, node: ShapeNode): Expr {
-		final cases: Array<Case> = [
-			for (branch in node.children) {
-				values: [
-					ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), [ for (_ in 0...branch.children.length) '_' ])
-				],
-				expr: macro return _span
-			}
-		];
+		final cases: Array<Case> = [ for (branch in node.children) {
+			values: [
+				ctorPattern(rule, branch.annotations.get(AnnotationKeys.BASE_CTOR), [ for (_ in 0...branch.children.length) '_' ])
+			],
+			expr: macro return _span
+		} ];
 		return block([
 			{ expr: ESwitch(ident('v'), cases, null), pos: Context.currentPos() },
 			macro return null
@@ -580,9 +578,7 @@ class SpanInfoLowering extends PairedShapeLowering {
 
 	/** The accessor ids that denote a plain stored slot, as an array-literal expression for the emitted test. */
 	public static function storedAccessorsExpr(): Expr {
-		final elems: Array<Expr> = [
-			for (id in STORED_ACCESSORS) ({ expr: EConst(CString(id)), pos: Context.currentPos() }: Expr)
-		];
+		final elems: Array<Expr> = [ for (id in STORED_ACCESSORS) ({ expr: EConst(CString(id)), pos: Context.currentPos() }: Expr) ];
 		return { expr: EArrayDecl(elems), pos: Context.currentPos() };
 	}
 

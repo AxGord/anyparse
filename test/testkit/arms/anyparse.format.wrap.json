@@ -243,8 +243,8 @@
 			"name": "M-CHAIN-THRESHOLD-WRAPS-PIVOT",
 			"type": "anyparse.format.wrap.BinaryChainEmit",
 			"method": "layout",
-			"find": "emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds);",
-			"replace": "extraThresholds.length == 0 ? emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, []) : WrapBoundary(Group(IfBreak(thresholdTree(extraThresholds, [], true, evalAt, shapeAt), thresholdTree(extraThresholds, [], false, evalAt, shapeAt))));",
+			"find": "emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds)",
+			"replace": "extraThresholds.length == 0 ? emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, []) : WrapBoundary(Group(IfBreak(thresholdTree(extraThresholds, [], true, evalAt, shapeAt), thresholdTree(extraThresholds, [], false, evalAt, shapeAt))))",
 			"note": "a cascade holding a lineLength rule wraps a plain Group around its exceeds pivot, which no longer counts the line's trailing columns nor carries the add-chain collapse marker"
 		},
 		{
@@ -753,6 +753,70 @@
 			"find": " && !(mixedBool && op == '||')",
 			"replace": "",
 			"note": "a chain mixing && with || fills across its || gaps, so an || no longer starts a line"
+		},
+		{
+			"name": "M-COMPR-RUN-GLUED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeMultiArgCollection",
+			"find": "if (ComprehensionRun.holds(items, collIdx, comprehensionItems)) return null;",
+			"replace": "",
+			"note": "a comprehension beside a broken collection argument rides its close line, so a literal run wider than a line is not laid out one literal per line"
+		},
+		{
+			"name": "M-COMPR-FIT-NO-YIELD",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "emitList",
+			"find": "comprehensionFitMeasure ? D.yieldsToRest(zero) : zero;",
+			"replace": "zero;",
+			"note": "a fit-cascade comprehension pays for the whole flat tail of its line, so it breaks its brackets though it fits and the construct after it could break"
+		},
+		{
+			"name": "M-COMPR-HUG-HEAD-UNMEASURED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionBlockHug",
+			"find": "IfWidthExceeds(\n\t\t\tlineWidth + DocMeasure.flatTokenWidth(hugged) - DocMeasure.flatFirstLineWidthThroughBodyGroup(head), unhugged(), hugged\n\t\t)",
+			"replace": "hugged",
+			"note": "a block-body comprehension hugs its brackets whatever the width of its generator heads, so a head past the bracket line wraps its iterable"
+		},
+		{
+			"name": "M-COMPR-SOLE-ARG-FIT-HUGS",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSingleArgGlue",
+			"find": "final comprFlat: Int = comprehensionItems != null && comprehensionItems[0] ? flatLength(items[0]) : -1;",
+			"replace": "final comprFlat: Int = -1;",
+			"note": "a sole comprehension argument that fits on its own line hugs the parentheses and breaks inside its brackets, and a ternary argument after it splits over its operator lines"
+		},
+		{
+			"name": "M-COMPR-SOLE-ARG-NEVER-HUGS",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSingleArgGlue",
+			"find": ": IfArrowContinuationFits(cols, comprFlat + (appendTrailingComma ? sep.length : 0), lineWidth + 1, hugged, broken);",
+			"replace": ": broken;",
+			"note": "a sole comprehension argument too wide for its own line still takes that line, breaking its brackets below the parenthesis"
+		},
+		{
+			"name": "M-HUG-HEAD-BOUNDARY",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionBlockHug",
+			"find": "lineWidth + DocMeasure.flatTokenWidth(hugged)",
+			"replace": "lineWidth + 1 + DocMeasure.flatTokenWidth(hugged)",
+			"note": "the block hug holds one column past the line limit, so a head line ending at the limit plus one hugs and wraps its iterable"
+		},
+		{
+			"name": "M-TERNARY-FIT-HUG-OFF",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "ternaryFitHug",
+			"find": "final idx: Int = admitted ? ternaryHugCollectionBranchIndex(items, ops, true) : -1;",
+			"replace": "final idx: Int = -1;",
+			"note": "a ternary whose comprehension branch cannot fit its own line breaks at ? and : anyway, though the comprehension breaks too"
+		},
+		{
+			"name": "M-TERNARY-HUG-WIDTH-ARM",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "ternaryHugShape",
+			"find": "final widthArm: Null<Doc> = widthProbeBreakArm(hugItems[idx]);",
+			"replace": "final widthArm: Null<Doc> = null;",
+			"note": "the ternary hug measures a block-body comprehension branch by its hugged head, so a head too wide for the line breaks the ternary instead of gluing it to the bracket"
 		}
 	]
 }

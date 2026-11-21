@@ -140,15 +140,13 @@ final class CondRegionMerge extends RuleBase {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) for (site in sites(entry.source, plugin)) {
-				file: entry.file,
-				span: site.boundary,
-				rule: ID,
-				severity: Severity.Info,
-				message: site.message
-			}
-		];
+		return [ for (entry in files) for (site in sites(entry.source, plugin)) {
+			file: entry.file,
+			span: site.boundary,
+			rule: ID,
+			severity: Severity.Info,
+			message: site.message
+		} ];
 	}
 
 	/** Splice each flagged boundary: the two directive lines are replaced by what the merged region needs there, at most an `#else`. */

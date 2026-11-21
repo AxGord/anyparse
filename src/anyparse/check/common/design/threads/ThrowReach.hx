@@ -55,27 +55,23 @@ final class ThrowReach {
 
 	/** The starts of the calls of `edge`'s function, in its file, that may raise. */
 	public function raisingFroms(edge: CallEdge): Array<Int> {
-		return [
-			for (e in _graph.outEdges(edge.from)) {
-				final at: Null<Span> = e.span;
-				if (at != null && e.file == edge.file && raises(e)) at.from;
-			}
-		];
+		return [ for (e in _graph.outEdges(edge.from)) {
+			final at: Null<Span> = e.span;
+			if (at != null && e.file == edge.file && raises(e)) at.from;
+		} ];
 	}
 
 	/** Each of the escape nodes `nodes` of `edge`'s function as a `LockEscape`, sorted by start: a raising call names its edge. */
 	public function escapes(edge: CallEdge, nodes: Array<QueryNode>): Array<LockEscape> {
-		final escapes: Array<LockEscape> = [
-			for (n in nodes) {
-				final at: Null<Span> = n.span;
-				if (at != null) {
-					final span: Span = at;
-					final raiser: Null<CallEdge> = _graph.outEdges(edge.from)
-						.find(e -> e.file == edge.file && e.span?.from == span.from && raises(e));
-					{ span: span, raiser: raiser };
-				}
+		final escapes: Array<LockEscape> = [ for (n in nodes) {
+			final at: Null<Span> = n.span;
+			if (at != null) {
+				final span: Span = at;
+				final raiser: Null<CallEdge> = _graph.outEdges(edge.from)
+					.find(e -> e.file == edge.file && e.span?.from == span.from && raises(e));
+				{ span: span, raiser: raiser };
 			}
-		];
+		} ];
 		escapes.sort((x, y) -> x.span.from - y.span.from);
 		return escapes;
 	}

@@ -466,9 +466,8 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 				for (b in [BranchChain.THEN_BRANCH_INDEX, BranchChain.ELSE_BRANCH_INDEX])
 					if (b < link.children.length && before.contains(links[i].children[b])) link.children[b]
 		];
-		return braced.length == before.length && [
-			for (i => block in braced) block.children.length == 1 && block.children[0].kind == before[i].kind
-		].foreach(ok -> ok);
+		return braced.length == before.length
+			&& [ for (i => block in braced) block.children.length == 1 && block.children[0].kind == before[i].kind ].foreach(ok -> ok);
 	}
 
 	/**

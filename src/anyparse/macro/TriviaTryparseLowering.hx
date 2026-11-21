@@ -100,16 +100,12 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		);
 		final caseBodyFlagNames: Array<String> = _plan.bodyPolicy() ?? [];
 		// `@:fmt(flatChildOpt('A=B', …))`: each arg is a `from=to` option pair the flat case body copies.
-		final flatChildOptPairs: Array<Array<String>> = [
-			for (raw in _plan.flatChildOpt() ?? []) {
-				final eq: Int = raw.indexOf('=');
-				if (eq <= 0 || eq >= raw.length - 1)
-					Context.fatalError(
-						'WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos()
-					);
-				[raw.substr(0, eq), raw.substr(eq + 1)];
-			}
-		];
+		final flatChildOptPairs: Array<Array<String>> = [ for (raw in _plan.flatChildOpt() ?? []) {
+			final eq: Int = raw.indexOf('=');
+			if (eq <= 0 || eq >= raw.length - 1)
+				Context.fatalError('WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos());
+			[raw.substr(0, eq), raw.substr(eq + 1)];
+		} ];
 		// A run that annotates nothing answers `-2`, so it keeps its source layout and owes no break after its last element;
 		// a run holding a comment, or followed by one before what it annotates, breaks as under `After`.
 		final ownMetaPolicy: Null<Expr> = WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, starNode, c.typePath);
@@ -950,13 +946,11 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 			// (the parser treats `macro` as a variable name in the next element).
 			final block: Array<Expr> = [(macro final _wo = _copyOpt(opt)), macro _wo._inExprPosition = true];
 			if (hasFlatChildOpt) {
-				final flatOnlyParts: Array<Expr> = [
-					for (pair in flatChildOptPairs) {
-						final from: String = pair[0];
-						final toAccess: Expr = optFieldAccess(pair[1]);
-						macro _wo.$from = $toAccess;
-					}
-				];
+				final flatOnlyParts: Array<Expr> = [ for (pair in flatChildOptPairs) {
+					final from: String = pair[0];
+					final toAccess: Expr = optFieldAccess(pair[1]);
+					macro _wo.$from = $toAccess;
+				} ];
 				block.push(macro if (_flatCase) $b{flatOnlyParts});
 			}
 			block.push(macro _wo);

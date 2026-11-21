@@ -311,6 +311,10 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		final containerKindsDecl: Expr = _plan.complexItems()
 			? macro final _containerKinds: Null<Array<Null<Array<Int>>>> = _complexKinds == null ? null : $containerKindsCall
 			: macro final _containerKinds: Null<Array<Null<Array<Int>>>> = null;
+		final comprehensionsCall: Expr = WriterLowering.astPredCallT(WriterLowering.COMPREHENSION_ITEMS_PRED, [macro cast _arr]);
+		final comprehensionsDecl: Expr = _plan.complexItems()
+			? macro final _comprehensions: Null<Array<Bool>> = _complexKinds == null ? null : $comprehensionsCall
+			: macro final _comprehensions: Null<Array<Bool>> = null;
 		// A Star without `@:fmt(typeParamItems)` counts 0, which no `typeParamItemCount >= n` rule with `n >= 1` reads as firing.
 		final typeParamCountCall: Expr = WriterLowering.astPredCallT(WriterLowering.TYPE_PARAM_ITEM_COUNT_PRED, [macro cast _arr]);
 		final typeParamCountExpr: Expr = _plan.typeParamItems() ? typeParamCountCall : macro 0;
@@ -442,6 +446,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 					&& _ignoreEmit;
 				$complexKindsDecl;
 				$containerKindsDecl;
+				$comprehensionsDecl;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{_openText}, $v{_closeText}, $v{_sepText}, _docs, opt, $_openInsideDoc, $_closeInsideDoc, false, _effRules, {
 						appendTrailingComma: ${_trail.appendTrailingCommaExpr},
@@ -466,6 +471,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 						comprehensionBodyMeasure: _isComprehension,
 						complexItemKinds: _complexKinds,
 						containerItemKinds: _containerKinds,
+						comprehensionItems: _comprehensions,
 						typeParamItemCount: $typeParamCountExpr,
 						moduleOnlyTypedefs: $moduleOnlyTypedefsExpr,
 						redecided: $v{_openText == '{'} && _ignoreEmit

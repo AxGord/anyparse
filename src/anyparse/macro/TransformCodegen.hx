@@ -48,15 +48,13 @@ class TransformCodegen {
 		final pack: Array<String> = packOf(visitTypePath);
 		final name: String = simpleName(visitTypePath);
 
-		final structFields: Array<Field> = [
-			for (hook in hooks) {
-				name: hook.name,
-				kind: FVar(TFunction([hook.ct], hook.ct)),
-				access: [],
-				meta: [{ name: ':optional', params: [], pos: Context.currentPos() }],
-				pos: Context.currentPos()
-			}
-		];
+		final structFields: Array<Field> = [ for (hook in hooks) {
+			name: hook.name,
+			kind: FVar(TFunction([hook.ct], hook.ct)),
+			access: [],
+			meta: [{ name: ':optional', params: [], pos: Context.currentPos() }],
+			pos: Context.currentPos()
+		} ];
 
 		Context.defineType({
 			pack: pack,

@@ -59,9 +59,7 @@ final class GateExcerpt {
 	 * each without its indentation.
 	 */
 	public static function lintRows(report: String, removed: Bool): Array<String> {
-		return [
-			for (line in report.split('\n')) if (line.startsWith('  + ') || (removed && line.startsWith('  - '))) line.trim()
-		];
+		return [ for (line in report.split('\n')) if (line.startsWith('  + ') || (removed && line.startsWith('  - '))) line.trim() ];
 	}
 
 	/**

@@ -212,9 +212,9 @@ final class PatchCommand implements CliCommand implements PostWriteFix {
 				sections.push([]);
 			else
 				sections[sections.length - 1].push(l);
-		return sections.length < 2 || sections.length % 2 != 0 ? null : [
-			for (i in 0...(sections.length >> 1)) { oldText: sections[i * 2].join('\n'), newText: sections[i * 2 + 1].join('\n') }
-		];
+		return sections.length < 2 || sections.length % 2 != 0
+			? null
+			: [ for (i in 0...(sections.length >> 1)) { oldText: sections[i * 2].join('\n'), newText: sections[i * 2 + 1].join('\n') } ];
 	}
 
 	private static function parsePatchArgs(args: Array<String>): PatchOpts {

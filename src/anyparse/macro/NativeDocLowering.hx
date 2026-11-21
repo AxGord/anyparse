@@ -119,20 +119,16 @@ final class NativeDocLowering {
 		final doorPath: Array<String> = _door;
 		_names = 0;
 		final steps: Array<Expr> = [macro if (!$p{doorPath}.isObject(raw)) return false];
-		final optional: Array<Bool> = [
-			for (child in node.children) child.annotations[AnnotationKeys.BASE_OPTIONAL] == true
-		];
+		final optional: Array<Bool> = [ for (child in node.children) child.annotations[AnnotationKeys.BASE_OPTIONAL] == true ];
 		if (optional.contains(true)) {
 			final key: String = nameOf('k');
 			final value: String = nameOf('v');
 			final met: String = nameOf('n');
 			final seen: Array<Null<String>> = [ for (o in optional) o ? nameOf('s') : null ];
-			final cases: Array<Case> = [
-				for (i => child in node.children) {
-					final flag: Null<String> = seen[i];
-					checkEntry(child, macro $i{value}, flag == null ? macro $i{met}++ : macro $i{flag} = true);
-				}
-			];
+			final cases: Array<Case> = [ for (i => child in node.children) {
+				final flag: Null<String> = seen[i];
+				checkEntry(child, macro $i{value}, flag == null ? macro $i{met}++ : macro $i{flag} = true);
+			} ];
 			final dispatch: Expr = { expr: ESwitch(macro $i{key}, cases, null), pos: Context.currentPos() };
 			steps.push(macro var $met: Int = 0);
 			for (flag in seen) if (flag != null) steps.push(macro var $flag: Bool = false);

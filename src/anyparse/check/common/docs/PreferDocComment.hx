@@ -168,15 +168,13 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
-		return seams == null ? [] : [
-			for (entry in files) for (rewrite in rewrites(entry.source, plugin, seams)) {
-				file: entry.file,
-				span: rewrite.comment,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: 'line comment above a declaration; use a doc comment'
-			}
-		];
+		return seams == null ? [] : [ for (entry in files) for (rewrite in rewrites(entry.source, plugin, seams)) {
+			file: entry.file,
+			span: rewrite.comment,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: 'line comment above a declaration; use a doc comment'
+		} ];
 	}
 
 	/** Rewrite each flagged run to a doc comment. */
@@ -537,9 +535,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 	 * reached the same way a top-level type is.
 	 */
 	private static function collectAnchors(source: String, node: QueryNode, seams: Seams, owner: Span, out: Map<Int, Anchor>): Void {
-		final runFrom: Map<Int, Int> = [
-			for (run in CheckScan.leadingRuns(node, [], seams.isRunEntry)) run.span.to => run.span.from
-		];
+		final runFrom: Map<Int, Int> = [ for (run in CheckScan.leadingRuns(node, [], seams.isRunEntry)) run.span.to => run.span.from ];
 		for (child in node.children) {
 			final span: Null<Span> = child.span;
 			if (seams.decls.contains(child.kind) && span != null) {

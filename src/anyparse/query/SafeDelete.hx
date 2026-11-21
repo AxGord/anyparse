@@ -61,15 +61,13 @@ final class SafeDelete {
 		srcFile: String, srcTypeName: String, memberName: String, reformat: Bool, scopeFiles: Array<{ file: String, source: String }>,
 		plugin: GrammarPlugin, refShape: RefShape, ?optsJson: String
 	): EditResult {
-		final parsed: Array<Parsed> = [
-			for (entry in scopeFiles) {
-				final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
-					case Unparsed(_): return Err('cannot check references: ${entry.file} does not parse');
-					case Parsed(read): read;
-				};
-				{ file: entry.file, source: entry.source, tree: tree };
-			}
-		];
+		final parsed: Array<Parsed> = [ for (entry in scopeFiles) {
+			final tree: QueryNode = switch ParseGate.parse(plugin, entry.source, entry.file) {
+				case Unparsed(_): return Err('cannot check references: ${entry.file} does not parse');
+				case Parsed(read): read;
+			};
+			{ file: entry.file, source: entry.source, tree: tree };
+		} ];
 
 		final srcEntry: Null<Parsed> = parsed.find(p -> p.file == srcFile);
 		if (srcEntry == null) return Err('source file $srcFile is not in the scope file set');

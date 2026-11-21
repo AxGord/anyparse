@@ -65,9 +65,7 @@ class ThreadSafetyLongLocksTest extends Test {
 		final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {}'
 			+ ' public function take(b:Bool):Void { if (b) _m.acquire(); b = !b; if (b) _m.release(); }'
 			+ ' public static function main():Void { new A().take(true); } }';
-		Assert.same(['A.take'], [
-			for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder
-		]);
+		Assert.same(['A.take'], [ for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder ]);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -260,9 +258,7 @@ class ThreadSafetyLongLocksTest extends Test {
 				'A._m @ ${source.indexOf('_m.acquire')} in A.boot quiet=false',
 				'A._m @ ${source.indexOf('_m.acquire', source.indexOf('shutdown'))} in A.shutdown quiet=true'
 			],
-			[
-				for (t in report?.mainShort ?? []) '${t.lock} @ ${t.span?.from} in ${t.holder} quiet=${t.quiet}'
-			]
+			[ for (t in report?.mainShort ?? []) '${t.lock} @ ${t.span?.from} in ${t.holder} quiet=${t.quiet}' ]
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -298,9 +294,7 @@ class ThreadSafetyLongLocksTest extends Test {
 			final source: String = 'class A { final _m:Mutex = new Mutex(); public function new() {} function c():Bool return false;'
 				+ ' public function take(b:Bool):Void { if (b) _m.acquire(); $shadow if (b) _m.release(); }'
 				+ ' public static function main():Void { new A().take(true); } }';
-			Assert.same(['A.take'], [
-				for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder
-			], shadow);
+			Assert.same(['A.take'], [ for (r in reasonsOf(longLock(explain([source]), 'A._m'))) if (r.kind == 'leak') r.holder ], shadow);
 		}
 		#else
 		Assert.pass('non-sys target');
@@ -335,9 +329,7 @@ class ThreadSafetyLongLocksTest extends Test {
 
 	/** Each reason of `lock` as kind, holder and the offset of its site in its own source. */
 	private static function reasonsOf(lock: Null<LongLock>): Array<{ kind: String, holder: String, at: Null<Int> }> {
-		return [
-			for (r in lock?.reasons ?? []) { kind: r.kind, holder: r.holder, at: r.span?.from }
-		];
+		return [ for (r in lock?.reasons ?? []) { kind: r.kind, holder: r.holder, at: r.span?.from } ];
 	}
 
 	/** The calls the `spans-blocking` reasons of `reasons` name, sorted. */

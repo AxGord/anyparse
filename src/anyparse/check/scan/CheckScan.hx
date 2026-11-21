@@ -484,9 +484,7 @@ final class CheckScan {
 	 * a naive `lastIndexOf('/*')` hits.
 	 */
 	public static function docBlockEnds(source: String, regions: Array<LexRegion>): Map<Int, Bool> {
-		return [
-			for (tok in SourceComments.collectCommentTokens(regions)) if (SourceComments.isDocBlock(source, tok)) tok.to => true
-		];
+		return [ for (tok in SourceComments.collectCommentTokens(regions)) if (SourceComments.isDocBlock(source, tok)) tok.to => true ];
 	}
 
 	/**

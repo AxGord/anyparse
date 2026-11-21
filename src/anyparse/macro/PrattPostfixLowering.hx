@@ -221,9 +221,7 @@ final class PrattPostfixLowering {
 		final enumSimple: String = simple;
 		final selfFnName: String = oc.parseFnName(typePath);
 		final coreCall: Expr = { expr: ECall(macro $i{coreFnName}, [macro ctx]), pos: Context.currentPos() };
-		final postfixBranches: Array<ShapeNode> = [
-			for (b in node.children) if (b.annotations.get(AnnotationKeys.POSTFIX_OP) != null) b
-		];
+		final postfixBranches: Array<ShapeNode> = [ for (b in node.children) if (b.annotations.get(AnnotationKeys.POSTFIX_OP) != null) b ];
 		if (postfixBranches.length == 0)
 			Context.fatalError('Lowering: lowerPostfixLoop called with no postfix branches', Context.currentPos());
 		// ω-keep-chain-receiver-comment: when this postfix enum has a method-chain

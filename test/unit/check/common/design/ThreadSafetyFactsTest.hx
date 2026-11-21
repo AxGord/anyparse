@@ -76,12 +76,10 @@ class ThreadSafetyFactsTest extends Test {
 
 	#if (sys || nodejs)
 	private static function graded(found: Array<Violation>): Array<String> {
-		return [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
-			}
-		];
+		return [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
+		} ];
 	}
 	#end
 

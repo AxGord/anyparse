@@ -295,9 +295,9 @@ final class FactNodeRecords {
 	/** The uses `record` gives each parameter of its node (`FactNode.paramUses`), or null when it records none. */
 	private static function paramUsesOf(record: FactNodeRecord): Null<Array<Array<ParamUse>>> {
 		final recorded: Null<Array<Array<FactUseRecord>>> = record.pu;
-		return recorded == null || recorded.length != (record.params ?? []).length ? null : [
-			for (uses in recorded) [ for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) } ]
-		];
+		return recorded == null || recorded.length != (record.params ?? []).length
+			? null
+			: [ for (uses in recorded) [ for (u in uses) { use: u.u ?? '', method: u.m, argument: argumentOf(u) } ] ];
 	}
 
 	/** The uses `known` and `more` give a node's parameters, joined per parameter; null when either is, or they disagree on the count. */

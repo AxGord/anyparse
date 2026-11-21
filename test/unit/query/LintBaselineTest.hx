@@ -69,9 +69,7 @@ class LintBaselineTest extends Test {
 			record('src/A.hx', 'info', 'string-literal-dup', message),
 			record('src/A.hx', 'info', 'string-literal-dup', message)
 		]);
-		final three: Array<Violation> = [
-			for (_ in 0...3) violation('src/A.hx', Severity.Info, 'string-literal-dup', message)
-		];
+		final three: Array<Violation> = [ for (_ in 0...3) violation('src/A.hx', Severity.Info, 'string-literal-dup', message) ];
 		Assert.equals(1, delta(three, before).length);
 	}
 
@@ -145,9 +143,8 @@ class LintBaselineTest extends Test {
 		final old: LintDiffTally = snapshot([ for (m in ['m1', 'm2', 'm3']) record('src/A.hx', 'warning', 'thread-safety', m) ]);
 		Assert.equals(
 			0,
-			delta([
-				for (m in ['m1', 'm2', 'm3']) withData(violation('src/A.hx', Severity.Warning, 'thread-safety', m), 'S.f')
-			], old).length
+			delta([ for (m in ['m1', 'm2', 'm3']) withData(violation('src/A.hx', Severity.Warning, 'thread-safety', m), 'S.f') ], old)
+				.length
 		);
 		// the snapshot holds identity S.f (message m) and a record without data (message m); live: identity S.g, then no data
 		final mixed: LintDiffTally = LintDiff.tally([

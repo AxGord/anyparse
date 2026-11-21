@@ -229,12 +229,10 @@ final class OracleServerPool {
 		// a server that did not take every invalidation may hold a text that is gone: it answers nothing from here on
 		for (i in unheard) end(oracles[i]);
 		final compiled: Array<Int> = [ for (i in asked) if (!unheard.contains(i)) i ];
-		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
-			for (i in compiled) {
-				final server: Null<PoolServer> = _servers[keyOf(oracles[i])];
-				{ args: server == null ? [] : compileArgs(server.port, oracles[i]), cwd: oracles[i].dir };
-			}
-		], BUFFER, ProcessSpawn.parallelism());
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([ for (i in compiled) {
+			final server: Null<PoolServer> = _servers[keyOf(oracles[i])];
+			{ args: server == null ? [] : compileArgs(server.port, oracles[i]), cwd: oracles[i].dir };
+		} ], BUFFER, ProcessSpawn.parallelism());
 		for (k in 0...compiled.length) {
 			final i: Int = compiled[k];
 			final server: Null<PoolServer> = _servers[keyOf(oracles[i])];

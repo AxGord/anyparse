@@ -62,13 +62,11 @@ final class MoveScaffold {
 				? VErr('--via field "$viaField" is declared as "$declaredType", not "${prep.destTypeName}"')
 				: VOk(viaField);
 		}
-		final candidates: Array<String> = [
-			for (g in fields) {
-				final gSpan: Null<Span> = g.member.span;
-				final name: Null<String> = g.member.name;
-				if (gSpan != null && name != null && declared[gSpan.from] == prep.destTypeName) name;
-			}
-		];
+		final candidates: Array<String> = [ for (g in fields) {
+			final gSpan: Null<Span> = g.member.span;
+			final name: Null<String> = g.member.name;
+			if (gSpan != null && name != null && declared[gSpan.from] == prep.destTypeName) name;
+		} ];
 		return switch candidates {
 			case [one]: VOk(one);
 			case []:
@@ -190,12 +188,10 @@ final class MoveScaffold {
 	private static function scaffoldDestBlock(fields: Array<ScaffoldField>): String {
 		final fieldLines: String = fields.map(f -> '\tprivate final ${f.name}: ${f.type};').join('\n');
 		final params: String = fields.map(f -> '${paramNameOf(f.name)}: ${f.type}').join(', ');
-		final assigns: String = [
-			for (f in fields) {
-				final p: String = paramNameOf(f.name);
-				'\t\t${p == f.name ? 'this.${f.name} = $p;' : '${f.name} = $p;'}';
-			}
-		].join('\n');
+		final assigns: String = [ for (f in fields) {
+			final p: String = paramNameOf(f.name);
+			'\t\t${p == f.name ? 'this.${f.name} = $p;' : '${f.name} = $p;'}';
+		} ].join('\n');
 		return '$fieldLines\n\n\tpublic function new($params) {\n$assigns\n\t}';
 	}
 

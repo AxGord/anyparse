@@ -190,9 +190,9 @@ private final class BodyText {
 		final loopKinds: Array<String> = (shape.loopStatementKinds ?? []).concat(shape.iterationBindingKinds ?? []);
 		final constructed: Map<String, String> = shape.execution?.literalConstructions ?? [];
 		final comprehended: Map<String, String> = shape.execution?.comprehensionCalls ?? [];
-		final comprehensionLoops: Array<String> = (shape.iterationBindingKinds ?? []).concat([ for (k in [shape.whileExprKind]) if (
-			k != null
-		) k ]);
+		final comprehensionLoops: Array<String> = (shape.iterationBindingKinds ?? []).concat(
+			[ for (k in [shape.whileExprKind]) if (k != null) k ]
+		);
 		final interpolating: Array<String> = shape.interpolatingStringKinds ?? [];
 		final loops: Array<Span> = [];
 		final literals: Array<{ kind: String, span: Span }> = [];

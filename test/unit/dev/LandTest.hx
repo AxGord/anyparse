@@ -1234,9 +1234,7 @@ final class LandTest extends Test {
 				commits: Std.parseInt(cmd('git -C $repo rev-list --count HEAD').run().out.trim()) ?? -1,
 				message: cmd('git -C $repo log -1 --format=%B').run().out.trim(),
 				author: cmd('git -C $repo log -1 --format=%an').run().out.trim(),
-				files: [
-					for (path in shape.read ?? []) if (FileSystem.exists('$repo/$path')) path => File.getContent('$repo/$path')
-				],
+				files: [ for (path in shape.read ?? []) if (FileSystem.exists('$repo/$path')) path => File.getContent('$repo/$path') ],
 				brief: contentsOf('$logs/merge-brief.md'),
 				proseLog: contentsOf('$logs/prose-refs.txt')
 			};

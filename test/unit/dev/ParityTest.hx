@@ -95,14 +95,12 @@ final class ParityTest extends Test {
 		}
 		TempDir.with(dir -> {
 			final stand: String = engine(dir.file('a.js'), 'A');
-			final invocations: Array<Invocation> = [
-				for (name in ['one', 'two']) {
-					name: name,
-					argv: ['apq', 'echo', name],
-					stdin: null,
-					files: []
-				}
-			];
+			final invocations: Array<Invocation> = [ for (name in ['one', 'two']) {
+				name: name,
+				argv: ['apq', 'echo', name],
+				stdin: null,
+				files: []
+			} ];
 			final outcomes: Array<Outcome> = TempDir.with(work -> Parity.side(tree, stand, invocations, work, 1, true));
 			Assert.same([null, null], outcomes.map(outcome -> outcome.status));
 			for (outcome in outcomes) Assert.stringContains('apq --batch gave no answer', outcome.failure);
@@ -124,14 +122,12 @@ final class ParityTest extends Test {
 			Assert.isFalse(Parity.oneProcessFor(tree, base, true), 'a stand-in engine has no batch entry');
 			Assert.isTrue(Parity.oneProcessFor(tree, real, true), 'this tree\'s engine has it');
 			Assert.isFalse(Parity.oneProcessFor(tree, real, false), 'per process when one process is not wanted');
-			final invocations: Array<Invocation> = [
-				for (name in ['one', 'two', 'three']) {
-					name: name,
-					argv: ['apq', 'echo', name],
-					stdin: 'in',
-					files: ['log' => '']
-				}
-			];
+			final invocations: Array<Invocation> = [ for (name in ['one', 'two', 'three']) {
+				name: name,
+				argv: ['apq', 'echo', name],
+				stdin: 'in',
+				files: ['log' => '']
+			} ];
 			final apart: Array<Comparison> = Parity.compare(tree, base, tip, invocations, 2, false);
 			final wanted: Array<Comparison> = Parity.compare(tree, base, tip, invocations, 2, true);
 			for (i => run in wanted) {

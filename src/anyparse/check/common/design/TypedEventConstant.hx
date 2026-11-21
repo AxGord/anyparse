@@ -174,23 +174,21 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 		final types: Null<EventTypes> = validate(spec, index, plugin, problems);
 		for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
 		if (types == null) return [];
-		final parsed: Array<Parsed> = [
-			for (entry in files) {
-				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
-				final info: Null<FileInfo> = index.fileInfo(entry.file);
-				if (tree != null && info != null) {
-					final parsedTree: QueryNode = tree;
-					final parsedInfo: FileInfo = info;
-					{
-						file: entry.file,
-						source: entry.source,
-						tree: parsedTree,
-						info: parsedInfo,
-						declaredTypeSources: seams.typed?.declaredTypeSources(entry.source) ?? []
-					};
-				}
+		final parsed: Array<Parsed> = [ for (entry in files) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
+			final info: Null<FileInfo> = index.fileInfo(entry.file);
+			if (tree != null && info != null) {
+				final parsedTree: QueryNode = tree;
+				final parsedInfo: FileInfo = info;
+				{
+					file: entry.file,
+					source: entry.source,
+					tree: parsedTree,
+					info: parsedInfo,
+					declaredTypeSources: seams.typed?.declaredTypeSources(entry.source) ?? []
+				};
 			}
-		];
+		} ];
 		final candidates: Map<String, Candidate> = [];
 		for (p in parsed) collectCandidates(p, p.tree, types, index, seams, candidates);
 		final uses: Map<String, Array<Use>> = [];

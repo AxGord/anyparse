@@ -200,17 +200,15 @@ final class Summary {
 	/** One aligned row per step: name, outcome, seconds, and the reason when there is one. */
 	public function table(): String {
 		final width: Int = _steps.fold((step: Step, w: Int) -> step.name.length > w ? step.name.length : w, 0);
-		final rows: Array<String> = [
-			for (step in _steps) {
-				final why: String = switch step.outcome {
-					case Passed: step.note == '' ? '' : '  ${step.note}';
-					case Failed(why), NotRun(why), Skipped(why): '  $why';
-				};
-				final waited: Float = step.wait ?? 0;
-				final wait: String = waited >= WAIT_SHOWN_MS ? '  waited ${Math.round(waited / MS_PER_SECOND)}s' : '';
-				'${step.name.rpad(' ', width)}  ${label(step.outcome).rpad(' ', OUTCOME_WIDTH)}  ${seconds(step.ms).lpad(' ', SECONDS_WIDTH)}$why$wait';
-			}
-		];
+		final rows: Array<String> = [ for (step in _steps) {
+			final why: String = switch step.outcome {
+				case Passed: step.note == '' ? '' : '  ${step.note}';
+				case Failed(why), NotRun(why), Skipped(why): '  $why';
+			};
+			final waited: Float = step.wait ?? 0;
+			final wait: String = waited >= WAIT_SHOWN_MS ? '  waited ${Math.round(waited / MS_PER_SECOND)}s' : '';
+			'${step.name.rpad(' ', width)}  ${label(step.outcome).rpad(' ', OUTCOME_WIDTH)}  ${seconds(step.ms).lpad(' ', SECONDS_WIDTH)}$why$wait';
+		} ];
 		return rows.join('\n');
 	}
 
@@ -219,15 +217,13 @@ final class Summary {
 	 * such step has one.
 	 */
 	public function excerpts(): String {
-		final blocks: Array<String> = [
-			for (step in _steps) {
-				final failing: Bool = switch step.outcome {
-					case Failed(_), NotRun(_): true;
-					case Passed, Skipped(_): false;
-				};
-				if (failing && step.excerpt.length != 0) '${step.name}:\n' + Excerpt.cut(step.excerpt).map(line -> '  $line').join('\n');
-			}
-		];
+		final blocks: Array<String> = [ for (step in _steps) {
+			final failing: Bool = switch step.outcome {
+				case Failed(_), NotRun(_): true;
+				case Passed, Skipped(_): false;
+			};
+			if (failing && step.excerpt.length != 0) '${step.name}:\n' + Excerpt.cut(step.excerpt).map(line -> '  $line').join('\n');
+		} ];
 		return blocks.join('\n');
 	}
 

@@ -41,15 +41,13 @@ final class BatteryBranchTest extends Test {
 	@:pin('control')
 	@:killer('M-BATTERY-ROW-THREADS-DROPPED')
 	public function testEachRowOfTheBranchCarriesItsThreads(): Void {
-		final steps: Array<Step> = [
-			for (name in ['suite', 'corpus', 'fmt']) {
-				name: name,
-				outcome: Passed,
-				ms: 1,
-				note: '',
-				excerpt: []
-			}
-		];
+		final steps: Array<Step> = [ for (name in ['suite', 'corpus', 'fmt']) {
+			name: name,
+			outcome: Passed,
+			ms: 1,
+			note: '',
+			excerpt: []
+		} ];
 		BatteryBranch.carryThreads(steps, ['suite', 'corpus'], 3);
 		Assert.same([3, 3, null], steps.map(step -> step.threads));
 		BatteryBranch.carryThreads(steps, ['fmt'], null);

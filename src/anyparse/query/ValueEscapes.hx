@@ -150,9 +150,7 @@ final class ValueEscapes {
 	private function macroMember(file: String, tree: QueryNode, node: QueryNode): Bool {
 		final name: Null<String> = node.name;
 		final at: Null<Span> = node.span;
-		final kinds: Array<String> = [
-			for (k in _shape.functionKinds ?? []) if (!(_shape.localFunctionKinds ?? []).contains(k)) k
-		];
+		final kinds: Array<String> = [ for (k in _shape.functionKinds ?? []) if (!(_shape.localFunctionKinds ?? []).contains(k)) k ];
 		if (!kinds.contains(node.kind) || name == null || at == null) return false;
 		final type: Null<String> = TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name;
 		final declared: Null<TypeDeclInfo> = type == null ? null : _scope.index.fileInfo(file)?.types.find(t -> t.name == type);
@@ -325,9 +323,7 @@ final class ValueEscapes {
 		final functions: Array<String> = ShapeVocab.functionLikeKinds(shape);
 		final assignKinds: Array<String> = [ for (k in [shape.assignKind, shape.nullCoalAssignKind]) if (k != null) k ];
 		// a lambda whose body is an expression yields it; a `function` lambda returns only through `return`
-		final arrowKinds: Array<String> = [
-			for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k
-		];
+		final arrowKinds: Array<String> = [ for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k ];
 		// statements that yield no value as a block's last one; a local function
 		// yields its closure, which `value` lets pass as it does a lambda
 		final silentKinds: Array<String> = (shape.localDeclKinds ?? []).concat(ShapeVocab.statementLoopKinds(shape))

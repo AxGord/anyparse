@@ -3486,8 +3486,8 @@
 			"name": "M-QUERY-TRANSPARENT-CTOR",
 			"type": "anyparse.macro.QueryWalkerLowering",
 			"method": "walkCase",
-			"find": "if (branch.hasMeta(QUERY_TRANSPARENT_META)) return {",
-			"replace": "if (false) return {",
+			"find": "if (branch.hasMeta(QUERY_TRANSPARENT_META))\n\t\t\treturn {",
+			"replace": "if (false)\n\t\t\treturn {",
 			"note": "a `@:queryTransparent` ctor projects a node of its own again, so a type parameter bound reads as `(TypeBound (Named Foo))` instead of its type"
 		},
 		{

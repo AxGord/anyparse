@@ -116,9 +116,7 @@ final class ExtractTypedef {
 	private static function occurrenceAt(
 		groups: Map<String, Array<Occurrence>>, order: Array<String>, entry: { file: String, source: String }, line: Int, col: Null<Int>
 	): Either<Occurrence, String> {
-		final here: Array<Occurrence> = [
-			for (key in order) for (hit in groups[key] ?? []) if (hit.file == entry.file) hit
-		];
+		final here: Array<Occurrence> = [ for (key in order) for (hit in groups[key] ?? []) if (hit.file == entry.file) hit ];
 		final offset: Int = Span.offsetOf(entry.source, line, col ?? 1);
 		final holding: Array<Occurrence> = here.filter(h -> col != null && h.at.from <= offset && offset < h.at.to);
 		holding.sort((a, b) -> (a.at.to - a.at.from) - (b.at.to - b.at.from));

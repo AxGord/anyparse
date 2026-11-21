@@ -131,9 +131,10 @@ class CondQueryTest extends Test {
 		Assert.equals(1, found.length);
 		Assert.same([true, true], [ for (branch in found[0].branches) branch.raw ]);
 		Assert.same(['1;', '2;'], [ for (branch in found[0].branches) text(RAW, branch.body).trim() ]);
-		Assert.same([[], []], [
-			for (branch in found[0].branches) CondQuery.namesIn(new HaxeQueryPlugin().parseFile(RAW), branch.body, SHAPE)
-		]);
+		Assert.same(
+			[[], []],
+			[ for (branch in found[0].branches) CondQuery.namesIn(new HaxeQueryPlugin().parseFile(RAW), branch.body, SHAPE) ]
+		);
 		// …and a region the tree DOES model is not flagged, so the flag is about this shape and not
 		// about every region.
 		Assert.same([false, false, false], [ for (branch in regionsOf(FLAT, 'nodejs')[0].branches) branch.raw ]);
@@ -169,9 +170,7 @@ class CondQueryTest extends Test {
 	 * Both arms are parse-free, so the tree cannot decide them and only the blank test can.
 	 */
 	public function testRawnessReadsTheBodysOwnBytes(): Void {
-		Assert.same([false], [
-			for (branch in regionsOf(fn('#if nodejs#end'), 'nodejs', false)[0].branches) branch.raw
-		]);
+		Assert.same([false], [ for (branch in regionsOf(fn('#if nodejs#end'), 'nodejs', false)[0].branches) branch.raw ]);
 		final tight: String = fn('#if nodejs a#else b#end');
 		final found: Array<CondRegion> = regionsOf(tight, 'nodejs', false);
 		Assert.same([true, true], [ for (branch in found[0].branches) branch.raw ]);

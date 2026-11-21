@@ -712,14 +712,12 @@ class MemberReachFactsTest extends Test {
 			placed: Bool
 		}> = withReach(['Main.hx' => main, 'Lib.hx' => lib], null, true, false, null, null, null, true, (reach, dir) -> {
 			final g: CallGraph = reach.graph();
-			[
-				for (e in g.outEdges('Main.run')) {
-					to: e.to,
-					file: Path.withoutDirectory(g.node(e.to)?.file ?? ''),
-					kind: e.kind.label(),
-					placed: e.span != null
-				}
-			];
+			[ for (e in g.outEdges('Main.run')) {
+				to: e.to,
+				file: Path.withoutDirectory(g.node(e.to)?.file ?? ''),
+				kind: e.kind.label(),
+				placed: e.span != null
+			} ];
 		});
 		Assert.isTrue(edges.exists(e -> e.to == 'Lib.wrap' && e.kind == 'call' && !e.placed), 'the splice has a site: $edges');
 		Assert.isTrue(edges.exists(e -> e.to != 'Lib.wrap' && e.file == 'Lib.hx' && e.kind == 'ref' && !e.placed), 'no lambda: $edges');
@@ -2292,16 +2290,14 @@ class MemberReachFactsTest extends Test {
 		facts.configurations.push('b.hxml -D y');
 		facts.configurations.push('b.hxml');
 		function listed(names: Array<String>): Array<ReachConfiguration> {
-			return [
-				for (n in names) {
-					name: n,
-					defined: [],
-					everDefined: [],
-					values: [],
-					compiled: [],
-					types: []
-				}
-			];
+			return [ for (n in names) {
+				name: n,
+				defined: [],
+				everDefined: [],
+				values: [],
+				compiled: [],
+				types: []
+			} ];
 		}
 		Assert.isTrue(FactsView.namesExactly(facts, listed(['b.hxml', 'b.hxml -D y'])), 'the order of the list counted');
 		Assert.isFalse(FactsView.namesExactly(facts, null), 'facts were the truth with no list of builds');
@@ -4310,19 +4306,22 @@ class MemberReachFactsTest extends Test {
 			'memberWrite',
 			'value'
 		];
-		Assert.same([
-			'- -',
-			'- -',
-			'- -',
-			'- -',
-			'- -',
-			'- -',
-			'touch -',
-			'touch escape',
-			'touch -',
-			'touch -',
-			'- escape'
-		], [ for (k in known) verdict(k.split(' ')[0], k.split(' ')[1]) ]);
+		Assert.same(
+			[
+				'- -',
+				'- -',
+				'- -',
+				'- -',
+				'- -',
+				'- -',
+				'touch -',
+				'touch escape',
+				'touch -',
+				'touch -',
+				'- escape'
+			],
+			[ for (k in known) verdict(k.split(' ')[0], k.split(' ')[1]) ]
+		);
 		final main: String = growing(
 			'$LOOP_HEAD\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n'
 			+ '\t\tsum(items);\n\t}\n\n\tstatic function calm():Void {}\n\n\tstatic function sum(a:Array<Int>):Int {\n'
@@ -5148,9 +5147,9 @@ class MemberReachFactsTest extends Test {
 		final ro: String = 'class Fr {\n\tpublic var frame:Int = 0;\n\n\tpublic function new() {}\n}\n\n'
 			+ 'abstract RoArr(Array<Fr>) from Array<Fr> {\n\t@:arrayAccess public inline function get(i:Int):Fr return this[i];\n}\n';
 		function pa(padding: Int): String {
-			final doc: String = [
-				for (_ in 0...padding) '\t * The frame of the first element of what it is handed, read off it.'
-			].join('\n');
+			final doc: String = [ for (_ in 0...padding) '\t * The frame of the first element of what it is handed, read off it.' ].join(
+				'\n'
+			);
 			return 'class Pa {\n'
 				+ (padding == 0 ? '' : '\t/**\n$doc\n\t */\n')
 				+ '\tpublic static inline function frameOf(a:Ro.RoArr):Int {\n\t\treturn a[0].frame;\n\t}\n}\n';
@@ -5496,10 +5495,9 @@ class MemberReachFactsTest extends Test {
 		if (facts != null && edit != null) edit(facts);
 		lastDropped = facts == null ? [] : [ for (d in facts.dropped) '${d.name}: ${d.reason}' ];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		final project: Array<{ file: String, source: String }> = [ for (name => text in files) {
-			file: Path.join([dir, name]),
-			source: text
-		} ];
+		final project: Array<{ file: String, source: String }> = [
+			for (name => text in files) { file: Path.join([dir, name]), source: text }
+		];
 		final libraries: Array<{ file: String, source: String }> = [
 			for (name => text in library ?? []) { file: Path.join([dir, name]), source: text }
 		];

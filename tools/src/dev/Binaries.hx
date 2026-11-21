@@ -85,9 +85,7 @@ final class Binaries {
 		final runs: Array<Result> = runPending(tree, builds, oracles, pending, mode);
 		// a -v compile prints a line per parsed file and per macro on stdout: it stays out of the log and of the error a failure quotes
 		final quiet: Array<Result> = [ for (k => run in runs) oracles[pending[k]] == null ? run : run.errorsOnly() ];
-		final reused: Array<String> = [
-			for (i => words in builds) if (!pending.contains(i)) 'haxe ${words.join(' ')}: $CURRENT'
-		];
+		final reused: Array<String> = [ for (i => words in builds) if (!pending.contains(i)) 'haxe ${words.join(' ')}: $CURRENT' ];
 		File.saveContent(log, reused.concat(quiet.map(run -> run.out + run.err)).join('\n'));
 		final after: Map<String, String> = [];
 		for (k => run in runs) {
@@ -98,9 +96,7 @@ final class Binaries {
 					oracle.hxml, oracle.dir, fingerprint, Confirmed, oracle.defines, after, OracleCoverage.parsedPaths(run.out)
 				);
 		}
-		stamp.record([
-			for (i => words in builds) if (reusable(words) && (!pending.contains(i) || runs[pending.indexOf(i)].ok)) words
-		]);
+		stamp.record([ for (i => words in builds) if (reusable(words) && (!pending.contains(i) || runs[pending.indexOf(i)].ok)) words ]);
 		final failed: Null<Result> = quiet.find(run -> !run.ok);
 		return failed == null ? Passed : Failed('${failed.command}: ${failed.firstError()}');
 	}

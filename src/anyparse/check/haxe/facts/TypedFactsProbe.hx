@@ -248,13 +248,13 @@ final class TypedFactsProbe {
 				});
 		}
 		final inputs: Array<Null<String>> = memo == null ? [] : memo.fingerprints([ for (a in asked) a.oracle ]);
-		final ahead: Array<Int> = memo == null ? [] : [
-			for (k in 0...asked.length) if (asked[k].rider == null && wanted(memo, asked[k].oracle, inputs[k])) k
-		];
+		final ahead: Array<Int> = memo == null
+			? []
+			: [ for (k in 0...asked.length) if (asked[k].rider == null && wanted(memo, asked[k].oracle, inputs[k])) k ];
 		final baselines: Array<OracleConfig> = [ for (k in ahead) asked[k].oracle ];
-		final runs: PendingRuns = ProcessSpawn.startAll([ for (a in asked) { args: a.args, cwd: a.oracle.dir } ].concat([
-			for (b in baselines) { args: OracleCoverage.probeArgs(b.hxml, b.defines), cwd: b.dir }
-		]), carried ? ReachDefinesProbe.BUFFER : BUFFER, ProcessSpawn.parallelism());
+		final runs: PendingRuns = ProcessSpawn.startAll([ for (a in asked) { args: a.args, cwd: a.oracle.dir } ].concat(
+			[ for (b in baselines) { args: OracleCoverage.probeArgs(b.hxml, b.defines), cwd: b.dir } ]
+		), carried ? ReachDefinesProbe.BUFFER : BUFFER, ProcessSpawn.parallelism());
 		return {
 			dropped: dropped,
 			asked: asked,

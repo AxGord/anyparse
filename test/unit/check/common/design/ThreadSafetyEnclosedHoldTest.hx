@@ -52,9 +52,7 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 			[
 				' — taken inside a hold of D._l every caller keeps, whose warning at D.outer is long through the call into this one'
 			],
-			[
-				for (v in found) if (v.data?.family == 'B' && v.data?.member == 'D.inner') v.message.substring(v.message.indexOf(' — '))
-			]
+			[ for (v in found) if (v.data?.family == 'B' && v.data?.member == 'D.inner') v.message.substring(v.message.indexOf(' — ')) ]
 		);
 		#else
 		Assert.pass('non-sys target');
@@ -130,12 +128,10 @@ class ThreadSafetyEnclosedHoldTest extends Test {
 		]);
 	}
 	private static function holds(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

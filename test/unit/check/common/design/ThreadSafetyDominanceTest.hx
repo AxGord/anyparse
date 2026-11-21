@@ -441,9 +441,7 @@ class ThreadSafetyDominanceTest extends Test {
 			+ 'quick():Void { _outer.acquire(); takeInner(); _outer.release(); } function takeInner():Void { _inner.acquire(); '
 			+ '_inner.release(); } public static function main():Void { final d:D = new D(); Runner.create(() -> d.slow()); d.quick(); } }'
 		]);
-		return [
-			for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.takeInner') v.severity.label()
-		];
+		return [ for (v in found) if (v.data?.family == 'A' && v.data?.member == 'D.takeInner') v.severity.label() ];
 	}
 
 	/**
@@ -467,12 +465,10 @@ class ThreadSafetyDominanceTest extends Test {
 
 	/** The hold findings (b) of `found` as `<severity> B <member> | <lock>`, sorted. */
 	private static function holds(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'B') '${v.severity.label()} B ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

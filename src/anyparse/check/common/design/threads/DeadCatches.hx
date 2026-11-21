@@ -143,9 +143,9 @@ final class DeadCatches {
 		if (at == null || callee == null) return false;
 		final lists: ChainLists = _listsOf(file);
 		final fn: Null<String> = _graph.functionAt(file, at.from);
-		final targets: Array<String> = fn == null ? [] : [
-			for (e in _graph.outEdges(fn)) if (e.kind.isInvocation() && e.span?.from == at.from && e.span?.to == at.to) e.to
-		];
+		final targets: Array<String> = fn == null
+			? []
+			: [ for (e in _graph.outEdges(fn)) if (e.kind.isInvocation() && e.span?.from == at.from && e.span?.to == at.to) e.to ];
 		final listed: Bool = targets.length > 0
 			? targets.foreach(t -> lists.nonThrowingIds.contains(t))
 			: lists.nonThrowingNames.contains(callee.name ?? '');

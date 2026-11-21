@@ -146,12 +146,10 @@ final class OperandCallees {
 		final owner: ResolvedType = owners[0];
 		final declared: Null<HostedMembers> = binder.declarationOf(owner, binder._shape.constructorName ?? 'new');
 		if (declared == null || declared.members.exists(m -> m.isStatic)) return null;
-		final args: Array<String> = [
-			for (i in 0...node.typeArgCount) {
-				final span: Null<Span> = node.children[i].span;
-				span == null ? '' : binder._source.substring(span.from, span.to);
-			}
-		];
+		final args: Array<String> = [ for (i in 0...node.typeArgCount) {
+			final span: Null<Span> = node.children[i].span;
+			span == null ? '' : binder._source.substring(span.from, span.to);
+		} ];
 		final bindings: Map<String, Located> = OperandBinder.sameDeclaration(owner, declared.host)
 			? bindAll(owner.type.typeParamNames, args, at.from)
 			: [];

@@ -142,15 +142,13 @@ class HxNoBodyAbstractTest extends HxTestHelpers {
 		final m: HxModule = HaxeModuleParser.parse(source);
 		Assert.equals(1, m.decls.length);
 		final iface: HxInterfaceDecl = expectInterfaceDecl(m.decls[0]);
-		return [
-			for (mb in iface.members) {
-				final member: HxClassMember = mb.member;
-				switch member {
-					case FnMember(d): d;
-					case _: throw 'expected FnMember';
-				}
+		return [ for (mb in iface.members) {
+			final member: HxClassMember = mb.member;
+			switch member {
+				case FnMember(d): d;
+				case _: throw 'expected FnMember';
 			}
-		];
+		} ];
 	}
 
 }

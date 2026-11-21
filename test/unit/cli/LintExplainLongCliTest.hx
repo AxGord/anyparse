@@ -157,9 +157,13 @@ class LintExplainLongCliTest extends Test {
 		final unknown: String = 'unknown option "shortSink" — ignored (did you mean "shortSinks"?)';
 		final records: Array<LintFindingJson> = LintDiff.parseReport(lint(SOURCE, config, ['--format', 'json']).out);
 		// beside the notice every reporting run gives of the builtin sinks it applied
-		Assert.same([['', 'info', unknown]], [
-			for (r in records) if (r.file == '' && !(r.message: String).startsWith(PositiveSinks.NOTICE)) [r.file, r.severity, r.message]
-		]);
+		Assert.same(
+			[['', 'info', unknown]],
+			[
+				for (r in records)
+					if (r.file == '' && !(r.message: String).startsWith(PositiveSinks.NOTICE)) [r.file, r.severity, r.message]
+			]
+		);
 		Assert.stringContains('(no file):\n  (no-span): [info] $unknown (thread-safety)', lint(SOURCE, config, ['--all']).out);
 		#else
 		Assert.pass('node only: stdout capture');

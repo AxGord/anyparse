@@ -546,9 +546,7 @@ final class GateArms {
 					.timeout(PLAN_TIMEOUT_MS)
 			).check().out
 		);
-		return [
-			for (node in around.nodes) if (node.level == 'member' && !seeds.contains(node.name)) node.name
-		];
+		return [ for (node in around.nodes) if (node.level == 'member' && !seeds.contains(node.name)) node.name ];
 	}
 
 	/** Whether `record` cuts one of `members` (`<type>.<method>`). */

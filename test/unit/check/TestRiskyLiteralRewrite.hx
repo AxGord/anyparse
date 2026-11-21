@@ -40,24 +40,22 @@ final class TestRiskyLiteralRewrite implements Check implements RiskyFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) {
-				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
-				if (tree != null) {
-					final node: Null<QueryNode> = firstLiteralOne(tree);
-					if (node != null) {
-						final span: Null<Span> = node.span;
-						if (span != null) {
-							file: entry.file,
-							span: span,
-							rule: id(),
-							severity: Severity.Warning,
-							message: 'rewritable literal 1'
-						};
-					}
+		return [ for (entry in files) {
+			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
+			if (tree != null) {
+				final node: Null<QueryNode> = firstLiteralOne(tree);
+				if (node != null) {
+					final span: Null<Span> = node.span;
+					if (span != null) {
+						file: entry.file,
+						span: span,
+						rule: id(),
+						severity: Severity.Warning,
+						message: 'rewritable literal 1'
+					};
 				}
 			}
-		];
+		} ];
 	}
 
 	public function fix(

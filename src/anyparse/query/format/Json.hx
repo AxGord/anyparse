@@ -108,21 +108,19 @@ final class Json {
 		final index: LineIndex = new LineIndex(source);
 		final out: AstMatchesJson = {
 			file: file,
-			matches: [
-				for (i => n in matches) {
-					final ast: AstNodeJson = toAst(n, index);
-					final window: Null<Span> = i < windows.length ? windows[i] : n.span;
-					if (doc) {
-						final d: Null<String> = SourceSlice.leadingDoc(source, window, regions);
-						if (d != null) ast.doc = d;
-					}
-					if (src) {
-						final s: String = SourceSlice.slice(source, window);
-						if (s.length > 0) ast.source = s;
-					}
-					ast;
+			matches: [ for (i => n in matches) {
+				final ast: AstNodeJson = toAst(n, index);
+				final window: Null<Span> = i < windows.length ? windows[i] : n.span;
+				if (doc) {
+					final d: Null<String> = SourceSlice.leadingDoc(source, window, regions);
+					if (d != null) ast.doc = d;
 				}
-			]
+				if (src) {
+					final s: String = SourceSlice.slice(source, window);
+					if (s.length > 0) ast.source = s;
+				}
+				ast;
+			} ]
 		};
 		return '${AstMatchesJsonWriter.write(out, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
@@ -209,13 +207,11 @@ final class Json {
 	}
 
 	private static function collectBindings(m: Match, source: String, index: LineIndex): Array<AstSearchBinding> {
-		return [
-			for (name => boundNode in m.bindings) {
-				final span: Null<Span> = boundNode.span;
-				final text: String = boundNode.kind == 'NameOnly' ? (boundNode.name ?? '') : SourceSlice.slice(source, span);
-				{ name: name, text: text, span: span == null ? emptySpan() : spanToJson(span, index) };
-			}
-		];
+		return [ for (name => boundNode in m.bindings) {
+			final span: Null<Span> = boundNode.span;
+			final text: String = boundNode.kind == 'NameOnly' ? (boundNode.name ?? '') : SourceSlice.slice(source, span);
+			{ name: name, text: text, span: span == null ? emptySpan() : spanToJson(span, index) };
+		} ];
 	}
 
 	private static function spanToJson(span: Span, index: LineIndex): AstSearchSpan {

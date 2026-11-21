@@ -1176,9 +1176,10 @@ class Codegen {
 	 * before the separator when the comment runs on, so the next parse reads it in this slot again.
 	 */
 	private static function collectTrailingBeforeSepField(formatInfo: FormatReader.FormatInfo): Field {
-		return trailingFullField('collectTrailingBeforeSep', [
-			for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, BeforeSeparator)
-		]);
+		return trailingFullField(
+			'collectTrailingBeforeSep',
+			[ for (p in formatInfo.commentPatterns) trailingFullAttemptBlock(p, BeforeSeparator) ]
+		);
 	}
 
 	/**
@@ -1197,9 +1198,10 @@ class Codegen {
 	 * line comment is `#` or `;` gets the same guarantee for free.
 	 */
 	private static function collectTrailingBlockField(formatInfo: FormatReader.FormatInfo): Field {
-		return trailingFullField('collectTrailingBlock', [
-			for (p in formatInfo.commentPatterns) if (!p.lineTerminated) trailingFullAttemptBlock(p, Refused)
-		]);
+		return trailingFullField(
+			'collectTrailingBlock',
+			[ for (p in formatInfo.commentPatterns) if (!p.lineTerminated) trailingFullAttemptBlock(p, Refused) ]
+		);
 	}
 
 	/** The shared body of the verbatim-trailing helpers: skip horizontal ws, try each `attempts` block, rewind to null on a miss. */

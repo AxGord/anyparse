@@ -57,10 +57,7 @@ final class MoveMemberReceivers {
 		final hits: Array<ReceiverHit> = [];
 		if (instance.length == 0) return { error: null, hits: hits };
 
-		final srcUnique: Bool = [
-			for (fi in prep.index.allFiles()) for (t in fi.types) if (t.name == prep.srcTypeName) t
-		].length
-			== 1;
+		final srcUnique: Bool = [ for (fi in prep.index.allFiles()) for (t in fi.types) if (t.name == prep.srcTypeName) t ].length == 1;
 		final accessKinds: Array<String> = ShapeVocab.memberAccessKinds(prep.shape);
 		for (file => tree in prep.trees) {
 			final source: String = prep.sourceOf[file] ?? '';

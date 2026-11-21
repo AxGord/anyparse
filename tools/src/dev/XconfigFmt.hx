@@ -54,10 +54,9 @@ final class XconfigFmt {
 
 	/** How the set `now` differs from `expected`: `- <file>` for one gone, `+ <file>` for one joined; empty when equal. */
 	public static function setMoves(expected: Array<String>, now: Array<String>): Array<String> {
-		return
-			[ for (file in expected) if (!now.contains(file)) '- $file' ].concat(
-				[ for (file in now) if (!expected.contains(file)) '+ $file' ]
-			);
+		return [ for (file in expected) if (!now.contains(file)) '- $file' ].concat(
+			[ for (file in now) if (!expected.contains(file)) '+ $file' ]
+		);
 	}
 
 	/**

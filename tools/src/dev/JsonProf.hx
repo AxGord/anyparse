@@ -99,9 +99,7 @@ final class JsonProf {
 	}
 
 	private static function nodes(sample: String): Array<FactNodeRecord> {
-		return [
-			for (line in lines(sample)) if (line.startsWith(NODE_LINE)) FactNodeRecordParser.parse(line)
-		];
+		return [ for (line in lines(sample)) if (line.startsWith(NODE_LINE)) FactNodeRecordParser.parse(line) ];
 	}
 
 	private static function factsStd(lines: Array<String>): Int {

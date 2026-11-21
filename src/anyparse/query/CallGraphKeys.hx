@@ -201,9 +201,7 @@ final class CallGraphKeys {
 	public static function apartFrom(
 		imports: CallGraphImports, apart: Array<{ from: String, to: String }>, typeName: String
 	): Array<String> {
-		return [
-			for (pair in apart) if (imports.pathKey(pair.from) == typeName) imports.pathKey(pair.to)
-		];
+		return [ for (pair in apart) if (imports.pathKey(pair.from) == typeName) imports.pathKey(pair.to) ];
 	}
 
 	/**
@@ -350,20 +348,16 @@ final class CallGraphKeys {
 			shiftsFrom = i;
 			break;
 		}
-		return [
-			for (p in g._facts.typeParams[target] ?? []) {
-				final passed: Array<Null<String>> = [
-					for (j in 1...call.children.length) {
-						final at: Int = rest && j - 1 > last ? last : j - 1;
-						if (at <= last && (params[at] ?? '').trim() == p) argType(call.children[j]);
-					}
-				];
-				final shifted: Bool = [ for (i in shiftsFrom ... params.length) params[i] ].exists(t -> (t ?? '').trim() == p);
-				!shifted && passed.length > 0 && !passed.exists(a -> a != passed[0])
-					? passed[0] ?? CallGraph.UNKNOWN_TYPE
-					: CallGraph.UNKNOWN_TYPE;
-			}
-		];
+		return [ for (p in g._facts.typeParams[target] ?? []) {
+			final passed: Array<Null<String>> = [ for (j in 1...call.children.length) {
+				final at: Int = rest && j - 1 > last ? last : j - 1;
+				if (at <= last && (params[at] ?? '').trim() == p) argType(call.children[j]);
+			} ];
+			final shifted: Bool = [ for (i in shiftsFrom ... params.length) params[i] ].exists(t -> (t ?? '').trim() == p);
+			!shifted && passed.length > 0 && !passed.exists(a -> a != passed[0])
+				? passed[0] ?? CallGraph.UNKNOWN_TYPE
+				: CallGraph.UNKNOWN_TYPE;
+		} ];
 	}
 
 	/**
@@ -373,16 +367,14 @@ final class CallGraphKeys {
 	 */
 	public static function returnsWritten(g: CallGraph, id: String): Array<WrittenIn> {
 		final kinds: Array<String> = (g._shape.functionKinds ?? []).concat(g._shape.inlineFunctionKinds ?? []);
-		return [
-			for (d in g.declarationsOf(id)) {
-				final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
-				final fn: Null<QueryNode> = entry == null ? null : CallGraphNames.functionNodeAt(entry.tree, d.span.from, kinds);
-				final read: Null<String> = entry == null || fn == null
-					? null
-					: CallGraphNames.returnSourceOf(fn, g.returnSourcesIn(entry.source));
-				{ file: d.file, written: read };
-			}
-		];
+		return [ for (d in g.declarationsOf(id)) {
+			final entry: Null<{ tree: QueryNode, source: String }> = g._entries[CallGraphNames.normalizePath(d.file)];
+			final fn: Null<QueryNode> = entry == null ? null : CallGraphNames.functionNodeAt(entry.tree, d.span.from, kinds);
+			final read: Null<String> = entry == null || fn == null
+				? null
+				: CallGraphNames.returnSourceOf(fn, g.returnSourcesIn(entry.source));
+			{ file: d.file, written: read };
+		} ];
 	}
 
 	/** `paramTypesOf` for a function offering no other signature: what its declarations write. */

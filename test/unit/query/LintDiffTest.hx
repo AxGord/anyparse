@@ -404,15 +404,18 @@ class LintDiffTest extends Test {
 	/** Every part of the identity is part of the key — family, member and subject — and so is the severity. */
 	public function testEachIdentityPartAndTheSeverityKeyTheFinding(): Void {
 		final before: String = reportOf([keyed('warning', 'A', 'A.b', 'S.f', 'm')]);
-		Assert.same([1, 1, 1, 1, 0], [
-			for (after in [
-				keyed('warning', 'B', 'A.b', 'S.f', 'm'),
-				keyed('warning', 'A', 'A.c', 'S.f', 'm'),
-				keyed('warning', 'A', 'A.b', 'S.g', 'm'),
-				keyed('info', 'A', 'A.b', 'S.f', 'm'),
-				keyed('warning', 'A', 'A.b', 'S.f', 'another message')
-			]) diff(before, reportOf([after]), '').addedTotal
-		]);
+		Assert.same(
+			[1, 1, 1, 1, 0],
+			[
+				for (after in [
+					keyed('warning', 'B', 'A.b', 'S.f', 'm'),
+					keyed('warning', 'A', 'A.c', 'S.f', 'm'),
+					keyed('warning', 'A', 'A.b', 'S.g', 'm'),
+					keyed('info', 'A', 'A.b', 'S.f', 'm'),
+					keyed('warning', 'A', 'A.b', 'S.f', 'another message')
+				]) diff(before, reportOf([after]), '').addedTotal
+			]
+		);
 	}
 
 	/**

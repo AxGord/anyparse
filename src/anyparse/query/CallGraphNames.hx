@@ -186,12 +186,10 @@ final class CallGraphNames {
 			skippable++;
 		return {
 			skippableFrom: skippable,
-			params: [
-				for (c in params) {
-					final at: Null<Span> = c.span;
-					at == null ? null : sources[at.from];
-				}
-			],
+			params: [ for (c in params) {
+				final at: Null<Span> = c.span;
+				at == null ? null : sources[at.from];
+			} ],
 			rest: params.length > 0 && params[params.length - 1].kind == restKind
 		};
 	}

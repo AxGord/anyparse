@@ -238,9 +238,7 @@ final class SplitVarDeclaration extends RuleBase {
 		if (declarators == null) return null;
 
 		final indent: String = SourceText.lineIndentAt(source, stmtSpan.from);
-		final statements: Array<String> = [
-			for (i in 0...declarators.length) i == 0 ? declarators[i] : '$keyword ${declarators[i]}'
-		];
+		final statements: Array<String> = [ for (i in 0...declarators.length) i == 0 ? declarators[i] : '$keyword ${declarators[i]}' ];
 		return { span: stmtSpan, count: declarators.length, text: '${statements.join(';\n$indent')};' };
 	}
 

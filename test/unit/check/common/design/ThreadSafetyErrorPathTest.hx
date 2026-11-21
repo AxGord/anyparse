@@ -221,13 +221,10 @@ class ThreadSafetyErrorPathTest extends Test {
 
 	/** The findings of `found` with data as `<severity> <family> <member> | <subject>`, sorted, `Report`'s own left out. */
 	private static function graded(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.member.indexOf('Report.') < 0)
-					'${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.member.indexOf('Report.') < 0) '${v.severity.label()} ${data.family} ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

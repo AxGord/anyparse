@@ -437,9 +437,7 @@ class SetModifierSliceTest extends Test {
 	private function declaredBooleanModifiers(): Array<String> {
 		final shape: RefShape = new HaxeQueryPlugin().refShape();
 		final visibility: Array<String> = [ for (kind in shape.visibilityModifierKinds ?? []) kind.toLowerCase() ];
-		return [
-			for (kind in CheckScan.modifierKinds(shape)) if (!visibility.contains(kind.toLowerCase())) kind.toLowerCase()
-		];
+		return [ for (kind in CheckScan.modifierKinds(shape)) if (!visibility.contains(kind.toLowerCase())) kind.toLowerCase() ];
 	}
 
 	/**

@@ -138,14 +138,12 @@ final class Parity {
 		return TempDir.with(work -> {
 			final before: Array<Outcome> = side(shimTree, base, invocations, work, threads, oneProcessFor(shimTree, base, oneProcess));
 			final after: Array<Outcome> = side(shimTree, tip, invocations, work, threads, oneProcessFor(shimTree, tip, oneProcess));
-			[
-				for (i => invocation in invocations) {
-					invocation: invocation,
-					base: before[i],
-					tip: after[i],
-					differences: differences(before[i], after[i])
-				}
-			];
+			[ for (i => invocation in invocations) {
+				invocation: invocation,
+				base: before[i],
+				tip: after[i],
+				differences: differences(before[i], after[i])
+			} ];
 		});
 	}
 
@@ -158,9 +156,7 @@ final class Parity {
 		if (out != null) lines.push(out);
 		final err: Null<String> = streamDifference('stderr', base.err, tip.err);
 		if (err != null) lines.push(err);
-		final changed: Array<String> = [
-			for (name => text in base.files) if (tip.files.exists(name) && tip.files[name] != text) name
-		];
+		final changed: Array<String> = [ for (name => text in base.files) if (tip.files.exists(name) && tip.files[name] != text) name ];
 		final onlyBase: Array<String> = [ for (name in base.files.keys()) if (!tip.files.exists(name)) name ];
 		final onlyTip: Array<String> = [ for (name in tip.files.keys()) if (!base.files.exists(name)) name ];
 		for (group in [
@@ -231,30 +227,24 @@ final class Parity {
 	public static function side(
 		shimTree: String, engine: String, invocations: Array<Invocation>, work: TempDir, threads: Int, oneProcess: Bool
 	): Array<Outcome> {
-		final dirs: Array<String> = [
-			for (i => invocation in invocations) fixture(work.file('$i'), invocation.files, invocation.commits)
-		];
+		final dirs: Array<String> = [ for (i => invocation in invocations) fixture(work.file('$i'), invocation.files, invocation.commits) ];
 		final results: Array<Result> = if (oneProcess) {
 			batched(shimTree, engine, invocations, dirs, work, threads);
 		} else {
-			final commands: Array<Command> = [
-				for (i => invocation in invocations) {
-					final command: Command = shim(shimTree, engine, invocation.argv).at(dirs[i]).timeout(TIMEOUT_MS);
-					final stdin: Null<String> = invocation.stdin;
-					stdin == null ? command : command.input(stdin);
-				}
-			];
+			final commands: Array<Command> = [ for (i => invocation in invocations) {
+				final command: Command = shim(shimTree, engine, invocation.argv).at(dirs[i]).timeout(TIMEOUT_MS);
+				final stdin: Null<String> = invocation.stdin;
+				stdin == null ? command : command.input(stdin);
+			} ];
 			Pool.of(threads).run(commands);
 		};
-		return [
-			for (i => result in results) {
-				status: result.status,
-				out: result.out,
-				err: result.err,
-				failure: result.failure,
-				files: snapshot(dirs[i], '')
-			}
-		];
+		return [ for (i => result in results) {
+			status: result.status,
+			out: result.out,
+			err: result.err,
+			failure: result.failure,
+			files: snapshot(dirs[i], '')
+		} ];
 	}
 
 	/**
@@ -397,21 +387,17 @@ final class Parity {
 			shares.push([ for (i in from ... Std.int(Math.min(from + size, invocations.length))) i ]);
 			from += size;
 		}
-		final commands: Array<Command> = [
-			for (s => share in shares) {
-				final calls: BatchCalls = {
-					calls: share.map(i -> { argv: engineArgv(shimTree, invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin })
-				};
-				final callsFile: String = work.file('batch-$s.json');
-				File.saveContent(callsFile, BatchCallsWriter.write(calls, JsonFormat.instance.compactWriteOptions));
-				Command.of(
-					['node'].concat(nodeFlags(shimTree)).concat([engine, BatchRun.FLAG, callsFile, work.file('batch-$s-answers.json')])
-				)
-					.env('HXQ_BIN', engine)
-					.at(work.file(''))
-					.timeout(TIMEOUT_MS * share.length);
-			}
-		];
+		final commands: Array<Command> = [ for (s => share in shares) {
+			final calls: BatchCalls = {
+				calls: share.map(i -> { argv: engineArgv(shimTree, invocations[i].argv), cwd: dirs[i], stdin: invocations[i].stdin })
+			};
+			final callsFile: String = work.file('batch-$s.json');
+			File.saveContent(callsFile, BatchCallsWriter.write(calls, JsonFormat.instance.compactWriteOptions));
+			Command.of(['node'].concat(nodeFlags(shimTree)).concat([engine, BatchRun.FLAG, callsFile, work.file('batch-$s-answers.json')]))
+				.env('HXQ_BIN', engine)
+				.at(work.file(''))
+				.timeout(TIMEOUT_MS * share.length);
+		} ];
 		final results: Array<Result> = [];
 		for (s => run in Pool.of(threads).run(commands)) {
 			final answersFile: String = work.file('batch-$s-answers.json');

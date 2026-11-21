@@ -183,9 +183,7 @@ class GraphViewTest extends Test {
 	/** Four packages in a chain `a -> b -> c -> d`, one import each. */
 	private static function chain(): CodeGraph {
 		final graph: CodeGraph = new CodeGraph();
-		final ids: Array<String> = [
-			for (name in ['a', 'b', 'c', 'd']) graph.addNode(Package, name, name, null, false)
-		];
+		final ids: Array<String> = [ for (name in ['a', 'b', 'c', 'd']) graph.addNode(Package, name, name, null, false) ];
 		for (i in 1...ids.length) graph.addEdge(ids[i - 1], ids[i], Import);
 		return graph;
 	}

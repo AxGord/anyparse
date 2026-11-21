@@ -107,12 +107,10 @@ class ThreadSafetyRethrowTest extends Test {
 
 	/** The members of the findings (c) of `found` on `W.outer` — on `W.inner` too where `inner` is set — sorted. */
 	private static function leaks(found: Array<Violation>, inner: Bool = false): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'C' && (data.subject == 'W.outer' || (inner && data.subject == 'W.inner'))) data.member;
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'C' && (data.subject == 'W.outer' || (inner && data.subject == 'W.inner'))) data.member;
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

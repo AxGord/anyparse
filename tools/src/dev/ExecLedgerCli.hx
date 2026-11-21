@@ -155,24 +155,22 @@ final class ExecLedgerCli {
 	}
 
 	public static function render(totals: Array<LedgerTotal>): String {
-		final cells: Array<Array<String>> = [
-			for (total in totals) {
-				final cpu: Null<Float> = total.cpuS;
-				final used: Null<Float> = cores(total);
-				[
-					total.phase,
-					total.branch,
-					'${total.rows}',
-					decimal(total.wallMs / MS_PER_SECOND),
-					decimal(total.waitMs / MS_PER_SECOND),
-					cpu == null ? NONE : decimal(cpu),
-					used == null ? NONE : decimal(used),
-					decimal(total.threadMinutes),
-					cpu == null ? NONE : decimal(cpu / SECONDS_PER_MINUTE),
-					'${total.unmetered}'
-				];
-			}
-		];
+		final cells: Array<Array<String>> = [ for (total in totals) {
+			final cpu: Null<Float> = total.cpuS;
+			final used: Null<Float> = cores(total);
+			[
+				total.phase,
+				total.branch,
+				'${total.rows}',
+				decimal(total.wallMs / MS_PER_SECOND),
+				decimal(total.waitMs / MS_PER_SECOND),
+				cpu == null ? NONE : decimal(cpu),
+				used == null ? NONE : decimal(used),
+				decimal(total.threadMinutes),
+				cpu == null ? NONE : decimal(cpu / SECONDS_PER_MINUTE),
+				'${total.unmetered}'
+			];
+		} ];
 		return Table.render([
 			'phase',
 			'branch',

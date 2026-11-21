@@ -305,9 +305,9 @@ final class ModuleMoveBindings {
 
 	/** The offsets of the heads of `text`'s qualified spellings that read by module path before the move (`headReading`). */
 	private static function modulePathSites(index: SymbolIndex, info: FileInfo, text: Null<String>, plugin: GrammarPlugin): Array<Int> {
-		return plugin.refShape().qualifiedSubTypeByModulePath != true ? [] : [
-			for (s in spellingsIn(text, plugin)) if (index.typing.headReading(info, s.head, s.sub, s.at) == ByModulePath) s.at
-		];
+		return plugin.refShape().qualifiedSubTypeByModulePath != true
+			? []
+			: [ for (s in spellingsIn(text, plugin)) if (index.typing.headReading(info, s.head, s.sub, s.at) == ByModulePath) s.at ];
 	}
 
 	/**

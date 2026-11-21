@@ -434,9 +434,7 @@ final class RegistryFragmentFollow {
 
 	/** The string and regex literals of `source`, which the lexer scans whole while the tree may project only their contents as leaves. */
 	private static function literalSpans(source: String, plugin: GrammarPlugin): Array<Span> {
-		return [
-			for (region in plugin.lexicalRegions(source)) if (!LexicalRegions.isComment(region)) new Span(region.from, region.to)
-		];
+		return [ for (region in plugin.lexicalRegions(source)) if (!LexicalRegions.isComment(region)) new Span(region.from, region.to) ];
 	}
 
 }

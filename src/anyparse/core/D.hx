@@ -308,6 +308,19 @@ class D {
 	}
 
 	/**
+	 * True iff `d`'s outermost rest-aware group yields to the rest of its line (`yieldsToRest`), reached through the same
+	 * placing wrappers as `yieldsToRest` and through a `Concat` of which exactly one part holds such a group.
+	 */
+	public static function yieldsToItsRest(d: Doc): Bool {
+		return switch d {
+			case GroupWithRestProbe(_, yields): yields == true;
+			case WrapBoundary(inner), Nest(_, inner), BreakCommit(_, inner, _): yieldsToItsRest(inner);
+			case Concat(parts): parts.filter(yieldsToItsRest).length == 1;
+			case _: false;
+		};
+	}
+
+	/**
 	 * Flatten a conditional `If*` kind by descending into its flat branch, or
 	 * `null` when `d` is not an `If*`. Every variant forwards to its flat side —
 	 * the broken branch is moot once an outer `flatten` commits to flat shape.

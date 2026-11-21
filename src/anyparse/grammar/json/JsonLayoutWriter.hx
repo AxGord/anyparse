@@ -245,9 +245,7 @@ final class JsonLayoutWriter {
 	 */
 	private function styleOf(node: QueryNode, layout: ContainerLayout, parentExpanded: Bool): ContainerStyle {
 		final indent: String = currentLineIndent();
-		final kept: Array<Span> = [
-			for (i => item in node.children) if (!isNew(item) && !isDirty(layout.leads[i])) layout.leads[i]
-		];
+		final kept: Array<Span> = [ for (i => item in node.children) if (!isNew(item) && !isDirty(layout.leads[i])) layout.leads[i] ];
 		final closeKept: Bool = !isDirty(layout.close);
 		final expanded: Bool = expandedOf(node, kept, closeKept ? layout.close : null, parentExpanded);
 		final broken: Null<Span> = kept.find(gap -> slice(gap).indexOf('\n') >= 0);

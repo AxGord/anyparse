@@ -82,9 +82,7 @@ final class EnumCtorRefs {
 		final ctor: String = target.ctor;
 		final fi: Null<FileInfo> = index.fileInfo(entry.file);
 		final out: Array<Int> = importOffsets(entry, target)
-			.concat([
-				for (off in aliasReceiverOffsets(entry, target, fi, index, refShape, regions)) if (!proven.contains(off)) off
-			]);
+			.concat([ for (off in aliasReceiverOffsets(entry, target, fi, index, refShape, regions)) if (!proven.contains(off)) off ]);
 		// What the new name already means here the renamed constructor may take over — through an import of the enum, or
 		// through an expected type, which reaches a pattern variable or an imported static in a file importing nothing.
 		final taken: Array<{ offset: Int, host: Null<String> }> = bareSpellings(entry, target.newName, refShape);

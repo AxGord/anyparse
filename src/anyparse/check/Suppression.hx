@@ -166,12 +166,10 @@ final class Suppression {
 			region: false
 		};
 		if (!lower.startsWith('noqa:')) return null;
-		final rules: Array<String> = [
-			for (part in text.substr('noqa:'.length).split(',')) {
-				final id: String = part.trim();
-				if (id.length > 0) id;
-			}
-		];
+		final rules: Array<String> = [ for (part in text.substr('noqa:'.length).split(',')) {
+			final id: String = part.trim();
+			if (id.length > 0) id;
+		} ];
 		return {
 			lineFrom: line,
 			lineTo: line,

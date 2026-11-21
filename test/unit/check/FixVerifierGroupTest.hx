@@ -34,9 +34,7 @@ final class FixVerifierGroupTest extends Test {
 
 	/** One edit per entry of `groups`, carrying that id; the spans differ but the partition never reads them. */
 	private static function editsGrouped(groups: Array<Null<Int>>): Array<GroupedEdit> {
-		return [
-			for (i in 0...groups.length) { span: new Span(i, i + 1), text: '', group: groups[i] }
-		];
+		return [ for (i in 0...groups.length) { span: new Span(i, i + 1), text: '', group: groups[i] } ];
 	}
 
 }

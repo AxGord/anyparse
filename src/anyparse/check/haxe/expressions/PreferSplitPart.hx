@@ -184,9 +184,7 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 			'${printer.printTypeExpr(path, c.span.from)}.${c.member}(${c.receiver}, ${c.delimiter})'
 		);
 		final imports: ImportGroups = printer.importGroups();
-		final edits: Array<GroupedEdit> = [
-			for (i => c in fixed) { span: c.span, text: texts[i], group: imports.groupOf(path) }
-		];
+		final edits: Array<GroupedEdit> = [ for (i => c in fixed) { span: c.span, text: texts[i], group: imports.groupOf(path) } ];
 		return edits.concat(imports.edits);
 	}
 

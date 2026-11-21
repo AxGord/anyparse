@@ -47,15 +47,13 @@ final class FragmentedDocComment extends RuleBase {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) for (run in adjacentBlockRuns(entry.source, plugin.lexicalRegions(entry.source))) {
-				file: entry.file,
-				span: new Span(run[0].from, run[run.length - 1].to),
-				rule: 'fragmented-doc-comment',
-				severity: Severity.Info,
-				message: 'this declaration is $BLOCK_COUNT_LEAD${run.length} adjacent comment blocks; merge them into one'
-			}
-		];
+		return [ for (entry in files) for (run in adjacentBlockRuns(entry.source, plugin.lexicalRegions(entry.source))) {
+			file: entry.file,
+			span: new Span(run[0].from, run[run.length - 1].to),
+			rule: 'fragmented-doc-comment',
+			severity: Severity.Info,
+			message: 'this declaration is $BLOCK_COUNT_LEAD${run.length} adjacent comment blocks; merge them into one'
+		} ];
 	}
 
 	/** Merge each flagged run of adjacent block comments into a single doc comment. */

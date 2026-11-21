@@ -219,9 +219,7 @@ final class LintScore {
 		];
 		final header: Array<String> = ['family', 'findings', 'keys'].concat(VERDICTS).concat(['unlabelled', 'precision', 'recall']);
 		final rows: Array<Array<String>> = [header].concat([ for (b in result.families.concat([o])) row(b) ]);
-		final widths: Array<Int> = [
-			for (c in 0...header.length) rows.fold((r, w) -> r[c].length > w ? r[c].length : w, 0)
-		];
+		final widths: Array<Int> = [ for (c in 0...header.length) rows.fold((r, w) -> r[c].length > w ? r[c].length : w, 0) ];
 		for (r in rows) lines.push([ for (c in 0...r.length) r[c].rpad(' ', widths[c]) ].join('  ').rtrim());
 		lines.push('lost recall: ${result.lost.length}');
 		for (e in result.lost) lines.push('  ${e.family}  ${e.member}  ${e.subject}  [${e.verdict}]');
@@ -243,23 +241,19 @@ final class LintScore {
 			excluded: result.excluded,
 			overall: bucketRecord(result.overall),
 			families: [ for (b in result.families) bucketRecord(b) ],
-			lost: [
-				for (e in result.lost) {
-					family: e.family,
-					member: e.member,
-					subject: e.subject,
-					verdict: e.verdict
-				}
-			],
-			unlabelled: [
-				for (k in result.unlabelled) {
-					family: k.family,
-					member: k.member,
-					subject: k.subject,
-					count: k.count,
-					file: k.file
-				}
-			]
+			lost: [ for (e in result.lost) {
+				family: e.family,
+				member: e.member,
+				subject: e.subject,
+				verdict: e.verdict
+			} ],
+			unlabelled: [ for (k in result.unlabelled) {
+				family: k.family,
+				member: k.member,
+				subject: k.subject,
+				count: k.count,
+				file: k.file
+			} ]
 		}, JsonFormat.instance.expandedWriteOptions);
 	}
 

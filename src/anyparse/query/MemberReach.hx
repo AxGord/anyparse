@@ -2706,13 +2706,11 @@ final class MemberReach {
 	 */
 	private function handedConverted(g: CallGraph, handed: NativeHands, arrayOwn: Bool): Array<Null<String>> {
 		final types: Null<Array<String>> = handed.types;
-		return types == null ? [null] : [
-			for (t in types) {
-				final converted: String = (arrayOwn ? elementType(t) : null) ?? t;
-				final nominal: String = NominalTypes.outerNominalOf(converted, _scope.plugin.typeSyntax) ?? converted;
-				g.types.generics.typeParamsOf(nominal).length > 0 ? null : converted;
-			}
-		];
+		return types == null ? [null] : [ for (t in types) {
+			final converted: String = (arrayOwn ? elementType(t) : null) ?? t;
+			final nominal: String = NominalTypes.outerNominalOf(converted, _scope.plugin.typeSyntax) ?? converted;
+			g.types.generics.typeParamsOf(nominal).length > 0 ? null : converted;
+		} ];
 	}
 
 	/**
@@ -3254,15 +3252,9 @@ final class MemberReach {
 		return {
 			file: file,
 			region: region,
-			edges: [
-				for (e in g.edges) if (e.file == file && e.kind != Contains && admits(e.from, e.span, e.spliced)) e
-			],
-			unresolved: [
-				for (u in g.unresolved) if (u.file == file && admits(u.from, u.span, u.spliced)) u
-			],
-			access: [
-				for (a in g.unresolvedAccess) if (a.file == file && admits(a.from, a.span, a.spliced)) a
-			]
+			edges: [ for (e in g.edges) if (e.file == file && e.kind != Contains && admits(e.from, e.span, e.spliced)) e ],
+			unresolved: [ for (u in g.unresolved) if (u.file == file && admits(u.from, u.span, u.spliced)) u ],
+			access: [ for (a in g.unresolvedAccess) if (a.file == file && admits(a.from, a.span, a.spliced)) a ]
 		};
 	}
 

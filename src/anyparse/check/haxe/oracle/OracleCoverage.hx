@@ -318,12 +318,10 @@ final class OracleCoverage implements CompiledSet {
 		final asked: Array<OracleConfig> = [ for (oracle in oracles) if (oracle.unavailable == null) oracle ];
 		final runs: Array<ProcessRun> = remembered(asked);
 		var next: Int = 0;
-		return [
-			for (oracle in oracles) {
-				final unavailable: Null<String> = oracle.unavailable;
-				unavailable == null ? fromRun(oracle.dir ?? Sys.getCwd(), oracle.hxml, reworded(runs[next++])) : unknown(unavailable);
-			}
-		];
+		return [ for (oracle in oracles) {
+			final unavailable: Null<String> = oracle.unavailable;
+			unavailable == null ? fromRun(oracle.dir ?? Sys.getCwd(), oracle.hxml, reworded(runs[next++])) : unknown(unavailable);
+		} ];
 		#else
 		return [ for (_ in oracles) unknown(UNSUPPORTED_TARGET) ];
 		#end
@@ -612,22 +610,21 @@ final class OracleCoverage implements CompiledSet {
 		final before: Array<Null<String>> = memo == null ? [ for (_ in asked) null ] : memo.fingerprints(asked);
 		final held: Array<Null<ProcessRun>> = [ for (i in 0...asked.length) memo?.run(asked[i], true, before[i]) ];
 		final spawned: Array<Int> = [ for (i in 0...asked.length) if (held[i] == null) i ];
-		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
-			for (i in spawned) { args: probeArgs(asked[i].hxml, asked[i].defines), cwd: asked[i].dir ?? Sys.getCwd() }
-		], PROBE_BUFFER, ProcessSpawn.parallelism());
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll(
+			[ for (i in spawned) { args: probeArgs(asked[i].hxml, asked[i].defines), cwd: asked[i].dir ?? Sys.getCwd() } ],
+			PROBE_BUFFER, ProcessSpawn.parallelism()
+		);
 		final after: Array<Null<String>> = memo == null ? [] : memo.fingerprints(spawned.map(i -> asked[i]));
-		return [
-			for (i in 0...asked.length) {
-				final reused: Null<ProcessRun> = held[i];
-				if (reused != null) {
-					reused;
-				} else {
-					final k: Int = spawned.indexOf(i);
-					memo?.file(asked[i], true, before[i], after[k], runs[k]);
-					runs[k];
-				}
+		return [ for (i in 0...asked.length) {
+			final reused: Null<ProcessRun> = held[i];
+			if (reused != null) {
+				reused;
+			} else {
+				final k: Int = spawned.indexOf(i);
+				memo?.file(asked[i], true, before[i], after[k], runs[k]);
+				runs[k];
 			}
-		];
+		} ];
 	}
 
 	/** The decline sentence for a file the oracle's compile never reads. */

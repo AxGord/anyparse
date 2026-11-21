@@ -209,6 +209,12 @@ typedef WrapListOptions = {
 	var ?containerItemKinds: Array<Null<Array<Int>>>;
 
 	/**
+	 * Per element, length-aligned with `items`: true iff the element is an array comprehension, as the grammar reads it
+	 * off the AST. Omitted reads as no comprehension anywhere.
+	 */
+	var ?comprehensionItems: Array<Bool>;
+
+	/**
 	 * The number of items whose declared type carries type parameters at any depth (`Array<Int>`, `Null<String>`, a field
 	 * of a nested anonymous type that does), as the grammar counts it — the value of the `TypeParamItemCountLargerThan`
 	 * condition. Omitted reads as 0, so a list whose grammar supplies no count never fires the condition.
@@ -255,6 +261,7 @@ private typedef ResolvedWrapListOptions = {
 	final comprehensionBodyMeasure: Bool;
 	final complexItemKinds: Null<Array<Int>>;
 	final containerItemKinds: Null<Array<Null<Array<Int>>>>;
+	final comprehensionItems: Null<Array<Bool>>;
 	final typeParamItemCount: Int;
 	final moduleOnlyTypedefs: Bool;
 	final trailBreakDoc: Doc;
@@ -2112,7 +2119,9 @@ class WrapList {
 		// open-shape branch builds one of those two shapes; the glue itself is
 		// not gated on it. Omitted → the policy is off and every caller is
 		// byte-identical.
-		?complexItemKinds: Array<Int>
+		?complexItemKinds: Array<Int>,
+		// The list's `comprehensionItems` axis: which items are array comprehensions.
+		?comprehensionItems: Array<Bool>
 	): Doc {
 		// ω-thinarrow-break if-else: a sole bare-ident arrow arg of a call / new-expr
 		// (`f(p -> if … else …)`) whose body is an ALREADY-multiline if/else breaks
@@ -2140,7 +2149,15 @@ class WrapList {
 			: replaceArrowMarker(items[last], (_, _, fl) -> WrapBoundary(fl));
 		final braceLedIdx: Int = flatLast == null ? -1 : last;
 		final list: Array<Doc> = flatLast == null ? items : items.slice(0, last).concat([flatLast]);
-		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(comprehensionBlockHug, open, close, list, openInside, closeInside);
+		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(
+			comprehensionBlockHug, open, close, list, openInside, closeInside, lineWidth,
+			() ->
+				shape(
+					mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe,
+					sepBeforeFlags, lineWidth, flatTrailingComma, comprehensionCuddledOpen, soleItemCuddledBrackets, false,
+					complexItemKinds, comprehensionItems
+				)
+		);
 		if (comprBlockHug != null) return comprBlockHug;
 		final comprCuddledOpen: Null<Doc> = shapeComprehensionCuddledOpen(
 			comprehensionCuddledOpen, mode, open, close, sep, list, openInside, cols, appendTrailingComma, trailBreak, sepBeforeFlags,
@@ -2154,7 +2171,19 @@ class WrapList {
 		);
 		if (soleArrowContGlue != null) return soleArrowContGlue;
 		final singleArgGlue: Null<Doc> = shapeSingleArgGlue(
-			mode, open, close, sep, list, openInside, closeInside, cols, appendTrailingComma, lineWidth
+			// A cuddled-open comprehension keeps its generator head on the call's bracket, so only without it does a fitting
+			// sole comprehension argument take its own line.
+			mode,
+			open,
+			close,
+			sep,
+			list,
+			openInside,
+			closeInside,
+			cols,
+			appendTrailingComma,
+			lineWidth,
+			comprehensionCuddledOpen ? null : comprehensionItems
 		);
 		if (singleArgGlue != null) return singleArgGlue;
 		// A body that carries its own hardline (a statement block) keeps its marker for the block-lambda glue, whose
@@ -2166,7 +2195,7 @@ class WrapList {
 		if (multiArgBlockLambda != null) return multiArgBlockLambda;
 		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
 			mode, open, close, sep, list, openInside, closeInside, cols, appendTrailingComma, flatTrailingComma, groupRestProbe,
-			sepBeforeFlags, lineWidth, braceLedIdx, complexItemKinds
+			sepBeforeFlags, lineWidth, braceLedIdx, complexItemKinds, comprehensionItems
 		);
 		if (multiArgCollection != null) return multiArgCollection;
 		final byMode: Doc = shapeByMode(
@@ -2342,7 +2371,7 @@ class WrapList {
 	 */
 	private static function shapeSingleArgGlue(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, lineWidth: Int
+		appendTrailingComma: Bool, lineWidth: Int, ?comprehensionItems: Array<Bool>
 	): Null<Doc> {
 		if (mode != FillLineWithLeadingBreak || items.length != 1 || isArrowBodyMarker(items[0]) || isMethodChainItem(items[0]))
 			return null;
@@ -2458,7 +2487,15 @@ class WrapList {
 		// refused one shape and no other: a comprehension whose generator head
 		// `wrapping.comprehensionCuddledOpen` cuddles to the `[`, so the first line
 		// ends at the generator's `)` rather than at an open delimiter.
-		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) return IfNaturalFirstLineExceeds(lineWidth, broken, hugGlue);
+		// A comprehension that fits on its own argument line takes that line whole (`f(` / `[ for … ]` / `)`); the bracket
+		// hug is for one that breaks there too: the continuation-fit gate of `shapeMultiArgCollection`'s fit pivot.
+		if (DocMeasure.firstVisibleTextStartsWith(items[0], '['.code)) {
+			final hugged: Doc = IfNaturalFirstLineExceeds(lineWidth, broken, hugGlue);
+			final comprFlat: Int = comprehensionItems != null && comprehensionItems[0] ? flatLength(items[0]) : -1;
+			return comprFlat < 0
+				? hugged
+				: IfArrowContinuationFits(cols, comprFlat + (appendTrailingComma ? sep.length : 0), lineWidth + 1, hugged, broken);
+		}
 		// ω-outer-first-wrap: OUTER boundaries win over inner ones. When
 		// breaking at THIS list's own delimiters already yields an argument that
 		// renders as one flat line at its continuation indent, take that shape —
@@ -2583,12 +2620,13 @@ class WrapList {
 	private static function shapeMultiArgCollection(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, flatTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int,
-		braceLedIdx: Int, ?complexItemKinds: Array<Int>
+		braceLedIdx: Int, ?complexItemKinds: Array<Int>, ?comprehensionItems: Array<Bool>
 	): Null<Doc> {
 		// `braceLedIdx`: the item `shape` reads as `{`-led though its first token is an arrow head, or -1.
 		if ((mode != FillLine && mode != FillLineWithLeadingBreak) || items.length <= 1) return null;
 		final collIdx: Int = soleMultilineCollectionArg(items, braceLedIdx);
 		if (collIdx < 0) return null;
+		if (ComprehensionRun.holds(items, collIdx, comprehensionItems)) return null;
 		// ω-item-close-trail: the glue shape ends `… lastItem <sep?> close`, so a
 		// last item ending in `//` would put the close delimiter on the comment's
 		// own line. Declining restores `openShape`, which the cascade had already
@@ -3326,12 +3364,10 @@ class WrapList {
 		rules: WrapRules, items: Array<Doc>, kinds: Null<Array<Int>>, ownKinds: Null<Array<Null<Array<Int>>>>
 	): Null<Array<Int>> {
 		final sub: Null<WrapRules> = rules.containerItemWrap;
-		return sub == null || kinds == null || ownKinds == null ? kinds : [
-			for (i => kind in kinds) {
-				final own: Null<Array<Int>> = kind == KIND_CONTAINER && i < ownKinds.length && i < items.length ? ownKinds[i] : null;
-				own != null && !containerTakesOwnLine(sub, items[i], own) ? KIND_CONTAINER_PLAIN : kind;
-			}
-		];
+		return sub == null || kinds == null || ownKinds == null ? kinds : [ for (i => kind in kinds) {
+			final own: Null<Array<Int>> = kind == KIND_CONTAINER && i < ownKinds.length && i < items.length ? ownKinds[i] : null;
+			own != null && !containerTakesOwnLine(sub, items[i], own) ? KIND_CONTAINER_PLAIN : kind;
+		} ];
 	}
 
 	/**
@@ -3368,9 +3404,9 @@ class WrapList {
 		make: (Array<Doc>, Doc, Int) -> Doc
 	): Doc {
 		final elided: Bool = [ for (k in from + 1...to) skipSepBefore(sepBeforeFlags, k) ].contains(true);
-		final fillItems: Array<Doc> = elided ? [
-			for (k in from ... to) k + 1 < to && !skipSepBefore(sepBeforeFlags, k + 1) ? Concat([items[k], Text(sep)]) : items[k]
-		] : items.slice(from, to);
+		final fillItems: Array<Doc> = elided
+			? [ for (k in from ... to) k + 1 < to && !skipSepBefore(sepBeforeFlags, k + 1) ? Concat([items[k], Text(sep)]) : items[k] ]
+			: items.slice(from, to);
 		final fillSep: Doc = elided ? Line(' ') : softSep;
 		return make(fillItems, fillSep, tailReserve);
 	}
@@ -4121,23 +4157,26 @@ class WrapList {
 	 * leading-breaking the `[`. `hug` decides; null follows the PADDED brackets
 	 * (`openInside` non-empty), the runtime signal of the fork's
 	 * `sameLine.comprehensionFor: fitLine` coupling, so tight brackets never hug.
+	 *
+	 * The hug holds only while the bracket line fits: every generator head, iterables laid flat, up to the body's `{`.
+	 * Past it the list takes its `unhugged` shape (`[`, the heads on their own line, `]` on its own line). The probe
+	 * measures the head alone by lowering its threshold by the flat width the hug carries past the head, so the
+	 * renderer's `col + flatWidth >= n` reads `col + head >= lineWidth`.
 	 */
 	private static function shapeComprehensionBlockHug(
-		hug: Null<Bool>, open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc
+		hug: Null<Bool>, open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, lineWidth: Int,
+		unhugged: () -> Doc
 	): Null<Doc> {
 		final padded: Bool = switch openInside {
 			case Empty: false;
 			case _: true;
 		};
-		return (hug ?? padded) && items.length == 1 && isBlockBodyComprehensionItem(items[0])
-			? Concat([
-				DelimiterLeaf.leaf(open),
-				openInside,
-				items[0],
-				closeInside,
-				DelimiterLeaf.leaf(close)
-			])
-			: null;
+		if (!(hug ?? padded) || items.length != 1 || !isBlockBodyComprehensionItem(items[0])) return null;
+		final head: Doc = Concat([DelimiterLeaf.leaf(open), openInside, items[0]]);
+		final hugged: Doc = Concat([head, closeInside, DelimiterLeaf.leaf(close)]);
+		return IfWidthExceeds(
+			lineWidth + DocMeasure.flatTokenWidth(hugged) - DocMeasure.flatFirstLineWidthThroughBodyGroup(head), unhugged(), hugged
+		);
 	}
 
 	/**
@@ -4468,6 +4507,7 @@ class WrapList {
 			comprehensionBodyMeasure: axes.comprehensionBodyMeasure ?? false,
 			complexItemKinds: axes.complexItemKinds,
 			containerItemKinds: axes.containerItemKinds,
+			comprehensionItems: axes.comprehensionItems,
 			typeParamItemCount: axes.typeParamItemCount ?? 0,
 			moduleOnlyTypedefs: axes.moduleOnlyTypedefs ?? false,
 			trailBreakDoc: axes.trailBreak ?? Line('\n')
@@ -4630,7 +4670,7 @@ class WrapList {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
 				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets,
-				comprehensionBlockHug, chunkKinds
+				comprehensionBlockHug, chunkKinds, axes.comprehensionItems
 			);
 			return prependLead(body, lead);
 		}
@@ -4663,12 +4703,15 @@ class WrapList {
 			)
 		else if (anyHardline || forceExceeds)
 			WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
-		else if (extraThresholds.length == 0)
-			emitZeroThreshold(
+		else if (extraThresholds.length == 0) {
+			final zero: Doc = emitZeroThreshold(
 				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
 				leadFlat, leadBreak, evalAt, shapeAt, leadFor, defaultBreakMode
-			)
-		else if (extraThresholds.length == 1)
+			);
+			// A comprehension that fits its line stays whole: a later construct on that line that breaks by itself opens
+			// first, and the brackets break only for a rest with no seam of its own.
+			comprehensionFitMeasure ? D.yieldsToRest(zero) : zero;
+		} else if (extraThresholds.length == 1)
 			emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
 		else
 			WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));

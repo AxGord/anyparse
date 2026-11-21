@@ -67,9 +67,7 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 	public function typecheckEachReading(
 		oracles: Array<OracleConfig>, stopAfterFailure: Bool, ?parallel: Int, ?decisive: String -> Bool
 	): Array<OracleReading> {
-		return [
-			for (_ in oracles) { outcome: Unavailable(OracleProviders.NO_ORACLE), parsed: null }
-		];
+		return [ for (_ in oracles) { outcome: Unavailable(OracleProviders.NO_ORACLE), parsed: null } ];
 	}
 
 	public function serverTypecheck(hxml: String, cwd: Null<String>, paths: Array<String>, defines: Array<String>): Null<OracleOutcome> {

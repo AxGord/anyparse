@@ -112,9 +112,9 @@ final class QueueFile {
 	}
 
 	private static function list(value: String): Array<String> {
-		return !value.startsWith('[') || !value.endsWith(']') ? [] : [
-			for (item in value.substring(1, value.length - 1).split(',')) if (item.trim() != '') item.trim()
-		];
+		return !value.startsWith('[') || !value.endsWith(']')
+			? []
+			: [ for (item in value.substring(1, value.length - 1).split(',')) if (item.trim() != '') item.trim() ];
 	}
 
 	private static function unindent(row: String): String {

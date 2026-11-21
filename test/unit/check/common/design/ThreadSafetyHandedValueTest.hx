@@ -354,24 +354,20 @@ class ThreadSafetyHandedValueTest extends Test {
 
 	/** The hold warnings (b) of `found` as `<member> | <lock>`, sorted: a hold across short calls run once is info. */
 	private static function holds(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'B' && v.severity.label() == 'warning') '${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'B' && v.severity.label() == 'warning') '${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}
 
 	/** The main-thread findings (a) of `found` as `<severity> A <member> | <subject>`, sorted. */
 	private static function mains(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'A') '${v.severity.label()} A ${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'A') '${v.severity.label()} A ${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}
@@ -398,12 +394,10 @@ class ThreadSafetyHandedValueTest extends Test {
 					+ ' public static function main():Void { Runner.create(work); _a.acquire(); $held _a.release(); $call } }'
 				]
 			);
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'D') '${data.member} | ${data.subject}';
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'D') '${data.member} | ${data.subject}';
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}

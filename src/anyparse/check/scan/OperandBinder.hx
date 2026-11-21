@@ -157,9 +157,7 @@ final class OperandBinder {
 		_declared = DeclaredNullity.of(file, tree, source, shape, provider, index.typeSyntax, () -> index);
 		_builtins = builtinNamesOf(shape);
 		_wrappers = shape.memberTransparentWrapperTypeNames ?? [];
-		_identKinds = [
-			for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind
-		];
+		_identKinds = [ for (kind in [shape.identKind, shape.stringInterpIdentKind]) if (kind != null) kind ];
 		_fnKinds = (shape.functionKinds ?? []).concat(shape.inlineFunctionKinds ?? []);
 		_expectation = index.typing.expectations;
 		_annotations = provider.declaredTypeSources(source);

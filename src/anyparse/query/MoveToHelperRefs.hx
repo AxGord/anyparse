@@ -193,9 +193,7 @@ final class MoveToHelperRefs {
 	/** The names the moved members spell as identifiers, the package roots among them, and the member names they access. */
 	private static function scanMoved(prep: MovePrep): MovedScan {
 		final scan: MovedScan = { names: ['this'], pathRoots: [], accessedNames: [] };
-		final identKinds: Array<String> = [
-			for (k in [prep.shape.identKind, prep.shape.stringInterpIdentKind]) if (k != null) k
-		];
+		final identKinds: Array<String> = [ for (k in [prep.shape.identKind, prep.shape.stringInterpIdentKind]) if (k != null) k ];
 		final accessKinds: Array<String> = ShapeVocab.memberAccessKinds(prep.shape);
 		function walk(node: QueryNode, typePathRoot: Bool): Void {
 			final name: Null<String> = node.name;

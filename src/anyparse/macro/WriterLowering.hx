@@ -1307,6 +1307,12 @@ class WriterLowering {
 	private static final CONTAINER_ITEM_KINDS_PRED: String = 'containerItemKinds';
 
 	/**
+	 * The `AstPreds` name of the per-element comprehension flag behind `WrapListOptions.comprehensionItems`, read at the
+	 * same emit sites as `COMPLEX_ITEM_KINDS_PRED` and under the same `@:fmt(complexItems)` flag.
+	 */
+	private static final COMPREHENSION_ITEMS_PRED: String = 'comprehensionItems';
+
+	/**
 	 * The `AstPreds` name of the counter behind `WrapListOptions.typeParamItemCount` — how many elements of a list declare a
 	 * type carrying type parameters — read at the trivia sep-Star under `@:fmt(typeParamItems)`.
 	 */
@@ -1494,9 +1500,7 @@ class WriterLowering {
 		SiblingScope.requireShared(_shape);
 		_predRootStatic = _shape.root;
 		_astPredsOnStatic = _formatInfo.astPreds;
-		final rules: Array<WriterRule> = [
-			for (typePath => node in _shape.rules) for (rule in lowerRule(typePath, node)) rule
-		];
+		final rules: Array<WriterRule> = [ for (typePath => node in _shape.rules) for (rule in lowerRule(typePath, node)) rule ];
 		// Reset the mirrors so a stale root from THIS build can never
 		// leak into a later build's static helpers — the astPredCallT
 		// guard then catches any out-of-generate() read, not just the

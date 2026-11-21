@@ -377,9 +377,7 @@ final class UnusedImport extends RuleBase implements ScopeDependent implements R
 	 */
 	private static function readersOf(scans: Array<FileScan>, imp: ImportInfo, own: String, index: SymbolIndex): Array<FileScan> {
 		if (imp.kind != ImportKind.Import) return scans;
-		final declaring: Array<String> = [
-			for (r in index.refs.resolveQualifiedRefAll(imp.raw)) if (r.file.file != own) r.file.file
-		];
+		final declaring: Array<String> = [ for (r in index.refs.resolveQualifiedRefAll(imp.raw)) if (r.file.file != own) r.file.file ];
 		return declaring.length == 0 ? scans : scans.filter(s -> !declaring.contains(s.file));
 	}
 

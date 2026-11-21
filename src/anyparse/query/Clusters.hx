@@ -135,13 +135,11 @@ final class Clusters {
 
 		final components: Array<Array<String>> = componentsOf(memberIds, adj, hubIds);
 		components.sort((a, b) -> a.length == b.length ? (a[0] < b[0] ? -1 : 1) : b.length - a.length);
-		final componentNodes: Array<Array<FnNode>> = [
-			for (comp in components) {
-				final nodes: Array<FnNode> = comp.map(nodeOf.bind(graph));
-				nodes.sort(byPosition);
-				nodes;
-			}
-		];
+		final componentNodes: Array<Array<FnNode>> = [ for (comp in components) {
+			final nodes: Array<FnNode> = comp.map(nodeOf.bind(graph));
+			nodes.sort(byPosition);
+			nodes;
+		} ];
 
 		var intraEdgeSites: Int = 0;
 		for (e in intraEdges) intraEdgeSites += e.weight;
@@ -185,12 +183,8 @@ final class Clusters {
 			out.add('\ncomponent $index — ${comp.length} member(s):\n');
 			for (n in comp) out.add('  ${CallChains.nodeLabel(graph, n.id, sourceOf)}\n');
 			final uses: Array<HubUse> = report.hubUses.filter(u -> u.component == index);
-			final toHub: Array<String> = [
-				for (u in uses) if (u.toHub > 0) '${SourceText.lastSegment(u.hubId)} ×${u.toHub}'
-			];
-			final fromHub: Array<String> = [
-				for (u in uses) if (u.fromHub > 0) '${SourceText.lastSegment(u.hubId)} ×${u.fromHub}'
-			];
+			final toHub: Array<String> = [ for (u in uses) if (u.toHub > 0) '${SourceText.lastSegment(u.hubId)} ×${u.toHub}' ];
+			final fromHub: Array<String> = [ for (u in uses) if (u.fromHub > 0) '${SourceText.lastSegment(u.hubId)} ×${u.fromHub}' ];
 			if (toHub.length > 0) out.add('  -> hubs: ${toHub.join(', ')}\n');
 			if (fromHub.length > 0) out.add('  <- hubs: ${fromHub.join(', ')}\n');
 		}

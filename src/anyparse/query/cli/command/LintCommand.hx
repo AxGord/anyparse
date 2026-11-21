@@ -274,9 +274,9 @@ final class LintCommand implements CliCommand {
 		// file order, the order every later per-file question discovers configs in, so each once-per-document config
 		// warning prints where it did.
 		final fileConfigs: Array<LintConfig> = LintDocuments.distinctConfigs(paths, resolveConfig);
-		final activeChecks: Array<Check> = applyEnablement ? [
-			for (c in checks) if (fileConfigs.exists(config -> Linter.enabledBy(config, c))) c
-		] : checks;
+		final activeChecks: Array<Check> = applyEnablement
+			? [ for (c in checks) if (fileConfigs.exists(config -> Linter.enabledBy(config, c))) c ]
+			: checks;
 
 		// Resolution scope: the UNION of `resolutionRoots` (explicit dirs) and `resolutionLibs`
 		// (haxelib names) across every discovered config, PLUS the auto-discovered Haxe std, which
@@ -633,9 +633,9 @@ final class LintCommand implements CliCommand {
 		// The std is read as a half of its own, after the declared libraries and without what they already hold, so a consumer
 		// can ask the project's code apart from the std it calls into (`ResolutionSources.declared`).
 		final stdDir: Null<String> = stdEnabled ? StdResolver.stdDir() : null;
-		final stdSpecs: Array<String> = stdDir == null ? [] : [
-			for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) spec
-		];
+		final stdSpecs: Array<String> = stdDir == null
+			? []
+			: [ for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) spec ];
 		final exclude: Map<String, Bool> = reportPaths.copy();
 		for (entry in alreadyRead) exclude[FileIdentity.realPath(entry.file)] = true;
 		final declared: Array<{ file: String, source: String }> = readResolutionSources(lang, scanRoots, exclude);

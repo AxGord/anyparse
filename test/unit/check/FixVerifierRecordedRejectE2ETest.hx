@@ -42,15 +42,13 @@ private final class EveryLiteralRewrite implements Check implements RiskyFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) if (entry.source.indexOf('= 1') >= 0) {
-				file: entry.file,
-				span: null,
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'test double finding'
-			}
-		];
+		return [ for (entry in files) if (entry.source.indexOf('= 1') >= 0) {
+			file: entry.file,
+			span: null,
+			rule: id(),
+			severity: Severity.Warning,
+			message: 'test double finding'
+		} ];
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {

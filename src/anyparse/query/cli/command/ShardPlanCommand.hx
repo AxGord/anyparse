@@ -107,9 +107,7 @@ final class ShardPlanCommand implements CliCommand {
 		// rather than from a re-derivation of it out of source text.
 		final classes: Null<String> = classesPath;
 		if (classes != null) {
-			final listed: Array<String> = [
-				for (line in CliIo.readFile(classes).split('\n')) if (line.trim() != '') line.trim()
-			];
+			final listed: Array<String> = [ for (line in CliIo.readFile(classes).split('\n')) if (line.trim() != '') line.trim() ];
 			final weights: Null<String> = weightsPath;
 			final measured: Null<Map<String, ClassWeight>> = weights == null ? null : ShardPlan.parseWeights(CliIo.readFile(weights));
 			return renderShardPlan(ShardPlan.planClasses(listed, shardCount, classes, measured), format, shardCount);

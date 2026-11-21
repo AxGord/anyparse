@@ -1336,9 +1336,7 @@ final class CallGraphEdges {
 		 */
 		function typeLambdaParams(lambda: QueryNode, currentType: Null<String>): Void {
 			final params: Array<QueryNode> = [ for (c in lambda.children) if (paramKinds.contains(c.kind)) c ];
-			final bare: Array<QueryNode> = [
-				for (p in params) if (p.span != null && !typeSources.exists(p.span?.from ?? -1)) p
-			];
+			final bare: Array<QueryNode> = [ for (p in params) if (p.span != null && !typeSources.exists(p.span?.from ?? -1)) p ];
 			if (bare.length == 0) return;
 			final written: Null<Array<String>> = expectation.lambdaParamTypes(lambda, lineage, lineageIndex, graphExpectation, currentType);
 			if (written == null) return;

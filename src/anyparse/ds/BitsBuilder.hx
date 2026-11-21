@@ -125,12 +125,8 @@ final class BitsBuilder {
 		final dense: Bool = values.length == 0 || values[values.length - 1] == values.length - 1;
 		if (dense) return { bits: bits, bitOfValue: macro (cast value: Int), valueAtIndex: macro cast index };
 		final last: Int = values.length - 1;
-		final toRank: Array<Case> = [
-			for (rank in 0...last) { values: [macro $v{values[rank]}], expr: macro $v{rank} }
-		];
-		final toValue: Array<Case> = [
-			for (rank in 0...last) { values: [macro $v{rank}], expr: macro cast $v{values[rank]} }
-		];
+		final toRank: Array<Case> = [ for (rank in 0...last) { values: [macro $v{values[rank]}], expr: macro $v{rank} } ];
+		final toValue: Array<Case> = [ for (rank in 0...last) { values: [macro $v{rank}], expr: macro cast $v{values[rank]} } ];
 		return {
 			bits: bits,
 			bitOfValue: { expr: ESwitch(macro (cast value: Int), toRank, macro $v{last}), pos: pos },

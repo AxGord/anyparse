@@ -127,25 +127,23 @@ final class TokenReport {
 
 	/** The cache rewrites of one agent, in turn order: its first turn only fills the cache, so it is never one. */
 	public static function rewritesOf(agent: AgentReading): Array<Rewrite> {
-		return [
-			for (i in 1...agent.turns.length) {
-				final turn: TurnReading = agent.turns[i];
-				final written: Int = turn.write5m + turn.write1h;
-				final context: Int = turn.input + turn.cacheRead + written;
-				if (context >= REWRITE_MIN_CONTEXT && !(written < REWRITE_SHARE * context)) {
-					final price: Null<Price> = priceOf(turn.model);
-					{
-						agent: agent.id,
-						slice: agent.slice,
-						model: turn.model,
-						tokens: written,
-						context: context,
-						gapSeconds: (turn.start - agent.turns[i - 1].end) / MS_PER_SECOND,
-						extraCost: price == null ? 0 : round(costOfWrite(turn, price) - written * price.read / PER_MTOK)
-					};
-				}
+		return [ for (i in 1...agent.turns.length) {
+			final turn: TurnReading = agent.turns[i];
+			final written: Int = turn.write5m + turn.write1h;
+			final context: Int = turn.input + turn.cacheRead + written;
+			if (context >= REWRITE_MIN_CONTEXT && !(written < REWRITE_SHARE * context)) {
+				final price: Null<Price> = priceOf(turn.model);
+				{
+					agent: agent.id,
+					slice: agent.slice,
+					model: turn.model,
+					tokens: written,
+					context: context,
+					gapSeconds: (turn.start - agent.turns[i - 1].end) / MS_PER_SECOND,
+					extraCost: price == null ? 0 : round(costOfWrite(turn, price) - written * price.read / PER_MTOK)
+				};
 			}
-		];
+		} ];
 	}
 
 	private static inline function costOfWrite(turn: TurnReading, price: Price): Float {
@@ -159,17 +157,15 @@ final class TokenReport {
 			TokenTranscript.addStat(sum, stat);
 			sums[key] = sum;
 		}
-		final rows: Array<ToolRow> = [
-			for (key => sum in sums) {
-				key: key,
-				calls: sum.calls,
-				outTok: tokens(sum.outChars),
-				avgOutTok: sum.calls == 0 ? 0 : Math.round(tokens(sum.outChars) / sum.calls),
-				inTok: tokens(sum.inChars),
-				over2k: sum.over2k,
-				over5k: sum.over5k
-			}
-		];
+		final rows: Array<ToolRow> = [ for (key => sum in sums) {
+			key: key,
+			calls: sum.calls,
+			outTok: tokens(sum.outChars),
+			avgOutTok: sum.calls == 0 ? 0 : Math.round(tokens(sum.outChars) / sum.calls),
+			inTok: tokens(sum.inChars),
+			over2k: sum.over2k,
+			over5k: sum.over5k
+		} ];
 		rows.sort((a, b) -> b.inTok + b.outTok - a.inTok - a.outTok);
 		return rows;
 	}
@@ -185,16 +181,14 @@ final class TokenReport {
 			for (big in stat.biggest) TokenTranscript.keepBiggest(sum.biggest, big);
 			sums[id] = sum;
 		}
-		final rows: Array<RoleToolRow> = [
-			for (id => sum in sums) {
-				role: id.substr(0, id.indexOf('\n')),
-				key: id.substr(id.indexOf('\n') + 1),
-				calls: sum.calls,
-				outTok: tokens(sum.outChars),
-				over5k: sum.over5k,
-				biggest: sum.biggest.map(big -> { outTok: tokens(big.outChars), call: big.call })
-			}
-		];
+		final rows: Array<RoleToolRow> = [ for (id => sum in sums) {
+			role: id.substr(0, id.indexOf('\n')),
+			key: id.substr(id.indexOf('\n') + 1),
+			calls: sum.calls,
+			outTok: tokens(sum.outChars),
+			over5k: sum.over5k,
+			biggest: sum.biggest.map(big -> { outTok: tokens(big.outChars), call: big.call })
+		} ];
 		rows.sort((a, b) -> b.outTok - a.outTok);
 		return rows;
 	}

@@ -21,13 +21,11 @@ final class FlowJson {
 				label: n.label,
 				line: n.line
 			}: FlowNodeJson)),
-			edges: [
-				for (e in graph.edges()) {
-					final edge: FlowEdgeJson = { from: e.from, to: e.to };
-					if (e.label != null) edge.label = e.label;
-					edge;
-				}
-			]
+			edges: [ for (e in graph.edges()) {
+				final edge: FlowEdgeJson = { from: e.from, to: e.to };
+				if (e.label != null) edge.label = e.label;
+				edge;
+			} ]
 		};
 	}
 

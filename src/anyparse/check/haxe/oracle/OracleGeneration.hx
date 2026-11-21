@@ -496,9 +496,7 @@ final class OracleGeneration {
 			group: group,
 			why: why,
 			inputs: hashAll(group.inputs ?? [], fresh),
-			implicitBefore: hashAll([
-				for (held in previous?.implicit ?? []) if (!isProduced(group, held.path)) held.path
-			], fresh)
+			implicitBefore: hashAll([ for (held in previous?.implicit ?? []) if (!isProduced(group, held.path)) held.path ], fresh)
 		};
 		deleteRecord(group);
 		sys.io.File.saveContent(epochFile(group), '${run.me.pid} ${Date.now().getTime()} ${Math.random()}');
@@ -528,15 +526,13 @@ final class OracleGeneration {
 			}
 		}
 		if (stale.length == 0) return;
-		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
-			for (s in stale) {
-				args: [],
-				cwd: s.group.generate.root,
-				shell: s.group.generate.command,
-				timeout: GENERATE_TIMEOUT,
-				groupFile: OracleGenerationLock.jobFile(lockDir(s.group))
-			}
-		], BUFFER, ProcessSpawn.parallelism());
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([ for (s in stale) {
+			args: [],
+			cwd: s.group.generate.root,
+			shell: s.group.generate.command,
+			timeout: GENERATE_TIMEOUT,
+			groupFile: OracleGenerationLock.jobFile(lockDir(s.group))
+		} ], BUFFER, ProcessSpawn.parallelism());
 		final libraries: LibraryIndex = libraryIndex(groups);
 		final settled: Map<String, String> = [];
 		for (i => s in stale) {

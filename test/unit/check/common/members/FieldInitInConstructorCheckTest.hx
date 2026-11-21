@@ -407,12 +407,10 @@ class FieldInitInConstructorCheckTest extends Test {
 	/** The `prefer-final-field` findings over `src`, as the flagged declaration texts. */
 	private function finalFieldNames(src: String): Array<String> {
 		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferFinalField(), [{ file: 'Picker.hx', source: src }]);
-		return [
-			for (v in vs) {
-				final span: Null<Span> = v.span;
-				span == null ? '' : src.substring(span.from, span.to);
-			}
-		];
+		return [ for (v in vs) {
+			final span: Null<Span> = v.span;
+			span == null ? '' : src.substring(span.from, span.to);
+		} ];
 	}
 
 	private function edits(src: String): Array<{ span: Span, text: String }> {

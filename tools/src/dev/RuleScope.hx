@@ -103,9 +103,11 @@ final class RuleScope {
 	/** `report` (a `lint --format json` array) without the findings of every rule outside `ids`. */
 	public static function keep(report: String, ids: Array<String>): String {
 		return switch JValueParser.parse(report) {
-			case JArray(records): JValueWriter.write(JArray([
-				for (record in records) if (ids.contains(JValueTools.stringAt(record, 'rule') ?? '')) record
-			]), JsonFormat.instance.expandedWriteOptions);
+			case JArray(records):
+				JValueWriter.write(
+					JArray([ for (record in records) if (ids.contains(JValueTools.stringAt(record, 'rule') ?? '')) record ]),
+					JsonFormat.instance.expandedWriteOptions
+				);
 			case _: report;
 		}
 	}
@@ -169,9 +171,7 @@ final class RuleScope {
 
 	/** The registry's text as a reader of other types: its comments dropped, and the lines that only list a rule. */
 	private static function registryRest(text: String): String {
-		return [
-			for (line in SuiteImpact.uncommented(text).split('\n')) if (!REGISTRY_LINE.match(line)) line
-		].join('\n');
+		return [ for (line in SuiteImpact.uncommented(text).split('\n')) if (!REGISTRY_LINE.match(line)) line ].join('\n');
 	}
 
 	/**

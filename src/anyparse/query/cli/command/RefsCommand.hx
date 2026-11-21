@@ -302,15 +302,13 @@ final class RefsCommand implements CliCommand implements LeadingQuery {
 			wantWrites: Bool
 		}
 	): Null<Array<RefsBatch>> {
-		final batches: Array<RefsBatch> = [
-			for (name in names) {
-				name: name,
-				entries: [],
-				memberAccesses: 0,
-				bindings: 0,
-				candidateNames: []
-			}
-		];
+		final batches: Array<RefsBatch> = [ for (name in names) {
+			name: name,
+			entries: [],
+			memberAccesses: 0,
+			bindings: 0,
+			candidateNames: []
+		} ];
 		var scanned: Int = 0;
 		for (path in paths) {
 			// ONE parse per file for the whole batch. The pre-filter is the UNION of

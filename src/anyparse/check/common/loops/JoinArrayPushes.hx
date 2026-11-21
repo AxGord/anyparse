@@ -290,15 +290,13 @@ final class JoinArrayPushes extends RuleBase {
 		if (seams == null) return [];
 		final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
 		final writes: () -> FieldWriteIndex = lazyWriteIndex(files, plugin);
-		return [
-			for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes, entry.file)) {
-				file: entry.file,
-				span: m.span,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: 'the push statements after this empty array can be folded into the literal'
-			}
-		];
+		return [ for (entry in files) for (m in collectMatches(plugin, entry.source, seams, symbols, writes, entry.file)) {
+			file: entry.file,
+			span: m.span,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: 'the push statements after this empty array can be folded into the literal'
+		} ];
 	}
 
 	/**
@@ -376,9 +374,7 @@ final class JoinArrayPushes extends RuleBase {
 			selfText: shape.selfReferenceText,
 			superText: shape.superReferenceText,
 			overrideKind: shape.overrideModifierKind,
-			collectionKinds: [
-				for (k in [shape.arrayLiteralKind, shape.objectLiteralKind, shape.objectFieldKind]) if (k != null) k
-			]
+			collectionKinds: [ for (k in [shape.arrayLiteralKind, shape.objectLiteralKind, shape.objectFieldKind]) if (k != null) k ]
 		};
 	}
 

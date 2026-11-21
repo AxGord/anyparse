@@ -131,7 +131,7 @@
 				}
 			]
 		},
-		"comprehensionFit": false
+		"comprehensionFit": true
 	},
 	"whitespace": {
 		"addLineCommentSpace": true,

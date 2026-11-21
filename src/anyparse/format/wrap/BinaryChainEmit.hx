@@ -436,6 +436,7 @@ final class BinaryChainEmit {
 		final pivotHugIdx: Int = !anyHardline && !forceKeep && extraThresholds.length == 0
 			? ternaryHugCollectionBranchIndex(items, ops)
 			: -1;
+
 		return if (forceKeep)
 			WrapBoundary(shapeKeep(
 				items, ops, cols, forceKeepLocation ?? evalAt(true, []).location, sourceBreakBefore, afterComments,
@@ -451,7 +452,10 @@ final class BinaryChainEmit {
 				emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, [])
 			))
 		else
-			emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds);
+			ternaryFitHug(
+				items, ops, opt, cols, evalAt, shapeAt, extraThresholds.length == 0,
+				emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds)
+			);
 	}
 
 	/**
@@ -1427,7 +1431,7 @@ final class BinaryChainEmit {
 	 * built around a collection (`{…} + x` — ENDS with `x`, not `}`) all fail
 	 * the predicate.
 	 */
-	private static function ternaryHugCollectionBranchIndex(items: Array<Doc>, ops: Array<String>): Int {
+	private static function ternaryHugCollectionBranchIndex(items: Array<Doc>, ops: Array<String>, fitPivot: Bool = false): Int {
 		if (items.length != 3 || !isTernaryOps(ops)) return -1;
 		if (WrapList.flatLength(items[0]) < 0) return -1;
 		var idx: Int = -1; // noqa: magic-number
@@ -1443,7 +1447,7 @@ final class BinaryChainEmit {
 		// branch, never disqualify one, since nearly every nested CALL carries a
 		// pivot and the first scan's second-branch bail would then reject almost
 		// every ternary — it cost `a ? { … } : f(x)` its hug.
-		if (idx == -1) for (i in 1...3) if (WrapList.renderPivotBreakArm(items[i]) != null) { // noqa: magic-number
+		if (idx == -1) for (i in 1...3) if (WrapList.renderPivotBreakArm(items[i], fitPivot) != null) { // noqa: magic-number
 			if (idx != -1) return -1;
 			idx = i;
 		}
@@ -1468,11 +1472,67 @@ final class BinaryChainEmit {
 	private static function ternaryHugShape(
 		idx: Int, items: Array<Doc>, ops: Array<String>, opt: WriteOptions,
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
-		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, fitPivot: Bool = false
 	): Doc {
-		final arm: Null<Doc> = WrapList.renderPivotBreakArm(items[idx]);
+		final arm: Null<Doc> = WrapList.renderPivotBreakArm(items[idx], fitPivot);
 		final hugItems: Array<Doc> = arm == null ? items : [ for (i in 0...items.length) i == idx ? arm : items[i] ];
-		return IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(hugItems, ops));
+		final broken: Doc = shapeAt(evalAt(true, []));
+		final hug: Doc = IfFirstLineExceeds(opt.lineWidth, broken, shapeNoWrap(hugItems, ops));
+		// A branch whose own head decides by width (a comprehension's block hug, `[ for (…) {`) renders its break arm
+		// (`[` alone) where that head does not fit, so the hug is measured a second time on that arm.
+		final widthArm: Null<Doc> = widthProbeBreakArm(hugItems[idx]);
+		return widthArm == null
+			? hug
+			: IfFirstLineExceeds(
+				opt.lineWidth,
+				IfFirstLineExceeds(
+					opt.lineWidth, broken, shapeNoWrap([ for (i in 0...items.length) i == idx ? widthArm : hugItems[i] ], ops)
+				),
+				shapeNoWrap(hugItems, ops)
+			);
+	}
+
+	/**
+	 * The break arm of a branch whose own decision is a width probe (`IfWidthExceeds`, the shape of a comprehension's
+	 * block hug), reached through the wrappers that only place it and a `Concat` of which exactly one part holds it; null
+	 * for any other branch.
+	 */
+	private static function widthProbeBreakArm(d: Doc): Null<Doc> {
+		return switch d {
+			case IfWidthExceeds(_, brk, _): brk;
+			case WrapBoundary(inner):
+				final arm: Null<Doc> = widthProbeBreakArm(inner);
+				arm == null ? null : WrapBoundary(arm);
+			case Nest(n, inner):
+				final arm: Null<Doc> = widthProbeBreakArm(inner);
+				arm == null ? null : Nest(n, arm);
+			case Concat(parts):
+				final arms: Array<Null<Doc>> = parts.map(widthProbeBreakArm);
+				final at: Array<Int> = [ for (i in 0...parts.length) if (arms[i] != null) i ];
+				at.length != 1 ? null : Concat([ for (i in 0...parts.length) i == at[0] ? arms[i] ?? parts[i] : parts[i] ]);
+			case _: null;
+		};
+	}
+
+	/**
+	 * ω-fit-pivot-collection-arg, ternary leg: `cascade`, the ternary's own shape, unless one branch is a collection the
+	 * renderer breaks by FIT (a fit-cascade comprehension) with everything else flat. Such a branch breaks the ternary
+	 * only when that lets it fit its own `? ` / `: ` line; when it breaks there too the ternary hugs it (`c ? [] : [`), as
+	 * it hugs a branch already committed to breaking. `admitted` is false where a column-aware threshold owns the shape.
+	 */
+	private static function ternaryFitHug(
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, cols: Int,
+		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, admitted: Bool, cascade: Doc
+	): Doc {
+		final idx: Int = admitted ? ternaryHugCollectionBranchIndex(items, ops, true) : -1;
+		if (idx < 0 || !D.yieldsToItsRest(items[idx])) return cascade;
+		final hug: Doc = ternaryHugShape(idx, items, ops, opt, evalAt, shapeAt, true);
+		final branchWidth: Int = ops[idx - 1].length + 1 + WrapList.flatLength(items[idx]);
+		final fits: Doc = idx == items.length - 1
+			? IfArrowContinuationFitsWithRest(cols, branchWidth, opt.lineWidth + 1, hug, cascade)
+			: IfArrowContinuationFits(cols, branchWidth, opt.lineWidth + 1, hug, cascade);
+		return WrapBoundary(IfLineExceeds(opt.lineWidth + 1, fits, cascade));
 	}
 
 	/**

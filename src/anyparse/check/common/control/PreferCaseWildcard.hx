@@ -45,15 +45,13 @@ final class PreferCaseWildcard extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				if (span != null) {
-					final end: Int = span.from + KEYWORD.length;
-					if (source.substring(span.from, end) == KEYWORD) { span: new Span(span.from, end), text: REPLACEMENT };
-				}
+		return [ for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null) {
+				final end: Int = span.from + KEYWORD.length;
+				if (source.substring(span.from, end) == KEYWORD) { span: new Span(span.from, end), text: REPLACEMENT };
 			}
-		];
+		} ];
 	}
 
 	/**

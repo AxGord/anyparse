@@ -680,22 +680,20 @@ final class MemberRegistryRenameTest extends Test {
 	/** The registry document holding `arms`, its strings spelled as a JSON writer spells them. */
 	private static function document(arms: Array<ArmRow>): String {
 		final list: (Array<String>) -> String = items -> '[${items.map(JsonText.quote).join(', ')}]';
-		final records: Array<String> = [
-			for (arm in arms) {
-				final fields: Array<String> = [
-					'"name": ${JsonText.quote(arm.name)}',
-					'"type": ${JsonText.quote(arm.type)}',
-					'"method": ${JsonText.quote(arm.method)}'
-				];
-				if (arm.kind != null) fields.push('"kind": ${JsonText.quote(arm.kind)}');
-				if (arm.find != null) fields.push('"find": ${JsonText.quote(arm.find)}');
-				if (arm.finds != null) fields.push('"find": ${list(arm.finds)}');
-				if (arm.replace != null) fields.push('"replace": ${JsonText.quote(arm.replace)}');
-				if (arm.replaces != null) fields.push('"replace": ${list(arm.replaces)}');
-				if (arm.force != null) fields.push('"force": ${JsonText.quote(arm.force)}');
-				'{${fields.join(', ')}}';
-			}
-		];
+		final records: Array<String> = [ for (arm in arms) {
+			final fields: Array<String> = [
+				'"name": ${JsonText.quote(arm.name)}',
+				'"type": ${JsonText.quote(arm.type)}',
+				'"method": ${JsonText.quote(arm.method)}'
+			];
+			if (arm.kind != null) fields.push('"kind": ${JsonText.quote(arm.kind)}');
+			if (arm.find != null) fields.push('"find": ${JsonText.quote(arm.find)}');
+			if (arm.finds != null) fields.push('"find": ${list(arm.finds)}');
+			if (arm.replace != null) fields.push('"replace": ${JsonText.quote(arm.replace)}');
+			if (arm.replaces != null) fields.push('"replace": ${list(arm.replaces)}');
+			if (arm.force != null) fields.push('"force": ${JsonText.quote(arm.force)}');
+			'{${fields.join(', ')}}';
+		} ];
 		return '{"arms": [${records.join(', ')}]}\n';
 	}
 

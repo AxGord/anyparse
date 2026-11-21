@@ -58,9 +58,11 @@ final class ThreadContexts {
 		inertRef = runsNothing.bind(graph, sealedSlots, stored, listsOf);
 		seedable = mayRunFromOutside.bind(graph, plugin, unresolvedNames, byFile);
 		// a quiet root is judged by the chain of the file declaring it
-		states = settleContexts(graph, listsOf, [
-			for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id
-		], conditions, inertRef, seedable);
+		states = settleContexts(
+			graph, listsOf,
+			[ for (id => node in graph.nodes) if (byFile[node.file]?.quietIds.contains(id) == true) id ],
+			conditions, inertRef, seedable
+		);
 	}
 
 	/** Whether the function `id` may run on a thread a `spawns` call starts. */

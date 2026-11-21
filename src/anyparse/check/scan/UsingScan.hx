@@ -143,9 +143,7 @@ final class UsingScan {
 			root: tree,
 			ambientUsings: ambient == null ? [] : TypeRefIndex.unguardedAmbientUsings(ambient),
 			guard: ModuleScan.guardedBodyRegion(tree, source, plugin),
-			guardedUsings: [
-				for (g in ModuleScan.guardedImportScopes(tree, source, plugin)) if (g.decl.kind == USING_DECL_KIND) g
-			]
+			guardedUsings: [ for (g in ModuleScan.guardedImportScopes(tree, source, plugin)) if (g.decl.kind == USING_DECL_KIND) g ]
 		};
 	}
 

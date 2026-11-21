@@ -746,9 +746,7 @@ final class MemberTouchScan {
 		if (holder.kind == shape.exprStatementKind) return valueDiscarded(lineage, at - 1);
 		final owner: Null<QueryNode> = at >= 2 ? lineage[at - 2] : null;
 		if (owner == null || !(shape.expressionBodyKinds ?? []).contains(holder.kind)) return false;
-		final memberFunctions: Array<String> = [
-			for (k in shape.functionKinds ?? []) if (!(shape.lambdaKinds ?? []).contains(k)) k
-		];
+		final memberFunctions: Array<String> = [ for (k in shape.functionKinds ?? []) if (!(shape.lambdaKinds ?? []).contains(k)) k ];
 		return memberFunctions.contains(owner.kind)
 			&& owner.children.exists(c -> (shape.typeAnnotationKinds ?? []).contains(c.kind) && c.name == shape.voidTypeName);
 	}
@@ -785,9 +783,7 @@ final class MemberTouchScan {
 	 */
 	private function bodyDiscardsItsValue(owner: QueryNode): Bool {
 		final shape: RefShape = _scope.shape;
-		final arrows: Array<String> = [
-			for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k
-		];
+		final arrows: Array<String> = [ for (k in shape.lambdaKinds ?? []) if (k != shape.fnExprKind && k != shape.namedFnExprKind) k ];
 		final discarding: Array<String> = ShapeVocab.functionLikeKinds(shape).concat(shape.doWhileLoopKinds ?? []);
 		return !arrows.contains(owner.kind) && discarding.contains(owner.kind);
 	}
@@ -845,9 +841,7 @@ final class MemberTouchScan {
 	/** The type names the grammar's string literals denote (`RefShape.literalTypeNames`). */
 	private function stringTypeNames(): Array<String> {
 		final literalTypes: Map<String, String> = _scope.shape.literalTypeNames ?? [];
-		return [
-			for (kind in _scope.shape.stringLiteralKinds ?? []) if (literalTypes.exists(kind)) literalTypes[kind] ?? ''
-		];
+		return [ for (kind in _scope.shape.stringLiteralKinds ?? []) if (literalTypes.exists(kind)) literalTypes[kind] ?? '' ];
 	}
 
 	/**

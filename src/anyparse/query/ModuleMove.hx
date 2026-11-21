@@ -372,9 +372,7 @@ final class ModuleMove {
 		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, pre: SymbolIndex, plugin: GrammarPlugin
 	): Array<String> {
 		final packages: Array<String> = emptiedPackages(planned, pre);
-		final prefixes: Array<String> = [
-			for (pkg in packages) for (prefix in ['$pkg.', '${ModulePathTokens.slashPath(pkg)}/']) prefix
-		];
+		final prefixes: Array<String> = [ for (pkg in packages) for (prefix in ['$pkg.', '${ModulePathTokens.slashPath(pkg)}/']) prefix ];
 		final lastSegments: Array<String> = packages.map(pkg -> pkg.substr(pkg.lastIndexOf('.') + 1));
 		final out: Array<String> = [];
 		for (e in files) if (lastSegments.exists(s -> e.source.indexOf(s) >= 0)) {
@@ -398,12 +396,10 @@ final class ModuleMove {
 	private static function registryRefusals(
 		registries: Array<TypePathRegistry>, textOf: Map<String, String>, planned: Array<PlannedMove>
 	): Array<String> {
-		final moved: Array<TypePathMove> = [
-			for (p in planned) for (t in p.info.types) if (!t.isPrivate) {
-				final suffix: String = t.isMain ? '' : '.${t.name}';
-				{ oldPath: p.rename.oldPath + suffix, newPath: p.rename.newPath + suffix };
-			}
-		];
+		final moved: Array<TypePathMove> = [ for (p in planned) for (t in p.info.types) if (!t.isPrivate) {
+			final suffix: String = t.isMain ? '' : '.${t.name}';
+			{ oldPath: p.rename.oldPath + suffix, newPath: p.rename.newPath + suffix };
+		} ];
 		final out: Array<String> = [];
 		for (registry in registries) {
 			final json: Null<String> = textOf[registry.file];
@@ -842,9 +838,7 @@ final class ModuleMove {
 		final groups: Array<AmbientImportGroup> = info.ambientImports.copy();
 		groups.reverse();
 		return {
-			chain: [
-				for (g in groups) for (imp in g.imports) if (imp.kind == ImportKind.Using) keyOf(imp)
-			],
+			chain: [ for (g in groups) for (imp in g.imports) if (imp.kind == ImportKind.Using) keyOf(imp) ],
 			own: [ for (imp in info.imports) if (imp.kind == ImportKind.Using) keyOf(imp) ]
 		};
 	}
@@ -928,9 +922,7 @@ final class ModuleMove {
 		files: Array<{ file: String, source: String }>, planned: Array<PlannedMove>, plugin: GrammarPlugin
 	): Array<String> {
 		final shape: RefShape = plugin.refShape();
-		final tags: Array<String> = [
-			for (t in [shape.takesPrivateAccessMetaName, shape.grantsPrivateAccessMetaName]) if (t != null) t
-		];
+		final tags: Array<String> = [ for (t in [shape.takesPrivateAccessMetaName, shape.grantsPrivateAccessMetaName]) if (t != null) t ];
 		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
 		final out: Array<String> = [];
 		for (e in files) if (tags.exists(t -> e.source.indexOf(t) >= 0)) {
@@ -994,9 +986,7 @@ final class ModuleMove {
 		final oldPathOf: Map<String, String> = [ for (old => now in newPathOf) now => old ];
 		final infoOf: Map<String, FileInfo> = [ for (fi in post.allFiles()) fi.file => fi ];
 		for (file in [ for (f in byFile.keys()) f ].concat([ for (f in lost.keys()) if (!byFile.exists(f)) f ])) {
-			final paths: Array<String> = [
-				for (p in byFile[file] ?? []) exactRepair(p, infoOf[file], post, plugin.refShape())
-			];
+			final paths: Array<String> = [ for (p in byFile[file] ?? []) exactRepair(p, infoOf[file], post, plugin.refShape()) ];
 			final importLines: Array<String> = switch repairLines(paths, [], plugin.refShape()) {
 				case Left(path): return '$file: the grammar declares no statement spelling to write $path';
 				case Right(l): l;
@@ -1105,9 +1095,7 @@ final class ModuleMove {
 			for (at in d.metaAt) list.push({ span: new Span(at, at + d.name.length), text: d.repair ?? '' });
 			edits[key] = list;
 		}
-		return [
-			for (file => list in edits) if (list.length > 0) for (r in writeFullPaths(file, list, texts, plugin)) r
-		];
+		return [ for (file => list in edits) if (list.length > 0) for (r in writeFullPaths(file, list, texts, plugin)) r ];
 	}
 
 	/** Where each file (by its new path) had a name written in full in a metadata argument, as it was spelled before the move. */

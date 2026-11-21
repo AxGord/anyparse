@@ -127,9 +127,7 @@ final class LandProse {
 				dir = Path.directory(dir);
 			}
 		}
-		final dirs: Array<String> = [
-			for (dir => empty in emptied) if (empty && emptied[Path.directory(dir)] != true) dir
-		];
+		final dirs: Array<String> = [ for (dir => empty in emptied) if (empty && emptied[Path.directory(dir)] != true) dir ];
 		dirs.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
 		return { files: files, dirs: dirs };
 	}

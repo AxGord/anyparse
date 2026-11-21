@@ -361,9 +361,7 @@ final class LandSweepTest extends Test {
 	private static function carrying(tree: String): Array<String> {
 		final names: Array<String> = FileSystem.readDirectory('$tree/src');
 		names.sort(Compare.compareString);
-		return [
-			for (name in names) if (File.getContent('$tree/src/$name').contains('BAD')) 'src/$name'
-		];
+		return [ for (name in names) if (File.getContent('$tree/src/$name').contains('BAD')) 'src/$name' ];
 	}
 
 	private static function write(repo: String, changes: Array<Change>): Void {

@@ -183,13 +183,11 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				if (span != null && source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD)
-					{ span: new Span(span.from, span.from), text: 'static ' };
-			}
-		];
+		return [ for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null && source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD)
+				{ span: new Span(span.from, span.from), text: 'static ' };
+		} ];
 	}
 
 	/**

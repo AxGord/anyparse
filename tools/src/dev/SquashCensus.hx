@@ -228,12 +228,11 @@ final class SquashCensus {
 		if (!ran(run) || run.err.indexOf(LIST_SUMMARY) < 0)
 			throw new Exception('fmt --list --one-pass did not run to its summary: ${run.firstError()}');
 		final prefix: String = 'apq fmt: $root/';
-		final unparsed: Array<String> = [
-			for (line in run.err.split('\n')) if (line.startsWith(prefix) && line.indexOf(NOT_ONE_PASS) < 0) {
+		final unparsed: Array<String> = [ for (line in run.err.split('\n'))
+			if (line.startsWith(prefix) && line.indexOf(NOT_ONE_PASS) < 0) {
 				final rest: String = line.substring(prefix.length);
 				rest.substring(0, rest.indexOf(': '));
-			}
-		];
+			} ];
 		final write: Result = hxq(['fmt', '--write'].concat(targets)).env('APQ_NO_CONFIG_WARN', '1').run();
 		if (!ran(write)) throw new Exception('fmt --write did not run: ${write.firstError()}');
 		return { onePass: XconfigFmt.onePassSet(run.err, root), unparsed: unparsed };

@@ -1464,7 +1464,7 @@
 			"name": "M-NO-REGISTRY-FOLLOW-FIX-PASS",
 			"type": "anyparse.query.cli.command.LintFixDriver",
 			"method": "runLintFix",
-			"find": "if (!RegistryFollowCommand.optedOut(runLedger)) RegistryFollowCommand.followWrite(",
+			"find": "if (!RegistryFollowCommand.optedOut(runLedger))\n\t\t\tRegistryFollowCommand.followWrite(",
 			"replace": "RegistryFollowCommand.followWrite(",
 			"note": "the lint pass of a write op's --fix follows the registries whatever the run's opt-out said, so a probe edit with --fix still re-spells the arm records that target the code it cut"
 		},

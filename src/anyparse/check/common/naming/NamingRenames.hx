@@ -1085,9 +1085,7 @@ final class NamingRenames {
 		// it also holds reads bound to a local of the same name (see `inheritedFieldRefSpans`), and here
 		// `renameOccurrences` is the authority on which bare reads are references. Deduped by offset
 		// against `covered` anyway — two edits over one span leave `applyEdits` no defined winner.
-		final ownerBound: Array<Span> = [
-			for (s in attributed.typedBound) if (!OccurrenceScan.offsetWithinAny(s.from, covered)) s
-		];
+		final ownerBound: Array<Span> = [ for (s in attributed.typedBound) if (!OccurrenceScan.offsetWithinAny(s.from, covered)) s ];
 		// A receiver that is a TYPE, not a value: `Event.ACTIVATE` beside a parameter named `Event`
 		// projects the same `IdentExpr` as a read of that parameter, so the resolver leaves it
 		// unattributed and the gate refuses. Discount it when BOTH hold — the identifier binds to no
@@ -1227,9 +1225,7 @@ final class NamingRenames {
 		// resolves that read scope-correctly, so it wins: renaming it would turn the argument into the
 		// field, which compiles. With no foreign declaration the bare half stays the rename target, the
 		// way it was when any such binding blocked the whole rename.
-		final bare: Array<Span> = [
-			for (s in refs.bareBound) if (!OccurrenceScan.offsetWithinAny(s.from, foreign)) s
-		];
+		final bare: Array<Span> = [ for (s in refs.bareBound) if (!OccurrenceScan.offsetWithinAny(s.from, foreign)) s ];
 		final ownerBound: Array<Span> = mergeUniqueSpans(bare.concat(refs.typedBound), family);
 		// Both the owner-bound targets AND the provably-different-owner occurrences are excluded from
 		// the completeness scan: the former are renamed, the latter left as-is; only an occurrence that

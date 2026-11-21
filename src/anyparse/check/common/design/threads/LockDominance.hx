@@ -79,9 +79,9 @@ final class LockDominance {
 		final by: Array<String> = lock == null ? [] : dominators[lock] ?? [];
 		final object: Null<String> = _must.takeObject(take);
 		if (at == null || by.length == 0 || object == null) return false;
-		final under: Array<String> = valuation != null ? [valuation] : [
-			for (s in _states.statesOf(take.from)) if (_conditions.carried(take, s.valuation, s.ctx) != 0) s.valuation
-		];
+		final under: Array<String> = valuation != null
+			? [valuation]
+			: [ for (s in _states.statesOf(take.from)) if (_conditions.carried(take, s.valuation, s.ctx) != 0) s.valuation ];
 		return under.length > 0
 			&& under.foreach(v ->
 				_must.at(take.from, v, take.file, at.from).exists(h -> MustHeld.objectOf(h) == object && by.contains(MustHeld.lockOf(h)))

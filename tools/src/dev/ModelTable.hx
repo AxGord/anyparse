@@ -75,9 +75,7 @@ final class ModelTable {
 	}
 
 	private static function rowOf(stage: String, from: Int, mapping: String): Null<TableRow> {
-		final values: Map<String, String> = [
-			for (pair in mapping.split(',')) if (PAIR.match(pair)) PAIR.matched(1) => PAIR.matched(2)
-		];
+		final values: Map<String, String> = [ for (pair in mapping.split(',')) if (PAIR.match(pair)) PAIR.matched(1) => PAIR.matched(2) ];
 		final upto: Null<Int> = Std.parseInt(values['upto'] ?? '');
 		final model: Null<String> = values['model'];
 		final effort: Null<String> = values['effort'];

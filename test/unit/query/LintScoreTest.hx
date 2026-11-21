@@ -263,14 +263,17 @@ class LintScoreTest extends Test {
 	@:killer('M-SCORE-LOST-EXIT')
 	public function testExitStatusIsTheLostRecall(): Void {
 		#if (sys || nodejs)
-		Assert.same([0, 1, 2, 2], [
-			for (truth in [
-				truthOf([entry('A', 'A.b', 'S.f', 'real-long')]),
-				truthOf([entry('A', 'A.c', 'S.f', 'real-long')]),
-				truthOf([entry('A', 'A.c', 'S.f', 'maybe')]),
-				truthOf([entry('A', 'A.b', 'S.f', 'real-long')], '"c"', 'other-rule')
-			]) runScore(truth, '[${finding('A', 'A.b', 'S.f')}]', [])
-		]);
+		Assert.same(
+			[0, 1, 2, 2],
+			[
+				for (truth in [
+					truthOf([entry('A', 'A.b', 'S.f', 'real-long')]),
+					truthOf([entry('A', 'A.c', 'S.f', 'real-long')]),
+					truthOf([entry('A', 'A.c', 'S.f', 'maybe')]),
+					truthOf([entry('A', 'A.b', 'S.f', 'real-long')], '"c"', 'other-rule')
+				]) runScore(truth, '[${finding('A', 'A.b', 'S.f')}]', [])
+			]
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -281,16 +284,19 @@ class LintScoreTest extends Test {
 		#if (sys || nodejs)
 		final truth: String = truthOf([entry('A', 'A.b', 'S.f', 'real-long')]);
 		final report: String = '[${finding('A', 'A.b', 'S.f')}]';
-		Assert.same([2, 2, 2, 2, 0, 0], [
-			for (flags in [
-				['--severity', 'loud'],
-				['--limit', 'abc'],
-				['--limit', '-2'],
-				['-x'],
-				['--limit', '-1'],
-				['--severity', 'all']
-			]) runScore(truth, report, flags)
-		]);
+		Assert.same(
+			[2, 2, 2, 2, 0, 0],
+			[
+				for (flags in [
+					['--severity', 'loud'],
+					['--limit', 'abc'],
+					['--limit', '-2'],
+					['-x'],
+					['--limit', '-1'],
+					['--severity', 'all']
+				]) runScore(truth, report, flags)
+			]
+		);
 		#else
 		Assert.pass('non-sys target');
 		#end

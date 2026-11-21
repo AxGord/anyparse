@@ -110,15 +110,13 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin);
-		return seams == null ? [] : [
-			for (entry in files) for (span in collect(plugin, entry.source, seams)) {
-				file: entry.file,
-				span: span,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: 'this branching lambda body needs its block braces'
-			}
-		];
+		return seams == null ? [] : [ for (entry in files) for (span in collect(plugin, entry.source, seams)) {
+			file: entry.file,
+			span: span,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: 'this branching lambda body needs its block braces'
+		} ];
 	}
 
 	public function fix(
@@ -127,15 +125,13 @@ final class LambdaBranchingBodyBlock extends RuleBase {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final found: Array<String> = collect(plugin, source, seams).map(span -> '${span.from}:${span.to}');
-		final edits: Array<{ span: Span, text: String }> = [
-			for (v in violations) {
-				final vspan: Null<Span> = v.span;
-				if (vspan != null && found.contains('${vspan.from}:${vspan.to}')) {
-					final body: String = source.substring(vspan.from, vspan.to);
-					{ span: vspan, text: '{\n${terminated(body)}\n}' };
-				}
+		final edits: Array<{ span: Span, text: String }> = [ for (v in violations) {
+			final vspan: Null<Span> = v.span;
+			if (vspan != null && found.contains('${vspan.from}:${vspan.to}')) {
+				final body: String = source.substring(vspan.from, vspan.to);
+				{ span: vspan, text: '{\n${terminated(body)}\n}' };
 			}
-		];
+		} ];
 		return CanonicalEdit.dropContainedEdits(edits);
 	}
 

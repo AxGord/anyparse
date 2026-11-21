@@ -334,12 +334,10 @@ final class MutationCheck {
 					);
 			}
 		}
-		final timing: Null<String> = timingLine([
-			for (row in rows) {
-				final file: String = Path.join([workroot, '${row.name}.timing']);
-				if (FileSystem.exists(file)) File.getContent(file);
-			}
-		]);
+		final timing: Null<String> = timingLine([ for (row in rows) {
+			final file: String = Path.join([workroot, '${row.name}.timing']);
+			if (FileSystem.exists(file)) File.getContent(file);
+		} ]);
 		if (timing != null) Sys.println(timing);
 		final tally: Null<String> = FixtureCache.tally(Path.join([workroot, 'fixture-cache/tally']));
 		if (tally != null) Sys.println('fixture cache: $tally');

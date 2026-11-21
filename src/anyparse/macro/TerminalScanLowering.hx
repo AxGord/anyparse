@@ -155,9 +155,7 @@ final class TerminalScanLowering {
 					group.push(tried);
 				}
 			}
-			final cases: Array<Case> = [
-				for (code in codes) { values: [macro $v{code}], expr: macro $b{byCode[code] ?? []} }
-			];
+			final cases: Array<Case> = [ for (code in codes) { values: [macro $v{code}], expr: macro $b{byCode[code] ?? []} } ];
 			tries.push(macro final $head: Int = _in.charCodeAt(_p));
 			tries.push({ expr: ESwitch(macro $i{head}, cases, macro {}), pos: Context.currentPos() });
 			for (tried in anyHead) tries.push(tried);

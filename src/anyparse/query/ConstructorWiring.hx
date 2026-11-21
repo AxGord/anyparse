@@ -97,9 +97,7 @@ final class ConstructorWiring {
 		_wiredRuns = [ for (r in wiredBefore) if (CallGraphNames.normalizePath(r.file) != file) r ].length;
 		_runs.resize(0);
 		for (r in kept) _runs.push(r);
-		for (key in [
-			for (k => site in _wired) if (site == file || removed.exists(k.substring(0, k.indexOf('|')))) k
-		]) _wired.remove(key);
+		for (key in [ for (k => site in _wired) if (site == file || removed.exists(k.substring(0, k.indexOf('|')))) k ]) _wired.remove(key);
 	}
 
 	/** Mark every recorded constructor run whose superclass chain passes through one of `grown`, so the next wiring re-reads it. */

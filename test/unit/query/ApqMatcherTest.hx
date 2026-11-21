@@ -37,12 +37,10 @@ class ApqMatcherTest extends Test {
 		final tree: QueryNode = plugin.parseFile(source);
 		final matches: Array<Match> = Matcher.search(pattern, tree);
 		Assert.equals(2, matches.length, 'two throw-new sites expected — got ${matches.length}');
-		final names: Array<String> = [
-			for (m in matches) {
-				final e: Null<QueryNode> = m.bindings.get('E');
-				e == null ? '<none>' : (e.name ?? '<noname>');
-			}
-		];
+		final names: Array<String> = [ for (m in matches) {
+			final e: Null<QueryNode> = m.bindings.get('E');
+			e == null ? '<none>' : (e.name ?? '<noname>');
+		} ];
 		Assert.isTrue(names.contains('IoError'), '$$E must bind to IoError — got ${names.join(',')}');
 		Assert.isTrue(names.contains('RangeError'), '$$E must bind to RangeError');
 	}
@@ -101,12 +99,10 @@ class ApqMatcherTest extends Test {
 		final tree: QueryNode = plugin.parseFile(source);
 		final matches: Array<Match> = Matcher.search(pattern, tree);
 		Assert.equals(2, matches.length, 'field + local var must both match — got ${matches.length}');
-		final names: Array<String> = [
-			for (m in matches) {
-				final v: Null<QueryNode> = m.bindings.get('v');
-				v == null ? '<none>' : (v.name ?? '<noname>');
-			}
-		];
+		final names: Array<String> = [ for (m in matches) {
+			final v: Null<QueryNode> = m.bindings.get('v');
+			v == null ? '<none>' : (v.name ?? '<noname>');
+		} ];
 		Assert.isTrue(names.contains('field'), '$$v must bind class-field var — got ${names.join(',')}');
 		Assert.isTrue(names.contains('local'), '$$v must bind local var — got ${names.join(',')}');
 	}
@@ -647,12 +643,10 @@ class Y {
 
 	/** The names each match bound to the given metavariable, in match order. */
 	private static function boundNames(matches: Array<Match>, metavar: String): Array<String> {
-		return [
-			for (m in matches) {
-				final n: Null<QueryNode> = m.bindings.get(metavar);
-				n == null ? '<none>' : (n.name ?? '<noname>');
-			}
-		];
+		return [ for (m in matches) {
+			final n: Null<QueryNode> = m.bindings.get(metavar);
+			n == null ? '<none>' : (n.name ?? '<noname>');
+		} ];
 	}
 
 }

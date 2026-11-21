@@ -458,9 +458,7 @@ final class PreferLocalFunction extends RuleBase {
 
 	/** `type` with every space dropped and any redundant outer parentheses peeled. */
 	private static function normalizedType(type: String): String {
-		final t: String = [
-			for (k in 0...type.length) if (!SourceText.isSpace(type.fastCodeAt(k))) type.charAt(k)
-		].join('');
+		final t: String = [ for (k in 0...type.length) if (!SourceText.isSpace(type.fastCodeAt(k))) type.charAt(k) ].join('');
 		return t.stripOuterParens();
 	}
 

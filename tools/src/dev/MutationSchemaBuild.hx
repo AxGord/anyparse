@@ -199,19 +199,17 @@ final class MutationSchemaBuild {
 	}
 
 	private static function parsePlacements(text: String): Array<Placement> {
-		return [
-			for (line in text.split('\n')) {
-				final cells: Array<String> = line.split('\t');
-				if (cells.length >= 6 && cells[1] == 'ok') {
-					id: Std.parseInt(cells[0]) ?? 0,
-					file: cells[2],
-					dispatch: Std.parseInt(cells[3]) ?? 0,
-					from: Std.parseInt(cells[4]) ?? 0,
-					to: Std.parseInt(cells[5]) ?? 0,
-					owner: cells[6] ?? ''
-				};
-			}
-		];
+		return [ for (line in text.split('\n')) {
+			final cells: Array<String> = line.split('\t');
+			if (cells.length >= 6 && cells[1] == 'ok') {
+				id: Std.parseInt(cells[0]) ?? 0,
+				file: cells[2],
+				dispatch: Std.parseInt(cells[3]) ?? 0,
+				from: Std.parseInt(cells[4]) ?? 0,
+				to: Std.parseInt(cells[5]) ?? 0,
+				owner: cells[6] ?? ''
+			};
+		} ];
 	}
 
 	private static function read(dir: String, name: String): String {

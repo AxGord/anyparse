@@ -275,9 +275,7 @@ final class LintScopeTest extends Test {
 	}
 
 	private static function below(dir: String): Array<String> {
-		return [
-			for (folder => files in TREE) if (folder == dir || folder.startsWith('$dir/')) for (file in files) file
-		];
+		return [ for (folder => files in TREE) if (folder == dir || folder.startsWith('$dir/')) for (file in files) file ];
 	}
 
 	/**

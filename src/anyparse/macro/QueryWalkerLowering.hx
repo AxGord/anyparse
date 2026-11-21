@@ -494,13 +494,14 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final ctor: String = branch.annotations[AnnotationKeys.BASE_CTOR];
 		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
 		final pattern: Expr = ctorPattern(rule, ctor, argNames);
-		if (branch.hasMeta(QUERY_TRANSPARENT_META)) return {
-			values: [pattern],
-			expr: block([
-				for (i in 0...branch.children.length)
-					for (e in descend(branch.children[i], ident(argNames[i]), 'into', TYPE_OUT_PARAM, 0)) e
-			])
-		};
+		if (branch.hasMeta(QUERY_TRANSPARENT_META))
+			return {
+				values: [pattern],
+				expr: block([
+					for (i in 0...branch.children.length)
+						for (e in descend(branch.children[i], ident(argNames[i]), 'into', TYPE_OUT_PARAM, 0)) e
+				])
+			};
 
 		final body: Array<Expr> = [
 			(macro final _children: Array<anyparse.query.QueryNode> = []),
@@ -508,13 +509,13 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		];
 		for (i in 0...branch.children.length) for (e in descend(branch.children[i], ident(argNames[i]), '_children', TYPE_SLOT_LOCAL, 0))
 			body.push(e);
-		final nameExpr: Expr = firstNonNullName([
-			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
-		]);
+		final nameExpr: Expr = firstNonNullName(
+			[ for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i])) ]
+		);
 		final typeArgs: Expr = ctorTypeArgCount(branch, argNames);
-		final targetExpr: Expr = firstNonNullName([
-			for (i in 0...branch.children.length) payloadTargetOf(branch.children[i], ident(argNames[i]))
-		]);
+		final targetExpr: Expr = firstNonNullName(
+			[ for (i in 0...branch.children.length) payloadTargetOf(branch.children[i], ident(argNames[i])) ]
+		);
 		body.push(macro into.push(new anyparse.query.QueryNode(
 			$v{ctor}, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), _span,
 			anyparse.query.QueryWalkSupport.first(_typeSlot), $typeArgs, $targetExpr
@@ -538,9 +539,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		// of its own, so its `type` field belongs to the `VarStmt` / `VarMember` / … ctor
 		// node that hosts it.
 		if (!isSpanned(node)) {
-			final out: Array<Expr> = [
-				for (child in node.children) for (e in seqFieldDescent(child, 'into', TYPE_OUT_PARAM, null)) e
-			];
+			final out: Array<Expr> = [ for (child in node.children) for (e in seqFieldDescent(child, 'into', TYPE_OUT_PARAM, null)) e ];
 			return block(out);
 		}
 
@@ -834,9 +833,9 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final argNames: Array<String> = [ for (i in 0...branch.children.length) '_a$i' ];
 		final pattern: Expr = ctorPattern(rule, ctor, NAME_UNWRAP_CTORS.contains(ctor) ? argNames : [ for (_ in argNames) '_' ]);
 		if (!NAME_UNWRAP_CTORS.contains(ctor)) return { values: [pattern], expr: macro {} };
-		final nameExpr: Expr = firstNonNullName([
-			for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i]))
-		]);
+		final nameExpr: Expr = firstNonNullName(
+			[ for (i in 0...branch.children.length) nameOfValue(branch.children[i], ident(argNames[i])) ]
+		);
 		return { values: [pattern], expr: macro return $nameExpr };
 	}
 

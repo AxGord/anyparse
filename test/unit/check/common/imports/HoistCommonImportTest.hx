@@ -939,19 +939,15 @@ class HoistCommonImportTest extends Test {
 		if (parsing == null) return null;
 		final cwd: String = Sys.getCwd();
 		final builds: ReachBuilds = {
-			configurations: [
-				for (i => names in parsing) {
-					name: 'build$i',
-					defined: [],
-					everDefined: [],
-					values: [],
-					compiled: [],
-					types: [],
-					parsed: [
-						for (name in names) FileIdentity.canonical(cwd, name.startsWith('/') ? name : '$root/$name')
-					]
-				}
-			],
+			configurations: [ for (i => names in parsing) {
+				name: 'build$i',
+				defined: [],
+				everDefined: [],
+				values: [],
+				compiled: [],
+				types: [],
+				parsed: [ for (name in names) FileIdentity.canonical(cwd, name.startsWith('/') ? name : '$root/$name') ]
+			} ],
 			library: []
 		};
 		return () -> builds;
@@ -969,9 +965,7 @@ class HoistCommonImportTest extends Test {
 
 	/** Every `.hx` of `tree` as the run's file set — an ambient source included, the way a whole-tree lint sees one. */
 	private static function analysed(tree: Array<TreeFile>, root: String): Array<{ file: String, source: String }> {
-		return [
-			for (entry in tree) if (entry.name.endsWith('.hx')) { file: '$root/${entry.name}', source: entry.source }
-		];
+		return [ for (entry in tree) if (entry.name.endsWith('.hx')) { file: '$root/${entry.name}', source: entry.source } ];
 	}
 
 	/** The `n`-th single-quoted SPAN of `message` — quotes come in pairs, so its opening one is at twice the index. */

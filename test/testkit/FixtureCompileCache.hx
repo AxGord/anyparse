@@ -482,13 +482,11 @@ final class FixtureCompileCache {
 	private static function key(
 		stamp: String, compile: CompilePlan, contents: Array<Map<String, String>>, environment: DynamicAccess<String>
 	): String {
-		final described: Array<Array<String>> = [
-			for (files in contents) {
-				final names: Array<String> = [ for (name in files.keys()) name ];
-				names.sort(Reflect.compare);
-				names.map(name -> '$name\t${files[name]}');
-			}
-		];
+		final described: Array<Array<String>> = [ for (files in contents) {
+			final names: Array<String> = [ for (name in files.keys()) name ];
+			names.sort(Reflect.compare);
+			names.map(name -> '$name\t${files[name]}');
+		} ];
 		final env: Array<String> = HAXE_ENV.map(name -> '$name=${environment.get(name) ?? ''}');
 		return hash(Buffer.from(Json.stringify({ // noqa: avoid-haxe-json
 			layout: LAYOUT,
@@ -574,9 +572,7 @@ final class FixtureCompileCache {
 	private static function readReached(log: String): Array<Int> {
 		final text: Null<String> = try Fs.readFileSync(log).toString('utf8') catch (exception: Exception) null;
 		try Fs.unlinkSync(log) catch (exception: Exception) {} // noqa: swallowed-exception
-		return text == null ? [] : [
-			for (line in text.split('\n')) if (Std.parseInt(line) != null) Std.parseInt(line) ?? 0
-		];
+		return text == null ? [] : [ for (line in text.split('\n')) if (Std.parseInt(line) != null) Std.parseInt(line) ?? 0 ];
 	}
 
 	/** `reached` appended to the caller's switch log `log`, as the compile would have written them there. */

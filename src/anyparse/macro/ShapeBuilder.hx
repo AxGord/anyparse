@@ -422,15 +422,13 @@ class ShapeBuilder {
 		if (!a.meta.has(':enum')) return null;
 		if (a.impl == null) return null;
 		final impl: ClassType = a.impl.get();
-		final values: Array<{ name: String, value: String }> = [
-			for (f in impl.statics.get()) if (!f.kind.match(FMethod(_))) {
-				final texpr: Null<TypedExpr> = FormatReader.initializerExpr(f);
-				if (texpr != null) {
-					final s: Null<String> = extractStringConst(texpr);
-					if (s != null) { name: f.name, value: s };
-				}
+		final values: Array<{ name: String, value: String }> = [ for (f in impl.statics.get()) if (!f.kind.match(FMethod(_))) {
+			final texpr: Null<TypedExpr> = FormatReader.initializerExpr(f);
+			if (texpr != null) {
+				final s: Null<String> = extractStringConst(texpr);
+				if (s != null) { name: f.name, value: s };
 			}
-		];
+		} ];
 		return values.length == 0 ? null : values;
 	}
 
@@ -534,14 +532,12 @@ class ShapeBuilder {
 					pos: d.pos,
 					meta: d.meta.get(),
 					kind: TDStructure,
-					fields: [
-						for (f in applied.fields) {
-							name: f.name,
-							kind: FVar(Context.toComplexType(f.type)),
-							meta: f.meta.get(),
-							pos: f.pos
-						}
-					]
+					fields: [ for (f in applied.fields) {
+						name: f.name,
+						kind: FVar(Context.toComplexType(f.type)),
+						meta: f.meta.get(),
+						pos: f.pos
+					} ]
 				});
 				return Context.getType(path);
 			case _:
@@ -575,12 +571,10 @@ class ShapeBuilder {
 
 	/** `instanceName` over paths: the generic's package `own`, its simple `name` and its qualified argument paths. */
 	private static function instanceNameOf(own: String, name: String, args: Array<String>): String {
-		final segments: Array<String> = [
-			for (arg in args) {
-				final dot: Int = arg.lastIndexOf('.');
-				dot != -1 && arg.substr(0, dot) == own ? arg.substr(dot + 1) : arg.split('.').join('_');
-			}
-		];
+		final segments: Array<String> = [ for (arg in args) {
+			final dot: Int = arg.lastIndexOf('.');
+			dot != -1 && arg.substr(0, dot) == own ? arg.substr(dot + 1) : arg.split('.').join('_');
+		} ];
 		return [name].concat(segments).join('_');
 	}
 

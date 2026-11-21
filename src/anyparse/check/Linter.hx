@@ -760,9 +760,7 @@ final class Linter {
 		final resolve: Null<(String) -> LintConfig> = resolveConfig;
 		for (check in checks) if (check is CrossFileAnchored)
 			(cast check: CrossFileAnchored).setReportable(resolve == null ? null : reportableFor.bind(check, resolve, applyEnablement));
-		final raw: Array<Violation> = [
-			for (check in checks) for (violation in runGated(check, files, plugin, resolveConfig)) violation
-		];
+		final raw: Array<Violation> = [ for (check in checks) for (violation in runGated(check, files, plugin, resolveConfig)) violation ];
 		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
 		final kept: Array<Violation> = Suppression.apply(unquoted, files, plugin.lexicalRegions);
 		final gated: Array<Violation> = resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);
@@ -856,9 +854,7 @@ final class Linter {
 			// A finding without a span anchors nothing, so it replaces nothing.
 			if (ids != null && span != null) for (id in ids) claimed.push(supersessionKey(id, v.file, span));
 		}
-		return claimed.length == 0 ? found : [
-			for (v in found) if (!claimed.contains(supersessionKey(v.rule, v.file, v.span))) v
-		];
+		return claimed.length == 0 ? found : [ for (v in found) if (!claimed.contains(supersessionKey(v.rule, v.file, v.span))) v ];
 	}
 
 	/** The identity `withoutSuperseded` compares findings by: rule, file and start offset (none for a finding without a span). */

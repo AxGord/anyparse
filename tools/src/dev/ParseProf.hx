@@ -241,13 +241,11 @@ final class ParseProf {
 	/** Parses every source once, untimed, so the writer phase measures only writing. */
 	private static function preparse(sources: Array<Src>): Array<Any> {
 		final p0: Float = now();
-		final trees: Array<Any> = [
-			for (s in sources) {
-				var tree: Any = null;
-				try tree = HaxeModuleTriviaParser.parse(s.source) catch (exception: haxe.Exception) {}
-				tree;
-			}
-		];
+		final trees: Array<Any> = [ for (s in sources) {
+			var tree: Any = null;
+			try tree = HaxeModuleTriviaParser.parse(s.source) catch (exception: haxe.Exception) {}
+			tree;
+		} ];
 		excluded += now() - p0;
 		return trees;
 	}

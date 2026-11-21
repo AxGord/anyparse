@@ -360,17 +360,15 @@ class MethodChainEmit {
 	 *    unless a comment forces it).
 	 */
 	private static function commentBreakMask(mode: WrapMode, count: Int, commentForced: Array<Bool>): Array<Bool> {
-		return [
-			for (i in 0...count) {
-				final forced: Bool = i < commentForced.length && commentForced[i];
-				final modeBreaks: Bool = switch mode {
-					case NoWrap: false;
-					case OnePerLine: true;
-					case _: i >= 1;
-				};
-				forced || modeBreaks;
-			}
-		];
+		return [ for (i in 0...count) {
+			final forced: Bool = i < commentForced.length && commentForced[i];
+			final modeBreaks: Bool = switch mode {
+				case NoWrap: false;
+				case OnePerLine: true;
+				case _: i >= 1;
+			};
+			forced || modeBreaks;
+		} ];
 	}
 
 	/**
@@ -559,9 +557,9 @@ class MethodChainEmit {
 		// ω-methodchain-cuddled-links: gap `i` is the boundary before
 		// `segs[i]`, so its predecessor is the receiver at `i == 0` and
 		// `segs[i-1]` after. No cuddling gap keeps the pre-knob shape below.
-		final cuddle: Array<Bool> = cuddledLinks ? [
-			for (i in 0...segs.length) endsWithMultilineClose(i == 0 ? receiver : segs[i - 1], committed == i)
-		] : [];
+		final cuddle: Array<Bool> = cuddledLinks
+			? [ for (i in 0...segs.length) endsWithMultilineClose(i == 0 ? receiver : segs[i - 1], committed == i) ]
+			: [];
 		if (cuddle.contains(true)) return Concat(cuddledRuns([], segs, 0, cuddle, cols));
 		final tail: Array<Doc> = [];
 		for (s in segs) {

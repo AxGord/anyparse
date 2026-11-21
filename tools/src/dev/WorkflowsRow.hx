@@ -67,9 +67,7 @@ final class WorkflowsRow {
 
 	/** Each file the loader refused, as it printed it: the path, then the loader's message. */
 	private static function refusals(run: Result): Array<String> {
-		return [
-			for (line in run.lines()) if (line.startsWith(REFUSED)) line.substr(REFUSED.length)
-		];
+		return [ for (line in run.lines()) if (line.startsWith(REFUSED)) line.substr(REFUSED.length) ];
 	}
 
 }

@@ -286,14 +286,12 @@ final class WriterPrattLowering {
 	 */
 	private static function chainCommentChannelsDecl(relocateAboveExpr: Expr): Expr {
 		final docsCT: ComplexType = macro : Array<Null<anyparse.core.Doc>>;
-		final vars: Array<Var> = [
-			for (name in ['_afterComments', '_ownComments', '_aboveComments']) {
-				name: name,
-				type: docsCT,
-				expr: macro [],
-				isFinal: true
-			}
-		];
+		final vars: Array<Var> = [ for (name in ['_afterComments', '_ownComments', '_aboveComments']) {
+			name: name,
+			type: docsCT,
+			expr: macro [],
+			isFinal: true
+		} ];
 		vars.push({
 			name: '_relocateAbove',
 			type: macro : Bool,
@@ -899,24 +897,25 @@ final class WriterPrattLowering {
 			// Suppressed inside a case pattern / switch subject for the same
 			// reason the array literal is (an enum-ctor pattern parses as a
 			// `Call`). Absent flag → `null`, byte-identical emission.
-			final complexKindsCall: Expr = AstPredLowering.predCallExpr(
-				pc.shape.root, pc.ctx.trivia, false, WriterLowering.COMPLEX_ITEM_KINDS_PRED, [macro cast _args]
-			);
-			final containerKindsCall: Expr = AstPredLowering.predCallExpr(
-				pc.shape.root, pc.ctx.trivia, false, WriterLowering.CONTAINER_ITEM_KINDS_PRED, [macro cast _args]
-			);
-			final complexKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
+			inline function argsPredCall(pred: String): Expr {
+				return AstPredLowering.predCallExpr(pc.shape.root, pc.ctx.trivia, false, pred, [macro cast _args]);
+			}
+			final complexKindsCall: Expr = argsPredCall(WriterLowering.COMPLEX_ITEM_KINDS_PRED);
+			final containerKindsCall: Expr = argsPredCall(WriterLowering.CONTAINER_ITEM_KINDS_PRED);
+			final complexItems: Bool = c.branch.fmtHasFlag('complexItems');
+			final complexKindsExpr: Expr = complexItems
 				? macro {
 					final _ck: Null<Array<Int>> = opt._suppressComplexItems ? null : $complexKindsCall;
 					_ck;
 				}
 				: macro null;
-			final containerKindsExpr: Expr = c.branch.fmtHasFlag('complexItems')
+			final containerKindsExpr: Expr = complexItems
 				? macro {
 					final _cck: Null<Array<Null<Array<Int>>>> = opt._suppressComplexItems ? null : $containerKindsCall;
 					_cck;
 				}
 				: macro null;
+			final comprehensionsExpr: Expr = complexItems ? argsPredCall(WriterLowering.COMPREHENSION_ITEMS_PRED) : macro null;
 			final flatTcExpr: Expr = c.isTriviaStar
 				? flatKeepsTrailingCommaExpr(postfixSourceTrailExpr(), c.branch.fmtHasFlag('trailingCommaRemovable'))
 				: macro false;
@@ -928,7 +927,8 @@ final class WriterPrattLowering {
 
 					flatTrailingComma: $flatTcExpr,
 					complexItemKinds: $complexKindsExpr,
-					containerItemKinds: $containerKindsExpr
+					containerItemKinds: $containerKindsExpr,
+					comprehensionItems: $comprehensionsExpr
 				}
 			);
 		}

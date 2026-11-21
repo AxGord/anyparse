@@ -394,22 +394,20 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 */
 	private static function collectConsts(container: QueryNode, cfg: EnumAbstractCfg): Array<ConstDecl> {
 		final kids: Array<QueryNode> = container.children;
-		return [
-			for (i in 0...kids.length) {
-				final node: QueryNode = kids[i];
-				if (cfg.constKinds.contains(node.kind) && precededByStatic(kids, i, cfg) && hasNumericValue(node, cfg)) {
-					final name: Null<String> = node.name;
-					final span: Null<Span> = node.span;
-					final prefix: Null<String> = name != null ? prefixOf(name) : null;
-					if (prefix != null && span != null && name != null) {
-						final prefixValue: String = prefix;
-						final spanValue: Span = span;
-						final nameValue: String = name;
-						{ prefix: prefixValue, span: spanValue, name: nameValue };
-					}
+		return [ for (i in 0...kids.length) {
+			final node: QueryNode = kids[i];
+			if (cfg.constKinds.contains(node.kind) && precededByStatic(kids, i, cfg) && hasNumericValue(node, cfg)) {
+				final name: Null<String> = node.name;
+				final span: Null<Span> = node.span;
+				final prefix: Null<String> = name != null ? prefixOf(name) : null;
+				if (prefix != null && span != null && name != null) {
+					final prefixValue: String = prefix;
+					final spanValue: Span = span;
+					final nameValue: String = name;
+					{ prefix: prefixValue, span: spanValue, name: nameValue };
 				}
 			}
-		];
+		} ];
 	}
 
 	/** Whether the member at `kids[i]` carries a `Static` modifier — scanning back over its preceding modifier siblings. */

@@ -112,12 +112,10 @@ final class OracleRunMemo implements OracleRunScope {
 	public function builds(oracles: Array<OracleConfig>): Array<Null<ReachConfiguration>> {
 		if (!_builds.keys().hasNext()) return [ for (_ in oracles) null ];
 		final now: Array<Null<String>> = fingerprints(oracles);
-		return [
-			for (i in 0...oracles.length) {
-				final fingerprint: Null<String> = now[i];
-				fingerprint == null || run(oracles[i], true, fingerprint) == null ? null : _builds[key(oracles[i], true, fingerprint)];
-			}
-		];
+		return [ for (i in 0...oracles.length) {
+			final fingerprint: Null<String> = now[i];
+			fingerprint == null || run(oracles[i], true, fingerprint) == null ? null : _builds[key(oracles[i], true, fingerprint)];
+		} ];
 	}
 
 	/**
@@ -131,20 +129,18 @@ final class OracleRunMemo implements OracleRunScope {
 		final contents: Map<String, String> = [];
 		final walks: Map<String, Map<String, String>> = [];
 		var written: Null<String> = null;
-		return [
-			for (oracle in oracles) {
-				final scan: Null<{ fingerprint: String, roots: Array<String> }> = oracle.unavailable == null
-					? OracleCache.scanned(oracle.hxml, oracle.dir, oracle.defines, contents, walks)
-					: null;
-				if (scan == null) {
-					null;
-				} else {
-					_roots[OracleDeclaration.oracleKey(oracle)] = scan.roots;
-					written = written ?? writtenDigest(_written());
-					ContentHash.md5('${scan.fingerprint}\n$written');
-				}
+		return [ for (oracle in oracles) {
+			final scan: Null<{ fingerprint: String, roots: Array<String> }> = oracle.unavailable == null
+				? OracleCache.scanned(oracle.hxml, oracle.dir, oracle.defines, contents, walks)
+				: null;
+			if (scan == null) {
+				null;
+			} else {
+				_roots[OracleDeclaration.oracleKey(oracle)] = scan.roots;
+				written = written ?? writtenDigest(_written());
+				ContentHash.md5('${scan.fingerprint}\n$written');
 			}
-		];
+		} ];
 	}
 
 	/**
@@ -176,14 +172,12 @@ final class OracleRunMemo implements OracleRunScope {
 
 	/** `oracles` carrying `memo`, every other field as it was — the configurations one run compiles with. */
 	public static function attach(oracles: Array<OracleConfig>, memo: OracleRunMemo): Array<OracleConfig> {
-		return [
-			for (oracle in oracles) {
-				// a copy of every field, so one added to `OracleConfig` later is carried without a line here
-				final carried: OracleConfig = Reflect.copy(oracle) ?? throw 'a configuration could not be copied';
-				carried.runs = memo;
-				carried;
-			}
-		];
+		return [ for (oracle in oracles) {
+			// a copy of every field, so one added to `OracleConfig` later is carried without a line here
+			final carried: OracleConfig = Reflect.copy(oracle) ?? throw 'a configuration could not be copied';
+			carried.runs = memo;
+			carried;
+		} ];
 	}
 
 	private static function key(oracle: OracleConfig, verbose: Bool, fingerprint: String): String {
@@ -194,12 +188,10 @@ final class OracleRunMemo implements OracleRunScope {
 	private static function writtenDigest(paths: Array<String>): String {
 		final sorted: Array<String> = paths.copy();
 		sorted.sort(Compare.compareString);
-		final lines: Array<String> = [
-			for (path in sorted) {
-				final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
-				'$path ${text == null ? 'absent' : ContentHash.md5(text)}';
-			}
-		];
+		final lines: Array<String> = [ for (path in sorted) {
+			final text: Null<String> = try sys.io.File.getContent(path) catch (exception: haxe.Exception) null;
+			'$path ${text == null ? 'absent' : ContentHash.md5(text)}';
+		} ];
 		return ContentHash.md5(lines.join('\n'));
 	}
 

@@ -354,12 +354,10 @@ class ThreadSafetyExhaustiveTest extends Test {
 
 	/** The members of the findings (c) of `found`. */
 	private static function leaks(found: Array<Violation>): Array<String> {
-		return [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'C') data.member;
-			}
-		];
+		return [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'C') data.member;
+		} ];
 	}
 	#end
 

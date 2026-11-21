@@ -315,16 +315,14 @@ final class TypeRefPrinter {
 			else
 				existing.paths.push(path);
 		}
-		return [
-			for (bucket in buckets) {
-				bucket.paths.sort((a, b) -> ImportOrder.compare(bucket.anchor.order, a, b));
-				{
-					span: new Span(bucket.anchor.offset, bucket.anchor.offset),
-					text: bucket.anchor.lead + [ for (path in bucket.paths) 'import $path;\n' ].join('') + bucket.anchor.trail,
-					paths: bucket.paths
-				};
-			}
-		];
+		return [ for (bucket in buckets) {
+			bucket.paths.sort((a, b) -> ImportOrder.compare(bucket.anchor.order, a, b));
+			{
+				span: new Span(bucket.anchor.offset, bucket.anchor.offset),
+				text: bucket.anchor.lead + [ for (path in bucket.paths) 'import $path;\n' ].join('') + bucket.anchor.trail,
+				paths: bucket.paths
+			};
+		} ];
 	}
 
 	/**
@@ -337,9 +335,7 @@ final class TypeRefPrinter {
 		final byPath: Map<String, Int> = [];
 		for (group => edit in pending) for (path in edit.paths) byPath[path] = group;
 		return {
-			edits: [
-				for (group => edit in pending) { span: edit.span, text: edit.text, group: group }
-			],
+			edits: [ for (group => edit in pending) { span: edit.span, text: edit.text, group: group } ],
 			groupOf: path -> path == null ? null : byPath[path]
 		};
 	}

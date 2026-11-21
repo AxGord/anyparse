@@ -213,9 +213,9 @@ final class TriviaTailRehome {
 	private static function structCopy(fieldNames: Array<String>, replaced: String, with: Expr): Expr {
 		final pos: Position = Context.currentPos();
 		return {
-			expr: EObjectDecl([
-				for (f in fieldNames) { field: f, expr: f == replaced ? with : { expr: EField(macro value, f), pos: pos } }
-			]),
+			expr: EObjectDecl(
+				[ for (f in fieldNames) { field: f, expr: f == replaced ? with : { expr: EField(macro value, f), pos: pos } } ]
+			),
 			pos: pos
 		};
 	}

@@ -514,9 +514,7 @@ final class LambdaLoopScan {
 			indexAccessKind: shape.indexAccessKind,
 			parenKind: shape.parenKind,
 			// The COUNT sink's step spellings; with none set that direction matches nothing.
-			incrementKinds: [
-				for (k in [(shape.postIncrKind: Null<String>), shape.preIncrKind]) if (k != null) k
-			],
+			incrementKinds: [ for (k in [(shape.postIncrKind: Null<String>), shape.preIncrKind]) if (k != null) k ],
 			addAssignKind: shape.addAssignKind,
 			superText: shape.superReferenceText,
 			projectComplete: RefactorSupport.projectIsComplete(plugin),

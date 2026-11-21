@@ -238,9 +238,9 @@ final class ReconFacts {
 		if (paths.length == 0) return [];
 		final format: String = '--format=%h %ad %s';
 		final run: Result = cmd('git -C $tree log $range --date=short $format -- $paths').run();
-		return run.ok ? [
-			for (row in run.lines()) if (row != '') row.length > SUBJECT_CHARS ? '${row.substr(0, SUBJECT_CHARS)}...' : row
-		] : null;
+		return run.ok
+			? [ for (row in run.lines()) if (row != '') row.length > SUBJECT_CHARS ? '${row.substr(0, SUBJECT_CHARS)}...' : row ]
+			: null;
 	}
 
 	private static function body(

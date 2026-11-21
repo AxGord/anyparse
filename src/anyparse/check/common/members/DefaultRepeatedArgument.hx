@@ -629,9 +629,7 @@ final class DefaultRepeatedArgument extends RuleBase implements DefaultOff imple
 	 * construction, a collection or object literal, a function value, a boolean operator's result.
 	 */
 	private static function nonNullKindsOf(shape: RefShape): Array<String> {
-		final out: Array<String> = [
-			for (kind in MemberKinds.constantLiteralKinds(shape)) if (kind != shape.nullLiteralKind) kind
-		];
+		final out: Array<String> = [ for (kind in MemberKinds.constantLiteralKinds(shape)) if (kind != shape.nullLiteralKind) kind ];
 		for (kind in [
 			shape.newExprKind,
 			shape.arrayLiteralKind,

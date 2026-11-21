@@ -168,9 +168,7 @@ class AstPredLowering {
 			for (i in binds.keys())
 				if (i >= arity) Context.fatalError('AstPredLowering: $rule.$ctor has no operand $i (arity $arity)', Context.currentPos());
 		if (arity == 0) return ctorRef;
-		final args: Array<Expr> = [
-			for (i in 0...arity) ident(binds != null && binds.exists(i) ? (binds[i]: String) : '_')
-		];
+		final args: Array<Expr> = [ for (i in 0...arity) ident(binds != null && binds.exists(i) ? (binds[i]: String) : '_') ];
 		return { expr: ECall(ctorRef, args), pos: Context.currentPos() };
 	}
 

@@ -422,16 +422,12 @@ final class DeclarationDelta {
 
 	/** The header's lines in order, as the writer emits them. */
 	private static function headerLines(version: FileVersion): Array<String> {
-		return [
-			for (line => holder in version.owner) if (holder >= 0 && version.units[holder].header) version.lines[line]
-		];
+		return [ for (line => holder in version.owner) if (holder >= 0 && version.units[holder].header) version.lines[line] ];
 	}
 
 	/** Every line outside the header, as the writer emits it. */
 	private static function bodyLines(version: FileVersion): Array<String> {
-		return [
-			for (line in 0...version.lines.length) if (inBody(version, line)) version.lines[line]
-		];
+		return [ for (line in 0...version.lines.length) if (inBody(version, line)) version.lines[line] ];
 	}
 
 	/** The tokens of every line outside the header, at their offsets in the version's text — what a rename must explain. */

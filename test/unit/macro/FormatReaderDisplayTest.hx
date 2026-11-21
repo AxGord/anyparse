@@ -143,9 +143,7 @@ final class FormatReaderDisplayTest extends Test {
 	/** What the run of `args` in `cwd` printed on its reading lines. */
 	private static function readings(args: Array<String>, cwd: String): Array<String> {
 		final run: ProcessRun = ProcessSpawn.run(args, cwd, OUTPUT);
-		return [
-			for (line in '${run.out}\n${run.err}'.split('\n')) if (line.startsWith(READING)) line
-		];
+		return [ for (line in '${run.out}\n${run.err}'.split('\n')) if (line.startsWith(READING)) line ];
 	}
 	#end
 

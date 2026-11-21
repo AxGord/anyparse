@@ -135,9 +135,7 @@ final class LockReleasers {
 		}
 		final out: Array<Int> = [];
 		_blindIn[id] = out;
-		final resolved: Array<String> = [
-			for (e in _graph.outEdges(id)) if (e.kind.isInvocation() && e.span != null) callKey(e.span)
-		];
+		final resolved: Array<String> = [ for (e in _graph.outEdges(id)) if (e.kind.isInvocation() && e.span != null) callKey(e.span) ];
 		function walk(node: QueryNode): Void {
 			if (node != fn && _functionKinds.contains(node.kind)) return;
 			final at: Null<Span> = node.span;
@@ -160,9 +158,7 @@ final class LockReleasers {
 		final id: String = give.from;
 		final at: Int = give.span?.from ?? -1;
 		final takes: Array<LockAcquire> = [ for (a in _holds) if (a.edge.from == id && a.lock == lock) a ];
-		final others: Array<CallEdge> = [
-			for (g in _sites.gives) if (g.edge.from == id && g.lock == lock && g.edge != give) g.edge
-		];
+		final others: Array<CallEdge> = [ for (g in _sites.gives) if (g.edge.from == id && g.lock == lock && g.edge != give) g.edge ];
 		return _states.statesOf(id).exists(s ->
 			_facts.runs(id, s.valuation).exists(v -> _conditions.carried(give, v, s.ctx) != 0 && !takes.exists(a -> {
 				final taken: Int = a.edge.span?.to ?? at;

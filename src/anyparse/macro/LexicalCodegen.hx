@@ -266,22 +266,20 @@ class LexicalCodegen {
 
 	/** One arm per declared region: match its opener, walk it, report it, resume past it. */
 	private static function armExprs(specs: Array<LexRegionSpec>): Array<Expr> {
-		return [
-			for (k in 0...specs.length) {
-				final test: Expr = literalTest(specs[k].open);
-				final call: Expr = macro $i{regionFn(k)}(source, i, depth, emit, hole);
-				final kind: Expr = kindValue(specs[k].kind);
-				macro if ($test) {
-					final end: Int = $call;
-					if (end >= 0) {
-						emit(i, end, $kind, depth);
-						i = end;
-						continue;
-					}
-					emit(i, -1, $kind, depth);
-				};
-			}
-		];
+		return [ for (k in 0...specs.length) {
+			final test: Expr = literalTest(specs[k].open);
+			final call: Expr = macro $i{regionFn(k)}(source, i, depth, emit, hole);
+			final kind: Expr = kindValue(specs[k].kind);
+			macro if ($test) {
+				final end: Int = $call;
+				if (end >= 0) {
+					emit(i, end, $kind, depth);
+					i = end;
+					continue;
+				}
+				emit(i, -1, $kind, depth);
+			};
+		} ];
 	}
 
 	private static function atomExpr(atom: LexBodyAtom, k: Int, h: Int): Expr {
@@ -543,20 +541,18 @@ class LexicalCodegen {
 	 */
 	private static function tokenRegionArms(specs: Array<LexRegionSpec>): Array<Expr> {
 		final region: Expr = tokenKindValue('Region');
-		return [
-			for (k in 0...specs.length) {
-				final test: Expr = literalTest(specs[k].open);
-				final call: Expr = macro $i{regionFn(k)}(source, i, 0, noRegion, noHole);
-				macro if ($test) {
-					final end: Int = $call;
-					if (end >= 0) {
-						out.push({ from: i, to: end, kind: $region });
-						i = end;
-						continue;
-					}
-				};
-			}
-		];
+		return [ for (k in 0...specs.length) {
+			final test: Expr = literalTest(specs[k].open);
+			final call: Expr = macro $i{regionFn(k)}(source, i, 0, noRegion, noHole);
+			macro if ($test) {
+				final end: Int = $call;
+				if (end >= 0) {
+					out.push({ from: i, to: end, kind: $region });
+					i = end;
+					continue;
+				}
+			};
+		} ];
 	}
 
 }

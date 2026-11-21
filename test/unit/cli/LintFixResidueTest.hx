@@ -42,15 +42,13 @@ private class Rename implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) for (at in occurrences(entry.source)) {
-				file: entry.file,
-				span: new Span(at, at + 3),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'a FOO'
-			}
-		];
+		return [ for (entry in files) for (at in occurrences(entry.source)) {
+			file: entry.file,
+			span: new Span(at, at + 3),
+			rule: id(),
+			severity: Severity.Warning,
+			message: 'a FOO'
+		} ];
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
@@ -87,15 +85,13 @@ private class Mention implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		return [
-			for (entry in files) if (entry.source.indexOf('BAR') >= 0) {
-				file: entry.file,
-				span: new Span(0, 5),
-				rule: id(),
-				severity: Severity.Warning,
-				message: 'a BAR'
-			}
-		];
+		return [ for (entry in files) if (entry.source.indexOf('BAR') >= 0) {
+			file: entry.file,
+			span: new Span(0, 5),
+			rule: id(),
+			severity: Severity.Warning,
+			message: 'a BAR'
+		} ];
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {

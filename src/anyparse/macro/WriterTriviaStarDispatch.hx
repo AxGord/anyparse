@@ -599,13 +599,11 @@ final class WriterTriviaStarDispatch {
 		final own: Array<Expr> = [ for (i in 0...width) knobRead(knobs[i]) ];
 		if (knobs.length == width) return own;
 		final flag: Expr = macro $p{['opt', knobs[width]]};
-		return [
-			for (i in 0...width) {
-				final unswitched: Expr = own[i];
-				final switched: Expr = knobRead(knobs[width + 1 + i]);
-				macro ($flag ? $switched : $unswitched);
-			}
-		];
+		return [ for (i in 0...width) {
+			final unswitched: Expr = own[i];
+			final switched: Expr = knobRead(knobs[width + 1 + i]);
+			macro ($flag ? $switched : $unswitched);
+		} ];
 	}
 
 	/** `knobReads` over the knob names a Star plan read for `@:fmt(<meta>(...))`; null when the Star does not carry the flag. */
@@ -661,15 +659,13 @@ final class WriterTriviaStarDispatch {
 			final edgeFlag: String = BlockStarPlan.BEGIN_END_TYPE;
 			Context.fatalError('@:fmt($ifDocFlag) replaces the counts of @:fmt($edgeFlag), which this Star lacks', Context.currentPos());
 		}
-		return [
-			for (i in 0...BEGIN_END_KNOBS) {
-				final stated: Expr = edges[i];
-				final docCount: Expr = ifDoc[i];
-				reads == null
-					? macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC)
-					: macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC, ${reads.body});
-			}
-		];
+		return [ for (i in 0...BEGIN_END_KNOBS) {
+			final stated: Expr = edges[i];
+			final docCount: Expr = ifDoc[i];
+			reads == null
+				? macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC)
+				: macro anyparse.format.MemberGap.docEdge($stated, $docCount, _arr, _trailLC, ${reads.body});
+		} ];
 	}
 
 	/**

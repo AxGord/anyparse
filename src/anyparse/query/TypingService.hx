@@ -569,9 +569,7 @@ final class TypingService {
 	 * they name none or disagree.
 	 */
 	private static function interpolatingStringType(shape: RefShape): Null<String> {
-		final names: Array<String> = [
-			for (k in shape.interpolatingStringKinds ?? []) shape.literalTypeNames?.get(k) ?? ''
-		];
+		final names: Array<String> = [ for (k in shape.interpolatingStringKinds ?? []) shape.literalTypeNames?.get(k) ?? '' ];
 		return names.length == 0 || names.contains('') || names.filter(n -> n != names[0]).length > 0 ? null : names[0];
 	}
 

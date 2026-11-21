@@ -183,15 +183,13 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware impl
 		final seams: Null<Seams> = readSeams(plugin, files, _resolveConfig);
 		if (seams == null) return [];
 		final resolveIndex: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex(files, plugin);
-		return [
-			for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex)) {
-				file: entry.file,
-				span: m.span,
-				rule: 'prefer-ternary-expression',
-				severity: Severity.Info,
-				message: 'this two-branch if-expression can be a ternary'
-			}
-		];
+		return [ for (entry in files) for (m in collect(plugin, entry.file, entry.source, seams, resolveIndex)) {
+			file: entry.file,
+			span: m.span,
+			rule: 'prefer-ternary-expression',
+			severity: Severity.Info,
+			message: 'this two-branch if-expression can be a ternary'
+		} ];
 	}
 
 	public function fix(
@@ -209,9 +207,7 @@ final class PreferTernaryExpression extends RuleBase implements ConfigAware impl
 			return m.edit;
 		});
 		// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
-		return ParenGuard.guard(source, [
-			for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
-		], plugin);
+		return ParenGuard.guard(source, [ for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i] ], plugin);
 	}
 
 	/**

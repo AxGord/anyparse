@@ -223,13 +223,11 @@ final class TriviaEofLowering {
 		if (c.measuredMultiline) {
 			final measuredElemCall: Expr = c.measuredElemCall;
 			elseBodyParts.push(macro final _elemDocs: Array<anyparse.core.Doc> = [ for (_e in _arr) $measuredElemCall ]);
-			elseBodyParts.push(macro final _measMulti: Array<Bool> = [
-				for (_d in _elemDocs) {
-					final _w: Int = anyparse.core.DocMeasure.flatTokenWidth(_d);
-					anyparse.core.DocMeasure.hasForcedBreak(_d)
-						|| (_w > opt.lineWidth && anyparse.core.DocMeasure.breakableHead(_d).width < _w);
-				}
-			]);
+			elseBodyParts.push(macro final _measMulti: Array<Bool> = [ for (_d in _elemDocs) {
+				final _w: Int = anyparse.core.DocMeasure.flatTokenWidth(_d);
+				anyparse.core.DocMeasure.hasForcedBreak(_d)
+					|| (_w > opt.lineWidth && anyparse.core.DocMeasure.breakableHead(_d).width < _w);
+			} ]);
 		}
 		elseBodyParts.push(c.emit.initPrev);
 		// ω-fileheader-multiline-comments: `_headIsPiu` flags whether the

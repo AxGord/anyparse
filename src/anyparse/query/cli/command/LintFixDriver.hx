@@ -803,9 +803,7 @@ final class LintFixDriver {
 			edits: checkEdits,
 			// Only a NON-EMPTY carry is worth passing on: an edit that quotes nothing cannot have
 			// moved anything across it, and the guard's first test is the array length.
-			carried: [
-				for (edit in carrying) if (edit.carried.length > 0) { edit: edit.span, spans: edit.carried }
-			],
+			carried: [ for (edit in carrying) if (edit.carried.length > 0) { edit: edit.span, spans: edit.carried } ],
 			overlapped: checkEdits.length > 0 && refused == null && CanonicalEdit.editsOverlapAny(checkEdits, accepted),
 			refusal: refused
 		};
@@ -828,9 +826,7 @@ final class LintFixDriver {
 	): (RuleEdits) -> Array<RuleEdits> {
 		return group -> {
 			final check: Null<Check> = checks.find(c -> c.id() == group.rule);
-			return check == null ? [] : [
-				for (v in group.findings) ruleEditsFor(check, source, [v], cached, index, [], said, reach)
-			];
+			return check == null ? [] : [ for (v in group.findings) ruleEditsFor(check, source, [v], cached, index, [], said, reach) ];
 		};
 	}
 
@@ -875,9 +871,7 @@ final class LintFixDriver {
 	 * costs a lookup rather than needing a second span filter to stay in step.
 	 */
 	public static function contributedCarried(groups: Array<RuleEdits>): Array<CarriedEdit> {
-		return [
-			for (group in groups) if (contributes(group)) for (declared in group.carried) declared
-		];
+		return [ for (group in groups) if (contributes(group)) for (declared in group.carried) declared ];
 	}
 
 	/**
@@ -1290,9 +1284,7 @@ final class LintFixDriver {
 
 	/** Every path `snapshot` holds that `files` no longer does — a file the run DELETED since the snapshot was taken. */
 	private static function goneSince(files: Array<{ file: String, source: String }>, snapshot: Map<String, String>): Array<String> {
-		return [
-			for (file in snapshot.keys()) if (!files.exists(entry -> entry.file == file)) file
-		];
+		return [ for (file in snapshot.keys()) if (!files.exists(entry -> entry.file == file)) file ];
 	}
 
 	/**
@@ -1313,9 +1305,7 @@ final class LintFixDriver {
 		final baseline: Null<OracleBaseline> = pre ?? (oracles.length > 0 && changed.length > 0 ? oracle.judging(oracles) : null);
 		// A created file is written again rather than skipped: a later pass may have EXTENDED it in
 		// memory only, and the write is idempotent where it did not.
-		CliIo.writeFiles([
-			for (entry in files) if (changed.contains(entry.file)) { path: entry.file, content: entry.source }
-		]);
+		CliIo.writeFiles([ for (entry in files) if (changed.contains(entry.file)) { path: entry.file, content: entry.source } ]);
 		return reconcileSafePass(files, changed, originalOf, coupled, baseline, oracle, oracles, created, trail);
 	}
 
@@ -1413,9 +1403,12 @@ final class LintFixDriver {
 		);
 		// After every revert net has settled, so a fragment follows only the bytes the run kept. The opt-out of a write op's own
 		// `--fix` reaches here through the shared run ledger.
-		if (!RegistryFollowCommand.optedOut(runLedger)) RegistryFollowCommand.followWrite('lint', [
-			for (e in files) if (before.exists(e.file)) { path: e.file, before: before[e.file] ?? e.source, after: e.source }
-		], plugin);
+		if (!RegistryFollowCommand.optedOut(runLedger))
+			RegistryFollowCommand.followWrite(
+				'lint',
+				[ for (e in files) if (before.exists(e.file)) { path: e.file, before: before[e.file] ?? e.source, after: e.source } ],
+				plugin
+			);
 		return exit;
 	}
 

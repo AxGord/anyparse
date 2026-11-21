@@ -179,15 +179,13 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin, files, _resolveConfig);
-		return seams == null ? [] : [
-			for (entry in files) for (m in matchesIn(entry.file, entry.source, plugin, seams)) {
-				file: entry.file,
-				span: m.ifSpan,
-				rule: RULE_ID,
-				severity: Severity.Info,
-				message: m.edit == null ? MSG_COMMENT : MSG_FIXABLE
-			}
-		];
+		return seams == null ? [] : [ for (entry in files) for (m in matchesIn(entry.file, entry.source, plugin, seams)) {
+			file: entry.file,
+			span: m.ifSpan,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: m.edit == null ? MSG_COMMENT : MSG_FIXABLE
+		} ];
 	}
 
 	public function fix(
@@ -207,9 +205,7 @@ final class ReturnReassignTernary extends RuleBase implements DefaultOff impleme
 			return edit;
 		});
 		// `plain` and `guarded` hold the same edits in the same order, so a containment index of one is the other's.
-		return ParenGuard.guard(source, [
-			for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i]
-		], plugin);
+		return ParenGuard.guard(source, [ for (i in 0...guarded.length) if (!CanonicalEdit.isContainedEdit(plain, i)) guarded[i] ], plugin);
 	}
 
 	/** Every collapsible pair in `file`'s `source` -- the one traversal `run` and `fix` share. */

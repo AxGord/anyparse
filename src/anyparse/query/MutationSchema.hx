@@ -209,19 +209,17 @@ final class MutationSchema {
 		out.add(source.substring(done));
 		return {
 			text: out.toString(),
-			placements: [
-				for (arm in arms) {
-					final at: { dispatch: Int, copyFrom: Int, copyTo: Int } = spans[arm.id] ?? { dispatch: 0, copyFrom: 0, copyTo: 0 };
-					{
-						id: arm.id,
-						skip: skips[arm.id],
-						dispatch: at.dispatch,
-						copyFrom: at.copyFrom,
-						copyTo: at.copyTo,
-						owner: skips.exists(arm.id) ? '' : owners[arm.id] ?? ''
-					};
-				}
-			]
+			placements: [ for (arm in arms) {
+				final at: { dispatch: Int, copyFrom: Int, copyTo: Int } = spans[arm.id] ?? { dispatch: 0, copyFrom: 0, copyTo: 0 };
+				{
+					id: arm.id,
+					skip: skips[arm.id],
+					dispatch: at.dispatch,
+					copyFrom: at.copyFrom,
+					copyTo: at.copyTo,
+					owner: skips.exists(arm.id) ? '' : owners[arm.id] ?? ''
+				};
+			} ]
 		};
 	}
 

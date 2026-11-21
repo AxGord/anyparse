@@ -93,13 +93,9 @@ class DeclarationQueriesTest extends Test {
 			index.typing.members.memberDeclarationsOf('Box', 'item').map(d -> '${d.file.file}:${d.member.typeSource}'),
 			'each declaration, with its file'
 		);
-		final paths: Array<String> = [
-			for (r in index.refs.resolvedDeclsNamed('Colour')) for (p in TypeNameBinding.namingPaths(r)) p
-		];
+		final paths: Array<String> = [ for (r in index.refs.resolvedDeclsNamed('Colour')) for (p in TypeNameBinding.namingPaths(r)) p ];
 		Assert.same(['p.Colour', 'p.Colour.Colour'], paths, 'a main type: its module, and its module and its name');
-		final sub: Array<String> = [
-			for (r in index.refs.resolvedDeclsNamed('Paint')) for (p in TypeNameBinding.namingPaths(r)) p
-		];
+		final sub: Array<String> = [ for (r in index.refs.resolvedDeclsNamed('Paint')) for (p in TypeNameBinding.namingPaths(r)) p ];
 		Assert.same(['p.Colour.Paint', 'p.Paint'], sub, 'a sub-type: its module and its name, its package and its name');
 	}
 

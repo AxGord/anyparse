@@ -78,17 +78,15 @@ final class DeclaresCommand implements CliCommand implements LeadingQuery {
 		}
 		final plugin: GrammarPlugin = io.plugin;
 
-		final files: Array<{ file: String, source: String }> = [
-			for (path in paths) {
-				file: path,
-				source: (try {
-					CliIo.readSourceForParse(path);
-				} catch (exception: Exception) {
-					CliIo.stderr('apq declares: $path: ${exception.message}\n');
-					return EXIT_RUNTIME;
-				}: String)
-			}
-		];
+		final files: Array<{ file: String, source: String }> = [ for (path in paths) {
+			file: path,
+			source: (try {
+				CliIo.readSourceForParse(path);
+			} catch (exception: Exception) {
+				CliIo.stderr('apq declares: $path: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			}: String)
+		} ];
 
 		// ONE listing for the whole batch — the parse is the expensive half and it
 		// does not depend on the names.

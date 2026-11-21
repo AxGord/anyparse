@@ -714,12 +714,10 @@ final class ProcessSpawn {
 
 	/** `env` as the `env` of a `SpawnJob`. A variable held as null stays null: that is how a command takes one away. */
 	public static function environment(env: DynamicAccess<String>): JValue {
-		final entries: Array<JEntry> = [
-			for (key in env.keys()) {
-				final value: Null<String> = env[key];
-				JValueTools.entry(key, value == null ? JNull : JString(value));
-			}
-		];
+		final entries: Array<JEntry> = [ for (key in env.keys()) {
+			final value: Null<String> = env[key];
+			JValueTools.entry(key, value == null ? JNull : JString(value));
+		} ];
 		return JObject(entries);
 	}
 
@@ -909,16 +907,14 @@ final class ProcessSpawn {
 	 * and `cancelled` when the batch was ended on purpose.
 	 */
 	public static function unanswered(count: Int, failure: String, err: String, ?cancelled: Bool): Array<ProcessRun> {
-		return [
-			for (_ in 0...count) {
-				status: null,
-				out: '',
-				err: err,
-				failure: failure,
-				overflowed: false,
-				cancelled: cancelled
-			}
-		];
+		return [ for (_ in 0...count) {
+			status: null,
+			out: '',
+			err: err,
+			failure: failure,
+			overflowed: false,
+			cancelled: cancelled
+		} ];
 	}
 
 	/**

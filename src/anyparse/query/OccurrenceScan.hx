@@ -153,9 +153,7 @@ final class OccurrenceScan {
 	 * linear `offsetWithinAny`.
 	 */
 	public static function inertRegions(source: String, regions: Array<LexRegion>): Array<Span> {
-		return [
-			for (region in regions) if (isInert(source, region)) new Span(region.from, region.to)
-		];
+		return [ for (region in regions) if (isInert(source, region)) new Span(region.from, region.to) ];
 	}
 
 	/**

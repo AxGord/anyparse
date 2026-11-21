@@ -93,19 +93,15 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final byEnd: Map<Int, AccessorClause> = [
-			for (clause in RunScan.accessorClausesOf(plugin, source)) clause.span.to => clause
-		];
-		return [
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				if (span != null) {
-					final clause: Null<AccessorClause> = byEnd[span.to];
-					if (clause != null && clause.plainStored() && clause.parenSpan().from == span.from)
-						{ span: new Span(clause.leadGap.from, span.to), text: '' };
-				}
+		final byEnd: Map<Int, AccessorClause> = [ for (clause in RunScan.accessorClausesOf(plugin, source)) clause.span.to => clause ];
+		return [ for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null) {
+				final clause: Null<AccessorClause> = byEnd[span.to];
+				if (clause != null && clause.plainStored() && clause.parenSpan().from == span.from)
+					{ span: new Span(clause.leadGap.from, span.to), text: '' };
 			}
-		];
+		} ];
 	}
 
 	/**

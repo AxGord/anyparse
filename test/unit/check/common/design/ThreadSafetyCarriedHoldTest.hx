@@ -379,13 +379,11 @@ class ThreadSafetyCarriedHoldTest extends Test {
 
 	/** The findings (b) of `Fs.work` in `found`, as `<severity> B <member> | <subject>`, `(folded)` marking a folded one. */
 	private static function holds(found: Array<Violation>): Array<String> {
-		final out: Array<String> = [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'B' && data.member == 'Fs.work')
-					'${v.severity.label()} B ${data.member} | ${data.subject}' + (v.message.indexOf(FOLDED) >= 0 ? ' (folded)' : '');
-			}
-		];
+		final out: Array<String> = [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'B' && data.member == 'Fs.work')
+				'${v.severity.label()} B ${data.member} | ${data.subject}' + (v.message.indexOf(FOLDED) >= 0 ? ' (folded)' : '');
+		} ];
 		out.sort(Reflect.compare);
 		return out;
 	}
@@ -423,9 +421,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 
 	/** The run's notice of a `closedWorld` it does not cover (`CLOSED_NOTE`, then the project's document); null for none. */
 	private static function closedNote(found: Array<Violation>): Null<String> {
-		final notes: Array<String> = [
-			for (v in found) if (v.file == '' && v.message.startsWith(CLOSED_NOTE)) v.message
-		];
+		final notes: Array<String> = [ for (v in found) if (v.file == '' && v.message.startsWith(CLOSED_NOTE)) v.message ];
 		return notes.length == 1 ? notes[0] : null;
 	}
 

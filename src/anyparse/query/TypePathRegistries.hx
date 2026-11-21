@@ -105,19 +105,15 @@ final class TypePathRegistries {
 
 	/** The records of the document `json` as `members` lays them out. Throws the JSON parser's error on a document that does not parse. */
 	public static function memberRecords(members: MemberKeys, json: String): Array<MemberRecord> {
-		return [
-			for (record in recordsOf(JsonProjection.parse(json), members.records)) {
-				name: firstString(record, members.name, json)?.value ?? '',
-				type: firstString(record, members.type, json)?.value ?? '',
-				kind: firstString(record, members.kind, json)?.value ?? members.defaultKind,
-				member: firstString(record, members.member, json),
-				finds: stringsAt(record, members.find, json),
-				replaces: stringsAt(record, members.replace, json),
-				opaque: [
-					for (key in members.opaque) for (slot in stringsAt(record, key, json)) { key: key, slot: slot }
-				]
-			}
-		];
+		return [ for (record in recordsOf(JsonProjection.parse(json), members.records)) {
+			name: firstString(record, members.name, json)?.value ?? '',
+			type: firstString(record, members.type, json)?.value ?? '',
+			kind: firstString(record, members.kind, json)?.value ?? members.defaultKind,
+			member: firstString(record, members.member, json),
+			finds: stringsAt(record, members.find, json),
+			replaces: stringsAt(record, members.replace, json),
+			opaque: [ for (key in members.opaque) for (slot in stringsAt(record, key, json)) { key: key, slot: slot } ]
+		} ];
 	}
 
 	/** The document edit that replaces the decoded range `[from, to)` of `slot` with `text`, which needs no JSON escape. */

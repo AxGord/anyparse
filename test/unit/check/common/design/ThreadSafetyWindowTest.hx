@@ -98,12 +98,10 @@ class ThreadSafetyWindowTest extends Test {
 
 	/** The members whose main-thread take of a lock warns (finding (a) of `Mutex.acquire`). */
 	private static function takes(found: Array<Violation>): Array<String> {
-		return [
-			for (v in found) {
-				final data: Null<FindingData> = v.data;
-				if (data != null && data.family == 'A' && data.subject == 'Mutex.acquire' && v.severity.label() == 'warning') data.member;
-			}
-		];
+		return [ for (v in found) {
+			final data: Null<FindingData> = v.data;
+			if (data != null && data.family == 'A' && data.subject == 'Mutex.acquire' && v.severity.label() == 'warning') data.member;
+		} ];
 	}
 	#end
 

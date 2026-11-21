@@ -1276,9 +1276,7 @@ final class MoveMember {
 
 	/** The first identifier of the source file outside the moved members that spells one of `names` and is no kept caller. */
 	private static function keepBareClash(prep: MovePrep, names: Array<String>, keptAt: Array<Int>): Null<QueryNode> {
-		final identKinds: Array<String> = [
-			for (k in [prep.shape.identKind, prep.shape.stringInterpIdentKind]) if (k != null) k
-		];
+		final identKinds: Array<String> = [ for (k in [prep.shape.identKind, prep.shape.stringInterpIdentKind]) if (k != null) k ];
 		function walk(node: QueryNode): Null<QueryNode> {
 			final from: Int = node.span?.from ?? -1;
 			return from >= 0
@@ -1297,16 +1295,14 @@ final class MoveMember {
 	 * source-coordinate edits into the member's slice space.
 	 */
 	private static function buildMovedBlocks(prep: MovePrep, movedTextEdits: Array<{ span: Span, text: String }>): Array<String> {
-		return [
-			for (m in prep.moved) {
-				final shifted: Array<{ span: Span, text: String }> = [
-					for (e in movedTextEdits)
-						if (e.span.from >= m.cut.from && e.span.from < m.cut.to)
-							{ span: new Span(e.span.from - m.cut.from, e.span.to - m.cut.from), text: e.text }
-				];
-				SourceText.trimNewlineEdges(CanonicalEdit.applyEdits(prep.srcSource.substring(m.cut.from, m.cut.to), shifted));
-			}
-		];
+		return [ for (m in prep.moved) {
+			final shifted: Array<{ span: Span, text: String }> = [
+				for (e in movedTextEdits)
+					if (e.span.from >= m.cut.from && e.span.from < m.cut.to)
+						{ span: new Span(e.span.from - m.cut.from, e.span.to - m.cut.from), text: e.text }
+			];
+			SourceText.trimNewlineEdges(CanonicalEdit.applyEdits(prep.srcSource.substring(m.cut.from, m.cut.to), shifted));
+		} ];
 	}
 
 	/**
@@ -1395,12 +1391,10 @@ final class MoveMember {
 		}
 		final srcRegions: Array<LexRegion> = plugin.lexicalRegions(srcSource);
 		while (true) {
-			final cuts: Array<Span> = [
-				for (name in names) {
-					final g: Null<MemberGroup> = byName[name];
-					if (g != null) ElementSpan.memberCutSpan(srcSource, g.groupSpan, srcRegions);
-				}
-			];
+			final cuts: Array<Span> = [ for (name in names) {
+				final g: Null<MemberGroup> = byName[name];
+				if (g != null) ElementSpan.memberCutSpan(srcSource, g.groupSpan, srcRegions);
+			} ];
 			final added: Array<String> = instanceCallsInto(allMembers, names, cuts, srcSource, srcTree, plugin);
 			if (added.length == 0) break;
 			for (name in added) names.push(name);
@@ -1417,19 +1411,17 @@ final class MoveMember {
 		plugin: GrammarPlugin
 	): Array<String> {
 		final slices: String = cuts.map(c -> srcSource.substring(c.from, c.to)).join('\n');
-		final candidates: Array<MemberGroup> = [
-			for (g in allMembers) {
-				final nm: Null<String> = g.member.name;
-				if (
-					nm != null && g.member.span != null
-					&& !names.contains(nm)
-					&& MemberKinds.FN_DECL_KINDS.contains(g.member.kind)
-					&& !g.modifiers.exists(mod -> mod.kind == 'Static')
-					&& slices.indexOf(nm) != -1
-				)
-					g;
-			}
-		];
+		final candidates: Array<MemberGroup> = [ for (g in allMembers) {
+			final nm: Null<String> = g.member.name;
+			if (
+				nm != null && g.member.span != null
+				&& !names.contains(nm)
+				&& MemberKinds.FN_DECL_KINDS.contains(g.member.kind)
+				&& !g.modifiers.exists(mod -> mod.kind == 'Static')
+				&& slices.indexOf(nm) != -1
+			)
+				g;
+		} ];
 		if (candidates.length == 0) return [];
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(candidates.map(c -> c.member.name ?? ''), srcTree, plugin.refShape());
 		final added: Array<String> = [];

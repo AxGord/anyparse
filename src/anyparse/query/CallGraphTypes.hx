@@ -289,9 +289,10 @@ final class CallGraphTypes {
 		final supers: Array<String> = t.supertypesRaw.map(raw -> imports.typeOf(file, raw));
 		unionInto(_supers, t.name, supers);
 		generics.record(t, file);
-		unionInto(_interfaces, t.name, [
-			for (i => raw in t.supertypesRaw) if (t.interfaces.contains(SourceText.lastSegment(raw))) supers[i]
-		]);
+		unionInto(
+			_interfaces, t.name,
+			[ for (i => raw in t.supertypesRaw) if (t.interfaces.contains(SourceText.lastSegment(raw))) supers[i] ]
+		);
 		final target: Null<String> = t.aliasTargetNominal;
 		final path: Null<String> = t.aliasTargetRaw;
 		if (target != null && target != t.name) {

@@ -280,9 +280,7 @@ final class CasePatterns {
 	 */
 	public static function ctorArgRulesOutConstants(root: QueryNode, shape: RefShape, callee: String, index: Int): Bool {
 		final aliases: Array<String> = shape.aliasingDeclKinds ?? [];
-		final enumKinds: Array<String> = [
-			for (kind in shape.bareConstructorTypeKinds ?? []) if (!aliases.contains(kind)) kind
-		];
+		final enumKinds: Array<String> = [ for (kind in shape.bareConstructorTypeKinds ?? []) if (!aliases.contains(kind)) kind ];
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		final ctors: Array<QueryNode> = [];
 		function walk(node: QueryNode): Void {

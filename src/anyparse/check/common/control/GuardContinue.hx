@@ -252,9 +252,7 @@ final class GuardContinue extends RuleBase {
 		if (exprStmtKind == null) return null;
 		final assignKind: Null<String> = shape.assignKind;
 		if (assignKind == null) return null;
-		final baseLiterals: Array<String> = [
-			for (k in [(shape.boolLitKind: Null<String>), shape.nullLiteralKind]) if (k != null) k
-		];
+		final baseLiterals: Array<String> = [ for (k in [(shape.boolLitKind: Null<String>), shape.nullLiteralKind]) if (k != null) k ];
 		final literalKinds: Array<String> = baseLiterals.concat(shape.numericLiteralKinds ?? []);
 		if (literalKinds.length == 0) return null;
 		final loopJumpKinds: Array<String> = [

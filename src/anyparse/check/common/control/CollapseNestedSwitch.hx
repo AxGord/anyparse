@@ -423,11 +423,12 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	 * grammar can spell an extractor. A callee is never a use — the call's own head is not a slot.
 	 */
 	private static function binderUses(seams: Seams, subject: QueryNode): Array<QueryNode> {
-		if (subject.kind == seams.identKind) return [subject];
-		if (seams.callKind == null || seams.extractorArrow == null || subject.kind != seams.callKind) return [];
-		return [
-			for (i in 1...subject.children.length) if (subject.children[i].kind == seams.identKind) subject.children[i]
-		];
+		return if (subject.kind == seams.identKind)
+			[subject]
+		else if (seams.callKind == null || seams.extractorArrow == null || subject.kind != seams.callKind)
+			[]
+		else
+			[ for (i in 1...subject.children.length) if (subject.children[i].kind == seams.identKind) subject.children[i] ];
 	}
 
 	/**

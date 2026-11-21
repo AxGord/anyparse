@@ -180,9 +180,7 @@ final class DefiniteAssignmentGuard {
 	private static function unitFindings(body: QueryNode, vocab: Vocabulary, out: Array<UnassignedRead>): Void {
 		final declared: Array<String> = [];
 		collectDeclared(body, vocab, declared);
-		final candidates: Array<String> = [
-			for (name in declared) if (declared.indexOf(name) == declared.lastIndexOf(name)) name
-		];
+		final candidates: Array<String> = [ for (name in declared) if (declared.indexOf(name) == declared.lastIndexOf(name)) name ];
 		if (candidates.length == 0) return;
 		visit(body, {
 			vocab: vocab,

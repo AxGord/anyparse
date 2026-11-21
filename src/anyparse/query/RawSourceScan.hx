@@ -463,9 +463,9 @@ final class RawSourceScan {
 		sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>
 	): Array<String> {
 		final tag: Null<String> = plugin.refShape().waivesPrivacyMetaName;
-		final out: Array<String> = tag == null ? [] : [
-			for (file => src in sources) if (!thirdParty.exists(file) && writesTagInCode(src, tag, plugin)) file
-		];
+		final out: Array<String> = tag == null
+			? []
+			: [ for (file => src in sources) if (!thirdParty.exists(file) && writesTagInCode(src, tag, plugin)) file ];
 		out.sort(Compare.compareString);
 		return out;
 	}
