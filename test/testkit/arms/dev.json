@@ -4528,6 +4528,29 @@
 			"find": "parsed < 0 || '$parsed' != value",
 			"replace": "parsed < 0",
 			"note": "a count with trailing letters such as 2x is read as its leading number"
+		},
+		{
+			"name": "M-PRIVATE-DECLARED-NEVER",
+			"type": "dev.PrivateDeclaration",
+			"method": "declared",
+			"force": "false",
+			"note": "ANYPARSE_PRIVATE=none declares nothing, so a checkout with no private map still cannot pass the scrub row or the infra4 row"
+		},
+		{
+			"name": "M-PRIVATE-DECLARED-ANY-VALUE",
+			"type": "dev.PrivateDeclaration",
+			"method": "declared",
+			"find": "== 'none'",
+			"replace": "!= ''",
+			"note": "any value of ANYPARSE_PRIVATE declares nothing private, so a typo on a machine that has a private map skips the guard silently"
+		},
+		{
+			"name": "M-INFRA4-DECLARED-NONE-IGNORED",
+			"type": "dev.GateLint",
+			"method": "infraOutcome",
+			"find": "PrivateDeclaration.unlessDeclared(",
+			"replace": "NotRun(",
+			"note": "infra4 ignores a declaration of nothing private, so a checkout with no infra trees can never pass the gate once rule code moved"
 		}
 	]
 }

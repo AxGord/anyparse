@@ -10,9 +10,11 @@ import dev.BaselineWarm;
 import dev.BaselineWriter;
 import dev.GateLint;
 import dev.GateTree;
+import dev.PrivateDeclaration;
 import devkit.Cmd.cmd;
 import devkit.Command;
 import devkit.Result;
+import devkit.Summary.Outcome;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -237,6 +239,33 @@ final class BaseLintTest extends Test {
 			File.saveContent(gate.log(BaseLint.FILE), '[]');
 			Assert.equals(gate.log(BaseLint.FILE), BaseLint.kept(gate, 's'));
 		}));
+	}
+
+	/**
+	 * Without infra trees in the baseline, `infra4` is skipped when the machine declares nothing private and `not run`, naming the
+	 * variable, otherwise.
+	 */
+	@:pin('control')
+	@:killer('M-INFRA4-DECLARED-NONE-IGNORED')
+	public function testInfra4WithoutInfraTreesIsSkippedWhenNothingPrivateIsDeclared(): Void {
+		final before: String = Sys.getEnv(PrivateDeclaration.VAR) ?? '';
+		TempDir.with(dir -> {
+			final gate: GateTree = gateOf(dir, '', true, false);
+			for (hxml in ['bin/apq-js-common.hxml', 'bin/apq-js.hxml']) {
+				FileSystem.createDirectory(Path.join([gate.tree, 'bin']));
+				File.saveContent(Path.join([gate.tree, hxml]), '');
+			}
+			cmd('git add -A').at(gate.tree).check();
+			cmd('git -c user.name=t -c user.email=t@t commit -q -m engine').at(gate.tree).check();
+			Sys.putEnv(PrivateDeclaration.VAR, 'none');
+			Assert.same(Outcome.Skipped(PrivateDeclaration.NOTE), new GateLint(gate).infraOutcome());
+			Sys.putEnv(PrivateDeclaration.VAR, '');
+			switch new GateLint(gate).infraOutcome() {
+				case NotRun(why): Assert.stringContains(PrivateDeclaration.VAR, why);
+				case other: Assert.fail('$other');
+			}
+		});
+		Sys.putEnv(PrivateDeclaration.VAR, before);
 	}
 
 	/**

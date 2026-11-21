@@ -151,7 +151,10 @@ final class GateLint {
 		final recorded: Null<Baseline> = _gate.baseline;
 		if (recorded == null) return NotRun(GateTree.NO_BASELINE);
 		final baseline: Baseline = recorded;
-		if (baseline.infra.length == 0) return NotRun('rule code moved, but the baseline recorded no --infra-tree');
+		if (baseline.infra.length == 0)
+			return PrivateDeclaration.unlessDeclared(
+				'rule code moved, but the baseline recorded no --infra-tree — set ${PrivateDeclaration.VAR}=none on a checkout with none'
+			);
 		final baseLint: String = switch BaseLint.read(_gate) {
 			case Got(report): report;
 			case NotGot(why): return NotRun(GateTree.clip('no base lint to compare with: $why'));

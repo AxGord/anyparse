@@ -599,7 +599,7 @@ final class SliceGate {
 			case Failed(_):
 				final failing: Result = tree.ok ? range : tree;
 				_gate.summary.excerpt(Excerpt.linesOf(failing.out + failing.err));
-			case NotRun(_):
+			case NotRun(_), Skipped(_):
 				_gate.summary.detail('${GateTree.short(_gate.base)}..HEAD clean of home paths only');
 			case _:
 				_gate.summary.detail('tree and ${GateTree.short(_gate.base)}..HEAD clean');

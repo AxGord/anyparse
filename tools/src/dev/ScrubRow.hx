@@ -5,7 +5,8 @@ import devkit.Summary.Outcome;
 
 /**
  * The one answer to "what does the slice gate's `scrub` row say of its two `scrub-guard` runs": a failing run is `Failed`
- * whatever the other run said, and only a clean pair can be `NotRun` — when the tree scan had no token list to check.
+ * whatever the other run said, and only a clean pair can be `NotRun` — when the tree scan had no token list to check and the
+ * machine did not declare nothing private (`PrivateDeclaration`), which makes the row `Skipped`.
  */
 @:nullSafety(Strict)
 final class ScrubRow {
@@ -18,7 +19,9 @@ final class ScrubRow {
 		return if (!tree.ok || !range.ok)
 			Failed(GateTree.quote(tree.ok ? range : tree))
 		else if (tree.err.indexOf(UNCONFIGURED) >= 0)
-			NotRun('no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS)')
+			PrivateDeclaration.unlessDeclared(
+				'no token list — set ANYPARSE_SCRUB_LIST (or ANYPARSE_SCRUB_PRIVATE_ROOTS), or declare ${PrivateDeclaration.VAR}=none'
+			)
 		else
 			Passed;
 	}

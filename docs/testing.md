@@ -248,7 +248,7 @@ node bin/dev.js scrub-guard --range origin/main..HEAD   # what a push would add:
 ln -s ../../tools/hooks/pre-push-scrub.sh .git/hooks/pre-push   # once per clone
 ```
 
-A match prints `<where>:<line>: rule <n>` and exits 1; the matched text is never printed. Unset, the tree scan passes and says so; a range (and so the hook) needs no list: it still refuses an added line that spells a home path (`/Users/<name>/`, `/home/<name>/`, any name but the placeholder `me`), printed as `<where>:<line>: local path`.
+A match prints `<where>:<line>: rule <n>` and exits 1; the matched text is never printed. Unset, the command's tree scan passes and says so (the slice gate's `scrub` row, which reads that, is `not run` unless `ANYPARSE_PRIVATE=none`; `dev.PrivateDeclaration` is the one place that reads the declaration); a range (and so the hook) needs no list: it still refuses an added line that spells a home path (`/Users/<name>/`, `/home/<name>/`, any name but the placeholder `me`), printed as `<where>:<line>: local path`.
 
 A list only catches the names someone wrote into it. The structural half takes the downstream checkout itself:
 `--private-root <dir>` (repeatable; or `ANYPARSE_SCRUB_PRIVATE_ROOTS`, `:`-separated — never a default, never a path
@@ -269,16 +269,18 @@ its flags, and a rule JavaScript cannot compile is a usage error naming its numb
 `.claude/workflows/` is tracked (the rest of `.claude/` is not; `lib/recon-arm`, a per-machine toggle, stays ignored). It
 names no path of one machine: the checkout is `{{project_root}}` in a prompt, `cwd` or `env:` value and
 the quoted `"$WF_PROJECT_ROOT"` in an exec command (a path with a space must not split), and the worktrees default to `<parent of the checkout>/.wt/anyparse`. A tree outside the
-checkout comes from an environment variable, set in `.claude/settings.local.json` `env`; an unset one skips its row with an
-echoed note and never fails the step:
+checkout comes from an environment variable, set in `.claude/settings.local.json` `env`. An unset one skips its layer or
+its tree with an echoed note, except where the table says the gate's row refuses: a row that guards something private
+never passes by an accidental absence, and a checkout with nothing private says so with `ANYPARSE_PRIVATE=none`:
 
 | variable | names | unset |
 |---|---|---|
 | `ANYPARSE_HXFORMAT_FORK` | the formatter corpus fork | the corpus layer skips |
-| `ANYPARSE_PONY` | the read-only downstream tree the gate's `frozen` row guards | no `--frozen` tree |
-| `ANYPARSE_INFRA_TREES` | space-separated downstream trees for the `infra` rows | no `--infra-tree` |
-| `ANYPARSE_SCRUB_LIST` | the private scrub map (above) | the scrub guard says so and passes |
-| `WF_PLUGIN_ROOT` | the workflow engine's plugin root, which a workflow exec already has; `scripts/wf-validate` under it is the loader | the `workflows` row cannot judge: `not run`, the verdict the scrub row gives an unconfigured list (`WorkflowsRow.unavailable` is its one place, so the decision of GATE-SCRUB-UNSET-LIST-DOC-VS-VERDICT moves both) |
+| `ANYPARSE_PRIVATE` | `none`: this checkout has nothing private (any other value, or unset, declares nothing) | the `scrub` and `infra4` rows below refuse |
+| `ANYPARSE_PONY` | the read-only downstream tree the gate's `frozen` row guards | no `--frozen` tree: the `frozen` row is `skipped` (`none recorded at --baseline`) |
+| `ANYPARSE_INFRA_TREES` | space-separated downstream trees for the `infra` rows | no `--infra-tree`: a slice that touches rule code gets `infra4` `not run` (`the baseline recorded no --infra-tree`), which fails the gate and `--allow` does not waive; with `ANYPARSE_PRIVATE=none` the row is `skipped` (`none configured, declared`) |
+| `ANYPARSE_SCRUB_LIST` | the private scrub map (above) | the `scrub-guard` command says so and passes, but the gate's `scrub` row is `not run` (it saw no token list), which fails the gate and `--allow` does not waive; with `ANYPARSE_PRIVATE=none` the row is `skipped` (`none configured, declared`), the range scan for home paths having run either way |
+| `WF_PLUGIN_ROOT` | the workflow engine's plugin root, which a workflow exec already has; `scripts/wf-validate` under it is the loader | the `workflows` row cannot judge: `not run`, which fails the gate — the engine's own variable, so no declaration waives it (`WorkflowsRow.unavailable` is its one place) |
 
 The `workflows` row of the slice gate and the `workflows` step of the battery load every file of `.claude/workflows` with the engine's own loader (`wf-validate`, one line per file, exit 1 when any refuses): a file it refuses fails the row with the loader's message. The gate row runs only when the slice's diff touches `.claude/workflows/` (else `skipped`). The battery step always runs, on the land's candidate tree, because a rebase or a merge can produce a file neither side had, and no gate has seen that tree (`dev.WorkflowsRow`, held by `unit.dev.WorkflowsRowTest` against a stand-in loader).
 

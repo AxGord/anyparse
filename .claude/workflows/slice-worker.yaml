@@ -194,11 +194,12 @@ states:
       [ -f "$f" ] || exit 10
       want=$(git merge-base HEAD main)
       have=$(node -e 'try{console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).base||"")}catch(e){console.log("")}' "$f")
-      # A slice whose diff grew into rule code after the first baseline needs the infra trees in it (else infra4 is not run).
+      # A slice whose diff grew into rule code after the first baseline needs the infra trees in it (else infra4 is not run); with no
+      # ANYPARSE_INFRA_TREES a retake would record none again, so the baseline stays and infra4 answers by ANYPARSE_PRIVATE.
       infra=$(node -e 'try{console.log((JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).infra||[]).length)}catch(e){console.log(0)}' "$f")
       rule=$(node "$WF_PROJECT_ROOT/bin/dev.js" rule-code "$tree")
       if [ "$have" = "$want" ]; then
-        [ "$rule" = yes ] && [ "$infra" = 0 ] || { echo "baseline on $(git rev-parse --short "$want") kept"; exit 0; }
+        [ "$rule" = yes ] && [ "$infra" = 0 ] && [ -n "$ANYPARSE_INFRA_TREES" ] || { echo "baseline on $(git rev-parse --short "$want") kept"; exit 0; }
         mv "$f" "$tree-logs/slice-gate/baseline-noinfra.json"
         echo "the slice now touches rule code, but the baseline recorded no --infra-tree — retaking with it"; exit 10
       fi
