@@ -137,9 +137,7 @@ final class ExhaustiveSwitches {
 	private function catchAll(branch: QueryNode): Bool {
 		if (branch.kind == _shape.defaultBranchKind) return true;
 		final pattern: Null<QueryNode> = branch.kind == _shape.caseBranchKind && branch.children.length > 0 ? branch.children[0] : null;
-		return pattern != null
-			&& pattern.kind == _shape.plainCasePatternKind
-			&& pattern.children.length == 1
+		return pattern != null && pattern.kind == _shape.plainCasePatternKind && pattern.children.length == 1
 			&& pattern.children[0].kind == _shape.identKind
 			&& pattern.children[0].name == '_';
 	}
@@ -345,9 +343,7 @@ final class ExhaustiveSwitches {
 		_judging.push(key);
 		final info: Null<MemberInfo> = _graph.types.memberOnChain(owner, member);
 		final decl: Null<HeldDecl> = _trees.typeDecl(owner);
-		final holds: Bool = info != null
-			&& decl != null
-			&& info.typeSource == closed.name
+		final holds: Bool = info != null && decl != null && info.typeSource == closed.name
 			&& (info.hasGetter ? getterHolds(decl, owner, member, closed) : storedHolds(decl, owner, member, closed));
 		_judging.pop();
 		// an answer that leaned on a member or a parameter still being judged is kept only once nothing is

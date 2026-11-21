@@ -614,8 +614,7 @@ final class WriterStarEmitLowering {
 		// the `case ` trailing space drops cleanly before the hardline.
 		// Mirrors the bare-Ref first-field channel (`HxTryCatchStmt.body`
 		// / `bodyPolicyWrap` Next branch `_dn(_cols, [_dhl, body])`).
-		final firstStarNlKeep: Bool = isFirstField
-			&& ctx.ctx.trivia
+		final firstStarNlKeep: Bool = isFirstField && ctx.ctx.trivia
 			&& ctx.isTriviaBearing(typePath)
 			&& starNode.fmtHasFlag(WriterLowering.BEFORE_NEWLINE_SLOT_FIRST);
 		final patternListExpr: Expr = if (firstStarNlKeep) {
@@ -1398,11 +1397,7 @@ final class WriterStarEmitLowering {
 			|| starNode.fmtHasFlag('typeParamClose')
 			|| starNode.fmtHasFlag('objectLiteralBracesClose');
 		if (
-			!plainPath
-			|| dropped
-			|| openText != null
-			|| closeText == null
-			|| sepText == null
+			!plainPath || dropped || openText != null || closeText == null || sepText == null
 			|| starNode.fmtReadString(ELEM_CHAIN_OP) == null
 			|| starNode.fmtReadString('wrapRules') == null
 		)

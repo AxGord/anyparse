@@ -1026,9 +1026,7 @@ final class MoveSymbol {
 			// Keep the module statement beside the new one when it still has something to bind here: a
 			// `using` unconditionally, because its other types are reached through EXTENSION CALLS that
 			// no name scan can see.
-			final keep: Bool = moduleWide
-				&& plan.mainMoved
-				&& plan.remaining.length > 0
+			final keep: Bool = moduleWide && plan.mainMoved && plan.remaining.length > 0
 				&& (imp.kind == ImportKind.Using || needsRemaining);
 			return { span: imp.span, text: (keep ? '$statement\n${importIndent(src, imp)}' : '') + importStatementText(imp, plan.newPath) };
 		}
@@ -1300,8 +1298,7 @@ final class MoveSymbol {
 			final spellsOldPath: Bool = importer.imports.exists(
 				imp -> !imp.guarded && imp.kind != ImportKind.Alias && SymbolIndex.pathImportedBy(imp) == plan.oldPath
 			);
-			final needsMoved: Bool = !plan.mainMoved
-				&& !spellsOldPath
+			final needsMoved: Bool = !plan.mainMoved && !spellsOldPath
 				&& NameMentionScan.sourceNamesAny(src, plan.moved, excluded, lexicalRegions(src));
 			for (imp in importer.imports) {
 				final edit: Null<{ span: Span, text: String }> = importerStatementEdit(imp, src, plan, needsRemaining, needsMoved);

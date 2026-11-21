@@ -283,8 +283,7 @@ final class IfExpressionChain {
 		// compares literal content, so requiring both leaves exactly token identity.
 		// Same pairing as `tail-merge`'s `sameStatement` and `redundant-case-body`'s
 		// `sameBody`, for the same reason `CheckScan.normalizeSpan`'s doc gives.
-		return aSpan != null
-			&& bSpan != null
+		return aSpan != null && bSpan != null
 			&& MemberKinds.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}

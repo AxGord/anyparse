@@ -453,9 +453,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	private static function plainBinder(param: QueryNode, seams: Seams): Bool {
 		return param.kind == seams.identKind || (
 			seams.paramKinds.contains(param.kind)
-			&& param.kind != seams.optionalParamKind
-			&& param.kind != seams.restParamKind
-			&& param.children.length == 0
+			&& param.kind != seams.optionalParamKind && param.kind != seams.restParamKind && param.children.length == 0
 		);
 	}
 
@@ -694,14 +692,8 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 		final m: MemberInfo = named[0];
 		return m.isStatic
 			&& ctx.seams.functionKinds.contains(m.kind)
-			&& !m.guarded
-			&& !m.isMacro
-			&& !m.isDynamic
-			&& !m.isOverload
-			&& !m.hasOverloadMeta
-			&& !m.paramRest
-			&& m.paramSkippableFrom == m.paramTypeSources.length
-			&& m.paramTypeSources.length == arity;
+			&& !m.guarded && !m.isMacro && !m.isDynamic && !m.isOverload && !m.hasOverloadMeta && !m.paramRest
+			&& m.paramSkippableFrom == m.paramTypeSources.length && m.paramTypeSources.length == arity;
 	}
 
 	/** One type's function members by name. A name declared twice (two arms of a conditional region) is kept but marked unsafe. */
@@ -936,10 +928,7 @@ final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implem
 	private static function hostNode(node: QueryNode, type: TypeDeclInfo, seams: Seams): Null<QueryNode> {
 		final span: Null<Span> = node.span;
 		return seams.typeHostKinds.contains(node.kind)
-			&& node.name == type.name
-			&& span != null
-			&& span.from < type.span.to
-			&& type.span.from < span.to
+			&& node.name == type.name && span != null && span.from < type.span.to && type.span.from < span.to
 			? node
 			: node.children.findMap(c -> hostNode(c, type, seams));
 	}

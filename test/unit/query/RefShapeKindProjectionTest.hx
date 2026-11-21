@@ -1728,11 +1728,7 @@ final class RefShapeKindProjectionTest extends Test {
 			final ok: Bool = (c >= 'a'.code && c <= 'z'.code)
 				|| (c >= 'A'.code && c <= 'Z'.code)
 				|| (c >= '0'.code && c <= '9'.code)
-				|| c == '_'.code
-				|| c == '.'.code
-				|| c == '<'.code
-				|| c == '>'.code
-				|| c == ','.code;
+				|| c == '_'.code || c == '.'.code || c == '<'.code || c == '>'.code || c == ','.code;
 			if (!ok) return false;
 		}
 		return true;

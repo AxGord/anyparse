@@ -163,8 +163,7 @@ final class PreferIsOperator extends HaxeRule implements VersionGated {
 	private static function proven(args: CallArgs, proof: Proof): Bool {
 		final index: Null<SymbolIndex> = proof.index();
 		final fi: Null<FileInfo> = index?.fileInfo(proof.file);
-		return index != null
-			&& fi != null
+		return index != null && fi != null
 			&& !index.typing.expectations.unifiesUnderExpectation(args.value)
 			&& receiverIsStd(args.receiver, index, fi, proof)
 			&& namesType(args.type, index, fi, proof);

@@ -513,9 +513,7 @@ final class JoinArrayPushes extends RuleBase {
 		final name: Null<String> = receiver.name;
 		if (argSpan == null || receiverSpan == null || name == null) return null;
 		final self: Null<String> = s.selfText;
-		final qualified: Bool = receiver.kind == s.fieldAccessKind
-			&& self != null
-			&& receiver.children.length == 1
+		final qualified: Bool = receiver.kind == s.fieldAccessKind && self != null && receiver.children.length == 1
 			&& receiver.children[0].kind == s.identKind
 			&& receiver.children[0].name == self;
 		return receiver.kind != s.identKind && !qualified ? null : {

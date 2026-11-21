@@ -150,9 +150,7 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 		final callee: QueryNode = node.children[0];
 		final lambda: QueryNode = node.children[1];
 		if (
-			callee.kind != s.fieldAccessKind
-			|| callee.name != MAP_METHOD
-			|| callee.children.length != 1
+			callee.kind != s.fieldAccessKind || callee.name != MAP_METHOD || callee.children.length != 1
 			|| !s.lambdaKinds.contains(lambda.kind)
 			|| lambda.children.length != 2
 		)
@@ -161,11 +159,9 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 		final binder: Null<String> = param.name;
 		final iterable: QueryNode = callee.children[0];
 		final iterableSpan: Null<Span> = iterable.span;
-		return binder == null
-			|| iterableSpan == null
+		return binder == null || iterableSpan == null
 			|| !s.requiredParamKinds.contains(param.kind)
-			|| param.children.length > 0
-			|| param.type != null
+			|| param.children.length > 0 || param.type != null
 			? null
 			: identityBody(iterable, iterableSpan, lambda.children[1], binder, s);
 	}
@@ -174,8 +170,7 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 		if (MappedComprehension.isBinder(body, binder, s.comprehension))
 			return { iterable: iterable, iterableSpan: iterableSpan, typeSpan: null };
 		final typeSpan: Null<Span> = body.type?.span;
-		return body.kind == s.checkTypeKind
-			&& body.children.length == 1
+		return body.kind == s.checkTypeKind && body.children.length == 1
 			&& MappedComprehension.isBinder(body.children[0], binder, s.comprehension)
 			&& typeSpan != null
 			? { iterable: iterable, iterableSpan: iterableSpan, typeSpan: typeSpan }
@@ -184,8 +179,7 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 
 	/** Whether `node` is the receiver of a call that builds a new array of its own. */
 	private static function copiedByParent(node: QueryNode, parent: Null<QueryNode>, s: Seams): Bool {
-		return parent != null
-			&& parent.kind == s.fieldAccessKind
+		return parent != null && parent.kind == s.fieldAccessKind
 			&& (NEW_ARRAY_METHODS.contains(parent.name ?? '') || READING_METHODS.contains(parent.name ?? ''))
 			&& parent.children.length > 0
 			&& parent.children[0] == node;
@@ -221,12 +215,7 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 		final lambdaKinds: Null<Array<String>> = shape.lambdaKinds;
 		final paramKinds: Null<Array<String>> = shape.paramKinds;
 		if (
-			comprehension == null
-			|| callKind == null
-			|| fieldKind == null
-			|| checkKind == null
-			|| arrayTypes == null
-			|| lambdaKinds == null
+			comprehension == null || callKind == null || fieldKind == null || checkKind == null || arrayTypes == null || lambdaKinds == null
 			|| paramKinds == null
 		)
 			return null;

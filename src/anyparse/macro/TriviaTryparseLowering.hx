@@ -1125,8 +1125,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 			: sepText != null && blockEnded
 				? macro {
 					if (
-						_si > 0
-						&& _priorElemDoc != null
+						_si > 0 && _priorElemDoc != null
 						&& (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !$priorCondProbe))
 					)
 						_docs.push(_dt($v{sepText}));
@@ -1151,8 +1150,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 			: sepText != null && blockEnded
 				? macro {
 					if (
-						_arr.length > 0
-						&& _priorElemDoc != null
+						_arr.length > 0 && _priorElemDoc != null
 						&& _arr[_arr.length - 1].sepAfter
 						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
 					)

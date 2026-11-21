@@ -626,8 +626,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final rest: String = source.substring(headEnd, armSpan.to);
 		final at: Int = firstNonSpace(rest);
 		if (at == -1 || rest.substr(at, terminator.length) != terminator) return null;
-		final wildcard: Bool = spans.length == 1
-			&& guardNode == null
+		final wildcard: Bool = spans.length == 1 && guardNode == null
 			&& nodes[0].kind == seams.identKind
 			&& nodes[0].name == seams.wildcardPatternName;
 		return {
@@ -769,9 +768,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 	private static function boundNames(seams: Seams, node: QueryNode, skip: QueryNode, out: Array<String>): Void {
 		final name: Null<String> = node.name;
 		if (
-			node != skip
-			&& name != null
-			&& name != seams.wildcardPatternName
+			node != skip && name != null && name != seams.wildcardPatternName
 			&& !CasePatternScan.startsUpper(name)
 			&& (node.kind == seams.identKind || seams.binderKinds.contains(node.kind))
 		)
@@ -804,11 +801,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		final wildcard: Null<String> = shape.wildcardPatternName;
 		final parenKind: Null<String> = shape.parenKind;
 		final assignKind: Null<String> = shape.assignKind;
-		return switchKinds.length == 0
-			|| caseBranchKind == null
-			|| plainKind == null
-			|| wildcard == null
-			|| parenKind == null
+		return switchKinds.length == 0 || caseBranchKind == null || plainKind == null || wildcard == null || parenKind == null
 			|| assignKind == null
 			? null
 			: {

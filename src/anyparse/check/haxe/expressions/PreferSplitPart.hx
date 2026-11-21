@@ -246,10 +246,7 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		if (first == null) return null;
 		if (node.kind == s.indexAccessKind)
 			return node.children.length == 2 && isFirstPart(node.children[1], source, s) ? { split: first, member: BEFORE } : null;
-		final popped: Bool = node.kind == s.callKind
-			&& node.children.length == 1
-			&& first.kind == s.fieldAccessKind
-			&& first.name == POP
+		final popped: Bool = node.kind == s.callKind && node.children.length == 1 && first.kind == s.fieldAccessKind && first.name == POP
 			&& first.children.length == 1;
 		return popped ? { split: first.children[0], member: AFTER_LAST } : null;
 	}
@@ -274,12 +271,8 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		final stringLiteralKinds: Null<Array<String>> = shape.stringLiteralKinds;
 		final literalTypeNames: Null<Map<String, String>> = shape.literalTypeNames;
 		final stringType: Null<String> = TypingService.stringType(shape);
-		return callKind == null
-			|| fieldAccessKind == null
-			|| indexAccessKind == null
-			|| stringLiteralKinds == null
-			|| literalTypeNames == null
-			|| stringType == null
+		return callKind == null || fieldAccessKind == null || indexAccessKind == null || stringLiteralKinds == null
+			|| literalTypeNames == null || stringType == null
 			|| !(plugin is TypeInfoProvider)
 			? null
 			: {
@@ -331,16 +324,8 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 	}
 
 	private static function isTextCut(m: MemberInfo, string: String, typeSyntax: TypeSyntaxReader): Bool {
-		return m.isStatic
-			&& m.visibility == PUBLIC_VISIBILITY
-			&& !m.guarded
-			&& !m.isMacro
-			&& !m.isDynamic
-			&& !m.isOverload
-			&& !m.hasOverloadMeta
-			&& !m.paramRest
-			&& m.paramSkippableFrom == CUT_PARAMS
-			&& m.paramTypeSources.length >= CUT_PARAMS
+		return m.isStatic && m.visibility == PUBLIC_VISIBILITY && !m.guarded && !m.isMacro && !m.isDynamic && !m.isOverload
+			&& !m.hasOverloadMeta && !m.paramRest && m.paramSkippableFrom == CUT_PARAMS && m.paramTypeSources.length >= CUT_PARAMS
 			&& m.paramTypeSources.slice(0, CUT_PARAMS).foreach(source -> spells(source, string, typeSyntax))
 			&& spells(m.returnSource, string, typeSyntax);
 	}

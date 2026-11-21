@@ -133,12 +133,9 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo> = infos?.staticVarSubdivInfo;
 		final interMember: Bool = interMemberInfo != null;
 		final uniformBetween: Bool = uniformBetweenOptField != null;
-		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments != null
-			|| existingBetweenFields != null
+		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments != null || existingBetweenFields != null
 			|| plan.beforeDocCommentEmptyLines()
-			|| headingAdds != null
-			|| interMember
-			|| uniformBetween;
+			|| headingAdds != null || interMember || uniformBetween;
 		_blankBeforeExpr = triviaBlockBlankBeforeExpr(
 			afterFieldsWithDocComments, existingBetweenFields, plan.beforeDocCommentEmptyLines(), infos?.condLeadingDocInfo, interMember,
 			interMemberInfo, staticVarSubdivInfo != null, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,

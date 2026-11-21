@@ -84,8 +84,7 @@ final class Squash {
 	private static function squashable(
 		source: String, regions: Array<LexRegion>, verbatim: Array<Span>, directives: Array<Span>, from: Int, to: Int
 	): Bool {
-		return from != 0
-			&& to < source.length
+		return from != 0 && to < source.length
 			&& !verbatim.exists(span -> from <= span.to && to >= span.from)
 			&& !isComment(from - 1, regions)
 			&& !isComment(to, regions)

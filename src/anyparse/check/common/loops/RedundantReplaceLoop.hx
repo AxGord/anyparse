@@ -481,9 +481,7 @@ final class RedundantReplaceLoop extends RuleBase implements DefaultOff {
 		final value: QueryNode = assign.children[1];
 		final replaceCall: Null<MethodCall> = methodCallParts(value, s);
 		if (
-			replaceCall == null
-			|| replaceCall.method != REPLACE_METHOD
-			|| value.children.length != REPLACE_CALL_CHILD_COUNT
+			replaceCall == null || replaceCall.method != REPLACE_METHOD || value.children.length != REPLACE_CALL_CHILD_COUNT
 			|| replaceCall.recv.kind != s.identKind
 			|| TypeResolver.identBindingFrom(replaceCall.recv, root, s.shape) != bindingFrom
 		)

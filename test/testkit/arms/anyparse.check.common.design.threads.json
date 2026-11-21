@@ -1287,8 +1287,8 @@
 			"name": "M-TS-FACTS-MADE-REF",
 			"type": "anyparse.check.common.design.threads.ThreadGraph",
 			"method": "madeWhereHanded",
-			"find": "return edge.via == null\n\t\t\t&& at != null",
-			"replace": "return false && edge.via == null\n\t\t\t&& at != null",
+			"find": "return edge.via == null && at != null",
+			"replace": "return false && edge.via == null && at != null",
 			"note": "the facts' record of a nested value made where the syntax hands it to a spawn makes it inherit the registrar's thread"
 		},
 		{
@@ -2047,8 +2047,8 @@
 			"name": "M-TS-HELPER-HANDOFF",
 			"type": "anyparse.check.common.design.threads.HoldGrade",
 			"method": "handsOff",
-			"find": "!a.untraced\n\t\t\t&& calls.length != 0",
-			"replace": "!a.untraced\n\t\t\t&& a.inner == null && calls.length != 0",
+			"find": "!a.untraced && calls.length != 0",
+			"replace": "!a.untraced && a.inner == null && calls.length != 0",
 			"note": "a hold a helper call opens never hands its lock off, however its caller leaves it held"
 		},
 		{

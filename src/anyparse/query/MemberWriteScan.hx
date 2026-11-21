@@ -353,11 +353,7 @@ final class MemberWriteScan {
 		return token == '++' || token == '--' || (
 			token.length != 0
 			&& token.fastCodeAt(token.length - 1) == '='.code
-			&& token != '=='
-			&& token != '<='
-			&& token != '>='
-			&& token != '!='
-			&& token != '=>'
+			&& token != '==' && token != '<=' && token != '>=' && token != '!=' && token != '=>'
 		);
 	}
 

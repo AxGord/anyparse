@@ -1189,14 +1189,8 @@ final class LambdaLoopScan {
 
 	/** Whether `kind` is a postfix / primary expression that `.exists(…)` binds directly onto; a looser iterable is wrapped. */
 	private static function postfixSafe(kind: String, s: Seams): Bool {
-		return kind == s.identKind
-			|| kind == s.fieldAccessKind
-			|| kind == s.nullSafeAccessKind
-			|| kind == s.forceFieldAccessKind
-			|| kind == s.indexAccessKind
-			|| kind == s.parenKind
-			|| kind == s.callKind
-			|| kind == s.newExprKind;
+		return kind == s.identKind || kind == s.fieldAccessKind || kind == s.nullSafeAccessKind || kind == s.forceFieldAccessKind
+			|| kind == s.indexAccessKind || kind == s.parenKind || kind == s.callKind || kind == s.newExprKind;
 	}
 
 }

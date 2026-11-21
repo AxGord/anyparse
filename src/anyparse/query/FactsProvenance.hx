@@ -110,8 +110,7 @@ private final class BodyText {
 		return holds(p)
 			&& _literals.exists(
 				l ->
-					l.span.from == p.span.from
-					&& p.span.to <= l.span.to
+					l.span.from == p.span.from && p.span.to <= l.span.to
 					&& FLAGS.match(_text.substring(p.span.to, l.span.to))
 					&& constructions[l.kind] == built
 			);
@@ -809,10 +808,7 @@ final class FactsProvenance {
 	private function readJoined(n: FactNode, p: FactPos, body: BodyText): Bool {
 		return n.fields.exists(
 			f ->
-				!f.write
-				&& f.at.file == p.file
-				&& f.at.span.from == p.span.from
-				&& f.at.span.to == p.span.to
+				!f.write && f.at.file == p.file && f.at.span.from == p.span.from && f.at.span.to == p.span.to
 				&& joined(n, f.at, f.field, body)
 		);
 	}
@@ -884,9 +880,7 @@ final class FactsProvenance {
 
 	/** Whether every fact of the typed body `n` sits on `body`'s text as its own (see `bodyIsSource`). */
 	private function factsMatch(n: FactNode, body: BodyText): Bool {
-		return !n.generated
-			&& n.incomplete.length <= 0
-			&& n.natives.length <= 0
+		return !n.generated && n.incomplete.length <= 0 && n.natives.length <= 0
 			&& !n.reflection.exists(r -> r.isValue)
 			&& callsMatch(n, body)
 			&& n.news.foreach(x -> body.spells(x.at, SourceText.lastSegment(CompilerFacts.baseId(x.type))))
@@ -925,15 +919,9 @@ final class FactsProvenance {
 		final own: (FactPos) -> Bool = p -> p.file == n.at.file && p.span.from == n.at.span.from && p.span.to == n.at.span.to;
 		return n.kind == FactKinds.CTOR
 			&& n.calls.foreach(c -> c.access == SUPER)
-			&& n.news.length == 0
-			&& n.fields.length == 0
-			&& n.elementWrites.length == 0
+			&& n.news.length == 0 && n.fields.length == 0 && n.elementWrites.length == 0
 			&& n.flows.foreach(f -> f.via == ARG_FLOW && own(f.at))
-			&& n.strings.length == 0
-			&& n.iterations.length == 0
-			&& n.reflection.length == 0
-			&& n.natives.length == 0
-			&& n.fns.length == 0;
+			&& n.strings.length == 0 && n.iterations.length == 0 && n.reflection.length == 0 && n.natives.length == 0 && n.fns.length == 0;
 	}
 
 	/**

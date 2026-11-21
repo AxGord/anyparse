@@ -165,8 +165,7 @@ final class CommentRewrite {
 	 * held by the time the damage landed.
 	 */
 	private static function isOneLineDocBlock(source: String, tok: CommentTok): Bool {
-		return !tok.isLine
-			&& tok.from + 2 < source.length
+		return !tok.isLine && tok.from + 2 < source.length
 			&& source.fastCodeAt(tok.from + 2) == '*'.code
 			&& source.substring(tok.from, tok.to).indexOf('\n') < 0;
 	}

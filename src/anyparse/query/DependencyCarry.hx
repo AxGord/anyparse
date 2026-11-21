@@ -868,12 +868,9 @@ final class DependencyCarry {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
 		if (
-			name != null
-			&& span != null
+			name != null && span != null
 			&& typeRefShape.typeRefKinds.contains(node.kind)
-			&& span.from >= declSpan.from
-			&& span.to <= declSpan.to
-			&& name != typeName
+			&& span.from >= declSpan.from && span.to <= declSpan.to && name != typeName
 		)
 			pushNameSpan(out, name, span);
 		for (c in node.children) collectDependencyNames(c, declSpan, typeRefShape, typeName, out);
@@ -905,13 +902,9 @@ final class DependencyCarry {
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
 			if (
-				name != null
-				&& span != null
-				&& child.kind == identKind
+				name != null && span != null && child.kind == identKind
 				&& SourceText.isUpperInitial(name)
-				&& span.from >= declSpan.from
-				&& span.to <= declSpan.to
-				&& name != typeName
+				&& span.from >= declSpan.from && span.to <= declSpan.to && name != typeName
 			)
 				pushNameSpan(out, name, span);
 		}
@@ -1306,11 +1299,7 @@ final class DependencyCarry {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
 		if (
-			name != null
-			&& span != null
-			&& node.kind == identKind
-			&& span.from >= declSpan.from
-			&& span.to <= declSpan.to
+			name != null && span != null && node.kind == identKind && span.from >= declSpan.from && span.to <= declSpan.to
 			&& candidates.contains(name)
 			&& !out.contains(name)
 		)

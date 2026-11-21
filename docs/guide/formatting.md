@@ -271,6 +271,15 @@ A `fillLine` / `fillLineWithLeadingBreak` list and a filled operator chain keep 
 `,` or closing delimiters included, is at most `maxLineLength` wide: a row of exactly the limit fits, one column more
 breaks (haxe-formatter breaks one column earlier). A call that ends such a row exactly at the limit keeps its arguments flat.
 
+## Simple operands share a line: `"type": "fillSimpleRuns"`
+
+A `wrapping.opBoolChain` rule of type `fillSimpleRuns` breaks an overflowing `&&` / `||` chain so that each run
+of consecutive simple operands fills its lines, while every other operand starts a line and ends it. Simple is a null
+check or comparison of names, field reads and literals, or a plain or negated name; a call, a parenthesised
+expression, an index, a collection literal, a lambda, a comment or a nested chain is not. The first operand stays on
+the chain's own line, and in a chain that mixes `&&` with `||` every `||` starts a line. This repository's
+`hxformat.json` takes it for `opBoolChain`; the built-in cascade keeps `onePerLineAfterFirst`.
+
 ## A literal argument: `callParameter.containerItemWrap`
 
 When a call's argument list breaks, an array or object literal argument that carries a call takes a line of its own,

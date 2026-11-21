@@ -53,8 +53,7 @@ final class UnresolvedTypeName extends RuleBase implements NoAutofix {
 				final name: Null<String> = node.name;
 				final span: Null<Span> = node.span;
 				if (
-					name != null
-					&& span != null
+					name != null && span != null
 					&& kinds.contains(node.kind)
 					&& isTypeName(name)
 					&& !declared.contains(name)

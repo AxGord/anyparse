@@ -7427,8 +7427,8 @@
 			"name": "M-CLASSLESS-TYPEDEF",
 			"type": "anyparse.query.FactsView",
 			"method": "classlessType",
-			"find": "declared != null\n\t\t\t\t\t&& declared.alike\n\t\t\t\t\t&& declared.kind == FactKinds.TYPEDEF\n\t\t\t\t\t&& declared.targets.length > 0",
-			"replace": "false && declared != null\n\t\t\t\t\t&& declared.alike\n\t\t\t\t\t&& declared.kind == FactKinds.TYPEDEF\n\t\t\t\t\t&& declared.targets.length > 0",
+			"find": "declared != null && declared.alike && declared.kind == FactKinds.TYPEDEF && declared.targets.length > 0",
+			"replace": "false && declared != null && declared.alike && declared.kind == FactKinds.TYPEDEF && declared.targets.length > 0",
 			"note": "(precision) a typedef of a structure (lime's `WindowAttributes`) may be an object of any class"
 		},
 		{
@@ -7895,7 +7895,7 @@
 			"name": "M-WILDGATE-TYPEDEF-READ",
 			"type": "anyparse.query.ImportBindings",
 			"method": "readWildcard",
-			"find": "type.kind == TYPEDEF_KIND\n\t\t\t||",
+			"find": "type.kind == TYPEDEF_KIND ||",
 			"replace": "",
 			"note": "a typedef is read as declaring no static, though its wildcard imports the statics of what it aliases"
 		},

@@ -113,8 +113,7 @@ final class WriteVerification {
 		final judges: Array<OracleConfig> = [ for (a in after) if (confirmed(a)) a.oracle ];
 		final unreached: Array<String> = [ for (s in sources) if (!after.exists(a -> parsedBy(a, s))) s ];
 		if (
-			judges.length > 0
-			&& unreached.length > 0
+			judges.length > 0 && unreached.length > 0
 			&& !settleUnreached(op, journal, compiler, judges, unreached, vouching, onlyCreated, parallel)
 		)
 			return ExitCode.EXIT_RUNTIME;

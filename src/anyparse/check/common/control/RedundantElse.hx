@@ -214,9 +214,7 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = BranchChain.thenOf(ifNode).span;
 		final run: Null<Span> = deNestedRun(BranchChain.elseBranch(ifNode), source, seams);
-		return ifSpan != null
-			&& thenSpan != null
-			&& run != null
+		return ifSpan != null && thenSpan != null && run != null
 			&& comments.exists(tok -> tok.from >= thenSpan.to && tok.to <= ifSpan.to && (tok.to <= run.from || tok.from >= run.to));
 	}
 
@@ -287,9 +285,7 @@ final class RedundantElse extends RuleBase implements QuotationAware {
 	private static function receiverName(node: QueryNode, seams: Seams): Null<String> {
 		if (node.kind == seams.identKind) return node.name;
 		final self: Null<String> = seams.selfRef;
-		return node.kind == seams.fieldAccessKind
-			&& self != null
-			&& node.children.length > 0
+		return node.kind == seams.fieldAccessKind && self != null && node.children.length > 0
 			&& node.children[0].kind == seams.identKind
 			&& node.children[0].name == self
 			? node.name

@@ -139,8 +139,7 @@ final class Binaries {
 				null, notes -> LintConfig.discover(Path.join([tree, 'apq.json']), notes).compilerOracles(new HaxeQueryPlugin(), notes)
 			))
 				if (
-					oracle.unavailable == null
-					&& oracle.defines.length == 0
+					oracle.unavailable == null && oracle.defines.length == 0
 					&& (oracle.modules ?? []).length == 0
 					&& oracle.generate == null
 				)

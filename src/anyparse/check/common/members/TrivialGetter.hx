@@ -719,8 +719,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 					if ((shape.mutableFieldDeclKinds ?? []).contains(child.kind)) {
 						final access: Null<AccessorClause> = clauses[span.from];
 						if (
-							access != null
-							&& access.read == 'get'
+							access != null && access.read == 'get'
 							&& (access.write == WRITE_NEVER || access.write == 'null' || access.write == 'set')
 						) properties.push({
 							name: name,

@@ -208,10 +208,7 @@ class ParseDiskCacheTest extends Test {
 		final spanA: Null<Span> = a.span;
 		final spanB: Null<Span> = b.span;
 		if (
-			a.kind != b.kind
-			|| a.name != b.name
-			|| a.target != b.target
-			|| a.typeArgCount != b.typeArgCount
+			a.kind != b.kind || a.name != b.name || a.target != b.target || a.typeArgCount != b.typeArgCount
 			|| a.children.length != b.children.length
 		)
 			return false;

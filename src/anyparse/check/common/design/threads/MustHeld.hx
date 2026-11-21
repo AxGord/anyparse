@@ -465,8 +465,7 @@ final class MustHeld {
 		final around: Array<Span> = loops;
 		return (_givesIn[id] ?? []).exists(g -> {
 			final given: Int = g.edge.span?.to ?? pos + 1;
-			g.lock == cover
-				&& given <= pos
+			g.lock == cover && given <= pos
 				&& runs(id, valuation, g.edge)
 				&& runsBefore(g.edge, valuation, pos)
 				&& !(_holdsIn[id] ?? []).exists(a -> {

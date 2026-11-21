@@ -1643,9 +1643,7 @@ final class NamingRenames {
 			final receiver: QueryNode = node.children[0];
 			final rspan: Null<Span> = receiver.span;
 			if (
-				receiver.kind == shape.identKind
-				&& receiver.name == name
-				&& rspan != null
+				receiver.kind == shape.identKind && receiver.name == name && rspan != null
 				&& TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)
 			) {
 				final off: Int = SourceText.identTokenOffset(source, rspan, name);

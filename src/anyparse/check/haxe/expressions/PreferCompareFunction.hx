@@ -514,19 +514,9 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final intType: Null<String> = shape.coreValueTypes?.integer;
 		final stringType: Null<String> = TypingService.stringType(shape);
 
-		return lt == null
-			|| gt == null
-			|| callKind == null
-			|| fieldAccessKind == null
-			|| ternaryKind == null
-			|| ifStatementKinds == null
-			|| returnKinds == null
-			|| lambdaKinds == null
-			|| paramKinds == null
-			|| blockKinds.length == 0
-			|| blockStmtKind == null
-			|| intType == null
-			|| stringType == null
+		return lt == null || gt == null || callKind == null || fieldAccessKind == null || ternaryKind == null || ifStatementKinds == null
+			|| returnKinds == null || lambdaKinds == null || paramKinds == null || blockKinds.length == 0 || blockStmtKind == null
+			|| intType == null || stringType == null
 			? null
 			: {
 				ltKind: lt,
@@ -655,12 +645,8 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** The value `Reflect.compare` written without a call. */
 	private static function isReflectCompare(node: QueryNode, s: Seams): Bool {
 		final type: Null<QueryNode> = node.children[0];
-		return node.kind == s.fieldAccessKind
-			&& node.name == COMPARE_MEMBER
-			&& node.children.length == 1
-			&& type != null
-			&& type.kind == s.identKind
-			&& type.name == REFLECT;
+		return node.kind == s.fieldAccessKind && node.name == COMPARE_MEMBER && node.children.length == 1 && type != null
+			&& type.kind == s.identKind && type.name == REFLECT;
 	}
 
 	private static function isReflectCompareCall(node: QueryNode, s: Seams): Bool {
@@ -673,8 +659,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final params: Array<QueryNode> = fn.children.filter(c -> s.paramKinds.contains(c.kind));
 		return params.length == COMPARATOR_PARAMS
 			&& params.foreach(p -> p.kind != s.shape.optionalParamKind && p.kind != s.shape.restParamKind && p.children.length == 0)
-			&& left.kind == s.identKind
-			&& right.kind == s.identKind
+			&& left.kind == s.identKind && right.kind == s.identKind
 			&& left.name == params[0].name
 			&& right.name == params[1].name;
 	}
@@ -732,10 +717,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** The expression an ARROW lambda's block yields as its last statement, when that statement is a bare expression. */
 	private static function arrowTail(fn: QueryNode, body: QueryNode, s: Seams): Null<QueryNode> {
 		final last: Null<QueryNode> = body.children[body.children.length - 1];
-		return s.fnExprKind == null
-			|| fn.kind == s.fnExprKind
-			|| last == null
-			|| last.kind != s.exprStatementKind
+		return s.fnExprKind == null || fn.kind == s.fnExprKind || last == null || last.kind != s.exprStatementKind
 			|| last.children.length != 1
 			? null
 			: last.children[0];

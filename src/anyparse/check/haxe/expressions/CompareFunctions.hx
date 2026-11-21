@@ -88,9 +88,7 @@ final class CompareFunctions {
 		}
 		final found: Array<MemberInfo> = types[0].type.members.filter(m -> m.name == member);
 		final plain: Bool = found.length == 1 && isCompareOf(found[0], type, intType, null, typeSyntax);
-		final nullable: Bool = !plain
-			&& found.length == 1
-			&& nullableWrapper != null
+		final nullable: Bool = !plain && found.length == 1 && nullableWrapper != null
 			&& isCompareOf(found[0], type, intType, nullableWrapper, typeSyntax);
 		final named: NamedCompare = { typePath: typePath, member: member, nullable: nullable };
 		if (found.length == 0)
@@ -105,16 +103,8 @@ final class CompareFunctions {
 	private static function isCompareOf(
 		m: MemberInfo, type: String, intType: String, wrapper: Null<String>, typeSyntax: TypeSyntaxReader
 	): Bool {
-		return m.isStatic
-			&& m.visibility == PUBLIC_VISIBILITY
-			&& !m.guarded
-			&& !m.isMacro
-			&& !m.isDynamic
-			&& !m.isOverload
-			&& !m.hasOverloadMeta
-			&& !m.paramRest
-			&& m.paramSkippableFrom == OPERANDS
-			&& m.paramTypeSources.length == OPERANDS
+		return m.isStatic && m.visibility == PUBLIC_VISIBILITY && !m.guarded && !m.isMacro && !m.isDynamic && !m.isOverload
+			&& !m.hasOverloadMeta && !m.paramRest && m.paramSkippableFrom == OPERANDS && m.paramTypeSources.length == OPERANDS
 			&& m.paramTypeSources.foreach(source -> spells(source, type, wrapper, typeSyntax))
 			&& spells(m.returnSource, intType, null, typeSyntax);
 	}

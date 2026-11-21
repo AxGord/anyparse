@@ -635,8 +635,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * alone decides, and it is never proven unreached.
 	 */
 	private static function isEntryPoint(category: NamingCategory, name: String, node: QueryNode, mods: Array<String>): Bool {
-		return category == NamingCategory.Method
-			&& name == 'main'
+		return category == NamingCategory.Method && name == 'main'
 			&& mods.contains('static')
 			&& !node.children.exists(c -> categoryOf(c, []) == NamingCategory.Param);
 	}

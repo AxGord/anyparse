@@ -293,9 +293,7 @@ final class PreferForIn extends RuleBase implements DefaultOff {
 		// it was refused before this arm existed and stays refused, since rewriting it buys the
 		// reader nothing and the dead binding is `unused-local`'s finding, not this rule's.
 		if (
-			body.kind == s.blockStmtKind
-			&& body.children.length < MIN_BODY_STATEMENTS
-			&& body.children.length == 1
+			body.kind == s.blockStmtKind && body.children.length < MIN_BODY_STATEMENTS && body.children.length == 1
 			&& s.localDeclKinds.contains(body.children[0].kind)
 		)
 			return null;

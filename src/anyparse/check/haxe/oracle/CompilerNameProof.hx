@@ -76,11 +76,7 @@ final class CompilerNameProof implements NameProof {
 
 	/** Whether the compiler named one place for both answers — `now` null, or anywhere else, is a different reading. PURE. */
 	public static function samePosition(was: TypeReplyPosition, now: Null<TypeReplyPosition>): Bool {
-		return now != null
-			&& was.file == now.file
-			&& was.line == now.line
-			&& was.first == now.first
-			&& was.last == now.last
+		return now != null && was.file == now.file && was.line == now.line && was.first == now.first && was.last == now.last
 			&& was.byLine == now.byLine;
 	}
 

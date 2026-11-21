@@ -204,9 +204,7 @@ final class KwBranchLowering {
 			steps.push(macro {
 				final _trailOptCap = collectTrivia(ctx);
 				if (
-					_trailOptCap.newlineBefore
-					|| _trailOptCap.blankBefore
-					|| _trailOptCap.blankAfterLeadingComments
+					_trailOptCap.newlineBefore || _trailOptCap.blankBefore || _trailOptCap.blankAfterLeadingComments
 					|| _trailOptCap.leadingComments.length > 0
 				) ctx.pendingTrivia = {
 					blankBefore: _trailOptCap.blankBefore,

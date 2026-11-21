@@ -516,12 +516,9 @@ final class OperandBinder {
 		final fieldKind: Null<String> = _shape.fieldAccessKind;
 		final fi: Null<FileInfo> = _index.fileInfo(_file);
 		final resolvers: Array<MemberInfo> = fieldKind == null ? [] : t.members.filter(m -> m.operatorOverloads.contains(fieldKind));
-		return fi == null
-			|| resolvers.length != 1
+		return fi == null || resolvers.length != 1
 			|| !(_shape.underlyingThisTypeKinds ?? []).contains(t.kind)
-			|| t.hasBuild
-			|| t.hasAutoBuild
-			|| t.guarded
+			|| t.hasBuild || t.hasAutoBuild || t.guarded
 			|| !_index.typing.members.declarationFreeOfExtensionTypes(owner)
 			|| _index.typing.extensions.maySupply(fi, name)
 			? Unknown

@@ -241,13 +241,8 @@ final class PreferArrayContains extends HaxeRule implements VersionGated {
 		final unaryMinusKinds: Array<String> = shape.unaryMinusKinds ?? [];
 		final numericLiteralKinds: Array<String> = shape.numericLiteralKinds ?? [];
 		if (
-			callKind == null
-			|| fieldAccessKind == null
-			|| eqKind == null
-			|| notEqKind == null
-			|| ordered == null
-			|| unaryMinusKinds.length == 0
-			|| numericLiteralKinds.length == 0
+			callKind == null || fieldAccessKind == null || eqKind == null || notEqKind == null || ordered == null
+			|| unaryMinusKinds.length == 0 || numericLiteralKinds.length == 0
 			|| !(plugin is TypeInfoProvider)
 		)
 			return null;

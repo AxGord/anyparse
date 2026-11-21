@@ -61,9 +61,7 @@ final class SubstrNegativeStart extends HaxeRule implements NoAutofix {
 						final start: QueryNode = node.children[1];
 						final span: Null<Span> = start.span;
 						if (
-							span != null
-							&& callee.kind == fieldAccessKind
-							&& callee.name == METHOD
+							span != null && callee.kind == fieldAccessKind && callee.name == METHOD
 							&& subtractKinds.contains(start.kind)
 							&& !lastCharacterStart(start, callee, fieldAccessKind, entry.source)
 							&& !proved(start, node)
@@ -100,11 +98,7 @@ final class SubstrNegativeStart extends HaxeRule implements NoAutofix {
 		final minuend: Null<QueryNode> = start.children[0];
 		final subtrahend: Null<QueryNode> = start.children[1];
 		final receiver: Null<QueryNode> = callee.children[0];
-		return minuend != null
-			&& subtrahend != null
-			&& receiver != null
-			&& minuend.kind == fieldAccessKind
-			&& minuend.name == LENGTH
+		return minuend != null && subtrahend != null && receiver != null && minuend.kind == fieldAccessKind && minuend.name == LENGTH
 			&& minuend.children.length == 1
 			&& textOf(subtrahend, source) == '1'
 			&& textOf(minuend.children[0], source) == textOf(receiver, source);

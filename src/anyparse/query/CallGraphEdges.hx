@@ -734,8 +734,7 @@ final class CallGraphEdges {
 				if (name == selfText) {
 					final underlying: Null<String> = selfTypeOf(currentType);
 					// an abstract over one of its own type parameters (`abstract W<T:A>(T)`) is a value of that bound
-					final self: Null<String> = underlying != null
-						&& currentType != null
+					final self: Null<String> = underlying != null && currentType != null
 						&& g.types.generics.declaresTypeParam(currentType, underlying)
 						? (member == null ? null : boundType(underlying, currentType, member, MEMBER_SCOPE))
 						: underlying;
@@ -1129,8 +1128,7 @@ final class CallGraphEdges {
 				return null;
 			}
 			if (
-				resolved == null
-				&& recv.isValue
+				resolved == null && recv.isValue
 				&& g.types.chainFullyIndexed(recv.typeName)
 				&& g.types.memberOnChain(recv.typeName, calleeName) == null
 			) {

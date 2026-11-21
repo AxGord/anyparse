@@ -67,4 +67,14 @@ enum abstract WrapMode(Int) from Int to Int {
 	 */
 	final PackedOrOnePerLine = 7;
 
+	/**
+	 * An operator chain's runs of consecutive SIMPLE operands fill their lines while every other operand starts a line
+	 * and ends it: `a != null && b != null` / `&& f(a, b)`. The first operand stays on the chain's own line, as under
+	 * `OnePerLineAfterFirst`; a chain of simple operands only is `FillLine`. Simple is `BinaryChainEmit.operandIsSimple`.
+	 *
+	 * anyparse extension — the fork has no `WrappingType` counterpart; a JSON config selects it by name
+	 * (`"fillSimpleRuns"`). Only `BinaryChainEmit` reads it; every other emitter takes its fallback for an unknown mode.
+	 */
+	final FillSimpleRuns = 8;
+
 }

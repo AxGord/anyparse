@@ -532,8 +532,7 @@ final class GateArms {
 		final seeds: Array<String> = [
 			for (node in diff.nodes)
 				if (
-					node.level == 'member'
-					&& node.change == 'changed'
+					node.level == 'member' && node.change == 'changed'
 					&& !layout.exists(m -> node.name.startsWith('$m.'))
 					&& codeChanged(node.name, touches)
 				)

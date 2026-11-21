@@ -356,10 +356,7 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		if (parent == null) return 'a use outside a declaration or a call';
 		if (parent.kind == seams.assignKind && parentSlot == 0) return respellInitialiser(parent.children[1], site, edits);
 		if (parent.kind != seams.indexAccessKind || parentSlot != 0)
-			return parent.kind != seams.fieldAccessKind
-				|| parentSlot != 0
-				|| grand == null
-				|| grand.kind != seams.callKind
+			return parent.kind != seams.fieldAccessKind || parentSlot != 0 || grand == null || grand.kind != seams.callKind
 				|| grandSlot != 0
 				? 'a use that is not a call of a set member'
 				: respellCall(parent, grand, site, edits);

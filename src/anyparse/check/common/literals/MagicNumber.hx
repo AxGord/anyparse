@@ -204,8 +204,7 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 			&& !isArrayIndex(parent, cfg)
 			&& !hasSizeFieldSibling(node, parent, cfg, cfg.comparisonKinds)
 			&& !hasSizeFieldSibling(node, parent, cfg, cfg.additiveKinds)
-			&& !positionCtx
-			&& !keyCtx
+			&& !positionCtx && !keyCtx
 		)
 			flag(out, file, node, exempt.values);
 		if (exempt.tables) {

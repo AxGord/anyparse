@@ -195,9 +195,7 @@ final class MemberSlots {
 	 * which is a VALUE: its position fixes the auto-numbering of an `Int` abstract, so it never changes rank group or order.
 	 */
 	private static inline function isPlainValueRank(m: OrderedMember): Bool {
-		return m.rank == PublicImmutableField
-			|| m.rank == PublicMutableField
-			|| m.rank == PrivateImmutableField
+		return m.rank == PublicImmutableField || m.rank == PublicMutableField || m.rank == PrivateImmutableField
 			|| m.rank == PrivateMutableField;
 	}
 

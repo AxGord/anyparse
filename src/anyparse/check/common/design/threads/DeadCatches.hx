@@ -58,8 +58,7 @@ final class DeadCatches {
 			final inner: Null<QueryNode> = kids.find(c -> c.span != null && c.span.from <= at.from && c.span.to >= at.to);
 			if (inner == null) break;
 			dead = _tryKinds.contains(node.kind)
-				&& inner.kind == _shape.catchClauseKind
-				&& kids.length > 0
+				&& inner.kind == _shape.catchClauseKind && kids.length > 0
 				&& throwsNothing(edge.file, kids[0]);
 			node = inner;
 		}
@@ -81,8 +80,7 @@ final class DeadCatches {
 		if ((_shape.caseLiteralKinds ?? []).contains(kind) || (_shape.stringLiteralKinds ?? []).contains(kind))
 			return node.children.foreach(c -> inertSegment(c.kind));
 		final passes: Bool = _blockKinds.contains(kind)
-			|| kind == _shape.exprStatementKind
-			|| kind == _shape.parenKind
+			|| kind == _shape.exprStatementKind || kind == _shape.parenKind
 			|| (_shape.comparisonKinds ?? []).contains(kind)
 			|| CondRegionScan.isConditionalKind(kind, _shape);
 		return passes && node.children.foreach(c -> throwsNothing(file, c));

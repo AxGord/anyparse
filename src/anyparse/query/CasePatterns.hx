@@ -169,8 +169,7 @@ final class CasePatterns {
 	 * (`RefShape.upperInitialNeverCaptures`).
 	 */
 	public static function isCaptureSpelling(name: String, shape: RefShape): Bool {
-		return name.length > 0
-			&& name != shape.wildcardPatternName
+		return name.length > 0 && name != shape.wildcardPatternName
 			&& !(shape.upperInitialNeverCaptures == true && SourceText.isUpperInitial(name));
 	}
 

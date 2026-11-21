@@ -524,8 +524,7 @@ final class SourceComments {
 			return 'a bullet';
 		var digits: Int = 0;
 		while (digits < text.length && text.fastCodeAt(digits) >= '0'.code && text.fastCodeAt(digits) <= '9'.code) digits++;
-		final numbered: Bool = digits > 0
-			&& digits + 1 < text.length
+		final numbered: Bool = digits > 0 && digits + 1 < text.length
 			&& text.fastCodeAt(digits) == '.'.code
 			&& text.fastCodeAt(digits + 1) == ' '.code;
 		return numbered ? 'a numbered list item' : null;

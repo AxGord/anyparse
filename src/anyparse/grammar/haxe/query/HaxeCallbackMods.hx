@@ -44,8 +44,7 @@ final class HaxeCallbackMods {
 		for (name => found in hits) for (hit in found) {
 			final target: Null<QueryNode> = hit.bindingNode;
 			if (
-				hit.kind == RefKind.Read
-				&& target != null
+				hit.kind == RefKind.Read && target != null
 				&& bare[hit.span.from] == name
 				&& HaxeNamingSupport.categoryOf(target, []) == NamingCategory.Method
 			)

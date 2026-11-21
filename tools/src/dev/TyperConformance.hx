@@ -228,9 +228,7 @@ private final class FileTyper {
 	 */
 	public function implicitReceiver(node: QueryNode, compiled: String): Bool {
 		final at: Null<Span> = node.span;
-		return at != null
-			&& node.kind == _shape.identKind
-			&& node.name != _shape.selfReferenceText
+		return at != null && node.kind == _shape.identKind && node.name != _shape.selfReferenceText
 			&& TypeResolver.enclosingTypeName(_tree, at) == compiled;
 	}
 
@@ -1635,11 +1633,7 @@ final class TyperConformance {
 			final site: Null<FactPos> = c.site;
 			final target: Null<String> = c.target;
 			final method: Null<FactNode> = target == null ? null : oracle.facts.node(target);
-			c.access == INLINED_ACCESS
-				&& site != null
-				&& site.span.from <= at.from
-				&& at.to <= site.span.to
-				&& target != null
+			c.access == INLINED_ACCESS && site != null && site.span.from <= at.from && at.to <= site.span.to && target != null
 				&& SourceText.lastSegment(target) == callee
 				&& method != null
 				&& method.params.slice(passed).exists(p -> normalized(p.type) == want);

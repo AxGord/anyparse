@@ -309,9 +309,7 @@ final class CallGraphFacts {
 			final kinds: Array<String> = typed.fields.find(f -> f.name == field)?.kinds ?? [];
 			// a macro function in every build runs in no program; one a build may replace is a value there
 			if (
-				n == null
-				|| n.kind != FactKinds.METHOD
-				|| n.overloadIndex > 0
+				n == null || n.kind != FactKinds.METHOD || n.overloadIndex > 0
 				|| (kinds.length > 0 && kinds.foreach(k -> k == FactKinds.MACRO))
 			)
 				continue;

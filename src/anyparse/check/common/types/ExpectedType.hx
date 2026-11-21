@@ -446,10 +446,7 @@ final class ExpectedType {
 		final self: Null<String> = shape.selfReferenceText;
 		final fieldName: Null<String> = target.name;
 		if (
-			target.kind != shape.fieldAccessKind
-			|| target.children.length != 1
-			|| self == null
-			|| fieldName == null
+			target.kind != shape.fieldAccessKind || target.children.length != 1 || self == null || fieldName == null
 			|| enclosingContainer == null
 		)
 			return null;

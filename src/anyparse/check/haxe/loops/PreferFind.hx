@@ -654,10 +654,7 @@ final class PreferFind extends HaxeRule {
 			if (headA != null) {
 				final returned: Null<QueryNode> = returnValue(headA.then, s);
 				if (
-					returned != null
-					&& returned.kind == s.identKind
-					&& returned.name == headA.loopVar
-					&& b.kind == s.returnKind
+					returned != null && returned.kind == s.identKind && returned.name == headA.loopVar && b.kind == s.returnKind
 					&& b.children.length >= 1
 				) {
 					final span: Null<Span> = a.span;
@@ -813,14 +810,8 @@ final class PreferFind extends HaxeRule {
 	 * (no wrapping parens needed); a looser operator (ternary / binary) iterable is wrapped.
 	 */
 	private static function postfixSafe(kind: String, s: Seams): Bool {
-		return kind == s.identKind
-			|| kind == s.fieldAccessKind
-			|| kind == s.nullSafeAccessKind
-			|| kind == s.forceFieldAccessKind
-			|| kind == s.indexAccessKind
-			|| kind == s.parenKind
-			|| kind == s.callKind
-			|| kind == s.newExprKind;
+		return kind == s.identKind || kind == s.fieldAccessKind || kind == s.nullSafeAccessKind || kind == s.forceFieldAccessKind
+			|| kind == s.indexAccessKind || kind == s.parenKind || kind == s.callKind || kind == s.newExprKind;
 	}
 
 	/**

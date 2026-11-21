@@ -202,8 +202,7 @@ final class PurityScan {
 		final host: Null<QueryNode> = recv.kind == ctx.fieldAccessKind ? recv.children[0] : null;
 		final member: Null<String> = recv.name;
 		final hostType: Null<String> = host == null ? null : receiverTypeName(host, ctx);
-		return member != null
-			&& hostType != null
+		return member != null && hostType != null
 			&& ctx.index.typing.members.memberTypeSourceOf(ctx.index.refs.aliasedName(hostType), member) == 'String';
 	}
 

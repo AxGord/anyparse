@@ -319,8 +319,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 			if (name == null || pspan == null) continue;
 			if (name.startsWith('_')) continue;
 			if (OccurrenceScan.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan], matchMask)) continue;
-			final autofixable: Bool = eligible
-				&& fnName != null
+			final autofixable: Bool = eligible && fnName != null
 				&& RemoveParam.paramSlotEdits(source, tree, fn, pi, fnName, fnSpan.from, shape).error == null;
 			if (!autofixable && capturedAsValue) continue;
 			out.push({

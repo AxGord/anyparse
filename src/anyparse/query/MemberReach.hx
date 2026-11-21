@@ -3144,12 +3144,7 @@ final class MemberReach {
 
 	/** Whether `site` runs nothing but the function values a call of a value of a function type, no `dynamic` method's, may run. */
 	private static inline function onlyValues(site: AdmissionSite): Bool {
-		return site.values
-			&& site.called != null
-			&& site.stored == null
-			&& !site.constructors
-			&& site.all != true
-			&& site.names.length == 0
+		return site.values && site.called != null && site.stored == null && !site.constructors && site.all != true && site.names.length == 0
 			&& (site.ids ?? []).length == 0
 			&& (site.owned ?? []).length == 0;
 	}

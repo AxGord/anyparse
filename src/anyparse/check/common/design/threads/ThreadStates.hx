@@ -207,10 +207,7 @@ final class ThreadStates {
 		final via: Null<String> = e.via;
 		final at: Null<ArgumentPosition> = e.argument;
 		final named: Null<Array<Int>> = via == null ? null : lists.mainArguments[via];
-		return e.kind == Ref
-			&& via != null
-			&& at != null
-			&& named != null
+		return e.kind == Ref && via != null && at != null && named != null
 			&& named.contains(at.index)
 			&& CallGraphKeys.bindsItsPosition(graph, via, at.index, at.count);
 	}

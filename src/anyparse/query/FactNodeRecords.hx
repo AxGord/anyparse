@@ -350,8 +350,7 @@ final class FactNodeRecords {
 	private static function sameUse(a: ParamUse, b: ParamUse): Bool {
 		final x: Null<ArgumentFact> = a.argument;
 		final y: Null<ArgumentFact> = b.argument;
-		return a.use == b.use
-			&& a.method == b.method
+		return a.use == b.use && a.method == b.method
 			&& (x == null ? y == null : y != null && x.target == y.target && x.access == y.access && x.index == y.index);
 	}
 

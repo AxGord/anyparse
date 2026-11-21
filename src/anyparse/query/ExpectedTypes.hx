@@ -120,8 +120,7 @@ final class ExpectedTypes {
 		final kind: String = value.kind;
 		return kind == _parenKind && value.children.length == 1
 			? unifiesUnderExpectation(value.children[0])
-			: kind == _ternaryKind
-				|| kind == _arrayLiteralKind
+			: kind == _ternaryKind || kind == _arrayLiteralKind
 				|| _ifExprKinds.contains(kind)
 				|| _switchKinds.contains(kind)
 				|| _tryExprKinds.contains(kind);

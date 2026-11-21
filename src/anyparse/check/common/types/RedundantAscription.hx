@@ -113,9 +113,7 @@ final class RedundantAscription extends RuleBase implements DefaultOff {
 				final operand: QueryNode = node.children[0];
 				final operandSpan: Null<Span> = operand.span;
 				if (
-					span != null
-					&& operandSpan != null
-					&& operand.kind == seams.newExprKind
+					span != null && operandSpan != null && operand.kind == seams.newExprKind
 					&& redundantTargetSource(node, span, operand, operandSpan, regions, castTargets, plugin.typeSyntax) != null
 				) violations.push({
 					file: entry.file,

@@ -1614,9 +1614,7 @@ final class WriterRefFieldLowering {
 		// exactly as it would be after the params' close-trailing comment.
 		final hasBeforeLeadingSlot: Bool = ctx.ctx.trivia
 			&& ctx.isTriviaBearing(typePath)
-			&& !isFirstField
-			&& kwLead == null
-			&& leadText == null;
+			&& !isFirstField && kwLead == null && leadText == null;
 		if (hasBeforeLeadingSlot) {
 			final leadAccess: Expr = beforeLeadingAccess(fieldName);
 			parts.push(macro {

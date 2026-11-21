@@ -19,10 +19,7 @@ final class BareNames {
 		if (node.kind == shape.caseBranchKind && node.children.length > 0 && readsName(node.children[0], name, shape)) into.push(node);
 		for (k in node.children) {
 			if (
-				k.name == name
-				&& k.kind != shape.identKind
-				&& k.kind != shape.stringInterpIdentKind
-				&& k.kind != shape.objectFieldKind
+				k.name == name && k.kind != shape.identKind && k.kind != shape.stringInterpIdentKind && k.kind != shape.objectFieldKind
 				&& !isAccess(k.kind, shape)
 			)
 				into.push(k);

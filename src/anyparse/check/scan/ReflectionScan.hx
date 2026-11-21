@@ -306,9 +306,7 @@ final class ReflectionScan {
 	 * Whether the call `node` names one member by a plain literal at argument `nameArg` — then it enumerates nothing.
 	 */
 	private static function literalNameArg(node: QueryNode, nameArg: Int, source: String, fold: Null<StringFoldSupport>): Bool {
-		return fold != null
-			&& nameArg >= 0
-			&& nameArg + 1 < node.children.length
+		return fold != null && nameArg >= 0 && nameArg + 1 < node.children.length
 			&& fold.literalOf(node.children[nameArg + 1], source) != null;
 	}
 

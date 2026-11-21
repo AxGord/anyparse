@@ -375,9 +375,7 @@ final class CallRepetition {
 	 */
 	private function initializerRun(edge: CallEdge): Bool {
 		final node: Null<FnNode> = _graph.node(edge.to);
-		return edge.span == null
-			&& node != null
-			&& node.span == null
+		return edge.span == null && node != null && node.span == null
 			&& (node.name == CallGraph.INIT_NAME || node.name == CallGraph.STATIC_INIT_NAME);
 	}
 

@@ -61,8 +61,7 @@ final class IdenticalOperands extends RuleBase implements NoAutofix {
 	): Void {
 		final span: Null<Span> = node.span;
 		if (
-			span != null
-			&& node.children.length == 2
+			span != null && node.children.length == 2
 			&& comparisonKinds.contains(node.kind)
 			&& MemberKinds.sameSource(node.children[0], node.children[1], source)
 			&& !(callKind != null && MemberKinds.subtreeContainsKind(node.children[0], callKind))

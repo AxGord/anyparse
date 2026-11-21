@@ -302,11 +302,7 @@ final class PreferBind extends RuleBase {
 			&& !index.isThirdParty(owner.file.file)
 			&& !owner.type.isExtern
 			&& (shape.functionKinds ?? []).contains(m.kind)
-			&& !m.guarded
-			&& !m.isDynamic
-			&& !m.isMacro
-			&& !m.isOverload
-			&& !m.hasOverloadMeta
+			&& !m.guarded && !m.isDynamic && !m.isMacro && !m.isOverload && !m.hasOverloadMeta
 			&& !(m.isInline && m.isExtern)
 			&& (generic == null || !m.metaNames.contains(generic))
 			&& (isStatic == null || isStatic == m.isStatic);

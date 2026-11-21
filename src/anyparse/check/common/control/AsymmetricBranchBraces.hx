@@ -253,8 +253,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 		final span: Null<Span> = tail.span;
 		final thenBraced: Bool = BranchChain.thenOf(tail).kind == seams.blockStmtKind;
 		return if (
-			last == null
-			|| span == null
+			last == null || span == null
 			|| thenBraced == (last.kind == seams.blockStmtKind)
 			|| (thenBraced && seams.exemptElseKinds.contains(last.kind))
 			|| BranchChain.isSplice(BranchChain.thenOf(tail), seams)
@@ -319,8 +318,7 @@ final class AsymmetricBranchBraces extends RuleBase implements DefaultOff implem
 	private static function tryFinding(node: QueryNode, seams: Seams): Null<Asymmetry> {
 		final bodies: Null<Array<QueryNode>> = BranchChain.tryBodiesOf(node, seams.tryKinds, seams.catchKind);
 		final span: Null<Span> = node.span;
-		return bodies == null
-			|| span == null
+		return bodies == null || span == null
 			|| !bodies.exists(b -> seams.bracedKinds.contains(b.kind))
 			|| bareBodies(bodies, seams).length == 0
 			? null

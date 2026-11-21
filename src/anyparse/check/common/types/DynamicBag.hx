@@ -248,14 +248,10 @@ final class DynamicBag {
 	): Void {
 		final s: Null<Span> = node.span;
 		if (
-			node.kind == ctx.fieldAccessKind
-			&& node.name == name
-			&& node.children.length == 1
+			node.kind == ctx.fieldAccessKind && node.name == name && node.children.length == 1
 			&& node.children[0].kind == shape.identKind
 			&& node.children[0].name == ctx.selfText
-			&& s != null
-			&& typeSpan.from <= s.from
-			&& s.to <= typeSpan.to
+			&& s != null && typeSpan.from <= s.from && s.to <= typeSpan.to
 		)
 			keys['${s.from}:${s.to}'] = true;
 		for (c in node.children) collectThisFieldKeys(c, name, shape, ctx, typeSpan, keys);

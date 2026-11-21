@@ -97,7 +97,7 @@
 			"defaultWrap": "noWrap",
 			"rules": [
 				{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"},
-				{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"}
+				{"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillSimpleRuns", "location": "beforeLast"}
 			]
 		},
 		"callParameter": {

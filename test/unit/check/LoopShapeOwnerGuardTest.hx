@@ -88,8 +88,7 @@ class LoopShapeOwnerGuardTest extends Test {
 	}
 
 	private static function isSlotConstant(name: String): Bool {
-		return name == 'ELSE_SLOT_INDEX'
-			|| name == 'COND_INDEX'
+		return name == 'ELSE_SLOT_INDEX' || name == 'COND_INDEX'
 			|| name.endsWith('_BRANCH_INDEX')
 			|| name.startsWith('RETURN_VALUE_')
 			|| (SHAPE_PREFIXES.exists(p -> name.startsWith(p)) && SLOT_SUFFIXES.exists(x -> name.endsWith(x)));

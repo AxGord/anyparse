@@ -304,9 +304,7 @@ final class TriviaEofLowering {
 				final _isLast: Bool = _ci + 1 == _t.leadingComments.length;
 				var _override: Int = 0;
 				final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}
-					&& _si == 0
-					&& _ci == 0
-					&& _isBlock
+					&& _si == 0 && _ci == 0 && _isBlock
 					&& (_headIsPiu || _t.leadingComments.length >= 2);
 				if (_firstSlot) {
 					_override = opt.afterFileHeaderComment;

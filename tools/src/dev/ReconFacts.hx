@@ -359,8 +359,7 @@ final class ReconFacts {
 			? []
 			: QueueFile.read(File.getContent(queueFile)).filter(
 				other ->
-					other.id != line.id
-					&& other.owner == line.owner
+					other.id != line.id && other.owner == line.owner
 					&& (other.status == 'running' || (other.ended != '' && other.ended >= sinceDate))
 			);
 		return same.length == 0

@@ -390,9 +390,7 @@ final class CondQuery {
 			name != null
 			&& !carriesLiteralText(node.kind, shape)
 			&& symbolRow(name, shape)
-			&& span != null
-			&& span.from >= body.from
-			&& span.to <= body.to
+			&& span != null && span.from >= body.from && span.to <= body.to
 		) {
 			final row: String = '${node.kind} $name';
 			out.pushUnique(row);

@@ -89,6 +89,8 @@ final class HaxeFormatValues {
 			// counterpart — leading break, then the items share one
 			// continuation line if they fit at that indent, else one per line.
 			case 'packedOrOnePerLine', 'PackedOrOnePerLine': WrapMode.PackedOrOnePerLine;
+			// anyparse extension with no fork counterpart — an operator chain's runs of simple operands fill their lines.
+			case 'fillSimpleRuns', 'FillSimpleRuns': WrapMode.FillSimpleRuns;
 			case _: null;
 		};
 	}

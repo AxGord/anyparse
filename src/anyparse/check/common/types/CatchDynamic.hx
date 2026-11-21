@@ -402,8 +402,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 				if (!interpolated && !loggingPos) nonLogging = true;
 				return;
 			}
-			final callLogging: Bool = node.kind == logging.callKind
-				&& node.children.length > 0
+			final callLogging: Bool = node.kind == logging.callKind && node.children.length > 0
 				&& isLoggingCallee(node.children[0], logging.fieldKind, logging.identKind);
 			for (i => c in node.children) visit(c, (callLogging && i > 0) || node.kind == logging.interpBlockKind);
 		}

@@ -318,9 +318,7 @@ final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 	private static function walk(node: QueryNode, parent: Null<QueryNode>, out: Array<Violation>, file: String, ctx: Ctx): Void {
 		final span: Null<Span> = node.span;
 		if (
-			span != null
-			&& node.kind == ctx.seams.condKind
-			&& parent != null
+			span != null && node.kind == ctx.seams.condKind && parent != null
 			&& ctx.seams.blockKinds.contains(parent.kind)
 			&& match(node, ctx) != null
 		) out.push({

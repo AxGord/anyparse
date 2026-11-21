@@ -220,8 +220,7 @@ final class IfFalseDeadCode extends RuleBase {
 			final span: Null<Span> = child.span;
 			if (span == null || span.to <= branch.from || span.from >= branch.to) continue;
 			if (
-				span.from < at
-				|| span.to > branch.to
+				span.from < at || span.to > branch.to
 				|| !NodeShape.isEmptyFiller(child, scan.source, scan.seams.emptyKinds, scan.seams.emptyContainerKinds)
 				|| !scan.source.substring(at, span.from).isBlank()
 			)

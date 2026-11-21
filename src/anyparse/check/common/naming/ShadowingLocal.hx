@@ -581,8 +581,7 @@ final class ShadowingLocal extends RuleBase {
 		return frameSpan == null
 			|| hits.exists(
 				hit ->
-					hit.kind == RefKind.Read
-					&& hit.span.from >= declSpan.to
+					hit.kind == RefKind.Read && hit.span.from >= declSpan.to
 					&& within(hit.span, frameSpan)
 					&& !bindsWithin(hit.bindingSpan, declSpan)
 			);
@@ -688,9 +687,7 @@ final class ShadowingLocal extends RuleBase {
 			frameSpan == null
 			|| regions.exists(
 				r ->
-					r.kind == LexRegionKind.StringLit
-					&& r.from >= frameSpan.from
-					&& r.to <= frameSpan.to
+					r.kind == LexRegionKind.StringLit && r.from >= frameSpan.from && r.to <= frameSpan.to
 					&& SourceText.mentionsIdent(site.source, new Span(r.from, r.to), name)
 			)
 		)

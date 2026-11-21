@@ -54,10 +54,7 @@ final class AvoidHaxeJson extends HaxeRule implements NoAutofix implements Defau
 					final method: String = node.name ?? '';
 					final alternative: Null<String> = ALTERNATIVES[method];
 					if (
-						receiver != null
-						&& span != null
-						&& receiverSpan != null
-						&& alternative != null
+						receiver != null && span != null && receiverSpan != null && alternative != null
 						&& isJson(receiver, entry.source.substring(receiverSpan.from, receiverSpan.to), entry.file, tree, shape, index())
 					) out.push({
 						file: entry.file,

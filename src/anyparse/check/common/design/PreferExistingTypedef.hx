@@ -314,10 +314,7 @@ final class PreferExistingTypedef extends RuleBase implements CrossFileFix imple
 
 	/** Whether `outer` holds `inner` and is not the same span. */
 	private static function covers(outer: Null<Span>, inner: Null<Span>): Bool {
-		return outer != null
-			&& inner != null
-			&& outer.from <= inner.from
-			&& inner.to <= outer.to
+		return outer != null && inner != null && outer.from <= inner.from && inner.to <= outer.to
 			&& (outer.from != inner.from || outer.to != inner.to);
 	}
 

@@ -381,10 +381,7 @@ final class LockSites {
 				final at: Null<Span> = g.edge.span;
 				final other: Null<String> = lockOf(g.edge);
 				if (
-					at != null
-					&& g.pair == pair
-					&& g.edge.from == edge.from
-					&& g.edge.file == edge.file
+					at != null && g.pair == pair && g.edge.from == edge.from && g.edge.file == edge.file
 					&& (lock == null || other == null || other == lock)
 				)
 					at.from;
@@ -452,9 +449,7 @@ final class LockSites {
 		final fn: Null<FnNode> = _graph.node(edge.from);
 		final owner: String = SourceText.parentPath(lock);
 		if (
-			fn == null
-			|| fn.name != _ctorName
-			|| fn.typeName != owner
+			fn == null || fn.name != _ctorName || fn.typeName != owner
 			|| _graph.types.isStatic(owner, memberName(lock))
 			|| _aliasedLocks.contains(lock)
 		)
@@ -474,9 +469,7 @@ final class LockSites {
 		final out: Array<BlindCall> = [];
 		final at: Null<Span> = node.span;
 		if (
-			at != null
-			&& node.kind == _shape.callKind
-			&& at.from != start
+			at != null && node.kind == _shape.callKind && at.from != start
 			&& !releases.contains(at.from)
 			&& !_graph.outEdges(edge.from).exists(e -> e.kind.isInvocation() && e.span?.from == at.from)
 		) {

@@ -232,8 +232,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 					// the legacy hardline. Default-false (every non-trivia
 					// -sep-Star producer) preserves the pre-slice break.
 					final _isLastLead: Bool = _ci == _t.leadingComments.length - 1;
-					final _glueLead: Bool = _isLastLead
-						&& _t.leadingCommentsGlued == true
+					final _glueLead: Bool = _isLastLead && _t.leadingCommentsGlued == true
 						&& StringTools.startsWith(_t.leadingComments[_ci], '/*');
 					_inner.push(_glueLead ? _dt(' ') : _dhl());
 					_ci++;
@@ -1084,9 +1083,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 	): Expr {
 		return macro if (
 			$v{matrixWrap}
-			&& _noWrapFlat
-			&& !_anyMultilineItem
-			&& !_requiresHardline
+			&& _noWrapFlat && !_anyMultilineItem && !_requiresHardline
 			&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
 		) {
 			final _pdocs: Array<anyparse.core.Doc> = [];
@@ -1460,8 +1457,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		// A member counted doc-led by its metadata takes the doc-keyed blank lines, which only the force-multi loop writes.
 		final metaLed: Expr = reads == null ? macro false : reads.body;
 		return macro if (
-			opt._inTypedefBody
-			&& _arr.length > 0
+			opt._inTypedefBody && _arr.length > 0
 			&& ((opt.typedefBetweenFields > 0 && _arr.length > 1) || ($begin ?? 0) > 0 || ($end ?? 0) > 0 || $metaLed)
 		)
 			_requiresHardline = true;

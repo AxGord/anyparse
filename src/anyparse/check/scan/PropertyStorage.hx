@@ -57,8 +57,7 @@ final class PropertyStorage {
 		final methodName: Null<String> = method.name;
 		final methodSpan: Null<Span> = method.span;
 		if (
-			methodName == null
-			|| methodSpan == null
+			methodName == null || methodSpan == null
 			|| !CheckScan.METHOD_KINDS.contains(method.kind)
 			|| !methodName.startsWith(CheckScan.SET_PREFIX)
 			|| method.children.length == 0
@@ -145,9 +144,7 @@ final class PropertyStorage {
 	private static function plainWriteToken(node: QueryNode, source: String, name: String, shape: RefShape): Null<Span> {
 		final target: Null<QueryNode> = node.kind == shape.assignKind && node.children.length > 0 ? node.children[0] : null;
 		final span: Null<Span> = target?.span;
-		return target != null
-			&& span != null
-			&& target.name == name
+		return target != null && span != null && target.name == name
 			&& (target.kind == shape.identKind || target.kind == shape.fieldAccessKind)
 			&& span.to - name.length >= span.from
 			&& source.substring(span.to - name.length, span.to) == name

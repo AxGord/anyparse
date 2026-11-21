@@ -400,8 +400,7 @@ class MethodChainEmit {
 	private static function maybeTagReglue(
 		ifFLE: Doc, breakMode: WrapMode, flatMode: WrapMode, segments: Array<Doc>, nestSuppress: Bool, segCallLeadingBreak: Bool
 	): Doc {
-		final reGluable: Bool = !nestSuppress
-			&& segCallLeadingBreak
+		final reGluable: Bool = !nestSuppress && segCallLeadingBreak
 			&& isDotBreak(breakMode)
 			&& flatMode == NoWrap
 			&& reGluableChain(segments);

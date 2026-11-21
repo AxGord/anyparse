@@ -328,9 +328,7 @@ final class MutationSchema {
 		var i: Int = parent.children.indexOf(member) - 1;
 		while (i >= 0) {
 			final sibling: QueryNode = parent.children[i];
-			final modifier: Bool = sibling.kind == 'Meta'
-				|| sibling.kind == 'MetaCall'
-				|| sibling.kind == 'Override'
+			final modifier: Bool = sibling.kind == 'Meta' || sibling.kind == 'MetaCall' || sibling.kind == 'Override'
 				|| KEPT_MODIFIERS.contains(sibling.kind)
 				|| REFUSED_MODIFIERS.contains(sibling.kind);
 			if (!modifier || sibling.span == null) break;

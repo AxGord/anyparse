@@ -407,8 +407,7 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 			if (i == 0) return -1;
 			final candidate: Null<Span> = node.children[i - 1].span;
 			final body: Null<Span> = node.children[i].span;
-			return candidate != null
-				&& body != null
+			return candidate != null && body != null
 				&& RefactorSupport.isReturnTypeSlot(seams.source, candidate.to, body.from, seams.regions)
 				? i - 1
 				: -1;
@@ -612,8 +611,7 @@ final class PreferMapType extends HaxeRule implements RiskyFix implements Groupe
 
 	/** Whether `code` may appear in a plain nominal type reference — an identifier character or the path `.`. */
 	private static function isNominalChar(code: Int): Bool {
-		return code == '.'.code
-			|| code == '_'.code
+		return code == '.'.code || code == '_'.code
 			|| (code >= 'a'.code && code <= 'z'.code)
 			|| (code >= 'A'.code && code <= 'Z'.code)
 			|| (code >= '0'.code && code <= '9'.code);

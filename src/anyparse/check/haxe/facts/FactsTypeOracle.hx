@@ -504,8 +504,7 @@ final class FactsTypeOracle implements FactsOracle {
 			for (n in site.facts.nodesIn(site.file))
 				if (
 					FactKinds.OWN_BODY_KINDS.contains(n.kind)
-					&& !n.generated
-					&& n.inlinedFrom == null
+					&& !n.generated && n.inlinedFrom == null
 					&& owners.contains(n.owner)
 					&& memberOf(n) == name
 				)

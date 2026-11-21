@@ -350,8 +350,7 @@ final class TailMerge extends RuleBase {
 	private static function commonSuffix(stmts: Array<QueryNode>, fallStmts: Array<QueryNode>, source: String): Int {
 		var k: Int = 0;
 		while (
-			k < stmts.length
-			&& k < fallStmts.length
+			k < stmts.length && k < fallStmts.length
 			&& TailScan.sameStatement(stmts[stmts.length - 1 - k], fallStmts[fallStmts.length - 1 - k], source)
 		)
 			k++;

@@ -425,8 +425,7 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 		// inherits a display-object member (`x`, `y`, `width`) has the stance silence the rule
 		// wholesale, so a project can cede it for exactly these three categories.
 		final category: NamingCategory = decl.category;
-		final shadowsBinding: Bool = category == NamingCategory.Local
-			|| category == NamingCategory.Param
+		final shadowsBinding: Bool = category == NamingCategory.Local || category == NamingCategory.Param
 			|| category == NamingCategory.CatchVar;
 		if (allowInheritedShadow && shadowsBinding) return false;
 		final owner: Null<String> = decl.enclosingType;

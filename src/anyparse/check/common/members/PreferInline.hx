@@ -392,11 +392,8 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * there is nothing in its modifier vocabulary for it to have matched.
 	 */
 	private static inline function isInlineBlockingModifier(kind: String, shape: RefShape): Bool {
-		return kind == shape.inlineModifierKind
-			|| kind == shape.dynamicModifierKind
-			|| kind == shape.macroModifierKind
-			|| kind == shape.overrideModifierKind
-			|| kind == shape.externModifierKind;
+		return kind == shape.inlineModifierKind || kind == shape.dynamicModifierKind || kind == shape.macroModifierKind
+			|| kind == shape.overrideModifierKind || kind == shape.externModifierKind;
 	}
 
 	/**
@@ -405,9 +402,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	 * operand re-typechecks in the CALLER's null-safety mode once inlined.
 	 */
 	private static inline function isRiskyHere(node: QueryNode, parentKind: String, shape: RefShape): Bool {
-		return node.kind == shape.nullLiteralKind
-			&& parentKind != shape.eqKind
-			&& parentKind != shape.notEqKind
+		return node.kind == shape.nullLiteralKind && parentKind != shape.eqKind && parentKind != shape.notEqKind
 			&& parentKind != shape.nullCoalesceKind;
 	}
 
@@ -812,8 +807,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 	/** The name a node references as a bare identifier or a `<self>.<name>` field access, else null. */
 	private static function selfRefName(node: QueryNode, shape: RefShape): Null<String> {
 		if (node.kind == shape.identKind) return node.name;
-		final selfReceiver: Bool = node.kind == shape.fieldAccessKind
-			&& node.children.length == 1
+		final selfReceiver: Bool = node.kind == shape.fieldAccessKind && node.children.length == 1
 			&& node.children[0].kind == shape.identKind
 			&& node.children[0].name == shape.selfReferenceText;
 		return selfReceiver ? node.name : null;
@@ -844,8 +838,7 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 		if (node.kind == shape.callKind && node.children.length >= 1) {
 			final callee: QueryNode = node.children[0];
 			if (
-				callee.kind == shape.fieldAccessKind
-				&& callee.children.length == 1
+				callee.kind == shape.fieldAccessKind && callee.children.length == 1
 				&& callee.children[0].kind == shape.identKind
 				&& callee.children[0].name == 'Reflect'
 			) for (i in 1...node.children.length) {

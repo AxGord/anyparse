@@ -120,8 +120,7 @@ final class NameMentionScan {
 		final name: Null<String> = node.name;
 		final span: Null<Span> = node.span;
 		if (
-			name != null
-			&& span != null
+			name != null && span != null
 			&& kinds.contains(node.kind)
 			&& names.contains(name)
 			&& (span.from < cut.from || span.from >= cut.to)

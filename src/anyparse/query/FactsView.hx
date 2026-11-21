@@ -750,9 +750,7 @@ final class FactsView {
 	 */
 	public function externMethod(owner: String, member: String): Bool {
 		final fact: Null<TypeFact> = _table.type(CompilerFacts.baseId(owner));
-		return fact != null
-			&& fact.isExtern
-			&& fact.alike
+		return fact != null && fact.isExtern && fact.alike
 			&& fact.fields.exists(f -> f.name == member && f.kinds.exists(k -> FactKinds.METHOD_KINDS.contains(k)));
 	}
 
@@ -1704,10 +1702,7 @@ final class FactsView {
 			case Named(NULLABLE, [inner]): classlessType(inner, depth);
 			case Named(id, _) if (depth < MAX_TYPEDEF_DEPTH):
 				final declared: Null<TypeFact> = _table.type(id);
-				declared != null
-					&& declared.alike
-					&& declared.kind == FactKinds.TYPEDEF
-					&& declared.targets.length > 0
+				declared != null && declared.alike && declared.kind == FactKinds.TYPEDEF && declared.targets.length > 0
 					&& declared.targets.foreach(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
 						read != null && classlessType(read, depth + 1);
@@ -1750,9 +1745,7 @@ final class FactsView {
 			final target: Null<String> = c.target;
 			final dot: Int = target == null ? -1 : target.lastIndexOf('.');
 			if (
-				target != null
-				&& c.access == INLINED
-				&& dot > 0
+				target != null && c.access == INLINED && dot > 0
 				&& FactKinds.REFLECTION_CLASSES.contains(target.substr(0, dot))
 				&& !out.contains(target)
 			)

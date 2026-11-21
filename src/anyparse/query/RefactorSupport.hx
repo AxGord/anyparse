@@ -402,8 +402,7 @@ final class RefactorSupport {
 				final nameSpan: Null<Span> = m.nameNode.span;
 				final onNameStart: Bool = nameSpan != null && nameSpan.from == cursor;
 				if (
-					cursor >= span.from
-					&& cursor < span.to
+					cursor >= span.from && cursor < span.to
 					&& (identTokenContains(m.nameNode, cursor, source) || span.from == cursor || onNameStart)
 				)
 					best = m;

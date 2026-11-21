@@ -83,8 +83,8 @@ class MixedLogicalParensCheckTest extends Test {
 	}
 
 	/**
-	 * Under the project's own formatter options the written pairs are what lays the chain out as groups: each `(x && y)`
-	 * stays on one line and the chain breaks only at `||`, where the bare chain breaks at every operator.
+	 * Under the project's own formatter options both spellings lay the chain out as groups: the chain breaks only at `||`
+	 * and each `&&` pair fills its line, parenthesised by the fix or bare (`fillSimpleRuns` breaks a mixed chain at `||`).
 	 */
 	public function testParenthesizedChainLaysOutOneGroupPerLine(): Void {
 		final config: String = File.getContent('hxformat.json');
@@ -104,9 +104,9 @@ class MixedLogicalParensCheckTest extends Test {
 			format(applyFix(head + bare + tail), config)
 		);
 		Assert.equals(
-			'${signature}alphaCondition.isEnabledForThisItem\n\t\t\t&& betaCondition.isEnabledForThisItem\n'
-			+ '\t\t\t|| gammaCondition.isEnabledForThisItem\n\t\t\t&& deltaCondition.isEnabledForThisItem\n'
-			+ '\t\t\t|| epsilonCondition.isEnabledForThisItem\n\t\t\t&& zetaCondition.isEnabledForThisItem$end',
+			'${signature}alphaCondition.isEnabledForThisItem && betaCondition.isEnabledForThisItem\n'
+			+ '\t\t\t|| gammaCondition.isEnabledForThisItem && deltaCondition.isEnabledForThisItem\n'
+			+ '\t\t\t|| epsilonCondition.isEnabledForThisItem && zetaCondition.isEnabledForThisItem$end',
 			format(head + bare + tail, config)
 		);
 	}

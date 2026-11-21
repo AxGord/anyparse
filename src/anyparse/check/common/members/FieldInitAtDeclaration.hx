@@ -673,8 +673,7 @@ final class FieldInitAtDeclaration extends RuleBase implements NotedFix {
 		if (!fields.contains(member.kind)) return null;
 		final span: Null<Span> = member.span;
 		final name: Null<String> = member.name;
-		return span == null
-			|| name == null
+		return span == null || name == null
 			|| statics.contains(span.from)
 			|| member.children.length >= 1
 			|| source.substring(span.from, span.to).indexOf('(') >= 0

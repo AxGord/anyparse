@@ -277,8 +277,7 @@ final class DeadStore extends RuleBase {
 				if (
 					expr.kind == ctx.assignKind
 					&& isFlagged(ctx, expr)
-					&& expr.children.length >= 2
-					&& stmtSpan != null
+					&& expr.children.length >= 2 && stmtSpan != null
 					&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index)
 				)
 					deletions.push({ span: ElementSpan.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
@@ -469,8 +468,7 @@ final class DeadStore extends RuleBase {
 			final span: Null<Span> = node.span;
 			final init: Null<QueryNode> = NullFlow.declInit(node, ctx.declTypeChildKinds);
 			if (
-				init != null
-				&& span != null
+				init != null && span != null
 				&& ctx.mutableLocalDeclKinds.contains(node.kind)
 				&& !live.contains(name)
 				&& !NullFlow.isMultiBinding(node, ctx.localDeclContinuationKinds, ctx.declTypeChildKinds)
@@ -553,10 +551,7 @@ final class DeadStore extends RuleBase {
 	 */
 	private static function isSafeNavCall(node: QueryNode, ctx: LiveCtx): Bool {
 		final navKind: Null<String> = ctx.safeNavKind;
-		return ctx.callKind != null
-			&& node.kind == ctx.callKind
-			&& node.children.length >= 2
-			&& navKind != null
+		return ctx.callKind != null && node.kind == ctx.callKind && node.children.length >= 2 && navKind != null
 			&& MemberKinds.subtreeContainsKind(node.children[0], navKind);
 	}
 

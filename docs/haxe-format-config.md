@@ -126,6 +126,7 @@ most common way a wrapping section reads as unwired.
 | `keep` | preserve the source's per-item newline pattern (the fork's `keep`) |
 | `ignore` | **anyparse extension** — drop the source newlines and let width decide |
 | `packedOrOnePerLine` | **anyparse extension** — leading break, then all items on one continuation line if they fit, else one each |
+| `fillSimpleRuns` | **anyparse extension**, operator chains only — runs of simple operands fill their lines, any other operand takes its own |
 
 Every value also accepts its capitalised spelling (`OnePerLine`, `FillLine`, …).
 

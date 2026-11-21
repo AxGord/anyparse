@@ -322,9 +322,7 @@ final class ReflectiveReach {
 	 */
 	private function resolvedLiteral(source: String, call: QueryNode): Null<String> {
 		final callee: Null<QueryNode> = call.children[0];
-		final resolving: Bool = callee != null
-			&& callee.name == RESOLVE_CLASS
-			&& call.children.length > 1
+		final resolving: Bool = callee != null && callee.name == RESOLVE_CLASS && call.children.length > 1
 			&& (callee.kind == _shape.identKind || FieldWrites.accessKind(callee.kind, _shape));
 		return resolving ? _plugin.stringFoldSupport()?.literalOf(call.children[1], source)?.content : null;
 	}
@@ -369,8 +367,7 @@ final class ReflectiveReach {
 		final index: Null<SymbolIndex> = _graph.index;
 		final made: String = aliased(CallGraphNames.lastSegments(init.name ?? '', 1));
 		final decl: Null<ResolvedType> = index?.refs.onlyDeclaration(made);
-		return index == null
-			|| decl == null
+		return index == null || decl == null
 			|| !(_shape.classDeclKinds ?? []).contains(decl.type.kind)
 			|| (fn != null && _graph.typeParamBoundsOf(fn, made) != null)
 			? null

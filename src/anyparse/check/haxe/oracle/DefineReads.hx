@@ -96,8 +96,7 @@ final class DefineReads {
 		final open: String = at > 0 ? source.charAt(at - 1) : '';
 		return (open == '\'' || open == '"')
 			&& source.charAt(at + length) == open
-			&& literal.from >= at - 1
-			&& literal.to <= at + length + 1;
+			&& literal.from >= at - 1 && literal.to <= at + length + 1;
 	}
 
 	/** Whether the literal whose text starts at `at` is the first argument of a define reader's call. */

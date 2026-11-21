@@ -189,8 +189,7 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 			final isVar: Bool = member.kind == seams.varKind;
 			if (seams.metaKinds.contains(member.kind)) {
 				runFrom ??= span.from;
-				final optional: Bool = member.kind == seams.bareMetaKind
-					&& seams.optionalMetaName != null
+				final optional: Bool = member.kind == seams.bareMetaKind && seams.optionalMetaName != null
 					&& member.name == seams.optionalMetaName;
 				optionalMeta = optionalMeta || optional;
 				foreignMeta = foreignMeta || !optional;

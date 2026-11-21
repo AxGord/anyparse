@@ -1004,20 +1004,8 @@ class Codegen {
 	 * only property the own-line gate needs.
 	 */
 	private static function infixOpByteTestExpr(): Expr {
-		return macro c == '+'.code
-			|| c == '-'.code
-			|| c == '*'.code
-			|| c == '/'.code
-			|| c == '%'.code
-			|| c == '='.code
-			|| c == '!'.code
-			|| c == '<'.code
-			|| c == '>'.code
-			|| c == '&'.code
-			|| c == '|'.code
-			|| c == '^'.code
-			|| c == '?'.code
-			|| c == ':'.code
+		return macro c == '+'.code || c == '-'.code || c == '*'.code || c == '/'.code || c == '%'.code || c == '='.code || c == '!'.code
+			|| c == '<'.code || c == '>'.code || c == '&'.code || c == '|'.code || c == '^'.code || c == '?'.code || c == ':'.code
 			|| c == '.'.code;
 	}
 

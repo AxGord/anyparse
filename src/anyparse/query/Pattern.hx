@@ -93,8 +93,7 @@ final class Metavar {
 			// (`0...n`) or a spread (`f(...arr)`) has an operand on one side
 			// and is copied through as ordinary source.
 			if (
-				c == '.'.code
-				&& i + PatternStar.TOKEN_LENGTH <= len
+				c == '.'.code && i + PatternStar.TOKEN_LENGTH <= len
 				&& source.fastCodeAt(i + 1) == '.'.code
 				&& source.fastCodeAt(i + 2) == '.'.code
 				&& PatternStar.isStarSlot(source, i)

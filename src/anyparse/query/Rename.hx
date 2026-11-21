@@ -552,9 +552,7 @@ final class Rename {
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
 			if (
-				span != null
-				&& offset >= span.from
-				&& offset < span.to
+				span != null && offset >= span.from && offset < span.to
 				&& fnKinds.contains(node.kind)
 				&& modifierPrecedes(tree, node, kind, modifierKinds)
 			)

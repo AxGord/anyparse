@@ -4,6 +4,7 @@ import anyparse.core.BreakCommits;
 import anyparse.core.D;
 import anyparse.core.Doc;
 import anyparse.core.DocMeasure;
+import anyparse.core.LeafTag;
 import anyparse.format.IndentChar;
 
 using StringTools;
@@ -181,6 +182,26 @@ final class BinaryChainEmit {
 		return cls == ChainOperatorClass.OpAddSub || cls == ChainOperatorClass.OpBool;
 	}
 
+	/**
+	 * True iff chain operand `d` is SIMPLE: one line of names, field reads and literals with the operators between them.
+	 * Complex is a forced break, a comment, or a leaf opening a paren, a call's arguments, an index, a collection or a lambda
+	 * body; a nested chain is parenthesised, or flattened into the chain's own operands. The one answer to "does this operand
+	 * fill a line with its simple neighbours", read off the leaf tags the writer set (`WrapMode.FillSimpleRuns`).
+	 */
+	public static function operandIsSimple(d: Doc): Bool {
+		if (WrapList.flatLength(d) < 0) return false;
+		var simple: Bool = true;
+		DocMeasure.walkFlatLeaves(d, leaf -> {
+			switch leaf {
+				case Text(_, _, LineComment | BlockComment | Delimiter(Paren | CallArgs | Collection, _) | Delimiter(_, Opens | Arrow)):
+					simple = false;
+				case _:
+			}
+			return !simple;
+		});
+		return simple;
+	}
+
 	/** One indent level in columns, per the configured indent character. */
 	private static inline function indentUnitOf(opt: WriteOptions): Int {
 		return opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -195,10 +216,11 @@ final class BinaryChainEmit {
 	/**
 	 * True for modes that lay the chain across multiple lines
 	 * (`OnePerLine` / `OnePerLineAfterFirst` / `FillLine` /
-	 * `FillLineWithLeadingBreak`). `NoWrap` / `Ignore` keep the chain inline. Used by the ω-chain-keep-flat unwrap pivot.
+	 * `FillLineWithLeadingBreak` / `FillSimpleRuns`). `NoWrap` / `Ignore` keep the chain inline. Used by the ω-chain-keep-flat
+	 * unwrap pivot.
 	 */
 	private static inline function isBreakMode(m: WrapMode): Bool {
-		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak;
+		return m == OnePerLine || m == OnePerLineAfterFirst || m == FillLine || m == FillLineWithLeadingBreak || m == FillSimpleRuns;
 	}
 
 	/**
@@ -670,6 +692,7 @@ final class BinaryChainEmit {
 			case OnePerLine: shapeOnePerLine(items, ops, cols, location, cuddleLast);
 			case OnePerLineAfterFirst: shapeOnePerLineAfterFirst(items, ops, cols, location, cuddleLast);
 			case FillLine, FillLineWithLeadingBreak: shapeFillLine(items, ops, cols, indentUnit, location, restAware);
+			case FillSimpleRuns: shapeFillSimpleRuns(items, ops, cols, indentUnit, location, restAware);
 			// ω-cascade-emits-comments: the writer pre-empts `Ignore` at the
 			// trivia branch. Defensive fallback to shapeNoWrap on engine leakage.
 			case Ignore: shapeNoWrap(items, ops);
@@ -1510,10 +1533,51 @@ final class BinaryChainEmit {
 		if (maxThen <= 0 || items.length != 3 || !isTernaryOps(ops)) return false;
 		final thenWidth: Int = WrapList.flatLength(items[1]);
 
-		return thenWidth >= 0
-			&& thenWidth <= maxThen
+		return thenWidth >= 0 && thenWidth <= maxThen
 			&& WrapList.flatLength(items[0]) >= 0
 			&& DocMeasure.breakTailCollectionCloseNest(items[2]) == 0; // noqa: magic-number
+	}
+
+	/**
+	 * `FillSimpleRuns`: each run of consecutive simple operands (`operandIsSimple`) fills its lines as `shapeFillLine` packs
+	 * them, and every other operand takes a line of its own; the first operand stays on the chain's line. A chain that mixes
+	 * `&&` with `||` holds its `&&` operands as nested chains of the `||` one, so every `||` gap breaks too. A chain where
+	 * every gap joins is `shapeFillLine` itself.
+	 */
+	private static function shapeFillSimpleRuns(
+		items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int, location: WrappingLocation, restAware: Bool
+	): Doc {
+		final simple: Array<Bool> = items.map(operandIsSimple);
+		final mixedBool: Bool = ops.contains('&&') && ops.contains('||');
+		final joins: Array<Bool> = [ for (i => op in ops) simple[i] && simple[i + 1] && !(mixedBool && op == '||') ];
+		if (!joins.contains(false)) return shapeFillLine(items, ops, cols, indentUnit, location, restAware);
+		final runs: Array<Array<Doc>> = [];
+		for (i => doc in carriedOperands(items, ops, location)) {
+			if (i > 0 && joins[i - 1])
+				runs[runs.length - 1].push(doc)
+			else
+				runs.push([doc]);
+		}
+		final lines: Array<Doc> = [];
+		for (r => run in runs) {
+			if (r > 0) lines.push(Line('\n'));
+			// The chain's last operand leaves a column for the closer that follows the chain on its line.
+			lines.push(run.length == 1 ? run[0] : Fill(run, Line(' '), r == runs.length - 1 ? 1 : 0));
+		}
+		final nestCols: Int = location == AfterLast && isAddSubOps(ops) ? indentUnit : cols;
+		final head: Doc = runs[0].length == 1 ? lines[0] : Nest(nestCols, lines[0]);
+		return Concat([head, Nest(nestCols, Concat(lines.slice(1)))]);
+	}
+
+	/** Each operand with the operator that joins it, on the side `location` puts it. */
+	private static function carriedOperands(items: Array<Doc>, ops: Array<String>, location: WrappingLocation): Array<Doc> {
+		return [
+			for (i => item in items)
+				switch location {
+					case BeforeLast: i == 0 ? item : Concat([Text('${ops[i - 1]} '), item]);
+					case AfterLast: i < ops.length ? Concat([item, Text(trailingOp(ops[i], null))]) : item;
+				}
+		];
 	}
 
 }

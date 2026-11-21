@@ -179,7 +179,7 @@
 			"name": "M-BIND-DYNAMIC-CALLEE",
 			"type": "anyparse.check.common.expressions.PreferBind",
 			"method": "plainMethod",
-			"find": "!m.isDynamic\n\t\t\t&&",
+			"find": "!m.isDynamic &&",
 			"replace": "",
 			"note": "a `dynamic` method, rebindable after the callback is created, is bound"
 		},
@@ -187,7 +187,7 @@
 			"name": "M-BIND-CLOSURELESS-CALLEE",
 			"type": "anyparse.check.common.expressions.PreferBind",
 			"method": "plainMethod",
-			"find": "!m.isMacro\n\t\t\t&& !m.isOverload",
+			"find": "!m.isMacro && !m.isOverload",
 			"replace": "true",
 			"note": "a macro or an overloaded method, which has no closure to bind, is bound"
 		},

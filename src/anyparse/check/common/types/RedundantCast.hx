@@ -49,8 +49,7 @@ final class RedundantCast extends RuleBase {
 						final operandSource: Null<String> = operandType(node.children[0], tree, shape, declaredTypeSources);
 						final targetSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
 						if (
-							operandSource != null
-							&& targetSource != null
+							operandSource != null && targetSource != null
 							&& TypeResolver.sameTypeSource(operandSource, targetSource, importMap)
 						) violations.push({
 							file: entry.file,

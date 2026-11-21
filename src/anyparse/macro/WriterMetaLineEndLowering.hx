@@ -46,9 +46,7 @@ final class WriterMetaLineEndLowering {
 			macro 0;
 		} else {
 			final test: Expr = { expr: ECall(pred, [elemNode(macro _fe)]), pos: pos };
-			macro _metaRaw == anyparse.format.MetadataLineEndPolicy.Fit
-				&& $arr.length > 0
-				&& !$broken
+			macro _metaRaw == anyparse.format.MetadataLineEndPolicy.Fit && $arr.length > 0 && !$broken
 				&& !Lambda.exists($arr, _fe -> !$test)
 				? ($arr.length == 1 ? 1 : 2)
 				: 0;

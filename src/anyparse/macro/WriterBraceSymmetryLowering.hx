@@ -581,8 +581,7 @@ final class WriterBraceSymmetryLowering {
 		final ssbSuppressCond: Null<Expr> = elseAccess == null
 			? null
 			: macro (
-				$elseAccess != null
-				&& opt.dropSingleStmtBraces
+				$elseAccess != null && opt.dropSingleStmtBraces
 				&& !anyparse.format.SingleStmtBraces.keepsBraces(
 					$fieldAccess, opt.dropSingleStmtBraces, opt.singleStmtBraceSymmetry, opt._ssbSuppress, true, $trailSemiExpr, true
 				)

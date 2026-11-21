@@ -263,8 +263,7 @@ final class OccurrenceScan {
 		final skip: String = skipReceiver;
 		inline function qualifiedBySkip(dotAt: Int): Bool {
 			final start: Int = dotAt - skip.length;
-			return skip.length > 0
-				&& start >= 0
+			return skip.length > 0 && start >= 0
 				&& source.substr(start, skip.length) == skip
 				&& (start == 0 || !source.fastCodeAt(start - 1).isIdentChar());
 		}
@@ -542,8 +541,7 @@ final class OccurrenceScan {
 			final afterIdx: Int = at + len;
 			final afterOk: Bool = afterIdx >= source.length || !source.fastCodeAt(afterIdx).isIdentChar();
 			if (
-				beforeOk
-				&& afterOk
+				beforeOk && afterOk
 				&& !offsetWithinAny(at, excluded)
 				&& !qualifiedBefore(source, at, commentRegions)
 				&& (matchMask == null || !offsetWithinSorted(at, matchMask))

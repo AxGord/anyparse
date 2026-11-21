@@ -84,10 +84,7 @@ final class ChangeSigCommand implements CliCommand {
 					if (file == null) {
 						file = a;
 					} else if (
-						posSpec == null
-						&& selectExpr == null
-						&& matchExpr == null
-						&& permSpec == null
+						posSpec == null && selectExpr == null && matchExpr == null && permSpec == null
 						&& CliArgs.isPosSpec(a)
 						&& a.indexOf(',') < 0
 					) {

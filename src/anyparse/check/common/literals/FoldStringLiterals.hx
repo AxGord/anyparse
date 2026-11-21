@@ -417,10 +417,7 @@ private class PlanContext {
 		var best: Null<Span> = null;
 		for (statement in statementSpans())
 			if (
-				member.from <= statement.from
-				&& statement.to <= member.to
-				&& statement.from <= span.from
-				&& span.to <= statement.to
+				member.from <= statement.from && statement.to <= member.to && statement.from <= span.from && span.to <= statement.to
 				&& (best == null || statement.to - statement.from < best.to - best.from)
 			)
 				best = statement;
@@ -1792,8 +1789,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	 * bare operands.
 	 */
 	private static function steerable(decomposition: Decomposition, from: Int, end: Int): Bool {
-		return from > 0
-			|| decomposition.startsBare
+		return from > 0 || decomposition.startsBare
 			|| decomposition.locked.contains(end)
 			|| !isBareGroup(decomposition.segments, from, end);
 	}
@@ -1972,8 +1968,7 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 		while (prefix < lines.length && prefix < original.length && lines[prefix] == original[prefix]) prefix++;
 		var suffix: Int = 0;
 		while (
-			suffix < lines.length - prefix
-			&& suffix < original.length - prefix
+			suffix < lines.length - prefix && suffix < original.length - prefix
 			&& lines[lines.length - 1 - suffix] == original[original.length - 1 - suffix]
 		)
 			suffix++;

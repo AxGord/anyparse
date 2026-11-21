@@ -301,8 +301,7 @@ final class CondRegionMerge extends RuleBase {
 
 	/** The line break ending the line that stops at `lineTo` - `\r\n` when the file uses it, `\n` otherwise. */
 	private static function lineTerminator(source: String, lineTo: Int): String {
-		final crlf: Bool = lineTo > 1
-			&& lineTo <= source.length
+		final crlf: Bool = lineTo > 1 && lineTo <= source.length
 			&& source.fastCodeAt(lineTo - 1) == '\n'.code
 			&& source.fastCodeAt(lineTo - 2) == '\r'.code;
 		return crlf ? '\r\n' : '\n';

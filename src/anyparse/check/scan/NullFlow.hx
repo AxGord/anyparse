@@ -1680,9 +1680,7 @@ final class NullFlow {
 			|| kind == ctx.exprStmtKind
 			|| ctx.writeKinds.contains(kind)
 			|| ctx.localDeclKinds.contains(kind)
-			|| kind == ctx.callKind
-			|| kind == ctx.parenKind
-			|| kind == ARRAY_KIND
+			|| kind == ctx.callKind || kind == ctx.parenKind || kind == ARRAY_KIND
 			|| ctx.ifKinds.contains(kind)
 			|| ctx.switchKinds.contains(kind)
 			|| ctx.tryKinds.contains(kind);
@@ -1912,9 +1910,7 @@ final class NullFlow {
 	private static function pureRefPath(node: QueryNode, ctx: FlowCtx): Bool {
 		if (constantExpr(node, ctx)) return true;
 		final kind: String = node.kind;
-		final structural: Bool = kind == ctx.identKind
-			|| kind == ctx.fieldAccessKind
-			|| kind == ctx.indexAccessKind
+		final structural: Bool = kind == ctx.identKind || kind == ctx.fieldAccessKind || kind == ctx.indexAccessKind
 			|| (ctx.parenKind != null && kind == ctx.parenKind);
 		return structural && node.children.foreach(c -> pureRefPath(c, ctx));
 	}

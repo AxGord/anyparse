@@ -387,8 +387,7 @@ final class MapKeysLookup extends RuleBase {
 		if (node.kind == cfg.callKind && node.children.length >= 1) {
 			final callee: QueryNode = node.children[0];
 			if (
-				callee.kind == cfg.fieldKind
-				&& callee.children.length == 1
+				callee.kind == cfg.fieldKind && callee.children.length == 1
 				&& isSameMemberPath(callee.children[0], memberPath, cfg)
 				&& isWriteMethod(callee.name)
 			)
@@ -449,8 +448,7 @@ final class MapKeysLookup extends RuleBase {
 	/** Whether `node` is exactly a `<path>[key]` index access or a `<path>.get(key)` call — one lookup, no descent. */
 	private static function isLookup(node: QueryNode, path: Array<String>, keyName: String, cfg: Cfg): Bool {
 		if (
-			node.kind == cfg.indexKind
-			&& node.children.length >= MIN_BINARY_CHILD_COUNT
+			node.kind == cfg.indexKind && node.children.length >= MIN_BINARY_CHILD_COUNT
 			&& isPath(node.children[0], path, cfg)
 			&& isIdentNamed(node.children[1], keyName, cfg)
 		)
@@ -458,9 +456,7 @@ final class MapKeysLookup extends RuleBase {
 		if (node.kind == cfg.callKind && node.children.length == GET_CALL_CHILD_COUNT) {
 			final callee: QueryNode = node.children[0];
 			if (
-				callee.kind == cfg.fieldKind
-				&& callee.name == GET_METHOD
-				&& callee.children.length == 1
+				callee.kind == cfg.fieldKind && callee.name == GET_METHOD && callee.children.length == 1
 				&& isPath(callee.children[0], path, cfg)
 				&& isIdentNamed(node.children[1], keyName, cfg)
 			)
@@ -621,8 +617,7 @@ final class MapKeysLookup extends RuleBase {
 		var candidate: String = base;
 		var n: Int = 1;
 		while (
-			candidate == rootName
-			|| candidate == keyName
+			candidate == rootName || candidate == keyName
 			|| OccurrenceScan.referencedInRange(source, candidate, bodySpan.from, bodySpan.to, [])
 		) {
 			candidate = base + n;

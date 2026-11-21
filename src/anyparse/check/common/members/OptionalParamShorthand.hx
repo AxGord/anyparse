@@ -868,9 +868,7 @@ final class OptionalParamShorthand extends RuleBase {
 	): Null<String> {
 		final span: Null<Span> = node.span;
 		if (span == null || node.kind == seams.nullLitKind) return null;
-		final negated: Bool = seams.negationKind != null
-			&& node.kind == seams.negationKind
-			&& node.children.length == 1
+		final negated: Bool = seams.negationKind != null && node.kind == seams.negationKind && node.children.length == 1
 			&& seams.numericKinds.contains(node.children[0].kind);
 		final literal: Bool = seams.constLiteralKinds.contains(node.kind) || negated || seams.stringFold?.literalOf(node, source) != null;
 		final fits: Bool = literal
@@ -896,9 +894,7 @@ final class OptionalParamShorthand extends RuleBase {
 		final name: Null<String> = node.name;
 		if (identKind == null || name == null) return false;
 		return if (
-			seams.fieldAccessKind != null
-			&& node.kind == seams.fieldAccessKind
-			&& node.children.length == 1
+			seams.fieldAccessKind != null && node.kind == seams.fieldAccessKind && node.children.length == 1
 			&& node.children[0].kind == identKind
 		)
 			isConstantMember(node.children[0].name, name, seams, scope)

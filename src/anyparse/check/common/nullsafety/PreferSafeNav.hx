@@ -705,8 +705,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		return if (node.kind == s.identKind)
 			node.name == s.selfText ? null : node.name
 		else if (
-			node.kind == s.fieldAccessKind
-			&& node.children.length == 1
+			node.kind == s.fieldAccessKind && node.children.length == 1
 			&& node.children[0].kind == s.identKind
 			&& node.children[0].name == s.selfText
 		)

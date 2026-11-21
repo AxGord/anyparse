@@ -1025,8 +1025,7 @@ final class TypedFactsWalk {
 			case _:
 		}
 		final kind: String = calledKind(fa, targetName, access.kind);
-		final declared: Bool = declaring != null
-			&& kind == access.kind
+		final declared: Bool = declaring != null && kind == access.kind
 			&& DECLARED_CALLS.contains(kind)
 			&& !FactKinds.REFLECTION_CLASSES.contains(declaring)
 			&& !TypedFactsShapes.SYNTAX_CLASSES.contains(declaring);

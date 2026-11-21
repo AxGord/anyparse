@@ -537,9 +537,7 @@ final class ComparisonToBoolean extends RuleBase {
 	 */
 	private static function negate(operand: QueryNode, src: String, seams: Seams): String {
 		final shape: RefShape = seams.shape;
-		final atomic: Bool = operand.kind == shape.identKind
-			|| operand.kind == shape.parenKind
-			|| operand.kind == shape.fieldAccessKind
+		final atomic: Bool = operand.kind == shape.identKind || operand.kind == shape.parenKind || operand.kind == shape.fieldAccessKind
 			|| operand.kind == seams.callKind;
 		return atomic ? '!$src' : '!($src)';
 	}

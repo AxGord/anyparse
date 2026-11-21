@@ -294,8 +294,8 @@
 			"name": "M-EICR-KNOB-IGNORED",
 			"type": "anyparse.macro.WriterBodyPolicyLowering",
 			"method": "buildElseIfCommentReflowLayout",
-			"find": "final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow\n\t\t\t\t&& $afterKwExpr == null\n\t\t\t\t&& _eicrLead.length == 1",
-			"replace": "final _eicrDoc: Null<anyparse.core.Doc> = $afterKwExpr == null\n\t\t\t\t&& _eicrLead.length == 1",
+			"find": "final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow && $afterKwExpr == null && _eicrLead.length == 1",
+			"replace": "final _eicrDoc: Null<anyparse.core.Doc> = $afterKwExpr == null && _eicrLead.length == 1",
 			"note": "the runtime gate stops reading `opt.elseIfCommentReflow`, so the reflow fires with the knob off and every pre-knob layout moves"
 		},
 		{
@@ -404,24 +404,24 @@
 			"name": "M-FILEHEADER-ANY-DECL",
 			"type": "anyparse.macro.TriviaEofLowering",
 			"method": "triviaEofFileheaderBlanksExpr",
-			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
-			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0 && _ci == 0 && _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _ci == 0 && _isBlock",
 			"note": "the first-decl guard goes, so a doc comment leading the SECOND declaration is read as the module's file header"
 		},
 		{
 			"name": "M-FILEHEADER-ANY-COMMENT",
 			"type": "anyparse.macro.TriviaEofLowering",
 			"method": "triviaEofFileheaderBlanksExpr",
-			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
-			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _isBlock",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0 && _ci == 0 && _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0 && _isBlock",
 			"note": "the first-comment guard goes, so the SECOND comment of a leading run is a file header too and a type's own doc is split from it"
 		},
 		{
 			"name": "M-FILEHEADER-ANY-COMMENT-KIND",
 			"type": "anyparse.macro.TriviaEofLowering",
 			"method": "triviaEofFileheaderBlanksExpr",
-			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t&& _isBlock",
-			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0\n\t\t\t\t\t&& _ci == 0\n\t\t\t\t\t",
+			"find": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0 && _ci == 0 && _isBlock",
+			"replace": "final _firstSlot: Bool = $v{afterFileHeaderCommentBlanks}\n\t\t\t\t\t&& _si == 0 && _ci == 0 ",
 			"note": "the block-comment guard goes, so a line-comment header takes the file-header blank the knob reserves for a block one"
 		},
 		{

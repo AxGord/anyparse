@@ -311,8 +311,7 @@ final class NullGuardedCode {
 		for (call in facts.calls[id] ?? []) if (call.access != STATIC_ACCESS || !handsNull(call.at, index, count)) return false;
 		return (facts.fields[id] ?? []).foreach(
 			read ->
-				read.fact.write
-				|| read.fact.use == COMPARE
+				read.fact.write || read.fact.use == COMPARE
 				|| (read.fact.use == VALUE && !read.fact.held && neverCalled(read.node, read.fact.at, 0))
 		);
 	}
@@ -322,9 +321,7 @@ final class NullGuardedCode {
 	 * with one signature, not exposed to code outside the program, of a class that is not extern.
 	 */
 	private function callable(type: TypeFact, field: FieldDeclFact): Bool {
-		return type.kind == FactKinds.CLASS
-			&& type.alike
-			&& !type.isExtern
+		return type.kind == FactKinds.CLASS && type.alike && !type.isExtern
 			&& field.kinds.foreach(k -> k == FactKinds.METHOD)
 			&& !field.overloads.exists(o -> o > 0)
 			&& !field.meta.contains(EXPOSE)
@@ -575,8 +572,7 @@ final class NullGuardedCode {
 				final fact: Null<TypeFact> = _view.type(id);
 				fact != null && fact.alike && (
 					FactKinds.NOMINAL_KINDS.contains(fact.kind) || (
-						fact.kind == FactKinds.TYPEDEF
-						&& fact.targets.length > 0
+						fact.kind == FactKinds.TYPEDEF && fact.targets.length > 0
 						&& fact.targets.foreach(target -> builtinEquality(FactsTypeTree.read(target), depth + 1))
 					)
 				);

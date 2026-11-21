@@ -261,8 +261,7 @@ final class LintScope {
 	private static function isLintInput(path: String): Bool {
 		final name: String = Path.withoutDirectory(path);
 		return GateTree.isEngineInput(path)
-			|| name == ConfigFinder.PROJECT_CONFIG
-			|| name == ConfigFinder.LEGACY_PROJECT_CONFIG
+			|| name == ConfigFinder.PROJECT_CONFIG || name == ConfigFinder.LEGACY_PROJECT_CONFIG
 			|| path.endsWith('.hxml')
 			|| INPUT_FILES.contains(name);
 	}

@@ -263,8 +263,7 @@ final class ParamAscription {
 		// supertype or implemented interface declaring the name pins it from above, and there a family
 		// scan looks in the wrong direction entirely. An ancestor the closure cannot reach proves neither.
 		final family: Null<Array<OverrideFamilyMember>> = symbols.subtypes.overrideFamilyOf(owning.name, method);
-		return family != null
-			&& family.length == 0
+		return family != null && family.length == 0
 			&& symbols.typing.members.supertypeMemberProof(owning.name, method) == SupertypeProof.Absent
 			? owning
 			: null;
@@ -320,9 +319,7 @@ final class ParamAscription {
 	): Bool {
 		final s: Null<Span> = node.span;
 		if (
-			node.kind == shape.identKind
-			&& node.name == name
-			&& s != null
+			node.kind == shape.identKind && node.name == name && s != null
 			&& targetKeys.exists('${s.from}:${s.to}')
 			&& !recordParamRead(node, parent, shape, castTargets, reads)
 		)

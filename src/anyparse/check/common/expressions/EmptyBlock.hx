@@ -123,8 +123,7 @@ final class EmptyBlock extends RuleBase {
 	private static function walk(scan: EmptyScan, node: QueryNode, parent: Null<QueryNode>): Void {
 		final span: Null<Span> = node.span;
 		if (
-			span != null
-			&& node.children.length == 0
+			span != null && node.children.length == 0
 			&& scan.flagKinds.contains(node.kind)
 			&& SourceText.isBlankSpan(span, scan.source)
 			&& !isDrainLoopBody(node, parent, scan)

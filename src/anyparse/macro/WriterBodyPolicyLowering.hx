@@ -88,8 +88,7 @@ final class WriterBodyPolicyLowering {
 		return args == null || args.length <= PLAIN_VALUE_CTOR_ARG
 			? null
 			: macro (
-				opt._inExprPosition
-				&& !opt._inElseIfBranch
+				opt._inExprPosition && !opt._inElseIfBranch
 				&& anyparse.format.LoopBodyShape.isPlainValueChain(
 					value, $v{args[0]}, $v{args[1]}, $v{args[2]}, $v{args[3]}, $v{args.slice(PLAIN_VALUE_CTOR_ARG)}
 				)
@@ -498,8 +497,7 @@ final class WriterBodyPolicyLowering {
 			macro {
 				final _body: anyparse.core.Doc = $writeCall;
 				if (
-					!$optAccess
-					&& $lcAccess == anyparse.format.BracePlacement.Next
+					!$optAccess && $lcAccess == anyparse.format.BracePlacement.Next
 					&& Type.enumConstructor($bodyValueExpr) == $v{ctorName}
 					&& anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				)
@@ -670,9 +668,7 @@ final class WriterBodyPolicyLowering {
 		return macro {
 			final _eicrBody: anyparse.core.Doc = $writeCall;
 			final _eicrLead: Array<String> = $kwLeadingExpr;
-			final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow
-				&& $afterKwExpr == null
-				&& _eicrLead.length == 1
+			final _eicrDoc: Null<anyparse.core.Doc> = opt.elseIfCommentReflow && $afterKwExpr == null && _eicrLead.length == 1
 				&& StringTools.startsWith(_eicrLead[0], '//')
 				? anyparse.format.ElseIfCommentReflow.insertHeadTrail(_eicrBody, trailingCommentDocGuarded(_eicrLead[0], opt))
 				: null;

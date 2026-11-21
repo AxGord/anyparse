@@ -280,8 +280,7 @@ final class PreferSwitchExpressionAssignment extends RuleBase {
 	private static function assignsFinalLocal(
 		name: String, lvalue: QueryNode, root: QueryNode, switchStmt: QueryNode, switchSpan: Span, leafCount: Int, s: Seams
 	): Bool {
-		return lvalue.kind == s.identKind
-			&& lvalue.name == name
+		return lvalue.kind == s.identKind && lvalue.name == name
 			&& writtenOnlyByArms(name, root, switchSpan, leafCount, s)
 			&& !Refs.readsName(name, switchStmt, s.shape);
 	}

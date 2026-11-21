@@ -255,8 +255,7 @@ final class EnumCtorRefs {
 	): Bool {
 		if (fi == null) return true;
 		final statics: ImportedStatics = index.values.importedStatics(fi, name);
-		return statics.unknown
-			|| statics.statics.length > 0
+		return statics.unknown || statics.statics.length > 0
 			|| CrossRenameMember.hostShadows(host, name, index)
 			|| CrossRenameMember.declaresModuleBinding(entry.tree, name, refShape);
 	}

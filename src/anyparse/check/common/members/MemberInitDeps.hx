@@ -111,10 +111,7 @@ final class MemberInitDeps {
 			if (sideEffecting(f, unsafe, shape, source, movableArglessNew))
 				for (g in fields)
 					if (
-						g.node != f.node
-						&& f.isStatic == g.isStatic
-						&& g.initNode != null
-						&& !g.isInline
+						g.node != f.node && f.isStatic == g.isStatic && g.initNode != null && !g.isInline
 						&& !initializesToDeclaredDefault(g, shape)
 					)
 						out.push(constraintOf(f, g, SideEffect));
@@ -142,12 +139,7 @@ final class MemberInitDeps {
 		if (init == null) return false;
 		final span: Null<Span> = init.span;
 		final name: Null<String> = target.node.name;
-		return span != null
-			&& name != null
-			&& target.isField
-			&& !target.isInline
-			&& target.initNode != null
-			&& target.node != owner.node
+		return span != null && name != null && target.isField && !target.isInline && target.initNode != null && target.node != owner.node
 			&& target.isStatic == owner.isStatic
 			&& OccurrenceScan.referencedInRange(source, name, span.from, span.to, []);
 	}
@@ -204,8 +196,7 @@ final class MemberInitDeps {
 		m: OrderedMember, unsafe: Array<String>, shape: RefShape, source: String, movableArglessNew: Bool
 	): Bool {
 		final init: Null<QueryNode> = m.initNode;
-		return m.isField
-			&& init != null
+		return m.isField && init != null
 			&& MemberKinds.subtreeContainsAnyKind(init, unsafe)
 			&& !(movableArglessNew && isMovableAllocation(init, shape, source));
 	}
@@ -241,10 +232,7 @@ final class MemberInitDeps {
 		for (f in fields) {
 			final name: Null<String> = f.node.name;
 			if (
-				f.isField
-				&& f.isStatic == owner.isStatic
-				&& f.node != owner.node
-				&& name != null
+				f.isField && f.isStatic == owner.isStatic && f.node != owner.node && name != null
 				&& OccurrenceScan.referencedInRange(source, name, span.from, span.to, [])
 			)
 				return true;

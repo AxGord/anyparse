@@ -537,11 +537,7 @@ final class HxTypedOptionsRewrite {
 			final name: Null<String> = argument?.name;
 			final at: Null<Span> = argument?.span;
 			if (
-				argument == null
-				|| wrapper == null
-				|| name == null
-				|| at == null
-				|| argument.kind != shape.identKind
+				argument == null || wrapper == null || name == null || at == null || argument.kind != shape.identKind
 				|| subject(m, run, false)
 			)
 				continue;

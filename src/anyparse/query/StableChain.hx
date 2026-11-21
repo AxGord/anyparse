@@ -107,8 +107,7 @@ final class StableChain {
 	private function isDataField(m: MemberInfo): Bool {
 		return (_shape.fieldDeclKinds ?? []).contains(m.kind)
 			&& (_anyDataField || !(_shape.mutableFieldDeclKinds ?? []).contains(m.kind))
-			&& !m.hasGetter
-			&& !m.isDynamic;
+			&& !m.hasGetter && !m.isDynamic;
 	}
 
 	/** The type declaration of this file holding offset `at`. */

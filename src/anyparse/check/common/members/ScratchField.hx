@@ -615,9 +615,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 
 	/** Whether `node` is `this.name`. */
 	private static function isSelfAccess(node: QueryNode, name: String, s: Seams): Bool {
-		return node.kind == s.fieldAccessKind
-			&& node.name == name
-			&& node.children.length == 1
+		return node.kind == s.fieldAccessKind && node.name == name && node.children.length == 1
 			&& node.children[0].kind == s.identKind
 			&& s.selfText != null
 			&& node.children[0].name == s.selfText;
@@ -809,8 +807,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 			if (assign == null || assign.kind != shape.assignKind || !NodeShape.hasAssignShape(assign)) return false;
 			final target: QueryNode = assign.children[0];
 			final bare: Bool = target.kind == shape.identKind;
-			final throughSelf: Bool = target.kind == shape.fieldAccessKind
-				&& target.children.length == 1
+			final throughSelf: Bool = target.kind == shape.fieldAccessKind && target.children.length == 1
 				&& target.children[0].kind == shape.identKind
 				&& self != null
 				&& target.children[0].name == self;

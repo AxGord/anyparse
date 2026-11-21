@@ -297,11 +297,7 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		final m: MemberInfo = owned.member;
 		return memberKinds.contains(m.kind)
 			&& !fieldKinds.contains(m.kind)
-			&& !m.isStatic
-			&& !m.isOverload
-			&& !m.hasOverloadMeta
-			&& !m.isMacro
-			&& m.paramTypeSources.length == arity;
+			&& !m.isStatic && !m.isOverload && !m.hasOverloadMeta && !m.isMacro && m.paramTypeSources.length == arity;
 	}
 
 	/** Whether the copy method `owned`'s one parameter is written as the idiom type, read in the declaring file's scope. */
@@ -326,14 +322,8 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		final typed: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
-		return exprStmtKind == null
-			|| assignKind == null
-			|| fieldKind == null
-			|| identKind == null
-			|| fieldKinds.length == 0
-			|| memberKinds.length == 0
-			|| typed == null
-			|| blockKinds.length == 0
+		return exprStmtKind == null || assignKind == null || fieldKind == null || identKind == null || fieldKinds.length == 0
+			|| memberKinds.length == 0 || typed == null || blockKinds.length == 0
 			? null
 			: {
 				shape: shape,

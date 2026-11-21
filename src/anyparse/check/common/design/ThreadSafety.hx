@@ -761,8 +761,7 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 				w ->
 					w != r
 					&& !suppressed(w.finding)
-					&& w.hold.lock == r.hold.lock
-					&& w.hold.edge.from != fn
+					&& w.hold.lock == r.hold.lock && w.hold.edge.from != fn
 					&& w.calls.exists(c -> w.taint.blockingTrail(w.hold, c, w.held)?.path.contains(fn) == true)
 			);
 			if (around.length == 0) continue;

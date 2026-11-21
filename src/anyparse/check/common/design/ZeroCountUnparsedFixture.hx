@@ -202,9 +202,7 @@ final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware imp
 		final count: QueryNode = node.children[2];
 		final field: Null<String> = count.name;
 		return seams.numericKinds.contains(zero.kind)
-			&& zero.name == '0'
-			&& count.kind == seams.fieldAccessKind
-			&& field != null
+			&& zero.name == '0' && count.kind == seams.fieldAccessKind && field != null
 			&& scan.options.countFields.contains(field)
 			&& count.children.length == 1
 			? count.children[0]

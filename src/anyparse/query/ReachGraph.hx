@@ -1145,9 +1145,7 @@ final class ReachGraph {
 				) {
 					final receiver: Null<QueryNode> = node.children[0];
 					final rs: Null<Span> = receiver?.span;
-					final staticOwner: Null<String> = receiver != null
-						&& rs != null
-						&& receiver.kind == shape.identKind
+					final staticOwner: Null<String> = receiver != null && rs != null && receiver.kind == shape.identKind
 						&& receiver.name != null
 						&& CallGraphNames.isTypeLike(receiver.name ?? '')
 						&& TypeResolver.bindingNodeFrom(receiver.name ?? '', rs, tree, shape) == null

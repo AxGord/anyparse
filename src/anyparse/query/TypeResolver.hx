@@ -293,9 +293,7 @@ final class TypeResolver {
 		while (root.kind == fieldAccessKind && root.children.length == 1) root = root.children[0];
 		final rootName: Null<String> = root.name;
 		final rootSpan: Null<Span> = root.span;
-		return root.kind == identKind
-			&& rootName != null
-			&& rootSpan != null
+		return root.kind == identKind && rootName != null && rootSpan != null
 			&& resolveBindingFrom(rootName, rootSpan, tree, shape) == null;
 	}
 
@@ -929,8 +927,7 @@ final class TypeResolver {
 		return (c >= 'a'.code && c <= 'z'.code)
 			|| (c >= 'A'.code && c <= 'Z'.code)
 			|| (c >= '0'.code && c <= '9'.code)
-			|| c == '_'.code
-			|| c == '.'.code;
+			|| c == '_'.code || c == '.'.code;
 	}
 
 	/** Whether `kind` is a member or type declaration — a scope a `@:nullSafety` meta can annotate. */
@@ -1036,12 +1033,9 @@ final class TypeResolver {
 			if (found != null) return;
 			final s: Null<Span> = n.span;
 			if (
-				s != null
-				&& s.from == naiveFrom
-				&& n.name == name
+				s != null && s.from == naiveFrom && n.name == name
 				&& localDeclKinds.contains(n.kind)
-				&& s.from <= opSpan.from
-				&& opSpan.to <= s.to
+				&& s.from <= opSpan.from && opSpan.to <= s.to
 			) {
 				found = s;
 				return;

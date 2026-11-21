@@ -2314,8 +2314,7 @@ class WrapList {
 		appendTrailingComma: Bool, lineWidth: Int
 	): Null<Doc> {
 		if (
-			mode == FillLineWithLeadingBreak
-			&& items.length == 1
+			mode == FillLineWithLeadingBreak && items.length == 1
 			&& isArrowBodyMarker(items[0])
 			&& !arrowBodyIsBlock(items[0])
 			&& !arrowBodyBreaks(items[0])

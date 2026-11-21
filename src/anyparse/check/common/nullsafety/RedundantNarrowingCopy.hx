@@ -75,8 +75,7 @@ private final class ThreadFacts {
 	/** Whether the field `field`, read in `file` from offset `at`, is known to hold still under two reads there. */
 	public function steady(file: String, field: String, at: Int): Bool {
 		final known: Null<KnownThreads> = _known;
-		return known != null
-			&& known.complete
+		return known != null && known.complete
 			&& known.chains[file]?.closedWorld == true
 			&& !known.writers.mayChangeUnderRead(field, known.graph.functionAt(file, at));
 	}
@@ -421,11 +420,7 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 		final equalityKinds: Null<Array<String>> = shape.equalityKinds;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (
-			localDeclKinds == null
-			|| fieldAccessKind == null
-			|| nullKind == null
-			|| callKind == null
-			|| equalityKinds == null
+			localDeclKinds == null || fieldAccessKind == null || nullKind == null || callKind == null || equalityKinds == null
 			|| support == null
 		)
 			return null;

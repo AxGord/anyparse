@@ -500,9 +500,7 @@ final class SourceCommand implements CliCommand {
 		for (child in type.children) {
 			final childSpan: Null<Span> = child.span;
 			if (
-				child.kind == anonKind
-				&& childSpan != null
-				&& childSpan.to <= end
+				child.kind == anonKind && childSpan != null && childSpan.to <= end
 				&& source.substring(childSpan.to, end).trim().replace(';', '') == ''
 			)
 				found = child;

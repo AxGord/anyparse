@@ -797,8 +797,7 @@ final class MoveMember {
 			for (sibling in membersOf(prep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions)) {
 				final siblingName: Null<String> = sibling.member.name;
 				if (
-					siblingName != null
-					&& sibling.member.span != null
+					siblingName != null && sibling.member.span != null
 					&& !movedNames.contains(siblingName)
 					&& slices.indexOf(siblingName) != -1
 				)
@@ -1422,8 +1421,7 @@ final class MoveMember {
 			for (g in allMembers) {
 				final nm: Null<String> = g.member.name;
 				if (
-					nm != null
-					&& g.member.span != null
+					nm != null && g.member.span != null
 					&& !names.contains(nm)
 					&& MemberKinds.FN_DECL_KINDS.contains(g.member.kind)
 					&& !g.modifiers.exists(mod -> mod.kind == 'Static')

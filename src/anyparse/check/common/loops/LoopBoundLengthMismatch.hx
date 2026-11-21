@@ -397,9 +397,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 		final call: QueryNode = stmt.children[0];
 		if (call.kind != s.core.callKind || !NodeShape.hasOneArgCallShape(call)) return null;
 		final callee: QueryNode = call.children[0];
-		return callee.kind == s.core.fieldAccessKind
-			&& callee.name == s.appendMethod
-			&& callee.children.length == 1
+		return callee.kind == s.core.fieldAccessKind && callee.name == s.appendMethod && callee.children.length == 1
 			&& isPlainRef(callee.children[0], name, s)
 			? call
 			: null;
@@ -421,9 +419,7 @@ final class LoopBoundLengthMismatch extends RuleBase implements NoAutofix implem
 	/** Whether `node` is the bare `name` or `this.name`. */
 	private static function isPlainRef(node: QueryNode, name: String, s: Seams): Bool {
 		return (node.kind == s.core.identKind && node.name == name) || (
-			node.kind == s.core.fieldAccessKind
-			&& node.name == name
-			&& node.children.length == 1
+			node.kind == s.core.fieldAccessKind && node.name == name && node.children.length == 1
 			&& node.children[0].kind == s.core.identKind
 			&& s.selfText != null
 			&& node.children[0].name == s.selfText

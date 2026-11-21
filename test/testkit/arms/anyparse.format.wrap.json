@@ -729,6 +729,30 @@
 			"find": "if (bare != null) return { head: bare.head, body: arrowBodyDoc(bare.body) ?? bare.body };",
 			"replace": "if (bare != null) return bare;",
 			"note": "the glue shape takes the arrow marker itself as its body, so a head wide enough to overflow the marker's own probe breaks after `->` twice and indents the ladder a second level"
+		},
+		{
+			"name": "M-FILL-SIMPLE-RUNS-NO-JOIN",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillSimpleRuns",
+			"find": "if (i > 0 && joins[i - 1])",
+			"replace": "if (false)",
+			"note": "no gap of a fillSimpleRuns chain joins, so simple operands go one per line again"
+		},
+		{
+			"name": "M-OPERAND-SIMPLE-ALWAYS",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "operandIsSimple",
+			"find": "simple = false;",
+			"replace": "simple = true;",
+			"note": "a call, paren or index operand counts as simple, so it joins the filled run instead of taking its own line"
+		},
+		{
+			"name": "M-MIXED-BOOL-OR-JOINS",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "shapeFillSimpleRuns",
+			"find": " && !(mixedBool && op == '||')",
+			"replace": "",
+			"note": "a chain mixing && with || fills across its || gaps, so an || no longer starts a line"
 		}
 	]
 }

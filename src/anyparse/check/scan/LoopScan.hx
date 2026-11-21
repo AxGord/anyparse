@@ -388,9 +388,7 @@ final class LoopScan {
 		final step: QueryNode = stmt.children[0];
 		return step.children.length > 0 && bareIdentName(step.children[0], s) == name && (
 			incrementKinds.contains(step.kind) || (
-				addAssignKind != null
-				&& step.kind == addAssignKind
-				&& step.children.length == COMPOUND_ASSIGN_CHILD_COUNT
+				addAssignKind != null && step.kind == addAssignKind && step.children.length == COMPOUND_ASSIGN_CHILD_COUNT
 				&& isNumericLiteral(step.children[1], ONE_LITERAL, source, s)
 			)
 		);
@@ -531,8 +529,7 @@ final class LoopScan {
 
 	/** Whether `node` is an index access whose receiver is the collection `path` (`isCollection`). */
 	public static function isIndexAccessOf(node: QueryNode, path: Array<String>, s: LoopSeams): Bool {
-		return node.kind == s.indexAccessKind
-			&& node.children.length == INDEX_ACCESS_CHILD_COUNT
+		return node.kind == s.indexAccessKind && node.children.length == INDEX_ACCESS_CHILD_COUNT
 			&& isCollection(node.children[0], path, s);
 	}
 

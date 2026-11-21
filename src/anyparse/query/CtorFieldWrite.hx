@@ -718,8 +718,7 @@ final class CtorFieldWrite {
 	): Void {
 		final enclosed: Bool = inClosure || closures.contains(node.kind);
 		if (
-			node.kind == assignKind
-			&& node.children.length >= 2
+			node.kind == assignKind && node.children.length >= 2
 			&& ctorTargetIsField(node.children[0], fieldFrom, fieldName, container, shape)
 		)
 			out.push({ assign: node, inClosure: enclosed });

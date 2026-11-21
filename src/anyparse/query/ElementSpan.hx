@@ -691,12 +691,8 @@ final class ElementSpan {
 	public static function literalWrapperOf(node: QueryNode, parent: QueryNode): Null<QueryNode> {
 		final nodeSpan: Null<Span> = node.span;
 		final parentSpan: Null<Span> = parent.span;
-		return node.kind == 'Literal'
-			&& parent.children.length == 1
-			&& nodeSpan != null
-			&& parentSpan != null
-			&& parentSpan.from < nodeSpan.from
-			&& nodeSpan.to < parentSpan.to
+		return node.kind == 'Literal' && parent.children.length == 1 && nodeSpan != null && parentSpan != null
+			&& parentSpan.from < nodeSpan.from && nodeSpan.to < parentSpan.to
 			? parent
 			: null;
 	}
@@ -754,9 +750,7 @@ final class ElementSpan {
 		final parent: Null<QueryNode> = TreePath.parentOf(tree, node);
 		if (parent == null || parent.children.length != 1) return null;
 		final parentSpan: Null<Span> = parent.span;
-		return parentSpan != null
-			&& parentSpan.from == span.from
-			&& parentSpan.to > span.to
+		return parentSpan != null && parentSpan.from == span.from && parentSpan.to > span.to
 			&& ownsItsLines(source, declEditSpan(source, tree, parent, parentSpan, regions), regions)
 			? parent
 			: null;
@@ -819,8 +813,7 @@ final class ElementSpan {
 	 */
 	private static function isAnnotationElement(node: QueryNode): Bool {
 		return MemberKinds.META_KINDS.contains(node.kind) || (
-			node.kind == MemberKinds.CONDITIONAL_REGION_KIND
-			&& node.children.length > 0
+			node.kind == MemberKinds.CONDITIONAL_REGION_KIND && node.children.length > 0
 			&& node.children.foreach(c -> MemberKinds.META_KINDS.contains(c.kind))
 		);
 	}
@@ -847,8 +840,7 @@ final class ElementSpan {
 	private static function ownsWholeLines(source: String, span: Span): Bool {
 		return span.from > 0
 			&& source.fastCodeAt(span.from - 1) == '\n'.code
-			&& span.to > span.from
-			&& span.to <= source.length
+			&& span.to > span.from && span.to <= source.length
 			&& source.fastCodeAt(span.to - 1) == '\n'.code;
 	}
 

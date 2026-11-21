@@ -271,8 +271,7 @@ final class TriviaPairSlots {
 	 * capture would run before the lead the rule's first-token claim promises.
 	 */
 	public static function isBeforeLeadRef(child: ShapeNode, isFirstField: Bool): Bool {
-		return !isFirstField
-			&& child.kind == Ref
+		return !isFirstField && child.kind == Ref
 			&& child.readMetaString(':kw') == null
 			&& child.readMetaString(':lead') != null
 			&& child.readMetaStringArgs(':absentOn') == null

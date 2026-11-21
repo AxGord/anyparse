@@ -463,8 +463,7 @@ final class ValueEscapes {
 		// the value an arrow lambda's body yields: an expression, or a block's last statement unless that one yields none
 		function bodyValue(body: QueryNode): Void {
 			final last: Null<QueryNode> = body.children.length > 0 ? body.children[body.children.length - 1] : null;
-			final block: Bool = body.kind == shape.blockBodyKind
-				|| body.kind == shape.blockStmtKind
+			final block: Bool = body.kind == shape.blockBodyKind || body.kind == shape.blockStmtKind
 				|| statementKinds.contains(last?.kind ?? '');
 			if (!block)
 				value(body);
@@ -532,9 +531,7 @@ final class ValueEscapes {
 				final owner: Null<String> = isTypeName(receiver) ? RefactorSupport.flattenPath(receiver) : typeOf(receiver);
 				if (owner == null || libraryMember(SourceText.lastSegment(owner), name)) return false;
 			} else if (
-				target.kind == shape.identKind
-				&& name != null
-				&& at != null
+				target.kind == shape.identKind && name != null && at != null
 				&& TypeResolver.bindingNodeFrom(name, at, tree, shape) == null
 				&& libraryMember(TypeResolver.enclosingTypeDeclAt(tree, at.from)?.name, name)
 			) {

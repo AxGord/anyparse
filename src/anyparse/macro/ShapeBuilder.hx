@@ -567,8 +567,7 @@ class ShapeBuilder {
 			case TType(ref, _):
 				final at: { file: String, min: Int, max: Int } = Context.getPosInfos(ref.get().pos);
 				final own: { file: String, min: Int, max: Int } = Context.getPosInfos(generic.pos);
-				at.file == own.file
-					&& at.min == own.min
+				at.file == own.file && at.min == own.min
 					&& typeToString(Context.follow(found, true)) == typeToString(Context.follow(applied, true));
 			case _: false;
 		};

@@ -92,9 +92,7 @@ final class ReceiverShadow {
 		final shape: RefShape = typing.shape;
 		if (
 			!(shape.stringLiteralKinds ?? []).contains(recv.kind)
-			&& recv.kind != shape.identKind
-			&& recv.kind != shape.fieldAccessKind
-			&& recv.kind != shape.callKind
+			&& recv.kind != shape.identKind && recv.kind != shape.fieldAccessKind && recv.kind != shape.callKind
 		)
 			return null;
 		final selfText: Null<String> = shape.selfReferenceText;

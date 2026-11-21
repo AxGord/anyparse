@@ -284,8 +284,7 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware impl
 	private static function sameLvalue(a: QueryNode, b: QueryNode, source: String): Bool {
 		final aSpan: Null<Span> = a.span;
 		final bSpan: Null<Span> = b.span;
-		return aSpan != null
-			&& bSpan != null
+		return aSpan != null && bSpan != null
 			&& MemberKinds.structurallyEqual(a, b)
 			&& normalize(source.substring(aSpan.from, aSpan.to)) == normalize(source.substring(bSpan.from, bSpan.to));
 	}
@@ -332,10 +331,7 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware impl
 				final valueSpan: Null<Span> = value?.span;
 				final initSpan: Null<Span> = m.init.span;
 				if (
-					value != null
-					&& condSpan != null
-					&& valueSpan != null
-					&& initSpan != null
+					value != null && condSpan != null && valueSpan != null && initSpan != null
 					&& !BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)
 				) {
 					final kept: Array<Span> = [new Span(m.declSpan.from, m.prefix.keptTo), condSpan, valueSpan, initSpan];
