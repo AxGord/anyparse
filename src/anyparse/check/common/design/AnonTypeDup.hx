@@ -46,17 +46,23 @@ typedef Occurrence = {
 /** One structure to rewrite: its span and the typedef path it becomes. */
 typedef RewriteSite = { final span: Span; final path: String; };
 
-/** A structure the config names: the typedef's full path, its fields as configured and their whitespace-free signature. */
-private typedef NamedType = { final path: String; final spelled: Array<String>; final signature: String; };
+/** A structure to name: the typedef's full path, its fields as spelled (configured or read off an occurrence), their signature. */
+typedef NamedType = { final path: String; final spelled: Array<String>; final signature: String; };
 
 /** The occurrences one finding's fix rewrites, and the typedef they become. */
-private typedef Plan = { final named: NamedType; final hits: Array<Occurrence>; };
+typedef Plan = { final named: NamedType; final hits: Array<Occurrence>; };
+
+/** What placing a typedef came to: the slices that create it and rewrite its occurrences, or the reason it was refused. */
+enum Placement {
+	Placed(slices: Array<CrossFileEdits>);
+	Refused(reason: String);
+}
 
 /**
  * Flags an anonymous structure TYPE that is written out three or more times
  * (configurable) across the lint scope — a shape that has earned a name.
- * The NAME is intent a human supplies, so the fix runs only for a structure the config names
- * (`named`, below); `extract-typedef` is the operation half for the rest.
+ * The NAME is intent a human supplies: the message names `apq extract-typedef` (`ExtractTypedef`) for it, and the fix
+ * here runs only for a structure the config names (`named`, below, deprecated in favour of that op).
  *
  * ## The key is STRUCTURAL, never textual
  *
@@ -112,8 +118,9 @@ private typedef Plan = { final named: NamedType; final hits: Array<Occurrence>; 
  * the run — the grouping is cross-file, so a per-file threshold would make the
  * verdict depend on which occurrence happened to come first.
  *
- * `anon-type-dup.named` maps a typedef path to its field list, `{"pkg.Name": ["a: Int", "?b: Array<X>"]}`,
- * and is the only thing that makes the fix run: it creates `pkg/Name` and rewrites every occurrence that
+ * `anon-type-dup.named` (deprecated: a run that reads it says so) maps a typedef path to its field list,
+ * `{"pkg.Name": ["a: Int", "?b: Array<X>"]}`, and is the only thing that
+ * makes the fix run: it creates `pkg/Name` and rewrites every occurrence that
  * matches EXACTLY (fields, optionality, written order, compared as text with whitespace removed).
  */
 @:nullSafety(Strict)
@@ -140,6 +147,13 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 	 * by `messageIdentity` so the mask anchor cannot drift from the wording it points at.
 	 */
 	private static final WRITTEN_LEAD: String = ' written ';
+
+	/** The fragment that precedes the extraction command a finding names, shared by the builder and by `messageIdentity`. */
+	private static final EXTRACT_LEAD: String = 'extract a typedef with apq extract-typedef ';
+
+	/** The note a config that sets `named` earns: the key still works, the op that replaces it is named. */
+	private static final NAMED_DEPRECATED: String = '"$OPTION_NAMED" is deprecated and still honoured — name a structure once with '
+		+ '`apq extract-typedef <file>:<line> <pkg.Name> --scope <dir>` instead of configuring it';
 
 	/** The same, for the DISTINCT-FILE tally of the cross-file wording. */
 	private static final ACROSS_LEAD: String = 'across ';
@@ -169,7 +183,7 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 	}
 
 	public function messageIdentity(message: String): String {
-		return MessageMask.maskAfter(MessageMask.maskAfter(message, WRITTEN_LEAD), ACROSS_LEAD);
+		return MessageMask.maskRestAfter(MessageMask.maskAfter(MessageMask.maskAfter(message, WRITTEN_LEAD), ACROSS_LEAD), EXTRACT_LEAD);
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -187,7 +201,9 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			minOccOf[entry.file] = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
 			final problems: Array<String> = [];
-			namedOf[entry.file] = namedTypesOf(config, problems);
+			final named: Array<NamedType> = namedTypesOf(config, problems);
+			namedOf[entry.file] = named;
+			if (named.length > 0) problems.push(NAMED_DEPRECATED);
 			for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
 			final minFields: Int = positiveOr(config.intOption(RULE_ID, 'minFields'), DEFAULT_MIN_FIELDS);
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
@@ -215,8 +231,12 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			final plan: Null<Plan> = span == null ? null : _plans['${v.file}:${span.from}'];
-			final slices: Null<Array<CrossFileEdits>> = plan == null ? null : slicesOf(plan, files, plugin, index);
-			if (slices != null) out.push(slices);
+			if (plan == null) continue;
+			switch slicesOf(plan, files, plugin, index) {
+				case Placed(slices):
+					out.push(slices);
+				case Refused(_):
+			}
 		}
 		return out;
 	}
@@ -244,8 +264,9 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 			final where: String = files.length == 1 ? 'in this file' : '$ACROSS_LEAD${files.length} files';
 			final plan: Null<Plan> = planOf(hits, namedOf[anchor.file] ?? []);
 			if (plan != null) _plans['${anchor.file}:${anchor.at.from}'] = plan;
+			final at: Position = anchor.at.lineCol(anchor.source);
 			final tail: String = plan == null
-				? 'extract a typedef, or name it under "$OPTION_NAMED" of $RULE_ID in apq.json to fix it'
+				? '$EXTRACT_LEAD${anchor.file}:${at.line}:${at.col} <pkg.Name> --scope ${commonDir(files)}'
 				: 'extract typedef ${plan.named.path}';
 			out.push({
 				file: anchor.file,
@@ -371,9 +392,61 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 		return { file: file, edits: edits.concat(printer.pendingImportEdits().map(e -> { span: e.span, text: e.text })) };
 	}
 
+	/** The structure `fields` spell, named `path`. */
+	public static function namedOf(path: String, fields: Array<String>): NamedType {
+		return { path: path, spelled: fields, signature: fields.map(squeeze).join('\n') };
+	}
+
+	/**
+	 * The create slice of the named typedef plus one rewrite slice per file holding an occurrence, or the reason the module
+	 * cannot be placed, already exists, or cannot be written. The occurrences are printed against an index that already
+	 * holds the new module, so a same-package file needs no import and a shadowed name falls back to the full path.
+	 */
+	public static function slicesOf(
+		plan: Plan, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>
+	): Placement {
+		final known: SymbolIndex = index ?? IndexScope.report(files, plugin);
+		final path: String = plan.named.path;
+		final found: Null<String> = targetFileOf(plan, known);
+		if (found == null) return Refused('no source root holds ${plan.hits[0].file}, so $path has no place');
+		if (files.exists(f -> f.file == found)) return Refused('the module of $path already exists: $found');
+		final target: String = found;
+		final created: Null<String> = createdSource(plan, known, plugin);
+		if (created == null) return Refused('the writer cannot build the module of $path');
+		// A host of its own, with no resolution scope: the new module exists only in `grown`, and the run's resolution index
+		// (which cannot know it) would make the printer refuse the import it needs.
+		final host: GrammarPlugin = new CachingGrammarPlugin(plugin);
+		final grown: SymbolIndex = IndexScope.over(files.concat([{ file: target, source: created }]), host);
+		final out: Array<CrossFileEdits> = [{ file: target, edits: [], create: created }];
+		final done: Array<String> = [];
+		for (hit in plan.hits) if (!done.contains(hit.file)) {
+			done.push(hit.file);
+			final sites: Array<RewriteSite> = [ for (h in plan.hits) if (h.file == hit.file) { span: h.at, path: path } ];
+			final slice: Null<CrossFileEdits> = rewriteSites(hit.file, hit.source, sites, grown, host);
+			if (slice == null) return Refused('${hit.file} does not parse');
+			out.push(slice);
+		}
+		return Placed(out);
+	}
+
 	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */
 	private static inline function positiveOr(value: Null<Int>, fallback: Int): Int {
 		return value != null && value > 0 ? value : fallback;
+	}
+
+	/** The deepest directory holding every one of `files`, `.` when they share none. */
+	private static function commonDir(files: Array<String>): String {
+		var common: Null<Array<String>> = null;
+		for (file in files) {
+			final dir: String = Path.directory(file);
+			final parts: Array<String> = dir == '' ? ['.'] : dir.split('/');
+			final shared: Array<String> = common ?? parts;
+			var n: Int = 0;
+			while (n < shared.length && n < parts.length && shared[n] == parts[n]) n++;
+			common = shared.slice(0, n);
+		}
+		final joined: String = (common ?? []).join('/');
+		return joined == '' ? (common == null || common.length == 0 ? '.' : '/') : joined;
 	}
 
 	/**
@@ -437,8 +510,7 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 
 	/** The structures `config` names under `named`: a typedef path mapped to a list of `name: Type` field strings. */
 	private static function namedTypesOf(config: LintConfig, problems: Array<String>): Array<NamedType> {
-		return RuleDeclaration.namedFields(config, RULE_ID, OPTION_NAMED, problems)
-			.map(named -> { path: named.path, spelled: named.fields, signature: named.fields.map(squeeze).join('\n') });
+		return RuleDeclaration.namedFields(config, RULE_ID, OPTION_NAMED, problems).map(named -> namedOf(named.path, named.fields));
 	}
 
 	/** The first named structure some of `hits` match EXACTLY — same fields, same optionality, same written order. */
@@ -453,38 +525,6 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 	/** `text` with every whitespace run removed: two spellings of one field compare equal. */
 	private static function squeeze(text: String): String {
 		return ~/\s+/g.replace(text, '');
-	}
-
-	/**
-	 * The create slice of the named typedef plus one rewrite slice per file holding an occurrence, or null when the module
-	 * cannot be placed, already exists, or cannot be written. The occurrences are printed against an index that already
-	 * holds the new module, so a same-package file needs no import and a shadowed name falls back to the full path.
-	 */
-	private static function slicesOf(
-		plan: Plan, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, index: Null<SymbolIndex>
-	): Null<Array<CrossFileEdits>> {
-		final known: SymbolIndex = index ?? IndexScope.report(files, plugin);
-		final found: Null<String> = targetFileOf(plan, known);
-		if (found == null || files.exists(f -> f.file == found)) return null;
-		final target: String = found;
-		final created: Null<String> = createdSource(plan, known, plugin);
-		if (created == null) return null;
-		// A host of its own, with no resolution scope: the new module exists only in `grown`, and the run's resolution index
-		// (which cannot know it) would make the printer refuse the import it needs.
-		final host: GrammarPlugin = new CachingGrammarPlugin(plugin);
-		final grown: SymbolIndex = IndexScope.over(files.concat([{ file: target, source: created }]), host);
-		final out: Array<CrossFileEdits> = [{ file: target, edits: [], create: created }];
-		final done: Array<String> = [];
-		for (hit in plan.hits) if (!done.contains(hit.file)) {
-			done.push(hit.file);
-			final sites: Array<RewriteSite> = [
-				for (h in plan.hits) if (h.file == hit.file) { span: h.at, path: plan.named.path }
-			];
-			final slice: Null<CrossFileEdits> = rewriteSites(hit.file, hit.source, sites, grown, host);
-			if (slice == null) return null;
-			out.push(slice);
-		}
-		return out;
 	}
 
 	/** Where the typedef's module goes: its package directories under the source root the first occurrence's file sits in. */

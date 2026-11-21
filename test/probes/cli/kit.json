@@ -59,7 +59,9 @@
 		"a/pkg/M.hx": "package pkg;\n\nclass M {\n\tpublic static function f() {\n\t\treturn Red;\n\t}\n}\n\nenum Color {\n\tRed;\n\tGreen;\n}\n",
 		"a/pkg/User.hx": "package pkg;\n\nimport pkg.M;\n\nclass User {\n\tstatic function main() {\n\t\tvar x = Green;\n\t\ttrace(x, M.f());\n\t}\n}\n",
 		"b/pkg/M.hx": "package pkg;\n\nclass M {\n\tpublic static function f() return 1;\n}\n\nclass MTools {\n\tpublic static function twice(i: Int): Int return i * 2;\n}\n",
-		"b/pkg/User.hx": "package pkg;\n\nusing pkg.M;\n\nclass User {\n\tstatic function main() {\n\t\ttrace(3.twice());\n\t}\n}\n"
+		"b/pkg/User.hx": "package pkg;\n\nusing pkg.M;\n\nclass User {\n\tstatic function main() {\n\t\ttrace(3.twice());\n\t}\n}\n",
+		"xtd/src/a/A.hx": "package a;\n\nclass A {\n\tpublic var p:{x:Int, y:String};\n\tpublic var q:{?y:String, x:Int};\n\tpublic var n:{inner:{x:Int, y:String}, z:Float};\n\n\tpublic function f(v:{y:String, x:Int}):{x:Int, y:String} {\n\t\treturn v;\n\t}\n\n\tpublic function g<T>(v:{x:T, y:String}):Void {}\n}\n",
+		"xtd/src/b/B.hx": "package b;\n\nclass B {\n\tpublic var p:{x:Int, y:String};\n\tpublic var arr:Array<{x:Int, y:String}>;\n\tpublic var d:{\n\t\t/** doc */ @:optional\n\t\tvar x:Int;\n\t\tvar y:String;\n\t};\n}\n"
 	},
 	"invocations": [
 		{
@@ -9642,6 +9644,74 @@
 				"exit": 1,
 				"out": "e3b0c44298fc1c14",
 				"err": "2b4d65165aa7762b",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-typedef xtd/src/a/A.hx:4 a.Point --scope xtd/src",
+			"argv": [
+				"apq",
+				"extract-typedef",
+				"xtd/src/a/A.hx:4",
+				"a.Point",
+				"--scope",
+				"xtd/src"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "2fe5fd738b4bf4c1",
+				"err": "d556b21b0145d2e0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-typedef xtd/src/a/A.hx:4 a.Point --scope xtd/src",
+			"argv": [
+				"hxq",
+				"extract-typedef",
+				"xtd/src/a/A.hx:4",
+				"a.Point",
+				"--scope",
+				"xtd/src"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "2fe5fd738b4bf4c1",
+				"err": "d556b21b0145d2e0",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-typedef xtd/src/a/A.hx:8 a.P --scope xtd/src",
+			"argv": [
+				"apq",
+				"extract-typedef",
+				"xtd/src/a/A.hx:8",
+				"a.P",
+				"--scope",
+				"xtd/src"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f1bab4939ad2c112",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-typedef xtd/src/a/A.hx:8 a.P --scope xtd/src",
+			"argv": [
+				"hxq",
+				"extract-typedef",
+				"xtd/src/a/A.hx:8",
+				"a.P",
+				"--scope",
+				"xtd/src"
+			],
+			"expect": {
+				"exit": 1,
+				"out": "e3b0c44298fc1c14",
+				"err": "f1bab4939ad2c112",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

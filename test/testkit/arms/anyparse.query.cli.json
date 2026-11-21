@@ -771,7 +771,7 @@
 		{
 			"name": "M-HOST-FOR-NOTES-UNSAID",
 			"type": "anyparse.query.cli.ProjectResolution",
-			"method": "hostFor",
+			"method": "hostOver",
 			"find": "ConfigNotes.say(ledger, notes, CliIo.stderr);",
 			"replace": "",
 			"note": "an edit op reading a broken apq.json collects the diagnostic and never says it: the op runs on the rest of the chain with no word"
@@ -799,6 +799,14 @@
 			"find": "if (modules.contains(path)) return true;",
 			"replace": "if (modules.exists(m -> m.endsWith(path))) return true;",
 			"note": "a module of another package whose path ends the same stands for the moved one"
+		},
+		{
+			"name": "M-LANG-ADDRESSED-FILE",
+			"type": "anyparse.query.cli.LanguageChoice",
+			"method": "choose",
+			"find": "command is PositionAddressed ? CliArgs.fileOfAddress(args[i]) : args[i]",
+			"replace": "args[i]",
+			"note": "the position suffix of an addressed file hides its extension, so a command addressed by file:line names no grammar"
 		}
 	]
 }

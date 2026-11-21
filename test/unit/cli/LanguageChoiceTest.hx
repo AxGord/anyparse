@@ -13,6 +13,7 @@ import anyparse.query.cli.command.ChangedCommand;
 import anyparse.query.cli.command.CommentRewriteCommand;
 import anyparse.query.cli.command.CondCommand;
 import anyparse.query.cli.command.DeclaresCommand;
+import anyparse.query.cli.command.ExtractTypedefCommand;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.GetCommand;
 import anyparse.query.cli.command.ImportersCommand;
@@ -381,6 +382,15 @@ class LanguageChoiceTest extends Test {
 			{ name: 'b.json', source: '{"k": "zz"}\n' }
 		]);
 		CliFixture.always(CliFixture.removeDir.bind(dir), () -> Assert.equals(1, quietRun(['fmt', '--list', dir])));
+	}
+
+	/** A command addressed as `<file>:<line>[:<col>]` names its grammar by the file part; no other command reads the suffix away. */
+	@:killer('M-LANG-ADDRESSED-FILE')
+	@:pin('control')
+	public function testAnAddressedFileNamesTheGrammar(): Void {
+		Assert.same(['--lang', 'haxe', 'src/A.hx:6:2', 'pkg.Name'], one(choose(new ExtractTypedefCommand(), ['src/A.hx:6:2', 'pkg.Name'])));
+		Assert.same(['--lang', 'haxe', 'src/A.hx:6', 'pkg.Name'], one(choose(new ExtractTypedefCommand(), ['src/A.hx:6', 'pkg.Name'])));
+		Assert.raises(() -> choose(new LintCommand(), ['src/A.hx:6']), UsageFailure);
 	}
 
 	private static function choose(command: CliCommand, args: Array<String>): LanguageChoiceResult {

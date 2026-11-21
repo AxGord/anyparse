@@ -22,6 +22,7 @@ import anyparse.query.cli.command.ExtractConstantCommand;
 import anyparse.query.cli.command.ExtractInterfaceCommand;
 import anyparse.query.cli.command.ExtractMethodCommand;
 import anyparse.query.cli.command.ExtractSuperclassCommand;
+import anyparse.query.cli.command.ExtractTypedefCommand;
 import anyparse.query.cli.command.ExtractVarCommand;
 import anyparse.query.cli.command.FmtCommand;
 import anyparse.query.cli.command.GatesCommand;
@@ -144,6 +145,7 @@ final class CliRegistry {
 			new ShardPlanCommand(),
 			new InlineCommand(),
 			new InlineMethodCommand(),
+			new ExtractTypedefCommand(),
 			new ExtractVarCommand(),
 			new ExtractConstantCommand(),
 			new ExtractMethodCommand(),

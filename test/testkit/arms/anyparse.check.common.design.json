@@ -1397,8 +1397,8 @@
 			"name": "M-ANON-EXISTING-TARGET",
 			"type": "anyparse.check.common.design.AnonTypeDup",
 			"method": "slicesOf",
-			"find": "if (found == null || files.exists(f -> f.file == found)) return null;",
-			"replace": "if (found == null) return null;",
+			"find": "if (files.exists(f -> f.file == found)) return Refused('the module of $path already exists: $found');",
+			"replace": "",
 			"note": "a module already sitting at the configured path is offered a create again, so the fix would overwrite it"
 		},
 		{
@@ -1499,6 +1499,62 @@
 			"method": "withoutNested",
 			"force": "found",
 			"note": "a structure inside another fixable one keeps its plan, so two edits cover one span and the whole file group is dropped"
+		},
+		{
+			"name": "M-XTD-ORDER",
+			"type": "anyparse.check.common.design.ExtractTypedef",
+			"method": "extract",
+			"find": "PreferExistingTypedef.sortedFields(hit.fields) != fields",
+			"replace": "hit.fields.join('\\n') != addressed.fields.join('\\n')",
+			"note": "an occurrence is the same type only when its fields are written in the addressed order, so a reordered spelling of the structure is left as written"
+		},
+		{
+			"name": "M-XTD-NESTED-ORDER",
+			"type": "anyparse.check.common.design.ExtractTypedef",
+			"method": "extract",
+			"find": "PreferExistingTypedef.sortedFields(hit.fields) != fields",
+			"replace": "false",
+			"note": "an occurrence whose nested structure is written with its fields in another order is rewritten to the typedef too, though prefer-existing-typedef compares nested bodies as written"
+		},
+		{
+			"name": "M-XTD-DENOTES",
+			"type": "anyparse.check.common.design.ExtractTypedef",
+			"method": "extract",
+			"find": "PreferExistingTypedef.denotesOf(hit.typeNames, hit.file, index) != denotes",
+			"replace": "false",
+			"note": "an occurrence whose type name binds another declaration than the addressed one's is rewritten to the typedef too, changing its type"
+		},
+		{
+			"name": "M-XTD-PARAM",
+			"type": "anyparse.check.common.design.ExtractTypedef",
+			"method": "extract",
+			"find": "else if (PreferExistingTypedef.bindsAParameter(hit, plugin, scopes))",
+			"replace": "else if (false)",
+			"note": "an occurrence whose type name is a type parameter in scope is rewritten to a typedef that cannot name it"
+		},
+		{
+			"name": "M-XTD-ADDRESSED-PARAM",
+			"type": "anyparse.check.common.design.ExtractTypedef",
+			"method": "extract",
+			"find": "if (PreferExistingTypedef.bindsAParameter(addressed, plugin, scopes))",
+			"replace": "if (false)",
+			"note": "a structure naming a type parameter is extracted into a module that cannot see the parameter"
+		},
+		{
+			"name": "M-XTD-NAME-TAKEN",
+			"type": "anyparse.check.common.design.ExtractTypedef",
+			"method": "extract",
+			"find": ".contains(path)) return Declined('the type $path already exists');",
+			"replace": ".contains('')) return Declined('the type $path already exists');",
+			"note": "a name some type of the scope already holds is taken again, so the new module redeclares it"
+		},
+		{
+			"name": "M-ANON-NAMED-DEPRECATION",
+			"type": "anyparse.check.common.design.AnonTypeDup",
+			"method": "run",
+			"find": "if (named.length > 0) problems.push(NAMED_DEPRECATED);",
+			"replace": "",
+			"note": "a config that sets the deprecated `named` key is not told so, and the op that replaces it stays unnamed"
 		}
 	]
 }

@@ -70,7 +70,7 @@ final class LanguageChoice {
 		final scopes: Array<String> = [];
 		// A `-`-led positional is stdin or a short option.
 		for (i in files) if (!args[i].startsWith(STDIN_POSITIONAL)) {
-			final lang: Null<String> = CliArgs.langOfFile(args[i]);
+			final lang: Null<String> = CliArgs.langOfFile(command is PositionAddressed ? CliArgs.fileOfAddress(args[i]) : args[i]);
 			if (lang == null)
 				scopes.push(args[i]);
 			else

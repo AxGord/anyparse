@@ -18,13 +18,22 @@ final class ProjectResolution {
 	 * `CachingGrammarPlugin` carrying the project's resolution scope when the project (or the std) provides one.
 	 */
 	public static function hostFor(plugin: GrammarPlugin, file: String, source: String, ledger: RunLedger): GrammarPlugin {
+		return hostOver(plugin, file, [{ file: file, source: source }], ledger);
+	}
+
+	/**
+	 * `hostFor` for an op that reads several files: `files` is the report side of the resolution scope, so the index sees
+	 * every file the op searches as well as the project's roots; `file` names the config that governs the run.
+	 */
+	public static function hostOver(
+		plugin: GrammarPlugin, file: String, files: Array<{ file: String, source: String }>, ledger: RunLedger
+	): GrammarPlugin {
 		final notes: Array<ConfigNote> = [];
 		final config: LintConfig = LintConfig.discover(file, notes);
 		OracleProviders.reportDrops(config, plugin, notes);
 		ConfigNotes.say(ledger, notes, CliIo.stderr);
 		final scope: Null<ResolutionScope> = LintCommand.resolutionThunk(
-			plugin.langName(), [{ file: file, source: source }],
-			config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd(), ledger
+			plugin.langName(), files, config.resolutionRoots(), config.resolutionLibs(), config.resolutionStd(), ledger
 		);
 		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
 		if (scope != null) host.setResolutionScope(scope);

@@ -186,6 +186,31 @@ final class PreferExistingTypedef extends RuleBase implements CrossFileFix imple
 		return found.filter(v -> !nested.contains(v));
 	}
 
+	public static function sortedFields(fields: Array<String>): String {
+		final sorted: Array<String> = fields.copy();
+		sorted.sort(Compare.compareString);
+		return sorted.join('\n');
+	}
+
+	/** What each simple name of `names` denotes from `file`, as one comparable text: equal only when every name binds alike. */
+	public static function denotesOf(names: Array<String>, file: String, index: SymbolIndex): String {
+		final parts: Array<String> = names.map(name -> '$name>${denotationOf(name, file, index)}');
+		parts.sort(Compare.compareString);
+		return parts.join(',');
+	}
+
+	/**
+	 * Whether a type name the structure spells is a type parameter in scope where it is written (a class's or a function's): a
+	 * parameter outranks every type of its name, so the typedef's own `Foo` would replace a parameter `Foo`. `memo` holds each
+	 * file's parameter scopes, read once from the tree.
+	 */
+	public static function bindsAParameter(hit: Occurrence, plugin: GrammarPlugin, memo: Map<String, Map<String, Array<Span>>>): Bool {
+		final known: Null<Map<String, Array<Span>>> = memo[hit.file];
+		final scopes: Map<String, Array<Span>> = known ?? parameterScopes(hit, plugin, memo);
+		final at: Int = hit.at.from;
+		return hit.typeNames.exists(name -> (scopes[name] ?? []).exists(s -> s.from <= at && at < s.to));
+	}
+
 	/** The structure-bodied typedefs of a module, `guarded` once the walk is inside a conditional region. */
 	private static function aliasesOf(
 		node: QueryNode, guarded: Bool, entry: { file: String, source: String }, seams: Seams
@@ -256,19 +281,6 @@ final class PreferExistingTypedef extends RuleBase implements CrossFileFix imple
 		};
 	}
 
-	private static function sortedFields(fields: Array<String>): String {
-		final sorted: Array<String> = fields.copy();
-		sorted.sort(Compare.compareString);
-		return sorted.join('\n');
-	}
-
-	/** What each simple name of `names` denotes from `file`, as one comparable text: equal only when every name binds alike. */
-	private static function denotesOf(names: Array<String>, file: String, index: SymbolIndex): String {
-		final parts: Array<String> = names.map(name -> '$name>${denotationOf(name, file, index)}');
-		parts.sort(Compare.compareString);
-		return parts.join(',');
-	}
-
 	/** The declaration `name` binds from `file`: its path, empty when none in the index, unique to the file when ambiguous. */
 	private static function denotationOf(name: String, file: String, index: SymbolIndex): String {
 		final found: Array<{ file: FileInfo, type: TypeDeclInfo }> = index.resolveTypeRefsFrom(name, file);
@@ -307,18 +319,6 @@ final class PreferExistingTypedef extends RuleBase implements CrossFileFix imple
 			&& outer.from <= inner.from
 			&& inner.to <= outer.to
 			&& (outer.from != inner.from || outer.to != inner.to);
-	}
-
-	/**
-	 * Whether a type name the structure spells is a type parameter in scope where it is written (a class's or a function's): a
-	 * parameter outranks every type of its name, so the typedef's own `Foo` would replace a parameter `Foo`. `memo` holds each
-	 * file's parameter scopes, read once from the tree.
-	 */
-	private static function bindsAParameter(hit: Occurrence, plugin: GrammarPlugin, memo: Map<String, Map<String, Array<Span>>>): Bool {
-		final known: Null<Map<String, Array<Span>>> = memo[hit.file];
-		final scopes: Map<String, Array<Span>> = known ?? parameterScopes(hit, plugin, memo);
-		final at: Int = hit.at.from;
-		return hit.typeNames.exists(name -> (scopes[name] ?? []).exists(s -> s.from <= at && at < s.to));
 	}
 
 	private static function parameterScopes(

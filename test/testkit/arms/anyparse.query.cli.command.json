@@ -1611,6 +1611,22 @@
 			"find": "final companions: Array<String> = ModuleMove.companionsOf(ConfigFinder.absolute(srcFile), mirrors, ConfigFinder.fileExists);",
 			"replace": "final companions: Array<String> = [];",
 			"note": "the test companions a project declares are no longer named"
+		},
+		{
+			"name": "M-XTD-DEFAULT-SCOPE",
+			"type": "anyparse.query.cli.command.ExtractTypedefCommand",
+			"method": "runExtractTypedef",
+			"find": "[scope ?? file]",
+			"replace": "[scope ?? '.']",
+			"note": "without --scope the whole working directory is searched, so an equal structure in a file the caller never named is rewritten"
+		},
+		{
+			"name": "M-XTD-CLI-OCCUPIED",
+			"type": "anyparse.query.cli.command.ExtractTypedefCommand",
+			"method": "land",
+			"find": "if (ConfigFinder.fileExists(made.file)) {",
+			"replace": "if (false) {",
+			"note": "a path holding a file outside the scope is refused by the staging with no word on why, instead of naming the taken name"
 		}
 	]
 }

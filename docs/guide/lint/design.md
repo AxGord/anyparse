@@ -6,8 +6,9 @@ Metrics, duplication, project contracts, concurrency. One section per rule, by i
 
 An anonymous structure type written out at least `minOccurrences` times (default `3`) across the
 lint run — a shape that has earned a name. `Info` and DEFAULT OFF. The typedef's name is a human's
-choice, so the finding is report-only until the config names the structure (below); `apq extract-typedef`
-performs an extraction by hand. One finding per shape, at its earliest occurrence, with the count and the
+choice, so the finding is report-only: its message names the command that extracts it,
+`apq extract-typedef <file>:<line>:<col> <pkg.Name> --scope <dir>` (the place of its earliest occurrence, a
+placeholder name, the directory holding every occurrence). One finding per shape, with the count and the
 number of files.
 
 Shapes are compared structurally: field order, separators and whitespace do not matter, an optional
@@ -22,9 +23,21 @@ function b(p:{ y:Int, x:Int }) …
 var c:Array<{ x:Int, y:Int }>;   // one finding: 3 occurrences of { x:Int, y:Int }
 ```
 
-### Naming a structure: `named`
+### Naming a structure: `apq extract-typedef`
 
-`lint --fix` extracts a structure only when the config names it. `named` maps the full path of the typedef
+`apq extract-typedef <file>:<line>[:<col>] <pkg.Name> [--scope <dir>] [--write] [--fix]` names the structure
+written at the address. It creates `pkg/Name.hx` under the source root of the addressed file, holding
+`typedef Name = <the structure as written>` and the imports its field types need, and rewrites every occurrence of
+the same type in the scope to `Name`, adding the import each file needs. Without `--scope` only the addressed file
+is searched. An occurrence is the same type when its fields are the same in any order, every type name in it denotes
+the same declaration as in the addressed one, and no type parameter of the enclosing class or function is among them;
+one that fails a part is left as written and listed. The files that change are written together or not at all, and
+a type of that name, or a file already at the path, refuses the run.
+
+### Naming a structure: `named` (deprecated)
+
+`named` still works and every lint run that reads it says so: use the op above instead. `lint --fix` extracts a
+structure only when the config names it. `named` maps the full path of the typedef
 to create onto the structure's fields, each written as `name: Type` (a leading `?` marks an optional one):
 
 ```json
@@ -38,8 +51,7 @@ its fields need, and rewrites every matching occurrence to `Receivers`, adding t
 An occurrence matches only when its fields equal the list exactly — same names, types, optionality and
 written order, whitespace aside — so a structure differing in one optional field, or spelling the same
 fields in another order, is left as it is. The files that change are written together or not at all. A
-module already at that path is never overwritten: the finding stays a report. Without a `named` entry
-the message says how to name the structure.
+module already at that path is never overwritten: the finding stays a report.
 
 ## `complexity`
 

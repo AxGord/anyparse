@@ -365,7 +365,7 @@ final class CliEdit {
 	 * reported, so a lint that finds nothing to do, or refuses, must not turn the op into a
 	 * failure. What the fix pass did, it says itself.
 	 */
-	private static function postWriteFix(
+	public static function postWriteFix(
 		filePath: String, before: Null<String>, after: String, plugin: GrammarPlugin, ledger: RunLedger
 	): Void {
 		if (before == null) {

@@ -300,7 +300,10 @@ class AnonTypeDupCheckTest extends Test {
 		Assert.equals(0, fixGroups(files, null).length);
 		final found: Array<Violation> = CheckFixture.violationsIn(new AnonTypeDup(), files);
 		Assert.equals(1, found.length);
-		Assert.isTrue(found[0].message.contains('named'), found[0].message);
+		Assert.isTrue(
+			found[0].message.endsWith('extract a typedef with apq extract-typedef src/app/A.hx:6:25 <pkg.Name> --scope src/app'),
+			found[0].message
+		);
 	}
 
 	/** A module already at the configured path is never overwritten: no group is offered. */
@@ -368,7 +371,7 @@ class AnonTypeDupCheckTest extends Test {
 			'apq lint: anon-type-dup: "named" entry "types.Receivers" is not a non-empty list of field strings — ignored\n'
 		], notesOf(wrongEntry));
 		Assert.same(['apq lint: anon-type-dup: "named" is not an object — ignored\n'], notesOf(wrongKey));
-		Assert.same([], notesOf(CONFIG));
+		Assert.same([], notesOf('{"rules":{"anon-type-dup":{"enabled":true}}}'));
 	}
 
 	/**
@@ -400,6 +403,42 @@ class AnonTypeDupCheckTest extends Test {
 		Assert.isTrue(own.contains(':Receivers') && !own.contains('import types.Receivers;') && !own.contains('actions:'), own);
 		final other: String = after['src/app/A.hx'] ?? '';
 		Assert.isTrue(other.contains('import types.Receivers;') && !other.contains('actions:'), other);
+	}
+
+	@:pin('control')
+	@:killer('M-ANON-NAMED-DEPRECATION')
+	public function testTheNamedKeyIsDeprecatedByANoteThatNamesTheOp(): Void {
+		final notes: Array<String> = notesOf(CONFIG);
+		Assert.equals(1, notes.length);
+		Assert.isTrue(notes[0].contains('"named" is deprecated') && notes[0].contains('apq extract-typedef'), notes[0]);
+		Assert.equals(1, violations([ for (_ in 0...3) SHAPE ]).length, 'the key still works: the finding and its fix are unchanged');
+	}
+
+	public function testTheMessageNamesTheDirectoryHoldingEveryOccurrence(): Void {
+		final files: Array<SourceEntry> = [
+			{ file: 'src/a/X.hx', source: SHAPE },
+			{ file: 'src/b/Y.hx', source: SHAPE },
+			{ file: 'src/b/Y2.hx', source: SHAPE },
+			{ file: 'src/b/c/Z.hx', source: SHAPE },
+			{ file: 'W.hx', source: SHAPE }
+		];
+		final first: String = CheckFixture.violationsIn(new AnonTypeDup(), files.slice(0, 3))[0].message;
+		Assert.isTrue(first.endsWith('--scope src'), first);
+		final rooted: String = CheckFixture.violationsIn(new AnonTypeDup(), files)[0].message;
+		Assert.isTrue(rooted.endsWith('--scope .'), rooted);
+		final siblings: String = CheckFixture.violationsIn(new AnonTypeDup(), files.slice(1, 4))[0].message;
+		Assert.isTrue(siblings.endsWith('--scope src/b'), siblings);
+	}
+
+	public function testMessageIdentityMasksTheAddressOfTheCommand(): Void {
+		// The command names the anchor's `file:line:col`, which moves with every edit above it.
+		final check: AnonTypeDup = new AnonTypeDup();
+		final at: String = CheckFixture.violationsIn(check, [ for (i in 0...3) { file: 'a$i.hx', source: SHAPE } ])[0].message;
+		final moved: String = CheckFixture.violationsIn(check, [ for (i in 0...3) { file: 'a$i.hx', source: '\n\n$SHAPE' } ])[0].message;
+		Assert.notEquals(at, moved);
+		Assert.equals(check.messageIdentity(at), check.messageIdentity(moved));
+		Assert.equals(check.messageIdentity(at), check.messageIdentity(check.messageIdentity(at)));
+		Assert.isTrue(check.messageIdentity(at).contains('written # times across # files'), check.messageIdentity(at));
 	}
 
 	private function violations(sources: Array<String>): Array<Violation> {

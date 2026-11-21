@@ -73,6 +73,8 @@ typedef GrammarEntry = {
 
 };
 
+/** A `<file>:<line>[:<col>]` address: the file and the 1-based position; `col` is null when only the line was given. */
+typedef FileAddress = { final file: String; final line: Int; final col: Null<Int>; };
 /**
  * The argument door of the `apq` CLI: everything that turns argv and the path
  * specs on it into the values a command actually runs on — one flag's value,
@@ -100,6 +102,11 @@ final class CliArgs {
 
 	/** The `--lang` of the Mermaid flowchart grammar plugin. */
 	public static inline final MERMAID_LANG: String = MermaidQueryPlugin.LANG;
+
+	/** The capture groups of `addressOf`'s pattern that hold the line and the optional column. */
+	private static inline final ADDRESS_LINE_GROUP: Int = 2;
+
+	private static inline final ADDRESS_COL_GROUP: Int = 3;
 
 	/**
 	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
@@ -497,6 +504,23 @@ final class CliArgs {
 	/** The one wording of scope `specs` holding no data document, for `apq <cmd>: <this>` to print. */
 	public static function noDataDocumentsMatched(specs: Array<String>): String {
 		return noFilesIn(specs, dataDocumentExtensions());
+	}
+
+	/**
+	 * `spec` as the file and 1-based position of a `<file>:<line>[:<col>]` address, or null when it carries no position.
+	 * The lazy file part keeps a colon inside the path with the file; the digits are not range-checked here.
+	 */
+	public static function addressOf(spec: String): Null<FileAddress> {
+		final located: EReg = ~/^(.+?):([0-9]+)(?::([0-9]+))?$/;
+		if (!located.match(spec)) return null;
+		final line: Null<Int> = Std.parseInt(located.matched(ADDRESS_LINE_GROUP));
+		final colText: Null<String> = located.matched(ADDRESS_COL_GROUP);
+		return line == null ? null : { file: located.matched(1), line: line, col: colText == null ? null : Std.parseInt(colText) };
+	}
+
+	/** The file part of `arg` for a command addressed by position, else `arg` itself: what names its grammar. */
+	public static function fileOfAddress(arg: String): String {
+		return addressOf(arg)?.file ?? arg;
 	}
 
 	/** `expandFor` over several extensions: a directory walks once per extension, a file or glob names its own paths. */
