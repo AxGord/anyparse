@@ -392,7 +392,7 @@
 			"name": "M-COMPR-NESTED-NEVER",
 			"type": "anyparse.check.common.loops.PreferComprehension",
 			"method": "buildBlock",
-			"find": "if (nested != null) return nested;",
+			"find": "if (nested != null) {\n\t\t\thoistCommentsIn(lead, ctx, acc);\n\t\t\treturn nested;\n\t\t}",
 			"replace": "",
 			"note": "a nested build is never folded, which is the rule before it learnt the shape"
 		},
@@ -1026,6 +1026,14 @@
 			"find": "edit: note == '' ? { span: span, text: replacement } : null",
 			"replace": "edit: note == '' ? { span: span, text: '' } : null",
 			"note": "the fix replaces the if with nothing instead of the while it held"
+		},
+		{
+			"name": "M-BODY-LEAD-COMMENT-DROPPED",
+			"type": "anyparse.check.common.loops.ComprehensionFills",
+			"method": "keptBlock",
+			"find": "led.length == 0 ?",
+			"replace": "true ?",
+			"note": "the kept block no longer collects the comments that led the loop body, so the fix drops the comment instead of keeping it before the statement it led"
 		}
 	]
 }

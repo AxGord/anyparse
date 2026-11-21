@@ -413,6 +413,16 @@ final class PreferComprehension extends RuleBase {
 		});
 	}
 
+	/** Append every comment token lying FULLY inside `span` to `acc.hoisted`, with its offset. */
+	public static function hoistCommentsIn(span: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc): Void {
+		for (tok in commentsIn(span, ctx)) acc.hoisted.push({ from: tok.from, text: ctx.source.substring(tok.from, tok.to) });
+	}
+
+	/** The one answer to "which comment tokens lie fully inside this span". */
+	public static function commentsIn(span: Span, ctx: ComprehensionCtx): Array<{ from: Int, to: Int, isLine: Bool }> {
+		return [ for (tok in ctx.comments) if (tok.from >= span.from && tok.to <= span.to) tok ];
+	}
+
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
 	private static function readSeams(plugin: GrammarPlugin): Null<ComprehensionSeams> {
 		final shape: RefShape = plugin.refShape();
@@ -802,13 +812,22 @@ final class PreferComprehension extends RuleBase {
 	private static function buildBlock(node: QueryNode, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
 		final kids: Array<QueryNode> = node.children;
 		final blockSpan: Null<Span> = node.span;
-		if (kids.length == 0 || blockSpan == null || (acc.keyed != null && kids.length != 1)) return null;
-		hoistGapComments(kids, blockSpan, ctx, acc);
-		if (kids.length == 1) return buildInner(kids[0], name, ctx, acc);
+		final firstSpan: Null<Span> = kids.length == 0 ? null : kids[0].span;
+		if (firstSpan == null || blockSpan == null || (acc.keyed != null && kids.length != 1)) return null;
+		final lead: Span = new Span(blockSpan.from, firstSpan.from);
+		hoistGapComments(kids, blockSpan, ctx, acc, true);
+		if (kids.length == 1) {
+			hoistCommentsIn(lead, ctx, acc);
+			return buildInner(kids[0], name, ctx, acc);
+		}
 		final nested: Null<String> = ComprehensionFills.nestedBuild(kids, name, ctx, acc);
-		if (nested != null) return nested;
+		if (nested != null) {
+			hoistCommentsIn(lead, ctx, acc);
+			return nested;
+		}
 		final locals: Null<Array<ChainLocal>> = chainLocals(kids, name, ctx);
-		if (locals == null) return ComprehensionFills.keptBlock(kids, name, ctx, acc);
+		if (locals == null) return ComprehensionFills.keptBlock(kids, name, ctx, acc, lead);
+		hoistCommentsIn(lead, ctx, acc);
 		final arg: Null<QueryNode> = pushArgument(kids[kids.length - 1], name, ctx, acc);
 		if (arg == null) return null;
 		final argSpan: Null<Span> = arg.span;
@@ -828,21 +847,17 @@ final class PreferComprehension extends RuleBase {
 	 * for a single-statement body). Each token carries its offset: a nested block contributes its
 	 * own gaps after this one, so source order is restored by sorting, not by append order.
 	 */
-	private static function hoistGapComments(kids: Array<QueryNode>, blockSpan: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc): Void {
+	private static function hoistGapComments(
+		kids: Array<QueryNode>, blockSpan: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc, skipLead: Bool = false
+	): Void {
 		var at: Int = blockSpan.from;
 		for (kid in kids) {
 			final kidSpan: Null<Span> = kid.span;
 			if (kidSpan == null) continue;
-			hoistCommentsIn(new Span(at, kidSpan.from), ctx, acc);
+			if (!skipLead || at != blockSpan.from) hoistCommentsIn(new Span(at, kidSpan.from), ctx, acc);
 			at = kidSpan.to;
 		}
 		hoistCommentsIn(new Span(at, blockSpan.to), ctx, acc);
-	}
-
-	/** Append every comment token lying FULLY inside `span` to `acc.hoisted`, with its offset. */
-	private static function hoistCommentsIn(span: Span, ctx: ComprehensionCtx, acc: ComprehensionAcc): Void {
-		for (tok in ctx.comments) if (tok.from >= span.from && tok.to <= span.to)
-			acc.hoisted.push({ from: tok.from, text: ctx.source.substring(tok.from, tok.to) });
 	}
 
 	/**
@@ -1008,7 +1023,6 @@ final class PreferComprehension extends RuleBase {
 		if (span != null && span.to <= at && !s.pureKinds.contains(node.kind)) return false;
 		return node.children.foreach(c -> precedingNodesPure(c, at, s));
 	}
-
 
 	/** `source[span]` with every chain local's single use replaced by its (recursively rendered) initializer. */
 	private static function renderSpan(span: Span, locals: Array<ChainLocal>, ctx: ComprehensionCtx, acc: ComprehensionAcc): String {
@@ -1202,7 +1216,6 @@ final class PreferComprehension extends RuleBase {
 		}
 		return buf.toString();
 	}
-
 
 	/**
 	 * The single argument NODE of a `<name>.push(e)` expression statement, or null when `node` is

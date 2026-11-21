@@ -155,7 +155,9 @@ final class ComprehensionFills {
 	 * initializers and the guards' conditions join the self-reference gate like any element, and a local named
 	 * after the array, or a comment inside a kept statement, refuses.
 	 */
-	public static function keptBlock(kids: Array<QueryNode>, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc): Null<String> {
+	public static function keptBlock(
+		kids: Array<QueryNode>, name: String, ctx: ComprehensionCtx, acc: ComprehensionAcc, lead: Span
+	): Null<String> {
 		final s: ComprehensionSeams = ctx.seams;
 		final last: Int = kids.length - 1;
 		final checks: Array<QueryNode> = [];
@@ -172,7 +174,12 @@ final class ComprehensionFills {
 		var steps: Array<KeptStep> = [{ text: ctx.source.substring(element.from, element.to), terminated: false }];
 		var i: Int = last;
 		while (i-- > 0) steps = isGuard(kids[i], s) ? [guardStep(texts[i], steps)] : [{ text: texts[i], terminated: true }].concat(steps);
-		return steps.length == 1 ? steps[0].text : '{ ${renderSteps(steps)} }';
+		if (steps.length == 1) {
+			PreferComprehension.hoistCommentsIn(lead, ctx, acc);
+			return steps[0].text;
+		}
+		final led: Array<String> = PreferComprehension.commentsIn(lead, ctx).map(tok -> ctx.source.substring(tok.from, tok.to));
+		return led.length == 0 ? '{ ${renderSteps(steps)} }' : '{\n${led.join('\n')}\n${renderSteps(steps)} }';
 	}
 
 	/**
