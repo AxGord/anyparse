@@ -243,4 +243,24 @@ final class RunScan {
 		return typeInfoOf(plugin)?.declaredTypes(source) ?? [];
 	}
 
+	/**
+	 * The edits of the matches a fix finds again in `source`: `find` re-reads every match (with the lazily built
+	 * `SymbolIndex` of this one file and its name), each violation is paired with the match at its span, and `edits`
+	 * gives that match's edits; contained edits are dropped. For a check whose `run` and `fix` share one scan.
+	 */
+	public static function matchedEdits<S, M: { var span: Span; }>(
+		plugin: GrammarPlugin, source: String, seams: Null<S>, violations: Array<Violation>, index: Null<SymbolIndex>,
+		find: (tree: QueryNode, seams: S, symbols: () -> Null<SymbolIndex>, file: String) -> Array<M>, edits: (match: M) -> Array<FixEdit>
+	): Array<FixEdit> {
+		return editsWith(plugin, source, seams, (tree, s) -> {
+			final file: String = violations.length == 0 ? '' : violations[0].file;
+			final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index);
+			final byKey: Map<String, M> = [];
+			for (m in find(tree, s, symbols, file)) byKey['${m.span.from}:${m.span.to}'] = m;
+			final out: Array<FixEdit> = [];
+			eachMatched(violations, byKey, (m, span) -> for (e in edits(m)) out.push(e));
+			return CanonicalEdit.dropContainedEdits(out);
+		});
+	}
+
 }

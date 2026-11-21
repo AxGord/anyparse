@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-PMW-POSITIVE",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "positiveAmount",
+			"find": "return value != null && value > 0;",
+			"replace": "return value != null;",
+			"note": "a zero literal step is accepted, so a pair whose loops never end is rewritten to a modulo by zero"
+		},
+		{
 			"name": "M-EMPTY-B-ANY-NONEMPTY",
 			"type": "anyparse.check.common.loops.RedundantReplaceLoop",
 			"method": "emptyReplacementMessage",
@@ -1034,6 +1042,78 @@
 			"find": "led.length == 0 ?",
 			"replace": "true ?",
 			"note": "the kept block no longer collects the comments that led the loop body, so the fix drops the comment instead of keeping it before the statement it led"
+		},
+		{
+			"name": "M-PMW-COMMENT",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "refusal",
+			"find": "for (c in ctx.comments) if (c.to > span.from && c.from < span.to) return COMMENT_NOTE;",
+			"replace": "",
+			"note": "a comment inside the pair is lost by the rewrite"
+		},
+		{
+			"name": "M-PMW-FIX-TEXT",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "matchPair",
+			"find": "{ span: from, text: '$name %= $amount;' }",
+			"replace": "{ span: from, text: '' }",
+			"note": "the first loop of a flagged pair is replaced by nothing, so the fix drops the modulo statement"
+		},
+		{
+			"name": "M-PMW-FLOAT-FIX",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "refusal",
+			"find": "return typeName == INT_TYPE ? '' : TYPE_NOTE;",
+			"replace": "return '';",
+			"note": "a Float or an undeclared type is fixed too, so a negative multiple of N ends as -0 where the loops ended +0"
+		},
+		{
+			"name": "M-PMW-IF-SAME",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "loopOf",
+			"find": "if (!MemberKinds.structurallyEqual(BranchChain.condOf(stmt), LoopScan.whileCondition(loop))) return null;",
+			"replace": "",
+			"note": "an if with a different condition counts as the loop it holds, and the fix drops a guard that decided something"
+		},
+		{
+			"name": "M-PMW-LOCAL",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "matchPair",
+			"find": "!ctx.locals.survivesCalls(a.target) || ",
+			"replace": "",
+			"note": "a field or a name a function literal writes is wrapped, so a setter or a captured write runs once instead of once per step"
+		},
+		{
+			"name": "M-PMW-OPPOSITE",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "matchPair",
+			"find": " || a.upper == b.upper",
+			"replace": "",
+			"note": "two loops walking the same edge are flagged as a wrap"
+		},
+		{
+			"name": "M-PMW-STABLE-NAME",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "positiveAmount",
+			"find": " && ctx.chains.read(amount) != null",
+			"replace": "",
+			"note": "a named step a function literal writes is accepted, so the loops stop being one wrap of one value"
+		},
+		{
+			"name": "M-PMW-STEP-EQUAL",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "matchPair",
+			"find": " || !MemberKinds.structurallyEqual(upper.amount, lower.amount)",
+			"replace": "",
+			"note": "a pair whose two steps differ is flagged, and the rewrite wraps by a step one loop never took"
+		},
+		{
+			"name": "M-PMW-ZERO-LOWER",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "isZero",
+			"find": " && NumericLiteral.valueOf(node.name ?? '') == 0",
+			"replace": "",
+			"note": "any numeric literal is a zero lower bound, so a loop that stops at 1 is rewritten to one that stops at 0"
 		}
 	]
 }

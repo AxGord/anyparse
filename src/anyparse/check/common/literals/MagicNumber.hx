@@ -3,6 +3,7 @@ package anyparse.check.common.literals;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.common.literals.LiteralTables.LiteralTableShape;
+import anyparse.check.scan.NumericLiteral;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
 
@@ -231,7 +232,7 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 		final span: Null<Span> = node.span;
 		final text: Null<String> = node.name;
 		if (span == null || text == null) return;
-		final value: Null<Float> = literalValue(text);
+		final value: Null<Float> = NumericLiteral.valueOf(text);
 		if (value == null || exempt.contains(value)) return;
 		out.push({
 			file: file,
@@ -240,18 +241,6 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 			severity: Severity.Warning,
 			message: 'magic number $text — extract into a named constant'
 		});
-	}
-
-	/**
-	 * The numeric value of a literal's source text, or null when it does not
-	 * parse. Underscores are stripped (`100_000`); a `0x` prefix is read as hex;
-	 * everything else (`3.14`, `1e5`, `.5`) parses as a float.
-	 */
-	private static function literalValue(text: String): Null<Float> {
-		final clean: String = text.replace('_', '');
-		if (clean.startsWith('0x') || clean.startsWith('0X')) return (Std.parseInt(clean): Null<Int>);
-		final f: Float = Std.parseFloat(clean);
-		return Math.isNaN(f) ? null : f;
 	}
 
 	/** A `Call` to one of `positionMethodNames` — its callee node's name is the invoked string-position method. */

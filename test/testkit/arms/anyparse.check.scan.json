@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-NUMLIT-HEX",
+			"type": "anyparse.check.scan.NumericLiteral",
+			"method": "valueOf",
+			"find": "if (clean.startsWith('0x') || clean.startsWith('0X')) return (Std.parseInt(clean): Null<Int>);",
+			"replace": "",
+			"note": "a hexadecimal literal falls through to Std.parseFloat and reads as zero, so a lower bound of 0x10 is taken for the zero bound"
+		},
+		{
 			"name": "M-REGION-TERM-OFF",
 			"type": "anyparse.check.scan.RegionTerminator",
 			"method": "terminatorAt",

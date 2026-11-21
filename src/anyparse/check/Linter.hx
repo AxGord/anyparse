@@ -136,6 +136,7 @@ import anyparse.check.common.loops.PreferComprehension;
 import anyparse.check.common.loops.PreferForIn;
 import anyparse.check.common.loops.PreferIndexAccess;
 import anyparse.check.common.loops.PreferKeyValueLoop;
+import anyparse.check.common.loops.PreferModuloWrap;
 import anyparse.check.common.loops.PreferRangeLoop;
 import anyparse.check.common.loops.PreferValueLoop;
 import anyparse.check.common.loops.RedundantIfBeforeWhile;
@@ -574,6 +575,9 @@ final class Linter {
 			new UnusedLoopBinder(),
 			new RedundantReplaceLoop(),
 			new RedundantIfBeforeWhile(),
+			// Rewrites the pair of loops `redundant-if-before-while` leaves once its `if` is gone, and the pair still behind that
+			// `if`; its edit spans the whole statement, so the two compose in either order and registry order is free.
+			new PreferModuloWrap(),
 			new LoopBoundLengthMismatch(),
 			new ScratchField(),
 			new TrivialGetter(),

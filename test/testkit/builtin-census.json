@@ -142,6 +142,7 @@
 	"prefer-map",
 	"prefer-map-literal",
 	"prefer-map-type",
+	"prefer-modulo-wrap",
 	"prefer-null-coalescing",
 	"prefer-null-guarded-loop",
 	"prefer-range-loop",

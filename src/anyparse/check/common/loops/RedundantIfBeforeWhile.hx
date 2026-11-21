@@ -4,7 +4,6 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.control.CollapsibleIf;
 import anyparse.check.scan.PurityScan;
-import anyparse.query.CanonicalEdit;
 import anyparse.query.MemberKinds;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -72,18 +71,10 @@ final class RedundantIfBeforeWhile extends RuleBase {
 
 	/** Replace each flagged `if` with the `while` it holds, source text unchanged. */
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
-		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
-			final file: String = violations.length == 0 ? '' : violations[0].file;
-			final symbols: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index);
-			final byKey: Map<String, Match> = [];
-			for (m in scan(tree, source, plugin, file, seams, symbols)) byKey['${m.span.from}:${m.span.to}'] = m;
-			final edits: Array<FixEdit> = [];
-			RunScan.eachMatched(violations, byKey, (m, span) -> {
-				final edit: Null<FixEdit> = m.edit;
-				if (edit != null) edits.push(edit);
-			});
-			return CanonicalEdit.dropContainedEdits(edits);
-		});
+		return RunScan.matchedEdits(
+			plugin, source, readSeams(plugin), violations, index,
+			(tree, seams, symbols, file) -> scan(tree, source, plugin, file, seams, symbols), m -> m.edit == null ? [] : [m.edit]
+		);
 	}
 
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
