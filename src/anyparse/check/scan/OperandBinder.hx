@@ -238,6 +238,21 @@ final class OperandBinder {
 	}
 
 	/**
+	 * Whether the result of the lambda `lambda` is expected to have the type `written`: the result of the function type the
+	 * lambda is expected to be (`ExpectedTypes.expectedAt` over `EXPECTATION`, asked of its body) is that type, each bound
+	 * where it is written (`WrittenTypeIdentity`). False where nothing written fixes the result.
+	 */
+	public function expectsResult(lambda: QueryNode, written: Located): Bool {
+		final found: Null<Lineage> = ExpectedTypes.lineageOf(_tree, lambda);
+		if (found == null || !_expectation.isLambda(lambda) || lambda.children.length == 0) return false;
+		final nodes: Array<QueryNode> = found.nodes.concat([lambda]);
+		final indices: Array<Int> = found.indices.concat([lambda.children.length - 1]);
+		final expected: Null<Located> = _expectation.expectedAt(nodes, indices, nodes.length - 1, EXPECTATION, this);
+		return expected != null
+			&& new WrittenTypeIdentity(_index, writtenTier, _declared.typeParamOwnerAt, _wrappers, _builtins).same(written, expected);
+	}
+
+	/**
 	 * The expression initialising the unannotated local `use` reads: the local holds ITS type (`NominalTypes.localInitializer`).
 	 */
 	private inline function initializerOf(use: QueryNode): Null<QueryNode> {

@@ -178,6 +178,17 @@ final class DeclaredNullity {
 	}
 
 	/**
+	 * Where the type parameter `name` in scope at `at` is declared: the start of the innermost enclosing function or type
+	 * whose list names it, so two positions read one parameter exactly when they answer alike. Null when no list in scope
+	 * names it; `at` itself when an enclosing type's list could not be read, so no two positions under it read as one.
+	 */
+	public function typeParamOwnerAt(name: String, at: Int): Null<Int> {
+		var owner: Null<Int> = null;
+		final readable: Bool = eachTypeParamListAt(at, (from, params) -> if (params.contains(name)) owner = from);
+		return readable ? owner : at;
+	}
+
+	/**
 	 * The verdict on the written type `typeSource` as seen from `fromFile` with `typeParams` in scope.
 	 * `hops` counts the alias / abstract steps taken to reach it, which decides whether a basic value
 	 * type is still `ValueType` (its own spelling at the binding) or only `NonNull`.
@@ -214,26 +225,34 @@ final class DeclaredNullity {
 	 * name would let a parameter resolve to a same-named type.
 	 */
 	private function typeParamsAt(bindingFrom: Int): Null<Array<String>> {
-		final fnKinds: Array<String> = _shape.functionKinds ?? [];
 		final out: Array<String> = [];
+		return eachTypeParamListAt(bindingFrom, (_, params) -> for (p in params) out.push(p)) ? out : null;
+	}
+
+	/**
+	 * Every type-parameter list in scope at `at`, outermost first, with the start of the function or type declaring it;
+	 * false when an enclosing type's list could not be read.
+	 */
+	private function eachTypeParamListAt(at: Int, visit: (from: Int, params: Array<String>) -> Void): Bool {
+		final fnKinds: Array<String> = _shape.functionKinds ?? [];
 		var readable: Bool = true;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
-			if (span != null && (bindingFrom < span.from || bindingFrom >= span.to)) return;
-			final name: Null<String> = node.name;
-			if (span != null && fnKinds.contains(node.kind)) for (p in _typeParams[span.from] ?? []) out.push(p);
+			if (span != null && (at < span.from || at >= span.to)) return;
+			final from: Int = span?.from ?? at;
+			if (span != null && fnKinds.contains(node.kind)) visit(from, _typeParams[from] ?? []);
 			final decl: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (decl != null) {
 				final params: Null<Array<String>> = typeDeclParams(decl.name);
 				if (params == null)
 					readable = false
 				else
-					for (p in params) out.push(p);
+					visit(from, params);
 			}
 			for (c in node.children) walk(c);
 		}
 		walk(_root);
-		return readable ? out : null;
+		return readable;
 	}
 
 	/**

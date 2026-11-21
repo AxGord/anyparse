@@ -1,6 +1,7 @@
 package anyparse.check.common.expressions;
 
 import anyparse.check.scan.CheckScan;
+import anyparse.check.scan.OperandBinder;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NodeShape;
 import anyparse.query.Refs;
@@ -39,6 +40,13 @@ private typedef Match = {
 }
 
 /**
+ * What a pair is judged against: its own function's written return type, or for an untyped lambda whether the type its
+ * position expects of the lambda's result restates an annotation written at an offset (null when nothing is asked).
+ */
+private typedef Judge = { final retType: Null<String>; final restates: Null<(annotation: String, at: Int) -> Bool>; }
+/** Whether the type the position of the untyped lambda `lambda` expects of its result restates `annotation`, written at `at`. */
+private typedef Expected = (lambda: QueryNode, annotation: String, at: Int) -> Bool;
+/**
  * Flags a value that is IMMEDIATELY returned right after it is produced, collapsing the pair
  * to a single return. The value is produced either by a local DECLARATION or by a plain
  * ASSIGNMENT to a pre-existing param / local:
@@ -70,6 +78,9 @@ private typedef Match = {
  * - unannotated decl -> always `return e;`;
  * - annotated decl AND the enclosing function's explicit return type equals the annotation
  *   (byte-identical source, whitespace ignored) -> `return e;`;
+ * - annotated decl in a lambda with no return type, whose position fixes the lambda's result
+ *   (a callee parameter's function type) to the annotation's type, each bound where it is
+ *   written (`OperandBinder.expectsResult`; read only when `fix` is handed an index) -> `return e;`;
  * - annotated decl whose initializer is a constructor call `new T(...)` -- `T` byte-identical
  *   (whitespace ignored) to the annotation and carrying no type parameters -> `return e;` too:
  *   the constructor call already fixes the value's own type, so the ascription would restate
@@ -141,6 +152,9 @@ private typedef Match = {
 @:nullSafety(Strict)
 final class JoinReturn extends RuleBase {
 
+	/** The judge outside every function: no return type, nothing asked. */
+	private static final NO_JUDGE: Judge = { retType: null, restates: null };
+
 	public function new() {
 		super(
 			'join-return', 'a local declaration whose value is immediately returned, joinable to a single return', RuleCategory.Expressions
@@ -155,7 +169,7 @@ final class JoinReturn extends RuleBase {
 			final lambdaSpans: Array<Span> = [];
 			collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
 			final matches: Array<Match> = [];
-			collectMatches(tree, entry.source, comments, null, seams, tree, declTypeSources, lambdaSpans, matches);
+			collectMatches(tree, entry.source, comments, NO_JUDGE, seams, tree, declTypeSources, lambdaSpans, null, matches);
 			for (m in matches) violations.push({
 				file: entry.file,
 				span: m.declSpan,
@@ -169,6 +183,7 @@ final class JoinReturn extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		final file: String = violations.length == 0 ? '' : violations[0].file;
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
@@ -176,7 +191,8 @@ final class JoinReturn extends RuleBase {
 			final lambdaSpans: Array<Span> = [];
 			collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
 			final matches: Array<Match> = [];
-			collectMatches(tree, source, comments, null, seams, tree, declTypeSources, lambdaSpans, matches);
+			final expected: Null<Expected> = index == null ? null : expectationOf(plugin, file, source, tree, index);
+			collectMatches(tree, source, comments, NO_JUDGE, seams, tree, declTypeSources, lambdaSpans, expected, matches);
 			final byKey: Map<String, Match> = [ for (m in matches) '${m.declSpan.from}:${m.declSpan.to}' => m ];
 
 			return CanonicalEdit.dropContainedEdits(
@@ -227,19 +243,19 @@ final class JoinReturn extends RuleBase {
 	 * function.
 	 */
 	private static function collectMatches(
-		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>, s: Seams,
-		tree: QueryNode, declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>, out: Array<Match>
+		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, judge: Judge, s: Seams, tree: QueryNode,
+		declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>, expected: Null<Expected>, out: Array<Match>
 	): Void {
-		final childRetType: Null<String> = s.functionKinds.contains(node.kind) ? functionReturnTypeSource(node, s, source) : retType;
+		final childJudge: Judge = s.functionKinds.contains(node.kind) ? judgeOf(node, source, s, expected) : judge;
 		if (s.blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length - 1) {
-				var m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, retType, s, tree, declTypeSources);
-				if (m == null) m = matchAssignPair(kids[i], kids[i + 1], source, comments, retType, s, tree, declTypeSources, lambdaSpans);
+				var m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, judge, s, tree, declTypeSources);
+				if (m == null) m = matchAssignPair(kids[i], kids[i + 1], source, comments, judge, s, tree, declTypeSources, lambdaSpans);
 				if (m != null) out.push(m);
 			}
 		}
-		for (c in node.children) collectMatches(c, source, comments, childRetType, s, tree, declTypeSources, lambdaSpans, out);
+		for (c in node.children) collectMatches(c, source, comments, childJudge, s, tree, declTypeSources, lambdaSpans, expected, out);
 	}
 
 	/**
@@ -248,8 +264,8 @@ final class JoinReturn extends RuleBase {
 	 * for every gate). `retType` is the enclosing function's return-type source.
 	 */
 	private static function matchPair(
-		decl: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>,
-		s: Seams, tree: QueryNode, declTypeSources: () -> Map<Int, String>
+		decl: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, judge: Judge, s: Seams,
+		tree: QueryNode, declTypeSources: () -> Map<Int, String>
 	): Null<Match> {
 		if (!s.localDeclKinds.contains(decl.kind)) return null;
 		final init: Null<QueryNode> = NodeShape.initOf(decl);
@@ -283,7 +299,7 @@ final class JoinReturn extends RuleBase {
 		return ({
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
-			text: buildReturn(initSource, annotation, retType, init, s),
+			text: buildReturn(initSource, annotation, judge, declNameFrom, init, s),
 			message: 'this declaration and its next-line return can be joined into a single return'
 		}: Match);
 	}
@@ -294,13 +310,17 @@ final class JoinReturn extends RuleBase {
 	 * only for the `new T(...)`-matches-annotation skip (see `isRedundantNewAscription`).
 	 */
 	private static function buildReturn(
-		initSource: String, annotation: Null<String>, retType: Null<String>, initNode: QueryNode, s: Seams
+		initSource: String, annotation: Null<String>, judge: Judge, at: Int, initNode: QueryNode, s: Seams
 	): String {
 		if (annotation == null) return 'return $initSource;';
 		final ann: String = annotation;
+		final retType: Null<String> = judge.retType;
+		final restates: Null<(annotation: String, at: Int) -> Bool> = judge.restates;
 		return if (retType != null && TypeResolver.stripWs(retType) == TypeResolver.stripWs(ann))
 			'return $initSource;'
 		else if (isRedundantNewAscription(initNode, ann, s))
+			'return $initSource;'
+		else if (restates != null && restates(ann, at))
 			'return $initSource;'
 		else
 			'return ($initSource : $ann);';
@@ -359,8 +379,8 @@ final class JoinReturn extends RuleBase {
 	 * collapse must not orphan it). `retType` is the enclosing function's return-type source.
 	 */
 	private static function matchAssignPair(
-		assign: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>,
-		s: Seams, tree: QueryNode, declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>
+		assign: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, judge: Judge, s: Seams,
+		tree: QueryNode, declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>
 	): Null<Match> {
 		final binary: Null<QueryNode> = NodeShape.assignmentOf(assign, s.exprStmtKind, s.assignKind);
 		if (binary == null) return null;
@@ -392,7 +412,7 @@ final class JoinReturn extends RuleBase {
 		return ({
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
-			text: buildReturn(initSource, annotation, retType, rhs, s),
+			text: buildReturn(initSource, annotation, judge, binding.from, rhs, s),
 			message: 'this assignment and its next-line return can be joined into a single return'
 		}: Match);
 	}
@@ -437,6 +457,37 @@ final class JoinReturn extends RuleBase {
 			if (sp != null) out.push(sp);
 		}
 		for (c in node.children) collectLambdaSpans(c, lambdaKinds, out);
+	}
+
+	/**
+	 * The judge of the pairs directly inside the function `fn`: its written return type, or for an untyped lambda the
+	 * restatement `expected` reads off the lambda's position (none without `expected`).
+	 */
+	private static function judgeOf(fn: QueryNode, source: String, s: Seams, expected: Null<Expected>): Judge {
+		final retType: Null<String> = functionReturnTypeSource(fn, s, source);
+		if (retType != null || expected == null || !(s.shape.lambdaKinds ?? []).contains(fn.kind))
+			return { retType: retType, restates: null };
+		final ask: Expected = expected;
+		return { retType: null, restates: (annotation, at) -> ask(fn, annotation, at) };
+	}
+
+	/**
+	 * `Expected` for `source`, `file` of `index`, read by the file's binder (`OperandBinder.expectsResult`), built once, when
+	 * the first pair asks.
+	 */
+	private static function expectationOf(
+		plugin: GrammarPlugin, file: String, source: String, tree: QueryNode, index: SymbolIndex
+	): Expected {
+		var binder: Null<OperandBinder> = null;
+		var built: Bool = false;
+		return (lambda, annotation, at) -> {
+			if (!built) {
+				binder = OperandBinder.forFile(plugin, file, source, tree, index);
+				built = true;
+			}
+			final b: Null<OperandBinder> = binder;
+			return b != null && b.expectsResult(lambda, { text: annotation, at: at });
+		};
 	}
 
 }

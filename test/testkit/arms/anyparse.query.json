@@ -17442,6 +17442,13 @@
 			"find": "inCall ? Lit.plainStringValue(child, c.shape) : null",
 			"replace": "Lit.plainStringValue(child, c.shape)",
 			"note": "a metadata's own direct string argument counts as a write too, so a field named like a native name is no longer reported"
+		},
+		{
+			"name": "M-DN-PARAM-OWNER-PER-POSITION",
+			"type": "anyparse.query.DeclaredNullity",
+			"method": "typeParamOwnerAt",
+			"force": "at",
+			"note": "every position owns its type parameters, so a class type parameter read by both a callee and its caller is two types"
 		}
 	]
 }

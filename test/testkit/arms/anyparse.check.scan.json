@@ -1872,6 +1872,51 @@
 			"find": "DELETABLE_MEMBER_KINDS.contains(child.kind)",
 			"replace": "METHOD_KINDS.contains(child.kind)",
 			"note": "the shared member-deleting fix matches methods only again, so a proven-dead static field is reported but its deletion edit is never produced"
+		},
+		{
+			"name": "M-WTI-BOUND-HEADS-ALWAYS-SAME",
+			"type": "anyparse.check.scan.WrittenTypeIdentity",
+			"method": "sameHead",
+			"find": "case [Bound(ds), Bound(es)]: TypeNameBinding.sameDecls(ds, es);",
+			"replace": "case [Bound(_), Bound(_)]: true;",
+			"note": "two bound heads are one type whatever they bind, so a name meaning another declaration in the callee's module reads as the annotation's type"
+		},
+		{
+			"name": "M-WTI-HEADS-ALWAYS-SAME",
+			"type": "anyparse.check.scan.WrittenTypeIdentity",
+			"method": "sameHead",
+			"force": "true",
+			"note": "every two heads are one type, so a parameter returning Float restates an Int annotation"
+		},
+		{
+			"name": "M-BINDER-LAMBDA-RESULT-ALWAYS-EXPECTED",
+			"type": "anyparse.check.scan.OperandBinder",
+			"method": "expectsResult",
+			"force": "true",
+			"note": "every lambda result is expected to have any type, so a Dynamic parameter or an unknown callee drops the ascription"
+		},
+		{
+			"name": "M-WTI-SHAPES-ALWAYS-SAME",
+			"type": "anyparse.check.scan.WrittenTypeIdentity",
+			"method": "same",
+			"find": "case _: false;",
+			"replace": "case _: true;",
+			"note": "two types of different shapes read as one, so a typedef restates the structure it names and an ascription null safety needs is dropped"
+		},
+		{
+			"name": "M-WTI-FIELDS-NEVER-SAME",
+			"type": "anyparse.check.scan.WrittenTypeIdentity",
+			"method": "sameFields",
+			"force": "false",
+			"note": "no two structures are one type, so a structure written out in both places keeps its ascription"
+		},
+		{
+			"name": "M-WTI-UNBOUND-PARAM-BY-SPELLING",
+			"type": "anyparse.check.scan.WrittenTypeIdentity",
+			"method": "sameHead",
+			"find": " && _paramOwner(p, x.at) == _paramOwner(q, y.at)",
+			"replace": "",
+			"note": "two unbound heads of this file are one type by spelling alone, so a callee type parameter the call does not bind reads as the caller parameter of the same name"
 		}
 	]
 }

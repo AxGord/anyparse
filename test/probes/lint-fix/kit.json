@@ -3321,6 +3321,68 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "F-JR-LAMBDA-RESTATED",
+			"note": "an annotated local returned from an untyped lambda whose parameter type returns the same type: joined without the ascription",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"join-return",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function each(body:(t:String) -> Int):Void {\n\t\tSys.println(body(\"a\"));\n\t}\n\n\tstatic function g():Int {\n\t\treturn 1;\n\t}\n\n\tstatic function main() {\n\t\teach(t -> {\n\t\t\tfinal x:Int = g();\n\t\t\treturn x;\n\t\t});\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "2a4c04f692dba32a",
+				"files": "c974fb30db25af84",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "F-JR-LAMBDA-UNBOUND-PARAM",
+			"note": "a generic caller T annotation under a same-file callee type parameter the call does not bind: joined keeping the ascription",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"join-return",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function each<T>(body:(t:String) -> T):Array<T> {\n\t\treturn [body(\"a\")];\n\t}\n\n\tstatic function conv(s:String):Dynamic {\n\t\treturn s;\n\t}\n\n\tstatic function f<T>():Void {\n\t\tSys.println(each(t -> {\n\t\t\tfinal x:T = conv(t);\n\t\t\treturn x;\n\t\t}));\n\t}\n\n\tstatic function main() {\n\t\tf();\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "2a4c04f692dba32a",
+				"files": "7692614cc6a4696f",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

@@ -486,6 +486,14 @@
 			"find": "final code: String = line.substring(0, runStart).rtrim();",
 			"replace": "final code: String = line.substring(0, comments.length == 0 ? runStart : comments[0].from).rtrim();",
 			"note": "the code ends where the line's FIRST comment opens, so a block comment inside the code hides its `;` and the collapse is refused"
+		},
+		{
+			"name": "M-JOIN-RETURN-LAMBDA-EXPECTATION-OFF",
+			"type": "anyparse.check.common.expressions.JoinReturn",
+			"method": "judgeOf",
+			"find": "restates: (annotation, at) -> ask(fn, annotation, at)",
+			"replace": "restates: null",
+			"note": "an untyped lambda asks nothing of its position, so an annotation the parameter's function type restates is kept as an ascription"
 		}
 	]
 }
