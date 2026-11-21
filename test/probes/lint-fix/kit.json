@@ -3253,6 +3253,74 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PET-TYPE-PARAM-SHADOW",
+			"note": "prefer-existing-typedef leaves a structure alone whose type name is a type parameter of the enclosing class: the typedef's Foo is the class pkg.Foo, the parameter outranks it, and the fix would change the type",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"prefer-existing-typedef",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"apq.json": "{\"rules\":{\"prefer-existing-typedef\":{\"enabled\":true}}}",
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\ttrace(new pkg.C<Int>().f());\n\t}\n}\n",
+				"pkg/Foo.hx": "package pkg;\n\nclass Foo {}\n",
+				"pkg/P.hx": "package pkg;\n\ntypedef P = {a:Foo};\n",
+				"pkg/C.hx": "package pkg;\n\nclass C<Foo> {\n\tpublic function new() {}\n\n\tpublic function f():{a:Foo} {\n\t\treturn null;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "PET-NESTED-STRUCTURE",
+			"note": "prefer-existing-typedef plans only the outer of two nested fixable structures, so the file's edit group applies (User.hx becomes f():Outer with its import) instead of the whole component being skipped",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"prefer-existing-typedef",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"apq.json": "{\"rules\":{\"prefer-existing-typedef\":{\"enabled\":true}}}",
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\ttrace(new app.User().f());\n\t}\n}\n",
+				"pkg/Inner.hx": "package pkg;\n\ntypedef Inner = {a:Int, b:String};\n",
+				"pkg/Outer.hx": "package pkg;\n\ntypedef Outer = {x:{a:Int, b:String}};\n",
+				"app/User.hx": "package app;\n\nclass User {\n\tpublic function new() {}\n\n\tpublic function f():{x:{a:Int, b:String}} {\n\t\treturn null;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "27c1e94e75bec010",
+				"files": "02d69cc58dcae741",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

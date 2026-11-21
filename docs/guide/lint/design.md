@@ -174,6 +174,28 @@ a mention of a TYPE, or a read or call of a MEMBER, that the project's `ownedTyp
 
 adjacent writes of EVERY field a project-declared idiom names, on one receiver of EXACTLY the declared type, replaceable with the declared method — `p.x = a; p.y = b;` -> `p.setTo(a, b);`, `p.x = q.x; p.y = q.y;` -> `p.copyFrom(q);`; `Info`, `--fix` rewrites the window. INERT until `apq.json` declares the idioms, because the equivalence is the FRAMEWORK's and the project names it: `"prefer-api-idiom": {"idioms": [{"type": "openfl.geom.Point", "fields": ["x", "y"], "method": "setTo"}, {"type": "openfl.geom.Point", "fields": ["x", "y"], "copy": "copyFrom"}]}` (`method`: one argument per field, in the declared order; `copy`: one value of the type whose same-named fields are copied; `"subtypes": true` also accepts a subclass receiver, which a subclass's override of the method could otherwise falsify). Each idiom is checked against the resolution index first and dropped with one stderr line when it cannot be true: a type naming no single declaration, a field that is not a plain instance field (a property with an accessor, a static, a method), a method that is not an instance method of exactly that arity, a copy method that does not take the type; an entry the reader cannot parse is dropped the same way. The fix is safe BY DECLARATION (no `RiskyFix`); what the rule proves itself is the rest — the receiver's static type is the declared one (a local's or parameter's written annotation, or a field walked through the index; an unannotated local is refused), every receiver hop is a plain read (a getter would run a different number of times), every right-hand side is pure and none mentions a field written ABOVE it on ANY receiver (an alias reads the new value today and the old one in the call), no comment sits in the deleted bytes (a trailing comment on the last write included), and the window is not inside the declared type or a subtype (the method's own body would become a self-call). A partial write, an interrupted run or a compound `+=` is no finding; a longer run is matched window by window.
 
+## `prefer-existing-typedef`
+
+An anonymous structure type that exactly one project typedef already spells, written as that typedef's name.
+`Info` and DEFAULT OFF; no keys — the typedef is the decision, so nothing names it in `apq.json`. `lint --fix`
+rewrites the structure to the typedef's name and adds the import the file needs; the files that change are written
+together or not at all.
+
+```haxe
+// pkg/Pair.hx   typedef Pair = { a:Int, b:String };
+function f():{ b:String, a:Int } …   // -> function f():Pair   (+ import pkg.Pair;)
+```
+
+A structure equals a typedef when both have the same fields (name, optionality, written type), in any order, and every
+type name they spell binds to the same declaration from each file — `{ a:Foo }` over two different `Foo` types is not
+the same type. A nested structure written with its fields in another order is not matched. The body of a `typedef` is
+never an occurrence.
+
+Reported but not rewritten, the message naming why: two or more typedefs have the structure (ambiguous), the typedef
+carries metadata (`@:structInit` included), is declared under `#if`, has type parameters, or is `private` to another
+module. The rule sees only the typedefs among the files of the run, so lint the whole project: one file alone finds no
+typedef declared elsewhere. `anon-type-dup` counts the repeats of a structure no typedef names yet.
+
 ## `prefer-helper`
 
 A run of statements that repeats the body of a helper the project marks as a TEMPLATE, replaceable with a call of

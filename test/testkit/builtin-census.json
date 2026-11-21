@@ -116,6 +116,7 @@
 	"prefer-count",
 	"prefer-doc-comment",
 	"prefer-enum-abstract",
+	"prefer-existing-typedef",
 	"prefer-exists",
 	"prefer-final",
 	"prefer-final-class",

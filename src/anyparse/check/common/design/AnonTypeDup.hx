@@ -35,13 +35,16 @@ typedef AnonCtx = {
  * One written-out occurrence of a shape: the file it sits in, its span, and that file's source the report quotes;
  * `fields` the whitespace-free text of each field in WRITTEN order, `typeNames` the simple type names it spells.
  */
-private typedef Occurrence = {
+typedef Occurrence = {
 	final file: String;
 	final at: Span;
 	final source: String;
 	final fields: Array<String>;
 	final typeNames: Array<String>;
 };
+
+/** One structure to rewrite: its span and the typedef path it becomes. */
+typedef RewriteSite = { final span: Span; final path: String; };
 
 /** A structure the config names: the typedef's full path, its fields as configured and their whitespace-free signature. */
 private typedef NamedType = { final path: String; final spelled: Array<String>; final signature: String; };
@@ -293,6 +296,81 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 		};
 	}
 
+	/**
+	 * Walk `node`, recording every keyable anonymous-structure occurrence under
+	 * its structural key. `parentKind` gates the type-declaration body: a
+	 * `typedef T = { … }` is the naming TARGET, never one of the duplicates.
+	 */
+	public static function collect(
+		node: QueryNode, parentKind: Null<String>, file: String, source: String, ctx: AnonCtx, minFields: Int,
+		groups: Map<String, Array<Occurrence>>, order: Array<String>
+	): Void {
+		if (node.kind == ctx.anonKind && !(parentKind != null && ctx.typeDeclKinds.contains(parentKind))) {
+			final span: Null<Span> = node.span;
+			final key: Null<String> = shapeKey(node, ctx, minFields);
+			if (key != null && span != null) {
+				// Re-bound: a narrowed local never reaches an anonymous-structure literal
+				// whose expected field type is non-nullable.
+				final at: Span = span;
+				final typeNames: Array<String> = [];
+				collectTypeNames(node, ctx, typeNames);
+				final hit: Occurrence = {
+					file: file,
+					at: at,
+					source: source,
+					fields: fieldTexts(node, source),
+					typeNames: typeNames
+				};
+				final bucket: Null<Array<Occurrence>> = groups[key];
+				if (bucket == null) {
+					groups[key] = [hit];
+					order.push(key);
+				} else {
+					bucket.push(hit);
+				}
+			}
+		}
+		for (child in node.children) collect(child, node.kind, file, source, ctx, minFields, groups, order);
+	}
+
+	/** The whitespace-free text of each field of `anon`, in written order; empty when a field has no span. */
+	public static function fieldTexts(anon: QueryNode, source: String): Array<String> {
+		final out: Array<String> = [];
+		for (child in anon.children) {
+			final span: Null<Span> = child.span;
+			if (span == null) return [];
+			out.push(squeeze(source.substring(span.from, span.to)));
+		}
+		return out;
+	}
+
+	/** The simple names of every type reference under `node`, each once. */
+	public static function collectTypeNames(node: QueryNode, ctx: AnonCtx, out: Array<String>): Void {
+		for (child in node.children) {
+			final name: Null<String> = child.name;
+			if (name != null && ctx.typeRefKinds.contains(child.kind) && name.indexOf('.') < 0 && !out.contains(name)) out.push(name);
+			collectTypeNames(child, ctx, out);
+		}
+	}
+
+	/**
+	 * The rewrite of every `sites` span of `file` to the typedef path it names, with the imports the printer decides each needs:
+	 * the one edit builder both this rule's `named` fix and `prefer-existing-typedef` hand their occurrences to.
+	 */
+	public static function rewriteSites(
+		file: String, source: String, sites: Array<RewriteSite>, index: SymbolIndex, plugin: GrammarPlugin
+	): Null<CrossFileEdits> {
+		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		if (tree == null) return null;
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
+			file, source, tree, provider == null ? [] : provider.importMap(source, file), plugin, index
+		);
+		final edits: Array<{ span: Span, text: String }> = sites.map(site -> { span: site.span, text: printer.print(site.path).text });
+		edits.sort((a, b) -> a.span.from - b.span.from);
+		return { file: file, edits: edits.concat(printer.pendingImportEdits().map(e -> { span: e.span, text: e.text })) };
+	}
+
 	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */
 	private static inline function positiveOr(value: Null<Int>, fallback: Int): Int {
 		return value != null && value > 0 ? value : fallback;
@@ -328,43 +406,6 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 			case 1: names[0];
 			case _: '${names[0]}<${names.slice(1).join(', ')}>';
 		};
-	}
-
-	/**
-	 * Walk `node`, recording every keyable anonymous-structure occurrence under
-	 * its structural key. `parentKind` gates the type-declaration body: a
-	 * `typedef T = { … }` is the naming TARGET, never one of the duplicates.
-	 */
-	private static function collect(
-		node: QueryNode, parentKind: Null<String>, file: String, source: String, ctx: AnonCtx, minFields: Int,
-		groups: Map<String, Array<Occurrence>>, order: Array<String>
-	): Void {
-		if (node.kind == ctx.anonKind && !(parentKind != null && ctx.typeDeclKinds.contains(parentKind))) {
-			final span: Null<Span> = node.span;
-			final key: Null<String> = shapeKey(node, ctx, minFields);
-			if (key != null && span != null) {
-				// Re-bound: a narrowed local never reaches an anonymous-structure literal
-				// whose expected field type is non-nullable.
-				final at: Span = span;
-				final typeNames: Array<String> = [];
-				collectTypeNames(node, ctx, typeNames);
-				final hit: Occurrence = {
-					file: file,
-					at: at,
-					source: source,
-					fields: fieldTexts(node, source),
-					typeNames: typeNames
-				};
-				final bucket: Null<Array<Occurrence>> = groups[key];
-				if (bucket == null) {
-					groups[key] = [hit];
-					order.push(key);
-				} else {
-					bucket.push(hit);
-				}
-			}
-		}
-		for (child in node.children) collect(child, node.kind, file, source, ctx, minFields, groups, order);
 	}
 
 	/** `text` elided to `MESSAGE_PREVIEW` characters so a wide structure does not bloat the report. */
@@ -414,26 +455,6 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 		return ~/\s+/g.replace(text, '');
 	}
 
-	/** The whitespace-free text of each field of `anon`, in written order; empty when a field has no span. */
-	private static function fieldTexts(anon: QueryNode, source: String): Array<String> {
-		final out: Array<String> = [];
-		for (child in anon.children) {
-			final span: Null<Span> = child.span;
-			if (span == null) return [];
-			out.push(squeeze(source.substring(span.from, span.to)));
-		}
-		return out;
-	}
-
-	/** The simple names of every type reference under `node`, each once. */
-	private static function collectTypeNames(node: QueryNode, ctx: AnonCtx, out: Array<String>): Void {
-		for (child in node.children) {
-			final name: Null<String> = child.name;
-			if (name != null && ctx.typeRefKinds.contains(child.kind) && name.indexOf('.') < 0 && !out.contains(name)) out.push(name);
-			collectTypeNames(child, ctx, out);
-		}
-	}
-
 	/**
 	 * The create slice of the named typedef plus one rewrite slice per file holding an occurrence, or null when the module
 	 * cannot be placed, already exists, or cannot be written. The occurrences are printed against an index that already
@@ -456,7 +477,10 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 		final done: Array<String> = [];
 		for (hit in plan.hits) if (!done.contains(hit.file)) {
 			done.push(hit.file);
-			final slice: Null<CrossFileEdits> = rewriteOf(plan, hit, grown, host);
+			final sites: Array<RewriteSite> = [
+				for (h in plan.hits) if (h.file == hit.file) { span: h.at, path: plan.named.path }
+			];
+			final slice: Null<CrossFileEdits> = rewriteSites(hit.file, hit.source, sites, grown, host);
 			if (slice == null) return null;
 			out.push(slice);
 		}
@@ -519,22 +543,6 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 			out.pushUnique(statement);
 		}
 		return out;
-	}
-
-	/** The rewrite of every occurrence in `first`'s file to the typedef's name, with the import the printer decides it needs. */
-	private static function rewriteOf(plan: Plan, first: Occurrence, index: SymbolIndex, plugin: GrammarPlugin): Null<CrossFileEdits> {
-		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, first.source);
-		if (tree == null) return null;
-		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		final printer: TypeRefPrinter = TypeRefPrinter.forFile(
-			first.file, first.source, tree, provider == null ? [] : provider.importMap(first.source, first.file), plugin, index
-		);
-		final printed: PrintedTypeRef = printer.print(plan.named.path);
-		final edits: Array<{ span: Span, text: String }> = [
-			for (hit in plan.hits) if (hit.file == first.file) { span: hit.at, text: printed.text }
-		];
-		edits.sort((a, b) -> a.span.from - b.span.from);
-		return { file: first.file, edits: edits.concat(printer.pendingImportEdits().map(e -> { span: e.span, text: e.text })) };
 	}
 
 }

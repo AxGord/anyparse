@@ -1432,6 +1432,73 @@
 			"find": "index.resolveTypeRefsFrom(name, hit.file)",
 			"replace": "[]",
 			"note": "a field type the first occurrence reaches through its own package, with no import written, is not imported by the created module, so it does not compile"
+		},
+		{
+			"name": "M-PET-NO-PLAN",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "crossFileFix",
+			"force": "[]",
+			"note": "no finding gets a fix group, so no structure is rewritten to its typedef"
+		},
+		{
+			"name": "M-PET-AMBIGUOUS",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "judge",
+			"find": "equal.length > 1",
+			"replace": "false",
+			"note": "a shape two typedefs spell is rewritten to the first one"
+		},
+		{
+			"name": "M-PET-DENOTES",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "denotationOf",
+			"force": "\"\"",
+			"note": "type names are compared as written, so the same name over two declarations reads as one type"
+		},
+		{
+			"name": "M-PET-META",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "carriesMeta",
+			"force": "false",
+			"note": "a typedef with metadata is rewritten to"
+		},
+		{
+			"name": "M-PET-PARAMS",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "aliasOf",
+			"find": "decl.typeParamArity > 0",
+			"replace": "false",
+			"note": "a typedef with type parameters is rewritten to"
+		},
+		{
+			"name": "M-PET-GUARD",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "rawAliasOf",
+			"find": "refusal: guarded ?",
+			"replace": "refusal: false ?",
+			"note": "a typedef under a conditional is rewritten to"
+		},
+		{
+			"name": "M-PET-PRIVATE",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "aliasOf",
+			"find": "moduleOnly: decl != null && decl.isPrivate",
+			"replace": "moduleOnly: false",
+			"note": "a typedef private to another module is rewritten to"
+		},
+		{
+			"name": "M-PET-PARAM-SHADOW",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "bindsAParameter",
+			"force": "false",
+			"note": "a type parameter named like the typedefs type name reads as that type, so the structure is rewritten to a typedef that means another type"
+		},
+		{
+			"name": "M-PET-NESTED",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "withoutNested",
+			"force": "found",
+			"note": "a structure inside another fixable one keeps its plan, so two edits cover one span and the whole file group is dropped"
 		}
 	]
 }

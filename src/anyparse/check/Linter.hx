@@ -70,6 +70,7 @@ import anyparse.check.common.design.ListenerSymmetry;
 import anyparse.check.common.design.OversizedType;
 import anyparse.check.common.design.OwnedTypes;
 import anyparse.check.common.design.PreferApiIdiom;
+import anyparse.check.common.design.PreferExistingTypedef;
 import anyparse.check.common.design.PreferHelper;
 import anyparse.check.common.design.RefusalAssertIgnoresMessage;
 import anyparse.check.common.design.RepeatedCast;
@@ -625,6 +626,8 @@ final class Linter {
 			// report-only for the same reason — the name is a human's choice — so neither produces
 			// an edit and registry order carries no meaning between them.
 			new AnonTypeDup(),
+			// Names what `anon-type-dup` only counts: a structure a project typedef already spells, so no config repeats the name.
+			new PreferExistingTypedef(),
 			new AvoidDynamic(),
 			new AvoidAny(),
 			new UnusedReturnValue(),

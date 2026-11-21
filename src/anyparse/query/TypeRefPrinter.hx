@@ -460,26 +460,12 @@ final class TypeRefPrinter {
 	private function typeParamScopes(): Map<String, Array<Span>> {
 		final cached: Null<Map<String, Array<Span>>> = _typeParamScopes;
 		if (cached != null) return cached;
-		final out: Map<String, Array<Span>> = [];
 		final source: Null<String> = _source;
 		final root: Null<QueryNode> = _root;
 		final plugin: Null<GrammarPlugin> = _plugin;
-		if (source != null && root != null && plugin is TypeInfoProvider) {
-			final names: Map<Int, Array<String>> = (cast plugin: TypeInfoProvider).typeParamNames(source);
-			final ends: Map<Int, Int> = [];
-			function walk(node: QueryNode): Void {
-				final span: Null<Span> = node.span;
-				if (span != null && names.exists(span.from) && span.to > (ends[span.from] ?? -1)) ends[span.from] = span.to;
-				for (c in node.children) walk(c);
-			}
-			walk(root);
-			for (from => params in names) for (name in params) {
-				final end: Null<Int> = ends[from];
-				final scopes: Array<Span> = out[name] ?? [];
-				scopes.push(end == null ? new Span(0, source.length) : new Span(from, end));
-				out[name] = scopes;
-			}
-		}
+		final out: Map<String, Array<Span>> = source != null && root != null && plugin != null
+			? typeParamScopesOf(source, root, plugin)
+			: [];
 		_typeParamScopes = out;
 		return out;
 	}
@@ -767,6 +753,34 @@ final class TypeRefPrinter {
 		final module: Null<ModulePath> = _module;
 		if (module == null) return null;
 		return module.base == simple ? module.path : '${module.path}.$simple';
+	}
+
+	/**
+	 * The one answer to "where is a type parameter of this name in scope in this file": every type parameter the file declares
+	 * (class-like and function alike), by name, mapped to the spans it is in scope over — the widest node starting where
+	 * `TypeInfoProvider.typeParamNames` keys its declaration, the whole file when the tree has no node there. Empty for a
+	 * grammar exposing no type parameters. A parameter outranks every type of its name, so a rewrite that writes a type's name
+	 * inside one of these spans must prove the name is not a parameter there.
+	 */
+	public static function typeParamScopesOf(source: String, root: QueryNode, plugin: GrammarPlugin): Map<String, Array<Span>> {
+		final out: Map<String, Array<Span>> = [];
+		if (plugin is TypeInfoProvider) {
+			final names: Map<Int, Array<String>> = (cast plugin: TypeInfoProvider).typeParamNames(source);
+			final ends: Map<Int, Int> = [];
+			function walk(node: QueryNode): Void {
+				final span: Null<Span> = node.span;
+				if (span != null && names.exists(span.from) && span.to > (ends[span.from] ?? -1)) ends[span.from] = span.to;
+				for (c in node.children) walk(c);
+			}
+			walk(root);
+			for (from => params in names) for (name in params) {
+				final end: Null<Int> = ends[from];
+				final scopes: Array<Span> = out[name] ?? [];
+				scopes.push(end == null ? new Span(0, source.length) : new Span(from, end));
+				out[name] = scopes;
+			}
+		}
+		return out;
 	}
 
 	/**
