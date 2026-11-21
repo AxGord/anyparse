@@ -19,7 +19,9 @@ final class LandSweepDeclinedTest extends Test {
 		final run: Swept = LandSweepTest.landing(side, [], 'hxq lint --rule r --fix src', LandSweepTest.sweeping('src/B.hx'));
 		utest.Assert.equals(0, run.status, run.output);
 		utest.Assert.isTrue(run.moved, run.output);
-		utest.Assert.equals('BAD b\n', run.files['src/B.hx'], 'the footprint file is main\'s, which the fix leaves as it declined it');
+		utest.Assert.equals(
+			'BAD b2\n', run.files['src/B.hx'], 'main did not change the file: the tip\'s text, which holds the declined site'
+		);
 		utest.Assert.stringContains('1 finding(s) the tip of `batch/hxqb-S1` carries too left as they are, first src/B.hx', run.output);
 	}
 

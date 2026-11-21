@@ -44,8 +44,9 @@ typedef ReapplyTools = {
  * The one answer to "how does a landing carry a sweep line's commit over files a parallel landing changed": it never merges
  * them, it runs the sweep again. A line whose text holds a marker row `sweep: <command>` lands with its footprint — the files
  * of its commit the command reports on the commit's own base tree — put back as the candidate's HEAD has them, the command
- * run in the candidate tree, and the result staged; a finding the command leaves fails the step as
- * residue unless the branch's own tip carries it too, a site the fix declines on purpose. Files of the
+ * run in the candidate tree, and the result staged; a footprint file main did not change since the branch's base then lands as
+ * the branch's tip has it (the follow-on cleanups the review judged), the rest as the command wrote them. A finding the command
+ * leaves fails the step as residue unless the branch's own tip carries it too, a site the fix declines on purpose. Files of the
  * commit outside the footprint (the rule itself, its tests) merge as any pick does.
  */
 @:nullSafety(Strict)
@@ -118,7 +119,8 @@ final class LandSweep {
 	}
 
 	/**
-	 * The `reapply` step: footprint, reset, the command, staging, the residue check — then `rebuild`, since the binaries the
+	 * The `reapply` step: footprint, reset, the command, staging, the tip's text for
+	 * what main left alone, the residue check — then `rebuild`, since the binaries the
 	 * landing built read the tree before the footprint was taken back and rewritten.
 	 */
 	public function run(rebuild: () -> Outcome): Outcome {
@@ -143,6 +145,11 @@ final class LandSweep {
 			final staging: Result = _candidate.git(['add', '--'].concat(changed));
 			if (!staging.ok) return Failed('could not stage what the sweep command wrote: ${staging.firstError()}');
 		}
+		// a file main did not change since the branch's base lands as the branch's reviewed tip has it: the follow-on cleanups of
+		// the commit step live there, and what quotes that text outside the footprint was written against it
+		final kept: Array<String> = untouchedByMain(footprint);
+		final tipped: Null<String> = restore(kept, _branch);
+		if (tipped != null) return Failed('could not take the footprint from the tip of `$_branch`: $tipped');
 		var standing: Standing = { fresh: [], carried: [] };
 		switch _tools.findings(_candidate.tree, _candidate.tree, words) {
 			case Unreported(why):
@@ -162,7 +169,10 @@ final class LandSweep {
 			return Failed('${files.length} file(s) still carry findings after the sweep command, first ${files[0]}$carried');
 		}
 		_applied = true;
-		_summary.detail('${footprint.length} footprint file(s) taken from HEAD, ${changed.length} rewritten by `$_command`$carried');
+		_summary.detail(
+			'${footprint.length} footprint file(s) taken from HEAD, ${changed.length} rewritten by `$_command`, ${kept.length}'
+			+ ' kept as the tip of `$_branch` has them$carried'
+		);
 		return rebuild();
 	}
 
@@ -199,12 +209,13 @@ final class LandSweep {
 		return reported;
 	}
 
-	/** `paths` in the candidate's index and files as its HEAD has them (absent when HEAD has none); the first error, or null. */
-	private function restore(paths: Array<String>): Null<String> {
-		final held: Array<String> = _candidate.git(['ls-tree', '-r', '--name-only', 'HEAD', '--'].concat(paths)).lines();
+	/** `paths` in the candidate's index and files as `rev` has them (absent when `rev` has none); the first error, or null. */
+	private function restore(paths: Array<String>, rev: String = 'HEAD'): Null<String> {
+		if (paths.length == 0) return null;
+		final held: Array<String> = _candidate.git(['ls-tree', '-r', '--name-only', rev, '--'].concat(paths)).lines();
 		final absent: Array<String> = paths.filter(path -> !held.contains(path));
 		if (held.length > 0) {
-			final taken: Result = _candidate.git(['checkout', 'HEAD', '--'].concat(held));
+			final taken: Result = _candidate.git(['checkout', rev, '--'].concat(held));
 			if (!taken.ok) return taken.firstError();
 		}
 		if (absent.length > 0) {
@@ -224,6 +235,23 @@ final class LandSweep {
 		return carried.length == 0
 			? ''
 			: ', ${carried.length} finding(s) the tip of `$_branch` carries too left as they are, first ${filesIn(carried)[0]}';
+	}
+
+	/** The files of `footprint` whose text on the candidate's HEAD is the text on the branch's base, so main did not change them. */
+	private function untouchedByMain(footprint: Array<String>): Array<String> {
+		final onMain: Map<String, String> = blobsAt('HEAD', footprint);
+		final onBase: Map<String, String> = blobsAt('$_branch^', footprint);
+		return footprint.filter(path -> onMain[path] == onBase[path]);
+	}
+
+	/** The object each of `paths` is at `rev`, by path; a path `rev` lacks has no entry. */
+	private function blobsAt(rev: String, paths: Array<String>): Map<String, String> {
+		final blobs: Map<String, String> = [];
+		for (entry in _candidate.git(['ls-tree', '-r', rev, '--'].concat(paths)).lines()) {
+			final parts: Array<String> = entry.split('\t');
+			blobs[parts[1]] = parts[0];
+		}
+		return blobs;
 	}
 
 	/** The sweep command of line `id` of the queue document `queue` (`commandIn`), or null when the line has none. */

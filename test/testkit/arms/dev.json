@@ -4551,6 +4551,22 @@
 			"find": "PrivateDeclaration.unlessDeclared(",
 			"replace": "NotRun(",
 			"note": "infra4 ignores a declaration of nothing private, so a checkout with no infra trees can never pass the gate once rule code moved"
+		},
+		{
+			"name": "M-LAND-SWEEP-TIP-NOT-KEPT",
+			"type": "dev.LandSweep",
+			"method": "run",
+			"find": "final kept: Array<String> = untouchedByMain(footprint);",
+			"replace": "final kept: Array<String> = [];",
+			"note": "a footprint file main did not change lands as the bare sweep output, without the follow-on cleanups the reviewed branch tip carries"
+		},
+		{
+			"name": "M-LAND-SWEEP-TIP-OVER-MAINS-EDIT",
+			"type": "dev.LandSweep",
+			"method": "untouchedByMain",
+			"find": "return footprint.filter(path -> onMain[path] == onBase[path]);",
+			"replace": "return footprint;",
+			"note": "a footprint file main changed lands as the branch tip has it, losing main's edit"
 		}
 	]
 }

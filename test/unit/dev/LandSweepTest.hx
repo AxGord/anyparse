@@ -35,8 +35,9 @@ typedef Swept = {
 }
 
 /**
- * The `reapply` step of `dev land` (`LandSweep`) on scratch repositories. Main holds `src/A.hx` and `src/B.hx` with a
- * finding each (the word `BAD`), `src/C.hx` and `rule.txt` without; the branch's one commit is a sweep line's — the findings
+ * The `reapply` step of `dev land` (`LandSweep`) on scratch repositories. Main holds `src/A.hx`, `src/B.hx` and `src/E.hx` (a
+ * file whose edits at both ends merge cleanly) with a finding each (the word `BAD`),
+ * `src/C.hx` and `rule.txt` without; the branch's one commit is a sweep line's — the findings
  * rewritten, and `src/C.hx` and `rule.txt` changed as the rule it brings. The stand-in command reports every file of `src`
  * holding `BAD` and rewrites the word.
  */
@@ -51,7 +52,7 @@ final class LandSweepTest extends Test {
 	private static final SWEPT: Array<Change> = [
 		{ path: 'src/A.hx', content: 'GOOD a\n' },
 		{ path: 'src/B.hx', content: 'GOOD b\n' },
-		{ path: 'src/C.hx', content: 'rule v2\n' },
+		{ path: 'src/C.hx', content: 'rule v2\nc1\nc2\nc3\nc4\n' },
 		{ path: 'rule.txt', content: 'r1\n' }
 	];
 
@@ -79,22 +80,21 @@ final class LandSweepTest extends Test {
 	@:pin('control')
 	@:killer('M-LAND-SWEEP-FOOTPRINT-IS-DIFF')
 	public function testAFileOfTheCommitTheCommandDoesNotReportOnTheBaseMergesAsAnyPick(): Void {
-		final run: Swept = landing(SWEPT, [], COMMAND, sweeping());
+		final run: Swept = landing(SWEPT, [{ path: 'src/C.hx', content: 'fine\nc1\nc2\nc3\nc4 main\n' }], COMMAND, sweeping());
 		utest.Assert.equals(0, run.status, run.output);
-		utest.Assert.equals('rule v2\n', run.files['src/C.hx']);
+		utest.Assert.equals(
+			'rule v2\nc1\nc2\nc3\nc4 main\n', run.files['src/C.hx'], 'a file the command does not report merges as any pick'
+		);
 		utest.Assert.equals('r1\n', run.files['rule.txt']);
 	}
 
 	@:pin('control')
 	@:killer('M-LAND-SWEEP-FOOTPRINT-KEPT')
-	public function testAFootprintFileLandsAsTheCommandWritesItNotAsTheBranchHasIt(): Void {
-		final byHand: Array<Change> = [
-			{ path: 'src/A.hx', content: 'GOOD a\n' },
-			{ path: 'src/B.hx', content: 'GOOD b, and a hand edit\n' }
-		];
-		final run: Swept = landing(byHand, [], COMMAND, sweeping());
+	public function testAFootprintFileMainChangedLandsAsTheCommandWritesItNotAsTheBranchHasIt(): Void {
+		final byHand: Array<Change> = [{ path: 'src/E.hx', content: 'GOOD e\nm1\nm2\nm3\nm4\ne9 by hand\n' }];
+		final run: Swept = landing(byHand, [{ path: 'src/E.hx', content: 'BAD e\nm1\nm2 main\nm3\nm4\ne9\n' }], COMMAND, sweeping());
 		utest.Assert.equals(0, run.status, run.output);
-		utest.Assert.equals('GOOD b\n', run.files['src/B.hx']);
+		utest.Assert.equals('GOOD e\nm1\nm2 main\nm3\nm4\ne9\n', run.files['src/E.hx']);
 	}
 
 	@:pin('control')
@@ -299,7 +299,8 @@ final class LandSweepTest extends Test {
 			write(repo, [
 				{ path: 'src/A.hx', content: 'BAD a\n' },
 				{ path: 'src/B.hx', content: 'BAD b\n' },
-				{ path: 'src/C.hx', content: 'fine\n' },
+				{ path: 'src/C.hx', content: 'fine\nc1\nc2\nc3\nc4\n' },
+				{ path: 'src/E.hx', content: 'BAD e\nm1\nm2\nm3\nm4\ne9\n' },
 				{ path: 'rule.txt', content: 'r0\n' },
 				{ path: '.gitignore', content: 'bin/*.out\n# $repo\n' }
 			]);
