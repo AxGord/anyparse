@@ -218,6 +218,9 @@ enum FixRevertCause {
 	/** The candidate was written and the compiler rejected it. */
 	OracleRejected;
 
+	/** The compiler rejected this exact edit in an earlier run on inputs that have not changed since, so nothing was compiled now. */
+	OracleRecordedReject;
+
 	/** The oracle could not run; `reason` is its own diagnostic. */
 	OracleUnavailable(reason: String);
 
@@ -791,12 +794,28 @@ final class FixVerifier {
 			spawns[0] += oracle.invocations() - spentBefore;
 			return outcome;
 		}
-		write(entry.file, candidate.fullText);
+		// A candidate an earlier run saw the compiler reject, on inputs that have not moved, is answered from the ledger
+		// without being written or compiled; a rejection observed here is recorded for the next run. Nothing else is: an
+		// acceptance changes the bytes, and an unavailable oracle says nothing about the candidate.
+		// A revert claims the compiler judged it only when some answer of THIS run came from it.
+		var compiled: Bool = false;
+		function rejection(): FixRevertCause {
+			return compiled ? OracleRejected : OracleRecordedReject;
+		}
+		function ask(text: String): OracleOutcome {
+			final oracle: OracleProvider = OracleProviders.of(plugin);
+			if (oracle.recordedReject(verifying, entry.file, before, text)) return Rejected('');
+			compiled = true;
+			write(entry.file, text);
+			final outcome: OracleOutcome = askCovering();
+			if (outcome.match(Rejected(_))) oracle.recordReject(verifying, entry.file, before, text);
+			return outcome;
+		}
 		// ALL of them, and the first REJECTION decides: an edit that compiles on one configuration
 		// and breaks another is exactly the incident this list exists to catch, so a single
 		// confirmation is not a verdict. `typecheckAll` stops at that first rejection, which is why
 		// the worst case of one compile per configuration is only ever paid for a GOOD edit.
-		switch askCovering() {
+		switch ask(candidate.fullText) {
 			case Confirmed:
 				entry.source = candidate.fullText;
 				return Applied;
@@ -811,7 +830,7 @@ final class FixVerifier {
 		if (n < 2) {
 			entry.source = before;
 			write(entry.file, before);
-			return Reverted(OracleRejected);
+			return Reverted(rejection());
 		}
 		// Cap the bisect SEARCH at 2*ceil(log2(n)) probes: a single failing UNIT needs at most
 		// that, so the search never spuriously falls back. PROBES and not spawns, because one
@@ -835,9 +854,7 @@ final class FixVerifier {
 		function probe(indices: Array<Int>): Bool {
 			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);
 			return switch CanonicalEdit.canonicalize(before, subset, false, plugin, opts) {
-				case Ok(text):
-					write(entry.file, text);
-					askCovering().match(Confirmed);
+				case Ok(text): ask(text).match(Confirmed);
 				case Err(message):
 					if (uncanonical == null) uncanonical = message;
 					false;
@@ -858,36 +875,35 @@ final class FixVerifier {
 			// knows more than this one and must answer from what IT saw — a hoisted cause put
 			// `NotCanonical` on a complement the compiler had read and rejected, which is the
 			// mirror of the defect the split of `FixRevertCause` exists to prevent.
-			return Partial(0, edits.length, spawnsBeforeConfirm, refusal == null ? OracleRejected : NotCanonical(refusal));
+			return Partial(0, edits.length, spawnsBeforeConfirm, refusal == null ? rejection() : NotCanonical(refusal));
 		}
 		final failerUnits: Array<Int> = failers;
 		final keptUnits: Array<Int> = [ for (u in 0...n) if (!failerUnits.contains(u)) u ];
 		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
 		return switch CanonicalEdit.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
-				write(entry.file, safeText);
-				switch askCovering() {
+				switch ask(safeText) {
 					case Confirmed:
 						entry.source = safeText;
 						// `OracleRejected` explicitly, not by defaulting: the cause is REQUIRED so
 						// that a future `Partial` cannot silently claim the compiler refused
 						// something it never saw. Here it is the truth — the full set was
 						// compiler-rejected, which is how the bisect was reached at all.
-						Partial(safe.length, edits.length - safe.length, spawns[0], OracleRejected);
+						Partial(safe.length, edits.length - safe.length, spawns[0], rejection());
 					case _:
 						entry.source = before;
 						write(entry.file, before);
 						// The compiler READ this complement and refused it — `OracleRejected` whatever
 						// happened earlier in the search. A refusal upstream says nothing about a
 						// candidate the compiler judged for itself.
-						Partial(0, edits.length, spawns[0], OracleRejected);
+						Partial(0, edits.length, spawns[0], rejection());
 				}
 			case Ok(_):
 				entry.source = before;
 				write(entry.file, before);
 				// The complement canonicalises back to the input, so nothing new was judged — but
 				// the FULL SET was, and its rejection is what put us here.
-				Partial(0, edits.length, spawnsBeforeConfirm, OracleRejected);
+				Partial(0, edits.length, spawnsBeforeConfirm, rejection());
 			case Err(message):
 				entry.source = before;
 				write(entry.file, before);
@@ -937,6 +953,18 @@ final class FixVerifier {
 	): Array<EntryVerdict> {
 		final n: Int = candidates.length;
 		if (n < 2) return candidates.map(candidate -> judgeAlone(candidate, plugin, write, rounds));
+		// A candidate the compiler already rejected in an earlier run is set aside before the batch is formed: it would
+		// fail the whole round and be blamed again, a compile spent to re-learn a recorded verdict.
+		final oracle: OracleProvider = OracleProviders.of(plugin);
+		final known: Array<Bool> = candidates.map(c -> oracle.recordedReject(c.verifying, c.entry.file, c.entry.source, c.fullText));
+		if (known.contains(true)) {
+			final open: Array<EntryCandidate> = [ for (i => c in candidates) if (!known[i]) c ];
+			final settled: Array<EntryVerdict> = judgeBatch(open, plugin, write, rounds);
+			var nextSettled: Int = 0;
+			return [
+				for (i => c in candidates) known[i] ? judgeAlone(c, plugin, write, rounds) : settled[nextSettled++]
+			];
+		}
 		final configs: Array<OracleConfig> = [];
 		for (candidate in candidates) {
 			write(candidate.entry.file, candidate.fullText);

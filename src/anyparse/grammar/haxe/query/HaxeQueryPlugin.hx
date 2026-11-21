@@ -18,6 +18,7 @@ import anyparse.check.haxe.oracle.OracleGeneration;
 import anyparse.check.haxe.oracle.OracleRunMemo;
 import anyparse.check.haxe.oracle.ReachBuildsCache;
 import anyparse.check.haxe.oracle.ReachBuildsRun;
+import anyparse.check.haxe.oracle.RejectedFixes;
 import anyparse.format.IndentChar;
 import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
@@ -830,6 +831,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		parsed: Null<Array<String>>
 	): Bool {
 		return OracleCache.storeIfUnchanged(hxml, cwd, fingerprint, outcome, defines, memo, parsed);
+	}
+
+	public function recordedReject(oracles: Array<OracleConfig>, file: String, before: String, after: String): Bool {
+		return RejectedFixes.recorded(oracles, file, before, after);
+	}
+
+	public function recordReject(oracles: Array<OracleConfig>, file: String, before: String, after: String): Void {
+		RejectedFixes.record(oracles, file, before, after);
+	}
+
+	public function forgetRejects(oracles: Array<OracleConfig>): Void {
+		RejectedFixes.forget(oracles);
 	}
 
 	public function classPaths(hxml: String, cwd: Null<String>): Array<String> {

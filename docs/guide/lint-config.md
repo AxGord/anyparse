@@ -125,7 +125,16 @@ alone leaves a reader with a search: attributing three reverts over an 809-file
 application once took an md5 snapshot of every file before and after a sweep
 plus one run per candidate rule, and still missed two, since both came from
 `OracleRelaxable` rules whose widened candidate set exists ONLY inside `--fix`
-and which therefore report nothing at all in any report run. Without the key the
+and which therefore report nothing at all in any report run. A fix the compiler
+rejected is remembered across runs: while the compile input has not moved (the
+hxml chain, the defines, the compiler and library versions) and the file and
+the rewrite are the same bytes, a later `--fix` skips that exact edit as
+`REVERTED (recorded verdict)` without compiling it, and sets it aside before it
+bisects, so a loop of `lint --fix` runs stops re-proving the same rejections.
+The record lives in the OS temp dir, one file per project of the build, and is keyed on that
+one file, so a rejection caused by a caller elsewhere stays recorded after the
+caller is repaired: `apq oracle <scope>` (a cold typecheck) drops every
+recorded rejection of the projects its builds belong to. Without the key the
 compiler is never spawned. The compile
 directory is PROBED, because `haxe <path>` resolves an hxml's relative `-cp`
 entries against the process cwd and real projects write them against two

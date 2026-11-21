@@ -1,10 +1,12 @@
 package anyparse.check.haxe.oracle;
 
+import anyparse.check.LintConfig.OracleConfig;
 import anyparse.core.ContentHash;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.proc.ProcessRun;
 import anyparse.proc.ProcessSpawn;
+import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
 import anyparse.query.OracleProvider.OracleOutcome;
 import anyparse.util.Compare;
@@ -90,9 +92,9 @@ private typedef HxmlChain = { var lines: Array<String>; var classPaths: Array<St
  *
  * Each of those is a hole that would make a hit stale, and together they are the whole
  * reason this cache is a REPORT-MODE fast path and nothing more. `--fix` never consults
- * it: `FixVerifier` writes files and then asks whether the project still compiles, a
- * question only a real compiler run may answer, so it calls `CompilerOracle` directly
- * and stays on the cold path by construction.
+ * it for an ACCEPTANCE: `FixVerifier` writes files and then asks whether the project still compiles, a
+ * question only a real compiler run may answer, so it calls `CompilerOracle` directly.
+ * What it may remember is a REJECTION of one exact edit (`RejectedFixes`), keyed on `inputsFingerprint`.
  *
  * ## Why mtime is banned here
  *
@@ -195,6 +197,24 @@ final class OracleCache {
 	}
 
 	/**
+	 * Everything one build compiles with EXCEPT its source files: the scheme tag, the compiler's `Defines:` line (Haxe and
+	 * library versions), the configuration's defines and the hxml include chain by content. Null whenever `fingerprint`
+	 * would be. It is the part of the compile input a record about one candidate edit may be keyed on without the whole
+	 * tree: an edit's verdict survives another file's change, never a change of the compiler, a library, a define or an hxml.
+	 */
+	public static function inputsFingerprint(hxml: String, cwd: Null<String>, ?defines: Array<String>): Null<String> {
+		#if (sys || nodejs)
+		final root: String = cwd ?? Sys.getCwd();
+		final chain: Null<HxmlChain> = scanHxmlChain(root, hxml);
+		if (chain == null) return null;
+		final probe: CompilerProbe = compilerProbe(root, chain.libs);
+		return probe.ok ? ContentHash.md5(inputLines(chain, probe, defines ?? []).join('\n')) : null;
+		#else
+		return null;
+		#end
+	}
+
+	/**
 	 * The verdict stored for this (hxml, cwd) pair, but ONLY when it was recorded under
 	 * the very fingerprint passed in. Null for a missing file, unparseable JSON, a
 	 * record missing a field, an unknown verdict word, or any fingerprint mismatch —
@@ -246,6 +266,58 @@ final class OracleCache {
 		#if (sys || nodejs)
 		final key: String = '${absolute(cwd ?? Sys.getCwd(), hxml)}|${cwd ?? ''}|${(defines ?? []).join(' ')}';
 		return Path.join([TempScratch.root(), 'apq-oracle-verdict-${ContentHash.md5(key)}.json']);
+		#else
+		return '';
+		#end
+	}
+
+	/**
+	 * The keys of the fix candidates `RejectedFixes` recorded as compiler-rejected in the ledger at `path` (`rejectsFile`),
+	 * oldest first. Empty for a missing, unreadable or wrong-shaped file — every doubt answers "nothing recorded".
+	 */
+	public static function rejectedKeys(path: String): Array<String> {
+		#if (sys || nodejs)
+		final record: Null<RejectedFixRecord> = try
+			fileExists(path) ? RejectedFixRecordParser.parse(sys.io.File.getContent(path)) : null
+		catch (_exception: haxe.Exception)
+			null;
+		return record?.rejects ?? [];
+		#else
+		return [];
+		#end
+	}
+
+	/** Replace the project's ledger with `keys`; a write failure is swallowed, since it costs a later run a compile, never a verdict. */
+	public static function storeRejectedKeys(path: String, keys: Array<String>): Void {
+		#if (sys || nodejs)
+		final text: String = RejectedFixRecordWriter.write({ rejects: keys }, JsonFormat.instance.compactWriteOptions);
+		try sys.io.File.saveContent(path, text) catch (_exception: haxe.Exception) {
+			// Swallowed on purpose: see the doc comment above.
+		}
+		#end
+	}
+
+	/** Delete the project's ledger; a file that cannot be removed is no worse than one that was never consulted. */
+	public static function dropRejectedKeys(path: String): Void {
+		#if (sys || nodejs)
+		try if (fileExists(path)) sys.FileSystem.deleteFile(path) catch (_exception: haxe.Exception) {
+			// Swallowed on purpose: see the doc comment above.
+		}
+		#end
+	}
+
+	/**
+	 * The ledger of rejected fix candidates of the PROJECT one build belongs to, `''` on a target with no filesystem: a file
+	 * in the OS temp dir named by the nearest directory at or above the build's compile directory holding `.git`,
+	 * `haxelib.json` or `apq.json` — never by the process's working directory, so a run started elsewhere meets the same one.
+	 */
+	public static function rejectsFile(oracle: OracleConfig): String {
+		#if (sys || nodejs)
+		final cwd: String = Sys.getCwd();
+		final compileDir: String = oracle.dir ?? (Path.directory(oracle.hxml) == '' ? cwd : Path.directory(oracle.hxml));
+		final base: String = absolute(cwd, compileDir);
+		final home: String = ConfigFinder.projectRoot(base, ConfigFinder.PROJECT_ROOT_MARKERS.concat(['apq.json'])) ?? base;
+		return Path.join([TempScratch.root(), 'apq-oracle-rejects-${ContentHash.md5(home)}.json']);
 		#else
 		return '';
 		#end
@@ -494,7 +566,12 @@ final class OracleCache {
 		for (dir in probe.dirs) mergeDir(files, absolute(root, dir), true, memo, walks);
 		final fileLines: Array<String> = [ for (path => hash in files) '$path $hash' ];
 		fileLines.sort(Compare.compareString);
-		return [FORMAT_TAG, probe.defines, 'oracle-defines ${defines.join(' ')}'].concat(chain.lines).concat(fileLines);
+		return inputLines(chain, probe, defines).concat(fileLines);
+	}
+
+	/** The manifest lines that are no source file: the scheme tag, the compiler's defines, the configuration's defines, the hxml chain. */
+	private static function inputLines(chain: HxmlChain, probe: CompilerProbe, defines: Array<String>): Array<String> {
+		return [FORMAT_TAG, probe.defines, 'oracle-defines ${defines.join(' ')}'].concat(chain.lines);
 	}
 
 	/**

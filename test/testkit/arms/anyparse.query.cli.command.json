@@ -1627,6 +1627,14 @@
 			"find": "if (ConfigFinder.fileExists(made.file)) {",
 			"replace": "if (false) {",
 			"note": "a path holding a file outside the scope is refused by the staging with no word on why, instead of naming the taken name"
+		},
+		{
+			"name": "M-FIXREJECT-ORACLE-COMMAND-KEEPS",
+			"type": "anyparse.query.cli.command.OracleCommand",
+			"method": "recordOracleVerdicts",
+			"find": "compiler.forgetRejects(oracles);",
+			"replace": "{}",
+			"note": "a cold `apq oracle` leaves the recorded fix rejections standing, so the one command meant to re-observe the build cannot clear a stale one"
 		}
 	]
 }

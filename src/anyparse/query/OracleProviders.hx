@@ -139,6 +139,14 @@ private final class AbsentOracle implements OracleProvider implements NameProof 
 		return false;
 	}
 
+	public function recordedReject(oracles: Array<OracleConfig>, file: String, before: String, after: String): Bool {
+		return false;
+	}
+
+	public function recordReject(oracles: Array<OracleConfig>, file: String, before: String, after: String): Void {}
+
+	public function forgetRejects(oracles: Array<OracleConfig>): Void {}
+
 	public function classPaths(hxml: String, cwd: Null<String>): Array<String> {
 		return [];
 	}

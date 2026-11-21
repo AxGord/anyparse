@@ -269,6 +269,15 @@ interface OracleProvider {
 		parsed: Null<Array<String>>
 	): Bool;
 
+	/** Whether an earlier run recorded `oracles` rejecting the edit of `file` from `before` to `after`, under their current inputs. */
+	public function recordedReject(oracles: Array<OracleConfig>, file: String, before: String, after: String): Bool;
+
+	/** Records that `oracles` rejected that edit, so a later run need not compile it again; kept only when every input can be told. */
+	public function recordReject(oracles: Array<OracleConfig>, file: String, before: String, after: String): Void;
+
+	/** Drops every recorded rejection of the projects `oracles` belong to: a cold typecheck replaces what was remembered. */
+	public function forgetRejects(oracles: Array<OracleConfig>): Void;
+
 	/** The class paths one build spells explicitly. */
 	public function classPaths(hxml: String, cwd: Null<String>): Array<String>;
 

@@ -1004,6 +1004,38 @@
 			"method": "relativeClasspaths",
 			"force": "[]",
 			"note": "the compile-dir probe reads no classpath, so every nested hxml compiles from its own directory even where its classpaths resolve from the config's"
+		},
+		{
+			"name": "M-FIXREJECT-KEY-IGNORES-INPUTS",
+			"type": "anyparse.check.haxe.oracle.RejectedFixes",
+			"method": "keyOf",
+			"find": "builds.push('${OracleDeclaration.oracleKey(oracle)}\\n$inputs');",
+			"replace": "builds.push(OracleDeclaration.oracleKey(oracle));",
+			"note": "a changed hxml, define, library or compiler leaves a recorded rejection standing, so a fix the new inputs would accept stays withheld"
+		},
+		{
+			"name": "M-FIXREJECT-KEY-IGNORES-RESULT",
+			"type": "anyparse.check.haxe.oracle.RejectedFixes",
+			"method": "keyOf",
+			"find": "ContentHash.md5(after)",
+			"replace": "ContentHash.md5(before)",
+			"note": "a rejection of one rewrite of a file answers for every other rewrite of the same bytes"
+		},
+		{
+			"name": "M-FIXREJECT-FORGET-NOOP",
+			"type": "anyparse.check.haxe.oracle.RejectedFixes",
+			"method": "forget",
+			"find": "OracleCache.dropRejectedKeys(path);",
+			"replace": "{}",
+			"note": "the ledger outlives every request to drop it, so a rejection recorded against code since repaired is never re-asked"
+		},
+		{
+			"name": "M-FIXREJECT-LEDGER-BY-PROCESS-CWD",
+			"type": "anyparse.check.haxe.oracle.OracleCache",
+			"method": "rejectsFile",
+			"find": "final home: String = ConfigFinder.projectRoot(base, ConfigFinder.PROJECT_ROOT_MARKERS.concat(['apq.json'])) ?? base;",
+			"replace": "final home: String = cwd;",
+			"note": "the ledger is chosen by the directory the process runs in, so apq oracle for one project drops every other project's rejections run from the same directory, and a fix run started elsewhere never meets the ledger apq oracle clears"
 		}
 	]
 }

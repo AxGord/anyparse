@@ -110,6 +110,8 @@ final class OracleCommand implements CliCommand {
 	 * read. A configuration whose `generate` command failed is reported unavailable and records nothing.
 	 */
 	private static function recordOracleVerdicts(compiler: OracleProvider, oracles: Array<OracleConfig>): Int {
+		// a cold, observed typecheck supersedes what `lint --fix` remembered the compiler rejecting
+		compiler.forgetRejects(oracles);
 		final prepared: PreparedOracles = compiler.prepareBuilds(oracles);
 		for (note in prepared.notes) CliIo.stderr('apq oracle: compilerOracle $note\n');
 		final ready: Array<OracleConfig> = prepared.oracles;
@@ -177,6 +179,10 @@ final class OracleCommand implements CliCommand {
 		CliIo.sysPrint('or the oracle could not run, 1 when it does not typecheck, 2 on usage. The\n');
 		CliIo.sysPrint('last stderr line counts both: `N of M configuration(s) typecheck, R do NOT,\n');
 		CliIo.sysPrint('U UNAVAILABLE` — read it, not the status, to know every one was confirmed.\n');
+		CliIo.sysPrint('\n');
+		CliIo.sysPrint('It also forgets the rejections `apq lint --fix` recorded for this project\n');
+		CliIo.sysPrint('(a candidate fix the compiler refused is skipped on later runs while the\n');
+		CliIo.sysPrint('compile input is unchanged); run it after repairing code a fix depended on.\n');
 		CliIo.sysPrint('\n');
 		CliIo.sysPrint('A configuration with a `generate` command has it run first when its hxml is\n');
 		CliIo.sysPrint('stale; the configurations then compile concurrently (APQ_ORACLE_PARALLEL=<n>).\n');

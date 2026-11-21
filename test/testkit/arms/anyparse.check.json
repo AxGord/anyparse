@@ -574,6 +574,38 @@
 			"method": "cutAfter",
 			"force": "text",
 			"note": "the tail after an anchor stays in the message identity again, so a finding whose quoted tail is empty in one spelling and present in another keys differently for one standing site"
+		},
+		{
+			"name": "M-FIXREJECT-ALONE-IGNORES-LEDGER",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeAlone",
+			"find": "if (oracle.recordedReject(verifying, entry.file, before, text)) return Rejected('');",
+			"replace": "if (false) return Rejected('');",
+			"note": "a candidate the compiler already rejected is written and compiled again in every new process"
+		},
+		{
+			"name": "M-FIXREJECT-REJECTION-NOT-RECORDED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeAlone",
+			"find": "if (outcome.match(Rejected(_))) oracle.recordReject(verifying, entry.file, before, text);",
+			"replace": "{}",
+			"note": "a rejection the compiler gave is never remembered, so the next run compiles the same candidate again"
+		},
+		{
+			"name": "M-FIXREJECT-BATCH-KEEPS-RECORDED",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeBatch",
+			"find": "c -> oracle.recordedReject(c.verifying, c.entry.file, c.entry.source, c.fullText)",
+			"replace": "c -> false",
+			"note": "a recorded reject stays in its check's batch, so the round that holds it fails and is spent to re-learn the verdict"
+		},
+		{
+			"name": "M-FIXREJECT-PARTIAL-CLAIMS-COMPILER",
+			"type": "anyparse.check.FixVerifier",
+			"method": "judgeAlone",
+			"find": "return compiled ? OracleRejected : OracleRecordedReject;",
+			"replace": "return OracleRejected;",
+			"note": "a bisect whose every answer came from the ledger still reports that the compiler rejected it, though no compile ran in this run"
 		}
 	]
 }

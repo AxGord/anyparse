@@ -5479,7 +5479,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "4a947772c6aa456f",
+				"out": "382686992202df8a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -5494,7 +5494,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "4a947772c6aa456f",
+				"out": "382686992202df8a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14"
 			}

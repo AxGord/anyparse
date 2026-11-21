@@ -253,6 +253,7 @@ final class LintFixVerify {
 	public static function revertCauseText(cause: FixRevertCause): String {
 		return switch cause {
 			case OracleRejected: 'the compiler rejected it';
+			case OracleRecordedReject: 'the compiler rejected it (recorded verdict)';
 			case OracleUnavailable(reason): 'the compiler oracle could not run ($reason)';
 			case NotCanonical(message): 'nothing reached the compiler — $message';
 		};
