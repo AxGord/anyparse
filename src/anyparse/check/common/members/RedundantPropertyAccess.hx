@@ -96,7 +96,7 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 		final byEnd: Map<Int, AccessorClause> = [
 			for (clause in RunScan.accessorClausesOf(plugin, source)) clause.span.to => clause
 		];
-		final edits: Array<{ span: Span, text: String }> = [
+		return [
 			for (v in violations) {
 				final span: Null<Span> = v.span;
 				if (span != null) {
@@ -106,7 +106,6 @@ final class RedundantPropertyAccess extends RuleBase implements DefaultOff {
 				}
 			}
 		];
-		return edits;
 	}
 
 	/**

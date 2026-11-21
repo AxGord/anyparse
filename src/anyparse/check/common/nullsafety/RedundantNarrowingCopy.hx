@@ -379,7 +379,7 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 		for (r in reads) {
 			final path: Array<QueryNode> = TreePath.ancestorsAt(scan.tree, r.from);
 			var i: Int = path.length - 1;
-			while (i > 0 && !(path[i].kind == s.identKind && path[i].span?.from == r.from)) i--;
+			while (i > 0 && (path[i].kind != s.identKind || path[i].span?.from != r.from)) i--;
 			if (
 				i > 0
 				&& s.equalityKinds.contains(path[i - 1].kind)

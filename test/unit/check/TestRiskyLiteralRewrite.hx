@@ -40,7 +40,7 @@ final class TestRiskyLiteralRewrite implements Check implements RiskyFix {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final out: Array<Violation> = [
+		return [
 			for (entry in files) {
 				final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 				if (tree != null) {
@@ -58,7 +58,6 @@ final class TestRiskyLiteralRewrite implements Check implements RiskyFix {
 				}
 			}
 		];
-		return out;
 	}
 
 	public function fix(

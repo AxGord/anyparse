@@ -150,8 +150,7 @@ final class CondDirectives {
 	public static function topLevelBlocks(source: String, directives: Array<CondDirective>, shape: RefShape): Array<CondBlock> {
 		final ifKeyword: Null<String> = shape.conditionalIfKeyword;
 		final endKeyword: Null<String> = shape.conditionalEndKeyword;
-		if (ifKeyword == null || endKeyword == null) return [];
-		final out: Array<CondBlock> = [
+		return ifKeyword == null || endKeyword == null ? [] : [
 			for (region in ownRegions(directives, ifKeyword, shape.conditionalElseKeywords ?? [], endKeyword)) {
 				final open: CondDirective = region.directives[0];
 				final close: CondDirective = region.directives[region.directives.length - 1];
@@ -166,7 +165,6 @@ final class CondDirectives {
 				};
 			}
 		];
-		return out;
 	}
 
 	/**

@@ -318,13 +318,12 @@ final class OracleCoverage implements CompiledSet {
 		final asked: Array<OracleConfig> = [ for (oracle in oracles) if (oracle.unavailable == null) oracle ];
 		final runs: Array<ProcessRun> = remembered(asked);
 		var next: Int = 0;
-		final out: Array<OracleCoverage> = [
+		return [
 			for (oracle in oracles) {
 				final unavailable: Null<String> = oracle.unavailable;
 				unavailable == null ? fromRun(oracle.dir ?? Sys.getCwd(), oracle.hxml, reworded(runs[next++])) : unknown(unavailable);
 			}
 		];
-		return out;
 		#else
 		return [ for (_ in oracles) unknown(UNSUPPORTED_TARGET) ];
 		#end

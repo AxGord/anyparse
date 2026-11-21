@@ -646,10 +646,10 @@ final class LintDiff {
 
 	/** What `pool` holds unspent, one entry per key in its tally's order, named by a message one of its occurrences carried. */
 	private static function leftovers(pool: LintDiffPool): Array<LintDiffEntry> {
-		final out: Array<LintDiffEntry> = [
+		return [
 			for (key in pool.tally.order) {
 				final count: Int = pool.counts[key] ?? 0;
-				if (!(count <= 0)) {
+				if (count > 0) {
 					final row: LintDiffRow = rowOf(pool.tally, key);
 					{
 						file: row.file,
@@ -662,7 +662,6 @@ final class LintDiff {
 				}
 			}
 		];
-		return out;
 	}
 
 	/** Per-severity totals over both surplus lists, in `SEVERITY_ORDER`. */

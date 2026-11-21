@@ -394,7 +394,7 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 	 */
 	private static function collectConsts(container: QueryNode, cfg: EnumAbstractCfg): Array<ConstDecl> {
 		final kids: Array<QueryNode> = container.children;
-		final out: Array<ConstDecl> = [
+		return [
 			for (i in 0...kids.length) {
 				final node: QueryNode = kids[i];
 				if (cfg.constKinds.contains(node.kind) && precededByStatic(kids, i, cfg) && hasNumericValue(node, cfg)) {
@@ -410,7 +410,6 @@ final class PreferEnumAbstract extends RuleBase implements RiskyFix implements G
 				}
 			}
 		];
-		return out;
 	}
 
 	/** Whether the member at `kids[i]` carries a `Static` modifier — scanning back over its preceding modifier siblings. */

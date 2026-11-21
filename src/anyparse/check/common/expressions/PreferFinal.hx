@@ -112,7 +112,7 @@ final class PreferFinal extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final keyword: String = 'var';
-		final edits: Array<{ span: Span, text: String }> = [
+		return [
 			for (v in violations) {
 				final span: Null<Span> = v.span;
 				if (span != null) {
@@ -121,7 +121,6 @@ final class PreferFinal extends RuleBase {
 				}
 			}
 		];
-		return edits;
 	}
 
 	/**

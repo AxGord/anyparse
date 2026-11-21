@@ -100,7 +100,7 @@ final class HxComplexItems {
 	 * element of a list by its own item count and nesting rather than by its kind alone.
 	 */
 	public static function containerItemKinds(elements: Array<Any>): Array<Null<Array<Int>>> {
-		final out: Array<Null<Array<Int>>> = [
+		return [
 			for (element in elements) {
 				final node: Null<Any> = nodeOf(element);
 				final own: Null<Array<Any>> = node == null
@@ -113,7 +113,6 @@ final class HxComplexItems {
 				own == null ? null : kinds(own);
 			}
 		];
-		return out;
 	}
 
 	/** The value expression of each field of an object literal; a field that is not a plain `name: value` stays itself. */

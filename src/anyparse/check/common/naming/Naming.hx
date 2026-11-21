@@ -435,7 +435,7 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 	 * language idiom outside any policy (`NamedDecl.reservedName`).
 	 */
 	public static function violationsFor(file: String, decls: Array<NamedDecl>, policy: NamingPolicy): Array<Violation> {
-		final out: Array<Violation> = [
+		return [
 			for (decl in decls) {
 				final span: Null<Span> = decl.span;
 				if (span != null && decl.reservedName != true && decl.contractName != true) {
@@ -455,7 +455,6 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 				}
 			}
 		];
-		return out;
 	}
 
 	/**

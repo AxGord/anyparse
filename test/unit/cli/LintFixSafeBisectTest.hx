@@ -52,7 +52,7 @@ private class DropText implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final found: Array<Violation> = [
+		return [
 			for (entry in files) {
 				final unless: Null<String> = _unless;
 				if (unless == null || !(entry.source.indexOf(unless) >= 0)) {
@@ -70,7 +70,6 @@ private class DropText implements Check {
 				}
 			}
 		];
-		return found;
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {

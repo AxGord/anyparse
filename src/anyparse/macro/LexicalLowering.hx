@@ -298,7 +298,7 @@ class LexicalLowering {
 	/** Every terminal tagged `@:token(<Kind>)`, in rule-name order. */
 	private static function tokenTerminals(shape: ShapeBuilder.ShapeResult): Array<LexTokenTerminal> {
 		final kinds: Array<String> = constructorNames('anyparse.query.TokenSpans.TokenKind').filter(kind -> !READER_KINDS.contains(kind));
-		final out: Array<LexTokenTerminal> = [
+		return [
 			for (name in sortedRuleNames(shape)) {
 				final node: Null<ShapeNode> = shape.rules[name];
 				if (node != null) {
@@ -312,7 +312,6 @@ class LexicalLowering {
 				}
 			}
 		];
-		return out;
 	}
 
 	/** The names of `shape`'s rules in byte order — map iteration order is not specified, and the emitted walk must be byte-stable. */

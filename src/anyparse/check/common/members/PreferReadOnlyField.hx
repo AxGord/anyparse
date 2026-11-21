@@ -117,16 +117,15 @@ final class PreferReadOnlyField extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final edits: Array<{ span: Span, text: String }> = [
+		return [
 			for (v in violations) {
 				final span: Null<Span> = v.span;
 				if (span != null) {
 					final nameEnd: Int = nameEndOffset(source, span, plugin);
-					if (!(nameEnd < 0)) { span: new Span(nameEnd, nameEnd), text: '(default, null)' };
+					if (nameEnd >= 0) { span: new Span(nameEnd, nameEnd), text: '(default, null)' };
 				}
 			}
 		];
-		return edits;
 	}
 
 	/**

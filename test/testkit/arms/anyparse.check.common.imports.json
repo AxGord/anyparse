@@ -280,7 +280,7 @@
 			"name": "M-SINK-OWN-RIVAL-BLIND",
 			"type": "anyparse.check.common.imports.HoistCommonImport",
 			"method": "sinkSound",
-			"find": "!(statementKeyOf(imp) == key && !imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)",
+			"find": "(statementKeyOf(imp) != key || imp.guarded) && SymbolIndex.bindsAnyOf(imp, statement.names, ctx.publicTypes)",
 			"replace": "false",
 			"note": "a reader's own import of the same name is no rival, so the own copy a sink writes lands beside it and whichever sorts last takes the name"
 		},

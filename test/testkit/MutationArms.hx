@@ -349,17 +349,17 @@ final class MutationArms {
 	 * time instead of leaving it for whoever runs the arm.
 	 */
 	private static function pairErrors(fragments: Array<String>, replacements: Array<String>, at: String): Array<String> {
-		if (fragments.length != replacements.length) return [
-			'$at declares ${fragments.length} "find" fragment(s) against ${replacements.length} "replace" — every pair of a'
-				+ ' multi-pair cut replaces its own fragment, so the two lists are the same length'
-		];
-		final out: Array<String> = [
-			for (index => piece in fragments) if (piece == replacements[index]) {
-				final pair: String = fragments.length > 1 ? ' in pair ${index + 1}' : '';
-				'$at declares the same text as "find" and "replace"$pair — `apq patch` refuses a pair that changes nothing';
-			}
-		];
-		return out;
+		return fragments.length != replacements.length
+			? [
+				'$at declares ${fragments.length} "find" fragment(s) against ${replacements.length} "replace" — every pair of a'
+					+ ' multi-pair cut replaces its own fragment, so the two lists are the same length'
+			]
+			: [
+				for (index => piece in fragments) if (piece == replacements[index]) {
+					final pair: String = fragments.length > 1 ? ' in pair ${index + 1}' : '';
+					'$at declares the same text as "find" and "replace"$pair — `apq patch` refuses a pair that changes nothing';
+				}
+			];
 	}
 
 	/**

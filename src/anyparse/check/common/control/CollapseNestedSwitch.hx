@@ -876,7 +876,7 @@ final class CollapseNestedSwitch extends RuleBase implements DefaultOff {
 		for (at => innerArm in innerArms) {
 			final kids: Array<QueryNode> = innerArm.children;
 			final run: Int = patternRunLength(seams, kids);
-			final trailing: Bool = at == innerArms.length - 1 && run == 1 && !(run < kids.length && kids[run].kind == seams.parenKind);
+			final trailing: Bool = at == innerArms.length - 1 && run == 1 && (run >= kids.length || kids[run].kind != seams.parenKind);
 			for (i in 0...run) {
 				final head: QueryNode = kids[i].children.length == 1 ? kids[i].children[0] : kids[i];
 				final bare: Bool = head.kind == seams.identKind && head.name == seams.wildcardPatternName;

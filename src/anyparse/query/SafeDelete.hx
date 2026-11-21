@@ -170,7 +170,7 @@ final class SafeDelete {
 					if (
 						span != null
 						&& !(inSrc && span.from >= memberSpan.from && span.from < memberSpan.to)
-						&& !(node.children.length > 0 && receivers.read(node.children[0], memberName) == OtherType)
+						&& (node.children.length <= 0 || receivers.read(node.children[0], memberName) != OtherType)
 					)
 						count++;
 				}

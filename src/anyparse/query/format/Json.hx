@@ -209,14 +209,13 @@ final class Json {
 	}
 
 	private static function collectBindings(m: Match, source: String, index: LineIndex): Array<AstSearchBinding> {
-		final out: Array<AstSearchBinding> = [
+		return [
 			for (name => boundNode in m.bindings) {
 				final span: Null<Span> = boundNode.span;
 				final text: String = boundNode.kind == 'NameOnly' ? (boundNode.name ?? '') : SourceSlice.slice(source, span);
 				{ name: name, text: text, span: span == null ? emptySpan() : spanToJson(span, index) };
 			}
 		];
-		return out;
 	}
 
 	private static function spanToJson(span: Span, index: LineIndex): AstSearchSpan {

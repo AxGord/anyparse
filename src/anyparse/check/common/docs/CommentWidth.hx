@@ -159,7 +159,7 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 		// last content line and the writer eats the space before that line's star. The block's
 		// own guards do the rest: a plain `/* … *\/` body does not start on a star, and a
 		// continuation with no gutter is handed back untouched.
-		final edits: Array<{ span: Span, text: String }> = [
+		return [
 			for (unit in ownersOf(wide)) {
 				final open: Array<Int> = [
 					for (w in wide) if (w.owner.from == unit.from && w.refusal == null && wanted.contains(w.from)) w.body
@@ -176,7 +176,6 @@ final class CommentWidth extends RuleBase implements DefaultOff implements Volat
 				}
 			}
 		];
-		return edits;
 	}
 
 	/** `wide`'s owning units, first occurrence first — one entry per comment unit that carries a finding. */

@@ -323,7 +323,7 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware impl
 	private static function declEdits(
 		tree: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, d: DeclSeams, site: Null<InversionSite>
 	): Array<{ key: Span, edit: GuardedEdit }> {
-		final out: Array<{ key: Span, edit: GuardedEdit }> = [
+		return [
 			for (m in DeclFallbackChain.collect(tree, source, comments, d)) if (DeclFallbackChain.ownedByTernary(m, d)) {
 				final cond: QueryNode = m.branches[0].cond;
 				final assign: Null<QueryNode> = AssignmentTreeHoist.plainAssign(m.branches[0].stmt, d.tree);
@@ -331,22 +331,26 @@ final class PreferTernaryAssignment extends RuleBase implements ConfigAware impl
 				final condSpan: Null<Span> = cond.span;
 				final valueSpan: Null<Span> = value?.span;
 				final initSpan: Null<Span> = m.init.span;
-				if (value != null && condSpan != null && valueSpan != null && initSpan != null)
-					if (!BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)) {
-						final kept: Array<Span> = [new Span(m.declSpan.from, m.prefix.keptTo), condSpan, valueSpan, initSpan];
-						if (!IfExpressionChain.droppedComment(m.region, kept, comments)) {
-							final head: String = '${m.prefix.text} = ';
-							{
-								key: m.declSpan,
-								edit: passThroughEdit(m.region, head, cond, value, m.init, source, d.shape) ?? NegatedCondition.ternaryEdit(
-									m.region, head, cond, value, m.init, ';', source, site
-								)
-							};
-						}
+				if (
+					value != null
+					&& condSpan != null
+					&& valueSpan != null
+					&& initSpan != null
+					&& !BoolExprShape.refusesNullNarrowingBoolCollapse(value, m.init, cond, d.shape)
+				) {
+					final kept: Array<Span> = [new Span(m.declSpan.from, m.prefix.keptTo), condSpan, valueSpan, initSpan];
+					if (!IfExpressionChain.droppedComment(m.region, kept, comments)) {
+						final head: String = '${m.prefix.text} = ';
+						{
+							key: m.declSpan,
+							edit: passThroughEdit(m.region, head, cond, value, m.init, source, d.shape) ?? NegatedCondition.ternaryEdit(
+								m.region, head, cond, value, m.init, ';', source, site
+							)
+						};
 					}
+				}
 			}
 		];
-		return out;
 	}
 
 	/**

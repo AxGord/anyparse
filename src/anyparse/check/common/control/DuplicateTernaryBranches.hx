@@ -43,21 +43,22 @@ final class DuplicateTernaryBranches extends RuleBase {
 			indexTernaries(tree, ternaryKind, nodeByKey);
 
 			// Only safe to drop the condition when evaluating it has no side effect.
-			final edits: Array<{ span: Span, text: String }> = [
+			return ([
 				for (v in violations) {
 					final span: Null<Span> = v.span;
 					if (span != null) {
 						final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-						if (node != null && BranchChain.hasElse(node)) if (MemberKinds.isSideEffectFree(
-							BranchChain.condOf(node), plugin.refShape()
-						)) {
+						if (
+							node != null
+							&& BranchChain.hasElse(node)
+							&& MemberKinds.isSideEffectFree(BranchChain.condOf(node), plugin.refShape())
+						) {
 							final branchSpan: Null<Span> = BranchChain.thenOf(node).span;
 							if (branchSpan != null) { span: span, text: source.substring(branchSpan.from, branchSpan.to) };
 						}
 					}
 				}
-			];
-			return edits;
+			]: Array<{ span: Span, text: String }>);
 		});
 	}
 

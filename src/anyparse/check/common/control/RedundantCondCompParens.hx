@@ -92,21 +92,20 @@ final class RedundantCondCompParens extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
 		final flagged: Array<String> = RunScan.spanKeys(violations);
-		final edits: Array<{ span: Span, text: String }> = [
+		return [
 			for (site in sites(source, plugin)) if (flagged.contains('${site.condition.from}:${site.condition.to}')) {
 				final lead: String = CondDirectives.isIdentCharAt(source, site.condition.from - 1) ? ' ' : '';
 				final trail: String = CondDirectives.isIdentCharAt(source, site.condition.to) ? ' ' : '';
 				{ span: site.condition, text: '$lead${site.flag}$trail' };
 			}
 		];
-		return edits;
 	}
 
 	/** Every parenthesised-single-flag condition in `source`, in source order. */
 	private static function sites(source: String, plugin: GrammarPlugin): Array<FlagParens> {
 		// Re-bound to non-null locals: strict null-safety narrowing does not reach into an
 		// anonymous struct literal.
-		final out: Array<FlagParens> = [
+		return [
 			for (directive in CondDirectives.scan(source, plugin.refShape(), plugin.lexicalRegions.bind(source))) {
 				final condition: Null<Span> = directive.condition;
 				if (condition != null) {
@@ -119,7 +118,6 @@ final class RedundantCondCompParens extends RuleBase {
 				}
 			}
 		];
-		return out;
 	}
 
 	/**
