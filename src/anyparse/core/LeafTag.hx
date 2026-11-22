@@ -99,6 +99,20 @@ class DelimiterLeaf {
 		return Text(s, null, byteTag(s, Plain));
 	}
 
+	/**
+	 * How many delimited runs a leaf tagged `tag` leaves open: +1 when it ends opening one, -1 when it only closes one,
+	 * and 0 for a leaf that closes first and opens last (`) {`), opens a run and closes it (`()`, `[]`, `(a)`), or has no run edge.
+	 */
+	public static function runDepthDelta(tag: Null<LeafTag>): Int {
+		return switch tag {
+			case Delimiter(NoOpen, Opens): 0;
+			case Delimiter(_, Opens): 1;
+			case Delimiter(Paren | CallArgs | Collection | EmptyCollection, Closes | ClosesBrace): 0;
+			case Delimiter(_, Closes | ClosesBrace): -1;
+			case _: 0;
+		};
+	}
+
 	/** Whether a leaf tagged `tag` starts with a `.`. */
 	public static function startsWithDot(tag: Null<LeafTag>): Bool {
 		return switch tag {

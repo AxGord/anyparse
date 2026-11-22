@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-RUN-DEPTH-OPEN-CLOSE-LEAF-NEGATIVE",
+			"type": "anyparse.core.LeafTag.DelimiterLeaf",
+			"method": "runDepthDelta",
+			"find": "case Delimiter(Paren | CallArgs | Collection | EmptyCollection, Closes | ClosesBrace): 0;",
+			"replace": "case Delimiter(Paren | CallArgs | Collection | EmptyCollection, Closes | ClosesBrace): -1;",
+			"note": "a leaf that opens a run and closes it (`()`, `[]`, `{}`) counts as a closer, so the run depth drifts below the head's nesting and the first break inside an iterated literal reads as the first break"
+		},
+		{
 			"name": "M-COLLAPSE-REWRITE-MEMO-OFF",
 			"type": "anyparse.core.CollapsePass",
 			"method": "rewrite",

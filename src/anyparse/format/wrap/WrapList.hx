@@ -1415,7 +1415,7 @@ class WrapList {
 	 * first break), no re-measure.
 	 */
 	private static inline function firstBreakIsArrayDelim(d: Doc): Bool {
-		return firstBreakIsDelimChar(d, '['.code);
+		return firstBreakIsDelimChar(d, '['.code, false);
 	}
 
 	/**
@@ -2160,8 +2160,8 @@ class WrapList {
 		);
 		if (comprBlockHug != null) return comprBlockHug;
 		final comprCuddledOpen: Null<Doc> = shapeComprehensionCuddledOpen(
-			comprehensionCuddledOpen, mode, open, close, sep, list, openInside, cols, appendTrailingComma, trailBreak, sepBeforeFlags,
-			lineWidth
+			comprehensionCuddledOpen, mode, open, close, sep, list, openInside, closeInside, cols, appendTrailingComma, trailBreak,
+			sepBeforeFlags, lineWidth
 		);
 		if (comprCuddledOpen != null) return comprCuddledOpen;
 		final soleArrowUniform: Null<Doc> = shapeSoleArrowUniform(mode, open, close, openInside, closeInside, list);
@@ -4010,7 +4010,7 @@ class WrapList {
 	 * predicate and reaches the generic cascade.
 	 */
 	private static function isHeadGluedBraceBodyComprehension(item: Doc): Bool {
-		return lastVisibleText(item) == '}' && firstBreakIsDelimChar(item, '{'.code);
+		return lastVisibleText(item) == '}' && firstBreakIsDelimChar(item, '{'.code, false);
 	}
 
 	/**
@@ -4248,15 +4248,16 @@ class WrapList {
 	 *
 	 * The tail mirrors `shapeOnePerLine` exactly, so switching the head placement never adds or
 	 * drops a token, and `closeInside` is dropped because the close delimiter no longer shares a
-	 * line with the body.
+	 * line with the body — except for a `{ … }` body glued to the head's `)`, whose `}` is back at
+	 * container indent: the close rides it and keeps `closeInside`.
 	 */
 	private static function shapeComprehensionCuddledOpen(
-		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,
-		appendTrailingComma: Bool, trailBreak: Doc, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
+		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc,
+		cols: Int, appendTrailingComma: Bool, trailBreak: Doc, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
 	): Null<Doc> {
 		if (!enabled || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
 		final itemFlat: Int = flatLength(items[0]);
-		if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;
+		if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code, false)) return null;
 		final item: Null<Doc> = itemFlat < 0 ? items[0] : dropComprehensionBody(items[0]);
 		if (item == null) return null;
 		final glueShape: Doc = Concat([
@@ -4264,7 +4265,7 @@ class WrapList {
 			openInside,
 			item,
 			appendTrailingComma ? Text(sep) : Empty,
-			trailBreak,
+			itemFlat < 0 && lastVisibleText(items[0]) == '}' && firstBreakIsDelimChar(items[0], '{'.code, true) ? closeInside : trailBreak,
 			DelimiterLeaf.leaf(close)
 		]);
 		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
@@ -4325,7 +4326,11 @@ class WrapList {
 	 * (`'{'`), which asks the same "did the construct open at the END of the
 	 * head line" question about a comprehension's block body.
 	 *
-	 * The soft-line stop is part of the contract for BOTH consumers: a soft
+	 * `skipNested` walks past a break sitting more than one delimited run deep (`DelimiterLeaf.runDepthDelta`):
+	 * the generator head's own parens are the first run, so a break inside what the head iterates is not the
+	 * break that tells where the body's `{` sits, while the body's own brace is the one run deep.
+	 *
+	 * The soft-line stop is part of the contract for every consumer: a soft
 	 * line reached before the delimiter means the construct is nested inside a
 	 * chain (opAdd / opBool / ternary continuation) whose own wrap owns the
 	 * layout, so the delimiter is not what the first line ends on.
@@ -4348,23 +4353,25 @@ class WrapList {
 	 * byte-identical, and so are the suite, the anyparse own corpus, client `src`
 	 * and the fork corpus apart from the comprehension fixtures above.
 	 */
-	private static function firstBreakIsDelimChar(d: Doc, ch: Int): Bool {
+	private static function firstBreakIsDelimChar(d: Doc, ch: Int, skipNested: Bool): Bool {
 		final stack: Array<Doc> = [d];
 		var lastCh: Int = -1;
+		var depth: Int = 0;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch (node) {
-				case Text(s):
+				case Text(s, _, tag):
 					if (s.length > 0 && !isCommentTextAtom(s)) lastCh = s.fastCodeAt(s.length - 1);
+					depth += DelimiterLeaf.runDepthDelta(tag);
 				case Line(_):
 					// A SOFT line (opAdd / opBool / ternary continuation) reaching before
 					// the delimiter means the delimited construct is NOT what `d` first
 					// breaks at — its owning chain has its own wrap semantics (fork
 					// explodes the call, does not hug). Stop here: only `ch` at the VERY
 					// first break qualifies.
-					return lastCh == ch;
+					if (!(skipNested && depth > 1)) return lastCh == ch;
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
-					return lastCh == ch;
+					if (!(skipNested && depth > 1)) return lastCh == ch;
 				case _:
 					flatPushChildren(node, stack);
 			}

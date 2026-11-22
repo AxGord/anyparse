@@ -107,7 +107,9 @@
 		"anonlit/Probe.hx": "class Probe {\n\tfunction f() {\n\t\tfinal found: { ids: Array<String>, chains: Map<String, Array<String>>, waivers: Array<String> } = { ids: ids, chains: _chains, waivers: _waivers };\n\t}\n}\n",
 		"anonlit/hxformat.json": "{\"wrapping\": {\"maxLineLength\": 120}}",
 		"compfit/G.hx": "class D {\n\tfunction g() {\n\t\tfinal candidates: Array<MemberGroup> = [ for (sibling in membersOf(\n\t\t\tprep.srcDecl, prep.srcSource, prep.shape, plugin.lexicalRegions\n\t\t)) {\n\t\t\tfinal siblingName: Null<String> = sibling.member.name;\n\t\t\tsibling;\n\t\t} ];\n\t}\n}\n",
-		"compfit/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140, \"comprehensionFit\": true}}"
+		"compfit/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140, \"comprehensionFit\": true}}",
+		"cuddled-empty-call-item/B.hx": "class C {\n\tfunction n():Array<Int> {\n\t\treturn [ for (p in [\n\t\t\taaaaaaaaaaaaaaaaaaaa(1),\n\t\t\tbbbbbbbbbbbbbbbbbbbb(),\n\t\t\tcccccccccccccccccccc(3),\n\t\t\tdddddddddddddddddddd(4)\n\t\t]) {\n\t\t\tfinal v:Int = p * 2;\n\t\t\tv;\n\t\t} ];\n\t}\n}\n",
+		"cuddled-empty-call-item/hxformat.json": "{\"indentation\": {\"character\": \"tab\", \"tabWidth\": 4}, \"wrapping\": {\"maxLineLength\": 140, \"comprehensionCuddledOpen\": true}, \"whitespace\": {\"bracketConfig\": {\"comprehensionBrackets\": {\"openingPolicy\": \"onlyAfter\", \"closingPolicy\": \"before\"}}}, \"sameLine\": {\"ifBody\": \"fitLine\", \"expressionIf\": \"next\"}}"
 	},
 	"invocations": [
 		{
@@ -1174,6 +1176,24 @@
 			"expect": {
 				"exit": 0,
 				"out": "210db44524300e1e",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "cuddled-empty-call-item/B.hx",
+			"note": "cuddled comprehension whose head iterates a multi-line literal holding an empty-argument call item: the `]` rides the body's `}`",
+			"fixpoint": "cuddled-empty-call-item/B.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"cuddled-empty-call-item/B.hx"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "081e1100dafe60cf",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

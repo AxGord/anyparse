@@ -4,6 +4,22 @@
 	],
 	"arms": [
 		{
+			"name": "M-CUDDLE-GLUED-BRACE-CLOSE-OWN-LINE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"find": "firstBreakIsDelimChar(items[0], '{'.code, true) ? closeInside : trailBreak,",
+			"replace": "firstBreakIsDelimChar(items[0], '{'.code, true) ? trailBreak : trailBreak,",
+			"note": "a cuddled comprehension whose block body is glued to its head closes on its own line like an expression body, splitting the } from the ]"
+		},
+		{
+			"name": "M-CUDDLE-GLUE-READS-NESTED-BREAK",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeComprehensionCuddledOpen",
+			"find": "firstBreakIsDelimChar(items[0], '{'.code, true) ? closeInside",
+			"replace": "firstBreakIsDelimChar(items[0], '{'.code, false) ? closeInside",
+			"note": "the glue test reads a break nested inside the head's iterated literal as the first break, so the body's glued brace is hidden and the ] drops to its own line"
+		},
+		{
 			"name": "M-GROUPIFY-GATE-REFOLD-OFF",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "groupifyShared",
@@ -15,7 +31,7 @@
 			"name": "M-CUDDLE-FLATONLY",
 			"type": "anyparse.format.wrap.WrapList",
 			"method": "shapeComprehensionCuddledOpen",
-			"find": "if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code)) return null;",
+			"find": "if (itemFlat >= 0 && !firstBreakIsDelimChar(items[0], ')'.code, false)) return null;",
 			"replace": "if (itemFlat >= 0) return null;",
 			"note": "restores the pre-S146 gate — only an item that CANNOT render flat cuddles, so a comprehension that renders flat and still overflows keeps its `[` on a line of its own"
 		},
