@@ -78,6 +78,7 @@
 	"join-return",
 	"join-single-use-local",
 	"join-string-append",
+	"jvm-short-circuit-inline-local-fn",
 	"lambda-branching-body-braces",
 	"listener-symmetry",
 	"loop-bound-length-mismatch",

@@ -535,6 +535,46 @@
 			"find": " || LexicalRegions.commentIntersects(span.from, span.to, regions())",
 			"replace": "",
 			"note": "a comment inside the comparison no longer blocks the rewrite, which would drop it"
+		},
+		{
+			"name": "M-JVMSC-ANY-PLACE",
+			"type": "anyparse.check.haxe.expressions.InlineCallWalk",
+			"method": "walk",
+			"find": "(inOperand && !lambda) || (short && i == 1)",
+			"replace": "true",
+			"note": "every call is read as inside a short-circuit operand, the left operand and a bare condition included"
+		},
+		{
+			"name": "M-JVMSC-ANY-CALLEE",
+			"type": "anyparse.check.haxe.expressions.InlineCallWalk",
+			"method": "report",
+			"find": "&& declared(callee.name ?? '')",
+			"replace": "",
+			"note": "every named call in an operand is flagged, not only a call to a declared inline function with a literal"
+		},
+		{
+			"name": "M-JVMSC-ANY-INLINE",
+			"type": "anyparse.check.haxe.expressions.InlineCallWalk",
+			"method": "walk",
+			"find": "&& holdsLiteral(node)",
+			"replace": "",
+			"note": "every local inline function is recorded, not only one whose body holds an object literal"
+		},
+		{
+			"name": "M-JVMSC-LAMBDA-BODY-IN-OPERAND",
+			"type": "anyparse.check.haxe.expressions.InlineCallWalk",
+			"method": "walk",
+			"find": "(inOperand && !lambda)",
+			"replace": "inOperand",
+			"note": "a call inside a function literal in the operand is read as part of the short-circuit's own frame"
+		},
+		{
+			"name": "M-JVMSC-NULL-COALESCE-OPERAND",
+			"type": "anyparse.check.haxe.expressions.JvmShortCircuitInlineLocalFn",
+			"method": "run",
+			"find": "[shape.logicalAndKind, shape.logicalOrKind]",
+			"replace": "[shape.logicalAndKind, shape.logicalOrKind, shape.nullCoalesceKind]",
+			"note": "the right operand of ?? is read as a short-circuit operand too"
 		}
 	]
 }

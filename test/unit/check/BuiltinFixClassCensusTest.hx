@@ -161,6 +161,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'helper-copy',
 			'identical-operands',
 			'impossible-cast',
+			'jvm-short-circuit-inline-local-fn',
 			'loop-bound-length-mismatch',
 			'magic-number',
 			'null-dereference',

@@ -1170,7 +1170,7 @@
 			"expect": {
 				"exit": 3,
 				"out": "e3b0c44298fc1c14",
-				"err": "b3059559e7eddea2",
+				"err": "984bd6a925ec57b3",
 				"files": "90fc96979480c2c1",
 				"compiles": [
 					true,
@@ -1712,7 +1712,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "5d8775343e770e01",
+				"err": "1bf07297915c37f6",
 				"files": "5ac73425cffbf6fb",
 				"compiles": [
 					false,
@@ -3374,6 +3374,36 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "2a4c04f692dba32a",
 				"files": "7692614cc6a4696f",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "J1",
+			"note": "jvm-short-circuit-inline-local-fn: warns on the call in the right operand of || (repro), not inside a function literal or the right operand of ??",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"jvm-short-circuit-inline-local-fn",
+				"--no-oracle"
+			],
+			"files": {
+				"Main.hx": "class Main {\n\tstatic function rw(n:Int, o:Null<{col:Int, f:Bool}>):Int return n + (o == null ? 0 : o.col);\n\n\tstatic function fits(n:Int, d:Int):Bool return n > d;\n\n\tstatic function repro(c:Bool, col:Int, w:Int):Int {\n\t\tvar r = 0;\n\t\tinline function rf(x:Int, z:Bool):Int return rw(x, {col: x, f: z});\n\t\tif (c || fits(w - rf(col, true), 1)) r = 1;\n\t\treturn r;\n\t}\n\n\tstatic function lambdaBody(c:Bool, w:Int):Int {\n\t\tvar r = 0;\n\t\tinline function rf(x:Int, z:Bool):Int return rw(x, {col: x, f: z});\n\t\tif (c || [1].filter(v -> fits(w - rf(v, true), 1)).length > 0) r = 1;\n\t\treturn r;\n\t}\n\n\tstatic function nullCoalesce(c:Null<Int>, col:Int, w:Int):Int {\n\t\tvar r = 0;\n\t\tinline function rf(x:Int, z:Bool):Int return rw(x, {col: x, f: z});\n\t\tif ((c ?? (w - rf(col, true))) > 1) r = 1;\n\t\treturn r;\n\t}\n\n\tstatic function main() {\n\t\tSys.println([repro(false, 3, 80), lambdaBody(false, 80), nullCoalesce(null, 3, 80)].join(','));\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "315a465cf97d25af",
+				"err": "b4b220b0ef1c9805",
+				"files": "e3b0c44298fc1c14",
 				"compiles": [
 					true,
 					true

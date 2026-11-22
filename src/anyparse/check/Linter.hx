@@ -224,6 +224,7 @@ import anyparse.check.common.unused.UnusedPublicMember;
 import anyparse.check.common.unused.UnusedReturnValue;
 import anyparse.check.common.unused.UnusedType;
 import anyparse.check.haxe.design.HandSourceScanner;
+import anyparse.check.haxe.expressions.JvmShortCircuitInlineLocalFn;
 import anyparse.check.haxe.expressions.PreferArrayContains;
 import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.check.haxe.expressions.PreferSplitPart;
@@ -302,6 +303,7 @@ final class Linter {
 			new CPrecedenceTrap(),
 			new MixedLogicalParens(),
 			new SubstrNegativeStart(),
+			new JvmShortCircuitInlineLocalFn(),
 			new HandSourceScanner(),
 			new AvoidHaxeJson(),
 			new PreferCompareFunction(),
