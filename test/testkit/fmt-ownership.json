@@ -69,6 +69,7 @@
 		"beforeCommentedFields",
 		"beforeDocCommentEmptyLines",
 		"clearExprPositionNonTail",
+		"glueCommentedGroups",
 		"propagateExprPosition",
 		"relocateTrailingComments",
 		"uniformStmtBlanks"

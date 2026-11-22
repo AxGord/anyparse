@@ -540,6 +540,18 @@ final class HxModuleWriteOptions {
 	public var typedefBeforeCommentedFields: Int = 0;
 
 	/**
+	 * Whether a run of line comments (`//`) heads a subgroup that stays glued: the same-kind members after the headed one
+	 * that the source holds without a blank line take no counted between-members blank (`betweenVars`,
+	 * `betweenFunctions`, an enum's `betweenFields`) — named by its body Star's `@:fmt(glueCommentedGroups(...))`.
+	 * `glueCommentedGroups` is the class, interface and abstract body's; the other two are their kind's. Off by
+	 * default: the fork has none.
+	 */
+	public var glueCommentedGroups: Bool = false;
+
+	public var enumGlueCommentedGroups: Bool = false;
+	public var enumAbstractGlueCommentedGroups: Bool = false;
+
+	/**
 	 * Whether an `enum abstract` body that is more than a list of values reads the plain `abstract` blank-line knobs (its
 	 * class rule set) instead of the `enumAbstract*` ones — the `enumAbstractEmptyLines.abstractRulesUnlessValueList` key,
 	 * named by `HxDecl.EnumAbstractDecl`'s `@:fmt(propagateEnumAbstractContext(...))`. Off by default: every body reads

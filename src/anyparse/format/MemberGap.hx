@@ -89,6 +89,18 @@ final class MemberGap {
 	}
 
 	/**
+	 * Whether a member is glued into the subgroup a line-comment heading opened, so no counted between-members blank
+	 * (`betweenVars`, `betweenFunctions`, an enum's `betweenFields`) splits it: the previous member heads or continues the
+	 * group (`inGroup`), the source holds no blank line between them, and the member is of the previous one's kind and
+	 * carries neither a comment of its own nor a doc-led mark. A blank the author wrote ends the group and stays.
+	 */
+	public static inline function groupGlued(
+		inGroup: Bool, sourceBlank: Bool, leadingComments: Array<String>, docLed: Bool, sameKind: Bool
+	): Bool {
+		return inGroup && !sourceBlank && leadingComments.length == 0 && !docLed && sameKind;
+	}
+
+	/**
 	 * The `stated` count of a type body edge (`bodyEdge`'s first argument) once the body's doc comments are read:
 	 * `ifDoc`, the kind's `…TypeIfDocComments` count, replaces it when the body holds a doc comment (`bodyHasDoc`);
 	 * `null` there leaves `stated`, and the body is then not scanned. `alsoDoc` is a body the caller already knows holds a
@@ -130,6 +142,14 @@ final class MemberGap {
 	/** Whether a member takes the blank line a heading asks for: `count` is above 0 and a `lineCommentRun` leads the member. */
 	public static function headingAdds(count: Int, leadingComments: Array<String>): Bool {
 		return count > 0 && lineCommentRun(leadingComments);
+	}
+
+	/**
+	 * Whether the group stays open after a member under `glue` (the `glueCommentedGroups` knob): the member heads one
+	 * (a `lineCommentRun` leads it) or is glued into one (`glued`, `groupGlued`'s answer).
+	 */
+	public static function groupOpenAfter(glue: Bool, leadingComments: Array<String>, glued: Bool): Bool {
+		return glue && (glued || lineCommentRun(leadingComments));
 	}
 
 	/**

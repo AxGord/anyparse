@@ -43,6 +43,9 @@ typedef HxFormatEmptyLinesSection = {
 	var beforeCommentedFields: Int;
 
 	@:optional
+	var glueCommentedGroups: Bool;
+
+	@:optional
 	var classEmptyLines: HxFormatClassEmptyLinesConfig;
 
 	@:optional

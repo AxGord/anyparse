@@ -103,21 +103,28 @@ final class WriterTriviaStarDispatch {
 	 */
 	public static function headingAddsExpr(args: Null<Array<String>>): Null<Expr> {
 		if (args == null) return null;
-		if (args.length != 1 && args.length != 3)
-			Context.fatalError(
-				'@:fmt(beforeCommentedFields) names its knob, optionally followed by a flag and the knob it switches to, got $args',
-				Context.currentPos()
-			);
-		final off: Expr = macro 0;
-		final own: Expr = args[0] == '' ? off : knobRead(args[0]);
-		final count: Expr = args.length == 1 ? own : macro (${knobRead(args[1])} ? ${args[2] == '' ? off : knobRead(args[2])} : $own);
+		final count: Expr = soleKnobRead(StarPlan.BEFORE_COMMENTED_FIELDS, args, macro 0);
 		return macro anyparse.format.MemberGap.headingAdds($count, _t.leadingComments);
+	}
+
+	/**
+	 * The runtime read of `@:fmt(glueCommentedGroups('<knob>'[, '<flag>', '<alt>']))` (`args`, null without the flag):
+	 * whether the Star keeps a line-comment heading's subgroup glued (`MemberGap.groupGlued`). `<knob>` is an `opt` Bool,
+	 * `''` for off; under `opt.<flag>` the `<alt>` Bool decides instead. Null without the flag: the Star splices no group rule.
+	 */
+	public static function groupGlueExpr(args: Null<Array<String>>): Null<Expr> {
+		return args == null ? null : soleKnobRead(StarPlan.GLUE_COMMENTED_GROUPS, args, macro false);
 	}
 
 	/** The element `_t` is doc-led: a `/**` among its leading comments, or `reads.elem` when the Star counts metadata. */
 	public static function docLedExpr(reads: Null<DocLedReads>): Expr {
 		final byDoc: Expr = macro anyparse.format.MemberGap.docLed(_t.leadingComments);
 		return reads == null ? byDoc : macro ($byDoc || ${reads.elem});
+	}
+
+	/** The one knob `knobReads` names for a `meta` flag of width 1, read as `off` where the flag spells it `''`. */
+	private static function soleKnobRead(meta: String, args: Array<String>, off: Expr): Expr {
+		return knobReads(meta, args, 1, off)[0];
 	}
 
 	/**
@@ -587,21 +594,21 @@ final class WriterTriviaStarDispatch {
 	 * The one answer to "which option does a type body's `@:fmt` knob read": `meta` names `width` knobs of the body's own;
 	 * a flag and `width` more name the knobs it reads while `opt.<flag>` is set — how one grammar type written in two roles
 	 * (`abstract` and `enum abstract`, `class` and `extern class`) keeps two scopes. The grammar always names them: a
-	 * default here would be one grammar's option name in the core macro. An empty name reads `null`: the role has no
-	 * such knob.
+	 * default here would be one grammar's option name in the core macro. An empty name reads `off`, `null` when absent: the
+	 * role has no such knob (a knob of a basic type passes its off value, which a static target needs in place of `null`).
 	 */
-	private static function knobReads(meta: String, knobs: Null<Array<String>>, width: Int): Array<Expr> {
+	private static function knobReads(meta: String, knobs: Null<Array<String>>, width: Int, ?off: Expr): Array<Expr> {
 		if (knobs == null || (knobs.length != width && knobs.length != 2 * width + 1))
 			Context.fatalError(
 				'@:fmt($meta) names its $width knob(s), optionally followed by a flag and the $width it switches to, got $knobs',
 				Context.currentPos()
 			);
-		final own: Array<Expr> = [ for (i in 0...width) knobRead(knobs[i]) ];
+		final own: Array<Expr> = [ for (i in 0...width) knobRead(knobs[i], off) ];
 		if (knobs.length == width) return own;
 		final flag: Expr = macro $p{['opt', knobs[width]]};
 		return [ for (i in 0...width) {
 			final unswitched: Expr = own[i];
-			final switched: Expr = knobRead(knobs[width + 1 + i]);
+			final switched: Expr = knobRead(knobs[width + 1 + i], off);
 			macro ($flag ? $switched : $unswitched);
 		} ];
 	}
@@ -611,9 +618,9 @@ final class WriterTriviaStarDispatch {
 		return knobs != null ? knobReads(meta, knobs, width) : null;
 	}
 
-	/** One knob of `knobReads`: `opt.<name>`, or `null` for an empty name. */
-	private static function knobRead(name: String): Expr {
-		return name == '' ? macro null : macro $p{['opt', name]};
+	/** One knob of `knobReads`: `opt.<name>`, or `off` (`null` when absent) for an empty name. */
+	private static function knobRead(name: String, ?off: Expr): Expr {
+		return name == '' ? off ?? macro null : macro $p{['opt', name]};
 	}
 
 	/**

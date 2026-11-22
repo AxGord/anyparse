@@ -117,7 +117,7 @@ constructFitGroup(…), constructFitSep, ctorKwTrivia, cuddle, deferKwSpace, dro
 elemChainOp(…), elementPerLine, elseIf, elseIfCommentReflow, elseSwitch(…), emptyBlockBreak, emptyCurlyBreak[(…)], existingBetweenFields(…),
 expressionParenHardFlatten, exprIfElseLadder, fillItems, fillParts, fillSeam, flatChildOpt(…), forceInlineSep,
 forceMultiInTypedef, forPolicy, forwardNewlineForBody, funcParamParens, functionTypeHaxe3,
-gapRule(…), groupRestProbe, ifElseLadder, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
+gapRule(…), glueCommentedGroups(…), groupRestProbe, ifElseLadder, ifPolicy, ignoreSourceNewlinesForWrap, indentCaseLabels, indentValueIfCtor(…),
 inlineBlockBodyIfFlag(…), inlineElemTrivia, inlineSep, interMemberBlankLines(…), interMemberCondLookThrough(…), intervalPolicy,
 keepBlankAfterStarCtor(…), keepCurlyBlanks, keepInnerWhenEmpty(…), kwPolicy(…), leftCurly[(…)],
 leftCurlyAnonFnOverride(…), lineLengthAwareSeps, liftNoSemi(…), listLayout(…), loopBodyIfElseNext(…), mapWrapRules(…),

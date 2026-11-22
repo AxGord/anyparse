@@ -3689,6 +3689,14 @@
 			"find": "return macro $optAccess > 0 && $pred($i{argNames[2]}) ? $optAccess : 0;",
 			"replace": "return macro $pred($i{argNames[2]}) ? 20 : 0;",
 			"note": "the option is not consulted, so an unset key hugs the tail block as if it were set"
+		},
+		{
+			"name": "M-GROUP-GLUE-GATE",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockBlankBeforeAssemblyExpr",
+			"find": "(!_glued && ($addByInterMemberExpr || $addByUniformBetweenExpr))",
+			"replace": "($addByInterMemberExpr || $addByUniformBetweenExpr)",
+			"note": "a member glued into a line-comment heading's subgroup takes the betweenVars / betweenFunctions / enum betweenFields blank again"
 		}
 	]
 }

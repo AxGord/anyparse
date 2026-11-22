@@ -23,6 +23,8 @@ typedef BlankGateExprs = {
 	final addByHeadingExpr: Expr;
 	final addByInterMemberExpr: Expr;
 	final addByUniformBetweenExpr: Expr;
+	final groupGluedExpr: Expr;
+	final groupTrackExpr: Expr;
 };
 
 /**
@@ -81,6 +83,10 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	private final _emptyDocExpr: Expr;
 	private final _beforeCloseHardlineExpr: Expr;
 	private final _blankBeforeExpr: Expr;
+
+	/** The `_inHeadGroup` running flag of a Star carrying `@:fmt(glueCommentedGroups(...))`, declared before its loop. */
+	private final _headGroupInitExpr: Expr;
+
 	private final _leaf: WriterLowering.BlockLeafExprs;
 	private final _elemPushExpr: Expr;
 	private final _glueToPreviousExpr: Expr;
@@ -104,6 +110,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			? null
 			: WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
 		final headingAdds: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.headingAddsExpr(plan.beforeCommentedFields());
+		final groupGlue: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.groupGlueExpr(plan.glueCommentedGroups());
 		final existingBetweenFields: Null<Expr> = source == null
 			? null
 			: WriterTriviaStarDispatch.starKnobReads(BlockStarPlan.EXISTING_BETWEEN_FIELDS, plan.existingBetweenFields(), 1)?.pop();
@@ -135,12 +142,13 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final uniformBetween: Bool = uniformBetweenOptField != null;
 		final anyEmptyLinesFlag: Bool = afterFieldsWithDocComments != null || existingBetweenFields != null
 			|| plan.beforeDocCommentEmptyLines()
-			|| headingAdds != null || interMember || uniformBetween;
+			|| headingAdds != null || groupGlue != null || interMember || uniformBetween;
 		_blankBeforeExpr = triviaBlockBlankBeforeExpr(
 			afterFieldsWithDocComments, existingBetweenFields, plan.beforeDocCommentEmptyLines(), infos?.condLeadingDocInfo, interMember,
 			interMemberInfo, staticVarSubdivInfo != null, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,
-			plan.uniformStmtBlanks(), docLedReads, headingAdds
+			plan.uniformStmtBlanks(), docLedReads, headingAdds, groupGlue
 		);
+		_headGroupInitExpr = groupGlue == null ? macro {} : macro var _inHeadGroup: Bool = false;
 		_beginEnd = triviaBlockBeginEndExpr(
 			plan.beginEndType(), plan.keepCurlyBlanks(), beginTypeAccess ?? macro null, endTypeAccess ?? macro null
 		);
@@ -226,6 +234,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			${_leaf.initCurrDocCommentExpr};
 
 			${_leaf.initPrevKindExpr};
+			$_headGroupInitExpr;
 			$uniformCollapseInitExpr;
 			// ω-blockended-trivia (Session 3): tracks the prior iteration's rendered
 			// element Doc so the between-element sep emission can query
@@ -422,7 +431,8 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>, interMember: Bool,
 		interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
-		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool, docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>, headingAdds: Null<Expr>
+		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool, docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>, headingAdds: Null<Expr>,
+		groupGlue: Null<Expr>
 	): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
@@ -459,6 +469,8 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo
 		);
 		final addByUniformBetweenExpr: Expr = triviaBlockUniformBetweenAddExpr(uniformBetween, uniformBetweenOptField);
+		final sameKindExpr: Expr = interMember ? macro _prevKind == _currKind : macro true;
+		final docLedExpr: Expr = WriterTriviaStarDispatch.docLedExpr(docLedReads);
 		return triviaBlockBlankBeforeAssemblyExpr({
 			currHasDocComputeExpr: currHasDocComputeExpr,
 			currKindComputeExpr: currKindComputeExpr,
@@ -471,7 +483,13 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			addByHeadingExpr: headingAdds ?? macro false,
 
 			addByInterMemberExpr: addByInterMemberExpr,
-			addByUniformBetweenExpr: addByUniformBetweenExpr
+			addByUniformBetweenExpr: addByUniformBetweenExpr,
+			groupGluedExpr: groupGlue == null
+				? macro false
+				: macro anyparse.format.MemberGap.groupGlued(_inHeadGroup, _t.blankBefore, _t.leadingComments, $docLedExpr, $sameKindExpr),
+			groupTrackExpr: groupGlue == null
+				? macro {}
+				: macro _inHeadGroup = anyparse.format.MemberGap.groupOpenAfter($groupGlue, _t.leadingComments, _glued)
 		});
 	}
 
@@ -554,6 +572,8 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final addByHeadingExpr: Expr = g.addByHeadingExpr;
 		final addByInterMemberExpr: Expr = g.addByInterMemberExpr;
 		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
+		final groupGluedExpr: Expr = g.groupGluedExpr;
+		final groupTrackExpr: Expr = g.groupTrackExpr;
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		return macro {
 			$currHasDocComputeExpr;
@@ -570,13 +590,17 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			// Byte-inert when the Star carries no `beforeDocCommentEmptyLines` flag
 			// (`$vetoByDocExpr` is the compile-time literal `false`) or the
 			// runtime policy is not `None`.
+			// A member glued into a line-comment heading's subgroup takes no counted between-members blank; the doc and
+			// heading rules and the source blank still decide its gap.
+			final _glued: Bool = $groupGluedExpr;
 			final _addBlank: Bool = !$vetoByDocExpr
-				&& ($addByDocExpr || $addByHeadingExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
+				&& ($addByDocExpr || $addByHeadingExpr || (!_glued && ($addByInterMemberExpr || $addByUniformBetweenExpr)));
 			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) {
 				_inner.push(_dhl());
 				if (_sourceBlank) $blankExtras;
 			}
+			$groupTrackExpr;
 		};
 	}
 

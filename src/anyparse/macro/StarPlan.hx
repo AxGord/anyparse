@@ -21,6 +21,12 @@ typedef StarMeta = {
  */
 class StarPlan {
 
+	/** The flag `beforeCommentedFields` reads, named once for its runtime read too. */
+	public static inline final BEFORE_COMMENTED_FIELDS: String = 'beforeCommentedFields';
+
+	/** The flag `glueCommentedGroups` reads, named once for its runtime read too. */
+	public static inline final GLUE_COMMENTED_GROUPS: String = 'glueCommentedGroups';
+
 	private final _meta: StarMeta;
 
 	public function new(meta: StarMeta) {
@@ -49,7 +55,13 @@ class StarPlan {
 	 * `@:fmt(beforeCommentedFields('<knob>'[, '<flag>', '<alt>']))`: the `opt` Int that asks a blank line in front of a member
 	 * headed by a line-comment run; null when the Star carries no such flag.
 	 */
-	public inline function beforeCommentedFields(): Null<Array<String>> return flagArgs('beforeCommentedFields');
+	public inline function beforeCommentedFields(): Null<Array<String>> return flagArgs(BEFORE_COMMENTED_FIELDS);
+
+	/**
+	 * `@:fmt(glueCommentedGroups('<knob>'[, '<flag>', '<alt>']))`: the `opt` Bool that keeps a line-comment heading's
+	 * subgroup glued; null when the Star carries no such flag.
+	 */
+	public inline function glueCommentedGroups(): Null<Array<String>> return flagArgs(GLUE_COMMENTED_GROUPS);
 
 	/** The separator text of `@:sep('text', …)`, or null. */
 	public inline function sepText(): Null<String> return _meta.annotation(AnnotationKeys.LIT_SEP_TEXT);

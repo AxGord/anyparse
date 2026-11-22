@@ -60,4 +60,7 @@ typedef HxFormatEnumEmptyLinesConfig = {
 	@:optional
 	var beforeCommentedFields: Int;
 
+	@:optional
+	var glueCommentedGroups: Bool;
+
 };

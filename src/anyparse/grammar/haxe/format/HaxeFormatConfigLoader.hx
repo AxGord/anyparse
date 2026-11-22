@@ -935,7 +935,8 @@ final class HaxeFormatConfigLoader {
 
 	/**
 	 * The `…TypeIfDocComments` keys of the enum, `enum abstract` and typedef sections into their own knobs (absent leaves
-	 * `null`), and each body's `metadataCountsAsDocComment` and `beforeCommentedFields` (absent leaves it off).
+	 * `null`), and each body's `metadataCountsAsDocComment`, `beforeCommentedFields` and `glueCommentedGroups` (absent
+	 * leaves it off).
 	 */
 	private static function applyTypeBodyDocEdges(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
 		opt.enumBeginTypeIfDocComments = section.enumEmptyLines?.beginTypeIfDocComments ?? opt.enumBeginTypeIfDocComments;
@@ -952,6 +953,9 @@ final class HaxeFormatConfigLoader {
 		opt.enumBeforeCommentedFields = section.enumEmptyLines?.beforeCommentedFields ?? opt.enumBeforeCommentedFields;
 		opt.enumAbstractBeforeCommentedFields = section.enumAbstractEmptyLines?.beforeCommentedFields ?? opt.enumAbstractBeforeCommentedFields;
 		opt.typedefBeforeCommentedFields = section.typedefEmptyLines?.beforeCommentedFields ?? opt.typedefBeforeCommentedFields;
+		opt.glueCommentedGroups = section.glueCommentedGroups ?? opt.glueCommentedGroups;
+		opt.enumGlueCommentedGroups = section.enumEmptyLines?.glueCommentedGroups ?? opt.enumGlueCommentedGroups;
+		opt.enumAbstractGlueCommentedGroups = section.enumAbstractEmptyLines?.glueCommentedGroups ?? opt.enumAbstractGlueCommentedGroups;
 	}
 
 	/** Routes each type body's `afterFieldsWithDocComments` key into its kind's knob; an absent key leaves the knob unset. */

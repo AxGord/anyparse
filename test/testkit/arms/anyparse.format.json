@@ -725,6 +725,46 @@
 			"find": "headingAdds && doc != NoBlank",
 			"replace": "headingAdds",
 			"note": "a heading asks its blank line over the doc veto, so the policy demands a blank fmt does not write"
+		},
+		{
+			"name": "M-GROUP-OPEN-CONTINUES",
+			"type": "anyparse.format.MemberGap",
+			"method": "groupOpenAfter",
+			"find": "glue && (glued || lineCommentRun(leadingComments))",
+			"replace": "glue && lineCommentRun(leadingComments)",
+			"note": "a heading glues only the member right after it, the third member of its group takes the between blank"
+		},
+		{
+			"name": "M-GROUP-SOURCE-BLANK",
+			"type": "anyparse.format.MemberGap",
+			"method": "groupGlued",
+			"find": "inGroup && !sourceBlank && ",
+			"replace": "inGroup && ",
+			"note": "a blank line the author wrote no longer ends the group, so the members after it stay glued"
+		},
+		{
+			"name": "M-GROUP-DOC-LED",
+			"type": "anyparse.format.MemberGap",
+			"method": "groupGlued",
+			"find": " && !docLed && ",
+			"replace": " && ",
+			"note": "a member counted doc-led by its metadata is glued into the group instead of keeping its own blank"
+		},
+		{
+			"name": "M-GROUP-SAME-KIND",
+			"type": "anyparse.format.MemberGap",
+			"method": "groupGlued",
+			"find": " && sameKind;",
+			"replace": ";",
+			"note": "a member of another kind (a function after the group's vars) is glued and loses its afterVars blank"
+		},
+		{
+			"name": "M-GROUP-OWN-COMMENT",
+			"type": "anyparse.format.MemberGap",
+			"method": "groupGlued",
+			"find": "leadingComments.length == 0 && ",
+			"replace": "",
+			"note": "a member with a comment of its own (a block comment, the next heading) is glued into the group"
 		}
 	]
 }

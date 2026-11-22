@@ -232,6 +232,47 @@ wins. `0` by default, which writes what the other keys say (haxe-formatter has n
 An `enum abstract` body that `abstractRulesUnlessValueList` hands to the abstract rules reads the `emptyLines` level
 key, as it reads every other abstract key.
 
+## A commented group stays glued: `emptyLines.<kind>.glueCommentedGroups`
+
+`glueCommentedGroups` (`true` or `false`) in `enumEmptyLines` and `enumAbstractEmptyLines`, and at `emptyLines` level
+for class, interface and plain `abstract` bodies. With `true`, a run of `//` comments heads a subgroup, not one member:
+the members after the headed one that sit directly under it in the source keep no blank line between them, even where
+`betweenVars`, `betweenFunctions` or an enum's `betweenFields` would put one. With
+`beforeCommentedFields: 1` and `classEmptyLines.betweenVars: 1`:
+
+```haxe
+class Palette {
+	var name:String;
+
+	// colours
+	var red:Int;
+	var green:Int;
+	var blue:Int;
+
+	var alpha:Int;
+}
+```
+
+The group ends at the first member that:
+
+- has a blank line in front of it in the source — the blank stays, and that member and the ones after it follow the
+  kind's own keys (`alpha` above takes `betweenVars`);
+- is of another kind, such as a function after the group's vars;
+- carries a comment of its own: a block comment, a doc comment or the next `//` heading;
+- counts as documented — a doc comment, or metadata under `metadataCountsAsDocComment`.
+
+The key only holds blank lines back: a blank line the author wrote is never removed, the doc-comment keys
+(`beforeDocCommentEmptyLines`, `afterFieldsWithDocComments`) and `beforeCommentedFields` keep their blank lines, and
+`aroundMultilineFields` still separates a member that renders over several lines. `false` by default, which writes what
+the other keys say (haxe-formatter has no such key):
+
+```json
+{ "emptyLines": { "beforeCommentedFields": 1, "glueCommentedGroups": true, "classEmptyLines": { "betweenVars": 1 } } }
+```
+
+An `enum abstract` body that `abstractRulesUnlessValueList` hands to the abstract rules reads the `emptyLines` level
+key. Typedef bodies have no such key.
+
 ## An `enum abstract` with more than values: `emptyLines.enumAbstractEmptyLines.abstractRulesUnlessValueList`
 
 `false` by default. Set, an `enum abstract` body holding a method, a property, a `static` member or a `//` comment in

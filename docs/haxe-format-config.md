@@ -757,6 +757,24 @@ body Star's `@:fmt(beforeCommentedFields('<knob>'[, '<flag>', '<alt>']))`.
 {"emptyLines": {"enumAbstractEmptyLines": {"existingBetweenFields": "remove", "beforeCommentedFields": 1}}}
 ```
 
+## `emptyLines.glueCommentedGroups` / `emptyLines.<kind>.glueCommentedGroups`
+
+anyparse-only, a Bool, `false` by default. At `emptyLines` level it covers class, interface and
+plain `abstract` bodies; `enumEmptyLines` and `enumAbstractEmptyLines` each carry their own (a
+typedef body has none). `true` makes a run of line comments (`//`) head a subgroup: a member that
+follows the group's last member with no source blank between them, of the same kind, with no
+leading comment of its own and not doc-led (metadata counts under `metadataCountsAsDocComment`)
+is glued into it and takes no `betweenVars` / `betweenFunctions` / enum `betweenFields` blank.
+A source blank ends the group and stays. The doc-comment keys, `beforeCommentedFields` and
+`aroundMultilineFields` are not held back. The `member-order` check reads none of these
+between-members counts, so it needs no mirror. Runtime: `MemberGap.groupGlued` /
+`MemberGap.groupOpenAfter`, spliced by `WriterTriviaStarDispatch.groupGlueExpr` for a body
+Star's `@:fmt(glueCommentedGroups('<knob>'[, '<flag>', '<alt>']))`.
+
+```json
+{"emptyLines": {"beforeCommentedFields": 1, "glueCommentedGroups": true, "classEmptyLines": {"betweenVars": 1}}}
+```
+
 ## `comments.*`
 
 The fork has a `comments` section holding only `blockCommentBodyIndent`, which hxq accepts and does not read. `blockCommentStyle` and `trailingCommentOverflow` are anyparse-only and additive.
