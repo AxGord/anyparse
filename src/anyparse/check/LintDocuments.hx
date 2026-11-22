@@ -232,10 +232,11 @@ final class LintDocuments {
 	}
 
 	/**
-	 * One line per option key a `rules` entry of `doc` names that its check does not accept, rules and keys in name order.
-	 * `accepted` maps a rule id to the keys its check declares (`OptionKeyed`); an entry whose rule has no declaration is
-	 * not checked. `enabled` and `severity` are never unknown — a mistyped one lands in `props` and is the rule's to say.
-	 * Each line names the rule, the key and the accepted keys, those nearest the key first, or `accepts: none`.
+	 * One line per option key a `rules` entry of `doc` names that its check does not accept, rules and keys in name order,
+	 * and one per `rules` id no check has. `accepted` maps EVERY rule id to the keys its check declares (`OptionKeyed`),
+	 * empty for a check that reads none, so an id absent from it names no rule. `enabled` and `severity` are never unknown —
+	 * a mistyped one lands in `props` and is the rule's to say. A key's line names the rule, the key and the accepted keys,
+	 * those nearest the key first, or `accepts: none`; an unknown id's names the ids nearest it.
 	 */
 	public static function unknownOptions(doc: LintDocument, accepted: Map<String, Array<String>>): Array<String> {
 		final lines: Array<String> = [];
@@ -244,7 +245,12 @@ final class LintDocuments {
 		for (id in ids) {
 			final known: Null<Array<String>> = accepted[id];
 			final entry: Null<RuleConfig> = doc.rules[id];
-			if (known == null || entry == null) continue;
+			if (entry == null) continue;
+			if (known == null) {
+				final nearest: Array<String> = EditDistance.closest(id, [ for (rule in accepted.keys()) rule ]);
+				lines.push('rules "$id" names no rule — ignored${nearest.length == 0 ? '' : '; nearest: ${nearest.join(', ')}'}');
+				continue;
+			}
 			final keys: Array<String> = [ for (key in entry.props.keys()) key ];
 			keys.sort(Compare.compareString);
 			for (key in keys) if (key != 'enabled' && key != 'severity' && !known.contains(key)) {

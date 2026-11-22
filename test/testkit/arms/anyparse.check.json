@@ -646,6 +646,30 @@
 			"find": "key != 'enabled' && key != 'severity' && ",
 			"replace": "",
 			"note": "a mistyped enabled is called an unknown key"
+		},
+		{
+			"name": "M-OPTKEYS-UNKNOWN-RULE-NEAREST",
+			"type": "anyparse.check.LintDocuments",
+			"method": "unknownOptions",
+			"find": "EditDistance.closest(id, [ for (rule in accepted.keys()) rule ])",
+			"replace": "[]",
+			"note": "an unknown rule id names no nearest rule"
+		},
+		{
+			"name": "M-OPTKEYS-UNKNOWN-RULE-SILENT",
+			"type": "anyparse.check.LintDocuments",
+			"method": "unknownOptions",
+			"find": "if (entry == null) continue;",
+			"replace": "if (entry == null || accepted[id] == null) continue;",
+			"note": "a rule id no check has is silently ignored"
+		},
+		{
+			"name": "M-OPTKEYS-OPTIONLESS-ENTERED",
+			"type": "anyparse.check.Linter",
+			"method": "acceptedOptions",
+			"find": "for (check in builtins()) out[check.id()] = check is OptionKeyed ? (cast check: OptionKeyed).acceptedOptions() : [];",
+			"replace": "for (check in builtins()) if (check is OptionKeyed) out[check.id()] = (cast check: OptionKeyed).acceptedOptions();",
+			"note": "a check that reads no option is left out of the table, so its id reads as no rule"
 		}
 	]
 }

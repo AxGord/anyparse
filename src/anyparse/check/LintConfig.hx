@@ -170,6 +170,12 @@ final class LintConfig {
 
 	private final _rules: Map<String, RuleConfig>;
 
+	/**
+	 * Told every option a check asks this config for — the rule id and the key, or null for the key set (`optionKeys`) — so a
+	 * census can run each check and learn which keys it reads. Null for every config a run resolves.
+	 */
+	private final _optionRead: Null<(String, Null<String>) -> Void>;
+
 	/** The enablement each document of the chain states, nearest first — see `switchFor`. */
 	private final _switches: Array<RuleSwitches>;
 
@@ -227,8 +233,9 @@ final class LintConfig {
 		?frameworks: Array<FrameworkContract>, ?drops: Array<String>, reachConfigurationsComplete: Bool = false,
 		reportSummaryThreshold: Int = LintFormat.DEFAULT_REPORT_SUMMARY_THRESHOLD, ?reflectiveClasses: Array<String>,
 		?reflectiveMethodHolders: Array<String>, ?ownedTypes: Array<TypeOwnership>, ?switches: Array<RuleSwitches>,
-		?oracleDeclarations: Array<OracleDeclared>
+		?oracleDeclarations: Array<OracleDeclared>, ?optionRead: (String, Null<String>) -> Void
 	) {
+		_optionRead = optionRead;
 		_switches = switches ?? [
 			{ rules: [ for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true ], categories: [] }
 		];
@@ -473,6 +480,7 @@ final class LintConfig {
 	 * reads — so a check reading its options through one reader can say which key no option of it has.
 	 */
 	public function optionKeys(id: String): Array<String> {
+		if (_optionRead != null) _optionRead(id, null);
 		final rule: Null<RuleConfig> = _rules[id];
 		if (rule == null) return [];
 		final keys: Array<String> = [ for (key in rule.props.keys()) key ];
@@ -542,6 +550,7 @@ final class LintConfig {
 	 * accessor reads (`prefer-api-idiom`'s list of objects), so the owning check validates it entry by entry itself.
 	 */
 	public function jsonOption(id: String, key: String): Null<JValue> {
+		if (_optionRead != null) _optionRead(id, key);
 		final rc: Null<RuleConfig> = _rules[id];
 		return rc?.props[key];
 	}
@@ -559,7 +568,7 @@ final class LintConfig {
 		return new LintConfig(
 			rules, _oracles.read, _resolutionRoots, _resolutionLibs, _resolutionStd, _compilerOracleServer, _languageVersion, _frameworks,
 			_drops, _reachConfigurationsComplete, _reportSummaryThreshold, _reflectiveClasses, _reflectiveMethodHolders, _ownedTypes,
-			_switches, _oracles.declared
+			_switches, _oracles.declared, _optionRead
 		);
 	}
 

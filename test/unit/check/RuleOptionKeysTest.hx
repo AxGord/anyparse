@@ -8,8 +8,8 @@ import unit.cli.CliFixture;
 
 /**
  * A key a rule's config object names that its check does not read is said once, with the keys it does read nearest
- * first, so a typo or a key borrowed from another rule is not silently ignored. Only a rule that declares its keys
- * (`OptionKeyed`) is checked.
+ * first, so a typo or a key borrowed from another rule is not silently ignored. A rule id no check has is said with the
+ * ids nearest it.
  */
 @:nullSafety(Strict)
 final class RuleOptionKeysTest extends Test {
@@ -106,11 +106,21 @@ final class RuleOptionKeysTest extends Test {
 		], unknown('{"rules":{"r":{"maxMember":1}}}', ['r' => ['alpha', 'omega', 'maxMembers']]));
 	}
 
-	/** A rule with no declaration is not checked. */
+	/** An id the table does not hold names no rule: its keys are not judged, the id is said once. */
 	@:pin('control')
 	@:killer('M-OPTKEYS-UNDECLARED-RULE')
-	public function testARuleWithoutADeclarationIsNotChecked(): Void {
-		Assert.same([], unknown('{"rules":{"free":{"anything":1}}}', ['other' => []]));
+	public function testAnIdTheTableLacksNamesNoRule(): Void {
+		Assert.same(['rules "free" names no rule — ignored'], unknown('{"rules":{"free":{"anything":1}}}', ['other' => []]));
+	}
+
+	/** The ids nearest the unknown one are named, nearest first. */
+	@:pin('control')
+	@:killer('M-OPTKEYS-UNKNOWN-RULE-NEAREST')
+	public function testAnUnknownIdNamesTheNearestRules(): Void {
+		Assert.same(
+			['rules "naming-x" names no rule — ignored; nearest: naming'],
+			unknown('{"rules":{"naming-x":{"enabled":true}}}', ['naming' => [], 'unrelated-rule' => []])
+		);
 	}
 
 	/** A mistyped `enabled` / `severity` lands among the options but is a value of the wrong shape, not an unknown key. */

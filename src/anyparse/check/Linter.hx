@@ -732,15 +732,16 @@ final class Linter {
 	}
 
 	/**
-	 * Every registered check that declares `OptionKeyed`, as rule id -> the option keys it accepts: what `LintConfig.discover`
-	 * is handed to say a key a rule's entry names and the rule does not read.
+	 * Every registered check as rule id -> the option keys it accepts, none for a check that does not declare `OptionKeyed`:
+	 * what `LintConfig.discover` is handed to say a key a rule's entry names and the rule does not read, and a `rules` id
+	 * no check has.
 	 *
 	 * Built by asking the registry, never by naming rules, and rebuilt per call rather than cached: a process-scoped table
 	 * is the global mutable state this project refuses, so a run hoists the one map it passes down.
 	 */
 	public static function acceptedOptions(): Map<String, Array<String>> {
 		final out: Map<String, Array<String>> = [];
-		for (check in builtins()) if (check is OptionKeyed) out[check.id()] = (cast check: OptionKeyed).acceptedOptions();
+		for (check in builtins()) out[check.id()] = check is OptionKeyed ? (cast check: OptionKeyed).acceptedOptions() : [];
 		return out;
 	}
 
