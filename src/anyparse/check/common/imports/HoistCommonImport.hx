@@ -6,6 +6,7 @@ import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.scan.UsingSites;
@@ -163,7 +164,7 @@ private typedef Plans = { final hoists: Array<HoistPlan>; final sinks: Array<Sin
  * The refusals, the nesting rule and the config keys: `docs/cli-query-tool.md`.
  */
 @:nullSafety(Strict)
-final class HoistCommonImport extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff
+final class HoistCommonImport extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff implements OptionKeyed
 		implements VolatileMessage implements AmbientGoverned {
 
 	/** The share of a directory's modules a statement must stand in, as a percentage. */
@@ -183,6 +184,11 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 
 	/** The denominator a percentage threshold is read against. */
 	private static inline final PERCENT: Int = 100;
+
+	private static final USING_ALLOW_LIST_KEY: String = 'usingAllowList';
+	private static final SINK_THRESHOLD_KEY: String = 'sinkThreshold';
+	private static final THRESHOLD_KEY: String = 'threshold';
+	private static final MIN_MODULES_KEY: String = 'minModules';
 
 	/** The keyword an `import` statement's identity opens with. */
 	private static final IMPORT_WORD: String = 'import';
@@ -268,6 +274,10 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		return out;
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [MIN_MODULES_KEY, THRESHOLD_KEY, SINK_THRESHOLD_KEY, USING_ALLOW_LIST_KEY];
+	}
+
 	/**
 	 * Every hoist this file set supports, deepest site first and with a statement an ancestor site
 	 * also takes dropped from its descendants — and every sink, from the same view of the directories.
@@ -293,9 +303,9 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	private function planSite(site: String, ctx: HoistContext, resolve: SymbolIndex, plans: Array<HoistPlan>): Void {
 		final governed: Array<String> = ctx.governedAt[site] ?? [];
 		final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, site);
-		if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;
-		final threshold: Int = cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD;
-		final allow: Array<String> = cfg.stringListOption(RULE_ID, 'usingAllowList') ?? DEFAULT_USING_ALLOW;
+		if (governed.length < (cfg.intOption(RULE_ID, MIN_MODULES_KEY) ?? DEFAULT_MIN_MODULES)) return;
+		final threshold: Int = cfg.intOption(RULE_ID, THRESHOLD_KEY) ?? DEFAULT_THRESHOLD;
+		final allow: Array<String> = cfg.stringListOption(RULE_ID, USING_ALLOW_LIST_KEY) ?? DEFAULT_USING_ALLOW;
 		final above: Array<String> = providedAtOrAbove(site, ctx);
 		final census: HoistCensus = censusOf(governed, ctx, allow);
 		for (key in census.keys) {
@@ -318,12 +328,12 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		final governed: Array<String> = ctx.governedAt[site] ?? [];
 		if (info == null || info.imports.length == 0) return;
 		final cfg: LintConfig = LintConfig.resolveWith(_resolveConfig, site);
-		final sink: Int = cfg.intOption(RULE_ID, 'sinkThreshold') ?? DEFAULT_SINK_THRESHOLD;
-		if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;
-		if (sink >= (cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD)) return;
+		final sink: Int = cfg.intOption(RULE_ID, SINK_THRESHOLD_KEY) ?? DEFAULT_SINK_THRESHOLD;
+		if (governed.length < (cfg.intOption(RULE_ID, MIN_MODULES_KEY) ?? DEFAULT_MIN_MODULES)) return;
+		if (sink >= (cfg.intOption(RULE_ID, THRESHOLD_KEY) ?? DEFAULT_THRESHOLD)) return;
 		final readers: Null<Array<Array<String>>> = UnusedImport.ambientReaders(info, plugin, report);
 		if (readers == null) return;
-		final allow: Array<String> = cfg.stringListOption(RULE_ID, 'usingAllowList') ?? DEFAULT_USING_ALLOW;
+		final allow: Array<String> = cfg.stringListOption(RULE_ID, USING_ALLOW_LIST_KEY) ?? DEFAULT_USING_ALLOW;
 		for (i in 0...info.imports.length) {
 			final candidate: Null<Hoistable> = hoistableOf(info.imports[i], allow, ctx.publicTypes, ctx.bindings);
 			final reading: Array<String> = readers[i];

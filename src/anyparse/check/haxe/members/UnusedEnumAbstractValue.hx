@@ -3,6 +3,7 @@ package anyparse.check.haxe.members;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.FactsOracle.EnumValueReads;
 import anyparse.check.scan.CaseValueKey;
@@ -71,7 +72,7 @@ private typedef ScopeFile = { file: String, source: String };
  * of the group follows; a value alone in its group takes its label along.
  */
 @:nullSafety(Strict)
-final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff implements RiskyFix implements ConfigAware {
+final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff implements RiskyFix implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'unused-enum-abstract-value';
 
@@ -139,6 +140,10 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 		}
 		walk(tree);
 		return edits;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [FIX_KEY];
 	}
 
 	/** Whether the rule's own config key enables the fix for `file`. */

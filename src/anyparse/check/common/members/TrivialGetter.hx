@@ -3,6 +3,7 @@ package anyparse.check.common.members;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.LintConfig;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.AccessorClause;
@@ -183,7 +184,7 @@ private typedef MemberTables = {
  * it — the same way it reports a hand-written bridged pair used as a seam. The finding is `Info`.
  */
 @:nullSafety(Strict)
-final class TrivialGetter extends RuleBase implements ConfigAware implements CrossFileFix {
+final class TrivialGetter extends RuleBase implements ConfigAware implements CrossFileFix implements OptionKeyed {
 
 	/**
 	 * Default cap on statement-level backing-field writes a shape-A collapse marks
@@ -205,6 +206,8 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 	 * trivial getter legal, and dead the moment the collapse gives the property a `default` side.
 	 */
 	private static inline final IS_VAR_META: String = '@:isVar';
+
+	private static final MAX_BYPASS_WRITES_KEY: String = 'maxBypassWrites';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -239,7 +242,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			// is "Field commonName has different property access than core type".
 			if (tree == null || MemberWriteScan.coreApiPinsMemberShape(tree, plugin)) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
-				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+				.intOption('trivial-getter', MAX_BYPASS_WRITES_KEY) ?? DEFAULT_MAX_BYPASS_WRITES;
 			// Resolved ONCE per file, not per class: `refShape()` builds its struct — several
 			// `concat`ed arrays among them — on every call.
 			final shape: RefShape = plugin.refShape();
@@ -290,7 +293,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			: RunScan.edits(plugin, source, tree -> {
 				final file: String = violations[0].file;
 				final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, file)
-					.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+					.intOption('trivial-getter', MAX_BYPASS_WRITES_KEY) ?? DEFAULT_MAX_BYPASS_WRITES;
 				final wanted: Array<String> = RunScan.spanKeys(violations);
 				final edits: Array<{ span: Span, text: String }> = [];
 				final shape: RefShape = plugin.refShape();
@@ -327,6 +330,10 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		return out;
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [MAX_BYPASS_WRITES_KEY];
+	}
+
 	/**
 	 * The atomic cross-file collapse fixing one flagged property, or null when it must stay
 	 * report-only. Re-derives the owner's shape-A collapse edits (`buildFix`) from the violation's
@@ -345,7 +352,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return null;
 		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
-			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+			.intOption('trivial-getter', MAX_BYPASS_WRITES_KEY) ?? DEFAULT_MAX_BYPASS_WRITES;
 		final shape: RefShape = plugin.refShape();
 		final branch: MemberBranchSeams = MemberBranchScan.seamsOf(shape, source, plugin.lexicalRegions.bind(source));
 		for (cls in CheckScan.classBodies(tree)) {

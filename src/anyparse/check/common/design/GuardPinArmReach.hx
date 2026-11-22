@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.RuleDeclaration.ArmTarget;
 import anyparse.query.MemberKinds;
@@ -60,7 +61,8 @@ typedef PinScan = {
  * the rest of the registry still applies. Grammar-agnostic over `MetaShape` and `RefShape`.
  */
 @:nullSafety(Strict)
-final class GuardPinArmReach extends RuleBase implements ConfigAware implements FileGated implements DefaultOff implements NoAutofix {
+final class GuardPinArmReach extends RuleBase implements ConfigAware implements FileGated implements DefaultOff implements OptionKeyed
+		implements NoAutofix {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'guard-pin-arm-reach';
@@ -124,6 +126,10 @@ final class GuardPinArmReach extends RuleBase implements ConfigAware implements 
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return [];
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [PIN_KEY, GUARD_KEY, KILLER_KEY, REGISTRY_KEY];
 	}
 
 	/**

@@ -2,10 +2,11 @@ package unit.check.common.members;
 
 import anyparse.check.LintConfig;
 import anyparse.check.common.members.MemberOrder;
+import anyparse.check.common.members.MemberOrderOptions;
 import anyparse.query.CanonicalEdit;
 
 /**
- * The review budget of `member-order`'s reorder as a RUN can set it: `MemberOrder.withBudget` is what
+ * The review budget of `member-order`'s reorder as a RUN can set it: `MemberOrderOptions.withBudget` is what
  * `lint --fix --review-budget` overlays on every config the run resolves, and the fix reads it back like any rule option.
  */
 @:nullSafety(Strict)
@@ -40,7 +41,7 @@ final class MemberOrderBudgetTest extends Test {
 	@:pin('control')
 	public function testTheOverlayLeavesTheReceiverAloneAndKeepsTheRest(): Void {
 		final base: LintConfig = LintConfig.parse('{"rules":{"member-order":{"enabled":false,"movableArglessNew":true}}}');
-		final lifted: LintConfig = MemberOrder.withBudget(base, 7);
+		final lifted: LintConfig = MemberOrderOptions.withBudget(base, 7);
 		Assert.equals(7, lifted.intOption('member-order', 'maxRelocatedLines'));
 		Assert.isNull(base.intOption('member-order', 'maxRelocatedLines'), 'the receiver is unchanged');
 		Assert.equals(true, lifted.boolOption('member-order', 'movableArglessNew'), 'the other option stays');
@@ -59,7 +60,7 @@ final class MemberOrderBudgetTest extends Test {
 
 	/** The fix of `src` under `lines` as the run's budget, or under the default when null. */
 	private static function fixRunUnder(src: String, lines: Null<Int>): FixRun {
-		final config: LintConfig = lines == null ? LintConfig.parse('{}') : MemberOrder.withBudget(LintConfig.parse('{}'), lines);
+		final config: LintConfig = lines == null ? LintConfig.parse('{}') : MemberOrderOptions.withBudget(LintConfig.parse('{}'), lines);
 		return CheckFixture.fixRun(new MemberOrder(), [{ file: 'Probe.hx', source: src }], 'Probe.hx', new HaxeQueryPlugin(), _ -> config);
 	}
 

@@ -40,11 +40,11 @@ typedef NamedFields = { final path: String; final fields: Array<String>; }
 final class RuleDeclaration {
 
 	/** The `prefer-api-idiom` option holding the idiom list. */
-	private static final IDIOMS_KEY: String = 'idioms';
+	public static final IDIOMS_KEY: String = 'idioms';
 
-	private static final EVENT_BASE_KEY: String = 'eventBase';
-	private static final TYPE_ABSTRACT_KEY: String = 'typeAbstract';
-	private static final LISTENER_METHODS_KEY: String = 'listenerMethods';
+	public static final EVENT_BASE_KEY: String = 'eventBase';
+	public static final TYPE_ABSTRACT_KEY: String = 'typeAbstract';
+	public static final LISTENER_METHODS_KEY: String = 'listenerMethods';
 
 	/** The key of a mutation-arm registry's records. */
 	private static final ARMS_KEY: String = 'arms';

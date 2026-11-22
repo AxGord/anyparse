@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.check.scan.RunScan;
 import anyparse.query.ShapeVocab;
@@ -59,7 +60,8 @@ private typedef Facts = {
  * lint gate refuses growth of the findings against the base, so a scanner can be added only through an owner.
  */
 @:nullSafety(Strict)
-final class HandSourceScanner extends HaxeRule implements ConfigAware implements FileGated implements NoAutofix implements DefaultOff {
+final class HandSourceScanner extends HaxeRule implements ConfigAware implements FileGated implements NoAutofix implements OptionKeyed
+		implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'hand-source-scanner';
 	private static inline final BACKSLASH: Int = 92;
@@ -140,6 +142,10 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return [];
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [ALLOW_KEY];
 	}
 
 	/** Whether a literal under `node`, itself an operand of a comparison, is still compared: through parentheses and a `.code` read. */

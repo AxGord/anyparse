@@ -29,7 +29,8 @@ private typedef CliScan = { var args: Array<CliArg>; var unknown: Null<String>; 
  * Which tokens of a command's argv are flags, which are a flag's value and which are positionals: the one answer
  * the dispatcher's unknown-flag refusal, `LanguageChoice`'s "is this token a file" and every command's own parser
  * (`walk`) read. Each command declares its own (`CliCommand.flags`); one whose argv another parser also reads
- * declares the union (`with`). Every command also takes `--lang` / `--lang-default` and `-h` / `--help`.
+ * declares the union (`with`). A command accepts only the switches it declares: any other
+ * `--word` is rejected. Every command also takes `--lang` / `--lang-default` and `-h` / `--help`.
  */
 @:nullSafety(Strict)
 final class CliFlags {

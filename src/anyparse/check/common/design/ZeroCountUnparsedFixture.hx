@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.query.NodeShape;
 import anyparse.query.ParseGate;
 import anyparse.query.StringFold.StringFoldSupport;
@@ -65,7 +66,8 @@ typedef FixtureScan = {
  * `StringFoldSupport`.
  */
 @:nullSafety(Strict)
-final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware implements FileGated implements DefaultOff implements NoAutofix {
+final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware implements FileGated implements OptionKeyed
+		implements DefaultOff implements NoAutofix {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'zero-count-unparsed-fixture';
@@ -134,6 +136,10 @@ final class ZeroCountUnparsedFixture extends RuleBase implements ConfigAware imp
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return [];
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [ASSERTS_KEY, COUNT_FIELDS_KEY, SOURCE_FIELDS_KEY, SKIP_PARSE_TESTS_KEY];
 	}
 
 	/** `node`'s literal when it is a plain string literal (no interpolation), else null. */

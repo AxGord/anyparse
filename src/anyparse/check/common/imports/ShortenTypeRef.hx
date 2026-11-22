@@ -6,6 +6,7 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.NameOracle;
 import anyparse.check.Check.NameOracleAware;
 import anyparse.check.Check.NameSite;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit;
@@ -237,7 +238,8 @@ private typedef ScanContext = {
  * under every judging configuration, names one declaration for both (`NameOracle`); anything else is a decline.
  */
 @:nullSafety(Strict)
-final class ShortenTypeRef extends RuleBase implements ConfigAware implements RiskyFix implements GroupedFix implements NameOracleAware {
+final class ShortenTypeRef extends RuleBase implements ConfigAware implements RiskyFix implements GroupedFix implements OptionKeyed
+		implements NameOracleAware {
 
 	/** The rule's stable identifier — the `apq.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shorten-type-ref';
@@ -408,6 +410,10 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 
 	public function setNameOracle(oracle: Null<NameOracle>): Void {
 		_nameOracle = oracle;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [IMPORT_MIN_USES_KEY, VALUE_POSITIONS_KEY];
 	}
 
 	/** The options `file`'s own project declares, each defaulted when it declares none. */

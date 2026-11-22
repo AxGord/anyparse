@@ -1,6 +1,7 @@
 package anyparse.check.common.members;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.members.MemberInitDeps.InitConstraintKind;
 import anyparse.check.common.members.MemberInitDeps.InitOrderConstraint;
@@ -98,7 +99,7 @@ private typedef FixOptions = { var movableArglessNew: Bool; var budget: Int; var
  * relative construction order, unobservable without cross-init data flow.
  */
 @:nullSafety(Strict)
-final class MemberOrder extends RuleBase implements ConfigAware implements VolatileMessage {
+final class MemberOrder extends RuleBase implements ConfigAware implements VolatileMessage implements OptionKeyed {
 
 	/**
 	 * The source lines a single reorder may MOVE before `fix` declines it and emits only the
@@ -114,11 +115,6 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 */
 	private static inline final MAX_RELOCATED_LINES: Int = 200;
 
-	private static inline final RULE_ID: String = 'member-order';
-
-	/** The `apq.json` option key that replaces `MAX_RELOCATED_LINES`. */
-	private static final BUDGET_OPTION: String = 'maxRelocatedLines';
-
 	/**
 	 * The linter's memoised per-file config resolver; null when run outside it (falls
 	 * back to `LintConfig.discover`) - read for the rule options (`optionOn`).
@@ -127,7 +123,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 
 	public function new() {
 		super(
-			RULE_ID,
+			MemberOrderOptions.RULE_ID,
 			'type members not in canonical order (constants, properties, fields, constructor, accessors, instance methods, static '
 			+ 'methods; public before private; within one rank inline members lead, then initialized declarations lead init-less ones; '
 			+ 'conditional members grouped into one #if block per condition and branch shape, sorted at the rank their members share and '
@@ -155,7 +151,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			walk(
 				violations, entry.file, entry.source, tree, shape, plugin.metaShape().metaKinds, accessors, regions,
 				CondDirectives.scan(entry.source, shape, () -> regions),
-				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, 'separateInlineSubgroup'), _configNotes),
+				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP), _configNotes),
 				EnumAbstractForms.valueStarts(plugin, tree)
 			);
 		});
@@ -177,10 +173,11 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			? RunScan.edits(plugin, source, tree -> {
 				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 				final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
-				final movableArglessNew: Bool = violations.length > 0 && optionOn(violations[0].file, 'movableArglessNew');
+				final movableArglessNew: Bool = violations.length > 0
+					&& optionOn(violations[0].file, MemberOrderOptions.MOVABLE_ARGLESS_NEW);
 				final spacing: SpacingPolicy = violations.length > 0
 					? MemberSpacing.policyOf(
-						violations[0].file, plugin, optionOn(violations[0].file, 'separateInlineSubgroup'), _configNotes
+						violations[0].file, plugin, optionOn(violations[0].file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP), _configNotes
 					)
 					: { separateInline: false, writer: null };
 				// Keyed by the flagged member's slot start, the same coordinate `firstLayoutIssue` re-derives
@@ -198,7 +195,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				// as "no file named" and answers from the whole index, as it did before it could be told.
 				final file: Null<String> = violations.length > 0 ? violations[0].file : null;
 				final budget: Int = violations.length > 0
-					? LintConfig.resolveWith(_resolveConfig, violations[0].file).intOption(id(), BUDGET_OPTION) ?? MAX_RELOCATED_LINES
+					? LintConfig.resolveWith(_resolveConfig, violations[0].file)
+						.intOption(id(), MemberOrderOptions.BUDGET) ?? MAX_RELOCATED_LINES
 					: MAX_RELOCATED_LINES;
 				final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 				fixWalk(
@@ -212,6 +210,14 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			: [];
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [
+			MemberOrderOptions.BUDGET,
+			MemberOrderOptions.MOVABLE_ARGLESS_NEW,
+			MemberOrderOptions.SEPARATE_INLINE_SUBGROUP
+		];
+	}
+
 	/**
 	 * Whether `file`'s `apq.json` turns the boolean `member-order` option `key` on (every one
 	 * defaults to OFF): `movableArglessNew`, read by the fix path, and the spacing-only
@@ -220,14 +226,6 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 */
 	private function optionOn(file: String, key: String): Bool {
 		return LintConfig.resolveWith(_resolveConfig, file).boolOption(id(), key) == true;
-	}
-
-	/**
-	 * `config` with this rule's review budget set to `lines`: the one place that knows the rule id and the option key, so a
-	 * run-wide override never names either.
-	 */
-	public static inline function withBudget(config: LintConfig, lines: Int): LintConfig {
-		return config.withIntOption(RULE_ID, BUDGET_OPTION, lines);
 	}
 
 	/**

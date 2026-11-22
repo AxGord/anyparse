@@ -2,6 +2,7 @@ package anyparse.check.common.literals;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.literals.LiteralTables.LiteralTableShape;
 import anyparse.check.scan.NumericLiteral;
 import anyparse.query.NodeShape;
@@ -98,10 +99,14 @@ private typedef MagicNumberExempt = {
  * `numericLiteralKinds` (or no `functionKinds`) makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class MagicNumber extends RuleBase implements ConfigAware implements NoAutofix {
+final class MagicNumber extends RuleBase implements ConfigAware implements NoAutofix implements OptionKeyed {
 
 	/** This check's stable id, also the key of its `apq.json` options. */
 	private static inline final RULE_ID: String = 'magic-number';
+
+	private static final IGNORE_KEY: String = 'ignore';
+	private static final IGNORE_CALL_ARGUMENTS_KEY: String = 'ignoreCallArguments';
+	private static final LITERAL_TABLES_KEY: String = 'literalTables';
 
 	/** Conventional values that carry no hidden meaning and are never flagged. */
 	private static final EXEMPT: Array<Float> = [-1, 0, 1, 2];
@@ -128,12 +133,12 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 			// the `apq.json` `ignore` list adds to it.
 			final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			final ignore: Array<Float> = config.numberListOption(RULE_ID, 'ignore') ?? [];
-			final calls: Array<String> = config.stringListOption(RULE_ID, 'ignoreCallArguments') ?? [];
+			final ignore: Array<Float> = config.numberListOption(RULE_ID, IGNORE_KEY) ?? [];
+			final calls: Array<String> = config.stringListOption(RULE_ID, IGNORE_CALL_ARGUMENTS_KEY) ?? [];
 			final exempt: MagicNumberExempt = {
 				values: base.concat(ignore),
 				calls: [ for (c in calls) if (c != '') c.split('.') ],
-				tables: config.boolOption(RULE_ID, 'literalTables') ?? false,
+				tables: config.boolOption(RULE_ID, LITERAL_TABLES_KEY) ?? false,
 				source: entry.source
 			};
 			walk(violations, entry.file, tree, null, false, false, false, cfg, exempt);
@@ -154,6 +159,10 @@ final class MagicNumber extends RuleBase implements ConfigAware implements NoAut
 	public function noAutofixReason(): String {
 		return
 			'the finding asks for a NAME, and only the author knows it — an auto-hoisted CONST_7 restates the digit behind an indirection';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [LITERAL_TABLES_KEY, IGNORE_CALL_ARGUMENTS_KEY, IGNORE_KEY];
 	}
 
 	/**

@@ -111,7 +111,7 @@
 			"name": "M-HOIST-MIN-MODULES",
 			"type": "anyparse.check.common.imports.HoistCommonImport",
 			"method": "planSite",
-			"find": "if (governed.length < (cfg.intOption(RULE_ID, 'minModules') ?? DEFAULT_MIN_MODULES)) return;",
+			"find": "if (governed.length < (cfg.intOption(RULE_ID, MIN_MODULES_KEY) ?? DEFAULT_MIN_MODULES)) return;",
 			"replace": "if (governed.length < 0) return;",
 			"note": "a directory with too few modules for a share to mean anything is weighed anyway, so one module of two carries the whole verdict"
 		},
@@ -264,7 +264,7 @@
 			"name": "M-SINK-HYSTERESIS-OFF",
 			"type": "anyparse.check.common.imports.HoistCommonImport",
 			"method": "sinkSite",
-			"find": "if (sink >= (cfg.intOption(RULE_ID, 'threshold') ?? DEFAULT_THRESHOLD)) return;",
+			"find": "if (sink >= (cfg.intOption(RULE_ID, THRESHOLD_KEY) ?? DEFAULT_THRESHOLD)) return;",
 			"replace": "if (sink < 0) return;",
 			"note": "a sink threshold at or above the hoist one is honoured, so one share sits on both sides and a fix run moves the same statement into the ambient source and back out of it pass after pass"
 		},

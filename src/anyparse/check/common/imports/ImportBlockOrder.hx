@@ -2,6 +2,7 @@ package anyparse.check.common.imports;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.query.ImportOrder;
 import anyparse.query.SymbolIndex;
 import anyparse.query.WildcardImportGate;
@@ -148,9 +149,10 @@ private typedef UsingWedge = {
  *    separately.
  */
 @:nullSafety(Strict)
-final class ImportBlockOrder extends RuleBase implements DefaultOff implements ConfigAware {
+final class ImportBlockOrder extends RuleBase implements DefaultOff implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'import-order';
+	private static final ORDER_KEY: String = 'order';
 
 	/** The `order` option value accepting EITHER recognised order — the default, and the least opinionated reading. */
 	private static final ORDER_ANY: String = 'any';
@@ -261,9 +263,13 @@ final class ImportBlockOrder extends RuleBase implements DefaultOff implements C
 			});
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [ORDER_KEY, OPTION_USING_AFTER];
+	}
+
 	/** The `order` option as an `ImportOrder` id, or -1 for `any` (the default, and any unrecognised value). */
 	private function requestedOrder(config: LintConfig): Int {
-		final name: Null<String> = config.stringOption(RULE_ID, 'order');
+		final name: Null<String> = config.stringOption(RULE_ID, ORDER_KEY);
 		return name == null || name == ORDER_ANY ? -1 : ImportOrder.orderNamed(name);
 	}
 

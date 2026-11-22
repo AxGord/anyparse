@@ -3,6 +3,7 @@ package anyparse.check.common.naming;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.common.naming.NamingRenames.RenameRefusal;
 import anyparse.check.common.unused.UnusedParameter;
@@ -146,7 +147,8 @@ private typedef Candidate = {
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.common.naming.Naming)
-final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements ConfigAware implements FileGated implements Supersedes {
+final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements ConfigAware implements FileGated implements OptionKeyed
+		implements Supersedes {
 
 	private static inline final RULE_ID: String = 'no-underscore-prefix';
 
@@ -161,6 +163,10 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 	 * unless an `apq.json` sets `allowInheritedShadow`. Default keeps the veto.
 	 */
 	private static inline final DEFAULT_ALLOW_INHERITED_SHADOW: Bool = false;
+
+	private static final LOCALS_KEY: String = 'locals';
+	private static final PARAMS_KEY: String = 'params';
+	private static final ALLOW_INHERITED_SHADOW_KEY: String = 'allowInheritedShadow';
 
 	/** The rule whose same-binding finding this one replaces - see `supersedes`. */
 	private static final NAMING_ID: String = 'naming';
@@ -208,7 +214,7 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 				// Resolved per fix() call from the findings' own file, exactly as `run` resolves `params` /
 				// `locals`: the option governs a GATE inside the rename, so it belongs to the fix path.
 				final config: LintConfig = LintConfig.resolveWith(_resolveConfig, violations[0].file);
-				final allowInheritedShadow: Bool = config.boolOption(RULE_ID, 'allowInheritedShadow') ?? DEFAULT_ALLOW_INHERITED_SHADOW;
+				final allowInheritedShadow: Bool = config.boolOption(RULE_ID, ALLOW_INHERITED_SHADOW_KEY) ?? DEFAULT_ALLOW_INHERITED_SHADOW;
 				// The inherited-member proof walks the FULL supertype closure, so it resolves through the
 				// plugin's resolution scope (report files UNION the configured libraries) when present,
 				// exactly as the `naming` field rename does; the report-scoped index is the fallback.
@@ -281,8 +287,8 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 
 	/** `config-noop` when the options exempt both parameters and locals: nothing is left in scope. */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
-		final params: Bool = config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS;
-		final locals: Bool = config.boolOption(RULE_ID, 'locals') ?? DEFAULT_LOCALS;
+		final params: Bool = config.boolOption(RULE_ID, PARAMS_KEY) ?? DEFAULT_PARAMS;
+		final locals: Bool = config.boolOption(RULE_ID, LOCALS_KEY) ?? DEFAULT_LOCALS;
 		return params || locals ? null : 'config-noop';
 	}
 
@@ -293,6 +299,10 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 	 */
 	public function supersedes(): Array<String> {
 		return [NAMING_ID];
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [ALLOW_INHERITED_SHADOW_KEY, PARAMS_KEY, LOCALS_KEY];
 	}
 
 	/** The refusal for a `target` another flagged binding also strips to, from an overlapping scope (`claimedByAnother`). */
@@ -477,8 +487,8 @@ final class NoUnderscorePrefix extends RuleBase implements DefaultOff implements
 	@:access(anyparse.check.common.unused.UnusedParameter)
 	private static function optionsOf(config: LintConfig): Options {
 		return {
-			params: config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS,
-			locals: config.boolOption(RULE_ID, 'locals') ?? DEFAULT_LOCALS,
+			params: config.boolOption(RULE_ID, PARAMS_KEY) ?? DEFAULT_PARAMS,
+			locals: config.boolOption(RULE_ID, LOCALS_KEY) ?? DEFAULT_LOCALS,
 			// `enabledBy` too: a disabled `unused-parameter` emits no finding to silence,
 			// so its rename cannot run whatever the option says.
 			silenceGuard: Linter.enabledBy(config, new UnusedParameter()) && UnusedParameter.renameSilenceLive(config)

@@ -2,6 +2,7 @@ package anyparse.check.common.design;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ConstantFieldScan;
@@ -105,7 +106,7 @@ private typedef GrantList = { final granted: Array<OversizedGrant>; final proble
  * (`readGrant`: silent within it, reported again past it).
  */
 @:nullSafety(Strict)
-final class OversizedType extends RuleBase implements ConfigAware implements VolatileMessage implements NoAutofix {
+final class OversizedType extends RuleBase implements ConfigAware implements VolatileMessage implements NoAutofix implements OptionKeyed {
 
 	/**
 	 * The member count above which a type is flagged — generous enough that only
@@ -130,6 +131,10 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 
 	/** This rule's id — the key its `apq.json` options sit under, and the `rule` field of its findings. */
 	private static inline final RULE_ID: String = 'oversized-type';
+
+	private static final GRANTS_KEY: String = 'grants';
+	private static final MAX_LINES_KEY: String = 'maxLines';
+	private static final MAX_MEMBERS_KEY: String = 'maxMembers';
 
 	/**
 	 * The fragment that follows the LINE EXTENT in the message — shared by the message
@@ -200,8 +205,8 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			var graph: Null<CallGraph> = null;
-			final maxMembers: Int = config.intOption(RULE_ID, 'maxMembers') ?? DEFAULT_MAX_MEMBERS;
-			final maxLines: Int = config.intOption(RULE_ID, 'maxLines') ?? DEFAULT_MAX_LINES;
+			final maxMembers: Int = config.intOption(RULE_ID, MAX_MEMBERS_KEY) ?? DEFAULT_MAX_MEMBERS;
+			final maxLines: Int = config.intOption(RULE_ID, MAX_LINES_KEY) ?? DEFAULT_MAX_LINES;
 			final grants: GrantList = readGrants(config, maxMembers, maxLines);
 			// Every file of a run resolves the config again; a refused entry is one finding per run.
 			for (problem in grants.problems) if (!told.contains(problem)) {
@@ -274,6 +279,10 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 		return MessageMask.maskBefore(MessageMask.maskBefore(message, MEMBERS_UNIT), LINES_UNIT);
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [MAX_MEMBERS_KEY, MAX_LINES_KEY, GRANTS_KEY];
+	}
+
 	/**
 	 * Walk `node`; for every type-body descendant emit a `Warning` when either
 	 * size threshold is exceeded.
@@ -338,7 +347,7 @@ final class OversizedType extends RuleBase implements ConfigAware implements Vol
 	private static function readGrants(config: LintConfig, maxMembers: Int, maxLines: Int): GrantList {
 		final read: Array<OversizedGrant> = [];
 		final problems: Array<String> = [];
-		for (entry in config.stringListOption(RULE_ID, 'grants') ?? []) {
+		for (entry in config.stringListOption(RULE_ID, GRANTS_KEY) ?? []) {
 			final grant: Null<OversizedGrant> = readGrant(entry.trim(), maxMembers, maxLines, problems);
 			if (grant != null) read.push(grant);
 		}

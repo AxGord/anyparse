@@ -5,6 +5,7 @@ import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.scan.LoopScan;
@@ -209,8 +210,8 @@ private typedef Seams = {
  * plugin's own `parsePattern`; a plugin without `paramKinds`, `blockBodyKind` or `controlExitKinds` makes it a no-op.
  */
 @:nullSafety(Strict)
-final class PreferHelper extends RuleBase implements ConfigAware implements FileGated implements RiskyFix implements GroupedFix
-		implements VolatileMessage {
+final class PreferHelper extends RuleBase implements ConfigAware implements FileGated implements RiskyFix implements OptionKeyed
+		implements GroupedFix implements VolatileMessage {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-helper';
@@ -319,6 +320,10 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 
 	public function messageIdentity(message: String): String {
 		return MessageMask.cutAfter(message, MESSAGE_LEAD);
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [OPTION_MARKER];
 	}
 
 	/** The marker `file`'s config names, or null. */

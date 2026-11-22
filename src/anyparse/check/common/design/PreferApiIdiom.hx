@@ -3,6 +3,7 @@ package anyparse.check.common.design;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.design.ConfiguredTypes.OwnedMember;
 import anyparse.check.common.design.RuleDeclaration.IdiomSpec;
 import anyparse.check.scan.PurityScan;
@@ -143,7 +144,7 @@ private typedef Ctx = {
  * required seam, or a plugin that is no `TypeInfoProvider`, makes the rule a no-op.
  */
 @:nullSafety(Strict)
-final class PreferApiIdiom extends RuleBase implements ConfigAware implements FileGated {
+final class PreferApiIdiom extends RuleBase implements ConfigAware implements FileGated implements OptionKeyed {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'prefer-api-idiom';
@@ -213,6 +214,10 @@ final class PreferApiIdiom extends RuleBase implements ConfigAware implements Fi
 			for (m in matchesIn(file, source, idioms, resolved, seams, plugin))
 				if (wanted.contains('${m.span.from}:${m.span.to}')) { span: m.span, text: m.text }
 		]: Array<FixEdit>);
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [RuleDeclaration.IDIOMS_KEY];
 	}
 
 	/** The idiom specs `file`'s config declares, printing every reader problem once. */

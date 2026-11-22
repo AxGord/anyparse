@@ -1,6 +1,7 @@
 package anyparse.check.common.unused;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.query.CallSites;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.OccurrenceScan;
@@ -99,7 +100,7 @@ using StringTools;
  * is reported for the same reason.
  */
 @:nullSafety(Strict)
-final class UnusedParameter extends RuleBase implements ConfigAware {
+final class UnusedParameter extends RuleBase implements ConfigAware implements OptionKeyed {
 
 	/** The rule id — also the `apq.json` key its options are read under. */
 	private static inline final RULE_ID: String = 'unused-parameter';
@@ -112,6 +113,8 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	 * complete; a project opts into that edit deliberately.
 	 */
 	private static inline final DEFAULT_RENAME_SILENCE: Bool = false;
+
+	private static final RENAME_SILENCE_KEY: String = 'renameSilence';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -225,6 +228,10 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		});
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [RENAME_SILENCE_KEY];
+	}
+
 	/**
 	 * Whether the `_<name>` silence-rename is enabled for the file these `violations`
 	 * belong to — the rule's `apq.json` `renameSilence` option, defaulting to
@@ -244,7 +251,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 	 * (`NoUnderscorePrefix` reads it to decide whether the rename it must not fight is live).
 	 */
 	private static function renameSilenceLive(config: LintConfig): Bool {
-		return config.boolOption(RULE_ID, 'renameSilence') ?? DEFAULT_RENAME_SILENCE;
+		return config.boolOption(RULE_ID, RENAME_SILENCE_KEY) ?? DEFAULT_RENAME_SILENCE;
 	}
 
 	/**
@@ -441,7 +448,6 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		for (c in node.children) collectFixEdits(c, root, source, shape, flagged, handled, edits);
 	}
 
-
 	/**
 	 * Rename every `Info` (non-removable) unused parameter to `_<name>` — the
 	 * conservative silencing fix, reached only when the file opts into
@@ -481,7 +487,6 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 			collectRenameEdits(c, node, source, shape, functionKinds, opaqueKinds, renameFlagged, index, edits, matchMask);
 	}
 
-
 	/**
 	 * The offset at which to insert the `_` prefix for a rename — the start of
 	 * `param`'s name token within its span — or `-1` when the parameter must NOT
@@ -509,7 +514,6 @@ final class UnusedParameter extends RuleBase implements ConfigAware {
 		else
 			SourceText.identTokenOffset(source, pspan, name);
 	}
-
 
 	/**
 	 * Whether `fn` is a method that a subtype OVERRIDES — a subtype of `fn`'s owner

@@ -1,6 +1,7 @@
 package anyparse.check.common.expressions;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.QuotationAware;
 import anyparse.check.common.control.BranchChain;
 import anyparse.query.BoolExprShape;
@@ -418,7 +419,12 @@ private enum abstract SlotKind(Int) {
  * for an argument handed to a macro function in ordinary code (`M.f((x))`). Verified against Haxe 4.3.7 (B8b, `docs/decisions.md`).
  */
 @:nullSafety(Strict)
-final class RedundantParens extends RuleBase implements ConfigAware implements QuotationAware {
+final class RedundantParens extends RuleBase implements ConfigAware implements QuotationAware implements OptionKeyed {
+
+	private static final ADDITIVE_OPERANDS_KEY: String = 'additiveOperands';
+	private static final COMPARISON_OPERANDS_KEY: String = 'comparisonOperands';
+	private static final SAME_OPERATOR_LEFT_KEY: String = 'sameOperatorLeft';
+	private static final ATOMS_KEY: String = 'atoms';
 
 	/** The rule id — also the `apq.json` key its four opt-in options hang off. */
 	private static final ID: String = 'redundant-parens';
@@ -489,6 +495,15 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 		});
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [
+			ATOMS_KEY,
+			SAME_OPERATOR_LEFT_KEY,
+			COMPARISON_OPERANDS_KEY,
+			ADDITIVE_OPERANDS_KEY
+		];
+	}
+
 	/**
 	 * The grammar's paren kind plus its delimited-slot vocabulary and this project's
 	 * operand-arm opt-ins. `shape.parenKind` must be non-null — the caller bails on a
@@ -502,10 +517,10 @@ final class RedundantParens extends RuleBase implements ConfigAware implements Q
 	 */
 	private function slotsOf(shape: RefShape, file: String): ParenSlots {
 		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
-		final atomArm: Bool = config.boolOption(ID, 'atoms') == true;
-		final familyArm: Bool = config.boolOption(ID, 'sameOperatorLeft') == true;
-		final comparisonArm: Bool = config.boolOption(ID, 'comparisonOperands') == true;
-		final additiveArm: Bool = config.boolOption(ID, 'additiveOperands') == true;
+		final atomArm: Bool = config.boolOption(ID, ATOMS_KEY) == true;
+		final familyArm: Bool = config.boolOption(ID, SAME_OPERATOR_LEFT_KEY) == true;
+		final comparisonArm: Bool = config.boolOption(ID, COMPARISON_OPERANDS_KEY) == true;
+		final additiveArm: Bool = config.boolOption(ID, ADDITIVE_OPERANDS_KEY) == true;
 		final operandArm: Bool = atomArm || familyArm || comparisonArm || additiveArm;
 		return {
 			parenKind: shape.parenKind ?? '',

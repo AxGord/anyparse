@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
@@ -82,7 +83,7 @@ private typedef Seams = {
  * interpolation kinds; a missing required kind, or a plugin without type information, makes the rule a no-op.
  */
 @:nullSafety(Strict)
-final class PreferSplitPart extends HaxeRule implements DefaultOff implements ConfigAware implements GroupedFix {
+final class PreferSplitPart extends HaxeRule implements DefaultOff implements ConfigAware implements GroupedFix implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'prefer-split-part';
 	private static inline final AFTER_LAST: String = 'allAfterLast';
@@ -186,6 +187,10 @@ final class PreferSplitPart extends HaxeRule implements DefaultOff implements Co
 		final imports: ImportGroups = printer.importGroups();
 		final edits: Array<GroupedEdit> = [ for (i => c in fixed) { span: c.span, text: texts[i], group: imports.groupOf(path) } ];
 		return edits.concat(imports.edits);
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [OPTION_TEXT_TOOLS];
 	}
 
 	private function toolsOf(file: String, plugin: GrammarPlugin, s: Seams, index: () -> Null<SymbolIndex>): Tools {

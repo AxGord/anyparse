@@ -2,6 +2,7 @@ package anyparse.check.common.literals;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.literals.LiteralTables.LiteralTableShape;
 import anyparse.query.StringFold.StringLiteral;
@@ -142,7 +143,7 @@ private typedef ScanCtx = {
  * silent capture. Only a lower-case name would capture.
  */
 @:nullSafety(Strict)
-final class StringLiteralDup extends RuleBase implements ConfigAware implements NoAutofix implements VolatileMessage {
+final class StringLiteralDup extends RuleBase implements ConfigAware implements NoAutofix implements VolatileMessage implements OptionKeyed {
 
 	/** Least repetitions of a literal before its occurrences are flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -163,6 +164,9 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'string-literal-dup';
+
+	private static final MIN_LENGTH_KEY: String = 'minLength';
+	private static final MIN_OCCURRENCES_KEY: String = 'minOccurrences';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -190,13 +194,13 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 		final tables: LiteralTableShape = LiteralTables.shapeOf(shape, support);
 		return RunScan.collectWith(files, plugin, support, (entry, tree, folds, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			final minOcc: Int = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
+			final minOcc: Int = positiveOr(config.intOption(RULE_ID, MIN_OCCURRENCES_KEY), DEFAULT_MIN_OCCURRENCES);
 			final ctx: ScanCtx = {
 				support: folds,
 				metaKinds: metaKinds,
 				tables: tables,
 				casePatternKind: shape.plainCasePatternKind,
-				minLen: positiveOr(config.intOption(RULE_ID, 'minLength'), DEFAULT_MIN_LENGTH)
+				minLen: positiveOr(config.intOption(RULE_ID, MIN_LENGTH_KEY), DEFAULT_MIN_LENGTH)
 			};
 			scanFile(violations, entry.file, entry.source, tree, ctx, minOcc);
 		});
@@ -212,6 +216,10 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 	public function noAutofixReason(): String {
 		return 'the constant needs a NAME, and which one says what the occurrences have in common is the author\'s call — once it is'
 			+ ' chosen, `apq extract-constant <file> --type <Type> --name <NAME> --literal <text>` performs the whole hoist';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [MIN_OCCURRENCES_KEY, MIN_LENGTH_KEY];
 	}
 
 	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */

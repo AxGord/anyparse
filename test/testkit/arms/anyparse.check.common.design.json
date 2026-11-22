@@ -1563,6 +1563,14 @@
 			"find": "return ThreadSafetyOptions.acceptedKeys();",
 			"replace": "return [];",
 			"note": "thread-safety declares no keys, so every key it reads is called unknown"
+		},
+		{
+			"name": "M-OPTKEYS-DECLARED-KEY-LEFT-OUT",
+			"type": "anyparse.check.common.design.HelperCopy",
+			"method": "acceptedOptions",
+			"find": "return [OPTION_HOMES];",
+			"replace": "return [];",
+			"note": "helper-copy leaves out a key it reads, so the config that sets it is told it is unknown"
 		}
 	]
 }

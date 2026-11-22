@@ -2,6 +2,7 @@ package anyparse.check.common.types;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.LintConfig;
 import anyparse.check.common.loops.MapValueScan;
 import anyparse.query.IndexScope;
@@ -80,7 +81,7 @@ private typedef SetProject = {
  * grown or not, and `--fix` respells it. A bit set is replaced by its own `add`, so a `final` binding keeps the plain advice.
  */
 @:nullSafety(Strict)
-final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAware {
+final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'map-as-set';
 
@@ -235,6 +236,10 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 				});
 			});
 		});
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [SET_OPTION, BITS_OPTION];
 	}
 
 	/**

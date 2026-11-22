@@ -2,6 +2,7 @@ package anyparse.check.common.types;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
@@ -159,12 +160,14 @@ using anyparse.util.Strings;
  * `parenKind` simply means no unwrapping.
  */
 @:nullSafety(Strict)
-final class ExplicitLocalType extends RuleBase implements DefaultOff implements OracleAssisted implements ConfigAware {
+final class ExplicitLocalType extends RuleBase implements DefaultOff implements OracleAssisted implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'explicit-local-type';
 
 	/** Default `maxInferredTypeLength`: an anonymous-structure annotation longer than this stays report-only. */
 	private static inline final DEFAULT_MAX_ANON_LEN: Int = 80;
+
+	private static final MAX_INFERRED_TYPE_LENGTH_KEY: String = 'maxInferredTypeLength';
 
 	/**
 	 * Why `fix` produced no annotation for a finding — one sentence per gate, written on the
@@ -406,6 +409,10 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 		_configResolver = resolve;
 	}
 
+	public function acceptedOptions(): Array<String> {
+		return [MAX_INFERRED_TYPE_LENGTH_KEY];
+	}
+
 	/**
 	 * The `maxInferredTypeLength` cap (chars) for an anonymous-structure annotation,
 	 * read from the file's `apq.json` via the injected resolver (or discovered), or
@@ -415,7 +422,7 @@ final class ExplicitLocalType extends RuleBase implements DefaultOff implements 
 	private function maxAnonLen(violations: Array<Violation>): Int {
 		if (violations.length == 0) return DEFAULT_MAX_ANON_LEN;
 		final cfg: LintConfig = LintConfig.resolveWith(_configResolver, violations[0].file);
-		return cfg.intOption(RULE_ID, 'maxInferredTypeLength') ?? DEFAULT_MAX_ANON_LEN;
+		return cfg.intOption(RULE_ID, MAX_INFERRED_TYPE_LENGTH_KEY) ?? DEFAULT_MAX_ANON_LEN;
 	}
 
 	/**

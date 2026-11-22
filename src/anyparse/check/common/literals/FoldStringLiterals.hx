@@ -1,6 +1,7 @@
 package anyparse.check.common.literals;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.literals.ConstantReadSlots.ChildSlot;
 import anyparse.check.common.literals.MacroGate.CallRef;
 import anyparse.check.common.literals.MacroGate.MacroIndex;
@@ -985,7 +986,7 @@ private class OperatorGate {
  * plugin declares no layout metrics, makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class FoldStringLiterals extends RuleBase implements ConfigAware {
+final class FoldStringLiterals extends RuleBase implements ConfigAware implements OptionKeyed {
 
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */
 	private static inline final RULE_ID: String = 'fold-adjacent-string-literals';
@@ -997,7 +998,6 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 	private static inline final MACRO_REFUSAL: String = ', but it is an argument of a call this rule cannot prove folds a '
 		+ 'concatenation, and rewriting one a macro pattern-matches breaks it silently — list the target in the '
 		+ '`$MACRO_WHITELIST_OPTION` option to allow it';
-
 
 	/**
 	 * Writer-verification passes per candidate. Each pass costs one `writeRoundTrip`
@@ -1102,6 +1102,10 @@ final class FoldStringLiterals extends RuleBase implements ConfigAware {
 			// (a trailing `// …`, the line break) is left where the author put it.
 			return planned == null ? null : { span: planned.editSpan, text: planned.text };
 		});
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [MACRO_WHITELIST_OPTION];
 	}
 
 	/**

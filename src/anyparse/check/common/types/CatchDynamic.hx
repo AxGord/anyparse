@@ -1,6 +1,7 @@
 package anyparse.check.common.types;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.common.naming.NamingOptions;
 import anyparse.query.IndexScope;
@@ -82,7 +83,9 @@ private typedef LoggingKinds = {
  * (`Exception`, a custom class, `String`, …) is left alone.
  */
 @:nullSafety(Strict)
-final class CatchDynamic extends RuleBase implements ConfigAware implements VersionGated {
+final class CatchDynamic extends RuleBase implements ConfigAware implements VersionGated implements OptionKeyed {
+
+	private static final FIX_LOGGING_USES_KEY: String = 'fixLoggingUses';
 
 	/** The name arm (b) gives a caught value when the project's `naming.catchVarName` sets none. */
 	private static final DEFAULT_CATCH_NAME: String = 'exception';
@@ -134,7 +137,7 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 			}
 			final file: String = violations.length > 0 ? violations[0].file : '';
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
-			final fixLogging: Bool = config.boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
+			final fixLogging: Bool = config.boolOption('catch-dynamic', FIX_LOGGING_USES_KEY) ?? false;
 			final loggingName: String = catchName(config);
 			final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 			final importMap: Map<String, String> = provider != null ? provider.importMap(source, file) : [];
@@ -175,6 +178,10 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	/** `haxe.Exception` is Haxe 4.1; a project declaring an older `languageVersion` does not get this rewrite. */
 	public function minLanguageVersion(): String {
 		return '4.1';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [FIX_LOGGING_USES_KEY];
 	}
 
 	/**

@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.design.DuplicateCode.DupBinders;
 import anyparse.check.common.design.DuplicateCode.DupCtx;
 import anyparse.query.BinderScan;
@@ -48,7 +49,7 @@ using anyparse.util.Strings;
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.common.design.DuplicateCode)
-final class HelperCopy extends RuleBase implements NoAutofix implements DefaultOff implements ConfigAware {
+final class HelperCopy extends RuleBase implements NoAutofix implements DefaultOff implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'helper-copy';
 
@@ -120,6 +121,10 @@ final class HelperCopy extends RuleBase implements NoAutofix implements DefaultO
 	/** Replacing a copy with a call is a refactoring: whether the home is importable where the copy sits is a design judgement. */
 	public function noAutofixReason(): String {
 		return 'whether the copy may call the shared helper — and what its callers then import — is a design judgement';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [OPTION_HOMES];
 	}
 
 	/** Whether `file` lies under one of `homes`, each matched from a path-segment boundary. */

@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.haxe.expressions.CompareFunctions.NamedCompare;
@@ -140,7 +141,8 @@ private typedef Operands = { left: String, right: String }
  * whose signature is not `(T, T): Int`, is a configuration error that stops the rule on the files it governs (`CompareFunctions`).
  */
 @:nullSafety(Strict)
-final class PreferCompareFunction extends HaxeRule implements DefaultOff implements Supersedes implements ConfigAware implements GroupedFix {
+final class PreferCompareFunction extends HaxeRule implements DefaultOff implements Supersedes implements ConfigAware implements OptionKeyed
+		implements GroupedFix {
 
 	private static inline final RULE_ID: String = 'prefer-compare-function';
 	private static inline final REFLECT: String = 'Reflect';
@@ -255,6 +257,10 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			'prefer-if-expression-return',
 			'redundant-lambda-wrapper'
 		];
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [OPTION_COMPARE];
 	}
 
 	private function compareFunctionsOf(file: String, plugin: GrammarPlugin, s: Seams, index: () -> Null<SymbolIndex>): CompareFunctions {

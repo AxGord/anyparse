@@ -2,6 +2,7 @@ package anyparse.check.common.members;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.design.ConfiguredTypes;
 import anyparse.query.CondRegionScan;
 import anyparse.query.ElementSpan;
@@ -54,7 +55,7 @@ private typedef OrderBreak = { final earlier: ModuleType; final later: ModuleTyp
  * a permutation would carry that to the wrong neighbour.
  */
 @:nullSafety(Strict)
-final class ModuleTypeOrder extends RuleBase implements DefaultOff implements ConfigAware {
+final class ModuleTypeOrder extends RuleBase implements DefaultOff implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'module-type-order';
 
@@ -158,6 +159,10 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 					{ span: new Span(slots[0].from, slots[slots.length - 1].to), text: parts.join('') }
 				];
 			});
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [OPTION_MAIN, OPTION_KINDS, OPTION_AFTER];
 	}
 
 	/** Refuses, as a config diagnostic, each `afterMainKinds` word the grammar does not declare a type kind under. */

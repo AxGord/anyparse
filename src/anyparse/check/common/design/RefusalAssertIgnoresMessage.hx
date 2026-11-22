@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.scan.CasePatternScan;
 import anyparse.query.NodeShape;
 import anyparse.query.SymbolIndex;
@@ -25,8 +26,8 @@ typedef RefusalOptions = { final refusals: Array<String>; final passes: Array<St
  * expects is the author's to name. Grammar-agnostic over `CasePatternScan`'s seams.
  */
 @:nullSafety(Strict)
-final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware implements FileGated implements DefaultOff
-		implements NoAutofix {
+final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware implements FileGated implements OptionKeyed
+		implements DefaultOff implements NoAutofix {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'refusal-assert-ignores-message';
@@ -79,6 +80,10 @@ final class RefusalAssertIgnoresMessage extends RuleBase implements ConfigAware 
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return [];
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [REFUSALS_KEY, PASSES_KEY];
 	}
 
 	/** Both option lists of `config`, or null while either is absent or empty. */

@@ -3,6 +3,7 @@ package anyparse.check.common.design;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.common.design.ConfiguredTypes.OwnedMember;
 import anyparse.check.common.design.RuleDeclaration.EventSpec;
@@ -134,7 +135,7 @@ private typedef Seams = {
  * clauses are the index's (`TypeDeclInfo.castClauses`, read by `abstractFromClauseKind` / `abstractToClauseKind`).
  */
 @:nullSafety(Strict)
-final class TypedEventConstant extends RuleBase implements ConfigAware implements FileGated implements RiskyFix {
+final class TypedEventConstant extends RuleBase implements ConfigAware implements FileGated implements RiskyFix implements OptionKeyed {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = 'typed-event-constant';
@@ -230,6 +231,14 @@ final class TypedEventConstant extends RuleBase implements ConfigAware implement
 			if (owner != null) out.push({ span: typeSpan, text: '$spelled<$owner>' });
 		}
 		return out;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [
+			RuleDeclaration.EVENT_BASE_KEY,
+			RuleDeclaration.TYPE_ABSTRACT_KEY,
+			RuleDeclaration.LISTENER_METHODS_KEY
+		];
 	}
 
 	/** The rule's declaration for `file`'s config, printing every reader problem once. */

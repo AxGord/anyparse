@@ -1025,7 +1025,7 @@
 			"name": "M-LINT-REVIEW-BUDGET-UNWIRED",
 			"type": "anyparse.query.cli.command.LintCommand",
 			"method": "withReviewBudget",
-			"find": "budget == null ? config : MemberOrder.withBudget(config, budget)",
+			"find": "budget == null ? config : MemberOrderOptions.withBudget(config, budget)",
 			"replace": "config",
 			"note": "the run resolves its configs without the --review-budget overlay, so the flag parses and is named in the headline yet no reorder is lifted"
 		},

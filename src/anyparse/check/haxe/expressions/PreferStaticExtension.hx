@@ -1,6 +1,7 @@
 package anyparse.check.haxe.expressions;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.haxe.expressions.StaticExtensionFacts.ExtensionFactsVerdict;
 import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.check.scan.ReceiverShadow;
@@ -240,7 +241,7 @@ private typedef Channels = {
  * site would be an unactionable report-only finding.
  */
 @:nullSafety(Strict)
-final class PreferStaticExtension extends HaxeRule implements ConfigAware {
+final class PreferStaticExtension extends HaxeRule implements ConfigAware implements OptionKeyed {
 
 	/** The rule id, also the `apq.json` option key. */
 	private static inline final RULE_ID: String = UsingScan.EXTENSION_RULE_ID;
@@ -381,6 +382,10 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware {
 				UsingScan.noteDeclineWhereUnset(accepted, UsingScan.coveredUsingDecline(needsUsing));
 				return [];
 			});
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [UsingScan.EXTENSION_TYPES_KEY, UsingScan.EXTENSION_ADD_USING_KEY];
 	}
 
 	/**

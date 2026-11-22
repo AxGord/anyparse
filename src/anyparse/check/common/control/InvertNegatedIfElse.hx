@@ -1,6 +1,7 @@
 package anyparse.check.common.control;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.control.NegatedCondition.InversionSeams;
 import anyparse.check.common.control.NegatedCondition.InversionSite;
 import anyparse.check.common.control.NegatedCondition.Swap;
@@ -92,7 +93,7 @@ private enum ValueVerdict {
  * the four ternary builders and the swap agree and `--fix` settles.
  */
 @:nullSafety(Strict)
-final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
+final class InvertNegatedIfElse extends RuleBase implements ConfigAware implements OptionKeyed {
 
 	public static inline final RULE_ID: String = 'invert-negated-if-else';
 
@@ -155,6 +156,10 @@ final class InvertNegatedIfElse extends RuleBase implements ConfigAware {
 			});
 			return edits.concat(ParenGuard.guard(source, guarded, plugin));
 		});
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [NegatedCondition.DEFAULT_LAST, NegatedCondition.KEEP_DEFAULT_ELSE];
 	}
 
 	/**

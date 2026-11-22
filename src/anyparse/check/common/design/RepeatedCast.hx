@@ -2,6 +2,7 @@ package anyparse.check.common.design;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FixEdit;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.scan.PurityScan;
 import anyparse.query.BranchPaths;
@@ -107,11 +108,13 @@ private typedef Scan = {
  * suggests no value name (`StdTypes.valueNameOf`). The name is suffixed when any name in the file already uses it.
  */
 @:nullSafety(Strict)
-final class RepeatedCast extends RuleBase implements ConfigAware implements VolatileMessage {
+final class RepeatedCast extends RuleBase implements ConfigAware implements VolatileMessage implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'repeated-cast';
 	private static inline final DEFAULT_MIN_CHECKED: Int = 2;
 	private static inline final DEFAULT_MIN_UNCHECKED: Int = 3;
+	private static final MIN_UNCHECKED_KEY: String = 'minUnchecked';
+	private static final MIN_CHECKED_KEY: String = 'minChecked';
 
 	/** The tail after the occurrence tally, shared by the builder and `messageIdentity`. */
 	private static final REPEAT_TAIL: String = ' times in one function body';
@@ -155,6 +158,10 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 			if (violations.exists(v -> v.span != null && v.span.from == at.from)) for (e in f.edits) out.push(e);
 		}
 		return out;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [MIN_CHECKED_KEY, MIN_UNCHECKED_KEY];
 	}
 
 	private function analyze(
@@ -202,8 +209,8 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 				return purity;
 			},
 			taken: namesIn(tree),
-			minChecked: cfg.intOption(RULE_ID, 'minChecked') ?? DEFAULT_MIN_CHECKED,
-			minUnchecked: cfg.intOption(RULE_ID, 'minUnchecked') ?? DEFAULT_MIN_UNCHECKED
+			minChecked: cfg.intOption(RULE_ID, MIN_CHECKED_KEY) ?? DEFAULT_MIN_CHECKED,
+			minUnchecked: cfg.intOption(RULE_ID, MIN_UNCHECKED_KEY) ?? DEFAULT_MIN_UNCHECKED
 		};
 		scanUnits(tree, scan, out);
 		return out;

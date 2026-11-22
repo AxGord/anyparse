@@ -2,6 +2,7 @@ package anyparse.check.common.design;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.SymbolIndex;
 
@@ -49,7 +50,7 @@ private typedef ComplexityCfg = {
  * grammar plugin maxComplexity seam.
  */
 @:nullSafety(Strict)
-final class Complexity extends RuleBase implements ConfigAware implements NoAutofix implements VolatileMessage {
+final class Complexity extends RuleBase implements ConfigAware implements NoAutofix implements VolatileMessage implements OptionKeyed {
 
 	/**
 	 * The complexity above which a function is flagged — the conventional checkstyle
@@ -57,6 +58,8 @@ final class Complexity extends RuleBase implements ConfigAware implements NoAuto
 	 * exceeds it; used unless a `checkstyle.json` configures a different `CyclomaticComplexity` max.
 	 */
 	private static inline final DEFAULT_MAX_COMPLEXITY: Int = 20;
+
+	private static final MAX_KEY: String = 'max';
 
 	/**
 	 * The fragment that precedes the SCORE in a message, shared by the builder and by
@@ -98,7 +101,7 @@ final class Complexity extends RuleBase implements ConfigAware implements NoAuto
 		};
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
 			final max: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
-				.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
+				.intOption('complexity', MAX_KEY) ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
 			walk(violations, entry.file, tree, cfg, max);
 		});
 	}
@@ -116,6 +119,10 @@ final class Complexity extends RuleBase implements ConfigAware implements NoAuto
 	 */
 	public function noAutofixReason(): String {
 		return 'the metric names a shape to restructure, never the restructuring — which decomposition is right is a human call';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [MAX_KEY];
 	}
 
 	/**

@@ -3,6 +3,7 @@ package anyparse.check.common.docs;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.SymbolIndex;
 
@@ -36,7 +37,8 @@ import anyparse.query.SymbolIndex;
  * sentences are the contract and which are the essay is the whole of the work.
  */
 @:nullSafety(Strict)
-final class DocLength extends RuleBase implements ConfigAware implements DefaultOff implements NoAutofix implements VolatileMessage {
+final class DocLength extends RuleBase implements ConfigAware implements DefaultOff implements NoAutofix implements OptionKeyed
+		implements VolatileMessage {
 
 	/** This check's `id()`, and the `rule` every finding carries. */
 	private static inline final RULE_ID: String = 'doc-length';
@@ -108,6 +110,10 @@ final class DocLength extends RuleBase implements ConfigAware implements Default
 
 	public function noAutofixReason(): String {
 		return 'cutting prose by length keeps whichever sentences came first, and the contract is rarely one of them';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [MAX_KEY];
 	}
 
 	/** The maximum `file`'s own project declares, or the default when it declares none. */

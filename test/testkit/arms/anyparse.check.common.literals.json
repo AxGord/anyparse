@@ -161,8 +161,8 @@
 			"name": "M-MAGIC-TABLES-DEFAULT-ON",
 			"type": "anyparse.check.common.literals.MagicNumber",
 			"method": "run",
-			"find": "boolOption(RULE_ID, 'literalTables') ?? false",
-			"replace": "boolOption(RULE_ID, 'literalTables') ?? true",
+			"find": "boolOption(RULE_ID, LITERAL_TABLES_KEY) ?? false",
+			"replace": "boolOption(RULE_ID, LITERAL_TABLES_KEY) ?? true",
 			"note": "literalTables is on when no project sets it, so every existing configuration silently loses its switch-table findings"
 		},
 		{

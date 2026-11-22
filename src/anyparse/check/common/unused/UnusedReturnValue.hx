@@ -2,6 +2,7 @@ package anyparse.check.common.unused;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.ScopeDependent;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
@@ -76,7 +77,9 @@ private typedef Ctx = {
  * to the default). The match is on the called name for every receiver form.
  */
 @:nullSafety(Strict)
-final class UnusedReturnValue extends RuleBase implements ConfigAware implements NoAutofix implements ScopeDependent {
+final class UnusedReturnValue extends RuleBase implements ConfigAware implements NoAutofix implements ScopeDependent implements OptionKeyed {
+
+	private static final ALLOW_KEY: String = 'allow';
 
 	/**
 	 * Call names whose non-`Void` result is idiomatically discarded — in-place
@@ -140,7 +143,7 @@ final class UnusedReturnValue extends RuleBase implements ConfigAware implements
 		};
 		return RunScan.collectWith(files, plugin, provider, (entry, tree, typed, violations) -> {
 			final extra: Null<Array<String>> = LintConfig.resolveWith(_resolveConfig, entry.file)
-				.stringListOption('unused-return-value', 'allow');
+				.stringListOption('unused-return-value', ALLOW_KEY);
 			final allow: Array<String> = extra == null ? DEFAULT_ALLOW : DEFAULT_ALLOW.concat(extra);
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
@@ -158,6 +161,10 @@ final class UnusedReturnValue extends RuleBase implements ConfigAware implements
 	public function noAutofixReason(): String {
 		return 'using the result and deliberately discarding it are opposite intents, and a call in statement position says nothing'
 			+ ' about which was meant';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [ALLOW_KEY];
 	}
 
 	/**

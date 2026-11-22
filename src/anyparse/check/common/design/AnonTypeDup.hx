@@ -5,6 +5,7 @@ import anyparse.check.Check.CrossFileAnchored;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit.EditResult;
@@ -124,8 +125,8 @@ enum Placement {
  * matches EXACTLY (fields, optionality, written order, compared as text with whitespace removed).
  */
 @:nullSafety(Strict)
-final class AnonTypeDup extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff implements VolatileMessage
-		implements CrossFileAnchored {
+final class AnonTypeDup extends RuleBase implements CrossFileFix implements ConfigAware implements DefaultOff implements OptionKeyed
+		implements VolatileMessage implements CrossFileAnchored {
 
 	/** Least occurrences of one shape before the group is flagged. */
 	private static inline final DEFAULT_MIN_OCCURRENCES: Int = 3;
@@ -138,6 +139,9 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 
 	/** This check's stable id — named once so the literal is not itself a repeated string. */
 	private static inline final RULE_ID: String = 'anon-type-dup';
+
+	private static final MIN_FIELDS_KEY: String = 'minFields';
+	private static final MIN_OCCURRENCES_KEY: String = 'minOccurrences';
 
 	/** The option mapping a typedef's full path to the field list of the structure it names. */
 	private static final OPTION_NAMED: String = 'named';
@@ -199,13 +203,13 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 		final order: Array<String> = [];
 		for (entry in files) {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			minOccOf[entry.file] = positiveOr(config.intOption(RULE_ID, 'minOccurrences'), DEFAULT_MIN_OCCURRENCES);
+			minOccOf[entry.file] = positiveOr(config.intOption(RULE_ID, MIN_OCCURRENCES_KEY), DEFAULT_MIN_OCCURRENCES);
 			final problems: Array<String> = [];
 			final named: Array<NamedType> = namedTypesOf(config, problems);
 			namedOf[entry.file] = named;
 			if (named.length > 0) problems.push(NAMED_DEPRECATED);
 			for (p in problems) ConfiguredTypes.warn(_configNotes, RULE_ID, p);
-			final minFields: Int = positiveOr(config.intOption(RULE_ID, 'minFields'), DEFAULT_MIN_FIELDS);
+			final minFields: Int = positiveOr(config.intOption(RULE_ID, MIN_FIELDS_KEY), DEFAULT_MIN_FIELDS);
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			collect(tree, null, entry.file, entry.source, ctx, minFields, groups, order);
@@ -239,6 +243,10 @@ final class AnonTypeDup extends RuleBase implements CrossFileFix implements Conf
 			}
 		}
 		return out;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [MIN_OCCURRENCES_KEY, MIN_FIELDS_KEY, OPTION_NAMED];
 	}
 
 	/**

@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.FrameworkAware;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.RiskyArm;
 import anyparse.check.Check.RiskyCrossFileEdit;
 import anyparse.check.common.naming.NamingPrivatize.PrivatizeCandidate;
@@ -61,7 +62,8 @@ import anyparse.query.TypeInfoProvider;
  * drops the finding too.
  */
 @:nullSafety(Strict)
-final class Naming extends RuleBase implements CrossFileFix implements RiskyArm implements ConfigAware implements FrameworkAware {
+final class Naming extends RuleBase implements CrossFileFix implements RiskyArm implements ConfigAware implements OptionKeyed
+		implements FrameworkAware {
 
 	/**
 	 * A lowercase head over an all-uppercase / digit tail of four or more characters - see `normalizerArtifactName`.
@@ -351,6 +353,10 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 			if (arm != null) edits.push({ span: arm.keywordSpan, text: NamingPrivatize.keyword() });
 		}
 		return edits;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [NamingOptions.HANDLER_OPTION, NamingOptions.CATCH_VAR_OPTION];
 	}
 
 	/**

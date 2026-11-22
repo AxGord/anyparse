@@ -3,6 +3,7 @@ package anyparse.check.common.docs;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.SymbolIndex;
 
@@ -69,7 +70,7 @@ private typedef DocCfg = { final requireTypeDoc: Bool; final requireMemberDoc: B
  * conservatively.
  */
 @:nullSafety(Strict)
-final class DocCoverage extends RuleBase implements ConfigAware implements NoAutofix implements FileGated {
+final class DocCoverage extends RuleBase implements ConfigAware implements NoAutofix implements FileGated implements OptionKeyed {
 
 	/** Whether an undocumented public top-level type is flagged, unless an `apq.json` sets `requireTypeDoc`. */
 	private static inline final RULE_ID: String = 'doc-coverage';
@@ -87,6 +88,10 @@ final class DocCoverage extends RuleBase implements ConfigAware implements NoAut
 	/** Whether the constructor is subject to the member requirement, unless an `apq.json` sets `includeConstructor`. */
 	private static inline final DEFAULT_INCLUDE_CONSTRUCTOR: Bool = false;
 
+	private static final INCLUDE_CONSTRUCTOR_KEY: String = 'includeConstructor';
+	private static final REQUIRE_MEMBER_DOC_KEY: String = 'requireMemberDoc';
+	private static final REQUIRE_TYPE_DOC_KEY: String = 'requireTypeDoc';
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -102,9 +107,9 @@ final class DocCoverage extends RuleBase implements ConfigAware implements NoAut
 		return RunScan.collectWith(files, plugin, resolveSeams(plugin), (entry, tree, seams, violations) -> {
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 			final cfg: DocCfg = {
-				requireTypeDoc: config.boolOption(RULE_ID, 'requireTypeDoc') ?? DEFAULT_REQUIRE_TYPE_DOC,
-				requireMemberDoc: config.boolOption(RULE_ID, 'requireMemberDoc') ?? DEFAULT_REQUIRE_MEMBER_DOC,
-				includeConstructor: config.boolOption(RULE_ID, 'includeConstructor') ?? DEFAULT_INCLUDE_CONSTRUCTOR
+				requireTypeDoc: config.boolOption(RULE_ID, REQUIRE_TYPE_DOC_KEY) ?? DEFAULT_REQUIRE_TYPE_DOC,
+				requireMemberDoc: config.boolOption(RULE_ID, REQUIRE_MEMBER_DOC_KEY) ?? DEFAULT_REQUIRE_MEMBER_DOC,
+				includeConstructor: config.boolOption(RULE_ID, INCLUDE_CONSTRUCTOR_KEY) ?? DEFAULT_INCLUDE_CONSTRUCTOR
 			};
 			scanModule(
 				violations, entry.file, entry.source, tree, seams, cfg,
@@ -130,9 +135,13 @@ final class DocCoverage extends RuleBase implements ConfigAware implements NoAut
 
 	/** `config-noop` when the options ask for neither type nor member docs: every finding is switched off. */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
-		final types: Bool = config.boolOption(RULE_ID, 'requireTypeDoc') ?? DEFAULT_REQUIRE_TYPE_DOC;
-		final members: Bool = config.boolOption(RULE_ID, 'requireMemberDoc') ?? DEFAULT_REQUIRE_MEMBER_DOC;
+		final types: Bool = config.boolOption(RULE_ID, REQUIRE_TYPE_DOC_KEY) ?? DEFAULT_REQUIRE_TYPE_DOC;
+		final members: Bool = config.boolOption(RULE_ID, REQUIRE_MEMBER_DOC_KEY) ?? DEFAULT_REQUIRE_MEMBER_DOC;
 		return types || members ? null : 'config-noop';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [REQUIRE_TYPE_DOC_KEY, REQUIRE_MEMBER_DOC_KEY, INCLUDE_CONSTRUCTOR_KEY];
 	}
 
 	/**

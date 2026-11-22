@@ -480,6 +480,14 @@
 			"find": "return ['excludePaths', 'excludeMeta', 'boundaryCalls'];",
 			"replace": "return ['excludePaths', 'excludeMeta'];",
 			"note": "avoid-dynamic leaves out a key it reads"
+		},
+		{
+			"name": "M-OPTKEYS-DECLARED-ACCEPTS-ANY",
+			"type": "anyparse.check.common.types.MapAsSet",
+			"method": "acceptedOptions",
+			"find": "return [SET_OPTION, BITS_OPTION];",
+			"replace": "return [SET_OPTION, BITS_OPTION, \"zzNoSuchOption\"];",
+			"note": "map-as-set accepts a key it does not read, so a typo under that name is never said"
 		}
 	]
 }

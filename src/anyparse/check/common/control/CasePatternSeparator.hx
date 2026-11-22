@@ -2,6 +2,7 @@ package anyparse.check.common.control;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.scan.CasePatternScan;
 import anyparse.query.MemberKinds;
 import anyparse.query.SymbolIndex;
@@ -80,7 +81,7 @@ private typedef SeparatorSeams = { final scan: CaseSeams; final orPatternKind: S
  * everywhere.
  */
 @:nullSafety(Strict)
-final class CasePatternSeparator extends RuleBase implements DefaultOff implements ConfigAware {
+final class CasePatternSeparator extends RuleBase implements DefaultOff implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'case-pattern-separator';
 
@@ -149,6 +150,10 @@ final class CasePatternSeparator extends RuleBase implements DefaultOff implemen
 				});
 				return edits;
 			});
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [OPTION_STYLE];
 	}
 
 	/**

@@ -8,7 +8,7 @@ import anyparse.check.LintDocuments;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.common.design.ThreadSafety;
-import anyparse.check.common.members.MemberOrder;
+import anyparse.check.common.members.MemberOrderOptions;
 import anyparse.core.PhaseTimings;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
@@ -666,7 +666,7 @@ final class LintCommand implements CliCommand {
 	 * made, so every reader of the run (report, fix passes, oracle verifier) sees one budget and no `apq.json` is touched.
 	 */
 	private static function withReviewBudget(config: LintConfig, budget: Null<Int>): LintConfig {
-		return budget == null ? config : MemberOrder.withBudget(config, budget);
+		return budget == null ? config : MemberOrderOptions.withBudget(config, budget);
 	}
 
 }

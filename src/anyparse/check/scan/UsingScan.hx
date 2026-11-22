@@ -101,6 +101,9 @@ final class UsingScan {
 	/** The rule whose `types` and `addUsing` options say which modules a project spells as extension calls. */
 	public static inline final EXTENSION_RULE_ID: String = 'prefer-static-extension';
 
+	public static final EXTENSION_ADD_USING_KEY: String = 'addUsing';
+	public static final EXTENSION_TYPES_KEY: String = 'types';
+
 	/** The wildcard import kind — the one form that binds names it does not spell out (`headerRebindsName`). */
 	private static final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
 
@@ -121,7 +124,7 @@ final class UsingScan {
 	 * every rule whose fix emits a call of a module, so two rules never disagree about a spelling and ping-pong.
 	 */
 	public static inline function extensionTypes(config: LintConfig): Null<Array<String>> {
-		return config.stringListOption(EXTENSION_RULE_ID, 'types');
+		return config.stringListOption(EXTENSION_RULE_ID, EXTENSION_TYPES_KEY);
 	}
 
 	/**
@@ -509,7 +512,7 @@ final class UsingScan {
 
 	/** Whether `config` lets a rewrite insert the `using` an extension call needs (`addUsing`, default on). */
 	public static function extensionAddUsing(config: LintConfig): Bool {
-		return config.boolOption(EXTENSION_RULE_ID, 'addUsing') ?? true;
+		return config.boolOption(EXTENSION_RULE_ID, EXTENSION_ADD_USING_KEY) ?? true;
 	}
 
 	/**
