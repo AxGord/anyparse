@@ -224,7 +224,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
 			walk(
 				tree, violations, entry.file, entry.source, ElementSpan.lazyRegions(entry.source, plugin),
-				PlainReadProof.prover(tree, entry.source, plugin, getIndex), seams
+				PlainReadProof.prover(tree, entry.source, entry.file, plugin, getIndex), seams
 			);
 		});
 	}

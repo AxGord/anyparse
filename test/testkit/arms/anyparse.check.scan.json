@@ -1925,6 +1925,38 @@
 			"find": " && _paramOwner(p, x.at) == _paramOwner(q, y.at)",
 			"replace": "",
 			"note": "two unbound heads of this file are one type by spelling alone, so a callee type parameter the call does not bind reads as the caller parameter of the same name"
+		},
+		{
+			"name": "M-PLAIN-READ-BINDER",
+			"type": "anyparse.check.scan.PlainReadProof",
+			"method": "resolvedToBinder",
+			"find": "return node != null && (binderKinds.contains(node.kind) || (node.kind == shape.identKind && capture(node)));",
+			"replace": "return false;",
+			"note": "a loop binder or a case capture the resolver binds is not a bound root, so its double read stays unproven"
+		},
+		{
+			"name": "M-PLAIN-READ-TYPED-STEP",
+			"type": "anyparse.check.scan.PlainReadProof",
+			"method": "prover",
+			"find": "return ctx != null && PurityScan.readsPlainField(subject, ctx);",
+			"replace": "return false;",
+			"note": "a .field step off a root whose type is not written is never typed, so it stays unproven"
+		},
+		{
+			"name": "M-PLAIN-READ-CAPTURE-PROOF",
+			"type": "anyparse.check.scan.PlainReadProof",
+			"method": "captureProver",
+			"find": "return CasePatterns.provesCaptureAt(path[at], switchNode, node, resolve, scope, tree, shape, typedSlot);",
+			"replace": "return true;",
+			"note": "a pattern name that may compare against a constant passes as a bound capture"
+		},
+		{
+			"name": "M-PLAIN-READ-STEP-GETTER",
+			"type": "anyparse.check.scan.PurityScan",
+			"method": "readsPlainField",
+			"find": "return access.kind == ctx.fieldAccessKind && !accessRunsCode(access, ctx);",
+			"replace": "return access.kind == ctx.fieldAccessKind;",
+			"note": "a getter step off a typed root passes as a plain read and runs twice under the guard"
 		}
 	]
 }

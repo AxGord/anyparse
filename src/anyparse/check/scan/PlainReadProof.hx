@@ -1,8 +1,14 @@
 package anyparse.check.scan;
 
+import anyparse.check.scan.PurityScan.PurityCtx;
+import anyparse.query.BinderScan;
+import anyparse.query.CasePatterns;
+import anyparse.query.CaseSlotTypes;
 import anyparse.query.MemberKinds;
+import anyparse.query.PatternNameScope;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TreePath;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 
@@ -33,8 +39,9 @@ typedef TypeScope = { var span: Span; var host: QueryNode; var isExtern: Bool; }
 /**
  * The one answer to "is a second read of this value unobservable": a rewrite that turns one read of a value into
  * two (or two into one) asks it, so a property getter is never run a different number of times. Proven only for
- * the self reference, a bound local or parameter, an own physical field of a non-extern type, and a `.field`
- * chain over one of those whose every step the resolution index proves a plain member. Everything else refuses.
+ * the self reference, a bound local, parameter, loop binder or decided case capture, an own physical field of a
+ * non-extern type, and a `.field` chain over one of those whose every step the resolution index proves a plain
+ * member, the root typed as written or as the typer binds it. Everything else refuses.
  */
 @:nullSafety(Strict)
 final class PlainReadProof {
@@ -58,10 +65,11 @@ final class PlainReadProof {
 
 	/**
 	 * The proof over one parsed file: whether a second read of the node it is given is unobservable. `index` is asked
-	 * only for a `.field` step; a grammar without the seams proves nothing.
+	 * only for a `.field` step, `file` names where `source` is read from (a lambda parameter's type comes from a function
+	 * type read there); a grammar without the seams proves nothing.
 	 */
 	public static function prover(
-		tree: QueryNode, source: String, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>
+		tree: QueryNode, source: String, file: String, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>
 	): QueryNode -> Bool {
 		final shape: RefShape = plugin.refShape();
 		final seams: Null<PlainReadSeams> = seamsOf(shape);
@@ -70,18 +78,27 @@ final class PlainReadProof {
 		final bindings: Array<{ name: String, scope: Span, declEnd: Int }> = [];
 		collectBindings(tree, null, s, bindings);
 		final declaredTypes: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
+		final purity: () -> Null<PurityCtx> = PurityScan.lazyContextOf(plugin, source, tree, index, file);
+		// A receiver whose binding writes no type is typed as the program binds it: `PurityScan` answers that step.
 		final plainRead: QueryNode -> Bool = subject -> {
 			final resolved: Null<SymbolIndex> = index();
-			return resolved != null && TypeResolver.isPlainFieldRead(subject, tree, shape, declaredTypes(), resolved);
+			if (resolved == null) return false;
+			if (TypeResolver.isPlainFieldRead(subject, tree, shape, declaredTypes(), resolved)) return true;
+			final ctx: Null<PurityCtx> = purity();
+			return ctx != null && PurityScan.readsPlainField(subject, ctx);
 		};
 		final fieldOk: (String, Span) -> Bool = fieldProver(tree, source, plugin, s);
-		return subject -> acceptedReceiver(subject, bindings, fieldOk, plainRead, s);
+		final binderKinds: Array<String> = BinderScan.binderKinds(shape);
+		final capture: QueryNode -> Bool = captureProver(tree, source, file, plugin, index);
+		final binder: (String, Span) -> Bool = (name, span) -> resolvedToBinder(name, span, tree, shape, binderKinds, capture);
+		return subject -> acceptedReceiver(subject, bindings, fieldOk, binder, plainRead, s);
 	}
 
 	/**
 	 * Whether `subject` is a receiver whose double read is provably free: the self reference
 	 * (a keyword, never an accessor), a local / param binding whose scope encloses it and
-	 * that lexically precedes it, or a field `fieldOk` proves physical.
+	 * that lexically precedes it, a binder the scope resolver places (`binder`: a loop binder, a decided
+	 * case capture), or a field `fieldOk` proves physical.
 	 *
 	 * A one-step `<root>.<field>` path reads BOTH parts twice, so it needs both proofs: `root`
 	 * accepted on its own terms, and `plainRead` — the resolution index proving the step itself
@@ -89,10 +106,10 @@ final class PlainReadProof {
 	 */
 	private static function acceptedReceiver(
 		subject: QueryNode, bindings: Array<{ name: String, scope: Span, declEnd: Int }>, fieldOk: (String, Span) -> Bool,
-		plainRead: QueryNode -> Bool, s: PlainReadSeams
+		binder: (String, Span) -> Bool, plainRead: QueryNode -> Bool, s: PlainReadSeams
 	): Bool {
 		if (subject.kind == s.fieldAccessKind)
-			return acceptedReceiver(subject.children[0], bindings, fieldOk, plainRead, s) && plainRead(subject);
+			return acceptedReceiver(subject.children[0], bindings, fieldOk, binder, plainRead, s) && plainRead(subject);
 		final name: Null<String> = subject.name;
 		final span: Null<Span> = subject.span;
 		if (name == null || span == null) return false;
@@ -102,7 +119,7 @@ final class PlainReadProof {
 		final bound: Bool = bindings.exists(
 			b -> b.name == useName && b.scope.from <= useSpan.from && useSpan.to <= b.scope.to && b.declEnd <= useSpan.from
 		);
-		return bound || fieldOk(useName, useSpan);
+		return bound || fieldOk(useName, useSpan) || binder(useName, useSpan);
 	}
 
 	/**
@@ -136,6 +153,55 @@ final class PlainReadProof {
 		return (name, span) -> {
 			final host: Null<TypeScope> = innermostScope(scopes, span);
 			return host != null && !host.isExtern && declaresPlainField(host.host, name, accessors, s);
+		};
+	}
+
+	/**
+	 * Whether the scope resolver binds the bare `name` read at `span` to a named binder (`BinderScan.binderKinds`: a loop
+	 * binder, a key-value value binder) or to a pattern identifier `capture` proves a capture (the resolver records a
+	 * capture's declaration as that identifier), the bindings the scope walk of `collectBindings` does not see.
+	 */
+	private static function resolvedToBinder(
+		name: String, span: Span, tree: QueryNode, shape: RefShape, binderKinds: Array<String>, capture: QueryNode -> Bool
+	): Bool {
+		final node: Null<QueryNode> = TypeResolver.resolveBindingHit(name, span, tree, shape)?.bindingNode;
+		return node != null && (binderKinds.contains(node.kind) || (node.kind == shape.identKind && capture(node)));
+	}
+
+	/**
+	 * Whether a pattern identifier is a PROVEN capture of its arm (`CasePatterns.provesCaptureAt`): a bare name one file
+	 * cannot tell from a constant it compares against may read a property. The name scope and the slot types are built
+	 * on the first ask; a null index leaves only the proofs the file alone gives.
+	 */
+	private static function captureProver(
+		tree: QueryNode, source: String, file: String, plugin: GrammarPlugin, index: () -> Null<SymbolIndex>
+	): QueryNode -> Bool {
+		final shape: RefShape = plugin.refShape();
+		final resolve: QueryNode -> Null<QueryNode> = CasePatternScan.subjectResolver(tree, shape);
+		var built: Bool = false;
+		var scope: Null<PatternNameScope> = null;
+		var slots: Null<CaseSlotTypes> = null;
+		return node -> {
+			if (!built) {
+				built = true;
+				final resolved: Null<SymbolIndex> = index();
+				final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
+				if (resolved != null) {
+					scope = PatternNameScope.of(file, tree, plugin, resolved);
+					if (provider != null) slots = new CaseSlotTypes(file, source, tree, plugin, provider, resolved);
+				}
+			}
+			final path: Array<QueryNode> = TreePath.pathAround(tree, node) ?? [];
+			var at: Int = path.length - 1;
+			while (at > 0 && path[at].kind != shape.caseBranchKind) at--;
+			if (at <= 0 || at + 1 >= path.length) return false;
+			final switchNode: QueryNode = path[at - 1];
+			final plain: QueryNode = path[at + 1];
+			final types: Null<CaseSlotTypes> = slots;
+			final typedSlot: Null<PatternIdent -> Bool> = types != null && plain.children.length == 1
+				? types.slotProof(switchNode, plain.children[0])
+				: null;
+			return CasePatterns.provesCaptureAt(path[at], switchNode, node, resolve, scope, tree, shape, typedSlot);
 		};
 	}
 

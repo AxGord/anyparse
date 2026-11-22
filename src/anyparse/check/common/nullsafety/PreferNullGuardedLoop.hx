@@ -108,7 +108,9 @@ final class PreferNullGuardedLoop extends RuleBase implements RiskyFix implement
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return RunScan.editsWith(plugin, source, seamsOf(plugin.refShape()), (tree, seams) -> {
 			final byKey: Map<String, Fallback> = [];
-			for (f in fallbacks(tree, source, '', plugin, () -> index ?? IndexScope.resolutionIndexOf(plugin), seams)) {
+			// a fix is handed the findings of the one file it edits: their file is where the proof reads its types and names
+			final file: String = violations.length == 0 ? '' : violations[0].file;
+			for (f in fallbacks(tree, source, file, plugin, () -> index ?? IndexScope.resolutionIndexOf(plugin), seams)) {
 				final span: Null<Span> = f.coalesce.span;
 				if (span != null && f.refusal == null) byKey['${span.from}:${span.to}'] = f;
 			}
@@ -139,7 +141,7 @@ final class PreferNullGuardedLoop extends RuleBase implements RiskyFix implement
 		final found: Array<Fallback> = [];
 		collect(tree, ElementSpan.lazyRegions(source, plugin), s, [], found);
 		if (!found.exists(f -> f.refusal == null)) return found;
-		final plainRead: QueryNode -> Bool = PlainReadProof.prover(tree, source, plugin, index);
+		final plainRead: QueryNode -> Bool = PlainReadProof.prover(tree, source, file, plugin, index);
 		final resolved: Null<SymbolIndex> = index();
 		final nominal: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, file, resolved, true);
 		return found.map(f -> {

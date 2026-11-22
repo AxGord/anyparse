@@ -455,6 +455,14 @@
 			"find": "!plainRead(f.value)",
 			"replace": "true",
 			"note": "a chain of plain fields is no longer rewritten: the proof refuses everything"
+		},
+		{
+			"name": "M-GUARDED-LOOP-FIX-FILE",
+			"type": "anyparse.check.common.nullsafety.PreferNullGuardedLoop",
+			"method": "fix",
+			"find": "final file: String = violations.length == 0 ? '' : violations[0].file;",
+			"replace": "final file: String = '';",
+			"note": "the fix re-proves with no file, so a capture the run accepted is left unrewritten"
 		}
 	]
 }

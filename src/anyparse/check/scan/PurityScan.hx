@@ -165,6 +165,14 @@ final class PurityScan {
 	}
 
 	/**
+	 * Whether `access` is a field read that runs no code: its receiver's type resolves, written or bound by the typer, and
+	 * the member is proven plain (`accessRunsCode`). Only the step itself is asked, never the receiver's own read.
+	 */
+	public static function readsPlainField(access: QueryNode, ctx: PurityCtx): Bool {
+		return access.kind == ctx.fieldAccessKind && !accessRunsCode(access, ctx);
+	}
+
+	/**
 	 * `contextOf`, built on the FIRST ask and at most once: forcing the symbol index is the cost, and most files
 	 * hold no candidate that needs a purity answer. A null index leaves the answer null.
 	 */
