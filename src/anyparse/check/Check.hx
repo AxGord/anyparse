@@ -325,6 +325,20 @@ interface GraphScoped extends FileGated {
 }
 
 /**
+ * A check that DECLARES the option keys it reads from its `rules` entry — the one answer to "which keys of this rule's
+ * config object does it accept". A key in `apq.json` outside that list (and outside `enabled` / `severity`, which every
+ * rule takes) is said as a config note naming the rule, the key and the accepted keys, nearest first; an empty list says
+ * the rule takes no options. A check that does not implement it is not checked: its keys are silently ignored.
+ */
+@:nullSafety(Strict)
+interface OptionKeyed {
+
+	/** Every option key the rule reads, besides `enabled` and `severity`. */
+	function acceptedOptions(): Array<String>;
+
+}
+
+/**
  * The type-query seam an `OracleAssisted` check asks for a type it cannot pin structurally. It is
  * STRUCTURAL: each question names the declaration it is about — a local, a function's return or
  * parameter, a field, an expression — by its span and name, so an oracle reading the compiler's

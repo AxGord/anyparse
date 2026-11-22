@@ -606,6 +606,46 @@
 			"find": "return compiled ? OracleRejected : OracleRecordedReject;",
 			"replace": "return OracleRejected;",
 			"note": "a bisect whose every answer came from the ledger still reports that the compiler rejected it, though no compile ran in this run"
+		},
+		{
+			"name": "M-OPTKEYS-DOCUMENT-ATTRIBUTION",
+			"type": "anyparse.check.LintConfig",
+			"method": "discoverChain",
+			"find": "LintDocuments.unknownOptions(doc, acceptedOptions)",
+			"replace": "LintDocuments.unknownOptions(merged ?? doc, acceptedOptions)",
+			"note": "a key is checked on the folded document, so an ancestor repeats a nested document key under its own path"
+		},
+		{
+			"name": "M-OPTKEYS-ACCEPTS-NONE",
+			"type": "anyparse.check.LintDocuments",
+			"method": "unknownOptions",
+			"find": "${ordered.length == 0 ? 'none' : ordered.join(', ')}",
+			"replace": "${ordered.join(', ')}",
+			"note": "a rule with no options lists an empty accepts"
+		},
+		{
+			"name": "M-OPTKEYS-NEAREST-FIRST",
+			"type": "anyparse.check.LintDocuments",
+			"method": "unknownOptions",
+			"find": "nearest.concat(known.filter(candidate -> !nearest.contains(candidate)))",
+			"replace": "known",
+			"note": "the accepted keys are listed in declared order"
+		},
+		{
+			"name": "M-OPTKEYS-UNDECLARED-RULE",
+			"type": "anyparse.check.LintDocuments",
+			"method": "unknownOptions",
+			"find": "final known: Null<Array<String>> = accepted[id];",
+			"replace": "final known: Null<Array<String>> = accepted[id] ?? [];",
+			"note": "a rule with no declaration accepts nothing"
+		},
+		{
+			"name": "M-OPTKEYS-LIFTED-KEYS",
+			"type": "anyparse.check.LintDocuments",
+			"method": "unknownOptions",
+			"find": "key != 'enabled' && key != 'severity' && ",
+			"replace": "",
+			"note": "a mistyped enabled is called an unknown key"
 		}
 	]
 }

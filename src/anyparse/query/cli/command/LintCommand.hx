@@ -254,12 +254,13 @@ final class LintCommand implements CliCommand {
 		// writer-emit ops discover; a single-config project resolves the same config
 		// for every file, so behaviour there is unchanged.
 		final configByDir: Map<String, LintConfig> = [];
+		final acceptedOptions: Map<String, Array<String>> = Linter.acceptedOptions();
 		function resolveConfig(file: String): LintConfig {
 			final dir: String = Path.directory(file);
 			final cached: Null<LintConfig> = configByDir[dir];
 			if (cached != null) return cached;
 			final notes: Array<ConfigNote> = [];
-			final discovered: LintConfig = withReviewBudget(LintConfig.discover(file, notes), o.reviewBudget);
+			final discovered: LintConfig = withReviewBudget(LintConfig.discover(file, notes, acceptedOptions), o.reviewBudget);
 			OracleProviders.reportDrops(discovered, plugin, notes);
 			ConfigNotes.say(ledger, notes, CliIo.stderr);
 			configByDir[dir] = discovered;

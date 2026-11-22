@@ -1555,6 +1555,14 @@
 			"find": "if (named.length > 0) problems.push(NAMED_DEPRECATED);",
 			"replace": "",
 			"note": "a config that sets the deprecated `named` key is not told so, and the op that replaces it stays unnamed"
+		},
+		{
+			"name": "M-OPTKEYS-THREAD-SAFETY-DECLARED",
+			"type": "anyparse.check.common.design.ThreadSafety",
+			"method": "acceptedOptions",
+			"find": "return ThreadSafetyOptions.acceptedKeys();",
+			"replace": "return [];",
+			"note": "thread-safety declares no keys, so every key it reads is called unknown"
 		}
 	]
 }

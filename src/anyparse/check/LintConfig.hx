@@ -594,8 +594,10 @@ final class LintConfig {
 	 * chain still applies: the nearest config being broken must not also throw away
 	 * the project's.
 	 */
-	public static inline function discover(path: String, notes: Array<ConfigNote>): LintConfig {
-		return discoverChain(path, null, notes).config;
+	public static inline function discover(
+		path: String, notes: Array<ConfigNote>, ?acceptedOptions: Map<String, Array<String>>
+	): LintConfig {
+		return discoverChain(path, null, notes, acceptedOptions).config;
 	}
 
 	/**
@@ -606,7 +608,9 @@ final class LintConfig {
 	 * declares is resolved against that document's own directory; that is what lets a report group
 	 * files by chain rather than by directory.
 	 */
-	public static function discoverChain(path: String, ?documents: DocumentMemo, notes: Array<ConfigNote>): DiscoveredConfig {
+	public static function discoverChain(
+		path: String, ?documents: DocumentMemo, notes: Array<ConfigNote>, ?acceptedOptions: Map<String, Array<String>>
+	): DiscoveredConfig {
 		final chain: ConfigChain = ConfigFinder.findUpProject(path, ConfigFinder.PROJECT_ROOT_MARKERS);
 		final folded: Array<String> = [];
 		var merged: Null<LintDocument> = null;
@@ -633,6 +637,13 @@ final class LintConfig {
 			if (doc.drops.length > 0) {
 				final lines: Array<String> = doc.drops.map(drop -> 'apq: ${entry.path}: $drop\n');
 				ConfigNotes.note(notes, entry.path, lines.join(''));
+			}
+			// A key ONLY the owning check can judge stays in `props`, where a merge has lost which document wrote it. It is
+			// said per document, here, under a key of its own so that a reader handed no table cannot spend this file's drops.
+			if (acceptedOptions != null) {
+				final unknown: Array<String> = LintDocuments.unknownOptions(doc, acceptedOptions);
+				if (unknown.length > 0)
+					ConfigNotes.note(notes, '${entry.path}#options', unknown.map(line -> 'apq: ${entry.path}: $line\n').join(''));
 			}
 			for (declared in doc.oracleDeclarations) declared.document = entry.path;
 			merged = merged == null ? doc : LintDocuments.mergeDocuments(merged, doc);

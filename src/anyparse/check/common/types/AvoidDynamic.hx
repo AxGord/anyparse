@@ -5,6 +5,7 @@ import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.TypeOracle;
@@ -162,7 +163,7 @@ private typedef InitInfo = { var present: Bool; var isNull: Bool; var type: Null
  */
 @:nullSafety(Strict)
 final class AvoidDynamic extends RuleBase implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix
-		implements FileGated {
+		implements FileGated implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'avoid-dynamic';
 
@@ -321,6 +322,10 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 	/** `config-excluded` for a file whose path contains an `excludePaths` entry. */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
 		return pathExcluded(file, config.stringListOption(RULE_ID, 'excludePaths') ?? []) ? 'config-excluded' : null;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return ['excludePaths', 'excludeMeta', 'boundaryCalls'];
 	}
 
 	/**

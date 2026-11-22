@@ -8,6 +8,8 @@ import anyparse.check.config.ApqLintConfigParser;
 import anyparse.check.config.OwnedTypesDeclaration;
 import anyparse.grammar.json.JValue;
 import anyparse.query.NamingPolicy.FrameworkContract;
+import anyparse.runtime.EditDistance;
+import anyparse.util.Compare;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -227,6 +229,33 @@ final class LintDocuments {
 			configs.pushUnique(config);
 		}
 		return configs;
+	}
+
+	/**
+	 * One line per option key a `rules` entry of `doc` names that its check does not accept, rules and keys in name order.
+	 * `accepted` maps a rule id to the keys its check declares (`OptionKeyed`); an entry whose rule has no declaration is
+	 * not checked. `enabled` and `severity` are never unknown — a mistyped one lands in `props` and is the rule's to say.
+	 * Each line names the rule, the key and the accepted keys, those nearest the key first, or `accepts: none`.
+	 */
+	public static function unknownOptions(doc: LintDocument, accepted: Map<String, Array<String>>): Array<String> {
+		final lines: Array<String> = [];
+		final ids: Array<String> = [ for (id in doc.rules.keys()) id ];
+		ids.sort(Compare.compareString);
+		for (id in ids) {
+			final known: Null<Array<String>> = accepted[id];
+			final entry: Null<RuleConfig> = doc.rules[id];
+			if (known == null || entry == null) continue;
+			final keys: Array<String> = [ for (key in entry.props.keys()) key ];
+			keys.sort(Compare.compareString);
+			for (key in keys) if (key != 'enabled' && key != 'severity' && !known.contains(key)) {
+				final nearest: Array<String> = EditDistance.closest(key, known);
+				final ordered: Array<String> = nearest.concat(known.filter(candidate -> !nearest.contains(candidate)));
+				lines.push(
+					'rules "$id" has unknown option "$key" — ignored; accepts: ${ordered.length == 0 ? 'none' : ordered.join(', ')}'
+				);
+			}
+		}
+		return lines;
 	}
 
 	/**

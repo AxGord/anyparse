@@ -1,7 +1,7 @@
 package unit.check.common.design.threads;
 
 /**
- * The `thread-safety` options are read and checked in ONE place (`ThreadSafetyOptions`): a key no option has, a value
+ * The `thread-safety` options are read and checked in ONE place (`ThreadSafetyOptions`): a value
  * of the wrong shape, a list item or a `boundedRepeats` entry dropped, a `site` matching no function — each is said, as
  * an `info` finding naming no file, instead of reading as a quiet config (the reviewer's `client-bad` config was
  * byte-identical to no config at all).
@@ -12,7 +12,6 @@ class ThreadSafetyOptionsTest extends Test {
 		+ ' public function release():Void {} } class L { public static function main():Void { for (i in 0...3) Sys.sleep(1); } }';
 
 	@:pin('control')
-	@:killer('M-TS-OPT-UNKNOWN')
 	@:killer('M-TS-OPT-LIST-SHAPE')
 	@:killer('M-TS-OPT-LIST-ITEM')
 	@:killer('M-TS-OPT-FLAG')
@@ -32,10 +31,9 @@ class ThreadSafetyOptionsTest extends Test {
 			'option "repeatBudgetMs" is not a positive number — ignored',
 			'option "runsOnce" is not an array of strings — ignored',
 			'option "sharedLocks" is not an array of strings — ignored',
-			'option "shortSinks" is not an array of strings — ignored',
-			'unknown option "shortSink" — ignored (did you mean "shortSinks"?)'
+			'option "shortSinks" is not an array of strings — ignored'
 		], said(
-			'"shortSinks":"Sys.sleep","shortSink":["Sys.sleep"],"iterates":[1,2],"registers":{"x":1},"sharedLocks":"Mutex.acquire",'
+			'"shortSinks":"Sys.sleep","iterates":[1,2],"registers":{"x":1},"sharedLocks":"Mutex.acquire",'
 			+ '"nonThrowing":[null],"repeatBudgetMs":"50","compilerFacts":"true","runsOnce":"L.main","boundedRepeats":['
 			+ '{"site":"L.main","max":"414","costMs":0.08},"junk",{"site":"Nope.nothing","max":5,"costMs":0.1}]'
 		));
@@ -77,7 +75,7 @@ class ThreadSafetyOptionsTest extends Test {
 	public function testALostSinksListIsSaid(): Void {
 		#if (sys || nodejs)
 		final none: String = 'option "sinks" lists no call — only the builtin sinks apply under this config';
-		Assert.same(['unknown option "sink" — ignored (did you mean "sinks"?)'], saidAlone('"sink":["Sys.sleep"]'), 'a typo');
+
 		Assert.same(['option "sinks" is not an array of strings — ignored', none], saidAlone('"sinks":"Sys.sleep"'), 'a string');
 		Assert.same(
 			['option "sinks" ignored 1 value(s) that are not strings', none], saidAlone('"sinks":[{"call":"Sys.sleep"}]'), 'objects'

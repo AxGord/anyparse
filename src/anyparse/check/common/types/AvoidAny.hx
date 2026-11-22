@@ -5,6 +5,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.types.DynamicShape.DynCtx;
 import anyparse.check.common.types.DynamicShape.DynPos;
 import anyparse.check.common.types.DynamicShape.DynReport;
@@ -23,7 +24,8 @@ import anyparse.query.SymbolIndex;
  * Off by default; report-only.
  */
 @:nullSafety(Strict)
-final class AvoidAny extends RuleBase implements ConfigAware implements FileGated implements NoAutofix implements DefaultOff {
+final class AvoidAny extends RuleBase implements ConfigAware implements FileGated implements NoAutofix implements DefaultOff
+		implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'avoid-any';
 	private static inline final ADVICE: String = ' — name the narrower type; a value read from a JSON document is read through a '
@@ -61,6 +63,10 @@ final class AvoidAny extends RuleBase implements ConfigAware implements FileGate
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		return [];
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return ['excludePaths', 'excludeMeta'];
 	}
 
 	public function noAutofixReason(): String {

@@ -464,6 +464,22 @@
 			"find": "final wanted: String = last ? '' : FIELD_SEPARATOR;",
 			"replace": "final wanted: String = '';",
 			"note": "the fields of a rewritten body run together with no separator"
+		},
+		{
+			"name": "M-OPTKEYS-AVOID-ANY-DECLARED",
+			"type": "anyparse.check.common.types.AvoidAny",
+			"method": "acceptedOptions",
+			"find": "return ['excludePaths', 'excludeMeta'];",
+			"replace": "return ['excludePaths'];",
+			"note": "avoid-any leaves out a key it reads"
+		},
+		{
+			"name": "M-OPTKEYS-AVOID-DYNAMIC-DECLARED",
+			"type": "anyparse.check.common.types.AvoidDynamic",
+			"method": "acceptedOptions",
+			"find": "return ['excludePaths', 'excludeMeta', 'boundaryCalls'];",
+			"replace": "return ['excludePaths', 'excludeMeta'];",
+			"note": "avoid-dynamic leaves out a key it reads"
 		}
 	]
 }

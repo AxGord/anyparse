@@ -1220,14 +1220,6 @@
 			"note": "an excluded file the run leaves out breaks the coverage"
 		},
 		{
-			"name": "M-TS-OPT-UNKNOWN",
-			"type": "anyparse.check.common.design.threads.ThreadSafetyOptions",
-			"method": "readKeys",
-			"find": "problems.push(unknownKey(key));",
-			"replace": "{}",
-			"note": "a misspelt option key is dropped without a word"
-		},
-		{
 			"name": "M-TS-OPT-LIST-SHAPE",
 			"type": "anyparse.check.common.design.threads.ThreadSafetyOptions",
 			"method": "readList",

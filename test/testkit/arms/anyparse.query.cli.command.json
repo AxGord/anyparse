@@ -1635,6 +1635,14 @@
 			"find": "compiler.forgetRejects(oracles);",
 			"replace": "{}",
 			"note": "a cold `apq oracle` leaves the recorded fix rejections standing, so the one command meant to re-observe the build cannot clear a stale one"
+		},
+		{
+			"name": "M-OPTKEYS-NOT-HANDED",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": "LintConfig.discover(file, notes, acceptedOptions)",
+			"replace": "LintConfig.discover(file, notes)",
+			"note": "the lint run hands no accepted-keys table, so no key is checked"
 		}
 	]
 }

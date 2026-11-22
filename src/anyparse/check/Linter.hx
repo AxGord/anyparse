@@ -7,6 +7,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.FileGated;
 import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.LanguageBound;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.Check.VolatileMessage;
@@ -727,6 +728,19 @@ final class Linter {
 			// to a dynamic field read whose type StringMap.set cannot pick an overload for.
 			out[check.id()] = message -> volatileMessage.messageIdentity(message);
 		}
+		return out;
+	}
+
+	/**
+	 * Every registered check that declares `OptionKeyed`, as rule id -> the option keys it accepts: what `LintConfig.discover`
+	 * is handed to say a key a rule's entry names and the rule does not read.
+	 *
+	 * Built by asking the registry, never by naming rules, and rebuilt per call rather than cached: a process-scoped table
+	 * is the global mutable state this project refuses, so a run hoists the one map it passes down.
+	 */
+	public static function acceptedOptions(): Map<String, Array<String>> {
+		final out: Map<String, Array<String>> = [];
+		for (check in builtins()) if (check is OptionKeyed) out[check.id()] = (cast check: OptionKeyed).acceptedOptions();
 		return out;
 	}
 

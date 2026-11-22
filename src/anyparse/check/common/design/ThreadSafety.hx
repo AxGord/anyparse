@@ -3,6 +3,7 @@ package anyparse.check.common.design;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.GraphScoped;
 import anyparse.check.Check.NoAutofix;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.LintConfig.ConfigNote;
 import anyparse.check.common.design.threads.AllocationSets;
 import anyparse.check.common.design.threads.BoundedRepeats;
@@ -182,7 +183,7 @@ private typedef WarnedHold = {
  * are reported at `info`, the reason in the message: brief, never dropped.
  */
 @:nullSafety(Strict)
-final class ThreadSafety extends RuleBase implements ConfigAware implements NoAutofix implements GraphScoped {
+final class ThreadSafety extends RuleBase implements ConfigAware implements NoAutofix implements GraphScoped implements OptionKeyed {
 
 	public static inline final CTX_MAIN: Int = 1;
 	public static inline final CTX_BG: Int = 2;
@@ -358,6 +359,10 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 	public function noAutofixReason(): String {
 		return 'moving the work off the main thread, or narrowing what the lock covers, is a concurrency design change no span'
 			+ ' rewrite expresses';
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return ThreadSafetyOptions.acceptedKeys();
 	}
 
 	/**

@@ -2,7 +2,6 @@ package anyparse.check.common.design.threads;
 
 import anyparse.grammar.json.JEntry;
 import anyparse.grammar.json.JValue;
-import anyparse.runtime.EditDistance;
 import haxe.Exception;
 
 using StringTools;
@@ -158,7 +157,7 @@ final class ThreadSafetyOptions {
 		return parts.join('\t');
 	}
 
-	/** Reads every option key of `config`, each by its shape, an unknown one said; answers the budget. */
+	/** Reads every option key of `config`, each by its shape (an unknown key is said by the `OptionKeyed` contract); answers the budget. */
 	private function readKeys(config: LintConfig): Null<Float> {
 		var budget: Null<Float> = null;
 		for (key in config.optionKeys(RULE)) {
@@ -177,8 +176,6 @@ final class ThreadSafetyOptions {
 			else if (LIFTED_KEYS.contains(key))
 				// the linter lifts a well-formed one out before the rule reads its options: what is left is of another shape
 				problems.push('option "$key" is not ${key == 'enabled' ? 'true or false' : 'a severity name'} — ignored');
-			else
-				problems.push(unknownKey(key));
 		}
 		return budget;
 	}
@@ -356,12 +353,9 @@ final class ThreadSafetyOptions {
 		return new ThreadSafetyOptions(config);
 	}
 
-	/** The line for an unknown option `key`, naming the nearest known one when there is one. */
-	private static function unknownKey(key: String): String {
-		final known: Array<String> = LIST_KEYS.concat(FLAG_KEYS).concat([BUDGET_KEY, BOUNDED_KEY]);
-		final near: Array<String> = EditDistance.closest(key, known)
-			.filter(candidate -> candidate.indexOf(key) >= 0 || EditDistance.between(key, candidate, key.length) * 2 < key.length);
-		return near.length == 0 ? 'unknown option "$key" — ignored' : 'unknown option "$key" — ignored (did you mean "${near[0]}"?)';
+	/** Every key `read` reads, besides `enabled` and `severity`: the keys the `OptionKeyed` contract accepts for the rule. */
+	public static function acceptedKeys(): Array<String> {
+		return LIST_KEYS.concat(FLAG_KEYS).concat([BUDGET_KEY, BOUNDED_KEY]);
 	}
 
 	/** The index of the first whitespace character of `text`; -1 when it has none. */

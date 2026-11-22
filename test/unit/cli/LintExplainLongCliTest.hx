@@ -153,8 +153,8 @@ class LintExplainLongCliTest extends Test {
 	public function testAFindingNamingNoFileIsPrinted(): Void {
 		#if nodejs
 		final config: String = '{"rules":{"thread-safety":{"sinks":["Mutex.acquire","Sys.sleep"],"lockPairs":["Mutex.acquire/release"],'
-			+ '"shortSink":["Sys.sleep"]}}}';
-		final unknown: String = 'unknown option "shortSink" — ignored (did you mean "shortSinks"?)';
+			+ '"compilerFacts":"yes"}}}';
+		final unknown: String = 'option "compilerFacts" is not true or false — ignored';
 		final records: Array<LintFindingJson> = LintDiff.parseReport(lint(SOURCE, config, ['--format', 'json']).out);
 		// beside the notice every reporting run gives of the builtin sinks it applied
 		Assert.same(
