@@ -49,6 +49,15 @@ typedef OrderedMember = {
 	/** Where the last line holding only a closer directive (`#end`) between the previous collected member and this one ends, or -1. */
 	var gapCloseTo: Int;
 
+	/**
+	 * Whether the member belongs to the documented subgroup: an unconditional field headed by a doc-block comment that
+	 * describes it alone (`MemberDocs.mark`). A source fact, independent of any option.
+	 */
+	var documented: Bool;
+
+	/** Whether the member is headed by a doc-block comment that also names the next same-kind field, so it stays in its run. */
+	var docShared: Bool;
+
 }
 
 /**
@@ -159,6 +168,7 @@ final class MemberSlots {
 		final hosted: Bool = container.kind == shape.enumAbstractDeclKind;
 		final starts: Array<Int> = valueStarts ?? [];
 		for (m in out) if (isPlainValueRank(m) && (hosted || EnumAbstractForms.isValue(m.node.span, starts))) m.rank = EnumValue;
+		MemberDocs.mark(out);
 		return out;
 	}
 
@@ -412,6 +422,8 @@ final class MemberSlots {
 			branchBefore: false,
 			gapOpenFrom: -1,
 			gapCloseTo: -1,
+			documented: false,
+			docShared: false,
 			leadComments: [ for (c in comments) if (c.from >= full.from && c.to <= own.from) source.substring(c.from, c.to) ]
 		});
 	}

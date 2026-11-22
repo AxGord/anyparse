@@ -689,8 +689,8 @@
 			"name": "M-MO-INLINE-BOUNDARY-BEFORE-EXEMPTIONS",
 			"type": "anyparse.check.common.members.MemberSpacing",
 			"method": "ownWant",
-			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }",
-			"replace": "else if (inlineSubgroupBoundary(a, b, separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
+			"find": "else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull\n\telse if (inlineSubgroupBoundary(a, b, spacing.separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }",
+			"replace": "else if (inlineSubgroupBoundary(a, b, spacing.separateInline))\n\t\t{ count: 1, atLeast: false, rule: InlineBoundary }\n\telse if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))\n\t\tnull",
 			"note": "the boundary is asked before the non-field and comment-led exemptions, so a same-rank method pair and a line-comment-led field are demanded a blank they never were"
 		},
 		{
@@ -706,31 +706,31 @@
 			"type": "anyparse.check.common.members.MemberOrder",
 			"method": "buildConditionalRegion",
 			"find": "MemberSpacing.separatorBetween(prevMember, m, source, spacing)",
-			"replace": "MemberSpacing.separatorBetween(prevMember, m, source, { separateInline: false, writer: spacing.writer })",
-			"note": "the `#if`-region rebuild ignores the option, so a type with any conditional member loses the inline-subgroup blank on reorder"
+			"replace": "MemberSpacing.separatorBetween(prevMember, m, source, { separateInline: false, separateDocumented: false, writer: spacing.writer })",
+			"note": "the `#if`-region rebuild ignores the options, so a type with any conditional member loses the subgroup blanks on reorder"
 		},
 		{
 			"name": "M-MO-INLINE-SPACING-ONLY-UNREAD",
 			"type": "anyparse.check.common.members.MemberOrder",
 			"method": "emitReorder",
 			"find": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, spacing);",
-			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, { separateInline: false, writer: spacing.writer });",
+			"replace": "reported.declineReason = pinned;\n\t\tMemberSpacing.emitSpacingOnly(edits, members, source, { separateInline: false, separateDocumented: false, writer: spacing.writer });",
 			"note": "the spacing-only fallback of a pinned container ignores the option, so its glued boundary is reported for ever and never fixed"
 		},
 		{
 			"name": "M-MO-WRITER-REPORT-UNREAD",
 			"type": "anyparse.check.common.members.MemberOrder",
 			"method": "run",
-			"find": "MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP), _configNotes)",
-			"replace": "{ separateInline: optionOn(entry.file, 'separateInlineSubgroup'), writer: null }",
+			"find": "MemberSpacing.policyOf(\n\t\t\t\tentry.file, plugin, optionOn(entry.file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP),\n\t\t\t\toptionOn(entry.file, MemberOrderOptions.SEPARATE_DOCUMENTED_SUBGROUP), _configNotes\n\t\t\t),",
+			"replace": "{ separateInline: optionOn(entry.file, 'separateInlineSubgroup'), separateDocumented: optionOn(entry.file, 'separateDocumentedSubgroup'), writer: null },",
 			"note": "the REPORT path ignores the writer's member-gap policy, so it flags a blank the writer forces (the 44 client blanks around multi-line fields) while the fix path - reading the policy - finds nothing to do"
 		},
 		{
 			"name": "M-MO-WRITER-FIX-UNREAD",
 			"type": "anyparse.check.common.members.MemberOrder",
 			"method": "fix",
-			"find": "? MemberSpacing.policyOf(\n\t\t\t\t\t\tviolations[0].file, plugin, optionOn(violations[0].file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP), _configNotes\n\t\t\t\t\t)",
-			"replace": "? { separateInline: optionOn(violations[0].file, 'separateInlineSubgroup'), writer: null }",
+			"find": "? MemberSpacing.policyOf(\n\t\t\t\t\tviolations[0].file, plugin, optionOn(violations[0].file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP),\n\t\t\t\t\toptionOn(violations[0].file, MemberOrderOptions.SEPARATE_DOCUMENTED_SUBGROUP), _configNotes\n\t\t\t\t)",
+			"replace": "? { separateInline: optionOn(violations[0].file, 'separateInlineSubgroup'), separateDocumented: optionOn(violations[0].file, 'separateDocumentedSubgroup'), writer: null }",
 			"note": "the FIX path ignores the writer's member-gap policy, so a doc-commented field the report flags re-derives as no issue there and is never set off"
 		},
 		{
@@ -1414,6 +1414,118 @@
 			"find": "if (!known.contains(word))",
 			"replace": "if (known.contains(word))",
 			"note": "an afterMainKinds word the grammar does not declare is no longer said"
+		},
+		{
+			"name": "M-MO-DOC-OPTION-IGNORED",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "subRank",
+			"find": "plan.documentedFirst && m.documented ? 0 : 1",
+			"replace": "m.documented ? 0 : 1",
+			"note": "the documented subgroup leads whatever the config says, so every project (the option's default is OFF) has its documented fields reported and moved ahead of their run"
+		},
+		{
+			"name": "M-MO-DOC-SORT-OFF",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "subRank",
+			"find": "(plan.documentedFirst && m.documented ? 0 : 1) << 1",
+			"replace": "1 << 1",
+			"note": "separateDocumentedSubgroup sorts nothing: the option is accepted and does nothing, so a documented field is never reported below an undocumented one and never moved"
+		},
+		{
+			"name": "M-MO-DOC-REPORT-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "run",
+			"find": "optionOn(entry.file, MemberOrderOptions.SEPARATE_DOCUMENTED_SUBGROUP)",
+			"replace": "false",
+			"note": "the REPORT path never reads the option, so the order it asks for is flagged by no run and only a fix pass that reads it would ever move a field"
+		},
+		{
+			"name": "M-MO-DOC-FIX-UNREAD",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "fix",
+			"find": "optionOn(violations[0].file, MemberOrderOptions.SEPARATE_DOCUMENTED_SUBGROUP)",
+			"replace": "false",
+			"note": "the FIX path never reads the option, so a finding the report raised for the documented order re-derives as no issue there and is never fixed"
+		},
+		{
+			"name": "M-MO-DOC-REASON-DROPPED",
+			"type": "anyparse.check.common.members.MemberOrderReason",
+			"method": "subOrderReason",
+			"find": "documentedFirst && a.documented != b.documented",
+			"replace": "false && a.documented != b.documented",
+			"note": "the finding names the inline or initializer sub-order for a pair the documented key ordered, a reason that is not the one the comparator used"
+		},
+		{
+			"name": "M-MO-DOC-BOUNDARY-OFF",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "documentedSubgroupBoundary",
+			"find": "return separateDocumented &&",
+			"replace": "return false &&",
+			"note": "the documented subgroup has no boundary rule of its own: the blank it asks for is left to the writer's doc-comment rule and a config without one demands nothing"
+		},
+		{
+			"name": "M-MO-DOC-BOUNDARY-MESSAGE-AS-RANK",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "messageOf",
+			"find": "case DocumentedBoundary: 'the documented members of a rank group are not separated from the rest of it by a blank line';",
+			"replace": "case DocumentedBoundary: 'rank groups are not separated by a blank line';",
+			"note": "the documented-boundary finding says rank groups are glued, which names the wrong gap"
+		},
+		{
+			"name": "M-MO-DOC-SHARED-DOC-MOVES",
+			"type": "anyparse.check.common.members.MemberDocs",
+			"method": "mark",
+			"find": "&& !next.documented && namesSibling(m, next)",
+			"replace": "&& !next.documented && false",
+			"note": "a doc naming its neighbour is still a subgroup member, so the pair is moved apart and half of what the doc says is orphaned"
+		},
+		{
+			"name": "M-MO-DOC-SHARED-UNREPORTED",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "firstLayoutIssue",
+			"find": "?? (plan.documentedFirst ? MemberDocs.firstSharedIssue(members) : null)",
+			"replace": "?? null",
+			"note": "a refused shared doc is dropped silently: the member stays in its run and nothing tells the author the doc needs a human"
+		},
+		{
+			"name": "M-MO-DOC-SHARED-UNGATED",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "firstLayoutIssue",
+			"find": "plan.documentedFirst ? MemberDocs.firstSharedIssue(members) : null",
+			"replace": "MemberDocs.firstSharedIssue(members)",
+			"note": "the shared-doc finding fires for every project, option or not"
+		},
+		{
+			"name": "M-MO-DOC-REPORT-ONLY-EDITS",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "emitReorder",
+			"find": "if (bad.reportOnly == true) {",
+			"replace": "if (false) {",
+			"note": "the report-only finding reaches the rebuild, which re-emits the container's own text as an edit"
+		},
+		{
+			"name": "M-MO-DOC-OWN-WORD-MENTION",
+			"type": "anyparse.check.common.members.MemberDocs",
+			"method": "namesSibling",
+			"find": "!own.contains(w) && ",
+			"replace": "true && ",
+			"note": "a word both names carry counts as a mention of the sibling, so a doc about the member's own count keeps it out of the subgroup"
+		},
+		{
+			"name": "M-MO-DOC-BEFORE-INLINE",
+			"type": "anyparse.check.common.members.MemberOrder",
+			"method": "subRank",
+			"find": "(m.isInline ? 0 : 1) << 2 | (plan.documentedFirst && m.documented ? 0 : 1) << 1",
+			"replace": "(m.isInline ? 0 : 1) << 1 | (plan.documentedFirst && m.documented ? 0 : 1) << 2",
+			"note": "the documented key outweighs the inline key, so a documented non-inline field is sorted ahead of an undocumented inline one and splits the inline-leads sub-order"
+		},
+		{
+			"name": "M-MO-DOC-BOUNDARY-ACROSS-INLINE",
+			"type": "anyparse.check.common.members.MemberSpacing",
+			"method": "documentedSubgroupBoundary",
+			"find": "a.isInline == b.isInline",
+			"replace": "true",
+			"note": "the documented boundary also fires at the inline seam, which belongs to separateInlineSubgroup and the writer's doc gap, so the finding names the wrong gap"
 		}
 	]
 }

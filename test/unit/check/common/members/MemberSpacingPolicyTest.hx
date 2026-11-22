@@ -36,7 +36,7 @@ class MemberSpacingPolicyTest extends Test {
 	@:killer('M-MO-WRITER-CONTAINER-KIND')
 	public function testTheWriterPolicyIsReadOnlyOnTheKindsItCovers(): Void {
 		final policy: MemberGapPolicy = multilineAnswering(true);
-		final spacing: SpacingPolicy = { separateInline: false, writer: policy };
+		final spacing: SpacingPolicy = { separateInline: false, separateDocumented: false, writer: policy };
 		Assert.equals(policy, MemberSpacing.forContainer(spacing, 'ClassDecl').writer);
 		Assert.isNull(MemberSpacing.forContainer(spacing, 'AbstractDecl').writer);
 	}
@@ -65,7 +65,7 @@ class MemberSpacingPolicyTest extends Test {
 		final members: Array<OrderedMember> = MemberSlots.collectMembers(
 			container, src, plugin.refShape(), plugin.metaShape().metaKinds, [], plugin.lexicalRegions(src)
 		);
-		return MemberSpacing.firstSpacingIssue(members, src, { separateInline: false, writer: writer })?.message;
+		return MemberSpacing.firstSpacingIssue(members, src, { separateInline: false, separateDocumented: false, writer: writer })?.message;
 	}
 
 }

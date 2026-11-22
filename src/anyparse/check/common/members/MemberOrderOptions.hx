@@ -16,6 +16,9 @@ final class MemberOrderOptions {
 	/** The key that separates an inline subgroup from the members around it. */
 	public static final SEPARATE_INLINE_SUBGROUP: String = 'separateInlineSubgroup';
 
+	/** The key that sorts a rank's documented fields first and separates them from the rest of it. */
+	public static final SEPARATE_DOCUMENTED_SUBGROUP: String = 'separateDocumentedSubgroup';
+
 	/** The rule's id, under which `apq.json` keeps these options. */
 	public static final RULE_ID: String = 'member-order';
 

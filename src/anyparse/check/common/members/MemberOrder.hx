@@ -27,9 +27,15 @@ import haxe.Exception;
  * `ranked` carries the same index for exactly those blocks that passed all
  * three content-ranking gates, and `rankedInline` names those of them that hold nothing but
  * `inline` fields - the blocks that LEAD the plain members of their rank instead of trailing
- * them.
+ * them. `documentedFirst` is the file's `separateDocumentedSubgroup` option: the documented fields of a rank (`MemberDocs`)
+ * lead its plain members.
  */
-typedef SortPlan = { var groupFirst: Map<String, Int>; var ranked: Map<String, Int>; var rankedInline: Array<String>; }
+typedef SortPlan = {
+	var groupFirst: Map<String, Int>;
+	var ranked: Map<String, Int>;
+	var rankedInline: Array<String>;
+	var documentedFirst: Bool;
+}
 
 /**
  * What one fix pass reads off its file's configs: `movableArglessNew` relaxes the side-effecting
@@ -71,9 +77,12 @@ private typedef FixOptions = { var movableArglessNew: Bool; var budget: Int; var
  * would be lost or misplaced; (3) no field initializer may tie the block to its position, in EITHER direction - a field in the block whose
  * initializer has a side effect or reads another same-phase field, or a field outside it whose initializer reads one inside. Those gates
  * are deliberately INDEPENDENT of the `movableArglessNew` option below: `compareOrder` is shared by the REPORT path (`run` -> `walk` ->
- * `firstLayoutIssue`) and the FIX path, and the report path reads no ORDER option (the one option it resolves, the spacing-only
- * `separateInlineSubgroup` below, decides no rank and no sort), so a rank that depended on an option would make the two
- * disagree and the fix would never converge. A gate on position-sensitive constructs in the CONDITION of the `#if` itself is a
+ * `firstLayoutIssue`) and the FIX path, and the report path reads no
+ * ORDER option the fix does not read from the same file (the spacing-only
+ * `separateInlineSubgroup` decides no rank and no sort; `separateDocumentedSubgroup` sorts the documented fields of one rank
+ * first, through `SortPlan.documentedFirst`, resolved identically by both paths), so a rank that depended on an option only
+ * one path read would make the two disagree and the fix would never converge. A
+ * gate on position-sensitive constructs in the CONDITION of the `#if` itself is a
  * documented NO-OP for this grammar: a Haxe conditional-compilation condition is a pure compile-time define expression evaluated before
  * parsing, with no ordered declaration and no `#define`, so nothing in it has a position that could matter - a grammar that grows one must
  * add that gate here. A container holding an `#else` shape the branch model refuses (nested, spanning two
@@ -151,7 +160,10 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			walk(
 				violations, entry.file, entry.source, tree, shape, plugin.metaShape().metaKinds, accessors, regions,
 				CondDirectives.scan(entry.source, shape, () -> regions),
-				MemberSpacing.policyOf(entry.file, plugin, optionOn(entry.file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP), _configNotes),
+				MemberSpacing.policyOf(
+					entry.file, plugin, optionOn(entry.file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP),
+					optionOn(entry.file, MemberOrderOptions.SEPARATE_DOCUMENTED_SUBGROUP), _configNotes
+				),
 				EnumAbstractForms.valueStarts(plugin, tree)
 			);
 		});
@@ -177,9 +189,10 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 					&& optionOn(violations[0].file, MemberOrderOptions.MOVABLE_ARGLESS_NEW);
 				final spacing: SpacingPolicy = violations.length > 0
 					? MemberSpacing.policyOf(
-						violations[0].file, plugin, optionOn(violations[0].file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP), _configNotes
+						violations[0].file, plugin, optionOn(violations[0].file, MemberOrderOptions.SEPARATE_INLINE_SUBGROUP),
+						optionOn(violations[0].file, MemberOrderOptions.SEPARATE_DOCUMENTED_SUBGROUP), _configNotes
 					)
-					: { separateInline: false, writer: null };
+					: { separateInline: false, separateDocumented: false, writer: null };
 				// Keyed by the flagged member's slot start, the same coordinate `firstLayoutIssue` re-derives
 				// on this path — so a container that declines can write its reason onto the very finding that
 				// reported it, rather than the caller inferring one from an empty edit list.
@@ -214,15 +227,16 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		return [
 			MemberOrderOptions.BUDGET,
 			MemberOrderOptions.MOVABLE_ARGLESS_NEW,
-			MemberOrderOptions.SEPARATE_INLINE_SUBGROUP
+			MemberOrderOptions.SEPARATE_INLINE_SUBGROUP,
+			MemberOrderOptions.SEPARATE_DOCUMENTED_SUBGROUP
 		];
 	}
 
 	/**
 	 * Whether `file`'s `apq.json` turns the boolean `member-order` option `key` on (every one
-	 * defaults to OFF): `movableArglessNew`, read by the fix path, and the spacing-only
-	 * `separateInlineSubgroup`, read by BOTH paths from the same file so the report and the fix
-	 * cannot disagree about the gap it governs.
+	 * defaults to OFF): `movableArglessNew`, read by the fix path, and the `separateInlineSubgroup` /
+	 * `separateDocumentedSubgroup` pair (through `MemberSpacing.policyOf`), read by BOTH paths from the same file so the report and
+	 * the fix cannot disagree about the gap or the order they govern.
 	 */
 	private function optionOn(file: String, key: String): Bool {
 		return LintConfig.resolveWith(_resolveConfig, file).boolOption(id(), key) == true;
@@ -238,13 +252,13 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 
 	/**
 	 * The within-rank sub-order of a plain unconditional member: `inline` members lead their
-	 * rank, and among fields an initialized declaration leads an init-less one — `inline`
-	 * weighs over the initializer key, so the two compose lexicographically. The caller
+	 * rank; under `separateDocumentedSubgroup` a documented field leads within each inline part; and among fields an initialized
+	 * declaration leads an init-less one. The keys weigh in that order, so they compose lexicographically. The caller
 	 * exempts the Accessor rank: a get/set pair must keep its source adjacency even when
 	 * only one half is inline.
 	 */
-	private static inline function subRank(m: OrderedMember): Int {
-		return (m.isInline ? 0 : 2) + (m.initNode != null ? 0 : 1);
+	private static inline function subRank(m: OrderedMember, plan: SortPlan): Int {
+		return (m.isInline ? 0 : 1) << 2 | (plan.documentedFirst && m.documented ? 0 : 1) << 1 | (m.initNode != null ? 0 : 1);
 	}
 
 	/**
@@ -341,7 +355,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 				node, source, shape, metaKinds, accessors, regions, valueStarts, directives
 			);
 			final issue: Null<LayoutIssue> = firstLayoutIssue(
-				members, source, computePlan(members, source, regions, directives, shape), MemberSpacing.forContainer(spacing, node.kind)
+				members, source, computePlan(members, source, regions, directives, shape, spacing.separateDocumented),
+				MemberSpacing.forContainer(spacing, node.kind)
 			);
 			if (issue != null) out.push({
 				file: file,
@@ -390,12 +405,16 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			container, source, shape, metaKinds, accessors, regions, valueStarts, directives
 		);
 		if (members.length < 2) return;
-		final plan: SortPlan = computePlan(members, source, regions, directives, shape);
+		final plan: SortPlan = computePlan(members, source, regions, directives, shape, options.spacing.separateDocumented);
 		final spacing: SpacingPolicy = MemberSpacing.forContainer(options.spacing, container.kind);
 		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan, spacing);
 		if (bad == null) return;
 		final reported: Null<Violation> = flagged[bad.member.span.from];
 		if (reported == null) return;
+		if (bad.reportOnly == true) {
+			reported.declineReason = 'the finding asks for a human edit, so the fix has no change to make';
+			return;
+		}
 		final constraints: Array<InitOrderConstraint> = MemberInitDeps.orderConstraints(members, shape, source, options.movableArglessNew);
 		final canonical: Array<OrderedMember> = canonicalSort(members, plan);
 		// A conditional block moves as ONE unit, which no pairwise edge can express, so a linear
@@ -788,7 +807,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 		return
 			firstOrderIssue(members, source, plan) ?? MemberSpacing.firstSpacingIssue(members, source, spacing) ?? MemberSpacing.firstDirectiveSpacingIssue(
 				members, source
-			);
+			) ?? (plan.documentedFirst ? MemberDocs.firstSharedIssue(members) : null);
 	}
 
 	/**
@@ -813,7 +832,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			otherRanked: rankedOrdinalOf(prev, plan),
 			pinnedOrdinal: pinnedOrdinal(bad, plan.groupFirst, section),
 			otherPinnedOrdinal: pinnedOrdinal(prev, plan.groupFirst, section),
-			branch: compareBranch(bad, prev)
+			branch: compareBranch(bad, prev),
+			documentedFirst: plan.documentedFirst
 		};
 		return {
 			member: bad,
@@ -838,7 +858,8 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 	 * merge those two blocks and pin both on the mixed rank.
 	 */
 	private static function computePlan(
-		members: Array<OrderedMember>, source: String, regions: Array<LexRegion>, directives: Array<CondDirective>, shape: RefShape
+		members: Array<OrderedMember>, source: String, regions: Array<LexRegion>, directives: Array<CondDirective>, shape: RefShape,
+		documentedFirst: Bool
 	): SortPlan {
 		final groupFirst: Map<String, Int> = [];
 		final buckets: Map<String, Array<OrderedMember>> = [];
@@ -867,7 +888,12 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			ranked[key] = ordinal;
 			if (uniformInline(bucket)) rankedInline.push(key);
 		}
-		return { groupFirst: groupFirst, ranked: ranked, rankedInline: rankedInline };
+		return {
+			groupFirst: groupFirst,
+			ranked: ranked,
+			rankedInline: rankedInline,
+			documentedFirst: documentedFirst
+		};
 	}
 
 	/**
@@ -1015,7 +1041,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			if (branch != 0) return branch;
 		}
 		if (oa == null && ob == null && a.rank != Accessor) {
-			final sub: Int = subRank(a) - subRank(b);
+			final sub: Int = subRank(a, plan) - subRank(b, plan);
 			if (sub != 0) return sub;
 		}
 		return a.index - b.index;

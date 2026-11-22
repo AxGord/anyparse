@@ -6,16 +6,19 @@ import anyparse.query.FormatConfigDiscovery;
 
 /**
  * One container's first layout finding: the member the check flags plus the
- * violation message describing what is wrong (member order vs group spacing).
+ * violation message describing what is wrong (member order vs group spacing). `reportOnly` marks a finding no edit
+ * can resolve (a doc a human has to rewrite): the fix emits nothing for it.
  */
-typedef LayoutIssue = { var member: OrderedMember; var message: String; }
+typedef LayoutIssue = { var member: OrderedMember; var message: String; var ?reportOnly: Bool; }
 
 /**
- * The spacing context of one container: the opt-in `separateInlineSubgroup` option, and `writer`, the writer's
+ * The context one container's layout is judged under: the opt-in `separateInlineSubgroup` option (spacing only), the opt-in
+ * `separateDocumentedSubgroup` option (`separateDocumented`: it also decides order, `MemberOrder.compareOrder`, from the same file
+ * on both paths), and `writer`, the writer's
  * member-gap policy under the file's format config (`GrammarPlugin.memberGapPolicy`) - null when the grammar's writer
  * forces no member gaps, or does not run that policy on this container's kind (`forContainer`).
  */
-typedef SpacingPolicy = { final separateInline: Bool; final writer: Null<MemberGapPolicy>; }
+typedef SpacingPolicy = { final separateInline: Bool; final separateDocumented: Bool; final writer: Null<MemberGapPolicy>; }
 
 /** Why a member gap wants the blank lines it wants - the rule `wantedBlanks` answered from, which picks the finding's message. */
 private enum abstract GapRule(Int) {
@@ -34,6 +37,9 @@ private enum abstract GapRule(Int) {
 
 	/** The writer's multi-line rule: a member written over several lines is set off by `aroundMultilineFields` blank lines. */
 	final Multiline = 4;
+
+	/** A rank's documented subgroup and the rest of it, under `separateDocumentedSubgroup`: one blank line. */
+	final DocumentedBoundary = 5;
 
 }
 
@@ -81,15 +87,25 @@ final class MemberSpacing {
 	 * ones the writer keeps.
 	 */
 	public static function policyOf(
-		file: String, plugin: GrammarPlugin, separateInline: Bool, notes: Null<Array<ConfigNote>>
+		file: String, plugin: GrammarPlugin, separateInline: Bool, separateDocumented: Bool, notes: Null<Array<ConfigNote>>
 	): SpacingPolicy {
-		return { separateInline: separateInline, writer: plugin.memberGapPolicy(FormatConfigDiscovery.discover(file, notes)) };
+		return {
+			separateInline: separateInline,
+			separateDocumented: separateDocumented,
+			writer: plugin.memberGapPolicy(FormatConfigDiscovery.discover(file, notes))
+		};
 	}
 
 	/** `spacing` for one container of kind `containerKind`: the writer policy the writer runs on that kind, if any. */
 	public static function forContainer(spacing: SpacingPolicy, containerKind: String): SpacingPolicy {
 		final writer: Null<MemberGapPolicy> = spacing.writer;
-		return writer == null ? spacing : { separateInline: spacing.separateInline, writer: writer.forKind(containerKind) };
+		return writer == null
+			? spacing
+			: {
+				separateInline: spacing.separateInline,
+				separateDocumented: spacing.separateDocumented,
+				writer: writer.forKind(containerKind)
+			};
 	}
 
 	/**
@@ -220,6 +236,18 @@ final class MemberSpacing {
 	}
 
 	/**
+	 * Whether the same-rank FIELD pair `a` / `b` straddles the boundary between the rank's documented subgroup and the rest of
+	 * it inside one `inline` part (`MemberOrder.compareOrder` sorts the subgroup first within each part, the inline seam staying with
+	 * `separateInlineSubgroup`) - the one gap the opt-in `separateDocumentedSubgroup` option wants
+	 * exactly one blank line in, ahead of the comment-led exemption of `ownWant`. A doc that also names the next field
+	 * (`docShared`) keeps its member out of the subgroup, so it is not a boundary.
+	 */
+	private static inline function documentedSubgroupBoundary(a: OrderedMember, b: OrderedMember, separateDocumented: Bool): Bool {
+		return separateDocumented && a.isField && b.isField && a.condition == null && b.condition == null && a.isInline == b.isInline
+			&& a.documented != b.documented;
+	}
+
+	/**
 	 * The blank lines the gap between the adjacent slots `a` and `b` wants, or null when the pair is left to the
 	 * source - THE per-pair spacing policy, read by the report, the spacing-only fix and the rebuild alike.
 	 *
@@ -235,7 +263,7 @@ final class MemberSpacing {
 	 */
 	private static function wantedBlanks(a: OrderedMember, b: OrderedMember, source: String, spacing: SpacingPolicy): Null<GapWant> {
 		final writer: Null<MemberGapPolicy> = a.condition == null && b.condition == null ? spacing.writer : null;
-		final own: Null<GapWant> = ownWant(a, b, source, spacing.separateInline);
+		final own: Null<GapWant> = ownWant(a, b, source, spacing);
 		if (writer == null) return own;
 		final headA: MemberGapHead = { leading: a.leadComments, hasMeta: a.hasMeta };
 		final headB: MemberGapHead = { leading: b.leadComments, hasMeta: b.hasMeta };
@@ -266,15 +294,19 @@ final class MemberSpacing {
 	 * The check's own spacing rule for the adjacent slots `a` and `b`, or null when it has no opinion: different-rank
 	 * neighbours want exactly one blank line; same-rank FIELD neighbours want none (a tight group) - save, under the
 	 * opt-in `separateInlineSubgroup` option (`separateInline`), exactly one at the boundary between the rank's `inline`
-	 * subgroup and the rest of it (`inlineSubgroupBoundary`). A same-rank pair of methods (conventionally
+	 * subgroup and the rest of it (`inlineSubgroupBoundary`), and, under `separateDocumentedSubgroup`, exactly one at the boundary of
+	 * the documented subgroup (`documentedSubgroupBoundary`, asked first because a
+	 * documented slot is comment-led). A same-rank pair of methods (conventionally
 	 * blank-separated) and a same-rank pair either of whose slots leads with a comment are left alone.
 	 */
-	private static function ownWant(a: OrderedMember, b: OrderedMember, source: String, separateInline: Bool): Null<GapWant> {
+	private static function ownWant(a: OrderedMember, b: OrderedMember, source: String, spacing: SpacingPolicy): Null<GapWant> {
 		return if (a.rank != b.rank)
 			{ count: 1, atLeast: false, rule: RankBoundary }
+		else if (documentedSubgroupBoundary(a, b, spacing.separateDocumented))
+			{ count: 1, atLeast: false, rule: DocumentedBoundary }
 		else if (!b.isField || slotStartsWithComment(a, source) || slotStartsWithComment(b, source))
 			null
-		else if (inlineSubgroupBoundary(a, b, separateInline))
+		else if (inlineSubgroupBoundary(a, b, spacing.separateInline))
 			{ count: 1, atLeast: false, rule: InlineBoundary }
 		else
 			{ count: 0, atLeast: false, rule: TightGroup };
@@ -287,6 +319,7 @@ final class MemberSpacing {
 			case RankBoundary: 'rank groups are not separated by a blank line';
 			case TightGroup: 'members of one rank group are separated by a blank line';
 			case InlineBoundary: 'the inline members of a rank group are not separated from the rest of it by a blank line';
+			case DocumentedBoundary: 'the documented members of a rank group are not separated from the rest of it by a blank line';
 			case DocComment if (want.count == 0): 'a doc-commented member is separated by a blank line the formatter removes';
 			case DocComment: 'a doc-commented member is not separated from its neighbour by $blanks, as the formatter writes it';
 			case Multiline:

@@ -20,6 +20,7 @@ typedef OrderKeys = {
 	var pinnedOrdinal: Int;
 	var otherPinnedOrdinal: Int;
 	var branch: Int;
+	var documentedFirst: Bool;
 }
 
 /**
@@ -68,7 +69,7 @@ final class MemberOrderReason {
 		else if (keys.ranked != null && keys.otherRanked != null)
 			groupReason(a, b, keys.ranked, keys.otherRanked, keys.branch)
 		else
-			subOrderReason(a, b);
+			subOrderReason(a, b, keys.documentedFirst);
 	}
 
 	/** A rank named the way the user's own order spec names it - what the reader has to move the member past. */
@@ -140,13 +141,17 @@ final class MemberOrderReason {
 
 	/**
 	 * The within-rank reason - the half of the order the rank vocabulary cannot express, and the one
-	 * every reader of the old message had to reverse-engineer: `inline` leads its rank group, then an
-	 * initialized declaration leads an init-less one.
+	 * every reader of the old message had to reverse-engineer: `inline` leads its rank group, then, under `separateDocumentedSubgroup`,
+	 * a documented field leads within each inline part, then an initialized declaration leads an init-less one.
 	 */
-	private static function subOrderReason(a: OrderedMember, b: OrderedMember): String {
-		return a.isInline != b.isInline
-			? 'an inline member leads its rank group, so it must precede the non-inline ${describe(b)}'
-			: 'a member with a declaration-site initializer leads an init-less one of the same rank, so it must precede the ' + describe(b);
+	private static function subOrderReason(a: OrderedMember, b: OrderedMember, documentedFirst: Bool): String {
+		return if (a.isInline != b.isInline)
+			'an inline member leads its rank group, so it must precede the non-inline ${describe(b)}'
+		else if (documentedFirst && a.documented != b.documented)
+			'a field headed by a doc comment leads its inline part of the rank group (separateDocumentedSubgroup), so it must precede '
+				+ 'the undocumented ${describe(b)}'
+		else
+			'a member with a declaration-site initializer leads an init-less one of the same rank, so it must precede the ${describe(b)}';
 	}
 
 }
