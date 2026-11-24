@@ -4,6 +4,14 @@
 	],
 	"arms": [
 		{
+			"name": "M-REGISTRY-FOLLOW-RESPELL-KEEPS-EDIT",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "mirrorsEdit",
+			"find": "return at < 0\n\t\t\t|| (at > 0 && tail < now.find.length)\n\t\t\t|| now.replace == now.find.substring(0, at) + was.replace + now.find.substring(tail);",
+			"replace": "return true;",
+			"note": "a replace re-spelled without the arguments the rewrite added to its find is written, so the arm cuts a call that no longer exists"
+		},
+		{
 			"name": "M-ADD-AFTER-ANCHOR-COMMENT",
 			"type": "anyparse.query.AddElement",
 			"method": "addElement",
@@ -16159,8 +16167,8 @@
 			"name": "M-REGISTRY-FOLLOW-SPLICE-CHECKED",
 			"type": "anyparse.query.RegistryFragmentFollow",
 			"method": "carry",
-			"find": "if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin)) return",
-			"replace": "if (true) return",
+			"find": "if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin) && mirrorsEdit(find, replace, newFind, candidate))\n\t\t\t\t\treturn",
+			"replace": "if (true)\n\t\t\t\t\treturn",
 			"note": "a re-spelled cut that would not parse is written instead of named"
 		},
 		{

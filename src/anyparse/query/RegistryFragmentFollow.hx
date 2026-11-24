@@ -23,6 +23,9 @@ typedef RewrittenModule = {
 	final newTree: QueryNode;
 }
 
+/** The parts of a find and of its replace that the two do not share. */
+private typedef EditedParts = { final find: String; final replace: String; }
+
 /** A find and its paired replace in the new spelling. */
 private typedef Carried = { final find: String; final replace: Null<String>; }
 
@@ -271,7 +274,8 @@ final class RegistryFragmentFollow {
 				continue;
 			for (built in replacesOf(find, replace, from, fit, written.length, newFrom, newTo, rewrite)) {
 				final candidate: String = dedent ? built.ltrim() : built;
-				if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin)) return { find: newFind, replace: candidate };
+				if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin) && mirrorsEdit(find, replace, newFind, candidate))
+					return { find: newFind, replace: candidate };
 			}
 		}
 		return null;
@@ -435,6 +439,34 @@ final class RegistryFragmentFollow {
 	/** The string and regex literals of `source`, which the lexer scans whole while the tree may project only their contents as leaves. */
 	private static function literalSpans(source: String, plugin: GrammarPlugin): Array<Span> {
 		return [ for (region in plugin.lexicalRegions(source)) if (!LexicalRegions.isComment(region)) new Span(region.from, region.to) ];
+	}
+
+	/**
+	 * Whether a carried replace keeps what the rewrite added around the part of the find its edit changes. When the rewrite put
+	 * text at an edge of that part (an argument ahead of it), the replace must carry the same text around its own middle: a
+	 * replace that lost it still parses but cuts a call that no longer exists, so a candidate without it is passed over.
+	 * A rewrite that changed the edited part itself leaves the question to the parser. Layout is not part of the comparison.
+	 */
+	private static function mirrorsEdit(find: String, replace: String, newFind: String, newReplace: String): Bool {
+		final was: EditedParts = editedParts(find, replace);
+		final now: EditedParts = editedParts(newFind, newReplace);
+		final at: Int = was.find.length == 0 ? -1 : now.find.indexOf(was.find);
+		final tail: Int = at + was.find.length;
+		// Text on both sides of the edited part is a group the rewrite put around it: whether the replace keeps it is the parser's call.
+		return at < 0
+			|| (at > 0 && tail < now.find.length)
+			|| now.replace == now.find.substring(0, at) + was.replace + now.find.substring(tail);
+	}
+
+	/** What a find and its replace do not share at either end, spaces left out. */
+	private static function editedParts(find: String, replace: String): EditedParts {
+		final prefix: Int = MemberRegistryRename.sharedPrefix(find, replace);
+		final suffix: Int = MemberRegistryRename.sharedSuffix(find, replace, prefix);
+		final blanks: EReg = ~/\s+/g;
+		return {
+			find: blanks.replace(find.substring(prefix, find.length - suffix), ''),
+			replace: blanks.replace(replace.substring(prefix, replace.length - suffix), '')
+		};
 	}
 
 }
