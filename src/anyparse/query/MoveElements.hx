@@ -98,7 +98,7 @@ final class MoveElements {
 		final source: String = request.source;
 		final slice: Span = sliceSpan(source, plan.moved, plugin.lexicalRegions(source));
 		final cut: String = switch CanonicalEdit.canonicalize(
-			source, [{ span: ElementSpan.commaListCut(source, slice), text: '' }], request.reformat, plugin, request.optsJson
+			source, [{ span: ElementSpan.commaListCut(source, slice, plan.array), text: '' }], request.reformat, plugin, request.optsJson
 		) {
 			case Ok(text, _): text;
 			case Err(message): return Err(message);

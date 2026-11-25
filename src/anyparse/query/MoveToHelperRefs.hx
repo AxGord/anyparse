@@ -417,6 +417,11 @@ final class MoveToHelperRefs {
 		final span: Null<Span> = placed.node.span;
 		final callKind: Null<String> = edits.prep.shape.callKind;
 		if (parent == null || span == null || callKind == null || parent.kind != callKind || parent.children[0] != placed.node) return -1;
+		// A call in a tree with a token log names the `(` it matched; one without is read from the byte after the callee.
+		if (parent.tokenLog != null) {
+			final open: Null<Span> = parent.tokenSpelled('(', source);
+			return open != null && source.substring(span.to, open.from).trim() == '' ? open.from : -1;
+		}
 		var i: Int = span.to;
 		while (i < source.length && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		return i < source.length && source.fastCodeAt(i) == '('.code ? i : -1;

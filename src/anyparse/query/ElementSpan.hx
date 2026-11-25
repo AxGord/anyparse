@@ -336,13 +336,15 @@ final class ElementSpan {
 	}
 
 	/**
-	 * Is the element at `span` immediately adjacent to a `,` — the next
-	 * non-whitespace byte after `span.to`, or the previous before `span.from`,
-	 * is a comma? True ⇒ the element sits in a comma-separated list (catches a
+	 * Is the element at `span` immediately adjacent to a `,` — one its `parent`
+	 * matched next to it when the tree holds a token log, else the next
+	 * non-whitespace byte after `span.to` or the previous before `span.from`?
+	 * True ⇒ the element sits in a comma-separated list (catches a
 	 * comma container the grammar does not list in `RefShape.commaContainerKinds`, for any list with at
 	 * least two elements). Shared by `add-element` and `deleteNode`.
 	 */
-	public static function adjacentToComma(source: String, span: Span): Bool {
+	public static function adjacentToComma(source: String, span: Span, parent: Null<QueryNode>): Bool {
+		if (parent != null && parent.tokenLog != null) return ownCommaBeside(source, parent, span) != null;
 		var i: Int = span.to;
 		while (i < source.length && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		if (i < source.length && source.fastCodeAt(i) == ','.code) return true;
@@ -558,14 +560,14 @@ final class ElementSpan {
 		// A comment that closes the element's own line is the element's trailing note and leaves with it.
 		final span: Span = lineClosingCommentSpan(source, lead, regionsOf);
 
-		var isComma: Bool = adjacentToComma(source, span);
+		var isComma: Bool = adjacentToComma(source, span, parent);
 		if (!isComma && parent != null) isComma = (shape.commaContainerKinds ?? []).contains(parent.kind);
 
 		// A comma list has no blank separators, so only the line branch gives one back. An element that
 		// held a whole line of a one-per-line list (`'x',` with its comma) takes the line with it: the cut
 		// used to leave the line's indentation and break behind, a blank line the writer keeps as trivia.
 		final cut: Span = isComma
-			? commaListCut(source, span, regionsOf)
+			? commaListCut(source, span, parent, regionsOf)
 			: braceEdgeSpan(source, blankExtendedSpan(source, lineExtendedSpan(source, span)));
 		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
 	}
@@ -598,10 +600,10 @@ final class ElementSpan {
 	 * separator: ONE comma (the trailing one, else the leading one, `commaExtendedSpan`) and, when that leaves
 	 * its line empty, the whole line. The comma half of `elementCut`, published for `MoveElements`, which cuts a
 	 * run of elements as one span: two adjacent element cuts on one line would collide. With `regions` a comment
-	 * that closes the element's line goes with it.
+	 * that closes the element's line goes with it. `container` is the list's node, whose own tokens name the comma.
 	 */
-	public static function commaListCut(source: String, span: Span, ?regions: () -> Array<LexRegion>): Span {
-		final withComma: Span = commaExtendedSpan(source, span);
+	public static function commaListCut(source: String, span: Span, container: Null<QueryNode>, ?regions: () -> Array<LexRegion>): Span {
+		final withComma: Span = commaExtendedSpan(source, span, container);
 		return lineExtendedSpan(source, regions == null ? withComma : lineClosingCommentSpan(source, withComma, regions));
 	}
 
@@ -820,13 +822,23 @@ final class ElementSpan {
 
 	/**
 	 * Extend `span` to also remove ONE separating comma so a comma list stays
-	 * well-formed after the element is cut: the trailing comma (preferred) —
-	 * the next non-whitespace byte after `span.to` — else the leading comma
-	 * before `span.from` (the element was last). A single-element list has
+	 * well-formed after the element is cut: the trailing comma (preferred)
+	 * else the leading one (the element was last). A single-element list has
 	 * neither and the span is returned unchanged (`[a]` → `[]`). Surrounding
-	 * whitespace is left to the writer re-emit.
+	 * whitespace is left to the writer re-emit. The comma is one `container`
+	 * matched when its tree holds a token log (`ownCommaBeside`), else the
+	 * next or previous non-whitespace byte.
 	 */
-	private static function commaExtendedSpan(source: String, span: Span): Span {
+	private static function commaExtendedSpan(source: String, span: Span, container: Null<QueryNode>): Span {
+		if (container != null && container.tokenLog != null) {
+			final comma: Null<Span> = ownCommaBeside(source, container, span);
+			return if (comma == null)
+				span
+			else if (comma.from >= span.to)
+				new Span(span.from, comma.to)
+			else
+				new Span(comma.from, span.to);
+		}
 		var i: Int = span.to;
 		while (i < source.length && SourceText.isSpace(source.fastCodeAt(i))) i++;
 		if (i < source.length && source.fastCodeAt(i) == ','.code) return new Span(span.from, i + 1);
@@ -909,6 +921,30 @@ final class ElementSpan {
 			from = next;
 		}
 		return from == span.from ? span : new Span(from, span.to);
+	}
+
+	/**
+	 * The `,` of `container`'s own tokens that separates `span` from a neighbour: the first token after the span when it
+	 * is a comma, else the last one before it when that is; null when neither is. A container owns the separators of its
+	 * list, so none is searched for; only whitespace may stand between it and the span, a comment there keeps it apart.
+	 */
+	private static function ownCommaBeside(source: String, container: QueryNode, span: Span): Null<Span> {
+		var before: Null<Span> = null;
+		var after: Null<Span> = null;
+		for (token in container.tokenSpans()) {
+			if (token.from >= span.to) {
+				after = token;
+				break;
+			}
+			if (token.to <= span.from) before = token;
+		}
+		if (after != null && isComma(source, after) && source.substring(span.to, after.from).trim() == '') return after;
+		return before != null && isComma(source, before) && source.substring(before.to, span.from).trim() == '' ? before : null;
+	}
+
+	/** Whether `token` spells `,`. */
+	private static function isComma(source: String, token: Span): Bool {
+		return token.to - token.from == 1 && source.fastCodeAt(token.from) == ','.code;
 	}
 
 }

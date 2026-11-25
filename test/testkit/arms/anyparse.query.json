@@ -17558,6 +17558,61 @@
 			"find": "return span != null && own.length > 0 && own[own.length - 1].to == span.to && spells(own[own.length - 1], source, text);",
 			"replace": "return span != null && span.to > span.from && source.charAt(span.to - 1) == text;",
 			"note": "the last source byte is read instead of the node own token, so a function whose `;` belongs to its expression body counts as ending in its own terminator"
+		},
+		{
+			"name": "M-TYPE-OPEN-OWN-TOKEN-UNREAD",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "typeBodyBraceOffset",
+			"find": "if (own != null) return own.from;",
+			"replace": "if (own != null) return null;",
+			"note": "a parsed type no longer answers with the `{` its own grammar matched, so every brace-body type reads as having no body"
+		},
+		{
+			"name": "M-TYPE-CLOSE-OWN-TOKEN-UNREAD",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "typeBodyCloseOffset",
+			"find": "if (own != null) return own.from;",
+			"replace": "if (own != null) return null;",
+			"note": "a parsed type no longer answers with the `}` its own grammar matched, so an append into its body finds no closing brace"
+		},
+		{
+			"name": "M-SCHEMA-TYPE-CLOSE-OWN-TOKEN-UNREAD",
+			"type": "anyparse.query.MutationSchema",
+			"method": "closingBrace",
+			"find": "return type.tokenSpelled('}', source)?.from ?? -1;",
+			"replace": "return -1;",
+			"note": "the type around a cut method no longer names its own `}`, so the schema finds no body to hold the switch and leaves every arm out"
+		},
+		{
+			"name": "M-SCHEMA-BODY-OPEN-OWN-TOKEN-UNREAD",
+			"type": "anyparse.query.MutationSchema",
+			"method": "opensWithBrace",
+			"find": "body.tokenSpelled('{', source)?.from == span.from",
+			"replace": "false",
+			"note": "a parsed method body no longer answers with the `{` it matched, so every block-bodied method reads as having no block"
+		},
+		{
+			"name": "M-EMPTY-PAREN-OWN-TOKEN-UNREAD",
+			"type": "anyparse.query.AddParam",
+			"method": "emptyParenInsertOffset",
+			"find": "final open: Null<Span> = fn.tokenSpelled('(', source);",
+			"replace": "final open: Null<Span> = null;",
+			"note": "a parsed function no longer names the `(` of its parameter list, so a parameter cannot be added to a function that has none"
+		},
+		{
+			"name": "M-HELPER-CALL-PAREN-OWN-TOKEN-UNREAD",
+			"type": "anyparse.query.MoveToHelperRefs",
+			"method": "openParen",
+			"find": "final open: Null<Span> = parent.tokenSpelled('(', source);",
+			"replace": "final open: Null<Span> = null;",
+			"note": "a parsed call no longer names its own `(`, so every call of a moved member reads as a value use and the move is refused"
+		},
+		{
+			"name": "M-COMMA-OWN-TOKEN-NULL",
+			"type": "anyparse.query.ElementSpan",
+			"method": "ownCommaBeside",
+			"force": "null",
+			"note": "a list's own commas are never found beside an element, so cutting the first element leaves its separator behind and the list no longer parses"
 		}
 	]
 }

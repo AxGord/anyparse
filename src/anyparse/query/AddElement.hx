@@ -137,7 +137,7 @@ final class AddElement {
 		// between a modifier and its decl (and a cursor on a modifier targets
 		// the decl it precedes). A non-decl element keeps its own span.
 		final span: Span = ElementSpan.declGroupSpan(element, parent, elemSpan);
-		var isComma: Bool = ElementSpan.adjacentToComma(source, span);
+		var isComma: Bool = ElementSpan.adjacentToComma(source, span, parent);
 		if (!isComma && parent != null) isComma = (plugin.refShape().commaContainerKinds ?? []).contains(parent.kind);
 
 		// A `;`-terminated element can never belong to a comma-separated list —

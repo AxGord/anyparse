@@ -345,7 +345,7 @@ final class MoveToHelper {
 		if (first != null) {
 			movedTextEdits.push({ span: new Span(first, first), text: '$declared, ' });
 		} else {
-			final open: Int = AddParam.emptyParenInsertOffset(prep.srcSource, m.span);
+			final open: Int = AddParam.emptyParenInsertOffset(prep.srcSource, m.group.member, m.span);
 			if (open >= 0) movedTextEdits.push({ span: new Span(open, open), text: declared });
 		}
 	}

@@ -104,7 +104,7 @@ class MoveToHelperSliceTest extends Test {
 	 * innermost first. The default parameter name is the source type's with a lower-case initial. Compile-proved: 46.
 	 */
 	@:pin('control')
-	@:killer('M-HELPER-CALL-ORDER')
+	@:killer('M-HELPER-CALL-ORDER', 'M-HELPER-CALL-PAREN-OWN-TOKEN-UNREAD', 'M-EMPTY-PAREN-OWN-TOKEN-UNREAD')
 	public function testNestedCallsKeepTheOuterCallFirst(): Void {
 		final src: String = 'package a;\n\nclass Src {\n\tvar n: Int = 2;\n\n\tpublic function new() {}\n\n\tpublic function self(): Src '
 			+ '{\n\t\treturn this;\n\t}\n\n\tpublic function add(k: Int): Int {\n\t\treturn n + k;\n\t}\n\n\tpublic '

@@ -41,7 +41,9 @@ class RemoveElementSliceTest extends Test {
 		);
 	}
 
-	/** Remove the first element — its trailing comma goes with it. */
+	/** Remove the first element — its trailing comma, the one the array's own grammar matched, goes with it. */
+	@:pin('control')
+	@:killer('M-COMMA-OWN-TOKEN-NULL')
 	public function testRemoveArrayFirst(): Void {
 		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [1, 2, 3];\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [2, 3];\n\t}\n}\n';

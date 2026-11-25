@@ -779,6 +779,10 @@ final class RefactorSupport {
 	public static function typeBodyBraceOffset(
 		source: String, decl: TypeDeclMatch, typeName: String, regions: Array<LexRegion>
 	): Null<Int> {
+		// A parsed type answers with the brace its own grammar matched. A tree with no token log scans the header text, and
+		// so does a type whose braces a child matched (a typedef's anonymous structure).
+		final own: Null<Span> = decl.nameNode.tokenSpelled('{', source);
+		if (own != null) return own.from;
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		final limit: Int = nameSpan.to <= source.length ? nameSpan.to : source.length;
 		var from: Int = typeHeaderFrom(source, decl, typeName, regions);
@@ -804,8 +808,11 @@ final class RefactorSupport {
 	 * final class swallows trailing trivia past the `}` (a following declaration's doc comment, when
 	 * the final class is not the last one), so a scan from there lands in that trivia and misses the
 	 * brace. `nameNode.span` ends right at the `}`, and equals `fullSpan` for every non-final shape.
+	 * A type that matched its own `}` (its tree holds a token log) answers with that token instead.
 	 */
 	public static function typeBodyCloseOffset(source: String, decl: TypeDeclMatch): Null<Int> {
+		final own: Null<Span> = decl.nameNode.tokenSpelled('}', source);
+		if (own != null) return own.from;
 		final bodySpan: Span = decl.nameNode.span ?? decl.fullSpan;
 		var bodyClose: Int = bodySpan.to - 1;
 		if (bodyClose >= source.length) bodyClose = source.length - 1;

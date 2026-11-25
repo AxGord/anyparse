@@ -46,8 +46,10 @@ class AddParamSliceTest extends Test {
 	/**
 	 * Add an optional `?`-parameter to a ZERO-parameter function:
 	 * `function g()` becomes `function g(?flag:Bool)` — the parameter is
-	 * inserted just inside the `(`.
+	 * inserted just inside the `(` the function's own grammar matched.
 	 */
+	@:pin('control')
+	@:killer('M-EMPTY-PAREN-OWN-TOKEN-UNREAD')
 	public function testAddOptionalToZeroParamFunction(): Void {
 		final source: String = 'class C {\n\tfunction g():Void {}\n}';
 		final expected: String = 'class C {\n\tfunction g(?flag:Bool):Void {}\n}';

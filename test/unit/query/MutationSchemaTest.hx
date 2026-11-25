@@ -22,6 +22,12 @@ class MutationSchemaTest extends Test {
 		+ '\t\treturn a;\n\t}\n\n\tpublic function new() {}\n\n\tfunction g(): Int return 1;\n\n\tmacro static function m() {\n'
 		+ '\t\treturn null;\n\t}\n}\n';
 
+	/**
+	 * A parsed type and method answer with the braces their own grammar
+	 * matched: the type's `}` holds the switch, the body's `{` opens the block.
+	 */
+	@:pin('control')
+	@:killer('M-SCHEMA-TYPE-CLOSE-OWN-TOKEN-UNREAD', 'M-SCHEMA-BODY-OPEN-OWN-TOKEN-UNREAD')
 	public function testTheSwitchCallsTheCopyWithEveryArgument(): Void {
 		final composed: SchemaFile = compose([arm(1, 'FnMember:f', 'return a;', 'return -a;')]);
 		Assert.isNull(composed.placements[0].skip);

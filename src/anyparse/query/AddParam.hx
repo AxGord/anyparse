@@ -122,7 +122,7 @@ final class AddParam {
 
 		final insertOffset: Int = params.length > 0
 			? tailInsertOffset(source, params[params.length - 1])
-			: emptyParenInsertOffset(source, declSpan);
+			: emptyParenInsertOffset(source, fnNode, declSpan);
 		if (insertOffset < 0) return Err('could not locate the parameter list of the function at $line:$col');
 
 		final insertText: String = params.length > 0 ? ', $trimmed' : trimmed;
@@ -187,14 +187,16 @@ final class AddParam {
 	}
 
 	/**
-	 * Insertion offset for a zero-parameter function: just inside the `(`
-	 * that opens the parameter list. The decl span starts at the
-	 * `function` keyword, so the first `(` at / after the span start opens
-	 * the parameter list (an empty `()` becomes `(paramText)`). The scan
-	 * is bounded by the declaration span so a `(` in a body / return type
-	 * is never reached. Returns -1 when no `(` is found.
+	 * Insertion offset for a zero-parameter function `fn`: just inside the `(` that opens its parameter list (an empty
+	 * `()` becomes `(paramText)`). A tree with a token log answers with the `(` the function's own grammar matched; one
+	 * without scans `declSpan` for its first `(`, the span starting at the `function` keyword so a `(` in a body or return
+	 * type is never reached. Returns -1 when no `(` is found.
 	 */
-	private static function emptyParenInsertOffset(source: String, declSpan: Span): Int {
+	private static function emptyParenInsertOffset(source: String, fn: QueryNode, declSpan: Span): Int {
+		if (fn.tokenLog != null) {
+			final open: Null<Span> = fn.tokenSpelled('(', source);
+			return open == null ? -1 : open.to;
+		}
 		final to: Int = declSpan.to <= source.length ? declSpan.to : source.length;
 		final from: Int = declSpan.from < 0 ? 0 : declSpan.from;
 		for (i in from ... to) if (source.fastCodeAt(i) == '('.code) return i + 1;

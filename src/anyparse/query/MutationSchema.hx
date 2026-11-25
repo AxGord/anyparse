@@ -285,8 +285,10 @@ final class MutationSchema {
 		final name: String = memberName;
 		final span: Span = memberSpan;
 		if (name == 'new') return Refused('a constructor');
-		final bodySpan: Null<Span> = member.children.find(child -> child.kind == 'BlockBody')?.span;
-		if (bodySpan == null || source.charAt(bodySpan.from) != '{') return Refused('its body is not a block');
+		final body: Null<QueryNode> = member.children.find(child -> child.kind == 'BlockBody');
+		final bodySpan: Null<Span> = body?.span;
+		if (body == null || bodySpan == null) return Refused('its body is not a block');
+		if (!opensWithBrace(source, body, bodySpan)) return Refused('its body is not a block');
 		final parent: Null<QueryNode> = parentOf(tree, member);
 		if (parent == null) return Refused('no enclosing type');
 		final modifiers: Array<QueryNode> = modifiersOf(parent, member);
@@ -341,8 +343,12 @@ final class MutationSchema {
 		return tree.children.contains(node) ? tree : tree.children.findMap(child -> parentOf(child, node));
 	}
 
-	/** The offset of `type`'s closing brace, or -1 when it has none where its span ends. */
+	/**
+	 * The offset of `type`'s closing brace, or -1 when it has none: the `}` its own grammar matched when its tree holds a
+	 * token log, else the byte its span ends on.
+	 */
 	private static function closingBrace(source: String, type: Null<QueryNode>): Int {
+		if (type != null && type.tokenLog != null) return type.tokenSpelled('}', source)?.from ?? -1;
 		final span: Null<Span> = type?.span;
 		return span != null && span.to > 0 && source.charAt(span.to - 1) == '}' ? span.to - 1 : -1;
 	}
@@ -350,6 +356,14 @@ final class MutationSchema {
 	/** How many line breaks `text` holds. */
 	private static function lines(text: String): Int {
 		return text.split('\n').length - 1;
+	}
+
+	/**
+	 * Whether `body` opens with `{`: the brace its own grammar matched
+	 * at its start when its tree holds a token log, else its first byte.
+	 */
+	private static function opensWithBrace(source: String, body: QueryNode, span: Span): Bool {
+		return body.tokenLog != null ? body.tokenSpelled('{', source)?.from == span.from : source.charAt(span.from) == '{';
 	}
 
 }

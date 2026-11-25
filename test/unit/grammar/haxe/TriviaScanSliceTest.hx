@@ -75,12 +75,15 @@ class TriviaScanSliceTest extends Test {
 		Assert.isFalse(RefactorSupport.isReturnTypeSlot(src, src.indexOf('Int') + 3, src.indexOf('return'), regionsOf(src)));
 	}
 
-	/** A `{` written in a header comment is not the body brace. */
+	/** A `{` written in a header comment is not the body brace, also on a tree with no token log, whose header is scanned. */
 	@:pin('control')
 	@:killer('M-HEADERSCAN-COMMENT-REGION')
 	public function testTypeBodyBraceOffsetIgnoresABraceInAHeaderComment(): Void {
 		final src: String = 'class X /* { */ {\n}\n';
-		final decl: Null<TypeDeclMatch> = declOf(src);
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final decl: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(
+			plugin.treeFromRoot(plugin.parseDeclarationsRoot(src), src, false), 'X'
+		);
 		if (decl == null) {
 			Assert.fail('uniqueTypeDeclNamed found no X');
 			return;
@@ -140,6 +143,30 @@ class TriviaScanSliceTest extends Test {
 	public function testIsReturnTypeSlotRefusesAnUnterminatedBlockCommentRunningToTheSourceEnd(): Void {
 		final src: String = 'function f(): Int /* n';
 		Assert.isFalse(RefactorSupport.isReturnTypeSlot(src, src.indexOf('Int') + 3, src.length, regionsOf(src)));
+	}
+
+	/**
+	 * A parsed type answers with the braces its own grammar matched, whatever its header holds: a constraint's `{`, a
+	 * comment's, and the doc after a `final class` whose wrapper span runs past its `}`.
+	 */
+	@:pin('control')
+	@:killer('M-TYPE-OPEN-OWN-TOKEN-UNREAD', 'M-TYPE-CLOSE-OWN-TOKEN-UNREAD')
+	public function testABodyBraceIsTheOneItsTypeMatched(): Void {
+		for (src in [
+			'class X<T: { a: Int }> /* { */ {\n\tvar s = "}";\n}\n',
+			'final class X {\n}\n\n/** } */\nclass Y {}\n',
+			'interface X {\n}\n',
+			'enum X {\n\tA;\n}\n',
+			'abstract X(Int) {\n}\n'
+		]) {
+			final decl: Null<TypeDeclMatch> = declOf(src);
+			if (decl == null) {
+				Assert.fail('uniqueTypeDeclNamed found no X in $src');
+				continue;
+			}
+			Assert.equals(src.indexOf('{\n'), RefactorSupport.typeBodyBraceOffset(src, decl, 'X', regionsOf(src)), src);
+			Assert.equals(src.indexOf('}\n', src.indexOf('{\n')), RefactorSupport.typeBodyCloseOffset(src, decl), src);
+		}
 	}
 
 	private function regionsOf(src: String): Array<LexRegion> {
