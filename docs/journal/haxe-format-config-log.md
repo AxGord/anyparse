@@ -395,3 +395,160 @@ not idempotent on any of the three; hxq is on all of them (second pass: 0 files)
 3. T3: colon of a named function-type parameter and of a `<T:Bound>` constraint: follow `typeHintColonPolicy` (fork) or stay unspaced (hxq, what the anyparse tree has)?
 4. T4: `macro (expr)` with or without the space?
 5. T5: blank lines around `//` section markers and before doc comments: source decides (hxq, bounded by `maxAnywhereInFile`) or a forced count (fork)?
+
+## Reading: what the haxe-formatter fork still lacks for identical output (FX-FORK-GAP-CENSUS, 2026-11-25)
+
+Successor of the 2026-11-07 reading. One reading of one moment: anyparse main `bb23ff5e1`, the newest fork branch (`fx/type-doc-emptylines`
+`d3df79a`, 109 commits over master, built with `haxe buildJsNode.hxml` from a `git archive` copy; the fork's checked-out tree untouched),
+formatter 1.18.0. The trees are COPIES of the `.hx` files, each with its own `hxformat.json`: this repo (`src test tools`, 3741 files),
+Pony (872 files, working tree) and the client tree (`src`, 940 files, working tree). Both tools format the same input in place; a second
+pass of each measures idempotence. A hunk is a maximal run of differing lines (runs closer than four lines merged). The harness (copy, run,
+hunk merge, family predicates, a per-key fill scan) was scratch code and is not kept. Run cost: fork 5 s / 52 s / 7 s, `hxq fmt` 5 s / 1 min / 7 s.
+
+### Parity
+
+| tree | fork, config as is | fork, fork-view config | files identical (of) | fork ≠ hxq | fork rewrote | hxq rewrote | 2nd pass changes (fork / hxq) |
+|---|---|---|---:|---:|---:|---:|---|
+| anyparse | formats 0 files (config refused) | | 1834 (3741) | **1907 f / 35 930 l** / 6447 h | 1907 | 0 | 105 f / 0 |
+| Pony | formats all, 1 crash | same as as-is | 576 (872) | **296 f / 6 289 l** / 796 h | 256 | 108 (+1 not parsed) | 7 f / 0 |
+| client tree | formats 0 files (config refused) | | 618 (940) | **322 f / 8 427 l** / 997 h | 321 | 8 | 2 f / 0 |
+
+The 2026-11-07 reading had 1249 / 280 / 293 files. The trees moved (anyparse +564 files, Pony rewrites more) and the key set grew, so the numbers
+are not a convergence nor a regression of one tool; the family table below is the comparable part.
+
+**Blocker, not layout.** With the trees' CURRENT `hxformat.json` the fork prints `hxformat.json has invalid values, files using it are not
+formatted` and formats NOTHING on two trees: `wrapping.opBoolChain` rule `type: fillSimpleRuns` (T22, a value only hxq has; anyparse) and
+`lineEnds.metadata{Type,Function,Var,Other}: fit` (client tree). The "fork-view" column replaces them by the nearest fork value
+(`fillSimpleRuns` → `fillLine`, `fit` → `none`) in the fork's copy only; every number in the family table is fork-view, so the hunks of
+the `&&`/`||` chain and the metadata line-end families include the substitution itself. Until the fork accepts the two values the parity of
+those trees is 0 by config validity. Keys the trees set that hxq does NOT implement (it prints them; the fork reads them): `afterBlocks`,
+`commaPolicy`, `catchPolicy`, `openingBracketPolicy`, `closingBracketPolicy`, `typedefBraces`, `blockBraces`, `unknownBraces`, `forLoopParens`,
+`expressionParens` (Pony and client tree).
+
+### Config gaps (an unset key: each tool falls back to its own default)
+
+Method: fill the keys the fork's default config has and a tree lacks, by group, run `hxq` (this repo on a 1-in-8 sample, 467 files; the
+other two whole), count files whose hxq output moves. A moving group is a key where the two tools' defaults differ.
+
+| tree | key | what moves | effect |
+|---|---|---|---|
+| anyparse | `lineEnds.metadata{Function,Type,Var,Other}` | fork default `none` keeps the source, hxq breaks after each declaration meta | 131 / 67 / 13 / 4 sample files; latent (the tree is already canonical, so fork = source = hxq today) |
+| anyparse | `sameLine.comprehensionFor` | fork `same`, hxq cascade | 20 sample files / 203 l |
+| anyparse | `wrapping.anonType`, `arrayWrap`, `objectLiteral`, `opAddSubChain` | fork default rule sets vs hxq's | 1 / 2 / 3 / 3 sample files |
+| anyparse | `whitespace.bracesConfig.typedefBraces` (hxq does not implement it, falls back to `anonTypeBraces`; the fork reads only `typedefBraces`) | fork prints `{var a: Int;}` for a typedef body | **828 h / 596 f**; pin `after`/`before` is a hxq no-op, removes 108 of 847 sample hunks |
+| anyparse, Pony | `whitespace.bracketConfig.comprehensionBrackets.openingPolicy` (anyparse `onlyAfter`, Pony unset) | fork prints `return[ for …`; `around` gives `return [ for …` in both tools | **369 h / 274 f** anyparse, 42 / 24 Pony; pin is a hxq no-op (0 files move) |
+| Pony | `lineEnds.metadata*` | same as above, NOT pin-able: fork `after` also breaks `@:meta` before an expression or statement (156 new hunks) | 98 h / 59 f; needs a fork patch |
+| Pony | `emptyLines.externClassEmptyLines` | | 2 files / 4 l |
+| client tree | `wrapping.ternaryMultilineBranch`, `wrapping.methodChain`, `sameLine.returnBodySingleLine` | key unset (K1, still open) | 6 / 9 / 1 files, 104 / 64 / 6 l |
+| anyparse | `emptyLines.afterFieldsWithDocComments` (fork reads the global key; hxq reads the per-type `typedefEmptyLines` / `enumEmptyLines` / `enumAbstractEmptyLines` ones) | NOT pin-able: the global key also moves class bodies (any-s 260 → 353 differing files) | 298 h of the blank-line family; needs a fork patch |
+
+Pins that are hxq no-ops and reduce the fork's difference: anyparse `typedefBraces` + `comprehensionBrackets.openingPolicy: around`: 1907 → 1775
+files, 35 930 → 33 854 lines, hunks 6447 → 5655 (hxq moves 0 files); Pony `openingPolicy: around` alone: 296 → 291 files, 6 289 → 6 181 lines.
+K6 of 2026-11-07 (Pony `openingPolicy: onlyAfter`) is gone, but its replacement is the missing `around` above; K7 (`colonPolicy`) is set in both
+trees now.
+
+### hxq-only keys, against what the fork has
+
+Keys hxq reads that the fork schema lacks: 88 names, of them about 50 settings (the rest are enum cases). A `git grep` of the fork's `src` on
+`fx/type-doc-emptylines` finds most of the keys the three trees set (the fork took them in the fx waves: `singleStatementBraces`,
+`blockCommentStyle`, `blockCommentBodyIndent`, `trailingCommentOverflow`, `aroundMultilineFields`, `uniformStatementBlanks`,
+`beginTypeIfDocComments`, `endTypeIfDocComments`, `alignInlineSwitchCaseBody`, `switchSubjectParens`, `arrowBodyOpenPad`, `arrowBodyReflow`,
+`elseSwitch`, `fitLineBodyGlue`, `loopBodyIfElseNext`, `conditionalExprFit`, `expressionIfWithBrackets`, `expressionIfArrowBodyReflow`,
+`expressionIfFit`, `expressionIfFitMaxBranches`, `elseIfCommentReflow`, `conditionalCompilationBinop`, `normalizeLineCommentIndent`,
+`optionalSemicolon`, `semicolonBeforeElse`, `trailingComma`, `comprehensionCuddledOpen`, `methodChainCuddledLinks`, `soleItemCuddledBrackets`,
+`ternaryMultilineBranch`, `itemsAfterCloseParenOnly`). The fork does NOT have, and a tree sets:
+
+| key / value | taste call | trees | in the divergence |
+|---|---|---|---|
+| `emptyLines.metadataCountsAsDocComment` (+ per-type copies) | T16 | anyparse | blank lines family: ~298 h around meta'd fields, ~101 after `{`, ~87 before `}` |
+| `sameLine.caseSiblings: anyBreak` | T1 | Pony, client tree | 152 / 114 h |
+| `wrapping.comprehensionFit` | T18 | anyparse | comprehension family, 316 h |
+| `wrapping.opBoolChain` type `fillSimpleRuns` | T22 | anyparse | `&&`/`||` chain family 351 h (fork-view = `fillLine`) |
+| `lineEnds.metadata*: fit`, `lineEnds.metadataInlineMaxLength` | | client tree | hidden by the fork-view; formats 0 files today |
+| `sameLine.expressionIfFitMaxValueWidth`, `ternaryTailBlockMaxThenLength` | T12 / T21 | anyparse, client tree | inside the ternary / `return if` rows |
+| `emptyLines.beforeCommentedFields`, `enumAbstractEmptyLines.abstractRulesUnlessValueList`, `wrapping.typedefBody`, `whitespace.typedefSemicolon` | | client tree | small |
+| T23 sole-object hug, T24 lambda-arg hug, T9 literal run as one unit | T9 / T23 / T24 | all (layout, no key yet or default off) | call-argument families |
+
+### Divergence families (fork-view; h = hunks, f = files; first differing gap decides the family; counts are predicates, not one isolated mechanism each)
+
+| family | anyparse h/f | Pony h/f | client h/f | side · size |
+|---|---|---|---|---|
+| wrap: call arguments (fill vs one per line, paren break) | 1464 / 775 | 71 / 59 | 259 / 127 | fork writer, mixed (T2 / T9) · L |
+| blank lines | 1023 / 580 | 83 / 55 | 73 / 41 | T16 + per-type `afterFieldsWithDocComments` fork keys · M; T5 stays hxq |
+| typedef braces padding | 828 / 596 | - | 1 / 1 | config pin (above) · XS |
+| wrap: cuddled bracket / lambda as last or sole argument | 224 / 122 | 38 / 32 | 180 / 63 | T23 / T24 (hxq pending), then the fork twin · M |
+| wrap: object literal / block | 305 / 178 | 64 / 29 | 58 / 40 | `ignore` default keeps source layout in the fork, hxq normalises · not isolated |
+| `return[` (no space before the comprehension bracket) | 369 / 274 | 42 / 24 | - | config pin (above) · XS |
+| wrap: `&&` / `||` chain | 351 / 220 | - | 8 / 5 | T22 fork patch (+ accept the value) · M |
+| indent of a wrapped line (`+` continuation one tab off) | 323 / 176 | 21 / 20 | 12 / 9 | not isolated, fork indent of `+` continuation inside a call argument |
+| wrap: array literal / access | 204 / 65 | 29 / 14 | 110 / 73 | not isolated |
+| wrap: comprehension | 316 / 229 | - | 3 / 3 | T18 `comprehensionFit` fork patch · M |
+| case body placement | 12 / 12 | 152 / 72 | 114 / 68 | T1 fork patch (`caseSiblings: anyBreak`) · M |
+| wrap: method chain | 218 / 164 | - | - | `onePerLine` first link: the fork breaks before the first `.call`, hxq keeps it glued (`itemsAfterCloseParenOnly`); `methodChainCuddledLinks: true` moves hxq too, so not a pin · not isolated |
+| wrap: condition parens | 141 / 112 | 14 / 13 | 32 / 28 | not isolated |
+| wrap: `+` `-` chain / ternary / assignment value | 382 / 291 | 15 / 14 | 62 / 56 | not isolated; `expressionIfFit` (`return if` on one line) is in here |
+| `macro(` vs `macro (` | 136 / 32 | 7 / 3 | - | T4 keep hxq; fork patch S |
+| `try … catch` wrap | 62 / 43 | 3 / 2 | 2 / 2 | T6 fork patch S–M |
+| content differs (comments, `#if` regions) | 25 / 22 | 84 / 48 | 33 / 12 | 34 of 48 Pony files have `#if`: hxq leaves an unbalanced region raw and says so, the fork re-indents it · conditional-compilation handling |
+| metadata line end | 1 / 1 | 98 / 59 | hidden | fork patch (`fit`; metadata on an expression is not a declaration) · M |
+| arrow spacing `->` | - | - | 39 / 14 | fork defect: `(count:Int)->body` prints no spaces and a function-type arrow `() -> Void` prints them, hxq the reverse (config `functionTypeHaxe*Policy: none`) · S |
+| wrap: function signature | 21 / 14 | 18 / 17 | - | not isolated |
+| other (small) | 26 / 25 | 30 / 21 | 7 / 7 | |
+
+Totals: 6447 / 796 / 997 hunks; the rows above add up to 6431 / 769 / 993, the rest (16 / 27 / 4 hunks) are three rows left out for size: wrap of an if/for/try body (10 / 8 / 3), wrap of an anon type / typedef body (2 / 19 / 0), other operators (4 / 0 / 1). Repro for the largest rows, run on this repo's config with both tools: a sole array item that is a `+` chain
+(`final l: Array<String> = ['…' + '…'];`): the fork cuddles `['…'⏎ + '…']`, hxq breaks inside the brackets; a `return if (c) a else if (d) b else null;`
+that fits: the fork lays it as a ladder, hxq keeps one line; `final r: Array<V> = [for (c in cs) for (v in run(c)) v];` over the width: the fork
+breaks inside the brackets, hxq keeps it on one line (`comprehensionFit`); `return A.b(x).filter(f).map(g).concat(o);`: the fork prints
+`return A⏎.b(x)⏎.filter(f)…`, hxq `return A.b(x)⏎.filter(f)…`; `Assert.equals(0, f([{…}, {…}]).length);` too wide: the fork keeps `equals(0, f([`
+cuddled, hxq breaks after `(` and puts the literal run on its own line (T9); `typedef A = { var a: Int; }` prints `{var a: Int;}` in the fork until
+`typedefBraces` is set.
+
+### Taste calls T1–T24 against the fork
+
+| call | fork has it | note |
+|---|---|---|
+| T1 `caseSiblings: anyBreak` | no | 266 h Pony + client tree |
+| T2 literal argument by rules / T9 literal run as one unit | no | part of the call-argument family |
+| T3 / T14 colon follows `typeHintColonPolicy` | yes | agrees |
+| T4 `macro (` | no | 143 h |
+| T5 blanks | no (forced count) | part of the blank-lines family; KEEP hxq |
+| T6 `try … catch` wrap | no | 67 h |
+| T7 / T8 / T10 / T20 complexity-driven lists, grids, typedef bodies | not checked | inside the wrap families |
+| T11 / T12 / T21 `if` ladder, simple value `if`, arrow body | key `expressionIfFit` yes, max width no; the repro above still differs | `return if` rows |
+| T13 trailing comma `keep` rule | not checked | no hunk of its own |
+| T15 glued `#if` body | not checked | no hunk of its own |
+| T16 `metadataCountsAsDocComment` | no | ~490 h anyparse |
+| T17 / T19 are lint rules | n/a | |
+| T18 comprehension padding / `comprehensionFit` | padding yes (config), fit no | 316 h |
+| T22 `fillSimpleRuns` | no (value refused) | 351 h and the config blocker |
+| T23 sole-object hug, T24 lambda-arg hug | no | hxq side pending (FMT-HUG-SOLE-OBJECT-ELEMENT, FMT-LAMBDA-ARG-HUG-BINARY-BODY); the fork twin follows |
+
+### Proposed queue lines (ranked; not queued — the parent and the user choose)
+
+Counts are the hunk / file figures of the family table; every fork line touches the haxe-formatter fork checkout (fork, branch `fx/<id>`, never pushed).
+
+1. FX-CFG-ANY (priority high, difficulty 2, touches hxformat.json of this repo, no after): add `whitespace.bracesConfig.typedefBraces: after/before` and set `comprehensionBrackets.openingPolicy: around`. Both are hxq no-ops (0 files move); the fork difference drops 1907 → 1775 files (typedef 828 / 596, `return[` 369 / 274). Repro: `typedef A = { var a: Int; }` prints `{var a: Int;}` in the fork. Pony gets the same `openingPolicy: around` as a list for the user (296 → 291 files); the client tree needs `ternaryMultilineBranch`, `methodChain`, `returnBodySingleLine` pinned (6 / 9 / 1 files).
+2. FX-FORK-VALUES (high, 4, touches the fork: config enum values, after: none): the fork accepts `wrapping.*.rules[].type: fillSimpleRuns` and `lineEnds.metadata*: fit` (parse and alias to `fillLine` / `none` first). Ends the config-validity blocker: the fork formats 0 of 3741 and 0 of 940 files today. Repro: run the fork on this repo's hxformat.json.
+3. FX-FORK-T16-BLANKS (normal, 5, fork, after 2): `emptyLines.metadataCountsAsDocComment` plus per-type `afterFieldsWithDocComments` for typedef / enum / enum abstract. About 790 of the 1023 / 580 anyparse blank-line hunks: ~490 for T16 (298 + 101 + 87) plus ~300 for the per-type key; the overlap of the two was not checked, so 490 to 790. Repro: `typedef B = { var a: Int; @:optional var b: Int; }`: hxq puts blanks around the meta'd field, the fork none.
+4. FX-FORK-T22-CHAIN (normal, 5, fork, after 2): real `fillSimpleRuns` layout for `&&` / `||` chains, 351 / 220 (anyparse). Repro: a six-operand null-check condition over the width.
+5. FX-FORK-T18-COMPFIT (normal, 5, fork, after 2): `wrapping.comprehensionFit`, 316 / 229. Repro: `final r: Array<V> = [for (c in cs) for (v in run(c)) v];` over the width: the fork breaks inside the brackets, hxq keeps one line.
+6. FX-FORK-T1-CASE (normal, 5, fork): `sameLine.caseSiblings: anyBreak`, 152 / 72 Pony + 114 / 68 client tree. Repro: a switch with one multi-line body and short siblings.
+7. FX-FORK-META-FIT (normal, 5, fork, after 2): metadata `fit` policy for declarations only (a pin of `after` also breaks expression metas: 156 new hunks); Pony 98 / 59. Repro: `@:keep public var x:Int;` vs `@:nullSafety(Off) stmt;`.
+8. FX-FORK-SMALL (low, 3, fork): `macro (` spacing T4 (136 / 32), brace-less `try … catch` wrap T6 (62 / 43), arrow spacing for `(x:T)->body` vs a function-type arrow (client tree 39 / 14). Repro: `var g = (count:Int)->f(count);` prints no spaces in the fork.
+9. FX-HUG-SOLE-OBJECT-ELEMENT-FORK (queued) and a T24 twin (lambda-arg hug), after the hxq sides land; re-count the cuddled-argument family (224 / 122 anyparse, 180 / 63 client tree) at that time.
+10. FX-PARITY-RATCHET (normal, 4, battery, after 1, 2): record fork ≠ hxq files for anyparse and Pony and refuse an increase; replaces FX-G.
+11. FX-FORK-WRAP-CENSUS (low, 4, research, after 1–8): isolate one mechanism each for call arguments (1464 / 775 anyparse), method chain, condition parens, ternary / `+` chains, object and array wraps, the `+` continuation indent; then split. About 3000 hunks, no repro yet.
+
+### How a fork line runs through the queue
+
+A queue line with `repo:` + `workflow:` is already supported (engine lines use `workflow: engine-task`), and slice-pipeline refuses a line whose repo is not its own. Cheapest: a `fork-task` workflow copied from the engine's `engine-task.yaml`: `repo:` the fork checkout; prepare = `git worktree add -b fx/<slice>` from the fx tip (a build there is about 1 s); gate = `haxe test.hxml` in the worktree (run once on a `git archive` copy of the tip: exit 0, about 20 s) plus a parity row (fork vs `hxq fmt` on copies of this repo and Pony, differing-file count not above a stored number); land = the branch stays in the fork, never pushed. The sandbox needs write access to the fork's `.git` for `worktree add`.
+
+### The old lines
+
+- FX-CFG (parked): replaced by FX-CFG-A for anyparse; the commits into Pony and the client tree were never made, the line must not run as written.
+  Done: interface/extern blanks 1/1 (`550bd70af`), `ternaryMultilineBranch` pinned in anyparse and Pony (`20b9dd061`), `blockCommentBodyIndent`. Still true:
+  the client tree lacks `ternaryMultilineBranch`, `methodChain`, `returnBodySingleLine` (table above); Pony needs `comprehensionBrackets.openingPolicy`.
+  Obsolete: the "113 key paths" list of FX-1e (10-22), K6 as worded, K7.
+- FX-G (parked, "fork == hxq on three trees" as a battery gate): the end state stands, its `after` list is stale. It cannot gate yet (no fork build in the
+  battery; the client tree is private, so only anyparse + Pony could gate in a public repo) and the gap is 1775–1907 files on anyparse. Replace by a
+  ratchet once the config blocker and the pins are in: the battery records fork ≠ hxq files per public tree and refuses an increase.
