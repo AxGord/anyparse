@@ -308,7 +308,9 @@ final class SymbolIndexBuilder {
 			pendingPrivate = false;
 		}
 
-		for (gn in declNodes(tree, source, externModifierKind, privateModifierKinds, prefixKeywordKinds(shape))) {
+		for (
+			gn in declNodes(tree, source, shape.conditionalMemberKind, externModifierKind, privateModifierKinds, prefixKeywordKinds(shape))
+		) {
 			final node: QueryNode = gn.node;
 			if (externModifierKind != null && node.kind == externModifierKind) {
 				pendingExtern = true;
@@ -728,7 +730,8 @@ final class SymbolIndexBuilder {
 	 * dropped: a type public in any build keeps the binding a public one has.
 	 */
 	private static function declNodes(
-		tree: QueryNode, source: String, externModifierKind: Null<String>, privateKinds: Array<String>, prefixKinds: Array<String>
+		tree: QueryNode, source: String, regionKind: Null<String>, externModifierKind: Null<String>, privateKinds: Array<String>,
+		prefixKinds: Array<String>
 	): Array<GuardedNode> {
 		final out: Array<GuardedNode> = [];
 		final guardedNames: Array<String> = [];
@@ -743,9 +746,9 @@ final class SymbolIndexBuilder {
 		// a prefix keyword a region holds leads the next declaration, which may sit outside the region
 		var prefixed: Bool = false;
 		for (node in tree.children) switch node.kind {
-			case 'Conditional':
+			case kind if (kind == regionKind):
 				prefixed = collectGuardedDecls(
-					node, source, out, guardedNames, seenImports, externModifierKind, privateKinds, prefixKinds, prefixed
+					node, source, out, guardedNames, seenImports, regionKind, externModifierKind, privateKinds, prefixKinds, prefixed
 				);
 			case 'CondSharedBodyDecl':
 				pushGuardedDecl(node, out, guardedNames, seenImports, externModifierKind, false);
@@ -777,15 +780,16 @@ final class SymbolIndexBuilder {
 	 */
 	private static function collectGuardedDecls(
 		node: QueryNode, source: String, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>,
-		externModifierKind: Null<String>, privateKinds: Array<String>, prefixKinds: Array<String>, prefixedIn: Bool
+		regionKind: Null<String>, externModifierKind: Null<String>, privateKinds: Array<String>, prefixKinds: Array<String>,
+		prefixedIn: Bool
 	): Bool {
 		final children: Array<QueryNode> = node.children;
 		var prefixed: Bool = prefixedIn;
 		for (i in 0...children.length) {
 			final child: QueryNode = children[i];
-			if (child.kind == 'Conditional') {
+			if (regionKind != null && child.kind == regionKind) {
 				prefixed = collectGuardedDecls(
-					child, source, out, guardedNames, seenImports, externModifierKind, privateKinds, prefixKinds, prefixed
+					child, source, out, guardedNames, seenImports, regionKind, externModifierKind, privateKinds, prefixKinds, prefixed
 				);
 			} else if (prefixKinds.contains(child.kind)) {
 				prefixed = true;
