@@ -1,5 +1,6 @@
 package anyparse.grammar.json;
 
+import anyparse.query.NodeTokens;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -56,7 +57,12 @@ final class JsonProjection {
 
 	/** Parse `source` and project it. Throws the parser's `ParseError` on a document that does not parse. */
 	public static function parse(source: String): QueryNode {
-		return new QueryNode(DOCUMENT, null, [ for (value in JsonQueryWalker.walk(source, false)) tight(value, source) ]);
+		final document: QueryNode = new QueryNode(
+			DOCUMENT, null,
+			[ for (value in JsonQueryWalker.walk(source, false)) tight(value, source) ]
+		);
+		NodeTokens.attach(document, JsonQueryWalker.parseTokens(source));
+		return document;
 	}
 
 	/** `node`'s span; every projected node but the synthetic root carries one. */

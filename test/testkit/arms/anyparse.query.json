@@ -17511,6 +17511,22 @@
 			"find": "!writes.exists(w -> start < w.effect && w.effect <= first) && ",
 			"replace": "",
 			"note": "a write between the hoist point and the earliest read is not seen, so the local holds the value before the write"
+		},
+		{
+			"name": "M-TOKENS-OWN-COVERS-PARTS",
+			"type": "anyparse.query.NodeTokens",
+			"method": "ownOf",
+			"find": "cursor = log.firstAtOrAfter(inner.to, start, hi);",
+			"replace": "cursor = start;",
+			"note": "a node answers every token inside its span, its children's included, so an `if` owns the parentheses of the call in its body"
+		},
+		{
+			"name": "M-DISK-CACHE-DROPS-TOKENS",
+			"type": "anyparse.query.ParseDiskCache",
+			"method": "decodeTree",
+			"find": "NodeTokens.attach(tree, log);",
+			"replace": "",
+			"note": "a tree read back from disk holds no token log, so a resolution-library node read from the cache has no tokens"
 		}
 	]
 }

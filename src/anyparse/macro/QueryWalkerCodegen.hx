@@ -38,6 +38,7 @@ class QueryWalkerCodegen {
 			rootMemoSource(),
 			rootMemoValue(result),
 			rootMemoError(),
+			rootMemoTokens(),
 			rootField(result, parserPath),
 			publicParseRootStrictField(result, parserPath)
 		];
@@ -45,6 +46,7 @@ class QueryWalkerCodegen {
 		for (fn in result.names) fields.push(nameField(fn));
 		for (fn in result.typeRefs) fields.push(typeRefsField(fn));
 		fields.push(publicParseRootField(result));
+		fields.push(publicParseTokensField());
 		fields.push(publicWalkRootField(result));
 		fields.push(publicWalkField(result));
 		fields.push(kindsField(
@@ -199,14 +201,23 @@ class QueryWalkerCodegen {
 	 */
 	private static function rootField(result: QueryWalkerLowering.QueryWalkerResult, parserPath: String): Field {
 		final parseCall: Expr = {
-			expr: ECall(field(haxe.macro.MacroStringTools.toFieldExpr(parserPath.split('.')), 'parse'), [macro source]),
+			expr: ECall(field(haxe.macro.MacroStringTools.toFieldExpr(parserPath.split('.')), 'parseWith'), [macro _ctx]),
 			pos: Context.currentPos()
 		};
 		final body: Expr = macro {
 			if (_memoSource == source) return _memoRoot;
 			_memoSource = source;
 			_memoError = null;
-			_memoRoot = try $parseCall catch (exception: haxe.Exception) {
+			_memoTokens = null;
+			final _ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput(source));
+			final _log: anyparse.runtime.TokenLog = new anyparse.runtime.TokenLog();
+			_ctx.tokens = _log;
+			_memoRoot = try {
+				final _parsed = $parseCall;
+				_log.seal();
+				_memoTokens = _log;
+				_parsed;
+			} catch (exception: haxe.Exception) {
 				_memoError = exception;
 				null;
 			};
@@ -217,6 +228,39 @@ class QueryWalkerCodegen {
 			access: [APrivate, AStatic],
 			doc: 'The parse root of `source`, memoised on the last source seen; null when it does not parse.',
 			kind: FFun({ args: [SOURCE_ARG], ret: nullRootCT(result.rootCT), expr: body }),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The literal tokens the parse of `_memoSource` kept (`TokenLog`) — null before the first parse and when that source
+	 * failed. A third field of the same single-entry memo, living and dying with `_memoSource`.
+	 */
+	private static function rootMemoTokens(): Field {
+		return {
+			name: '_memoTokens',
+			access: [APrivate, AStatic],
+			doc: 'Token log of the parse of `_memoSource`, or null when that source did not parse.',
+			kind: FVar(macro : Null<anyparse.runtime.TokenLog>, macro null),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * The public `parseTokens(source)` entry — the literals the memoised parse of `source` matched and kept, the log
+	 * `NodeTokens.attach` hands each projected node its own tokens from.
+	 */
+	private static function publicParseTokensField(): Field {
+		final body: Expr = macro {
+			_root(source);
+			return _memoTokens;
+		};
+		return {
+			name: 'parseTokens',
+			access: [APublic, AStatic],
+			doc: 'The literal tokens the parse of `source` matched and kept, through the same memo as `parseRoot`; null when it '
+				+ 'does not parse.',
+			kind: FFun({ args: [SOURCE_ARG], ret: macro : Null<anyparse.runtime.TokenLog>, expr: body }),
 			pos: Context.currentPos()
 		};
 	}

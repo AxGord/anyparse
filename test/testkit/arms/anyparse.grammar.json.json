@@ -152,6 +152,14 @@
 			"find": "indentChar: indentChar,",
 			"replace": "indentChar: Space,",
 			"note": "the tabbed layout falls back to spaces, so a kit a tool re-records is reindented whole"
+		},
+		{
+			"name": "M-JSON-NO-TOKENS",
+			"type": "anyparse.grammar.json.JsonProjection",
+			"method": "parse",
+			"find": "NodeTokens.attach(document, JsonQueryWalker.parseTokens(source));",
+			"replace": "",
+			"note": "a JSON document is projected without its token log, so a member does not know its colon"
 		}
 	]
 }

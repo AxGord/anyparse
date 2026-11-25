@@ -191,6 +191,22 @@
 			"find": "if (lineBreak || (",
 			"replace": "if ((",
 			"note": "a value with no closing `;` loses the blank lines and comments after it: the operator loop consumed that gap into the stash, and the Star rewind drops the stash unless the value ended with `}`"
+		},
+		{
+			"name": "M-TOKEN-LOG-KEEPS-ABANDONED",
+			"type": "anyparse.runtime.TokenLog",
+			"method": "push",
+			"find": "retract(from);",
+			"replace": "",
+			"note": "a literal a branch matched before the parser left it stays in the log, so a parenthesised expression owns its parentheses twice"
+		},
+		{
+			"name": "M-MEMO-REPLAY-DROPS-TOKENS",
+			"type": "anyparse.runtime.Parser",
+			"method": "memoReplay",
+			"find": "if (log != null && kept != null) log.replay(kept);",
+			"replace": "",
+			"note": "a memoised run replayed after a rewind dropped its tokens records none, so `[]` inside a re-tried parenthesis loses its brackets"
 		}
 	]
 }

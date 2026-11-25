@@ -440,6 +440,14 @@
 			"find": "stmts.length < 2 ? null",
 			"replace": "true ? null",
 			"note": "a multi-statement pattern keeps only its first statement, so the rest is silently dropped and the search is wider than written"
+		},
+		{
+			"name": "M-PARSED-ROOT-NO-TOKENS",
+			"type": "anyparse.grammar.haxe.query.HaxeQueryPlugin",
+			"method": "parseRoot",
+			"find": "HaxeQueryWalker.parseTokens(source)",
+			"replace": "null",
+			"note": "the root handle carries no token log, so no tree a caching host projects has tokens"
 		}
 	]
 }

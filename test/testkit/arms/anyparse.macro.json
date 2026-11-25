@@ -3737,6 +3737,22 @@
 			"find": "anyparse.runtime.CommentRun.endsInBreak($afterRun) ? anyparse.core.D.DECIDED_ARROW_BREAK : opt.lineWidth",
 			"replace": "opt.lineWidth",
 			"note": "an arrow body under a line comment after `->` keeps its marker undecided: a body that fits goes below the comment with only its first line indented"
+		},
+		{
+			"name": "M-KW-BOUNDARY-KEEPS-TOKEN",
+			"type": "anyparse.macro.Codegen",
+			"method": "matchKwField",
+			"find": "ctx.tokens?.retract(_savedPos);",
+			"replace": "",
+			"note": "a keyword failing its word boundary stays in the log, so the identifier `elseBody` owns an `else`"
+		},
+		{
+			"name": "M-TRIVIA-LIT-RECORDS",
+			"type": "anyparse.macro.Codegen",
+			"method": "matchLitField",
+			"find": "if (records) steps.push",
+			"replace": "steps.push",
+			"note": "comment scanning records its delimiters, so a `//` inside a class body is a token of the class"
 		}
 	]
 }

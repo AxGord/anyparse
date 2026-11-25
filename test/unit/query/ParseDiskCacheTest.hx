@@ -27,7 +27,12 @@ class ParseDiskCacheTest extends Test {
 		+ 'String): Null<U> {\n\t\tfinal made = new Map<String, Int>();\n\t\treturn null;\n\t}\n\n}\n';
 	private static final OTHER: String = 'package disk.cache;\n\nclass Holder {\n\n\tpublic function new() {}\n\n}\n';
 
-	/** A stored tree and bundle come back as what a parse gave: every node field, the declared-type and target slots, every map. */
+	/**
+	 * A stored tree and bundle come back as what a parse gave: every node field, the declared-type and target slots, each
+	 * node's own tokens, every map.
+	 */
+	@:pin('control')
+	@:killer('M-DISK-CACHE-DROPS-TOKENS')
 	public function testReadGivesBackWhatTheParseGave(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.write('diskcacheround', SOURCE);
@@ -201,7 +206,7 @@ class ParseDiskCacheTest extends Test {
 		return new CachingGrammarPlugin(new HaxeQueryPlugin());
 	}
 
-	/** Whether two trees are the same tree: kind, name, span, type arguments, the declared type and every child, recursively. */
+	/** Whether two trees are the same tree: kind, name, span, type arguments, own tokens, declared type, every child, recursively. */
 	private static function sameTree(a: QueryNode, b: QueryNode): Bool {
 		final spanA: Null<Span> = a.span;
 		final spanB: Null<Span> = b.span;
@@ -212,6 +217,7 @@ class ParseDiskCacheTest extends Test {
 			return false;
 		if ((spanA == null) != (spanB == null) || (spanA != null && spanB != null && (spanA.from != spanB.from || spanA.to != spanB.to)))
 			return false;
+		if (a.tokenSpans().map(span -> span.toString()).join(',') != b.tokenSpans().map(span -> span.toString()).join(',')) return false;
 		final typeA: Null<QueryNode> = a.type;
 		final typeB: Null<QueryNode> = b.type;
 		if ((typeA == null) != (typeB == null) || (typeA != null && typeB != null && !sameTree(typeA, typeB))) return false;

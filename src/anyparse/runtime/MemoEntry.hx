@@ -38,9 +38,14 @@ final class MemoEntry {
 	/** A copy of the stash the run created and left pending, for `Own`. */
 	public final own: Null<PendingTrivia>;
 
+	/** The `TokenLog` pairs the run kept, for a parse that records them; null otherwise. */
+	public final tokens: Null<Array<Int>>;
+
 	public function new(
-		end: Int, value: Null<Dynamic>, error: Null<ParseError>, handedAfter: Null<PendingTrivia>, exit: MemoExit, own: Null<PendingTrivia>
+		end: Int, value: Null<Dynamic>, error: Null<ParseError>, handedAfter: Null<PendingTrivia>, exit: MemoExit, own: Null<PendingTrivia>,
+		?tokens: Null<Array<Int>>
 	) {
+		this.tokens = tokens;
 		this.end = end;
 		this.value = value;
 		this.error = error;

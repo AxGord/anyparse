@@ -1,5 +1,6 @@
 package anyparse.grammar.mermaid;
 
+import anyparse.query.NodeTokens;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -28,7 +29,9 @@ final class MermaidProjection {
 	public static function parse(source: String): QueryNode {
 		final statements: Array<QueryNode> = MermaidQueryWalker.walk(source, false);
 		if (statements.length > 0) statements[0] = tight(statements[0], source);
-		return new QueryNode(DOCUMENT, null, statements);
+		final document: QueryNode = new QueryNode(DOCUMENT, null, statements);
+		NodeTokens.attach(document, MermaidQueryWalker.parseTokens(source));
+		return document;
 	}
 
 	/** `node`'s span; every projected node but the synthetic root carries one. */

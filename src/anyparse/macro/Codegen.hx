@@ -67,7 +67,8 @@ class Codegen {
 			fields.push(ruleField(rule));
 		}
 		fields.push(skipWsField(formatInfo));
-		fields.push(matchLitField());
+		fields.push(matchLitField('matchLit', true));
+		fields.push(matchLitField('matchTriviaLit', false));
 		fields.push(peekLitField());
 		fields.push(matchKwField());
 		fields.push(peekKwField());
@@ -273,7 +274,7 @@ class Codegen {
 
 	private static function commentSkipBlock(p: FormatReader.CommentPattern): Expr {
 		final open: String = p.open;
-		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+		if (p.lineTerminated) return macro if (matchTriviaLit(ctx, $v{open})) {
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
 				ctx.pos++;
@@ -281,9 +282,9 @@ class Codegen {
 			continue;
 		}
 		final close: String = p.close;
-		return macro if (matchLit(ctx, $v{open})) {
+		return macro if (matchTriviaLit(ctx, $v{open})) {
 			while (ctx.pos < ctx.input.length) {
-				if (matchLit(ctx, $v{close})) break;
+				if (matchTriviaLit(ctx, $v{close})) break;
 				ctx.pos++;
 			}
 			continue;
@@ -322,7 +323,7 @@ class Codegen {
 
 	private static function commentSkipAndStashBlock(p: FormatReader.CommentPattern): Expr {
 		final open: String = p.open;
-		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+		if (p.lineTerminated) return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
@@ -342,11 +343,11 @@ class Codegen {
 			continue;
 		}
 		final close: String = p.close;
-		return macro if (matchLit(ctx, $v{open})) {
+		return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				if (matchLit(ctx, $v{close})) {
+				if (matchTriviaLit(ctx, $v{close})) {
 					_end = ctx.pos;
 					break;
 				}
@@ -409,7 +410,12 @@ class Codegen {
 			|| $code == '_'.code;
 	}
 
-	private static function matchLitField(): Field {
+	/**
+	 * `matchLit`, or with `records` false `matchTriviaLit`: the same match, minus the `TokenLog` record a span parse
+	 * keeps of every literal its grammar matched. Comment scanning uses the second, since a comment's delimiters are
+	 * trivia, not a token of any node.
+	 */
+	private static function matchLitField(name: String, records: Bool): Field {
 		// Allocation-free compare: this is the single hottest primitive in
 		// generated parsers (every failed Alt-branch trial lands here), and
 		// the previous `input.substring(pos, pos + len) != lit` allocated a
@@ -433,9 +439,13 @@ class Codegen {
 			}
 		);
 		steps.push(macro ctx.pos = base + len);
+		if (records) steps.push(macro {
+			final _log: Null<anyparse.runtime.TokenLog> = ctx.tokens;
+			if (_log != null) _log.push(base, base + len);
+		});
 		steps.push(macro return true);
 		return {
-			name: 'matchLit',
+			name: name,
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
@@ -621,6 +631,7 @@ class Codegen {
 						final isWord: Bool = $isWordTest;
 						if (isWord) {
 							ctx.pos = _savedPos;
+							ctx.tokens?.retract(_savedPos);
 							return false;
 						}
 					}
@@ -632,17 +643,14 @@ class Codegen {
 	}
 
 	/**
-	 * `expectKw` is `expectLit` plus a trailing word-boundary check. After
-	 * the literal match succeeds it peeks at the next input character and
-	 * throws `ParseError` if it is a word character (`[A-Za-z0-9_]`), so
-	 * that e.g. `class` does not match the prefix of `classify`. Rollback
-	 * of the consumed characters on word-boundary failure is the caller's
-	 * responsibility — the enum-branch `tryBranch` wrapper in `Lowering`
-	 * captures `ctx.pos` before invoking the branch and resets it on any
-	 * thrown `ParseError`, which covers this case automatically.
+	 * `expectKw` is `matchKw` that throws instead of answering false: the
+	 * keyword must match and end on a word boundary (`[A-Za-z0-9_]` must not
+	 * follow), so that e.g. `class` does not match the prefix of `classify`.
+	 * Going through `matchKw` leaves one helper that rewinds over its own
+	 * match, so the `TokenLog` record of a keyword failing its boundary is
+	 * dropped in one place.
 	 */
 	private static function expectKwField(): Field {
-		final isWordTest: Expr = isWordCharExpr(macro c);
 		return {
 			name: 'expectKw',
 			access: [APrivate, AStatic],
@@ -653,12 +661,7 @@ class Codegen {
 				],
 				ret: macro : Void,
 				expr: macro {
-					if (!matchLit(ctx, keyword)) throw anyparse.runtime.ParseError.backtrack;
-					if (ctx.pos < ctx.input.length) {
-						final c: Int = ctx.input.charCodeAt(ctx.pos);
-						final isWord: Bool = $isWordTest;
-						if (isWord) throw anyparse.runtime.ParseError.backtrack;
-					}
+					if (!matchKw(ctx, keyword)) throw anyparse.runtime.ParseError.backtrack;
 				}
 			}),
 			pos: Context.currentPos()
@@ -1020,7 +1023,7 @@ class Codegen {
 	 */
 	private static function commentCaptureBlock(p: FormatReader.CommentPattern): Expr {
 		final open: String = p.open;
-		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+		if (p.lineTerminated) return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
@@ -1039,11 +1042,11 @@ class Codegen {
 			continue;
 		}
 		final close: String = p.close;
-		return macro if (matchLit(ctx, $v{open})) {
+		return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				if (matchLit(ctx, $v{close})) {
+				if (matchTriviaLit(ctx, $v{close})) {
 					_end = ctx.pos;
 					break;
 				}
@@ -1065,7 +1068,7 @@ class Codegen {
 	 */
 	private static function trailingAttemptBlock(p: FormatReader.CommentPattern): Expr {
 		final open: String = p.open;
-		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+		if (p.lineTerminated) return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
@@ -1076,14 +1079,14 @@ class Codegen {
 		final close: String = p.close;
 		final closeLen: Int = close.length;
 		final docRefusal: Expr = docEndsLineRefusal(p, macro _start - $v{open.length});
-		return macro if (matchLit(ctx, $v{open})) {
+		return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos;
 			var _found: Bool = false;
 			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				final _c: Int = ctx.input.charCodeAt(ctx.pos);
 				if (_c == '\n'.code) break;
-				if (matchLit(ctx, $v{close})) {
+				if (matchTriviaLit(ctx, $v{close})) {
 					_end = ctx.pos - $v{closeLen};
 					_found = true;
 					break;
@@ -1238,7 +1241,7 @@ class Codegen {
 	 */
 	private static function trailingFullAttemptBlock(p: FormatReader.CommentPattern, runOn: TrailingRunOn): Expr {
 		final open: String = p.open;
-		if (p.lineTerminated) return macro if (matchLit(ctx, $v{open})) {
+		if (p.lineTerminated) return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			while (ctx.pos < ctx.input.length) {
 				if (ctx.input.charCodeAt(ctx.pos) == '\n'.code) break;
@@ -1267,12 +1270,12 @@ class Codegen {
 			};
 			case Always, BeforeSeparator: macro {};
 		};
-		return macro if (matchLit(ctx, $v{open})) {
+		return macro if (matchTriviaLit(ctx, $v{open})) {
 			final _start: Int = ctx.pos - $v{open.length};
 			var _found: Bool = false;
 			var _end: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
-				if (matchLit(ctx, $v{close})) {
+				if (matchTriviaLit(ctx, $v{close})) {
 					_end = ctx.pos;
 					_found = true;
 					break;

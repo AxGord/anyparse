@@ -6,6 +6,7 @@ import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonFormat;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.runtime.Span;
+import anyparse.runtime.TokenLog;
 import haxe.Exception;
 import haxe.io.Path;
 
@@ -35,7 +36,8 @@ final class ParseDiskCache {
 
 	private static inline final MILLISECONDS: Float = 1000;
 
-	// One node is NODE_WIDTH integers, at these offsets from where it starts.
+	// One node is NODE_WIDTH integers, at these offsets from where it starts. After the tree: the count of its
+	// `QueryNode.tokenLog` integers (-1: none), then the log's pairs.
 	private static inline final KIND: Int = 0;
 	private static inline final NAME: Int = 1;
 	private static inline final SPAN_FROM: Int = 2;
@@ -47,7 +49,7 @@ final class ParseDiskCache {
 	private static inline final NODE_WIDTH: Int = 8;
 
 	/** The scheme tag opening every entry: bump it and every stored entry misses. */
-	private static final FORMAT_TAG: String = 'apq-parse-cache v2';
+	private static final FORMAT_TAG: String = 'apq-parse-cache v3';
 
 	private static final DIR_PREFIX: String = 'apq-parse-cache-';
 	private static final SWITCH_VARIABLE: String = 'APQ_PARSE_CACHE';
@@ -107,6 +109,10 @@ final class ParseDiskCache {
 		final stored: StoredTree = { strings: [], ints: [] };
 		final interned: Map<String, Int> = [];
 		writeNode(tree, stored, interned);
+		final log: Null<TokenLog> = tree.tokenLog;
+		final pairs: Array<Int> = log == null ? [] : log.pairs();
+		stored.ints.push(log == null ? -1 : pairs.length);
+		for (bound in pairs) stored.ints.push(bound);
 		return StoredTreeWriter.write(stored, JsonFormat.instance.compactWriteOptions);
 	}
 
@@ -140,7 +146,15 @@ final class ParseDiskCache {
 		final stored: StoredTree = StoredTreeParser.parse(text);
 		final cursor: Array<Int> = [0];
 		final tree: QueryNode = readNode(stored, cursor);
-		if (cursor[0] != stored.ints.length) throw new Exception('trailing data in a stored tree');
+		final at: Int = cursor[0];
+		final tokenInts: Int = at < stored.ints.length ? stored.ints[at] : -2;
+		if (tokenInts < -1 || at + 1 + (tokenInts < 0 ? 0 : tokenInts) != stored.ints.length)
+			throw new Exception('a stored tree ends without its token log');
+		if (tokenInts >= 0) {
+			final log: TokenLog = new TokenLog();
+			log.replay(stored.ints.slice(at + 1));
+			NodeTokens.attach(tree, log);
+		}
 		return tree;
 	}
 

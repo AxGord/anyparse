@@ -85,6 +85,12 @@ final class Parser {
 	public var bodySkip: Null<BodySkip> = null;
 
 	/**
+	 * Set for a parse whose consumer reads the literals it matched (`TokenLog`): the generated `matchLit` records each
+	 * match here and a memo replay re-records its run's. Null for every parse that does not ask.
+	 */
+	public var tokens: Null<TokenLog> = null;
+
+	/**
 	 * Packrat memo of the `@:memo` grammar rules: generated rule key plus the
 	 * pending-trivia content (`memoKey`), then start position. Scoped to this
 	 * parse like every other field here: an entry is valid only for this
@@ -129,6 +135,9 @@ final class Parser {
 		final entry: Null<MemoEntry> = byPos == null ? null : byPos[start];
 		if (entry == null) return null;
 		pos = entry.end;
+		final log: Null<TokenLog> = tokens;
+		final kept: Null<Array<Int>> = entry.tokens;
+		if (log != null && kept != null) log.replay(kept);
 		final handed: Null<PendingTrivia> = pendingTrivia;
 		final after: Null<PendingTrivia> = entry.handedAfter;
 		if (handed != null && after != null) {
@@ -160,9 +169,10 @@ final class Parser {
 		if (handed != null && handed.leadingComments.length < handedComments) return;
 		final left: Null<PendingTrivia> = pendingTrivia;
 		final exit: MemoExit = if (left == null) Nothing else if (left == handed) Handed else Own;
+		final log: Null<TokenLog> = tokens;
 		final entry: MemoEntry = new MemoEntry(
 			pos, value, error, handed == null ? null : copyTrivia(handed, handedComments), exit,
-			left == null || exit == Handed ? null : copyTrivia(left, 0)
+			left == null || exit == Handed ? null : copyTrivia(left, 0), log == null || error != null ? null : log.between(start, pos)
 		);
 		var byPos: Null<Map<Int, MemoEntry>> = _memo[key];
 		if (byPos == null) {

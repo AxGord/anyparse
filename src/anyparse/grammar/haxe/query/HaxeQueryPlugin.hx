@@ -40,8 +40,10 @@ import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.NodeTokens;
 import anyparse.query.OracleProvider;
 import anyparse.query.ParseGate;
+import anyparse.query.ParsedRoot;
 import anyparse.query.ParsedRootProvider;
 import anyparse.query.Pattern;
 import anyparse.query.ReachLiveness.ReachBuilds;
@@ -655,10 +657,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * `ParsedRootProvider`: parse `source` into the grammar root - the handle the three
 	 * projections below share, so a caller needing more than one of them pays ONE parse
 	 * instead of one per projection. Null when the source does not parse; each projection
-	 * then behaves exactly as its source-taking twin did on that source.
+	 * then behaves exactly as its source-taking twin did on that source. The handle is a `ParsedRoot`
+	 * carrying the literals the parse kept, which `treeFromRoot` hands to the tree's nodes.
 	 */
 	public function parseRoot(source: String): Null<Any> {
-		return HaxeQueryWalker.parseRoot(source);
+		final root: Null<Any> = HaxeQueryWalker.parseRoot(source);
+		return root == null ? null : new ParsedRoot(root, HaxeQueryWalker.parseTokens(source));
 	}
 
 	/**
@@ -670,7 +674,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		final regions: Array<LexRegion> = lexicalRegions(source);
 		final ctx: Parser = new Parser(new StringInput(source));
 		ctx.bodySkip = new BodySkip(SourceComments.collectNonCodeRegions(regions), CondDirectives.skipMarks(source, refShape(), regions));
-		return try HaxeModuleSpanParser.parseWith(ctx) catch (exception: Exception) null;
+		final root: Null<Any> = try HaxeModuleSpanParser.parseWith(ctx) catch (exception: Exception) null;
+		return root == null ? null : new ParsedRoot(root, null);
 	}
 
 	/**
@@ -689,16 +694,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// stopped parsing, with no file offset to look at. Re-raise the parser's own error here, where
 		// the source is in hand: the memo the null root came from still holds it, so this costs nothing
 		// on the common path and one re-parse on a path that throws either way.
-		final parsed: Any = root ?? (HaxeQueryWalker.parseRootStrict(source): Any);
+		final handle: Null<ParsedRoot<Any>> = cast root;
+		final parsed: Any = handle?.value ?? (HaxeQueryWalker.parseRootStrict(source): Any);
 		final tree: QueryNode = new QueryNode('module', null, HaxeQueryWalker.walkRoot(cast parsed, withTypeRefs));
 		HxInterpProjection.reproject(tree, source);
 		HxArrowParamProjection.reproject(tree, source);
+		NodeTokens.attach(tree, handle?.tokens);
 		return tree;
 	}
 
 	/** `ParsedRootProvider`: the `spanTypeInfo` projection of an already-parsed root — the empty bundle on a null one. */
 	public function spanTypeInfoFromRoot(root: Null<Any>, source: String): SpanTypeInfo {
-		return HaxeQueryWalker.spanInfoRoot(cast root, source);
+		return HaxeQueryWalker.spanInfoRoot(cast rootValue(root), source);
 	}
 
 	/**
@@ -739,7 +746,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			final raw: Null<String> = node.name;
 			if (raw != null) out[SourceText.lastSegment(raw)] = raw;
 		}
-		for (tp in HaxeQueryWalker.typeParamNamesRoot(cast root, source)) out.remove(tp);
+		for (tp in HaxeQueryWalker.typeParamNamesRoot(cast rootValue(root), source)) out.remove(tp);
 		return out;
 	}
 
@@ -934,6 +941,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		final names: Array<String> = [];
 		collectStaticMethodsWithParam(tree, names);
 		return names;
+	}
+
+	/** The grammar root a `parseRoot` / `parseDeclarationsRoot` handle holds; null for a null handle. */
+	private static function rootValue(root: Null<Any>): Null<Any> {
+		final handle: Null<ParsedRoot<Any>> = cast root;
+		return handle?.value;
 	}
 
 	/**

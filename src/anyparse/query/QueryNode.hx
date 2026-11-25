@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
+import anyparse.runtime.TokenLog;
 
 /**
  * Generic AST node view exposed by a `GrammarPlugin` to the query
@@ -27,6 +28,13 @@ import anyparse.runtime.Span;
  */
 @:nullSafety(Strict)
 final class QueryNode {
+
+	/**
+	 * The literals the parse of this node's tree matched and kept (`TokenLog`), shared by every node of the tree; null
+	 * when the tree was read without one. Written once, after the tree is whole (`NodeTokens.attach`); read through
+	 * `tokenSpans`.
+	 */
+	public var tokenLog(default, null): Null<TokenLog> = null;
 
 	public final kind: String;
 	public final name: Null<String>;
@@ -84,6 +92,30 @@ final class QueryNode {
 		this.type = type;
 		this.typeArgCount = typeArgCount;
 		this.target = target;
+	}
+
+	/**
+	 * Set `tokenLog`, once: `NodeTokens.attach` hands it to every node when the tree is projected or read back from disk.
+	 * A node that already holds one keeps it, since a node another tree lent this one still answers for its own parse.
+	 */
+	public function attachTokens(log: TokenLog): Void {
+		if (tokenLog == null) tokenLog = log;
+	}
+
+	/**
+	 * The literals the parse matched for this node ITSELF — its keywords, its `@:lead` / `@:trail` delimiters, its
+	 * operators — in source order; a token inside a child's or the type slot's span is that node's, never this one's.
+	 * Empty when it matched none or its tree holds no `tokenLog`.
+	 */
+	public function tokenSpans(): Array<Span> {
+		final log: Null<TokenLog> = tokenLog;
+		return log == null ? [] : NodeTokens.ownOf(this, log);
+	}
+
+	/** The span of the first of `tokens` that spells `text` in `source`; null when none does. */
+	public function tokenSpelled(text: String, source: String): Null<Span> {
+		for (span in tokenSpans()) if (span.to - span.from == text.length && source.substring(span.from, span.to) == text) return span;
+		return null;
 	}
 
 }
