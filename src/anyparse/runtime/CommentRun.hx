@@ -14,6 +14,16 @@ final class CommentRun {
 		return c.startsWith('//');
 	}
 
+	/** Whether the comment `c` is a block comment on one line, which keeps the token after it on its line behind one space. */
+	public static inline function isInlineBlock(c: String): Bool {
+		return c.startsWith('/*') && c.indexOf('\n') < 0;
+	}
+
+	/** Whether the token after `run` starts the next line: the run's last comment is a line comment or a block spanning lines. */
+	public static function endsInBreak(run: Array<String>): Bool {
+		return run.length > 0 && !isInlineBlock(run[run.length - 1]);
+	}
+
 	/** `comments` joined into one slot value, in source order. */
 	public static function join(comments: Array<String>): String {
 		var out: Null<String> = null;

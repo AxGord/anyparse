@@ -3180,7 +3180,7 @@
 			"name": "M-OPTIONAL-AFTER-LEAD-UNWRITTEN",
 			"type": "anyparse.macro.WriterRefFieldLowering",
 			"method": "emitOptionalRefLead",
-			"find": "if (afterLead != null) optParts.push(afterLeadDoc(afterLead));",
+			"find": "if (afterLead != null) optParts.push(WriterLoweringSupport.afterLeadDoc(afterLead));",
 			"replace": "",
 			"note": "the optional-lead writer never emits the AfterLead run, so a parsed comment after an optional lead is dropped on write"
 		},
@@ -3721,6 +3721,22 @@
 			"find": "(!_glued && ($addByInterMemberExpr || $addByUniformBetweenExpr))",
 			"replace": "($addByInterMemberExpr || $addByUniformBetweenExpr)",
 			"note": "a member glued into a line-comment heading's subgroup takes the betweenVars / betweenFunctions / enum betweenFields blank again"
+		},
+		{
+			"name": "M-AFTER-LEAD-BREAK-HARD",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "afterLeadDoc",
+			"find": "_dohsbh()",
+			"replace": "_dhl()",
+			"note": "the break that ends a line comment after a lead or after `->` no longer yields to the arrow body's own break, so a blank line opens under the comment"
+		},
+		{
+			"name": "M-ARROW-MARKER-AFTER-RUN-UNFORCED",
+			"type": "anyparse.macro.WriterBlankLowering",
+			"method": "arrowBodyLineWrapExpr",
+			"find": "anyparse.runtime.CommentRun.endsInBreak($afterRun) ? anyparse.core.D.DECIDED_ARROW_BREAK : opt.lineWidth",
+			"replace": "opt.lineWidth",
+			"note": "an arrow body under a line comment after `->` keeps its marker undecided: a body that fits goes below the comment with only its first line indented"
 		}
 	]
 }

@@ -1179,6 +1179,14 @@
 			"find": "if (D.isHardline(flat)) return { width: total, opensAtBreak: lastOpen };",
 			"replace": "",
 			"note": "the head width runs on past the forced break after the body's `{` through the whole body, so a block-body comprehension with a fitting head stops hugging"
+		},
+		{
+			"name": "M-DECIDED-MARKER-BRACE-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "selfBreakingBraceBody",
+			"find": "width != D.DECIDED_ARROW_BREAK",
+			"replace": "true",
+			"note": "a brace body under a line comment after `->` takes the marker's flat side: its `{` goes below the comment but its statements and `}` stay at the head's indent"
 		}
 	]
 }

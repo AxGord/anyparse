@@ -833,6 +833,22 @@
 			"find": "final widthArm: Null<Doc> = widthProbeBreakArm(hugItems[idx]);",
 			"replace": "final widthArm: Null<Doc> = null;",
 			"note": "the ternary hug measures a block-body comprehension branch by its hugged head, so a head too wide for the line breaks the ternary instead of gluing it to the bracket"
+		},
+		{
+			"name": "M-BARE-ARROW-SPLIT-RUN-IN-BODY",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "bareArrowSplit",
+			"find": "lastIdx > opIdx + 2 &&",
+			"replace": "false &&",
+			"note": "the comment run after a bare arrow's `->` is split into the body, which a sole-argument glue shape replaces by the marker's flat side, so the comment is dropped"
+		},
+		{
+			"name": "M-DECIDED-MARKER-BLOCK-HUGGED",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "arrowBodyIsBlock",
+			"find": "n != D.DECIDED_ARROW_BREAK && ",
+			"replace": "",
+			"note": "a last-argument lambda whose brace body sits under a line comment after `->` is hugged as a `{`-led item: its marker is replaced by the flat side and the block loses its indent"
 		}
 	]
 }

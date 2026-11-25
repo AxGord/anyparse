@@ -2862,7 +2862,8 @@ class WrapList {
 	 */
 	private static function arrowBodyIsBlock(item: Doc): Bool {
 		return switch item {
-			case WrapBoundary(IfResidualLineExceeds(_, _, flatBody)): DocMeasure.firstVisibleTextStartsWith(flatBody, '{'.code);
+			case WrapBoundary(IfResidualLineExceeds(n, _, flatBody)):
+				n != D.DECIDED_ARROW_BREAK && DocMeasure.firstVisibleTextStartsWith(flatBody, '{'.code);
 			case Concat(arr) if (arr.length > 0): arrowBodyIsBlock(arr[arr.length - 1]);
 			case _: false;
 		};
@@ -2892,7 +2893,12 @@ class WrapList {
 			case _:
 		}
 		if (opIdx < 0) return null;
-		final headParts: Array<Doc> = [ for (i in 0...opIdx + 1) arr[i] ];
+		// A comment run the operator carries (`x -> // why` before the body) is an element between the post-operator
+		// space and the operand: it stays on the head's line, with that space, and the body is the last element.
+		final lastIdx: Int = arr.length - 1;
+		final afterOpRun: Bool = lastIdx > opIdx + 2 && arr[opIdx + 1].match(OptSpace(_));
+		final headParts: Array<Doc> = [ for (i in 0...(afterOpRun ? lastIdx : opIdx + 1)) arr[i] ];
+		if (afterOpRun) return { head: Concat(headParts), body: arr[lastIdx] };
 		// Body = everything after the operator, skipping a single leading OptSpace
 		// (the `_dop(' ')` post-arrow space the Pratt codegen emits).
 		final bodyParts: Array<Doc> = [];

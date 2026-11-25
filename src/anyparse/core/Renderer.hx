@@ -739,8 +739,10 @@ class Renderer {
 	 * arithmetic is pinned, the CHOICE this line makes between the two is not, and
 	 * cannot be — flipping this call's argument still leaves every gate green.
 	 */
-	private static inline function selfBreakingBraceBody(flatDoc: Doc): Bool {
-		return DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code)
+	private static inline function selfBreakingBraceBody(width: Int, flatDoc: Doc): Bool {
+		// A marker a line comment after `->` has decided (`D.DECIDED_ARROW_BREAK`) keeps its break side.
+		return width != D.DECIDED_ARROW_BREAK
+			&& DocMeasure.firstVisibleTextStartsWith(flatDoc, '{'.code)
 			&& DocMeasure.hasForcedBreak(flatDoc)
 			&& flatTokenWidthFirstLine(flatDoc) <= 1;
 	}
@@ -3574,7 +3576,7 @@ class Renderer {
 					final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
 				}
-			case IfResidualLineExceeds(_, _, flatDoc) if (selfBreakingBraceBody(flatDoc)):
+			case IfResidualLineExceeds(n, _, flatDoc) if (selfBreakingBraceBody(n, flatDoc)):
 				// ω-arrow-block-body-open: an `IfResidualLineExceeds` is the
 				// `@:fmt(arrowBodyLineWrap)` marker of a `->` / `=>` lambda
 				// body. When that body opens with `{` and breaks IMMEDIATELY

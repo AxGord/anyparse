@@ -140,7 +140,9 @@
 		"kwv-objlit/hxformat.json": "{\"indentation\":{\"indentObjectLiteral\":true},\"lineEnds\":{\"leftCurly\":\"before\"}}\n",
 		"vmg/c1.hx": "class A {\n\tfunction f() {\n\t\tvar @:e\n\t\t// c3\n\t\t// c4\n\t\tz = 1;\n\t}\n}\n",
 		"vmg/c3.hx": "class A {\n\tfunction f() {\n\t\tvar @:e /* b */ // l2\n\t\tt = 1;\n\t}\n}\n",
-		"vmg/c4.hx": "class A {\n\tfunction f() {\n\t\tvar @:e\n\t\t/* b */ // l3\n\t\ts = 1;\n\t}\n}\n"
+		"vmg/c4.hx": "class A {\n\tfunction f() {\n\t\tvar @:e\n\t\t/* b */ // l3\n\t\ts = 1;\n\t}\n}\n",
+		"arrow/a1.hx": "class C {\n\tfunction f() {\n\t\tmodules.sort((a, b) -> /* c */ if (a < b) -1 else if (a > b) 1 else 0);\n\t\tvar f = x -> /* c */ if (x) 1 else 0;\n\t}\n}\n",
+		"arrow/a2.hx": "class C {\n\tfunction f() {\n\t\tmodules.sort((a, b) -> // why\n\t\t\tif (a < b) -1 else if (a > b) 1 else 0\n\t\t);\n\t\tvar g = x -> // why\n\t\t\tif (x) {\n\t\t\t\t1;\n\t\t\t} else {\n\t\t\t\t0;\n\t\t\t};\n\t\tvar q = (a, b) -> // why\n\t\t\t{\n\t\t\t\ta;\n\t\t\t};\n\t\tvar s = (a, b) -> // why\n\t\t\tswitch a {\n\t\t\t\tcase 1: b;\n\t\t\t\tcase _: a;\n\t\t\t};\n\t\tbar(1,\n\t\t\tx -> // why\n\t\t\t\tif (x) {\n\t\t\t\t\t1;\n\t\t\t\t} else {\n\t\t\t\t\t0;\n\t\t\t\t});\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -2409,6 +2411,44 @@
 			"expect": {
 				"exit": 0,
 				"out": "601da727d7a207be",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "arrow/a1.hx",
+			"note": "a comment between `->` and the arrow body: base drops it and refuses (exit 1); kept, the body nested one indent under a line comment",
+			"fixpoint": "arrow/a1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"arrow/a1.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "045e76d7fd3e3ea7",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "arrow/a2.hx",
+			"note": "a comment between `->` and the arrow body: base drops it and refuses (exit 1); kept, the body nested one indent under a line comment",
+			"fixpoint": "arrow/a2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"arrow/a2.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "b36b4970f8c030dd",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

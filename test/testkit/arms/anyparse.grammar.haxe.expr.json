@@ -74,6 +74,24 @@
 			"find": "ifElseLadder('IfExpr', 'thenBranch', 'BlockExpr', 'SwitchExpr', 'SwitchExprBare')",
 			"replace": "ifElseLadder",
 			"note": "the expression if names no braced ctors, so a function-body if keeps its then switch glued beside a brace-less else"
+		},
+		{
+			"name": "M-PAREN-ARROW-AFTER-LEAD-UNCAPTURED",
+			"type": "anyparse.grammar.haxe.expr.HxThinParenLambda",
+			"method": "HxThinParenLambda",
+			"kind": "TypedefDecl",
+			"find": "statementBodyForCtor('BlockExpr'), captureAfterLead)",
+			"replace": "statementBodyForCtor('BlockExpr'))",
+			"note": "the paren lambda's body has no seat for a comment after `->`, so the writer drops it and fmt refuses the file"
+		},
+		{
+			"name": "M-THIN-ARROW-AFTER-OP-UNCAPTURED",
+			"type": "anyparse.grammar.haxe.expr.HxExpr",
+			"method": "ThinArrow",
+			"kind": "ParamCtor",
+			"find": "statementBodyForCtor('BlockExpr'), captureAfterOp)",
+			"replace": "statementBodyForCtor('BlockExpr'))",
+			"note": "the bare `x -> body` arrow keeps no slot for a comment after `->`, so the comment is stashed and dropped or moved behind the body"
 		}
 	]
 }

@@ -171,13 +171,18 @@ final class WriterBlankLowering {
 	 * Shared verbatim by the Pratt infix `->` branch (`lowerInfixTightAssign`) and the
 	 * bare-Ref field path (`emitBareRefNonBodyPolicy`).
 	 */
-	private static function arrowBodyLineWrapExpr(bodyCall: Expr): Expr {
+	private static function arrowBodyLineWrapExpr(bodyCall: Expr, ?afterRun: Expr): Expr {
+		// A comment run after `->` that ends its line has broken it already: the marker is decided for its break side,
+		// so the whole body nests one indent under the comment while the probes still find the marker.
+		final width: Expr = afterRun == null
+			? macro opt.lineWidth
+			: macro anyparse.runtime.CommentRun.endsInBreak($afterRun) ? anyparse.core.D.DECIDED_ARROW_BREAK : opt.lineWidth;
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _doc: anyparse.core.Doc = anyparse.format.wrap.WrapList.namedThresholdLiteral($bodyCall, true);
 			final _flat: Int = anyparse.format.wrap.WrapList.flatLength(_doc);
 			_dwb(_dilr(
-				opt.lineWidth,
+				$width,
 				opt.fitLineBodyGlue && _flat >= 0
 					? anyparse.format.BodyFit.continuationRescuesArrowBody(_cols, _doc, _flat, opt.lineWidth)
 					: _dn(_cols, _dc([_dhl(), _doc])),

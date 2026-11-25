@@ -74,18 +74,19 @@ final class BodyGroupPrefixChargeConsumerTest extends Test {
 	 * must stay — the same reason the keep-mode literal drops out at 17.
 	 */
 	public function testArrowMarkerAdmitsExactlyOneColumn(): Void {
-		Assert.isTrue(Renderer.selfBreakingBraceBody(blockBody()));
-		Assert.isTrue(Renderer.selfBreakingBraceBody(selfBreakingLiteral()));
+		final width: Int = 120;
+		Assert.isTrue(Renderer.selfBreakingBraceBody(width, blockBody()));
+		Assert.isTrue(Renderer.selfBreakingBraceBody(width, selfBreakingLiteral()));
 		final past: Doc = oneColumnPastTheThreshold();
 		// The other two conjuncts hold on this Doc, so the width is the only
 		// thing that can reject it.
 		Assert.isTrue(DocMeasure.firstVisibleTextStartsWith(past, '{'.code));
 		Assert.isTrue(DocMeasure.hasForcedBreak(past));
 		Assert.equals(2, Renderer.flatTokenWidthFirstLine(past));
-		Assert.isFalse(Renderer.selfBreakingBraceBody(past));
+		Assert.isFalse(Renderer.selfBreakingBraceBody(width, past));
 		final keep: Doc = keepModeLiteral();
 		Assert.equals(17, Renderer.flatTokenWidthFirstLine(keep));
-		Assert.isFalse(Renderer.selfBreakingBraceBody(keep));
+		Assert.isFalse(Renderer.selfBreakingBraceBody(width, keep));
 	}
 
 	/**

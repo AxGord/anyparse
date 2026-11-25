@@ -44,6 +44,18 @@ final class WriterLoweringSupport {
 	private static final NESTED_FLAG: String = 'compactUnlessNested';
 
 	/**
+	 * The Doc for a `<field>AfterLead` run, emitted right after the lead literal and its own spacing: an inline
+	 * block comment is followed by a space, anything else by a line break one indent deeper, so the field's value
+	 * never lands inside a line comment. That break yields to one the value already opens with (an arrow body that
+	 * breaks after `->`), so the two never make a blank line. Nothing when the run is empty.
+	 */
+	public static function afterLeadDoc(access: Expr): Expr {
+		return macro leadingCommentsBefore(
+			$access, _dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dohsbh()), opt
+		);
+	}
+
+	/**
 	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the
 	 * generated writer reads a `WriteOptions` knob (cascade rules, body
 	 * policy flags, leftCurly placement, etc.). Replaces 4-line inline
@@ -168,9 +180,9 @@ final class WriterLoweringSupport {
 		if (slot == ChainLeadComment) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainAfterComment) return macro $i{argNames[idx]};
-		if (TriviaPairAltCtor.isInfixChainBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isInfixAfterOpBranch(branch)) idx++;
 		if (slot == ChainOwnComments) return macro $i{argNames[idx]};
-		if (TriviaPairAltCtor.isInfixChainBranch(branch)) idx++;
+		if (TriviaPairAltCtor.isInfixAfterOpBranch(branch)) idx++;
 		if (slot == ChainRhsTrail) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isRhsTrailBranch(branch)) idx++;
 		if (slot == TernaryCondTrail) return macro $i{argNames[idx]};
@@ -195,7 +207,7 @@ final class WriterLoweringSupport {
 			case ChainNewline: TriviaPairAltCtor.isInfixChainBranch(branch);
 			case ChainLeadComment: TriviaPairAltCtor.isAltChainNewlineBranch(branch);
 			case PostfixOpSpace: TriviaPairAltCtor.isPostfixOpSpaceBranch(branch);
-			case ChainAfterComment, ChainOwnComments: TriviaPairAltCtor.isInfixChainBranch(branch);
+			case ChainAfterComment, ChainOwnComments: TriviaPairAltCtor.isInfixAfterOpBranch(branch);
 			case ChainRhsTrail: TriviaPairAltCtor.isRhsTrailBranch(branch);
 			case TernaryCondTrail, TernaryThenTrail: TriviaPairAltCtor.isTernaryTrailBranch(branch);
 			case KwAfter, KwLeading: TriviaPairAltCtor.isCtorKwValueBranch(branch);

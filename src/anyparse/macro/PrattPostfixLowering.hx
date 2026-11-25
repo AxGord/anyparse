@@ -432,6 +432,8 @@ final class PrattPostfixLowering {
 			//      probe. Plain mode keeps the 2-arg ctor (synth widens only
 			//      in Trivia).
 			final captureChainNl: Bool = oc.ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+			// The comments between the operator and the right operand: every chain ctor, and a non-chain one opting in.
+			final captureAfterOp: Bool = oc.ctx.trivia && TriviaPairAltCtor.isInfixAfterOpBranch(branch);
 			// ω-keep-infix-rhs-comment: capture a same-line comment trailing the
 			// RIGHT operand (position #3 — before the enclosing `)`/`;`/`,`).
 			final captureRhsTrail: Bool = oc.ctx.trivia && branch.fmtHasFlag('captureRhsTrail');
@@ -440,6 +442,8 @@ final class PrattPostfixLowering {
 			if (captureChainNl) {
 				ctorArgs.push(macro _chainNl);
 				ctorArgs.push(macro _opTrailComment);
+			}
+			if (captureAfterOp) {
 				ctorArgs.push(macro _opAfterComment);
 				ctorArgs.push(macro _opOwnComments);
 			}
@@ -460,12 +464,12 @@ final class PrattPostfixLowering {
 			// ω-keep-infix-postop-comment: capture a same-line comment trailing the
 			// operator (before the right operand) BEFORE `skipWsAndStash` stashes it
 			// into pendingTrivia (where it leaks into the next operand's parse).
-			if (captureChainNl) commitParts.push(macro final _opAfterComment: Null<String> = collectTrailingFull(ctx));
-			if (captureChainNl) commitParts.push(macro final _opStash0: Int = ctx.stashedCommentCount());
+			if (captureAfterOp) commitParts.push(macro final _opAfterComment: Null<String> = collectTrailingFull(ctx));
+			if (captureAfterOp) commitParts.push(macro final _opStash0: Int = ctx.stashedCommentCount());
 			commitParts.push(skipCall);
 			// Own-line comments between the operator and its right operand belong to this ctor: taken back off the
 			// stash, which would otherwise hand them to whatever the operand parses next (a call's first argument).
-			if (captureChainNl) commitParts.push(macro final _opOwnComments: Array<String> = ctx.takeStashedComments(_opStash0));
+			if (captureAfterOp) commitParts.push(macro final _opOwnComments: Array<String> = ctx.takeStashedComments(_opStash0));
 			if (captureChainNl) commitParts.push(macro final _chainNl: Bool = $chainNlValue);
 			// AFTER the `_chainNl` read (`&&`/`||` consume the very flag this drops).
 			commitParts.push(oc.stashNewlineClearExpr());

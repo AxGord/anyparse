@@ -224,6 +224,18 @@ final class TriviaPairAltCtor {
 	}
 
 	/**
+	 * The one answer to "does this `@:infix` ctor keep the comments written between its operator and its right
+	 * operand": the chain ctors (`captureChainNewline`) and any other infix ctor opting in with
+	 * `@:fmt(captureAfterOp)` (`HxExpr.ThinArrow`). Such a ctor grows the `opAfterComment` (same-line) and
+	 * `opOwnComments` (own-line run) slots; without them the parser stashed the gap's comments and the writer
+	 * dropped them.
+	 */
+	public static function isInfixAfterOpBranch(branch: ShapeNode): Bool {
+		return isInfixChainBranch(branch)
+			|| (branch.children.length == 2 && branch.hasMeta(':infix') && branch.fmtHasFlag('captureAfterOp'));
+	}
+
+	/**
 	 * ω-keep-infix-rhs-comment — true for any `@:infix` binop ctor carrying
 	 * `@:fmt(captureRhsTrail)`. Grows an `opRhsTrailComment:Null<String>` slot
 	 * (the LAST chain-family slot) holding the verbatim same-line comment
@@ -322,7 +334,7 @@ final class TriviaPairAltCtor {
 			+ (hasChainLeadComment ? 1 : 0)
 			+ (hasPostfixOpSpace ? 1 : 0)
 			+ (hasPostfixCloseTrailing ? 3 : 0)
-			+ (isInfixChainBranch(branch) ? 2 : 0)
+			+ (isInfixAfterOpBranch(branch) ? 2 : 0)
 			+ (isRhsTrailBranch(branch) ? 1 : 0)
 			+ (isTernaryTrailBranch(branch) ? 2 : 0)
 			+ (isCtorKwValueBranch(branch) ? 2 : 0);
@@ -477,10 +489,10 @@ final class TriviaPairAltCtor {
 			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 			args.push({ name: TriviaTypeSynth.CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT });
 		}
-		// ω-keep-infix-postop-comment: infix chain ctors also grow an
+		// ω-keep-infix-postop-comment: every `isInfixAfterOpBranch` ctor grows an
 		// `opAfterComment:Null<String>` slot (after chainLeadComment) holding the
 		// comment trailing the operator. Infix-only (FieldAccess excluded).
-		if (isInfixChainBranch(branch)) {
+		if (isInfixAfterOpBranch(branch)) {
 			final strCT2: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT2: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT2)] });
 			args.push({ name: TriviaTypeSynth.OP_AFTER_COMMENT_ARG_NAME, type: nullStrCT2 });

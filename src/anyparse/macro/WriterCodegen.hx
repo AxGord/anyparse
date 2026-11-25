@@ -1309,7 +1309,7 @@ class WriterCodegen {
 			for (i in 0...run.length) {
 				final c: String = run[i];
 				parts.push(leadingCommentDocRun(run, i, opt));
-				parts.push(StringTools.startsWith(c, '/*') && c.indexOf('\n') < 0 ? _dt(' ') : brk);
+				parts.push(anyparse.runtime.CommentRun.isInlineBlock(c) ? _dt(' ') : brk);
 			}
 			return _dc(parts);
 		};

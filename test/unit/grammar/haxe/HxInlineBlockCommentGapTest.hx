@@ -101,7 +101,10 @@ class HxInlineBlockCommentGapTest extends Test {
 		['untyped_lead', 'var v = untyped /* u */ x;'],
 		['macro_lead', 'var v = macro /* m */ x;'],
 		// The gap between `untyped` and its block fills the block field's kw-trivia slots (`@:fmt(ctorKwTrivia)`).
-		['untyped_block_lead', 'untyped /* u */ {\n\t\t\trun();\n\t\t}']
+		['untyped_block_lead', 'untyped /* u */ {\n\t\t\trun();\n\t\t}'],
+		// The gap after an arrow's `->`: the paren lambda body's `AfterLead` run, the bare arrow's after-operator slots.
+		['arrow_body', 'var f = () -> /* b */ 1;'],
+		['arrow_bare_body', 'var f = x -> /* b */ 1;']
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
@@ -129,8 +132,7 @@ class HxInlineBlockCommentGapTest extends Test {
 		['field_access', 'var v = x./* d */ y;'],
 		['index_lead', 'var v = a[/* ix */ 0];'],
 		['obj_field', 'var o = { a: /* o */ 1 };'],
-		['cast_lead', 'var v = cast(/* c */ x, Int);'],
-		['arrow_body', 'var f = () -> /* b */ 1;']
+		['cast_lead', 'var v = cast(/* c */ x, Int);']
 	];
 
 	/** Slot-less seams outside a function body — same contract, other hosts. */

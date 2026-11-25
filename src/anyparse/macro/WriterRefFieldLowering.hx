@@ -370,7 +370,7 @@ final class WriterRefFieldLowering {
 			);
 		if (!breakAfterEqEmitted) {
 			// The `<field>AfterLead` run sits between the lead (with its own spacing) and the value, where the source wrote it.
-			if (afterLead != null) optParts.push(afterLeadDoc(afterLead));
+			if (afterLead != null) optParts.push(WriterLoweringSupport.afterLeadDoc(afterLead));
 			optParts.push(writeCall);
 		}
 		// ω-optional-ref-trail: bracket-pair close for an
@@ -1237,7 +1237,7 @@ final class WriterRefFieldLowering {
 			// (`->` form) and `HxParenLambda.body` (`=>` form)
 			// for symmetric coverage of the canonical and
 			// legacy lambda-body syntaxes.
-			parts.push(arrowBodyLineWrapExpr(writeCall));
+			parts.push(arrowBodyLineWrapExpr(writeCall, afterLeadSlotAccess(ctx, child, fieldAccess, site.typePath)));
 		} else {
 			parts.push(writeCall);
 		}
@@ -1933,7 +1933,7 @@ final class WriterRefFieldLowering {
 		if (beforeLead != null) parts.push(beforeLeadDoc(beforeLead));
 		emitMandatoryLead(child, parts, leadText, fieldAccess, ctx.isKeyValueLead(leadText));
 		final afterLead: Null<Expr> = afterLeadSlotAccess(ctx, child, fieldAccess, typePath);
-		if (afterLead != null) parts.push(afterLeadDoc(afterLead));
+		if (afterLead != null) parts.push(WriterLoweringSupport.afterLeadDoc(afterLead));
 	}
 
 	/**
@@ -2026,17 +2026,6 @@ final class WriterRefFieldLowering {
 			case EField(base, name): { expr: EField(base, name + TriviaTypeSynth.AFTER_LEAD_SUFFIX), pos: fieldAccess.pos };
 			case _: null;
 		};
-	}
-
-	/**
-	 * The Doc for a `<field>AfterLead` run, emitted right after the lead literal and its own spacing: an inline
-	 * block comment is followed by a space, anything else by a line break one indent deeper, so the field's value
-	 * never lands inside a line comment. Nothing when the run is empty.
-	 */
-	private static function afterLeadDoc(access: Expr): Expr {
-		return macro leadingCommentsBefore(
-			$access, _dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl()), opt
-		);
 	}
 
 	/**

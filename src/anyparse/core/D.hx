@@ -12,6 +12,12 @@ using StringTools;
  */
 class D {
 
+	/**
+	 * The width of an arrow-body marker (`IfResidualLineExceeds`) that a line comment after `->` has decided: every line
+	 * exceeds it, so the body takes the break side, and no probe keeps that body on the `->` line.
+	 */
+	public static inline final DECIDED_ARROW_BREAK: Int = 0;
+
 	/** Nothing. */
 	public static inline function empty(): Doc return Empty;
 

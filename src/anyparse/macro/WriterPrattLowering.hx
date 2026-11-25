@@ -189,9 +189,21 @@ final class WriterPrattLowering {
 	 */
 	private static function assignEmitExpr(
 		pc: PrattLoweringCtx, c: WriterLowering.LowerBranchCtx, opText: String, isAsymmetric: Bool, leftCtx: Int, rightCtx: Int,
-		leftCall: Expr, rightOptExpr: Null<Expr>, rightEmit: Expr
+		leftCall: Expr, rightOptExpr: Null<Expr>, rightEmit: Expr, afterRun: Null<Expr>
 	): Expr {
-		final plainExpr: Expr = macro _dc([$leftCall, _dt(' '), _dt($v{opText}), _dop(' '), $rightEmit]);
+		// The comments after the operator are an element of their own between it and the operand, so a probe that
+		// splits an arrow into head and body keeps them on the head's line.
+		final afterDoc: Expr = WriterLoweringSupport.afterLeadDoc(macro _run);
+		final plainExpr: Expr = afterRun == null
+			? macro _dc([$leftCall, _dt(' '), _dt($v{opText}), _dop(' '), $rightEmit])
+			: macro {
+				final _al: anyparse.core.Doc = $leftCall;
+				final _run: Array<String> = $afterRun;
+				final _ar: anyparse.core.Doc = $rightEmit;
+				_run.length == 0
+					? _dc([_al, _dt(' '), _dt($v{opText}), _dop(' '), _ar])
+					: _dc([_al, _dt(' '), _dt($v{opText}), _dop(' '), $afterDoc, _ar]);
+			};
 		if (opText != '=' || isAsymmetric) return plainExpr;
 		final argTypeCT: ComplexType = pc.ruleValueCT(c.typePath);
 		final rightArg: Expr = macro $i{c.argNames[1]};
@@ -659,6 +671,23 @@ final class WriterPrattLowering {
 	}
 
 	/**
+	 * The run captured between an `@:fmt(captureAfterOp)` operator and its right operand (the same-line comment, then
+	 * the own-line ones), empty at runtime when the gap held none; null at macro time for an unflagged ctor. Only the
+	 * assignment-class emit (`assign`) has this seat; a flagged ctor written by another one is refused.
+	 */
+	private static function afterOpRunExpr(branch: ShapeNode, argNames: Array<String>, assign: Bool): Null<Expr> {
+		if (!branch.fmtHasFlag('captureAfterOp')) return null;
+		if (!assign) Context.fatalError('@:fmt(captureAfterOp) is written only by the assignment-class infix emit', Context.currentPos());
+		final arity: Int = branch.children.length;
+		final after: Expr = altSlotAccess(branch, arity, argNames, ChainAfterComment) ?? macro null;
+		final own: Expr = altSlotAccess(branch, arity, argNames, ChainOwnComments) ?? macro [];
+		return macro {
+			final _ac: Null<String> = $after;
+			_ac == null ? $own : [_ac].concat($own);
+		};
+	}
+
+	/**
 	 * Infix tight / assign sub-builder: tight operators (`...`, arrow
 	 * type) and assignment-class operators (right operand at precedence 0) keep flat emission.
 	 *
@@ -712,7 +741,11 @@ final class WriterPrattLowering {
 		// a trailing `arg -> { … }` call arg never reaches the sole-arrow /
 		// multi-arg block-lambda glue shapes and the enclosing call opens
 		// every arg one indent deeper instead of keeping the head glued.
-		final rightEmit: Expr = branch.fmtHasFlag('arrowBodyLineWrap') ? arrowBodyLineWrapExpr(rightCall) : rightCall;
+		final afterRun: Null<Expr> = pc.ctx.trivia ? afterOpRunExpr(branch, argNames, isAssign && !isTight) : null;
+		// `assignEmitExpr` binds the run as `_run` ahead of the operand, so the marker reads it.
+		final rightEmit: Expr = branch.fmtHasFlag('arrowBodyLineWrap')
+			? arrowBodyLineWrapExpr(rightCall, afterRun == null ? null : macro _run)
+			: rightCall;
 		final ivOpExpr: Expr = intervalPolicyOp(opText);
 		final innerExpr: Expr = if (infixPolicyFlag == 'intervalPolicy')
 			macro {
@@ -720,7 +753,7 @@ final class WriterPrattLowering {
 				_dc([_leftIv, $ivOpExpr, $rightCall]);
 			}
 		else if (isAssign && !isTight)
-			assignEmitExpr(pc, c, opText, isAsymmetric, leftCtx, rightCtx, leftCall, rightOptExpr, rightEmit)
+			assignEmitExpr(pc, c, opText, isAsymmetric, leftCtx, rightCtx, leftCall, rightOptExpr, rightEmit, afterRun)
 		else
 			macro _dc([$leftCall, $opEmitExpr, $rightCall]);
 		return macro {

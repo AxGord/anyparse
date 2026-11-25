@@ -39,7 +39,7 @@ typedef HxThinParenLambda = {
 	var params: Array<HxLambdaParam>;
 
 	@:fmt(space('arrowFunctions', 'lead'), propagateExprPosition, propagateAnonFnContext, propagateArrowLambdaBody, arrowBodyLineWrap,
-		statementBodyForCtor('BlockExpr'))
+		statementBodyForCtor('BlockExpr'), captureAfterLead)
 	@:lead('->')
 	var body: HxExpr;
 
