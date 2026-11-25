@@ -290,7 +290,13 @@ final class HaxeFormat implements TextFormat {
 	 * `equalItemLengths` condition and its `fillLineWithLeadingBreak`
 	 * rule remain skipped — none of the current corpus fixtures depends
 	 * on it. `Ignore` is the fallback, so a source break never keeps a
-	 * list open. Returned as a fresh struct on each call so test code that
+	 * list open. Unlike the fork, a short list of several containers stays
+	 * flat only while its line fits, and decides by its first line
+	 * (`overflowByFirstLine`): an overflowing one moves whole to a
+	 * continuation line where it fits, else breaks by this cascade, rather
+	 * than hugging `[{` and lending the break to its first element alone,
+	 * so same-shape siblings are laid out alike; a single short item keeps
+	 * the hug. Returned as a fresh struct on each call so test code that
 	 * mutates the `defaultWriteOptions.arrayLiteralWrap` substruct
 	 * doesn't corrupt the singleton.
 	 */
@@ -298,7 +304,28 @@ final class HaxeFormat implements TextFormat {
 		return {
 			rules: [
 				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.HasMultilineItems, value: 1 }] },
-				{ mode: WrapMode.NoWrap, conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 }] },
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 },
+						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }
+					]
+				},
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 },
+						{ cond: WrapConditionType.ItemCountLessThan, value: 1 }
+					]
+				},
+				{
+					mode: WrapMode.NoWrap,
+					conditions: [
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 80 },
+						{ cond: WrapConditionType.HasContainerItems, value: 0 }
+					]
+				},
+
 				{
 					mode: WrapMode.FillLineWithLeadingBreak,
 					conditions: [
@@ -318,7 +345,8 @@ final class HaxeFormat implements TextFormat {
 				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 }] },
 				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
 			],
-			defaultMode: WrapMode.Ignore
+			defaultMode: WrapMode.Ignore,
+			overflowByFirstLine: true
 		};
 	}
 

@@ -269,9 +269,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final otherSrc: String = "package pkg;\nclass Other {\n\tpublic function g() { return Reflect.field(this, 'shape'); }\n}";
 		final dir: String = CliFixture.writeDir('namingrefl', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
-		final files: Array<{ file: String, source: String }> = [{
-			file: '$dir/C.hx', source: cSrc
-		}, { file: '$dir/Other.hx', source: otherSrc }];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: '$dir/C.hx', source: cSrc }, { file: '$dir/Other.hx', source: otherSrc }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');
@@ -292,9 +291,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final otherSrc: String =
 			'package pkg;\nclass Other {\n\tpublic function g(shape:Int):String {\n\t\treturn "reshaped:" + shape;\n\t}\n}';
 		final dir: String = CliFixture.writeDir('namingid', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
-		final files: Array<{ file: String, source: String }> = [{
-			file: '$dir/C.hx', source: cSrc
-		}, { file: '$dir/Other.hx', source: otherSrc }];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: '$dir/C.hx', source: cSrc }, { file: '$dir/Other.hx', source: otherSrc }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');
@@ -1231,9 +1229,8 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 	private function assertReflectionGuard(otherSource: String, expectRenamed: Bool): Void {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\n\tpublic function f():Void {\n\t\tshape = 1;\n\t}\n}';
 		final dir: String = CliFixture.writeDir('namingrefl', [{ name: 'C.hx', source: cSrc }, { name: 'E.hx', source: otherSource }]);
-		final files: Array<{ file: String, source: String }> = [{
-			file: '$dir/C.hx', source: cSrc
-		}, { file: '$dir/E.hx', source: otherSource }];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: '$dir/C.hx', source: cSrc }, { file: '$dir/E.hx', source: otherSource }];
 		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, files).filter(v -> v.file == '$dir/C.hx');

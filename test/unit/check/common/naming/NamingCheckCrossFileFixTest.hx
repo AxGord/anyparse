@@ -486,9 +486,8 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 	public function testCrossFileFixRenamesPublicMethod(): Void {
 		final bSrc: String = 'package pkg;\nclass Base {\n\tpublic function __draw():Int { return 1; }\n}';
 		final cSrc: String = 'package pkg;\nclass Caller {\n\tpublic function go(b:Base):Int { return b.__draw(); }\n}';
-		final files: Array<{ file: String, source: String }> = [{
-			file: 'pkg/Base.hx', source: bSrc
-		}, { file: 'pkg/Caller.hx', source: cSrc }];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Base.hx', source: bSrc }, { file: 'pkg/Caller.hx', source: cSrc }];
 		final rename: Array<CrossFileEdits> = crossFileRename(files);
 		assertRenameSlice(rename, 'pkg/Base.hx', bSrc, 'public function draw():Int', '__draw');
 		assertRenameSlice(rename, 'pkg/Caller.hx', cSrc, 'return b.draw();', '__draw');
@@ -640,9 +639,8 @@ class NamingCheckCrossFileFixTest extends NamingCheckTestBase {
 		final hSrc: String = 'package pkg;\nclass Holder {\n\tpublic final __size:Int;\n\tpublic function new(n:Int) { __size = n; }\n}';
 		final oSrc: String = 'package pkg;\nclass Other {\n\tpublic function f():String { return \'reads the __size of it\'; }\n}\n\n'
 			+ 'class Mystery extends Unknown {\n\tpublic var size:Int;\n}';
-		final files: Array<{ file: String, source: String }> = [{
-			file: 'pkg/Holder.hx', source: hSrc
-		}, { file: 'pkg/Other.hx', source: oSrc }];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Holder.hx', source: hSrc }, { file: 'pkg/Other.hx', source: oSrc }];
 		final rename: Array<CrossFileEdits> = crossFileRename(files);
 		// The renamed write beside its untouched parameter: only the rename produces this string.
 		assertRenameSlice(rename, 'pkg/Holder.hx', hSrc, 'public function new(n:Int) { size = n; }', '__size');

@@ -207,7 +207,8 @@ final class ParenChainOpensTest extends Test {
 	public function testNoWrapObjectInAnElementStaysGlued(): Void {
 		assertLaidOut(
 			'class C {\n\tfunction f() {\n\t\tvar o = [{a: (aaaaaaaaaaaa + bbbbbbbbbbbb + cccccccccccc), b: 1}, 2];\n\t}\n}',
-			'class C {\n\tfunction f() {\n\t\tvar o = [{a: (aaaaaaaaaaaa\n\t\t\t+ bbbbbbbbbbbb\n\t\t\t+ cccccccccccc), b: 1}, 2];\n\t}\n}',
+			'class C {\n\tfunction f() {\n\t\tvar o = [\n\t\t\t{a: (aaaaaaaaaaaa\n\t\t\t\t+ bbbbbbbbbbbb\n\t\t\t\t+ cccccccccccc), b: 1},\n'
+			+ '\t\t\t2\n\t\t];\n\t}\n}',
 			OBJECT_AND_CALL_CONFIG
 		);
 		assertLaidOut(

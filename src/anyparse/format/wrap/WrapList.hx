@@ -1452,6 +1452,11 @@ class WrapList {
 			);
 		final flatWithLead: Doc = shapeAt(modeFlat, leadFlat);
 		final breakWithLead: Doc = shapeAt(modeBreak, leadBreak);
+		// An enclosing seam's natural first-line walk reads a first-line probe on its flat side, flattened so that no item
+		// breaks there: the seam sees the whole list and may move it. The group keeps the fit at the list's own column.
+		final choice: Doc = rules.overflowByFirstLine == true && modeFlat == NoWrap
+			? IfFirstLineExceeds(opt.lineWidth, breakWithLead, D.flatten(flatWithLead))
+			: IfBreak(breakWithLead, flatWithLead);
 		// ω-group-rest-probe cascade-disagree: when the cascade resolves
 		// to different modes at flat (`exceeds=false`) vs break
 		// (`exceeds=true`), the outer Group's own `fitsFlat` decides
@@ -1471,7 +1476,7 @@ class WrapList {
 		// and — since ω-comprehension-fit-measure — every fit-cascade
 		// comprehension, whose SOLE rule is exactly that, so it arrives
 		// here on every render rather than never.
-		return WrapBoundary(groupOrRestProbe(IfBreak(breakWithLead, flatWithLead), groupRestProbe));
+		return WrapBoundary(groupOrRestProbe(choice, groupRestProbe));
 	}
 
 	/**

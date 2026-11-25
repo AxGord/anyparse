@@ -723,9 +723,8 @@ class LintSliceTest extends Test {
 	public function testStaticWildcardMemberUsed(): Void {
 		final codes: String = 'package pkg;\nenum abstract Codes(Int) {\n\tfinal EXIT_OK = 0;\n\tfinal EXIT_FAIL = 1;\n}';
 		final user: String = 'package pkg;\nimport pkg.Codes.*;\nclass User {\n\tfunction f():Int return EXIT_OK;\n}';
-		final files: Array<{ file: String, source: String }> = [{
-			file: 'pkg/Codes.hx', source: codes
-		}, { file: 'pkg/User.hx', source: user }];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Codes.hx', source: codes }, { file: 'pkg/User.hx', source: user }];
 		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 		Assert.equals(0, vs.length);
 	}
@@ -737,9 +736,8 @@ class LintSliceTest extends Test {
 	public function testStaticWildcardUnusedIsWarning(): Void {
 		final codes: String = 'package pkg;\nenum abstract Codes(Int) {\n\tfinal EXIT_OK = 0;\n\tfinal EXIT_FAIL = 1;\n}';
 		final user: String = 'package pkg;\nimport pkg.Codes.*;\nclass User {\n\tfunction f():Int return 5;\n}';
-		final files: Array<{ file: String, source: String }> = [{
-			file: 'pkg/Codes.hx', source: codes
-		}, { file: 'pkg/User.hx', source: user }];
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Codes.hx', source: codes }, { file: 'pkg/User.hx', source: user }];
 		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), files, plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('unused-import', vs[0].rule);

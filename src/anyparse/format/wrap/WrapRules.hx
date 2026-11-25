@@ -53,4 +53,13 @@ typedef WrapRules = {
 	@:optional
 	var containerItemWrap: WrapRules;
 
+	/**
+	 * Does a list this cascade lays flat while its line fits, and breaks once it overflows, choose by its first rendered
+	 * line instead of by a group fit at its own column? Its flat side is then what an enclosing seam measures, so an `=`
+	 * or argument seam moves the whole list to a continuation line where it fits, and the list breaks by its own cascade
+	 * only where it still overflows. Absent or `false`: the group fit.
+	 */
+	@:optional
+	var overflowByFirstLine: Bool;
+
 };

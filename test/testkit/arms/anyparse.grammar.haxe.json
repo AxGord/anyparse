@@ -117,6 +117,30 @@
 			"find": "WrapMode.PackedOrOnePerLine",
 			"replace": "WrapMode.OnePerLine",
 			"note": "an object literal of simple fields that overflows only by its context goes one field per line again instead of packing its fields inside the broken braces"
+		},
+		{
+			"name": "M-ARRAY-CONTAINER-ITEMS-FIT-GUARD",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultArrayLiteralWrap",
+			"find": "ExceedsMaxLineLength, value: 0 }",
+			"replace": "ExceedsMaxLineLength, value: 1 }",
+			"note": "a short array of object literals stays NoWrap when its line overflows, hugs `[{` and breaks its first element alone again"
+		},
+		{
+			"name": "M-ARRAY-SINGLE-ITEM-HUG",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultArrayLiteralWrap",
+			"find": "ItemCountLessThan, value: 1 }",
+			"replace": "ItemCountLessThan, value: 0 }",
+			"note": "an overflowing array of one short object literal stops hugging `[{` and breaks at its brackets instead"
+		},
+		{
+			"name": "M-ARRAY-OVERFLOW-BY-FIRST-LINE",
+			"type": "anyparse.grammar.haxe.HaxeFormat",
+			"method": "defaultArrayLiteralWrap",
+			"find": "overflowByFirstLine: true",
+			"replace": "overflowByFirstLine: false",
+			"note": "an overflowing array of containers is a group again, so the `=` and call-argument seams no longer move it whole and it breaks one element per line on the line it starts"
 		}
 	]
 }
