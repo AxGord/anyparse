@@ -14,6 +14,10 @@ states:
     prompt: |-
       Slice worktree: {{context.cwd}} — your slice ID is its directory name (a `/tmp/hxqb-<ID>` tree: the part
       after `hxqb-`); your branch is `batch/hxqb-<ID>`.
+      READ RIGHT (a hook refuses the rest; each refusal is a paid turn): .hx → `hxq show <file> --select '<sel>'` (`--outline` = the file's map),
+      `hxq search` / `refs` / `mentions` / `owner`; a known line range of any other file → Read with offset+limit; project json (apq.json,
+      arms, apqlint.json) → `apq get <file> <path>`. Never grep/sed/cat/head/tail a .hx or project json, never a whole-file Read of a .hx,
+      never pipe hxq into head/grep (use `--limit N` / `--select`).
       CLAUDE.md is already in your context — do not open it; mind its (§ Non-negotiable invariants, § What a comment may say,
       § Test framework). Read the user's standing principles whole: {{project_root}}/.claude/workflows/lib/principles.md;
       and YOUR task in {{project_root}}/.claude/batch/queue.yaml (`awk '/^  - id: <ID>$/{f=1;print;next} f&&/^  - /{exit} f' …`) —
@@ -438,15 +442,14 @@ states:
       - Every shell call: `cd {{context.cwd}} && export HXQ_BIN={{context.cwd}}/bin/apq.js && …`; absolute paths
         for every write; logs into {{context.cwd}}-logs/, never inside the worktree.
       - .hx: load the `hxq` and `hxq-write` skills; read `hxq show --select`, edit `hxq patch … --write --fix`, create `hxq new`.
-        Never Edit/Write/grep/sed/cat on .hx. A mechanical finding → `--fix`, never by hand; a false positive
+        Never Edit/Write on .hx (reads: READ RIGHT, in `orient`). A mechanical finding → `--fix`, never by hand; a false positive
         of a check is a tool defect, not a code churn. After a src/ change rebuild BOTH:
         `haxe bin/apq-js.hxml && haxe test-js.hxml`. Never HXQ_QUIET=1.
       - Edit loop: `hxq lint <files> --all --no-oracle`; tests ONLY through the `check` step below — never
         `node bin/test.js` by hand (its log is not yours to read).
       - Tokens (every call's output is re-read on each later turn): a `transition` reply IS the next prompt —
-        never call `status` after it; read code by declaration (`hxq show --select`), never a whole file over
-        ~300 lines and never `git diff` on .hx (`hxq changed`, `hxq show`); never `cat`/`tail` a whole log —
-        `grep -m 20 '<the failing name>'`.
+        never call `status` after it; read by declaration (`hxq show --select`), never `git diff` on .hx (`hxq changed`);
+        a log is never `cat`/`tail`ed whole — `grep -m 20 '<the failing name>'` (a log is not a .hx).
       - Long commands and waits: a command you wait for runs in the FOREGROUND with `timeout: 600000` (a build, a
         filtered suite, an op over many files fit), never with `run_in_background`. One that may outlast a call you
         start detached with a done-marker, from your logs dir and NOT chained after a `cd … &&` (the `&` would put the

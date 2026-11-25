@@ -80,6 +80,10 @@ states:
   read:
     prompt: |-
       Slice under review — {{context.cwd}} (exit {{exit_code}}):
+      READ RIGHT (a hook refuses the rest; each refusal is a paid turn): .hx → `hxq show <file> --select '<sel>'` (`--outline` = the file's map),
+      `hxq search` / `refs` / `mentions` / `owner`; a known line range of any other file → Read with offset+limit; project json (apq.json,
+      arms, apqlint.json) → `apq get <file> <path>`. Never grep/sed/cat/head/tail a .hx or project json, never a whole-file Read of a .hx,
+      never pipe hxq into head/grep (use `--limit N` / `--select`).
       {{stdout}}
       FIRST read the digest file named above, whole (Read tool): commits, diff stat, decisions lines, `hxq changed`
       by meaning, who mentions each changed declaration, clones the slice introduced, baseline and gate tables.
@@ -105,8 +109,7 @@ states:
       The digest (`hxq changed`) decides what you read: files marked `layout` / `imports` / `renamed` — do NOT
       read them (the gate and the digest prove them); for `declarations` / `new` / `text` read ONLY the listed
       declarations (`hxq show <file> --select '<address>'`, `HXQ_BIN={{context.cwd}}/bin/apq.js`) and, where a change
-      can affect a caller, the callers the mentions list names. Never `git diff` on .hx — `hxq show --select` the
-      listed declarations (a non-.hx file — json, md, yaml — may be diffed, verbatim with `rtk proxy git diff`).
+      can affect a caller, the callers the mentions list names. Never `git diff` on .hx (a non-.hx file — json, md, yaml — may be diffed, verbatim with `rtk proxy git diff`).
       Tokens: a `transition` reply IS the next prompt — never call `status` after it; never `cat`/`tail` a whole log —
       `grep -m 20` what you look for.
       Behaviour parity, when the slice touches src/anyparse/query/cli or any command: run

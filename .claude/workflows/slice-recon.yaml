@@ -35,6 +35,10 @@ states:
 
   recon:
     prompt: |-
+      READ RIGHT (a hook refuses the rest; each refusal is a paid turn): .hx → `hxq show <file> --select '<sel>'` (`--outline` = the file's map),
+      `hxq search` / `refs` / `mentions` / `owner`; a known line range of any other file → Read with offset+limit; project json (apq.json,
+      arms, apqlint.json) → `apq get <file> <path>`. Never grep/sed/cat/head/tail a .hx or project json, never a whole-file Read of a .hx,
+      never pipe hxq into head/grep (use `--limit N` / `--select`).
       You are the RECON of anyparse slice {{context.slice}}, read-only: you write ONE file, {{context.wt}}-logs/recon.md,
       and change nothing else — no tracked file, no queue, no build, gate or test run, no sub-agent. The only workflow
       calls you make are on THIS session ({{session_id}}). SCRATCH RULE: every probe file and every config you write
