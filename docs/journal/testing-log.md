@@ -4772,3 +4772,75 @@ Zero runtime cost by construction (it emits the inline lambda), and it would pic
 4. "Three or more static helpers over one typedef" as a signal (move-to-helper / extension): 46 spread typedefs (30 with three or more public helpers) are the real candidates; the 82 all-in-own-module ones are the class-next-to-the-typedef habit and the 35 private ones are file-local contexts, not a defect. `prefer-static-extension` needs the helper classes added to its `types` list to say anything about them.
 
 Not queued; the user decides.
+
+## LAND-WALL-BREAKDOWN (2026-11-25): the land step split by what runs inside
+
+### Land wall split, last 30 lands
+Reading of commit d1eee143b4148f73d391fb9547a0ad0d0171a54c (pinned.txt), taken 2026-11-25 from the engine events log (`~/.claude/workflow-state/events/*.jsonl`), the 30 session records' `land_table` (the `dev land` stdout), `battery-table.txt` in `.claude/backups/slice-logs/<id>/` and `$TMPDIR/anyparse-land/*/battery.log`. Nothing was run; no build, no test. Window: the last 30 `slice-pipeline` lands by `mark_landed` in `ledger-recent.jsonl`, 2026-11-25 00:01 to 15:43 UTC (2.5 lands per hour). 32 land runs (2 lands had a failed first run).
+
+Definition (checked on all 32 runs): land wall = transition into `land` to `exec_end` = `duration_ms` + `wait_ms`. `wait_ms` = time before the process started (waiting for the `anyparse-land` lock, which another land holds) + time the running `dev land` spent waiting for pool threads. The land table's step seconds sum to `duration_ms` + the in-process waits (within 2 s per land). The same definition on the 30 names of the baseline's table G (2026-11-20..24) gives 34 runs, 21,821 s process time + 1,639 s waits = 23,461 s = 782 s per land.
+
+Total land wall over the 30 lands: 33,720 s = 1,124 s per land (median 974 s, min 300 s, max 3,450 s for a land with a failed run). Mean task wall of the same 30: 7,252 s (121 min) from the ledger (7,239 s from first to last event, verifier), so land is 15.5% of a task here (12% in the baseline window).
+
+| part | seconds (30 lands) | share of land wall | per land s |
+|---|---|---|---|
+| waiting for another land to finish (the lock) | 10,106 | 30.0% | 337 |
+| final checks (battery), running | 15,331 | 45.5% | 511 |
+| final checks, waiting for pool threads | 2,597 | 7.7% | 87 |
+| base snapshot (battery of main's HEAD, 3 lands), running | 1,372 | 4.1% | 46 |
+| base snapshot, waiting for pool threads | 523 | 1.6% | 17 |
+| rebuild of apq.js/test.js (`build`), running | 1,509 | 4.5% | 50 |
+| rebuild, waiting for pool threads | 741 | 2.2% | 25 |
+| failed first runs (2 lands), process time and their pool waits | 1,386 | 4.1% | 46 |
+| merge (`pick` 39 s), fmt 18 s, commit 15 s, advance/binaries/prose-refs/post-land/arm-sweep 28 s, branch 3 s | 104 | 0.3% | 3 |
+| not explained | 51 | 0.15% | 2 |
+| total | 33,720 | 100% | 1,124 |
+
+(The lock wait of the failed runs, 77 s, is inside the first row.) Pool waits inside the land process: 3,861 s (11.4%) in the successful runs (2,597 + 523 + 741), plus 705 s inside the failed FMT-HUG run (in the failed-run row) = 4,562 s (13.5%) over all 32 runs. Merge (`pick`, a cherry-pick of the branch) is 1.3 s per land; fmt 0.6 s; commit 0.5 s. Review warm and the sweep lock: 0 inside land. `reapply` (the sweep re-application) did not run in any of the 30. `post-land` only starts a background run (0.8 s) and holds no lock.
+
+Battery parts (seconds of the critical branch of each land, row seconds plus the row's own `waited`; the sum of the 3 branch totals is the battery step less 711 s of overhead, 24 s per land):
+| branch | lands where it is critical | seconds | rows inside (seconds, waited seconds) |
+|---|---|---|---|
+| suite -> corpus | 10 | 7,920 | suite 7,207 + 710 waited, corpus 3 |
+| oracle -> lint -> blast | 14 | 7,687 | lint 6,353 (0 waited), oracle 733 + 596 waited, blast 4 |
+| fmt -> xconfig -> squash | 6 | 1,609 | squash 948, xconfig 262, fmt 158 + 242 waited |
+| typer -> jvm -> kits -> workflows | 0 | 0 | never critical |
+| sum | 30 | 17,217 | battery step 17,928 |
+
+Wait share depends on load. Baseline window (the 30 names of table G), same definition: lock wait 739 s = 3.2% of land wall, all pool waits (lock + in-process) 1,639 s = 7.0%, process 727 s per land; land table means there: battery 555 s, build 59 s, base 19 s, the rest about 4 s. Today: process 635 s, waits 489 s per land (337 lock + 152 in-process). The battery itself did not get slower; the line behind it grew. The verifier could not reproduce the baseline figures with date-based event windows (762 s for the 30 lands before the last 30, 846 s for all 52 lands marked 11-20..24); mine come from the 30 names the baseline lists, so treat the baseline comparison as my re-read of that list.
+
+### Largest part and what would cut it
+Largest part: the final checks (battery) = 17,928 s = 53.2% of land wall (598 s per land; 45.5% when its pool waits are taken out). Second: waiting for the lock, 30.0%, which is other lands' whole hold time (their battery, build, base snapshot and waits): all 18 waits of 5 s or more (10,105 of 10,106 s) lie inside another land's hold time, and the battery is about 76% of the non-lock land wall (17,928 of 23,614 s). So the checks are about 76% of the land wall (53.2% own + about 23% inside other lands' holds); 83% is the upper bound if the whole lock wait were battery.
+
+Inside the battery (rows of a table run four branches at once, the span = longest branch; a row's seconds EXCLUDE its pool wait, and row seconds + the row's `waited Ns` equal the printed `concurrent span` to the second in all 30 tables, checked by me and the verifier):
+- critical branch oracle -> lint: 14 of 30 lands, critical branch mean 549 s. The lint row ran as a whole-project lint (300 s or more) in 24 of 30 lands (mean 457 s over the 21 before LINT-UNUSED-PUBLIC-SCAN-ONCE landed 14:09; 311, 302, 324 s in the last 3 whole-lint lands, which carry it). It is scoped to 0-104 files in 6 lands that change no lint input: PIPELINE-SWEEP-STATES-FOREIGN-REPO, PIPELINE-LAND-NEEDS-REVIEW-TERMINAL (66 s), FX-FORK-GAP-CENSUS, WORKER-BRIEF-HXQ-FIRST, COMPARATOR-LAMBDA-CENSUS, FX-HUG-SOLE-OBJECT-ELEMENT-FORK (0.4-0.5 s).
+- critical branch suite: 10 of 30 lands, mean 792 s. 7 of them are `battery full` lands (5 touched a divergence path in `Land.DIVERGENCE_PATHS`: runtime/, HaxeQueryPlugin.hx, TestTranscript.hx, testkit/; 2 were every-10th landings 850 and 860); the other 3 are whole-suite lands where the suite waited 201-218 s for pool threads. A full battery runs the suite as ONE shard (monolith, 780-993 s, mean 857 s); the other lands run it on 3 shards (mean 307 s without waits, 397 s with). Mean battery step: full 905 s, whole-suite-under-lock 568 s, impact 405 s.
+- critical branch fmt -> xconfig -> squash: 6 lands (small impact suite or doc-only lands), mean 268 s, squash row 158 s. This is the floor of a land: no land took less than 214 s of battery.
+
+Other cuttable parts:
+- Docs-only commits on main (one root, two costs). (a) Base snapshot: 3 lands (RANGE-COMPREHENSION-FEEDS-CALL 771 s, TEST-FIXTURE-CACHE-SINGLE 431 s, FMT-EMPTYLINES-INSIDE-COND-REGION 694 s) ran a whole battery of main's HEAD before their own ("base N had no snapshot - made"), inside the lock. In all three, HEAD was a docs-only commit by the parent (609b1cd8 `decisions.md` one line; 39734c84 docs; 7d3644c2 CLAUDE.md) on top of the last land; `Battery.keyOf` keys the snapshot by commit sha, so any non-land commit voids it: 1,895 s = 5.6%. (b) Failed first run of FMT-HUG-SOLE-OBJECT-ELEMENT (680 s run + 705 s waits, battery green): triage text "land FAILED at advance: main moved during landing (1d036c73e -> 609b1cd8b)"; 609b1cd8 is the same parent docs-only decisions.md commit, made at 13:23Z inside that land's run (13:02-13:25Z); the land was redone in full (664 s run, 1,318 s lock wait). 1,386 s = 4.1%. Together a docs-only commit on main cost 3,281 s = 9.7% of land wall (109 s per land) in this window. The second failed run (FMT-EMPTYLINES-INSIDE-COND-REGION, 1.1 s) is a branch-shape refusal: "2 commits over checked-out branch, land takes one; squash needed" (the parent squashed; negligible time).
+- Pool waits while holding the lock: 4,562 s (13.5%) over the 32 runs (3,861 s in the successful runs). 160 of the 245 "waiting for threads" snapshots in the 36 kept `battery.log` list a `slice-gate` among the holders, 101 a post-land or hxcpp run (snapshot counts, not seconds). Code read (`tools/src/devkit/Branches.hx`, `Lease.hx`, verifier and me): a branch with a fixed thread count asks one priority step ahead of the caller's own (`Lease.ahead`); the flexible heavy ask (`heavyAsk`, used for the suite when no fixed demand) sets no priority; the suite row carries 710 of the critical-row waits, oracle 596. Whether the workers' gates run at a lower priority than the land's was not checked.
+- Rebuild: 50 s net per land (median 62 s with waits, min 54 s); its 5 slow cases (101-290 s) are pool waits. Nothing to cut cheaply.
+
+Arithmetic counterfactuals on the 30 battery tables (branch sums include each row's own `waited`; the new row keeps its land's wait; the next-longest branch becomes critical; saving = old span minus new span, summed over the 30 lands):
+| change | lands moved | seconds saved | per land | share of mean land wall |
+|---|---|---|---|---|
+| full battery runs its suite on 3 shards (suite row 306 s) | 7 | 2,695 | 90 | 8.0% |
+| whole lint at 312 s where it ran above 400 s (the post-LINT-UNUSED level) | 14 | 1,428 | 48 | 4.2% |
+| both | 21 | 4,687 | 156 | 13.9% |
+| lint row removed altogether on every land | 14 | 2,174 | 72 | 6.4% |
+| main's base snapshot carried over a docs-only commit | 3 | 1,895 | 63 | 5.6% |
+| docs-only commit on main tolerated by the base snapshot and by `advance` | 4 | 3,281 | 109 | 9.7% |
+| pool waits inside the land removed | all | up to 4,562 | up to 152 | 13.5% |
+These do not add up (shared rows); the queue behind a shorter land shrinks too (second-order effect not computed).
+
+Reading: the ranking is full-battery monolith (8.0%) and the docs-only-commit cost (9.7%) above lint; after the lint fix that already landed, lint is not worth cutting (removing it entirely saves 72 s per land because the suite is next at about 300-400 s). The pool waits are the largest unexplained piece.
+
+### Method and limits
+- "Last 30 lands" = the last 30 rows of `ledger-recent.jsonl` with `workflow == slice-pipeline` and a `mark_landed` visit, as of this reading; session ids matched by task and end time. The baseline's own 30 (the names in table G of MACHINE-BASELINE) were re-read with the same script for the comparison only; date-based windows of the events log do not reproduce the baseline's 782 s (verifier), so the baseline comparison is my reading of that name list.
+- The lock wait is the gap between the transition into `land` and `exec_start` (valid because every such gap lies inside another land's hold time); in-process waits are `wait_ms` minus that gap. In-process waits are split between battery and build/base with the battery's own `PASS (waited Ns)` line; for the 3 base-snapshot lands the rest is assigned to the snapshot.
+- The critical branch is computed from row seconds plus each row's `waited`; this reproduces the printed `concurrent span` to the second in all 30 tables. Counterfactuals are arithmetic on those rows (no re-run), with pool waits unchanged.
+- Not measured: which holder a land's pool wait was behind in seconds (only snapshot counts); whether workers' gates run below the land's priority; the effect of the post-land background runs on the pool beyond those counts; the second-order effect of shorter lands on the lock queue. Review warm's size (1,412 s) is the verifier's reading, not mine.
+- One day, 2.5 lands per hour: the lock share (30%) belongs to this load; in the baseline window the lock wait was 3.2% (all waits 7.0%).
+
+Verifier (round 2, FIXES): of the "other 3" whole-suite lands, two waited 201 and 218 s; in LINT-UNUSED-PUBLIC-SCAN-ONCE the suite is critical because lint had just dropped to 311 s. A docs-only commit is not provably result-neutral: `FmtFlagOwnershipTest` reads docs/strategies.md and `LandProseTest` handles CLAUDE.md, so a tolerated set must be a named list of paths no test reads.
