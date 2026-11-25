@@ -140,7 +140,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 			function walk(node: QueryNode, fn: String): Void {
 				final name: String = vocab.functionKinds.contains(node.kind) ? node.name ?? fn : fn;
 				if (vocab.loopKinds.contains(node.kind)) {
-					final what: Null<String> = verdict(node, entry.source, vocab);
+					final what: Null<String> = verdict(node, entry.source, shape, vocab);
 					final span: Null<Span> = node.span;
 					if (what != null && span != null) {
 						out.push(finding(entry.file, span, name, what));
@@ -241,7 +241,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	}
 
 	/** What the loop `loop` does by hand, as a phrase for the message, or null when it is no source scanner. */
-	private static function verdict(loop: QueryNode, source: String, vocab: Vocab): Null<String> {
+	private static function verdict(loop: QueryNode, source: String, shape: RefShape, vocab: Vocab): Null<String> {
 		final facts: Facts = {
 			reads: false,
 			codes: [],
@@ -252,7 +252,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 			up: [],
 			down: []
 		};
-		collect(loop, source, vocab, facts, false);
+		collect(loop, source, shape, vocab, facts, false);
 		if (!facts.reads) return null;
 		final named: Array<String> = [];
 		if (facts.codes.exists(c -> QUOTES.contains(c))) named.push('a quote');
@@ -270,12 +270,13 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	}
 
 	/** Gathers into `facts` what `node`'s subtree reads, names and mutates. */
-	private static function collect(node: QueryNode, source: String, vocab: Vocab, facts: Facts, compared: Bool): Void {
+	private static function collect(node: QueryNode, source: String, shape: RefShape, vocab: Vocab, facts: Facts, compared: Bool): Void {
 		final kind: String = node.kind;
 		final first: Null<QueryNode> = node.children[0];
 		final second: Null<QueryNode> = node.children[1];
 		if (vocab.stringKinds.contains(kind)) {
-			if (compared) literal(textOf(node, source), facts);
+			final value: Null<String> = compared ? Lit.plainStringValue(node, shape) : null;
+			if (value != null) literal(value, facts);
 		} else if (vocab.numberKinds.contains(kind)) {
 			final code: Null<Int> = Std.parseInt(textOf(node, source));
 			if (compared && code != null) facts.codes.push(code);
@@ -288,7 +289,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 		}
 		if (readsCharacter(node, vocab)) facts.reads = true;
 		final operand: Bool = vocab.comparedHostKinds.contains(kind) || (compared && passesComparison(node, vocab));
-		for (child in node.children) collect(child, source, vocab, facts, operand);
+		for (child in node.children) collect(child, source, shape, vocab, facts, operand);
 	}
 
 	/** Records how `node`, whose target is the local `target`, moves it: set to a flag or constant, or stepped by one. */
@@ -311,10 +312,8 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 		}
 	}
 
-	/** Records the character a string literal `text` names, or the opener or directive it spells whole. */
-	private static function literal(text: String, facts: Facts): Void {
-		if (text.length < 2) return;
-		final body: String = text.substring(1, text.length - 1);
+	/** Records the character a string literal `body` names, or the opener or directive it spells whole. */
+	private static function literal(body: String, facts: Facts): Void {
 		final value: String = body.length == 2 && body.charAt(0) == '\\' ? body.charAt(1) : body;
 		if (value.length == 1)
 			facts.codes.push(value.charCodeAt(0) ?? 0);

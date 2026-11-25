@@ -62,8 +62,8 @@
 			"name": "M-HSS-COMPARED-ONLY-STRING",
 			"type": "anyparse.check.haxe.design.HandSourceScanner",
 			"method": "collect",
-			"find": "if (compared) literal(textOf(node, source), facts);",
-			"replace": "literal(textOf(node, source), facts);",
+			"find": "final value: Null<String> = compared ? Lit.plainStringValue(node, shape) : null;",
+			"replace": "final value: Null<String> = Lit.plainStringValue(node, shape);",
 			"note": "a one-character string only emitted or stored names a character like a compared one"
 		},
 		{
