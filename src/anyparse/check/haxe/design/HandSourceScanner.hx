@@ -8,6 +8,7 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.OptionKeyed;
 import anyparse.check.common.types.AvoidDynamic;
 import anyparse.check.scan.RunScan;
+import anyparse.query.Lit;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 
@@ -43,10 +44,11 @@ private typedef Facts = {
 }
 
 /**
- * Flags a loop that reads the characters of a text and tracks its own lexical state by hand — the strings, escapes,
- * comment openers, `#if` directives or bracket depth of SOURCE text that `LexicalRegions` (strings, comments, regexes),
- * `CondDirectives` (`#if` / `#end`), `HxInterpProjection` (string interpolation) or the AST already answer. The question
- * is "where does this construct start and end"; a second hand scanner is a second answer that drifts from the first.
+ * Flags source text of a language read by hand: a loop that reads the characters of a text and tracks its own lexical
+ * state — the strings, escapes, comment openers, `#if` directives or bracket depth — or a search of source text for a
+ * piece of syntax (`source.indexOf('(')`). The question is "where does this construct start and end"; the answer is the
+ * AST node that spans it or the grammar declaration that knows it, or, when none does, a declaration added to the
+ * grammar with its reader generated. A shared hand scanner is another hand-written answer, not that one.
  *
  * A loop qualifies when it reads characters (`fastCodeAt` / `charCodeAt` / `charAt`, or a `'x'.code`) and holds one of
  * three shapes: it compares at least two of {quote, backslash, a comment opener, `#if`}; or it compares a quote and
@@ -55,9 +57,13 @@ private typedef Facts = {
  * test or a case pattern; one only emitted or stored names nothing. A comment opener is a spelled `/*` or `//`, a `/`
  * beside a `*`, or two compared `/`; a lone `/` is a path separator.
  *
- * The owners themselves, and code that scans a different alphabet (a regex source, a command template, a generated
- * lexer), are listed under `allow` as `{ "path fragment": "why" }`. `Info`, default-off, report-only: the project's
- * lint gate refuses growth of the findings against the base, so a scanner can be added only through an owner.
+ * A call is reported when `indexOf` / `lastIndexOf` searches for a literal that spells Haxe syntax (a bracket, `;`, `:`,
+ * `=`, an arrow, a comment mark) in text that is a `source` / `src` name or a `substring` / `substr` window cut from a
+ * text; a search over a name, a path or a line, and one for a dot or a newline, is not source scanning.
+ *
+ * Code that scans a different alphabet (a regex source, a command template, a generated lexer) is listed under `allow` as
+ * `{ "path fragment": "why" }`; a reason that names an owner is no reason. `Info`, default-off, report-only: the project's
+ * lint gate refuses growth of the findings against the base.
  */
 @:nullSafety(Strict)
 final class HandSourceScanner extends HaxeRule implements ConfigAware implements FileGated implements NoAutofix implements OptionKeyed
@@ -89,12 +95,25 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	private static final DIRECTIVES: Array<String> = ['#if', '#elseif', '#else', '#end'];
 	private static final OPENERS: Array<String> = ['/*', '//'];
 
+	/** The calls that search a text for a literal, and the calls that cut a window out of one. */
+	private static final SEARCH_METHODS: Array<String> = ['indexOf', 'lastIndexOf'];
+
+	private static final WINDOW_METHODS: Array<String> = ['substring', 'substr'];
+
+	/** Parameter names that hold the whole source of a file. */
+	private static final SOURCE_NAMES: Array<String> = ['source', 'src'];
+
+	/** The needles that spell a piece of Haxe syntax: brackets, a separator, an assignment or arrow, a comment mark. */
+	private static final SYNTAX_LITERALS: Array<String> = ['(', ')', '{', '}', '[', ']', ';', ':', '=', '->', '=>', '/*', '*/', '//'];
+
 	/** The linter's memoised per-file config resolver; null when run outside it. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {
 		super(
-			RULE_ID, 'a loop that reads the characters of a text and tracks its strings, comments, directives or brackets by hand',
+			RULE_ID,
+			'a loop that reads the characters of a text and tracks its strings, comments, directives or brackets by hand, or a search of '
+			+ 'source text for syntax',
 			RuleCategory.Design
 		);
 	}
@@ -109,13 +128,14 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	}
 
 	public function noAutofixReason(): String {
-		return 'which owner answers the question is the author\'s to choose';
+		return 'which node or grammar declaration answers the question is the author\'s to choose';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Vocab> = vocabOf(plugin.refShape());
 		if (seams == null) return [];
 		final vocab: Vocab = seams;
+		final shape: RefShape = plugin.refShape();
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
 			function walk(node: QueryNode, fn: String): Void {
 				final name: String = vocab.functionKinds.contains(node.kind) ? node.name ?? fn : fn;
@@ -123,16 +143,13 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 					final what: Null<String> = verdict(node, entry.source, vocab);
 					final span: Null<Span> = node.span;
 					if (what != null && span != null) {
-						out.push({
-							file: entry.file,
-							span: span,
-							rule: RULE_ID,
-							severity: Severity.Info,
-							message: '$name $what by hand — ask the owner of the question instead: LexicalRegions for strings and '
-							+ 'comments, CondDirectives for #if, HxInterpProjection for string interpolation, the AST for brackets'
-						});
+						out.push(finding(entry.file, span, name, what));
 						return;
 					}
+				} else {
+					final search: Null<String> = syntaxSearch(node, shape, vocab);
+					final span: Null<Span> = node.span;
+					if (search != null && span != null) out.push(finding(entry.file, span, name, search));
 				}
 				for (child in node.children) walk(child, name);
 			}
@@ -151,6 +168,41 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	/** Whether a literal under `node`, itself an operand of a comparison, is still compared: through parentheses and a `.code` read. */
 	private static inline function passesComparison(node: QueryNode, vocab: Vocab): Bool {
 		return node.kind == vocab.parenKind || (node.kind == vocab.accessKind && node.name == CODE_FIELD);
+	}
+
+	private static function finding(file: String, span: Span, name: String, what: String): Violation {
+		return {
+			file: file,
+			span: span,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: '$name $what by hand — read the AST node or the grammar declaration that knows this; if none does, declare it '
+				+ 'in the grammar and generate the reader. A shared hand scanner is not the answer'
+		};
+	}
+
+	/**
+	 * What `node` does when it is a search of source text for a piece of syntax (`source.indexOf('(')`), as a phrase for the
+	 * message, or null. The receiver is source text when it is a `source` / `src` name or a `substring` window cut from one.
+	 */
+	private static function syntaxSearch(node: QueryNode, shape: RefShape, vocab: Vocab): Null<String> {
+		final callee: Null<QueryNode> = node.children[0];
+		final needle: Null<QueryNode> = node.children[1];
+		if (node.kind != vocab.callKind || callee == null || needle == null || callee.kind != vocab.accessKind) return null;
+		final receiver: Null<QueryNode> = callee.children[0];
+		if (!SEARCH_METHODS.contains(callee.name ?? '') || receiver == null) return null;
+		final value: Null<String> = Lit.plainStringValue(needle, shape);
+		return value != null && SYNTAX_LITERALS.contains(value) && holdsSourceText(receiver, vocab)
+			? 'searches source text for `$value`'
+			: null;
+	}
+
+	private static function holdsSourceText(receiver: QueryNode, vocab: Vocab): Bool {
+		final window: Null<QueryNode> = receiver.children[0];
+		return receiver.kind == vocab.identKind
+			? SOURCE_NAMES.contains(receiver.name ?? '')
+			: receiver.kind == vocab.callKind && window != null && window.kind == vocab.accessKind
+				&& WINDOW_METHODS.contains(window.name ?? '');
 	}
 
 	/** The `allow` keys of `config`: path fragments, each carrying its reason as the value. */

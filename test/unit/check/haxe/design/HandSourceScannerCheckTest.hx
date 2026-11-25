@@ -21,7 +21,7 @@ class HandSourceScannerCheckTest extends Test {
 		Assert.equals('hand-source-scanner', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.isTrue(vs[0].message.indexOf('f compares characters with a quote and a backslash') == 0, vs[0].message);
-		Assert.isTrue(vs[0].message.indexOf('LexicalRegions') != -1, vs[0].message);
+		Assert.isTrue(vs[0].message.indexOf('AST node') != -1, vs[0].message);
 	}
 
 	/** A character is named by its literal as well as its code, and an opener or directive spelled whole counts. */
@@ -213,6 +213,74 @@ class HandSourceScannerCheckTest extends Test {
 		Assert.equals(
 			1, violations('for (i in 0...s.length) { final c = s.charCodeAt(i); if (c == 0x22) k++; if (c == 0x5c) k++; }').length
 		);
+	}
+
+	/** A finding names the node or the declaration that knows the construct, never a hand-written owner. */
+	@:pin('control')
+	@:killer('M-HSS-MESSAGE-NAMES-OWNER')
+	public function testTheMessageNamesNoHandWrittenOwner(): Void {
+		final vs: Array<Violation> = violations('source.indexOf("(");');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('AST node or the grammar declaration') != -1, vs[0].message);
+		Assert.equals(-1, vs[0].message.indexOf('LexicalRegions'), vs[0].message);
+	}
+
+	/** A search of source text for a piece of syntax is a scan: the text is the source name or a window cut from one. */
+	@:pin('control')
+	@:killer('M-HSS-SEARCH-IGNORED')
+	public function testASyntaxSearchOfSourceTextIsReported(): Void {
+		final vs: Array<Violation> = violations('final at = source.indexOf(\'(\');');
+		Assert.equals(1, vs.length);
+		Assert.equals('hand-source-scanner', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.indexOf('f searches source text for `(` by hand') == 0, vs[0].message);
+		Assert.equals(1, violations('final at = src.lastIndexOf("=>");').length);
+		Assert.equals(1, violations('final at = source.indexOf("//");').length);
+	}
+
+	@:pin('control')
+	@:killer('M-HSS-WINDOW-IGNORED')
+	public function testAWindowCutFromATextIsSourceText(): Void {
+		Assert.equals(1, violations('final at = s.substring(a, b).indexOf(":");').length);
+		Assert.equals(1, violations('final at = s.substr(a, b).lastIndexOf("=");').length);
+	}
+
+	/** A dot, a newline or a name is not a piece of syntax: the search reads a path or a line, not source. */
+	@:pin('control')
+	@:killer('M-HSS-NEEDLE-ANY')
+	public function testASearchForAnythingButSyntaxIsLeftAlone(): Void {
+		Assert.equals(0, violations('final at = source.indexOf(".");').length);
+		Assert.equals(0, violations('final at = source.indexOf("\\n");').length);
+		Assert.equals(0, violations('final at = source.indexOf("class");').length);
+		Assert.equals(0, violations('final at = source.indexOf(needle);').length);
+	}
+
+	@:pin('control')
+	@:killer('M-HSS-RECEIVER-ANY')
+	public function testASearchOfATextThatIsNoSourceIsLeftAlone(): Void {
+		Assert.equals(0, violations('final at = path.indexOf("(");').length);
+		Assert.equals(0, violations('final at = s.indexOf("(");').length);
+		Assert.equals(0, violations('final at = source.contains("(");').length);
+	}
+
+	/** A search inside a loop that is no scanner is still a search of source text: the walk descends into it. */
+	@:pin('control')
+	@:killer('M-HSS-UNFLAGGED-LOOP-NOT-DESCENDED')
+	public function testASearchInsideAnUnflaggedLoopIsReported(): Void {
+		final vs: Array<Violation> = violations('for (i in 0...n) { k += source.indexOf(\'(\'); }');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('searches source text for `(`') != -1, vs[0].message);
+	}
+
+	/** A scanner loop carries one finding as the loop; the search it holds is not a second one. */
+	@:pin('control')
+	@:killer('M-HSS-SCANNER-LOOP-DESCENDS')
+	public function testASearchInsideAScannerLoopIsReportedOnceAsTheLoop(): Void {
+		final vs: Array<Violation> = violations(
+			'for (i in 0...s.length) { final c = s.charCodeAt(i); if (c == 34) k++; if (c == 92) k += source.indexOf(\'(\'); }'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('compares characters with a quote and a backslash') != -1, vs[0].message);
 	}
 
 	private function body(statements: String): String {

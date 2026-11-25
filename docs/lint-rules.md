@@ -324,7 +324,7 @@ metrics, duplication, project contracts, concurrency.
 | [`duplicate-code-renamed`](guide/lint/design.md#duplicate-code-renamed) | any | off | three or more consecutive statements duplicated up to a renaming of their local bindings (layout-insensitive, literal-exact) |
 | [`extract-repeated-expression`](guide/lint/design.md#extract-repeated-expression) | any | on | a non-trivial pure expression repeated three or more times in one function body — a candidate for a final local |
 | [`guard-pin-arm-reach`](guide/lint/design.md#guard-pin-arm-reach) | any | off | a test pinned as a guard that calls a member a mutation arm of its own class cuts — the arm may kill it |
-| [`hand-source-scanner`](guide/lint/design.md#hand-source-scanner) | haxe | off | a loop that reads the characters of a text and tracks its strings, comments, directives or brackets by hand |
+| [`hand-source-scanner`](guide/lint/design.md#hand-source-scanner) | haxe | off | a loop that reads the characters of a text and tracks its strings, comments, directives or brackets by hand, or a search of source text for syntax |
 | [`helper-copy`](guide/lint/design.md#helper-copy) | any | off | a function repeating, up to the names of its bindings, a helper the project keeps in a shared home |
 | [`listener-symmetry`](guide/lint/design.md#listener-symmetry) | any | on | an add/remove listener method missing its symmetrical twin (or the twin not declared next to it) |
 | [`oversized-type`](guide/lint/design.md#oversized-type) | any | on | a type with too many behaviour members or lines (constants are not counted) — a decomposition candidate |

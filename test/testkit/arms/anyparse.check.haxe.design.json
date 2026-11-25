@@ -167,6 +167,61 @@
 			"find": "slashes >= 2 ||",
 			"replace": "false ||",
 			"note": "two compared `/` name no comment opener"
+		},
+		{
+			"name": "M-HSS-MESSAGE-NAMES-OWNER",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "finding",
+			"find": "read the AST node or the grammar declaration that knows this",
+			"replace": "ask the owner LexicalRegions",
+			"note": "a finding sends the author to a hand-written owner instead of the node or declaration that knows the construct"
+		},
+		{
+			"name": "M-HSS-SEARCH-IGNORED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "syntaxSearch",
+			"force": "null",
+			"note": "a search of source text for a piece of syntax is never reported"
+		},
+		{
+			"name": "M-HSS-WINDOW-IGNORED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "holdsSourceText",
+			"find": "receiver.kind == vocab.callKind && window != null",
+			"replace": "false && window != null",
+			"note": "a substring window cut from a text is no source text"
+		},
+		{
+			"name": "M-HSS-NEEDLE-ANY",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "syntaxSearch",
+			"find": "SYNTAX_LITERALS.contains(value) && ",
+			"replace": "",
+			"note": "a search for a dot, a newline or a name is reported as a syntax search"
+		},
+		{
+			"name": "M-HSS-RECEIVER-ANY",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "syntaxSearch",
+			"find": " && holdsSourceText(receiver, vocab)",
+			"replace": "",
+			"note": "a search of any text, a path or a line included, is reported as a source search"
+		},
+		{
+			"name": "M-HSS-UNFLAGGED-LOOP-NOT-DESCENDED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "run",
+			"find": "for (child in node.children) walk(child, name);",
+			"replace": "if (!vocab.loopKinds.contains(node.kind)) for (child in node.children) walk(child, name);",
+			"note": "a search inside a loop that is no scanner is never reached"
+		},
+		{
+			"name": "M-HSS-SCANNER-LOOP-DESCENDS",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "run",
+			"find": "return;",
+			"replace": "",
+			"note": "a scanner loop is reported and then walked on, so the search it holds is a second finding"
 		}
 	]
 }
