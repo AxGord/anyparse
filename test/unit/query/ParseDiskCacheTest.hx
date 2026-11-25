@@ -2,9 +2,11 @@ package unit.query;
 
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.ParseDiskCache;
+import anyparse.query.ProjectParseStore;
 import anyparse.query.QueryNode;
 import anyparse.query.SharedParseTier;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
+import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 #if (sys || nodejs)
 import anyparse.core.TempScratch;
@@ -202,6 +204,56 @@ class ParseDiskCacheTest extends Test {
 		#end
 	}
 
+	/** A file a build parsed is served to the next build from the store with no parse; a file whose text changed is parsed again. */
+	public function testProjectFilesAreServedFromTheStoreOnTheNextBuild(): Void {
+		#if (sys || nodejs)
+		final first: String = CliFixture.write('diskcacheprojecta', SOURCE);
+		final second: String = CliFixture.write('diskcacheprojectb', OTHER);
+		final roots: Array<{ file: String, source: String }> = [{ file: first, source: SOURCE }, { file: second, source: OTHER }];
+		final cold: ProjectParseStore = new ProjectParseStore('haxe', Math.POSITIVE_INFINITY);
+		Assert.equals(2, indexed(roots, cold), 'the cold build indexes both files');
+		Assert.equals(2, cold.written(), 'the cold build wrote both files');
+
+		final parsesBefore: Int = SharedParseTier.innerParses;
+		final spansBefore: Int = SharedParseTier.innerSpanParses;
+		final warm: ProjectParseStore = new ProjectParseStore('haxe');
+		Assert.equals(2, indexed(roots, warm), 'the warm build indexes both files');
+		Assert.equals(parsesBefore, SharedParseTier.innerParses, 'the warm build parsed nothing');
+		Assert.equals(spansBefore, SharedParseTier.innerSpanParses, 'the warm build span-parsed nothing');
+		Assert.equals(0, warm.written(), 'a file the store held is not written again');
+
+		final edited: Array<{ file: String, source: String }> = [{ file: first, source: '$OTHER// edited\n' }, roots[1]];
+		Assert.equals(2, indexed(edited, new ProjectParseStore('haxe', Math.POSITIVE_INFINITY)), 'the edited project indexes');
+		Assert.isTrue(SharedParseTier.innerParses > parsesBefore, 'a file whose text changed is parsed again');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A build writes at most its share of files, at least one, so repeated builds fill the store and the last one parses nothing. */
+	@:pin('control')
+	@:killer('M-PROJECT-STORE-IGNORES-BUDGET')
+	public function testWriteBudgetFillsTheStoreOneStretchAtATime(): Void {
+		#if (sys || nodejs)
+		final sources: Array<String> = [SOURCE, OTHER, '$OTHER// third\n'];
+		final files: Array<{ file: String, source: String }> = [
+			for (i => source in sources) { file: CliFixture.write('diskcachebudget$i', source), source: source }
+		];
+		for (round in 0...sources.length) {
+			final store: ProjectParseStore = new ProjectParseStore('haxe', 0);
+			Assert.equals(3, indexed(files, store), 'the build indexes every file');
+			Assert.equals(1, store.written(), 'build ${round + 1} wrote exactly one file under a zero budget');
+		}
+		final parsesBefore: Int = SharedParseTier.innerParses;
+		final last: ProjectParseStore = new ProjectParseStore('haxe', 0);
+		Assert.equals(3, indexed(files, last), 'the last build indexes every file');
+		Assert.equals(parsesBefore, SharedParseTier.innerParses, 'after one build per file the store holds them all');
+		Assert.equals(0, last.written(), 'and nothing is written again');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private static function plugin(): CachingGrammarPlugin {
 		return new CachingGrammarPlugin(new HaxeQueryPlugin());
 	}
@@ -259,6 +311,11 @@ class ParseDiskCacheTest extends Test {
 			CliFixture.removeDir(root);
 		}, () -> body(root));
 		#end
+	}
+
+	/** How many files an index over `files` holds when built with `store` around it. */
+	private static function indexed(files: Array<{ file: String, source: String }>, store: ProjectParseStore): Int {
+		return SymbolIndex.build(files, plugin(), null, store).allFiles().length;
 	}
 
 }

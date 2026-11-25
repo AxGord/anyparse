@@ -4,6 +4,7 @@ import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.GrammarPlugin.AmbientImportSource;
 import anyparse.query.GrammarPlugin.AmbientImports;
 import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.ParseDiskCache.StoredProjections;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
@@ -138,7 +139,7 @@ final class SymbolIndexBuilder {
 	 * exactly the state `SymbolIndex`'s constructor takes.
 	 */
 	public static function extract(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?store: ProjectParseStore
 	): { files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String> } {
 		final infos: Array<FileInfo> = [];
 		final skipped: Array<String> = [];
@@ -148,7 +149,9 @@ final class SymbolIndexBuilder {
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		final memberSeams: MemberSeams = SymbolIndexMembers.memberSeamsOf(shape);
 		for (entry in files) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
+			final stored: Null<StoredProjections> = store?.seat(entry.file, entry.source);
+			final storedSpans: Null<SpanTypeInfo> = stored?.spans;
+			final tree: Null<QueryNode> = stored?.tree ?? (try plugin.parseFile(entry.source) catch (_: Exception) null);
 			// The SOURCE is retained for a skipped file too. Nothing structural can be read from
 			// it, but its raw text still answers the one question every confinement gate asks —
 			// could this file reference the member at all — and that turns a whole-project veto
@@ -158,10 +161,9 @@ final class SymbolIndexBuilder {
 				skipped.push(entry.file);
 				continue;
 			}
-			infos.push(extractFileInfo(
-				entry.file, entry.source, tree, spanInfoOf(plugin, provider, entry.source), shape, memberSeams, abstractKinds,
-				plugin.typeSyntax
-			));
+			final spans: SpanTypeInfo = storedSpans ?? spanInfoOf(plugin, provider, entry.source);
+			if (storedSpans == null) store?.keep(entry.file, entry.source, tree, spans);
+			infos.push(extractFileInfo(entry.file, entry.source, tree, spans, shape, memberSeams, abstractKinds, plugin.typeSyntax));
 		}
 		attachAmbientImports(infos, plugin, shape, memberSeams, abstractKinds, provider);
 		return { files: infos, skipped: skipped, sources: sources };

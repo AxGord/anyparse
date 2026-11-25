@@ -10,13 +10,14 @@ import anyparse.runtime.TokenLog;
 import haxe.Exception;
 import haxe.io.Path;
 
-/** What `ParseDiskCache` keeps of one source: the two projections a resolution-library parse yields. */
-typedef StoredProjections = { final tree: QueryNode; final spans: SpanTypeInfo; };
+/** What `ParseDiskCache` keeps of one source: its tree, and the span-info bundle when the run that stored it had computed one. */
+typedef StoredProjections = { final tree: QueryNode; final spans: Null<SpanTypeInfo>; };
 
 /**
  * The one answer to "is the parse of this source already on disk": a content-addressed, engine-keyed store of the
- * `QueryNode` tree and `SpanTypeInfo` bundle a resolution-library source parses to, so a new process reads them instead
- * of parsing the library again (`SharedParseTier.promote`).
+ * `QueryNode` tree and `SpanTypeInfo` bundle a source parses to, so a new process reads them instead of parsing again: a resolution-library
+ * source (`SharedParseTier.promote`, tree and bundle) or a project file (`ProjectParseStore`, the tree and the bundle
+ * only when the run had computed it).
  *
  * A file is what its source hashes to under the engine that wrote it. The directory is named by
  * `ParseProjectionEngine.digest`, so another engine never reads it; an entry is named by its path and holds the hash of
@@ -49,7 +50,7 @@ final class ParseDiskCache {
 	private static inline final NODE_WIDTH: Int = 8;
 
 	/** The scheme tag opening every entry: bump it and every stored entry misses. */
-	private static final FORMAT_TAG: String = 'apq-parse-cache v3';
+	private static final FORMAT_TAG: String = 'apq-parse-cache v4';
 
 	private static final DIR_PREFIX: String = 'apq-parse-cache-';
 	private static final SWITCH_VARIABLE: String = 'APQ_PARSE_CACHE';
@@ -74,7 +75,8 @@ final class ParseDiskCache {
 			final first: Int = text.indexOf('\n');
 			final second: Int = text.indexOf('\n', first + 1);
 			if (first < 0 || second < 0 || text.substr(0, first) != header(source)) return null;
-			final spans: SpanTypeInfo = haxe.Unserializer.run(text.substr(second + 1));
+			final stored: String = text.substr(second + 1);
+			final spans: Null<SpanTypeInfo> = stored == '' ? null : haxe.Unserializer.run(stored);
 			return { tree: decodeTree(text.substring(first + 1, second)), spans: spans };
 		} catch (_: Exception) {
 			return null;
@@ -85,7 +87,7 @@ final class ParseDiskCache {
 	}
 
 	/** Keep `tree` and `spans` as the projections of `source` at `file`, replacing what the entry held; a failure is silent. */
-	public function store(file: String, source: String, tree: QueryNode, spans: SpanTypeInfo): Void {
+	public function store(file: String, source: String, tree: QueryNode, spans: Null<SpanTypeInfo>): Void {
 		#if (sys || nodejs)
 		final directory: Null<String> = directoryOrNull();
 		if (directory == null) return;
@@ -93,7 +95,9 @@ final class ParseDiskCache {
 		// Staged under this process's name and renamed over the entry, so a concurrent reader sees the old entry or the new one whole.
 		final temporary: String = TempScratch.slot(entryName(file), '.staged');
 		try {
-			sys.io.File.saveContent(temporary, '${header(source)}\n${encodeTree(tree)}\n${haxe.Serializer.run(spans)}');
+			sys.io.File.saveContent(
+				temporary, '${header(source)}\n${encodeTree(tree)}\n${spans == null ? '' : haxe.Serializer.run(spans)}'
+			);
 			sys.FileSystem.rename(temporary, path);
 		} catch (_: Exception) {
 			// A cache that cannot write costs the next run a parse and nothing else.

@@ -374,6 +374,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_rootProvider = inner is ParsedRootProvider ? cast inner : null;
 
 		_shared = new SharedParseTier(inner.langName());
+
 	}
 
 	/**
@@ -509,7 +510,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		if (_projectIndexBuilt) return _projectIndex;
 		final files: Null<Array<{ file: String, source: String }>> = resolutionProjectFiles();
 		_projectIndexBuilt = true;
-		if (files != null) _projectIndex = SymbolIndex.build(files, this);
+		if (files != null) _projectIndex = SymbolIndex.build(files, this, null, new ProjectParseStore(_inner.langName()));
 		return _projectIndex;
 	}
 
@@ -542,7 +543,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final key: String = fileSetKey(files, thirdPartyFiles ?? []);
 		final memo: Null<{ sources: Array<String>, index: SymbolIndex }> = _indexMemo[key];
 		if (memo != null && sameSources(memo.sources, files)) return memo.index;
-		final index: SymbolIndex = SymbolIndex.build(files, this, thirdPartyFiles);
+		final index: SymbolIndex = SymbolIndex.build(files, this, thirdPartyFiles, new ProjectParseStore(_inner.langName()));
+
 		_indexMemo[key] = { sources: files.map(entry -> entry.source), index: index };
 		return index;
 	}

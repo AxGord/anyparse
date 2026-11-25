@@ -105,7 +105,9 @@ final class IndexScope {
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?thirdPartyFiles: Array<String>
 	): SymbolIndex {
 		final host: Null<SymbolIndexHost> = hostOf(plugin);
-		return host != null ? host.indexOver(files, thirdPartyFiles) : SymbolIndex.build(files, plugin, thirdPartyFiles);
+		return host != null
+			? host.indexOver(files, thirdPartyFiles)
+			: SymbolIndex.build(files, plugin, thirdPartyFiles, new ProjectParseStore(plugin.langName()));
 	}
 
 	/**

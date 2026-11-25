@@ -133,9 +133,10 @@ final class SharedParseTier {
 	/** Enter the projections an earlier process stored for `entry` into the process level, counting the hit. */
 	private function adoptStored(entry: { file: String, source: String }): Void {
 		final stored: Null<StoredProjections> = _disk.lookup(entry.file, entry.source);
-		if (stored == null) return;
+		final spans: Null<SpanTypeInfo> = stored?.spans;
+		if (stored == null || spans == null) return;
 		_parses[entry.source] = stored.tree;
-		_spans[entry.source] = stored.spans;
+		_spans[entry.source] = spans;
 		diskHits++;
 	}
 

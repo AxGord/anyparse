@@ -17669,6 +17669,14 @@
 			"find": "if (!_unchecked.contains(v.rule)) _unchecked.push(v.rule);",
 			"replace": "",
 			"note": "a finding kept unasked names no rule, so the --no-oracle note cannot say which findings went unchecked"
+		},
+		{
+			"name": "M-PROJECT-STORE-IGNORES-BUDGET",
+			"type": "anyparse.query.ProjectParseStore",
+			"method": "withinBudget",
+			"find": "return _written == 0 || _spent <= _budget * (now - _started);",
+			"replace": "return true;",
+			"note": "a store with no write budget writes every parsed file in one run, so a run is no longer bounded and the stretch-by-stretch fill is not observable"
 		}
 	]
 }

@@ -1154,10 +1154,10 @@ final class SymbolIndex {
 	 * counts for every owner, which is what an unpartitioned index has always answered.
 	 */
 	public static function build(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?thirdPartyFiles: Array<String>
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?thirdPartyFiles: Array<String>, ?store: ProjectParseStore
 	): SymbolIndex {
 		final extracted: { files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String> } = SymbolIndexBuilder.extract(
-			files, plugin
+			files, plugin, store
 		);
 		final thirdParty: Map<String, Bool> = [ for (file in thirdPartyFiles ?? []) file => true ];
 		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources, plugin, thirdParty);
