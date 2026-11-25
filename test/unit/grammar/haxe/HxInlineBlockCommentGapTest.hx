@@ -104,7 +104,10 @@ class HxInlineBlockCommentGapTest extends Test {
 		['untyped_block_lead', 'untyped /* u */ {\n\t\t\trun();\n\t\t}'],
 		// The gap after an arrow's `->`: the paren lambda body's `AfterLead` run, the bare arrow's after-operator slots.
 		['arrow_body', 'var f = () -> /* b */ 1;'],
-		['arrow_bare_body', 'var f = x -> /* b */ 1;']
+		['arrow_bare_body', 'var f = x -> /* b */ 1;'],
+		// The gaps after a ternary's `?` and `:` (`@:fmt(captureAfterOp)` on the mixfix ctor).
+		['ternary_then', 'var v = c ? /* q */ a : b;'],
+		['ternary_else', 'var v = c ? a : /* q */ b;']
 	];
 
 	/** Seams with no capture slot — the parser drops the comment, so the round trip refuses. */
@@ -126,8 +129,6 @@ class HxInlineBlockCommentGapTest extends Test {
 		['paren_trail', 'var v = (x /* c */);'],
 		['binop_lhs_lead', 'var v = /* m */ a + b;'],
 		['ternary_cond', 'var v = /* q */ c ? a : b;'],
-		['ternary_then', 'var v = c ? /* q */ a : b;'],
-		['ternary_else', 'var v = c ? a : /* q */ b;'],
 		['unary_lead', 'var v = !/* u */ x;'],
 		['field_access', 'var v = x./* d */ y;'],
 		['index_lead', 'var v = a[/* ix */ 0];'],

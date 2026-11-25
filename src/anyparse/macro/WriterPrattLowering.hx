@@ -1236,10 +1236,9 @@ final class WriterPrattLowering {
 		// and where the THEN slot, closed by the mandatory `:`, keeps it on reparse.
 		// A one-line block comment is inline-safe: it rides along and the cascade
 		// still decides the layout (`a /* c */ ? b : c` stays flat when it fits).
-		final condTrailAccess: Null<Expr> =
-			pc.ctx.trivia ? altSlotAccess(branch, branch.children.length, argNames, TernaryCondTrail) : null;
-		final thenTrailAccess: Null<Expr> =
-			pc.ctx.trivia ? altSlotAccess(branch, branch.children.length, argNames, TernaryThenTrail) : null;
+		final trivia: Bool = pc.ctx.trivia;
+		final condTrailAccess: Null<Expr> = trivia ? altSlotAccess(branch, branch.children.length, argNames, TernaryCondTrail) : null;
+		final thenTrailAccess: Null<Expr> = trivia ? altSlotAccess(branch, branch.children.length, argNames, TernaryThenTrail) : null;
 		final trailDecl: Expr = condTrailAccess != null && thenTrailAccess != null
 			? macro {
 				final _condTrail: Null<String> = ${condTrailAccess};
@@ -1252,6 +1251,12 @@ final class WriterPrattLowering {
 					_items[1] = _dc([_items[1], trailingCommentDocVerbatim(_thenTrail, opt)]);
 					if (StringTools.startsWith(_thenTrail, '//') || _thenTrail.indexOf('\n') >= 0) _forceKeep = true;
 				}
+			}
+			: macro {};
+		final leadDecl: Expr = trivia
+			? macro {
+				${ternaryAfterOpRun(branch, argNames, 1, TernaryThenLead)};
+				${ternaryAfterOpRun(branch, argNames, 2, TernaryElseLead)};
 			}
 			: macro {};
 		return macro {
@@ -1272,6 +1277,7 @@ final class WriterPrattLowering {
 			final _ops: Array<String> = [$v{ternaryOp}, $v{sep}];
 			var _forceKeep: Bool = false;
 			$trailDecl;
+			$leadDecl;
 			// ternary-rest-aware: measure the ternary's trailing rest-of-stack
 			// (the statement `;`, an enclosing argument `,`, ...) so a ternary whose
 			// flat body ends AT the line limit but whose physical line overflows
@@ -1306,6 +1312,22 @@ final class WriterPrattLowering {
 				_dc([_dt('('), _inner, _dt(')')])
 			else
 				_inner;
+		};
+	}
+
+	/**
+	 * The run after a ternary's `?` or `:` (`@:fmt(captureAfterOp)`), put between the operator and the operand
+	 * `_items[item]`, as the assignment-class infix emit places its own; nothing for a branch without the slot. Unlike an
+	 * operand-trailing comment it needs no forced layout: the operator is already written before it, and the line break
+	 * that ends a line comment breaks the ternary by itself.
+	 */
+	private static function ternaryAfterOpRun(branch: ShapeNode, argNames: Array<String>, item: Int, slot: WriterLowering.AltSlot): Expr {
+		final access: Null<Expr> = altSlotAccess(branch, branch.children.length, argNames, slot);
+		if (access == null) return macro {};
+		final runDoc: Expr = WriterLoweringSupport.afterLeadDoc(macro _run);
+		return macro {
+			final _run: Array<String> = $access;
+			if (_run.length > 0) _items[$v{item}] = _dc([$runDoc, _items[$v{item}]]);
 		};
 	}
 

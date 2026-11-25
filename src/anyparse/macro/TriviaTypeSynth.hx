@@ -445,6 +445,11 @@ class TriviaTypeSynth {
 
 	public static inline final TERNARY_THEN_TRAIL_ARG_NAME: String = 'thenTrailComment';
 
+	/** The positional arg names a `@:ternary` ctor carrying `@:fmt(captureAfterOp)` appends: the comments after `?` and after `:`. */
+	public static inline final TERNARY_THEN_LEAD_ARG_NAME: String = 'thenLeadComments';
+
+	public static inline final TERNARY_ELSE_LEAD_ARG_NAME: String = 'elseLeadComments';
+
 	/**
 	 * The two positional arg names a single-Ref `@:kw` ctor opted in by `@:fmt(ctorKwTrivia)` appends
 	 * (`TriviaPairAltCtor.isCtorKwValueBranch`): the comment on the keyword's line and the own-line comments

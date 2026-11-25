@@ -118,6 +118,7 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isInfixAfterOpBranch(branch)) n += 2; // opAfterComment + opOwnComments (infix post-operator comments)
 		if (TriviaPairAltCtor.isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) n += 2; // condTrailComment + thenTrailComment (ω-keep-ternary-operand-comment)
+		if (TriviaPairAltCtor.isTernaryAfterOpBranch(branch)) n += 2; // thenLeadComments + elseLeadComments
 		if (TriviaPairAltCtor.isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
 		// The postfix close-trailing gate adds THREE slots in `buildEnumCtor` —
 		// closeTrailing, argsInnerComment, callLeadingComment. Keep the count in
@@ -453,6 +454,10 @@ final class TriviaPairConverters {
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // condTrailComment (ω-keep-ternary-operand-comment)
 			defaults.push(macro (null: Null<String>)); // thenTrailComment
+		}
+		if (TriviaPairAltCtor.isTernaryAfterOpBranch(branch)) {
+			defaults.push(macro ([]: Array<String>)); // thenLeadComments
+			defaults.push(macro ([]: Array<String>)); // elseLeadComments
 		}
 		if (TriviaPairAltCtor.isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
 		if (TriviaPairAltCtor.isPostfixCloseTrailingBranch(branch)) {

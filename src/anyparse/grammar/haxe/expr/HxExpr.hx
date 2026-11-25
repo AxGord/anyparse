@@ -499,8 +499,9 @@ enum HxExpr {
 	// `multilineBranchInline`: `wrapping.ternaryMultilineBranch: "inline"` keeps a branch's
 	// multi-line block on the condition's line (`cond ? macro {`) while that line fits. `tailBlockHug`:
 	// `sameLine.ternaryTailBlockMaxThenLength` keeps `cond ? x : f(a -> {` on one line for a short `x`.
+	// `captureAfterOp`: the comments between `?` or `:` and the operand after it.
 	@:ternary('?', ':', 1)
-	@:fmt(captureTernaryTrail, multilineBranchInline('ternaryMultilineBranchInline', 'ternaryBranchHoldsMultilineBlock'),
+	@:fmt(captureTernaryTrail, captureAfterOp, multilineBranchInline('ternaryMultilineBranchInline', 'ternaryBranchHoldsMultilineBlock'),
 		tailBlockHug('ternaryTailBlockMaxThenLength', 'ternaryBranchEndsInTailBlock'))
 	Ternary(cond: HxExpr, thenExpr: HxExpr, elseExpr: HxExpr);
 

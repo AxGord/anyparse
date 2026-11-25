@@ -264,6 +264,16 @@ final class TriviaPairAltCtor {
 	}
 
 	/**
+	 * The one answer to "does this `@:ternary` ctor keep the comments written between its `?` or `:` and the operand
+	 * after it": a mixfix ctor opting in with `@:fmt(captureAfterOp)` (`HxExpr.Ternary`), the twin of
+	 * `isInfixAfterOpBranch`. It grows two `Array<String>` slots, the run after `?` (`thenLeadComments`) and the run
+	 * after `:` (`elseLeadComments`), each the same-line comment then the own-line ones.
+	 */
+	public static function isTernaryAfterOpBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 3 && branch.hasMeta(':ternary') && branch.fmtHasFlag('captureAfterOp');
+	}
+
+	/**
 	 * ω-postfix-op-space — true when the branch is a word-op postfix ctor
 	 * opting into source-faithful operator spacing via
 	 * `@:fmt(capturePostfixOpSpace)` (`HxExpr.CondSpliceTail`). Such a
@@ -337,6 +347,7 @@ final class TriviaPairAltCtor {
 			+ (isInfixAfterOpBranch(branch) ? 2 : 0)
 			+ (isRhsTrailBranch(branch) ? 1 : 0)
 			+ (isTernaryTrailBranch(branch) ? 2 : 0)
+			+ (isTernaryAfterOpBranch(branch) ? 2 : 0)
 			+ (isCtorKwValueBranch(branch) ? 2 : 0);
 		// CHECKSTYLE:ON
 	}
@@ -514,6 +525,11 @@ final class TriviaPairAltCtor {
 			final nullStrCT4: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT4)] });
 			args.push({ name: TriviaTypeSynth.TERNARY_COND_TRAIL_ARG_NAME, type: nullStrCT4 });
 			args.push({ name: TriviaTypeSynth.TERNARY_THEN_TRAIL_ARG_NAME, type: nullStrCT4 });
+		}
+		// The runs after the ternary's `?` and `:`, right after its operand-trailing pair.
+		if (isTernaryAfterOpBranch(branch)) {
+			args.push({ name: TriviaTypeSynth.TERNARY_THEN_LEAD_ARG_NAME, type: macro : Array<String> });
+			args.push({ name: TriviaTypeSynth.TERNARY_ELSE_LEAD_ARG_NAME, type: macro : Array<String> });
 		}
 		// ω-postfix-op-space: word-op postfix ctors opting into source-faithful
 		// operator spacing grow `opSpaceBefore:Bool` as the LAST appended slot

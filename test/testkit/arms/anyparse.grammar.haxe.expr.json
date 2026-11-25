@@ -92,6 +92,15 @@
 			"find": "statementBodyForCtor('BlockExpr'), captureAfterOp)",
 			"replace": "statementBodyForCtor('BlockExpr'))",
 			"note": "the bare `x -> body` arrow keeps no slot for a comment after `->`, so the comment is stashed and dropped or moved behind the body"
+		},
+		{
+			"name": "M-TERNARY-AFTER-OP-UNCAPTURED",
+			"type": "anyparse.grammar.haxe.expr.HxExpr",
+			"method": "Ternary",
+			"kind": "ParamCtor",
+			"find": "captureTernaryTrail, captureAfterOp,",
+			"replace": "captureTernaryTrail,",
+			"note": "the ternary keeps no slot for a comment after `?` or `:`, so the comment is stashed and dropped and fmt refuses the file"
 		}
 	]
 }

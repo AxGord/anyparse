@@ -189,6 +189,10 @@ final class WriterLoweringSupport {
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) idx++;
 		if (slot == TernaryThenTrail) return macro $i{argNames[idx]};
 		if (TriviaPairAltCtor.isTernaryTrailBranch(branch)) idx++;
+		if (slot == TernaryThenLead) return macro $i{argNames[idx]};
+		if (TriviaPairAltCtor.isTernaryAfterOpBranch(branch)) idx++;
+		if (slot == TernaryElseLead) return macro $i{argNames[idx]};
+		if (TriviaPairAltCtor.isTernaryAfterOpBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 
@@ -210,6 +214,7 @@ final class WriterLoweringSupport {
 			case ChainAfterComment, ChainOwnComments: TriviaPairAltCtor.isInfixAfterOpBranch(branch);
 			case ChainRhsTrail: TriviaPairAltCtor.isRhsTrailBranch(branch);
 			case TernaryCondTrail, TernaryThenTrail: TriviaPairAltCtor.isTernaryTrailBranch(branch);
+			case TernaryThenLead, TernaryElseLead: TriviaPairAltCtor.isTernaryAfterOpBranch(branch);
 			case KwAfter, KwLeading: TriviaPairAltCtor.isCtorKwValueBranch(branch);
 		};
 	}

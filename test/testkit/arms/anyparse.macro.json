@@ -3753,6 +3753,22 @@
 			"find": "if (records) steps.push",
 			"replace": "steps.push",
 			"note": "comment scanning records its delimiters, so a `//` inside a class body is a token of the class"
+		},
+		{
+			"name": "M-TERNARY-AFTER-OP-RUN-UNWRITTEN",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "ternaryAfterOpRun",
+			"find": "$runDoc, _items",
+			"replace": "_items",
+			"note": "the writer never emits the run captured after a ternary's `?` or `:`, so the comment is dropped and fmt refuses the file"
+		},
+		{
+			"name": "M-TERNARY-AFTER-OP-OWN-LINE-DROPPED",
+			"type": "anyparse.macro.PrattPostfixLowering",
+			"method": "buildPrattBranchBody",
+			"find": "_leadSame == null ? _leadOwn : [_leadSame].concat(_leadOwn);",
+			"replace": "_leadSame == null ? [] : [_leadSame];",
+			"note": "the own-line comments after a ternary's `?` or `:` are taken off the stash but never kept, so the writer drops them"
 		}
 	]
 }

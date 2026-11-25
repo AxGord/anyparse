@@ -356,28 +356,44 @@ final class PrattPostfixLowering {
 			// included. Either way the writer then breaks before the next operator,
 			// so the comment keeps its place.
 			final captureTernaryTrail: Bool = oc.ctx.trivia && branch.fmtHasFlag('captureTernaryTrail');
+			// The comments between `?` / `:` and the operand after each: the same-line one read before the skip
+			// stashes it, the own-line ones taken back off the stash, which would hand them to the operand's first atom.
+			final captureAfterOps: Bool = oc.ctx.trivia && TriviaPairAltCtor.isTernaryAfterOpBranch(branch);
 			final ctorArgs: Array<Expr> = [macro left, macro _middle, macro _right];
 			if (captureTernaryTrail) {
 				ctorArgs.push(macro _opTrailComment);
 				ctorArgs.push(macro _thenTrailComment);
+			}
+			if (captureAfterOps) {
+				ctorArgs.push(macro _thenLead);
+				ctorArgs.push(macro _elseLead);
 			}
 			final ctorCall: Expr = { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
 			final thenTrailCapture: Expr = captureTernaryTrail
 				? macro final _thenTrailComment: Null<String> = collectTrailingBeforeSep(ctx)
 				: macro {};
 			final clearStashNl: Expr = oc.stashNewlineClearExpr();
+			final leadRun: Expr = macro {
+				final _leadSame: Null<String> = collectTrailingFull(ctx);
+				final _leadStash0: Int = ctx.stashedCommentCount();
+				$skipCall;
+				final _leadOwn: Array<String> = ctx.takeStashedComments(_leadStash0);
+				_leadSame == null ? _leadOwn : [_leadSame].concat(_leadOwn);
+			};
+			final thenLeadRun: Expr = captureAfterOps ? macro final _thenLead: Array<String> = $leadRun : skipCall;
+			final elseLeadRun: Expr = captureAfterOps ? macro final _elseLead: Array<String> = $leadRun : skipCall;
 			macro {
 				if ($v{precValue} < minPrec) {
 					ctx.pos = _savedPos;
 					_matched = false;
 				} else {
 					$clearStashNl;
-					$skipCall;
+					$thenLeadRun;
 					final _middle: $returnCT = $fullExprCall;
 					$thenTrailCapture;
 					$skipCall;
 					expectLit(ctx, $v{sepText});
-					$skipCall;
+					$elseLeadRun;
 					// The separator is the ternary's SECOND operator commit — the middle
 					// operand's own loop exit can have stashed the gap before it.
 					$clearStashNl;
