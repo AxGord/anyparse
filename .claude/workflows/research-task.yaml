@@ -79,7 +79,7 @@ states:
     prompt: |-
       The worktree for {{context.slice}} was not made (exit {{exit_code}}):
       {{stderr}}
-      A stale directory or branch: decide and `retry`. Otherwise `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml",
+      A stale directory or branch: decide and `retry`. Otherwise `queue_mark({file: "{{context.queue_file}}",
       id: "{{context.slice}}", to: "released"})` (back to `[ ]`, nothing was made), then `release`.
     transitions:
       retry: prepare
@@ -96,7 +96,7 @@ states:
 
            You are the INVESTIGATOR of anyparse research line {{context.slice}}. The deliverable is a report for a decision, no code.
            READ-ONLY by rule (nothing stops you but this rule, so keep it): change no tracked file and no queue, call no workflow tool (no mcp__plugin_workflow_wf__*) but the ONE context_set that delivers your report, no commit, no sub-agent. No build and no test run UNLESS your line asks for a measurement by running (single-class runs, timings, a profile; user 2026-11-14): then, through the pool only, `node {{project_root}}/bin/dev.js worker-build {{context.wt}}` once (the worktree's own apq.js + test.js), then in {{context.wt}} single-class `APQ_TEST=<one class> node bin/test.js` runs, `apq` / `hxq` (HXQ_BIN={{context.wt}}/bin/apq.js) commands over a sample you name, and `node --cpu-prof` of one such command; each reading with its command and wall time in the report. A pool wait has no deadline of yours (a STARVED mark is only a mark): start a long command with `run_in_background` and wait on it. Never the whole suite, `dev shard`, a gate, the battery, an arm, `--fix` or `--write` on any tree; a run a hook refuses goes under not measured with the refusal quoted; scripts and scratch files go ONLY under {{context.wt}}-logs/ (absolute paths; a Bash heredoc naming a .hx file is refused by the hxq hook). The report itself is never a file you write (the Write tool refuses report files for sub-agents): it goes into the session context, below.
-           Your line: `awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{project_root}}/.claude/batch/queue.yaml` — read only that. What it asks your report to hold (its `Report:` sentence) is the body of your report; do not widen the scope.
+           Your line: `awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{context.queue_file}}` — read only that. What it asks your report to hold (its `Report:` sentence) is the body of your report; do not widen the scope.
            The tree is {{context.wt}} at the commit in {{context.wt}}-logs/pinned.txt: every number you give is a reading of that commit, named with it. Read code with hxq (`HXQ_BIN={{project_root}}/bin/apq.js hxq owner|mentions|callers|refs|show --select|source --select|ast`): grep, sed and awk on .hx are refused by a hook; Read only non-.hx files. An engine of another commit, when a comparison needs one: `node {{project_root}}/bin/dev.js base-engine <sha>` prints its apq.js; never build anything else.
            STEP 1, before anything else, the QUESTION CHECK: the user's own words the line quotes, the question as the line asks it, and whether they are the same question. When they are not the same, stop there: the whole report is that one finding (the shape below still applies).
            Your report, in English, in exactly this order (an exec writes it to {{context.wt}}-logs/report.md and checks the shape):
@@ -211,7 +211,7 @@ states:
       1. Spawn ONE verifier: Agent (plain, no `subagent_type`), model {{context.model_verify}}, effort {{context.effort_verify}} (both empty → {{context.model}}, {{context.effort}}), `run_in_background: true`, prompt exactly:
 
            You are the VERIFIER of anyparse research line {{context.slice}}, independent of the investigator who wrote the report. READ-ONLY by rule (nothing stops you but this rule): change no tracked file and no queue, call no workflow tool (no mcp__plugin_workflow_wf__*), no build, no test or gate run, no commit, no sub-agent; you write ONLY {{context.wt}}-logs/verify.md (Write tool, absolute path).
-           Read: your line (`awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{project_root}}/.claude/batch/queue.yaml`), {{context.wt}}-logs/report.md whole, and {{context.wt}}-logs/verify.md when it exists (your earlier list: a fix round's report must answer it).
+           Read: your line (`awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{context.queue_file}}`), {{context.wt}}-logs/report.md whole, and {{context.wt}}-logs/verify.md when it exists (your earlier list: a fix round's report must answer it).
            The data is the tree {{context.wt}} at the commit in {{context.wt}}-logs/pinned.txt; read code with hxq (`HXQ_BIN={{project_root}}/bin/apq.js hxq …`; grep, sed and awk on .hx are refused by a hook).
            Required, each with what you ran and what it showed:
              1. Re-derive at least one headline number from the data yourself; state the report's number and yours; a disagreement is a finding.
@@ -361,7 +361,7 @@ states:
   mark_by_hand:
     prompt: |-
       wf-queue refused to mark {{context.slice}} failed (exit {{exit_code}}): {{stderr}}
-      `queue_mark({file: "{{project_root}}/.claude/batch/queue.yaml", id: "{{context.slice}}", to: "failed", note: "<the reason, one line>"})`, then `close`, or `stop` if the parent said stop.
+      `queue_mark({file: "{{context.queue_file}}", id: "{{context.slice}}", to: "failed", note: "<the reason, one line>"})`, then `close`, or `stop` if the parent said stop.
     transitions:
       close: closed
       stop: stopped
