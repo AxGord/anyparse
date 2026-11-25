@@ -1,5 +1,9 @@
 package anyparse.query;
 
+import anyparse.check.Check.Violation;
+import anyparse.check.Severity;
+import anyparse.check.common.design.ExtractRepeatedExpression;
+import anyparse.check.common.types.ExplicitLocalType;
 import anyparse.runtime.Span;
 
 using anyparse.util.Strings;
@@ -7,14 +11,16 @@ using Lambda;
 
 /**
  * Outcome of an `ExtractVar.extractVar` call. `Ok` carries the
- * format-preserving rewritten source; `Err` carries a human-readable
+ * format-preserving rewritten source, the occurrences it replaced, the
+ * equal occurrences its function body holds and whether some reading the
+ * same value were left because no point dominates them; `Err` carries a human-readable
  * diagnostic (cursor not on an expression start, the enclosing statement
  * not inside a `{ }` block, a post-rewrite re-parse failure). Modelled as
  * a sum type so the CLI maps it to stdout vs. stderr + a non-zero exit
  * without a sentinel-string convention. Mirrors `InlineResult`.
  */
 enum ExtractResult {
-	Ok(text: String);
+	Ok(text: String, replaced: Int, equal: Int, guarded: Bool);
 	Err(message: String);
 }
 
@@ -34,7 +40,9 @@ enum ExtractResult {
  *  3. Hoists that expression into a fresh `final <name> = <expr>;`
  *     inserted on its own line immediately before the nearest enclosing
  *     block-level statement, at that statement's indentation, and
- *     replaces the expression occurrence at the cursor with `<name>`.
+ *     replaces with `<name>` every equal occurrence reading the same value
+ *     that one point reaching the earliest on every path, with no write
+ *     between, dominates (`ExtractRepeatedExpression.hoistRun`).
  *  4. Re-parses the result; an unparseable rewrite is rejected.
  *
  * The enclosing statement must be a DIRECT CHILD of a `{ }` block
@@ -49,14 +57,11 @@ enum ExtractResult {
  * No parenthesisation is needed: the hoisted decl is a fresh assignment
  * context and the use-site replacement is a bare identifier. The temp is
  * declared `final` — it is single-assignment, matching the project's
- * immutability default — and carries no type annotation (Haxe infers).
- * A single occurrence is replaced; replace-all is out of scope. A
- * type-ambiguous extraction (bare `[]` / `null`) is a documented
- * syntactic-tool limitation — type inference is not attempted.
+ * immutability default — and annotated with the type the structural
+ * ladder of `ExplicitLocalType` names without a compiler; when it names
+ * none (a field chain, a bare `[]` / `null`) the local stays untyped.
  *
- * Coordinate convention: `line` / `col` are interpreted exactly as
- * `apq refs` PRINTS them (1-based), identical to
- * `Rename` / `Inline`.
+ * `line` / `col` are 1-based, as `apq refs` prints them.
  */
 @:nullSafety(Strict)
 final class ExtractVar {
@@ -109,15 +114,18 @@ final class ExtractVar {
 	/**
 	 * Extract the expression starting at `line:col` in `source` into a
 	 * fresh `final <name> = <expr>;` hoisted before the enclosing
-	 * block-level statement, replacing the occurrence with `name`.
-	 * `plugin` is the caller-owned grammar plugin (the same the `refs` CLI
-	 * builds), so the operation stays language-agnostic. Returns
-	 * `Ok(rewritten)` or an `Err` describing why the extraction could not
-	 * be applied. The source is never mutated — the caller decides whether
-	 * to write the result.
+	 * block-level statement, replacing with `name` every occurrence equal to it
+	 * that reads the same value (`ExtractRepeatedExpression.hoistRun`), or only
+	 * the addressed one when `single`. The local carries the type the structural
+	 * ladder of `ExplicitLocalType` names, untyped when it names none.
+	 * `plugin` is the caller-owned grammar plugin, `file` the path the source
+	 * is read from (the index resolves its members against it). Returns
+	 * `Ok(rewritten, replaced, equal)` or an `Err` describing why the extraction
+	 * could not be applied. The source is never mutated.
 	 */
 	public static function extractVar(
-		source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin, ?exactTo: Int
+		source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin, ?exactTo: Int, single: Bool = false,
+		file: String = 'source'
 	): ExtractResult {
 		if (!name.isIdentifier()) return Err('new name "$name" is not a valid identifier');
 
@@ -135,12 +143,23 @@ final class ExtractVar {
 		final exprSpan: Null<Span> = expr.span;
 		if (exprSpan == null) return Err('no expression starts at position $line:$col (point at the first token of an expression)');
 		final targetSpan: Span = exprSpan;
-		// A PEG span can swallow trailing trivia — trim it so neither the hoisted
-		// text nor the replaced range carries a dangling space.
-		var effTo: Int = targetSpan.to;
-		while (effTo > targetSpan.from && SourceText.isSpace(source.fastCodeAt(effTo - 1))) effTo--;
 
-		final enclosingStmt: Null<QueryNode> = findEnclosingBlockStmt(tree, expr);
+		final hoist: HoistRun = single ? {
+			run: [targetSpan],
+			equal: 1,
+			block: null,
+			anchor: null,
+			guarded: false
+		} : ExtractRepeatedExpression.hoistRun(plugin, file, source, tree, expr);
+		final block: Null<QueryNode> = hoist.block;
+		// Several occurrences go under the statement `hoistRun` found dominating the earliest; a block this op cannot
+		// hoist into leaves only the addressed occurrence.
+		final anchor: Null<QueryNode> = hoist.anchor;
+		final shared: Null<QueryNode> = block != null && BLOCK_KINDS.contains(block.kind) && anchor != null && isStatement(anchor.kind)
+			? anchor
+			: null;
+		final run: Array<Span> = shared != null ? hoist.run : [targetSpan];
+		final enclosingStmt: Null<QueryNode> = shared ?? findEnclosingBlockStmt(tree, expr);
 		if (enclosingStmt == null) return Err('"$name": cannot extract — the enclosing statement is not inside a { } block');
 		final stmt: QueryNode = enclosingStmt;
 		final stmtSpan: Null<Span> = stmt.span;
@@ -159,19 +178,20 @@ final class ExtractVar {
 		final indent: String = source.substring(lineStart, hoistSpan.from);
 		if (!isAllWhitespace(indent)) return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
 
-		final exprText: String = source.substring(targetSpan.from, effTo);
+		final exprText: String = source.substring(targetSpan.from, trimmedEnd(source, targetSpan));
 
-		final insertEdit: { span: Span, text: String } = {
-			span: new Span(lineStart, lineStart),
-			text: '${indent}final $name = $exprText;\n'
-		};
-		final replaceEdit: { span: Span, text: String } = { span: new Span(targetSpan.from, effTo), text: name };
+		final edits: Array<{ span: Span, text: String }> = [
+			{ span: new Span(lineStart, lineStart), text: '${indent}final $name = $exprText;\n' }
+		];
+		for (s in run) edits.push({ span: new Span(s.from, trimmedEnd(source, s)), text: name });
 
-		final rewritten: String = CanonicalEdit.applyEdits(source, [insertEdit, replaceEdit]);
+		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
 		if (rewritten == source) return Err('extract of "$name" is a no-op');
 
 		final unparsed: Null<String> = ParseGate.refusal(plugin, rewritten, 'rewritten source');
-		return unparsed != null ? Err(unparsed) : Ok(rewritten);
+		return unparsed != null
+			? Err(unparsed)
+			: Ok(annotate(rewritten, lineStart + indent.length, plugin, file), run.length, hoist.equal, hoist.guarded);
 	}
 
 	/** Is `kind` a statement node (its kind ends with `Stmt`)? */
@@ -273,6 +293,36 @@ final class ExtractVar {
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
 		}
 		return true;
+	}
+
+	/** The end of `span` with the trailing trivia a PEG span can swallow trimmed off, so no replaced range carries a dangling space. */
+	private static function trimmedEnd(source: String, span: Span): Int {
+		var end: Int = span.to;
+		while (end > span.from && SourceText.isSpace(source.fastCodeAt(end - 1))) end--;
+		return end;
+	}
+
+	/**
+	 * `source` with the local declared at `declFrom` annotated by the type `ExplicitLocalType`'s structural ladder
+	 * names for its initializer, or `source` unchanged when it names none — the same edit that rule's fix writes.
+	 */
+	private static function annotate(source: String, declFrom: Int, plugin: GrammarPlugin, file: String): String {
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
+		final kinds: Array<String> = plugin.refShape().localDeclKinds ?? [];
+		final decl: Null<QueryNode> = tree == null
+			? null
+			: TreePath.ancestorsAt(tree, declFrom).find(n -> kinds.contains(n.kind) && n.span?.from == declFrom);
+		final span: Null<Span> = decl?.span;
+		if (span == null) return source;
+		final finding: Violation = {
+			file: file,
+			span: span,
+			rule: 'explicit-local-type',
+			severity: Severity.Info,
+			message: 'hoisted local'
+		};
+		final edits: Array<{ span: Span, text: String }> = new ExplicitLocalType().fix(source, [finding], plugin);
+		return edits.length == 0 ? source : CanonicalEdit.applyEdits(source, edits);
 	}
 
 }

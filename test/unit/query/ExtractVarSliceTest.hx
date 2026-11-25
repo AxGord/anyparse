@@ -170,7 +170,7 @@ class ExtractVarSliceTest extends Test {
 	private function assertExtract(source: String, line: Int, col: Int, name: String, expected: String): Void {
 		final result: ExtractResult = extractOf(source, line, col, name);
 		switch result {
-			case Ok(text):
+			case Ok(text, _, _, _):
 				Assert.equals(expected, text);
 				// Every accepted rewrite must itself re-parse.
 				assertReparses(text);
@@ -182,7 +182,7 @@ class ExtractVarSliceTest extends Test {
 	private function assertRefused(reason: String, source: String, line: Int, col: Int, name: String): Void {
 		final result: ExtractResult = extractOf(source, line, col, name);
 		switch result {
-			case Ok(text):
+			case Ok(text, _, _, _):
 				Assert.fail('expected Err (refusal), got Ok:\n$text');
 			case Err(message):
 				Assert.isTrue(message.indexOf(reason) >= 0, message);

@@ -1643,6 +1643,14 @@
 			"find": "LintConfig.discover(file, notes, acceptedOptions)",
 			"replace": "LintConfig.discover(file, notes)",
 			"note": "the lint run hands no accepted-keys table, so no key is checked"
+		},
+		{
+			"name": "M-EXTRACT-VAR-SINGLE-IGNORED",
+			"type": "anyparse.query.cli.command.ExtractVarCommand",
+			"method": "runExtractVar",
+			"find": "single = true;",
+			"replace": "",
+			"note": "--single is parsed and dropped, so every equal occurrence is replaced"
 		}
 	]
 }

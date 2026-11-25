@@ -1571,6 +1571,22 @@
 			"find": "return [OPTION_HOMES];",
 			"replace": "return [];",
 			"note": "helper-copy leaves out a key it reads, so the config that sets it is told it is unknown"
+		},
+		{
+			"name": "M-EXTRACT-VAR-RUN-UNCUT",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "hoistRun",
+			"find": "for (run in sameValueRuns(equal, unit, ctx, 1))",
+			"replace": "for (run in [equal])",
+			"note": "a write between equal reads no longer cuts the hoisted run, so a read after the write is replaced by a value computed before it"
+		},
+		{
+			"name": "M-EXTRACT-VAR-HOIST-UNDOMINATED",
+			"type": "anyparse.check.common.design.ExtractRepeatedExpression",
+			"method": "dominated",
+			"find": "final anchor: Null<QueryNode> = SameValueRuns.hoistPoint(part, block, writes, ctx.shape);",
+			"replace": "final anchor: Null<QueryNode> = TreePath.ancestorsAt(block, part[0].span.from)[1];",
+			"note": "the local goes before the statement holding the earliest read whatever guards or writes precede the read inside it"
 		}
 	]
 }

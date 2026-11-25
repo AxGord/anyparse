@@ -24,7 +24,7 @@ final class ExtractVarCommand implements CliCommand {
 	}
 
 	public function flags(): CliFlags {
-		return new CliFlags(['--write'], ['--match', '--nth']);
+		return new CliFlags(['--write', '--single'], ['--match', '--nth']);
 	}
 
 	public function run(args: Array<String>, ctx: CliContext): Int {
@@ -36,11 +36,12 @@ final class ExtractVarCommand implements CliCommand {
 	}
 
 	/**
-	 * `apq extract-var <file> <line>:<col> <name> [--write]` — hoist the
+	 * `apq extract-var <file> <line>:<col> <name> [--single] [--write]` — hoist the
 	 * expression starting at `<line>:<col>` into a fresh local
 	 * `final <name> = <expr>;` inserted on its own line immediately before
 	 * the nearest enclosing block-level statement (at that statement's
-	 * indentation), replacing the expression occurrence with `<name>`. The
+	 * indentation), replacing with `<name>` every equal occurrence that reads
+	 * the same value, or only the addressed one with `--single`. The
 	 * inverse of `inline`. The enclosing statement must be a direct child
 	 * of a `{ }` block — an expression buried in a braceless branch is
 	 * refused. `<line>:<col>` uses the same column convention `apq refs`
@@ -54,6 +55,7 @@ final class ExtractVarCommand implements CliCommand {
 		final op: String = 'extract-var';
 		var lang: String = 'haxe';
 		var write: Bool = false;
+		var single: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
 		var matchExpr: Null<String> = null;
@@ -71,6 +73,8 @@ final class ExtractVarCommand implements CliCommand {
 					nth = arg.intValue();
 				case '--write':
 					write = true;
+				case '--single':
+					single = true;
 				case '-h', '--help':
 					printExtractVarUsage();
 					return EXIT_OK;
@@ -127,9 +131,14 @@ final class ExtractVarCommand implements CliCommand {
 		}
 		if (pos == null) return EXIT_RUNTIME;
 		final loc: Position = pos;
-		final result: ExtractResult = ExtractVar.extractVar(source, loc.line, loc.col, nameStr, plugin, exactTo);
+		final result: ExtractResult = ExtractVar.extractVar(source, loc.line, loc.col, nameStr, plugin, exactTo, single, filePath);
 		switch result {
-			case Ok(text):
+			case Ok(text, replaced, equal, guarded):
+				// A left occurrence is said, never silent: the repeated-expression finding then still stands.
+				if (equal > 1) {
+					final left: String = leftNote(replaced < equal, single, guarded);
+					CliIo.stderr('apq extract-var: replaced $replaced of $equal equal occurrence(s) in the function$left\n');
+				}
 				if (write) {
 					RegistryFollowCommand.writeFollowed(op, [{ path: filePath, content: text }], plugin);
 					CliIo.stderr('apq extract-var: wrote $filePath\n');
@@ -144,13 +153,20 @@ final class ExtractVarCommand implements CliCommand {
 	}
 
 	private static function printExtractVarUsage(): Void {
-		CliIo.sysPrint("Usage: apq extract-var <file> (<line>:<col> | --match '<expr-pattern>') <name> [--write]\n");
+		CliIo.sysPrint("Usage: apq extract-var <file> (<line>:<col> | --match '<expr-pattern>') <name> [--single] [--write]\n");
 		CliUsage.printOptionsWriteLangHelp();
+		CliIo.sysPrint('  --single   replace only the addressed occurrence\n');
 		CliIo.sysPrint('Scope-correct, format-preserving extract-variable — the inverse of\n');
 		CliIo.sysPrint('inline. The expression starting at <line>:<col> is hoisted into a fresh\n');
 		CliIo.sysPrint('local `final <name> = <expr>;` inserted on its own line immediately\n');
 		CliIo.sysPrint('before the nearest enclosing block-level statement (at that statement\'s\n');
-		CliIo.sysPrint('indentation), and the expression occurrence is replaced with <name>.\n');
+		CliIo.sysPrint('indentation). Every occurrence in the function equal to it up to layout\n');
+		CliIo.sysPrint('that reads the same value (pure, no write or loop back edge between\n');
+		CliIo.sysPrint('them) is replaced with <name>, unless a guard, a branch or a write\n');
+		CliIo.sysPrint('before the earliest one keeps a single local from standing for it;\n');
+		CliIo.sysPrint('stderr says how many of the equal ones\n');
+		CliIo.sysPrint('were replaced. The local carries the type the structural ladder of\n');
+		CliIo.sysPrint('explicit-local-type names without a compiler, untyped when it names none.\n');
 		CliIo.sysPrint('The cursor must point at the FIRST token of an expression; the\n');
 		CliIo.sysPrint('outermost expression starting there is selected. The enclosing\n');
 		CliIo.sysPrint('statement must be a direct child of a { } block — an expression buried\n');
@@ -158,6 +174,21 @@ final class ExtractVarCommand implements CliCommand {
 		CliIo.sysPrint('convention `apq refs` prints. The rewrite is verified to re-parse; a\n');
 		CliIo.sysPrint('cursor not on an expression start, an enclosing statement outside a\n');
 		CliIo.sysPrint('block, or an unparseable result exits non-zero with the file untouched.\n');
+	}
+
+	/**
+	 * Why equal occurrences were left: the caller's `--single`, a branch, a short-circuit or a write the earliest sits
+	 * behind (`guarded`), or no proof they read the value the hoisted one does.
+	 */
+	private static function leftNote(left: Bool, single: Bool, guarded: Bool): String {
+		return if (!left)
+			''
+		else if (single)
+			' (--single)'
+		else if (guarded)
+			' — no statement before them reaches the rest unconditionally: a branch, a short-circuit or a write comes first'
+		else
+			' — the rest is not proved to read the same value: an impure read, or a write, a loop or another body between them';
 	}
 
 }

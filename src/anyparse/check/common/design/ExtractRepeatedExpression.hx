@@ -65,6 +65,19 @@ private typedef BindingBucket = {
 }
 
 /**
+ * What `ExtractRepeatedExpression.hoistRun` answers: the spans one local replaces, by position, how many equal
+ * occurrences the body holds, the block holding the replaced ones and the statement of it the local goes before
+ * (both null for one), and whether occurrences reading the same value were left because no point dominates them.
+ */
+typedef HoistRun = {
+	final run: Array<Span>;
+	final equal: Int;
+	final block: Null<QueryNode>;
+	final anchor: Null<QueryNode>;
+	final guarded: Bool;
+}
+
+/**
  * Flags a NON-TRIVIAL, PURE value expression that appears three or more times,
  * literally identical up to LAYOUT — whitespace between tokens, never a literal's
  * own interior — within ONE function body: a candidate for a `final x = <expr>;`
@@ -193,40 +206,16 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final faKind: Null<String> = shape.fieldAccessKind;
-		final callKind: Null<String> = shape.callKind;
-		if (faKind == null || callKind == null) return [];
-		final faK: String = faKind;
-		final callK: String = callKind;
-		final indexKind: Null<String> = shape.indexAccessKind;
-		final candidateKinds: Array<String> = indexKind == null ? [faKind, callKind] : [faKind, callKind, indexKind];
-		final functionUnitKinds: Array<String> = ShapeVocab.functionLikeKinds(shape);
-		final exclusiveConditionalKinds: Array<String> = (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []);
+		// A grammar missing the field-access or the call kind leaves `contextOf` null, so no file reports.
+		final candidateKinds: Array<String> = [
+			for (k in [shape.fieldAccessKind, shape.callKind, shape.indexAccessKind]) if (k != null) k
+		];
 		final index: SymbolIndex = IndexScope.report(files, plugin);
-		final loopKinds: Array<String> = ShapeVocab.loopKinds(shape);
-		final blockKinds: Array<String> = plugin.controlFlowSupport()?.blockKinds() ?? [];
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {
-			final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, entry.source, root, index, entry.file);
-			if (purity == null) return;
-			final resolved: PurityCtx = purity;
-			final units: Array<QueryNode> = [];
-			collectUnits(root, functionUnitKinds, units);
-			final ctx: Ctx = {
-				fieldAccessKind: faK,
-				callKind: callK,
-				candidateKinds: candidateKinds,
-				functionUnitKinds: functionUnitKinds,
-				exclusiveConditionalKinds: exclusiveConditionalKinds,
-				opaqueKinds: shape.opaqueKinds ?? [],
-				purity: resolved,
-				shape: shape,
-				tree: root,
-				units: units,
-				loopKinds: loopKinds,
-				blockKinds: blockKinds,
-				locals: null
-			};
-			for (unit in units) analyzeUnit(violations, entry.file, entry.source, unit, ctx);
+			final ctx: Null<Ctx> = contextOf(plugin, entry.file, entry.source, root, index, candidateKinds);
+			if (ctx == null) return;
+			final resolved: Ctx = ctx;
+			for (unit in resolved.units) analyzeUnit(violations, entry.file, entry.source, unit, resolved);
 		});
 	}
 
@@ -241,6 +230,56 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 		return 'where the shared `final` belongs, and whether hoisting the value reads better at all, is an author judgement the'
 			+ ' heuristic safe-extraction preconditions here cannot make — once it is chosen,'
 			+ ' `apq extract-var <file> --match <expr> <name>` performs the hoist';
+	}
+
+	/**
+	 * The occurrences of `target`'s expression in the function body holding it that one local can replace: equal to it
+	 * up to layout, read the value it reads, cut by writes and loop back edges exactly as the finding is, and reached
+	 * from one point that dominates the earliest (`dominated`), `target` included. The one answer to "which equal
+	 * occurrences can a hoist of this expression replace". Just `target` when it is impure, no body holds it or no point
+	 * dominates; `equal` counts every equal occurrence of the body, replaced or not.
+	 */
+	public static function hoistRun(plugin: GrammarPlugin, file: String, source: String, root: QueryNode, target: QueryNode): HoistRun {
+		final span: Null<Span> = target.span;
+		if (span == null) return {
+			run: [],
+			equal: 0,
+			block: null,
+			anchor: null,
+			guarded: false
+		};
+		final at: Span = span;
+		final alone: HoistRun = {
+			run: [at],
+			equal: 1,
+			block: null,
+			anchor: null,
+			guarded: false
+		};
+		final index: SymbolIndex = IndexScope.report([{ file: file, source: source }], plugin);
+		final found: Null<Ctx> = contextOf(plugin, file, source, root, index, [target.kind]);
+		if (found == null) return alone;
+		final ctx: Ctx = found;
+		final unit: Null<QueryNode> = innermostUnitAt(at.from, ctx.units);
+		if (unit == null) return alone;
+		final candidates: Array<Candidate> = [];
+		collect(unit, source, ctx, [], candidates, true);
+		final norm: String = normalize(source, at);
+		final render: String = SpanRender.renderSpan(source, at.from, at.to, target);
+		final equal: Array<Candidate> = candidates.filter(c ->
+			c.norm == norm && SpanRender.renderSpan(source, c.span.from, c.span.to, c.node) == render
+		);
+		final single: HoistRun = {
+			run: [at],
+			equal: equal.length,
+			block: null,
+			anchor: null,
+			guarded: false
+		};
+		if (!equal.exists(c -> c.node == target) || !PurityScan.isPure(target, ctx.purity)) return single;
+		for (run in sameValueRuns(equal, unit, ctx, 1)) if (run.length > 1 && run.exists(c -> c.node == target))
+			return dominated(run, at, unit, ctx, equal.length);
+		return single;
 	}
 
 	/** Whether `outer` strictly contains `inner` (covers it and is not the identical span). */
@@ -289,7 +328,7 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 			final rep: QueryNode = exact[0].node;
 			if (!isNonTrivial(rep, ctx)) continue;
 			if (!PurityScan.isPure(rep, ctx.purity)) continue;
-			for (run in sameValueRuns(exact, unit, ctx)) if (run.length >= MIN_OCCURRENCES && !allPairsExclusive(run))
+			for (run in sameValueRuns(exact, unit, ctx, MIN_OCCURRENCES)) if (run.length >= MIN_OCCURRENCES && !allPairsExclusive(run))
 				kept.push({ render: text, occ: run });
 		}
 		for (g in dropSubsumed(kept)) {
@@ -374,14 +413,13 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 	 * when some write of an operand runs where no position in `unit` decides when, then cut at every write of an
 	 * operand between two occurrences, and a run dropped when a loop's back edge carries a write into it.
 	 */
-	private static function sameValueRuns(occ: Array<Candidate>, unit: QueryNode, ctx: Ctx): Array<Array<Candidate>> {
+	private static function sameValueRuns(occ: Array<Candidate>, unit: QueryNode, ctx: Ctx, min: Int): Array<Array<Candidate>> {
 		final out: Array<Array<Candidate>> = [];
-		for (bucket in bindingBuckets(occ, ctx)) if (bucket.occ.length >= MIN_OCCURRENCES) {
+		for (bucket in bindingBuckets(occ, ctx)) if (bucket.occ.length >= min) {
 			final writes: Null<Array<WriteSite>> = ownWrites(bucket, unit, ctx);
 			if (writes != null)
 				for (run in SameValueRuns.splitAtWrites(bucket.occ, writes))
-					if (run.length >= MIN_OCCURRENCES && !SameValueRuns.carriedRound(run, writes, unit, ctx.blockKinds, ctx.loopKinds))
-						out.push(run);
+					if (run.length >= min && !SameValueRuns.carriedRound(run, writes, unit, ctx.blockKinds, ctx.loopKinds)) out.push(run);
 		}
 		return out;
 	}
@@ -523,6 +561,69 @@ final class ExtractRepeatedExpression extends RuleBase implements VolatileMessag
 	 */
 	private static function normalize(source: String, span: Span): String {
 		return CheckScan.normalizeSpan(source, span.from, span.to).norm;
+	}
+
+	/**
+	 * The per-file context of the analysis over `root`, counting `candidateKinds`; null when the grammar or the purity
+	 * scan cannot read it.
+	 */
+	private static function contextOf(
+		plugin: GrammarPlugin, file: String, source: String, root: QueryNode, index: SymbolIndex, candidateKinds: Array<String>
+	): Null<Ctx> {
+		final shape: RefShape = plugin.refShape();
+		final faKind: Null<String> = shape.fieldAccessKind;
+		final callKind: Null<String> = shape.callKind;
+		if (faKind == null || callKind == null) return null;
+		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, root, index, file);
+		if (purity == null) return null;
+		final functionUnitKinds: Array<String> = ShapeVocab.functionLikeKinds(shape);
+		final units: Array<QueryNode> = [];
+		collectUnits(root, functionUnitKinds, units);
+		return {
+			fieldAccessKind: faKind,
+			callKind: callKind,
+			candidateKinds: candidateKinds,
+			functionUnitKinds: functionUnitKinds,
+			exclusiveConditionalKinds: (shape.branchConditionKinds ?? []).concat(shape.switchKinds ?? []),
+			opaqueKinds: shape.opaqueKinds ?? [],
+			purity: purity,
+			shape: shape,
+			tree: root,
+			units: units,
+			loopKinds: ShapeVocab.loopKinds(shape),
+			blockKinds: plugin.controlFlowSupport()?.blockKinds() ?? [],
+			locals: null
+		};
+	}
+
+	/**
+	 * The widest part of `run` around the target at `at` that one local can replace from a point dominating its earliest
+	 * occurrence (`SameValueRuns.hoistPoint`), the blocks holding the target tried outermost first; the target alone when
+	 * none does. A local declared above a guard, a branch or a write the earliest occurrence sits behind would read the
+	 * value where the code never did.
+	 */
+	private static function dominated(run: Array<Candidate>, at: Span, unit: QueryNode, ctx: Ctx, equal: Int): HoistRun {
+		final buckets: Array<BindingBucket> = bindingBuckets(run, ctx);
+		final writes: Null<Array<WriteSite>> = buckets.length == 1 ? ownWrites(buckets[0], unit, ctx) : null;
+		if (writes != null) for (block in TreePath.ancestorsAt(unit, at.from)) if (ctx.blockKinds.contains(block.kind)) {
+			final part: Array<Candidate> = run.filter(c -> TreePath.covers(block, c.span));
+			if (part.length < 2 || SameValueRuns.carriedRound(part, writes, unit, ctx.blockKinds, ctx.loopKinds)) continue;
+			final anchor: Null<QueryNode> = SameValueRuns.hoistPoint(part, block, writes, ctx.shape);
+			if (anchor != null) return {
+				run: part.map(c -> c.span),
+				equal: equal,
+				block: block,
+				anchor: anchor,
+				guarded: part.length < run.length
+			};
+		}
+		return {
+			run: [at],
+			equal: equal,
+			block: null,
+			anchor: null,
+			guarded: true
+		};
 	}
 
 }

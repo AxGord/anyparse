@@ -17457,6 +17457,36 @@
 			"method": "typeParamOwnerAt",
 			"force": "at",
 			"note": "every position owns its type parameters, so a class type parameter read by both a callee and its caller is two types"
+		},
+		{
+			"name": "M-EXTRACT-VAR-ONE-OCCURRENCE",
+			"type": "anyparse.query.ExtractVar",
+			"method": "extractVar",
+			"find": "final run: Array<Span> = shared != null ? hoist.run : [targetSpan];",
+			"replace": "final run: Array<Span> = [targetSpan];",
+			"note": "only the addressed occurrence becomes the local, so the equal reads beside it stay and the repeated-expression finding stands"
+		},
+		{
+			"name": "M-EXTRACT-VAR-UNTYPED",
+			"type": "anyparse.query.ExtractVar",
+			"method": "annotate",
+			"force": "source",
+			"note": "the hoisted local is written untyped even where the structural ladder names its type, so explicit-local-type fires on it"
+		},
+		{
+			"name": "M-EXTRACT-VAR-HOIST-UNGUARDED",
+			"type": "anyparse.query.SameValueRuns",
+			"method": "evaluatedWhenever",
+			"force": "true",
+			"note": "every position counts as evaluated whenever its statement runs, so a hoist of equal reads lands above the guard the earliest sits behind"
+		},
+		{
+			"name": "M-EXTRACT-VAR-HOIST-WRITE-CROSSED",
+			"type": "anyparse.query.SameValueRuns",
+			"method": "hoistPoint",
+			"find": "!writes.exists(w -> start < w.effect && w.effect <= first) && ",
+			"replace": "",
+			"note": "a write between the hoist point and the earliest read is not seen, so the local holds the value before the write"
 		}
 	]
 }

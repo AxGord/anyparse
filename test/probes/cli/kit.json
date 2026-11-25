@@ -61,7 +61,9 @@
 		"b/pkg/M.hx": "package pkg;\n\nclass M {\n\tpublic static function f() return 1;\n}\n\nclass MTools {\n\tpublic static function twice(i: Int): Int return i * 2;\n}\n",
 		"b/pkg/User.hx": "package pkg;\n\nusing pkg.M;\n\nclass User {\n\tstatic function main() {\n\t\ttrace(3.twice());\n\t}\n}\n",
 		"xtd/src/a/A.hx": "package a;\n\nclass A {\n\tpublic var p:{x:Int, y:String};\n\tpublic var q:{?y:String, x:Int};\n\tpublic var n:{inner:{x:Int, y:String}, z:Float};\n\n\tpublic function f(v:{y:String, x:Int}):{x:Int, y:String} {\n\t\treturn v;\n\t}\n\n\tpublic function g<T>(v:{x:T, y:String}):Void {}\n}\n",
-		"xtd/src/b/B.hx": "package b;\n\nclass B {\n\tpublic var p:{x:Int, y:String};\n\tpublic var arr:Array<{x:Int, y:String}>;\n\tpublic var d:{\n\t\t/** doc */ @:optional\n\t\tvar x:Int;\n\t\tvar y:String;\n\t};\n}\n"
+		"xtd/src/b/B.hx": "package b;\n\nclass B {\n\tpublic var p:{x:Int, y:String};\n\tpublic var arr:Array<{x:Int, y:String}>;\n\tpublic var d:{\n\t\t/** doc */ @:optional\n\t\tvar x:Int;\n\t\tvar y:String;\n\t};\n}\n",
+		"extractvar/P1.hx": "class P1 {\n\tpublic var c:P1;\n\tpublic var n:Int;\n\n\tfunction f(b:P1, cond:Bool):Int {\n\t\tif (cond) {\n\t\t\tb.c.n = 5;\n\t\t\ttrace(b.c.n + 1);\n\t\t}\n\t\treturn b.c.n * 2;\n\t}\n}\n",
+		"extractvar/P3b.hx": "class P3b {\n\tpublic var c:P3b;\n\tpublic var n:Int;\n\n\tfunction f(b:P3b):Int {\n\t\tvar s:Int = 0;\n\t\tif (b.c != null) {\n\t\t\ts = b.c.n;\n\t\t}\n\t\tif (b.c != null && b.c.n > 0) s += 1;\n\t\treturn s + (b.c == null ? 0 : b.c.n);\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -9712,6 +9714,86 @@
 				"exit": 1,
 				"out": "e3b0c44298fc1c14",
 				"err": "f1bab4939ad2c112",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-var extractvar/P1.hx --match b.c.n --nth 2 p",
+			"argv": [
+				"apq",
+				"extract-var",
+				"extractvar/P1.hx",
+				"--match",
+				"b.c.n",
+				"--nth",
+				"2",
+				"p"
+			],
+			"note": "a hoist of equal reads never goes above the guard or the write its earliest read sits behind",
+			"expect": {
+				"exit": 0,
+				"out": "f22062e79d0407e9",
+				"err": "c7f29fe931bed19a",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "apq extract-var extractvar/P3b.hx --match b.c.n --nth 1 p",
+			"argv": [
+				"apq",
+				"extract-var",
+				"extractvar/P3b.hx",
+				"--match",
+				"b.c.n",
+				"--nth",
+				"1",
+				"p"
+			],
+			"note": "a hoist of equal reads never goes above the guard or the write its earliest read sits behind",
+			"expect": {
+				"exit": 0,
+				"out": "50fb733f08e8ea92",
+				"err": "3761c8e608276362",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-var extractvar/P1.hx --match b.c.n --nth 2 p",
+			"argv": [
+				"hxq",
+				"extract-var",
+				"extractvar/P1.hx",
+				"--match",
+				"b.c.n",
+				"--nth",
+				"2",
+				"p"
+			],
+			"note": "a hoist of equal reads never goes above the guard or the write its earliest read sits behind",
+			"expect": {
+				"exit": 0,
+				"out": "f22062e79d0407e9",
+				"err": "c7f29fe931bed19a",
+				"files": "e3b0c44298fc1c14"
+			}
+		},
+		{
+			"name": "hxq extract-var extractvar/P3b.hx --match b.c.n --nth 1 p",
+			"argv": [
+				"hxq",
+				"extract-var",
+				"extractvar/P3b.hx",
+				"--match",
+				"b.c.n",
+				"--nth",
+				"1",
+				"p"
+			],
+			"note": "a hoist of equal reads never goes above the guard or the write its earliest read sits behind",
+			"expect": {
+				"exit": 0,
+				"out": "50fb733f08e8ea92",
+				"err": "3761c8e608276362",
 				"files": "e3b0c44298fc1c14"
 			}
 		}

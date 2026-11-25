@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.WriteSites.WriteSite;
 import anyparse.runtime.Span;
 
@@ -62,6 +63,59 @@ final class SameValueRuns {
 		var i: Int = common.length - 1;
 		while (i >= 0 && !blockKinds.contains(common[i].kind)) i--;
 		return i >= 0 ? common[i] : null;
+	}
+
+	/**
+	 * The statement of `block` a local holding `run`'s value may be declared before: the one holding the earliest
+	 * occurrence, when that occurrence is evaluated whenever the statement runs (`evaluatedWhenever`) and no write in
+	 * `writes` takes effect between the statement's start and it. Null when no such point dominates the run.
+	 */
+	public static function hoistPoint<T: Located>(
+		run: Array<T>, block: QueryNode, writes: Array<WriteSite>, shape: RefShape
+	): Null<QueryNode> {
+		final first: Int = run[0].span.from;
+		final chain: Array<QueryNode> = TreePath.ancestorsAt(block, first);
+		final stmt: Null<QueryNode> = chain.length > 1 ? chain[1] : null;
+		final from: Null<Int> = stmt?.span?.from;
+		if (stmt == null || from == null) return null;
+		final start: Int = from;
+		return !writes.exists(w -> start < w.effect && w.effect <= first) && evaluatedWhenever(stmt, first, shape) ? stmt : null;
+	}
+
+	/**
+	 * Whether the expression starting at `at` is evaluated every time `stmt` runs, before any code that may skip it: each
+	 * step down evaluates all of its operands (`CtorFieldWrite.unconditionalOperandKinds`, a field or index access, a
+	 * return, arithmetic, a comparison), or only its first one for a construct deciding the rest (a condition, `&&`,
+	 * `||`, `??`, a ternary). Any other kind — a branch body, a loop body, a closure, a kind the grammar leaves unset —
+	 * refuses.
+	 */
+	public static function evaluatedWhenever(stmt: QueryNode, at: Int, shape: RefShape): Bool {
+		final firstOnly: Array<String> = (shape.conditionFirstChildKinds ?? []).concat(shape.branchConditionKinds ?? []);
+		for (kind in [
+			shape.logicalAndKind,
+			shape.logicalOrKind,
+			shape.nullCoalesceKind,
+			shape.ternaryKind
+		]) if (kind != null) firstOnly.push(kind);
+		final all: Array<String> = CtorFieldWrite.unconditionalOperandKinds(shape)
+			.concat(shape.arithmeticKinds ?? [])
+			.concat(shape.comparisonKinds ?? []);
+		for (kind in [
+			shape.fieldAccessKind,
+			shape.indexAccessKind,
+			shape.returnStatementKind,
+			shape.returnExpressionKind
+		]) if (kind != null) all.push(kind);
+		function reaches(node: QueryNode): Bool {
+			final span: Null<Span> = node.span;
+			if (span == null || at < span.from || at >= span.to) return false;
+			return span.from == at || (
+				firstOnly.contains(node.kind)
+					? node.children.length > 0 && reaches(node.children[0])
+					: all.contains(node.kind) && node.children.exists(reaches)
+			);
+		}
+		return reaches(stmt);
 	}
 
 }

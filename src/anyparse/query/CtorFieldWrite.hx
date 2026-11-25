@@ -670,6 +670,26 @@ final class CtorFieldWrite {
 		return declType != null && index.traits.abstractRebindsThis(declType, abstractKinds) == true;
 	}
 
+	/**
+	 * The node kinds through which evaluation of a child operand is UNCONDITIONAL — the whitelist
+	 * `ctorWriteUnconditional` walks. Every entry comes from its own `RefShape` seam, so an unset
+	 * seam simply contributes nothing.
+	 */
+	public static function unconditionalOperandKinds(shape: RefShape): Array<String> {
+		final kinds: Array<String> = [];
+		inline function admit(kind: Null<String>): Void if (kind != null && !kinds.contains(kind)) kinds.push(kind);
+		admit(shape.exprStatementKind);
+		admit(shape.parenKind);
+		admit(shape.callKind);
+		admit(shape.newExprKind);
+		admit(shape.arrayLiteralKind);
+		admit(shape.objectLiteralKind);
+		admit(shape.objectFieldKind);
+		admit(shape.assignKind);
+		if (shape.localDeclKinds != null) for (kind in shape.localDeclKinds) admit(kind);
+		return kinds;
+	}
+
 	/** Whether `kinds` is set and holds `kind` — an unset seam contributes nothing. */
 	private static inline function kindIn(kinds: Null<Array<String>>, kind: String): Bool {
 		return kinds != null && kinds.contains(kind);
@@ -724,26 +744,6 @@ final class CtorFieldWrite {
 			out.push({ assign: node, inClosure: enclosed });
 		for (child in node.children)
 			collectCtorFieldWrites(child, fieldFrom, fieldName, container, shape, assignKind, closures, enclosed, out);
-	}
-
-	/**
-	 * The node kinds through which evaluation of a child operand is UNCONDITIONAL — the whitelist
-	 * `ctorWriteUnconditional` walks. Every entry comes from its own `RefShape` seam, so an unset
-	 * seam simply contributes nothing.
-	 */
-	private static function unconditionalOperandKinds(shape: RefShape): Array<String> {
-		final kinds: Array<String> = [];
-		inline function admit(kind: Null<String>): Void if (kind != null && !kinds.contains(kind)) kinds.push(kind);
-		admit(shape.exprStatementKind);
-		admit(shape.parenKind);
-		admit(shape.callKind);
-		admit(shape.newExprKind);
-		admit(shape.arrayLiteralKind);
-		admit(shape.objectLiteralKind);
-		admit(shape.objectFieldKind);
-		admit(shape.assignKind);
-		if (shape.localDeclKinds != null) for (kind in shape.localDeclKinds) admit(kind);
-		return kinds;
 	}
 
 	/** Whether `writeFrom` is reachable from `node` through `transparent` kinds only. */
