@@ -6,6 +6,7 @@ import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
+import anyparse.query.NodeTokens;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -386,8 +387,8 @@ final class JoinSingleUseLocal extends RuleBase {
 		if (!s.localDeclKinds.contains(decl.kind) || s.mutableKinds.contains(decl.kind)) return null;
 		if (s.continuationKinds.contains(decl.kind) || NodeShape.initOf(decl) == null) return null;
 		if (SourceText.isMultiDeclarator(decl, s.continuationKinds)) return null;
-		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
-		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
+		// A bare single-var decl ends in its own `;` token.
+		if (!NodeTokens.endsWithOwn(decl, source, ';')) return null;
 		final dropSpan: Span = ElementSpan.lineExtendedSpan(source, declSpan);
 		return dropSpan.from == declSpan.from && dropSpan.to == declSpan.to ? null : dropSpan;
 	}

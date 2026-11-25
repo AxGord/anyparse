@@ -5,6 +5,7 @@ import anyparse.query.CondRegionScan;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
+import anyparse.query.NodeTokens;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.Refs;
 import anyparse.query.SourceComments;
@@ -380,7 +381,7 @@ final class NarrowLocalScope extends RuleBase {
 	private static function bareSingleDeclaration(decl: QueryNode, source: String, s: Seams): Null<Span> {
 		if (!s.localDeclKinds.contains(decl.kind) || decl.children.length != 0 || decl.name == null) return null;
 		final span: Null<Span> = decl.span;
-		return if (span == null || span.to <= span.from || source.charAt(span.to - 1) != ';')
+		return if (span == null || !NodeTokens.endsWithOwn(decl, source, ';'))
 			null
 		else if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds))
 			null

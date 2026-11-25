@@ -352,6 +352,16 @@ class CatchDynamicCheckTest extends Test {
 		Assert.equals(0, editCount(src));
 	}
 
+	@:pin('control')
+	@:killer('M-CATCH-HEADER-COLON-TOKEN')
+	public function testAColonInAHeaderCommentIsNotTheTypeColon(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e /* a: Map<K, V> */ : Dynamic) {}\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals('catch type \'Dynamic\' is a raw catch-all — prefer catch (exception:Exception)', vs[0].message);
+	}
+
 	private function editCount(src: String): Int {
 		final check: CatchDynamic = new CatchDynamic();
 		return CheckFixture.edits(check, src).length;

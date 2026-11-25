@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.OptionKeyed;
 import anyparse.query.CallSites;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.NodeTokens;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.RemoveParam;
@@ -394,10 +395,8 @@ final class UnusedParameter extends RuleBase implements ConfigAware implements O
 	private static function isPublicDecl(
 		fn: QueryNode, parent: QueryNode, source: String, visibilityKinds: Array<String>, modifierKinds: Array<String>
 	): Bool {
-		return MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds)).exists(sib -> {
-			final sspan: Null<Span> = sib.span;
-			return visibilityKinds.contains(sib.kind) && sspan != null && source.substring(sspan.from, sspan.to).trim() == 'public';
-		});
+		return MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds))
+			.exists(sib -> visibilityKinds.contains(sib.kind) && NodeTokens.firstSpelling(sib, source, 'public') != -1);
 	}
 
 	/**

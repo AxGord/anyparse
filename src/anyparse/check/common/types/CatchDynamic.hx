@@ -5,6 +5,7 @@ import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VersionGated;
 import anyparse.check.common.naming.NamingOptions;
 import anyparse.query.IndexScope;
+import anyparse.query.NodeTokens;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
@@ -184,6 +185,11 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 		return [FIX_LOGGING_USES_KEY];
 	}
 
+	/** `at` relative to `start`, or -1 for an absent token. */
+	private static inline function offsetIn(at: Int, start: Int): Int {
+		return at < 0 ? -1 : at - start;
+	}
+
 	/**
 	 * The catch-variable name `config`'s project wants - its `naming.catchVarName`, else `exception` - the name the
 	 * messages recommend and arm (b) writes.
@@ -236,9 +242,10 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 	}
 
 	/**
-	 * The header source of a catch clause — `[span.from, body.from)` — with the offsets of its `(`, first `:` and
-	 * last `)` (each -1 when absent) and its body node; null when the clause or its body carries no span. The
-	 * decoding both region readers share, so a typed and a bare clause are read off the same bytes.
+	 * The header source of a catch clause — `[span.from, body.from)` — with the offsets of its own `(`, first `:` and
+	 * last `)` tokens (each -1 when absent, or when its tree kept no token log) and its body node; null when the clause
+	 * or its body carries no span. The decoding both region readers share, so a typed and a bare clause are read off
+	 * the same tokens, and a colon or paren inside a comment of the header is none of them.
 	 */
 	private static function catchHeader(catchNode: QueryNode, source: String): Null<CatchHeader> {
 		final cs: Null<Span> = catchNode.span;
@@ -252,9 +259,9 @@ final class CatchDynamic extends RuleBase implements ConfigAware implements Vers
 		return {
 			start: start,
 			header: header,
-			open: header.indexOf('('),
-			colon: header.indexOf(':'),
-			close: header.lastIndexOf(')'),
+			open: offsetIn(NodeTokens.firstSpelling(catchNode, source, '('), start),
+			colon: offsetIn(NodeTokens.firstSpelling(catchNode, source, ':'), start),
+			close: offsetIn(NodeTokens.lastSpelling(catchNode, source, ')'), start),
 			body: bodyNode
 		};
 	}

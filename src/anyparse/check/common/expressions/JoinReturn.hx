@@ -4,6 +4,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NodeShape;
+import anyparse.query.NodeTokens;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SourceComments;
@@ -272,8 +273,8 @@ final class JoinReturn extends RuleBase {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		if (init == null || name == null || declSpan == null) return null;
-		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
-		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
+		// A bare single-var decl ends in its own `;` token.
+		if (!NodeTokens.endsWithOwn(decl, source, ';')) return null;
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null) return null;
 		if (SourceText.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // multi-declarator

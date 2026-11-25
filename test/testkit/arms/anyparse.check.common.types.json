@@ -488,6 +488,14 @@
 			"find": "return [SET_OPTION, BITS_OPTION];",
 			"replace": "return [SET_OPTION, BITS_OPTION, \"zzNoSuchOption\"];",
 			"note": "map-as-set accepts a key it does not read, so a typo under that name is never said"
+		},
+		{
+			"name": "M-CATCH-HEADER-COLON-TOKEN",
+			"type": "anyparse.check.common.types.CatchDynamic",
+			"method": "catchHeader",
+			"find": "colon: offsetIn(NodeTokens.firstSpelling(catchNode, source, ':'), start),",
+			"replace": "colon: header.indexOf(':'),",
+			"note": "the header text is searched for its first colon again, so a colon inside a comment of the header splits the parameter and a raw catch-all goes unflagged"
 		}
 	]
 }

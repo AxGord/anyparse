@@ -9,6 +9,7 @@ import anyparse.check.common.types.LiteralInfer.AnnotationSite;
 import anyparse.check.scan.EnumAbstractForms;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberKinds;
+import anyparse.query.NodeTokens;
 import anyparse.query.NominalTypes;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
@@ -338,7 +339,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final v: Null<Violation> = span == null ? null : s.flagged['${span.from}:${span.to}'];
 		if (span == null || name == null || v == null) return null;
 		final body: Null<QueryNode> = fn.children.find(c -> s.bodies.contains(c.kind));
-		final at: Int = body == null ? -1 : voidInsertPoint(span.from, body, s.source);
+		final at: Int = body == null ? -1 : voidInsertPoint(fn, body, s.source);
 		if (at < 0) return decline(v, DECLINE_NO_RETURN_SLOT);
 		// A position-based oracle answers at a position INSIDE the name token, not at the
 		// `function` keyword the node's span starts on.
@@ -548,7 +549,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 				|| MemberKinds.subtreeContainsKindStopping(body, throwKinds, stop)
 			)
 				return;
-			final at: Int = voidInsertPoint(span.from, body, source);
+			final at: Int = voidInsertPoint(fn, body, source);
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':Void' });
 		}
 
@@ -622,7 +623,7 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 		final bodies: Array<String> = s.shape.functionBodyKinds ?? [];
 		final body: Null<QueryNode> = fn.children.find(c -> bodies.contains(c.kind));
 		if (body == null || !macroReturnsExpr(body, s.shape, s.tree, s.index)) return decline(v, DECLINE_MACRO_RETURN);
-		final at: Int = voidInsertPoint(span.from, body, s.source);
+		final at: Int = voidInsertPoint(fn, body, s.source);
 		if (at < 0) return decline(v, DECLINE_NO_RETURN_SLOT);
 		final site: AnnotationSite = { file: s.file, methodName: null };
 		final printer: TypeRefPrinter = s.printer ?? LiteralInfer.printerFor(s.source, s.tree, s.plugin, s.file);
@@ -688,20 +689,18 @@ final class ExplicitType extends RuleBase implements OracleAssisted {
 
 	/**
 	 * The offset right after the parameter list's `)` — where a return-type annotation is
-	 * inserted, before the body — found by scanning back from the body's first token over
-	 * horizontal whitespace only. Shared by the structural `: Void` pass and the oracle-assisted
-	 * one. The first non-whitespace character must be the `)`;
-	 * anything else (a comment ending in `)`, or the `)` and `{` on separate lines)
-	 * leaves the finding report-only, so a `)` inside a comment between the parameter
-	 * list and the body is never mistaken for the parameter close. Returns -1 when the
-	 * `)` is not immediately before the body.
+	 * inserted, before the body: `fn`'s own last `)` token, followed by horizontal whitespace
+	 * only up to the body. Shared by the structural `: Void` pass and the oracle-assisted one.
+	 * Anything else between them (a return type, a comment, a line break) leaves the finding
+	 * report-only. Returns -1 when that `)` is not immediately before the body, or the tree
+	 * kept no token log.
 	 */
-	private static function voidInsertPoint(lo: Int, body: QueryNode, source: String): Int {
+	private static function voidInsertPoint(fn: QueryNode, body: QueryNode, source: String): Int {
 		final bodySpan: Null<Span> = body.span;
-		if (bodySpan == null) return -1;
-		var pos: Int = bodySpan.from;
-		while (pos > lo && source.fastCodeAt(pos - 1).isSpaceOrTab()) pos--;
-		return pos > lo && source.fastCodeAt(pos - 1) == ')'.code ? pos : -1;
+		final close: Int = NodeTokens.lastSpelling(fn, source, ')');
+		if (bodySpan == null || close < 0 || close >= bodySpan.from) return -1;
+		for (at in close + 1...bodySpan.from) if (!source.fastCodeAt(at).isSpaceOrTab()) return -1;
+		return close + 1;
 	}
 
 	/**

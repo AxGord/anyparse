@@ -3,6 +3,7 @@ package anyparse.check.common.expressions;
 import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.NodeShape;
+import anyparse.query.NodeTokens;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
@@ -163,8 +164,8 @@ final class JoinDeclarationAssignment extends RuleBase {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		if (name == null || declSpan == null) return null;
-		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
-		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
+		// A bare single-var decl ends in its own `;` token.
+		if (!NodeTokens.endsWithOwn(decl, source, ';')) return null;
 		final declText: String = source.substring(declSpan.from, declSpan.to - 1).rtrim();
 		if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
 

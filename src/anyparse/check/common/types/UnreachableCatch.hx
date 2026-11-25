@@ -2,6 +2,7 @@ package anyparse.check.common.types;
 
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
+import anyparse.query.NodeTokens;
 import anyparse.query.SymbolIndex;
 
 /**
@@ -127,20 +128,19 @@ final class UnreachableCatch extends RuleBase {
 	}
 
 	/**
-	 * The exception type SOURCE of a catch clause — the text between the first `:` and the
-	 * closing `)` of the header, bounded by the handler block (the clause's last child).
-	 * Null when the clause is untyped or malformed.
+	 * The exception type SOURCE of a catch clause — the text between the clause's own first `:` token and its
+	 * closing `)` token, so a colon inside a comment of the header is not the type's. Null when the clause is
+	 * untyped or malformed, or its tree kept no token log.
 	 */
 	private static function catchTypeSource(clause: QueryNode, source: String): Null<String> {
 		final cs: Null<Span> = clause.span;
 		if (cs == null || clause.children.length < 1) return null;
 		final body: Null<Span> = clause.children[clause.children.length - 1].span;
 		if (body == null) return null;
-		final header: String = source.substring(cs.from, body.from);
-		final colon: Int = header.indexOf(':');
-		final close: Int = header.lastIndexOf(')');
+		final colon: Int = NodeTokens.firstSpelling(clause, source, ':');
+		final close: Int = NodeTokens.lastSpelling(clause, source, ')');
 		if (colon == -1 || close == -1 || close <= colon) return null;
-		final t: String = header.substring(colon + 1, close).trim();
+		final t: String = source.substring(colon + 1, close).trim();
 		return t == '' ? null : t;
 	}
 
@@ -153,9 +153,7 @@ final class UnreachableCatch extends RuleBase {
 		final cs: Null<Span> = clause.span;
 		if (cs == null || clause.children.length < 1) return false;
 		final body: Null<Span> = clause.children[clause.children.length - 1].span;
-		if (body == null) return false;
-		final header: String = source.substring(cs.from, body.from);
-		return header.indexOf(':') == -1 && header.lastIndexOf(')') != -1;
+		return body != null && NodeTokens.firstSpelling(clause, source, ':') == -1 && NodeTokens.lastSpelling(clause, source, ')') != -1;
 	}
 
 	/** Whether a clause of simple type `simple` catches every value (a `catchAllTypeNames` type). */

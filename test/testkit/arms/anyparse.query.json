@@ -17534,6 +17534,30 @@
 			"method": "buildMacroPathsOf",
 			"force": "[]",
 			"note": "no build-macro callee path is indexed, so no builder module is ever looked up and a builder reading field finality is trusted"
+		},
+		{
+			"name": "M-NODE-TOKENS-FIRST-SPELLING",
+			"type": "anyparse.query.NodeTokens",
+			"method": "firstSpelling",
+			"find": "if (spells(span, source, text)) return span.from;",
+			"replace": "return span.from;",
+			"note": "the first own token is taken whatever it spells, so a catch clause answers its `catch` keyword for its `(` and `:`"
+		},
+		{
+			"name": "M-NODE-TOKENS-LAST-SPELLING",
+			"type": "anyparse.query.NodeTokens",
+			"method": "lastSpelling",
+			"find": "while (index >= 0 && !spells(own[index], source, text)) index--;",
+			"replace": "",
+			"note": "the last own token is taken whatever it spells, so a catch clause answers its `)` for its `:`"
+		},
+		{
+			"name": "M-NODE-TOKENS-ENDS-WITH-OWN",
+			"type": "anyparse.query.NodeTokens",
+			"method": "endsWithOwn",
+			"find": "return span != null && own.length > 0 && own[own.length - 1].to == span.to && spells(own[own.length - 1], source, text);",
+			"replace": "return span != null && span.to > span.from && source.charAt(span.to - 1) == text;",
+			"note": "the last source byte is read instead of the node own token, so a function whose `;` belongs to its expression body counts as ending in its own terminator"
 		}
 	]
 }
