@@ -72,13 +72,11 @@ final class JsonProjection {
 		return span;
 	}
 
-	/** The offset of `member`'s `:` — back from its value's first byte over the whitespace between. */
+	/** The offset of `member`'s `:` — the token the member's own parse matched. */
 	public static function colonOf(member: QueryNode, source: String): Int {
-		var at: Int = spanOf(member.children[0]).from - 1;
-		while (at > 0 && isSpace(source.fastCodeAt(at))) at--;
-		if (source.charAt(at) != JsonFormat.instance.keyValueSep)
-			throw new Exception('json: expected "${JsonFormat.instance.keyValueSep}" at offset $at');
-		return at;
+		final colon: Null<Span> = member.tokenSpelled(JsonFormat.instance.keyValueSep, source);
+		if (colon == null) throw new Exception('json: a member carries no "${JsonFormat.instance.keyValueSep}" token');
+		return colon.from;
 	}
 
 	/** The offset just past `member`'s key — back from its `:` over the whitespace between. */

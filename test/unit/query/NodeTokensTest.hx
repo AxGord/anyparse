@@ -3,7 +3,6 @@ package unit.query;
 import anyparse.grammar.json.JsonProjection;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.runtime.Span;
 import haxe.Exception;
 
 /**
@@ -84,12 +83,10 @@ class NodeTokensTest extends Test {
 		final document: QueryNode = JsonProjection.parse(source);
 		final members: Array<QueryNode> = all(document, JsonProjection.MEMBER);
 		Assert.equals(2, members.length);
-		for (member in members) {
-			final colon: Null<Span> = member.tokenSpelled(':', source);
-			Assert.equals(
-				JsonProjection.colonOf(member, source), colon == null ? -1 : colon.from, 'the parse kept the colon the scan finds'
-			);
-		}
+		Assert.equals(4, JsonProjection.colonOf(members[0], source), 'a colon touching its key');
+		Assert.equals(13, JsonProjection.colonOf(members[1], source), 'a colon past a space, its value on the next line');
+		Assert.equals(4, JsonProjection.keyEndOf(members[0], source));
+		Assert.equals(12, JsonProjection.keyEndOf(members[1], source), 'the key ends before the space ahead of its colon');
 		Assert.equals('[ ]', own(first(document, JsonProjection.ARRAY), source));
 	}
 
