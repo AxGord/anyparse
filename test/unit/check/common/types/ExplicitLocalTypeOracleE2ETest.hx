@@ -49,6 +49,7 @@ class ExplicitLocalTypeOracleE2ETest extends Test {
 		+ '\tpublic function pair<U>(u:U):Array<U> {\n\t\tvar both = [u].map(x -> x);\n\t\treturn both;\n\t}\n\n'
 		+ '\tpublic function tag():Int {\n\t\tvar entry = [({n: 1} : Entry)];\n\t\treturn entry[0].n;\n\t}\n\n}\n\n'
 		+ 'private typedef Entry = {final n:Int;}\n';
+
 	private static final BOXMAIN: String = 'class Main {\n\n\tstatic function main() {\n'
 		+ '\t\tfinal b:Box<Int> = new Box(1);\n\t\ttrace(b.get(), b.pair(\'s\'), b.tag());\n\t}\n\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n';

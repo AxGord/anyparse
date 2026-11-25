@@ -225,6 +225,7 @@ class ApqDxTier5CliTest extends Test {
 		Assert.pass('non-nodejs target');
 		#end
 	}
+
 	/**
 	 * Two `probe` PROCESSES, each with its own private temp root, must stage to
 	 * two different files — the per-process isolation mechanism (`RunTests.main` ->

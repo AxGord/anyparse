@@ -174,6 +174,7 @@ final class RiddenProbeTest extends Test {
 			[ for (p in carried.parsed ?? []) if (p.indexOf(own) >= 0) p ]
 		);
 	}
+
 	/** Every node the compile typed in the fixture's `Main.hx`, with each call and field access it holds and their ranges. */
 	private static function factsIn(facts: Null<CompilerFacts>, dir: String): Array<String> {
 		return [ for (node in facts?.nodesIn('$dir/Main.hx') ?? []) {

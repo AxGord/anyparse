@@ -248,11 +248,20 @@ final class MemberSpacing {
 	}
 
 	/**
+	 * Whether the writer spaces the gap between the adjacent slots `a` and `b`: both outside any `#if` body, or both in
+	 * one body with no directive line between them - a region's markers stay tight to the members beside them.
+	 */
+	private static inline function writerSpaced(a: OrderedMember, b: OrderedMember): Bool {
+		return (a.condition == null && b.condition == null)
+			|| (a.condition == b.condition && !b.branchBefore && b.gapOpenFrom < 0 && b.gapCloseTo < 0);
+	}
+
+	/**
 	 * The blank lines the gap between the adjacent slots `a` and `b` wants, or null when the pair is left to the
 	 * source - THE per-pair spacing policy, read by the report, the spacing-only fix and the rebuild alike.
 	 *
-	 * The writer decides first wherever it forces the gap (`spacing.writer`, unconditional pairs only: the members of
-	 * an `#if` body are written with their source gaps): its doc-comment rule sets a doc-commented member off as the
+	 * The writer decides first wherever it forces the gap (`spacing.writer`, on the pairs `writerSpaced` names): its
+	 * doc-comment rule sets a doc-commented member off as the
 	 * format config says (`docBlanks`), so a comment-led slot the writer blank-separates is REQUIRED to be, not
 	 * exempt. Otherwise the check's own rule (`ownWant`) answers. Where that rule wants a tight gap, the writer's
 	 * multi-line rule is asked as well: a member it renders over several lines is set off by `aroundMultilineFields`
@@ -262,7 +271,7 @@ final class MemberSpacing {
 	 * not asked where the check's own rule already wants a blank or has no opinion: it only ever adds blanks there.
 	 */
 	private static function wantedBlanks(a: OrderedMember, b: OrderedMember, source: String, spacing: SpacingPolicy): Null<GapWant> {
-		final writer: Null<MemberGapPolicy> = a.condition == null && b.condition == null ? spacing.writer : null;
+		final writer: Null<MemberGapPolicy> = writerSpaced(a, b) ? spacing.writer : null;
 		final own: Null<GapWant> = ownWant(a, b, source, spacing);
 		if (writer == null) return own;
 		final headA: MemberGapHead = { leading: a.leadComments, hasMeta: a.hasMeta };
@@ -276,7 +285,8 @@ final class MemberSpacing {
 			own
 		else
 			{ count: forced, atLeast: true, rule: DocComment };
-		if (base == null || base.count != 0) return base;
+		// The multi-line rule is the type body's alone: an `#if` body spaces its members by the doc rule only.
+		if (base == null || base.count != 0 || a.condition != null) return base;
 		final lifted: Null<Int> = writer.multilineBlanks(headA, headB);
 		if (lifted == null || lifted == 0) return base;
 		final multiA: Null<Bool> = writer.multiline(source.substring(a.span.from, a.span.to));

@@ -24,6 +24,7 @@ final class CompilerNameProofTest extends Test {
 
 	/** The consumer as the rewrite would leave it: `F` alone, which only the handed-in text spells. */
 	private static final SHORT_SOURCE: String = 'package a.b;\n\nclass Main {\n\tstatic function main() {\n\t\ttrace(F.make());\n\t}\n}\n';
+
 	/** A consumer declaring its own `F` below the name that reads it. */
 	private static final OWN_SOURCE: String = 'package a.b;\n\nclass Main {\n\tstatic function main() {\n\t\ttrace(F.make());\n\t}\n}\n\n'
 		+ 'class F {\n\tpublic static function make():String {\n\t\treturn \'own\';\n\t}\n}\n';

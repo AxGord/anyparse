@@ -323,11 +323,17 @@ typedef BodyLayouts = {
  * the grammar gives by `WriterTriviaStarDispatch.knobReads`.
  */
 typedef InterMemberClassifyInfo = {
+
 	classifierFieldName: String,
 	classifyCases: Array<Case>,
 	betweenVars: Expr,
 	betweenFunctions: Expr,
-	afterVars: Expr
+	afterVars: Expr,
+
+	/** This Star's var and function families as ctor-index bit masks (`anyparse.format.RegionGaps.varKinds`). */
+	varKinds: Int,
+	fnKinds: Int
+
 };
 
 /**
@@ -337,12 +343,18 @@ typedef InterMemberClassifyInfo = {
  * the case-builder helper under the >5-scalar threshold.
  */
 typedef InterMemberCasesCtx = {
+
 	final enumRule: ShapeNode;
 	final varCtors: Array<String>;
 	final fnCtors: Array<String>;
 	final condCtor: Null<String>;
 	final bodyField: Null<String>;
 	final fieldName: String;
+
+	/** A family read at write time as a ctor-index bit mask; null when `varCtors` / `fnCtors` name it. */
+	final varKinds: Null<Expr>;
+	final fnKinds: Null<Expr>;
+
 };
 
 /**

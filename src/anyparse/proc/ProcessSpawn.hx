@@ -691,6 +691,7 @@ final class ProcessSpawn {
 		}
 		return { dir: dir, jobs: file };
 	}
+
 	/** The text of the jobs file the process driver reads: a bare array of `jobs`, each as its schema writes it. */
 	public static function jobsText(jobs: Array<SpawnJob>): String {
 		// a schema cannot root on an array, and the driver reads a bare one

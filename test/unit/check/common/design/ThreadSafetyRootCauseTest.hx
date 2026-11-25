@@ -495,6 +495,7 @@ class ThreadSafetyRootCauseTest extends Test {
 			+ 'A(); Runner.create(() -> { s.a(); s.z(); }); s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
 		]);
 	}
+
 	/** `A.a` holding `_x` across a read, `A.b` holding it across `both()`, which runs `body`; `deep()` sleeps. */
 	private static function twoWays(body: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
@@ -520,6 +521,7 @@ class ThreadSafetyRootCauseTest extends Test {
 			+ 'Runner.create(() -> { s.x(); s.p(); }); s._x.acquire(); s._x.release(); s._y.acquire(); s._y.release(); } }'
 		]);
 	}
+
 	/**
 	 * `S.x` holding `_x` across `body` itself; `p` holds `_y` across `io()`, which sleeps. A lock's take is no sink here, so
 	 * a call into `p` names the sleep as its first way.
@@ -546,6 +548,7 @@ class ThreadSafetyRootCauseTest extends Test {
 			+ '_x.release(); } public static function main():Void { final s:A = new A(); $running s._x.acquire(); s._x.release(); } }'
 		]);
 	}
+
 	/** `S` with locks `_a` and `_b`, `work` and `more` declared, a worker running `background`, and the main thread taking both. */
 	private static function twoTakes(work: String, more: String, background: String): Array<Violation> {
 		return ThreadSafetyCheckTest.violations(CONFIG, [
@@ -556,6 +559,7 @@ class ThreadSafetyRootCauseTest extends Test {
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> { $background }); s.peek(); } }'
 		]);
 	}
+
 	private static function holds(found: Array<Violation>, ?only: Array<String>): Array<String> {
 		return graded(found, 'B', only);
 	}

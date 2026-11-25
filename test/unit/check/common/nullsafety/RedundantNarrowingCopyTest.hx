@@ -314,6 +314,7 @@ class RedundantNarrowingCopyTest extends Test {
 			'function a():Void { final listener:Null<(C)->Void> = onChange; if (listener != null) listener(this); }'
 		]));
 	}
+
 	/** The thread facts walk each file's config chain into the rule's run notes: a run that collects them says them once. */
 	@:pin('control')
 	@:killer('M-RNC-FACTS-NOTES-DROPPED')
@@ -362,6 +363,7 @@ class RedundantNarrowingCopyTest extends Test {
 	private static function lines(members: Array<String>): String {
 		return members.join('\n').split('; ').join(';\n').split('{ ').join('{\n');
 	}
+
 	/** `body` over `sources` as the files of a project whose `apq.json` is `config`. */
 	private static function inProject(
 		config: String, sources: Array<String>, body: (files: Array<{ file: String, source: String }>, plugin: HaxeQueryPlugin) -> Void

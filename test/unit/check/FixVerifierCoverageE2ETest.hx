@@ -51,6 +51,7 @@ final class FixVerifierCoverageE2ETest extends Test {
 	private static final BREAKS: String = '@:nullSafety(Strict)\nclass Main {\n\n\tpublic function new() {}\n\n'
 		+ '\tstatic function main() {\n\t\trun(new Main());\n\t}\n\n\tstatic function run(a:Main, ?b:Main):Void {\n'
 		+ '\t\tvar x:Dynamic = a;\n\t\tx = b;\n\t\tvar y:Main = x;\n\t\ttrace(y);\n\t}\n\n}\n';
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 
 	/** Both region modules are referenced, so `-main` pulls them into the compiled set. */
@@ -66,7 +67,9 @@ final class FixVerifierCoverageE2ETest extends Test {
 	private static final DEAD: String = 'class Dead {\n\n\tpublic function new() {}\n\n\tpublic function run():Void {\n'
 		+ '\t\t#if regionon\n\t\ttrace(0);\n\t\t#else\n\t\tfinal a:Dead = new Dead();\n\t\tvar x:Dynamic = a;\n'
 		+ '\t\tvar y:Dead = x;\n\t\ttrace(y);\n\t\t#end\n\t}\n\n}\n';
+
 	private static final REGION_HXML: String = '-cp .\n-main Main\n-D regionon\n';
+
 	/**
 	 * `OTHER`'s shape under an indentation the writer will not settle on — the same findings, but
 	 * `canonicalize` refuses the source before any candidate exists.

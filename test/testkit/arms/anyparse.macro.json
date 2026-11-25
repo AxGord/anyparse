@@ -1382,7 +1382,7 @@
 		{
 			"name": "M-EXISTING-READS-CLASS-KNOB",
 			"type": "anyparse.macro.TriviaBlockLowering",
-			"method": "triviaBlockBlankBeforeExpr",
+			"method": "triviaBlockBlankGates",
 			"find": "? macro ($existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)",
 			"replace": "? macro (opt.existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)",
 			"note": "every body strips on the class policy again, so `<kind>EmptyLines.existingBetweenFields` moves nothing and the class section moves them all"
@@ -1390,7 +1390,7 @@
 		{
 			"name": "M-SPLIT-LEAD-IGNORED",
 			"type": "anyparse.macro.TriviaBlockLowering",
-			"method": "triviaBlockBlankBeforeExpr",
+			"method": "triviaBlockBlankGates",
 			"find": "? macro (_currHasDocComment && !anyparse.format.MemberGap.docSplitLead(_t.leadingComments))",
 			"replace": "? macro _currHasDocComment",
 			"note": "a split-led member takes the before-doc blank in the gap above it as well as the one inside its leading cluster"
@@ -3801,6 +3801,46 @@
 			"find": "anyparse.runtime.CommentRun.hasBreak($access)",
 			"replace": "anyparse.runtime.CommentRun.endsInBreak($access)",
 			"note": "a line comment then an inline block after `=` takes the glued seat again, so a broken literal after them indents from the statement instead of the value"
+		},
+		{
+			"name": "M-REGION-GAP-LINED",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseLinedBlanksExpr",
+			"find": "return regionGapDecide ?? macro {",
+			"replace": "return macro {",
+			"note": "a member of a #if body on its own line takes only its source blank again, so the var/fn and doc gaps of its type body are lost inside the region"
+		},
+		{
+			"name": "M-REGION-GAP-LEAD",
+			"type": "anyparse.macro.TriviaTryparseLowering",
+			"method": "triviaTryparseLeadCommentSepExpr",
+			"find": "final blankEmit: Expr = regionGapDecide ?? macro if",
+			"replace": "final blankEmit: Expr = macro if",
+			"note": "a doc-commented member of a #if body takes only its source blank again, glued to the member above it"
+		},
+		{
+			"name": "M-REGION-GAP-HANDOFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockElemCallExpr",
+			"find": "final baseOptExpr: Expr = regionOpt ? macro _regionOpt : macro opt;",
+			"replace": "final baseOptExpr: Expr = macro opt;",
+			"note": "a #if body no longer receives its type body knobs, so its between-member counts and existing-blank policy fall back to the neutral defaults"
+		},
+		{
+			"name": "M-REGION-DOC-HANDOFF",
+			"type": "anyparse.macro.TriviaBlockLowering",
+			"method": "triviaBlockRegionOptDecl",
+			"find": "${src.beforeDocCommentEmptyLines ?? ignore}",
+			"replace": "${src.beforeDocCommentEmptyLines ?? macro opt.beforeDocCommentEmptyLines}",
+			"note": "a type body that applies no doc gap hands the global before-doc policy to its #if regions, so a doc-led member inside a macro class region is set off while the same member outside it is not"
+		},
+		{
+			"name": "M-REGION-KIND-HANDOFF",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "buildInterMemberClassifyInfo",
+			"find": "fnKinds: familyMask(enumRule, fnCtors)",
+			"replace": "fnKinds: familyMask(enumRule, fnCtors.concat([\"FinalModifiedMember\"]))",
+			"note": "a type body hands the class function family to its #if regions, so a final function inside an abstract region takes function gaps it does not take outside"
 		}
 	]
 }

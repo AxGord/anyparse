@@ -280,6 +280,7 @@ class ThreadSafetyHandedValueTest extends Test {
 			+ 'public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s._m.acquire(); s._m.release(); } }'
 		]);
 	}
+
 	/**
 	 * `S.work` runs on a spawned thread and holds `_m` across `held`; the main thread takes `_m` too. `load` blocks; the
 	 * other classes keep the value handed to their constructor in the ways `testAValueAConstructorOnlyStoresRunsWhereTheFieldIsCalled`
@@ -371,6 +372,7 @@ class ThreadSafetyHandedValueTest extends Test {
 		out.sort(Reflect.compare);
 		return out;
 	}
+
 	/**
 	 * The lock-order findings (D) as `<member> | <locks>`, sorted, of a run where `S.main` holds the static `_a` across
 	 * `held` after spawning `work`, which holds `_b` and takes `_a`; `takeB` takes `_b`, `Hub.on` registers a handler. With

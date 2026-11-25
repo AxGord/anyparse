@@ -51,6 +51,7 @@ final class PendingRuns {
 
 	/** The batch's own directory, made with `mkdtemp`: private to this user, and no other process can have named it first. */
 	private var _dir: String = '';
+
 	private var _result: String = '';
 	#end
 

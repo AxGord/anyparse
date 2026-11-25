@@ -346,6 +346,7 @@ class ThreadSafetyHelperHoldsTest extends Test {
 			+ ' public static function main():Void { final s:S = new S(); Runner.create(() -> s.work()); s.peek(); } }'
 		);
 	}
+
 	/**
 	 * `H` whose helper `takeBoth` runs `take`, `giveBoth` giving both locks back, `viaBoth` holding both on a worker across
 	 * a wait for `c` — which another worker takes in one function and gives back in another — with `members`, `background`

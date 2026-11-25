@@ -26,6 +26,7 @@ final class OracleDirTest extends Test {
 
 	/** A module `Main` reads, which only the classpath under `sub/` holds. */
 	private static final HELPER: String = 'class Helper {\n\tpublic static var value:Int = 1;\n}\n';
+
 	private static final HXML: String = '-cp src\n-main Main\n';
 	#end
 

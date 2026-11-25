@@ -9,6 +9,7 @@ import anyparse.macro.WriterPolicyLowering.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+using StringTools;
 using Lambda;
 using anyparse.macro.MetaInspect;
 
@@ -23,8 +24,11 @@ typedef TriviaStarDispatchCtx = {
 	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
 }
 
-/** `WriterTriviaStarDispatch.docLedReads`: a Star's metadata-counts-as-doc reads of the element `_t` and of the body `_arr`. */
-typedef DocLedReads = { final elem: Expr; final body: Expr; }
+/**
+ * `WriterTriviaStarDispatch.docLedReads`: whether a Star counts metadata as doc (`on`), and its metadata-counts-as-doc
+ * reads of the element `_t` and of the body `_arr`.
+ */
+typedef DocLedReads = { final on: Expr; final elem: Expr; final body: Expr; }
 /**
  * Pass 3W helpers - the close-peek trivia Star dispatch and its per-element
  * readers.
@@ -65,6 +69,9 @@ final class WriterTriviaStarDispatch {
 	/** How many knobs `@:fmt(interMemberBlankLines(...))` names: between vars, between functions, after vars. */
 	private static inline final INTER_MEMBER_KNOBS: Int = 3;
 
+	/** The ctor positions a kind-family bit mask holds: the bits of a non-negative `Int`. */
+	private static inline final FAMILY_MASK_BITS: Int = 31;
+
 	/** The arguments of `@:fmt(staticVarSubdivision(...))` before its knobs: modifier field, static ctor. */
 	private static inline final STATIC_SUBDIV_HEAD_ARGS: Int = 2;
 
@@ -93,7 +100,11 @@ final class WriterTriviaStarDispatch {
 		final field: String = args[0];
 		final elemList: Expr = { expr: EField(macro _t.node, field), pos: pos };
 		final memberList: Expr = { expr: EField(macro _m.node, field), pos: pos };
-		return { elem: macro ($on && $elemList.length > 0), body: macro ($on && Lambda.exists(_arr, _m -> $memberList.length > 0)) };
+		return {
+			on: on,
+			elem: macro ($on && $elemList.length > 0),
+			body: macro ($on && Lambda.exists(_arr, _m -> $memberList.length > 0))
+		};
 	}
 
 	/**
@@ -356,7 +367,8 @@ final class WriterTriviaStarDispatch {
 		// final x`) classify every member of that family as kind 1. Mirrors
 		// the fork's `FieldUtils.getFieldType`, which folds `Kwd(KwdFinal)`
 		// into the same `Var(...)` field kind as `Kwd(KwdVar)`.
-		final varCtors: Array<String> = args[1].split('|');
+		final varKinds: Null<Expr> = familyKnob(args[1]);
+		final varCtors: Array<String> = varKinds == null ? args[1].split('|') : [];
 		// The fn-ctor arg also accepts a `|`-separated set, symmetric with the
 		// var-ctor set, so a grammar whose "function" family spans multiple
 		// ctors (Haxe: `FnMember` for `function f()`, `FinalModifiedMember` for
@@ -364,7 +376,8 @@ final class WriterTriviaStarDispatch {
 		// every member of that family as kind 2. Mirrors the fork's
 		// `FieldUtils.getFieldType`, which classifies a `final`-modified
 		// `function` as the same `Function(...)` kind as a plain `function`.
-		final fnCtors: Array<String> = args[2].split('|');
+		final fnKinds: Null<Expr> = familyKnob(args[2]);
+		final fnCtors: Array<String> = fnKinds == null ? args[2].split('|') : [];
 
 		// ω-interblank-cond-lookthrough: validate + unpack the optional
 		// look-through config. The classifier field must match
@@ -393,15 +406,40 @@ final class WriterTriviaStarDispatch {
 			fnCtors: fnCtors,
 			condCtor: condCtor,
 			bodyField: bodyField,
-			fieldName: fieldName
+			fieldName: fieldName,
+			varKinds: varKinds,
+			fnKinds: fnKinds
 		});
 		return {
 			classifierFieldName: fieldName,
 			classifyCases: cases,
 			betweenVars: knobs[0],
 			betweenFunctions: knobs[1],
-			afterVars: knobs[2]
+			afterVars: knobs[2],
+			varKinds: familyMask(enumRule, varCtors),
+			fnKinds: familyMask(enumRule, fnCtors)
 		};
+	}
+
+	/**
+	 * A kind-family argument of `@:fmt(interMemberBlankLines)` spelled as an `_`-prefixed opt path names a ctor-index bit
+	 * mask read at write time (the family of the type body holding a `#if` region); null for a `|`-separated ctor list.
+	 */
+	private static function familyKnob(arg: String): Null<Expr> {
+		return arg.startsWith('_') ? knobRead(arg) : null;
+	}
+
+	/** The bit mask of `ctors` over the children of the classifier enum, bit `i` for its `i`-th ctor. */
+	private static function familyMask(enumRule: ShapeNode, ctors: Array<String>): Int {
+		var mask: Int = 0;
+		for (i => branch in enumRule.children) {
+			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
+			if (ctorName == null || !ctors.contains(ctorName)) continue;
+			if (i >= FAMILY_MASK_BITS)
+				Context.fatalError('@:fmt(interMemberBlankLines): ctor $ctorName sits past the family mask width', Context.currentPos());
+			mask |= 1 << i;
+		}
+		return mask;
 	}
 
 	/**
@@ -618,9 +656,12 @@ final class WriterTriviaStarDispatch {
 		return knobs != null ? knobReads(meta, knobs, width) : null;
 	}
 
-	/** One knob of `knobReads`: `opt.<name>`, or `off` (`null` when absent) for an empty name. */
+	/**
+	 * One knob of `knobReads`: `opt.<name>`, or `off` (`null` when absent) for an empty name. A dotted name is a path into
+	 * a record the opt holds (`_regionGaps.betweenVars`).
+	 */
 	private static function knobRead(name: String, ?off: Expr): Expr {
-		return name == '' ? off ?? macro null : macro $p{['opt', name]};
+		return name == '' ? off ?? macro null : macro $p{['opt'].concat(name.split('.'))};
 	}
 
 	/**

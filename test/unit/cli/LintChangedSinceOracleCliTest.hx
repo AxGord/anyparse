@@ -102,6 +102,7 @@ class LintChangedSinceOracleCliTest extends Test {
 		Assert.pass('haxe unavailable — skipped');
 		return true;
 	}
+
 	/** Main.hx holds two un-annotated locals; the working tree then edits only the second one's initializer. */
 	private static function assistedRepo(): String {
 		final source: (String) -> String = second ->

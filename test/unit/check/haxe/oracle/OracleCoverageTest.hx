@@ -35,6 +35,7 @@ final class OracleCoverageTest extends Test {
 	/** `OTHER` with the SAME type error — the only difference is which file carries it. */
 	private static final BROKEN_OTHER: String = 'class Other {\n\n\tpublic function new() {}\n\n\tpublic function run():Void {\n'
 		+ '\t\tvar x:Int = "not an int";\n\t\ttrace(x);\n\t}\n\n}\n';
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 
 	/**
@@ -52,6 +53,7 @@ final class OracleCoverageTest extends Test {
 	/** The SAME error in the branch it does not — one variable, and the compile cannot see it. */
 	private static final BROKEN_DEAD: String = 'class Main {\n\n\tstatic function main() {\n\t\t#if regionon\n'
 		+ '\t\tvar live:Int = 1;\n\t\ttrace(live);\n\t\t#else\n\t\tvar dead:Int = "not an int";\n\t\ttrace(dead);\n\t\t#end\n\t}\n\n}\n';
+
 	private static final BRANCHED_HXML: String = '-cp .\n-main Main\n-D regionon\n';
 
 	/**
@@ -60,6 +62,7 @@ final class OracleCoverageTest extends Test {
 	 */
 	private static final ARM_A: String = 'class ArmA {\n\n\tstatic function main() {\n\t\t#if arma\n\t\ttrace(\'a\');\n\t\t#end\n'
 		+ '\t\t#if (arma && armb)\n\t\ttrace(\'both\');\n\t\t#end\n\t\ttrace(1);\n\t}\n\n}\n';
+
 	private static final ARM_B: String = 'class ArmB {\n\n\tstatic function main() {\n\t\ttrace(2);\n\t}\n\n}\n';
 
 	/**

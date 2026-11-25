@@ -761,8 +761,8 @@
 			"name": "M-MO-WRITER-MULTILINE-IGNORED",
 			"type": "anyparse.check.common.members.MemberSpacing",
 			"method": "wantedBlanks",
-			"find": "if (base == null || base.count != 0) return base;",
-			"replace": "if (true) return base;",
+			"find": "if (base == null || base.count != 0 || a.condition != null) return base;",
+			"replace": "if (true || a.condition != null) return base;",
 			"note": "the writer's multi-line rule is not asked, so the blank `aroundMultilineFields` writes around a multi-line field is reported as a gap inside one rank group, for ever - the fix's edit is undone by the canonical round-trip"
 		},
 		{
@@ -777,9 +777,9 @@
 			"name": "M-MO-WRITER-CONDITIONAL",
 			"type": "anyparse.check.common.members.MemberSpacing",
 			"method": "wantedBlanks",
-			"find": "a.condition == null && b.condition == null ? spacing.writer : null",
-			"replace": "spacing.writer",
-			"note": "the writer's member-gap policy is applied inside an `#if` body too, whose members the writer writes with their source gaps"
+			"find": "writerSpaced(a, b) ? spacing.writer : null",
+			"replace": "a.condition == null && b.condition == null ? spacing.writer : null",
+			"note": "the writer's member-gap policy is skipped inside an `#if` body, whose members the writer spaces as a type body does, so a gap it forces there goes unreported"
 		},
 		{
 			"name": "M-MO-WRITER-CONTAINER-KIND",

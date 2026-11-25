@@ -66,6 +66,7 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 
 	private static final PARAM_HXML: String = '-cp .\n-main Param\n';
 	private static final PARAM_APQLINT: String = '{"compilerOracle":"check.hxml","rules":{"avoid-dynamic":{"enabled":true}}}';
+
 	/** An unused import (a safe fix) and a narrowable `Dynamic` local (a risky one) in one class; `C` is the class name. */
 	private static final DISABLED_SUBDIR: String = 'import haxe.io.Bytes;\n\nclass C {\n\tpublic function new() {}\n\n'
 		+ '\tpublic static function run():Void {\n\t\tfinal a:C = new C();\n'

@@ -63,6 +63,7 @@ class ExplicitLocalTypeOracleAbstainTest extends Test {
 
 	/** The same oracle with `tests` off its classpath: it typechecks, and it never reads the fixture. */
 	private static final UNCOVERED_HXML: String = '-cp src\n-main Lib\n--no-output\n';
+
 	private static final APQLINT: String = '{"compilerOracle":"check.hxml","rules":{"explicit-local-type":{"enabled":true}}}';
 	#end
 

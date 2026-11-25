@@ -209,10 +209,12 @@ class MemberOrderWriterGapTest extends Test {
 	 */
 	@:pin('control')
 	@:killer('M-MO-WRITER-CONDITIONAL')
-	public function testAnIfBodyKeepsItsSourceGaps(): Void {
-		final src: String = 'class C {\n\t#if X\n\tvar a:Int;\n\t/** B. */\n\tvar b:Int;\n\t#end\n}\n';
-		Assert.equals(src, formatted(src, DEFAULTS));
-		Assert.equals(0, violations(fileUnder(DEFAULTS), src).length);
+	public function testAnIfBodyTakesTheWriterGaps(): Void {
+		final tight: String = 'class C {\n\t#if X\n\tvar a:Int;\n\t/** B. */\n\tvar b:Int;\n\t#end\n}\n';
+		final setOff: String = 'class C {\n\t#if X\n\tvar a:Int;\n\n\t/** B. */\n\tvar b:Int;\n\t#end\n}\n';
+		Assert.equals(setOff, formatted(tight, DEFAULTS));
+		Assert.equals(1, violations(fileUnder(DEFAULTS), tight).length);
+		Assert.equals(0, violations(fileUnder(DEFAULTS), setOff).length);
 	}
 
 	/**

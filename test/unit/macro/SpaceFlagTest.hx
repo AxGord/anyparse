@@ -123,6 +123,7 @@ class SpaceFlagTest extends Test {
 	private static function written(flag: String, policy: String): String {
 		return writtenField('@:lead(\':\') @:fmt($flag) var value: Atom;', policy);
 	}
+
 	/**
 	 * The same with `field` for the second field, holding `value`; `tightColon` makes the format list `:` as a tight lead.
 	 */

@@ -50,7 +50,7 @@ import haxe.macro.Expr;
  */
 @:access(anyparse.macro.WriterBlankLowering, anyparse.macro.WriterBraceSymmetryLowering, anyparse.macro.WriterCascadeLowering,
 	anyparse.macro.WriterCtorBlankLowering, anyparse.macro.WriterLoweringSupport, anyparse.macro.WriterPolicyLowering,
-	anyparse.macro.WriterTriviaStarEmitLowering)
+	anyparse.macro.WriterTriviaStarEmitLowering, anyparse.macro.TriviaBlockLowering)
 final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 
 	private final _elemCall: Expr;
@@ -71,6 +71,9 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	private final _padLeadingSpaceDoc: Expr;
 	private final _subsequentSepDoc: Expr;
 	private final _firstSepExpr: Expr;
+
+	/** The member-gap decision of a `#if` member-region body, null for every other tryparse Star. */
+	private final _regionGap: Null<TriviaBlockLowering.RegionGapExprs>;
 
 	/**
 	 * Reads the Star's plan and builds every input its emit splices, in the order the emit has always built them: the
@@ -168,6 +171,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		else
 			subsequentSepExpr;
 		_firstSepExpr = sepOverrides.firstSepOverride ?? sepExpr;
+		_regionGap = TriviaBlockLowering.regionGapExprs(ctx.triviaStar, starNode, c.elemRefName);
 	}
 
 	/** The separator text a blockEnded or sepFaithful Star re-emits, null for every other Star. */
@@ -425,10 +429,17 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		final sepCascade: Expr = triviaTryparseSepCascadeExpr();
 		final elemCondFn: Null<Expr> = _elemCondFn;
 		final elemCondProbe: Expr = elemCondFn == null ? macro false : macro $elemCondFn(_t.node);
+		final gap: Null<TriviaBlockLowering.RegionGapExprs> = _regionGap;
+		final noGap: Expr = macro {};
 		return macro {
+			${gap?.initPrevDocExpr ?? noGap};
+			${gap?.initCurrDocExpr ?? noGap};
+			${gap?.initPrevKindExpr ?? noGap};
 			var _si: Int = 0;
 			while (_si < _arr.length) {
 				final _t = _arr[_si];
+				${gap?.initCurrKindExpr ?? noGap};
+				${gap?.computeExpr ?? noGap};
 				// ω-cond-indent-policy AlignedNestedIncrease: remember where
 				// THIS element's docs begin (its leading inter-element
 				// separator + the element body) so the splice at loop tail
@@ -461,6 +472,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				}
 				_priorElemDoc = _elem;
 				${_cascade.trackPrev};
+				${gap?.trackExpr ?? noGap};
 				_si++;
 			}
 		};
@@ -474,7 +486,9 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	 * the while builder stays under the complexity gate.
 	 */
 	private function triviaTryparseSepCascadeExpr(): Expr {
-		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr();
+		final regionGapDecide: Null<Expr> = _regionGap?.decideExpr;
+		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr(regionGapDecide);
+		final linedBlanks: Expr = triviaTryparseLinedBlanksExpr(regionGapDecide);
 		final forceInlineCond: Expr = triviaTryparseForceInlineSepCond(_plan.forceInlineSep());
 		final metaSep: Expr = WriterMetaLineEndLowering.fitSepExpr();
 		return macro {
@@ -537,12 +551,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				// reduces to `(_t.blankBefore ? 1 : 0)` — byte-identical
 				// to the prior single-blank emit.
 				if (!$v{_plan.elemSelfTrailsNewline()}) _docs.push(_dhl());
-				final _blanks: Int = $_cascadeBlanksCount;
-				var _bli: Int = 0;
-				while (_bli < _blanks) {
-					_docs.push(_dhl());
-					_bli++;
-				}
+				$linedBlanks;
 			} else if (_si > 0) {
 				_docs.push($_subsequentSepDoc);
 			} else if (_sepFirst) {
@@ -775,6 +784,21 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		};
 	}
 
+	/**
+	 * The blank lines after the hardline between two elements on their own lines: a member-region body spaces its members
+	 * as a block of members does, every other Star takes the source-blank cascade.
+	 */
+	private function triviaTryparseLinedBlanksExpr(regionGapDecide: Null<Expr>): Expr {
+		return regionGapDecide ?? macro {
+			final _blanks: Int = $_cascadeBlanksCount;
+			var _bli: Int = 0;
+			while (_bli < _blanks) {
+				_docs.push(_dhl());
+				_bli++;
+			}
+		};
+	}
+
 	/** The generated writer body of a `@:trivia @:tryparse` Star: its plan read once, then the heritage, fill or main emit. */
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaTryparseStarExpr(ctx: WriterStarEmitLowering.StarEmitCtx, c: WriterLowering.TriviaStarCtx): Expr {
@@ -849,8 +873,13 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	 * the separator cascade stays under the complexity gate.
 	 */
 	@:access(anyparse.macro.WriterLowering)
-	private static function triviaTryparseLeadCommentSepExpr(): Expr {
+	private static function triviaTryparseLeadCommentSepExpr(regionGapDecide: Null<Expr>): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _docs.push(_dhl()));
+		// A member-region body decides the blank above a commented member as a block of members does.
+		final blankEmit: Expr = regionGapDecide ?? macro if (_t.blankBefore && _si > 0) {
+			_docs.push(_dhl());
+			$blankExtras;
+		};
 		return macro {
 			// ω-D16-padleading-first-comment-no-dup: padLeading
 			// already emitted `_dhl()` for the first element when
@@ -865,10 +894,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 			// inter-stmt path (`_si > 0`) and non-padLeading
 			// consumers stay byte-identical.
 			if (!(_si == 0 && _padLeading && _padHardline)) _docs.push(_dhl());
-			if (_t.blankBefore && _si > 0) {
-				_docs.push(_dhl());
-				$blankExtras;
-			}
+			$blankEmit;
 			var _ci: Int = 0;
 			while (_ci < _t.leadingComments.length) {
 				_docs.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));

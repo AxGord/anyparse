@@ -387,6 +387,7 @@ class ThreadSafetyCarriedHoldTest extends Test {
 		out.sort(Reflect.compare);
 		return out;
 	}
+
 	/**
 	 * The severities of `W.work`'s hold of `Db.batch` across `fs.db.lookup()` — `fs` declared `fsType`, `Fs` declared
 	 * `fsDecl` — in a run that also holds the module `swapper` (`Swapper.go(fs, b)` runs on a worker): `fs.db` names the held

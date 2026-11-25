@@ -15,6 +15,7 @@ import anyparse.format.LiteralReflow;
 import anyparse.format.MetadataLineEndPolicy;
 import anyparse.format.OperatorSpacing;
 import anyparse.format.OptionalSemicolon;
+import anyparse.format.RegionGaps;
 import anyparse.format.RightCurlyPlacement;
 import anyparse.format.SameLinePolicy;
 import anyparse.format.SiblingPolicy;
@@ -1088,6 +1089,13 @@ final class HxModuleWriteOptions {
 	 * `abstract` pair. Default `false`.
 	 */
 	public var _inEnumAbstract: Bool = false; // noqa: naming
+
+	/**
+	 * The member-gap decisions of the type body a member is written in, set by that body's `@:fmt(regionGapKnobs(…))`
+	 * and read by the `#if` region bodies of `HxConditionalMember`, so members inside a region are spaced exactly as the
+	 * same members outside it. The default keeps a region's source blanks, the layout of a region no type body holds.
+	 */
+	public var _regionGaps: RegionGaps = new RegionGaps(); // noqa: naming, prefer-final-public-field
 
 	/**
 	 * The chain mode the enclosing site set, `null` when none did. `_setChainModeOverride(opt, mode)` FORCES it — both

@@ -103,6 +103,7 @@ class LintFixSafeBisectTest extends Test {
 
 	/** The poison of the first fixture: the field `Reader` reads. */
 	private static final DROP: String = '\tpublic static var drop:Int = 1;\n\n';
+
 	private static final HOLDER_AB: String = 'package p;\n\nclass Holder {\n\n\tpublic static var a:Int = 1;\n\n'
 		+ '\tpublic static var b:Int = 2;\n\n\tpublic static function value():Int {\n\t\treturn a + b;\n\t}\n\n}\n';
 	private static final READER_VALUE: String =

@@ -29,6 +29,12 @@ final class BlockStarPlan extends StarPlan {
 	/** The knob name of `@:fmt(existingBetweenFields(…))`: null when absent, empty when bare. */
 	public inline function existingBetweenFields(): Null<Array<String>> return flagArgs(EXISTING_BETWEEN_FIELDS);
 
+	/**
+	 * The opt field of `@:fmt(regionGapKnobs('<field>'))`: the `anyparse.format.RegionGaps` record of this Star's
+	 * resolved member-gap decisions, handed to the opt its elements are written under.
+	 */
+	public inline function regionGapKnobs(): Null<Array<String>> return _meta.args('regionGapKnobs');
+
 	/** The arguments of `@:fmt(uniformBetween(…))`, or null when the flag is absent or bare. */
 	public inline function uniformBetween(): Null<Array<String>> return _meta.args(UNIFORM_BETWEEN);
 

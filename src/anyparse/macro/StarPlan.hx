@@ -45,6 +45,9 @@ class StarPlan {
 
 	public inline function beforeDocCommentEmptyLines(): Bool return _meta.flag('beforeDocCommentEmptyLines');
 
+	/** The knob `@:fmt(beforeDocCommentEmptyLines('<knob>'))` reads its policy from; null when bare (`beforeDocCommentEmptyLines`). */
+	public inline function beforeDocCommentEmptyLinesKnob(): Null<String> return firstArg('beforeDocCommentEmptyLines');
+
 	/**
 	 * `@:fmt(metadataCountsAsDoc('<field>', '<knob>'[, '<flag>', '<alt>']))`: the element field whose non-empty list makes a
 	 * member count as doc-led, and the `opt` Bool that switches it on; null when the Star carries no such flag.

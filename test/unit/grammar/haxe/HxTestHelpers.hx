@@ -3,9 +3,9 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxModuleWriter;
-import anyparse.grammar.haxe.cond.HxConditionalBlock;
 import anyparse.grammar.haxe.cond.HxConditionalCommaList;
 import anyparse.grammar.haxe.cond.HxConditionalDecl;
+import anyparse.grammar.haxe.cond.HxConditionalMember;
 import anyparse.grammar.haxe.cond.HxConditionalParam;
 import anyparse.grammar.haxe.cond.HxConditionalStmt;
 import anyparse.grammar.haxe.cond.HxConditionalType;
@@ -26,7 +26,6 @@ import anyparse.grammar.haxe.decl.HxErrorMsg;
 import anyparse.grammar.haxe.decl.HxFnDecl;
 import anyparse.grammar.haxe.decl.HxInterfaceDecl;
 import anyparse.grammar.haxe.decl.HxMacroClass;
-import anyparse.grammar.haxe.decl.HxMemberDecl;
 import anyparse.grammar.haxe.decl.HxParam;
 import anyparse.grammar.haxe.decl.HxParamBody;
 import anyparse.grammar.haxe.decl.HxTopLevelDecl;
@@ -140,7 +139,7 @@ class HxTestHelpers extends Test {
 		};
 	}
 
-	private function expectConditionalMember(member: Null<HxClassMember>): HxConditionalBlock<HxMemberDecl> {
+	private function expectConditionalMember(member: Null<HxClassMember>): HxConditionalMember {
 		return switch member {
 			case Conditional(inner): inner;
 			case _: throw 'expected Conditional, got $member';

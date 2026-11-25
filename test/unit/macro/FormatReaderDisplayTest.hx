@@ -23,6 +23,7 @@ final class FormatReaderDisplayTest extends Test {
 
 	/** The line a fixture macro prints its readings on, told apart from whatever else the compiler says. */
 	private static inline final READING: String = 'READING ';
+
 	private static final MAIN: String = '@:build(Dump.build())\nclass Main {\n\tstatic function main() {}\n}\n';
 	private static final WORD: String = 'enum abstract Word(String) {\n\tvar Plain = \'p\';\n\tvar Named;\n}\n';
 

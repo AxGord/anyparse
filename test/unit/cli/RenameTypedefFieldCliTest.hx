@@ -20,6 +20,7 @@ class RenameTypedefFieldCliTest extends Test {
 	private static final DECLARING: String = 'package p;\n\ntypedef Ctx = {\n\tfinal flag: Bool;\n\tfinal other: Int;\n}\n\nclass Build {\n'
 		+ '\tpublic static function make(): Ctx {\n\t\treturn {flag: true, other: 1};\n\t}\n\n'
 		+ '\tpublic static function held(): Bool {\n\t\tfinal c: Ctx = {flag: false, other: 2};\n\t\treturn c.flag;\n\t}\n}\n';
+
 	private static final READER: String =
 		'package p;\n\nimport p.Build.Ctx;\n\nclass Reader {\n\tpublic static function read(c: Ctx): Bool {\n\t\treturn c.flag;\n\t}\n}\n';
 	#end

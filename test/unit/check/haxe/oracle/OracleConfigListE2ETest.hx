@@ -57,6 +57,7 @@ final class OracleConfigListE2ETest extends Test {
 	/** The same shape in a branch NEITHER configuration defines — the decline that survives the list. */
 	private static final NOWHERE: String = 'class Nowhere {\n\n\tpublic static function run():Void {\n\t\t#if never\n'
 		+ '\t\tfinal v:Int = 1;\n\t\ttrace(v);\n\t\t#else\n\t\ttrace(0);\n\t\t#end\n\t}\n\n}\n';
+
 	private static final REGION_MAIN: String =
 		'class Main {\n\n\tpublic static function main() {\n\t\tRegion.run();\n\t\tNowhere.run();\n\t}\n\n}\n';
 	private static final REGION_HXML: String = '-cp .\n-main Main\n';
@@ -76,6 +77,7 @@ final class OracleConfigListE2ETest extends Test {
 	/** The rewritable literal lives in the branch only the EXCLUDED configuration would make live. */
 	private static final EXCLUDED: String = 'class Excluded {\n\n\tpublic static function run():Void {\n\t\t#if breakme\n'
 		+ '\t\tfinal v:Int = 1;\n\t\ttrace(v);\n\t\t#else\n\t\ttrace(0);\n\t\t#end\n\t}\n\n}\n';
+
 	private static final RED_HXML: String = '-cp .\n-main Red\n';
 
 	/**
@@ -96,6 +98,7 @@ final class OracleConfigListE2ETest extends Test {
 	 */
 	private static final DISPLAY_MAIN: String = 'class Main {\n\n\tstatic function pick() {\n\t\treturn #if flag 1 #else \'a\' #end;\n'
 		+ '\t}\n\n\tpublic static function main() {\n\t\tvar v = pick();\n\t\ttrace(v);\n\t}\n\n}\n';
+
 	private static final CLI_HXML: String = '-cp .\n-main Main\n';
 
 	/**
@@ -564,6 +567,7 @@ final class OracleConfigListE2ETest extends Test {
 			{ name: 'main.hxml', source: REGION_HXML }
 		]);
 	}
+
 	/** A one-module `Main` fixture with the given `apq.json`, for the scenarios that run the whole CLI. */
 	private static function cliDir(apqlint: String, main: String): String {
 		return CliFixture.writeDir('oraclelistcli', [

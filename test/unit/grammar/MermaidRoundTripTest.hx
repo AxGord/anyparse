@@ -68,6 +68,7 @@ class MermaidRoundTripTest extends Test {
 		Assert.equals(MermaidAst.dump(ast), MermaidAst.dump(reparsed), '$path: same AST after a write');
 		Assert.equals(written, MermaidWriter.write(reparsed), '$path: the write is idempotent');
 	}
+
 	/** The `.mmd` files of one corpus set, in name order. */
 	private static function corpusFiles(set: String): Array<String> {
 		final dir: String = '$CORPUS/$set';

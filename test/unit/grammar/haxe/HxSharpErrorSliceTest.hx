@@ -3,11 +3,10 @@ package unit.grammar.haxe;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.cond.HxConditionalBlock;
 import anyparse.grammar.haxe.cond.HxConditionalDecl;
+import anyparse.grammar.haxe.cond.HxConditionalMember;
 import anyparse.grammar.haxe.cond.HxConditionalStmt;
 import anyparse.grammar.haxe.decl.HxClassDecl;
-import anyparse.grammar.haxe.decl.HxMemberDecl;
 import anyparse.grammar.haxe.stmt.HxStatement;
 import utest.Assert;
 
@@ -93,7 +92,7 @@ class HxSharpErrorSliceTest extends HxTestHelpers {
 			'class Main {\n#if cs\n#error \'msg\'\n#end\n\tpublic function new() {\n\t\t#if cs\n#error \'msg\'\n#end\n\t}\n}'
 		);
 		Assert.equals(2, cls.members.length);
-		final memberCond: HxConditionalBlock<HxMemberDecl> = expectConditionalMember(cls.members[0].member);
+		final memberCond: HxConditionalMember = expectConditionalMember(cls.members[0].member);
 		Assert.equals('cs', (memberCond.cond: String));
 		Assert.equals("'msg'", (expectErrorMember(memberCond.body[0].member): String));
 		final stmts: Array<HxStatement> = fnBodyStmts(expectFnMember(cls.members[1].member));

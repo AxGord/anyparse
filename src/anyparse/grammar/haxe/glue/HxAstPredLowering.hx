@@ -39,10 +39,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static final HX_ABSTRACT_DECL: String = 'anyparse.grammar.haxe.decl.HxAbstractDecl';
 	private static final MEMBER_BEYOND_VALUE: String = 'memberBeyondValue';
 	private static final CONDITIONAL_CTOR: String = 'Conditional';
-	private static final HX_CONDITIONAL_MEMBER: String = ShapeBuilder.instancePath(
-		'anyparse.grammar.haxe.cond.HxConditionalBlock', [HX_MEMBER_DECL]
-	);
-	private static final HX_ELSEIF_MEMBER: String = ShapeBuilder.instancePath('anyparse.grammar.haxe.cond.HxElseifBlock', [HX_MEMBER_DECL]);
+	private static final HX_CONDITIONAL_MEMBER: String = 'anyparse.grammar.haxe.cond.HxConditionalMember';
+	private static final HX_ELSEIF_MEMBER: String = 'anyparse.grammar.haxe.cond.HxElseifMember';
 
 	/** The `HxClassMember` ctors that declare a method, whatever form its name or signature takes. */
 	private static final FN_MEMBER_CTORS: Array<String> = ['FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'];

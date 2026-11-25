@@ -644,6 +644,7 @@ class FactsFixGateE2ETest extends Test {
 		Assert.equals(before, run(dir), 'the program prints what it printed');
 		CliFixture.removeDir(dir);
 	}
+
 	/**
 	 * The argument fixture fixed by `redundant-map-iter-key` under `apqlint`:
 	 * the `_counts` loop changes when `dropped`, and the output does not.

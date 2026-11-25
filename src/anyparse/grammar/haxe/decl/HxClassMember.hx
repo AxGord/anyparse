@@ -4,7 +4,7 @@ import anyparse.grammar.haxe.cond.HxCondClosedMemberRaw;
 import anyparse.grammar.haxe.cond.HxCondNameFnDecl;
 import anyparse.grammar.haxe.cond.HxCondSharedBodyMember;
 import anyparse.grammar.haxe.cond.HxCondSigFnDecl;
-import anyparse.grammar.haxe.cond.HxConditionalBlock;
+import anyparse.grammar.haxe.cond.HxConditionalMember;
 import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
 
 /**
@@ -37,7 +37,7 @@ import anyparse.grammar.haxe.cond.HxVarSemiCondInitDecl;
  *
  * `Conditional` covers `#if <cond> <members> [#elseif …] [#else …] #end` regions wrapping whole member
  * declarations: `@:kw('#if')` dispatches with a non-word-char boundary check; `@:trail('#end')` consumes the
- * closing directive after `HxConditionalBlock` parses the region. A member-level `#if` is reached here only
+ * closing directive after `HxConditionalMember` parses the region. A member-level `#if` is reached here only
  * AFTER the modifier-scope `HxMemberModifier.Conditional` is tried via the modifiers Star and rolls back (its
  * `@:trail('#end')` fails on the member introducer keyword) — the `PackageDecl` to `PackageEmpty`
  * shared-keyword rollback; a pure modifier-conditional never reaches this ctor. The single `Conditional` ctor
@@ -125,7 +125,7 @@ enum HxClassMember {
 	/**
 	 * `#error "msg"` / `#error 'msg'` preprocessor directive at member
 	 * scope (slice ω-sharp-error). Reachable from
-	 * `HxConditionalBlock<HxMemberDecl>.body` — `#if cs
+	 * `HxConditionalMember.body` — `#if cs
 	 * #error '…' #end` inside a class body. Structural twin of
 	 * `@:kw('function') FnMember(decl:HxFnDecl)`: `@:kw` + single Ref,
 	 * no `@:trail`. See `HxDecl.ErrorDecl` for the shared rationale.
@@ -169,7 +169,7 @@ enum HxClassMember {
 	@:kw('#if')
 	@:trail('#end')
 	@:fmt(conditionalMarkerDedent, siblingShare('anyparse.format.SiblingShare.decidePads', 'conditionalSiblings'))
-	Conditional(inner: HxConditionalBlock<HxMemberDecl>);
+	Conditional(inner: HxConditionalMember);
 
 	/**
 	 * A member-scope `#if` region the balanced `Conditional` cannot read but that is COMPLETE at its

@@ -716,17 +716,13 @@ final class WriterCascadeLowering {
 	 */
 	private static function buildInterMemberClassifyCases(c: InterMemberCasesCtx): Array<Case> {
 		final enumRule: ShapeNode = c.enumRule;
-		final varCtors: Array<String> = c.varCtors;
+
 		final fnCtors: Array<String> = c.fnCtors;
 		final condCtor: Null<String> = c.condCtor;
 		final bodyField: Null<String> = c.bodyField;
 		final fieldName: String = c.fieldName;
 		final pos: Position = Context.currentPos();
-		// Base var/fn/other kind mapping for the TOP-level classify switch:
-		// var family → `1`, fn → `2`, everything else → `0`.
-		inline function kindFor(ctorName: String): Expr {
-			return if (varCtors.contains(ctorName)) macro 1; else if (fnCtors.contains(ctorName)) macro 2; else macro 0;
-		}
+
 		// `case <Ctor>(_, …):` pattern for one enum variant, binding the
 		// single ctor arg to `_inner` when `bindInner` (the look-through
 		// ctor needs the wrapper to reach its body Star).
@@ -770,7 +766,7 @@ final class WriterCascadeLowering {
 		// takes part in no blank-line cascade.
 		if (condCtor != null) innerCases.push({ values: [macro null], guard: null, expr: macro 0 });
 		final cases: Array<Case> = [];
-		for (branch in enumRule.children) {
+		for (index => branch in enumRule.children) {
 			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctorName == null) continue;
 			final isLookThrough: Bool = condCtor != null && ctorName == condCtor;
@@ -788,12 +784,33 @@ final class WriterCascadeLowering {
 				final innerSwitch: Expr = { expr: ESwitch(innerClassifier, innerCases, null), pos: pos };
 				macro ($innerBodyAccess.length > 0 ? $innerSwitch : 0);
 			} else {
-				kindFor(ctorName);
+				interMemberKindExpr(c, ctorName, index);
 			}
 			cases.push({ values: [pattern], guard: null, expr: kindExpr });
 		}
 		cases.push({ values: [macro null], guard: null, expr: macro 0 });
 		return cases;
+	}
+
+	/**
+	 * The top-level classify kind of one ctor: var family `1`, function family `2`, everything else `0`. A family read as
+	 * a mask tests the ctor's bit at write time.
+	 */
+	private static function interMemberKindExpr(c: InterMemberCasesCtx, ctorName: String, index: Int): Expr {
+		final varKinds: Null<Expr> = c.varKinds;
+		final fnKinds: Null<Expr> = c.fnKinds;
+		final fnKind: Expr = if (fnKinds != null)
+			macro (anyparse.format.RegionGaps.inFamily($fnKinds, $v{index}) ? 2 : 0);
+		else if (c.fnCtors.contains(ctorName))
+			macro 2;
+		else
+			macro 0;
+		return if (varKinds != null)
+			macro (anyparse.format.RegionGaps.inFamily($varKinds, $v{index}) ? 1 : $fnKind);
+		else if (c.varCtors.contains(ctorName))
+			macro 1;
+		else
+			fnKind;
 	}
 
 	/**

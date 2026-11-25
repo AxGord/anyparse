@@ -26,7 +26,28 @@ typedef BlankGateExprs = {
 	final groupGluedExpr: Expr;
 	final groupTrackExpr: Expr;
 };
+/** The pieces of a `#if` member-region body's blank-before decision, each spliced where the tryparse emit needs it. */
+typedef RegionGapExprs = {
+	final initPrevDocExpr: Expr;
+	final initCurrDocExpr: Expr;
+	final initPrevKindExpr: Expr;
+	final initCurrKindExpr: Expr;
+	final computeExpr: Expr;
+	final decideExpr: Expr;
+	final trackExpr: Expr;
+}
 
+/**
+ * What a type body Star with `@:fmt(regionGapKnobs)` resolved for its own members, the source of the
+ * `anyparse.format.RegionGaps` it hands to the `#if` regions inside it; a null part is a rule the Star does not apply.
+ */
+typedef RegionGapSources = {
+	final existingBetweenFields: Null<Expr>;
+	final interMember: Null<WriterLowering.InterMemberClassifyInfo>;
+	final afterFieldsWithDocComments: Null<Expr>;
+	final beforeDocCommentEmptyLines: Null<Expr>;
+	final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>;
+}
 /**
  * Pass 3W helpers — the block-mode (`@:lead` + `@:trail` + `@:trivia`) Star
  * emit family.
@@ -91,6 +112,9 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	private final _elemPushExpr: Expr;
 	private final _glueToPreviousExpr: Expr;
 
+	/** The `_regionOpt` declaration of `@:fmt(regionGapKnobs(…))`, an empty block without the flag. */
+	private final _regionOptDecl: Expr;
+
 	/**
 	 * Reads a block-mode trivia Star's (`@:lead(open) @:trail(close) @:trivia`) plan and builds every input its emit splices.
 	 * A struct field's block Star (`source` non-null) also reads its member-gap, doc-edge and line-comment inputs off its node
@@ -131,7 +155,17 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final uniformBetweenOptField: Null<String> = source == null
 			? null
 			: WriterLoweringSupport.fmtSingleStringArg(BlockStarPlan.UNIFORM_BETWEEN, plan.uniformBetween());
-		_elemCall = triviaBlockElemCallExpr(elemFn, plan.leftCurlyAnonFnOverride(), plan.clearExprPositionNonTail());
+		final regionKnobs: Null<Array<String>> = plan.regionGapKnobs();
+		_regionOptDecl = regionKnobs == null
+			? macro {}
+			: triviaBlockRegionOptDecl(regionKnobs, {
+				existingBetweenFields: existingBetweenFields,
+				interMember: infos?.interMemberInfo,
+				afterFieldsWithDocComments: afterFieldsWithDocComments,
+				beforeDocCommentEmptyLines: plan.beforeDocCommentEmptyLines() ? beforeDocPolicyRead(plan) : null,
+				docLedReads: docLedReads
+			});
+		_elemCall = triviaBlockElemCallExpr(elemFn, plan.leftCurlyAnonFnOverride(), plan.clearExprPositionNonTail(), regionKnobs != null);
 		_emptyDocExpr = triviaBlockEmptyDocExpr(
 			openText, closeText, openText + closeText, plan.emptyCurlyBreak(), plan.emptyCurlyBreakKnob(), plan.emptyBlockBreak()
 		);
@@ -146,7 +180,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		_blankBeforeExpr = triviaBlockBlankBeforeExpr(
 			afterFieldsWithDocComments, existingBetweenFields, plan.beforeDocCommentEmptyLines(), infos?.condLeadingDocInfo, interMember,
 			interMemberInfo, staticVarSubdivInfo != null, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,
-			plan.uniformStmtBlanks(), docLedReads, headingAdds, groupGlue
+			plan.uniformStmtBlanks(), docLedReads, headingAdds, groupGlue, beforeDocPolicyRead(plan)
 		);
 		_headGroupInitExpr = groupGlue == null ? macro {} : macro var _inHeadGroup: Bool = false;
 		_beginEnd = triviaBlockBeginEndExpr(
@@ -230,6 +264,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final whileExpr: Expr = triviaBlockWhileExpr();
 		return macro {
 			final _inner: Array<anyparse.core.Doc> = [];
+			$_regionOptDecl;
 			${_leaf.initDocCommentExpr};
 			${_leaf.initCurrDocCommentExpr};
 
@@ -432,18 +467,40 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
 		anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool, docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>, headingAdds: Null<Expr>,
-		groupGlue: Null<Expr>
+		groupGlue: Null<Expr>, ?beforeDocPolicy: Expr
 	): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
-		if (!anyEmptyLinesFlag) return triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
+		return anyEmptyLinesFlag
+			? triviaBlockBlankBeforeAssemblyExpr(
+				triviaBlockBlankGates(
+					afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, condLeadingDocInfo, interMember,
+					interMemberInfo, staticVarSubdiv, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, docLedReads, headingAdds,
+					groupGlue, beforeDocPolicy
+				),
+				macro _inner
+			)
+			: triviaBlockSourceBlankOnlyExpr(uniformStmtBlanks, blankExtras);
+	}
+
+	/**
+	 * The strip / add / compute gates of one element's blank-before decision, apart from where the blank is pushed: a
+	 * block Star assembles them per element, a `#if` member-region body Star splits the computes from the decision.
+	 */
+	@:access(anyparse.macro.WriterLowering)
+	private static function triviaBlockBlankGates(
+		afterFieldsWithDocComments: Null<Expr>, existingBetweenFields: Null<Expr>, beforeDocCommentEmptyLines: Bool,
+		condLeadingDocInfo: Null<WriterLowering.CondLeadingDocLookThroughInfo>, interMember: Bool,
+		interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo>, staticVarSubdiv: Bool,
+		staticVarSubdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo>, uniformBetween: Bool, uniformBetweenOptField: Null<String>,
+		docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>, headingAdds: Null<Expr>, groupGlue: Null<Expr>, ?beforeDocPolicy: Expr
+	): BlankGateExprs {
 		// The doc-comment rule is ONE runtime policy (`anyparse.format.MemberGap`), shared with the
 		// `member-order` check: each side the Star carries no flag for reads as "not doc-led" under `Ignore`.
 		final prevDocExpr: Expr = afterFieldsWithDocComments != null ? macro _prevHadDocComment : macro false;
 		final afterPolicyExpr: Expr = afterFieldsWithDocComments ?? macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
 		final currDocExpr: Expr = beforeDocCommentEmptyLines ? macro _currHasDocComment : macro false;
-		final beforePolicyExpr: Expr = beforeDocCommentEmptyLines
-			? macro opt.beforeDocCommentEmptyLines
-			: macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final beforeKnobExpr: Expr = beforeDocPolicy ?? macro opt.beforeDocCommentEmptyLines;
+		final beforePolicyExpr: Expr = beforeDocCommentEmptyLines ? beforeKnobExpr : macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
 		final docRule: Bool = afterFieldsWithDocComments != null || beforeDocCommentEmptyLines;
 		final stripByDocExpr: Expr = docRule
 			? macro anyparse.format.MemberGap.docStrips($prevDocExpr, $currDocExpr, $afterPolicyExpr, $beforePolicyExpr)
@@ -458,7 +515,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			? macro ($existingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove)
 			: macro false;
 		final vetoByDocExpr: Expr = beforeDocCommentEmptyLines
-			? macro anyparse.format.MemberGap.docVetoes(_currHasDocComment, opt.beforeDocCommentEmptyLines)
+			? macro anyparse.format.MemberGap.docVetoes(_currHasDocComment, $beforeKnobExpr)
 			: macro false;
 		final currHasDocComputeExpr: Expr = triviaBlockCurrHasDocComputeExpr(beforeDocCommentEmptyLines, condLeadingDocInfo, docLedReads);
 
@@ -471,7 +528,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final addByUniformBetweenExpr: Expr = triviaBlockUniformBetweenAddExpr(uniformBetween, uniformBetweenOptField);
 		final sameKindExpr: Expr = interMember ? macro _prevKind == _currKind : macro true;
 		final docLedExpr: Expr = WriterTriviaStarDispatch.docLedExpr(docLedReads);
-		return triviaBlockBlankBeforeAssemblyExpr({
+		return {
 			currHasDocComputeExpr: currHasDocComputeExpr,
 			currKindComputeExpr: currKindComputeExpr,
 
@@ -490,7 +547,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 			groupTrackExpr: groupGlue == null
 				? macro {}
 				: macro _inHeadGroup = anyparse.format.MemberGap.groupOpenAfter($groupGlue, _t.leadingComments, _glued)
-		});
+		};
 	}
 
 	/**
@@ -560,7 +617,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	 *
 	 */
 	@:access(anyparse.macro.WriterLowering)
-	private static function triviaBlockBlankBeforeAssemblyExpr(g: BlankGateExprs): Expr {
+	private static function triviaBlockBlankBeforeAssemblyExpr(g: BlankGateExprs, target: Expr): Expr {
 		final currHasDocComputeExpr: Expr = g.currHasDocComputeExpr;
 		final currKindComputeExpr: Expr = g.currKindComputeExpr;
 
@@ -574,7 +631,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
 		final groupGluedExpr: Expr = g.groupGluedExpr;
 		final groupTrackExpr: Expr = g.groupTrackExpr;
-		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro $target.push(_dhl()));
 		return macro {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
@@ -597,7 +654,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 				&& ($addByDocExpr || $addByHeadingExpr || (!_glued && ($addByInterMemberExpr || $addByUniformBetweenExpr)));
 			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
 			if (_si > 0 && (_sourceBlank || _addBlank)) {
-				_inner.push(_dhl());
+				$target.push(_dhl());
 				if (_sourceBlank) $blankExtras;
 			}
 			$groupTrackExpr;
@@ -645,7 +702,9 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	 */
 	@:access(anyparse.macro.WriterLowering)
 	@:access(anyparse.macro.WriterOptFanout)
-	private static function triviaBlockElemCallExpr(elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool): Expr {
+	private static function triviaBlockElemCallExpr(
+		elemFn: String, clearAnonFnBodyOnElems: Bool, clearExprPositionNonTail: Bool, regionOpt: Bool
+	): Expr {
 		// ω-arrow-lambda-body-context: when the call site opts in via
 		// `@:fmt(leftCurlyAnonFnOverride(...))` on the parent Star, the per-
 		// element write call passes `_clearAnonFnBody(opt)` so the flag is
@@ -653,7 +712,8 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		// statements / nested BlockExpr inside the body) fall back to the
 		// default `blockLeftCurly` knob rather than re-triggering the
 		// anon-fn override.
-		final elemOptExpr: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody(opt) : macro opt;
+		final baseOptExpr: Expr = regionOpt ? macro _regionOpt : macro opt;
+		final elemOptExpr: Expr = clearAnonFnBodyOnElems ? macro _clearAnonFnBody($baseOptExpr) : baseOptExpr;
 		// ω-value-yielded-if-tail-barrier (SI-2): the per-element opt arg. When
 		// `clearExprPositionNonTail` is set (BlockExpr / BlockStmt), every block
 		// statement EXCEPT the tail gets `_clearExprPosition` so a discarded
@@ -1035,6 +1095,93 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 	private static function triviaBlockEndNExpr(beginEndType: Bool, endAccess: Expr): Expr {
 		final stated: Expr = beginEndType ? endAccess : macro null;
 		return macro anyparse.format.MemberGap.bodyEdge($stated, opt.beforeRightCurly, _trailBB && _arr.length > 0 && _trailLC.length == 0);
+	}
+
+	/**
+	 * `@:fmt(regionGapKnobs('<field>'))`: the opt every element is written under carries this Star's resolved member-gap
+	 * decisions in that field, so a `#if` region body inside an element spaces its members exactly as this Star does.
+	 */
+	private static function triviaBlockRegionOptDecl(fields: Array<String>, src: RegionGapSources): Expr {
+		if (fields.length != 1)
+			Context.fatalError('@:fmt(regionGapKnobs) names the one opt field its elements read, got $fields', Context.currentPos());
+		final field: String = fields[0];
+		final ignore: Expr = macro anyparse.format.CommentEmptyLinesPolicy.Ignore;
+		final info: Null<WriterLowering.InterMemberClassifyInfo> = src.interMember;
+		final gaps: Expr = macro new anyparse.format.RegionGaps(
+			${src.existingBetweenFields ?? macro anyparse.format.KeepEmptyLinesPolicy.Keep}, ${info?.betweenVars ?? macro 0},
+			${info?.betweenFunctions ?? macro 0}, ${info?.afterVars ?? macro 0}, ${src.afterFieldsWithDocComments ?? ignore},
+			${src.beforeDocCommentEmptyLines ?? ignore}, ${src.docLedReads?.on ?? macro false}, $v{info?.varKinds ?? 0},
+			$v{info?.fnKinds ?? 0}
+		);
+		return macro final _regionOpt = {
+			final _ro = _copyOpt(opt);
+			_ro.$field = $gaps;
+			_ro;
+		};
+	}
+
+	/** The policy `beforeDocCommentEmptyLines` reads: its named knob, else the global `opt.beforeDocCommentEmptyLines`. */
+	@:access(anyparse.macro.WriterTriviaStarDispatch)
+	private static function beforeDocPolicyRead(plan: StarPlan): Expr {
+		final knob: Null<String> = plan.beforeDocCommentEmptyLinesKnob();
+		return knob != null ? WriterTriviaStarDispatch.knobRead(knob) : macro opt.beforeDocCommentEmptyLines;
+	}
+
+	/**
+	 * The blank-before decision a block Star of members makes, read off the same flags of a `#if` member-region body
+	 * Star; null when that Star carries none. The blank is pushed onto `_docs`, and the first element takes none, so the
+	 * region's markers stay tight to the members beside them.
+	 */
+	@:access(anyparse.macro.WriterTriviaStarDispatch)
+	@:access(anyparse.macro.WriterLowering)
+	private static function regionGapExprs(
+		tc: WriterTriviaStarDispatch.TriviaStarDispatchCtx, starNode: ShapeNode, elemRefName: String
+	): Null<RegionGapExprs> {
+		final plan: BlockStarPlan = new BlockStarPlan(StarPlan.metaOf(starNode));
+		final afterDoc: Null<Expr> = WriterTriviaStarDispatch.afterDocPolicy(starNode);
+		final existing: Null<Expr> = WriterTriviaStarDispatch.starKnobReads(
+			BlockStarPlan.EXISTING_BETWEEN_FIELDS, plan.existingBetweenFields(), 1
+		)?.pop();
+		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
+		final beforeDoc: Bool = plan.beforeDocCommentEmptyLines();
+		final infos: WriterLowering.TriviaBlockInfos = WriterTriviaStarDispatch.buildTriviaBlockInfos(tc, starNode, elemRefName, beforeDoc);
+		final interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo> = infos.interMemberInfo;
+		final interMember: Bool = interMemberInfo != null;
+		if (afterDoc == null && existing == null && !beforeDoc && !interMember) return null;
+		final subdivInfo: Null<WriterLowering.StaticVarSubdivisionInfo> = infos.staticVarSubdivInfo;
+		final g: BlankGateExprs = triviaBlockBlankGates(
+			afterDoc, existing, beforeDoc, infos.condLeadingDocInfo, interMember, interMemberInfo, subdivInfo != null, subdivInfo, false,
+			null, docLedReads, null, null, beforeDocPolicyRead(plan)
+		);
+		final leaf: WriterLowering.BlockLeafExprs = triviaBlockLeafExprs(afterDoc, beforeDoc, interMember, false, null, docLedReads);
+		final decide: BlankGateExprs = {
+			currHasDocComputeExpr: macro {},
+			currKindComputeExpr: macro {},
+			stripByDocExpr: g.stripByDocExpr,
+			stripByExistingExpr: g.stripByExistingExpr,
+			vetoByDocExpr: g.vetoByDocExpr,
+			addByDocExpr: g.addByDocExpr,
+			addByHeadingExpr: g.addByHeadingExpr,
+			addByInterMemberExpr: g.addByInterMemberExpr,
+			addByUniformBetweenExpr: g.addByUniformBetweenExpr,
+			groupGluedExpr: g.groupGluedExpr,
+			groupTrackExpr: g.groupTrackExpr
+		};
+		return {
+			initPrevDocExpr: leaf.initDocCommentExpr,
+			initCurrDocExpr: leaf.initCurrDocCommentExpr,
+			initPrevKindExpr: leaf.initPrevKindExpr,
+			initCurrKindExpr: leaf.initCurrKindExpr,
+			computeExpr: macro {
+				${g.currHasDocComputeExpr};
+				${g.currKindComputeExpr};
+			},
+			decideExpr: triviaBlockBlankBeforeAssemblyExpr(decide, macro _docs),
+			trackExpr: macro {
+				${leaf.trackDocCommentExpr};
+				${leaf.trackPrevKindExpr};
+			}
+		};
 	}
 
 }

@@ -54,7 +54,7 @@ typedef HxMacroClass = {
 			'member', 'VarMember|FinalMember', 'FnMember', 'macroClassBetweenVars', 'macroClassBetweenFunctions', 'macroClassAfterVars'
 		), staticVarSubdivision('modifiers', 'Static', 'macroClassAfterStaticVars', 'macroClassBetweenStaticFunctions'),
 		gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'), relocateTrailingComments,
-		glueToPrevious('member', 'EmptySemiMember'))
+		glueToPrevious('member', 'EmptySemiMember'), regionGapKnobs('_regionGaps'))
 	@:lead('{')
 	@:trail('}')
 	@:trivia

@@ -141,6 +141,7 @@ final class TestTranscript {
 			counted: sawUtestReport(block, tests, failures, errors)
 		};
 	}
+
 	/**
 	 * The locus line printed under the counts of a red transcript — `first failure: <Class>.<test>  line:N  <message>` —
 	 * or null when the transcript names no failing test.

@@ -51,7 +51,7 @@ typedef HxInterfaceDecl = {
 		interMemberBlankLines(
 			'member', 'VarMember|FinalMember', 'FnMember', 'interfaceBetweenVars', 'interfaceBetweenFunctions', 'interfaceAfterVars'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),
-		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
+		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'), regionGapKnobs('_regionGaps'))
 	@:lead('{')
 	@:trail('}')
 	@:trivia

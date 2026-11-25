@@ -41,6 +41,7 @@ final class LintFixSafeRevertContinuesTest extends Test {
 
 	/** The oracle probe fixture - a module that typechecks on any host with a working `haxe`. */
 	private static final TRIVIAL: String = 'class Main {\n\n\tprivate static function main():Void {}\n\n}\n';
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 

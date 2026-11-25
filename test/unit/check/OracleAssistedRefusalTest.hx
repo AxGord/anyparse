@@ -36,6 +36,7 @@ final class OracleAssistedRefusalTest extends Test {
 	/** One local only the compiler can type, in a file that is NOT the writer's fixed point. */
 	private static final DRIFTED: String =
 		'class Main {\n\n\tstatic function main() {\n\t\tvar comp = [for (i in 0...3) i];\n\t\ttrace(  comp);\n\t}\n\n}\n';
+
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 

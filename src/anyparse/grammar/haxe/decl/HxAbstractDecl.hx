@@ -87,7 +87,7 @@ typedef HxAbstractDecl = {
 			'modifiers', 'Static', 'abstractAfterStaticVars', 'abstractBetweenStaticFunctions', '_inEnumAbstract',
 			'enumAbstractBetweenVars', 'enumAbstractBetweenFunctions'
 		), betweenMultilineCommentsBlanks, gapRule('anyparse.format.MemberGap.aroundMultiline', 'aroundMultilineFields'),
-		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'))
+		relocateTrailingComments, glueToPrevious('member', 'EmptySemiMember'), regionGapKnobs('_regionGaps'))
 	@:lead('{')
 	@:trail('}')
 	@:trivia

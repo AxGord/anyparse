@@ -2,9 +2,9 @@ package anyparse.grammar.haxe.cond;
 
 /**
  * Body of a `#if <cond> <blocks> [#elseif ...] [#else <blocks>] #end` preprocessor-guarded region
- * wrapping whole ELEMENTS of a block-structured list: switch `case` / `default` branches, enum
- * constructors, class / interface / abstract member declarations. The host ctor (`HxSwitchCase`,
- * `HxEnumCtor`, `HxClassMember`) consumes `#if` and the trailing `#end`; this typedef covers the
+ * wrapping whole ELEMENTS of a block-structured list: switch `case` / `default` branches and enum
+ * constructors (a region of type members is `HxConditionalMember`, which spaces them). The host ctor
+ * (`HxSwitchCase`, `HxEnumCtor`) consumes `#if` and the trailing `#end`; this typedef covers the
  * content between them. Every instance shares one layout policy: each body Star pads its
  * boundaries, indents under the directive, puts one element per line and shares its sibling
  * scope with the other bodies of the region.
