@@ -341,7 +341,7 @@ Owns: `@:kw`.
 
 Owns: `@:skip`, `@:ws`.
 
-Cross-cutting and annotate-only: `@:ws` on a rule root records `skip.active`, which nothing reads yet; the generated `skipWs(ctx)` — spaces, tabs, LF, CR and the BOM plus the format's comment delimiters, `Codegen.skipWsField`; the format's `whitespace` field is not consulted — is emitted before every terminal by the lowering whether or not the tag is present, so today the tag documents intent. `LoweringCtx.skipStack` is declared for a future scoped skip and is never pushed; the `@:skip("regex")` form with a user-provided pattern is owned but not read.
+Cross-cutting and annotate-only: `@:ws` on a rule root records `skip.active`, which nothing reads yet; the generated `skipWs(ctx)` — the characters of the format's `whitespace` field and the BOM plus the format's comment delimiters, `Codegen.skipWsField` — is emitted before every terminal by the lowering whether or not the tag is present, so today the tag documents intent. `LoweringCtx.skipStack` is declared for a future scoped skip and is never pushed; the `@:skip("regex")` form with a user-provided pattern is owned but not read.
 
 ### Pratt, Prefix, Postfix, Ternary
 

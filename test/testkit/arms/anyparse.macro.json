@@ -3587,6 +3587,14 @@
 			"note": "the exclusion is dropped, so a type `&` takes the first `&` of `&&` and the wrapper never sees its lead"
 		},
 		{
+			"name": "M-SKIPWS-FORMAT-WHITESPACE-IGNORED",
+			"type": "anyparse.macro.Codegen",
+			"method": "whitespaceTest",
+			"find": "for (k in 0...whitespace.length) test = macro c == $v{whitespace.charCodeAt(k)} || $test;",
+			"replace": "test = macro c == ' '.code || c == '\\t'.code || c == '\\n'.code || c == '\\r'.code || $test;",
+			"note": "the skipper consumes the hardcoded four characters again, so a format that leaves line breaks out of its whitespace still skips them"
+		},
+		{
 			"name": "M-TDSEMI-SHARED-KEY",
 			"type": "anyparse.macro.WriterKwRefLowering",
 			"method": "optionalSemicolonWrap",

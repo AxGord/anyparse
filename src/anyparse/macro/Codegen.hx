@@ -229,7 +229,8 @@ class Codegen {
 	 * Generate `skipWs` — the whitespace-and-comment skipper called
 	 * between every terminal match and at the public entry's tail check.
 	 *
-	 * Base behaviour: consume spaces, tabs, LF, CR.
+	 * Base behaviour: consume the characters of the format's `whitespace`
+	 * field, and the BOM.
 	 *
 	 * When `formatInfo.commentPatterns` is non-empty (e.g. Haxe with
 	 * `//` and `/* *\/`), each pattern contributes an inline match block:
@@ -247,7 +248,7 @@ class Codegen {
 	 * entries never call `skipWs`).
 	 */
 	private static function skipWsField(formatInfo: FormatReader.FormatInfo): Field {
-		final body: Expr = buildSkipWsBody(formatInfo.commentPatterns);
+		final body: Expr = buildSkipWsBody(formatInfo.commentPatterns, formatInfo.whitespace);
 		return {
 			name: 'skipWs',
 			access: [APrivate, AStatic],
@@ -256,14 +257,12 @@ class Codegen {
 		};
 	}
 
-	private static function buildSkipWsBody(patterns: Array<FormatReader.CommentPattern>): Expr {
+	private static function buildSkipWsBody(patterns: Array<FormatReader.CommentPattern>, whitespace: String): Expr {
 		final commentStmts: Array<Expr> = [ for (p in patterns) commentSkipBlock(p) ];
-		// 0xFEFF is the UTF-8 BOM codepoint, treated as invisible
-		// horizontal whitespace anywhere in the input. Real-world editors
-		// emit it at the file head; tolerating it inline costs nothing.
+		final isWhitespace: Expr = whitespaceTest(whitespace);
 		return macro while (ctx.pos < ctx.input.length) {
 			final c: Int = ctx.input.charCodeAt(ctx.pos);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == $v{BOM}) {
+			if ($isWhitespace) {
 				ctx.pos++;
 				continue;
 			}
@@ -304,9 +303,10 @@ class Codegen {
 	 */
 	private static function skipWsAndStashField(formatInfo: FormatReader.FormatInfo): Field {
 		final commentStmts: Array<Expr> = [ for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p) ];
+		final isWhitespace: Expr = whitespaceTest(formatInfo.whitespace);
 		final body: Expr = macro while (ctx.pos < ctx.input.length) {
 			final c: Int = ctx.input.charCodeAt(ctx.pos);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == $v{BOM}) {
+			if ($isWhitespace) {
 				ctx.pos++;
 				continue;
 			}
@@ -1365,6 +1365,19 @@ class Codegen {
 			cond = macro $cond && ctx.input.charCodeAt(i + $v{k}) == $v{code};
 		}
 		return cond;
+	}
+
+	/**
+	 * The one answer to "which characters does a generated skipper treat as
+	 * whitespace": the format's declared `whitespace` plus the BOM. 0xFEFF is
+	 * the UTF-8 BOM codepoint, invisible horizontal whitespace anywhere in
+	 * the input (editors emit it at the file head), so it is skipped even
+	 * when the format does not list it. The tested character is the local `c`.
+	 */
+	private static function whitespaceTest(whitespace: String): Expr {
+		var test: Expr = macro c == $v{BOM};
+		for (k in 0...whitespace.length) test = macro c == $v{whitespace.charCodeAt(k)} || $test;
+		return test;
 	}
 
 }

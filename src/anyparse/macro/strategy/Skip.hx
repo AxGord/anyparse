@@ -15,10 +15,10 @@ using Lambda;
  * Skip strategy — cross-cutting whitespace / comment consumption, annotate-only.
  *
  * `@:ws` on a rule root marks it `skip.active`, which records intent and is read
- * by nothing yet: the generated `skipWs(ctx)` (`Codegen.skipWsField` — spaces,
- * tabs, LF, CR, the BOM, plus the format's comment delimiters) is emitted before
- * every terminal by the lowering whether or not the tag is present, and the
- * format's `whitespace` field is not consulted. `LoweringCtx.skipStack` is
+ * by nothing yet: the generated `skipWs(ctx)` (`Codegen.skipWsField` — the
+ * characters of the format's `whitespace` field, the BOM, plus the format's
+ * comment delimiters) is emitted before every terminal by the lowering whether
+ * or not the tag is present. `LoweringCtx.skipStack` is
  * declared for a future scoped skip and is never pushed; a `@:skip("regex")` form
  * with a user-provided pattern is owned but not read. There is deliberately no
  * CoreIR primitive for skip — it is a codegen concern.
