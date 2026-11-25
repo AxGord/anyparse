@@ -106,6 +106,41 @@ final class ReachBuildsCache {
 		return #if (sys || nodejs) Path.join([TempScratch.root(), '${stem(oracles)}.json']) #else '' #end;
 	}
 
+	/** `c` as its record, in the schema's key order; an absent `parsed` is left out, never held as null. */
+	public static function recordOf(c: ReachConfiguration): ReachConfigurationRecord {
+		final record: ReachConfigurationRecord = {
+			name: c.name,
+			defined: c.defined,
+			everDefined: c.everDefined,
+			values: [ for (name => value in c.values) [name, value] ],
+			compiled: c.compiled,
+			types: c.types.map(t -> { name: t.name, file: t.file })
+		};
+		final parsed: Null<Array<String>> = c.parsed;
+		if (parsed != null) record.parsed = parsed;
+		return record;
+	}
+
+	/** The build one record entry holds, or null for an entry of any other shape. */
+	public static function configurationOf(c: ReachConfigurationRecord): Null<ReachConfiguration> {
+		final values: Map<String, String> = [];
+		for (pair in c.values) {
+			if (pair.length != 2) return null;
+			values[pair[0]] = pair[1];
+		}
+		final read: ReachConfiguration = {
+			name: c.name,
+			defined: c.defined,
+			everDefined: c.everDefined,
+			values: values,
+			compiled: c.compiled,
+			types: c.types.map(t -> { name: t.name, file: t.file })
+		};
+		final parsed: Null<Array<String>> = c.parsed;
+		if (parsed != null) read.parsed = parsed;
+		return read;
+	}
+
 	/** `load`'s answer from the record at `path`; it may throw on a record of no shape `buildsOf` foresaw. */
 	private static function loadFrom(oracles: Array<OracleConfig>, path: String): Null<ReachBuilds> {
 		final record: ReachBuildsRecord = ReachBuildsRecordParser.parse(File.getContent(path));
@@ -166,21 +201,6 @@ final class ReachBuildsCache {
 		return stats.foreach(pair -> pair.length == 2 && pair[1] != '' && statOf(pair[0]) == pair[1]);
 	}
 
-	/** `c` as its record, in the schema's key order; an absent `parsed` is left out, never held as null. */
-	private static function recordOf(c: ReachConfiguration): ReachConfigurationRecord {
-		final record: ReachConfigurationRecord = {
-			name: c.name,
-			defined: c.defined,
-			everDefined: c.everDefined,
-			values: [ for (name => value in c.values) [name, value] ],
-			compiled: c.compiled,
-			types: c.types.map(t -> { name: t.name, file: t.file })
-		};
-		final parsed: Null<Array<String>> = c.parsed;
-		if (parsed != null) record.parsed = parsed;
-		return record;
-	}
-
 	/** The builds `record` holds, every library source read and checked against its hash; null for any field of no shape. */
 	private static function buildsOf(record: ReachBuildsRecord): Null<ReachBuilds> {
 		final configurations: Array<ReachConfiguration> = [];
@@ -199,26 +219,6 @@ final class ReachBuildsCache {
 			library.push({ file: entry.file, source: read });
 		}
 		return { configurations: configurations, library: library };
-	}
-
-	/** The build one record entry holds, or null for an entry of any other shape. */
-	private static function configurationOf(c: ReachConfigurationRecord): Null<ReachConfiguration> {
-		final values: Map<String, String> = [];
-		for (pair in c.values) {
-			if (pair.length != 2) return null;
-			values[pair[0]] = pair[1];
-		}
-		final read: ReachConfiguration = {
-			name: c.name,
-			defined: c.defined,
-			everDefined: c.everDefined,
-			values: values,
-			compiled: c.compiled,
-			types: c.types.map(t -> { name: t.name, file: t.file })
-		};
-		final parsed: Null<Array<String>> = c.parsed;
-		if (parsed != null) read.parsed = parsed;
-		return read;
 	}
 
 }

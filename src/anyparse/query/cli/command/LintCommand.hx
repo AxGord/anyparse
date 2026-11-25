@@ -341,7 +341,8 @@ final class LintCommand implements CliCommand {
 		// reads the trees the checks just parsed out of its cache instead of parsing them again.
 		final cached: CachingGrammarPlugin = wrapResolution(plugin, resolution);
 		final explainer: Null<ThreadSafety> = LintExplainLong.explainer(activeChecks, o.explainLong);
-		final reach: ImportReach = new ImportReach(OracleProviders.of(plugin), oracles);
+		// a run under `--no-oracle` compiles nothing, so it asks no build and names what it kept unasked
+		final reach: ImportReach = new ImportReach(OracleProviders.of(plugin), oracles, !o.noOracle);
 		// The range and the reach both narrow BEFORE supersession: a finding either withholds must not take the one it supersedes with it,
 		// and a finding outside the range costs no probe.
 		final ruleNotes: Array<ConfigNote> = [];
@@ -367,7 +368,7 @@ final class LintCommand implements CliCommand {
 		// PROJECT-WIDE typecheck regardless of how narrow the lint scope is — nearly the
 		// whole of a single-file run, the inner loop's largest single tax.
 		final oracleExit: Null<Int> = o.noOracle
-			? LintFixVerify.oracleSkippedNote(oracles)
+			? LintFixVerify.oracleSkippedNote(oracles, reach.unchecked())
 			: LintFixVerify.reportModeOracle(OracleProviders.of(cached), oracles, paths, oracleConfig?.compilerOracleServer() ?? false);
 		LintOracleRun.endCompiles(compiler, early, ahead, oracles);
 		if (oracleExit != null) return oracleExit;

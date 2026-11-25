@@ -7,7 +7,7 @@ import anyparse.check.haxe.expressions.PreferCompareFunction;
 import anyparse.check.haxe.expressions.PreferSplitPart;
 import anyparse.check.haxe.oracle.OracleCoverage;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.Cli.RuleEdits;
+import anyparse.query.Cli;
 import anyparse.query.ImportReach;
 import anyparse.query.OracleProviders;
 import anyparse.query.RunLedger;
@@ -192,6 +192,60 @@ final class ImportReachTest extends Test {
 			0, reportedUnder(root, reachOver([leaf(root, 'wide.hxml'), leaf(root, 'narrow.hxml')]), MAIN).length,
 			'one blind build is enough'
 		);
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A report that compiles nothing asks no build: the finding a narrow build would withhold is kept, and its rule is named as
+	 * the one whose remedy reach went unasked.
+	 */
+	@:pin('control')
+	@:killer('M-IMPORTREACH-NOPROBE-PROBES')
+	@:killer('M-IMPORTREACH-NOPROBE-UNNAMED')
+	public function testAReportThatCompilesNothingKeepsTheFindingAndNamesItsRule(): Void {
+		#if (sys || nodejs)
+		final root: String = fixture();
+		final reach: ImportReach = new ImportReach(OracleProviders.of(new HaxeQueryPlugin()), [leaf(root, 'narrow.hxml')], false);
+		Assert.equals(1, reportedUnder(root, reach, MAIN).length, 'no build was asked, so none withholds the finding');
+		Assert.isFalse(reach.probed(), 'a report that compiles nothing probes no build');
+		Assert.same(['prefer-split-part'], reach.unchecked());
+		CliFixture.removeDir(root);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** `lint --no-oracle` builds its reach that way: a remedy finding in a file of a declared build compiles that build not once. */
+	@:pin('control')
+	@:killer('M-LINT-NOORACLE-REACH-PROBES')
+	public function testANoOracleReportCompilesNoBuildForARemedy(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('importreach_nooracle', [
+			{ name: 'leaf/narrow.hxml', source: '-cp src\n-main C\n${CompileCounter.MACRO}' },
+			{ name: 'leaf/src/C.hx', source: MAIN },
+			{ name: 'leaf/src/Counter.hx', source: CompileCounter.SOURCE },
+			{
+				name: 'leaf/apq.json',
+				source: '{"compilerOracle":[{"hxml":"narrow.hxml","dir":"."}],"resolutionRoots":["src","../shared"],'
+				+ '"rules":{"prefer-split-part":{"enabled":true,"textTools":"lib.Text"}}}'
+			},
+			{ name: 'shared/lib/Text.hx', source: TEXT }
+		]);
+		var exit: Int = -1;
+		final out: String = CliFixture.captureStdout(() -> exit = Cli.run([
+			'lint',
+			'$root/leaf/src/C.hx',
+			'--rule',
+			'prefer-split-part',
+			'--all',
+			'--no-oracle'
+		]));
+		Assert.equals(0, exit);
+		Assert.stringContains('(prefer-split-part)', out, 'the finding a narrow build would withhold is reported');
+		Assert.equals(0, CompileCounter.count('$root/leaf'), 'the run compiled no build');
 		CliFixture.removeDir(root);
 		#else
 		Assert.pass('non-sys target');

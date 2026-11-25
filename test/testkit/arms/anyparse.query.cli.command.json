@@ -1668,6 +1668,14 @@
 			"find": "single = true;",
 			"replace": "",
 			"note": "--single is parsed and dropped, so every equal occurrence is replaced"
+		},
+		{
+			"name": "M-LINT-NOORACLE-REACH-PROBES",
+			"type": "anyparse.query.cli.command.LintCommand",
+			"method": "runLint",
+			"find": ", !o.noOracle)",
+			"replace": ")",
+			"note": "the report's reach probes the declared builds under --no-oracle, so a run that compiles nothing spawns haxe for a remedy"
 		}
 	]
 }

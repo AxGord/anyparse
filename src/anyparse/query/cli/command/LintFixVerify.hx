@@ -357,10 +357,18 @@ final class LintFixVerify {
 	/**
 	 * `--no-oracle`: say plainly that the compiler was not asked, and never fail on
 	 * it. Always null (no fail) — declining to run a gate can only ever weaken a
-	 * verdict, so it must never be able to produce one.
+	 * verdict, so it must never be able to produce one. `unchecked` names the rules whose
+	 * findings were kept with no build asked whether it sees the module their remedy names.
 	 */
-	public static function oracleSkippedNote(oracles: Array<OracleConfig>): Null<Int> {
-		if (oracles.length > 0) CliIo.stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
+	public static function oracleSkippedNote(oracles: Array<OracleConfig>, unchecked: Array<String>): Null<Int> {
+		if (oracles.length == 0) return null;
+		CliIo.stderr('apq lint: compiler oracle SKIPPED (--no-oracle) — nullSafety trust unproved for this run\n');
+		if (unchecked.length > 0)
+			CliIo.stderr(
+				'apq lint: --no-oracle compiles no build, so the findings of '
+				+ unchecked.join(', ')
+				+ ' are kept without asking whether each build that compiles their file sees the module their remedy names\n'
+			);
 		return null;
 	}
 

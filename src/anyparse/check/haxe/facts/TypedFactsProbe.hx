@@ -1,12 +1,15 @@
 package anyparse.check.haxe.facts;
 
 import anyparse.check.LintConfig.OracleConfig;
+import anyparse.check.haxe.facts.TypedFactsCache;
 import anyparse.check.haxe.oracle.CompilerOracle;
 import anyparse.check.haxe.oracle.OracleCache;
 import anyparse.check.haxe.oracle.OracleCoverage;
 import anyparse.check.haxe.oracle.OracleDeclaration;
 import anyparse.check.haxe.oracle.OracleRunMemo;
 import anyparse.check.haxe.oracle.ReachDefinesProbe;
+import anyparse.core.ContentHash;
+import anyparse.core.ReachBuildsEngine;
 import anyparse.core.TempScratch;
 import anyparse.grammar.json.JsonText;
 import anyparse.macro.EmbeddedSource;
@@ -19,11 +22,12 @@ import anyparse.query.ReachLiveness.ReachConfiguration;
 import haxe.io.Path;
 
 /**
- * One configuration's facts compile: its probe directory, the file the hook writes, and the compile's arguments — and,
- * when the define probe's compile carries the hook (`ReachDefinesProbe.ProbeRider`), that probe's directory and the
- * rider it was given.
+ * One configuration's facts compile: its position among the run's configurations, its probe directory, the file the hook
+ * writes, and the compile's arguments — and, when the define probe's compile carries the hook
+ * (`ReachDefinesProbe.ProbeRider`), that probe's directory and the rider it was given.
  */
 typedef FactsCompile = {
+	var index: Int;
 	var oracle: OracleConfig;
 	var dir: String;
 	var out: String;
@@ -32,16 +36,24 @@ typedef FactsCompile = {
 	var rider: Null<ProbeRider>;
 }
 
+/** A configuration whose facts an earlier run compiled of the same input (`TypedFactsCache`), at its position among the run's. */
+typedef StoredCompile = { var index: Int; var oracle: OracleConfig; var stored: TypedFactsStored; }
+
+/** The key of each configuration of a run and the record an earlier run stored under it (`TypedFactsCache`), in order. */
+typedef StoreLookup = { var keys: Array<Null<TypedFactsKey>>; var held: Array<Null<TypedFactsStored>>; }
 /**
  * The facts compiles `TypedFactsProbe.start` left running, and what `finish` needs to read them: the configurations
  * dropped before any compile, the compiles in job order with the fingerprint each input had when it started (`inputs`,
- * in a run that remembers), and the baselines compiled after them in the same batch with theirs. `runs` is null on a
- * target that cannot spawn a compile.
+ * in a run that remembers) and, in a run that reads stored facts, the key each had (`keys`), the configurations answered
+ * from the store instead (`stored`), and the baselines compiled after them in the same batch with theirs. `runs` is null
+ * on a target that cannot spawn a compile.
  */
 typedef FactsProbe = {
 	var dropped: Array<{ name: String, reason: String }>;
 	var asked: Array<FactsCompile>;
 	var inputs: Array<Null<String>>;
+	var keys: Array<Null<TypedFactsKey>>;
+	var stored: Array<StoredCompile>;
 	var memo: Null<OracleRunMemo>;
 	var baselines: Array<OracleConfig>;
 	var before: Array<Null<String>>;
@@ -51,8 +63,10 @@ typedef FactsProbe = {
 /**
  * What the compiler typed, for every configured compiler oracle: one compile of the configuration's own hxml with the
  * `TypedFactsMacro` hook, which writes the typed tree's facts to a file once typing ended, read into one
- * `CompilerFacts` table. Asked per run and never kept across runs (`docs/decisions.md` records why a cache is unsound);
- * the compiles overlap (`ProcessSpawn.parallelism`). A configuration that cannot be asked, fails to compile, or leaves no
+ * `CompilerFacts` table. A `--fix` run compiles them itself; a report whose compiles carry the builds' probe answers a
+ * configuration whose input an earlier run compiled from what that run stored (`TypedFactsCache`), under the verdict
+ * cache's content fingerprint. The compiles overlap (`ProcessSpawn.parallelism`).
+ * A configuration that cannot be asked, fails to compile, or leaves no
  * complete file contributes no facts and is named in the table's `dropped`.
  *
  * ## The facts file
@@ -237,16 +251,28 @@ final class TypedFactsProbe {
 		#if (sys || nodejs)
 		final memo: Null<OracleRunMemo> = OracleRunMemo.of(oracles);
 		final carried: Bool = memo?.grammar != null;
-		for (i in 0...oracles.length) {
-			final prepared: Null<FactsCompile> = prepare(oracles[i], i, carried);
-			if (prepared != null)
-				asked.push(prepared)
-			else
+		final cache: StoreLookup = lookup(memo, oracles);
+		final keys: Array<Null<TypedFactsKey>> = [];
+		final stored: Array<StoredCompile> = [];
+		for (i => oracle in oracles) {
+			final held: Null<TypedFactsStored> = cache.held[i];
+			if (held != null) {
+				final record: TypedFactsStored = held;
+				stored.push({ index: i, oracle: oracle, stored: record });
+				continue;
+			}
+			final prepared: Null<FactsCompile> = prepare(oracle, i, carried);
+			if (prepared != null) {
+				asked.push(prepared);
+				keys.push(cache.keys[i]);
+			} else {
 				dropped.push({
-					name: OracleDeclaration.describeOracle(oracles[i]),
-					reason: oracles[i].unavailable ?? 'its probe directory could not be written'
+					name: OracleDeclaration.describeOracle(oracle),
+					reason: oracle.unavailable ?? 'its probe directory could not be written'
 				});
+			}
 		}
+		if (memo != null) fileStored(memo, stored);
 		final inputs: Array<Null<String>> = memo == null ? [] : memo.fingerprints([ for (a in asked) a.oracle ]);
 		final ahead: Array<Int> = memo == null
 			? []
@@ -259,6 +285,8 @@ final class TypedFactsProbe {
 			dropped: dropped,
 			asked: asked,
 			inputs: inputs,
+			keys: keys,
+			stored: stored,
 			memo: memo,
 			baselines: baselines,
 			before: [ for (k in ahead) inputs[k] ],
@@ -269,6 +297,8 @@ final class TypedFactsProbe {
 			dropped: dropped,
 			asked: asked,
 			inputs: [],
+			keys: [],
+			stored: [],
 			memo: null,
 			baselines: [],
 			before: [],
@@ -282,8 +312,9 @@ final class TypedFactsProbe {
 	 * its `dropped` and why; null only on a target that cannot spawn a compile. A compile that reported an error is dropped
 	 * even when it wrote a complete file: typing goes on past an error, and what it recovers with — an unbound monomorph, a
 	 * branch left out — reads exactly like a fact, so the table could not tell the two apart. The files are read and added
-	 * one at a time, so no two dumps are held at once. The baselines compiled beside, and what the define probe's compiles
-	 * answered (`fileRidden`), are filed in the run's memo.
+	 * one at a time, in the order of the configurations, so no two dumps are held at once; a configuration answered from the
+	 * store reads its dump there. The baselines compiled beside, and what the define probe's compiles answered (`fileRidden`),
+	 * are filed in the run's memo, and each dump a compile carrying the builds' probe wrote is stored for a later run.
 	 */
 	public static function finish(probe: FactsProbe): Null<CompilerFacts> {
 		#if (sys || nodejs)
@@ -296,21 +327,32 @@ final class TypedFactsProbe {
 			final after: Array<Null<String>> = memo.fingerprints(probe.baselines);
 			for (j in 0...probe.baselines.length) memo.file(probe.baselines[j], true, probe.before[j], after[j], runs[asked.length + j]);
 		}
-		final again: Array<Int> = memo == null ? [] : fileRidden(memo, probe, runs);
+		final readings: Map<Int, TypedFactsRidden> = [];
+		final again: Array<Int> = memo == null ? [] : fileRidden(memo, probe, runs, readings);
 		final redone: Array<ProcessRun> = compiledAgain(asked, again);
 		for (k => i in again) runs[i] = redone[k];
+		final after: Array<Null<TypedFactsKey>> = probe.keys.exists(k -> k != null) && readings.keys().hasNext()
+			? TypedFactsCache.keys(asked.map(a -> a.oracle), engine())
+			: [];
 		final facts: CompilerFacts = CompilerFacts.create(
 			file -> try sys.io.File.getContent(file) catch (exception: haxe.Exception) null, memoised(Sys.getCwd())
 		);
 		for (d in probe.dropped) facts.dropped.push(d);
+		final stored: Array<StoredCompile> = probe.stored;
+		var next: Int = 0;
 		for (i in 0...asked.length) {
+			while (next < stored.length && stored[next].index < asked[i].index) addStored(facts, stored[next++]);
 			final dump: Null<FactsDump> = answer(asked[i].oracle, runs[i], asked[i].out);
-			if (dump != null)
-				facts.add(dump)
-			else
+			final ridden: Null<TypedFactsRidden> = readings[i];
+			if (dump == null) {
 				facts.dropped.push({ name: OracleDeclaration.describeOracle(asked[i].oracle), reason: failureOf(runs[i]) });
+			} else {
+				facts.add(dump);
+				if (ridden != null && after.length > 0) TypedFactsCache.store(asked[i].oracle, probe.keys[i], after[i], dump.text, ridden);
+			}
 			discardAll(asked[i]);
 		}
+		while (next < stored.length) addStored(facts, stored[next++]);
 		return facts;
 		#else
 		return null;
@@ -358,7 +400,9 @@ final class TypedFactsProbe {
 	 * (`ReachDefinesProbe.readRidden`) — its `-v` typecheck and its build — and name the ones of several arms, whose facts
 	 * a plain compile answers again: the hook joins the last arm only, under defines the plain compile gives the first.
 	 */
-	private static function fileRidden(memo: OracleRunMemo, probe: FactsProbe, runs: Array<ProcessRun>): Array<Int> {
+	private static function fileRidden(
+		memo: OracleRunMemo, probe: FactsProbe, runs: Array<ProcessRun>, readings: Map<Int, TypedFactsRidden>
+	): Array<Int> {
 		final grammar: Null<GrammarPlugin> = memo.grammar;
 		final ridden: Array<Int> = [ for (i in 0...probe.asked.length) if (probe.asked[i].rider != null) i ];
 		if (grammar == null || ridden.length == 0) return [];
@@ -374,6 +418,9 @@ final class TypedFactsProbe {
 			final verbose: Null<ProcessRun> = reading.verbose;
 			final configuration: Null<ReachConfiguration> = reading.configuration;
 			if (verbose == null || configuration == null) continue;
+			final typecheck: ProcessRun = verbose;
+			final build: ReachConfiguration = configuration;
+			readings[i] = { verbose: typecheck, configuration: build };
 			memo.file(compile.oracle, true, probe.inputs[i], after[k], verbose);
 			memo.fileBuild(compile.oracle, probe.inputs[i], after[k], configuration);
 		}
@@ -401,6 +448,80 @@ final class TypedFactsProbe {
 		if (run.status == 0) return 'it wrote no facts file';
 		final first: String = StringTools.trim(run.err.split('\n').find(l -> StringTools.trim(l) != '' && l.indexOf('Warning') < 0) ?? '');
 		return 'the compile failed (status ${run.status})' + (first == '' ? '' : ': $first');
+	}
+
+	/**
+	 * A hash of the code a stored facts compile answers by — the hook's modules, the defines it adds, and the define probe's
+	 * engine its compile carries — so another engine's record misses.
+	 */
+	private static function engine(): String {
+		return ContentHash.md5(
+			MACRO_FILES.map(f -> '${f.path}\n${f.text}')
+				.concat(HOOK_DEFINES)
+				.concat([ReachBuildsEngine.digest()])
+				.join('\n')
+		);
+	}
+
+	/**
+	 * The key of each configuration of `oracles` and the record an earlier run stored under it, both null for every one in a run
+	 * that reads no stored facts: only a report (`OracleRunMemo.persisted`) whose compiles carry the builds' probe, since that
+	 * compile's `-v` typecheck is what says the compile read only what the key hashed.
+	 */
+	private static function lookup(memo: Null<OracleRunMemo>, oracles: Array<OracleConfig>): StoreLookup {
+		final keys: Array<Null<TypedFactsKey>> = memo != null && memo.grammar != null && memo.persisted
+			? TypedFactsCache.keys(oracles, engine())
+			: [ for (_ in oracles) null ];
+		return {
+			keys: keys,
+			held: [ for (i in 0...oracles.length) {
+				final key: Null<TypedFactsKey> = keys[i];
+				key == null ? null : TypedFactsCache.load(oracles[i], key);
+			} ]
+		};
+	}
+
+	/**
+	 * File in the run's `memo` what each compile of `stored` answered besides the facts — its `-v` typecheck and its build —
+	 * under the input each configuration reads now, the one its stored key was just read for: the baseline, the coverage and
+	 * the builds of that input then compile nothing either.
+	 */
+	private static function fileStored(memo: OracleRunMemo, stored: Array<StoredCompile>): Void {
+		if (stored.length == 0) return;
+		final now: Array<Null<String>> = memo.fingerprints(stored.map(s -> s.oracle));
+		for (k => s in stored) {
+			memo.file(s.oracle, true, now[k], now[k], s.stored.ridden.verbose);
+			memo.fileBuild(s.oracle, now[k], now[k], s.stored.ridden.configuration);
+		}
+	}
+
+	/**
+	 * Add to `facts` the dump `s` stored, or, when another run replaced the dump since this run read its record, compile that
+	 * configuration now: a replaced dump is a miss, never a lost configuration, so the cache cannot change a run's answer.
+	 * Its baseline and build were filed from the record; only a failed compile drops it.
+	 */
+	private static function addStored(facts: CompilerFacts, s: StoredCompile): Void {
+		#if (sys || nodejs)
+		final name: String = OracleDeclaration.describeOracle(s.oracle);
+		final text: Null<String> = TypedFactsCache.dump(s.oracle, s.stored);
+		if (text != null) {
+			final dump: String = text;
+			facts.add({ name: name, text: dump, file: memoised(s.oracle.dir ?? Sys.getCwd()) });
+			return;
+		}
+		final compile: Null<FactsCompile> = prepare(s.oracle, s.index, false);
+		if (compile == null) {
+			facts.dropped.push({ name: name, reason: s.oracle.unavailable ?? 'its probe directory could not be written' });
+			return;
+		}
+		final run: ProcessRun = ProcessSpawn.runAll([{ args: compile.args, cwd: s.oracle.dir }], BUFFER, 1)[0];
+		final dump: Null<FactsDump> = answer(s.oracle, run, compile.out);
+		if (dump == null)
+			facts.dropped.push({ name: name, reason: failureOf(run) });
+		else
+			facts.add(dump);
+		discardAll(compile);
+		#end
 	}
 
 	#if (sys || nodejs)
@@ -432,6 +553,7 @@ final class TypedFactsProbe {
 		} : null;
 		final reach: Null<{ dir: String, args: Array<String> }> = rider == null ? null : ReachDefinesProbe.prepare(oracle, index, rider);
 		return {
+			index: index,
 			oracle: oracle,
 			dir: dir,
 			out: out,

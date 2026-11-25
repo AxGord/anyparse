@@ -13,18 +13,31 @@ using Lambda;
  *
  * A build whose classpath is narrower than the lint scope (the replay program's `-cp test` alone) compiles the module but cannot
  * resolve a type under `src`. The compile that would say so is the net `--no-oracle` switches off, so this answers from each
- * build's compiled set, probed lazily and once per run. Run-scoped: the probes live in the instance, never in a static.
+ * build's compiled set, probed lazily and once per run. A report that compiles nothing (`probes` off) asks no build: it keeps
+ * each finding a build would have to vouch for and names its rule (`unchecked`). Run-scoped: the probes live in the instance,
+ * never in a static.
  */
 @:nullSafety(Strict)
 final class ImportReach {
 
 	private final _memo: OracleCoverageMemo = { probes: [], usable: null };
+	private final _unchecked: Array<String> = [];
 	private final _oracles: Array<OracleConfig>;
 	private final _provider: OracleProvider;
+	private final _probes: Bool;
 
-	public function new(provider: OracleProvider, oracles: Array<OracleConfig>) {
+	public function new(provider: OracleProvider, oracles: Array<OracleConfig>, probes: Bool = true) {
 		_provider = provider;
 		_oracles = oracles;
+		_probes = probes;
+	}
+
+	/**
+	 * The rules, each once in the order first met, of the findings `reportable` kept because no build was asked whether it sees
+	 * the module their remedy names (`probes` off).
+	 */
+	public inline function unchecked(): Array<String> {
+		return _unchecked.copy();
 	}
 
 	/** Whether a declared build has been compiled for a reach question yet: the probe is lazy, so a run that never asks has not. */
@@ -62,12 +75,16 @@ final class ImportReach {
 		return [ for (v in found) if (remedyResolves(v, sources[v.file] ?? '', plugin)) v ];
 	}
 
-	/** Whether every build that reads `v`'s file resolves its remedy module, or the file imports it itself, or the finding names none. */
+	/**
+	 * Whether every build that reads `v`'s file resolves its remedy module, or the file imports it itself, or the finding names none.
+	 * With `probes` off a module the file does not import is taken as resolved, and the finding's rule is named `unchecked`.
+	 */
 	private function remedyResolves(v: Violation, source: String, plugin: GrammarPlugin): Bool {
 		final module: Null<String> = v.remedy;
-		return module == null
-			|| importedPaths(source, plugin).contains(module)
-			|| _provider.probedOnce(_memo, _oracles).foreach(coverage -> coverage.unreached(v.file, [module]) == null);
+		if (module == null || importedPaths(source, plugin).contains(module)) return true;
+		if (_probes) return _provider.probedOnce(_memo, _oracles).foreach(coverage -> coverage.unreached(v.file, [module]) == null);
+		if (!_unchecked.contains(v.rule)) _unchecked.push(v.rule);
+		return true;
 	}
 
 	/** The import paths `edits` bring into `source` that it did not import before, in the grammar's own reading of an import. */

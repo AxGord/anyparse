@@ -6,7 +6,8 @@ import unit.cli.CliFixture;
  * `lint` reports a finding only where the builds that compile its file resolve the helper the finding advises.
  *
  * Driven through the command, since the property is its wiring: the declared builds are real, the helper lives under a root the
- * narrow build does not read, and the rules a withheld finding supersedes stay in the report.
+ * narrow build does not read, and the rules a withheld finding supersedes stay in the report. The report runs with the oracle:
+ * one under `--no-oracle` compiles no build and keeps such a finding unasked (`ImportReachTest`).
  */
 @:nullSafety(Strict)
 final class LintReachReportTest extends Test {
@@ -58,7 +59,7 @@ final class LintReachReportTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	/** The report of `lint --no-oracle --all` over a project whose one declared build is `hxml`. */
+	/** The report of `lint --all` over a project whose one declared build is `hxml`. */
 	private static function reportOver(hxml: String): String {
 		final root: String = CliFixture.writeTree('lintreach', [
 			{
@@ -70,7 +71,7 @@ final class LintReachReportTest extends Test {
 			{ name: 'leaf/src/C.hx', source: SOURCE },
 			{ name: 'shared/lib/Cmp.hx', source: CMP }
 		]);
-		final report: String = CliFixture.inDir(root, ['lint', 'leaf/src/C.hx', '--no-oracle', '--all']);
+		final report: String = CliFixture.inDir(root, ['lint', 'leaf/src/C.hx', '--all']);
 		CliFixture.removeDir(root);
 		return report;
 	}

@@ -1269,6 +1269,62 @@
 			"find": "if (handed && to != null && i == 0 && FactKinds.ARRAY_ELEMENT_FUNCTIONS.contains(to))",
 			"replace": "if (handed && to != null)",
 			"note": "the first argument of every declared function is an index read, so an array handed on reads as no escape"
+		},
+		{
+			"name": "M-FACTSCACHE-NEVER-LOADS",
+			"type": "anyparse.check.haxe.facts.TypedFactsProbe",
+			"method": "lookup",
+			"find": "key == null ? null : TypedFactsCache.load(oracles[i], key)",
+			"replace": "null",
+			"note": "a report never reads the stored facts, so a repeat over an unchanged input compiles every configuration again"
+		},
+		{
+			"name": "M-FACTSCACHE-RIDDEN-UNFILED",
+			"type": "anyparse.check.haxe.facts.TypedFactsProbe",
+			"method": "fileStored",
+			"find": "memo.fileBuild(s.oracle, now[k], now[k], s.stored.ridden.configuration);",
+			"replace": "",
+			"note": "a stored compile's build is not filed in the run, so the builds' probe compiles the input the store already answered"
+		},
+		{
+			"name": "M-FACTSCACHE-KEY-BLIND",
+			"type": "anyparse.check.haxe.facts.TypedFactsCache",
+			"method": "keysOf",
+			"find": "OracleDeclaration.oracleKey(oracle), scan.fingerprint]",
+			"replace": "OracleDeclaration.oracleKey(oracle)]",
+			"note": "the key leaves out the content fingerprint, so an edited source is answered with the facts of its old text"
+		},
+		{
+			"name": "M-FACTSCACHE-FIX-READS",
+			"type": "anyparse.check.haxe.facts.TypedFactsProbe",
+			"method": "lookup",
+			"find": "memo.persisted",
+			"replace": "true",
+			"note": "a --fix run reads and stores facts across runs, a verdict the fix gates must take from a compile of their own"
+		},
+		{
+			"name": "M-FACTSCACHE-STORES-MOVED",
+			"type": "anyparse.check.haxe.facts.TypedFactsCache",
+			"method": "store",
+			"find": "key.key == now.key && ",
+			"replace": "",
+			"note": "a compile whose input moved while it ran is stored under the key of neither state"
+		},
+		{
+			"name": "M-FACTSCACHE-STORES-UNHASHED",
+			"type": "anyparse.check.haxe.facts.TypedFactsCache",
+			"method": "store",
+			"find": " && OracleCache.readsHashed(key.base, OracleCoverage.parsedPaths(ridden.verbose.out), key.hashed)",
+			"replace": "",
+			"note": "a compile that parsed a file the key never hashed is stored, so an edit there is answered with stale facts"
+		},
+		{
+			"name": "M-FACTSCACHE-REPLACED-DROPS",
+			"type": "anyparse.check.haxe.facts.TypedFactsProbe",
+			"method": "addStored",
+			"find": "final compile: Null<FactsCompile> = prepare(s.oracle, s.index, false);",
+			"replace": "final compile: Null<FactsCompile> = null;",
+			"note": "a stored dump another run replaced drops its configuration instead of compiling it, so the cache changes the run's facts"
 		}
 	]
 }

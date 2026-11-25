@@ -1296,8 +1296,8 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "395e31b04411ced0",
-				"err": "f7f1028e6b19c0a9",
+				"out": "f9a3264e11c6eb29",
+				"err": "663b8c07c5f35a25",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [
 					false,
@@ -1330,8 +1330,8 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "e3b0c44298fc1c14",
-				"err": "e9c853be52da8a63",
+				"out": "0a4255ab5aeb2dbb",
+				"err": "c69ae0557934830f",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [
 					true,

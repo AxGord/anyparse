@@ -17653,6 +17653,22 @@
 			"find": "if (!name.fastCodeAt(i).isIdentChar()) return false;",
 			"replace": "continue;",
 			"note": "a name with a non-identifier character is routed to the index, which cannot hold it"
+		},
+		{
+			"name": "M-IMPORTREACH-NOPROBE-PROBES",
+			"type": "anyparse.query.ImportReach",
+			"method": "remedyResolves",
+			"find": "if (_probes) return",
+			"replace": "if (true) return",
+			"note": "a reach that compiles nothing probes the builds anyway, so a --no-oracle report spawns a compile per build"
+		},
+		{
+			"name": "M-IMPORTREACH-NOPROBE-UNNAMED",
+			"type": "anyparse.query.ImportReach",
+			"method": "remedyResolves",
+			"find": "if (!_unchecked.contains(v.rule)) _unchecked.push(v.rule);",
+			"replace": "",
+			"note": "a finding kept unasked names no rule, so the --no-oracle note cannot say which findings went unchecked"
 		}
 	]
 }
