@@ -21,6 +21,7 @@ private typedef RegistriesFollowed = {
 	final writes: Array<{ path: String, content: String }>;
 	final count: Int;
 	final notes: Array<String>;
+	final reaimed: Array<String>;
 }
 
 /**
@@ -91,6 +92,7 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 		final followed: RegistriesFollowed = followDocuments(memberDocuments(declaration), modules, plugin, null);
 		if (write) CliIo.writeFiles(followed.writes);
 		for (note in followed.notes) CliIo.stderr('apq registry-follow: $note\n');
+		for (line in followed.reaimed) CliIo.stderr('apq registry-follow: $line\n');
 		final tail: String = write ? '' : ' (not written; pass --write)';
 		CliIo.sysPrint('registry-follow: ${followed.count} fragment(s) in ${followed.writes.length} file(s)$tail\n');
 		return followed.notes.length == 0 ? ExitCode.EXIT_OK : ExitCode.EXIT_RUNTIME;
@@ -170,6 +172,7 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 		final followed: RegistriesFollowed = followDocuments(reached, modules, plugin, exists);
 		CliIo.writeFiles(followed.writes);
 		for (note in followed.notes) CliIo.stderr('apq $op: registry-follow: $note\n');
+		for (line in followed.reaimed) CliIo.stderr('apq $op: registry-follow: $line\n');
 		if (followed.count > 0)
 			CliIo.stderr('apq $op: registry-follow: ${followed.count} fragment(s) in ${followed.writes.length} file(s)\n');
 	}
@@ -247,15 +250,22 @@ final class RegistryFollowCommand implements CliCommand implements LanguageFree 
 	): RegistriesFollowed {
 		final writes: Array<{ path: String, content: String }> = [];
 		final notes: Array<String> = [];
+		final reaimed: Array<String> = [];
 		var count: Int = 0;
 		for (d in documents) {
 			final followed: RegistryFollow = RegistryFragmentFollow.follow(d.members, d.json, modules, plugin, exists);
 			for (note in followed.notes) notes.push(note);
+			for (line in followed.reaimed) reaimed.push(line);
 			count += followed.count;
 			final text: Null<String> = followed.text;
 			if (text != null) writes.push({ path: d.path, content: text });
 		}
-		return { writes: writes, count: count, notes: notes };
+		return {
+			writes: writes,
+			count: count,
+			notes: notes,
+			reaimed: reaimed
+		};
 	}
 
 }

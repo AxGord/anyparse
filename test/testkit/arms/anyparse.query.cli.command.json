@@ -4,6 +4,22 @@
 	],
 	"arms": [
 		{
+			"name": "M-FOLLOW-WRITE-SAYS-REAIM",
+			"type": "anyparse.query.cli.command.RegistryFollowCommand",
+			"method": "followWrite",
+			"find": "for (line in followed.reaimed) CliIo.stderr('apq $op: registry-follow: $line\\n');",
+			"replace": "",
+			"note": "a write op that re-aimed an arm's cut no longer says so on stderr, so the arm's replace changes from empty to false unannounced"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-RUN-SAYS-REAIM",
+			"type": "anyparse.query.cli.command.RegistryFollowCommand",
+			"method": "run",
+			"find": "for (line in followed.reaimed) CliIo.stderr('apq registry-follow: $line\\n');",
+			"replace": "",
+			"note": "the registry-follow command that re-aimed an arm's cut no longer says so on stderr"
+		},
+		{
 			"name": "M-LINT-FIX-CENSUS-UNGATED",
 			"type": "anyparse.query.cli.command.LintFixLedger",
 			"method": "ledgerLines",

@@ -27,7 +27,7 @@ typedef RewrittenModule = {
 private typedef EditedParts = { final find: String; final replace: String; }
 
 /** A find and its paired replace in the new spelling. */
-private typedef Carried = { final find: String; final replace: Null<String>; }
+private typedef Carried = { final find: String; final replace: Null<String>; final reaimed: Bool; }
 
 /** One member across the rewrite: its text after it, the node holding it, and the alignments of the text before it. */
 private typedef Rewrite = {
@@ -61,13 +61,19 @@ final class RegistryFragmentFollow {
 	): RegistryFollow {
 		final edits: Array<RegistryEdit> = [];
 		final notes: Array<String> = [];
+		final reaimed: Array<String> = [];
 		for (record in TypePathRegistries.memberRecords(members, json)) {
 			final module: Null<RewrittenModule> = modules.find(m -> m.path == record.type);
 			final member: Null<StringSlot> = record.member;
 			if (module != null && member != null && record.finds.length > 0)
-				followRecord(record, member.value, module, plugin, exists, edits, notes);
+				followRecord(record, member.value, module, plugin, exists, edits, notes, reaimed);
 		}
-		return { text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits), count: edits.length, notes: notes };
+		return {
+			text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits),
+			count: edits.length,
+			notes: notes,
+			reaimed: reaimed
+		};
 	}
 
 	/** Whether the carried spelling would turn an arm that cut something into one whose find equals its replace. */
@@ -77,7 +83,7 @@ final class RegistryFragmentFollow {
 
 	private static function followRecord(
 		record: MemberRecord, member: String, module: RewrittenModule, plugin: GrammarPlugin, exists: Null<String -> Bool>,
-		edits: Array<RegistryEdit>, notes: Array<String>
+		edits: Array<RegistryEdit>, notes: Array<String>, reaimed: Array<String>
 	): Void {
 		final before: Array<QueryNode> = MemberRegistryRename.selected(module.tree, record.kind, member, plugin);
 		final after: Array<QueryNode> = MemberRegistryRename.selected(module.newTree, record.kind, member, plugin);
@@ -127,15 +133,7 @@ final class RegistryFragmentFollow {
 					notes.push('arm ${record.name}: no re-spelling of its cut applies to the rewritten source — re-aim it');
 					continue;
 				}
-				final newReplace: Null<String> = carried.replace;
-				// An arm whose find equals its replace cuts nothing and breaks the build; naming it beats writing it.
-				if (cutsNothing(find.value, replace?.value, carried)) {
-					notes.push('arm ${record.name}: following the rewrite would leave its find equal to its replace — re-aim it by hand');
-					continue;
-				}
-				if (carried.find != find.value) edits.push(TypePathRegistries.respell(find, carried.find));
-				if (replace != null && newReplace != null && newReplace != replace.value)
-					edits.push(TypePathRegistries.respell(replace, newReplace));
+				emit(record, find, replace, carried, edits, notes, reaimed);
 			}
 	}
 
@@ -267,7 +265,7 @@ final class RegistryFragmentFollow {
 			);
 			final lead: Int = spelled.length - newFind.length;
 			if (located == null || (located.from != rewrite.at + newFrom && located.from != rewrite.at + newFrom + lead)) continue;
-			if (replace == null) return { find: newFind, replace: null };
+			if (replace == null) return { find: newFind, replace: null, reaimed: false };
 			if (!staysOneNode(
 				rewrite, new Span(rewrite.oldAt + from + (dedent ? fit[0] : 0), rewrite.oldAt + from + written.length), located
 			))
@@ -275,10 +273,10 @@ final class RegistryFragmentFollow {
 			for (built in replacesOf(find, replace, from, fit, written.length, newFrom, newTo, rewrite)) {
 				final candidate: String = dedent ? built.ltrim() : built;
 				if (splices(rewrite.module.newSource, located, candidate, rewrite.plugin) && mirrorsEdit(find, replace, newFind, candidate))
-					return { find: newFind, replace: candidate };
+					return { find: newFind, replace: candidate, reaimed: false };
 			}
 		}
-		return null;
+		return replace == null ? null : guardReaim(rewrite, new Span(rewrite.oldAt + from, rewrite.oldAt + from + written.length), replace);
 	}
 
 	/**
@@ -467,6 +465,48 @@ final class RegistryFragmentFollow {
 			find: blanks.replace(find.substring(prefix, find.length - suffix), ''),
 			replace: blanks.replace(replace.substring(prefix, replace.length - suffix), '')
 		};
+	}
+
+	/**
+	 * A cut that removes a guard statement `if (C) continue;` whose loop a rewrite folded into a comprehension guard `if (!C)`:
+	 * the guard's condition is what survives, and replacing it with `false` keeps the arm's meaning, the guard then never refusing.
+	 * The statement is read from the tree, never from its text.
+	 */
+	private static function guardReaim(rewrite: Rewrite, cut: Span, replace: String): Null<Carried> {
+		if (replace.trim() != '') return null;
+		final guard: Null<QueryNode> = TreePath.withSpan(rewrite.module.tree, cut, 'IfStmt');
+		if (guard == null || guard.children.length != 2 || guard.children[1].kind != 'ContinueStmt') return null;
+		final span: Null<Span> = guard.children[0].span;
+		if (span == null) return null;
+		final condition: String = rewrite.module.source.substring(span.from, span.to);
+		final located: Null<Span> = Patch.cutSpan(
+			rewrite.module.newSource, rewrite.module.newTree, rewrite.target, condition, rewrite.plugin
+		);
+		return located != null && splices(rewrite.module.newSource, located, 'false', rewrite.plugin)
+			? { find: condition, replace: 'false', reaimed: true }
+			: null;
+	}
+
+	/**
+	 * Write the edits that carry one fragment pair. An arm whose find equals its replace cuts nothing and breaks the build, so it is
+	 * named; a re-aimed cut changes what the arm says, not only its spelling, so it is said in `reaimed`, which is not a decline.
+	 */
+	private static function emit(
+		record: MemberRecord, find: StringSlot, replace: Null<StringSlot>, carried: Carried, edits: Array<RegistryEdit>,
+		notes: Array<String>, reaimed: Array<String>
+	): Void {
+		if (cutsNothing(find.value, replace?.value, carried)) {
+			notes.push('arm ${record.name}: following the rewrite would leave its find equal to its replace — re-aim it by hand');
+			return;
+		}
+		final newReplace: Null<String> = carried.replace;
+		if (carried.find != find.value) edits.push(TypePathRegistries.respell(find, carried.find));
+		if (replace != null && newReplace != null && newReplace != replace.value)
+			edits.push(TypePathRegistries.respell(replace, newReplace));
+		if (carried.reaimed)
+			reaimed.push(
+				'arm ${record.name}: re-aimed its cut to the condition of the guard it removed (find ${carried.find}, replace $newReplace)'
+			);
 	}
 
 }

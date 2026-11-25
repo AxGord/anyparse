@@ -586,6 +586,27 @@ class RegistryFollowWriteCliTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-FOLLOW-WRITE-SAYS-REAIM')
+	public function testAReAimedCutIsSaidOnStderrAndTheWriteStands(): Void {
+		#if nodejs
+		final body: String =
+			'final out = [];\n\t\tfor (d in ds) {\n\t\t\tif (refuses(d, x)) continue;\n\t\t\tout.push(d);\n\t\t}\n\t\treturn out;';
+		final root: String = project('apq_follow_reaim', body, '"find":"if (refuses(d, x)) continue;","replace":""', []);
+		final module: String = '$root/src/p/C.hx';
+		final before: String = File.getContent(module);
+		final err: String = CliFixture.captureStderr(() -> RegistryFollowCommand.followWrite('fmt', [
+			{ path: module, before: before, after: before.replace(body, 'return [ for (d in ds) if (!refuses(d, x)) d ];') }
+		], CliArgs.pickPluginFor('haxe', module)));
+		final arms: String = File.getContent('$root/arms/p.json');
+		CliFixture.removeDir(root);
+		Assert.isTrue(err.indexOf('apq fmt: registry-follow: arm A: re-aimed') >= 0, err);
+		Assert.isTrue(arms.indexOf('"find":"refuses(d, x)","replace":"false"') >= 0, arms);
+		#else
+		Assert.pass('the scratch project needs the nodejs target');
+		#end
+	}
+
 	#if nodejs
 	/** A project whose `p.C.f` holds `body` and whose arm `A` on it cuts `cut`; `oracle` names `build.hxml` as its compiler oracle. */
 	private static function project(

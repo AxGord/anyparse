@@ -16,6 +16,11 @@ class RegistryFollowCommandCliTest extends Test {
 		'package p;\n\nclass C {\n\tfunction f(a: Bool, b: Bool, c: Bool): Bool {\n\t\treturn a && b || c;\n\t}\n}\n';
 	private static final AFTER: String =
 		'package p;\n\nclass C {\n\tfunction f(a: Bool, b: Bool, c: Bool): Bool {\n\t\treturn (a && b) || c;\n\t}\n}\n';
+	private static final GUARD_BEFORE: String = 'package p;\n\nclass C {\n\tfunction f(ds: Array<Int>, x: Bool): Array<Int> {\n'
+		+ '\t\tfinal out: Array<Int> = [];\n\t\tfor (d in ds) {\n\t\t\tif (refuses(d, x)) continue;\n'
+		+ '\t\t\tout.push(d);\n\t\t}\n\t\treturn out;\n\t}\n}\n';
+	private static final GUARD_AFTER: String = 'package p;\n\nclass C {\n\tfunction f(ds: Array<Int>, x: Bool): Array<Int> {\n'
+		+ '\t\treturn [ for (d in ds) if (!refuses(d, x)) d ];\n\t}\n}\n';
 
 	public function testWriteCarriesAFragmentAndExitsZero(): Void {
 		#if nodejs
@@ -58,17 +63,36 @@ class RegistryFollowCommandCliTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-REGISTRY-FOLLOW-RUN-SAYS-REAIM')
+	public function testAReAimedCutIsSaidOnStderrAndTheExitStaysZero(): Void {
+		#if nodejs
+		final root: String = repo(
+			'apq_registry_follow_reaim', '"find":"if (refuses(d, x)) continue;","replace":""', GUARD_BEFORE, GUARD_AFTER
+		);
+		var run: Null<CliRun> = null;
+		final err: String = CliFixture.captureStderr(() -> run = CliFixture.runIn(root, ['registry-follow', 'HEAD', '--write']));
+		final arms: String = File.getContent('$root/arms/p.json');
+		CliFixture.removeDir(root);
+		Assert.equals(0, run?.code);
+		Assert.isTrue(err.indexOf('apq registry-follow: arm A: re-aimed') >= 0, err);
+		Assert.isTrue(arms.indexOf('"find":"refuses(d, x)","replace":"false"') >= 0, arms);
+		#else
+		Assert.pass('a git child process needs the nodejs target');
+		#end
+	}
+
 	#if nodejs
-	private static function repo(name: String, cut: String): String {
+	private static function repo(name: String, cut: String, ?before: Null<String>, ?after: Null<String>): String {
 		final root: String = CliFixture.writeTree(name, [
 			{ name: 'apq.json', source: CONFIG },
-			{ name: 'src/p/C.hx', source: BEFORE },
+			{ name: 'src/p/C.hx', source: before ?? BEFORE },
 			{ name: 'arms/p.json', source: '{"arms":[{"name":"A","type":"p.C","method":"f",$cut}]}\n' }
 		]);
 		CliFixture.git(root, ['init', '-q']);
 		CliFixture.git(root, ['add', '-A']);
 		CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);
-		File.saveContent('$root/src/p/C.hx', AFTER);
+		File.saveContent('$root/src/p/C.hx', after ?? AFTER);
 		return root;
 	}
 	#end

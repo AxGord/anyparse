@@ -12,6 +12,30 @@
 			"note": "a replace re-spelled without the arguments the rewrite added to its find is written, so the arm cuts a call that no longer exists"
 		},
 		{
+			"name": "M-REGISTRY-FOLLOW-GUARD-REAIM-EMPTY-REPLACE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "guardReaim",
+			"find": "if (replace.trim() != '') return null;",
+			"replace": "",
+			"note": "a cut whose replace is text, not a removal, is re-aimed too, so an arm that swaps the guard for another statement is rewritten into a different mutation"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-GUARD-REAIM-BARE-CONTINUE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "guardReaim",
+			"find": "guard == null || guard.children.length != 2 || guard.children[1].kind != 'ContinueStmt'",
+			"replace": "guard == null",
+			"note": "a break guard or an if with an else is re-aimed like a bare continue guard, though setting its condition false is not the same as removing the statement"
+		},
+		{
+			"name": "M-REGISTRY-FOLLOW-GUARD-REAIM-FALSE",
+			"type": "anyparse.query.RegistryFragmentFollow",
+			"method": "guardReaim",
+			"find": "? { find: condition, replace: 'false', reaimed: true }",
+			"replace": "? { find: condition, replace: '', reaimed: true }",
+			"note": "a guard statement folded into a comprehension is re-aimed at its condition with an empty replace, so the arm cuts the condition out of `if (!C)` instead of keeping the guard open"
+		},
+		{
 			"name": "M-ADD-AFTER-ANCHOR-COMMENT",
 			"type": "anyparse.query.AddElement",
 			"method": "addElement",

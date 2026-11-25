@@ -25,8 +25,13 @@ private typedef RenamedModule = {
 /** A performed member rename as a registry reads it. */
 typedef MemberRename = { final oldName: String; final newName: String; final modules: Array<RenamedModule>; }
 
-/** A registry document after a rename: its new text (null when no record changed), the values changed, and the records named. */
-typedef RegistryFollow = { final text: Null<String>; final count: Int; final notes: Array<String>; }
+/** A registry document after a rewrite: its new text (null when none changed), the values changed, the records named, the arms re-aimed. */
+typedef RegistryFollow = {
+	final text: Null<String>;
+	final count: Int;
+	final notes: Array<String>;
+	final reaimed: Array<String>;
+}
 
 /**
  * The one answer to "which values of a declared member registry follow a member rename": what the op's own edit set
@@ -84,7 +89,8 @@ final class MemberRegistryRename {
 			count: 0,
 			notes: [
 				'the grammar reads no word "${rename.oldName}", so no record follows its rename — re-aim them'
-			]
+			],
+			reaimed: []
 		};
 		for (record in records) {
 			for (held in record.opaque) if (tokensOf(held.slot.value, rename.oldName, plugin).length > 0)
@@ -98,7 +104,12 @@ final class MemberRegistryRename {
 			else if (member != null)
 				followRecord(record, member, module, rename, plugin, edits, notes);
 		}
-		return { text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits), count: edits.length, notes: notes };
+		return {
+			text: edits.length == 0 ? null : CanonicalEdit.applyEdits(json, edits),
+			count: edits.length,
+			notes: notes,
+			reaimed: []
+		};
 	}
 
 	/** Every node the applier's address `<kind>:<name>` selects in `tree`; none for an address that does not parse. */
