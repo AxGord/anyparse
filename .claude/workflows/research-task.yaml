@@ -300,7 +300,7 @@ states:
     env:
       SLICE: "{{context.slice}}"
       WT: "{{context.wt}}"
-      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      QUEUE: "{{context.queue_file}}"
     timeout: 120000
     on_success: present
     on_error: close_failed
@@ -339,7 +339,7 @@ states:
     command: &mark_failed |-
       "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --failed "$SLICE" --note "${NOTE:-research line blocked}"
     env:
-      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      QUEUE: "{{context.queue_file}}"
       SLICE: "{{context.slice}}"
       NOTE: "{{context.fail_note}}"
     timeout: 60000
@@ -350,7 +350,7 @@ states:
     type: exec
     command: *mark_failed
     env:
-      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+      QUEUE: "{{context.queue_file}}"
       SLICE: "{{context.slice}}"
       NOTE: "{{context.fail_note}}"
     timeout: 60000
