@@ -82,6 +82,20 @@ typedef Tail = Base & {x:Int}
 typedef Callback = (a:Int) -> Void;
 ```
 
+## Braces that `remove` keeps: `whitespace.bracesConfig.singleStatementBraces`
+
+`remove` drops the braces around a single-statement body, but never where the bare form reads as a dangling-else puzzle: a bare `if` in the then-position of an `if`, and a bare `for` / `while` there when an `else` follows it. Those gain braces, and the `else` gains its own so the pair stays symmetric. There is no separate key: it is part of `remove`. `symmetric` only repairs a pair with one braced branch, so it leaves two bare branches alone, and `keep` changes nothing.
+
+```haxe
+// "singleStatementBraces": "remove"
+if (a) {
+	for (x in xs)
+		g(x);
+} else {
+	h();
+}
+```
+
 ## Padding inside square brackets: `whitespace.bracketConfig`
 
 Four kinds of bracket, each its own `openingPolicy` / `closingPolicy` pair (`none`, `before`, `after`, `onlyBefore`, `onlyAfter`, `around`): `accessBrackets` (index access, `a[i]`), `arrayLiteralBrackets` (`[1, 2]`), `mapLiteralBrackets` (`[k => v]`) and `comprehensionBrackets` (`[for (x in xs) x]`). Every kind is tight by default, and a kind left out stays tight.

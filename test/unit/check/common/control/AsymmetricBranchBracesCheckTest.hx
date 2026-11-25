@@ -417,6 +417,17 @@ class AsymmetricBranchBracesCheckTest extends Test {
 		Assert.equals(0, violations(wrap('e = macro try {\n\t\t\tp();\n\t\t\tq();\n\t\t} catch (err:Dynamic)\n\t\t\t$$b;')).length);
 	}
 
+	/**
+	 * A bare loop then branch before a bare `else` is symmetric, and is not a finding: `fmt` under `"symmetric"` leaves
+	 * it bare, and under `"remove"` (`SingleStmtBraces.bracesRequiredInThen`) braces BOTH branches, so neither writer
+	 * output is one this rule flags.
+	 */
+	@:pin('guard')
+	public function testABareLoopBeforeABareElseIsNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a)\n\t\t\tfor (c in s)\n\t\t\t\tp();\n\t\telse\n\t\t\tq();')).length);
+		Assert.equals(0, violations(wrap('if (a) {\n\t\t\tfor (c in s)\n\t\t\t\tp();\n\t\t} else {\n\t\t\tq();\n\t\t}')).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new AsymmetricBranchBraces(), src);
 	}

@@ -23,7 +23,7 @@
 			"name": "M-WRAP-SEPAFTER-ALWAYS",
 			"type": "anyparse.format.SingleStmtBraces",
 			"method": "wrapInBlock",
-			"find": "sepAfter: raise == null && !innerSelfTerminates(value),",
+			"find": "sepAfter: raise == null && !(innerSelfTerminates(value) && spineTerminated(value)),",
 			"replace": "sepAfter: true,",
 			"note": "a synthesized block records a source `;` after its statement, so the block writer appends one after the `}` of an `if` it braced"
 		},
@@ -243,10 +243,10 @@
 		{
 			"name": "M-SSB-GATE8-ANY-POSITION",
 			"type": "anyparse.format.SingleStmtBraces",
-			"method": "deBracedElem",
-			"find": "\telse if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt')",
-			"replace": "\telse if (Type.enumConstructor(cast inner) == 'IfStmt')",
-			"note": "gate 8's keep stops being restricted to then-position, so an else body whose single statement is an `if` no longer collapses into an `else if`"
+			"method": "bracesRequiredInThen",
+			"find": "\tif (!isIfThenBody) return false;",
+			"replace": "",
+			"note": "gate 8's required braces stop being restricted to then-position, so an else body whose single statement is an `if` no longer collapses into an `else if`"
 		},
 		{
 			"name": "M-GAP-DOC-PRECEDENCE",
@@ -765,6 +765,46 @@
 			"find": "leadingComments.length == 0 && ",
 			"replace": "",
 			"note": "a member with a comment of its own (a block comment, the next heading) is glued into the group"
+		},
+		{
+			"name": "M-SSB-LOOP-THEN-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "bracesRequiredInThen",
+			"find": "(elseFollows && ELSE_GUARDED_LOOP_CTORS.contains(ctor))",
+			"replace": "false",
+			"note": "a bare loop in then-position before an else stays bare under remove"
+		},
+		{
+			"name": "M-SSB-LOOP-THEN-KEEP-OFF",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "deBracedElem",
+			"find": "\telse if (bracesRequiredInThen(cast inner, isIfThenBody, elseFollows))",
+			"replace": "\telse if (false)",
+			"note": "a braced loop before an else is de-braced again, so fmt undoes its own repair on the next pass"
+		},
+		{
+			"name": "M-SSB-LOOP-THEN-WITHOUT-ELSE",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "bracesRequiredInThen",
+			"find": "(elseFollows && ELSE_GUARDED_LOOP_CTORS",
+			"replace": "(ELSE_GUARDED_LOOP_CTORS",
+			"note": "a then-position loop gains braces with no else after it"
+		},
+		{
+			"name": "M-SSB-LOOP-THEN-SYMMETRIC",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "unwrapStmt",
+			"find": "if (drop && bracesRequiredInThen(block, isIfThenBody, elseFollows))",
+			"replace": "if (bracesRequiredInThen(block, isIfThenBody, elseFollows))",
+			"note": "gate 8 runs under symmetric too, bracing two symmetric bare branches"
+		},
+		{
+			"name": "M-SSB-WRAP-SPINE-TERMINATOR",
+			"type": "anyparse.format.SingleStmtBraces",
+			"method": "wrapInBlock",
+			"find": "!(innerSelfTerminates(value) && spineTerminated(value))",
+			"replace": "!innerSelfTerminates(value)",
+			"note": "a block wrapped around a loop or an if/else whose last statement the else closed writes no `;`, so the braced form does not compile"
 		}
 	]
 }

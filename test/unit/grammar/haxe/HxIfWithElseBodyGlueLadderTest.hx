@@ -30,10 +30,10 @@ final class HxIfWithElseBodyGlueLadderTest extends Test {
 	private static final CALL_LADDER: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n'
 		+ "\t\t\tattachCollectedLabel(defaultPreviewSurface,\n\t\t\t\t'some long label text here', anotherArgument, yetAnother);\n"
 		+ "\t\telse\n\t\t\tlog('long message that fits after else');\n\t}\n}";
-	private static final FOR_SOURCE: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n\t\t\tfor (x in xs) {\n'
-		+ "\t\t\t\tlog(x);\n\t\t\t}\n\t\telse\n\t\t\tlog('long message that fits after else');\n\t}\n}";
-	private static final FOR_LADDER: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n\t\t\tfor (x in xs)\n'
-		+ "\t\t\t\tlog(x);\n\t\telse\n\t\t\tlog('long message that fits after else');\n\t}\n}";
+	private static final TRY_SOURCE: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n\t\t\ttry {\n\t\t\t\tlog(x);\n'
+		+ "\t\t\t} catch (e:Dynamic) {\n\t\t\t\tlog(e);\n\t\t\t}\n\t\telse\n\t\t\tlog('long message that fits after else');\n\t}\n}";
+	private static final TRY_LADDER: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n\t\t\ttry\n\t\t\t\tlog(x)\n'
+		+ "\t\t\tcatch (e:Dynamic)\n\t\t\t\tlog(e);\n\t\telse\n\t\t\tlog('long message that fits after else');\n\t}\n}";
 	private static final CHAIN_HEAD_SOURCE: String = 'class C {\n\tfunction f() {\n\t\tif (retryCount == 0)\n'
 		+ "\t\t\tattachCollectedLabel(defaultPreviewSurface, 'some long label text here', anotherArgument, yetAnother);\n"
 		+ "\t\telse if (retryCount == 1)\n\t\t\tlog('x');\n\t\telse\n\t\t\tlog('long message that fits after else');\n\t}\n}";
@@ -64,8 +64,8 @@ final class HxIfWithElseBodyGlueLadderTest extends Test {
 	private static final NESTED_LADDER: String = 'class C {\n\tfunction f() {\n\t\tif (a)\n'
 		+ '\t\t\tattachCollectedLabel(defaultPreviewSurface,\n'
 		+ '\t\t\t\t\'some long label text here\', anotherArgument, yetAnother);\n\t\telse\n'
-		+ '\t\t\tfor (i in xs)\n\t\t\t\tif (b)\n\t\t\t\t\ty();\n\t\t\t\telse\n\t\t\t\t\tz();\n\t\tif (a)\n\t\t\tfor ('
-		+ 'i in xs)\n\t\t\t\tif (b)\n\t\t\t\t\ty();\n\t\t\t\telse\n\t\t\t\t\tz();\n\t\telse\n\t\t\tw();\n\t}\n}';
+		+ '\t\t\tfor (i in xs)\n\t\t\t\tif (b)\n\t\t\t\t\ty();\n\t\t\t\telse\n\t\t\t\t\tz();\n\t\tif (a) {\n\t\t\tfor (i in xs)\n'
+		+ '\t\t\t\tif (b)\n\t\t\t\t\ty();\n\t\t\t\telse\n\t\t\t\t\tz();\n\t\t} else {\n\t\t\tw();\n\t\t}\n\t}\n}';
 
 	public function new(): Void {
 		super();
@@ -78,11 +78,11 @@ final class HxIfWithElseBodyGlueLadderTest extends Test {
 		Assert.equals(CALL_LADDER, triviaWrite(CALL_SOURCE));
 	}
 
-	/** A `for` whose own body goes below it takes the ladder too. */
+	/** A `try` whose bodies go below it takes the ladder too (a loop there is braced before an `else`, `SingleStmtBraces` gate 8). */
 	@:pin('control')
 	@:killer('M-IF-ELSE-LADDER-OFF')
-	public function testForBodyLaddersTheChain(): Void {
-		Assert.equals(FOR_LADDER, triviaWrite(FOR_SOURCE));
+	public function testTryBodyLaddersTheChain(): Void {
+		Assert.equals(TRY_LADDER, triviaWrite(TRY_SOURCE));
 	}
 
 	/** An else-if chain whose head branch is multi-line goes as a ladder in every branch. */
@@ -120,7 +120,7 @@ final class HxIfWithElseBodyGlueLadderTest extends Test {
 	public function testLaddersAreIdempotent(): Void {
 		for (ladder in [
 			CALL_LADDER,
-			FOR_LADDER,
+			TRY_LADDER,
 			CHAIN_HEAD_LADDER,
 			CHAIN_MIDDLE_LADDER,
 			ONE_LINER_LADDER,

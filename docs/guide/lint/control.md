@@ -16,6 +16,8 @@ takes the same direction: the bare branches gain braces.
 
 Two bare branches are symmetric too — this is not a "brace everything" rule. An `else if` and an
 `else switch` are chain links, not branches, and are never braced. A chain is reported once.
+A bare loop then branch before a bare `else` is symmetric as well: `fmt` under
+`singleStatementBraces: "remove"` braces both, and `"symmetric"` leaves both bare.
 
 A `try` / `catch` is a group the same way, in statement and in value position: its try body and
 every catch body braced, or all of them bare. A bare expression body takes its `;` inside the new

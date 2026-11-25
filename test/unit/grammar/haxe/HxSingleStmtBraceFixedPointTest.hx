@@ -19,7 +19,7 @@ final class HxSingleStmtBraceFixedPointTest extends Test {
 	@:pin('control')
 	@:killer('M-SSB-ELSE-IF-LINK-NONE')
 	public function testAnElseBlockHoldingAnIfJoinsTheChain(): Void {
-		final statement: String = 'if (c) { for (x in y) { p(); q(); } } else { if (d) { e(); f(); } else { g(); h(); } }';
+		final statement: String = 'if (c) { p(); } else { if (d) { e(); f(); } else { g(); h(); } }';
 		settles(statement);
 		// The chain keeps braces through the else block's `if`, so no branch of it loses its own.
 		Assert.isTrue(

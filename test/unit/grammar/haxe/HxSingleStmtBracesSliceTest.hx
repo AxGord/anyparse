@@ -62,14 +62,16 @@ final class HxSingleStmtBracesSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-SSB-FRAME-OFF')
 	@:killer('M-SSB-DANGLING-NONE')
-	public inline function testDanglingElseThroughLoopBodyKeepsBraces(): Void {
-		// KEY safety gate (suppress frame): the loop body itself sees no
-		// `else`, but unwrapping `{ if (b) x(); }` inside the then-body of
-		// an if-with-else would rebind the outer `else` to `if (b)`.
+	public inline function testDanglingElseThroughCatchBodyKeepsBraces(): Void {
+		// KEY safety gate (suppress frame): the loop body itself sees no `else`, but
+		// unwrapping `{ if (b) q(); }` inside the then-body of an if-with-else would rebind
+		// the outer `else` to `if (b)`. A loop directly in that position is braced by gate 8,
+		// so a loop in a catch body is the shape that still reaches the frame.
 		assertFmt(
-			'class F {\n\tfunction f(a:Bool, b:Bool, c:Bool):Void {\n\t\tif (a) while (c) {\n\t\t\tif (b) x();\n\t\t} else y();\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool, b:Bool, c:Bool):Void {\n\t\tif (a)\n\t\t\twhile (c) {\n\t\t\t\tif (b) x();\n\t\t\t}\n'
-			+ '\t\telse\n\t\t\ty();\n\t}\n}'
+			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a) try {\n\t\t\tp();\n\t\t} catch (e:Dynamic) {\n'
+			+ '\t\t\tfor (x in xs) {\n\t\t\t\tif (b) q();\n\t\t\t}\n\t\t} else r();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a)\n\t\t\ttry {\n\t\t\t\tp();\n\t\t\t} '
+			+ 'catch (e:Dynamic) {\n\t\t\t\tfor (x in xs) {\n\t\t\t\t\tif (b) q();\n\t\t\t\t}\n\t\t\t}\n\t\telse\n\t\t\tr();\n\t}\n}'
 		);
 	}
 
@@ -592,24 +594,26 @@ final class HxSingleStmtBracesSliceTest extends Test {
 	public inline function testTrailingIfWithOwnElseDeBraces(): Void {
 		// The else-consuming refinement: the trailing `if` already HAS an `else`, so it
 		// cannot take a second one and the spine walk continues into that else branch,
-		// which ends on a sealed call. Compiler-verified: `if (a) while (c) if (b) p();
-		// else q(); else r();` binds the last `else` to `if (a)`, same as the braced form.
+		// which ends on a sealed call - so the then-body de-braces. A loop there is braced by
+		// gate 8, so a catch body carries the trailing `if`.
 		assertFmt(
-			'class F {\n\tfunction f(a:Bool, b:Bool, c:Bool):Void {\n\t\tif (a) {\n\t\t\twhile (c) if (b) p(); else q();\n\t\t} else {\n'
-			+ '\t\t\tr();\n\t\t}\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool, b:Bool, c:Bool):Void {\n\t\tif (a)\n\t\t\twhile (c)\n\t\t\t\tif (b)\n\t\t\t\t\tp();\n'
-			+ '\t\t\t\telse\n\t\t\t\t\tq();\n\t\telse\n\t\t\tr();\n\t}\n}'
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\ttry {\n\t\t\t\tp();\n'
+			+ '\t\t\t} catch (e:Dynamic) if (b) q(); else s();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\ttry\n\t\t\t\tp()\n\t\t\tcatch (e:Dynamic)\n\t\t\t\tif (b)\n'
+			+ '\t\t\t\t\tq();\n\t\t\t\telse\n\t\t\t\t\ts();\n\t\telse\n\t\t\tr();\n\t}\n}'
 		);
 	}
 
-	public inline function testSuppressFrameSealedLoopBodyDeBraces(): Void {
+	public inline function testSuppressFrameSealedCatchBodyDeBraces(): Void {
 		// Gate 5 span-precision, the positive half of
-		// `testDanglingElseThroughLoopBodyKeepsBraces`: the then-body still renders bare, so
-		// the frame IS armed - but this loop body ends on a sealed call, not on an open
+		// `testDanglingElseThroughCatchBodyKeepsBraces`: the then-body still renders bare, so
+		// the frame IS armed - but this catch body ends on a sealed call, not on an open
 		// `if`, so it de-braces. The blanket frame kept every nested body braced here.
 		assertFmt(
-			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a) while (c) {\n\t\t\tg();\n\t\t} else y();\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a)\n\t\t\twhile (c) g();\n\t\telse\n\t\t\ty();\n\t}\n}'
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) try {\n\t\t\tp();\n\t\t} catch (e:Dynamic) {\n\t\t\tg();\n'
+			+ '\t\t} else y();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a)\n\t\t\ttry\n\t\t\t\tp()\n\t\t\tcatch (e:Dynamic)\n\t\t\t\tg();\n'
+			+ '\t\telse\n\t\t\ty();\n\t}\n}'
 		);
 	}
 
@@ -642,20 +646,16 @@ final class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-SSB-FRAME-OFF')
-	@:killer('M-SSB-DANGLING-NONE')
-	@:killer('M-SSB-TAIL-SEALED-NONE')
-	public inline function testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces(): Void {
-		// Both halves of the spine walk in one shape. The then-body's single `for` ends on a
-		// brace-bearing body, so the THEN-body de-braces (the `HxForStmt.body` field arm -
-		// rename that field and this half fails closed). The `for` body itself then renders
-		// on the trailing spine and its single statement IS an else-less `if`, so gate 5
-		// keeps ITS braces. Compiler-verified equivalent.
+	@:killer('M-SSB-LOOP-THEN-KEEP-OFF')
+	public inline function testBracedLoopThenKeepsBracesAndFreesItsBody(): Void {
+		// Gate 8 keeps the braces of a then-body whose single statement is a loop before an
+		// `else`. That `}` seals the subtree, so the loop's own body is off the trailing spine
+		// and de-braces into the guard-loop form although its statement is an else-less `if`.
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a) {\n\t\t\tfor (x in xs) {\n\t\t\t\tif (b) p();\n'
 			+ '\t\t\t}\n\t\t} else {\n\t\t\tq();\n\t\t}\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a)\n\t\t\tfor (x in xs) {\n\t\t\t\tif (b) p();\n'
-			+ '\t\t\t}\n\t\telse\n\t\t\tq();\n\t}\n}'
+			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a) {\n\t\t\tfor (x in xs) if (b) p();\n'
+			+ '\t\t} else {\n\t\t\tq();\n\t\t}\n\t}\n}'
 		);
 	}
 

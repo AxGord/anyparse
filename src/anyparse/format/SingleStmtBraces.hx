@@ -65,6 +65,12 @@ class SingleStmtBraces {
 	private static final SPLICE_CTORS: Array<String> = ['DollarIdentExpr', 'DollarReifExpr', 'DollarBlockExpr'];
 
 	/**
+	 * The loop ctors gate 8 braces in then-position before an `else` - the writer's twin of
+	 * `RefShape.loopStatementKinds`, sharing the missing kind-name seam `SYMMETRY_WRAP_SKIP_CTORS` names.
+	 */
+	private static final ELSE_GUARDED_LOOP_CTORS: Array<String> = ['ForStmt', 'WhileStmt'];
+
+	/**
 	 * Return the block's single inner statement when every gate below passes, so the
 	 * writer emits `if (cond) return x;` instead of `if (cond) { return x; }`, and
 	 * return the body unchanged in every other case.
@@ -99,10 +105,10 @@ class SingleStmtBraces {
 	 *     answers through this function, so it inherits gate 4 instead of copying it, and
 	 *     runs both ways: a bare branch opposite a brace-keeping sibling GAINS braces
 	 *     through `wrapInBlock`, and a loop body, having no sibling, always arrives `false`;
-	 *  8. a BARE `if` in then-position always gains a synthesized brace block, since
-	 *     `if (a) if (b) … else …` reads as a dangling-else puzzle. The parse tree has
-	 *     already bound that `else`, so bracing cannot change semantics and this gate runs
-	 *     even under `suppress`.
+	 *  8. a BARE `if` in then-position, and a BARE loop there before an `else`, gain a synthesized
+	 *     brace block (`bracesRequiredInThen`): `if (a) if (b) … else …` and `if (a) for (…) g(); else h();`
+	 *     read as dangling-else puzzles. The parse tree has already bound that `else`, so bracing
+	 *     cannot change semantics and this gate runs even under `suppress`.
 	 */
 	public static function unwrapStmt(
 		body: Dynamic, drop: Bool, symmetry: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool,
@@ -113,7 +119,7 @@ class SingleStmtBraces {
 		final block: EnumValue = cast body;
 		// Gate 8, the repair direction: braces are REQUIRED here, so fmt self-heals a
 		// previously unwrapped source.
-		if (drop && isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block, 'BlockStmt');
+		if (drop && bracesRequiredInThen(block, isIfThenBody, elseFollows)) return wrapInBlock(block, 'BlockStmt');
 		// Gate 7's repair direction - see `needsSymmetryWrap`. This is the ONE direction
 		// `symmetry` alone arms.
 		if (needsSymmetryWrap(block, siblingKeepsBraces, isIfThenBody)) return wrapInBlock(block, 'BlockStmt');
@@ -179,7 +185,7 @@ class SingleStmtBraces {
 		// splice can never disagree about a dangling `else`.
 		return if (!drop)
 			symmetry && Type.enumConstructor(cast body) == 'BlockStmt'
-		else if (isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt')
+		else if (bracesRequiredInThen(cast body, isIfThenBody, elseFollows))
 			drop
 		else
 			Type.enumConstructor(cast body) == 'BlockStmt'
@@ -292,7 +298,7 @@ class SingleStmtBraces {
 			leadingComments: [],
 			trailingComment: null,
 			trailingBeforeSep: false,
-			sepAfter: raise == null && !innerSelfTerminates(value),
+			sepAfter: raise == null && !(innerSelfTerminates(value) && spineTerminated(value)),
 			node: raise == null ? value : raise(value)
 		};
 		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
@@ -519,6 +525,44 @@ class SingleStmtBraces {
 	/** An `HxIfStmt` struct's else body, null for a lone `if`. */
 	private static inline function elseBodyOf(ifStmt: Any): Any {
 		return Reflect.field(ifStmt, 'elseBody');
+	}
+
+	/**
+	 * Whether gate 8 requires braces around the then-position statement `v`: a bare `if` always, a bare
+	 * loop when an `else` follows it - either reads as if that `else` might bind inside it.
+	 */
+	private static function bracesRequiredInThen(v: EnumValue, isIfThenBody: Bool, elseFollows: Bool): Bool {
+		if (!isIfThenBody) return false;
+		final ctor: String = Type.enumConstructor(v);
+		return ctor == 'IfStmt' || (elseFollows && ELSE_GUARDED_LOOP_CTORS.contains(ctor));
+	}
+
+	/**
+	 * Whether the `if` / loop `v` ends on a terminator of its own, read down its trailing spine: in
+	 * `if (a) for (x in xs) g(x) else h();` the `else` closes the loop's `g(x)`, so a brace block built
+	 * around the loop must write that `;` itself. Kinds the walk does not model answer `true`.
+	 */
+	private static function spineTerminated(v: Null<Any>): Bool {
+		if (v == null || !Reflect.isEnumValue(v)) return true;
+		final e: EnumValue = cast v;
+		final ctor: String = Type.enumConstructor(e);
+		final head: Any = paramAt(e, 0);
+		final elseBody: Null<Any> = ctor == 'IfStmt' ? elseBodyOf(head) : null;
+		// An else body's own `;` is its statement's: the slot's `@:trailOpt(';')` sees only a second one.
+		if (elseBody != null) return spineTerminated(elseBody);
+		// A then or loop body before the `else` may leave its terminator to its slot's `@:trailOpt(';')`.
+		final tail: Null<String> = if (ctor == 'IfStmt')
+			'thenBody'
+		else if (ELSE_GUARDED_LOOP_CTORS.contains(ctor))
+			'body'
+		else
+			null;
+		// Off the spine, only the statements that may leave their `;` to what follows can lack it.
+		return tail == null
+			? innerSelfTerminates(e) || !STATEMENT_TRY_TAIL_CTORS.contains(ctor)
+			: !hasStructField(head, tail)
+				|| Reflect.field(head, '${tail}TrailPresent') == true
+				|| spineTerminated(Reflect.field(head, tail));
 	}
 
 	/**
@@ -818,7 +862,7 @@ class SingleStmtBraces {
 	): Null<Dynamic> {
 		if (!drop || body == null || !Reflect.isEnumValue(body)) return null;
 		final block: EnumValue = cast body;
-		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return null; // gate 8 wrap - no de-brace
+		if (bracesRequiredInThen(block, isIfThenBody, elseFollows)) return null; // gate 8 wrap - no de-brace
 		if (needsSymmetryWrap(block, siblingKeepsBraces, isIfThenBody)) return null; // gate 7 wrap - no de-brace
 		if (Type.enumConstructor(block) != 'BlockStmt') return null; // do-body / non-block - no plain de-brace
 		if (siblingKeepsBraces) return null; // gate 7 keep
@@ -833,7 +877,7 @@ class SingleStmtBraces {
 		// statement instead of to its own `if`?
 		return if (inner == null || !Reflect.isEnumValue(inner))
 			null
-		else if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt')
+		else if (bracesRequiredInThen(cast inner, isIfThenBody, elseFollows))
 			null // gate 8 keep
 		else if (!innerSelfTerminates(cast inner) || isSplice(inner))
 			null // gate 3 terminator
