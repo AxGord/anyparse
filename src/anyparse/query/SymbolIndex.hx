@@ -482,6 +482,13 @@ typedef TypeDeclInfo = {
 	var hasAutoBuild: Bool;
 
 	/**
+	 * The callee path of every build-macro call the declaration's metadata writes (`RefShape.typeBuildMacroMetaNames`, Haxe
+	 * `@:autoBuild(pkg.Mod.fn())` -> `pkg.Mod.fn`), read off the metadata's argument nodes in source order; an argument that is
+	 * not a call of a dotted path adds nothing. What names the builder MODULE a reader of the macro's own source looks up.
+	 */
+	var buildMacroPaths: Array<String>;
+
+	/**
 	 * True when the declaration carries a tag the grammar names in `RefShape.macroMadeTypeMetaNames` (Haxe
 	 * `@:genericBuild`): every instantiation is a type the macro makes, so the written kind says nothing about what a binding
 	 * of it is. Read by `TypeTraits.abstractRebindsThis`, which must answer "may rebind" for it.

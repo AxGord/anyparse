@@ -243,6 +243,19 @@ class BuildMacroMetaSeamTest extends Test {
 		Assert.isFalse(type.hasAutoBuild);
 	}
 
+	/**
+	 * Every build tag's callee path is indexed off its argument nodes, in source order; a tag spelled in a comment is
+	 * no metadata, and an argument that is not a call of a dotted path adds nothing.
+	 */
+	@:pin('control')
+	@:killer('M-INDEX-BUILD-PATHS-NONE')
+	public function testTheBuildCallPathsAreIndexedFromTheMetadataNodes(): Void {
+		final type: TypeDeclInfo = indexedType(
+			'/* @:build(X.y()) */\n@:autoBuild(a.b.Mod.fn()) @:build(Mac.run(1)) @:build(42) @:keep class C {}'
+		);
+		Assert.same(['a.b.Mod.fn', 'Mac.run'], type.buildMacroPaths);
+	}
+
 	// ---- the other four declaration-metadata seams, each pinned end-to-end plus its near miss ----
 
 	/** `reflectedDeclMetaName`: the type's member names are runtime data, so the naming autofix leaves them alone. */
@@ -365,6 +378,7 @@ class BuildMacroMetaSeamTest extends Test {
 			hasRtti: false,
 			hasBuild: false,
 			hasAutoBuild: false,
+			buildMacroPaths: [],
 			isMacroMade: false,
 			hasKeep: false,
 			isEnumAbstract: false,

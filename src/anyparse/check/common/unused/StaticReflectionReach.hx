@@ -2,6 +2,7 @@ package anyparse.check.common.unused;
 
 import anyparse.check.scan.NativeCodeScan;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.check.scan.UsingScan;
 import anyparse.query.CondRegionScan;
 import anyparse.query.OccurrenceScan;
 import anyparse.query.ParseGate;
@@ -127,9 +128,6 @@ final class StaticReflectionReach {
 
 	/** The word that marks a file whose strings may be macro-reified into identifiers. */
 	private static inline final MACRO_WORD: String = 'macro';
-
-	/** A file's own `using Std;` — what makes a receiver-less `x.isOfType(v)` the `Std` one. */
-	private static final USING_STD: EReg = ~/\busing\s+Std\s*;/;
 
 	/** The `Type` functions that turn an INSTANCE into a class value. */
 	private static final CLASS_SOURCES: Array<String> = ['getClass', 'typeof'];
@@ -276,7 +274,7 @@ final class StaticReflectionReach {
 				callKind: callKind,
 				fieldKind: fieldKind,
 				macroFile: RawSourceScan.mentionsWord(entry.source, MACRO_WORD),
-				usingStd: USING_STD.match(entry.source),
+				usingStd: writesUsing(tree, STD_RECEIVER, shape),
 				declared: []
 			};
 			walk(tree, [], null, false, scan, state);
@@ -433,7 +431,7 @@ final class StaticReflectionReach {
 		final target: Null<String> = if ((scan.shape.aliasingDeclKinds ?? []).contains(node.kind))
 			aliasTarget(text, text.indexOf('=') + 1)
 		else if ((scan.shape.importAliasKinds ?? []).contains(node.kind))
-			importTarget(text)
+			importTarget(node)
 		else
 			null;
 		if (target != null) state.aliases.push({ alias: name, target: target });
@@ -446,9 +444,9 @@ final class StaticReflectionReach {
 	}
 
 	/** The simple name an `import p.C as A` / `import p.C in A` binds, or null. */
-	private static function importTarget(text: String): Null<String> {
-		final re: EReg = ~/^\s*import\s+([A-Za-z_][A-Za-z0-9_.]*)\s+(as|in)\s/;
-		return re.match(text) ? CheckScan.simpleModuleName(re.matched(1)) : null;
+	private static function importTarget(node: QueryNode): Null<String> {
+		final target: Null<String> = node.target;
+		return target == null ? null : CheckScan.simpleModuleName(target);
 	}
 
 	/**
@@ -473,6 +471,18 @@ final class StaticReflectionReach {
 		if (receiver == TYPE_RECEIVER) return TYPE_CONSUMERS.contains(member) && slot == 1;
 		// The receiver-less `x.isOfType(v)` is `Std`'s only under a `using Std` the file itself spells.
 		return STD_CONSUMERS.contains(member) && (receiver == STD_RECEIVER ? slot == 2 : scan.usingStd && slot == 1);
+	}
+
+	/**
+	 * Whether the module level of `node` — its conditional regions included, the way the grammar nests a
+	 * guarded header — holds a `using` of `module`, read off the declaration nodes so a commented-out one does not count.
+	 */
+	private static function writesUsing(node: QueryNode, module: String, shape: RefShape): Bool {
+		return node.children.exists(
+			c ->
+				(c.kind == UsingScan.USING_DECL_KIND && c.name == module)
+				|| (CondRegionScan.isConditionalKind(c.kind, shape) && writesUsing(c, module, shape))
+		);
 	}
 
 }

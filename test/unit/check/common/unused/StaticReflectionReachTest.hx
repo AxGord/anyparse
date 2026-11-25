@@ -274,6 +274,38 @@ class StaticReflectionReachTest extends Test {
 		#end
 	}
 
+	/** A `using Std;` in a comment is no declaration: the receiver-less `x.isOfType(C)` stays some method handed the class. */
+	@:pin('control')
+	@:killer('M-STATICREACH-USING-STD-TEXT')
+	public function testACommentedUsingStdIsNotOne(): Void {
+		final call: String = 'class U {\n\tpublic static function k(x: Dynamic): Bool {\n\t\treturn x.isOfType(C);\n\t}\n}\n';
+		Assert.isTrue(reachable([
+			{ file: 'C.hx', source: OWNER },
+			{ file: 'U.hx', source: '// using Std;\n\n$call' }
+		]));
+	}
+
+	/** A `using Std;` the header guards in an `#if` region is one: the grammar nests it under the region. */
+	@:pin('control')
+	@:killer('M-STATICREACH-USING-STD-GUARD-BLIND')
+	public function testAGuardedUsingStdCounts(): Void {
+		final call: String = 'class U {\n\tpublic static function k(x: Dynamic): Bool {\n\t\treturn x.isOfType(C);\n\t}\n}\n';
+		Assert.isFalse(reachable([
+			{ file: 'C.hx', source: OWNER },
+			{ file: 'U.hx', source: '#if js\nusing Std;\n#end\n\n$call' }
+		]));
+	}
+
+	/** `import C in B` binds the owner under `B` exactly as `import C as B` does. */
+	@:pin('control')
+	@:killer('M-STATICREACH-IMPORT-ALIAS-BLIND')
+	public function testAnInAliasAsAValueKeepsTheGate(): Void {
+		Assert.isTrue(reachable([
+			{ file: 'C.hx', source: OWNER },
+			{ file: 'U.hx', source: 'import C in B;\n\nclass U {\n\tpublic static function k(): Dynamic {\n\t\treturn B;\n\t}\n}\n' }
+		]));
+	}
+
 	/** How many edits `unused-private` writes for `OWNER`-like `owner` with `TABLE` and `others` in scope. */
 	private function deletions(owner: String, others: Array<SourceFile>): Int {
 		final files: Array<SourceFile> = [{ file: 'C.hx', source: owner }, { file: 'T.hx', source: TABLE }].concat(others);

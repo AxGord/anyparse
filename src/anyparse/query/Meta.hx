@@ -7,7 +7,10 @@ import anyparse.runtime.Span;
  * One annotation site discovered by `Meta.find`.
  *
  * `annotation` is the verbatim tag (e.g. `@:foo`), `args` the
- * per-argument source text (`[]` when the annotation takes none).
+ * per-argument source text (`[]` when the annotation takes none),
+ * `argNodes` the argument nodes themselves — what a reader of an
+ * argument's structure reads instead of re-parsing its text; empty for
+ * the raw catch-all form, whose arguments the grammar left unparsed.
  * `declKind` / `declName` / `declSpan` describe the declaration the
  * annotation is attached to; `metaSpan` is the annotation node's own
  * span. Spans are `Null` for contract safety — in practice every
@@ -16,6 +19,7 @@ import anyparse.runtime.Span;
 typedef MetaHit = {
 	var annotation: String;
 	var args: Array<String>;
+	var argNodes: Array<QueryNode>;
 	var declKind: String;
 	var declName: Null<String>;
 	var declSpan: Null<Span>;
@@ -122,6 +126,7 @@ final class Meta {
 		return {
 			annotation: tag,
 			args: args,
+			argNodes: metaNode.children,
 			declKind: owner.kind,
 			declName: owner.name,
 			declSpan: owner.span,

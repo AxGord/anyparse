@@ -285,6 +285,7 @@ final class SymbolIndexBuilder {
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
 		var pendingMeta: Array<String> = [];
+		var pendingBuilders: Array<String> = [];
 		// the members a pending `@:forward(...)` names, null when it names none (it forwards them all)
 		var pendingForwarded: Null<Array<String>> = null;
 		// the paths the pending extension annotations (`@:using(...)`) write, null once one writes something else
@@ -302,6 +303,7 @@ final class SymbolIndexBuilder {
 		var pendingPrivate: Bool = false;
 		inline function clearPending(): Void {
 			pendingMeta = [];
+			pendingBuilders = [];
 			pendingForwarded = null;
 			pendingUsings = [];
 			pendingExtern = false;
@@ -350,6 +352,7 @@ final class SymbolIndexBuilder {
 					hasRtti: carriesMeta(pendingMeta, shape.reflectedDeclMetaName),
 					hasBuild: carriesOwnBuildMacro(pendingMeta, shape),
 					hasAutoBuild: carriesAnyMeta(pendingMeta, shape.descendantBuildMacroMetaNames),
+					buildMacroPaths: pendingBuilders,
 					isMacroMade: carriesAnyMeta(pendingMeta, shape.macroMadeTypeMetaNames),
 					hasKeep: carriesMeta(pendingMeta, shape.retainedDeclMetaName),
 					isEnumAbstract: EnumAbstractForms.isEnumAbstract(shape, typeDecl.kind, gn.enumPrefixed == true, pendingMeta),
@@ -378,6 +381,7 @@ final class SymbolIndexBuilder {
 			if (isMetaNodeKind(node.kind)) {
 				final metaName: Null<String> = node.name;
 				if (metaName != null) pendingMeta.push(metaName);
+				pendingBuilders = pendingBuilders.concat(buildMacroPathsOf(node, shape));
 				// `@:forward(a, b)` forwards only the members it names
 				pendingForwarded = forwardedArgsOf(node, shape, pendingForwarded);
 				pendingUsings = extensionArgsOf(node, source, shape, pendingUsings);
@@ -910,6 +914,7 @@ final class SymbolIndexBuilder {
 			hasRtti: first.hasRtti || alternate.hasRtti,
 			hasBuild: first.hasBuild || alternate.hasBuild,
 			hasAutoBuild: first.hasAutoBuild || alternate.hasAutoBuild,
+			buildMacroPaths: union(first.buildMacroPaths, alternate.buildMacroPaths),
 			isMacroMade: first.isMacroMade || alternate.isMacroMade,
 			hasKeep: first.hasKeep || alternate.hasKeep,
 			isEnumAbstract: first.isEnumAbstract || alternate.isEnumAbstract,
@@ -1240,6 +1245,18 @@ final class SymbolIndexBuilder {
 			else
 				collectHeldMeta(c, held);
 		}
+	}
+
+	/** The callee paths of the build-macro calls the metadata node `meta` writes (`TypeDeclInfo.buildMacroPaths`). */
+	private static function buildMacroPathsOf(meta: QueryNode, shape: RefShape): Array<String> {
+		if (!(shape.typeBuildMacroMetaNames ?? []).contains(meta.name ?? '')) return [];
+		final out: Array<String> = [];
+		for (arg in meta.children) {
+			final callee: Null<QueryNode> = arg.kind == shape.callKind ? arg.children[0] : null;
+			final path: Null<String> = callee == null ? null : dottedPathOf(callee, shape);
+			if (path != null) out.push(path);
+		}
+		return out;
 	}
 
 }

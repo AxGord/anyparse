@@ -140,12 +140,13 @@ final class TypeTraits {
 	 * which compiles either way, so no compiler oracle can vouch for the keyword swap.
 	 *
 	 * The builder is named by the metadata's call path (`@:autoBuild(pkg.Mod.fn())` → `Mod`) and looked up
-	 * by that simple name in this index; a builder the index does not hold answers false — that is the
+	 * by that simple name in this index (`TypeDeclInfo.buildMacroPaths` of the file's declarations, so a tag
+	 * in a comment or a string names none); a builder the index does not hold answers false — that is the
 	 * residual, not a proof. A text scan, and a conservative one: a module that merely mentions a token
 	 * in an unrelated macro still counts.
 	 */
 	public function builderReadsFinality(typeName: String, ?fromFile: String): Bool {
-		return buildClosureAny(typeName, fromFile, (_, source) -> source != null && builderModules(source).exists(readsFinality));
+		return buildClosureAny(typeName, fromFile, (info, source) -> source != null && builderModules(info).exists(readsFinality));
 	}
 
 	/**
@@ -224,15 +225,15 @@ final class TypeTraits {
 		return info.types.exists(type -> type.hasBuild || type.hasAutoBuild);
 	}
 
-	/** The simple names of the builder modules the build metadata in `source` calls (`@:build(pkg.Mod.fn())` → `Mod`). */
-	private static function builderModules(source: String): Array<String> {
+	/**
+	 * The simple names of the builder modules the build metadata of `info`'s declarations calls (`@:build(pkg.Mod.fn())` → `Mod`).
+	 */
+	private static function builderModules(info: FileInfo): Array<String> {
 		final out: Array<String> = [];
-		final re: EReg = ~/@:(build|autoBuild|genericBuild)\s*\(\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\(/;
-		var rest: String = source;
-		while (re.match(rest)) {
-			final path: Array<String> = re.matched(2).split('.');
-			if (path.length >= 2 && !out.contains(path[path.length - 2])) out.push(path[path.length - 2]);
-			rest = re.matchedRight();
+		for (type in info.types) for (path in type.buildMacroPaths) {
+			final segments: Array<String> = path.split('.');
+			final module: String = segments.length < 2 ? '' : segments[segments.length - 2];
+			if (module != '' && !out.contains(module)) out.push(module);
 		}
 		return out;
 	}

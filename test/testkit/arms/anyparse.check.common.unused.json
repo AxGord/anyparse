@@ -391,6 +391,29 @@
 			"find": "hxmlFiles(rootOf(ConfigFinder.absolute(files[0].file)))",
 			"replace": "hxmlFiles(Path.removeTrailingSlashes(Sys.getCwd()))",
 			"note": "the working directory is walked even when the project has a root, so an hxml the lint was merely started beside silences a type of an unrelated project"
+		},
+		{
+			"name": "M-STATICREACH-USING-STD-TEXT",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "build",
+			"find": "usingStd: writesUsing(tree, STD_RECEIVER, shape),",
+			"replace": "usingStd: entry.source.indexOf('using Std;') >= 0,",
+			"note": "a `using Std;` is matched as text, so one inside a comment makes a receiver-less `x.isOfType(C)` the Std one"
+		},
+		{
+			"name": "M-STATICREACH-USING-STD-GUARD-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "writesUsing",
+			"find": "|| (CondRegionScan.isConditionalKind(c.kind, shape) && writesUsing(c, module, shape))",
+			"replace": "|| false",
+			"note": "a `using Std;` guarded by an `#if` region is not seen, so a receiver-less `x.isOfType(C)` under it is taken for some other method"
+		},
+		{
+			"name": "M-STATICREACH-IMPORT-ALIAS-BLIND",
+			"type": "anyparse.check.common.unused.StaticReflectionReach",
+			"method": "importTarget",
+			"force": "null",
+			"note": "an `import C in B` alias binds nothing, so the owner read as a value under `B` is ignored"
 		}
 	]
 }

@@ -1,12 +1,13 @@
 package anyparse.query.cli.command;
 
 import anyparse.query.ExitCode.*;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Meta.MetaHit;
+import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
 
-using anyparse.util.Strings;
 using Lambda;
 
 /**
@@ -71,6 +72,9 @@ typedef GatesOpts = {
 @:nullSafety(Strict)
 final class GatesCommand implements CliCommand {
 
+	/** The `@:fmt` argument calls `gates --mechanism trail-opt` reports: the two trail-optional gates. */
+	private static final GATE_KINDS: Array<String> = ['trailOptParseGate', 'trailOptShapeGate'];
+
 	public function new() {}
 
 	public function name(): String {
@@ -124,31 +128,26 @@ final class GatesCommand implements CliCommand {
 	}
 
 	/**
-	 * Parse `trailOptParseGate('<pred>')` or `trailOptShapeGate('<pred>')`
-	 * out of a single `@:fmt` argument string. Returns `null` if the
-	 * arg isn't a gate call — `@:fmt(...)` carries many other flags
-	 * (`tightLead`, `wrapRules(...)`, `bodyPolicy(...)`, …) which
-	 * `gates` deliberately ignores. Hand-rolled parser to keep the
-	 * walker independent of the format/wrap plugin types.
+	 * The gate one `@:fmt` argument names — `trailOptParseGate('<pred>')` or `trailOptShapeGate('<pred>', …)` — read off
+	 * the argument's call node: the callee is the gate kind, the FIRST argument (a string literal or a bare identifier) the
+	 * predicate; later arguments are flag-bearing selectors, not part of its identity. Null for any other argument (`tightLead`,
+	 * `wrapRules(...)`, …), which `gates` ignores.
 	 */
-	public static function extractGate(arg: String): Null<GateExtract> {
-		final trimmed: String = arg.trim();
-		final markers: Array<String> = ['trailOptParseGate', 'trailOptShapeGate'];
-		for (m in markers) if (trimmed.startsWith(m)) {
-			final after: String = trimmed.substr(m.length).trim();
-			if (!after.startsWith('(')) continue;
-			final inner: String = after.substring(1, after.lastIndexOf(')')).trim();
-			// `trailOptShapeGate` takes multiple args (`'endsWithCloseBrace', 'init'`);
-			// extract just the FIRST quoted string — that's the predicate
-			// method name on the schema instance. Subsequent args are
-			// flag-bearing (typically a field-name selector) and not part
-			// of the predicate identity.
-			final firstArg: String = sliceFirstQuotedArg(inner);
-			final stripped: String = CliArgs.stripQuotes(firstArg);
-			if (stripped.length == 0) continue;
-			return { gateKind: m, predicate: stripped };
-		}
-		return null;
+	public static function extractGate(arg: QueryNode, plugin: GrammarPlugin, source: String): Null<GateExtract> {
+		final shape: RefShape = plugin.refShape();
+		final callee: Null<QueryNode> = arg.children[0];
+		final first: Null<QueryNode> = arg.children[1];
+		if (arg.kind != shape.callKind || callee == null || first == null || callee.kind != shape.identKind) return null;
+		final gateKind: Null<String> = callee.name;
+		if (gateKind == null || !GATE_KINDS.contains(gateKind)) return null;
+		final literal: Null<StringLiteral> = plugin.stringFoldSupport()?.literalOf(first, source);
+		final predicate: Null<String> = if (literal != null)
+			literal.content
+		else if (first.kind == shape.identKind)
+			first.name
+		else
+			null;
+		return predicate == null || predicate.length == 0 ? null : { gateKind: gateKind, predicate: predicate };
 	}
 
 	private static inline function gatesParseExit(code: Int): GatesOpts {
@@ -233,7 +232,7 @@ final class GatesCommand implements CliCommand {
 			}
 			final raw: Array<MetaHit> = Meta.find(tree, plugin.metaShape(), source);
 			final fileHits: Array<GateHit> = mechanism == 'trail-opt'
-				? collectTrailOptHits(raw, source, limit, totalHits)
+				? collectTrailOptHits(raw, plugin, source, limit, totalHits)
 				: collectMechanismHits(raw, source, mechanism, limit, totalHits);
 			totalHits += fileHits.length;
 			if (fileHits.length > 0) allHits.push({ file: path, source: source, hits: fileHits });
@@ -255,10 +254,12 @@ final class GatesCommand implements CliCommand {
 	 * matching `@:fmt(trailOpt*Gate(...))` argument; preserves the
 	 * pre-`--mechanism` output and limit semantics.
 	 */
-	private static function collectTrailOptHits(raw: Array<MetaHit>, source: String, limit: Int, sharedTotal: Int): Array<GateHit> {
+	private static function collectTrailOptHits(
+		raw: Array<MetaHit>, plugin: GrammarPlugin, source: String, limit: Int, sharedTotal: Int
+	): Array<GateHit> {
 		final out: Array<GateHit> = [];
-		for (h in raw) if (h.annotation == '@:fmt') for (arg in h.args) {
-			final extracted: Null<GateExtract> = extractGate(arg);
+		for (h in raw) if (h.annotation == '@:fmt') for (arg in h.argNodes) {
+			final extracted: Null<GateExtract> = extractGate(arg, plugin, source);
 			if (extracted == null) continue;
 			if (limit >= 0 && sharedTotal + out.length >= limit) break;
 			out.push({
@@ -333,30 +334,6 @@ final class GatesCommand implements CliCommand {
 		if (trail != null) parts.push('@:trail($trail)');
 		if (absentOn != null) parts.push('@:absentOn($absentOn)');
 		return parts.join(' ');
-	}
-
-	/**
-	 * Pick the first comma-separated argument from a paren-list body.
-	 * Quote-aware: a comma INSIDE a `'…'` / `"…"` doesn't terminate the
-	 * arg. Returns the trimmed first segment; the whole string when no
-	 * top-level comma exists.
-	 */
-	private static function sliceFirstQuotedArg(inner: String): String {
-		var i: Int = 0;
-		while (i < inner.length) {
-			final c: Int = inner.fastCodeAt(i);
-			if (c == "'".code || c == '"'.code) {
-				final end: Int = inner.quotedEnd(i);
-				// An unterminated quote swallows the rest, so the whole text is the argument.
-				if (end == i) return inner.trim();
-				i = end;
-			} else if (c == ','.code) {
-				return inner.substring(0, i).trim();
-			} else {
-				i++;
-			}
-		}
-		return inner.trim();
 	}
 
 	private static function printGatesUsage(): Void {

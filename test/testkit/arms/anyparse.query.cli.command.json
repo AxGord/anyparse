@@ -954,8 +954,9 @@
 		{
 			"name": "M-GATES-QUOTE-BLIND",
 			"type": "anyparse.query.cli.command.GatesCommand",
-			"method": "sliceFirstQuotedArg",
-			"force": "inner.indexOf(',') < 0 ? inner.trim() : inner.substring(0, inner.indexOf(',')).trim()",
+			"method": "extractGate",
+			"find": "literal.content",
+			"replace": "literal.content.split(',')[0]",
 			"note": "the first argument ends at the first comma whether or not a quote encloses it, so a predicate name holding a comma is cut short"
 		},
 		{

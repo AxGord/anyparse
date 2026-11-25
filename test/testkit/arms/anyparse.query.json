@@ -17527,6 +17527,13 @@
 			"find": "NodeTokens.attach(tree, log);",
 			"replace": "",
 			"note": "a tree read back from disk holds no token log, so a resolution-library node read from the cache has no tokens"
+		},
+		{
+			"name": "M-INDEX-BUILD-PATHS-NONE",
+			"type": "anyparse.query.SymbolIndexBuilder",
+			"method": "buildMacroPathsOf",
+			"force": "[]",
+			"note": "no build-macro callee path is indexed, so no builder module is ever looked up and a builder reading field finality is trusted"
 		}
 	]
 }
