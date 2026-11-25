@@ -306,6 +306,21 @@
 				"src/anyparse/macro/LexicalLowering.hx": "reads a terminal's regex source (delimiters, classes, escape group), not the source text of a language the project has a grammar for",
 				"src/anyparse/runtime/BodySkip.hx": "the declarations-only skip over a function body: it balances the grammar's own delimiters over gaps and marks the grammar's lexer supplies, spelling no character class",
 				"tools/src/devkit/CmdTemplate.hx": "parses its own command-template mini-language at compile time, not a source text of a grammar"
+			},
+			"nameSearchAllow": {
+				"src/anyparse/check/common/members/PreferEnumAbstract.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/check/common/unused/UnusedPrivate.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/query/DocMemberRefs.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/query/FactText.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/query/ModulePathTokens.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/query/NameMentionScan.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/query/OccurrenceScan.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/query/RawSourceScan.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"src/anyparse/query/SourceText.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"tools/src/dev/LandProse.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"tools/src/dev/SuiteImpact.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"test/testkit/ProseClaims.hx": "a hand search for a name held in a variable, listed so the census counts growth only",
+				"test/unit/grammar/haxe/HxTrailingCommaOptionsTest.hx": "a hand search for a name held in a variable, listed so the census counts growth only"
 			}
 		},
 		"anon-type-dup": true,

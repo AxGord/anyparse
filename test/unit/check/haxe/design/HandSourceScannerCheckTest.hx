@@ -283,6 +283,80 @@ class HandSourceScannerCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('compares characters with a quote and a backslash') != -1, vs[0].message);
 	}
 
+	/** A name held in a variable searched in a text, the hit's neighbour read as a character, derived positions included. */
+	@:pin('control')
+	@:killer('M-HSS-NAME-SEARCH-REPORTED')
+	public function testANameSearchWithANeighbourReadIsReported(): Void {
+		final vs: Array<Violation> =
+			violations('final at = s.indexOf(n); final before = at > 0 ? s.charCodeAt(at - 1) : 0; if (before == 95) k++;');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('searches a text for a name held in a variable') != -1, vs[0].message);
+	}
+
+	@:pin('control')
+	@:killer('M-HSS-NAME-SEARCH-SPREADS')
+	public function testAPositionDerivedFromTheHitIsFollowed(): Void {
+		Assert.equals(1, violations('final at = s.indexOf(n); final end = at + n.length; if (s.charCodeAt(end) == 95) k++;').length);
+	}
+
+	/** An occurrence test reads no neighbour. */
+	@:pin('control')
+	@:killer('M-HSS-NAME-SEARCH-NEEDS-HOLDER')
+	public function testABareNameSearchIsLeftAlone(): Void {
+		Assert.equals(0, violations('if (s.indexOf(n) >= 0) k++; if (s.charCodeAt(k) == 95) k++;').length);
+	}
+
+	/** A character read at a fixed index is not a test of the hit's neighbours. */
+	@:pin('control')
+	@:killer('M-HSS-NAME-READ-TIED-TO-HIT')
+	public function testAReadNotIndexedOffTheHitIsLeftAlone(): Void {
+		Assert.equals(0, violations('final at = s.indexOf(n); if (at >= 0 && s.charCodeAt(0) == 95) k++;').length);
+	}
+
+	@:pin('control')
+	@:killer('M-HSS-NAME-NEEDLE-IS-VARIABLE')
+	public function testALiteralNeedleBesideAReadIsLeftAlone(): Void {
+		Assert.equals(0, violations('final at = s.indexOf("word"); if (s.charCodeAt(at) == 95) k++;').length);
+	}
+
+	/** A constant marker is not a name the function was asked about. */
+	@:pin('control')
+	@:killer('M-HSS-NAME-NEEDLE-MUST-BE-BOUND')
+	public function testAConstantNeedleIsLeftAlone(): Void {
+		Assert.equals(0, violations('final at = s.indexOf(MARK); if (s.charCodeAt(at - 1) == 95) k++;').length);
+	}
+
+	/** One character searched is a membership test. */
+	@:pin('control')
+	@:killer('M-HSS-NAME-NEEDLE-NOT-A-CHARACTER')
+	public function testACharacterNeedleIsLeftAlone(): Void {
+		Assert.equals(0, violations('final c = s.charAt(0); final at = s.indexOf(c); if (s.charCodeAt(at + 1) == 95) k++;').length);
+	}
+
+	@:pin('control')
+	@:killer('M-HSS-NAME-RECEIVER-NOT-LITERAL')
+	public function testASearchOverALiteralIsLeftAlone(): Void {
+		Assert.equals(0, violations('final at = "abc".indexOf(n); if (s.charCodeAt(at) == 95) k++;').length);
+	}
+
+	/** `nameSearchAllow` silences the name search of the file only; the older shapes stay reported and `allow` stays separate. */
+	@:pin('control')
+	@:killer('M-HSS-NAME-ALLOW-KEY-READ')
+	public function testNameSearchAllowSilencesTheNameSearch(): Void {
+		final rule: HandSourceScanner = allowing('nameSearchAllow');
+		Assert.equals(0, CheckFixture.violations(rule, body('final at = s.indexOf(n); if (s.charCodeAt(at - 1) == 95) k++;')).length);
+	}
+
+	@:pin('control')
+	@:killer('M-HSS-NAME-ALLOW-KEY-SEPARATE')
+	public function testNameSearchAllowKeepsOlderShapesReported(): Void {
+		final rule: HandSourceScanner = allowing('nameSearchAllow');
+		Assert.isNull(rule.skipReason('C.hx', LintConfig.parse('{"rules":{"hand-source-scanner":{"nameSearchAllow":{"C.hx":"census"}}}}')));
+		final quoteLoop: String =
+			'var i = 0; while (i < s.length) { final c = s.charCodeAt(i); if (c == 34) return i; if (c == 92) i++; i++; }';
+		Assert.equals(1, CheckFixture.violations(rule, body(quoteLoop)).length);
+	}
+
 	private function body(statements: String): String {
 		return 'class C {\n\tfunction f(s:String, n:Int):Int {\n\t\tvar k = 0;\n\t\t$statements\n\t\treturn k;\n\t}\n}';
 	}
@@ -299,6 +373,13 @@ class HandSourceScannerCheckTest extends Test {
 	/** A loop comparing a quote and, beside it, the `test`. */
 	private function beside(test: String): String {
 		return 'for (i in 0...s.length) { final c = s.charCodeAt(i); if (c == 34) k++; if ($test) k++; }';
+	}
+
+	private function allowing(key: String): HandSourceScanner {
+		final rule: HandSourceScanner = new HandSourceScanner();
+		final config: LintConfig = LintConfig.parse('{"rules":{"hand-source-scanner":{"$key":{"C.hx":"census"}}}}');
+		rule.setConfigResolver(_ -> config);
+		return rule;
 	}
 
 }

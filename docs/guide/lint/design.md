@@ -120,7 +120,7 @@ Source text of a language read by hand: a loop that reads the characters of a te
 
 A loop is reported when it reads characters (`fastCodeAt`, `charCodeAt`, `charAt`, or a `'x'.code`) and also: compares at least two of {a quote, a backslash, a comment opener, `#if`}; or compares a quote and assigns a flag or constant to a local declared outside the loop; or compares an open / close bracket pair (`()`, `{}`, `[]`) and steps an Int local both up and down by one. A character is named by a one-character string literal or its code that is an operand of an equality test or a case pattern (one only emitted or stored names nothing); a comment opener is a spelled `/*` or `//`, a `/` beside a `*`, or two compared `/`. The outermost loop of a nested scanner carries the finding, and its message names the enclosing function.
 
-A call is reported when `indexOf` / `lastIndexOf` searches for a string literal that spells Haxe syntax (`(` `)` `{` `}` `[` `]` `;` `:` `=` `->` `=>` `/*` `*/` `//`) in a text that is a `source` / `src` name or a `substring` / `substr` window cut from a text. A search for a dot, a newline or a name, and one over any other name, is not reported. A test that locates an offset in its own fixture text is reported like any other: that is a hand search of a source, and the project decides per path with `allow`.
+A call is reported when `indexOf` / `lastIndexOf` searches for a string literal that spells Haxe syntax (`(` `)` `{` `}` `[` `]` `;` `:` `=` `->` `=>` `/*` `*/` `//`) in a text that is a `source` / `src` name or a `substring` / `substr` window cut from a text. A search for a dot or a newline, and one over any other name, is not reported. A function is also reported when it searches a text with `indexOf` / `lastIndexOf` for a name held in a parameter or local, keeps the result in a local, and reads a character (`charCodeAt`, `fastCodeAt`, `charAt`) at an index that mentions that local or one derived from it (`at - 1`, `at + name.length`): a hand word-boundary test of the hit's neighbours. A bare occurrence test, a search for a constant, a search for one character and a search over a string literal are not reported. A test that locates an offset in its own fixture text is reported like any other: that is a hand search of a source, and the project decides per path with `allow`.
 
 ```haxe
 while (i < s.length) {
@@ -132,6 +132,8 @@ final open = source.indexOf('(');        // reported: a search of source text fo
 ```
 
 Option `allow`: an object of path fragments, each with the reason the file may read text by hand — code that scans another alphabet (a regex source, a command template, a generated lexer). A reason that names an owner of the same question is no reason.
+
+Option `nameSearchAllow`: the same shape, read by the name-search report only. It lists the files whose hand word-boundary tests the project counts without yet replacing, so the gate refuses growth while the older shapes of those files stay reported; `allow` keeps its meaning of another alphabet.
 
 ```json
 "hand-source-scanner": { "allow": { "tools/src/devkit/CmdTemplate.hx": "parses its own command-template mini-language, not a source text of a grammar" } }

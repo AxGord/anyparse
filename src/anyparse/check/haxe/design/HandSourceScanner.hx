@@ -29,6 +29,7 @@ private typedef Vocab = {
 	final incrementKinds: Array<String>;
 	final parenKind: Null<String>;
 	final comparedHostKinds: Array<String>;
+	final paramKinds: Array<String>;
 }
 
 /** What one loop's subtree reads, names and mutates. */
@@ -59,7 +60,9 @@ private typedef Facts = {
  *
  * A call is reported when `indexOf` / `lastIndexOf` searches for a literal that spells Haxe syntax (a bracket, `;`, `:`,
  * `=`, an arrow, a comment mark) in text that is a `source` / `src` name or a `substring` / `substr` window cut from a
- * text; a search over a name, a path or a line, and one for a dot or a newline, is not source scanning.
+ * text; a search over a path or a line, and one for a dot or a newline, is not source scanning. A function that searches a
+ * text for a name held in a parameter or local and reads a character indexed off the hit is a hand word-boundary test; the
+ * files whose such tests the project counts without replacing go under `nameSearchAllow`, which silences that report only.
  *
  * Code that scans a different alphabet (a regex source, a command template, a generated lexer) is listed under `allow` as
  * `{ "path fragment": "why" }`; a reason that names an owner is no reason. `Info`, default-off, report-only: the project's
@@ -74,6 +77,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	private static inline final SLASH: Int = 47;
 	private static inline final STAR: Int = 42;
 	private static inline final HASH: Int = 35;
+	private static final NAME_SEARCH_ALLOW_KEY: String = 'nameSearchAllow';
 	private static final ALLOW_KEY: String = 'allow';
 
 	/** The `.code` field of a one-character string literal, which reads a character as a number. */
@@ -124,7 +128,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 
 	/** `config-excluded` for a file whose path contains an `allow` key. */
 	public function skipReason(file: String, config: LintConfig): Null<String> {
-		return AvoidDynamic.pathExcluded(file, allowedPaths(config)) ? 'config-excluded' : null;
+		return AvoidDynamic.pathExcluded(file, allowedPaths(config, ALLOW_KEY)) ? 'config-excluded' : null;
 	}
 
 	public function noAutofixReason(): String {
@@ -137,8 +141,15 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 		final vocab: Vocab = seams;
 		final shape: RefShape = plugin.refShape();
 		return RunScan.collect(files, plugin, (entry, tree, out) -> {
+			final nameSearchExcluded: Bool = isNameSearchExcluded(entry.file);
 			function walk(node: QueryNode, fn: String): Void {
 				final name: String = vocab.functionKinds.contains(node.kind) ? node.name ?? fn : fn;
+				if (
+					vocab.functionKinds.contains(node.kind)
+					&& node.span != null && !nameSearchExcluded
+					&& nameSearchWithNeighbours(node, vocab)
+				)
+					out.push(finding(entry.file, node.span, name, 'searches a text for a name held in a variable and tests the neighbours'));
 				if (vocab.loopKinds.contains(node.kind)) {
 					final what: Null<String> = verdict(node, entry.source, shape, vocab);
 					final span: Null<Span> = node.span;
@@ -162,7 +173,12 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	}
 
 	public function acceptedOptions(): Array<String> {
-		return [ALLOW_KEY];
+		return [ALLOW_KEY, NAME_SEARCH_ALLOW_KEY];
+	}
+
+	private function isNameSearchExcluded(file: String): Bool {
+		final resolve: Null<(String) -> LintConfig> = _resolveConfig;
+		return resolve != null && AvoidDynamic.pathExcluded(file, allowedPaths(resolve(file), NAME_SEARCH_ALLOW_KEY));
 	}
 
 	/** Whether a literal under `node`, itself an operand of a comparison, is still compared: through parentheses and a `.code` read. */
@@ -206,8 +222,8 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 	}
 
 	/** The `allow` keys of `config`: path fragments, each carrying its reason as the value. */
-	private static function allowedPaths(config: LintConfig): Array<String> {
-		return switch config.jsonOption(RULE_ID, ALLOW_KEY) {
+	private static function allowedPaths(config: LintConfig, key: String): Array<String> {
+		return switch config.jsonOption(RULE_ID, key) {
 			case JObject(entries): [ for (entry in entries) entry.key ];
 			case _: [];
 		};
@@ -234,6 +250,7 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 			addAssignKind: shape.addAssignKind,
 			incrementKinds: [ for (kind in [shape.postIncrKind, shape.preIncrKind]) if (kind != null) kind ],
 			parenKind: shape.parenKind,
+			paramKinds: shape.paramKinds ?? [],
 			comparedHostKinds: (shape.equalityKinds ?? []).concat(
 				[ for (kind in [shape.plainCasePatternKind, shape.orPatternKind]) if (kind != null) kind ]
 			)
@@ -335,6 +352,108 @@ final class HandSourceScanner extends HaxeRule implements ConfigAware implements
 			(node.kind == vocab.callKind && first.kind == vocab.accessKind && READ_METHODS.contains(first.name ?? ''))
 			|| (node.kind == vocab.accessKind && node.name == CODE_FIELD && vocab.stringKinds.contains(first.kind))
 		);
+	}
+
+	/**
+	 * Whether the function `fn` searches a text for a name held in a variable and reads a character next to the hit: the search
+	 * result lands in a local, and a character read is indexed off that local or one derived from it (`at - 1`, `at + name.length`).
+	 * A bare occurrence test, a membership test of one character and a search for a constant are not this.
+	 */
+	private static function nameSearchWithNeighbours(fn: QueryNode, vocab: Vocab): Bool {
+		final bound: Array<String> = [];
+		final chars: Array<String> = [];
+		boundNames(fn, vocab, bound, chars);
+		final hits: Array<String> = [];
+		collectHits(fn, null, vocab, bound, chars, hits);
+		if (hits.length == 0) return false;
+		var grown: Bool = true;
+		while (grown) grown = spreadHits(fn, vocab, hits);
+		return readsNextTo(fn, vocab, hits);
+	}
+
+	/** Gathers the parameters and locals `node` declares into `bound`, and those initialised from a character read into `chars`. */
+	private static function boundNames(node: QueryNode, vocab: Vocab, bound: Array<String>, chars: Array<String>): Void {
+		final declared: Null<String> = node.name;
+		if (declared != null && (vocab.declKinds.contains(node.kind) || vocab.paramKinds.contains(node.kind))) {
+			bound.push(declared);
+			if (node.children.exists(child -> isCharacterRead(child, vocab))) chars.push(declared);
+		}
+		for (child in node.children) boundNames(child, vocab, bound, chars);
+	}
+
+	/** Records into `hits` the local that holds the result of each search of a bound, multi-character name under `node`. */
+	private static function collectHits(
+		node: QueryNode, parent: Null<QueryNode>, vocab: Vocab, bound: Array<String>, chars: Array<String>, hits: Array<String>
+	): Void {
+		if (parent != null && isNameSearch(node, vocab, bound, chars)) {
+			final holder: Null<String> = holderOf(node, parent, vocab);
+			if (holder != null) hits.push(holder);
+		}
+		for (child in node.children) collectHits(child, node, vocab, bound, chars, hits);
+	}
+
+	private static function isNameSearch(node: QueryNode, vocab: Vocab, bound: Array<String>, chars: Array<String>): Bool {
+		final callee: Null<QueryNode> = node.children[0];
+		final needle: Null<QueryNode> = node.children[1];
+		if (node.kind != vocab.callKind || callee == null || needle == null || callee.kind != vocab.accessKind) return false;
+		final receiver: Null<QueryNode> = callee.children[0];
+		final root: String = rootName(needle, vocab) ?? '';
+		return SEARCH_METHODS.contains(callee.name ?? '')
+			&& receiver != null
+			&& !vocab.stringKinds.contains(receiver.kind)
+			&& bound.contains(root)
+			&& !chars.contains(root);
+	}
+
+	/** The local a search result is stored into: a declaration's initialiser or the target of an assignment. */
+	private static function holderOf(search: QueryNode, parent: QueryNode, vocab: Vocab): Null<String> {
+		if (vocab.declKinds.contains(parent.kind)) return parent.name;
+		final target: Null<QueryNode> = parent.children[0];
+		return parent.kind == vocab.assignKind && target != null && target != search && target.kind == vocab.identKind ? target.name : null;
+	}
+
+	/** The identifier an access chain starts from, or null when it starts from anything else. */
+	private static function rootName(node: QueryNode, vocab: Vocab): Null<String> {
+		var current: QueryNode = node;
+		while (current.kind == vocab.accessKind) {
+			final next: Null<QueryNode> = current.children[0];
+			if (next == null) return null;
+			current = next;
+		}
+		return current.kind == vocab.identKind ? current.name : null;
+	}
+
+	/** Adds to `hits` each local declared from one of them; whether it added any. */
+	private static function spreadHits(node: QueryNode, vocab: Vocab, hits: Array<String>): Bool {
+		var grown: Bool = false;
+		final declared: Null<String> = node.name;
+		if (
+			declared != null
+			&& vocab.declKinds.contains(node.kind)
+			&& !hits.contains(declared)
+			&& node.children.exists(child -> mentionsAny(child, vocab, hits))
+		) {
+			hits.push(declared);
+			grown = true;
+		}
+		for (child in node.children) if (spreadHits(child, vocab, hits)) grown = true;
+		return grown;
+	}
+
+	private static function mentionsAny(node: QueryNode, vocab: Vocab, names: Array<String>): Bool {
+		return (node.kind == vocab.identKind && names.contains(node.name ?? ''))
+			|| node.children.exists(child -> mentionsAny(child, vocab, names));
+	}
+
+	/** Whether a call under `node` reads a character at an index that mentions one of `hits`. */
+	private static function readsNextTo(node: QueryNode, vocab: Vocab, hits: Array<String>): Bool {
+		return (isCharacterRead(node, vocab) && node.children.exists(arg -> arg != node.children[0] && mentionsAny(arg, vocab, hits)))
+			|| node.children.exists(child -> readsNextTo(child, vocab, hits));
+	}
+
+	private static function isCharacterRead(node: QueryNode, vocab: Vocab): Bool {
+		final callee: Null<QueryNode> = node.children[0];
+		return node.kind == vocab.callKind && callee != null && callee.kind == vocab.accessKind && READ_METHODS.contains(callee.name ?? '');
 	}
 
 }

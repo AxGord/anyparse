@@ -222,6 +222,86 @@
 			"find": "return;",
 			"replace": "",
 			"note": "a scanner loop is reported and then walked on, so the search it holds is a second finding"
+		},
+		{
+			"name": "M-HSS-NAME-SEARCH-REPORTED",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "nameSearchWithNeighbours",
+			"find": "return readsNextTo(fn, vocab, hits);",
+			"replace": "return false;",
+			"note": "a search whose hit has a character read beside it is the shape"
+		},
+		{
+			"name": "M-HSS-NAME-READ-TIED-TO-HIT",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "readsNextTo",
+			"find": "arg != node.children[0] && mentionsAny(arg, vocab, hits)",
+			"replace": "arg != node.children[0]",
+			"note": "a character read not indexed off the search result counts"
+		},
+		{
+			"name": "M-HSS-NAME-SEARCH-NEEDS-HOLDER",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "collectHits",
+			"find": "if (holder != null) hits.push(holder);",
+			"replace": "hits.push(holder ?? 'k');",
+			"note": "a search whose result is not stored counts"
+		},
+		{
+			"name": "M-HSS-NAME-NEEDLE-IS-VARIABLE",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "isNameSearch",
+			"find": "&& bound.contains(root)",
+			"replace": "&& (bound.contains(root) || root == '')",
+			"note": "a literal needle counts as a name"
+		},
+		{
+			"name": "M-HSS-NAME-NEEDLE-MUST-BE-BOUND",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "isNameSearch",
+			"find": "&& bound.contains(root)",
+			"replace": "&& true",
+			"note": "a constant needle counts as a name"
+		},
+		{
+			"name": "M-HSS-NAME-NEEDLE-NOT-A-CHARACTER",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "isNameSearch",
+			"find": "&& !chars.contains(root)",
+			"replace": "&& true",
+			"note": "a needle read from one character counts as a name"
+		},
+		{
+			"name": "M-HSS-NAME-RECEIVER-NOT-LITERAL",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "isNameSearch",
+			"find": "!vocab.stringKinds.contains(receiver.kind)",
+			"replace": "true",
+			"note": "a membership test over a string literal counts"
+		},
+		{
+			"name": "M-HSS-NAME-SEARCH-SPREADS",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "nameSearchWithNeighbours",
+			"find": "while (grown) grown = spreadHits(fn, vocab, hits);",
+			"replace": "grown = false;",
+			"note": "a local derived from the search result is not followed"
+		},
+		{
+			"name": "M-HSS-NAME-ALLOW-KEY-READ",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "isNameSearchExcluded",
+			"find": "allowedPaths(resolve(file), NAME_SEARCH_ALLOW_KEY)",
+			"replace": "allowedPaths(resolve(file), ALLOW_KEY)",
+			"note": "the nameSearchAllow key is not read"
+		},
+		{
+			"name": "M-HSS-NAME-ALLOW-KEY-SEPARATE",
+			"type": "anyparse.check.haxe.design.HandSourceScanner",
+			"method": "skipReason",
+			"find": "allowedPaths(config, ALLOW_KEY)",
+			"replace": "allowedPaths(config, ALLOW_KEY).concat(allowedPaths(config, NAME_SEARCH_ALLOW_KEY))",
+			"note": "nameSearchAllow exempts the file from every shape"
 		}
 	]
 }
