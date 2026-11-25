@@ -498,7 +498,7 @@ final class StarLoopLowering {
 					};
 					if (_isBE) continue;
 					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
-					ctx.pos++;
+					ctx.takeSepByte();
 				}
 			}
 			: macro {
@@ -507,7 +507,7 @@ final class StarLoopLowering {
 					$elemStep;
 					skipWs(ctx);
 					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
-					ctx.pos++;
+					ctx.takeSepByte();
 				}
 			};
 	}
@@ -540,7 +540,7 @@ final class StarLoopLowering {
 							_prevEndPos = ctx.pos;
 							skipWs(ctx);
 						} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-							ctx.pos++;
+							ctx.takeSepByte();
 							skipWs(ctx);
 							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 							$accumRef.push($elemCall);
@@ -561,7 +561,7 @@ final class StarLoopLowering {
 					skipWs(ctx);
 					while ($closeNotNextExpr) {
 						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-							ctx.pos++;
+							ctx.takeSepByte();
 							skipWs(ctx);
 							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 							$accumRef.push($elemCall);
@@ -628,7 +628,7 @@ final class StarLoopLowering {
 				// (fn params, new-expr args).
 				while ($closeNotNextExpr) {
 					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
+						ctx.takeSepByte();
 						skipWs(ctx);
 						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 					}
@@ -661,7 +661,7 @@ final class StarLoopLowering {
 			final _savedPos: Int = ctx.pos;
 			skipWs(ctx);
 			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-				ctx.pos++;
+				ctx.takeSepByte();
 				$i{sepBeforeLocal} = true;
 			} else {
 				ctx.pos = _savedPos;

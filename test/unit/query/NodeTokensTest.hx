@@ -24,12 +24,12 @@ class NodeTokensTest extends Test {
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(FORMS);
 		Assert.equals('class { }', own(first(tree, 'ClassDecl'), FORMS));
 		Assert.equals('var : = ;', own(first(tree, 'VarMember'), FORMS));
-		Assert.equals('function ( ) :', own(first(tree, 'FnMember'), FORMS));
+		Assert.equals('function ( , ) :', own(first(tree, 'FnMember'), FORMS));
 		Assert.equals(':', own(first(tree, 'Required'), FORMS), 'a parameter owns its own type colon');
 		Assert.equals('if ( ) else', own(first(tree, 'IfStmt'), FORMS));
 		Assert.equals('>', own(first(tree, 'Gt'), FORMS));
-		Assert.equals('( )', own(first(tree, 'Call'), FORMS));
-		Assert.equals('[ ]', own(first(tree, 'ArrayExpr'), FORMS));
+		Assert.equals('( , )', own(first(tree, 'Call'), FORMS));
+		Assert.equals('[ , ]', own(first(tree, 'ArrayExpr'), FORMS));
 		Assert.equals('', own(first(tree, 'IdentExpr'), FORMS), 'a leaf the grammar reads by pattern matched no literal');
 	}
 
@@ -91,6 +91,43 @@ class NodeTokensTest extends Test {
 			);
 		}
 		Assert.equals('[ ]', own(first(document, JsonProjection.ARRAY), source));
+	}
+
+	@:pin('control')
+	@:killer('M-SEP-BYTE-NOT-RECORDED')
+	public function testAStarLoopOwnsTheSeparatorsItMatchedByByte(): Void {
+
+		final source: String = 'enum E {\n\tA(x: Int, y: Int);\n}\ntypedef T = {a: Int, b: Int};\ntypedef U = {a: Int; b: Int};\n'
+			+ 'class C {\n\tfunction f() {\n\t\tfinal o = {a: 1, b: 2};\n\t\tfinal g = (a, b) -> a;\n\t\tnew C(1, 2);\n\t}\n}\n';
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(source);
+		Assert.equals('( , ) ;', own(first(tree, 'ParamCtor'), source), 'constructor parameters');
+		final anons: Array<QueryNode> = all(tree, 'Anon');
+		Assert.equals('{ , }', own(anons[0], source), 'comma-separated members');
+		Assert.equals('{ ; }', own(anons[1], source), 'the alternative separator the member list matched');
+		Assert.equals('{ , }', own(first(tree, 'ObjectLit'), source), 'object literal fields');
+		Assert.equals('( , ) ->', own(first(tree, 'ThinParenLambdaExpr'), source), 'lambda parameters');
+		Assert.equals('new ( , )', own(first(tree, 'NewExpr'), source), 'constructor call arguments');
+	}
+
+	@:pin('control')
+	@:killer('M-SEP-BYTE-NOT-RECORDED')
+	public function testATrailingSeparatorBeforeTheCloseBelongsToItsContainer(): Void {
+		final source: String =
+			'class C {\n\tfunction f(a: Int, b: Int,) {\n\t\tg(1, 2,);\n\t\tfinal xs = [1, 2,];\n\t\tfinal o = {a: 1, b: 2,};\n\t}\n}\n';
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(source);
+		Assert.equals('function ( , , )', own(first(tree, 'FnMember'), source), 'parameters');
+		Assert.equals('( , , )', own(first(tree, 'Call'), source), 'call arguments');
+		Assert.equals('[ , , ]', own(first(tree, 'ArrayExpr'), source), 'array elements');
+		Assert.equals('{ , , }', own(first(tree, 'ObjectLit'), source), 'object literal fields');
+	}
+
+	@:pin('control')
+	@:killer('M-SEP-BYTE-NOT-RECORDED')
+	public function testAJsonContainerOwnsItsCommas(): Void {
+		final source: String = '{"a": [1, 2], "b": 3}';
+		final document: QueryNode = JsonProjection.parse(source);
+		Assert.equals('{ , }', own(first(document, JsonProjection.OBJECT), source));
+		Assert.equals('[ , ]', own(first(document, JsonProjection.ARRAY), source));
 	}
 
 	@:pin('guard')

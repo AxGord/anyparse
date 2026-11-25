@@ -257,7 +257,7 @@ final class StarFieldLowering {
 					_items.push($elemCall);
 					skipWs(ctx);
 					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
+						ctx.takeSepByte();
 						skipWs(ctx);
 						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 						_items.push($elemCall);
@@ -941,7 +941,7 @@ final class StarFieldLowering {
 				// element, and the close expect catches the rest.
 				while ($closeNotNextExpr) {
 					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
+						ctx.takeSepByte();
 						skipWs(ctx);
 						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 					}
@@ -979,7 +979,7 @@ final class StarFieldLowering {
 				skipWs(ctx);
 				final _sc: Null<Int> = ctx.input.charCodeAt(ctx.pos);
 				if (_sc == $v{sepCharCode} || _sc == $v{sepAltCharCode}) {
-					ctx.pos++;
+					ctx.takeSepByte();
 					skipWs(ctx);
 				} else if (!_selfEnded && ($closeNotNextExpr)) {
 					expectLit(ctx, $v{sepText});
@@ -1029,7 +1029,7 @@ final class StarFieldLowering {
 						_prevEndPos = ctx.pos;
 						skipWs(ctx);
 					} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
+						ctx.takeSepByte();
 						skipWs(ctx);
 						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 						_items.push($elemCall);
@@ -1067,7 +1067,7 @@ final class StarFieldLowering {
 				skipWs(ctx);
 				while ($closeNotNextExpr) {
 					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
+						ctx.takeSepByte();
 						skipWs(ctx);
 						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 						_items.push($elemCall);

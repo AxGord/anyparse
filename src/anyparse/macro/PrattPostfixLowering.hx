@@ -661,7 +661,7 @@ final class PrattPostfixLowering {
 					// (call args).
 					while ($closeNotNextExpr) {
 						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-							ctx.pos++;
+							ctx.takeSepByte();
 							skipWs(ctx);
 							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
 						}

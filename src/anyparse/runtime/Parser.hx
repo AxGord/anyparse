@@ -103,6 +103,15 @@ final class Parser {
 	}
 
 	/**
+	 * Consumes the one-byte separator at `pos` that a star loop matched by its character fast path, recording it in the
+	 * token log like `matchLit` records a literal.
+	 */
+	public inline function takeSepByte(): Void {
+		tokens?.push(pos, pos + 1);
+		pos++;
+	}
+
+	/**
 	 * The memo key of rule `rule` under the current `pendingTrivia`. A rule's
 	 * run reads the stash (it drains it, and operator commits read its flags),
 	 * so the stash's content is part of the input the key must name.

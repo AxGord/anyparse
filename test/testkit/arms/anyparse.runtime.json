@@ -207,6 +207,14 @@
 			"find": "if (log != null && kept != null) log.replay(kept);",
 			"replace": "",
 			"note": "a memoised run replayed after a rewind dropped its tokens records none, so `[]` inside a re-tried parenthesis loses its brackets"
+		},
+		{
+			"name": "M-SEP-BYTE-NOT-RECORDED",
+			"type": "anyparse.runtime.Parser",
+			"method": "takeSepByte",
+			"find": "tokens?.push(pos, pos + 1);",
+			"replace": "",
+			"note": "a separator a star loop matches by its character fast path is consumed but not kept, so a call owns its parentheses and no commas"
 		}
 	]
 }
