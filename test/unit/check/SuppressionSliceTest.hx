@@ -62,6 +62,22 @@ class SuppressionSliceTest extends Test {
 	}
 
 	/**
+	 * A `noqa` on the `});` line closing a call whose last argument is a multi-line lambda does
+	 * NOT silence a finding inside the lambda body: the finding's span ends at its last body
+	 * token, before that line. The directive belongs on a line the span touches.
+	 */
+	public function testNoqaOnClosingParenLineMissesLambdaBodyFinding(): Void {
+		final src: String = 'package p;\nclass C {\n\tfunction f() {\n\t\ta.sort((x, y) -> {\n\t\t\treturn x - y;\n\t\t}); // noqa\n\t}\n}';
+		Assert.equals(1, applyAt(src, 5, 4, 5, 17).length);
+	}
+
+	/** The same lambda body with the `noqa` on a body line the finding's span touches is silenced. */
+	public function testNoqaOnLambdaBodyLineSuppresses(): Void {
+		final src: String = 'package p;\nclass C {\n\tfunction f() {\n\t\ta.sort((x, y) -> {\n\t\t\treturn x - y; // noqa\n\t\t});\n\t}\n}';
+		Assert.equals(0, applyAt(src, 5, 4, 5, 17).length);
+	}
+
+	/**
 	 * Suppress `p/C.hx`'s only supplied source against a finding at the given line span.
 	 * `violationFile` defaults to that same file; naming another one models a finding whose
 	 * source `apply` was never handed.

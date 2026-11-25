@@ -16,7 +16,7 @@ A finding whose span sits inside a `macro …` QUOTATION is dropped, for every r
 
 Findings are suppressible inline: a trailing `// noqa` (or `// noqa: <rule>,<rule>` for
 named rules) clears any finding whose source span covers its line — so a directive the
-writer reflowed onto a continuation line still lands — and `// CHECKSTYLE:OFF` …
+writer reflowed onto a continuation line still lands (a span ends at its last token, so a `noqa` on a closing `});` line does not cover a finding inside the multi-line lambda it closes: put it on a line the finding spans) — and `// CHECKSTYLE:OFF` …
 `// CHECKSTYLE:ON` clears a region (matching the finding's reported line) — so one stubborn false positive never makes a rule unusable. `--fail-on
 <error|warning|info>` exits non-zero when a finding at or above that severity survives
 (default: report-only, exit 0), and `--format <text|json|checkstyle>` switches the
