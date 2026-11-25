@@ -1,5 +1,6 @@
 package devkit;
 
+import anyparse.util.Compare;
 import haxe.io.Path;
 import js.Node;
 
@@ -90,7 +91,7 @@ final class LeaseHistory {
 	public static function p90(times: Array<Float>): Null<Float> {
 		if (times.length < MIN_RUNS) return null;
 		final sorted: Array<Float> = times.copy();
-		sorted.sort((a, b) -> if (a < b) -1 else if (a > b) 1 else 0);
+		sorted.sort(Compare.compareFloat);
 		return sorted[Math.ceil(PERCENTILE * sorted.length) - 1];
 	}
 

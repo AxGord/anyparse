@@ -311,7 +311,7 @@ final class CuratorReport {
 	 */
 	public static function landsFrom(sessions: Array<LedgerSession>, project: String, lands: Int, to: Float): Float {
 		final landed: Array<LedgerSession> = sessions.filter(s -> isPipeline(s, project) && s.landed && s.ended <= to);
-		landed.sort((a, b) -> Reflect.compare(a.ended, b.ended));
+		landed.sort((a, b) -> Compare.compareFloat(a.ended, b.ended));
 		if (landed.length > lands) return landed[landed.length - lands - 1].ended;
 		return landed.length == 0 ? to : landed.fold((s, first) -> Math.min(s.started, first), to) - 1;
 	}
@@ -474,7 +474,7 @@ final class CuratorReport {
 		occupants: Array<LedgerSession>, from: Float, to: Float, slots: Int, exclusive: Array<String>
 	): Array<IdleCause> {
 		final starts: Array<Float> = occupants.map(s -> s.started);
-		starts.sort(Reflect.compare);
+		starts.sort(Compare.compareFloat);
 		final minutes: Map<String, Float> = [CAUSE_NO_START => 0, CAUSE_EXCLUSIVE => 0, CAUSE_OTHER => 0];
 		var next: Int = 0;
 		var at: Float = from;

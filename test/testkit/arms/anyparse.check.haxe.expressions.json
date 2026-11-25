@@ -166,7 +166,7 @@
 			"name": "M-RCMP-ANY-OPERAND-TYPE",
 			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
 			"method": "comparison",
-			"find": "&& (type == s.intType || type == s.stringType)",
+			"find": "&& orderable(type, s, named)",
 			"replace": "&& true",
 			"note": "every operand type is accepted, so a Float chain, which answers 0 for a NaN where Reflect.compare answers a sign, is rewritten"
 		},
@@ -575,6 +575,14 @@
 			"find": "[shape.logicalAndKind, shape.logicalOrKind]",
 			"replace": "[shape.logicalAndKind, shape.logicalOrKind, shape.nullCoalesceKind]",
 			"note": "the right operand of ?? is read as a short-circuit operand too"
+		},
+		{
+			"name": "M-RCMP-FLOAT-NAMED-CHAIN",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "orderable",
+			"find": "|| named.of(type) != null",
+			"replace": "|| false",
+			"note": "a Float chain stays silent even where the project names a Float function"
 		}
 	]
 }

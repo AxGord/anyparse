@@ -119,9 +119,9 @@ private typedef Operands = { left: String, right: String }
  *   comparator's result is read there, and `Reflect.compare` promises a sign, not `-1` / `1`.
  * - **Two strict comparisons of the SAME two operands in opposite directions**, valued `-1` and `1` in either order, and `0`
  *   for the rest.
- * - **Both operands `Int`, or both `String`.** A `Float` operand is out of a chain, named function or not: a `NaN` makes the
- *   chain answer `0` where `Reflect.compare` answers a sign and the function answers as it likes. An operand of unknown type
- *   stays silent.
+ * - **Both operands `Int`, `String`, or a type the project names a function for.** A `Float` chain is flagged only under a
+ *   `Float` key, whose function is trusted as the project's order (a `NaN` answers `0` in the chain, as in the shipped
+ *   function); without one it stays silent. An operand of unknown type stays silent.
  * - **Pure operands**, since the chain reads each twice and the call once, and **no comment in the replaced text**.
  *
  * ## Where the fix is offered
@@ -354,7 +354,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			addIfSome(chains, valueChain(sole ?? inner, s), true);
 		}
 		for (chain in chains) {
-			final called: Null<Called> = comparison(chain, source, s, typing);
+			final called: Null<Called> = comparison(chain, source, s, typing, named);
 			final extent: Span = IfExpressionChain.tokenSpan(chain.extent, source, comments);
 			if (called == null) continue;
 			final found: Match = matched(fn, chain, extent, called, named.of(called.type), source, s);
@@ -452,7 +452,9 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	 * answers `nonNull` only when both operands are proved non-null: on `null` the call answers `-1` in both argument
 	 * orders where the chain answers `0`, so a rewrite there changes an answer.
 	 */
-	private static function comparison(chain: Chain, source: String, s: Seams, typing: () -> Null<Typed>): Null<Called> {
+	private static function comparison(
+		chain: Chain, source: String, s: Seams, typing: () -> Null<Typed>, named: CompareFunctions
+	): Null<Called> {
 		final first: Null<Order> = order(chain.rungs[0].cond, s);
 		final second: Null<Order> = order(chain.rungs[1].cond, s);
 		final v1: String = valueText(chain.rungs[0].value, source, s);
@@ -471,7 +473,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final right: QueryNode = v1 == ASCENDING ? first.bigNode : first.smallNode;
 		final type: Null<String> = t.nominal(left);
 		return type != null
-			&& (type == s.intType || type == s.stringType)
+			&& orderable(type, s, named)
 			&& t.nominal(right) == type
 			&& PurityScan.isPure(left, t.purity)
 			&& PurityScan.isPure(right, t.purity)
@@ -760,6 +762,11 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			value(sole);
 		}
 		return out;
+	}
+
+	/** Int and String chains always have `Reflect.compare` to move to; any other type, Float, only where the project names its order. */
+	private static function orderable(type: String, s: Seams, named: CompareFunctions): Bool {
+		return type == s.intType || type == s.stringType || named.of(type) != null;
 	}
 
 }

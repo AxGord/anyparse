@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Compare;
 import devkit.Args;
 import devkit.Cmd.cmd;
 import devkit.Command;
@@ -80,7 +81,7 @@ final class BenchAb {
 	/** `<label> median=… n=… min=… max=…`: the median is the LOWER middle reading of an even count. */
 	public static function medianRow(label: String, readings: Array<Float>): String {
 		final sorted: Array<Float> = readings.copy();
-		sorted.sort(Reflect.compare);
+		sorted.sort(Compare.compareFloat);
 		final n: Int = sorted.length;
 		final pick: Int -> String = i -> fixed(n == 0 ? 0 : sorted[i]).lpad(' ', NUMBER_WIDTH);
 		return '${label.rpad(' ', LABEL_WIDTH)} median=${pick(Std.int((n + 1) / 2) - 1)}  n=$n  min=${pick(0)}  max=${pick(n - 1)}';

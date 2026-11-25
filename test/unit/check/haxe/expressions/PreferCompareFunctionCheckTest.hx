@@ -804,16 +804,32 @@ class PreferCompareFunctionCheckTest extends Test {
 		}
 	}
 
-	/** A `NaN` makes a chain answer `0` where the named function answers as it likes, so a `Float` chain stays silent under the key. */
+	/** Under a `Float` key a chain over `Float`s moves to the named function, which the project names as its order. */
+	@:pin('control')
+	@:killer('M-RCMP-FLOAT-NAMED-CHAIN')
+	public function testFloatChainMovesToTheNamedFunction(): Void {
+		Assert.equals(
+			importing(floats('xs.sort(Order.floats);')),
+			namedFix(floats('xs.sort((a:Float, b:Float) -> a < b ? -1 : a > b ? 1 : 0);'), FLOATS)
+		);
+		Assert.equals(
+			importing(sorted('xs.sort((a:Item, b:Item) -> Order.floats(a.f, b.f));')),
+			namedFix(sorted('xs.sort((a:Item, b:Item) -> a.f < b.f ? -1 : a.f > b.f ? 1 : 0);'), FLOATS)
+		);
+		Assert.equals(
+			importing(sorted('xs.sort((a:Item, b:Item) -> Order.nullableFloats(a.f, b.f));')),
+			namedFix(sorted('xs.sort((a:Item, b:Item) -> a.f < b.f ? -1 : a.f > b.f ? 1 : 0);'), NULLABLE_FLOATS)
+		);
+
+	}
+
+	/** Without a `Float` key a chain over `Float`s is silent: a `NaN` makes it answer `0` where `Reflect.compare` answers a sign. */
 	@:pin('control')
 	@:killer('M-RCMP-ANY-OPERAND-TYPE')
-	public function testFloatChainStaysSilentUnderTheKey(): Void {
-		for (json in [FLOATS, NULLABLE_FLOATS]) {
-			final src: String = floats('xs.sort((a:Float, b:Float) -> a < b ? -1 : a > b ? 1 : 0);');
-			Assert.equals(0, namedRun(src, json).violations.length);
-			final field: String = sorted('xs.sort((a:Item, b:Item) -> a.f < b.f ? -1 : a.f > b.f ? 1 : 0);');
-			Assert.equals(0, namedRun(field, json).violations.length);
-		}
+	public function testFloatChainWithoutTheKeyStaysSilent(): Void {
+		final src: String = sorted('xs.sort((a:Item, b:Item) -> a.f < b.f ? -1 : a.f > b.f ? 1 : 0);');
+		Assert.equals(0, namedRun(src).violations.length);
+		Assert.equals(src, namedFix(src));
 	}
 
 	/** A bare `Reflect.compare` over `String`s outside null safety moves to a `Null<String>` function and stays with a plain one. */

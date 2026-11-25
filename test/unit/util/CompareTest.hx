@@ -73,4 +73,38 @@ final class CompareTest extends Test {
 		Assert.equals(-1, Compare.compareInt(-2147483648, 1));
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-FLOAT-LESS')
+	public function testASmallerFloatComesFirstEvenUnderOneApart(): Void {
+		Assert.equals(-1, Compare.compareFloat(1.25, 1.5));
+		Assert.equals(-1, Compare.compareFloat(-3.0, -2.5));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-FLOAT-MORE')
+	public function testALargerFloatComesLastEvenUnderOneApart(): Void {
+		Assert.equals(1, Compare.compareFloat(1.5, 1.25));
+		Assert.equals(1, Compare.compareFloat(-2.5, -3.0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-FLOAT-EQUAL')
+	public function testEqualFloatsCompareAsZero(): Void {
+		Assert.equals(0, Compare.compareFloat(2.5, 2.5));
+		Assert.equals(0, Compare.compareFloat(0.0, -0.0));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-FLOAT-NAN-LESS')
+	public function testNaNOnTheLeftComparesAsZero(): Void {
+		Assert.equals(0, Compare.compareFloat(Math.NaN, 1.0));
+		Assert.equals(0, Compare.compareFloat(Math.NaN, Math.NaN));
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-FLOAT-NAN-MORE')
+	public function testNaNOnTheRightComparesAsZero(): Void {
+		Assert.equals(0, Compare.compareFloat(1.0, Math.NaN));
+	}
+
 }

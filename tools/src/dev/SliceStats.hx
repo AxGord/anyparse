@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Compare;
 import dev.SliceMeasure.EdgeReading;
 import dev.SliceMeasure.EdgeShare;
 import devkit.Args;
@@ -369,7 +370,7 @@ final class SliceStats {
 	public static function median(values: Array<Float>): Float {
 		if (values.length == 0) return 0;
 		final sorted: Array<Float> = values.copy();
-		sorted.sort(Reflect.compare);
+		sorted.sort(Compare.compareFloat);
 		final mid: Int = sorted.length >> 1;
 		return sorted.length % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 	}

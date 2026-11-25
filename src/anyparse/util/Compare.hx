@@ -20,4 +20,13 @@ final class Compare {
 		return if (a < b) -1 else if (a > b) 1 else 0;
 	}
 
+	/**
+	 * Order of two floats: -1, 0 or 1. Not `a - b`: the difference is a Float, and truncating it to the Int a comparator returns
+	 * makes a gap under one compare as equal. A `NaN` on either side answers 0, as both branch tests are false; the callers that
+	 * rewrite a hand-written chain to this function rely on that being the chain's own answer.
+	 */
+	public static inline function compareFloat(a: Float, b: Float): Int {
+		return if (a < b) -1 else if (a > b) 1 else 0;
+	}
+
 }

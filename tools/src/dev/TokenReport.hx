@@ -1,5 +1,6 @@
 package dev;
 
+import anyparse.util.Compare;
 import dev.TokenTranscript.AgentReading;
 import dev.TokenTranscript.ToolStat;
 import dev.TokenTranscript.TurnReading;
@@ -270,9 +271,9 @@ final class TokenReport {
 			turns += agent.turns.length;
 		}
 		final gaps: Array<Float> = all.map(r -> r.gapSeconds);
-		gaps.sort(Reflect.compare);
+		gaps.sort(Compare.compareFloat);
 		final worst: Array<Rewrite> = all.copy();
-		worst.sort((a, b) -> Reflect.compare(b.extraCost, a.extraCost));
+		worst.sort((a, b) -> Compare.compareFloat(b.extraCost, a.extraCost));
 		return {
 			turns: turns,
 			rewrites: all.length,

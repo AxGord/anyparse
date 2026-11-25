@@ -422,7 +422,8 @@
 			"enabled": true,
 			"compare": {
 				"Int": "anyparse.util.Compare.compareInt",
-				"String": "anyparse.util.Compare.compareString"
+				"String": "anyparse.util.Compare.compareString",
+				"Float": "anyparse.util.Compare.compareFloat"
 			}
 		},
 		"prefer-typed-throw": true,

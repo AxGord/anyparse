@@ -514,6 +514,46 @@
 			"find": "for (x in items) xs.pushUnique(x);",
 			"replace": "for (x in items) if (!xs.contains(x)) xs.insert(0, x);",
 			"note": "new values land at the front, so the source's first-seen order is reversed in the target"
+		},
+		{
+			"name": "M-UTIL-COMPARE-FLOAT-LESS",
+			"type": "anyparse.util.Compare",
+			"method": "compareFloat",
+			"find": "a < b",
+			"replace": "a < b - 1",
+			"note": "a smaller float under one below compares as equal"
+		},
+		{
+			"name": "M-UTIL-COMPARE-FLOAT-MORE",
+			"type": "anyparse.util.Compare",
+			"method": "compareFloat",
+			"find": "a > b",
+			"replace": "a > b + 1",
+			"note": "a larger float under one above compares as equal"
+		},
+		{
+			"name": "M-UTIL-COMPARE-FLOAT-EQUAL",
+			"type": "anyparse.util.Compare",
+			"method": "compareFloat",
+			"find": "a > b",
+			"replace": "a >= b",
+			"note": "equal floats compare as larger"
+		},
+		{
+			"name": "M-UTIL-COMPARE-FLOAT-NAN-LESS",
+			"type": "anyparse.util.Compare",
+			"method": "compareFloat",
+			"find": "a < b",
+			"replace": "!(a >= b)",
+			"note": "a NaN answers as smaller instead of 0"
+		},
+		{
+			"name": "M-UTIL-COMPARE-FLOAT-NAN-MORE",
+			"type": "anyparse.util.Compare",
+			"method": "compareFloat",
+			"find": "a > b",
+			"replace": "!(a <= b)",
+			"note": "a NaN answers as larger instead of 0"
 		}
 	]
 }
