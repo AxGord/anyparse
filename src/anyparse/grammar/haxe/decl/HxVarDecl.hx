@@ -73,9 +73,14 @@ typedef HxVarDecl = {
 	@:kw('#if')
 	var condInit: Null<HxVarInitRegion>;
 
+	/**
+	 * `captureAfterLead` keeps a comment between `=` and the value in `initAfterLead`; a non-empty run is seated
+	 * glued after `=` instead of the `breakAfterLeadOnOverflow` bundle, since the comment already decides the break.
+	 */
 	@:optional
 	@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
-		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), breakAfterLeadOnOverflow('type'), propagateExprPosition)
+		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), breakAfterLeadOnOverflow('type'), propagateExprPosition,
+		captureAfterLead)
 	@:lead('=')
 	var init: Null<HxExpr>;
 

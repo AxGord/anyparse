@@ -142,7 +142,10 @@
 		"vmg/c3.hx": "class A {\n\tfunction f() {\n\t\tvar @:e /* b */ // l2\n\t\tt = 1;\n\t}\n}\n",
 		"vmg/c4.hx": "class A {\n\tfunction f() {\n\t\tvar @:e\n\t\t/* b */ // l3\n\t\ts = 1;\n\t}\n}\n",
 		"arrow/a1.hx": "class C {\n\tfunction f() {\n\t\tmodules.sort((a, b) -> /* c */ if (a < b) -1 else if (a > b) 1 else 0);\n\t\tvar f = x -> /* c */ if (x) 1 else 0;\n\t}\n}\n",
-		"arrow/a2.hx": "class C {\n\tfunction f() {\n\t\tmodules.sort((a, b) -> // why\n\t\t\tif (a < b) -1 else if (a > b) 1 else 0\n\t\t);\n\t\tvar g = x -> // why\n\t\t\tif (x) {\n\t\t\t\t1;\n\t\t\t} else {\n\t\t\t\t0;\n\t\t\t};\n\t\tvar q = (a, b) -> // why\n\t\t\t{\n\t\t\t\ta;\n\t\t\t};\n\t\tvar s = (a, b) -> // why\n\t\t\tswitch a {\n\t\t\t\tcase 1: b;\n\t\t\t\tcase _: a;\n\t\t\t};\n\t\tbar(1,\n\t\t\tx -> // why\n\t\t\t\tif (x) {\n\t\t\t\t\t1;\n\t\t\t\t} else {\n\t\t\t\t\t0;\n\t\t\t\t});\n\t}\n}\n"
+		"arrow/a2.hx": "class C {\n\tfunction f() {\n\t\tmodules.sort((a, b) -> // why\n\t\t\tif (a < b) -1 else if (a > b) 1 else 0\n\t\t);\n\t\tvar g = x -> // why\n\t\t\tif (x) {\n\t\t\t\t1;\n\t\t\t} else {\n\t\t\t\t0;\n\t\t\t};\n\t\tvar q = (a, b) -> // why\n\t\t\t{\n\t\t\t\ta;\n\t\t\t};\n\t\tvar s = (a, b) -> // why\n\t\t\tswitch a {\n\t\t\t\tcase 1: b;\n\t\t\t\tcase _: a;\n\t\t\t};\n\t\tbar(1,\n\t\t\tx -> // why\n\t\t\t\tif (x) {\n\t\t\t\t\t1;\n\t\t\t\t} else {\n\t\t\t\t\t0;\n\t\t\t\t});\n\t}\n}\n",
+		"varinit/hxformat.json": "{}\n",
+		"varinit/v1.hx": "class A {\n\tfunction f() {\n\t\tvar x = /* c */ 1;\n\t}\n}\n",
+		"varinit/v2.hx": "class A {\n\tvar f = /* c */ 1;\n\n\tfunction f() {\n\t\tvar y:Int = /* c */ 1;\n\t\tvar a = 1, b = /* d */ 2;\n\t\tvar z = // z\n\t\t\tsomeFunctionCall(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccccccc, dddddddddddddddddddddddddddddd, eeeeeeeeeeeeeeeeeeee);\n\t\tvar p = // p\n\t\t\t{xxx: 1, yyyyyyyyyyyyyyyyyyyyyyyyyyyy: 2, zzzzzzzzzzzzzzzzzzzzzzzzzz: 3, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww: 4};\n\t\tvar q = // q\n\t\t\t[aaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccc, ddddddddddddddddddddddddddd];\n\t\tvar o = /* o */ {xxx: 1, yyyyyyyyyyyyyyyyyyyyyyyyyyyy: 2, zzzzzzzzzzzzzzzzzzzzzzzzzz: 3, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww: 4};\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -2449,6 +2452,44 @@
 			"expect": {
 				"exit": 0,
 				"out": "b36b4970f8c030dd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "varinit/v1.hx",
+			"note": "a comment between a var initializer's `=` and its value: base drops it and refuses (exit 1); kept, a value below a line comment nested one indent under it",
+			"fixpoint": "varinit/v1.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"varinit/v1.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "a2522145b7552e47",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "varinit/v2.hx",
+			"note": "a comment between a var initializer's `=` and its value: base drops it and refuses (exit 1); kept, a value below a line comment nested one indent under it",
+			"fixpoint": "varinit/v2.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"varinit/v2.hx",
+				"--one-pass"
+			],
+			"expect": {
+				"exit": 0,
+				"out": "5f0b28df10a66aa8",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"onePass": true,

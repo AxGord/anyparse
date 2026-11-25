@@ -347,7 +347,15 @@ final class WriterRefFieldLowering {
 			// the post-branch unconditional `writeCall` push is skipped.
 			final breakAfterEqArg: Null<String> = child.fmtReadString('breakAfterLeadOnOverflow');
 			if (breakAfterEqArg != null && !ctx.isTightLead(leadText)) {
-				optParts.push(breakAfterLeadOnOverflowWrap(leadText, writeCall, breakAfterEqArg));
+				final bundle: Expr = breakAfterLeadOnOverflowWrap(leadText, writeCall, breakAfterEqArg);
+				if (afterLead == null) {
+					optParts.push(bundle);
+				} else {
+					// A captured comment after the lead decides the `=`-break itself, so it takes the seated shape and the
+					// overflow probe is skipped.
+					final seated: Expr = WriterLoweringSupport.afterLeadSeatedDoc(leadText, afterLead, writeCall);
+					optParts.push(macro $afterLead == null || $afterLead.length == 0 ? $bundle : $seated);
+				}
 				breakAfterEqEmitted = true;
 			} else {
 				// Trailing space after a non-tight optional lead
@@ -363,11 +371,6 @@ final class WriterRefFieldLowering {
 				optParts.push(macro _dop(' '));
 			}
 		}
-		if (breakAfterEqEmitted && afterLead != null)
-			Context.fatalError(
-				'captureAfterLead cannot share a field with breakAfterLeadOnOverflow: the bundled lead has no comment seat',
-				Context.currentPos()
-			);
 		if (!breakAfterEqEmitted) {
 			// The `<field>AfterLead` run sits between the lead (with its own spacing) and the value, where the source wrote it.
 			if (afterLead != null) optParts.push(WriterLoweringSupport.afterLeadDoc(afterLead));

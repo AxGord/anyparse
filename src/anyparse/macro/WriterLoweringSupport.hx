@@ -56,6 +56,24 @@ final class WriterLoweringSupport {
 	}
 
 	/**
+	 * The lead, its run and the value for a non-empty `<field>AfterLead` run: a run of inline blocks keeps the value
+	 * behind it; a run breaking a line anywhere puts the rest of the run and the value inside one indent step, so the
+	 * value's own later lines (a broken literal, wrapped call args) nest under it as after a width break of the lead.
+	 */
+	public static function afterLeadSeatedDoc(leadText: String, access: Expr, writeCall: Expr): Expr {
+		return macro anyparse.runtime.CommentRun.hasBreak($access)
+			? _dc([
+				_dt($v{leadText}),
+				_dop(' '),
+				_dn(
+					opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth,
+					_dc([leadingCommentsBefore($access, _dohsbh(), opt), $writeCall])
+				)
+			])
+			: _dc([_dt($v{leadText}), _dop(' '), ${afterLeadDoc(access)}, $writeCall]);
+	}
+
+	/**
 	 * Build the field-access Expr `opt.<fieldName>` — used everywhere the
 	 * generated writer reads a `WriteOptions` knob (cascade rules, body
 	 * policy flags, leftCurly placement, etc.). Replaces 4-line inline

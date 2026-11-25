@@ -3769,6 +3769,30 @@
 			"find": "_leadSame == null ? _leadOwn : [_leadSame].concat(_leadOwn);",
 			"replace": "_leadSame == null ? [] : [_leadSame];",
 			"note": "the own-line comments after a ternary's `?` or `:` are taken off the stash but never kept, so the writer drops them"
+		},
+		{
+			"name": "M-VAR-INIT-AFTER-LEAD-BUNDLED",
+			"type": "anyparse.macro.WriterRefFieldLowering",
+			"method": "emitOptionalRefLead",
+			"find": "$afterLead == null || $afterLead.length == 0 ? $bundle : $seated",
+			"replace": "$bundle",
+			"note": "a comment after a var initializer's `=` goes through the overflow bundle, which has no comment seat, so the writer drops it"
+		},
+		{
+			"name": "M-VAR-INIT-LINE-COMMENT-VALUE-UNNESTED",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "afterLeadSeatedDoc",
+			"find": "anyparse.runtime.CommentRun.hasBreak($access)",
+			"replace": "false",
+			"note": "a value below a line comment after `=` is no longer nested under it, so a broken literal or wrapped call indents from the statement instead of the value"
+		},
+		{
+			"name": "M-VAR-INIT-MIXED-RUN-VALUE-UNNESTED",
+			"type": "anyparse.macro.WriterLoweringSupport",
+			"method": "afterLeadSeatedDoc",
+			"find": "anyparse.runtime.CommentRun.hasBreak($access)",
+			"replace": "anyparse.runtime.CommentRun.endsInBreak($access)",
+			"note": "a line comment then an inline block after `=` takes the glued seat again, so a broken literal after them indents from the statement instead of the value"
 		}
 	]
 }

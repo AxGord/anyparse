@@ -1,5 +1,6 @@
 package anyparse.runtime;
 
+using Lambda;
 using StringTools;
 
 /**
@@ -22,6 +23,11 @@ final class CommentRun {
 	/** Whether the token after `run` starts the next line: the run's last comment is a line comment or a block spanning lines. */
 	public static function endsInBreak(run: Array<String>): Bool {
 		return run.length > 0 && !isInlineBlock(run[run.length - 1]);
+	}
+
+	/** Whether laying out `run` breaks a line anywhere: some comment in it is a line comment or a block spanning lines. */
+	public static function hasBreak(run: Array<String>): Bool {
+		return run.exists(c -> !isInlineBlock(c));
 	}
 
 	/** `comments` joined into one slot value, in source order. */

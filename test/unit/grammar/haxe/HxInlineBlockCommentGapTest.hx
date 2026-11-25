@@ -40,7 +40,9 @@ class HxInlineBlockCommentGapTest extends Test {
 		// An enum constructor's parameters are the trivia list a function's are, so the comment rides the element slot.
 		['enum_ctor_arg', 'enum Foo {\n\tA(/* c */ x: Int);\n}\n'],
 		// The gap after a typedef's `=` fills the `<field>AfterLead` slot (`@:fmt(captureAfterLead)`).
-		['typedef_assign', 'typedef T = /* c */ Int;\n']
+		['typedef_assign', 'typedef T = /* c */ Int;\n'],
+		// The gap after a var initializer's `=` fills `initAfterLead`, on a field as on a local.
+		['field_init', 'class Foo {\n\tvar x: Int = /* f */ 1;\n}\n']
 	];
 
 	/** Seams the Trivia parser captures — the round trip keeps the comment. */
@@ -49,6 +51,10 @@ class HxInlineBlockCommentGapTest extends Test {
 		['assign_rhs_lead', 'x = /* rh */ 2;'],
 		['assign_op', 'x += /* o */ 1;'],
 		['var_init_trail', 'var x = 5 /* i */;'],
+		['var_init', 'var x = /* i */ 5;'],
+		['multi_var', 'var a = 1, b = /* m */ 2;'],
+		['binop_lhs_lead', 'var v = /* m */ a + b;'],
+		['ternary_cond', 'var v = /* q */ c ? a : b;'],
 		['return_trail', 'return x /* r */;'],
 		['stmt_lead', '/* s */ run();'],
 		['callarg_lead', 'f(/* a */ x);'],
@@ -124,11 +130,7 @@ class HxInlineBlockCommentGapTest extends Test {
 		['return_void', 'return /* v */;'],
 		['throw_trail', 'throw e /* t */;'],
 		['break_trail', 'while (c) {\n\t\t\tbreak /* b */;\n\t\t}'],
-		['var_init', 'var x = /* i */ 5;'],
-		['multi_var', 'var a = 1, b = /* m */ 2;'],
 		['paren_trail', 'var v = (x /* c */);'],
-		['binop_lhs_lead', 'var v = /* m */ a + b;'],
-		['ternary_cond', 'var v = /* q */ c ? a : b;'],
 		['unary_lead', 'var v = !/* u */ x;'],
 		['field_access', 'var v = x./* d */ y;'],
 		['index_lead', 'var v = a[/* ix */ 0];'],
@@ -138,7 +140,6 @@ class HxInlineBlockCommentGapTest extends Test {
 
 	/** Slot-less seams outside a function body — same contract, other hosts. */
 	private static final SLOT_LESS_DECLS: Array<Array<String>> = [
-		['field_init', 'class Foo {\n\tvar x: Int = /* f */ 1;\n}\n'],
 		['typeparam', 'class Foo {\n\tvar x: Array</* t */ Int>;\n}\n'],
 		['extends_lead', 'class Foo extends /* e */ Bar {}\n'],
 		['anon_field', 'typedef T = {\n\ta: /* a */ Int,\n}\n']
