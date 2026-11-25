@@ -16,6 +16,7 @@ import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.io.Path;
+import testkit.FixtureCacheRun;
 import unit.CheckFixture;
 import unit.cli.CliFixture;
 
@@ -5863,6 +5864,16 @@ class MemberReachFactsTest extends Test {
 		final std: String = StdResolver.stdDir() ?? '';
 		final path: String = FileIdentity.canonical(Sys.getCwd(), Path.join([std, 'cpp/NativeArray.hx']));
 		assertMatch(builtAsk(CPP_BUILD, ['Main.hx' => main], [path => sys.io.File.getContent(path)]), r -> r.match(Proven));
+	}
+
+	/** Compiles recorded by an earlier run replay; a run no runner wired gets the cache a shard has. */
+	public function setupClass(): Void {
+		FixtureCacheRun.engage();
+	}
+
+	public function teardownClass(): Void {
+		final counts: Null<String> = FixtureCacheRun.release();
+		if (counts != null) Sys.println('fixture cache: $counts');
 	}
 
 }

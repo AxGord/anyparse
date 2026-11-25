@@ -108,6 +108,14 @@
 			"find": "final overrides: Null<DynamicAccess<Null<String>>> = request.env;",
 			"replace": "final overrides: Null<DynamicAccess<Null<String>>> = null;",
 			"note": "the variables a job sets over the environment are not read, so a lookup answers an entry that ran the live arm's switch, and keys by this process's compiler variables"
+		},
+		{
+			"name": "M-FIXTURE-CACHE-RUN-NO-WIRING",
+			"type": "testkit.FixtureCacheRun",
+			"method": "engage",
+			"find": "Sys.putEnv(ProcessSpawn.ANSWER_ENV, FixtureCache.answer(dir.path));",
+			"replace": "Sys.putEnv(ProcessSpawn.ANSWER_ENV, \"\");",
+			"note": "an engaged run names no answer module, so every hit of a plain run is compiled again"
 		}
 	]
 }
