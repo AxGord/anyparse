@@ -42,9 +42,10 @@ class WrittenNameDeclarationsTest extends Test {
 
 	private static final ABSTRACT: String = 'package b;\n\nabstract U(Int) from Int to Int {\n'
 		+ '\t@:op(A + B) static function add(a: U, b: U): U return a;\n\n\t@:arrayAccess function get(i: Int): String return "";\n}\n';
-	private static final TWINS: Array<{ file: String, source: String }> = [
-		{ file: 't/T.hx', source: 'package t;\n\n#if a\nclass T {}\n#else\nclass T {}\n#end\n' }
-	];
+	private static final TWINS: Array<{ file: String, source: String }> = [{
+		file: 't/T.hx',
+		source: 'package t;\n\n#if a\nclass T {}\n#else\nclass T {}\n#end\n'
+	}];
 
 	@:pin('control')
 	@:killer('M-MAY-DENOTE-NEVER-BOUND')

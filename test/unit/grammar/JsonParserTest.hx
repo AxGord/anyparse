@@ -100,9 +100,10 @@ class JsonParserTest extends Test {
 	}
 
 	public function testNested(): Void {
-		parseEq('{"items":[1,{"x":"y"}]}', JObject([
-			{ key: 'items', value: JArray([JNumber(1), JObject([{ key: 'x', value: JString('y') }])]) }
-		]));
+		parseEq('{"items":[1,{"x":"y"}]}', JObject([{
+			key: 'items',
+			value: JArray([JNumber(1), JObject([{ key: 'x', value: JString('y') }])])
+		}]));
 	}
 
 	public function testMixedTypes(): Void {

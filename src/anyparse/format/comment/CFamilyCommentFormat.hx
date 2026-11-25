@@ -75,6 +75,7 @@ final class CFamilyCommentFormat implements TextFormat {
 		alignInlineSwitchCaseBody: false,
 		comprehensionCuddledOpen: false,
 		soleItemCuddledBrackets: false,
+		soleObjectCuddledBrackets: false,
 		methodChainCuddledLinks: false,
 		ternaryCuddledBraces: false,
 		addLineCommentSpace: true,

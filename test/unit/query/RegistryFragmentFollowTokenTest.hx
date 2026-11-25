@@ -48,15 +48,13 @@ final class RegistryFragmentFollowTokenTest extends Test {
 		final now: String = head + after + tail;
 		final json: String =
 			'{"arms":[{"name":"A","type":"p.C","method":"f","find":${JsonText.quote(find)},"replace":${JsonText.quote(replace)}}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.C',
-				source: old,
-				tree: plugin.parseFile(old),
-				newSource: now,
-				newTree: plugin.parseFile(now)
-			}
-		], plugin, null);
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.C',
+			source: old,
+			tree: plugin.parseFile(old),
+			newSource: now,
+			newTree: plugin.parseFile(now)
+		}], plugin, null);
 	}
 
 }

@@ -68,7 +68,7 @@ one of them is where the difference shows.
 
 Alongside them, on `wrapping` itself: `maxLineLength` (Int), `arrayMatrixWrap` (String),
 `trailingComma`, `comprehensionCuddledOpen` (Bool), `methodChainCuddledLinks` (Bool),
-`soleItemCuddledBrackets` (Bool), `ternaryCuddledBraces` (Bool).
+`soleItemCuddledBrackets` (Bool), `soleObjectCuddledBrackets` (Bool), `ternaryCuddledBraces` (Bool).
 
 `arrayMatrixCollapse` (a rule set shaped like `arrayWrap`) decides a GRID array literal — rows of two or more
 cells in the source, as `arrayMatrixWrap` aligns them. No other list reads its source line breaks; a grid keeps its
@@ -83,7 +83,7 @@ sets `trailingCommas.arrayLiteralDefault`, `callArgumentDefault` or `objectLiter
 nothing about `wrapping.trailingComma` loads as `"keep"`, so the comma it asks for is added; an explicit
 `"remove"` outranks every add-knob.
 
-All four cuddle keys are **anyparse extensions** — the fork has no such concept, so their
+All five cuddle keys are **anyparse extensions** — the fork has no such concept, so their
 shapes were derived here, not copied — and each is documented on its `WriteOptions` field:
 `ternaryCuddledBraces` (a broken ternary's `:` and the else branch's opening delimiter ride
 the then branch's own closing line, `} : {`, only when the then branch has a closing line to
@@ -91,7 +91,7 @@ ride and the glue would not cost lines; the width guard reads the ternary's real
 width off the render stack through `Doc.IfArrowContinuationFitsWithRest`),
 `comprehensionCuddledOpen` (a comprehension that is the sole item of its brackets keeps
 `[ for (head)` on the open line whenever the head fits, with the body one level down and
-the `]` on its own line), `methodChainCuddledLinks` and `soleItemCuddledBrackets`
+the `]` on its own line), `methodChainCuddledLinks`, `soleItemCuddledBrackets` and `soleObjectCuddledBrackets`
 (`HxFormatWrappingSection`'s doc says what each recognises). All default `false`.
 
 `ternaryMultilineBranch` is the FORK's key (FX-1b), with its spellings: `"break"` puts a

@@ -543,9 +543,10 @@ final class MapKeysLookup extends RuleBase {
 			return null;
 		final reuse: Null<{ name: String, span: Span }> = reusableValueDecl(p.body, p.path, p.keyName, source, cfg);
 		final valName: String = reuse == null ? freshValueName(source, bodySpan, p.path[0], p.keyName) : reuse.name;
-		final edits: Array<{ span: Span, text: String }> = [
-			{ span: new Span(keyStart, iterSpan.to), text: '${p.keyName} => $valName in ${source.substring(recvSpan.from, recvSpan.to)}' }
-		];
+		final edits: Array<{ span: Span, text: String }> = [{
+			span: new Span(keyStart, iterSpan.to),
+			text: '${p.keyName} => $valName in ${source.substring(recvSpan.from, recvSpan.to)}'
+		}];
 		// The declaration's line span STRICTLY contains its initialiser's lookup span, so
 		// `dropContainedEdits` drops that lookup edit whichever order the two are pushed in.
 		if (reuse != null) edits.push({ span: ElementSpan.lineExtendedSpan(source, reuse.span), text: '' });

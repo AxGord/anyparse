@@ -71,12 +71,10 @@ class PreferExistingTypedefCheckTest extends Test {
 			}
 		];
 		Assert.equals(0, violations(files).length);
-		final same: Array<SourceEntry> = files.slice(0, 3).concat([
-			{
-				file: 'src/app/User.hx',
-				source: 'package app;\n\nimport one.Foo;\n\nclass User {\n\tpublic function f(): { a:Foo, b:Int } return null;\n}\n'
-			}
-		]);
+		final same: Array<SourceEntry> = files.slice(0, 3).concat([{
+			file: 'src/app/User.hx',
+			source: 'package app;\n\nimport one.Foo;\n\nclass User {\n\tpublic function f(): { a:Foo, b:Int } return null;\n}\n'
+		}]);
 		Assert.equals(1, violations(same).length);
 	}
 

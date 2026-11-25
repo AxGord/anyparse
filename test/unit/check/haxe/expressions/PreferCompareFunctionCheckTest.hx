@@ -227,11 +227,13 @@ class PreferCompareFunctionCheckTest extends Test {
 
 	/** A parameter written without a type takes its element type from the array the callback is handed to. */
 	public function testUntypedParametersTakeTheElementType(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'Array.hx', source: 'extern class Array<T> { function sort(f:(T, T) -> Int):Void; }' }
-		].concat([
-			{ file: 'C.hx', source: sorted('xs.sort((a, b) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0);') }
-		]);
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'Array.hx',
+			source: 'extern class Array<T> { function sort(f:(T, T) -> Int):Void; }'
+		}].concat([{
+			file: 'C.hx',
+			source: sorted('xs.sort((a, b) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0);')
+		}]);
 		Assert.equals(1, CheckFixture.violationsIn(new PreferCompareFunction(), files, null, bare).length);
 	}
 
@@ -252,9 +254,10 @@ class PreferCompareFunctionCheckTest extends Test {
 			Assert.equals('prefer-compare-function', found[0].rule);
 		}
 		// A report-only finding still replaces the fixable findings of the rules it supersedes on the same chain.
-		final fields: Array<Violation> = Linter.collect([
-			{ file: 'C.hx', source: sorted('xs.sort((a:Item, b:Item) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0);') }
-		], plugin, checks, bare, false);
+		final fields: Array<Violation> = Linter.collect([{
+			file: 'C.hx',
+			source: sorted('xs.sort((a:Item, b:Item) -> a.n < b.n ? -1 : a.n > b.n ? 1 : 0);')
+		}], plugin, checks, bare, false);
 		Assert.equals(1, fields.length);
 		Assert.equals('prefer-compare-function', fields[0].rule);
 		Assert.isTrue(fields[0].message.indexOf('no fix') >= 0);

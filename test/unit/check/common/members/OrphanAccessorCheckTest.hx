@@ -292,9 +292,10 @@ class OrphanAccessorCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-ORPHAN-ARMS-SHARE-REASON')
 	public function testTheUnresolvedSupertypeArmAlsoSaysWhyNoEditFollows(): Void {
-		final found: Null<Violation> = loneFinding([
-			{ file: 'C.hx', source: 'class C extends Missing {\n\tpublic function get_data():Int return 0;\n}' }
-		]);
+		final found: Null<Violation> = loneFinding([{
+			file: 'C.hx',
+			source: 'class C extends Missing {\n\tpublic function get_data():Int return 0;\n}'
+		}]);
 		if (found == null) return;
 		Assert.equals(Severity.Info, found.severity);
 		final reason: Null<String> = found.declineReason;

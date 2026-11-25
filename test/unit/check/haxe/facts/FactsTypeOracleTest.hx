@@ -114,9 +114,11 @@ class FactsTypeOracleTest extends Test {
 	public function testAFinalClassIsItsOwnHome(): Void {
 		// `final class` projects as a wrapper around the named class form; the wrapper names nothing itself
 		final modified: String = '@:x final $SRC';
-		final facts: CompilerFacts = CompilerFacts.build([
-			{ name: 'one', text: dump('Int', 0, 'Int', 'Int', 'Int', modified), file: path -> path }
-		], file -> file == 'A.hx' ? modified : null, file -> file);
+		final facts: CompilerFacts = CompilerFacts.build([{
+			name: 'one',
+			text: dump('Int', 0, 'Int', 'Int', 'Int', modified),
+			file: path -> path
+		}], file -> file == 'A.hx' ? modified : null, file -> file);
 		final oracle: FactsTypeOracle = new FactsTypeOracle(facts, file -> modified, null, PLUGIN);
 		Assert.same(Typed('Int'), oracle.localType('A.hx', declOf(modified), 'v', modified.indexOf('var v') + 5));
 	}

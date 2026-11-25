@@ -77,13 +77,11 @@ class ExplicitLocalTypeIndexAccessTest extends Test {
 		// The table is keyed on the SIMPLE name, so an indexed PROJECT `Vector<T>` with its own
 		// `@:arrayAccess` would be read as the stdlib one and annotated `Int` where the real return
 		// is `Null<Int>`. Every sibling arm carries this shadow gate; so does this one.
-		assertNoFixIdx(wrap('final v:Vector<Int> = null;\n\t\tfinal e = v[0];'), [
-			{
-				file: 'mypkg/Vector.hx',
-				source: 'package mypkg;\nabstract Vector<T>(Array<T>) {\n'
-				+ '\t@:arrayAccess public inline function get(i:Int):Null<T> return this[i];\n}'
-			}
-		]);
+		assertNoFixIdx(wrap('final v:Vector<Int> = null;\n\t\tfinal e = v[0];'), [{
+			file: 'mypkg/Vector.hx',
+			source: 'package mypkg;\nabstract Vector<T>(Array<T>) {\n'
+			+ '\t@:arrayAccess public inline function get(i:Int):Null<T> return this[i];\n}'
+		}]);
 	}
 
 	public function testSkipIndexAccessOversizedAnonElement(): Void {

@@ -151,31 +151,25 @@ final class ExecLedgerTest extends Test {
 	@:pin('control')
 	@:killer('M-EXECLEDGER-OVERHEAD-CPU-TWICE')
 	public function testTheLandBatteryStepKeepsOnlyItsOverheadCpu(): Void {
-		final land: Array<LedgerRow> = [
-			{
-				row: 'battery',
-				phase: 'land',
-				wallMs: 100,
-				cpuS: 30
-			}
-		];
-		final span: Array<LedgerRow> = [
-			{
-				row: 'span',
-				phase: 'battery',
-				wallMs: 80,
-				cpuS: 25
-			}
-		];
+		final land: Array<LedgerRow> = [{
+			row: 'battery',
+			phase: 'land',
+			wallMs: 100,
+			cpuS: 30
+		}];
+		final span: Array<LedgerRow> = [{
+			row: 'span',
+			phase: 'battery',
+			wallMs: 80,
+			cpuS: 25
+		}];
 		Assert.equals(5.0, ExecLedger.withoutDoubleCount(land, span)[0].cpuS);
-		Assert.equals(0.0, ExecLedger.withoutDoubleCount(land, [
-			{
-				row: 'span',
-				phase: 'battery',
-				wallMs: 80,
-				cpuS: 40
-			}
-		])[0].cpuS);
+		Assert.equals(0.0, ExecLedger.withoutDoubleCount(land, [{
+			row: 'span',
+			phase: 'battery',
+			wallMs: 80,
+			cpuS: 40
+		}])[0].cpuS);
 		Assert.equals(
 			30.0, ExecLedger.withoutDoubleCount(land, [{ row: 'span', phase: 'battery', wallMs: 80 }])[0].cpuS,
 			'an unmeasured span cuts nothing'

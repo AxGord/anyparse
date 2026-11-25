@@ -20,12 +20,10 @@ import unit.cli.CliFixture;
 class ImportGraphTest extends Test {
 
 	/** `GraphFixture` plus a package importing by wildcard, by static field and from outside the scope. */
-	private static final FILES: Array<{ file: String, source: String }> = GraphFixture.FILES.concat([
-		{
-			file: 'pkg/c/Delta.hx',
-			source: 'package pkg.c;\n\nimport haxe.ds.StringMap;\nimport pkg.a.*;\nimport pkg.b.Beta.make;\n\nclass Delta {}\n'
-		}
-	]);
+	private static final FILES: Array<{ file: String, source: String }> = GraphFixture.FILES.concat([{
+		file: 'pkg/c/Delta.hx',
+		source: 'package pkg.c;\n\nimport haxe.ds.StringMap;\nimport pkg.a.*;\nimport pkg.b.Beta.make;\n\nclass Delta {}\n'
+	}]);
 
 	/** The package map as Mermaid. */
 	private static final PACKAGE_MERMAID: String = [
@@ -73,9 +71,10 @@ class ImportGraphTest extends Test {
 	 * as the edge's label; the two packages importing each other are drawn red.
 	 */
 	public function testPackageMapAsMermaid(): Void {
-		final weighted: Array<{ file: String, source: String }> = FILES.concat([
-			{ file: 'pkg/c/Epsilon.hx', source: 'package pkg.c;\n\nimport pkg.a.Alpha;\n\nclass Epsilon {}\n' }
-		]);
+		final weighted: Array<{ file: String, source: String }> = FILES.concat([{
+			file: 'pkg/c/Epsilon.hx',
+			source: 'package pkg.c;\n\nimport pkg.a.Alpha;\n\nclass Epsilon {}\n'
+		}]);
 		Assert.equals(PACKAGE_MERMAID, GraphMermaid.write(ImportGraph.build(indexOf(weighted), Package), 'package map'));
 	}
 
@@ -121,9 +120,10 @@ class ImportGraphTest extends Test {
 
 	/** An alias import counts for the type it aliases. */
 	public function testAnAliasImportCountsForItsType(): Void {
-		final files: Array<{ file: String, source: String }> = FILES.concat([
-			{ file: 'pkg/d/Eta.hx', source: 'package pkg.d;\n\nimport pkg.a.Alpha as A;\n\nclass Eta {}\n' }
-		]);
+		final files: Array<{ file: String, source: String }> = FILES.concat([{
+			file: 'pkg/d/Eta.hx',
+			source: 'package pkg.d;\n\nimport pkg.a.Alpha as A;\n\nclass Eta {}\n'
+		}]);
 		Assert.isTrue(edges(ImportGraph.build(indexOf(files), Package)).contains('pkg.d -> pkg.a x1'));
 	}
 

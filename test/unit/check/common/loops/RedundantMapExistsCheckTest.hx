@@ -194,15 +194,13 @@ class RedundantMapExistsCheckTest extends Test {
 	): Array<{ file: String, source: String }> {
 		final vis: String = visibility ?? 'private';
 		final expr: String = lookup ?? '$name.exists(k) ? $name[k] : k';
-		return [
-			{
-				file: 'C.hx',
-				source: 'class C {\n\n\t$vis var $name:Map<String, String> = [$entries];\n\n\tvar n:Map<String, String> = [];\n\n'
-					+ '\tvar arr:Array<String> = [];\n\n\tvar other:String = \'o\';\n\n\tvar a:Bool = true;\n\n\tpublic function new() {}\n'
-					+ '\n\tpublic function read(k:String):String {\n\t\treturn $expr;\n\t}\n\n\tprivate function f(s:String):String {\n'
-					+ '\t\treturn s;\n\t}\n$extra\n}'
-			}
-		];
+		return [{
+			file: 'C.hx',
+			source: 'class C {\n\n\t$vis var $name:Map<String, String> = [$entries];\n\n\tvar n:Map<String, String> = [];\n\n'
+				+ '\tvar arr:Array<String> = [];\n\n\tvar other:String = \'o\';\n\n\tvar a:Bool = true;\n\n\tpublic function new() {}\n'
+				+ '\n\tpublic function read(k:String):String {\n\t\treturn $expr;\n\t}\n\n\tprivate function f(s:String):String {\n'
+				+ '\t\treturn s;\n\t}\n$extra\n}'
+		}];
 	}
 
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {

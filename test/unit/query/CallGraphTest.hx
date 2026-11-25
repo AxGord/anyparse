@@ -1321,13 +1321,11 @@ class CallGraphTest extends Test {
 					+ 'lib():Void L.run(l -> l.wait()); static function own(b:Box<utils.Lock>, s:sys.thread.Lock):Void b.get(s).wait(); }'
 			}
 		];
-		final library: Array<{ file: String, source: String }> = [
-			{
-				file: 'lib/L.hx',
-				source: 'package lib; extern class L { @:overload(function(f:(sys.thread.Lock) -> Void):Void {})'
-					+ ' public static function run(f:(utils.Lock) -> Void):Void; }'
-			}
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'lib/L.hx',
+			source: 'package lib; extern class L { @:overload(function(f:(sys.thread.Lock) -> Void):Void {})'
+				+ ' public static function run(f:(utils.Lock) -> Void):Void; }'
+		}];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final g: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(library), plugin));
 		function targets(from: String): Array<String> {
@@ -1741,12 +1739,10 @@ class CallGraphTest extends Test {
 				source: 'package app; class X { static function arr():Void { final a:Array<sys.thread.Lock> = []; a[0].wait(); } }'
 			}
 		];
-		final std: Array<{ file: String, source: String }> = [
-			{
-				file: QueryTestHelpers.stdPath('Array.hx'),
-				source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }'
-			}
-		];
+		final std: Array<{ file: String, source: String }> = [{
+			file: QueryTestHelpers.stdPath('Array.hx'),
+			source: 'extern class Array<T> { public function new(); public function push(x:T):Int; }'
+		}];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final indexed: CallGraph = CallGraph.build(project, plugin, SymbolIndex.build(project.concat(std), plugin));
 		function targets(graph: CallGraph, from: String): Array<String> {

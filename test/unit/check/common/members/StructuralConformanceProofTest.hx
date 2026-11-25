@@ -218,12 +218,14 @@ class StructuralConformanceProofTest extends Test {
 			{ file: 'Other.hx', source: 'class Other {}' },
 			{ file: 'S.hx', source: 'typedef S = { final x:Base; var y:Int; }' }
 		];
-		Assert.equals(1, owner(model.concat([
-			{ file: 'C.hx', source: 'class C { public var x:Sub = null; public var y:Int = 0; }' }
-		])));
-		Assert.equals(2, owner(model.concat([
-			{ file: 'C.hx', source: 'class C { public var x:Other = null; public var y:Int = 0; }' }
-		])), 'unrelated');
+		Assert.equals(1, owner(model.concat([{
+			file: 'C.hx',
+			source: 'class C { public var x:Sub = null; public var y:Int = 0; }'
+		}])));
+		Assert.equals(2, owner(model.concat([{
+			file: 'C.hx',
+			source: 'class C { public var x:Other = null; public var y:Int = 0; }'
+		}])), 'unrelated');
 	}
 
 	/**
@@ -238,12 +240,14 @@ class StructuralConformanceProofTest extends Test {
 			{ file: 'b/T.hx', source: 'package b;\nclass T {}' },
 			{ file: 'S.hx', source: 'import a.T;\ntypedef S = { var x:T; var y:Int; }' }
 		];
-		Assert.equals(0, owner(model.concat([
-			{ file: 'C.hx', source: 'import a.T;\nclass C { public var x:T = null; public var y:Int = 0; }' }
-		])));
-		Assert.equals(2, owner(model.concat([
-			{ file: 'C.hx', source: 'import b.T;\nclass C { public var x:T = null; public var y:Int = 0; }' }
-		])), 'b.T');
+		Assert.equals(0, owner(model.concat([{
+			file: 'C.hx',
+			source: 'import a.T;\nclass C { public var x:T = null; public var y:Int = 0; }'
+		}])));
+		Assert.equals(2, owner(model.concat([{
+			file: 'C.hx',
+			source: 'import b.T;\nclass C { public var x:T = null; public var y:Int = 0; }'
+		}])), 'b.T');
 	}
 
 	/**
@@ -259,12 +263,14 @@ class StructuralConformanceProofTest extends Test {
 			{ file: 'Bare.hx', source: 'abstract Bare(Base) {}' },
 			{ file: 'S.hx', source: 'typedef S = { final x:Base; var y:Int; }' }
 		];
-		Assert.equals(1, owner(model.concat([
-			{ file: 'C.hx', source: 'class C { public var x:ToBase = null; public var y:Int = 0; }' }
-		])));
-		Assert.equals(2, owner(model.concat([
-			{ file: 'C.hx', source: 'class C { public var x:Bare = null; public var y:Int = 0; }' }
-		])), 'no clause reaches Base');
+		Assert.equals(1, owner(model.concat([{
+			file: 'C.hx',
+			source: 'class C { public var x:ToBase = null; public var y:Int = 0; }'
+		}])));
+		Assert.equals(2, owner(model.concat([{
+			file: 'C.hx',
+			source: 'class C { public var x:Bare = null; public var y:Int = 0; }'
+		}])), 'no clause reaches Base');
 	}
 
 	/** How many findings the rule reports against the owner file `C.hx`. */

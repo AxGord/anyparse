@@ -110,14 +110,12 @@ final class StructFieldTrailLowering {
 	): Void {
 		inline function pushVar(name: String, type: ComplexType, init: Expr): Void {
 			parseSteps.push({
-				expr: EVars([
-					{
-						name: name,
-						type: type,
-						expr: init,
-						isFinal: false
-					}
-				]),
+				expr: EVars([{
+					name: name,
+					type: type,
+					expr: init,
+					isFinal: false
+				}]),
 				pos: Context.currentPos()
 			});
 		}
@@ -147,14 +145,12 @@ final class StructFieldTrailLowering {
 		// sibling's writer reads. `collectTrailingFull` keeps the delimiters so
 		// block and line styles both round-trip verbatim.
 		if (isStar && !isOptional && trailText != null && hasAfterTrailSlot) parseSteps.push({
-			expr: EVars([
-				{
-					name: afterTrailLocal,
-					type: macro : Null<String>,
-					expr: macro collectTrailingFull(ctx),
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: afterTrailLocal,
+				type: macro : Null<String>,
+				expr: macro collectTrailingFull(ctx),
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		if (!isStar && !isOptional && trailText != null) {
@@ -165,14 +161,12 @@ final class StructFieldTrailLowering {
 			// where it was — re-emitting one before the close literal would
 			// comment the literal out.
 			if (hasBeforeTrailSlot) parseSteps.push({
-				expr: EVars([
-					{
-						name: beforeTrailLocal,
-						type: macro : Null<String>,
-						expr: macro collectTrailingBlock(ctx),
-						isFinal: true
-					}
-				]),
+				expr: EVars([{
+					name: beforeTrailLocal,
+					type: macro : Null<String>,
+					expr: macro collectTrailingBlock(ctx),
+					isFinal: true
+				}]),
 				pos: Context.currentPos()
 			});
 			parseSteps.push(macro skipWs(ctx));
@@ -186,14 +180,12 @@ final class StructFieldTrailLowering {
 			// is present and does not consume any whitespace beyond
 			// the optional space + `//<body>` match.
 			if (hasAfterTrailSlot) parseSteps.push({
-				expr: EVars([
-					{
-						name: afterTrailLocal,
-						type: macro : Null<String>,
-						expr: macro collectTrailingFull(ctx),
-						isFinal: true
-					}
-				]),
+				expr: EVars([{
+					name: afterTrailLocal,
+					type: macro : Null<String>,
+					expr: macro collectTrailingFull(ctx),
+					isFinal: true
+				}]),
 				pos: Context.currentPos()
 			});
 		}
@@ -273,25 +265,21 @@ final class StructFieldTrailLowering {
 				);
 				parseSteps.push(macro final _beforeTrivia = collectTrivia(ctx));
 				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeNlLocal,
-							type: macro : Bool,
-							expr: macro _beforeTrivia.newlineBefore,
-							isFinal: true
-						}
-					]),
+					expr: EVars([{
+						name: beforeNlLocal,
+						type: macro : Bool,
+						expr: macro _beforeTrivia.newlineBefore,
+						isFinal: true
+					}]),
 					pos: Context.currentPos()
 				});
 				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeLeadingLocal,
-							type: arrayStrCT,
-							expr: macro _beforeTrivia.leadingComments,
-							isFinal: true
-						}
-					]),
+					expr: EVars([{
+						name: beforeLeadingLocal,
+						type: arrayStrCT,
+						expr: macro _beforeTrivia.leadingComments,
+						isFinal: true
+					}]),
 					pos: Context.currentPos()
 				});
 				// ω-region-prefix-blank: third split of the SAME scan — whether
@@ -299,14 +287,12 @@ final class StructFieldTrailLowering {
 				// Null local = the field did not opt in, and no slot exists to
 				// write it onto.
 				if (beforeBlankLocal != null) parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeBlankLocal,
-							type: macro : Bool,
-							expr: macro _beforeTrivia.blankBefore,
-							isFinal: true
-						}
-					]),
+					expr: EVars([{
+						name: beforeBlankLocal,
+						type: macro : Bool,
+						expr: macro _beforeTrivia.blankBefore,
+						isFinal: true
+					}]),
 					pos: Context.currentPos()
 				});
 				if (beforeLeadingNewlineLocal != null)
@@ -318,14 +304,12 @@ final class StructFieldTrailLowering {
 				// the local that the struct literal writes onto the
 				// synth slot. `skipWs` would silently discard both.
 				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeNlLocal,
-							type: macro : Bool,
-							expr: macro collectTrivia(ctx).newlineBefore,
-							isFinal: true
-						}
-					]),
+					expr: EVars([{
+						name: beforeNlLocal,
+						type: macro : Bool,
+						expr: macro collectTrivia(ctx).newlineBefore,
+						isFinal: true
+					}]),
 					pos: Context.currentPos()
 				});
 			} else if (afterLeadLocal != null) {
@@ -434,39 +418,33 @@ final class StructFieldTrailLowering {
 		parseSteps.push(macro final _absentPending = ctx.pendingTrivia);
 		parseSteps.push(macro final _absentTrivia = collectTrivia(ctx));
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: beforeNewlineLocalName(fieldName),
-					type: macro : Bool,
-					expr: macro _absentTrivia.newlineBefore,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: beforeNewlineLocalName(fieldName),
+				type: macro : Bool,
+				expr: macro _absentTrivia.newlineBefore,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: beforeLeadingLocalName(fieldName),
-					type: arrayStrCT,
-					expr: macro _absentTrivia.leadingComments,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: beforeLeadingLocalName(fieldName),
+				type: arrayStrCT,
+				expr: macro _absentTrivia.leadingComments,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		// ω-region-prefix-blank: same third split as the mandatory arm in
 		// `emitPreFieldWs` — the absent branch rewinds past this trivia, but the
 		// PRESENT branch's writer still needs to know the gap held a blank.
 		if (hasBeforeBlankSlot) parseSteps.push({
-			expr: EVars([
-				{
-					name: beforeBlankLocalName(fieldName),
-					type: macro : Bool,
-					expr: macro _absentTrivia.blankBefore,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: beforeBlankLocalName(fieldName),
+				type: macro : Bool,
+				expr: macro _absentTrivia.blankBefore,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		if (hasBeforeLeadingNewlineSlot)
@@ -476,14 +454,12 @@ final class StructFieldTrailLowering {
 	/** A `final <name>: Bool = <value>;` parse step, the shape every pre-field gap split declares. */
 	private static function boolLocal(name: String, value: Expr): Expr {
 		return {
-			expr: EVars([
-				{
-					name: name,
-					type: macro : Bool,
-					expr: value,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: name,
+				type: macro : Bool,
+				expr: value,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		};
 	}

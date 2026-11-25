@@ -264,12 +264,10 @@ class AnonTypeDupCheckTest extends Test {
 	@:pin('guard')
 	public function testADifferentOptionalFieldIsUntouched(): Void {
 		final variant: String = '{ ?actions: Array<Array<Item>>, manager: Array<Array<Item>>, object: Item }';
-		final other: Array<SourceEntry> = [
-			{
-				file: 'src/app/C.hx',
-				source: 'package app;\n\nimport lib.Item;\n\nclass C {\n\tpublic function four(p: $variant): Void {}\n}\n'
-			}
-		];
+		final other: Array<SourceEntry> = [{
+			file: 'src/app/C.hx',
+			source: 'package app;\n\nimport lib.Item;\n\nclass C {\n\tpublic function four(p: $variant): Void {}\n}\n'
+		}];
 		final files: Array<SourceEntry> = project(other);
 		final groups: Array<Array<CrossFileEdits>> = fixGroups(files, CONFIG);
 		Assert.equals(1, groups.length);
@@ -281,12 +279,10 @@ class AnonTypeDupCheckTest extends Test {
 	@:killer('M-ANON-ORDER-LOOSE')
 	public function testAReorderedStructureIsNotRewritten(): Void {
 		final reordered: String = '{ object: Item, actions: Array<Array<Item>>, manager: Array<Array<Item>> }';
-		final other: Array<SourceEntry> = [
-			{
-				file: 'src/app/C.hx',
-				source: 'package app;\n\nimport lib.Item;\n\nclass C {\n\tpublic function four(p: $reordered): Void {}\n}\n'
-			}
-		];
+		final other: Array<SourceEntry> = [{
+			file: 'src/app/C.hx',
+			source: 'package app;\n\nimport lib.Item;\n\nclass C {\n\tpublic function four(p: $reordered): Void {}\n}\n'
+		}];
 		final groups: Array<Array<CrossFileEdits>> = fixGroups(project(other), CONFIG);
 		Assert.equals(1, groups.length);
 		Assert.isFalse(groups[0].map(s -> s.file).contains('src/app/C.hx'));
@@ -310,9 +306,10 @@ class AnonTypeDupCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-ANON-EXISTING-TARGET')
 	public function testAnExistingModuleIsNotOverwritten(): Void {
-		final taken: Array<SourceEntry> = [
-			{ file: 'src/types/Receivers.hx', source: 'package types;\n\nclass Receivers {}\n' }
-		];
+		final taken: Array<SourceEntry> = [{
+			file: 'src/types/Receivers.hx',
+			source: 'package types;\n\nclass Receivers {}\n'
+		}];
 		Assert.equals(0, fixGroups(project(taken), CONFIG).length);
 	}
 

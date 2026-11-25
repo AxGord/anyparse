@@ -64,9 +64,10 @@ final class HxIfExprCondWrapSliceTest extends Test {
 		edited.conditionWrap = {
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.FillLineWithLeadingBreak,
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
-			]
+			rules: [{
+				conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }],
+				mode: WrapMode.NoWrap
+			}]
 		};
 	});
 	private static final EXPLODED: String = 'class C {\n\tfunction f() {\n\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) ->\n'

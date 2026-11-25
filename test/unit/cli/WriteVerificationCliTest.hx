@@ -245,9 +245,10 @@ class WriteVerificationCliTest extends Test {
 	@:killer('M-WRITE-VERIFY-ONE-HOLDER-NOT-FINAL')
 	public function testACheapBuildMissingTheModulesDependencyDoesNotDecideAGreenerHolderDoes(): Void {
 		#if (sys || nodejs)
-		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', [
-			{ name: 'more/Util.hx', source: 'class Util {\n\tpublic static function one(): Int {\n\t\treturn 1;\n\t}\n}\n' }
-		]);
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', [{
+			name: 'more/Util.hx',
+			source: 'class Util {\n\tpublic static function one(): Int {\n\t\treturn 1;\n\t}\n}\n'
+		}]);
 		if (!compilesBoth(dir)) return;
 		final spawned: Int = CompilerOracle.invocations;
 		var rc: Int = 1;
@@ -380,14 +381,12 @@ class WriteVerificationCliTest extends Test {
 	@:killer('M-WRITE-VERIFY-HOLDERS-COMPILE')
 	public function testABuildThatWalksTheFolderOfACreatedModuleReadsItInItsConfiguredCompile(): Void {
 		#if (sys || nodejs)
-		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', [
-			{
-				name: 'more/Walk.hx',
-				source: 'class Walk {\n\tpublic static function run(): Void {\n'
-				+ '\t\tif (sys.FileSystem.exists(\'src/pkg\')) for (name in sys.FileSystem.readDirectory(\'src/pkg\')) if (name == '
-				+ '\'Refused.hx\') haxe.macro.Context.error(\'the walk refuses \' + name, haxe.macro.Context.currentPos());\n\t}\n}\n'
-			}
-		]);
+		final dir: String = twoBuilds('class Big {\n\tstatic function main() {}\n}\n', [{
+			name: 'more/Walk.hx',
+			source: 'class Walk {\n\tpublic static function run(): Void {\n'
+			+ '\t\tif (sys.FileSystem.exists(\'src/pkg\')) for (name in sys.FileSystem.readDirectory(\'src/pkg\')) if (name == '
+			+ '\'Refused.hx\') haxe.macro.Context.error(\'the walk refuses \' + name, haxe.macro.Context.currentPos());\n\t}\n}\n'
+		}]);
 		File.saveContent('$dir/big.hxml', '-cp src\n-cp more\n--macro Walk.run()\n-main Big\n');
 		if (!compilesBoth(dir)) return;
 		var rc: Int = 0;

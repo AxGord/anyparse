@@ -129,15 +129,13 @@ final class RegistryFragmentFollowTest extends Test {
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor('haxe', 'C.hx');
 		final tree: QueryNode = plugin.parseFile(BEFORE);
 		final json: String = '{"arms":[{"name":"A","type":"p.C","method":"f","find":"$find","replace":"$replace"}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.C',
-				source: BEFORE,
-				tree: tree,
-				newSource: AFTER,
-				newTree: plugin.parseFile(AFTER)
-			}
-		], plugin);
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.C',
+			source: BEFORE,
+			tree: tree,
+			newSource: AFTER,
+			newTree: plugin.parseFile(AFTER)
+		}], plugin);
 	}
 
 	private static function assertCarried(
@@ -170,15 +168,13 @@ final class RegistryFragmentFollowTest extends Test {
 		final now: String = head + after + tail;
 		final json: String =
 			'{"arms":[{"name":"A","type":"p.C","method":"f","find":${JsonText.quote(find)},"replace":${JsonText.quote(replace)}}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.C',
-				source: old,
-				tree: plugin.parseFile(old),
-				newSource: now,
-				newTree: plugin.parseFile(now)
-			}
-		], plugin, modules == null ? null : p -> modules.contains(p));
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.C',
+			source: old,
+			tree: plugin.parseFile(old),
+			newSource: now,
+			newTree: plugin.parseFile(now)
+		}], plugin, modules == null ? null : p -> modules.contains(p));
 	}
 
 }

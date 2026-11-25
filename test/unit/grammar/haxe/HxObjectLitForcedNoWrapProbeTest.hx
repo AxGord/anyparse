@@ -38,9 +38,10 @@ final class HxObjectLitForcedNoWrapProbeTest extends Test {
 		edited.objectLiteralWrap = {
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.OnePerLine,
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 140 }], mode: WrapMode.NoWrap }
-			]
+			rules: [{
+				conditions: [{ cond: WrapConditionType.TotalItemLengthLessThan, value: 140 }],
+				mode: WrapMode.NoWrap
+			}]
 		};
 	});
 

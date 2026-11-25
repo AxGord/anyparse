@@ -164,16 +164,14 @@ final class LibraryBodies {
 			'library read', () -> readSources(build.classPaths, build.target)
 		);
 		final kept: Array<{ file: String, source: String }> = PhaseTimings.measure('library defines', () -> {
-			final liveness: ReachLiveness = new ReachLiveness(plugin, [
-				{
-					name: OPTION,
-					defined: build.defined,
-					everDefined: build.defined,
-					values: build.values,
-					compiled: [],
-					types: []
-				}
-			]);
+			final liveness: ReachLiveness = new ReachLiveness(plugin, [{
+				name: OPTION,
+				defined: build.defined,
+				everDefined: build.defined,
+				values: build.values,
+				compiled: [],
+				types: []
+			}]);
 			sources.map(s -> { file: s.file, source: blanked(s.source, liveness.skippedOf(s.file, s.source)) });
 		});
 		return new LibraryBodies(

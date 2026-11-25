@@ -243,9 +243,11 @@ final class NamingPrivatize {
 	): Null<Array<ReachRegion>> {
 		final clsSpan: Null<Span> = cls.span;
 		if (clsSpan == null) return null;
-		final out: Array<ReachRegion> = [
-			{ file: c.file, source: c.source, span: ElementSpan.docExtendedSpan(c.source, clsSpan, lex) }
-		];
+		final out: Array<ReachRegion> = [{
+			file: c.file,
+			source: c.source,
+			span: ElementSpan.docExtendedSpan(c.source, clsSpan, lex)
+		}];
 		for (sub in scope.subtypes.subtypeDecls(owner, c.file)) {
 			final src: Null<String> = scope.sourceOf(sub.file.file);
 			if (src == null) return null;

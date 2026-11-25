@@ -37,9 +37,10 @@ final class HxObjectLitLineLengthRuleFixedPointTest extends Test {
 		edited.objectLiteralWrap = {
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.NoWrap,
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 110 }], mode: WrapMode.OnePerLine }
-			]
+			rules: [{
+				conditions: [{ cond: WrapConditionType.LineLengthLargerThan, value: 110 }],
+				mode: WrapMode.OnePerLine
+			}]
 		};
 	});
 

@@ -348,9 +348,10 @@ final class MainSinkReport {
 		graph: CallGraph, edge: CallEdge, repeats: MainRepetition, climb: Null<MainClimb>
 	): Array<RepeatSite> {
 		final repetition: CallRepetition = repeats.repetition;
-		if (repetition.repeated(edge)) return [
-			{ member: ThreadSafety.memberOf(graph, edge.from), at: repeatSubject(edge, repetition) }
-		];
+		if (repetition.repeated(edge)) return [{
+			member: ThreadSafety.memberOf(graph, edge.from),
+			at: repeatSubject(edge, repetition)
+		}];
 		final found: Array<RepeatOwner> = (climb ?? repeats.main.climb(edge)).owners;
 		final by: Array<RepeatSite> = [];
 		for (o in found) if (o.path.length == found[0].path.length) {

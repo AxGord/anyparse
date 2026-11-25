@@ -83,9 +83,10 @@ final class ExtractConstant {
 
 		final firstOcc: Span = occurrences[0];
 		final token: String = source.substring(firstOcc.from, firstOcc.to);
-		final edits: Array<{ span: Span, text: String }> = [
-			{ span: new Span(insertAt, insertAt), text: 'private static final $name:String = $token;\n' }
-		];
+		final edits: Array<{ span: Span, text: String }> = [{
+			span: new Span(insertAt, insertAt),
+			text: 'private static final $name:String = $token;\n'
+		}];
 		for (occ in occurrences) edits.push({ span: occ, text: name });
 
 		return CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson);

@@ -202,9 +202,10 @@ class TypeNameBindingTest extends Test {
 			{ file: 'p/X.hx', source: 'package p;\n\nclass X {}\n' },
 			{ file: 'p/Main.hx', source: 'package p;\n\nimport Thing;\n\nclass Main {}\n' }
 		];
-		final library: Array<{ file: String, source: String }> = [
-			{ file: 'lib/Thing.hx', source: 'package lib;\n\nclass Thing {}\n\nclass X {}\n' }
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'lib/Thing.hx',
+			source: 'package lib;\n\nclass Thing {}\n\nclass X {}\n'
+		}];
 		final index: SymbolIndex = IndexScope.report(project, QueryTestHelpers.projectPlugin(project, library));
 		Assert.equals('Unknown', tierText(index, 'X', 'p/Main.hx'), 'no root module `Thing` is in the scope');
 	}
@@ -218,9 +219,10 @@ class TypeNameBindingTest extends Test {
 			{ file: 'p/X.hx', source: 'package p;\n\nclass X {}\n' },
 			{ file: 'p/Main.hx', source: 'package p;\n\nimport lib.Pair;\n\nclass Main {}\n' }
 		];
-		final library: Array<{ file: String, source: String }> = [
-			{ file: 'lib/Pair.hx', source: 'package lib;\n\nclass Pair {\n\tfunction f() {\n\t\treturn 1 +;\n\t}\n}\n\nclass X {}\n' }
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'lib/Pair.hx',
+			source: 'package lib;\n\nclass Pair {\n\tfunction f() {\n\t\treturn 1 +;\n\t}\n}\n\nclass X {}\n'
+		}];
 		final index: SymbolIndex = IndexScope.report(project, QueryTestHelpers.projectPlugin(project, library));
 		Assert.equals('Free', tierText(index, 'X', 'p/Main.hx'), '`lib.Pair` declares an `X` past a body nothing reads');
 	}
@@ -244,9 +246,10 @@ class TypeNameBindingTest extends Test {
 	@:killer('M-BINDING-GUARDED-OTHER-BUILD')
 	public function testAGuardedImportBindsWhereTheOtherBuildProvablyBindsNothing(): Void {
 		// The scope READS the toplevel module `T` and finds no type `T` in it, so a build without the import binds nothing.
-		final project: Array<{ file: String, source: String }> = [
-			{ file: 'Main.hx', source: '#if useA\nimport a.T;\n#end\n\nclass Main {\n\tvar t:T;\n}\n' }
-		];
+		final project: Array<{ file: String, source: String }> = [{
+			file: 'Main.hx',
+			source: '#if useA\nimport a.T;\n#end\n\nclass Main {\n\tvar t:T;\n}\n'
+		}];
 		final library: Array<{ file: String, source: String }> = [
 			{ file: 'a/T.hx', source: 'package a;\n\nclass T {}\n' },
 			{ file: 'T.hx', source: 'class Unrelated {}\n' }

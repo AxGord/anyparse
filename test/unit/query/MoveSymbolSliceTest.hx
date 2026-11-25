@@ -523,9 +523,10 @@ class MoveSymbolSliceTest extends Test {
 		Assert.isTrue(
 			changeFor(changes, 'pkg/AsUser.hx').newSource.contains('import other.B.Foo as F;'), 'the alias importer is repointed'
 		);
-		assertRefusal('by its fully-qualified path', MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', files.concat([
-			{ file: 'pkg/Fqn.hx', source: 'package pkg;\n\nclass Fqn {\n\tvar f:pkg.A.Foo;\n}' }
-		]), plugin(), typeRefShape()));
+		assertRefusal('by its fully-qualified path', MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', files.concat([{
+			file: 'pkg/Fqn.hx',
+			source: 'package pkg;\n\nclass Fqn {\n\tvar f:pkg.A.Foo;\n}'
+		}]), plugin(), typeRefShape()));
 	}
 
 	/**

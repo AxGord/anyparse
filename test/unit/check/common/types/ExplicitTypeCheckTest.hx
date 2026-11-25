@@ -441,9 +441,10 @@ class ExplicitTypeCheckTest extends Test {
 
 	/** An overridden SUPERCLASS method is the same lookup — `supertypes` and `interfaces` share one closure. */
 	public function testFixParamFromSuperclass(): Void {
-		final out: String = scopedFix('class Impl extends B { override public function take(v):Void {} }', [
-			{ file: 'B.hx', source: 'class B {\n\tpublic function new() {}\n\tpublic function take(v:Float):Void {}\n}' }
-		]);
+		final out: String = scopedFix('class Impl extends B { override public function take(v):Void {} }', [{
+			file: 'B.hx',
+			source: 'class B {\n\tpublic function new() {}\n\tpublic function take(v:Float):Void {}\n}'
+		}]);
 		Assert.isTrue(out.indexOf('take(v:Float)') != -1, 'got: $out');
 	}
 
@@ -503,9 +504,10 @@ class ExplicitTypeCheckTest extends Test {
 	 * mismatched arity yields NO annotation rather than one copied from a clamped position.
 	 */
 	public function testFixSkipsShorterDeclaredParamList(): Void {
-		final out: String = scopedFix('class Impl implements Sh { public function pair(a:Int, b):Void {} }', [
-			{ file: 'Sh.hx', source: 'interface Sh {\n\tpublic function pair(a:Int):Void;\n}' }
-		]);
+		final out: String = scopedFix('class Impl implements Sh { public function pair(a:Int, b):Void {} }', [{
+			file: 'Sh.hx',
+			source: 'interface Sh {\n\tpublic function pair(a:Int):Void;\n}'
+		}]);
 		Assert.equals(-1, out.indexOf('b:'), 'got: $out');
 	}
 
@@ -557,9 +559,10 @@ class ExplicitTypeCheckTest extends Test {
 	 * and no name-level gate can tell them apart.
 	 */
 	public function testFixSkipsGenericDeclaringType(): Void {
-		final out: String = scopedFix('class Impl implements Gen { public function f(v):Void {} }', [
-			{ file: 'Gen.hx', source: 'interface Gen<T> {\n\tpublic function f(v:T):Void;\n}' }
-		]);
+		final out: String = scopedFix('class Impl implements Gen { public function f(v):Void {} }', [{
+			file: 'Gen.hx',
+			source: 'interface Gen<T> {\n\tpublic function f(v:T):Void;\n}'
+		}]);
 		Assert.equals(-1, out.indexOf('f(v:'), 'got: $out');
 	}
 
@@ -583,13 +586,11 @@ class ExplicitTypeCheckTest extends Test {
 	 * parameter type would annotate the override with an unrelated one.
 	 */
 	public function testFixIgnoresLocalFunctionOfTheSameName(): Void {
-		final out: String = scopedFix('class Impl extends Lb { override public function f(v):Void {} }', [
-			{
-				file: 'Lb.hx',
-				source: 'class Lb {\n\tpublic function new() {}\n'
-				+ '\tpublic function a():Void { function f(v:String) { trace(v); } f("x"); }\n\tpublic function f(v:Float):Void {}\n}'
-			}
-		]);
+		final out: String = scopedFix('class Impl extends Lb { override public function f(v):Void {} }', [{
+			file: 'Lb.hx',
+			source: 'class Lb {\n\tpublic function new() {}\n'
+			+ '\tpublic function a():Void { function f(v:String) { trace(v); } f("x"); }\n\tpublic function f(v:Float):Void {}\n}'
+		}]);
 		Assert.isTrue(out.indexOf('f(v:Float)') != -1, 'got: $out');
 	}
 
@@ -612,9 +613,10 @@ class ExplicitTypeCheckTest extends Test {
 	 * PIN of preserved behaviour across the `typeUsableFrom` rewrite, not a gate revert.
 	 */
 	public function testFixCopiesUnindexedTypeImportedIdenticallyOnBothSides(): Void {
-		final out: String = scopedFix('import haxe.io.Bytes;\n\nclass Impl implements By { public function w(b):Void {} }', [
-			{ file: 'By.hx', source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}' }
-		]);
+		final out: String = scopedFix('import haxe.io.Bytes;\n\nclass Impl implements By { public function w(b):Void {} }', [{
+			file: 'By.hx',
+			source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}'
+		}]);
 		Assert.isTrue(out.indexOf('w(b:Bytes)') != -1, 'got: $out');
 	}
 
@@ -623,9 +625,10 @@ class ExplicitTypeCheckTest extends Test {
 	 * so it is skipped. PIN of preserved behaviour across the `typeUsableFrom` rewrite.
 	 */
 	public function testFixSkipsUnindexedTypeImportedOnOneSide(): Void {
-		final out: String = scopedFix('class Impl implements By { public function w(b):Void {} }', [
-			{ file: 'By.hx', source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}' }
-		]);
+		final out: String = scopedFix('class Impl implements By { public function w(b):Void {} }', [{
+			file: 'By.hx',
+			source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}'
+		}]);
 		Assert.equals(-1, out.indexOf('w(b:'), 'got: $out');
 	}
 
@@ -646,9 +649,10 @@ class ExplicitTypeCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-BINDS-ALIKE-ONE-SIDE')
 	public function testFixSkipsAStdNameTheModuleShadowsHere(): Void {
-		final out: String = scopedFix('class Impl implements Fl { public function take(p):Void {} }\n\nclass Float {}', [
-			{ file: 'Fl.hx', source: 'interface Fl {\n\tpublic function take(p:Float):Void;\n}' }
-		]);
+		final out: String = scopedFix('class Impl implements Fl { public function take(p):Void {} }\n\nclass Float {}', [{
+			file: 'Fl.hx',
+			source: 'interface Fl {\n\tpublic function take(p:Float):Void;\n}'
+		}]);
 		Assert.equals(-1, out.indexOf('take(p:'), 'got: $out');
 	}
 
@@ -657,9 +661,10 @@ class ExplicitTypeCheckTest extends Test {
 	 * so the interface's annotation is copied.
 	 */
 	public function testFixCopiesAStdToplevelTypeBothFilesReachBare(): Void {
-		final out: String = scopedFix('class Impl implements Dt { public function take(p):Void {} }', [
-			{ file: 'Dt.hx', source: 'interface Dt {\n\tpublic function take(p:Date):Void;\n}' }
-		]);
+		final out: String = scopedFix('class Impl implements Dt { public function take(p):Void {} }', [{
+			file: 'Dt.hx',
+			source: 'interface Dt {\n\tpublic function take(p:Date):Void;\n}'
+		}]);
 		Assert.isTrue(out.indexOf('take(p:Date)') != -1, 'got: $out');
 	}
 

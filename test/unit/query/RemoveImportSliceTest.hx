@@ -104,9 +104,10 @@ class RemoveImportSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-REMOVEIMPORT-CLI-USING-FLAG-DROPPED')
 	public function testCliUsingFlagRemovesTheUsing(): Void {
-		final dir: String = CliFixture.writeTree('removeimportusing', [
-			{ name: 'src/q/Target.hx', source: 'package q;\n\nimport a.B;\n\nusing a.B;\n\nclass Target {}\n' }
-		]);
+		final dir: String = CliFixture.writeTree('removeimportusing', [{
+			name: 'src/q/Target.hx',
+			source: 'package q;\n\nimport a.B;\n\nusing a.B;\n\nclass Target {}\n'
+		}]);
 		final target: String = '$dir/src/q/Target.hx';
 		Assert.equals(0, Cli.run(['remove-import', target, 'a.B', '--using', '--write']));
 		Assert.equals('package q;\n\nimport a.B;\n\nclass Target {}\n', File.getContent(target));

@@ -153,9 +153,10 @@ class RedundantThisCheckTest extends Test {
 	 * member (inherited member OR `using` extension), so `this.` is kept.
 	 */
 	public function testInheritedFromBaseOutsideSetNotFlagged(): Void {
-		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [
-			{ file: 'S.hx', source: 'class S extends Base { function m():Void { this.inh(); } }' }
-		]);
+		final vs: Array<Violation> = CheckFixture.violationsIn(new RedundantThis(), [{
+			file: 'S.hx',
+			source: 'class S extends Base { function m():Void { this.inh(); } }'
+		}]);
 		Assert.equals(0, vs.length);
 	}
 

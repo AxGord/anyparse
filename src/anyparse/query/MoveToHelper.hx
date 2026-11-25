@@ -163,9 +163,10 @@ final class MoveToHelper {
 		final meta: String = nullSafety == null ? '' : '$nullSafety\n';
 		final doc: String =
 			'/**\n * Static helpers taken out of `$srcTypeName`: each reads the `$srcTypeName` it is handed as its first parameter.\n */\n';
-		return Right(scopeFiles.concat([
-			{ file: helperFile, source: '$header\n\n$doc${meta}final class $helperName {}\n' }
-		]));
+		return Right(scopeFiles.concat([{
+			file: helperFile,
+			source: '$header\n\n$doc${meta}final class $helperName {}\n'
+		}]));
 	}
 
 	/** The source text of the null-safety entry (`RefShape.nullSafetyMetaName`) the source type carries, or null. */

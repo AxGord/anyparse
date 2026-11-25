@@ -849,6 +849,54 @@
 			"find": "n != D.DECIDED_ARROW_BREAK && ",
 			"replace": "",
 			"note": "a last-argument lambda whose brace body sits under a line comment after `->` is hugged as a `{`-led item: its marker is replaced by the flat side and the block loses its indent"
+		},
+		{
+			"name": "M-SOLE-OBJECT-CUDDLE-GATE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSoleItemCuddledBrackets",
+			"find": "if (!(enabled || objectOnly) ||",
+			"replace": "if (!enabled ||",
+			"note": "the object-only knob alone never enables the cuddle, so a sole object element keeps the exploded layout"
+		},
+		{
+			"name": "M-SOLE-OBJECT-CUDDLE-KIND",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSoleItemCuddledBrackets",
+			"find": "anyContainerItem(complexItemKinds) && firstVisibleText(item)",
+			"replace": "firstVisibleText(item)",
+			"note": "the object-only knob stops reading the grammar classification, so a sole block expression, whose Doc also opens with {, cuddles"
+		},
+		{
+			"name": "M-SOLE-OBJECT-CUDDLE-BRACE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSoleItemCuddledBrackets",
+			"find": "anyContainerItem(complexItemKinds) && firstVisibleText(item) == '{';",
+			"replace": "anyContainerItem(complexItemKinds);",
+			"note": "the object-only knob admits any container literal, so a sole nested array cuddles [[ as an object would"
+		},
+		{
+			"name": "M-SOLE-OBJECT-CUDDLE-COMMIT",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSoleItemCuddledBrackets",
+			"find": "isObject && flatLength(openShape) < 0 ? renderPivotBreakArm(item, true) ?? item : item",
+			"replace": "item",
+			"note": "a cuddle over a committed exploded list keeps the element unbroken in its glue, so hosts read the list as flat: a call opens its parenthesis and a ternary breaks at ? and :"
+		},
+		{
+			"name": "M-SOLE-ITEM-CUDDLE-LAZY-GLUE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSoleItemCuddledBrackets",
+			"find": "isObject && flatLength(openShape) < 0",
+			"replace": "flatLength(openShape) < 0",
+			"note": "the committed glue reaches every element the wider knob admits, so a fitting ternary with a sole call element breaks inside the call"
+		},
+		{
+			"name": "M-SOLE-OBJECT-CUDDLE-FIRST-BREAK",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "firstBreakIsDelimChar",
+			"find": "lastCh == ch || (ch == '['.code && lastCh == '{'.code && prevCh == '['.code)",
+			"replace": "lastCh == ch",
+			"note": "a call whose first break is a cuddled [{ no longer reads as breaking at its array, so an outer call holding it opens its parenthesis"
 		}
 	]
 }

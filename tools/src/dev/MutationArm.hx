@@ -580,14 +580,12 @@ final class MutationArm {
 		]);
 		return {
 			dir: dir,
-			batch: ProcessSpawn.startAll([
-				{
-					cmd: build.argv[0],
-					args: build.argv.slice(1),
-					cwd: job.repo,
-					tethered: true
-				}
-			], SCHEMA_BUFFER, 1)
+			batch: ProcessSpawn.startAll([{
+				cmd: build.argv[0],
+				args: build.argv.slice(1),
+				cwd: job.repo,
+				tethered: true
+			}], SCHEMA_BUFFER, 1)
 		};
 	}
 

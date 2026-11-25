@@ -280,14 +280,12 @@ final class OracleServerPortTest extends Test {
 	@:access(anyparse.check.haxe.oracle.OracleServerPool)
 	public function testAClientThatDidNotRunDoesNotEndTheReadinessPoll(): Void {
 		#if nodejs
-		final server: PendingRuns = ProcessSpawn.startAll([
-			{
-				cmd: js.Node.process.execPath,
-				args: ['-e', 'setTimeout(()=>{},60000)'],
-				cwd: null,
-				tethered: true
-			}
-		], 1024, 1);
+		final server: PendingRuns = ProcessSpawn.startAll([{
+			cmd: js.Node.process.execPath,
+			args: ['-e', 'setTimeout(()=>{},60000)'],
+			cwd: null,
+			tethered: true
+		}], 1024, 1);
 		final replies: Array<Null<ConnectResult>> = [null, { status: 0, output: '{"jsonrpc":"2.0","id":1,"result":null}' }];
 		CliFixture.always(
 			server.cancel, () -> Assert.isTrue(OracleServerPool.answers(server, () -> replies.shift()), 'the second reply reads')
@@ -303,14 +301,12 @@ final class OracleServerPortTest extends Test {
 	@:access(anyparse.check.haxe.oracle.OracleServerPool)
 	public function testAServerThatExitedIsNotPolled(): Void {
 		#if nodejs
-		final server: PendingRuns = ProcessSpawn.startAll([
-			{
-				cmd: js.Node.process.execPath,
-				args: ['-e', ''],
-				cwd: null,
-				tethered: true
-			}
-		], 1024, 1);
+		final server: PendingRuns = ProcessSpawn.startAll([{
+			cmd: js.Node.process.execPath,
+			args: ['-e', ''],
+			cwd: null,
+			tethered: true
+		}], 1024, 1);
 		Assert.equals(1, server.await().length, 'the job ran');
 		Assert.isFalse(server.running(), 'and ended');
 		var asked: Int = 0;

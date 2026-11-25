@@ -268,20 +268,19 @@ class PossibleNullDereferenceTest extends Test {
 		];
 		Assert.equals(
 			1,
-			violationsFiles(decls.concat([
-				{ file: 'C.hx', source: 'class C { function f(a:Mid, name:String) { a.model.subactions[name].tpl(); } }' }
-			])).length,
+			violationsFiles(decls.concat([{
+				file: 'C.hx',
+				source: 'class C { function f(a:Mid, name:String) { a.model.subactions[name].tpl(); } }'
+			}])).length,
 			'the unguarded multi-hop path IS reported — without this half the guarded one is vacuous'
 		);
 		Assert.equals(
 			0,
-			violationsFiles(decls.concat([
-				{
-					file: 'C.hx',
-					source: 'class C { function f(a:Mid, name:String) { if (a.model.subactions.exists(name)) '
-					+ 'a.model.subactions[name].tpl(); } }'
-				}
-			])).length,
+			violationsFiles(decls.concat([{
+				file: 'C.hx',
+				source: 'class C { function f(a:Mid, name:String) { if (a.model.subactions.exists(name)) '
+				+ 'a.model.subactions[name].tpl(); } }'
+			}])).length,
 			'the same read under its own exists-guard is not'
 		);
 	}

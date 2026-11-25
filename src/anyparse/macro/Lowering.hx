@@ -1136,14 +1136,12 @@ class Lowering {
 		// lead literal.
 		if (triviaCaptureSource) steps.push(macro final _start_pos: Int = ctx.pos);
 		steps.push({
-			expr: EVars([
-				{
-					name: '_raw',
-					type: null,
-					expr: callSub,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: '_raw',
+				type: null,
+				expr: callSub,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		if (trailText != null) appendKwRefTrailStep(steps, trailText, triviaTrailOpt, triviaCaptureSource, trailOptional, parseGateCall);

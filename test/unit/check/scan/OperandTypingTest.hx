@@ -336,9 +336,10 @@ class OperandTypingTest extends Test {
 		);
 		Assert.equals(1, fold.violations.length);
 		Assert.equals(0, fold.edits.length);
-		final chain: FixRun = CheckFixture.fixRun(new PreferIfExpressionChain(), [
-			{ file: 'Use.hx', source: 'class Use {\n\tfunction f(k:Num):Int {\n\t\treturn k == 1 ? 1 : k == 2 ? 2 : 3;\n\t}\n}\n' }
-		].concat(DECLS), 'Use.hx', plugin);
+		final chain: FixRun = CheckFixture.fixRun(new PreferIfExpressionChain(), [{
+			file: 'Use.hx',
+			source: 'class Use {\n\tfunction f(k:Num):Int {\n\t\treturn k == 1 ? 1 : k == 2 ? 2 : 3;\n\t}\n}\n'
+		}].concat(DECLS), 'Use.hx', plugin);
 		Assert.equals(1, chain.edits.length);
 	}
 

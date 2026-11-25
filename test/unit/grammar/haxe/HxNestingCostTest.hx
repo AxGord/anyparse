@@ -103,9 +103,11 @@ class HxNestingCostTest extends Test {
 	private static final DOC_NODES: Meter = {
 		cost: docNodes,
 		budget: n -> 40 * n + 100,
-		shapes: [
-			{ name: 'comprehension-array-wrap', gen: COMPREHENSION.gen, cfg: ARRAY_WRAP_CFG }
-		]
+		shapes: [{
+			name: 'comprehension-array-wrap',
+			gen: COMPREHENSION.gen,
+			cfg: ARRAY_WRAP_CFG
+		}]
 	};
 
 	/** A constant number of reads of a `for` body or a call's arguments per level. */

@@ -132,9 +132,10 @@ class GraphDiffCliTest extends Test {
 	@:pin('control')
 	public function testAModuleLevelFunctionChanges(): Void {
 		#if nodejs
-		final root: String = CliFixture.writeTree('apq_graphdiff', [
-			{ name: 'p/Util.hx', source: 'package p;\n\nfunction top(): Int {\n\treturn 1;\n}\n' }
-		]);
+		final root: String = CliFixture.writeTree('apq_graphdiff', [{
+			name: 'p/Util.hx',
+			source: 'package p;\n\nfunction top(): Int {\n\treturn 1;\n}\n'
+		}]);
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			CliFixture.git(root, ['init', '-q']);
 			CliFixture.git(root, ['add', '-A']);

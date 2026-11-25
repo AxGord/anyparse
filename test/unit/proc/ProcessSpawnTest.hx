@@ -128,14 +128,12 @@ final class ProcessSpawnTest extends Test {
 	public function testAJobPastItsTimeoutIsKilled(): Void {
 		#if nodejs
 		final started: Float = Date.now().getTime();
-		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
-			{
-				args: [],
-				cwd: null,
-				shell: 'sleep 5',
-				timeout: 300
-			}
-		], ROOMY, 1);
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([{
+			args: [],
+			cwd: null,
+			shell: 'sleep 5',
+			timeout: 300
+		}], ROOMY, 1);
 		Assert.isNull(runs[0].status, 'no exit status: it was killed');
 		Assert.isTrue(runs[0].failure.indexOf('timed out') >= 0, 'and says so: ${runs[0].failure}');
 		Assert.isTrue(Date.now().getTime() - started < 4000, 'without waiting the five seconds out');
@@ -232,13 +230,11 @@ final class ProcessSpawnTest extends Test {
 			Assert.pass('no lsof or /proc to ask on Windows');
 			return;
 		}
-		final runs: Array<ProcessRun> = ProcessSpawn.runAll([
-			{
-				args: [],
-				cwd: null,
-				shell: 'if [ -e /proc/$$PPID/fd/0 ]; then readlink /proc/$$PPID/fd/0; else lsof -a -p $$PPID -d 0 -F n; fi'
-			}
-		], ROOMY, 1);
+		final runs: Array<ProcessRun> = ProcessSpawn.runAll([{
+			args: [],
+			cwd: null,
+			shell: 'if [ -e /proc/$$PPID/fd/0 ]; then readlink /proc/$$PPID/fd/0; else lsof -a -p $$PPID -d 0 -F n; fi'
+		}], ROOMY, 1);
 		Assert.equals(0, runs[0].status, 'the probe ran: ${runs[0].failure} ${runs[0].err}');
 		Assert.isTrue(runs[0].out.indexOf('/dev/null') >= 0, 'the driver\'s stdin is the null device, not a pipe: ${runs[0].out}');
 		#else

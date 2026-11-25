@@ -86,13 +86,11 @@ class MemberGraphBuilderTest extends Test {
 
 	/** `clusters` groups the members by component under their type, with the hubs in a group of their own. */
 	public function testClustersGroupByComponent(): Void {
-		final calls: CallGraph = CallGraph.build([
-			{
-				file: 'A.hx',
-				source: 'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); }'
-				+ ' function d():Void log(); function log():Void {} }'
-			}
-		], new HaxeQueryPlugin());
+		final calls: CallGraph = CallGraph.build([{
+			file: 'A.hx',
+			source: 'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); }'
+			+ ' function d():Void log(); function log():Void {} }'
+		}], new HaxeQueryPlugin());
 		final report: Null<ClusterReport> = Clusters.analyze(calls, 'A', null, null);
 		if (report == null) {
 			Assert.fail('no report');

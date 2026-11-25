@@ -183,9 +183,10 @@ class ReachBuildsCacheTest extends Test {
 		final dot: Null<String> = tree('verdictdot', complete, GEN_HXML, [GEN]);
 		if (dot == null) return;
 		Assert.isFalse(reused(dot), 'a dot directory');
-		final deep: Null<String> = tree('verdictdeep', complete, '$HXML${DEEP_PACKAGE}.Deep\n', [
-			{ name: '${DEEP_PACKAGE.split('.').join('/')}/Deep.hx', source: 'package $DEEP_PACKAGE;\n\nclass Deep {}\n' }
-		]);
+		final deep: Null<String> = tree('verdictdeep', complete, '$HXML${DEEP_PACKAGE}.Deep\n', [{
+			name: '${DEEP_PACKAGE.split('.').join('/')}/Deep.hx',
+			source: 'package $DEEP_PACKAGE;\n\nclass Deep {}\n'
+		}]);
 		if (deep == null) return;
 		Assert.isFalse(reused(deep), 'past the walk depth');
 		for (d in [plain, dot, deep]) CliFixture.removeDir(d);
@@ -289,17 +290,15 @@ class ReachBuildsCacheTest extends Test {
 	/** One interp build that parsed `parsed` and typed `Far` in `library`, whose source is read from disk. */
 	private static function builds(parsed: String, library: String): ReachBuilds {
 		return {
-			configurations: [
-				{
-					name: 'check.hxml',
-					defined: ['interp'],
-					everDefined: ['interp'],
-					values: ['target.name' => 'interp'],
-					compiled: [library],
-					types: [{ name: 'Far', file: library }],
-					parsed: [parsed]
-				}
-			],
+			configurations: [{
+				name: 'check.hxml',
+				defined: ['interp'],
+				everDefined: ['interp'],
+				values: ['target.name' => 'interp'],
+				compiled: [library],
+				types: [{ name: 'Far', file: library }],
+				parsed: [parsed]
+			}],
 			library: [{ file: library, source: File.getContent(library) }]
 		};
 	}

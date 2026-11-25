@@ -356,14 +356,12 @@ class CrossRenameStructureFieldTest extends Test {
 			case Ok(changes, _): changes;
 			case Err(message):
 				Assert.fail(message);
-				[
-					{
-						file: cursorFile,
-						newSource: source,
-						count: 0,
-						edits: []
-					}
-				];
+				[{
+					file: cursorFile,
+					newSource: source,
+					count: 0,
+					edits: []
+				}];
 		};
 	}
 

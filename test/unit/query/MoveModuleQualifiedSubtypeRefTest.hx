@@ -62,21 +62,20 @@ class MoveModuleQualifiedSubtypeRefTest extends Test {
 	@:pin('control')
 	@:killer('M-MOVE-MODULE-QUALIFIED-DENOTES-NONE')
 	public function testParentPackageSpellingRefuses(): Void {
-		assertRefusesNaming(moveSub([
-			{ file: 'p/x/C.hx', source: 'package p.x;\n\nclass C {\n\tpublic static function g():Int return D.Sub.h();\n}\n' }
-		]), 'D.Sub');
+		assertRefusesNaming(moveSub([{
+			file: 'p/x/C.hx',
+			source: 'package p.x;\n\nclass C {\n\tpublic static function g():Int return D.Sub.h();\n}\n'
+		}]), 'D.Sub');
 	}
 
 	/** An alias of the module is a binding of it: `DD.Sub` is named in the refusal. */
 	@:pin('control')
 	@:killer('M-MOVE-MODULE-QUALIFIED-DENOTES-NONE')
 	public function testAliasSpellingRefuses(): Void {
-		assertRefusesNaming(moveSub([
-			{
-				file: 'r/C.hx',
-				source: 'package r;\n\nimport p.D as DD;\n\nclass C {\n\tpublic static function g():Int return DD.Sub.h();\n}\n'
-			}
-		]), 'DD.Sub');
+		assertRefusesNaming(moveSub([{
+			file: 'r/C.hx',
+			source: 'package r;\n\nimport p.D as DD;\n\nclass C {\n\tpublic static function g():Int return DD.Sub.h();\n}\n'
+		}]), 'DD.Sub');
 	}
 
 	/** A MAIN type is never spelled `Module.Main`, so an unrelated `b.D` beside its package does not refuse its move. */

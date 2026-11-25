@@ -1561,15 +1561,13 @@ class WriterLowering {
 		final body: Expr = preWriteFn != null ? wrapWithPreWrite(preWriteFn, rawBody, fnName, typePath) : rawBody;
 		if (node.kind == Alt && hasPrattBranch(node))
 			extraFields.push(WriterPrattLowering.openRightField(_pratt, node, typePath, fnName, valueCT));
-		return [
-			{
-				fnName: fnName,
-				valueCT: valueCT,
-				body: body,
-				hasCtxPrec: hasPratt,
-				isBinary: false
-			}
-		];
+		return [{
+			fnName: fnName,
+			valueCT: valueCT,
+			body: body,
+			hasCtxPrec: hasPratt,
+			isBinary: false
+		}];
 	}
 
 	// -------- enum rule --------

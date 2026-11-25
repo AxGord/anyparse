@@ -116,9 +116,10 @@ class LintSliceTest extends Test {
 		Assert.notNull(Linter.byId('duplicate-import'));
 		Assert.isNull(Linter.byId('does-not-exist'));
 
-		final files: Array<{ source: String, file: String }> = [
-			{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\n/** A class. */\n@:keep\n@:nullSafety(Strict)\nclass C {}' }
-		];
+		final files: Array<{ source: String, file: String }> = [{
+			file: 'pkg/C.hx',
+			source: 'package pkg;\nimport a.b.Unused;\n/** A class. */\n@:keep\n@:nullSafety(Strict)\nclass C {}'
+		}];
 		final viaDefault: Array<Violation> = Linter.run(files, plugin(), null, _ -> LintConfig.parse(NO_RULES));
 		Assert.equals(1, viaDefault.length);
 		Assert.equals('unused-import', viaDefault[0].rule);
@@ -424,12 +425,10 @@ class LintSliceTest extends Test {
 	 */
 	public function testGuardedAliasBranchesBindingDifferentModulesNotDuplicate(): Void {
 		inline function duplicates(extra: String): Int {
-			return CheckFixture.violationsIn(new DuplicateImport(), [
-				{
-					file: 'pkg/C.hx',
-					source: 'package pkg;\n#if js\nimport a.b.One as U;\n#else\nimport a.b.Two as U;\n#end\n${extra}class C extends U {}'
-				}
-			], plugin())
+			return CheckFixture.violationsIn(new DuplicateImport(), [{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\n#if js\nimport a.b.One as U;\n#else\nimport a.b.Two as U;\n#end\n${extra}class C extends U {}'
+			}], plugin())
 				.length;
 		}
 		Assert.equals(0, duplicates(''));
@@ -444,9 +443,10 @@ class LintSliceTest extends Test {
 		// involved, so this arm is independent of the builder's dedup key.
 		Assert.equals(
 			0,
-			CheckFixture.violationsIn(new DuplicateImport(), [
-				{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.One as U;\nimport a.b.Two as U;\nclass C {\n\tvar u:U;\n}' }
-			], plugin())
+			CheckFixture.violationsIn(new DuplicateImport(), [{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\nimport a.b.One as U;\nimport a.b.Two as U;\nclass C {\n\tvar u:U;\n}'
+			}], plugin())
 				.length
 		);
 	}

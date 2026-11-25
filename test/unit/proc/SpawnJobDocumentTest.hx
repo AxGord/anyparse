@@ -9,23 +9,21 @@ class SpawnJobDocumentTest extends Test {
 
 	#if nodejs
 	public function testEverySetFieldReachesTheDocument(): Void {
-		final batch: Null<DriverBatch> = ProcessSpawn.writeJobs([
-			{
-				args: ['a"b', 'c\nd'],
-				cwd: 'here',
-				cmd: 'tool',
-				env: JObject([JValueTools.entry('K', JString('v')), JValueTools.entry('a"b', JString('c"d'))]),
-				stdin: 'in',
-				shell: 'sh',
-				timeout: 1000,
-				groupFile: 'g',
-				tethered: true,
-				reap: false,
-				idle: 5,
-				progress: 'p',
-				awaitProgress: true
-			}
-		], 'apq-job-document-');
+		final batch: Null<DriverBatch> = ProcessSpawn.writeJobs([{
+			args: ['a"b', 'c\nd'],
+			cwd: 'here',
+			cmd: 'tool',
+			env: JObject([JValueTools.entry('K', JString('v')), JValueTools.entry('a"b', JString('c"d'))]),
+			stdin: 'in',
+			shell: 'sh',
+			timeout: 1000,
+			groupFile: 'g',
+			tethered: true,
+			reap: false,
+			idle: 5,
+			progress: 'p',
+			awaitProgress: true
+		}], 'apq-job-document-');
 		if (batch == null) {
 			Assert.fail('no batch');
 			return;

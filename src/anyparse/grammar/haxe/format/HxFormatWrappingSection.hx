@@ -37,7 +37,8 @@ package anyparse.grammar.haxe.format;
  * comprehension bracket padding),
  * `methodChainCuddledLinks` (a link after a multi-line predecessor that ends in a dedented `})` starts on that
  * closing line) and `soleItemCuddledBrackets` (a `[…]` holding exactly ONE element that owns a wrap point of
- * its own keeps both brackets cuddled to it).
+ * its own keeps both brackets cuddled to it) and `soleObjectCuddledBrackets` (the same cuddle, only for a sole
+ * object-literal element: `[{` … `}]`).
  */
 @:peg
 typedef HxFormatWrappingSection = {
@@ -62,6 +63,9 @@ typedef HxFormatWrappingSection = {
 
 	@:optional
 	var soleItemCuddledBrackets: Bool;
+
+	@:optional
+	var soleObjectCuddledBrackets: Bool;
 
 	@:optional
 	var ternaryCuddledBraces: Bool;

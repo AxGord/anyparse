@@ -67,12 +67,10 @@ class RegistryFollowWriteCliTest extends Test {
 		#if nodejs
 		final root: String = project(
 			'apq_follow_move', 'return D.Sub.h() + 2;', '"find":"return D.Sub.h() + 2","replace":"return D.Sub.h() - 2"',
-			[
-				{
-					name: 'src/p/D.hx',
-					source: 'package p;\n\nclass D {}\n\nclass Sub {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n'
-				}
-			]
+			[{
+				name: 'src/p/D.hx',
+				source: 'package p;\n\nclass D {}\n\nclass Sub {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n'
+			}]
 		);
 		final run: CliRun = CliFixture.runIn(root, ['move', 'src/p/C.hx', '--to', 'src/q', '--write']);
 		final arms: String = File.getContent('$root/arms/q.json');
@@ -111,9 +109,11 @@ class RegistryFollowWriteCliTest extends Test {
 		final original: String = File.getContent('$root/arms/p.json');
 		final journal: WriteJournal = new WriteJournal();
 		WriteJournal.during(journal, () -> {
-			RegistryFollowCommand.followWrite('fmt', [
-				{ path: module, before: before, after: before.replace('a&&b||c', 'a && b || c') }
-			], CliArgs.pickPluginFor('haxe', module));
+			RegistryFollowCommand.followWrite('fmt', [{
+				path: module,
+				before: before,
+				after: before.replace('a&&b||c', 'a && b || c')
+			}], CliArgs.pickPluginFor('haxe', module));
 			return 0;
 		});
 		final carried: String = File.getContent('$root/arms/p.json');
@@ -223,12 +223,10 @@ class RegistryFollowWriteCliTest extends Test {
 		#if nodejs
 		final arms: String = armsAfter(
 			'apq_follow_rename_scope', 'return D.Sub.h() + 2;', '"find":"return D.Sub.h() + 2","replace":"return D.Sub.h() - 2"',
-			[
-				{
-					name: 'src/p/D.hx',
-					source: 'package p;\n\nclass D {}\n\nclass Sub {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n'
-				}
-			],
+			[{
+				name: 'src/p/D.hx',
+				source: 'package p;\n\nclass D {}\n\nclass Sub {\n\tpublic static function h():Int {\n\t\treturn 1;\n\t}\n}\n'
+			}],
 			[
 				'rename',
 				'src/p/D.hx',
@@ -595,9 +593,11 @@ class RegistryFollowWriteCliTest extends Test {
 		final root: String = project('apq_follow_reaim', body, '"find":"if (refuses(d, x)) continue;","replace":""', []);
 		final module: String = '$root/src/p/C.hx';
 		final before: String = File.getContent(module);
-		final err: String = CliFixture.captureStderr(() -> RegistryFollowCommand.followWrite('fmt', [
-			{ path: module, before: before, after: before.replace(body, 'return [ for (d in ds) if (!refuses(d, x)) d ];') }
-		], CliArgs.pickPluginFor('haxe', module)));
+		final err: String = CliFixture.captureStderr(() -> RegistryFollowCommand.followWrite('fmt', [{
+			path: module,
+			before: before,
+			after: before.replace(body, 'return [ for (d in ds) if (!refuses(d, x)) d ];')
+		}], CliArgs.pickPluginFor('haxe', module)));
 		final arms: String = File.getContent('$root/arms/p.json');
 		CliFixture.removeDir(root);
 		Assert.isTrue(err.indexOf('apq fmt: registry-follow: arm A: re-aimed') >= 0, err);

@@ -196,9 +196,10 @@ class PreferTypedThrowCheckTest extends Test {
 			return;
 		}
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
-		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
-			{ file: Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH }
-		]);
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{
+			file: Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']),
+			source: STRING_CATCH
+		}]);
 		final check: PreferTypedThrow = new PreferTypedThrow();
 		final vs: Array<Violation> = CheckFixture.violationsIn(check, report, scoped);
 		Assert.equals(1, vs.length);
@@ -263,9 +264,10 @@ class PreferTypedThrowCheckTest extends Test {
 			return;
 		}
 		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
-		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
-			{ file: haxe.io.Path.join([live, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH }
-		]);
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{
+			file: haxe.io.Path.join([live, 'haxe', 'ds', 'BalancedTree.hx']),
+			source: STRING_CATCH
+		}]);
 		StdResolver.resetCache();
 		Sys.putEnv('APQ_NO_STD', '1');
 		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferTypedThrow(), report, scoped);

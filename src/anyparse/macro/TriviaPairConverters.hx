@@ -235,12 +235,10 @@ final class TriviaPairConverters {
 				// Wadler trick — `[for (x in arr) expr]` is the comprehension; produce it via EFor inside EArrayDecl
 				// Actually Haxe accepts EMeta? Simpler: build via parser-friendly Expr
 				final compr: Expr = {
-					expr: EArrayDecl([
-						{
-							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, inner),
-							pos: pos
-						}
-					]),
+					expr: EArrayDecl([{
+						expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, inner),
+						pos: pos
+					}]),
 					pos: pos
 				};
 				return optional ? macro ($access == null ? null : $compr) : compr;
@@ -515,12 +513,10 @@ final class TriviaPairConverters {
 					})
 					: innerWrap;
 				final compr: Expr = {
-					expr: EArrayDecl([
-						{
-							expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, perElem),
-							pos: pos
-						}
-					]),
+					expr: EArrayDecl([{
+						expr: EFor({ expr: EBinop(OpIn, { expr: EConst(CIdent(iterVar)), pos: pos }, access), pos: pos }, perElem),
+						pos: pos
+					}]),
 					pos: pos
 				};
 				return optional ? macro ($access == null ? null : $compr) : compr;

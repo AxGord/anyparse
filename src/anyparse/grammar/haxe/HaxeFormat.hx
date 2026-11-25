@@ -262,16 +262,14 @@ final class HaxeFormat implements TextFormat {
 			// A call-bearing literal argument takes its own line when the list breaks, unless it is simple: at most three
 			// items, none a nested container, the whole literal short — then it fills the line with its neighbours.
 			containerItemWrap: {
-				rules: [
-					{
-						mode: WrapMode.FillLine,
-						conditions: [
-							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
-							{ cond: WrapConditionType.HasContainerItems, value: 0 },
-							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
-						]
-					}
-				],
+				rules: [{
+					mode: WrapMode.FillLine,
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.HasContainerItems, value: 0 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+					]
+				}],
 				defaultMode: WrapMode.OnePerLine
 			}
 		};
@@ -364,9 +362,10 @@ final class HaxeFormat implements TextFormat {
 	 */
 	public static function defaultComprehensionWrap(): WrapRules {
 		return {
-			rules: [
-				{ mode: WrapMode.OnePerLine, conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }] }
-			],
+			rules: [{
+				mode: WrapMode.OnePerLine,
+				conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
+			}],
 			defaultMode: WrapMode.NoWrap
 		};
 	}
@@ -606,13 +605,11 @@ final class HaxeFormat implements TextFormat {
 	 */
 	public static function defaultTernaryWrap(): WrapRules {
 		return {
-			rules: [
-				{
-					mode: WrapMode.OnePerLineAfterFirst,
-					location: WrappingLocation.BeforeLast,
-					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
-				}
-			],
+			rules: [{
+				mode: WrapMode.OnePerLineAfterFirst,
+				location: WrappingLocation.BeforeLast,
+				conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }]
+			}],
 			defaultMode: WrapMode.NoWrap
 		};
 	}

@@ -102,18 +102,16 @@ final class BinaryParseLowering {
 	 */
 	private static function emitBinFixedStringField(localName: String, len: Int, parseSteps: Array<Expr>): Void {
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro : String,
-					expr: macro {
-						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{len}));
-						ctx.pos += $v{len};
-						_s;
-					},
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: macro : String,
+				expr: macro {
+					final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{len}));
+					ctx.pos += $v{len};
+					_s;
+				},
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}
@@ -126,24 +124,22 @@ final class BinaryParseLowering {
 		final localRef: Expr = { expr: EConst(CIdent('_f_$refField')), pos: Context.currentPos() };
 		final errMsg: String = 'invalid size in field "$refField"';
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro : haxe.io.Bytes,
-					expr: macro {
-						final _len: Int = {
-							final _s: String = StringTools.rtrim($localRef);
-							final _v: Null<Int> = Std.parseInt(_s);
-							if (_v == null) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{errMsg});
-							(_v: Int);
-						};
-						final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + _len);
-						ctx.pos += _len;
-						_b;
-					},
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: macro : haxe.io.Bytes,
+				expr: macro {
+					final _len: Int = {
+						final _s: String = StringTools.rtrim($localRef);
+						final _v: Null<Int> = Std.parseInt(_s);
+						if (_v == null) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{errMsg});
+						(_v: Int);
+					};
+					final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + _len);
+					ctx.pos += _len;
+					_b;
+				},
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}
@@ -158,18 +154,16 @@ final class BinaryParseLowering {
 	): Void {
 		final decodeExpr: Expr = makeIntDecodeExpr(encoding, errContext);
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro : Int,
-					expr: macro {
-						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{width}));
-						ctx.pos += $v{width};
-						$decodeExpr;
-					},
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: macro : Int,
+				expr: macro {
+					final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{width}));
+					ctx.pos += $v{width};
+					$decodeExpr;
+				},
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}
@@ -181,18 +175,16 @@ final class BinaryParseLowering {
 	private static function emitBinLengthBytesField(localName: String, fieldName: String, parseSteps: Array<Expr>): Void {
 		final lenRef: Expr = { expr: EConst(CIdent('_lenPrefix_$fieldName')), pos: Context.currentPos() };
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro : haxe.io.Bytes,
-					expr: macro {
-						final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + $lenRef);
-						ctx.pos += $lenRef;
-						_b;
-					},
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: macro : haxe.io.Bytes,
+				expr: macro {
+					final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + $lenRef);
+					ctx.pos += $lenRef;
+					_b;
+				},
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}

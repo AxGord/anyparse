@@ -139,9 +139,10 @@ class MoveMemberSplitSliceTest extends Test {
 		final access: String = errMessage(move(
 			'p/Big.hx', 'Big', 'bump,total', 'Lib',
 			bigScope('')
-				.concat([
-					{ file: 'p/User.hx', source: 'package p;\n\nclass User {\n\tpublic static function peek(b:Big):Int return b.count;\n}' }
-				])
+				.concat([{
+					file: 'p/User.hx',
+					source: 'package p;\n\nclass User {\n\tpublic static function peek(b:Big):Int return b.count;\n}'
+				}])
 		));
 		Assert.isTrue(access.contains('mutable instance field(s) "count"'), access);
 		final property: String = errMessage(move('p/Big.hx', 'Big', 'bump,total', 'Lib', [

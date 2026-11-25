@@ -85,12 +85,10 @@ class SymbolIndexSliceTest extends Test {
 	 * a plain return → its own nominal) and returns null for an unknown type / member.
 	 */
 	public function testReturnNominalOfResolves(): Void {
-		final index: SymbolIndex = SymbolIndex.build([
-			{
-				file: 'src/H.hx',
-				source: 'class H { public function findUser():Null<Foo> return null; public function plain():Foo return null; }'
-			}
-		], plugin());
+		final index: SymbolIndex = SymbolIndex.build([{
+			file: 'src/H.hx',
+			source: 'class H { public function findUser():Null<Foo> return null; public function plain():Foo return null; }'
+		}], plugin());
 		Assert.equals('Null', index.typing.members.returnNominalOf('H', 'findUser'));
 		Assert.equals('Foo', index.typing.members.returnNominalOf('H', 'plain'));
 		Assert.isNull(index.typing.members.returnNominalOf('H', 'missing'));
@@ -931,9 +929,10 @@ class SymbolIndexSliceTest extends Test {
 
 	/** A supertype outside the index stays unprovable — the conservative side is unchanged. */
 	public function testProvablyLacksMemberRefusesUnindexedSupertype(): Void {
-		final index: SymbolIndex = SymbolIndex.build([
-			{ file: 'src/Lone.hx', source: 'class Lone extends SomethingExternal { private var _own:Int; }' }
-		], plugin());
+		final index: SymbolIndex = SymbolIndex.build([{
+			file: 'src/Lone.hx',
+			source: 'class Lone extends SomethingExternal { private var _own:Int; }'
+		}], plugin());
 		Assert.isFalse(index.typing.members.typeProvablyLacksMember('Lone', '_absent'));
 	}
 

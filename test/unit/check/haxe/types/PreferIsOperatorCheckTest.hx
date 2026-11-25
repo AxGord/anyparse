@@ -91,12 +91,10 @@ class PreferIsOperatorCheckTest extends Test {
 		final root: String = '${tmp != null && tmp.length > 0 ? tmp : '/tmp'}/anyparse_isop_shadow_${Sys.time()}';
 		FileSystem.createDirectory('$root/b');
 		File.saveContent('$root/b/Std.hx', 'package b;\n\nclass Std {}');
-		final files: Array<{ file: String, source: String }> = [
-			{
-				file: '$root/b/M.hx',
-				source: 'package b;\n\nclass M {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn Std.isOfType(v, M);\n\t}\n}'
-			}
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: '$root/b/M.hx',
+			source: 'package b;\n\nclass M {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn Std.isOfType(v, M);\n\t}\n}'
+		}];
 		Assert.equals(0, CheckFixture.violationsIn(new PreferIsOperator(), files).length);
 		FileSystem.deleteFile('$root/b/Std.hx');
 		Assert.equals(1, CheckFixture.violationsIn(new PreferIsOperator(), files).length);
@@ -130,9 +128,10 @@ class PreferIsOperatorCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-ISOP-VERSION-UNGATED')
 	public function testAProjectOlderThanTheOperatorIsNotTold(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'C.hx', source: '${TYPES}class C {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn Std.isOfType(v, Base);\n\t}\n}' }
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'C.hx',
+			source: '${TYPES}class C {\n\tfunction f(v:Dynamic):Bool {\n\t\treturn Std.isOfType(v, Base);\n\t}\n}'
+		}];
 		final older: LintConfig = LintConfig.parse('{"languageVersion": "4.1"}');
 		final current: LintConfig = LintConfig.parse('{"languageVersion": "4.2"}');
 		Assert.equals(0, CheckFixture.violationsIn(new PreferIsOperator(), files, null, _ -> older).length);

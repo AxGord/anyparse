@@ -424,14 +424,12 @@ class LexicalCodegen {
 		// One FLAT statement list: a regex local a nested `$b{}` declared would be invisible to the loop.
 		final stmts: Array<Expr> = [];
 		for (t in 0...tokens.terminals.length) stmts.push({
-			expr: EVars([
-				{
-					name: tokenReName(t),
-					type: macro : EReg,
-					expr: macro anyparse.runtime.AnchoredRegex.of($v{tokens.terminals[t].pattern}),
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: tokenReName(t),
+				type: macro : EReg,
+				expr: macro anyparse.runtime.AnchoredRegex.of($v{tokens.terminals[t].pattern}),
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		final kindType: ComplexType = kindCT();

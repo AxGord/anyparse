@@ -427,14 +427,12 @@ final class StructSeqLowering {
 			final localName: String = '_f_$fieldName';
 			final localCT: ComplexType = isOptional ? fieldCT : TPath({ pack: [], name: 'Null', params: [TPType(fieldCT)] });
 			declareLocals.push({
-				expr: EVars([
-					{
-						name: localName,
-						type: localCT,
-						expr: macro null,
-						isFinal: false
-					}
-				]),
+				expr: EVars([{
+					name: localName,
+					type: localCT,
+					expr: macro null,
+					isFinal: false
+				}]),
 				pos: Context.currentPos()
 			});
 			final parseCall: Expr = byNameFieldParseExpr(sc, child, fieldName);
@@ -463,14 +461,12 @@ final class StructSeqLowering {
 						throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{errMsg});
 				});
 				missingChecks.push({
-					expr: EVars([
-						{
-							name: checkedName,
-							type: fieldCT,
-							expr: macro $i{localName},
-							isFinal: true
-						}
-					]),
+					expr: EVars([{
+						name: checkedName,
+						type: fieldCT,
+						expr: macro $i{localName},
+						isFinal: true
+					}]),
 					pos: Context.currentPos()
 				});
 				structFields.push({ field: fieldName, expr: macro $i{checkedName} });
@@ -685,25 +681,21 @@ final class StructSeqLowering {
 		// read, so `ctx.pos` no longer points anywhere useful for a
 		// diagnostic. One Int local per entry, on every ByName mapping.
 		final keyPosDecl: Expr = {
-			expr: EVars([
-				{
-					name: '${keyLocal}Pos',
-					type: macro : Int,
-					expr: macro ctx.pos,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: '${keyLocal}Pos',
+				type: macro : Int,
+				expr: macro ctx.pos,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		};
 		final keyDecl: Expr = {
-			expr: EVars([
-				{
-					name: keyLocal,
-					type: macro : String,
-					expr: { expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos() },
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: keyLocal,
+				type: macro : String,
+				expr: { expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos() },
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		};
 		final mappingOpen: String = sc.formatInfo.mappingOpen;
@@ -899,14 +891,12 @@ final class StructSeqLowering {
 				}
 			};
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: fieldCT,
-					expr: absentOnValueExpr,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: fieldCT,
+				expr: absentOnValueExpr,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}
@@ -1112,14 +1102,12 @@ final class StructSeqLowering {
 		final hasOptionalRefAfterTrailSlot: Bool = child.kind == Ref && isOptional && !isStar && trailText != null && sc.ctx.trivia
 			&& sc.isTriviaBearing(typePath);
 		if (hasOptionalRefAfterTrailSlot) parseSteps.push({
-			expr: EVars([
-				{
-					name: '_afterTrail_$fieldName',
-					type: macro : Null<String>,
-					expr: macro null,
-					isFinal: false
-				}
-			]),
+			expr: EVars([{
+				name: '_afterTrail_$fieldName',
+				type: macro : Null<String>,
+				expr: macro null,
+				isFinal: false
+			}]),
 			pos: Context.currentPos()
 		});
 		// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
@@ -1141,14 +1129,12 @@ final class StructSeqLowering {
 			&& sc.ctx.trivia
 			&& sc.isTriviaBearing(typePath);
 		if (hasStructFieldTrailOptSlot) parseSteps.push({
-			expr: EVars([
-				{
-					name: trailPresentLocal,
-					type: macro : Bool,
-					expr: macro false,
-					isFinal: false
-				}
-			]),
+			expr: EVars([{
+				name: trailPresentLocal,
+				type: macro : Bool,
+				expr: macro false,
+				isFinal: false
+			}]),
 			pos: Context.currentPos()
 		});
 		// Splicing the same `Expr` into two `macro` blocks is safe —
@@ -1201,14 +1187,12 @@ final class StructSeqLowering {
 				final subFnName: String = child.fmtHasFlag(ATOM_OPERAND_FLAG) ? '${sc.parseFnName(refName)}Atom' : sc.parseFnName(refName);
 				final callExpr: Expr = { expr: ECall(macro $i{subFnName}, [macro ctx]), pos: Context.currentPos() };
 				parseSteps.push({
-					expr: EVars([
-						{
-							name: localName,
-							type: null,
-							expr: callExpr,
-							isFinal: true
-						}
-					]),
+					expr: EVars([{
+						name: localName,
+						type: null,
+						expr: callExpr,
+						isFinal: true
+					}]),
 					pos: Context.currentPos()
 				});
 			case Star if (isOptional && kwLead != null):
@@ -1263,14 +1247,12 @@ final class StructSeqLowering {
 		final newlineAfterLocal: String = '_newlineAfter_$fieldName';
 		if (hasNewlineAfterSlot) {
 			parseSteps.push({
-				expr: EVars([
-					{
-						name: newlineAfterLocal,
-						type: macro : Bool,
-						expr: macro false,
-						isFinal: false
-					}
-				]),
+				expr: EVars([{
+					name: newlineAfterLocal,
+					type: macro : Bool,
+					expr: macro false,
+					isFinal: false
+				}]),
 				pos: Context.currentPos()
 			});
 			parseSteps.push(macro {
@@ -1475,14 +1457,12 @@ final class StructSeqLowering {
 				}
 			};
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: fieldCT,
-					expr: valueExpr,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: fieldCT,
+				expr: valueExpr,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}

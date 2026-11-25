@@ -236,9 +236,10 @@ final class LintConfig {
 		?oracleDeclarations: Array<OracleDeclared>, ?optionRead: (String, Null<String>) -> Void
 	) {
 		_optionRead = optionRead;
-		_switches = switches ?? [
-			{ rules: [ for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true ], categories: [] }
-		];
+		_switches = switches ?? [{
+			rules: [ for (id => rc in rules) if (rc.enabled != null) id => rc.enabled == true ],
+			categories: []
+		}];
 		_ownedTypes = ownedTypes ?? [];
 		_reportSummaryThreshold = reportSummaryThreshold;
 		_reachConfigurationsComplete = reachConfigurationsComplete;

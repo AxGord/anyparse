@@ -91,15 +91,13 @@ final class BranchesTest extends Test {
 		TempDir.with(dir -> {
 			final report: Array<String> -> String = names -> Path.join([dir.path, '${names[0]}.json']);
 			final summary: Summary = new Summary();
-			final left: String = Branches.encode('r1', [
-				{
-					name: 'a',
-					outcome: Passed,
-					ms: 0,
-					note: '',
-					excerpt: []
-				}
-			], ['n' => 1]);
+			final left: String = Branches.encode('r1', [{
+				name: 'a',
+				outcome: Passed,
+				ms: 0,
+				note: '',
+				excerpt: []
+			}], ['n' => 1]);
 			final readings: Map<String, Int> = Branches.run(
 				'r1', [['a'], ['b']], ['b', 'a'],
 				names ->
@@ -160,15 +158,13 @@ final class BranchesTest extends Test {
 	/** A branch that began after its pool lease shows the seconds on its first row and in the total; an immediate grant shows none. */
 	public function testALeaseWaitIsShownOnTheRowAndInTheTotalButAnImmediateGrantIsNot(): Void {
 		TempDir.with(dir -> {
-			final steps: Array<Step> = [
-				{
-					name: 'a',
-					outcome: Passed,
-					ms: 0,
-					note: '',
-					excerpt: []
-				}
-			];
+			final steps: Array<Step> = [{
+				name: 'a',
+				outcome: Passed,
+				ms: 0,
+				note: '',
+				excerpt: []
+			}];
 			final now: Float = Date.now().getTime();
 			final run: (Float) -> Summary = began -> {
 				final report: String = dir.file('${Std.int(began - now)}.json');
@@ -197,15 +193,13 @@ final class BranchesTest extends Test {
 			final now: Float = Date.now().getTime();
 			final script: String = 'require("fs").writeFileSync(process.argv[1], process.argv[2])';
 			final report: String -> String = name -> dir.file('$name.json');
-			final left: String -> String = name -> Branches.encode('r1', [
-				{
-					name: name,
-					outcome: Passed,
-					ms: 0,
-					note: '',
-					excerpt: []
-				}
-			], [], now + 2400);
+			final left: String -> String = name -> Branches.encode('r1', [{
+				name: name,
+				outcome: Passed,
+				ms: 0,
+				note: '',
+				excerpt: []
+			}], [], now + 2400);
 			final summary: Summary = new Summary();
 			final readings: Map<String, Int> = Branches.run(
 				'r1', [['a'], ['b']], ['a', 'b'],
@@ -245,15 +239,13 @@ final class BranchesTest extends Test {
 		TempDir.with(dir -> {
 			final report: String = dir.file('a.json');
 			final progress: String = '$report.progress';
-			final left: String = Branches.encode('r1', [
-				{
-					name: 'a',
-					outcome: Passed,
-					ms: 0,
-					note: '',
-					excerpt: []
-				}
-			], []);
+			final left: String = Branches.encode('r1', [{
+				name: 'a',
+				outcome: Passed,
+				ms: 0,
+				note: '',
+				excerpt: []
+			}], []);
 			final script: String = 'const fs = require("fs"); fs.writeFileSync(process.argv[1], process.argv[2]); '
 				+ 'fs.writeFileSync(process.argv[3], "b"); setInterval(() => {}, 1000)';
 			final summary: Summary = new Summary();
@@ -500,16 +492,14 @@ final class BranchesTest extends Test {
 		TempDir.with(dir -> {
 			final report: Array<String> -> String = names -> Path.join([dir.path, '${names[0]}.json']);
 			final summary: Summary = new Summary();
-			final left: String = Branches.encode('r1', [
-				{
-					name: 'base-lint',
-					outcome: Passed,
-					ms: 5,
-					note: '',
-					excerpt: [],
-					threads: 1
-				}
-			], []);
+			final left: String = Branches.encode('r1', [{
+				name: 'base-lint',
+				outcome: Passed,
+				ms: 5,
+				note: '',
+				excerpt: [],
+				threads: 1
+			}], []);
 			Assert.isFalse(
 				Branches.run(
 					'r1', [['base-lint']],

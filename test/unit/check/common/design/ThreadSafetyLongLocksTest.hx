@@ -49,9 +49,11 @@ class ThreadSafetyLongLocksTest extends Test {
 		final db: String = sources[0].replace(
 			'function work():Void {}', 'function work():Void {} function other(b:Bool):Void { if (!b) _batch.acquire(); }'
 		);
-		Assert.same([
-			{ kind: 'leak', holder: 'Db.other', at: db.indexOf('_batch.acquire(); }', db.indexOf('function other')) }
-		], reasonsOf(longLock(explain([db, sources[1]]), 'Db._batch')).filter(r -> r.kind == 'leak'));
+		Assert.same([{
+			kind: 'leak',
+			holder: 'Db.other',
+			at: db.indexOf('_batch.acquire(); }', db.indexOf('function other'))
+		}], reasonsOf(longLock(explain([db, sources[1]]), 'Db._batch')).filter(r -> r.kind == 'leak'));
 		#else
 		Assert.pass('non-sys target');
 		#end

@@ -164,17 +164,19 @@ class PreferCountCheckTest extends Test {
 
 	public function testLibraryDeclaringARootListGetsCount(): Void {
 		// A `resolutionLibs` library's root-package `List` makes the bare name ambiguous.
-		final lib: Array<{ file: String, source: String }> = [
-			{ file: 'vendor/List.hx', source: 'class List<T> {\n\tpublic var length:Int = 99;\n}' }
-		];
+		final lib: Array<{ file: String, source: String }> = [{
+			file: 'vendor/List.hx',
+			source: 'class List<T> {\n\tpublic var length:Int = 99;\n}'
+		}];
 		Assert.isTrue(bareListMessage('', lib).indexOf('final n = q.count()') != -1);
 	}
 
 	public function testNonStdHaxePackageGetsCount(): Void {
 		// ONE declaration, but in a library, not under the std root: a `haxe.`-prefixed package proves nothing.
-		final lib: Array<{ file: String, source: String }> = [
-			{ file: 'vendor/haxe/mine/List.hx', source: 'package haxe.mine;\n\nclass List<T> {\n\tpublic var length:Int = 99;\n}' }
-		];
+		final lib: Array<{ file: String, source: String }> = [{
+			file: 'vendor/haxe/mine/List.hx',
+			source: 'package haxe.mine;\n\nclass List<T> {\n\tpublic var length:Int = 99;\n}'
+		}];
 		final vs: Array<Violation> = run([{ file: 'C.hx', source: listFn('', 'haxe.mine.List<Int>') }], lib);
 		Assert.isTrue(vs[0].message.indexOf('final n = q.count()') != -1, vs[0].message);
 	}

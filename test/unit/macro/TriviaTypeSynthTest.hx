@@ -39,7 +39,7 @@ class TriviaTypeSynthTest extends Test {
 			indentChar: Tab, indentSize: 1, tabWidth: 4, lineWidth: 80, lineEnd: '\\n', finalNewline: true, keyValueSpace: false, entrySpace: true,
 			trailingWhitespace: false, maxConsecutiveBlanks: -1, commentStyle: Verbatim, arrayMatrixWrap: NoMatrixWrap,
 			trailingComma: Keep, conditionalPolicy: Aligned, alignInlineSwitchCaseBody: false, comprehensionCuddledOpen: false,
-			soleItemCuddledBrackets: false, methodChainCuddledLinks: false, ternaryCuddledBraces: false,
+			soleItemCuddledBrackets: false, soleObjectCuddledBrackets: false, methodChainCuddledLinks: false, ternaryCuddledBraces: false,
 			addLineCommentSpace: true, normalizeLineCommentIndent: false, compressSuccessiveParenthesis: true
 		};
 		private function new() {}

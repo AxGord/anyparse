@@ -588,21 +588,17 @@ class NamingCheckLocalFixTest extends NamingCheckTestBase {
 	@:pin('control')
 	@:killer('M-NAMING-LOCAL-CROSS-NOTE')
 	public function testLocalAndParamCollisionsNameTheTakenName(): Void {
-		final local: String = refusalFor([
-			{
-				file: 'pkg/C.hx',
-				source: 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n\t\tfinal _label:String = label + "!";\n'
-				+ '\t\treturn _label;\n\t}\n}'
-			}
-		], 'pkg/C.hx', true);
+		final local: String = refusalFor([{
+			file: 'pkg/C.hx',
+			source: 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n\t\tfinal _label:String = label + "!";\n'
+			+ '\t\treturn _label;\n\t}\n}'
+		}], 'pkg/C.hx', true);
 		Assert.stringContains("'label' is already bound", local);
-		final param: String = refusalFor([
-			{
-				file: 'pkg/C.hx',
-				source: 'package pkg;\nclass C {\n\tpublic function other(__modelButtons:Array<Int>):Int {\n'
-				+ '\t\tfinal modelButtons:Int = __modelButtons.length;\n\t\treturn modelButtons;\n\t}\n}'
-			}
-		], 'pkg/C.hx', true);
+		final param: String = refusalFor([{
+			file: 'pkg/C.hx',
+			source: 'package pkg;\nclass C {\n\tpublic function other(__modelButtons:Array<Int>):Int {\n'
+			+ '\t\tfinal modelButtons:Int = __modelButtons.length;\n\t\treturn modelButtons;\n\t}\n}'
+		}], 'pkg/C.hx', true);
 		Assert.stringContains("'modelButtons' is already bound", param);
 		Assert.isFalse(param.indexOf('confinement proof') >= 0, 'a parameter needs no confinement proof, got: $param');
 	}

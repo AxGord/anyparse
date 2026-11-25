@@ -131,7 +131,8 @@
 				}
 			]
 		},
-		"comprehensionFit": true
+		"comprehensionFit": true,
+		"soleObjectCuddledBrackets": true
 	},
 	"whitespace": {
 		"addLineCommentSpace": true,

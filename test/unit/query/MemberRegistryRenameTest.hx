@@ -269,29 +269,25 @@ final class MemberRegistryRenameTest extends Test {
 	}
 
 	public function testAListOfCutsFollowsPairByPair(): Void {
-		final out: ArmsAfter = followBase([
-			{
-				name: 'LIST',
-				type: 'p.Base',
-				method: 'other',
-				finds: ['return walk();', 'final a: Int = 2;'],
-				replaces: ['return walk() + 1;', 'final a: Int = walk();']
-			}
-		]);
+		final out: ArmsAfter = followBase([{
+			name: 'LIST',
+			type: 'p.Base',
+			method: 'other',
+			finds: ['return walk();', 'final a: Int = 2;'],
+			replaces: ['return walk() + 1;', 'final a: Int = walk();']
+		}]);
 		Assert.same(['return step();', 'final a: Int = 2;'], out.arm('LIST').finds);
 		Assert.same(['return step() + 1;', 'final a: Int = step();'], out.arm('LIST').replaces);
 	}
 
 	public function testADedentedFindKeepsItsOwnIndentation(): Void {
-		final out: ArmsAfter = followBase([
-			{
-				name: 'DEDENTED',
-				type: 'p.Base',
-				method: 'other',
-				find: 'if (a > 1)\n\treturn walk();',
-				replace: 'if (a > 2)\n\treturn walk();'
-			}
-		]);
+		final out: ArmsAfter = followBase([{
+			name: 'DEDENTED',
+			type: 'p.Base',
+			method: 'other',
+			find: 'if (a > 1)\n\treturn walk();',
+			replace: 'if (a > 2)\n\treturn walk();'
+		}]);
 		Assert.equals('if (a > 1)\n\treturn step();', out.arm('DEDENTED').find);
 		Assert.equals('if (a > 2)\n\treturn step();', out.arm('DEDENTED').replace);
 		Assert.equals(0, out.notes.length);
@@ -322,15 +318,13 @@ final class MemberRegistryRenameTest extends Test {
 	public function testMixedVerdictsLeaveTheReplaceAndNameTheRecord(): Void {
 		final source: String = 'package p;\n\nclass Base {\n\tpublic function new() {}\n\n\tpublic function walk(): Int {\n\t\treturn 1;\n'
 			+ '\t}\n\n\tpublic function label(): Int {\n\t\tfinal walk: Int = 2;\n\t\treturn walk + this.walk();\n\t}\n}\n';
-		final out: ArmsAfter = follow('src/p/Base.hx', source, 'function walk', 'step', [
-			{
-				name: 'MIXED',
-				type: 'p.Base',
-				method: 'label',
-				find: 'return walk + this.walk();',
-				replace: 'walk() + 1;'
-			}
-		]);
+		final out: ArmsAfter = follow('src/p/Base.hx', source, 'function walk', 'step', [{
+			name: 'MIXED',
+			type: 'p.Base',
+			method: 'label',
+			find: 'return walk + this.walk();',
+			replace: 'walk() + 1;'
+		}]);
 		Assert.equals('return walk + this.step();', out.arm('MIXED').find);
 		Assert.equals('walk() + 1;', out.arm('MIXED').replace);
 		Assert.isTrue(
@@ -366,29 +360,25 @@ final class MemberRegistryRenameTest extends Test {
 		Assert.equals('final a: Int = this.step();', out.arm('SELF').replace);
 		Assert.equals('final a: Int = o.walk();', out.arm('QUALIFIED').replace);
 		Assert.isTrue(out.notes.length == 1 && out.notes[0].startsWith('arm QUALIFIED: '), out.notes.join('|'));
-		final secondary: ArmsAfter = follow('src/p/Shadow.hx', SHADOW, 'public function walk', 'count', [
-			{
-				name: 'SIBLING',
-				type: 'p.Shadow',
-				method: 'aux',
-				find: 'return 7;',
-				replace: 'return walk;'
-			}
-		]);
+		final secondary: ArmsAfter = follow('src/p/Shadow.hx', SHADOW, 'public function walk', 'count', [{
+			name: 'SIBLING',
+			type: 'p.Shadow',
+			method: 'aux',
+			find: 'return 7;',
+			replace: 'return walk;'
+		}]);
 		Assert.equals('return walk;', secondary.arm('SIBLING').replace);
 		Assert.isTrue(secondary.notes.length == 1 && secondary.notes[0].startsWith('arm SIBLING: '), secondary.notes.join('|'));
 	}
 
 	public function testAFindCuttingARenamedTokenAtItsEdgeStaysAndIsNamed(): Void {
-		final out: ArmsAfter = followBase([
-			{
-				name: 'EDGE',
-				type: 'p.Caller',
-				method: 'run',
-				find: 'return b.wal',
-				replace: 'return b.sta'
-			}
-		]);
+		final out: ArmsAfter = followBase([{
+			name: 'EDGE',
+			type: 'p.Caller',
+			method: 'run',
+			find: 'return b.wal',
+			replace: 'return b.sta'
+		}]);
 		Assert.equals('return b.wal', out.arm('EDGE').find);
 		Assert.isTrue(
 			out.notes.length == 1 && out.notes[0].startsWith('arm EDGE: ') && out.notes[0].endsWith('re-aim it'), out.notes.join('|')
@@ -399,15 +389,13 @@ final class MemberRegistryRenameTest extends Test {
 		final source: String = 'package p;\n\nclass Mod {\n\tpublic function walk(): Int {\n\t\treturn 1;\n\t}\n\n'
 			+ '\tpublic function user(o: Far): Int {\n\t\treturn walk() + o.step();\n\t}\n}\n\nclass Far {\n'
 			+ '\tpublic function step(): Int {\n\t\treturn 1;\n\t}\n}\n';
-		final out: ArmsAfter = follow('src/p/Mod.hx', source, 'function walk', 'step', [
-			{
-				name: 'TWICE',
-				type: 'p.Mod',
-				method: 'user',
-				find: 'walk()',
-				replace: 'walk() + 1'
-			}
-		]);
+		final out: ArmsAfter = follow('src/p/Mod.hx', source, 'function walk', 'step', [{
+			name: 'TWICE',
+			type: 'p.Mod',
+			method: 'user',
+			find: 'walk()',
+			replace: 'walk() + 1'
+		}]);
 		Assert.equals('step()', out.arm('TWICE').find);
 		Assert.isTrue(
 			out.notes.length == 1 && out.notes[0].startsWith('arm TWICE: ') && out.notes[0].contains('p.Mod#user'), out.notes.join('|')
@@ -572,15 +560,13 @@ final class MemberRegistryRenameTest extends Test {
 	@:pin('control')
 	@:killer('M-REGISTRY-TOKENS-BY-TEXT')
 	public function testANameInsideAStringIsNoTokenOfTheFind(): Void {
-		final out: ArmsAfter = followBase([
-			{
-				name: 'QUOTED',
-				type: 'p.Base',
-				method: 'label',
-				find: 'return \'walk\' + walk();',
-				replace: 'walk() + 1;'
-			}
-		]);
+		final out: ArmsAfter = followBase([{
+			name: 'QUOTED',
+			type: 'p.Base',
+			method: 'label',
+			find: 'return \'walk\' + walk();',
+			replace: 'walk() + 1;'
+		}]);
 		Assert.equals('return \'walk\' + step();', out.arm('QUOTED').find);
 		Assert.equals('step() + 1;', out.arm('QUOTED').replace);
 		Assert.same([], out.notes);
@@ -650,14 +636,12 @@ final class MemberRegistryRenameTest extends Test {
 			Assert.fail('the fixture renames');
 			return;
 		}
-		final doc: String = document([
-			{
-				name: 'A',
-				type: 'p.Base',
-				method: 'walk',
-				find: 'return 1;'
-			}
-		]);
+		final doc: String = document([{
+			name: 'A',
+			type: 'p.Base',
+			method: 'walk',
+			find: 'return 1;'
+		}]);
 		final followed: RegistryFollow = MemberRegistryRename.follow(LAYOUT, doc, rename, new JsonQueryPlugin());
 		Assert.isNull(followed.text);
 		Assert.same([

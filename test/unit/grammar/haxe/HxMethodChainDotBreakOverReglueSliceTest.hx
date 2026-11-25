@@ -28,16 +28,14 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 		edited.callParameterWrap = {
 			containerItemWrap: {
 				defaultMode: WrapMode.OnePerLine,
-				rules: [
-					{
-						conditions: [
-							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
-							{ cond: WrapConditionType.HasContainerItems, value: 0 },
-							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
-						],
-						mode: WrapMode.FillLine
-					}
-				]
+				rules: [{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.HasContainerItems, value: 0 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+					],
+					mode: WrapMode.FillLine
+				}]
 			},
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.FillLineWithLeadingBreak,
@@ -64,16 +62,14 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 		edited.callParameterWrap = {
 			containerItemWrap: {
 				defaultMode: WrapMode.OnePerLine,
-				rules: [
-					{
-						conditions: [
-							{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
-							{ cond: WrapConditionType.HasContainerItems, value: 0 },
-							{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
-						],
-						mode: WrapMode.FillLine
-					}
-				]
+				rules: [{
+					conditions: [
+						{ cond: WrapConditionType.ItemCountLessThan, value: 3 },
+						{ cond: WrapConditionType.HasContainerItems, value: 0 },
+						{ cond: WrapConditionType.TotalItemLengthLessThan, value: 60 }
+					],
+					mode: WrapMode.FillLine
+				}]
 			},
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.FillLineWithLeadingBreak,

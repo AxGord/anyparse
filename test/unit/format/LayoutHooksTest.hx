@@ -35,9 +35,11 @@ final class LayoutHooksTest extends Test {
 
 	public function testAMatchedRuleBreaksTheClausesAndChargesItsIndent(): Void {
 		final rules: WrapRules = {
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 2 }], mode: WrapMode.OnePerLine, additionalIndent: 1 }
-			],
+			rules: [{
+				conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 2 }],
+				mode: WrapMode.OnePerLine,
+				additionalIndent: 1
+			}],
 			defaultMode: WrapMode.NoWrap
 		};
 		Assert.equals('class A\n\textends B\n\timplements C', render(ClauseWrap.layout([EXTENDS, IMPLEMENTS], 1, rules, 120)));
@@ -58,9 +60,10 @@ final class LayoutHooksTest extends Test {
 
 	public function testARuleOnAMeasureTheClauseListDoesNotTakeNeverHolds(): Void {
 		final rules: WrapRules = {
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 1 }], mode: WrapMode.OnePerLine }
-			],
+			rules: [{
+				conditions: [{ cond: WrapConditionType.TotalItemLengthLargerThan, value: 1 }],
+				mode: WrapMode.OnePerLine
+			}],
 			defaultMode: WrapMode.NoWrap
 		};
 		Assert.equals('class A extends B implements C', render(ClauseWrap.layout([EXTENDS, IMPLEMENTS], 1, rules, 120)));

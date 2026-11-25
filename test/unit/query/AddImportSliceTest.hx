@@ -305,9 +305,10 @@ class AddImportSliceTest extends Test {
 	@:pin('control')
 	@:killer('M-ADDIMPORT-STATEMENT-KEYWORD-IGNORED')
 	public function testCliTakesAWholeUsingStatement(): Void {
-		final dir: String = CliFixture.writeTree('addimportusing', [
-			{ name: 'src/q/Target.hx', source: 'package q;\n\nimport a.B;\n\nclass Target {}\n' }
-		]);
+		final dir: String = CliFixture.writeTree('addimportusing', [{
+			name: 'src/q/Target.hx',
+			source: 'package q;\n\nimport a.B;\n\nclass Target {}\n'
+		}]);
 		final target: String = '$dir/src/q/Target.hx';
 		Assert.equals(0, Cli.run(['add-import', target, 'using Lambda;', '--write']));
 		Assert.equals('package q;\n\nimport a.B;\n\nusing Lambda;\n\nclass Target {}\n', File.getContent(target));

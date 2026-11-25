@@ -788,9 +788,10 @@ class PreferInlineCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-INLINE-LOCAL-BUILD-MACRO')
 	public function testOwnFileBuildMacroTokenCostsNoResolutionIndex(): Void {
-		final report: Array<{ file: String, source: String }> = [
-			{ file: 'C.hx', source: '@:build(b.B.build())\nclass Built {}\n\nclass C {\n\tpublic function tag():Int return 1;\n}' }
-		];
+		final report: Array<{ file: String, source: String }> = [{
+			file: 'C.hx',
+			source: '@:build(b.B.build())\nclass Built {}\n\nclass C {\n\tpublic function tag():Int return 1;\n}'
+		}];
 		var demands: Int = 0;
 		function sources(): ResolutionSources {
 			demands++;

@@ -27,9 +27,10 @@ class ModuleScanPathOfDeclTest extends Test {
 	}
 
 	private static function fixture(): FileInfo {
-		final index: SymbolIndex = SymbolIndex.build([
-			{ file: 'src/pkg/Main.hx', source: 'package pkg;\nclass Main {}\ntypedef Helper = {};\n' }
-		], new HaxeQueryPlugin());
+		final index: SymbolIndex = SymbolIndex.build([{
+			file: 'src/pkg/Main.hx',
+			source: 'package pkg;\nclass Main {}\ntypedef Helper = {};\n'
+		}], new HaxeQueryPlugin());
 		return (index.fileInfo('src/pkg/Main.hx'): FileInfo);
 	}
 

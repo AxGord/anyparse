@@ -165,9 +165,10 @@ final class FixVerifierCoverageE2ETest extends Test {
 			files, [new AvoidDynamic()],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }],
 			File.saveContent, null,
-			[
-				{ config: { hxml: 'check.hxml', dir: dir, defines: [] }, coverage: OracleCoverage.unknown('probe stub') }
-			]
+			[{
+				config: { hxml: 'check.hxml', dir: dir, defines: [] },
+				coverage: OracleCoverage.unknown('probe stub')
+			}]
 		);
 		if (!result.baseline.match(Confirmed)) {
 			CliFixture.removeDir(dir);
@@ -255,15 +256,13 @@ final class FixVerifierCoverageE2ETest extends Test {
 		final result: FixVerifyResult = FixVerifier.verify(
 			files, [new AvoidDynamic()], new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }], File.saveContent
 		);
-		Assert.same([
-			{
-				rule: 'avoid-dynamic',
-				file: '$dir/Main.hx',
-				findings: 1,
-				edits: 1,
-				declineReasons: []
-			}
-		], result.tallies, 'the drifted file contributes no row, the canonical one still does');
+		Assert.same([{
+			rule: 'avoid-dynamic',
+			file: '$dir/Main.hx',
+			findings: 1,
+			edits: 1,
+			declineReasons: []
+		}], result.tallies, 'the drifted file contributes no row, the canonical one still does');
 		Assert.equals(0, result.declined.length, 'and it is not a decline either — no candidate was ever produced');
 		Assert.equals(DRIFTED, File.getContent('$dir/Other.hx'), 'the drifted file is byte-identical');
 		CliFixture.removeDir(dir);

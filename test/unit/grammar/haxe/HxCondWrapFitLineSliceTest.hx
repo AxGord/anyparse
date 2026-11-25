@@ -25,9 +25,10 @@ final class HxCondWrapFitLineSliceTest extends Test {
 		edited.conditionWrap = {
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.FillLineWithLeadingBreak,
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
-			]
+			rules: [{
+				conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }],
+				mode: WrapMode.NoWrap
+			}]
 		};
 	});
 

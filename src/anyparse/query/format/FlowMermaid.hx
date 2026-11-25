@@ -36,9 +36,10 @@ final class FlowMermaid {
 			final label: Null<String> = e.label;
 			statements.push(Chain({
 				head: group(Id(e.from)),
-				links: [
-					{ edge: Arrow({ link: '-->', label: label == null ? null : Plain(label) }), target: group(Id(e.to)) }
-				]
+				links: [{
+					edge: Arrow({ link: '-->', label: label == null ? null : Plain(label) }),
+					target: group(Id(e.to))
+				}]
 			}));
 		}
 		final thrown: Array<String> = [ for (n in graph.nodes()) if (n.kind == Throw) n.id ];

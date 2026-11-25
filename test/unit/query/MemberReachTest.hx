@@ -630,19 +630,17 @@ class MemberReachTest extends Test {
 				rootsAllMatched: true
 			},
 			builds: () -> {
-				configurations: [
-					{
-						name: 'made',
-						defined: [],
-						everDefined: [],
-						values: [],
-						compiled: files.map(f -> FileIdentity.canonical(cwd, f.file)),
-						types: [
-							for (t in [['C', 'F0.hx'], ['Other', 'F1.hx'], ['Poker', 'F2.hx'], ['Made', 'F0.hx']])
-								{ name: t[0], file: FileIdentity.canonical(cwd, t[1]) }
-						]
-					}
-				],
+				configurations: [{
+					name: 'made',
+					defined: [],
+					everDefined: [],
+					values: [],
+					compiled: files.map(f -> FileIdentity.canonical(cwd, f.file)),
+					types: [
+						for (t in [['C', 'F0.hx'], ['Other', 'F1.hx'], ['Poker', 'F2.hx'], ['Made', 'F0.hx']])
+							{ name: t[0], file: FileIdentity.canonical(cwd, t[1]) }
+					]
+				}],
 				library: []
 			}
 		});

@@ -518,6 +518,7 @@ final class HaxeFormatConfigLoader {
 		if (section.comprehensionFit != null) opt.comprehensionFit = section.comprehensionFit;
 		if (section.methodChainCuddledLinks != null) opt.methodChainCuddledLinks = section.methodChainCuddledLinks;
 		if (section.soleItemCuddledBrackets != null) opt.soleItemCuddledBrackets = section.soleItemCuddledBrackets;
+		if (section.soleObjectCuddledBrackets != null) opt.soleObjectCuddledBrackets = section.soleObjectCuddledBrackets;
 		if (section.ternaryCuddledBraces != null) opt.ternaryCuddledBraces = section.ternaryCuddledBraces;
 		if (section.ternaryMultilineBranch != null)
 			opt.ternaryMultilineBranchInline = section.ternaryMultilineBranch == HxFormatTernaryMultilineBranchPolicy.Inline;

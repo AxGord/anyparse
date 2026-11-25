@@ -113,12 +113,14 @@ class UnusedPrivateCheckTest extends Test {
 	 * wrongly flagged `_x` as unused.
 	 */
 	public function testAccessGrantOutsideReportScopeKeepsMember(): Void {
-		final report: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}' }
-		];
-		final library: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c._x; }\n}' }
-		];
+		final report: Array<{ file: String, source: String }> = [{
+			file: 'pkg/C.hx',
+			source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}'
+		}];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'pkg/E.hx',
+			source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c._x; }\n}'
+		}];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
 			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
@@ -862,13 +864,10 @@ class UnusedPrivateCheckTest extends Test {
 		final bareVs: Array<Violation> = CheckFixture.violationsIn(bareCheck, report, bare);
 		Assert.equals(1, bareVs.length);
 		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, CheckFixture.index(report, bare)).length > 0);
-		final library: Array<{ file: String, source: String }> = [
-			{
-				file: 'pkg/F.hx',
-				source: 'package pkg;\n\nclass F {\n\n\tpublic function f(d: D) {\n\t\treturn Reflect.field(d, \'secretThing\');\n\t}\n\n'
-					+ '}\n'
-			}
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'pkg/F.hx',
+			source: 'package pkg;\n\nclass F {\n\n\tpublic function f(d: D) {\n\t\treturn Reflect.field(d, \'secretThing\');\n\t}\n\n}\n'
+		}];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
 			{ declared: true, sources: () -> { report: report, projectRoots: library, library: new LibrarySources(library) } }

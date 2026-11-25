@@ -65,12 +65,10 @@ class ChangedCommandCliTest extends Test {
 		final body: String =
 			'\t\tvar a: Int = 1;\n\t\tvar b: Int = 2;\n\t\tvar c: Int = 3;\n\t\tvar d: Int = 4;\n\t\tvar e: Int = 5;\n\t\treturn a;\n';
 		final edited: String = '\t\tvar a: Int = 10;\n' + body.substr(body.indexOf('\n') + 1);
-		final root: String = CliFixture.writeTree('apq_changed_diff', [
-			{
-				name: 'A.hx',
-				source: 'class A {\n\tpublic function f(): Int {\n\t\treturn 1;\n\t}\n\n\tpublic function g(): Int {\n$body\t}\n}\n'
-			}
-		]);
+		final root: String = CliFixture.writeTree('apq_changed_diff', [{
+			name: 'A.hx',
+			source: 'class A {\n\tpublic function f(): Int {\n\t\treturn 1;\n\t}\n\n\tpublic function g(): Int {\n$body\t}\n}\n'
+		}]);
 		CliFixture.git(root, ['init', '-q']);
 		CliFixture.git(root, ['add', '-A']);
 		CliFixture.git(root, ['-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'base']);

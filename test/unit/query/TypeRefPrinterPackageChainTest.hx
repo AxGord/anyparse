@@ -80,9 +80,10 @@ class TypeRefPrinterPackageChainTest extends Test {
 	@:pin('control')
 	@:killer('M-RESOLVE-BARE-GUARDED-DECL')
 	public function testGuardedEnclosingTypeProvesNothing(): Void {
-		final index: SymbolIndex = indexOf([
-			{ file: 'q/Thing.hx', source: 'package q;\n\n#if never\nclass Thing {}\n#else\nclass Thing {}\n#end\n' }
-		]);
+		final index: SymbolIndex = indexOf([{
+			file: 'q/Thing.hx',
+			source: 'package q;\n\n#if never\nclass Thing {}\n#else\nclass Thing {}\n#end\n'
+		}]);
 		Assert.equals('import q.Thing', spelled(printerWith('package q.sub;\n\nclass C {}\n', index, 'q/sub/C.hx'), 'q.Thing'));
 	}
 

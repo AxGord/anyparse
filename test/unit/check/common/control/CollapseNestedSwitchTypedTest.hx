@@ -149,9 +149,10 @@ class CollapseNestedSwitchTypedTest extends Test {
 	@:pin('control')
 	@:killer('M-COLLAPSE-TYPED-UNSCOPED')
 	public function testNameTwoDeclarationsShareRefused(): Void {
-		final other: Array<{ file: String, source: String }> = [
-			{ file: 'other/Either.hx', source: 'package other;\nenum Either<L, R> {\n\tLeft(v: L);\n\tRight(v: R);\n}\n' }
-		];
+		final other: Array<{ file: String, source: String }> = [{
+			file: 'other/Either.hx',
+			source: 'package other;\nenum Either<L, R> {\n\tLeft(v: L);\n\tRight(v: R);\n}\n'
+		}];
 		Assert.equals(0, found(site(OUTER_OK, INNER_OK), '', other).length);
 	}
 

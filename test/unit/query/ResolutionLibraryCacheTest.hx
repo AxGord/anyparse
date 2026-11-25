@@ -197,9 +197,10 @@ class ResolutionLibraryCacheTest extends Test {
 	public function testDistinctResolutionScopesDoNotCrossContaminate(): Void {
 		#if (sys || nodejs)
 		final libWithBase: String = CliFixture.writeDir('resisoa', [{ name: 'Base.hx', source: BASE }]);
-		final libWithoutBase: String = CliFixture.writeDir('resisob', [
-			{ name: 'Other.hx', source: 'package lib;\nclass Other {\n\tpublic function new() {}\n}' }
-		]);
+		final libWithoutBase: String = CliFixture.writeDir('resisob', [{
+			name: 'Other.hx',
+			source: 'package lib;\nclass Other {\n\tpublic function new() {}\n}'
+		}]);
 		final projA: String = CliFixture.writeDir('resisoproja', [
 			{ name: 'Derived.hx', source: DERIVED },
 			{ name: 'apq.json', source: '{"resolutionRoots":["$libWithBase"]}' }

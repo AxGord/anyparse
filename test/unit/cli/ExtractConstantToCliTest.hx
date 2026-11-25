@@ -81,9 +81,10 @@ class ExtractConstantToCliTest extends Test {
 	@:killer('M-EXTRACT-CONSTANT-TO-INTO-BY-SPELLING')
 	public function testASymlinkedIntoIsTheSourceItself(): Void {
 		#if nodejs
-		final dir: String = CliFixture.writeTree('extractto', [
-			{ name: 'B.hx', source: 'class B {\n\tfunction f():Int {\n\t\treturn 42;\n\t}\n}\n' }
-		]);
+		final dir: String = CliFixture.writeTree('extractto', [{
+			name: 'B.hx',
+			source: 'class B {\n\tfunction f():Int {\n\t\treturn 42;\n\t}\n}\n'
+		}]);
 		js.node.Fs.symlinkSync('$dir/B.hx', '$dir/M.hx');
 		final rc: Int = Cli.run([
 			'extract-constant',

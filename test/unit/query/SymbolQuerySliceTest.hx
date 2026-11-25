@@ -47,9 +47,10 @@ class SymbolQuerySliceTest extends Test {
 
 	/** `--kind` keeps only decls of one grammar kind. */
 	public function testKindFilter(): Void {
-		final files: Array<{ source: String, file: String }> = [
-			{ file: 'src/pkg/A.hx', source: 'package pkg;\nclass A {}\ntypedef Helper = {};\ninterface I {}' }
-		];
+		final files: Array<{ source: String, file: String }> = [{
+			file: 'src/pkg/A.hx',
+			source: 'package pkg;\nclass A {}\ntypedef Helper = {};\ninterface I {}'
+		}];
 		final classes: Array<SymbolRow> = SymbolQuery.symbols(files, plugin(), 'ClassDecl');
 		Assert.equals(1, classes.length);
 		Assert.equals('pkg.A', classes[0].qualified);

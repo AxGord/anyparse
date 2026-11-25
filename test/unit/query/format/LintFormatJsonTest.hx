@@ -31,15 +31,13 @@ class LintFormatJsonTest extends Test {
 	}
 
 	public function testNoSpanIsNullCoordinates(): Void {
-		final text: String = LintFormat.json([
-			{
-				file: 'a.hx',
-				span: null,
-				rule: 'r',
-				severity: Info,
-				message: 'm'
-			}
-		], SOURCE);
+		final text: String = LintFormat.json([{
+			file: 'a.hx',
+			span: null,
+			rule: 'r',
+			severity: Info,
+			message: 'm'
+		}], SOURCE);
 		Assert.stringContains('"line": null,\n    "col": null,\n    "endLine": null,\n    "endCol": null,\n    "severity": "info"', text);
 	}
 
@@ -107,23 +105,19 @@ class LintFormatJsonTest extends Test {
 			+ '    "dominated": [\n      {\n        "lock": "D",\n        "by": [\n          "L"\n        ]\n      }\n    ]\n  }\n}',
 			LintFormat.json([], SOURCE, null, {
 				report: {
-					long: [
-						{
-							lock: 'L',
-							reasons: [reason, blind],
-							circular: 2,
-							aside: null
-						}
-					],
-					mainShort: [
-						{
-							lock: 'M',
-							file: 'a.hx',
-							span: new Span(0, 1),
-							holder: 'T.k',
-							quiet: true
-						}
-					],
+					long: [{
+						lock: 'L',
+						reasons: [reason, blind],
+						circular: 2,
+						aside: null
+					}],
+					mainShort: [{
+						lock: 'M',
+						file: 'a.hx',
+						span: new Span(0, 1),
+						holder: 'T.k',
+						quiet: true
+					}],
 					dominated: [{ lock: 'D', by: ['L'] }]
 				}
 			})

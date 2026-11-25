@@ -344,9 +344,10 @@ class PreferStaticExtensionFactsTest extends Test {
 		// the run's journal places the receiver in the edited text, but the table is asked by range: only the text it read
 		final edited: String = '$MAIN// edited since the compile\n';
 		final journal: EditJournal = new EditJournal();
-		journal.record(MAIN, [
-			{ span: new Span(MAIN.length, MAIN.length), text: '// edited since the compile\n' }
-		], edited);
+		journal.record(MAIN, [{
+			span: new Span(MAIN.length, MAIN.length),
+			text: '// edited since the compile\n'
+		}], edited);
 		final seen: Null<Map<String, String>> = verdicts([[]], edited, null, BUILD, CONFIG, null, journal);
 		if (seen == null) return;
 		Assert.equals('report', seen['proven'], '$seen');
@@ -613,9 +614,10 @@ class PreferStaticExtensionFactsTest extends Test {
 	private static function stdStringTools(): Array<{ file: String, source: String }> {
 		#if (sys || nodejs)
 		final std: Null<String> = StdResolver.stdDir();
-		return std == null ? [] : [
-			{ file: Path.join([std, 'StringTools.hx']), source: File.getContent(Path.join([std, 'StringTools.hx'])) }
-		];
+		return std == null ? [] : [{
+			file: Path.join([std, 'StringTools.hx']),
+			source: File.getContent(Path.join([std, 'StringTools.hx']))
+		}];
 		#else
 		return [];
 		#end

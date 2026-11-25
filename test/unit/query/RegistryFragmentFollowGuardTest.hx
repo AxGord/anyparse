@@ -60,15 +60,13 @@ final class RegistryFragmentFollowGuardTest extends Test {
 		final now: String = head.split('final out: Array<Int> = [];\n\t\t').join('') + AFTER + tail;
 		final json: String =
 			'{"arms":[{"name":"A","type":"p.C","method":"f","find":${JsonText.quote(find)},"replace":${JsonText.quote(replace)}}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.C',
-				source: old,
-				tree: plugin.parseFile(old),
-				newSource: now,
-				newTree: plugin.parseFile(now)
-			}
-		], plugin);
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.C',
+			source: old,
+			tree: plugin.parseFile(old),
+			newSource: now,
+			newTree: plugin.parseFile(now)
+		}], plugin);
 	}
 
 	private static function assertDeclined(out: RegistryFollow): Void {

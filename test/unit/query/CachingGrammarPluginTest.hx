@@ -219,12 +219,10 @@ class CachingGrammarPluginTest extends Test {
 	 * make it `static` and it is this assertion, and only this assertion, that fails.
 	 */
 	public function testMaxComplexityMemoizedPerDirectoryAndPerRun(): Void {
-		final dir: String = CliFixture.writeDir('cgpmaxcx', [
-			{
-				name: 'checkstyle.json',
-				source: '{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":10}]}}]}'
-			}
-		]);
+		final dir: String = CliFixture.writeDir('cgpmaxcx', [{
+			name: 'checkstyle.json',
+			source: '{"checks":[{"type":"CyclomaticComplexity","props":{"thresholds":[{"severity":"WARNING","complexity":10}]}}]}'
+		}]);
 		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		Assert.equals(9, cached.maxComplexity('$dir/A.hx'));
 		File.saveContent(

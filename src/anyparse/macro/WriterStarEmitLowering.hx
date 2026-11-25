@@ -1325,9 +1325,10 @@ final class WriterStarEmitLowering {
 			{ values: [macro 2], expr: comprField, guard: null }
 		];
 		final policyExpr: Expr = { expr: ESwitch(macro _abk, kindCases, arrayField), pos: Context.currentPos() };
-		final spaceSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], macro _abp, [
-			{ values: isClose ? ['Before', 'Both'] : ['After', 'Both'], expr: macro _dt(' ') }
-		], macro _de());
+		final spaceSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], macro _abp, [{
+			values: isClose ? ['Before', 'Both'] : ['After', 'Both'],
+			expr: macro _dt(' ')
+		}], macro _de());
 		// The classifier is the generated typed predicate of this build's
 		// AST family (`AstPreds.arrayBracketKind` plain, `AstPredsT.…`
 		// trivia — see `AstPredLowering.predClassParts`); a grammar that

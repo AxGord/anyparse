@@ -894,9 +894,10 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		Assert.equals(
 			'a public member is reachable from every file holding a value of its owner type, so the single-file rename never applies to '
 			+ 'one — the cross-file path owns it, and declined too',
-			refusalFor([
-				{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tpublic function __run():Void {}\n}' }
-			], 'pkg/C.hx')
+			refusalFor([{
+				file: 'pkg/C.hx',
+				source: 'package pkg;\nclass C {\n\tpublic function __run():Void {}\n}'
+			}], 'pkg/C.hx')
 		);
 		// The other half: a rename the chain DOES reach the end of declines nothing.
 		final renamed: String = 'package pkg;\nclass C {\n\tprivate function __run():Void {}\n\n\tpublic function u():Void { __run(); }\n}';
@@ -1035,9 +1036,10 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final bareVs: Array<Violation> = CheckFixture.violationsIn(bareCheck, report, bare);
 		Assert.equals(1, bareVs.length);
 		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, CheckFixture.index(report, bare)).length > 0);
-		final library: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.My_Field; }\n}' }
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'pkg/E.hx',
+			source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.My_Field; }\n}'
+		}];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
 			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }
@@ -1086,9 +1088,10 @@ class NamingCheckMemberFixTest extends NamingCheckTestBase {
 		final bareVs: Array<Violation> = CheckFixture.violationsIn(bareCheck, report, bare);
 		Assert.equals(1, bareVs.length);
 		Assert.isTrue(bareCheck.fix(declSource, bareVs, bare, CheckFixture.index(report, bare)).length > 0);
-		final library: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/E.hx', source: 'package pkg;\nclass E {\n\tpublic function f(c:C) { return Reflect.field(c, \'My_Field\'); }\n}' }
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'pkg/E.hx',
+			source: 'package pkg;\nclass E {\n\tpublic function f(c:C) { return Reflect.field(c, \'My_Field\'); }\n}'
+		}];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
 			{ declared: true, sources: () -> { report: report, projectRoots: library, library: new LibrarySources(library) } }

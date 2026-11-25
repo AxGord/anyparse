@@ -55,9 +55,10 @@ class TypeRefPrinterTest extends Test {
 	@:pin('control')
 	@:killer('M-BIND-UNSEEN-TARGET-UNLISTED')
 	public function testModuleImportMakesItsSecondaryTypeVisible(): Void {
-		final index: SymbolIndex = indexOf([
-			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
-		]);
+		final index: SymbolIndex = indexOf([{
+			file: 'pkg/deep/Mod.hx',
+			source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n'
+		}]);
 		final p: TypeRefPrinter = printerWith('package app;\n\nimport pkg.deep.Mod;\n\nclass C {}\n', index);
 		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
 		Assert.isFalse(p.hasPendingImports());
@@ -100,9 +101,10 @@ class TypeRefPrinterTest extends Test {
 
 	/** A `using <module>;` IS an `import <module>;` plus static extension — it binds the module's types too. */
 	public function testUsingTheModuleMakesItsSecondaryTypeVisible(): Void {
-		final index: SymbolIndex = indexOf([
-			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
-		]);
+		final index: SymbolIndex = indexOf([{
+			file: 'pkg/deep/Mod.hx',
+			source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n'
+		}]);
 		final p: TypeRefPrinter = printerWith('package app;\n\nusing pkg.deep.Mod;\n\nclass C {}\n', index);
 		Assert.equals('Sub', p.print('pkg.deep.Mod.Sub').text);
 		Assert.isFalse(p.hasPendingImports());
@@ -428,9 +430,10 @@ class TypeRefPrinterTest extends Test {
 	public function testSamePackageSubModuleTypeStillGetsAnImport(): Void {
 		// A sub-module type of one's OWN package is declared in that package yet still needs an
 		// import — its own declaration must not veto route 2.
-		final index: SymbolIndex = indexOf([
-			{ file: 'pkg/Mod.hx', source: 'package pkg;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
-		]);
+		final index: SymbolIndex = indexOf([{
+			file: 'pkg/Mod.hx',
+			source: 'package pkg;\n\nclass Mod {}\n\ntypedef Sub = Int;\n'
+		}]);
 		final src: String = 'package pkg;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printerWith(src, index);
 		Assert.equals('Sub', p.print('pkg.Mod.Sub').text);
@@ -460,9 +463,10 @@ class TypeRefPrinterTest extends Test {
 		// The trap: with `import other.Entity;` present, a bare `pkg.Entity` for the OTHER
 		// (sub-module) `Entity` compiles only by accident. The index repairs it to the
 		// module-qualified path, which resolves unconditionally.
-		final index: SymbolIndex = indexOf([
-			{ file: 'pkg/Mod.hx', source: 'package pkg;\n\nclass Mod {}\n\ntypedef Entity = Int;\n' }
-		]);
+		final index: SymbolIndex = indexOf([{
+			file: 'pkg/Mod.hx',
+			source: 'package pkg;\n\nclass Mod {}\n\ntypedef Entity = Int;\n'
+		}]);
 		final src: String = 'package app;\n\nimport other.Entity;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printerWith(src, index);
 		Assert.equals('pkg.Mod.Entity', p.print('pkg.Entity').text);
@@ -883,9 +887,10 @@ class TypeRefPrinterTest extends Test {
 	// --- resolvePath: which DECLARATION a written reference names ---
 
 	public function testResolvePathAnswersTheSamePathForBothSpellings(): Void {
-		final index: SymbolIndex = indexOf([
-			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
-		]);
+		final index: SymbolIndex = indexOf([{
+			file: 'pkg/deep/Mod.hx',
+			source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n'
+		}]);
 		final p: TypeRefPrinter = printerWith('package app;\n\nclass C {}\n', index);
 		Assert.equals('pkg.deep.Mod.Sub', p.resolvePath('pkg.deep.Mod.Sub'));
 		Assert.equals('pkg.deep.Mod.Sub', p.resolvePath('pkg.deep.Sub'), 'the hybrid canonicalises onto the same declaration');

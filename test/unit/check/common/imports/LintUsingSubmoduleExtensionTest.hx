@@ -49,12 +49,10 @@ class LintUsingSubmoduleExtensionTest extends Test {
 
 	/** A module the run cannot read at all stays an unverifiable Info — no member set, no verdict. */
 	public function testOutOfScopeModuleStaysInfo(): Void {
-		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [
-			{
-				file: 'pkg/C.hx',
-				source: 'package pkg;\n\nusing a.b.Tools;\n\nclass C {\n\tfunction f(v: Float): String return v.toFixed();\n}'
-			}
-		]);
+		final vs: Array<Violation> = CheckFixture.violationsIn(new UnusedImport(), [{
+			file: 'pkg/C.hx',
+			source: 'package pkg;\n\nusing a.b.Tools;\n\nclass C {\n\tfunction f(v: Float): String return v.toFixed();\n}'
+		}]);
 		Assert.equals(1, vs.length);
 		if (vs.length == 1) Assert.equals(Severity.Info, vs[0].severity);
 	}

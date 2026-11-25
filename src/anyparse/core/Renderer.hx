@@ -1343,14 +1343,12 @@ class Renderer {
 			indent: Int,
 			mode: Mode,
 			forceFlat: Bool
-		}> = [
-			{
-				doc: d,
-				indent: indent,
-				mode: MBreak,
-				forceFlat: false
-			}
-		];
+		}> = [{
+			doc: d,
+			indent: indent,
+			mode: MBreak,
+			forceFlat: false
+		}];
 		while (stack.length > 0 && !aborted) {
 			final node: {
 				doc: Doc,
@@ -1396,14 +1394,12 @@ class Renderer {
 			indent: Int,
 			mode: Mode,
 			forceFlat: Bool
-		}> = [
-			{
-				doc: d,
-				indent: indent,
-				mode: MBreak,
-				forceFlat: false
-			}
-		];
+		}> = [{
+			doc: d,
+			indent: indent,
+			mode: MBreak,
+			forceFlat: false
+		}];
 		while (stack.length > 0 && !aborted) {
 			final node: {
 				doc: Doc,
@@ -4160,14 +4156,12 @@ class Renderer {
 	 * ends at or before `measuredEnd` and it takes its flat side.
 	 */
 	private static function rendersAsMeasured(d: Doc, restProbeEnds: Bool = false, measuredEnd: Int = -1): Bool {
-		final stack: Array<RouteEntry> = [
-			{
-				doc: d,
-				grouped: false,
-				forceFlat: false,
-				hardFlat: false
-			}
-		];
+		final stack: Array<RouteEntry> = [{
+			doc: d,
+			grouped: false,
+			forceFlat: false,
+			hardFlat: false
+		}];
 		while (stack.length > 0) {
 			final e: RouteEntry = stack.pop();
 			switch e.doc {
@@ -4307,14 +4301,12 @@ class Renderer {
 		d: Doc, grouped: Bool = false, forceFlat: Bool = false, hardFlat: Bool = false, depth: Int = 0
 	): Null<RouteWidths> {
 		if (depth > MAX_ROUTE_DEPTH) return null;
-		final stack: Array<RouteEntry> = [
-			{
-				doc: d,
-				grouped: grouped,
-				forceFlat: forceFlat,
-				hardFlat: hardFlat
-			}
-		];
+		final stack: Array<RouteEntry> = [{
+			doc: d,
+			grouped: grouped,
+			forceFlat: forceFlat,
+			hardFlat: hardFlat
+		}];
 		var width: Int = 0;
 		var ends: Int = -1;
 		inline function broke(at: Int): RouteWidths {

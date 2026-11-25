@@ -64,15 +64,13 @@ final class RegistryFragmentFollowMetadataTest extends Test {
 		final plugin: GrammarPlugin = CliArgs.pickPluginFor('haxe', 'T.hx');
 		final json: String = '{"arms":[{"name":"A","type":"p.T","method":${JsonText.quote(member)},"kind":${JsonText.quote(kind)},'
 			+ '"find":${JsonText.quote(find)},"replace":${JsonText.quote(replace)}}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.T',
-				source: BEFORE,
-				tree: plugin.parseFile(BEFORE),
-				newSource: AFTER,
-				newTree: plugin.parseFile(AFTER)
-			}
-		], plugin);
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.T',
+			source: BEFORE,
+			tree: plugin.parseFile(BEFORE),
+			newSource: AFTER,
+			newTree: plugin.parseFile(AFTER)
+		}], plugin);
 	}
 
 }

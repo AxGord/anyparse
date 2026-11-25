@@ -74,17 +74,15 @@ final class MakeFinalCommand implements CliCommand {
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
 		if (CliArgs.refuseDataGrammar(op, plugin)) return EXIT_RUNTIME;
 
-		final scopeFiles: Null<Array<{ file: String, source: String }>> = scopeDir == null ? [
-			{
-				file: filePath,
-				source: try {
-					CliIo.readFile(filePath);
-				} catch (exception: Exception) {
-					CliIo.stderr('apq make-final: $filePath: ${exception.message}\n');
-					return EXIT_RUNTIME;
-				}
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = scopeDir == null ? [{
+			file: filePath,
+			source: try {
+				CliIo.readFile(filePath);
+			} catch (exception: Exception) {
+				CliIo.stderr('apq make-final: $filePath: ${exception.message}\n');
+				return EXIT_RUNTIME;
 			}
-		] : CliArgs.collectScopeFiles(op, plugin.langName(), scopeDir, [filePath]);
+		}] : CliArgs.collectScopeFiles(op, plugin.langName(), scopeDir, [filePath]);
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: EditResult = MakeFinal.makeFinal(filePath, typeNameNN, fieldNameNN, scopeFiles, plugin);

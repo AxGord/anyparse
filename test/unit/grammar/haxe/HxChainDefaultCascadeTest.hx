@@ -21,9 +21,10 @@ final class HxChainDefaultCascadeTest extends Test {
 		edited.conditionWrap = {
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.FillLineWithLeadingBreak,
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
-			]
+			rules: [{
+				conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }],
+				mode: WrapMode.NoWrap
+			}]
 		};
 	});
 
@@ -146,9 +147,10 @@ final class HxChainDefaultCascadeTest extends Test {
 			edited.expressionWrappingWrap = {
 				defaultAdditionalIndent: 0,
 				defaultMode: WrapMode.NoWrap,
-				rules: [
-					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }], mode: WrapMode.FillLineWithLeadingBreak }
-				]
+				rules: [{
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+					mode: WrapMode.FillLineWithLeadingBreak
+				}]
 			};
 		});
 		final src: String = 'class Main {\n\tstatic function main() {\n\t\tif ((veryLongExpressionAlpha + veryLongExpressionBravo + '

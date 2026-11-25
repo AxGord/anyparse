@@ -19,9 +19,10 @@ class ConfigFinderProjectNameTest extends Test {
 	@:pin('guard')
 	public function testTheLegacyNameIsStillRead(): Void {
 		#if (sys || nodejs)
-		final root: String = CliFixture.writeDir('cfgname_legacy', [
-			{ name: ConfigFinder.LEGACY_PROJECT_CONFIG, source: '{"resolutionLibs": ["old"]}' }
-		]);
+		final root: String = CliFixture.writeDir('cfgname_legacy', [{
+			name: ConfigFinder.LEGACY_PROJECT_CONFIG,
+			source: '{"resolutionLibs": ["old"]}'
+		}]);
 		File.saveContent('$root/Probe.hx', 'class Probe {}\n');
 		Assert.same(['old'], TestConfigs.discover('$root/Probe.hx').resolutionLibs());
 		CliFixture.removeDir(root);
@@ -33,9 +34,10 @@ class ConfigFinderProjectNameTest extends Test {
 	@:pin('guard')
 	public function testTheLegacyNameInheritsThroughTheNewOne(): Void {
 		#if (sys || nodejs)
-		final root: String = CliFixture.writeDir('cfgname_chain', [
-			{ name: ConfigFinder.LEGACY_PROJECT_CONFIG, source: '{"resolutionLibs": ["old"]}' }
-		]);
+		final root: String = CliFixture.writeDir('cfgname_chain', [{
+			name: ConfigFinder.LEGACY_PROJECT_CONFIG,
+			source: '{"resolutionLibs": ["old"]}'
+		}]);
 		FileSystem.createDirectory('$root/nested');
 		File.saveContent('$root/nested/${ConfigFinder.PROJECT_CONFIG}', '{"languageVersion": "4.3"}');
 		File.saveContent('$root/nested/Probe.hx', 'class Probe {}\n');

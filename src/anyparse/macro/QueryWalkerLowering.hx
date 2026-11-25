@@ -639,9 +639,10 @@ class QueryWalkerLowering extends PairedShapeLowering {
 		final chain: Null<String> = operandChainCtor(ref);
 		final subject: Expr = chain == null ? value : ident('_operand');
 		final anonPattern: Expr = ctorPattern(ref, ANON_CTOR, [ for (_ in 0...ctorArity(ref, ANON_CTOR)) '_' ]);
-		final cases: Array<Case> = [
-			{ values: [anonPattern], expr: block(descendCore(child, subject, intoName, typeOutName, 0)) }
-		];
+		final cases: Array<Case> = [{
+			values: [anonPattern],
+			expr: block(descendCore(child, subject, intoName, typeOutName, 0))
+		}];
 		if (chain != null) cases.push({
 			values: [ctorPattern(ref, chain, ['_l', '_r'])],
 			expr: macro {

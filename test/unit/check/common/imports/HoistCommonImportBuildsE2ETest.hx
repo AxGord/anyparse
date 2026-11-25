@@ -73,9 +73,10 @@ class HoistCommonImportBuildsE2ETest extends Test {
 	@:killer('M-HOIST-HELD-UNSAID')
 	public function testALiveBuildThatDoesNotAnswerHoldsAndSaysSo(): Void {
 		#if nodejs
-		final dir: Null<String> = tree('{"hxml":"check.hxml"},{"hxml":"next.hxml"}', [
-			{ name: 'next.hxml', source: '-cp .\n-main Main\n--interp\n--next\n-cp .\n-main Main\n--interp\n' }
-		]);
+		final dir: Null<String> = tree('{"hxml":"check.hxml"},{"hxml":"next.hxml"}', [{
+			name: 'next.hxml',
+			source: '-cp .\n-main Main\n--interp\n--next\n-cp .\n-main Main\n--interp\n'
+		}]);
 		if (dir == null) return;
 		final live: LintOutcome = lint(dir, false);
 		Assert.equals('', live.hoisted);

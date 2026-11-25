@@ -137,17 +137,13 @@ private class OverlappingPair implements Check implements CrossFileFix {
 		for (v in violations) for (entry in files) if (entry.file == v.file) {
 			final at: Int = entry.source.indexOf('var a:') + 'var '.length;
 			out.push([{ file: v.file, edits: [{ span: new Span(at, at + 1), text: 'b' }] }]);
-			out.push([
-				{
-					file: v.file,
-					edits: [
-						{
-							span: new Span(0, entry.source.length),
-							text: entry.source.replace('static function main() {}', 'static function main() {}\n\n\tstatic var c:Int = 0;')
-						}
-					]
-				}
-			]);
+			out.push([{
+				file: v.file,
+				edits: [{
+					span: new Span(0, entry.source.length),
+					text: entry.source.replace('static function main() {}', 'static function main() {}\n\n\tstatic var c:Int = 0;')
+				}]
+			}]);
 		}
 		return out;
 	}
@@ -220,9 +216,10 @@ class LintFixRemoveTest extends Test {
 	@:killer('M-FIX-AMBIENT-HELD')
 	public function testAPassPutsAnAmbientSourceItRewroteOnDisk(): Void {
 		#if (sys || nodejs)
-		final root: String = CliFixture.writeTree('apq_fix_ambient_disk', MODULES.concat([
-			{ name: 'src/aqq/import.hx', source: 'import qqz.Deadqqw;\nimport qqz.Liveqqw;\n' }
-		]));
+		final root: String = CliFixture.writeTree('apq_fix_ambient_disk', MODULES.concat([{
+			name: 'src/aqq/import.hx',
+			source: 'import qqz.Deadqqw;\nimport qqz.Liveqqw;\n'
+		}]));
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
 			final witness: DiskWitness = new DiskWitness('$root/src/aqq/import.hx');

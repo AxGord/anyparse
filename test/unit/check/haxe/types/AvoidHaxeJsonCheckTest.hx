@@ -18,13 +18,11 @@ using StringTools;
 class AvoidHaxeJsonCheckTest extends Test {
 
 	/** The std's `haxe.Json`, as the scan holds it where the run has no std of its own to resolve an import against. */
-	private static final STD_JSON: Array<{ file: String, source: String }> = [
-		{
-			file: 'haxe/Json.hx',
-			source: 'package haxe;\n\nclass Json {\n\tpublic static function parse(text:String):Dynamic return null;\n\n'
-				+ '\tpublic static function stringify(value:Dynamic):String return "";\n}\n'
-		}
-	];
+	private static final STD_JSON: Array<{ file: String, source: String }> = [{
+		file: 'haxe/Json.hx',
+		source: 'package haxe;\n\nclass Json {\n\tpublic static function parse(text:String):Dynamic return null;\n\n'
+			+ '\tpublic static function stringify(value:Dynamic):String return "";\n}\n'
+	}];
 
 	public function testParseAndStringifyFlagged(): Void {
 		final vs: Array<Violation> = violations(body('var a = Json.parse(s); var b = Json.stringify(v); var c = haxe.Json.parse(s);'));

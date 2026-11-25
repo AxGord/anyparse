@@ -62,19 +62,18 @@ class PreferInlineMacroCallTest extends Test {
 	@:pin('control')
 	@:killer('M-INLINE-FORWARD-TO-MACRO')
 	public function testBareForwardToMacroOfTheSameClassIsNotFlagged(): Void {
-		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferInline(), [
-			{ file: 'M.hx', source: '$SAME_CLASS_MACRO\tpublic static function bare(): Array<Int> return table();\n}' }
-		]);
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferInline(), [{
+			file: 'M.hx',
+			source: '$SAME_CLASS_MACRO\tpublic static function bare(): Array<Int> return table();\n}'
+		}]);
 		Assert.equals(0, vs.length, 'a bare call binds the class member, which is the macro');
 	}
 
 	public function testParameterNamedLikeTheMacroStillShadowsIt(): Void {
-		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferInline(), [
-			{
-				file: 'M.hx',
-				source: '$SAME_CLASS_MACRO\tpublic static function viaParam(table: () -> Array<Int>): Array<Int> return table();\n}'
-			}
-		]);
+		final vs: Array<Violation> = CheckFixture.violationsIn(new PreferInline(), [{
+			file: 'M.hx',
+			source: '$SAME_CLASS_MACRO\tpublic static function viaParam(table: () -> Array<Int>): Array<Int> return table();\n}'
+		}]);
 		Assert.equals(1, vs.length, 'the call goes through the parameter, not the macro member');
 	}
 

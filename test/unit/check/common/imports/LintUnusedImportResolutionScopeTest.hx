@@ -108,9 +108,10 @@ class LintUnusedImportResolutionScopeTest extends Test {
 		assertDecline(usingUnknown, 'known neither to the std probe nor to the report and project index');
 		// The other half of the contract: a finding the fix DOES take carries no reason at all, so a
 		// reader never sees a decline where an edit happened.
-		final report: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: 'package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}' }
-		];
+		final report: Array<{ file: String, source: String }> = [{
+			file: 'pkg/C.hx',
+			source: 'package pkg;\n\nimport ext.lib.Widget;\n\nclass C {}'
+		}];
 		final deletable: FixRun = CheckFixture.fixRun(new UnusedImport(), report, scopedHost(report, lib));
 		Assert.equals(1, deletable.violations.length);
 		Assert.equals(Severity.Warning, deletable.violations[0].severity);
@@ -166,9 +167,10 @@ class LintUnusedImportResolutionScopeTest extends Test {
 	@:killer('M-USING-ALIAS-NOT-FOLLOWED')
 	public function testProjectRootUsingOfUnresolvedTypedefStaysInfo(): Void {
 		final use: String = 'package pkg;\n\nusing ext.lib.Alias;\n\nclass C {}';
-		final project: Array<{ file: String, source: String }> = [
-			{ file: 'ext/lib/Alias.hx', source: 'package ext.lib;\n\ntypedef Alias = totally.unknown.Thing;' }
-		];
+		final project: Array<{ file: String, source: String }> = [{
+			file: 'ext/lib/Alias.hx',
+			source: 'package ext.lib;\n\ntypedef Alias = totally.unknown.Thing;'
+		}];
 		final vs: Array<Violation> = runWithProjectRoots(use, project);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);

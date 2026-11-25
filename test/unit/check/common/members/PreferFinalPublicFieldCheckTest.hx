@@ -456,13 +456,11 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testTypeParamReceiverPoisons(): Void {
 		Assert.equals(
 			0,
-			multi([
-				{
-					file: 'T1.hx',
-					source: 'class Widget { public var w:Int = 0; } class Helper { public static function reset<T:Widget>(s:T):Void {'
-					+ ' s.w = 5; } }'
-				}
-			]).length
+			multi([{
+				file: 'T1.hx',
+				source: 'class Widget { public var w:Int = 0; } class Helper { public static function reset<T:Widget>(s:T):Void {'
+				+ ' s.w = 5; } }'
+			}]).length
 		);
 	}
 
@@ -473,14 +471,12 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testPatternVarShadowingBoundParamPoisons(): Void {
 		Assert.equals(
 			0,
-			multi([
-				{
-					file: 'T2.hx',
-					source: 'class Boxed { public var count:Int = 0; } class Other { public var count2:Int = 0; } enum Wrap {'
-					+ ' Leaf(b:Boxed); } class User { public function go(v:Wrap, outer:Other):Void { outer.count2 = 1; switch v {'
-					+ ' case Leaf(outer): outer.count = 5; case _: } } }'
-				}
-			]).length
+			multi([{
+				file: 'T2.hx',
+				source: 'class Boxed { public var count:Int = 0; } class Other { public var count2:Int = 0; } enum Wrap {'
+				+ ' Leaf(b:Boxed); } class User { public function go(v:Wrap, outer:Other):Void { outer.count2 = 1; switch v {'
+				+ ' case Leaf(outer): outer.count = 5; case _: } } }'
+			}]).length
 		);
 	}
 
@@ -492,13 +488,11 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testTypedefAliasReceiverPoisons(): Void {
 		Assert.equals(
 			0,
-			multi([
-				{
-					file: 'T3.hx',
-					source: 'typedef Handle = Widget2; class Widget2 { public var visible:Bool = true; } class C2 {'
-					+ ' public function f(h:Handle):Void { h.visible = false; } }'
-				}
-			]).length
+			multi([{
+				file: 'T3.hx',
+				source: 'typedef Handle = Widget2; class Widget2 { public var visible:Bool = true; } class C2 {'
+				+ ' public function f(h:Handle):Void { h.visible = false; } }'
+			}]).length
 		);
 	}
 
@@ -509,14 +503,12 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	 * `Base4.item` is never reassigned, so having a subtype no longer suppresses it.
 	 */
 	public function testCaptureVarShadowingInheritedFieldPoisons(): Void {
-		final flagged: Array<String> = multi([
-			{
-				file: 'T4.hx',
-				source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 {'
-				+ ' public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void {'
-				+ ' switch v { case var item: item.sx = 5; } } }'
-			}
-		]).map(v -> v.message);
+		final flagged: Array<String> = multi([{
+			file: 'T4.hx',
+			source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 {'
+			+ ' public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void {'
+			+ ' switch v { case var item: item.sx = 5; } } }'
+		}]).map(v -> v.message);
 
 		Assert.isTrue(flagged.exists(m -> m.indexOf('sx2') >= 0), '$flagged');
 		Assert.isFalse(flagged.exists(m -> m.indexOf('\'sx\'') >= 0), 'written field must stay out — $flagged');
@@ -529,13 +521,11 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testTypeParamMemberChainPoisons(): Void {
 		Assert.equals(
 			0,
-			multi([
-				{
-					file: 'T5.hx',
-					source: 'class Cont<T> { public var item:Null<T>; } class P5 { public var px:Int = 0; } class U5 {'
-					+ ' public function go(c:Cont<P5>):Void { c.item.px = 9; } }'
-				}
-			]).length
+			multi([{
+				file: 'T5.hx',
+				source: 'class Cont<T> { public var item:Null<T>; } class P5 { public var px:Int = 0; } class U5 {'
+				+ ' public function go(c:Cont<P5>):Void { c.item.px = 9; } }'
+			}]).length
 		);
 	}
 
@@ -543,9 +533,10 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testDynamicCompoundStaysPoisoned(): Void {
 		Assert.equals(
 			0,
-			multi([
-				{ file: 'T6.hx', source: 'class C6 { public var n:Int = 0; } class U6 { public function f(d:Dynamic):Void { d.n += 1; } }' }
-			]).length
+			multi([{
+				file: 'T6.hx',
+				source: 'class C6 { public var n:Int = 0; } class U6 { public function f(d:Dynamic):Void { d.n += 1; } }'
+			}]).length
 		);
 	}
 
@@ -553,13 +544,11 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testDynamicStringRhsPlainClassFreed(): Void {
 		Assert.equals(
 			1,
-			multi([
-				{
-					file: 'T7.hx',
-					source: 'class Plain7 {} class C7 { public var p:Plain7 = new Plain7(); } class U7 {'
-					+ ' public function f(d:Dynamic):Void { d.p = "s"; } }'
-				}
-			]).length
+			multi([{
+				file: 'T7.hx',
+				source: 'class Plain7 {} class C7 { public var p:Plain7 = new Plain7(); } class U7 {'
+				+ ' public function f(d:Dynamic):Void { d.p = "s"; } }'
+			}]).length
 		);
 	}
 
@@ -715,9 +704,10 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	public function testUnresolvableInterfacePublicSkips(): Void {
 		Assert.equals(
 			0,
-			multi([
-				{ file: 'C.hx', source: 'class C implements ExternalIface {\n\tpublic var needsResync:Bool = false;\n}' }
-			]).length
+			multi([{
+				file: 'C.hx',
+				source: 'class C implements ExternalIface {\n\tpublic var needsResync:Bool = false;\n}'
+			}]).length
 		);
 	}
 

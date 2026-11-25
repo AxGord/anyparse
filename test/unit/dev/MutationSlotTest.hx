@@ -141,14 +141,12 @@ final class MutationSlotTest extends Test {
 			final workroot: String = dir.file('work');
 			FileSystem.createDirectory(workroot);
 			// a pid no process holds: past the largest one the system hands out
-			slotFiles(workroot, [
-				{
-					name: 'P',
-					patch: dir.file('none.patch'),
-					filter: 'ALL',
-					expected: ''
-				}
-			], '2147483646');
+			slotFiles(workroot, [{
+				name: 'P',
+				patch: dir.file('none.patch'),
+				filter: 'ALL',
+				expected: ''
+			}], '2147483646');
 			Assert.equals(0, MutationSlot.run(1, workroot));
 			Assert.isFalse(FileSystem.exists('$workroot/claims/P'), 'no track claimed');
 		});
@@ -329,14 +327,12 @@ final class MutationSlotTest extends Test {
 		committedSlot(workroot);
 		final patch: String = '$workroot/$name.patch';
 		File.saveContent(patch, '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+b\n');
-		slotFiles(workroot, [
-			{
-				name: name,
-				patch: patch,
-				filter: 'ALL',
-				expected: ''
-			}
-		], '${js.Node.process.pid}');
+		slotFiles(workroot, [{
+			name: name,
+			patch: patch,
+			filter: 'ALL',
+			expected: ''
+		}], '${js.Node.process.pid}');
 		Assert.equals(0, MutationSlot.run(1, workroot));
 		return workroot;
 	}

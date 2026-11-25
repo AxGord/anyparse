@@ -66,9 +66,10 @@ final class GraphMermaid {
 		final edges: Array<GraphEdge> = graph.edges();
 		for (e in edges) statements.push(Chain({
 			head: group(Id(e.from)),
-			links: [
-				{ edge: Arrow({ link: linkOf(e.kind), label: edgeLabel(e) }), target: group(Id(e.to)) }
-			]
+			links: [{
+				edge: Arrow({ link: linkOf(e.kind), label: edgeLabel(e) }),
+				target: group(Id(e.to))
+			}]
 		}));
 		final leaves: Array<GraphNode> = graph.nodes().filter(n -> !byParent.exists(n.id));
 		classed(statements, FOCUS_CLASS, FOCUS_STYLE, leaves.filter(n -> n.focus));

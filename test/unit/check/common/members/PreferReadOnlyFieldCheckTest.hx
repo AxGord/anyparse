@@ -293,9 +293,10 @@ class PreferReadOnlyFieldCheckTest extends Test {
 	public function testCtorSoleAssignmentStillCededWithoutStructure(): Void {
 		Assert.equals(
 			0,
-			ownerViolations([
-				{ file: 'C.hx', source: 'class C { public var x:Void->Bool; public function new(p:Void->Bool) { x = p; } }' }
-			]).length
+			ownerViolations([{
+				file: 'C.hx',
+				source: 'class C { public var x:Void->Bool; public function new(p:Void->Bool) { x = p; } }'
+			}]).length
 		);
 	}
 

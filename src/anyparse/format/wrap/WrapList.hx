@@ -2115,6 +2115,10 @@ class WrapList {
 		// from `emit` for the same reason as the knob above. Default `false` keeps
 		// every non-threaded caller byte-identical.
 		soleItemCuddledBrackets: Bool = false,
+		// `opt.soleObjectCuddledBrackets`: the same cuddle narrowed to a sole
+		// object-literal element. Default `false` keeps every non-threaded caller
+		// byte-identical.
+		soleObjectCuddledBrackets: Bool = false,
 		// ω-comprehension-block-hug: the list's `comprehensionBlockHug` axis; null
 		// (every non-threaded caller) follows the bracket padding as before.
 		?comprehensionBlockHug: Bool,
@@ -2159,8 +2163,8 @@ class WrapList {
 			() ->
 				shape(
 					mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe,
-					sepBeforeFlags, lineWidth, flatTrailingComma, comprehensionCuddledOpen, soleItemCuddledBrackets, false,
-					complexItemKinds, comprehensionItems
+					sepBeforeFlags, lineWidth, flatTrailingComma, comprehensionCuddledOpen, soleItemCuddledBrackets,
+					soleObjectCuddledBrackets, false, complexItemKinds, comprehensionItems
 				)
 		);
 		if (comprBlockHug != null) return comprBlockHug;
@@ -2213,7 +2217,8 @@ class WrapList {
 		// above declined — and the two multi-arg ones cannot have fired anyway,
 		// since both require `items.length > 1` while this one requires exactly 1.
 		final soleItemCuddled: Null<Doc> = shapeSoleItemCuddledBrackets(
-			soleItemCuddledBrackets, mode, open, close, list, openInside, closeInside, lineWidth, byMode
+			soleItemCuddledBrackets, soleObjectCuddledBrackets, mode, open, close, list, openInside, closeInside, lineWidth, byMode,
+			complexItemKinds
 		);
 		return soleItemCuddled ?? byMode;
 	}
@@ -2259,18 +2264,27 @@ class WrapList {
 	 * `shapeSingleArgGlue`: `trailingComma*` describes a list broken one per line.
 	 */
 	private static function shapeSoleItemCuddledBrackets(
-		enabled: Bool, mode: WrapMode, open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, lineWidth: Int,
-		openShape: Doc
+		enabled: Bool, objectOnly: Bool, mode: WrapMode, open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc,
+		lineWidth: Int, openShape: Doc, complexItemKinds: Null<Array<Int>>
 	): Null<Doc> {
-		if (!enabled || open != '[' || close != ']' || items.length != 1 || isFlatMode(mode)) return null;
+		if (!(enabled || objectOnly) || open != '[' || close != ']' || items.length != 1 || isFlatMode(mode)) return null;
 		final item: Doc = items[0];
 		if (isArrowBodyMarker(item) || isMethodChainItem(item) || startsWithHardline(item)) return null;
 		if (isLineCommentText(firstVisibleText(item)) || lastItemEndsWithLineComment(items)) return null;
 		if (!endsWithCloseDelim(item)) return null;
+		// The object-only knob reads the grammar's own classification: a container
+		// literal opening with `{` is an object literal, while a block expression,
+		// whose Doc also opens with a `{` collection leaf, classifies as no container.
+		final isObject: Bool = anyContainerItem(complexItemKinds) && firstVisibleText(item) == '{';
+		if (!enabled && !isObject) return null;
+		// An object element under an exploded shape that is already a committed break commits its own
+		// break in the glue too, so every host reads `[{` as the multi-line collection the exploded shape
+		// is; any other element keeps the lazy glue so a line that fits stays flat.
+		final glueItem: Doc = isObject && flatLength(openShape) < 0 ? renderPivotBreakArm(item, true) ?? item : item;
 		final glueShape: Doc = Concat([
 			DelimiterLeaf.leaf(open),
 			openInside,
-			item,
+			glueItem,
 			closeInside,
 			DelimiterLeaf.leaf(close)
 		]);
@@ -4367,12 +4381,18 @@ class WrapList {
 	private static function firstBreakIsDelimChar(d: Doc, ch: Int, skipNested: Bool): Bool {
 		final stack: Array<Doc> = [d];
 		var lastCh: Int = -1;
+		var prevCh: Int = -1;
 		var depth: Int = 0;
+		// A sole-item cuddle breaks after `[{`: for `[` that break is still the array's own.
+		function atCh(): Bool return lastCh == ch || (ch == '['.code && lastCh == '{'.code && prevCh == '['.code);
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch (node) {
 				case Text(s, _, tag):
-					if (s.length > 0 && !isCommentTextAtom(s)) lastCh = s.fastCodeAt(s.length - 1);
+					if (s.length > 0 && !isCommentTextAtom(s)) {
+						prevCh = s.length > 1 ? s.fastCodeAt(s.length - 2) : lastCh;
+						lastCh = s.fastCodeAt(s.length - 1);
+					}
 					depth += DelimiterLeaf.runDepthDelta(tag);
 				case Line(_):
 					// A SOFT line (opAdd / opBool / ternary continuation) reaching before
@@ -4380,9 +4400,9 @@ class WrapList {
 					// breaks at — its owning chain has its own wrap semantics (fork
 					// explodes the call, does not hug). Stop here: only `ch` at the VERY
 					// first break qualifies.
-					if (!(skipNested && depth > 1)) return lastCh == ch;
+					if (!(skipNested && depth > 1)) return atCh();
 				case OptHardline, OptHardlineSkipAtOpenDelim, OptHardlineSkipBeforeHardline:
-					if (!(skipNested && depth > 1)) return lastCh == ch;
+					if (!(skipNested && depth > 1)) return atCh();
 				case _:
 					flatPushChildren(node, stack);
 			}
@@ -4688,7 +4708,7 @@ class WrapList {
 			final body: Doc = shape(
 				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreakDoc, groupRestProbe,
 				sepBeforeFlags, opt.lineWidth, flatTrailingComma, opt.comprehensionCuddledOpen, opt.soleItemCuddledBrackets,
-				comprehensionBlockHug, chunkKinds, axes.comprehensionItems
+				opt.soleObjectCuddledBrackets, comprehensionBlockHug, chunkKinds, axes.comprehensionItems
 			);
 			return prependLead(body, lead);
 		}

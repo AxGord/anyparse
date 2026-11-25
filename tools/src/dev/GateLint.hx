@@ -218,16 +218,14 @@ final class GateLint {
 	private function compareInfra(
 		checkout: Null<String>, baseKey: Null<String>, baseline: Baseline, baseLint: String, rules: Null<Array<String>>
 	): Outcome {
-		final trees: Array<InfraLint> = [
-			{
-				name: 'base tree',
-				tree: checkout ?? _gate.tree,
-				scope: GateTree.TREE_SCOPE,
-				key: baseKey,
-				oracle: true,
-				snapshot: baseLint
-			}
-		].concat(baseline.infra.map(s -> {
+		final trees: Array<InfraLint> = [{
+			name: 'base tree',
+			tree: checkout ?? _gate.tree,
+			scope: GateTree.TREE_SCOPE,
+			key: baseKey,
+			oracle: true,
+			snapshot: baseLint
+		}].concat(baseline.infra.map(s -> {
 			name: Path.withoutDirectory(s.tree),
 			tree: s.tree,
 			scope: ['.'],

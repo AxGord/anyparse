@@ -32,9 +32,10 @@ final class HxCondForContainerGlueSliceTest extends Test {
 		edited.conditionWrap = {
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.FillLineWithLeadingBreak,
-			rules: [
-				{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
-			]
+			rules: [{
+				conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }],
+				mode: WrapMode.NoWrap
+			}]
 		};
 		edited.comprehensionObjectLitGlue = true;
 	});
@@ -96,9 +97,10 @@ final class HxCondForContainerGlueSliceTest extends Test {
 			edited.conditionWrap = {
 				defaultAdditionalIndent: 0,
 				defaultMode: WrapMode.FillLineWithLeadingBreak,
-				rules: [
-					{ conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }], mode: WrapMode.NoWrap }
-				]
+				rules: [{
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 0 }],
+					mode: WrapMode.NoWrap
+				}]
 			};
 		});
 		final flat: String = 'class C {\n\tfunction f() {\n\t\tif (aa == null || bb == null || [alphaItemNameHere, betaItemNameHere, '

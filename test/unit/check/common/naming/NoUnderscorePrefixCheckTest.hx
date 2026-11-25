@@ -140,9 +140,10 @@ class NoUnderscorePrefixCheckTest extends Test {
 		#if nodejs
 		final src: String = 'package pkg;\nclass C {\n\tpublic function run(label:String):String {\n'
 			+ '\t\tfinal _label:String = label + "!";\n\t\treturn _label;\n\t}\n}\n';
-		final dir: String = CliFixture.writeDir('nup-ledger', [
-			{ name: 'apq.json', source: '{"rules":{"no-underscore-prefix":{"enabled":true}}}' }
-		]);
+		final dir: String = CliFixture.writeDir('nup-ledger', [{
+			name: 'apq.json',
+			source: '{"rules":{"no-underscore-prefix":{"enabled":true}}}'
+		}]);
 		FileSystem.createDirectory('$dir/pkg');
 		File.saveContent('$dir/pkg/C.hx', src);
 		var err: String = '';

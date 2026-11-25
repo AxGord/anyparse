@@ -453,15 +453,13 @@ class MissingVisibilityCheckTest extends Test {
 	private function fixedSourceForced(src: String, memberAt: Int): String {
 		final check: MissingVisibility = new MissingVisibility();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final forced: Array<Violation> = [
-			{
-				file: 'C.hx',
-				span: new Span(memberAt, memberAt + 1),
-				rule: 'missing-visibility',
-				severity: Severity.Warning,
-				message: 'forced'
-			}
-		];
+		final forced: Array<Violation> = [{
+			file: 'C.hx',
+			span: new Span(memberAt, memberAt + 1),
+			rule: 'missing-visibility',
+			severity: Severity.Warning,
+			message: 'forced'
+		}];
 		return applyEdits(src, CheckFixture.fixOf(check, src, forced, plugin));
 	}
 

@@ -150,9 +150,11 @@ final class AbstractCasts {
 	public function coreGraph(name: String): Null<CastGraph> {
 		final core: Null<CoreValueTypes> = _core;
 		return core == null || !core.names.contains(name) || core.classNames.contains(name) ? null : {
-			branches: [
-				{ from: [], to: [ for (w in core.widens[name] ?? []) Core(w) ], transitive: true }
-			],
+			branches: [{
+				from: [],
+				to: [ for (w in core.widens[name] ?? []) Core(w) ],
+				transitive: true
+			}],
 			fromFields: [],
 			toFields: [],
 			fieldsComplete: true

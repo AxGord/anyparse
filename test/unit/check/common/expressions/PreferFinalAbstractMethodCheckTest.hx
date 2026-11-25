@@ -186,21 +186,20 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-SCOPE-LIBRARY-DROPPED')
 	public function testResolutionScopeResolvesLibraryType(): Void {
-		final report: Array<{ file: String, source: String }> = [
-			{
-				file: 'C.hx',
-				source: 'class C { function r():Void { var w:Window = get(); w.move(1, 2); trace(w); } function get():Window return null; }'
-			}
-		];
+		final report: Array<{ file: String, source: String }> = [{
+			file: 'C.hx',
+			source: 'class C { function r():Void { var w:Window = get(); w.move(1, 2); trace(w); } function get():Window return null; }'
+		}];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({
 			declared: true,
 			sources: () -> {
 				report: report,
 				projectRoots: [],
-				library: new LibrarySources([
-					{ file: 'Window.hx', source: 'class Window { public function move(x:Int, y:Int):Void {} }' }
-				])
+				library: new LibrarySources([{
+					file: 'Window.hx',
+					source: 'class Window { public function move(x:Int, y:Int):Void {} }'
+				}])
 			}
 		});
 		Assert.equals(1, CheckFixture.violationsIn(new PreferFinal(), report, scoped).length);

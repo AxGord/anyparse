@@ -863,16 +863,14 @@ class LintFixDeclineWiringSliceTest extends Test {
 	public function testACrossFileRuleIsNotReportedAsSayingNothing(): Void {
 		#if (sys || nodejs)
 		final ledger: Map<String, RuleFixOutcome> = [];
-		LintFixDriver.ledgerFileLintEdits(ledger, [
-			{
-				rule: 'cross-file-rule',
-				findings: [reasoned(null)],
-				carried: [],
-				edits: [],
-				overlapped: false,
-				refusal: null
-			}
-		], true, []);
+		LintFixDriver.ledgerFileLintEdits(ledger, [{
+			rule: 'cross-file-rule',
+			findings: [reasoned(null)],
+			carried: [],
+			edits: [],
+			overlapped: false,
+			refusal: null
+		}], true, []);
 		final clause: String = 'land through `crossFileFix`';
 		final withSeam: String = LintFixLedger.unfixedFixLedger(ledger, [], [], [], ['cross-file-rule']).join('');
 		Assert.isTrue(withSeam.indexOf(clause) != -1, 'the row says where the rule\'s edits actually go: $withSeam');
@@ -883,16 +881,14 @@ class LintFixDeclineWiringSliceTest extends Test {
 		// carry `CrossFileFix` too and have real per-file fixes, so a specific decline of theirs must
 		// not be told its edits go somewhere else.
 		final reasoning: Map<String, RuleFixOutcome> = [];
-		LintFixDriver.ledgerFileLintEdits(reasoning, [
-			{
-				rule: 'cross-file-rule',
-				findings: [reasoned('this call is shadowed')],
-				carried: [],
-				edits: [],
-				overlapped: false,
-				refusal: null
-			}
-		], true, []);
+		LintFixDriver.ledgerFileLintEdits(reasoning, [{
+			rule: 'cross-file-rule',
+			findings: [reasoned('this call is shadowed')],
+			carried: [],
+			edits: [],
+			overlapped: false,
+			refusal: null
+		}], true, []);
 		final spoken: String = LintFixLedger.unfixedFixLedger(reasoning, [], [], [], ['cross-file-rule']).join('');
 		Assert.isTrue(spoken.indexOf('this call is shadowed') != -1, spoken);
 		Assert.isTrue(spoken.indexOf(clause) == -1, 'a rule that named its own gate is not told its edits went elsewhere: $spoken');
@@ -1150,16 +1146,14 @@ class LintFixDeclineWiringSliceTest extends Test {
 		final findings: Array<Violation> = [
 			for (reason in [ARM_HAND_OFF, ARM_HAND_OFF, 'truly declined', null, null]) armFinding(reason)
 		];
-		LintFixDriver.ledgerFileLintEdits(ledger, [
-			{
-				rule: 'arm-rule',
-				findings: findings,
-				carried: [],
-				edits: [],
-				overlapped: false,
-				refusal: null
-			}
-		], true, [new ArmCheck()]);
+		LintFixDriver.ledgerFileLintEdits(ledger, [{
+			rule: 'arm-rule',
+			findings: findings,
+			carried: [],
+			edits: [],
+			overlapped: false,
+			refusal: null
+		}], true, [new ArmCheck()]);
 		return ledger;
 	}
 
@@ -1176,15 +1170,13 @@ class LintFixDeclineWiringSliceTest extends Test {
 			declined: [],
 			coverageUnknown: null,
 			coverage: null,
-			tallies: [
-				{
-					rule: 'arm-rule',
-					file: 'A.hx',
-					findings: 2,
-					edits: edits,
-					declineReasons: declineReasons
-				}
-			]
+			tallies: [{
+				rule: 'arm-rule',
+				file: 'A.hx',
+				findings: 2,
+				edits: edits,
+				declineReasons: declineReasons
+			}]
 		};
 	}
 
@@ -1275,14 +1267,12 @@ class LintFixDeclineWiringSliceTest extends Test {
 			excluded: [],
 			reverted: [{ file: 'Rejected.hx', rule: 'avoid-dynamic', cause: OracleRejected }],
 			partials: [],
-			declined: [
-				{
-					file: 'Uncovered.hx',
-					rule: 'avoid-dynamic',
-					edits: 3,
-					reason: 'the compiler oracle does not compile this file'
-				}
-			],
+			declined: [{
+				file: 'Uncovered.hx',
+				rule: 'avoid-dynamic',
+				edits: 3,
+				reason: 'the compiler oracle does not compile this file'
+			}],
 			coverageUnknown: null,
 			coverage: null,
 			tallies: [

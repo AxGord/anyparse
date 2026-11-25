@@ -98,14 +98,12 @@ final class ParseDispatchLowering {
 	 */
 	private static function finalLocal(name: String, type: ComplexType, value: Expr): Expr {
 		return {
-			expr: EVars([
-				{
-					name: name,
-					type: type,
-					expr: value,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: name,
+				type: type,
+				expr: value,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		};
 	}

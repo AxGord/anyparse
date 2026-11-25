@@ -41,9 +41,10 @@ class GuardPinArmReachCheckTest extends Test {
 	public function testARelativeRegistryResolvesBesideTheConfigThatNamesIt(): Void {
 		final config: String = configNaming('arms.json');
 		final dir: String = CliFixture.writeTree('guardpin', [{ name: 'apq.json', source: config }, { name: 'arms.json', source: ARMS }]);
-		final vs: Array<Violation> = CheckFixture.violationsIn(new GuardPinArmReach(), [
-			{ file: '$dir/WidgetTest.hx', source: fixture('@:pin(\'guard\')', 'Widget.spin();') }
-		], null, _ -> LintConfig.parse(config));
+		final vs: Array<Violation> = CheckFixture.violationsIn(new GuardPinArmReach(), [{
+			file: '$dir/WidgetTest.hx',
+			source: fixture('@:pin(\'guard\')', 'Widget.spin();')
+		}], null, _ -> LintConfig.parse(config));
 		CliFixture.removeDir(dir);
 		Assert.equals(1, vs.length);
 	}
@@ -73,13 +74,11 @@ class GuardPinArmReachCheckTest extends Test {
 
 	/** One bad record costs only itself: the arm beside it still reports, in every file, and the problem is reported once per run. */
 	public function testABadRecordLeavesTheOtherArmsApplying(): Void {
-		final dir: String = CliFixture.writeTree('guardpin', [
-			{
-				name: 'arms.json',
-				source: '{"arms": [{"name": "M-BAD", "type": "pkg.Widget", "method": 1},'
-				+ ' {"name": "M-ONE", "type": "pkg.Widget", "method": "spin"}]}'
-			}
-		]);
+		final dir: String = CliFixture.writeTree('guardpin', [{
+			name: 'arms.json',
+			source: '{"arms": [{"name": "M-BAD", "type": "pkg.Widget", "method": 1},'
+			+ ' {"name": "M-ONE", "type": "pkg.Widget", "method": "spin"}]}'
+		}]);
 		final config: String = configNaming('$dir/arms.json');
 		final source: String = fixture('@:pin(\'guard\')', 'Widget.spin();');
 		final vs: Array<Violation> = CheckFixture.violationsIn(new GuardPinArmReach(), [

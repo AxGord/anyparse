@@ -180,9 +180,10 @@ final class ExtractVar {
 
 		final exprText: String = source.substring(targetSpan.from, trimmedEnd(source, targetSpan));
 
-		final edits: Array<{ span: Span, text: String }> = [
-			{ span: new Span(lineStart, lineStart), text: '${indent}final $name = $exprText;\n' }
-		];
+		final edits: Array<{ span: Span, text: String }> = [{
+			span: new Span(lineStart, lineStart),
+			text: '${indent}final $name = $exprText;\n'
+		}];
 		for (s in run) edits.push({ span: new Span(s.from, trimmedEnd(source, s)), text: name });
 
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);

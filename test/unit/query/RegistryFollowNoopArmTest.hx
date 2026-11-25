@@ -45,15 +45,13 @@ final class RegistryFollowNoopArmTest extends Test {
 		final old: String = '${head}x + 2$tail';
 		final now: String = '${head}x - 2$tail';
 		final json: String = '{"arms":[{"name":"A","type":"p.C","method":"f","find":"$find","replace":"$replace"}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.C',
-				source: old,
-				tree: plugin.parseFile(old),
-				newSource: now,
-				newTree: plugin.parseFile(now)
-			}
-		], plugin);
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.C',
+			source: old,
+			tree: plugin.parseFile(old),
+			newSource: now,
+			newTree: plugin.parseFile(now)
+		}], plugin);
 	}
 
 }

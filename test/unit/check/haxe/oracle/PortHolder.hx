@@ -48,14 +48,12 @@ final class PortHolder {
 		final dir: String = CliFixture.writeDir('apq_port_holder', []);
 		final said: String = '$dir/said';
 		final seen: String = '$said.seen';
-		final holder: PendingRuns = ProcessSpawn.startAll([
-			{
-				cmd: js.Node.process.execPath,
-				args: ['-e', HOLDER, said, '$port'],
-				cwd: dir,
-				tethered: true
-			}
-		], 1024, 1);
+		final holder: PendingRuns = ProcessSpawn.startAll([{
+			cmd: js.Node.process.execPath,
+			args: ['-e', HOLDER, said, '$port'],
+			cwd: dir,
+			tethered: true
+		}], 1024, 1);
 		CliFixture.always(() -> {
 			holder.cancel();
 			CliFixture.removeDir(dir);

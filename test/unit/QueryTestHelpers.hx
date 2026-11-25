@@ -46,16 +46,14 @@ final class QueryTestHelpers {
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		final libraryFiles: Array<{ file: String, source: String }> = library ?? [];
 		final cwd: String = Sys.getCwd();
-		final declared: Array<ReachConfiguration> = defines ?? [
-			{
-				name: 'complete',
-				defined: [],
-				everDefined: [],
-				values: [],
-				compiled: [],
-				types: []
-			}
-		];
+		final declared: Array<ReachConfiguration> = defines ?? [{
+			name: 'complete',
+			defined: [],
+			everDefined: [],
+			values: [],
+			compiled: [],
+			types: []
+		}];
 		function builds(): ReachBuilds {
 			final all: Array<{ file: String, source: String }> = project.concat(libraryFiles);
 			final index: SymbolIndex = CheckFixture.index(all, new HaxeQueryPlugin());

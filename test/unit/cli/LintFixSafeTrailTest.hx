@@ -85,14 +85,12 @@ class LintFixSafeTrailTest extends Test {
 			final files: Array<{ file: String, source: String }> = [{ file: file, source: 'fixed' }];
 			var message: String = 'nothing thrown';
 			try
-				LintFixSafeTrail.settle([
-					{
-						file: file,
-						rules: ['poison'],
-						keptRules: [],
-						kept: null
-					}
-				], [file], files, [file => 'original'], [file => 'fixed'], [], _ -> {})
+				LintFixSafeTrail.settle([{
+					file: file,
+					rules: ['poison'],
+					keptRules: [],
+					kept: null
+				}], [file], files, [file => 'original'], [file => 'fixed'], [], _ -> {})
 			catch (exception: WriteFailure)
 				message = 'WriteFailure: ${exception.message}'
 			catch (exception: Exception)

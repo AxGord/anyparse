@@ -160,9 +160,10 @@ class GrammarWalkCliTest extends Test {
 	@:pin('control')
 	public function testGatesParsesDefinitionsByTheirOwnGrammar(): Void {
 		#if nodejs
-		final dir: String = CliFixture.writeTree('grammarwalk', [
-			{ name: 'JKw.hx', source: 'package anyparse.grammar.json;\n\nenum JKw {\n\t@:kw("call") Call(name: String);\n}\n' }
-		]);
+		final dir: String = CliFixture.writeTree('grammarwalk', [{
+			name: 'JKw.hx',
+			source: 'package anyparse.grammar.json;\n\nenum JKw {\n\t@:kw("call") Call(name: String);\n}\n'
+		}]);
 		CliFixture.always(CliFixture.removeDir.bind(dir), () -> {
 			var code: Int = -1;
 			final out: String = CliFixture.captureStdout(

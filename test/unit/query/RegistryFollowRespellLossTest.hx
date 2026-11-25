@@ -53,15 +53,13 @@ final class RegistryFollowRespellLossTest extends Test {
 		final old: String = '$head$was$tail';
 		final next: String = '$head$now$tail';
 		final json: String = '{"arms":[{"name":"A","type":"p.C","method":"f","find":"$find","replace":"$replace"}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.C',
-				source: old,
-				tree: plugin.parseFile(old),
-				newSource: next,
-				newTree: plugin.parseFile(next)
-			}
-		], plugin);
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.C',
+			source: old,
+			tree: plugin.parseFile(old),
+			newSource: next,
+			newTree: plugin.parseFile(next)
+		}], plugin);
 	}
 
 }

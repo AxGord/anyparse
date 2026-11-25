@@ -161,14 +161,12 @@ final class StarFieldLowering {
 		}
 		final accumCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(elemCT)] });
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: accumCT,
-					expr: macro [],
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: accumCT,
+				expr: macro [],
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		final accumRef: Expr = macro $i{localName};
@@ -281,27 +279,25 @@ final class StarFieldLowering {
 		// up. The caller (`lowerStruct`) suppresses its per-field
 		// pre-`skipWs` for this branch so we don't double-skip.
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: optAccumCT,
-					expr: macro {
-						final _savedPosOptStar: Int = ctx.pos;
+			expr: EVars([{
+				name: localName,
+				type: optAccumCT,
+				expr: macro {
+					final _savedPosOptStar: Int = ctx.pos;
+					skipWs(ctx);
+					if (matchLit(ctx, $v{openText})) {
+						final _items: $accumCT = [];
+						$loopBody;
 						skipWs(ctx);
-						if (matchLit(ctx, $v{openText})) {
-							final _items: $accumCT = [];
-							$loopBody;
-							skipWs(ctx);
-							expectLit(ctx, $v{closeText});
-							_items;
-						} else {
-							ctx.pos = _savedPosOptStar;
-							null;
-						}
-					},
-					isFinal: true
-				}
-			]),
+						expectLit(ctx, $v{closeText});
+						_items;
+					} else {
+						ctx.pos = _savedPosOptStar;
+						null;
+					}
+				},
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}
@@ -439,14 +435,12 @@ final class StarFieldLowering {
 				}
 			};
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: optAccumCT,
-					expr: valueExpr,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: optAccumCT,
+				expr: valueExpr,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}
@@ -543,14 +537,12 @@ final class StarFieldLowering {
 					{ pack: [], name: 'Null', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
 				);
 				parseSteps.push({
-					expr: EVars([
-						{
-							name: trailOpenLocal,
-							type: nullStrCT,
-							expr: macro collectTrailingAfterOpen(ctx),
-							isFinal: true
-						}
-					]),
+					expr: EVars([{
+						name: trailOpenLocal,
+						type: nullStrCT,
+						expr: macro collectTrailingAfterOpen(ctx),
+						isFinal: true
+					}]),
 					pos: Context.currentPos()
 				});
 			}
@@ -558,14 +550,12 @@ final class StarFieldLowering {
 		final wrappedCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)] });
 		final accumCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(wrappedCT)] });
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: accumCT,
-					expr: macro [],
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: localName,
+				type: accumCT,
+				expr: macro [],
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 		// ω-orphan-trivia: two mutable locals capture the trivia scanned
@@ -593,14 +583,12 @@ final class StarFieldLowering {
 		// shapes either rewind on failure or have no nestBody wrap so the
 		// signal is meaningless. Default `false` matches the no-blank case.
 		if (tryparse && nestBody) parseSteps.push({
-			expr: EVars([
-				{
-					name: trailBALocal,
-					type: boolCT,
-					expr: macro false,
-					isFinal: false
-				}
-			]),
+			expr: EVars([{
+				name: trailBALocal,
+				type: boolCT,
+				expr: macro false,
+				isFinal: false
+			}]),
 			pos: Context.currentPos()
 		});
 		// ω-objectlit-source-trail-comma: sep-Stars with a close literal
@@ -612,14 +600,12 @@ final class StarFieldLowering {
 		// empty-list case and the no-trailing-sep case identically.
 		final trailPresentLocal: String = trailPresentLocalName(localName);
 		if (sepText != null) parseSteps.push({
-			expr: EVars([
-				{
-					name: trailPresentLocal,
-					type: boolCT,
-					expr: macro false,
-					isFinal: false
-				}
-			]),
+			expr: EVars([{
+				name: trailPresentLocal,
+				type: boolCT,
+				expr: macro false,
+				isFinal: false
+			}]),
 			pos: Context.currentPos()
 		});
 		final accumRef: Expr = macro $i{localName};
@@ -738,14 +724,12 @@ final class StarFieldLowering {
 		final trailCloseCapture: Expr = trailCloseCaptureExpr(starNode);
 		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] });
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: trailCloseLocal,
-					type: nullStrCT,
-					expr: trailCloseCapture,
-					isFinal: true
-				}
-			]),
+			expr: EVars([{
+				name: trailCloseLocal,
+				type: nullStrCT,
+				expr: trailCloseCapture,
+				isFinal: true
+			}]),
 			pos: Context.currentPos()
 		});
 	}
@@ -1141,25 +1125,21 @@ final class StarFieldLowering {
 			{ pack: [], name: 'Array', params: [TPType(TPath({ pack: [], name: 'String', params: [] }))] }
 		);
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: trailingBlankBeforeLocalName(localName),
-					type: boolCT,
-					expr: macro false,
-					isFinal: false
-				}
-			]),
+			expr: EVars([{
+				name: trailingBlankBeforeLocalName(localName),
+				type: boolCT,
+				expr: macro false,
+				isFinal: false
+			}]),
 			pos: Context.currentPos()
 		});
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: trailingLeadingLocalName(localName),
-					type: arrayStrCT,
-					expr: macro [],
-					isFinal: false
-				}
-			]),
+			expr: EVars([{
+				name: trailingLeadingLocalName(localName),
+				type: arrayStrCT,
+				expr: macro [],
+				isFinal: false
+			}]),
 			pos: Context.currentPos()
 		});
 	}

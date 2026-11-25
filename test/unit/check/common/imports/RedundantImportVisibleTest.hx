@@ -48,9 +48,10 @@ class RedundantImportVisibleTest extends Test {
 
 	/** A module importing its own sub-type: the module's own types outrank every statement. */
 	public function testImportOfTheModulesOwnSubTypeIsRedundant(): Void {
-		final vs: Array<Violation> = violations([
-			{ file: 'app/C.hx', source: 'package app;\n\nimport app.C.Extra;\n\nclass C {\n\n\tvar e:Extra;\n\n}\n\nclass Extra {}\n' }
-		]);
+		final vs: Array<Violation> = violations([{
+			file: 'app/C.hx',
+			source: 'package app;\n\nimport app.C.Extra;\n\nclass C {\n\n\tvar e:Extra;\n\n}\n\nclass Extra {}\n'
+		}]);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('this module declares them'), vs[0].message);
 	}

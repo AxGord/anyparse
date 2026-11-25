@@ -155,9 +155,10 @@ final class ModuleTypeOrder extends RuleBase implements DefaultOff implements Co
 					parts.push(source.substring(slot.from, slot.to));
 					if (k + 1 < moved.length) parts.push(source.substring(slots[k].to, slots[k + 1].from));
 				}
-				return [
-					{ span: new Span(slots[0].from, slots[slots.length - 1].to), text: parts.join('') }
-				];
+				return [{
+					span: new Span(slots[0].from, slots[slots.length - 1].to),
+					text: parts.join('')
+				}];
 			});
 	}
 

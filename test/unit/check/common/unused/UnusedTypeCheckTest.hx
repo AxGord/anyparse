@@ -61,9 +61,10 @@ class UnusedTypeCheckTest extends Test {
 	public function testClassHoldingTheEntryFunctionNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violationsOf([
-				{ file: 'App.hx', source: 'class App {\n\tpublic static function main(): Void {}\n}' }
-			]).length
+			violationsOf([{
+				file: 'App.hx',
+				source: 'class App {\n\tpublic static function main(): Void {}\n}'
+			}]).length
 		);
 	}
 

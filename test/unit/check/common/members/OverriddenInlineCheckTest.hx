@@ -85,24 +85,20 @@ class OverriddenInlineCheckTest extends Test {
 	}
 
 	public function testOverrideInTheResolutionScopeFlagsTheReportedInline(): Void {
-		final report: Array<{ file: String, source: String }> = [
-			{
-				file: 'a/Client.hx',
-				source: 'package a;\n\nclass Client {\n\tpublic function new() {}\n\n\tpublic inline function send():Void {}\n}'
-			}
-		];
+		final report: Array<{ file: String, source: String }> = [{
+			file: 'a/Client.hx',
+			source: 'package a;\n\nclass Client {\n\tpublic function new() {}\n\n\tpublic inline function send():Void {}\n}'
+		}];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({
 			declared: true,
 			sources: () -> {
 				report: report,
 				projectRoots: [],
-				library: new LibrarySources([
-					{
-						file: 'net/Client.hx',
-						source: 'package net;\n\nclass Client #if js extends a.Client #end {\n\toverride public function send():Void {}\n}'
-					}
-				])
+				library: new LibrarySources([{
+					file: 'net/Client.hx',
+					source: 'package net;\n\nclass Client #if js extends a.Client #end {\n\toverride public function send():Void {}\n}'
+				}])
 			}
 		});
 		Assert.equals('a/Client.hx:inline', summary(CheckFixture.violationsIn(new OverriddenInline(), report, scoped)));

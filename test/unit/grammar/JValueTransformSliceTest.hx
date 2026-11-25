@@ -158,15 +158,13 @@ class JValueTransformSliceTest extends Test {
 			JObject([]),
 			JArray([JNull, JBool(false), JNumber(1), JString('x')]),
 			JObject([{ key: 'x', value: JNumber(1) }, { key: 'y', value: JArray([JNumber(2)]) }]),
-			JObject([
-				{
-					key: 'items',
-					value: JArray([
-						JObject([{ key: 'id', value: JNumber(1) }]),
-						JObject([{ key: 'id', value: JNumber(2) }])
-					])
-				}
-			])
+			JObject([{
+				key: 'items',
+				value: JArray([
+					JObject([{ key: 'id', value: JNumber(1) }]),
+					JObject([{ key: 'id', value: JNumber(2) }])
+				])
+			}])
 		];
 		for (i => ast in cases) {
 			final out: JValue = deepIdentity(ast);

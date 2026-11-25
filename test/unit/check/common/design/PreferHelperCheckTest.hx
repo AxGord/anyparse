@@ -91,9 +91,10 @@ class PreferHelperCheckTest extends Test {
 	@:killer('M-PREFER-HELPER-IMPORTED-GROUPED')
 	public function testARewriteOfAnImportedHelperIsItsOwnGroup(): Void {
 		final files: Array<{ file: String, source: String }> = user(PUSH);
-		final imported: Array<{ file: String, source: String }> = [
-			{ file: files[0].file, source: files[0].source.replace('package app;\n', 'package app;\n\nimport util.Groups;\n') }
-		].concat(files.slice(1));
+		final imported: Array<{ file: String, source: String }> = [{
+			file: files[0].file,
+			source: files[0].source.replace('package app;\n', 'package app;\n\nimport util.Groups;\n')
+		}].concat(files.slice(1));
 		final edits: Array<GroupedEdit> = groupedEditsOf(imported);
 		Assert.equals(1, edits.length);
 		if (edits.length != 1) return;
@@ -304,9 +305,10 @@ class PreferHelperCheckTest extends Test {
 	@:killer('M-PREFER-HELPER-USING-ALWAYS')
 	public function testADeclaredUsingAddsNoEdit(): Void {
 		final files: Array<SourceEntry> = typed(UNIQUE);
-		final declared: Array<SourceEntry> = [
-			{ file: files[0].file, source: files[0].source.replace('package app;\n', 'package app;\n\nusing util.Groups;\n') }
-		].concat(files.slice(1));
+		final declared: Array<SourceEntry> = [{
+			file: files[0].file,
+			source: files[0].source.replace('package app;\n', 'package app;\n\nusing util.Groups;\n')
+		}].concat(files.slice(1));
 		final edits: Array<GroupedEdit> = groupedEditsOf(declared, EXT);
 		Assert.equals(1, edits.length);
 		if (edits.length != 1) return;
@@ -369,12 +371,10 @@ class PreferHelperCheckTest extends Test {
 	@:killer('M-PREFER-HELPER-GUARDED-USING')
 	public function testAUsingOnlyARegionDeclaresKeepsTheQualifiedCall(): Void {
 		final files: Array<SourceEntry> = typed(UNIQUE);
-		final guarded: Array<SourceEntry> = [
-			{
-				file: files[0].file,
-				source: files[0].source.replace('package app;\n', 'package app;\n\n#if (sys || nodejs)\nusing util.Groups;\n#end\n')
-			}
-		].concat(files.slice(1));
+		final guarded: Array<SourceEntry> = [{
+			file: files[0].file,
+			source: files[0].source.replace('package app;\n', 'package app;\n\n#if (sys || nodejs)\nusing util.Groups;\n#end\n')
+		}].concat(files.slice(1));
 		final vs: Array<Violation> = violationsOf(guarded, EXT);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('only inside a `#if` region') != -1, vs[0].message);
@@ -426,9 +426,10 @@ class PreferHelperCheckTest extends Test {
 	public function testAnotherUsingSupplyingTheNameKeepsTheQualifiedCall(): Void {
 		final other: String = 'package util;\n\nclass Other {\n\tpublic static function pushUnique<T>(xs:Array<T>, x:T):Void {}\n}\n';
 		final files: Array<SourceEntry> = typed(UNIQUE);
-		final withOther: Array<SourceEntry> = [
-			{ file: files[0].file, source: files[0].source.replace('package app;\n', 'package app;\n\nusing util.Other;\n') }
-		].concat(files.slice(1)).concat([{ file: 'util/Other.hx', source: other }]);
+		final withOther: Array<SourceEntry> = [{
+			file: files[0].file,
+			source: files[0].source.replace('package app;\n', 'package app;\n\nusing util.Other;\n')
+		}].concat(files.slice(1)).concat([{ file: 'util/Other.hx', source: other }]);
 		final vs: Array<Violation> = violationsOf(withOther, EXT);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('qualified: another `using` in the file could also supply `pushUnique`') != -1, vs[0].message);

@@ -173,16 +173,18 @@ class ExplicitLocalTypeReadFixTest extends ExplicitLocalTypeCheckTestBase {
 	// --- fix: cross-class static field read (Type.field, via SymbolIndex) ---
 
 	public function testFixCrossClassStaticFieldRead(): Void {
-		assertFixIdx(wrap('var v = API.API_URL;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		], 'v:String');
+		assertFixIdx(wrap('var v = API.API_URL;'), [{
+			file: 'API.hx',
+			source: 'class API {\n\tpublic static final API_URL:String = "x";\n}'
+		}], 'v:String');
 	}
 
 	public function testFixCrossClassStaticNullableFieldPreservesNull(): Void {
 		// The soundness case: a `Null<String>` static field read stays `Null<String>`.
-		assertFixIdx(wrap('var v = API.TOKEN;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final TOKEN:Null<String> = null;\n}' }
-		], 'v:Null<String>');
+		assertFixIdx(wrap('var v = API.TOKEN;'), [{
+			file: 'API.hx',
+			source: 'class API {\n\tpublic static final TOKEN:Null<String> = null;\n}'
+		}], 'v:Null<String>');
 	}
 
 	public function testFixSameFileStaticFieldRead(): Void {
@@ -207,9 +209,10 @@ class ExplicitLocalTypeReadFixTest extends ExplicitLocalTypeCheckTestBase {
 	}
 
 	public function testSkipStaticFieldUnknownType(): Void {
-		assertNoFixIdx(wrap('var v = Unknown.FOO;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		]);
+		assertNoFixIdx(wrap('var v = Unknown.FOO;'), [{
+			file: 'API.hx',
+			source: 'class API {\n\tpublic static final API_URL:String = "x";\n}'
+		}]);
 	}
 
 	public function testSkipStaticFieldAmbiguousType(): Void {
@@ -228,9 +231,10 @@ class ExplicitLocalTypeReadFixTest extends ExplicitLocalTypeCheckTestBase {
 	public function testSkipStaticFieldNonBuiltinType(): Void {
 		// The field type `Token` is spelled in API.hx's import scope; copying it into C.hx
 		// (which does not import Token) would not resolve -> report-only.
-		assertNoFixIdx(wrap('var v = API.CURRENT;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final CURRENT:Token = null;\n}' }
-		]);
+		assertNoFixIdx(wrap('var v = API.CURRENT;'), [{
+			file: 'API.hx',
+			source: 'class API {\n\tpublic static final CURRENT:Token = null;\n}'
+		}]);
 	}
 
 	public function testSkipStaticFieldConditionalDiffers(): Void {
@@ -248,16 +252,18 @@ class ExplicitLocalTypeReadFixTest extends ExplicitLocalTypeCheckTestBase {
 	public function testSkipStaticFieldReceiverShadowedByLocal(): Void {
 		// A local named `API` shadows the type: `API.API_URL` now reads the local's field, not
 		// the static. The receiver resolves to a value binding -> report-only.
-		assertNoFixIdx(wrap('var API:C = this;\n\t\tvar v = API.API_URL;'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		]);
+		assertNoFixIdx(wrap('var API:C = this;\n\t\tvar v = API.API_URL;'), [{
+			file: 'API.hx',
+			source: 'class API {\n\tpublic static final API_URL:String = "x";\n}'
+		}]);
 	}
 
 	public function testSkipStaticMethodIndexShadowedType(): Void {
 		// An indexed project type named `Date` shadows the stdlib -> its `now()` may differ -> report-only.
-		assertNoFixIdx(wrap('final n = Date.now();'), [
-			{ file: 'Date.hx', source: 'class Date {\n\tpublic static function now():Int return 0;\n}' }
-		]);
+		assertNoFixIdx(wrap('final n = Date.now();'), [{
+			file: 'Date.hx',
+			source: 'class Date {\n\tpublic static function now():Int return 0;\n}'
+		}]);
 	}
 
 }

@@ -67,9 +67,11 @@ final class HxTypedOptionsRewriteTest extends Test {
 		final written: HxModuleWriteOptions = HxWriteOptionsKit.forkWith(edited -> edited.arrayLiteralWrap = {
 			defaultAdditionalIndent: 0,
 			defaultMode: WrapMode.OnePerLine,
-			rules: [
-				{ additionalIndent: 1, conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 3 }], mode: WrapMode.FillLine }
-			]
+			rules: [{
+				additionalIndent: 1,
+				conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 3 }],
+				mode: WrapMode.FillLine
+			}]
 		});
 		Assert.isTrue(same(written, HaxeFormatConfigLoader.loadHxFormatJson(json)));
 		Assert.isFalse(same(written, HaxeFormatConfigLoader.loadHxFormatJson('{}')));

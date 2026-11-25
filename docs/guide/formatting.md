@@ -134,6 +134,30 @@ final a = [
 final c = [ for (x in xs) x ];
 ```
 
+## A sole object element hugs its brackets: `wrapping.soleObjectCuddledBrackets`
+
+`true` keeps an array literal whose only element is an object literal that breaks hugged to it: `[{` on the opening line, the fields one indent deeper than the array's line, `}]` together on the closing line. It holds in every position: a call argument (the arguments after it ride the `}]` line), a variable initializer, a return value. A list that fits stays on one line (`[{a: 1}]`). A line comment before or after the element, a second element, or an element that is not an object literal (a block expression, a nested array, a call) keeps the exploded layout. `false`, the default, puts `[` and `]` on lines of their own around the object. The wider `wrapping.soleItemCuddledBrackets` cuddles any sole element that ends in a closing delimiter, calls included; either key on cuddles an object element. This repository sets the key to `true`.
+
+```json
+"wrapping": { "soleObjectCuddledBrackets": true }
+```
+
+```haxe
+// soleObjectCuddledBrackets: true
+return follow(LAYOUT, json, [{
+	path: "p.C",
+	name: "q.D"
+}], plugin);
+
+// false
+return follow(LAYOUT, json, [
+	{
+		path: "p.C",
+		name: "q.D"
+	}
+], plugin);
+```
+
 ## A value `try` that does not fit: `sameLine.expressionTryOverflow`
 
 A brace-less value `try` (`final x = try f() catch (e: E) g()`) that fits the line stays on it. One that does not fit breaks at its seams, never inside the first call or the tail, with `sameLine.expressionTry` left at `same`. `next` (the default) puts each body on its own indented line with `catch` at the statement's indent, the shape a value `if` takes under `sameLine.expressionIf: next`:

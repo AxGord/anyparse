@@ -317,16 +317,14 @@ final class WriterMetaLineEndLowering {
 			? macro false
 			: { expr: ECall(pred, [{ expr: EField(macro _mv, simple[1]), pos: pos }]), pos: pos };
 		final peel: Expr = {
-			expr: ESwitch(macro _tail, [
-				{
-					values: [bindFirstArg(chainPat)],
-					expr: macro {
-						_chainSimple = _chainSimple && $innerSimple;
-						_tail = $innerAccess;
-					},
-					guard: null
-				}
-			], macro break),
+			expr: ESwitch(macro _tail, [{
+				values: [bindFirstArg(chainPat)],
+				expr: macro {
+					_chainSimple = _chainSimple && $innerSimple;
+					_tail = $innerAccess;
+				},
+				guard: null
+			}], macro break),
 			pos: pos
 		};
 		return {

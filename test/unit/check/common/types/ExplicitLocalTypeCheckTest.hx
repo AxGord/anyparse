@@ -144,9 +144,10 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 	}
 
 	public function testBareNewIndexShadowedBuiltinSkipped(): Void {
-		assertNoFixIdx(wrap('final s = new StringBuf();'), [
-			{ file: 'StringBuf.hx', source: 'class StringBuf<T> {\n\tpublic function new() {}\n}' }
-		]);
+		assertNoFixIdx(wrap('final s = new StringBuf();'), [{
+			file: 'StringBuf.hx',
+			source: 'class StringBuf<T> {\n\tpublic function new() {}\n}'
+		}]);
 	}
 
 	public function testIdempotentOnTyped(): Void {
@@ -193,16 +194,18 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 	 * already spells it, so it resolves identically and needs no import.
 	 */
 	public function testBareNewOfAResolutionScopedTypeIsNamed(): Void {
-		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [
-			{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget {\n\tpublic function new() {}\n}' }
-		]).indexOf(':Widget') >= 0);
+		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [{
+			file: 'lib/ext/Widget.hx',
+			source: 'package ext;\n\nclass Widget {\n\tpublic function new() {}\n}'
+		}]).indexOf(':Widget') >= 0);
 	}
 
 	/** The discriminating half: a GENERIC library type stays report-only — a bare `:Widget` is a compile error. */
 	public function testBareNewOfAGenericResolutionScopedTypeStaysReportOnly(): Void {
-		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [
-			{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget<T> {\n\tpublic function new() {}\n}' }
-		]).indexOf(':Widget') < 0);
+		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [{
+			file: 'lib/ext/Widget.hx',
+			source: 'package ext;\n\nclass Widget<T> {\n\tpublic function new() {}\n}'
+		}]).indexOf(':Widget') < 0);
 	}
 
 	/**
@@ -212,21 +215,24 @@ class ExplicitLocalTypeCheckTest extends ExplicitLocalTypeCheckTestBase {
 	 * annotation.
 	 */
 	public function testReportScopeArityWinsOverADisagreeingResolutionScope(): Void {
-		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [
-			{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget<T> {\n\tpublic function new() {}\n}' }
-		], [{ file: 'Widget.hx', source: 'class Widget {\n\tpublic function new() {}\n}' }]).indexOf(':Widget') >= 0);
+		Assert.isTrue(scopedFixText(wrap('final w = new Widget();'), [{
+			file: 'lib/ext/Widget.hx',
+			source: 'package ext;\n\nclass Widget<T> {\n\tpublic function new() {}\n}'
+		}], [{ file: 'Widget.hx', source: 'class Widget {\n\tpublic function new() {}\n}' }]).indexOf(':Widget') >= 0);
 	}
 
 	/** And the same precedence the other way: a GENERIC project type declines even though the library's is not. */
 	public function testReportScopeGenericityWinsOverANonGenericResolutionScope(): Void {
 		Assert.isTrue(scopedFixText(
 			wrap('final w = new Widget();'),
-			[
-				{ file: 'lib/ext/Widget.hx', source: 'package ext;\n\nclass Widget {\n\tpublic function new() {}\n}' }
-			],
-			[
-				{ file: 'Widget.hx', source: 'class Widget<T> {\n\tpublic function new() {}\n}' }
-			]
+			[{
+				file: 'lib/ext/Widget.hx',
+				source: 'package ext;\n\nclass Widget {\n\tpublic function new() {}\n}'
+			}],
+			[{
+				file: 'Widget.hx',
+				source: 'class Widget<T> {\n\tpublic function new() {}\n}'
+			}]
 		).indexOf(':Widget') < 0);
 	}
 

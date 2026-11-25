@@ -127,13 +127,10 @@ class SpaceFlagTest extends Test {
 	 * The same with `field` for the second field, holding `value`; `tightColon` makes the format list `:` as a tight lead.
 	 */
 	private static function writtenField(field: String, policy: String, value: String = "'b'", tightColon: Bool = false): String {
-		final dir: String = CliFixture.writeDir('space-flag', [
-			{
-				name: 'Main.hx',
-				source: 'class Main { static function main() { final d: g.Pair = { key: \'a\', value: $value'
-				+ ' }; Sys.print(g.W.write(d)); } }\n'
-			}
-		]);
+		final dir: String = CliFixture.writeDir('space-flag', [{
+			name: 'Main.hx',
+			source: 'class Main { static function main() { final d: g.Pair = { key: \'a\', value: $value }; Sys.print(g.W.write(d)); } }\n'
+		}]);
 		FileSystem.createDirectory('$dir/g');
 		for (file in grammarFiles(field, policy, tightColon)) File.saveContent('$dir/g/${file.name}', file.source);
 		final run: js.node.ChildProcess.ChildProcessSpawnSyncResult = js.node.ChildProcess.spawnSync(

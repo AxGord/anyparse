@@ -20,9 +20,10 @@ class MoveMemberScopeCliTest extends Test {
 			{ name: 'A.hx', source: 'package p;\n\nclass A {\n\tpublic static function foo():Int return 1;\n}\n' },
 			{ name: 'B.hx', source: 'package p;\n\nclass B {}\n' }
 		]);
-		final second: String = CliFixture.writeTree('mmscope2', [
-			{ name: 'C.hx', source: 'package p;\n\nclass C {\n\tpublic static function go():Int return A.foo();\n}\n' }
-		]);
+		final second: String = CliFixture.writeTree('mmscope2', [{
+			name: 'C.hx',
+			source: 'package p;\n\nclass C {\n\tpublic static function go():Int return A.foo();\n}\n'
+		}]);
 		CliFixture.always(() -> {
 			CliFixture.removeDir(first);
 			CliFixture.removeDir(second);

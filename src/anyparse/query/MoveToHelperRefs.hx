@@ -401,9 +401,10 @@ final class MoveToHelperRefs {
 			file: file,
 			inCut: inCut,
 			length: callLength(placed),
-			edits: [
-				{ span: new Span(offset, open + 1), text: '$prefix${m.name}($first${hasArgs ? ', ' : ''}' }
-			]
+			edits: [{
+				span: new Span(offset, open + 1),
+				text: '$prefix${m.name}($first${hasArgs ? ', ' : ''}'
+			}]
 		});
 		return null;
 	}

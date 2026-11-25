@@ -82,13 +82,11 @@ class MoveElementsCliTest extends Test {
 	@:killer('M-MOVE-ELEMENTS-INTO-BY-SPELLING')
 	public function testASymlinkedIntoIsTheSameModule(): Void {
 		#if nodejs
-		final dir: String = CliFixture.writeDir('moveelements', [
-			{
-				name: 'A.hx',
-				source: "class A {\n\tpublic static final XS:Array<String> = ['a', 'b'];\n\tpublic static final ZS:Array<String> = ['z'];\n"
-				+ '}\n'
-			}
-		]);
+		final dir: String = CliFixture.writeDir('moveelements', [{
+			name: 'A.hx',
+			source: "class A {\n\tpublic static final XS:Array<String> = ['a', 'b'];\n\tpublic static final ZS:Array<String> = ['z'];\n"
+			+ '}\n'
+		}]);
 		js.node.Fs.symlinkSync('$dir/A.hx', '$dir/L.hx');
 		final rc: Int = Cli.run([
 			'move-elements',

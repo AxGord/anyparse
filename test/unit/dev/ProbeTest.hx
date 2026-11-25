@@ -37,22 +37,18 @@ final class ProbeTest extends Test {
 		final failure: String = 'apq --batch gave no answer: boom';
 		Assert.same([], Probe.deviations(recorded, seen(recorded, '', failure), false), 'a cause alone deviates nothing');
 		final kit: Kit = {
-			invocations: [
-				{
-					name: 'lost',
-					argv: ['apq', 'echo'],
-					stdin: null,
-					files: []
-				}
-			],
-			cases: [
-				{
-					compile: null,
-					expect: recorded,
-					knownDefect: null,
-					fixpoint: null
-				}
-			]
+			invocations: [{
+				name: 'lost',
+				argv: ['apq', 'echo'],
+				stdin: null,
+				files: []
+			}],
+			cases: [{
+				compile: null,
+				expect: recorded,
+				knownDefect: null,
+				fixpoint: null
+			}]
 		};
 		Assert.same(
 			['DEVIATES #0 lost: apq echo', '  failure: $failure', '  exit: 0 → 1'],

@@ -176,9 +176,10 @@ class FrameworkContractTest extends Test {
 
 	/** A declared roster ADDS to the grammar's own framework rather than replacing it: declaring Unity does not switch utest off. */
 	public function testADeclaredRosterDoesNotDisplaceTheBuiltInFramework(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'unit/CTest.hx', source: 'class C extends Test {\n\tprivate function testX():Void {}\n}' }
-		];
+		final files: Array<{ file: String, source: String }> = [{
+			file: 'unit/CTest.hx',
+			source: 'class C extends Test {\n\tprivate function testX():Void {}\n}'
+		}];
 		Assert.equals(0, CheckFixture.violationsIn(unconfigured(), files).length);
 		final guarded: UnusedPrivate = new UnusedPrivate();
 		guarded.setConfigResolver(_ -> LintConfig.parse(UNITY_CONFIG));
@@ -362,13 +363,11 @@ class FrameworkContractTest extends Test {
 			{ file: 'engine/Base.hx', source: 'class Base {\n\tpublic function new():Void {}\n}' },
 			{ file: twinLast ? 'engine/Mid.hx' : 'game/Mid.hx', source: twinLast ? extendingSrc : twinSrc },
 			{ file: twinLast ? 'game/Mid.hx' : 'engine/Mid.hx', source: twinLast ? twinSrc : extendingSrc }
-		].concat([
-			{
-				file: DRIVER_FILE,
-				source: 'class Player extends Mid {\n\n\tpublic function new():Void {\n\t\tsuper();\n\t}\n\n'
-				+ '\tprivate function _ready():Void {}\n\n}'
-			}
-		]);
+		].concat([{
+			file: DRIVER_FILE,
+			source: 'class Player extends Mid {\n\n\tpublic function new():Void {\n\t\tsuper();\n\t}\n\n'
+			+ '\tprivate function _ready():Void {}\n\n}'
+		}]);
 	}
 
 	/** The Godot-shaped driver plus its in-scope engine root. */

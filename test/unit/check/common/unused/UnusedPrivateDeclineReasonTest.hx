@@ -42,24 +42,27 @@ class UnusedPrivateDeclineReasonTest extends Test {
 		{
 			name: 'side-effecting-initializer',
 			fragment: 'not provably side-effect-free',
-			files: [
-				{ file: 'C.hx', source: 'class C {\n\tprivate var _x: Int = Std.random(3);\n}\n' }
-			]
+			files: [{
+				file: 'C.hx',
+				source: 'class C {\n\tprivate var _x: Int = Std.random(3);\n}\n'
+			}]
 		},
 		{
 			name: 'abstract-method-impl',
 			fragment: 'ABSTRACT method',
-			files: [
-				{ file: 'C.hx', source: 'class C extends Base {\n\tprivate function impl(): Int {\n\t\treturn 1;\n\t}\n}\n' }
-			]
+			files: [{
+				file: 'C.hx',
+				source: 'class C extends Base {\n\tprivate function impl(): Int {\n\t\treturn 1;\n\t}\n}\n'
+			}]
 		},
 		{ name: 'rtti', fragment: '`@:rtti`', files: [{ file: 'C.hx', source: '@:rtti\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }] },
 		{
 			name: 'build-macro',
 			fragment: '`@:build` macro',
-			files: [
-				{ file: 'C.hx', source: '@:build(M.build())\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }
-			]
+			files: [{
+				file: 'C.hx',
+				source: '@:build(M.build())\nclass C {\n\tprivate var _x: Int = 0;\n}\n'
+			}]
 		},
 		{ name: 'keep', fragment: '`@:keep`', files: [{ file: 'C.hx', source: '@:keep\nclass C {\n\tprivate var _x: Int = 0;\n}\n' }] },
 		{
@@ -103,12 +106,10 @@ class UnusedPrivateDeclineReasonTest extends Test {
 		{
 			name: 'emptying-a-conditional-region',
 			fragment: 'emptying a conditional region',
-			files: [
-				{
-					file: 'C.hx',
-					source: 'class C {\n\t#if js\n\tprivate var _onlyMember: Int = 0;\n\t#end\n\n\tpublic function new() {}\n}\n'
-				}
-			]
+			files: [{
+				file: 'C.hx',
+				source: 'class C {\n\t#if js\n\tprivate var _onlyMember: Int = 0;\n\t#end\n\n\tpublic function new() {}\n}\n'
+			}]
 		}
 	];
 
@@ -205,13 +206,10 @@ class UnusedPrivateDeclineReasonTest extends Test {
 	 * the ledger then prints one row of two rather than a labelled finding beside a silent one.
 	 */
 	public function testTheRegionGateSpeaksForEveryMemberItTakesDown(): Void {
-		final files: Array<SourceFile> = [
-			{
-				file: 'C.hx',
-				source: 'class C {\n\t#if js\n\tprivate var _a: Int = 0;\n\tprivate var _b: Int = 0;\n\t#end\n\n'
-					+ '\tpublic function new() {}\n}\n'
-			}
-		];
+		final files: Array<SourceFile> = [{
+			file: 'C.hx',
+			source: 'class C {\n\t#if js\n\tprivate var _a: Int = 0;\n\tprivate var _b: Int = 0;\n\t#end\n\n\tpublic function new() {}\n}\n'
+		}];
 		final answer: Declines = declineReasons(files);
 		final spoke: Int = answer.reasons.length;
 		Assert.equals(2, spoke, '$spoke of the two members in the emptied branch got a sentence');

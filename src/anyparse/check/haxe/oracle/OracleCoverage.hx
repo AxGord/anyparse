@@ -426,9 +426,11 @@ final class OracleCoverage implements CompiledSet {
 	public static function of(paths: Array<String>, root: String, ?defines: Array<String>, ?classPaths: Array<String>): OracleCoverage {
 		#if (sys || nodejs)
 		final resolved: Array<String> = paths.map(path -> FileIdentity.canonical(root, path));
-		return new OracleCoverage(resolved, [
-			{ files: resolved, defines: defines ?? [], classPaths: (classPaths ?? []).map(path -> FileIdentity.canonical(root, path)) }
-		], '');
+		return new OracleCoverage(resolved, [{
+			files: resolved,
+			defines: defines ?? [],
+			classPaths: (classPaths ?? []).map(path -> FileIdentity.canonical(root, path))
+		}], '');
 		#else
 		return unknown(UNSUPPORTED_TARGET);
 		#end

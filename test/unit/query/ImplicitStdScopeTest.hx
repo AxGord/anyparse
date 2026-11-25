@@ -80,12 +80,10 @@ class ImplicitStdScopeTest extends Test {
 	 */
 	public function testDeclaredResolutionScopeStillVetoesUnusedPrivateDeletion(): Void {
 		#if (sys || nodejs)
-		final lib: String = CliFixture.writeDir('implstdprivlib', [
-			{
-				name: 'Caller.hx',
-				source: 'package other;\nclass Caller {\n\tpublic function new() {}\n\tpublic function go(): Void { writeByte(); }\n}'
-			}
-		]);
+		final lib: String = CliFixture.writeDir('implstdprivlib', [{
+			name: 'Caller.hx',
+			source: 'package other;\nclass Caller {\n\tpublic function new() {}\n\tpublic function go(): Void { writeByte(); }\n}'
+		}]);
 		final proj: String = CliFixture.writeDir('implstdprivproj', [
 			{ name: 'Cond.hx', source: COND },
 			{ name: 'apq.json', source: '{"resolutionRoots":["$lib"]}' }

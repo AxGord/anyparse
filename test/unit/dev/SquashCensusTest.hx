@@ -258,18 +258,16 @@ final class SquashCensusTest extends Test {
 	/** A report over one tree with `differs`, `newOnePass` and `unparsed` files, the other columns left at zero. */
 	private static function reportOf(differs: Array<String>, newOnePass: Array<String>, unparsed: Int): SquashReport {
 		return {
-			rows: [
-				{
-					dir: 'src',
-					files: 0,
-					squashed: 0,
-					unparsed: unparsed,
-					onePassOriginal: 0,
-					onePassSquashed: 0,
-					onePassNew: newOnePass.length,
-					differs: differs.length
-				}
-			],
+			rows: [{
+				dir: 'src',
+				files: 0,
+				squashed: 0,
+				unparsed: unparsed,
+				onePassOriginal: 0,
+				onePassSquashed: 0,
+				onePassNew: newOnePass.length,
+				differs: differs.length
+			}],
 			newOnePass: newOnePass,
 			differs: differs
 		};

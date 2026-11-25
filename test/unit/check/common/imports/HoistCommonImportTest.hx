@@ -238,13 +238,10 @@ class HoistCommonImportTest extends Test {
 	@:killer('M-HOIST-USING-DEMOTION')
 	public function testKeepsAnAllowListedUsingWhereARivalRemains(): Void {
 		final tree: Array<TreeFile> = usingTree('qqz.Sqqwwee', 'using qqz.Cqqwwee;\n', CALLS_TQQ)
-			.concat([
-				{
-					name: 'src/qqz/Cqqwwee.hx',
-					source: 'package qqz;\n\nclass Cqqwwee {\n\n\tpublic static function tqq(s: String): String {\n\t\treturn s;\n\t}\n\n'
-					+ '}\n'
-				}
-			]);
+			.concat([{
+				name: 'src/qqz/Cqqwwee.hx',
+				source: 'package qqz;\n\nclass Cqqwwee {\n\n\tpublic static function tqq(s: String): String {\n\t\treturn s;\n\t}\n\n}\n'
+			}]);
 		Assert.equals('', planned(tree));
 	}
 
@@ -543,9 +540,10 @@ class HoistCommonImportTest extends Test {
 	@:pin('control')
 	@:killer('M-HOIST-SHORT-CHAIN')
 	public function testWithholdsOnAnUnboundedChain(): Void {
-		Assert.equals('', planned(COMMON_TREE.concat([
-			{ name: 'src/aqq/StrayQq.hx', source: 'package wrongqq;\n\nimport qqz.Zqqwwee;\n\nclass StrayQq {\n\n\tvar a: Zqqwwee;\n\n}\n' }
-		])));
+		Assert.equals('', planned(COMMON_TREE.concat([{
+			name: 'src/aqq/StrayQq.hx',
+			source: 'package wrongqq;\n\nimport qqz.Zqqwwee;\n\nclass StrayQq {\n\n\tvar a: Zqqwwee;\n\n}\n'
+		}])));
 	}
 
 	/** A directory with fewer modules than the minimum has no share worth reading. */
@@ -631,9 +629,10 @@ class HoistCommonImportTest extends Test {
 	@:pin('control')
 	@:killer('M-SINK-HYSTERESIS-OFF')
 	public function testASinkThresholdNotBelowTheHoistOneIsIgnored(): Void {
-		Assert.equals('', sunk(SINK_TREE.concat([
-			{ name: 'apq.json', source: '{ "rules": { "hoist-common-import": { "threshold": 50, "sinkThreshold": 50 } } }\n' }
-		])));
+		Assert.equals('', sunk(SINK_TREE.concat([{
+			name: 'apq.json',
+			source: '{ "rules": { "hoist-common-import": { "threshold": 50, "sinkThreshold": 50 } } }\n'
+		}])));
 	}
 
 	/** The fix spells the statement in its one reader and deletes the source it leaves with nothing in it. */
@@ -769,9 +768,10 @@ class HoistCommonImportTest extends Test {
 					};
 				case _: entry;
 			})
-				.concat([
-					{ name: 'src/qqz/Base.hx', source: 'package qqz;\n\nclass Base {\n\n\tprivate var shape:Int = 0;\n\n}\n' }
-				])
+				.concat([{
+					name: 'src/qqz/Base.hx',
+					source: 'package qqz;\n\nclass Base {\n\n\tprivate var shape:Int = 0;\n\n}\n'
+				}])
 		);
 		var out: String = '';
 		CliFixture.always(CliFixture.removeDir.bind(root), () -> {

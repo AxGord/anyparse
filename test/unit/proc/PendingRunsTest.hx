@@ -97,14 +97,12 @@ final class PendingRunsTest extends Test {
 	public function testATetheredJobDiesWithItsDriver(): Void {
 		#if nodejs
 		final dir: String = CliFixture.writeDir('pendingtether', []);
-		final pending: PendingRuns = ProcessSpawn.startAll([
-			{
-				args: [],
-				cwd: dir,
-				shell: 'echo $$$$ > job.pid && exec sleep $TETHERED_S',
-				tethered: true
-			}
-		], BUFFER, 1);
+		final pending: PendingRuns = ProcessSpawn.startAll([{
+			args: [],
+			cwd: dir,
+			shell: 'echo $$$$ > job.pid && exec sleep $TETHERED_S',
+			tethered: true
+		}], BUFFER, 1);
 		final job: Null<Int> = awaitPid('$dir/job.pid');
 		final driver: Null<Int> = pending._pid;
 		Assert.notNull(job, 'the job started');

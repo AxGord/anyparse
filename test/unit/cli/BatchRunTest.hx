@@ -76,12 +76,10 @@ final class BatchRunTest extends Test {
 	public function testASecondFixCallReportsItsSkipAgain(): Void {
 		#if nodejs
 		// `b` moves only with the first write of `a`, which is no candidate: `a` is written twice
-		final dir: String = CliFixture.writeDir('batch_fix_skip', [
-			{
-				name: 'A.hx',
-				source: 'class A {\n\tvar a:Int;\n\tvar b:Int;\n\n\tpublic function new() {\n\t\ta = 1;\n\t\tb = 2;\n\t\ta = 3;\n\t}\n}\n'
-			}
-		]);
+		final dir: String = CliFixture.writeDir('batch_fix_skip', [{
+			name: 'A.hx',
+			source: 'class A {\n\tvar a:Int;\n\tvar b:Int;\n\n\tpublic function new() {\n\t\ta = 1;\n\t\tb = 2;\n\t\ta = 3;\n\t}\n}\n'
+		}]);
 		final fix: Array<String> = [
 			'lint',
 			'--lang-default',

@@ -187,15 +187,11 @@ final class WriterPolicyLowering {
 	 * arm is empty when the body type has no such ctor, so the caller's switch stays exhaustive.
 	 */
 	private static function fitValueListCases(listPatterns: Array<Expr>, optFlag: Expr, nextBranch: Expr, fitBranch: Expr): Array<Case> {
-		return listPatterns.length == 0 ? [] : [
-			{
-				values: listPatterns,
-				expr: buildPolicySwitch(
-					['anyparse', 'format', 'SameLinePolicy'], optFlag, [{ values: ['Next'], expr: nextBranch }], fitBranch
-				),
-				guard: null
-			}
-		];
+		return listPatterns.length == 0 ? [] : [{
+			values: listPatterns,
+			expr: buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [{ values: ['Next'], expr: nextBranch }], fitBranch),
+			guard: null
+		}];
 	}
 
 	/** The cases of a shape-aware catch separator: blocks, then the construct-fit list arm, then bare bodies. */
@@ -409,9 +405,10 @@ final class WriterPolicyLowering {
 	 * `@:fmt(accessBrackets)` flag name differs from the two opt fields).
 	 */
 	private static function policyInsideSpace(optFieldName: String, isClose: Bool): Expr {
-		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(optFieldName), [
-			{ values: isClose ? ['Before', 'Both'] : ['After', 'Both'], expr: macro _dt(' ') }
-		], macro _de());
+		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(optFieldName), [{
+			values: isClose ? ['Before', 'Both'] : ['After', 'Both'],
+			expr: macro _dt(' ')
+		}], macro _de());
 	}
 
 	/**

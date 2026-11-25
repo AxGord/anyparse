@@ -312,9 +312,10 @@ class NominalTypesTest extends Test {
 	@:pin('control')
 	@:killer('M-NOMINAL-BLIND-PARAMS')
 	public function testABlindMemberReadWrittenWithAParameterHasNoAnswer(): Void {
-		final others: Array<{ file: String, source: String }> = [
-			{ file: 'a/Pri.hx', source: 'package a;\n\nclass Pri<T> {\n\tpublic var data: Array<T>;\n\tpublic var size: Int;\n}\n' }
-		];
+		final others: Array<{ file: String, source: String }> = [{
+			file: 'a/Pri.hx',
+			source: 'package a;\n\nclass Pri<T> {\n\tpublic var data: Array<T>;\n\tpublic var size: Int;\n}\n'
+		}];
 		final text: String = 'package p;\n\nclass C {\n\tvar p: Pri<String>;\n\tfunction probeData() return p.data;\n'
 			+ '\tfunction probeSize() return p.size;\n}\n';
 		Assert.isNull(sourceAmong(text, others, 'probeData'), 'a member written with the parameter');

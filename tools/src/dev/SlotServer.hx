@@ -56,14 +56,12 @@ final class SlotServer {
 			if (free == null) return null;
 			final port: Int = free;
 			if (FileSystem.exists(_groupFile)) FileSystem.deleteFile(_groupFile);
-			final batch: PendingRuns = ProcessSpawn.startAll([
-				{
-					args: ['--wait', '127.0.0.1:$port'],
-					cwd: wt,
-					tethered: true,
-					groupFile: _groupFile
-				}
-			], BUFFER, 1);
+			final batch: PendingRuns = ProcessSpawn.startAll([{
+				args: ['--wait', '127.0.0.1:$port'],
+				cwd: wt,
+				tethered: true,
+				groupFile: _groupFile
+			}], BUFFER, 1);
 			if (ready(port, wt)) {
 				_batch = batch;
 				_port = port;

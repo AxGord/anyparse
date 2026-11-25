@@ -422,9 +422,10 @@ final class OracleRunMemoTest extends Test {
 	public function testASourceTheFingerprintCannotSeeIsAlwaysCompiled(): Void {
 		#if (sys || nodejs)
 		// outside the project: a directory under the compile root is walked like any other
-		final extra: String = CliFixture.writeDir('runmemoextra', [
-			{ name: 'Extra.hx', source: 'class Extra {\n\tpublic static function go():Void {}\n}\n' }
-		]);
+		final extra: String = CliFixture.writeDir('runmemoextra', [{
+			name: 'Extra.hx',
+			source: 'class Extra {\n\tpublic static function go():Void {}\n}\n'
+		}]);
 		final dir: Null<String> = scratch(
 			'class Main {\n\tstatic function main() {\n\t\tExtra.go();\n\t}\n}\n', '$BUILD--macro addClassPath(\'$extra\')\n'
 		);

@@ -374,22 +374,18 @@ class AmbientImportResolutionTest extends Test {
 		}
 		// A source spelled nothing like the Haxe plugin file name, handed straight to the engine: what the
 		// engine honours is the DATA on the file record, never a grammar spelling of where it came from.
-		host.file.ambientImports = [
-			{
-				file: 'lib/globals.prelude',
-				imports: [
-					{
-						raw: 'a.T',
-						kind: ImportKind.Import,
-						alias: null,
-						aliasTarget: null,
-						aliasKeyword: null,
-						span: new Span(0, 0),
-						guarded: false
-					}
-				]
-			}
-		];
+		host.file.ambientImports = [{
+			file: 'lib/globals.prelude',
+			imports: [{
+				raw: 'a.T',
+				kind: ImportKind.Import,
+				alias: null,
+				aliasTarget: null,
+				aliasKeyword: null,
+				span: new Span(0, 0),
+				guarded: false
+			}]
+		}];
 		final resolved: Null<ResolvedType> = index.refs.resolveStartType('T', 'lib/Plain.hx');
 		Assert.equals('a/T.hx', resolved == null ? 'null' : resolved.file.file, 'the ambient band sheds the same-package candidate');
 	}

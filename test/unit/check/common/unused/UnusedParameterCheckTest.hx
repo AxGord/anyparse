@@ -291,9 +291,10 @@ class UnusedParameterCheckTest extends Test {
 		final bare: Array<Violation> = CheckFixture.violationsIn(new UnusedParameter(), report);
 		Assert.equals(1, bare.length);
 		Assert.equals(Severity.Warning, bare[0].severity, 'a confined private method is the autofixable subset');
-		final library: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.h(1, 2); }\n}' }
-		];
+		final library: Array<{ file: String, source: String }> = [{
+			file: 'pkg/E.hx',
+			source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c.h(1, 2); }\n}'
+		}];
 		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		plugin.setResolutionScope(
 			{ declared: true, sources: () -> { report: report, projectRoots: [], library: new LibrarySources(library) } }

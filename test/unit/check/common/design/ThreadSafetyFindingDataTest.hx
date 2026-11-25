@@ -189,14 +189,12 @@ class ThreadSafetyFindingDataTest extends Test {
 				]
 			)
 				.filter(v -> v.data?.family == 'B');
-		Assert.same([
-			{
-				family: 'B',
-				member: 'A.work',
-				subject: 'A._m',
-				chain: ['A.work', 'A.save', 'File.saveContent']
-			}
-		], found.map(v -> v.data));
+		Assert.same([{
+			family: 'B',
+			member: 'A.work',
+			subject: 'A._m',
+			chain: ['A.work', 'A.save', 'File.saveContent']
+		}], found.map(v -> v.data));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -215,14 +213,12 @@ class ThreadSafetyFindingDataTest extends Test {
 				]
 			)
 				.filter(v -> v.data?.family == 'C');
-		Assert.same([
-			{
-				family: 'C',
-				member: 'Db.add',
-				subject: 'Db._m',
-				chain: ['Db.add']
-			}
-		], found.map(v -> v.data));
+		Assert.same([{
+			family: 'C',
+			member: 'Db.add',
+			subject: 'Db._m',
+			chain: ['Db.add']
+		}], found.map(v -> v.data));
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -240,14 +236,12 @@ class ThreadSafetyFindingDataTest extends Test {
 			)
 				.map(source -> source.replace('Db', 'Zd'))
 		);
-		Assert.same([
-			{
-				family: 'D',
-				member: 'Fs.save',
-				subject: 'Fs._mutation / Zd._batch',
-				chain: ['Fs.save', 'Zd.add', 'Mutex.acquire']
-			}
-		], found.map(v -> v.data));
+		Assert.same([{
+			family: 'D',
+			member: 'Fs.save',
+			subject: 'Fs._mutation / Zd._batch',
+			chain: ['Fs.save', 'Zd.add', 'Mutex.acquire']
+		}], found.map(v -> v.data));
 		#else
 		Assert.pass('non-sys target');
 		#end

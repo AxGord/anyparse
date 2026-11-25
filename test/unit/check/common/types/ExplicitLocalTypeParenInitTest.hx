@@ -83,9 +83,10 @@ class ExplicitLocalTypeParenInitTest extends ExplicitLocalTypeCheckTestBase {
 	}
 
 	public function testFixParenCrossClassStaticFieldRead(): Void {
-		assertFixIdx(wrap('var v = (API.API_URL);'), [
-			{ file: 'API.hx', source: 'class API {\n\tpublic static final API_URL:String = "x";\n}' }
-		], 'v:String');
+		assertFixIdx(wrap('var v = (API.API_URL);'), [{
+			file: 'API.hx',
+			source: 'class API {\n\tpublic static final API_URL:String = "x";\n}'
+		}], 'v:String');
 	}
 
 	public function testParenLocalStillReported(): Void {

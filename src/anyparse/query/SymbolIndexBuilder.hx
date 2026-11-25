@@ -363,13 +363,11 @@ final class SymbolIndexBuilder {
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta, shape) : null,
 					underlyingRaw: underlyingPathOf(typeDecl.nameNode, isAbstract, gn.guarded),
-					branches: [
-						{
-							kind: typeDecl.kind,
-							span: typeDecl.fullSpan,
-							clauses: isAbstract ? castClausesOf(typeDecl, node, source, pendingMeta, shape) : null
-						}
-					],
+					branches: [{
+						kind: typeDecl.kind,
+						span: typeDecl.fullSpan,
+						clauses: isAbstract ? castClausesOf(typeDecl, node, source, pendingMeta, shape) : null
+					}],
 					guarded: gn.guarded,
 					forwardedMembers: pendingForwarded
 				};

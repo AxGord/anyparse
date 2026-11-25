@@ -83,15 +83,13 @@ class JsonRoundTripTest extends Test {
 				{ key: 'age', value: JNumber(30) },
 				{ key: 'active', value: JBool(true) }
 			]),
-			JObject([
-				{
-					key: 'items',
-					value: JArray([
-						JObject([{ key: 'id', value: JNumber(1) }]),
-						JObject([{ key: 'id', value: JNumber(2) }])
-					])
-				}
-			]),
+			JObject([{
+				key: 'items',
+				value: JArray([
+					JObject([{ key: 'id', value: JNumber(1) }]),
+					JObject([{ key: 'id', value: JNumber(2) }])
+				])
+			}]),
 			JArray([
 				JNull,
 				JBool(true),

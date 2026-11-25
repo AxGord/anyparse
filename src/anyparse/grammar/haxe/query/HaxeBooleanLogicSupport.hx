@@ -267,15 +267,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 						declined: false,
 						notDelta: 0
 					};
-					final leaves: Array<OrLeaf> = head.concat(run ?? [
-						{
-							op: acc,
-							names: names.copy(),
-							providers: [],
-							tested: tested.copy(),
-							span: accSpan
-						}
-					]);
+					final leaves: Array<OrLeaf> = head.concat(run ?? [{
+						op: acc,
+						names: names.copy(),
+						providers: [],
+						tested: tested.copy(),
+						span: accSpan
+					}]);
 					final joined: Null<String> = narrowingOr(leaves, joinOr(plain(cond, source), acc), source);
 					if (joined == null) return null;
 					accSrc = joined;

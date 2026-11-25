@@ -184,9 +184,10 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testSupertypeShadowNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);'), 'class Widget extends Base {}\n', [
-				{ file: 'Base.hx', source: 'class Base {\n\tpublic function deco(n: Int): Widget return this;\n}\n' }
-			])).length
+			violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);'), 'class Widget extends Base {}\n', [{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic function deco(n: Int): Widget return this;\n}\n'
+			}])).length
 		);
 	}
 
@@ -258,9 +259,10 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testConflictingUsingNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
-				{ file: 'Other.hx', source: 'class Other {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n}\n' }
-			])).length
+			violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [{
+				file: 'Other.hx',
+				source: 'class Other {\n\tpublic static function deco(w: Widget, n: Int): Widget return w;\n}\n'
+			}])).length
 		);
 	}
 
@@ -288,9 +290,10 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testNonConflictingUsingStillFlagged(): Void {
 		Assert.equals(
 			1,
-			violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [
-				{ file: 'Other.hx', source: 'class Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n' }
-			])).length
+			violationsOf(fileSet(user('using Ext;\nusing Other;\n\n', 'Ext.deco(w, 1);'), WIDGET_SOURCE, [{
+				file: 'Other.hx',
+				source: 'class Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n'
+			}])).length
 		);
 	}
 
@@ -495,9 +498,10 @@ class PreferStaticExtensionCheckTest extends Test {
 		// clause records, so its own empty member list proves nothing.
 		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(w:Fwd):Void {\n\t\tExt.pad(w, 1, 2);\n\t}\n}\n';
 		final files: Array<{ file: String, source: String }> =
-			fileSet(source, 'class Widget {\n\tpublic function pad(a: Int, b: Int): Widget return this;\n}\n', [
-				{ file: 'Fwd.hx', source: '@:forward abstract Fwd(Widget) from Widget to Widget {}\n' }
-			]);
+			fileSet(source, 'class Widget {\n\tpublic function pad(a: Int, b: Int): Widget return this;\n}\n', [{
+				file: 'Fwd.hx',
+				source: '@:forward abstract Fwd(Widget) from Widget to Widget {}\n'
+			}]);
 		Assert.equals(0, editsOf(files).length);
 	}
 
@@ -506,9 +510,10 @@ class PreferStaticExtensionCheckTest extends Test {
 		// the existing run would outrank `using Other;` and hijack its `tag` calls.
 		final source: String =
 			'using Other;\n\nclass C {\n\tfunction f(w:Widget, v:Widget):Void {\n\t\tv.tag();\n\t\tExt.deco(w, 1);\n\t}\n}\n';
-		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
-			{ file: 'Other.hx', source: 'class Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n' }
-		]);
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [{
+			file: 'Other.hx',
+			source: 'class Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n'
+		}]);
 		final out: String = fixResultOf(files);
 		Assert.isTrue(out.indexOf('using Ext;') != -1, out);
 		Assert.isTrue(out.indexOf('using Ext;') < out.indexOf('using Other;'), out);
@@ -546,9 +551,10 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testTwoModulesMergeIntoOneInsert(): Void {
 		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext", "Ext2"]}}}';
 		final source: String = 'class C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t\tExt2.tint(w, 2);\n\t}\n}\n';
-		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
-			{ file: 'Ext2.hx', source: 'class Ext2 {\n\tpublic static function tint(w: Widget, n: Int): Widget return w;\n}\n' }
-		]);
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [{
+			file: 'Ext2.hx',
+			source: 'class Ext2 {\n\tpublic static function tint(w: Widget, n: Int): Widget return w;\n}\n'
+		}]);
 		Assert.equals(5, editsOf(files, config).length);
 		final out: String = fixResultOf(files, config);
 		Assert.isTrue(out.indexOf('using Ext;') != -1, out);
@@ -566,9 +572,10 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testCommentInSingleArgTailNotFixed(): Void {
 		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext1"]}}}';
 		final source: String = 'using Ext1;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt1.solo(w /* keep */);\n\t}\n}\n';
-		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
-			{ file: 'Ext1.hx', source: 'class Ext1 {\n\tpublic static function solo(w: Widget): Widget return w;\n}\n' }
-		]);
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [{
+			file: 'Ext1.hx',
+			source: 'class Ext1 {\n\tpublic static function solo(w: Widget): Widget return w;\n}\n'
+		}]);
 		Assert.equals(1, violationsOf(files, config).length);
 		Assert.equals(0, editsOf(files, config).length);
 	}
@@ -637,12 +644,10 @@ class PreferStaticExtensionCheckTest extends Test {
 		// An indexed PROJECT type named `Reflect` shadows the stdlib one, so its `fields` may return
 		// anything — the table is refused and the binder stays untyped (report-only, hedged).
 		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);')
-			.concat([
-				{
-					file: 'Reflect.hx',
-					source: 'class Reflect {\n\tpublic static function fields(o: Dynamic): Array<Widget> return null;\n}\n'
-				}
-			]);
+			.concat([{
+				file: 'Reflect.hx',
+				source: 'class Reflect {\n\tpublic static function fields(o: Dynamic): Array<Widget> return null;\n}\n'
+			}]);
 		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('receiver type unresolved') != -1, vs[0].message);
@@ -688,12 +693,10 @@ class PreferStaticExtensionCheckTest extends Test {
 			return;
 		}
 		final files: Array<{ file: String, source: String }> = strExtFiles('for (key in Reflect.fields(o)) StrExt.deco(key, 1);')
-			.concat([
-				{
-					file: haxe.io.Path.join([stdDir, 'Reflect.hx']),
-					source: 'extern class Reflect {\n\tpublic static function fields(o: Dynamic): Array<String>;\n}\n'
-				}
-			]);
+			.concat([{
+				file: haxe.io.Path.join([stdDir, 'Reflect.hx']),
+				source: 'extern class Reflect {\n\tpublic static function fields(o: Dynamic): Array<String>;\n}\n'
+			}]);
 		final vs: Array<Violation> = violationsOf(files, STREXT_CONFIG);
 		Assert.equals(1, vs.length);
 		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);
@@ -710,9 +713,10 @@ class PreferStaticExtensionCheckTest extends Test {
 	 * nowhere at all.
 	 */
 	public function testStaticCallReceiverResolves(): Void {
-		final files: Array<{ file: String, source: String }> = fileSet(user('using Ext;\n\n', 'Ext.deco(Mk.make(), 1);'), WIDGET_SOURCE, [
-			{ file: 'Mk.hx', source: 'class Mk {\n\tpublic static function make(): Widget return null;\n}\n' }
-		]);
+		final files: Array<{ file: String, source: String }> = fileSet(user('using Ext;\n\n', 'Ext.deco(Mk.make(), 1);'), WIDGET_SOURCE, [{
+			file: 'Mk.hx',
+			source: 'class Mk {\n\tpublic static function make(): Widget return null;\n}\n'
+		}]);
 		final vs: Array<Violation> = violationsOf(files);
 		Assert.equals(1, vs.length);
 		Assert.equals(-1, vs[0].message.indexOf('receiver type unresolved'), vs[0].message);
@@ -875,12 +879,10 @@ class PreferStaticExtensionCheckTest extends Test {
 
 	/** The `Maker` fixture the CALL-receiver gates resolve through: `make` returns a `Widget`, `self` chains. */
 	private function makerFiles(body: String, widget: String = WIDGET_SOURCE): Array<{ file: String, source: String }> {
-		return fileSet('using Ext;\n\nclass C {\n\tfunction f(m:Maker):Void {\n\t\t$body\n\t}\n}\n', widget, [
-			{
-				file: 'Maker.hx',
-				source: 'class Maker {\n\tpublic function make(): Widget return null;\n\n\tpublic function self(): Maker return this;\n}\n'
-			}
-		]);
+		return fileSet('using Ext;\n\nclass C {\n\tfunction f(m:Maker):Void {\n\t\t$body\n\t}\n}\n', widget, [{
+			file: 'Maker.hx',
+			source: 'class Maker {\n\tpublic function make(): Widget return null;\n\n\tpublic function self(): Maker return this;\n}\n'
+		}]);
 	}
 
 	/** The structural-membership fixture set: a `Bag` that only DECLARES `iterator()`, a plain type, and a generic extension module. */

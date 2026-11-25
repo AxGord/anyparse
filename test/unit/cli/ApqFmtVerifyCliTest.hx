@@ -67,19 +67,17 @@ class ApqFmtVerifyCliTest extends Test {
 	public function testDroppedTrailingCommasVerify(): Void {
 		#if (sys || nodejs)
 		// The default `remove` drops the trailing comma of a flat and of a multi-line list; neither is a divergence.
-		final dir: String = CliFixture.writeDir('apq_fmt_verify_comma', [
-			{ name: 'A.hx', source: 'class A {\n\tstatic var x = [1, 2,];\n\tstatic var y = [\n\t\t1,\n\t\t2,\n\t];\n}\n' }
-		]);
+		final dir: String = CliFixture.writeDir('apq_fmt_verify_comma', [{
+			name: 'A.hx',
+			source: 'class A {\n\tstatic var x = [1, 2,];\n\tstatic var y = [\n\t\t1,\n\t\t2,\n\t];\n}\n'
+		}]);
 		Assert.equals(0, Cli.run(['fmt', dir, '--verify']));
 		CliFixture.removeDir(dir);
 		// the commonest multi-line layout keeps a comment between the comma and the closer
-		final commented: String = CliFixture.writeDir('apq_fmt_verify_comma_comment', [
-			{
-				name: 'A.hx',
-				source: 'class A {\n\tstatic var y = [\n\t\t1,\n\t\t2, // two\n\t];\n\tstatic var z = [\n\t\t1,\n\t\t2,\n\t\t// tail\n'
-				+ '\t];\n}\n'
-			}
-		]);
+		final commented: String = CliFixture.writeDir('apq_fmt_verify_comma_comment', [{
+			name: 'A.hx',
+			source: 'class A {\n\tstatic var y = [\n\t\t1,\n\t\t2, // two\n\t];\n\tstatic var z = [\n\t\t1,\n\t\t2,\n\t\t// tail\n\t];\n}\n'
+		}]);
 		Assert.equals(0, Cli.run(['fmt', commented, '--verify']));
 		CliFixture.removeDir(commented);
 		#else
@@ -90,12 +88,10 @@ class ApqFmtVerifyCliTest extends Test {
 	public function testLiteralsAreComparedVerbatimWhileTheRestIsReformatted(): Void {
 		#if (sys || nodejs)
 		// strings holding `,]` and runs of spaces, an interpolation hole (its code is re-laid) and a regex survive the reformat untouched
-		final dir: String = CliFixture.writeDir('apq_fmt_verify_literals', [
-			{
-				name: 'A.hx',
-				source: 'class A{static var s="a,]  b";static var t=\'x $${ s+1 } ,] y\';static var r=~/a  ,]/;static var l=[1,2,];}\n'
-			}
-		]);
+		final dir: String = CliFixture.writeDir('apq_fmt_verify_literals', [{
+			name: 'A.hx',
+			source: 'class A{static var s="a,]  b";static var t=\'x $${ s+1 } ,] y\';static var r=~/a  ,]/;static var l=[1,2,];}\n'
+		}]);
 		Assert.equals(0, Cli.run(['fmt', dir, '--verify']));
 		CliFixture.removeDir(dir);
 		#else

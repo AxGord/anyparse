@@ -113,9 +113,10 @@ final class NamingCrossRenameTest extends Test {
 			},
 			{
 				what: 'a module main type',
-				files: [
-					{ file: 'pkg/JSON_MAIN.hx', source: 'package pkg;\n\ntypedef JSON_MAIN = {\n\tx:Int\n}\n' }
-				],
+				files: [{
+					file: 'pkg/JSON_MAIN.hx',
+					source: 'package pkg;\n\ntypedef JSON_MAIN = {\n\tx:Int\n}\n'
+				}],
 				roots: [],
 				name: 'JSON_MAIN',
 				reason: NamingCrossRename.MAIN_TYPE

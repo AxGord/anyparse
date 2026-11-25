@@ -64,13 +64,11 @@ class PreferFinalPublicFieldStructuralTest extends Test {
 	public function testIteratorShapeMemberNotFlagged(): Void {
 		Assert.equals(
 			0,
-			ownerViolations([
-				{
-					file: 'C.hx',
-					source: 'class C { public var hasNext:Void->Bool; public function new() { hasNext = null; } '
-					+ 'public function next():Int return 1; }'
-				}
-			]).length
+			ownerViolations([{
+				file: 'C.hx',
+				source: 'class C { public var hasNext:Void->Bool; public function new() { hasNext = null; } '
+				+ 'public function next():Int return 1; }'
+			}]).length
 		);
 	}
 

@@ -294,6 +294,16 @@ typedef WriteOptions = {
 	soleItemCuddledBrackets: Bool,
 
 	/**
+	 * When `true`, the `soleItemCuddledBrackets` cuddle applies to a `[…]` whose ONLY element is an
+	 * object literal (`[{` on the opening line, `}]` together on the closing one), whatever the host
+	 * — call argument, initializer, return value. The narrow sibling of `soleItemCuddledBrackets`,
+	 * with the same guards (no line comment around the element, a fitting list stays flat); either
+	 * knob on enables the cuddle for an object element. Default `false`. Fed by
+	 * `wrapping.soleObjectCuddledBrackets`.
+	 */
+	soleObjectCuddledBrackets: Bool,
+
+	/**
 	 * When `true`, a method-chain link whose PRECEDING link already rendered multi-line
 	 * and ended in a dedented closing-delimiter run (`}` / `})` / `}]`) starts ON that
 	 * closing line instead of on a fresh indented line of its own, while every other

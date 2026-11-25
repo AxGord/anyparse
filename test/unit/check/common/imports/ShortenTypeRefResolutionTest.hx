@@ -52,9 +52,10 @@ class ShortenTypeRefResolutionTest extends Test {
 	}
 
 	public function testNearerPackageTypeLeavesTheEnclosingPathAlone(): Void {
-		final nearer: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/sub/Entity.hx', source: 'package pkg.sub;\n\nclass Entity<T> {}\n' }
-		];
+		final nearer: Array<{ file: String, source: String }> = [{
+			file: 'pkg/sub/Entity.hx',
+			source: 'package pkg.sub;\n\nclass Entity<T> {}\n'
+		}];
 		Assert.equals(0, violations(holder('\tpublic final a:pkg.Entity<String> = null;\n'), nearer).length);
 	}
 
@@ -96,12 +97,10 @@ class ShortenTypeRefResolutionTest extends Test {
 	@:pin('control')
 	@:killer('M-SHORTEN-VALUE-DOORS-SKIPPED')
 	public function testAnInheritedFieldKeepsTheValueSiteQualified(): Void {
-		final base: Array<{ file: String, source: String }> = [
-			{
-				file: 'pkg/Base.hx',
-				source: 'package pkg;\n\nclass Base {\n\tpublic var Entity:String = \'\';\n\n\tpublic function new() {}\n}\n'
-			}
-		];
+		final base: Array<{ file: String, source: String }> = [{
+			file: 'pkg/Base.hx',
+			source: 'package pkg;\n\nclass Base {\n\tpublic var Entity:String = \'\';\n\n\tpublic function new() {}\n}\n'
+		}];
 		final src: String = 'package pkg.sub;\n\nclass Holder extends Base {\n'
 			+ '\tpublic function f(y:Dynamic):Bool {\n\t\treturn Std.isOfType(y, pkg.Entity);\n\t}\n}\n';
 		Assert.equals(0, violations(src, base).length);

@@ -272,9 +272,10 @@ final class HoistCommonBranchTail extends RuleBase {
 		final keepBlock: Bool = seams.blockKinds.contains(branches[lastIndex].kind)
 			&& (body.length != 1 || TailScan.localDeclNames(body, seams).length != 0 || TailScan.hasOpaqueDecl(body, seams));
 		final copy: Span = keepBlock ? lastBranch : new Span(first.from, last.to);
-		return [
-			{ span: new Span(headSpan.from, lastBranch.to), text: source.substring(copy.from, copy.to) }
-		];
+		return [{
+			span: new Span(headSpan.from, lastBranch.to),
+			text: source.substring(copy.from, copy.to)
+		}];
 	}
 
 }

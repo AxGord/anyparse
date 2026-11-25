@@ -30,9 +30,10 @@ final class MoveWildcardImportCarryTest extends Test {
 	private static final HOST_BARE: String = 'package p;\n\nclass Host {}\n\nclass Moved {\n\tvar n: Node;\n}\n';
 
 	/** The package of `Tools`, whose main class declares the static `qfun` that `Moved` calls bare. */
-	private static final MODULE_Q: Array<{ name: String, source: String }> = [
-		{ name: 'src/q/Tools.hx', source: 'package q;\n\nclass Tools {\n\tpublic static function qfun(): Int return 1;\n}\n' }
-	];
+	private static final MODULE_Q: Array<{ name: String, source: String }> = [{
+		name: 'src/q/Tools.hx',
+		source: 'package q;\n\nclass Tools {\n\tpublic static function qfun(): Int return 1;\n}\n'
+	}];
 
 	/** `Moved` (line 5, column 7) calls `qfun`, which no statement of the source's own spells. */
 	private static final HOST_BARE_CALL: String =

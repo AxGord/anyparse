@@ -89,6 +89,7 @@ final class HxModuleWriteOptions {
 	public var alignInlineSwitchCaseBody: Bool = false;
 	public var comprehensionCuddledOpen: Bool = false;
 	public var soleItemCuddledBrackets: Bool = false;
+	public var soleObjectCuddledBrackets: Bool = false;
 	public var methodChainCuddledLinks: Bool = false;
 	public var ternaryCuddledBraces: Bool = false;
 	public var maxConsecutiveBlanks: Int = 1;

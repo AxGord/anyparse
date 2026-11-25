@@ -237,9 +237,10 @@ class SpanInfoLowering extends PairedShapeLowering {
 	 */
 	private function lowerSpanInfoSeq(node: ShapeNode): Expr {
 		final own: Expr = isSpanned(node) ? field(ident('v'), PairedShapeLowering.SPAN_FIELD) : ident('cur');
-		final body: Array<Expr> = [
-			{ expr: EVars([{ name: '_sp', type: null, expr: own }]), pos: Context.currentPos() }
-		];
+		final body: Array<Expr> = [{
+			expr: EVars([{ name: '_sp', type: null, expr: own }]),
+			pos: Context.currentPos()
+		}];
 		// A type-parameter name is collected into the whole-file list with NO span
 		// guard (the reflective scan reached this visitor directly), and into its
 		// declaration's list under `_sp`, the span of the node that declares it.

@@ -735,9 +735,10 @@ final class ModuleMove {
 			if (anchor.order < 0)
 				unplaced.push(line);
 			else
-				imported = CanonicalEdit.applyEdits(imported, [
-					{ span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}$line\n${anchor.trail}' }
-				]);
+				imported = CanonicalEdit.applyEdits(imported, [{
+					span: new Span(anchor.offset, anchor.offset),
+					text: '${anchor.lead}$line\n${anchor.trail}'
+				}]);
 		}
 		final insert: Null<{ span: Span, text: String }> = MoveSymbol.carriedImportEdit(imported, unplaced, plugin);
 		if (insert != null) imported = CanonicalEdit.applyEdits(imported, [insert]);

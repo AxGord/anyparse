@@ -84,6 +84,7 @@ final class SExprFormat implements TextFormat {
 		alignInlineSwitchCaseBody: false,
 		comprehensionCuddledOpen: false,
 		soleItemCuddledBrackets: false,
+		soleObjectCuddledBrackets: false,
 		methodChainCuddledLinks: false,
 		ternaryCuddledBraces: false,
 		addLineCommentSpace: true,

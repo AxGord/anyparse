@@ -66,15 +66,13 @@ final class RegistryFragmentFollowJunkTest extends Test {
 		final now: String = head + after + tail;
 		final replaced: String = replace == null ? '' : ',"replace":${JsonText.quote(replace)}';
 		final json: String = '{"arms":[{"name":"A","type":"p.C","method":"f","find":${JsonText.quote(find)}$replaced}]}';
-		return RegistryFragmentFollow.follow(LAYOUT, json, [
-			{
-				path: 'p.C',
-				source: old,
-				tree: plugin.parseFile(old),
-				newSource: now,
-				newTree: plugin.parseFile(now)
-			}
-		], plugin, null);
+		return RegistryFragmentFollow.follow(LAYOUT, json, [{
+			path: 'p.C',
+			source: old,
+			tree: plugin.parseFile(old),
+			newSource: now,
+			newTree: plugin.parseFile(now)
+		}], plugin, null);
 	}
 
 }

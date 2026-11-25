@@ -481,16 +481,14 @@ final class WriterArrowValueIfLowering {
 			_vwOk && (_vwW < 0 || _vwW <= $knobAccess);
 		};
 		final stepCases: Array<Case> = capture == null
-			? [
-				{
-					values: [macro _],
-					expr: macro {
-						_vwOk = $tailFits;
-						break;
-					},
-					guard: null
-				}
-			]
+			? [{
+				values: [macro _],
+				expr: macro {
+					_vwOk = $tailFits;
+					break;
+				},
+				guard: null
+			}]
 			: [
 				{ values: [capture], expr: macro _vwCur = _vwInner, guard: null },
 				{

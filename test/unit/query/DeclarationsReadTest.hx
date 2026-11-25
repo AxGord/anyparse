@@ -79,14 +79,12 @@ class DeclarationsReadTest extends Test {
 	@:pin('guard')
 	public function testTheDeclarationsReadAgreesWithTheFullReadOnEverySource(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final sources: Array<{ file: String, source: String }> = [
-			{
-				file: 'p/Cond.hx',
-				source: 'package p;\n\n#if a\nimport x.Y;\n#end\n\nclass Cond {\n\tvar v = function() { return { a: 1 }; };\n\n'
-					+ '\tfunction f(): Int {\n\t\t#if a\n\t\tif (b) { g(); }\n\t\t#else\n\t\th();\n\t\t#end\n\t\treturn \'}\'.length;\n'
-					+ '\t}\n\n\t#if b\n\tfunction k() {}\n\t#end\n}\n\nprivate typedef T = { x: Int };\n'
-			}
-		];
+		final sources: Array<{ file: String, source: String }> = [{
+			file: 'p/Cond.hx',
+			source: 'package p;\n\n#if a\nimport x.Y;\n#end\n\nclass Cond {\n\tvar v = function() { return { a: 1 }; };\n\n'
+				+ '\tfunction f(): Int {\n\t\t#if a\n\t\tif (b) { g(); }\n\t\t#else\n\t\th();\n\t\t#end\n\t\treturn \'}\'.length;\n'
+				+ '\t}\n\n\t#if b\n\tfunction k() {}\n\t#end\n}\n\nprivate typedef T = { x: Int };\n'
+		}];
 		for (name in FileSystem.readDirectory(AGREEMENT_DIR)) if (name.endsWith('.hx'))
 			sources.push({ file: '$AGREEMENT_DIR/$name', source: File.getContent('$AGREEMENT_DIR/$name') });
 		var compared: Int = 0;

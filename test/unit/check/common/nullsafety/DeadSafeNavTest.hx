@@ -178,9 +178,10 @@ class DeadSafeNavTest extends Test {
 	@:pin('control')
 	@:killer('M-DSN-HXML-ALWAYS-ON')
 	public function testPlainOracleBuildKeepsTheFix(): Void {
-		assertBuild([
-			{ name: 'build.hxml', source: '-cp .\n-D flag\n-main app.C\napp.C\n--js out.js\n' }
-		], false);
+		assertBuild([{
+			name: 'build.hxml',
+			source: '-cp .\n-D flag\n-main app.C\napp.C\n--js out.js\n'
+		}], false);
 	}
 
 	/** A commented-out macro is not part of the build. */
@@ -194,9 +195,10 @@ class DeadSafeNavTest extends Test {
 	@:pin('control')
 	@:killer('M-DSN-MACRO-BLIND')
 	public function testGlobalMetadataMacroKeepsNoFix(): Void {
-		assertBuild([
-			{ name: 'build.hxml', source: '-cp .\n--macro addGlobalMetadata(\'app\', \'@:nullSafety(Strict)\')\n' }
-		], true);
+		assertBuild([{
+			name: 'build.hxml',
+			source: '-cp .\n--macro addGlobalMetadata(\'app\', \'@:nullSafety(Strict)\')\n'
+		}], true);
 	}
 
 	/** A `-lib`'s extraParams are not read, so it may enable null-safety. */

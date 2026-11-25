@@ -385,9 +385,10 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 		final newline: String = editEndOf(source, last) == last.to ? '\n' : '\r\n';
 		return {
 			comment: new Span(first.from, last.to),
-			edits: [
-				{ span: new Span(first.from, editEndOf(source, last)), text: docText(lines, indent, newline) }
-			]
+			edits: [{
+				span: new Span(first.from, editEndOf(source, last)),
+				text: docText(lines, indent, newline)
+			}]
 		};
 	}
 

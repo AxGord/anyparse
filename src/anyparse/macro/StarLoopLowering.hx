@@ -647,14 +647,12 @@ final class StarLoopLowering {
 		// re-emit the leading sep.
 		final sepBeforeLocal: String = '${localName}SepBefore';
 		parseSteps.push({
-			expr: EVars([
-				{
-					name: sepBeforeLocal,
-					type: macro : Bool,
-					expr: macro false,
-					isFinal: false
-				}
-			]),
+			expr: EVars([{
+				name: sepBeforeLocal,
+				type: macro : Bool,
+				expr: macro false,
+				isFinal: false
+			}]),
 			pos: Context.currentPos()
 		});
 		parseSteps.push(macro {
