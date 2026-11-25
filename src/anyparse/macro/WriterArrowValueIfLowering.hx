@@ -442,7 +442,8 @@ final class WriterArrowValueIfLowering {
 	 * type carries no `@:fmt(valueIfFitValueWidth('<knobField>', '<valueField>'))` or its knob is
 	 * `0`, else every VALUE of the chain (each member's `<valueField>` plus the final `else` value)
 	 * must render flat within the knob's width. A value with a forced break (a block, a
-	 * multi-statement lambda) has no flat width and refuses the chain.
+	 * multi-statement lambda, a switch) has no flat width: its chain is not one of plain values, so the cap
+	 * leaves it to the layout it has without the cap.
 	 *
 	 * The width of the written value rather than its constructor is the measure, so the grammar
 	 * names no list of "simple" kinds: a literal, a name, a field path or a short call is narrow, a
@@ -476,7 +477,8 @@ final class WriterArrowValueIfLowering {
 		final capture: Null<Expr> = ctorCapturePattern(ac, spineRef, spineCtor, '_vwInner');
 		final tailFits: Expr = macro {
 			final _vwW: Int = anyparse.format.wrap.WrapList.flatLength($i{spineFn}(_vwNext, opt));
-			_vwW >= 0 && _vwW <= $knobAccess;
+			if (_vwW < 0) _vwBreak = true;
+			_vwOk && (_vwW < 0 || _vwW <= $knobAccess);
 		};
 		final stepCases: Array<Case> = capture == null
 			? [
@@ -504,17 +506,18 @@ final class WriterArrowValueIfLowering {
 		return macro $knobAccess <= 0 || {
 			var _vwCur = value;
 			var _vwOk: Bool = true;
+			var _vwBreak: Bool = false;
 			while (true) {
 				final _vwW: Int = anyparse.format.wrap.WrapList.flatLength($i{valueFn}($valueAccess, opt));
-				if (_vwW < 0 || _vwW > $knobAccess) {
+				if (_vwW < 0)
+					_vwBreak = true;
+				else if (_vwW > $knobAccess)
 					_vwOk = false;
-					break;
-				}
 				final _vwNext = $spineAccess;
 				if (_vwNext == null) break;
 				$stepSwitch;
 			}
-			_vwOk;
+			_vwBreak || _vwOk;
 		};
 	}
 

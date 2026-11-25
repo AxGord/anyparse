@@ -951,8 +951,7 @@ final class WriterBodyPolicyLowering {
 			_glueFlatWidth == -1 || opt.lineWidth <= 0 || $optFlag != anyparse.format.BodyPolicy.FitLine
 				? $glueLayoutExpr
 				: anyparse.core.Doc.IfArrowContinuationFits(_cols, _glueFlatWidth, opt.lineWidth + 1, $glueLayoutExpr, $allmanExpr);
-		} else
-			$allmanExpr;
+		} else $allmanExpr;
 	}
 
 	/**

@@ -833,9 +833,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		// that one context (var-init / call-arg object literals keep their
 		// source-multiline shape because the flag is cleared on every
 		// expression-position descent).
-		final ignoreBase: Expr = if (ignoreSourceNewlinesForWrap)
-			macro true
-		else if (wrapRulesField != null) {
+		final ignoreBase: Expr = if (ignoreSourceNewlinesForWrap) macro true else if (wrapRulesField != null) {
 			final rulesAccess: Expr = wrapRulesAccess(wrapRulesField, mapWrap);
 			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
 		} else {

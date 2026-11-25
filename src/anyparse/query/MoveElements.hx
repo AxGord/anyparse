@@ -198,9 +198,7 @@ final class MoveElements {
 		final refusal: Null<String> = elementRefusal(moved, request.first, request.destSource != null, plugin);
 		if (refusal != null) return Left(refusal);
 		final destOriginal: String = request.destSource ?? source;
-		final destTree: QueryNode = if (request.destSource == null)
-			tree
-		else switch ParseGate.parse(plugin, destOriginal, 'destination') {
+		final destTree: QueryNode = if (request.destSource == null) tree else switch ParseGate.parse(plugin, destOriginal, 'destination') {
 			case Unparsed(message): return Left(message);
 			case Parsed(parsed): parsed;
 		};

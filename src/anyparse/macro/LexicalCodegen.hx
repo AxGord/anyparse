@@ -523,8 +523,7 @@ class LexicalCodegen {
 				chain = macro if ($test) {
 					best = i + $v{text.length};
 					kind = $literal;
-				} else
-					$chain;
+				} else $chain;
 			}
 			cases.push({ values: [macro $v{group.code}], expr: chain });
 		}

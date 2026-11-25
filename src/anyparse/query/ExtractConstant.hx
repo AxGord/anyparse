@@ -133,7 +133,8 @@ final class ExtractConstant {
 			final newSource: String = if (needsImport) switch AddImport.addImport(replaced, modulePath, false, true, plugin, optsJson) {
 				case Ok(text): text;
 				case Err(message): return Err('${sf.file}: import: $message');
-			} else
+			}
+			else
 				replaced;
 			changes.push({ file: sf.file, newSource: newSource, count: occurrences.length });
 		}

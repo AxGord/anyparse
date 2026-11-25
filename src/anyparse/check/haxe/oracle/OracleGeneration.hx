@@ -632,9 +632,7 @@ final class OracleGeneration {
 	private static function hashOf(path: String, memo: Map<String, String>): String {
 		final held: Null<String> = memo[path];
 		if (held != null) return held;
-		final hash: String = if (!sys.FileSystem.exists(path))
-			MISSING
-		else if (sys.FileSystem.isDirectory(path)) {
+		final hash: String = if (!sys.FileSystem.exists(path)) MISSING else if (sys.FileSystem.isDirectory(path)) {
 			final lines: Array<String> = [];
 			listTree(path, '', lines, 0, memo);
 			lines.sort(anyparse.util.Compare.compareString);

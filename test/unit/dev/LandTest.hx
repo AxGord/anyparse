@@ -1187,9 +1187,7 @@ final class LandTest extends Test {
 					} else {
 						judge(tree, shape.measured, judged);
 					}
-					return if (at >= 0)
-						makeBase(battery, cache, base)
-					else if (red) {
+					return if (at >= 0) makeBase(battery, cache, base) else if (red) {
 						File.saveContent(log, redLogOf(battery));
 						Failed('the battery is red');
 					} else {

@@ -2550,6 +2550,30 @@
 			"note": "the value-width cap refuses every chain, so even a chain of narrow values keeps the expressionIf policy layout"
 		},
 		{
+			"name": "M-VIF-WIDTH-FORCED-BREAK-REFUSES",
+			"type": "anyparse.macro.WriterArrowValueIfLowering",
+			"method": "arrowValueIfValueWidthExpr",
+			"find": "_vwBreak || _vwOk",
+			"replace": "_vwOk && !_vwBreak",
+			"note": "a chain with a forced-break value (a switch) is refused by the width cap, so the glued block layout re-ladders"
+		},
+		{
+			"name": "M-VIF-WIDTH-BREAK-NOT-EXEMPT",
+			"type": "anyparse.macro.WriterArrowValueIfLowering",
+			"method": "arrowValueIfValueWidthExpr",
+			"find": "_vwBreak || _vwOk",
+			"replace": "_vwOk",
+			"note": "a forced-break value no longer exempts its chain from the width cap, so a wide plain value beside a switch re-ladders the chain"
+		},
+		{
+			"name": "M-VIF-WIDTH-TAIL-BREAK-UNSEEN",
+			"type": "anyparse.macro.WriterArrowValueIfLowering",
+			"method": "arrowValueIfValueWidthExpr",
+			"find": "if (_vwW < 0) _vwBreak = true;",
+			"replace": "",
+			"note": "a switch as the final else value is not noticed as a forced break, so a wide member value beside it re-ladders the chain"
+		},
+		{
 			"name": "M-COND-BODY-SOURCE-SEP",
 			"type": "anyparse.macro.TriviaTryparseLowering",
 			"method": "triviaTryparseSepCascadeExpr",

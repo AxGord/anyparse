@@ -938,9 +938,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	@:access(anyparse.macro.WriterLowering)
 	private static function triviaTryparseWriterOptExpr(flatChildOptPairs: Null<Array<Array<String>>>, propagateExprPosition: Bool): Expr {
 		final hasFlatChildOpt: Bool = flatChildOptPairs != null && flatChildOptPairs.length > 0;
-		return if (!hasFlatChildOpt && !propagateExprPosition)
-			macro opt;
-		else if (propagateExprPosition) {
+		return if (!hasFlatChildOpt && !propagateExprPosition) macro opt; else if (propagateExprPosition) {
 			// Wrap each `macro` expression in parens — array-literal `,` after
 			// a `macro final ... = ...` reification fragment otherwise mis-parses
 			// (the parser treats `macro` as a variable name in the next element).
@@ -981,9 +979,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 			);
 		inline function pred(flagName: String): Expr
 			return fit ? buildCaseBodyFitPredicate(flagName) : buildCaseBodyFlagPredicate(flagName);
-		return if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
-			macro false;
-		else if (caseBodyFlagNames.length == 1) {
+		return if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0) macro false; else if (caseBodyFlagNames.length == 1) {
 			pred(caseBodyFlagNames[0]);
 		} else {
 			final stmtPred: Expr = pred(caseBodyFlagNames[0]);

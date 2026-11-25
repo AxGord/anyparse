@@ -149,8 +149,7 @@ final class MoveToHelperTypes {
 			var from: Int = cut.from;
 			while (from > 0 && SourceText.isSpace(source.fastCodeAt(from - 1))) from--;
 			{ span: new Span(from, source.length), text: '\n' };
-		} else
-			{ span: cut, text: '' } ];
+		} else { span: cut, text: '' } ];
 	}
 
 	private static function isBlank(source: String, from: Int, to: Int): Bool {

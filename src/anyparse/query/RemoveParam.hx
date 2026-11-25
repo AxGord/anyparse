@@ -201,9 +201,7 @@ final class RemoveParam {
 		if (targetSpan == null) return;
 		final target: Span = targetSpan;
 
-		final range: Null<Span> = if (n == 1)
-			new Span(target.from, target.to);
-		else if (index == 0) {
+		final range: Null<Span> = if (n == 1) new Span(target.from, target.to); else if (index == 0) {
 			final nextSpan: Null<Span> = slots[1].span;
 			nextSpan == null ? null : new Span(target.from, nextSpan.from);
 		} else {
