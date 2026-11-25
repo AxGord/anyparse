@@ -251,9 +251,9 @@
 			"name": "M-ULB-INTERP-BLIND",
 			"type": "anyparse.check.common.loops.UnusedLoopBinder",
 			"method": "unread",
-			"find": "return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));",
-			"replace": "return true;",
-			"note": "occurrences are never accounted for, so a `$i` interpolation read and anything else the tree hides is renamed away"
+			"find": " || interpolates(body, name, shape.stringInterpIdentKind)",
+			"replace": "",
+			"note": "a `$i` interpolation read has no code word for the token reader, so the tree's interpolation node is the only thing that keeps the binder"
 		},
 		{
 			"name": "M-ULB-INTERP-LITERAL-BLIND",
@@ -276,7 +276,7 @@
 			"type": "anyparse.check.common.loops.UnusedLoopBinder",
 			"method": "unread",
 			"find": [
-				"if (CondRegionScan.opaqueCondRegionMentioning(body, ctx.source, name, ctx.s.shape) != null) return false;",
+				"if (CondRegionScan.opaqueCondRegionMentioning(body, ctx.source, name, shape) != null) return false;",
 				"return occurrences.foreach(at -> covered.contains(at) && !OccurrenceScan.offsetWithinAny(at, ctx.strings));"
 			],
 			"replace": [

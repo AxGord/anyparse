@@ -14,6 +14,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TokenSpans;
 import anyparse.query.TypeInfoProvider;
 
 /** The grammar seams the check reads. */
@@ -391,14 +392,15 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 	 * "What counts as a read". Every uncertainty answers false.
 	 */
 	private static function unread(ctx: FileCtx, name: String, body: QueryNode, bodySpan: Span): Bool {
-		if (CondRegionScan.opaqueCondRegionMentioning(body, ctx.source, name, ctx.s.shape) != null) return false;
-		if (hazardMentions(ctx, body, name)) return false;
+		final shape: RefShape = ctx.s.shape;
+		if (CondRegionScan.opaqueCondRegionMentioning(body, ctx.source, name, shape) != null) return false;
+		if (hazardMentions(ctx, body, name) || interpolates(body, name, shape.stringInterpIdentKind)) return false;
 		final occurrences: Array<Int> = occurrencesIn(ctx, name, bodySpan);
 		if (occurrences.length == 0) return true;
 		final covered: Array<Int> = [];
 		// A reification or an interpolation hides its reads from the tree, so an occurrence
 		// the hits do not account for, or one inside an interpolating literal, is a read.
-		for (hit in Refs.find(name, ctx.root, ctx.s.shape)) if (within(hit.span, bodySpan)) {
+		for (hit in Refs.find(name, ctx.root, shape)) if (within(hit.span, bodySpan)) {
 			if (hit.kind == RefKind.Decl) {
 				final token: Null<Span> = OccurrenceScan.binderTokenSpan(ctx.source, hit.span.from, hit.span.to, name);
 				if (token != null) covered.push(token.from);
@@ -453,16 +455,21 @@ final class UnusedLoopBinder extends RuleBase implements DefaultOff {
 	 * simple name: outside comments and inert literals, and not the member tail of a dotted access.
 	 */
 	private static function occurrencesIn(ctx: FileCtx, name: String, span: Span): Array<Int> {
-		final out: Array<Int> = [];
-		var at: Int = ctx.source.indexOf(name, span.from);
-		while (at >= 0 && at + name.length <= span.to) {
-			if (
-				OccurrenceScan.referencedUnqualifiedInRange(ctx.source, name, at, at + name.length, ctx.fieldNames, ctx.comments, ctx.inert)
-			)
-				out.push(at);
-			at = ctx.source.indexOf(name, at + 1);
-		}
-		return out;
+		return [
+			for (at in TokenSpans.codeWordOffsets(ctx.source, span.from, span.to, name, ctx.plugin))
+				if (OccurrenceScan.referencedUnqualifiedInRange(
+					ctx.source, name, at, at + name.length, ctx.fieldNames, ctx.comments, ctx.inert
+				))
+					at
+		];
+	}
+
+	/**
+	 * Whether the subtree holds a `$name` string-interpolation read of `name`. The token reader sees no code
+	 * word there (the `$` form has no hole), so only the tree can answer it; it is a read however the binder resolves.
+	 */
+	private static function interpolates(node: QueryNode, name: String, interpKind: Null<String>): Bool {
+		return (node.kind == interpKind && node.name == name) || node.children.exists(c -> interpolates(c, name, interpKind));
 	}
 
 }

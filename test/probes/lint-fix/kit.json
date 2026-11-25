@@ -3413,6 +3413,70 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "HW1",
+			"note": "prefer-typed-throw: a blocking catch clause written as code inside a string-interpolation hole still degrades the thrower to report-only",
+			"argv": [
+				"hxq",
+				"lint",
+				"C.hx",
+				"H.hx",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"C.hx": "class C {\n\n\tpublic function f():Void {\n\t\tthrow 'boom';\n\t}\n\n}\n",
+				"H.hx": "class H {\n\n\tpublic function g():String {\n\t\treturn '${try h() catch (e:String) \"x\"}';\n\t}\n\n\tfunction h():String return 'a';\n\n}\n",
+				"Main.hx": "class Main {\n\tstatic function main() {}\n}\n",
+				"apq.json": "{\"rules\":{\"unused-loop-binder\":true,\"unused-private\":true,\"prefer-typed-throw\":true}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "efbf36a41bbe6268",
+				"err": "4a8fa1e78b9755b4",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "HW2",
+			"note": "prefer-typed-throw: a blocking catch clause that only a comment spells is no handler, so the thrower is not degraded to report-only",
+			"argv": [
+				"hxq",
+				"lint",
+				"C.hx",
+				"D.hx",
+				"--all",
+				"--no-oracle"
+			],
+			"files": {
+				"C.hx": "class C {\n\n\tpublic function f():Void {\n\t\tthrow 'boom';\n\t}\n\n}\n",
+				"D.hx": "class D {\n\n\t// try h() catch (e:String) {}\n\tpublic function g():Void {}\n\n}\n",
+				"Main.hx": "class Main {\n\tstatic function main() {}\n}\n",
+				"apq.json": "{\"rules\":{\"unused-loop-binder\":true,\"unused-private\":true,\"prefer-typed-throw\":true}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "dd46c84ad74bf273",
+				"err": "ad3986186e70b85c",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

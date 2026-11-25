@@ -496,6 +496,14 @@
 			"find": "colon: offsetIn(NodeTokens.firstSpelling(catchNode, source, ':'), start),",
 			"replace": "colon: header.indexOf(':'),",
 			"note": "the header text is searched for its first colon again, so a colon inside a comment of the header splits the parameter and a raw catch-all goes unflagged"
+		},
+		{
+			"name": "M-TYPEDTHROW-CATCH-HOLE-UNSEEN",
+			"type": "anyparse.check.common.types.PreferTypedThrow",
+			"method": "sourceHasBlockingCatch",
+			"find": "for (at in TokenSpans.codeWordOffsets(source, 0, source.length, CATCH_KEYWORD, plugin)) {",
+			"replace": "for (at in plugin.tokenSpans(source, 0, source.length).filter(t -> TokenSpans.spellsWord(t, source, CATCH_KEYWORD)).map(t -> t.from)) {",
+			"note": "only top-level tokens are searched for a catch clause, so one written as code inside a string-interpolation hole no longer degrades the rule and its boxing fix makes that handler stop matching"
 		}
 	]
 }

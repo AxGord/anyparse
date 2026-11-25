@@ -307,9 +307,9 @@
 		{
 			"name": "M-QUALIFIED-CONSTRUCTION-UNSEEN",
 			"type": "anyparse.check.common.unused.UnusedPrivate",
-			"method": "precededByNew",
-			"find": "while (j >= 0 && source.fastCodeAt(j) == '.'.code) {",
-			"replace": "while (false) {",
+			"method": "isQualifierRun",
+			"find": "if (spans.length % 2 != 0) return false;",
+			"replace": "if (spans.length != 0) return false;",
 			"note": "a qualified `new pkg.Type()` is not a construction of `Type`, so a private constructor only built that way is deleted"
 		},
 		{
@@ -414,6 +414,34 @@
 			"method": "importTarget",
 			"force": "null",
 			"note": "an `import C in B` alias binds nothing, so the owner read as a value under `B` is ignored"
+		},
+		{
+			"name": "M-INSTANTIATION-TEXT-COUNTED",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "containsInstantiation",
+			"find": [
+				"final starts: Array<Int> = TokenSpans.codeWordOffsets(source, 0, source.length, className, plugin);",
+				"final news: Array<Int> = TokenSpans.codeWordOffsets(source, 0, source.length, 'new', plugin);"
+			],
+			"replace": [
+				"final starts: Array<Int> = [ for (k in 0...source.length) if (source.substr(k, className.length) == className) k ];",
+				"final news: Array<Int> = [ for (k in 0...source.length) if (source.substr(k, 3) == 'new') k ];"
+			],
+			"note": "a construction written in a comment or a string counts as one, so a private constructor nothing builds is kept"
+		},
+		{
+			"name": "M-INSTANTIATION-HOLE-UNSEEN",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "containsInstantiation",
+			"find": [
+				"final starts: Array<Int> = TokenSpans.codeWordOffsets(source, 0, source.length, className, plugin);",
+				"final news: Array<Int> = TokenSpans.codeWordOffsets(source, 0, source.length, 'new', plugin);"
+			],
+			"replace": [
+				"final starts: Array<Int> = plugin.tokenSpans(source, 0, source.length).filter(t -> TokenSpans.spellsWord(t, source, className)).map(t -> t.from);",
+				"final news: Array<Int> = plugin.tokenSpans(source, 0, source.length).filter(t -> TokenSpans.spellsWord(t, source, 'new')).map(t -> t.from);"
+			],
+			"note": "only top-level tokens are searched, so a construction written as code inside a string-interpolation hole counts for nothing and a private constructor only built there is reported"
 		}
 	]
 }

@@ -359,6 +359,33 @@ class PreferTypedThrowCheckTest extends Test {
 		Assert.isTrue(vs[0].declineReason == null, 'nothing declined this finding, got: ${vs[0].declineReason}');
 	}
 
+	/** A `catch (e:String)` written only in a comment or a string is no handler, so the gate does not degrade. */
+	@:pin('guard')
+	public function testCatchClauseInACommentOrStringDoesNotDegrade(): Void {
+		final handler: String = 'class D {\n\n\t// try h() catch (e:String) {}\n\tpublic function g():Void {\n'
+			+ '\t\tfinal s: String = \'catch (e:String)\';\n\t}\n\n}\n';
+		final check: PreferTypedThrow = new PreferTypedThrow();
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: THROWER }, { file: 'D.hx', source: handler }]
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'not degraded, got: ${vs[0].message}');
+	}
+
+	/** A `catch (e:String)` written as CODE inside a string-interpolation hole is a handler: the gate still degrades. */
+	@:pin('control')
+	@:killer('M-TYPEDTHROW-CATCH-HOLE-UNSEEN')
+	public function testCatchClauseInAnInterpolationHoleStillDegrades(): Void {
+		final handler: String = 'class H {\n\n\tpublic function g():String {\n\t\treturn \'$${try h() catch (e: String) "x"}\';\n\t}\n\n'
+			+ '\tfunction h():String return \'a\';\n\n}\n';
+		final check: PreferTypedThrow = new PreferTypedThrow();
+		final vs: Array<Violation> = CheckFixture.violationsIn(
+			check, [{ file: 'C.hx', source: THROWER }, { file: 'H.hx', source: handler }]
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'degraded, got: ${vs[0].message}');
+	}
+
 	private function scopedPlugin(
 		report: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>
 	): CachingGrammarPlugin {

@@ -16,12 +16,11 @@ import anyparse.query.OracleProviders;
 import anyparse.query.ParseGate;
 import anyparse.query.RefactorSupport;
 import anyparse.query.ShapeVocab;
-import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TokenSpans;
 import anyparse.query.TypeRefIndex;
 import anyparse.query.TypeResolver;
 
-using anyparse.util.Strings;
 using StringTools;
 
 /**
@@ -232,7 +231,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		for (c in ctorCandidates) if (
 			!index.text.skippedMayReference(c.className)
 			&& !index.subtypes.hasSubtype(c.className, c.file)
-			&& !isInstantiatedAnywhere(c.className, files)
+			&& !isInstantiatedAnywhere(c.className, files, plugin)
 			&& !mentionedInStrings(c.className, reflected)
 			&& !usedAsValue(c.className, files, plugin, index)
 			&& !isAliased(c.className, scopeIndex)
@@ -823,8 +822,10 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	}
 
 	/** Whether `className` is instantiated (`new ClassName`) anywhere in the file set. */
-	private static function isInstantiatedAnywhere(className: String, files: Array<{ file: String, source: String }>): Bool {
-		return files.exists(entry -> containsInstantiation(entry.source, className));
+	private static function isInstantiatedAnywhere(
+		className: String, files: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+	): Bool {
+		return files.exists(entry -> containsInstantiation(entry.source, className, plugin));
 	}
 
 	/**
@@ -865,43 +866,30 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 	}
 
 	/**
-	 * Raw-text scan for `new ClassName` in `source`: an occurrence of `className` at
-	 * an identifier boundary, immediately preceded (past whitespace) by the `new`
-	 * keyword. Sees inside `#if` regions (unlike the AST walkers), so a
-	 * conditionally-compiled instantiation is not missed.
+	 * Whether `source` writes `new ClassName` as code: a code word `className` whose nearest earlier code word `new`
+	 * is separated from it by nothing but a `pkg.` qualifier. Read from the token stream, so it sees inside `#if` regions
+	 * and unparseable files (unlike the AST walkers) and a mention in a comment or string never counts.
 	 */
-	private static function containsInstantiation(source: String, className: String): Bool {
-		final len: Int = className.length;
-		if (len == 0) return false;
-		var i: Int = 0;
-		while (i + len <= source.length) {
-			final at: Int = source.indexOf(className, i);
-			if (at < 0) return false;
-			final afterIdx: Int = at + len;
-			final beforeOk: Bool = at == 0 || !source.fastCodeAt(at - 1).isIdentChar();
-			final afterOk: Bool = afterIdx >= source.length || !source.fastCodeAt(afterIdx).isIdentChar();
-			if (beforeOk && afterOk && precededByNew(source, at)) return true;
-			i = at + 1;
-		}
-		return false;
+	private static function containsInstantiation(source: String, className: String, plugin: GrammarPlugin): Bool {
+		final starts: Array<Int> = TokenSpans.codeWordOffsets(source, 0, source.length, className, plugin);
+		if (starts.length == 0) return false;
+		final news: Array<Int> = TokenSpans.codeWordOffsets(source, 0, source.length, 'new', plugin);
+		return starts.exists(at -> {
+			final nearest: Null<Int> = news.filter(n -> n + 'new'.length <= at).pop();
+			return nearest != null && isQualifierRun(source, nearest + 'new'.length, at, plugin);
+		});
 	}
 
 	/**
-	 * Whether the token ending just before `pos` (past whitespace, and past a package / module qualifier `pkg.sub.`) is the
-	 * `new` keyword at a word boundary — `new pkg.Type()` constructs `Type` as surely as `new Type()`.
+	 * Whether the tokens in `[from, to)` are `pkg.sub.` — each a word followed by a dot, or none — so `new pkg.Type()`
+	 * constructs `Type` as surely as `new Type()`.
 	 */
-	private static function precededByNew(source: String, pos: Int): Bool {
-		final kw: String = 'new';
-		var j: Int = skipWhitespaceBack(source, pos - 1);
-		while (j >= 0 && source.fastCodeAt(j) == '.'.code) {
-			j = skipWhitespaceBack(source, j - 1);
-			while (j >= 0 && source.fastCodeAt(j).isIdentChar()) j--;
-			j = skipWhitespaceBack(source, j);
-		}
-		final start: Int = j + 1 - kw.length;
-		if (start < 0) return false;
-		for (k in 0...kw.length) if (source.fastCodeAt(start + k) != kw.fastCodeAt(k)) return false;
-		return start == 0 || !source.fastCodeAt(start - 1).isIdentChar();
+	private static function isQualifierRun(source: String, from: Int, to: Int, plugin: GrammarPlugin): Bool {
+		final spans: Array<TokenSpan> = plugin.tokenSpans(source, from, to);
+		if (spans.length % 2 != 0) return false;
+		for (k => span in spans) if (k % 2 == 0 ? span.kind != TokenKind.Word : source.substr(span.from, span.to - span.from) != '.')
+			return false;
+		return true;
 	}
 
 	/**
@@ -1017,13 +1005,6 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 		return index == null
 			? MemberKinds.isSideEffectFree.bind(_, shape)
 			: TypeResolver.isDeletionPure.bind(_, tree, shape, RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? [], index);
-	}
-
-	/** The last index at or before `j` that is not whitespace, or -1. */
-	private static function skipWhitespaceBack(source: String, j: Int): Int {
-		var at: Int = j;
-		while (at >= 0 && SourceText.isSpace(source.fastCodeAt(at))) at--;
-		return at;
 	}
 
 }

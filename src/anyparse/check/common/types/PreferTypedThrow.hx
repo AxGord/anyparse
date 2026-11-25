@@ -8,11 +8,11 @@ import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
 import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TokenSpans;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
 
 using anyparse.util.Groups;
-using anyparse.util.Strings;
 
 /** The resolved grammar seams of one `prefer-typed-throw` run — read once per `run` / `fix` rather than per node. */
 private typedef Seams = {
@@ -58,7 +58,7 @@ private typedef Seams = {
  * `IndexScope.resolutionIndexOf`): if ANY `catch` clause there is typed one of those
  * names, the rule DEGRADES WHOLESALE to report-only — every finding keeps its diagnostic, no
  * finding gets an edit. A source the index could not PARSE is scanned like any
- * other — the gate is textual and the index retains its bytes — so a skipped project file
+ * other — the gate is lexical and the index retains its bytes — so a skipped project file
  * degrades only when its own text carries such a clause. The `Cli` fixed-point loop lists this
  * rule in
  * `fullScopeIds` so a later pass sees every file rather than the changed subset. With NO
@@ -235,52 +235,43 @@ final class PreferTypedThrow extends RuleBase implements DefaultOff {
 	 * run-wide for one unreadable file that may hold no `catch` at all.
 	 */
 	private static function catchAllInScope(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, seams: Seams): Bool {
-		for (entry in files) if (sourceHasBlockingCatch(entry.source, seams.blockingCatchTypes)) return true;
+		for (entry in files) if (sourceHasBlockingCatch(entry.source, seams.blockingCatchTypes, plugin)) return true;
 		final index: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin);
 		if (index == null) return false;
 		final scanned: Map<String, Bool> = [ for (entry in files) entry.file => true ];
 		// A source the index could not PARSE never enters `allFiles` — but this gate never wanted a
-		// parse. `sourceHasBlockingCatch` is a text scan and the builder RETAINS a skipped file's raw
+		// parse. `sourceHasBlockingCatch` is a token scan and the builder RETAINS a skipped file's raw
 		// source, so the clause question is asked of it exactly as of every other file. The `null`
 		// arm is the builder's contract restated, not a live case: `extract` stores the source before
 		// its `tree == null` bail, so a retained-nowhere source cannot occur. A std source is out of
 		// reach either way, and a skipped REPORT file was already read by the loop at the top.
 		for (skipped in index.skippedFiles()) if (!scanned.exists(skipped) && !StdResolver.isStdFile(skipped)) {
 			final skippedSource: Null<String> = index.sourceOf(skipped);
-			if (skippedSource == null || sourceHasBlockingCatch(skippedSource, seams.blockingCatchTypes)) return true;
+			if (skippedSource == null || sourceHasBlockingCatch(skippedSource, seams.blockingCatchTypes, plugin)) return true;
 		}
 		for (info in index.allFiles()) if (!scanned.exists(info.file) && !StdResolver.isStdFile(info.file)) {
 			final src: Null<String> = index.sourceOf(info.file);
-			if (src != null && sourceHasBlockingCatch(src, seams.blockingCatchTypes)) return true;
+			if (src != null && sourceHasBlockingCatch(src, seams.blockingCatchTypes, plugin)) return true;
 		}
 		return false;
 	}
 
 	/**
-	 * Whether `source` textually carries a `catch (<name>:<T>)` whose `T` reduces to a
-	 * `blocking` nominal. A word-boundary `catch` token, the next `(`, its matching `)` and
-	 * the nominal after the first `:` — no parse (see the class doc for why, and why an
-	 * over-match is the safe direction). A clause with no `:` (an untyped `catch (e)`) or a
-	 * non-nominal type (a function type / generics) yields no name and never blocks.
+	 * Whether `source` carries a `catch (<name>:<T>)` whose `T` reduces to a `blocking` nominal.
+	 * A `catch` token, the next `(`, its first `)` and the nominal after the first `:`, all read
+	 * from the lexical token stream — no parse, so a skipped source answers like any other (see the
+	 * class doc). A clause with no `:` (an untyped `catch (e)`) or a non-nominal type (a function
+	 * type / generics) yields no name and never blocks.
 	 */
-	private static function sourceHasBlockingCatch(source: String, blocking: Array<String>): Bool {
-		final n: Int = source.length;
-		var i: Int = 0;
-		while (i < n) {
-			final at: Int = source.indexOf(CATCH_KEYWORD, i);
-			if (at < 0) return false;
-			i = at + CATCH_KEYWORD.length;
-			if (at > 0 && source.fastCodeAt(at - 1).isIdentChar()) continue;
-			if (i < n && source.fastCodeAt(i).isIdentChar()) continue;
-			var open: Int = i;
-			while (open < n && source.isSpace(open)) open++;
-			if (open >= n || source.fastCodeAt(open) != '('.code) continue;
-			final close: Int = source.indexOf(')', open);
+	private static function sourceHasBlockingCatch(source: String, blocking: Array<String>, plugin: GrammarPlugin): Bool {
+		for (at in TokenSpans.codeWordOffsets(source, 0, source.length, CATCH_KEYWORD, plugin)) {
+			final texts: Array<String> = TokenSpans.texts(source, plugin.tokenSpans(source, at, source.length));
+			if (texts.length < 2 || texts[1] != '(') continue;
+			final close: Int = texts.indexOf(')', 2);
 			if (close < 0) return false;
-			final inner: String = source.substring(open + 1, close);
-			final colon: Int = inner.indexOf(':');
-			if (colon < 0) continue;
-			final name: Null<String> = TypeResolver.simpleNominalName(inner.substring(colon + 1));
+			final colon: Int = texts.indexOf(':', 2);
+			if (colon < 0 || colon > close) continue;
+			final name: Null<String> = TypeResolver.simpleNominalName(texts.slice(colon + 1, close).join(''));
 			if (name != null && blocking.contains(name)) return true;
 		}
 		return false;
