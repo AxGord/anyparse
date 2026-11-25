@@ -29,6 +29,8 @@ final class TrackedWorkflowRoutesTest extends Test {
 		'the command of review_lock is `true`: its error route exists only because the engine requires one, and keeps the mode already set';
 	private static inline final FLAGS_ACCUMULATE: String = 'an accumulator: a failed round reads the flags an earlier round or the parent left; '
 		+ 'worker_end sets them from a finished worker only';
+	private static inline final DESIGN_MARKER_ONLY: String = 'reads the verdict only for a `design=yes` marker, which the recorded verdict '
+		+ 'never carries: a stale value from an earlier round answers the same';
 	private static inline final LAST_REPORT: String =
 		'prints the last successful sync report; the failure prompts carry the live output of the failing step as {{stdout}}';
 	private static inline final CAME_FROM_TEXT: String =
@@ -53,6 +55,7 @@ final class TrackedWorkflowRoutesTest extends Test {
 		'slice-pipeline.yaml:land/land_table/mark_landed' => HAND_LANDED,
 		'slice-pipeline.yaml:review_lock/lock_mode/sweep_lock' => LOCK_MODE_KEPT,
 		'slice-pipeline.yaml:review_lock/lock_mode/sweep_next' => LOCK_MODE_KEPT,
+		'slice-pipeline.yaml:review_end/verdict/review_route' => DESIGN_MARKER_ONLY,
 		'slice-pipeline.yaml:worker_end/gate_flags/decided' => FLAGS_ACCUMULATE,
 		'slice-pipeline.yaml:worker_end/gate_flags/fixes' => FLAGS_ACCUMULATE,
 		'slice-pipeline.yaml:worker_end/gate_flags/gate_fix' => FLAGS_ACCUMULATE,
@@ -129,6 +132,41 @@ final class TrackedWorkflowRoutesTest extends Test {
 		utest.Assert.isFalse(WorkflowRoutes.reads(ask, 'lock_note'), 'no context key stands between the lock and the ask');
 		final stray: Null<WorkflowState> = states['land_stray'];
 		utest.Assert.isTrue(stray != null && stray.text.contains('{{stdout}}'), 'the stray-files ask prints the land output');
+	}
+
+	/** The verdict is read by `review_end` from the review session's record; no reviewer message carries a route to land. */
+	public function testOnlyARecordedVerdictLeavesTheReviewForLandFixesOrReject(): Void {
+		final states: Map<String, WorkflowState> = WorkflowRoutes.statesOf(PIPELINE);
+		final end: Null<WorkflowState> = states['review_end'];
+		final branch: Null<WorkflowState> = states['review_branch'];
+		if (end == null || branch == null) {
+			utest.Assert.fail('review_end and review_branch exist');
+			return;
+		}
+		utest.Assert.equals('review_branch', WorkflowRoutes.nextOf(end, 0));
+		utest.Assert.equals('review_running', WorkflowRoutes.nextOf(end, 3));
+		utest.Assert.equals('review_dead', WorkflowRoutes.nextOf(end, 4));
+		utest.Assert.equals('review_dead', WorkflowRoutes.nextOf(end, 99));
+		utest.Assert.equals('land', WorkflowRoutes.nextOf(branch, 0));
+		utest.Assert.equals('fixes', WorkflowRoutes.nextOf(branch, 1));
+		utest.Assert.equals('reject', WorkflowRoutes.nextOf(branch, 2));
+		utest.Assert.equals('review_dead', WorkflowRoutes.nextOf(branch, 4));
+		final dead: Null<WorkflowState> = states['review_dead'];
+		utest.Assert.isTrue(
+			dead != null && dead.text.contains('set: {reviewer_agent: ""}'),
+			'a dead review is redone by a fresh reviewer: respawn clears the warm-round marker review_route reads'
+		);
+		for (name in ['review', 'review_spawn', 'review_warm']) {
+			final state: Null<WorkflowState> = states[name];
+			if (state == null) {
+				utest.Assert.fail('$name exists');
+				continue;
+			}
+			for (verdictRoute in ['land', 'fixes', 'reject'])
+				utest.Assert.isFalse(
+					WorkflowRoutes.targetsOf(state).contains(verdictRoute), '$name must not route to $verdictRoute itself'
+				);
+		}
 	}
 
 	public function testAFreshLineGoesToReconRoute(): Void {

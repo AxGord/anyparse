@@ -439,9 +439,6 @@ states:
       light exec, runs inside that call); then ONE `transition` `started` with `set: {review_session: <its id>}` (the start reply's prompt is the reviewer's, not yours).
     transitions:
       started: review_route
-      land: land
-      fixes: fixes
-      reject: reject
 
   review_route:
     type: exec
@@ -477,15 +474,12 @@ states:
 
       Then `link_agent({session_id: "{{context.review_session}}", agent_id: <the id Agent returned>})`; context_set
       `reviewer_agent` = that id. END your turn on this pipeline.
-      On its notification (the last message carries the verdict; `status({session_id: "{{context.review_session}}",
-      key: "fixes"})` gives the fix list whole): ONE `transition` by the verdict with `set: {verdict: <MERGE|FIXES|REJECT>,
-      tokens_review: <digits only>}` (the notification's number is that agent's context size: it REPLACES the value, for
-      a fresh agent too). MERGE → `land`; FIXES → `fixes`; REJECT → `reject`. The keys ride on the transition (`set`):
-      written first, in the same call — never a separate context_set beside it in one parallel batch.
+      On its notification: ONE `transition` `reviewed` with `set: {tokens_review: <digits only>}` (the notification's number is
+      that agent's context size: it REPLACES the value, for a fresh agent too). Never a verdict: the engine reads it from the
+      review session's own record (the fix list: `status({session_id: "{{context.review_session}}", key: "fixes"})`), and
+      a reviewer message is no evidence that the session reached its terminal.
     transitions:
-      land: land
-      fixes: fixes
-      reject: reject
+      reviewed: review_end
 
   review_warm:
     full_on_revisit: true
@@ -498,17 +492,84 @@ states:
            that diff newly touches; do not re-read the unchanged slice. A parent call in {{context.wt}}-logs/decisions.md binds your verdict.
 
       and `link_agent({session_id: "{{context.review_session}}", agent_id: "{{context.reviewer_agent}}"})`. END your turn on this
-      pipeline. `no_verdict` (a fresh spawn) only for a reviewer that ended with no VERDICT line or no longer answers.
-      On its notification (the last message carries the verdict; `status({session_id: "{{context.review_session}}",
-      key: "fixes"})` gives the fix list whole): ONE `transition` by the verdict with `set: {verdict: <MERGE|FIXES|REJECT>,
-      tokens_review: <digits only>}` (the notification's number is that agent's context size: it REPLACES the value, for
-      a fresh agent too). MERGE → `land`; FIXES → `fixes`; REJECT → `reject`. The keys ride on the transition (`set`):
-      written first, in the same call — never a separate context_set beside it in one parallel batch.
+      pipeline. `no_verdict` (a fresh spawn) only for a reviewer that no longer answers.
+      On its notification: ONE `transition` `reviewed` with `set: {tokens_review: <digits only>}` (the notification's number is
+      that agent's context size: it REPLACES the value, for a fresh agent too). Never a verdict: the engine reads it from the
+      review session's own record (the fix list: `status({session_id: "{{context.review_session}}", key: "fixes"})`), and
+      a reviewer message is no evidence that the session reached its terminal.
     transitions:
-      land: land
-      fixes: fixes
-      reject: reject
+      reviewed: review_end
       no_verdict: review_spawn
+
+  review_end:
+    station: false
+    type: exec
+    # A verdict is the review session's recorded one: read from its state file at its terminal, never from the
+    # reviewer agent's last message (an agent that answered while its session still sat at an early state landed an unreviewed slice).
+    command: |-
+      case "$R" in ''|*[!0-9a-f]*) echo "refused review session id: '$R'"; exit 4;; esac
+      f="${STATE_DIR:-$HOME/.claude/workflow-state}/$R.json"
+      [ -f "$f" ] || { echo "review session $R has no session file $f"; exit 4; }
+      node -e '
+        const s = require(process.argv[1]);
+        const at = (s.stack[s.active_frame] || s.stack[s.stack.length - 1] || {}).current_state || "?";
+        const v = (s.context || {}).verdict;
+        if (s.outcome === "completed") {
+          if (v === "MERGE" || v === "FIXES" || v === "REJECT") { console.log(v); process.exit(0); }
+          console.log("review session " + s.session_id + " completed with no recorded verdict (state " + at + ")"); process.exit(4);
+        }
+        if (s.outcome) { console.log("review session " + s.session_id + " ended " + s.outcome + " at " + at); process.exit(4); }
+        console.log("review session " + s.session_id + " is still at " + at); process.exit(3);' "$f"
+    env:
+      R: "{{context.review_session}}"
+    timeout: 30000
+    context_set:
+      verdict: "{{stdout}}"
+    cases:
+      "0": review_branch
+      "3": review_running
+      "4": review_dead
+    default: review_dead
+
+  review_branch:
+    station: false
+    type: exec
+    # Exec context_set lands only on exit 0, so the recorded verdict is stored by review_end and routed here.
+    command: |-
+      case "$VERDICT" in MERGE*) exit 0;; FIXES*) exit 1;; REJECT*) exit 2;; esac
+      echo "no recorded verdict to route: '$VERDICT'"; exit 4
+    env:
+      VERDICT: "{{context.verdict}}"
+    timeout: 10000
+    cases:
+      "0": land
+      "1": fixes
+      "2": reject
+    default: review_dead
+
+  review_running:
+    max_visits: 8
+    on_exhausted: review_dead
+    prompt: |-
+      {{stdout}}
+      The review of {{context.slice}} has not reached its terminal, so it has no verdict. If the reviewer agent
+      `{{context.reviewer_agent}}` has already answered, SendMessage it once: «Your session {{context.review_session}} is not at its
+      terminal: `status({session_id: "{{context.review_session}}"})` and drive it to `finish` (the verdict goes through the
+      `done` transition, not through your message).» Then END your turn (`WAITING …`); on its notification transition
+      `recheck` — never `land`, `fixes` or `reject` by hand.
+    transitions:
+      recheck: review_end
+
+  review_dead:
+    prompt: |-
+      {{stdout}}
+      The review session {{context.review_session}} of {{context.slice}} ended or stalled with no recorded verdict
+      (`status({session_id: "{{context.review_session}}"})` gives its state and outcome). The slice is NOT reviewed:
+      `respawn` starts a NEW slice-review session and a FRESH reviewer that reads the whole slice, never the failed reviewer's warm
+      round: transition it with `set: {reviewer_agent: ""}` (review_route sends a non-empty one to review_warm). `stop` when it cannot be reviewed.
+    transitions:
+      respawn: review
+      stop: stopped
 
   fixes:
     full_on_revisit: true
