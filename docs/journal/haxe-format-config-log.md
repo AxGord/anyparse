@@ -552,3 +552,9 @@ A queue line with `repo:` + `workflow:` is already supported (engine lines use `
 - FX-G (parked, "fork == hxq on three trees" as a battery gate): the end state stands, its `after` list is stale. It cannot gate yet (no fork build in the
   battery; the client tree is private, so only anyparse + Pony could gate in a public repo) and the gap is 1775–1907 files on anyparse. Replace by a
   ratchet once the config blocker and the pins are in: the battery records fork ≠ hxq files per public tree and refuses an increase.
+
+### FX-HUG-SOLE-OBJECT-ELEMENT-FORK: `wrapping.soleObjectCuddledBrackets` in the fork
+
+Fork branch `fx/hug-sole-object-element` (commit `1703745`, cut from `fx/type-doc-emptylines`, never pushed). The key is a real fork key now (default off), not an ignored hxq-only one: in `MarkWrapping.arrayLiteralWrapping`, an array whose only element is an object literal (no comment between the brackets, no metadata) takes the object-break layout when `arrayWrap` would break around the element, and a fitting array stays flat. The marker walks inner tokens first, so `objectLiteralWrapping` has already marked the object when the array hook runs; the hook re-marks it one field per line, overwriting. Fork tests: `test/testcases/wrapping/sole_object_cuddled_brackets{,_refusals,_off}.hxtest` (var init, return, sole and non-last call argument, ternary branches, nested; comment, two elements, nested array, fitting; default off); `haxe test.hxml` green before and after.
+
+Reading, `57a6d173d~1` copies of the 206 `.hx` files the sweep touched, both formatters with `maxLineLength` 140 and only the key on: 372 hug blocks from `hxq fmt`, 379 from the fork, 340 text-identical (indentation normalised). The rest sit in the known families (the `+` continuation indent, the host call's own wrapping after `}]`, an object kept multiline because its source was); a fitting one-line object that `arrayWrap` still explodes (a first item over 80 columns) hugs in both.
