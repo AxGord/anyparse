@@ -4844,3 +4844,61 @@ Reading: the ranking is full-battery monolith (8.0%) and the docs-only-commit co
 - One day, 2.5 lands per hour: the lock share (30%) belongs to this load; in the baseline window the lock wait was 3.2% (all waits 7.0%).
 
 Verifier (round 2, FIXES): of the "other 3" whole-suite lands, two waited 201 and 218 s; in LINT-UNUSED-PUBLIC-SCAN-ONCE the suite is critical because lint had just dropped to 311 s. A docs-only commit is not provably result-neutral: `FmtFlagOwnershipTest` reads docs/strategies.md and `LandProseTest` handles CLAUDE.md, so a tolerated set must be a named list of paths no test reads.
+
+## FIX-ROUND-CAUSES (2026-11-25): what the review findings behind the fix rounds of the last 30 lands were
+
+### Evidence base and limits
+Reading of main at ae3d4a84a (pinned), the queue/archive notes and `.claude/backups/slice-logs/<ID>/`, 2026-11-25.
+- Window (corrected after verification): the 30 newest lands on first-parent main. The first script missed TEST-FIXTURE-CACHE-SINGLE (494fbaed6, `Review-Rounds: 1`): its queue note names the pre-rewrite sha 64889b5e9 ("Land sha rewritten 2026-11-25: 64889b5e9 -> 494fbaed6"). The window now holds it (0 rounds) and drops the oldest, FMT-ARROW-COMMENT-BEFORE-IF-BODY-REFUSED (1 round). Window = TEST-FIXTURE-CACHE-SINGLE and the 29 lands from FX-HUG-SOLE-OBJECT-ELEMENT-FORK (8323680b3) back to FMT-ARRAY-FIRST-OBJECT-ELEMENT-BREAKS-ALONE (b6ba837e6). Scripts: lands.js, band.js in the slice's logs dir; list last30.json (still holds FMT-ARROW; band.js applies the swap).
+- Fix rounds = (review count in the LANDED note) - 1 = the `Review-Rounds:` trailer (checked on 6 commits, and by the verifier on the whole window). Corrected sum: 17 fix rounds over 30 lands = 0.57 per land; 15 lands with none, 3 lands with two (FX-FORK-GAP-CENSUS, FMT-COMMENT-AFTER-LEAD-VAR-INIT-REFUSED, SWEEP-REGISTRY-FOLLOW-DECLINES-DECLTERN-ARMS).
+- Band (difficulty: from queue.yaml and queue.archive.yaml, band.js, same window): band 4-6 = 11 lands, 10 rounds, 0.91 per land (the baseline's 0.8 is of the same band; this window agrees with it rather than differing). Difficulty 7 = 8 lands, 7 rounds, 0.88. Difficulties 2, 3, 8 = 11 lands, 0 rounds.
+- What survives on disk per slice: the last review.md (it re-lists the previous round's fix items), plus decisions.md, handoff.md, open-items.txt, review-lessons.json, probe-additions.txt. The FIXES texts themselves are gone (slice branches deleted, worktrees and -logs cleaned). Items below are reconstructed from these. One round stays unknown: FMT-COMMENT-AFTER-LEAD-VAR-INIT-REFUSED r1 (handoff.md and the lesson FMT-AFTER-LEAD-PLAIN-SEAT-VALUE-UNNESTED point at the same adjacent-input family, unconfirmed). SWEEP r1 was recovered from SWEEP-REGISTRY-FOLLOW-DECLINES-DECLTERN-ARMS/decisions.md ("Review item 3: say so in the fix's output"). The item list of other rounds can be incomplete when the re-check summarised.
+- Not measured: the wall of one fix round (needs the event ledger, not on disk here); the baseline's 15% was not re-derived.
+
+### Classification of the 17 fix rounds
+Primary kind per round (the item that forced the round).
+| land | round | band | primary kind | items (reconstructed) | caught earlier by |
+|---|---|---|---|---|---|
+| FX-HUG-SOLE-OBJECT-ELEMENT-FORK | 1 | 4-6 | doc/report | dead `huggedObjects` field + guard (never fires); journal sentence false about mark order; report claim wrong | brief (claims from code reading); gate no (fork files non-canonical, lint skips them) |
+| FMT-EMPTYLINES-INSIDE-COND-REGION | 1 | 7 | real bug | macro class region read wrong knobs; doc/kind gaps not handed down (parent call in decisions.md); doc comment naming; missing pin (enum abstract); kit row missing. Also a stale base commit rode into land (lesson SLICE-GATE-SCRUB-SKIPS-STALE-BASE) | brief (adjacent host types); gate: scrub range |
+| FMT-HUG-SOLE-OBJECT-ELEMENT | 1 | 7 | real bug | committed glue under the sibling knob `soleItemCuddledBrackets` hit a non-object element in the real Pony config; missing pin; stray line in `hxq changed`; kit row missing | brief (probe real configs enabling a sibling knob; lesson SIBLING-KNOB-REAL-CONFIG-CHECK) |
+| FX-FORK-GAP-CENSUS | 1 | 4-6 | doc/report | report held none of the line's Output items (lesson RESEARCH-OUTPUT-CHECKLIST) | brief + done-check |
+| FX-FORK-GAP-CENSUS | 2 | 4-6 | doc/report | queued-line number wrong ('890 of 1023' vs the document's own tables) | brief (numbers copied from the tables) |
+| HAND-WORD-CENSUS | 1 | 4-6 | real bug (shape too loose) | false positives (Glob, MermaidText.isBare, PreferLpad, BuildFailure, DeclaredSortedLists); allow scope wrong (parent call: separate key `nameSearchAllow`) | brief for the first (read the census hits); the second a parent call |
+| HAND-WORD-CHECKS | 1 | 4-6 | real bug | catch clause inside an interpolation hole not seen; two control pins and kit rows HW1/HW2 missing | brief (interpolation holes are a known class) |
+| PIPELINE-LAND-NEEDS-REVIEW-TERMINAL | 1 | 4-6 | real bug | review_dead respawn re-warmed the failed reviewer (`set: {reviewer_agent: ""}`); pin | not by brief; gate no (workflow prompts have no run) |
+| HAND-TOKEN-SEPARATORS | 1 | 4-6 | missing test | trailing separator before the close not pinned (FnMember, Call, ArrayExpr, ObjectLit) | brief (pin every touched site) or gate (changed branch has a pin) |
+| FMT-COMPR-RECEIVER-BREAKS-FOR-LAMBDA | 1 | 7 | missing test | two untested branches of flatAskerRestStep; resolved by dropping them as unobservable | brief (an unpinned branch is dead or unproven); gate |
+| FMT-COMMENT-AFTER-LEAD-VAR-INIT-REFUSED | 1 | 7 | unknown | text not on disk | - |
+| FMT-COMMENT-AFTER-LEAD-VAR-INIT-REFUSED | 2 | 7 | real bug | mixed run (line comment then inline block) left the value unnested; pin | brief (comment-form matrix) |
+| HAND-RULE-MESSAGE | 1 | 4-6 | style/lint (project rule) | hand quote-strip and `textOf` read of a string literal where `Lit.plainStringValue` is the owner (no hand parsing); two missing control pins | brief (`hxq owner` first; rule is in CLAUDE.md) |
+| FMT-BRACE-LOOP-THEN-BEFORE-ELSE | 1 | 7 | real bug | wrapped then lost the `;` the else closed -> `Missing ;`; pin | brief (compile every probe output with haxe --no-output) |
+| SWEEP-REGISTRY-FOLLOW-DECLINES-DECLTERN-ARMS | 1 | 4-6 | wrong scope (parent call) | output the line asked for "in so many words" ("say so in the fix's output") was left out; the parent decided to add it in-slice | brief (each phrase of the line's text mapped to a place in the diff) |
+| SWEEP-REGISTRY-FOLLOW-DECLINES-DECLTERN-ARMS | 2 | 4-6 | missing test | CLI stderr lines of the re-aim unpinned (2 CLI tests + arms); docs row of cli-query-tool.md (follow-through of r1) | brief/gate (new user-visible output has a pin) |
+| FMT-ARRAY-FIRST-OBJECT-ELEMENT-BREAKS-ALONE | 1 | 7 | wrong scope | behaviour moved beyond the line (container array that fits moves whole after `=`, sole call argument; parent decision (a) restored it); report named wrong sites; two pins missing | brief (diff output on the repo's own tree vs base); partly a parent call |
+
+Tally of the 17 rounds by primary kind (main ae3d4a84a, 2026-11-25):
+| kind | rounds | of which band 4-6 |
+|---|---|---|
+| real bug (output wrong on an adjacent input) | 7 (FMT-EMPTY, FMT-HUG-SOLE, HAND-WORD-CENSUS, HAND-WORD-CHECKS, PIPELINE-LAND, FMT-COMMENT r2, FMT-BRACE) | 3 |
+| missing test | 3 (HAND-TOKEN-SEP, FMT-COMPR, SWEEP r2) | 2 |
+| doc / report claim wrong or incomplete | 3 (FX-HUG-FORK, FX-FORK-GAP r1, r2) | 3 |
+| wrong scope | 2 (SWEEP r1, FMT-ARRAY) | 1 |
+| style/lint (hand parsing instead of the owner) | 1 (HAND-RULE-MESSAGE) | 1 |
+| unknown (text lost) | 1 (FMT-COMMENT r1) | 0 |
+| total | 17 | 10 |
+Secondary items: a missing pin, arm or kit row is an item in 11 of the 16 known rounds (FMT-EMPTY, FMT-HUG, HAND-WORD-CHECKS, PIPELINE, HAND-TOKEN-SEP, FMT-COMPR, FMT-COMMENT r2, HAND-RULE, FMT-BRACE, SWEEP r2, FMT-ARRAY). A kit row for the adjacent input is an item in 3 rounds (FMT-EMPTY, FMT-HUG, HAND-WORD-CHECKS).
+Which rounds the gate could have caught: none of the 7 real bugs (the gate runs the existing suite, kits and lint; each bug was found by the reviewer's OWN new probe on an adjacent construct: macro class, Pony config, interpolation hole, mixed comment run, else-closing `;`). Gate-catchable: the stale-base scrub, and the pin-per-branch item if a row checks that each changed branch has a test. Parent calls not preventable by brief or gate: parts of 4 rounds (HAND-WORD-CENSUS allow scope, FMT-EMPTY doc handoff, SWEEP r1, FMT-ARRAY restore (a)).
+
+### Proposed brief / gate changes and expected cut
+Counts are of THIS window (17 rounds, 30 lands; band 4-6: 10 rounds, 11 lands); the cuts are estimates from the tally, not measured.
+1. Brief: an "adjacent inputs" table in the worker report. For every new or changed behaviour the worker lists the adjacent inputs it probed with the tip engine: sibling host types (macro class, enum abstract, abstract, interface), real configs that enable a sibling knob (Pony, repo hxformat.json), comment forms (line, inline block, mixed run), interpolation holes, multi-line bodies, a dangling `;` or `else`; each probe output compiled with `haxe --no-output`; each deviation becomes a kit row. Targets the 7 real-bug rounds. Expected: 2 to 4 removed.
+2. Brief + done-check: pin per new branch. The done-check lists the declarations and branches the diff adds (`hxq changed <base>..HEAD`) and each one's pin or arm; a branch with none is pinned or dropped (as FMT-COMPR did). Targets 3 missing-test rounds plus the pin items in 8 more. Expected: 2 to 3 removed.
+3. Brief: report claims. A number or mechanism sentence in the report or journal is copied from a command output or read from the code at the named line; a research report answers every Output item of the line with its place (lesson RESEARCH-OUTPUT-CHECKLIST); each phrase of the line's text ("in so many words") maps to a place in the diff (SWEEP r1). Targets 3 doc rounds and 1 scope round. Expected: 1 to 2 removed.
+4. Gate: scrub range starts at merge-base(main, HEAD), or the gate refuses a base not on main (lesson SLICE-GATE-SCRUB-SKIPS-STALE-BASE). 0 rounds in this window; protects land.
+5. Scope: the worker diffs the formatter output on the repo's own tree (or the kit) against base and states every file that moves outside the line's example (FMT-ARRAY, FMT-HUG-SOLE). Expected: 0 to 1 removed.
+6. Floor, not preventable: the workflow-prompt round (PIPELINE-LAND) and the parent calls named above.
+Expected result, all 30 lands: items 1 to 3 and 5 sum to 5 to 10 rounds removed (2-4, 2-3, 1-2, 0-1), leaving 7 to 12 of 17 = 0.23 to 0.40 per land (now 0.57). 0.40 itself is not "under 0.4"; the central case (7 removed, 10 left) is 0.33.
+Expected result, band 4-6 (the band the target is stated for; now 10 rounds over 11 lands = 0.91): under 0.4 means at most 4 rounds left, so at least 6 of 10 must go. Items 1 to 3 and 5 applied to that band's 10 rounds (3 real bug, 3 doc, 2 missing test, 1 scope, 1 style) remove 3 to 7 (0.27 to 0.64 left per land is 3 to 7 rounds over 11 lands: 0.27 to 0.64); the central case, 5 removed, leaves 5 rounds = 0.45. So under 0.4 in band 4-6 is reachable only at the upper end of the estimate and is NOT expected at the central case; the 0.57 all-lands figure falls under 0.4 more easily mostly because 11 lands of difficulty 2, 3 and 8 carry 0 rounds. The brief changes add worker report size and tokens (WORKER-CONTEXT-DIET just cut them); that the worker follows a longer checklist is not measured.
+
+Verifier (round 2, FIXES): 16 lands with no fix round, 11 with one, 3 with two (not 15). Of the 7 real bugs, 5 were found by the reviewer's own probe of an adjacent construct and 2 by reading (PIPELINE-LAND: the workflow prompt; HAND-WORD-CENSUS: the census hits); the gate caught none. FMT-COMMENT-AFTER-LEAD-VAR-INIT-REFUSED r1 is probably a real bug (a line-comment value left un-nested), inferred from the arms of 9eb214bfb, not read from review text.
