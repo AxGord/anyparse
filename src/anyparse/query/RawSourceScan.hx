@@ -88,6 +88,9 @@ final class RawSourceScan {
 	/** The last source `sourceCarriesAllowGrant` was asked about, or null before the first ask. */
 	private var _grantScanSource: Null<String>;
 
+	/** `nameOccursOutsideAll`'s whole-project word index, built on the first name asked; instance state of the run-scoped scan. */
+	private var _wordIndex: Null<SourceWordIndex>; // noqa: scratch-field
+
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
 	public function new(
 		files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>, plugin: GrammarPlugin, thirdParty: Map<String, Bool>,
@@ -197,6 +200,8 @@ final class RawSourceScan {
 	 * subtypes" proof needs, where the regions are a type declaration and each of its subtypes'.
 	 */
 	public function nameOccursOutsideAll(name: String, excluded: Map<String, Array<Span>>): Bool {
+		if (SourceWordIndex.indexable(name))
+			return wordIndex().occursOutside(name, excluded, file -> matchMaskFor(file, _sources[file] ?? ''));
 		for (file => src in _sources)
 			if (OccurrenceScan.referencedInRange(src, name, 0, src.length, excluded[file] ?? [], matchMaskFor(file, src))) return true;
 		return false;
@@ -414,6 +419,12 @@ final class RawSourceScan {
 		return src == null
 			|| OccurrenceScan.referencedInRange(src, name, 0, src.length, [])
 			|| fi.types.exists(t -> _traits.buildClosureSpells(t.name, file, name));
+	}
+
+	private function wordIndex(): SourceWordIndex {
+		final built: SourceWordIndex = _wordIndex ?? new SourceWordIndex(_sources);
+		_wordIndex = built;
+		return built;
 	}
 
 	/** Whether `c` can be part of an identifier — the word boundary `mentionsWord` tests against. */

@@ -17613,6 +17613,46 @@
 			"method": "ownCommaBeside",
 			"force": "null",
 			"note": "a list's own commas are never found beside an element, so cutting the first element leaves its separator behind and the list no longer parses"
+		},
+		{
+			"name": "M-WORDINDEX-RUN-UNSPLIT",
+			"type": "anyparse.query.SourceWordIndex",
+			"method": "addSource",
+			"find": "record(source.substring(i, end), fileIndex, i);",
+			"replace": "record(source.substring(i, i + 1), fileIndex, i);",
+			"note": "a run is recorded as its first character only, so a multi-character word is never found"
+		},
+		{
+			"name": "M-WORDINDEX-ESCAPE-TAIL-UNRECORDED",
+			"type": "anyparse.query.SourceWordIndex",
+			"method": "addSource",
+			"find": "if (tail < end && OccurrenceScan.interpolationEscapeBefore(source, tail))",
+			"replace": "if (false)",
+			"note": "the name after a numeric dollar escape is not recorded, so the index misses a read the text walk sees"
+		},
+		{
+			"name": "M-WORDINDEX-EXCLUDED-IGNORED",
+			"type": "anyparse.query.SourceWordIndex",
+			"method": "occursOutside",
+			"find": "!OccurrenceScan.offsetWithinAny(at, excluded[file] ?? []) && ",
+			"replace": "",
+			"note": "the excluded spans of a file no longer hide its own occurrences"
+		},
+		{
+			"name": "M-WORDINDEX-MASK-IGNORED",
+			"type": "anyparse.query.SourceWordIndex",
+			"method": "occursOutside",
+			"find": " && !OccurrenceScan.offsetWithinSorted(at, maskOf(file))",
+			"replace": "",
+			"note": "an occurrence inside the inert mask counts as a reference"
+		},
+		{
+			"name": "M-WORDINDEX-INDEXABLE-ANY",
+			"type": "anyparse.query.SourceWordIndex",
+			"method": "indexable",
+			"find": "if (!name.fastCodeAt(i).isIdentChar()) return false;",
+			"replace": "continue;",
+			"note": "a name with a non-identifier character is routed to the index, which cannot hold it"
 		}
 	]
 }

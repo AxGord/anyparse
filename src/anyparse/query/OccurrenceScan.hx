@@ -59,7 +59,7 @@ typedef ClassifiedOccurrence = { final span: Span; final kind: OccurrenceClass; 
 final class OccurrenceScan {
 
 	/** The numeric escapes that spell the interpolation trigger `$` (see `interpolationEscapeBefore`). */
-	private static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
+	public static final DOLLAR_ESCAPES: Array<String> = ['\\x24', '\\u0024'];
 
 	/**
 	 * Does `name` occur as a word-boundary identifier token within
@@ -481,6 +481,48 @@ final class OccurrenceScan {
 			&& !offsetWithinAny(j, commentRegions);
 	}
 
+	/**
+	 * Whether `offset` lies within any SORTED, non-overlapping span of `spans` — binary search over
+	 * the shape `inertRegions` / `GrammarPlugin.lexicalRegions` produce (source order, no overlaps).
+	 * `offsetWithinAny` stays linear for its own callers, where `excluded` / `commentRegions` is
+	 * typically a handful of spans; this one exists for a project-wide scan
+	 * (`RawSourceScan.nameOccursOutside`) that asks it once per OCCURRENCE against a mask that can
+	 * hold hundreds of entries for one large file.
+	 */
+	public static function offsetWithinSorted(offset: Int, spans: Array<Span>): Bool {
+		var lo: Int = 0;
+		var hi: Int = spans.length - 1;
+		while (lo <= hi) {
+			final mid: Int = (lo + hi) >> 1;
+			final s: Span = spans[mid];
+			if (offset < s.from)
+				hi = mid - 1;
+			else if (offset >= s.to)
+				lo = mid + 1;
+			else
+				return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether the text directly before `at` is a numeric escape spelling the
+	 * interpolation trigger `$` — `\x24` or `$`. A string literal's escapes are
+	 * DECODED before the interpolation scan runs over the result, so `'\x24name'` is a
+	 * read of `name` exactly as `'$name'` is; but the escape ends in a hex digit, which
+	 * the word-boundary test above reads as "still the same token" and would report as
+	 * NO reference — the one direction that costs a wrongly deleted binding.
+	 *
+	 * Deliberately spelling-based, not decode-based: this scan runs over raw source
+	 * with no idea which regions are string literals, so `'\\x24name'` (a literal
+	 * backslash, decoding to no `$` at all) also answers yes. That is the harmless
+	 * direction — an extra KEPT binding, the same over-counting the textual scan
+	 * already accepts for names inside comments.
+	 */
+	public static function interpolationEscapeBefore(source: String, at: Int): Bool {
+		return DOLLAR_ESCAPES.exists(e -> at >= e.length && source.substr(at - e.length, e.length) == e);
+	}
+
 	/** `region` to an `InertScan` reader in source order: its text spans, then each hole's own regions between them. */
 	private static function reportInert(region: LexRegion, onRegion: (start: Int, end: Int, literal: Bool) -> Void): Void {
 		final literal: Bool = switch region.kind {
@@ -548,48 +590,6 @@ final class OccurrenceScan {
 			i = at + 1;
 		}
 		return false;
-	}
-
-	/**
-	 * Whether `offset` lies within any SORTED, non-overlapping span of `spans` — binary search over
-	 * the shape `inertRegions` / `GrammarPlugin.lexicalRegions` produce (source order, no overlaps).
-	 * `offsetWithinAny` stays linear for its own callers, where `excluded` / `commentRegions` is
-	 * typically a handful of spans; this one exists for a project-wide scan
-	 * (`RawSourceScan.nameOccursOutside`) that asks it once per OCCURRENCE against a mask that can
-	 * hold hundreds of entries for one large file.
-	 */
-	private static function offsetWithinSorted(offset: Int, spans: Array<Span>): Bool {
-		var lo: Int = 0;
-		var hi: Int = spans.length - 1;
-		while (lo <= hi) {
-			final mid: Int = (lo + hi) >> 1;
-			final s: Span = spans[mid];
-			if (offset < s.from)
-				hi = mid - 1;
-			else if (offset >= s.to)
-				lo = mid + 1;
-			else
-				return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Whether the text directly before `at` is a numeric escape spelling the
-	 * interpolation trigger `$` — `\x24` or `$`. A string literal's escapes are
-	 * DECODED before the interpolation scan runs over the result, so `'\x24name'` is a
-	 * read of `name` exactly as `'$name'` is; but the escape ends in a hex digit, which
-	 * the word-boundary test above reads as "still the same token" and would report as
-	 * NO reference — the one direction that costs a wrongly deleted binding.
-	 *
-	 * Deliberately spelling-based, not decode-based: this scan runs over raw source
-	 * with no idea which regions are string literals, so `'\\x24name'` (a literal
-	 * backslash, decoding to no `$` at all) also answers yes. That is the harmless
-	 * direction — an extra KEPT binding, the same over-counting the textual scan
-	 * already accepts for names inside comments.
-	 */
-	private static function interpolationEscapeBefore(source: String, at: Int): Bool {
-		return DOLLAR_ESCAPES.exists(e -> at >= e.length && source.substr(at - e.length, e.length) == e);
 	}
 
 	private static function collectModulePathSpans(node: QueryNode, kinds: Array<String>, out: Array<Span>): Void {
