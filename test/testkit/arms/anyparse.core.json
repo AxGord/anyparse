@@ -1143,10 +1143,18 @@
 		{
 			"name": "M-FLAT-ASKER-FILL-FLAT",
 			"type": "anyparse.core.Renderer",
-			"method": "siblingRestStep",
-			"find": "sibling.flatAsker == true && renderCol >= 0 && items.length > 1",
-			"replace": "false",
+			"method": "flatAskerRestStep",
+			"find": "if (items.length < 2 || fitsFlat(sibling.width - penCol, 0, doc)) return null;",
+			"replace": "return null;",
 			"note": "a yielding group's second ask measures a fill flat, so an argument list that wraps on the hint's own line is no seam and the type hint breaks ahead of a call"
+		},
+		{
+			"name": "M-FLAT-ASKER-ARROW-FLAT",
+			"type": "anyparse.core.Renderer",
+			"method": "flatAskerRestStep",
+			"find": "if (renderCol + DocMeasure.flatTokenWidth(flatDoc) < n) return null;",
+			"replace": "return null;",
+			"note": "a yielding group's second ask measures a lambda's arrow body flat, so a fitting comprehension receiver opens its brackets instead of the lambda breaking after its arrow"
 		},
 		{
 			"name": "M-YIELDED-HINT-NOT-WHOLE",

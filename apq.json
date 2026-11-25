@@ -382,7 +382,7 @@
 		"orphan-accessor": true,
 		"oversized-type": {
 			"grants": [
-				"Renderer <= 70 members / 4100 lines: the Doc layout engine is ONE algorithm — 47 of its 48 non-hub members land in a single `hxq clusters` component (98%), because every fit probe, push and flush reads the same render state. S11 measured the only real seam, a 22-member width layer, and cutting it leaves 2383 lines behind.",
+				"Renderer <= 71 members / 4100 lines: the Doc layout engine is ONE algorithm — 47 of its 48 non-hub members land in a single `hxq clusters` component (98%), because every fit probe, push and flush reads the same render state. S11 measured the only real seam, a 22-member width layer, and cutting it leaves 2383 lines behind.",
 				"WrapList <= 114 members / 4660 lines: one wrapping decision table, 80 of 94 non-hub members in one component (85%). The members are arms of a single policy keyed by construct, not collaborating objects; splitting them by call edges would move the arms and leave the dispatch.",
 				"NullFlow <= 100 members: one MaybeNull lattice plus its transfer functions — 50 of 52 non-hub members in one component (96%). A flow-sensitive dataflow analysis has no seam that is not the lattice itself.",
 				"FactsView <= 152 members: the owned-types door to the compiler facts: 75 public questions, so no split reaches the member threshold without forwarders, and every member reads the same `_table` / `_scope` / `truth` (C2, re-measured).",

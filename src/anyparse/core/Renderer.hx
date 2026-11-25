@@ -4024,6 +4024,8 @@ class Renderer {
 	 *  - For the second ask of a group that yields to its rest (`flatAsker`) the
 	 *    columns are the flat layout's own, so a fill that does not fit from its
 	 *    column wraps on this very line, which ends after the fill's first item.
+	 *    Likewise a lambda's arrow-body probe whose body does not fit from its
+	 *    column breaks after the arrow whatever trails it, so the line ends there.
 	 *  - A `Flatten` / `HardFlatten` region renders flat whatever it holds, so
 	 *    nothing in it is a break point: it is measured without these rules.
 	 */
@@ -4041,11 +4043,9 @@ class Renderer {
 				IfNaturalFirstLineExceeds(_, _, _) if (sibling.glue != null && renderCol >= 0):
 				ungluedRestStep(node.doc, inner, sibling, renderCol, penCol);
 			case GroupWithRestProbe(innerDoc) if (renderCol >= 0): fitsFlat(sibling.width - penCol, 0, innerDoc) ? null : broken(innerDoc);
-			case Fill(items, sep, _), FillWithRestProbe(items, sep, _),
-				FillBreakAfterWrap(items, sep, _) if (sibling.flatAsker == true && renderCol >= 0 && items.length > 1):
-				fitsFlat(sibling.width - penCol, 0, node.doc)
-					? null
-					: { add: DocMeasure.flatTokenWidth(items[0]) + DocMeasure.flatTokenWidth(sep), aborted: true };
+			case Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _),
+				IfResidualLineExceeds(_, _, _) if (sibling.flatAsker == true && renderCol >= 0):
+				flatAskerRestStep(node.doc, inner, sibling, renderCol, penCol);
 			case IfWidthExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
 				renderCol + DocMeasure.flatTokenWidth(flatDoc) >= n ? broken(breakDoc) : null;
 			case IfFirstLineExceeds(n, breakDoc, flatDoc) if (renderCol >= 0):
@@ -4056,6 +4056,7 @@ class Renderer {
 			case IfFullLineExceeds(_, breakDoc, _) if (onPath && (!sibling.groupAsker || sibling.flatAsker == true)):
 				final open: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(breakDoc, false);
 				open.broke && findCollapseProbe(breakDoc) == null ? { add: open.width, aborted: true } : null;
+
 			case Flatten(innerDoc), HardFlatten(innerDoc):
 				final region: Array<{ doc: Doc, mode: Mode }> = [{ doc: innerDoc, mode: node.mode }];
 				var add: Int = 0;
@@ -4068,6 +4069,31 @@ class Renderer {
 				{ add: add, aborted: aborted };
 			case _: null;
 		};
+	}
+
+	/**
+	 * The `siblingRestStep` of a node under the second ask of a group that yields to its rest (`RestSibling.flatAsker`),
+	 * whose columns are the flat layout's own: a construct that does not fit from its column breaks on this very line,
+	 * whatever trails it, and ends it there. `null` measures the node flat.
+	 */
+	private static function flatAskerRestStep(
+		doc: Doc, inner: Array<{ doc: Doc, mode: Mode }>, sibling: RestSibling, renderCol: Int, penCol: Int
+	): Null<{ add: Int, aborted: Bool }> {
+		switch doc {
+			case Fill(items, sep, _), FillWithRestProbe(items, sep, _), FillBreakAfterWrap(items, sep, _):
+				// The fill wraps after its first item.
+				if (items.length < 2 || fitsFlat(sibling.width - penCol, 0, doc)) return null;
+				return { add: DocMeasure.flatTokenWidth(items[0]) + DocMeasure.flatTokenWidth(sep), aborted: true };
+			case IfResidualLineExceeds(n, breakDoc, flatDoc):
+				// A lambda's arrow-body probe breaks after the arrow when its body alone reaches the threshold from its
+				// column. A brace body or one that opens its own construct is not told apart: the call's own paren probe
+				// ends the line before it, or both readings keep the line within the limit.
+				if (renderCol + DocMeasure.flatTokenWidth(flatDoc) < n) return null;
+				inner.push({ doc: breakDoc, mode: MBreak });
+				return { add: 0, aborted: false };
+			case _:
+				return null;
+		}
 	}
 
 	/**
