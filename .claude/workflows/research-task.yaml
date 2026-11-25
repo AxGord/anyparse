@@ -289,7 +289,7 @@ states:
         printf '1. Lines with `after:` on this one become admissible once this line is done: park or re-point any the report changes BEFORE `slot_free`:\n%s\n\n' "$deps"
         printf '2. The line is closed (done) and the slot is free: `slot_free`; do not hold it for the answer.\n\n'
         printf '3. Relay to the user, in Russian, from the report'"'"'s `## For the user`: (1) the answer, (4) what would make it wrong, (5) the choices and the recommendation, and the proposed-lines table. No queue vocabulary; ids only in the table. A verifier verdict of FIXES on the second pass goes beside (4). Nothing proposed is queued before the user answers.\n\n'
-        printf '4. The report'"'"'s `## For the parent`: the docs/decisions.md line (only when the report refutes a hypothesis, through `node bin/dev.js decision --slice %s`) and any CLAUDE.md edit the line names are yours, on main.\n' "$SLICE"
+        printf '4. The report'"'"'s `## For the parent`: the docs/decisions.md line (only when the report refutes a hypothesis, through `node bin/dev.js decision --commit --slice %s "<text>"`) and any CLAUDE.md edit the line names are yours, on main. Commit on main only through those two commands, never `git commit` by hand: both wait for a landing in flight (the `anyparse-land` lock), a by-hand commit fails that landing at its advance. A CLAUDE.md edit: make it, then `node bin/dev.js main-commit -m "<message>" CLAUDE.md`.\n' "$SLICE"
       } > "$keep/present.md"
       "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --done "$SLICE" --note "RESEARCH report $(date +%F): ${verdict:-no verifier verdict}; read $keep/report.md" || { echo "the line was not marked done: $keep kept"; exit 3; }
       if [ -d "$WT" ]; then

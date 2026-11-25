@@ -4567,6 +4567,86 @@
 			"find": "return footprint.filter(path -> onMain[path] == onBase[path]);",
 			"replace": "return footprint;",
 			"note": "a footprint file main changed lands as the branch tip has it, losing main's edit"
+		},
+		{
+			"name": "M-MAIN-COMMIT-LOCK-SKIPPED",
+			"type": "dev.MainCommit",
+			"method": "commit",
+			"find": "if (lock.unlocked) {",
+			"replace": "if (true) {",
+			"note": "a commit on main runs without the land lock, so a landing in flight finds main moved at its advance"
+		},
+		{
+			"name": "M-LAND-LOCK-NOT-WAITED",
+			"type": "dev.LandLock",
+			"method": "hold",
+			"find": "while (!FileSystem.exists(granted)) {",
+			"replace": "while (false) {",
+			"note": "the work runs whether or not the lock was granted, so a commit is made while a landing holds main"
+		},
+		{
+			"name": "M-MAIN-COMMIT-DIRTY-OUTSIDE",
+			"type": "dev.MainCommit",
+			"method": "commitHeld",
+			"find": "if (outside.length > 0)",
+			"replace": "if (false)",
+			"note": "a tree changed outside the named paths is committed over, taking a change nobody named into the commit it lands"
+		},
+		{
+			"name": "M-MAIN-COMMIT-STAGES-MORE",
+			"type": "dev.MainCommit",
+			"method": "stage",
+			"find": "final added: Result = git(repo, ['add', '--all', '--'].concat(paths));",
+			"replace": "final added: Result = git(repo, ['add', '--all']);",
+			"note": "every untracked file of the tree is staged beside the named paths, leaving main with a staged change a landing then refuses"
+		},
+		{
+			"name": "M-MAIN-COMMIT-AMENDS-LANDING",
+			"type": "dev.MainCommit",
+			"method": "commitHeld",
+			"find": "if (landing != '')",
+			"replace": "if (false)",
+			"note": "an amend rewrites a landed slice commit"
+		},
+		{
+			"name": "M-MAIN-COMMIT-AMENDS-PUSHED",
+			"type": "dev.MainCommit",
+			"method": "commitHeld",
+			"find": "if (pushed.length > 0)",
+			"replace": "if (false)",
+			"note": "an amend rewrites a commit a remote already holds"
+		},
+		{
+			"name": "M-LAND-LOCK-VERSION-LEXICAL",
+			"type": "dev.LandLock",
+			"method": "newer",
+			"find": "return left > right;",
+			"replace": "return left < right;",
+			"note": "the oldest installed workflow plugin is taken for the newest"
+		},
+		{
+			"name": "M-MAIN-COMMIT-UNLOCKED-LOCKS",
+			"type": "dev.MainCommit",
+			"method": "commit",
+			"find": "if (lock.unlocked) {",
+			"replace": "if (false) {",
+			"note": "--unlocked still takes the lock, so the one escape from a wedged pool does not escape it"
+		},
+		{
+			"name": "M-MAIN-COMMIT-DETACHED",
+			"type": "dev.MainCommit",
+			"method": "commitHeld",
+			"find": "if (!git(repo, ['symbolic-ref', '-q', 'HEAD']).ok)",
+			"replace": "if (false)",
+			"note": "a commit is made on a detached HEAD, where no branch holds it"
+		},
+		{
+			"name": "M-MAIN-COMMIT-PATH-OUTSIDE",
+			"type": "dev.MainCommit",
+			"method": "commitHeld",
+			"find": "if (path == '' || Path.isAbsolute(path) || path.startsWith('..'))",
+			"replace": "if (false)",
+			"note": "a path outside the tree or an empty one reaches git add"
 		}
 	]
 }

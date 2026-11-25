@@ -1,5 +1,7 @@
 package dev;
 
+import dev.MainCommit.MainCommitLock;
+import dev.MainCommit.MainCommitPlan;
 import devkit.Args;
 import haxe.Exception;
 import haxe.io.Path;
@@ -11,13 +13,15 @@ using StringTools;
 
 /**
  * `dev decision --slice <ID> <text>` — the only writer of `docs/decisions.md`: appends ONE line `- <text> → <ID>` without
- * reading the file, which has grown past what an agent can afford to open. `problem` and `entryProblem` are the shape every
+ * reading the file, which has grown past what an agent can afford to open. With `--commit` the append and its commit run
+ * under the land lock (`MainCommit`), so a landing in flight is waited for, never failed. `problem` and `entryProblem` are the shape every
  * new line keeps, and `addedLines` what a slice added; `dev slice-gate` checks the second with the first.
  */
 @:nullSafety(Strict)
 final class Decision {
 
-	public static inline final USAGE: String = 'usage: dev decision --slice <ID> <text> [--repo <dir>]';
+	public static inline final USAGE: String =
+		'usage: dev decision --slice <ID> <text> [--repo <dir>] [--commit [--trailer <line>]… [--wait <seconds>] [--wf-run <path> | --unlocked]]';
 
 	/** The longest text a line may carry: one sentence, what was tried and why not; the detail is the slice's commit. */
 	public static inline final MAX_TEXT: Int = 300;
@@ -38,14 +42,30 @@ final class Decision {
 		final args: Args = new Args(argv);
 		final slice: Null<String> = args.option('--slice');
 		final repo: String = Repo.resolve(args.option('--repo'));
+		final commit: Bool = args.flag('--commit');
+		final trailers: Array<String> = args.options('--trailer');
+		final lock: MainCommitLock = MainCommit.lockOf(args);
 		final text: String = args.positionals(['<text>'])[0];
 		if (slice == null) throw new UsageError('missing --slice <ID>');
 		final why: Null<String> = problem(text, slice);
 		if (why != null) throw new UsageError('refused: $why');
 		final line: String = '- $text$ARROW$slice';
-		append(Path.join([repo, LEDGER]), line);
-		Sys.println(line);
-		return 0;
+		final file: String = Path.join([repo, LEDGER]);
+		if (!commit) {
+			append(file, line);
+			Sys.println(line);
+			return 0;
+		}
+		final plan: MainCommitPlan = {
+			message: 'decision: $slice $text',
+			paths: [LEDGER],
+			amend: false,
+			trailers: trailers
+		};
+		return MainCommit.commit(repo, plan, lock, () -> {
+			append(file, line);
+			Sys.println(line);
+		});
 	}
 
 	/** Append `line` to `file`, starting a new line first when the file does not end in one; reads only its last byte. */
