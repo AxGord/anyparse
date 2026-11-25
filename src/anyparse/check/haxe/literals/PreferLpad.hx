@@ -118,8 +118,14 @@ typedef LpadSite = { final span: Span; final ladder: LpadLadder; final proven: B
  * `stringInterpIdentKind` / `stringLiteralKinds` / `numericLiteralKinds` plus
  * `CheckScan.STRING_FRAGMENT_KIND`; any unset seam makes the check a no-op. The pad character, the
  * `lpad` name and the `StringTools` module are the language-specific tokens, spelled as constants.
+ *
+ * Runs before `prefer-comprehension`, whose array-comprehension rewrite can cover the loop a ladder
+ * sits in: `Cli.computeFileLintEdits` keeps the earlier edit, so the ladder lands and the
+ * comprehension is re-detected on the next `--fix` pass; the reverse loses the ladder's `for` header
+ * and with it the literal range the fix is gated on.
  */
 @:nullSafety(Strict)
+@:lintBefore(PreferComprehension)
 final class PreferLpad extends HaxeRule implements DefaultOff {
 
 	/** This check's stable id, spelled once. */

@@ -53,6 +53,7 @@ private typedef Chain = {
  * `Violation.declineReason`) a chain whose span holds a comment; the finding stays reported.
  */
 @:nullSafety(Strict)
+@:lintBefore(PreferTernaryReturn)
 final class SimplifyBooleanReturnChain extends RuleBase {
 
 	/** Why `fix` leaves a chain whose span holds a comment: the rewrite is built from the conditions alone. */

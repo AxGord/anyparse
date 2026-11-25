@@ -258,8 +258,13 @@ private typedef Seams = {
  * `dynamicModifierKind` / `macroModifierKind`, annotations from `MetaShape.metaKinds`, local
  * functions from `localFunctionKinds` / `inlineFunctionKinds`, and shadowing binders from the
  * declaration seams. An unset seam degrades to a refusal, never to a wrong accept.
+ *
+ * Runs after `prefer-arrow-callback` and `prefer-lambda-expression-body`, which normalise a wrapper
+ * into the `x -> f(x)` form this rule removes, so one fixed-point run reaches the bare `f` from a
+ * `function(x) { return f(x); }` literal.
  */
 @:nullSafety(Strict)
+@:lintAfter(PreferArrowCallback, PreferLambdaExpressionBody)
 final class RedundantLambdaWrapper extends RuleBase implements DefaultOff implements RiskyArm {
 
 	private static inline final RULE_ID: String = 'redundant-lambda-wrapper';

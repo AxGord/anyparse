@@ -1049,7 +1049,7 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "d8e86ebba78c5f83",
+				"out": "e648da3f951ed88d",
 				"err": "3eccc819a7289b27",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [
@@ -1296,7 +1296,7 @@
 			},
 			"expect": {
 				"exit": 0,
-				"out": "f9a3264e11c6eb29",
+				"out": "2280cef9aad0eaac",
 				"err": "663b8c07c5f35a25",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [
@@ -3475,6 +3475,97 @@
 				"sameRun": [
 					true,
 					true
+				]
+			}
+		},
+		{
+			"name": "RO1",
+			"note": "registry order: guard-return runs after prefer-ternary-return, so a nested if/else of returns in an override settles as one if-expression return, not flat guard returns",
+			"argv": [
+				"hxq",
+				"lint",
+				"A.hx",
+				"--all",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"A.hx": "package;\n\nclass A extends Base {\n\n\t@:async\n\toverride public function tag(name:String, content:String):String {\n\t\tif (name == 'x') {\n\t\t\tif (content == null)\n\t\t\t\treturn '${name}';\n\t\t\telse\n\t\t\t\treturn @await sub(content);\n\t\t} else {\n\t\t\treturn @await super.tag(name, content);\n\t\t}\n\t}\n\n}\n",
+				"Base.hx": "package;\n\nclass Base {\n\n\tpublic function new() {}\n\n\t@:async\n\tpublic function tag(name:String, content:String):String {\n\t\treturn name;\n\t}\n\n\t@:async\n\tpublic function sub(content:String):String {\n\t\treturn content;\n\t}\n\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "e61f08b9c8a08ea7",
+				"files": "76bedd72fe22d0dd",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "RO2",
+			"note": "registry order: redundant-else-after-return runs before prefer-switch, so an if / else-if chain of guard blocks on one length settles as flat guards, not a switch with an empty default",
+			"argv": [
+				"hxq",
+				"lint",
+				"C.hx",
+				"--all",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"C.hx": "package;\n\nclass C {\n\n\tpublic static function run(parts:Array<String>, items:Array<String>, cb:Int->Void):Void {\n\t\tif (items.length == 0) {\n\t\t\tcb(0);\n\t\t\treturn;\n\t\t}\n\t\tif (parts.length == 0) {\n\t\t\tgo(items, cb);\n\t\t\treturn;\n\t\t} else if (parts.length == 1) {\n\t\t\tif (parts[0] != '')\n\t\t\t\tgo([for (a in items) parts[0] + '/' + a], cb);\n\t\t\telse\n\t\t\t\tgo(items, cb);\n\t\t\treturn;\n\t\t}\n\t\tcb(parts.length);\n\t}\n\n\tpublic static function go(items:Array<String>, cb:Int->Void):Void {\n\t\tcb(items.length);\n\t}\n\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "a09dbe19bdf1db3e",
+				"files": "a12790452d759eb9",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
+				]
+			}
+		},
+		{
+			"name": "RO3",
+			"note": "registry order: redundant-else-after-return runs before collapsible-else-if and hoist-common-branch-head, so twin locals of an if/else stay in their branches and a nested if/else of returns settles as ternary returns",
+			"argv": [
+				"hxq",
+				"lint",
+				"E.hx",
+				"--all",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"E.hx": "package;\n\nclass E {\n\n\tpublic static function join(items:Array<String>, ?sep:String):String {\n\t\tif (sep == null) {\n\t\t\tvar r:String = '';\n\t\t\tvar f:Bool = true;\n\n\t\t\tfor (e in items)\n\t\t\t\tif (f) {\n\t\t\t\t\tf = false;\n\t\t\t\t\tr += e;\n\t\t\t\t} else {\n\t\t\t\t\tr += ' ' + e;\n\t\t\t\t}\n\t\t\treturn r;\n\t\t} else {\n\t\t\tvar r:String = '';\n\t\t\tvar f:Bool = true;\n\t\t\tfor (e in items)\n\t\t\t\tif (f) {\n\t\t\t\t\tf = false;\n\t\t\t\t\tr += e;\n\t\t\t\t} else {\n\t\t\t\t\tr += sep + e;\n\t\t\t\t}\n\t\t\treturn r;\n\t\t}\n\t}\n\n\tpublic static function pick(name:String, token:String, flag:Bool):String {\n\t\tif (name == 'ready') {\n\t\t\tfinal t = token;\n\t\t\tif (flag) {\n\t\t\t\tif (t == null)\n\t\t\t\t\treturn pad(name);\n\t\t\t\telse\n\t\t\t\t\treturn '';\n\t\t\t} else {\n\t\t\t\tif (t == null)\n\t\t\t\t\treturn '';\n\t\t\t\telse\n\t\t\t\t\treturn pad(name);\n\t\t\t}\n\t\t} else {\n\t\t\treturn pad(token);\n\t\t}\n\t}\n\n\tpublic static function pad(s:String):String {\n\t\treturn s + ' ';\n\t}\n\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "466e8629596c0a5e",
+				"files": "12ac10f37b42d453",
+				"compiles": [
+					false,
+					false
+				],
+				"sameRun": [
+					false,
+					false
 				]
 			}
 		}

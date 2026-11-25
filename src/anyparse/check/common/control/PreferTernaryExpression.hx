@@ -166,6 +166,7 @@ private typedef Scan = {
  * `controlFlowSupport` block kinds; unset, no arrow body is read.
  */
 @:nullSafety(Strict)
+@:lintBefore(JoinBranchCall)
 final class PreferTernaryExpression extends RuleBase implements ConfigAware implements QuotationAware {
 
 	/** The linter's per-file config resolver (`invert-negated-if-else` `keepDefaultElse`), or null to read each file's chain from disk. */

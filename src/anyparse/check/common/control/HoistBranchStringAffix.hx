@@ -206,6 +206,7 @@ private typedef Match = {
  * operator); any unset makes the check a no-op.
  */
 @:nullSafety(Strict)
+@:lintBefore(CondAssignMerge)
 final class HoistBranchStringAffix extends RuleBase implements DefaultOff {
 
 	/** The rule id, also the `rule` field of every violation it reports. */

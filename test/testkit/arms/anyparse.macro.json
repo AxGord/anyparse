@@ -1979,7 +1979,7 @@
 		},
 		{
 			"name": "M-GRAMMAR-DISCOVERY-DOT-ENTRIES",
-			"type": "anyparse.macro.GrammarDiscovery",
+			"type": "anyparse.macro.ClasspathModules",
 			"method": "collect",
 			"find": "!entry.startsWith('.')",
 			"replace": "true",
@@ -3841,6 +3841,62 @@
 			"find": "fnKinds: familyMask(enumRule, fnCtors)",
 			"replace": "fnKinds: familyMask(enumRule, fnCtors.concat([\"FinalModifiedMember\"]))",
 			"note": "a type body hands the class function family to its #if regions, so a final function inside an abstract region takes function gaps it does not take outside"
+		},
+		{
+			"name": "M-REGISTRY-DROPS-A-RULE",
+			"type": "anyparse.macro.RuleDiscovery",
+			"method": "order",
+			"find": "return { paths: paths, problem: null };",
+			"replace": "return { paths: paths.filter(path -> path.indexOf('.UnusedImport') < 0), problem: null };",
+			"note": "a rule leaves the builtin registry, so the kit's registered-rule reads must stop holding it"
+		},
+		{
+			"name": "M-RULE-ORDER-UNSORTED",
+			"type": "anyparse.macro.RuleDiscovery",
+			"method": "byNameThenPath",
+			"find": "a.name == b.name ? Compare.compareString(a.path, b.path) : Compare.compareString(a.name, b.name)",
+			"replace": "0",
+			"note": "the registry order follows the directory walk instead of the class names, so it moves when a file is added or a filesystem lists differently"
+		},
+		{
+			"name": "M-RULE-ORDER-AFTER-IGNORED",
+			"type": "anyparse.macro.RuleDiscovery",
+			"method": "order",
+			"find": "preceding[index].push(found[0]);",
+			"replace": "",
+			"note": "a rule declaring @:lintAfter keeps its name position, so an anchor it needs to run behind can claim an overlap first"
+		},
+		{
+			"name": "M-RULE-ORDER-BEFORE-IGNORED",
+			"type": "anyparse.macro.RuleDiscovery",
+			"method": "order",
+			"find": "preceding[found[0]].push(index);",
+			"replace": "",
+			"note": "a rule declaring @:lintBefore keeps its name position, so the rule it must precede wins an overlapping edit"
+		},
+		{
+			"name": "M-RULE-ANCHOR-UNKNOWN-SKIPPED",
+			"type": "anyparse.macro.RuleDiscovery",
+			"method": "order",
+			"find": "if (found.length != 1) return refused(row, AFTER, anchor, found.length);",
+			"replace": "if (found.length > 1) return refused(row, AFTER, anchor, found.length);",
+			"note": "an anchor naming no rule (a renamed or deleted one) is not reported as such, so the build error names no cause"
+		},
+		{
+			"name": "M-RULE-ANCHOR-PATH-IGNORED",
+			"type": "anyparse.macro.RuleDiscovery",
+			"method": "named",
+			"find": "row.path == anchor || row.name == anchor",
+			"replace": "row.name == anchor",
+			"note": "an anchor spelled as a class path names no rule, so two rules sharing a class name cannot be told apart"
+		},
+		{
+			"name": "M-RULE-ORDER-ANCHORS-UNREAD",
+			"type": "anyparse.macro.RuleDiscovery",
+			"method": "order",
+			"find": "!placed[index] && preceding[index].foreach(before -> placed[before])",
+			"replace": "!placed[index]",
+			"note": "the anchors are never waited on, so a cycle of them builds silently in name order"
 		}
 	]
 }

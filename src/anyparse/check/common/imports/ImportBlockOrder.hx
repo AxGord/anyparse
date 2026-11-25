@@ -147,8 +147,12 @@ private typedef UsingWedge = {
  *    the runs and moves the wedged `using` lines below them; `false` restores the pre-wedge
  *    reading, where a `using` is an immovable run boundary and the runs around it are judged
  *    separately.
+ *
+ * Runs after the import-removing and import-moving rules: its reorder edit spans the whole
+ * movable run, so ahead of them it would defer every deletion inside that run to a later pass.
  */
 @:nullSafety(Strict)
+@:lintAfter(UnusedImport, DuplicateImport, RedundantImport, HoistCommonImport, ImportOutsideGuard)
 final class ImportBlockOrder extends RuleBase implements DefaultOff implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'import-order';

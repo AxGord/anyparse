@@ -2876,7 +2876,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "25d022178e09a100",
+				"out": "9b0b5e235080bdcc",
 				"err": "cbe36b1c6da3a54a",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2893,7 +2893,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "25d022178e09a100",
+				"out": "9b0b5e235080bdcc",
 				"err": "cbe36b1c6da3a54a",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -2985,7 +2985,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "7b47dbc5c4e88739",
+				"out": "c71af556aadcb62d",
 				"err": "500be2f97cd8fc69",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -3004,7 +3004,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "7b47dbc5c4e88739",
+				"out": "c71af556aadcb62d",
 				"err": "500be2f97cd8fc69",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -3126,7 +3126,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "7b47dbc5c4e88739",
+				"out": "c71af556aadcb62d",
 				"err": "500be2f97cd8fc69",
 				"files": "e3b0c44298fc1c14"
 			}
@@ -3144,7 +3144,7 @@
 			"stdin": "{\"a\": [1, 2]}",
 			"expect": {
 				"exit": 0,
-				"out": "7b47dbc5c4e88739",
+				"out": "c71af556aadcb62d",
 				"err": "500be2f97cd8fc69",
 				"files": "e3b0c44298fc1c14"
 			}

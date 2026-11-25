@@ -7,11 +7,8 @@ import haxe.macro.Context;
 using Lambda;
 using StringTools;
 
-import anyparse.util.Compare;
-import haxe.io.Path;
 import haxe.macro.Expr;
 import haxe.macro.Type;
-import sys.FileSystem;
 
 /** One grammar plugin's claim on the CLI's dispatch: its module path, its `--lang` and its file extensions. */
 typedef PluginClaim = { final module: String; final lang: String; final extensions: Array<String>; }
@@ -67,11 +64,7 @@ final class GrammarDiscovery {
 
 	/** Every `*QueryPlugin` module path under the directories `roots`, deduped and sorted; an empty root is skipped. */
 	public static function pluginModules(roots: Array<String>): Array<String> {
-		final seen: Map<String, Bool> = [];
-		for (root in roots) if (root != '' && FileSystem.isDirectory(root)) collect(root, [], seen);
-		final found: Array<String> = [ for (module in seen.keys()) module ];
-		found.sort(Compare.compareString);
-		return found;
+		return ClasspathModules.under(roots, [], entry -> entry.endsWith(MODULE_SUFFIX + MODULE_EXTENSION));
 	}
 
 	/**
@@ -133,17 +126,6 @@ final class GrammarDiscovery {
 				}
 				found;
 			case _: null;
-		}
-	}
-
-	/** Record in `seen` the `*QueryPlugin` module of every file under `dir`, whose package is `pack`. */
-	private static function collect(dir: String, pack: Array<String>, seen: Map<String, Bool>): Void {
-		for (entry in FileSystem.readDirectory(dir)) if (!entry.startsWith('.')) {
-			final full: String = Path.join([dir, entry]);
-			if (FileSystem.isDirectory(full))
-				collect(full, pack.concat([entry]), seen)
-			else if (entry.endsWith(MODULE_SUFFIX + MODULE_EXTENSION))
-				seen[pack.concat([entry.substr(0, entry.length - MODULE_EXTENSION.length)]).join('.')] = true;
 		}
 	}
 

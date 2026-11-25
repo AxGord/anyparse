@@ -112,8 +112,13 @@ private typedef Seams = {
  * kinds and for the and / or kinds that word the finding. `!!x`
  * and `!(!x)` are NOT this rule's shape: a single-term double negation belongs to
  * `double-negation`, which reads through parentheses for exactly that reason.
+ *
+ * Runs after `double-negation`, and that order is load-bearing: on `!(!(!x) || q)` the two rules
+ * claim distinct but NESTED nodes, the earlier double-negation edit lands first and the shared fix
+ * pass converges.
  */
 @:nullSafety(Strict)
+@:lintAfter(DoubleNegation)
 final class SimplifyNegatedCompound extends RuleBase {
 
 	public function new() {

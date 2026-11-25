@@ -59,8 +59,12 @@ private typedef HeaderHalves = { final imports: Array<ImportLine>; final usings:
  *
  * The merged import run is NOT re-sorted (`import-order` owns that, and it is default off) — a
  * moved import may land in a run whose order it does not fit.
+ *
+ * Runs after the import-removing rules: an import stranded above a whole-body `#if` that is ALSO
+ * unused should be deleted by `unused-import`, not relocated by this one.
  */
 @:nullSafety(Strict)
+@:lintAfter(UnusedImport, DuplicateImport, RedundantImport, HoistCommonImport)
 final class ImportOutsideGuard extends RuleBase {
 
 	private static inline final RULE_ID: String = 'import-outside-guard';

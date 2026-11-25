@@ -107,8 +107,13 @@ private typedef Seams = {
  * re-derives its candidates from the re-parsed tree, so a reported span that no longer names a
  * degenerate switch produces no edit. After the fix there is no switch left at that position, so a
  * second pass finds nothing.
+ *
+ * Runs after the case-arm rules, each of which stops at a switch holding one catch-all, so a single
+ * `--fix` pass reduces the arms first: this rule's edit spans the whole switch and would otherwise
+ * swallow theirs.
  */
 @:nullSafety(Strict)
+@:lintAfter(UnusedCaseBinder, RedundantCaseBody, EmptyCaseArm)
 final class UnnecessarySwitch extends RuleBase {
 
 	/** A degenerate switch holds exactly its subject and ONE arm. */

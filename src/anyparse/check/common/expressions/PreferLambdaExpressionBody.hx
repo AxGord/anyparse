@@ -373,8 +373,12 @@ private typedef Match = { var span: Span; var text: String; }
  *   end on no terminator at all. Membership only ever makes the walk hand its end to a
  *   child or refuse, never keep a delimiter it should have dropped, so an over-wide set
  *   costs coverage, not correctness.
+ *
+ * Runs after `prefer-arrow-callback`, which normalises a `function` literal into the arrow form
+ * this rule then collapses.
  */
 @:nullSafety(Strict)
+@:lintAfter(PreferArrowCallback)
 final class PreferLambdaExpressionBody extends RuleBase {
 
 	/** The rule id, spelled once — `run`, `fix` and the registry all quote it. */

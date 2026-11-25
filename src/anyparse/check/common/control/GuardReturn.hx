@@ -211,8 +211,12 @@ private typedef Candidate = GuardedIf & { var tail: Null<QueryNode>; }
  * `lambdaKinds` (the scope stop of the value-return scan); it is disabled outright unless
  * `voidReturnKind`, `blockBodyKind` and `valueReturnKinds` are all set, the explicit-pair arm
  * staying live regardless.
+ *
+ * Runs after `prefer-ternary-return`, which collapses a two-`return` `if` / `else` into one `return`
+ * of a ternary: ahead of it this rule splits the same chain into guards, and `--fix` settles there.
  */
 @:nullSafety(Strict)
+@:lintAfter(PreferTernaryReturn)
 final class GuardReturn extends RuleBase {
 
 	/**

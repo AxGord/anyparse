@@ -110,8 +110,13 @@ private typedef Seams = {
  * pass), and a nested flagged `if` inside the de-nested run is dropped
  * (`RefactorSupport.dropContainedEdits`) so edits never overlap. Needs `ControlFlowSupport`; unset
  * makes the check report-only.
+ *
+ * Runs before `collapsible-else-if`, `hoist-common-branch-head` and `prefer-switch`: each rewrites
+ * an `if` / `else` chain this rule flattens, and the edit that lands first decides the shape the
+ * `--fix` fixed point settles on.
  */
 @:nullSafety(Strict)
+@:lintBefore(CollapsibleElseIf, HoistCommonBranchHead, PreferSwitch)
 final class RedundantElse extends RuleBase implements QuotationAware {
 
 	private static final MESSAGE: String = 'this else is redundant — the if branch always exits';

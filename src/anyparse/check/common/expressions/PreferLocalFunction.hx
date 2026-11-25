@@ -156,8 +156,13 @@ private typedef Refs = { var declarations: Int; var ok: Bool; }
  * A body that does not close on a brace is not self-terminating, so it regains the `;` its
  * statement carried, and a lambda's expression body regains the `return` its arrow implied. The
  * emitted text is re-formatted by the canonical writer, so it carries no indentation of its own.
+ *
+ * Runs after `join-declaration-assignment`, which claims the adjacent `var f; f = function(){};`
+ * pair first; this rule's overlapping edits are then deferred one fixed-point pass and land on the
+ * joined `var f = function(){};` form.
  */
 @:nullSafety(Strict)
+@:lintAfter(JoinDeclarationAssignment)
 final class PreferLocalFunction extends RuleBase {
 
 	private static inline final RULE_ID: String = 'prefer-local-function';

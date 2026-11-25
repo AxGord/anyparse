@@ -106,6 +106,7 @@ private typedef Seams = {
  * opt in with `"misplaced-type-doc": { "enabled": true }`.
  */
 @:nullSafety(Strict)
+@:lintBefore(UnusedImport, DuplicateImport, RedundantImport, HoistCommonImport, ImportOutsideGuard, ImportBlockOrder)
 final class MisplacedTypeDoc extends RuleBase implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'misplaced-type-doc';
