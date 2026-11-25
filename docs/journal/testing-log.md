@@ -4915,3 +4915,45 @@ Readings of HEAD 8d0b63721 (worktree pinned at 521a3cabf), 2026-11-25; scripts a
 - Test selection: `dev suite-impact` selects the whole suite for 18 of the last 20 lands, so auto-mutants need a member-to-test reach map recorded on the mutation build.
 - Not sampled: writer, parser, grammar and macro code (a macro mutant is a build, 14-88 s).
 Conclusion: mechanical arms are feasible; start with the reach map and a report-only survivors row, decide on an `auto:` killer form after about 20 lands of survivor data.
+
+## RESUME-RULE-LOG (2026-11-25): resume or respawn an idle agent, the measured cost and one rule
+
+Readings of the anyparse session's subagent transcripts (2961 agents, started 2026-11-10..2026-11-25, one session directory; read 2026-11-25). The investigator's tree is pinned at 609b1cd8ba4 (`.claude/backups/slice-logs/RESUME-VS-RESPAWN-COST/pinned.txt`). Sources in that directory: `report.md` (investigator), `verify.md` (verifier, verdict FIXES; its corrections are applied here), scripts `an.js`, `b.js`, `c.js`, `d.js`. Units are base input tokens; the weights (cache read 0.1, 1 h cache write 2, output 5) are an assumption, not billing data.
+
+### Facts
+- Cache re-write after idle: a turn-to-turn gap with context over 20k, the next turn re-writing over 70% of it. Under 60 min: 16 of 4389 gaps (5-10 min 2 of 1634; 10-30 min 9 of 1997; 30-60 min 5 of 758). Over 60 min: 421 of 424. The 5-min cache TTL assumption for idle agents is refuted; the cache lives about 1 h (inferred from these data, not from settings).
+- Cold events (gap over 60 min, context over 20k): 424, median context 54.6k. Buckets: up to 50k 160, 50-60k 85, 60-90k 58, over 90k 121.
+- The 424 split by `agentType` (from each agent's `.meta.json`): `workflow:driver` 291 (over 90k: 5), `general-purpose` (workers, reviewers, recon) 105 (over 90k: 93), `workflow:dispatcher` 28 (over 90k: 23). So 319 are orchestrator wakes (a task notification after a child ran over 60 min), not a resume a driver could swap for a respawn. The first-pass reading "393 of 424 are real SendMessage resumes" is refuted by this split.
+- Fresh start: first-turn context median 43k (p10 23k, p90 45k); 39% of first-turn tokens are cache reads (41.2M read, 64.2M write). The report gives 2962 agents for this sum and 2961 elsewhere; not reconciled.
+- Median agent: 49 turns, max context 74k (p90 178k, as the report gives it).
+- Remaining turns after a cold event with context over 90k (until the next over-60-min gap or the end): median 21, p90 51.
+
+### Cost model
+C = resumed context, N = remaining turns, R = handoff re-read, 15k assumed, all written.
+- Resume, warm (idle under 60 min): 0.1·C per turn.
+- Resume, cold: 2·C once, then 0.1·C per turn.
+- Respawn: start F = 0.39·43.2k·0.1 + 0.61·43.2k·2 = 54.4k, plus R written (30k), then about 0.1·(F+R) per turn, with F+R context taken as 58k.
+- Cold difference, resume minus respawn: 2C − 84.4k + 0.1·N·(C − 58k).
+- Break-even C: N=0 about 42k; N=21 (median) about 50k. The median cold context, 54.6k, sits just above break-even.
+
+### Saving
+- First pass (all agents, respawn above 90k): 1.25e8 units = 3.6% of 3.42e9 total agent spend.
+- Driver's own choice (general-purpose agents only, 105 events, 93 over 90k): 4.89e7 units = 1.4% of 3.42e9.
+- Orchestrator wakes, which the rule does not govern: driver 0.8e6, dispatcher 7.50e7 units.
+- Of the first-pass 1.25e8, one dispatcher agent (`a58cd87bc868a94e1`, `workflow:dispatcher`, haiku, 1524 turns, 2026-11-19..25, 23 of the 121 over-90k cold events, contexts 330k-790k) gives 7.50e7 = 60%; it is 99% of the haiku row (7.58e7).
+- Separate reading, not this rule: that dispatcher re-writes its whole context after each wait over 60 min. The lever named for it is DISPATCHER-CONTEXT-REFRESH.
+- The 2.4% price-weighted share (guessed relative prices: opus 1, fable 1, sonnet 0.2, haiku 0.07) was computed on the full population; it is not recomputed for the general-purpose subset.
+
+### Rule (one threshold: 60 min)
+Scope: the driver's choice for general-purpose worker, reviewer and recon agents. C = the linked agent's last context size, from its completion notification.
+1. Idle ≤ 60 min: resume.
+2. Idle > 60 min, C ≤ 50k: resume.
+3. Idle > 60 min, C > 50k: respawn with a short handoff brief (report and diff), except a fix round that depends on the worker's own reasoning, which resumes.
+
+The rule is cost-only. The report's branches 3 and 4 differ on a fix round that does not depend on reasoning in the 50-90k band (3: respawn, 4: resume); the merged rule takes branch 3. That split is not measured. Quality of fresh versus resumed agents (lost findings, extra rounds) is not measured; the reasoning exception is a judgment, not a reading.
+
+### Not checked
+Billing and USD per model (weights and prices assumed); quality (lost findings, redo work, extra rounds); the mapping to lands (agents are not mapped to land ids, so "last 40 lands" was not the window); the main-session driver and parent idle wakes (their transcripts were not read); R = 15k (assumed); the 1 h TTL (inferred, not confirmed).
+
+### Proposed, not queued
+RESUME-RULE-QUALITY (quality check and billing per model), DRIVER-IDLE-BRANCH (driver reads last turn time and context, applies the rule), DISPATCHER-CONTEXT-REFRESH (dispatcher context).
