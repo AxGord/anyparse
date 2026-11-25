@@ -10,6 +10,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.ValueNameBinding.ImportedStatics;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -128,7 +129,7 @@ final class EnumCtorRefs {
 	): Null<String> {
 		if (edits.length == 0) return null;
 		final froms: Array<Int> = edits.map(e -> e.span.from);
-		froms.sort((a, b) -> a - b);
+		froms.sort(Compare.compareInt);
 		final delta: Int = newName.length - (edits[0].span.to - edits[0].span.from);
 		final moved: Array<Int> = [ for (i => from in froms) from + i * delta ];
 		final hit: Null<RefHit> = Refs.find(newName, newTree, refShape)

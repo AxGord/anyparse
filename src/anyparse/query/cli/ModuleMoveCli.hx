@@ -15,6 +15,7 @@ import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.MoveCommand;
 import anyparse.query.cli.command.RegistryFollowCommand;
+import anyparse.util.Compare;
 import haxe.ds.Either;
 import haxe.io.Path;
 
@@ -332,7 +333,7 @@ final class ModuleMoveCli {
 				dir = Path.directory(dir);
 			}
 		}
-		out.sort((a, b) -> b.length - a.length);
+		out.sort((a, b) -> Compare.compareInt(b.length, a.length));
 		return out;
 	}
 

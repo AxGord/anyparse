@@ -13,6 +13,7 @@ import anyparse.query.ReplaceNode;
 import anyparse.query.cli.command.LintCommand;
 import anyparse.query.cli.command.RegistryFollowCommand;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 /**
  * The edit pipeline every mutating `apq` command ends in: resolve the address
@@ -308,7 +309,7 @@ final class CliEdit {
 		final nowTrivia: Array<Bool> = triviaLines(after, now, plugin.lexicalRegions(after));
 		final lines: Array<Int> = [ for (i in edits.inserted) if (!nowTrivia[i]) i ];
 		for (gone in edits.deleted) if (!oldTrivia[gone.line]) lines.push(gone.before < now.length ? gone.before : now.length - 1);
-		lines.sort((a, b) -> a - b);
+		lines.sort(Compare.compareInt);
 		final windows: LintRange = [];
 		for (line in lines) {
 			final last: Null<LineWindow> = windows.length == 0 ? null : windows[windows.length - 1];

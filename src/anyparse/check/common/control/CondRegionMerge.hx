@@ -3,6 +3,7 @@ package anyparse.check.common.control;
 import anyparse.query.CondDirectives;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 using StringTools;
@@ -184,7 +185,7 @@ final class CondRegionMerge extends RuleBase {
 			paired.push(second.open);
 			out.push(site);
 		}
-		out.sort((a, b) -> a.boundary.from - b.boundary.from);
+		out.sort((a, b) -> Compare.compareInt(a.boundary.from, b.boundary.from));
 		return out;
 	}
 

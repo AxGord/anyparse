@@ -7,6 +7,7 @@ import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.literals.LiteralTables.LiteralTableShape;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 
 /** A pending finding: the anchor span of a repeated literal and its rendered message. */
 private typedef Finding = { final at: Span; final message: String; };
@@ -245,7 +246,7 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 				if (spans.length >= minOcc)
 					{ at: earliest(spans), message: 'string literal ${preview(content)} repeated ${spans.length}$REPEAT_TAIL' }
 		];
-		findings.sort((a, b) -> a.at.from - b.at.from);
+		findings.sort((a, b) -> Compare.compareInt(a.at.from, b.at.from));
 		for (finding in findings) out.push({
 			file: file,
 			span: finding.at,

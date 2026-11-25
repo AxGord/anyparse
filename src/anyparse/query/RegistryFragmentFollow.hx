@@ -8,6 +8,7 @@ import anyparse.query.TypePathRegistries.MemberRecord;
 import anyparse.query.TypePathRegistries.RegistryEdit;
 import anyparse.query.TypePathRegistries.StringSlot;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.Exception;
 
 using anyparse.util.Groups;
@@ -430,7 +431,7 @@ final class RegistryFragmentFollow {
 			final candidates: Array<Int> = replaced ? [wide] : [startOf(map, at, end), endOf(map, at)];
 			out.pushAllUnique(candidates);
 		}
-		out.sort((a, b) -> a - b);
+		out.sort(Compare.compareInt);
 		return out;
 	}
 

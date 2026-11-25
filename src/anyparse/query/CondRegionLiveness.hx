@@ -117,7 +117,7 @@ final class CondRegionLiveness {
 		final directives: Array<CondDirective> = CondDirectives.scan(source, shape, () -> regions);
 		if (directives.length == 0) return null;
 		final sorted: Array<Int> = probePoints(spans, directives);
-		sorted.sort((a, b) -> a - b);
+		sorted.sort(anyparse.util.Compare.compareInt);
 		final frames: Array<Frame> = [];
 		var next: Int = 0;
 		// The three sweeps below differ only in where the frontier sits, so the walk is one

@@ -15,6 +15,7 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
 import anyparse.query.ExitCode.*;
 import anyparse.query.OracleProvider;
+import anyparse.util.Compare;
 
 using anyparse.util.Groups;
 using Lambda;
@@ -291,7 +292,7 @@ final class LintFixVerify {
 			if (seen == null) sizes.push(size);
 			counts[size] = (seen ?? 0) + 1;
 		}
-		sizes.sort((a, b) -> b - a);
+		sizes.sort((a, b) -> Compare.compareInt(b, a));
 		final parts: Array<String> = [ for (size in sizes) {
 			final times: Int = counts[size] ?? 0;
 			times == 1 ? '$size' : '${size}x$times';

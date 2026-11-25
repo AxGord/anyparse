@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.query.QueryNode;
 import anyparse.query.ShardFilter;
 import anyparse.query.ShardPlan;
+import anyparse.util.Compare;
 import testkit.TestRegistry;
 
 using anyparse.util.Groups;
@@ -152,7 +153,7 @@ class ShardPlanTest extends Test {
 		final perShard: Array<Int> = counts(rows, 4);
 		Assert.equals(ShardPlan.STICKY_CLASSES.length + 30, perShard[0] + perShard[1] + perShard[2] + perShard[3]);
 		final tail: Array<Int> = [perShard[1], perShard[2], perShard[3]];
-		tail.sort((x, y) -> x - y);
+		tail.sort(Compare.compareInt);
 		Assert.isTrue(tail[2] - tail[0] <= 1, 'tail split is unbalanced: $perShard');
 	}
 

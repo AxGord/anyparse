@@ -44,6 +44,7 @@ private typedef Seams = {
 	final shape: RefShape;
 	final valueKinds: Array<String>;
 	final intType: String;
+	final subtractKinds: Array<String>;
 	final stringType: String;
 }
 
@@ -106,12 +107,12 @@ private typedef Operands = { left: String, right: String }
  *
  *     xs.sort((a, b) -> a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
  *     // -> xs.sort((a, b) -> Reflect.compare(a.path, b.path));
- *     xs.sort((a: Int, b: Int) -> a < b ? -1 : a > b ? 1 : 0);
- *     // -> xs.sort(Reflect.compare);
  *
  * The forms are the ternary chain, the if-expression chain, and the statement chain closing a function body. A descending chain
  * is the ascending one with its operands swapped, so the fix swaps them. A chain of two proved operands, Int or String, in the
- * order of the callback's plain parameters and nothing else in its body is rewritten to the function itself.
+ * order of the callback's plain parameters and nothing else in its body is rewritten to the function itself. A callback value
+ * `l - r` of two `Int` operands, one read from each parameter, wraps on large values of opposite sign and so answers the
+ * wrong sign: a correctness finding, rewritten to `compare(l, r)`. Any other operand type is left alone.
  *
  * ## What a site must be
  *
@@ -155,6 +156,9 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** A callback of this many parameters is a comparator. */
 	private static inline final COMPARATOR_PARAMS: Int = 2;
 
+	/** The operands of a binary operator. */
+	private static inline final BINARY_OPERANDS: Int = 2;
+
 	/** A chain of this many comparisons, then a terminal value, is a three-way comparison. */
 	private static inline final RUNGS: Int = 2;
 
@@ -171,6 +175,10 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	private static final NOT_RETURNED: String = 'the callback does not return this call, so its value may be read for more than a sign';
 	private static final LESS: String = 'lt';
 	private static final GREATER: String = 'gt';
+
+	/** The name the grammar's `integerFoldOperators` gives the binary minus. */
+	private static final SUBTRACT: String = 'subtract';
+
 	private static final ASCENDING: String = '-1';
 	private static final DESCENDING: String = '1';
 	private static final EQUAL: String = '0';
@@ -331,6 +339,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final body: Null<QueryNode> = fn.children[fn.children.length - 1];
 		if (body == null) return;
 		final chains: Array<Chain> = [];
+		final values: Array<{ value: QueryNode, whole: Bool }> = [];
 		var sole: Null<QueryNode> = null;
 		if (s.blockKinds.contains(body.kind)) {
 			final stmts: Array<QueryNode> = body.children;
@@ -339,6 +348,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 				final value: Null<QueryNode> = returnValue(st, s);
 				if (value == null) continue;
 				addIfSome(chains, valueChain(value, s), alone);
+				values.push({ value: value, whole: alone });
 				if (alone) sole = value;
 			}
 			final last: Null<QueryNode> = stmts[stmts.length - 1];
@@ -352,6 +362,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			final inner: QueryNode = s.expressionBodyKinds.contains(body.kind) && body.children.length == 1 ? body.children[0] : body;
 			sole = returnValue(inner, s) ?? inner;
 			addIfSome(chains, valueChain(sole ?? inner, s), true);
+			values.push({ value: sole ?? inner, whole: true });
 		}
 		for (chain in chains) {
 			final called: Null<Called> = comparison(chain, source, s, typing, named);
@@ -360,6 +371,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			final found: Match = matched(fn, chain, extent, called, named.of(called.type), source, s);
 			if (!LexicalRegions.commentIntersects(found.replaced.from, found.replaced.to, regions)) out.push(found);
 		}
+		fromSubtractions(fn, values, source, regions, s, typing, named, out);
 		final t: Null<Typed> = named.isEmpty() ? null : typing();
 		if (t != null)
 			movedCalls(
@@ -522,6 +534,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final intType: Null<String> = shape.coreValueTypes?.integer;
 		final stringType: Null<String> = TypingService.stringType(shape);
 
+
 		return lt == null || gt == null || callKind == null || fieldAccessKind == null || ternaryKind == null || ifStatementKinds == null
 			|| returnKinds == null || lambdaKinds == null || paramKinds == null || blockKinds.length == 0 || blockStmtKind == null
 			|| intType == null || stringType == null
@@ -548,6 +561,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 				parenKind: shape.parenKind,
 				valueKinds: (shape.numericLiteralKinds ?? []).concat(shape.unaryMinusKinds ?? []),
 				intType: intType,
+				subtractKinds: subtractKindsOf(shape),
 				stringType: stringType
 			};
 	}
@@ -767,6 +781,65 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** Int and String chains always have `Reflect.compare` to move to; any other type, Float, only where the project names its order. */
 	private static function orderable(type: String, s: Seams, named: CompareFunctions): Bool {
 		return type == s.intType || type == s.stringType || named.of(type) != null;
+	}
+
+	/**
+	 * The finding for a callback value `l - r` of two `Int` operands, each read from one of the callback's two parameters and
+	 * the two from different ones. Only the sign of a comparator's result is read, and a subtraction answers the wrong sign once
+	 * the difference overflows, so it is a correctness finding and its fix writes the three-way comparison of `l` and `r`.
+	 */
+	private static function subtraction(
+		fn: QueryNode, value: QueryNode, whole: Bool, source: String, s: Seams, typing: () -> Null<Typed>, named: CompareFunctions
+	): Null<Match> {
+		final op: QueryNode = BoolExprShape.unwrapParens(value, s.parenKind);
+		final extent: Null<Span> = value.span;
+		if (!s.subtractKinds.contains(op.kind) || op.children.length != BINARY_OPERANDS || extent == null) return null;
+		final left: QueryNode = op.children[0];
+		final right: QueryNode = op.children[1];
+		final names: Array<String> = [ for (c in fn.children) if (s.paramKinds.contains(c.kind)) c.name ?? '' ];
+		final fromLeft: Array<String> = parametersRead(left, names, s, []);
+		final fromRight: Array<String> = parametersRead(right, names, s, []);
+		if (fromLeft.length != 1 || fromRight.length != 1 || fromLeft[0] == fromRight[0]) return null;
+		final t: Null<Typed> = typing();
+		if (t == null || t.nominal(left) != s.intType || t.nominal(right) != s.intType) return null;
+		final compare: Null<NamedCompare> = named.of(s.intType);
+		final wholeFn: Null<Span> = whole && comparesParameters(fn, left, right, s) ? fn.span : null;
+		final lhs: String = textOf(BoolExprShape.unwrapParens(left, s.parenKind), source);
+		final rhs: String = textOf(BoolExprShape.unwrapParens(right, s.parenKind), source);
+		return {
+			span: extent,
+			replaced: wholeFn ?? extent,
+			compare: compare,
+			operands: wholeFn == null ? { left: lhs, right: rhs } : null,
+			message: 'this sort callback subtracts `$lhs - $rhs`, which overflows on large Ints; ${shortName(compare)}($lhs, $rhs'
+				+ ') does not',
+			noFix: null,
+			asReturn: false
+		};
+	}
+
+	/** The parameters among `names` that `node` reads, each once. */
+	private static function parametersRead(node: QueryNode, names: Array<String>, s: Seams, into: Array<String>): Array<String> {
+		final name: Null<String> = node.name;
+		if (node.kind == s.identKind && name != null && names.contains(name) && !into.contains(name)) into.push(name);
+		for (c in node.children) parametersRead(c, names, s, into);
+		return into;
+	}
+
+	/** The kinds the grammar names as a binary minus. */
+	private static function subtractKindsOf(shape: RefShape): Array<String> {
+		return [ for (kind => op in shape.execution?.integerFoldOperators ?? []) if (op == SUBTRACT) kind ];
+	}
+
+	/** The subtractions among the values a callback answers with. */
+	private static function fromSubtractions(
+		fn: QueryNode, values: Array<{ value: QueryNode, whole: Bool }>, source: String, regions: Array<LexRegion>, s: Seams,
+		typing: () -> Null<Typed>, named: CompareFunctions, out: Array<Match>
+	): Void {
+		for (v in values) {
+			final found: Null<Match> = subtraction(fn, v.value, v.whole, source, s, typing, named);
+			if (found != null && !LexicalRegions.commentIntersects(found.replaced.from, found.replaced.to, regions)) out.push(found);
+		}
 	}
 
 }

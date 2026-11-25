@@ -5,6 +5,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 using Lambda;
@@ -193,7 +194,7 @@ final class Rename {
 	): Array<Capture> {
 		if (resolved.length == 0) return [];
 		final sorted: Array<Span> = edits.copy();
-		sorted.sort((a, b) -> a.from - b.from);
+		sorted.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
 		final resolvedFrom: Array<Int> = resolved.map(occ -> occ.from);
 		final expected: Array<Int> = [];
@@ -207,7 +208,7 @@ final class Rename {
 		}
 		if (newCursor < 0) newCursor = expected[0];
 		final actual: Array<Int> = renameOccurrences(rewritten, newTree, newCursor, shape).map(occ -> occ.from);
-		actual.sort((a, b) -> a - b);
+		actual.sort(Compare.compareInt);
 		if (actual.length == expected.length && actual.foreach(off -> expected.contains(off))) return [];
 		final out: Array<Capture> = [ for (off in actual) if (!expected.contains(off)) { offset: off, extra: true } ];
 		for (off in expected) if (!actual.contains(off)) out.push({ offset: off, extra: false });
@@ -462,7 +463,7 @@ final class Rename {
 		}
 		if (edits.length == 0) return null;
 		final offsets: Array<Int> = edits.map(edit -> edit.span.from);
-		offsets.sort((a, b) -> a - b);
+		offsets.sort(Compare.compareInt);
 		return { source: CanonicalEdit.applyEdits(rewritten, edits), insertions: offsets, prefixLength: '$self.'.length };
 	}
 
@@ -675,7 +676,7 @@ final class Rename {
 		// over the edits that PRECEDE it (not `delta * i`, which is only right when every edit
 		// is also a resolved occurrence), then one prefix length per insertion at or before it.
 		final sorted: Array<Span> = edits.copy();
-		sorted.sort((a, b) -> a.from - b.from);
+		sorted.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
 		final resolvedFrom: Array<Int> = resolved.map(occ -> occ.from);
 		final expected: Array<Int> = [];
@@ -692,7 +693,7 @@ final class Rename {
 		if (newCursor < 0) newCursor = expected[0];
 
 		final actual: Array<Int> = renameOccurrences(qualified, tree, newCursor, shape).map(occ -> occ.from);
-		actual.sort((a, b) -> a - b);
+		actual.sort(Compare.compareInt);
 		return actual.length != expected.length || !actual.foreach(off -> expected.contains(off))
 			? Err('rename to "$newName" is unsafe: qualifying the captured occurrences did not resolve the capture')
 			: Ok(qualified);

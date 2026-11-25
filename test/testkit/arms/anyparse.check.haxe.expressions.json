@@ -583,6 +583,37 @@
 			"find": "|| named.of(type) != null",
 			"replace": "|| false",
 			"note": "a Float chain stays silent even where the project names a Float function"
+		},
+		{
+			"name": "M-PCF-SUB-SILENT",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "subtraction",
+			"force": "null",
+			"note": "no subtraction is ever reported"
+		},
+		{
+			"name": "M-PCF-SUB-INT-ONLY",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "subtraction",
+			"find": "t.nominal(left) != s.intType || t.nominal(right) != s.intType",
+			"replace": "false",
+			"note": "a subtraction of Floats is reported like one of Ints"
+		},
+		{
+			"name": "M-PCF-SUB-ANY-OPERANDS",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "subtraction",
+			"find": "fromLeft.length != 1 || fromRight.length != 1 || fromLeft[0] == fromRight[0]",
+			"replace": "false",
+			"note": "a subtraction whose operands are not read from the two different parameters is reported"
+		},
+		{
+			"name": "M-PCF-SUB-ANY-CALL",
+			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"method": "matches",
+			"find": "callee.name == SORT",
+			"replace": "true",
+			"note": "a two-parameter callback of any call is read as a comparator"
 		}
 	]
 }

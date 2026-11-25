@@ -16,6 +16,7 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeSyntax;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 
@@ -1027,7 +1028,7 @@ final class PreferComprehension extends RuleBase {
 	/** `source[span]` with every chain local's single use replaced by its (recursively rendered) initializer. */
 	private static function renderSpan(span: Span, locals: Array<ChainLocal>, ctx: ComprehensionCtx, acc: ComprehensionAcc): String {
 		final inside: Array<ChainLocal> = [ for (l in locals) if (l.useSpan.from >= span.from && l.useSpan.to <= span.to) l ];
-		inside.sort((a, b) -> a.useSpan.from - b.useSpan.from);
+		inside.sort((a, b) -> Compare.compareInt(a.useSpan.from, b.useSpan.from));
 		final buf: StringBuf = new StringBuf();
 		var at: Int = span.from;
 		for (l in inside) {

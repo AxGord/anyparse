@@ -7,6 +7,7 @@ import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.TypeExtraction.SourceClass;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.ds.Either;
 
 using anyparse.util.Strings;
@@ -186,7 +187,7 @@ final class ExtractSuperclass {
 			final groupSpan: Span = ElementSpan.declGroupSpan(hitNN.node, decl.nameNode, hitNN.span);
 			out.push({ name: name, node: hitNN.node, cut: ElementSpan.memberCutSpan(source, groupSpan, regions()) });
 		}
-		out.sort((a, b) -> a.cut.from - b.cut.from);
+		out.sort((a, b) -> Compare.compareInt(a.cut.from, b.cut.from));
 		return Right(out);
 	}
 

@@ -9,6 +9,7 @@ import anyparse.query.MemberKinds;
 import anyparse.query.NodeShape;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 
 using StringTools;
 
@@ -500,7 +501,7 @@ final class PreferSafeNavComparison extends RuleBase implements VersionGated {
 			if (LexicalRegions.commentIntersects(recvSpan.to, dot, regions)) return null;
 			dots.push(dot);
 		}
-		dots.sort((a, b) -> b - a);
+		dots.sort((a, b) -> Compare.compareInt(b, a));
 		var text: String = source.substring(r.lastFrom, r.to);
 		for (d in dots) text = '${text.substring(0, d - r.lastFrom)}?${text.substring(d - r.lastFrom)}';
 		return { span: new Span(r.from, r.to), text: text };

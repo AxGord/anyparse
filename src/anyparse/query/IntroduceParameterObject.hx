@@ -5,6 +5,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 
@@ -179,7 +180,7 @@ final class IntroduceParameterObject {
 			if (found < 0) return null;
 			indices.push(found);
 		}
-		indices.sort((a, b) -> a - b);
+		indices.sort(Compare.compareInt);
 		for (i in 1...indices.length) if (indices[i] != indices[i - 1] + 1) return null;
 		return { start: indices[0], end: indices[indices.length - 1] };
 	}

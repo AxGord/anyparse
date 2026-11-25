@@ -5,6 +5,7 @@ import anyparse.query.CondRegionLiveness;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import anyparse.util.Strings;
 
 using anyparse.util.Groups;
@@ -195,7 +196,7 @@ final class CondQuery {
 			closeBranch(frame, directive);
 			frame.heads.push(directive);
 		}
-		out.sort((a, b) -> a.span.from - b.span.from);
+		out.sort((a, b) -> Compare.compareInt(a.span.from, b.span.from));
 		return out;
 	}
 

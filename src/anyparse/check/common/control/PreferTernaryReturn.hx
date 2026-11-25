@@ -17,6 +17,7 @@ import anyparse.query.ParenGuard;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
+import anyparse.util.Compare;
 
 using StringTools;
 
@@ -666,7 +667,7 @@ final class PreferTernaryReturn extends RuleBase implements CarryingFix implemen
 			if (span != null && span.from >= whole.from && span.to <= whole.from + text.length) found;
 		} ];
 		final edits: Array<FixEdit> = rule.fix(spliced, inside, plugin);
-		edits.sort((a, b) -> b.span.from - a.span.from);
+		edits.sort((a, b) -> Compare.compareInt(b.span.from, a.span.from));
 		var out: String = text;
 		for (edit in edits) out = out.substring(0, edit.span.from - whole.from) + edit.text + out.substring(edit.span.to - whole.from);
 		return out;

@@ -17,6 +17,7 @@ import anyparse.query.LexicalRegions;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.util.Compare;
 import haxe.Exception;
 
 /**
@@ -1163,7 +1164,7 @@ final class MemberOrder extends RuleBase implements ConfigAware implements Volat
 			covered.push(m.span);
 			if (m.leadTrivia.length > 0) covered.push(new Span(m.leadFrom, m.leadFrom + m.leadTrivia.length));
 		}
-		covered.sort((x, y) -> x.from - y.from);
+		covered.sort((x, y) -> Compare.compareInt(x.from, y.from));
 		return covered;
 	}
 

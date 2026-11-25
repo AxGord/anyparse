@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.runtime.Span;
 import anyparse.runtime.TokenLog;
+import anyparse.util.Compare;
 
 /**
  * The one answer to "which literals did the parse match for this node itself": the tokens of its parse's `TokenLog`
@@ -70,7 +71,7 @@ final class NodeTokens {
 		final type: Null<QueryNode> = node.type;
 		if (type == null) return node.children;
 		final parts: Array<QueryNode> = node.children.concat([type]);
-		parts.sort((a, b) -> startOf(a) - startOf(b));
+		parts.sort((a, b) -> Compare.compareInt(startOf(a), startOf(b)));
 		return parts;
 	}
 

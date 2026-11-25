@@ -10,6 +10,7 @@ import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
+import anyparse.util.Compare;
 
 using anyparse.util.Arrays;
 using StringTools;
@@ -411,7 +412,7 @@ final class PreferArrowCallback extends RuleBase {
 	/** Whether the parts of `outer` NOT covered by the `kept` spans contain a comment marker. */
 	private static function gapHasComment(ctx: Ctx, outer: Span, kept: Array<Span>): Bool {
 		final sorted: Array<Span> = kept.copy();
-		sorted.sort((a, b) -> a.from - b.from);
+		sorted.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		var cursor: Int = outer.from;
 		for (s in sorted) {
 			if (s.from > cursor && LexicalRegions.commentIntersects(cursor, s.from, ctx.regions())) return true;

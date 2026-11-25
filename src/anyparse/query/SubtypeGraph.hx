@@ -7,6 +7,7 @@ import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using anyparse.util.Groups;
 using Lambda;
@@ -313,7 +314,7 @@ final class SubtypeGraph {
 		// scan this replaced found a match in, in the order it met them
 		final ordinals: Array<Int> = [];
 		for (name in names) for (ordinal in owners.byName[name] ?? []) ordinals.pushUnique(ordinal);
-		ordinals.sort((a, b) -> a - b);
+		ordinals.sort(Compare.compareInt);
 		for (ordinal in ordinals) {
 			final resolved: ResolvedType = owners.types[ordinal];
 			if (resolved.type.name == owner) continue;

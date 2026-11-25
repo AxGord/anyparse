@@ -5,6 +5,7 @@ import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.CommentProse;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 
@@ -234,7 +235,7 @@ final class PreferDocComment extends RuleBase implements DefaultOff {
 			final rewrite: Null<DocCommentRewrite> = trailingRewriteOf(source, tok, byDeclLine, docEnds, owned);
 			if (rewrite != null) out.push(rewrite);
 		}
-		out.sort((a, b) -> a.comment.from - b.comment.from);
+		out.sort((a, b) -> Compare.compareInt(a.comment.from, b.comment.from));
 		return out;
 	}
 

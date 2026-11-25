@@ -77,7 +77,7 @@ final class MutationSchemaBuild {
 			final hit: Array<Placement> = own.filter(p -> (row >= p.from && row <= p.to) || row == p.dispatch);
 			for (p in (hit.length > 0 ? hit : own)) if (!out.contains(p.id)) out.push(p.id);
 		}
-		out.sort((a, b) -> a - b);
+		out.sort(Compare.compareInt);
 		return out;
 	}
 
@@ -105,7 +105,7 @@ final class MutationSchemaBuild {
 			final pos: { pos: Int, len: Int } = dispatch.matchedPos();
 			from = pos.pos + pos.len;
 		}
-		out.sort((a, b) -> a - b);
+		out.sort(Compare.compareInt);
 		return out;
 	}
 

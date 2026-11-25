@@ -20,6 +20,7 @@ import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.TypePathRegistries.TypePathMove;
 import anyparse.query.TypePathRegistries.TypePathRegistry;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.Exception;
 import haxe.ds.ArraySort;
 import haxe.ds.Either;
@@ -575,7 +576,7 @@ final class ModuleMove {
 	/** `edits` in ascending order of their start. */
 	private static function sorted(edits: Array<TextEdit>): Array<TextEdit> {
 		final out: Array<TextEdit> = edits.copy();
-		ArraySort.sort(out, (a, b) -> a.span.from - b.span.from);
+		ArraySort.sort(out, (a, b) -> Compare.compareInt(a.span.from, b.span.from));
 		return out;
 	}
 

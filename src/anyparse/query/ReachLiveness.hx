@@ -5,6 +5,7 @@ import anyparse.query.CondRegionLiveness.DefineFacts;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using anyparse.util.Groups;
 using Lambda;
@@ -147,7 +148,7 @@ final class ReachLiveness {
 		// `deadOf` reads the directives: asked first, before they are taken
 		final dead: Array<Span> = deadOf(file, source);
 		final skipped: Array<Span> = dead.concat(_directives[file] ?? []);
-		skipped.sort((a, b) -> a.from - b.from);
+		skipped.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		_skipped[file] = skipped;
 		return skipped;
 	}

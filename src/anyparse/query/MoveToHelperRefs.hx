@@ -9,6 +9,7 @@ import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -132,7 +133,7 @@ final class MoveToHelperRefs {
 			final error: Null<String> = receiverCallRewrite(edits, indexes, h, calls);
 			if (error != null) return error;
 		}
-		calls.sort((a, b) -> a.length - b.length);
+		calls.sort((a, b) -> Compare.compareInt(a.length, b.length));
 		for (c in calls) for (e in c.edits) (c.inCut ? edits.movedTextEdits : ScopeFiles.editsFor(edits.editsByFile, c.file)).push(e);
 		return null;
 	}

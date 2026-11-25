@@ -10,6 +10,7 @@ import anyparse.query.cli.CliArgs.PositionalScan;
 import anyparse.query.cli.CliArgs.ResolvedInputs;
 import anyparse.query.cli.CliWalk;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -550,7 +551,7 @@ final class LitCommand implements CliCommand implements LeadingQuery {
 			// AST walk emits in depth-first source order; comment and directive
 			// hits are appended after. Sort by span.from so the rendered file
 			// group stays in source order regardless of which pass produced the hit.
-			if (query.scanComments || query.scanDirectives) hits.sort((a, b) -> a.span.from - b.span.from);
+			if (query.scanComments || query.scanDirectives) hits.sort((a, b) -> Compare.compareInt(a.span.from, b.span.from));
 			allEntries.push({ file: entry.path, source: entry.source, hits: hits });
 		}
 

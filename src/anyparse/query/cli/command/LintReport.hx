@@ -15,6 +15,7 @@ import anyparse.query.cli.command.LintCommand.LintWindowOf;
 import anyparse.query.format.LintFormat;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -187,7 +188,7 @@ final class LintReport {
 			else
 				group.push(v);
 		}
-		for (group in byFile) group.sort((a, b) -> spanStart(a.span) - spanStart(b.span));
+		for (group in byFile) group.sort((a, b) -> Compare.compareInt(spanStart(a.span), spanStart(b.span)));
 		// The two record formats want the groups concatenated in input-file order; the text
 		// branch prints them one group at a time and needs no such array.
 		inline function orderedByPath(): Array<Violation> {

@@ -1,6 +1,7 @@
 package unit.lowering;
 
 import anyparse.macro.RegexFirstBytes;
+import anyparse.util.Compare;
 
 /**
  * The contract of the first-byte classifier the Alt dispatch guards and the
@@ -239,7 +240,7 @@ class RegexFirstBytesTest extends Test {
 
 	private static function sorted(codes: Array<Int>): Array<Int> {
 		final copy: Array<Int> = codes.copy();
-		copy.sort((a, b) -> a - b);
+		copy.sort(Compare.compareInt);
 		return copy;
 	}
 

@@ -9,6 +9,7 @@ import anyparse.query.MemberBranchScan.MemberBranchSeams;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -154,7 +155,7 @@ final class ReachHazards {
 			node: root,
 			receivers: receiversAt(r.at.span)
 		});
-		out.sort((a, b) -> a.span.from - b.span.from);
+		out.sort((a, b) -> Compare.compareInt(a.span.from, b.span.from));
 		return out;
 	}
 

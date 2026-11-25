@@ -31,6 +31,7 @@ import anyparse.query.TypeInfoMemo;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
+import anyparse.util.Compare;
 
 using StringTools;
 
@@ -359,7 +360,7 @@ final class RedundantNarrowingCopy extends RuleBase implements ConfigAware imple
 			if (h.kind != RefKind.Read || h.interpolated || h.patternUndecided) return null;
 			reads.push(h.span);
 		}
-		reads.sort((a, b) -> a.from - b.from);
+		reads.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		return reads.length == 0 ? null : reads;
 	}
 

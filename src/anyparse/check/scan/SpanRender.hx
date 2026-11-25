@@ -1,6 +1,7 @@
 package anyparse.check.scan;
 
 import anyparse.query.LeafSpans;
+import anyparse.util.Compare;
 
 /**
  * One stretch of a rendered span: the bytes `[from, to)` and, when non-null, the text emitted in
@@ -101,7 +102,7 @@ final class SpanRender {
 			for (token in tokens) if (!replaced(overrides, token)) { from: token.from, to: token.to, text: null }
 		];
 		for (hole in overrides) parts.push({ from: hole.span.from, to: hole.span.to, text: hole.text });
-		parts.sort((a, b) -> a.from - b.from);
+		parts.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		return parts;
 	}
 

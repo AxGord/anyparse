@@ -16,6 +16,7 @@ import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.ds.Either;
 
 using anyparse.util.Groups;
@@ -967,7 +968,7 @@ final class MoveMember {
 		// Each member's list holds the source's `using` lines in declaration order, the union across members need not
 		// (`[using A]` then `[using B, using A]` reads B after A) — and their order decides which extension wins a name.
 		final usings: Array<String> = MoveSymbol.carriedUsingLines(carried);
-		usings.sort((a, b) -> prep.srcSource.indexOf(a) - prep.srcSource.indexOf(b));
+		usings.sort((a, b) -> Compare.compareInt(prep.srcSource.indexOf(a), prep.srcSource.indexOf(b)));
 		final ordered: Array<String> = MoveSymbol.carriedImportLines(carried).concat(usings);
 		// One seat decides where a carried `using` goes — see `MoveSymbol.carriedDestEdits`. A
 		// destination whose own `using` run cannot be ranked above is a REFUSAL here too, for the same
@@ -1364,7 +1365,7 @@ final class MoveMember {
 				isStatic: modifierStatic || hostStatic
 			});
 		}
-		moved.sort((a, b) -> a.cut.from - b.cut.from);
+		moved.sort((a, b) -> Compare.compareInt(a.cut.from, b.cut.from));
 		for (i in 1...moved.length) if (moved[i].cut.from < moved[i - 1].cut.to)
 			return 'members "${moved[i - 1].name}" and "${moved[i].name}" resolve to overlapping source spans';
 		return null;

@@ -5,6 +5,7 @@ import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MoveMember.MovePrep;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.ds.Either;
 
 using Lambda;
@@ -136,7 +137,7 @@ final class MoveToHelperTypes {
 	 */
 	private static function sourceCuts(source: String, cuts: Array<Span>): Array<{ span: Span, text: String }> {
 		final sorted: Array<Span> = cuts.copy();
-		sorted.sort((a, b) -> a.from - b.from);
+		sorted.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		final merged: Array<Span> = [];
 		for (cut in sorted) {
 			final last: Null<Span> = merged[merged.length - 1];

@@ -3,6 +3,7 @@ package anyparse.check.common.design.threads;
 import anyparse.check.common.design.threads.LockSites.LockEscape;
 import anyparse.query.CallGraph;
 import anyparse.query.ShapeVocab;
+import anyparse.util.Compare;
 
 /**
  * Which calls of a call graph may raise an exception, for the `thread-safety` finding of a lock left held by a throw. A
@@ -72,7 +73,7 @@ final class ThrowReach {
 				{ span: span, raiser: raiser };
 			}
 		} ];
-		escapes.sort((x, y) -> x.span.from - y.span.from);
+		escapes.sort((x, y) -> Compare.compareInt(x.span.from, y.span.from));
 		return escapes;
 	}
 

@@ -20,6 +20,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.UnchangedLocal;
 import anyparse.query.WriteSites;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 using StringTools;
@@ -282,7 +283,7 @@ final class RepeatedCast extends RuleBase implements ConfigAware implements Vola
 				if (most >= least) found.push(finding(home.unit, run, most, scan));
 			}
 		}
-		found.sort((a, b) -> a.span.from - b.span.from);
+		found.sort((a, b) -> Compare.compareInt(a.span.from, b.span.from));
 		for (f in found) out.push(f);
 	}
 

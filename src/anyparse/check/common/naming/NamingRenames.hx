@@ -22,6 +22,7 @@ import haxe.Exception;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.ReflectionScan;
 import anyparse.query.ShapeVocab;
+import anyparse.util.Compare;
 
 using anyparse.util.Groups;
 using StringTools;
@@ -656,7 +657,7 @@ final class NamingRenames {
 				return null;
 		}
 		final sorted: Array<Span> = renameSpans.copy();
-		sorted.sort((a, b) -> a.from - b.from);
+		sorted.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
 		final starts: Array<Int> = sorted.map(s -> s.from);
 		final targets: Array<Int> = [];

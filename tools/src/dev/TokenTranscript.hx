@@ -4,6 +4,7 @@ import anyparse.grammar.json.JValue;
 import anyparse.grammar.json.JValueTools;
 import anyparse.grammar.json.JValueWriter;
 import anyparse.grammar.json.JsonFormat;
+import anyparse.util.Compare;
 import haxe.Exception;
 import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
@@ -328,7 +329,7 @@ final class TokenTranscript {
 	/** `calls` with `call` added, keeping only the `BIGGEST_CALLS` largest answers, the largest first. */
 	public static function keepBiggest(calls: Array<BigCall>, call: BigCall): Void {
 		calls.push(call);
-		calls.sort((a, b) -> b.outChars - a.outChars);
+		calls.sort((a, b) -> Compare.compareInt(b.outChars, a.outChars));
 		if (calls.length > BIGGEST_CALLS) calls.pop();
 	}
 

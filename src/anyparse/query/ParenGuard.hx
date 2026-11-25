@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.Exception;
 
 using anyparse.util.Arrays;
@@ -341,7 +342,7 @@ final class ParenGuard {
 				to: edit.text.length
 			});
 			final holes: Array<Span> = edit.holes.copy();
-			holes.sort((a, b) -> a.from - b.from);
+			holes.sort((a, b) -> Compare.compareInt(a.from, b.from));
 			for (h in 0...holes.length) sites.push({
 				edit: e,
 				position: h + 1,
@@ -390,7 +391,7 @@ final class ParenGuard {
 			final rootOpen: Int = length + pieceLen - (wrap[rootIndex] ? openLen : 0);
 			final rootFrom: Int = length + pieceLen;
 			final holes: Array<Span> = edit.holes.copy();
-			holes.sort((a, b) -> a.from - b.from);
+			holes.sort((a, b) -> Compare.compareInt(a.from, b.from));
 			var at: Int = 0;
 			for (h => hole in holes) {
 				piece.add(edit.text.substring(at, hole.from));

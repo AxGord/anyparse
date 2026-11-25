@@ -11076,7 +11076,7 @@
 			"name": "M-CARRY-USING-ORDER-MET",
 			"type": "anyparse.query.MoveMember",
 			"method": "pushImportEdits",
-			"find": "usings.sort((a, b) -> prep.srcSource.indexOf(a) - prep.srcSource.indexOf(b));",
+			"find": "usings.sort((a, b) -> Compare.compareInt(prep.srcSource.indexOf(a), prep.srcSource.indexOf(b)));",
 			"replace": "",
 			"note": "the union of the members' carried `using` lines keeps the order the members met them in, not the source's, and the extension ranking flips"
 		},
@@ -11530,7 +11530,7 @@
 			"name": "M-HELPER-CALL-ORDER",
 			"type": "anyparse.query.MoveToHelperRefs",
 			"method": "rewrite",
-			"find": "calls.sort((a, b) -> a.length - b.length);",
+			"find": "calls.sort((a, b) -> Compare.compareInt(a.length, b.length));",
 			"replace": "",
 			"note": "call rewrites inserting at one offset are pushed outermost first, so `a.self().add(1)` comes out with its heads swapped"
 		},

@@ -14,6 +14,7 @@ import anyparse.query.OracleProvider;
 import anyparse.query.OracleProviders;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using anyparse.util.Groups;
 
@@ -1044,7 +1045,7 @@ final class FixVerifier {
 		}
 		if (kept.length == 0 || kept.length == units.length) return whole;
 		final flat: Array<Int> = [ for (u in kept) for (i in units[u]) i ];
-		flat.sort((a, b) -> a - b);
+		flat.sort(Compare.compareInt);
 		final keptEdits: Array<GroupedEdit> = flat.map(i -> edits[i]);
 		final refused: Int = edits.length - keptEdits.length;
 		final oracle: OracleProvider = OracleProviders.of(plugin);
@@ -1098,7 +1099,7 @@ final class FixVerifier {
 		edits: Array<GroupedEdit>, units: Array<Array<Int>>, unitIndices: Array<Int>
 	): Array<{ span: Span, text: String }> {
 		final flat: Array<Int> = [ for (u in unitIndices) for (i in units[u]) i ];
-		flat.sort((a, b) -> a - b);
+		flat.sort(Compare.compareInt);
 		return flat.map(i -> { span: edits[i].span, text: edits[i].text });
 	}
 

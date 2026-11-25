@@ -2,6 +2,7 @@ package unit.lowering;
 
 import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.query.AccessorClause;
+import anyparse.util.Compare;
 
 /**
  * The span-only capture mode (`@:spanCapture`): `HxAccessClause` gets a `_span` from the rule entry to past its
@@ -42,7 +43,7 @@ final class AccessClauseSpanCaptureTest extends Test {
 	private static function clauseTexts(src: String): Array<String> {
 		final clauses: Map<Int, AccessorClause> = new HaxeQueryPlugin().accessorClauses(src);
 		final keys: Array<Int> = [ for (k in clauses.keys()) k ];
-		keys.sort((a, b) -> a - b);
+		keys.sort(Compare.compareInt);
 		final out: Array<String> = [];
 		for (k in keys) {
 			final c: Null<AccessorClause> = clauses[k];
@@ -55,7 +56,7 @@ final class AccessClauseSpanCaptureTest extends Test {
 	private static function gapTexts(src: String): Array<String> {
 		final clauses: Map<Int, AccessorClause> = new HaxeQueryPlugin().accessorClauses(src);
 		final keys: Array<Int> = [ for (k in clauses.keys()) k ];
-		keys.sort((a, b) -> a - b);
+		keys.sort(Compare.compareInt);
 		final out: Array<String> = [];
 		for (k in keys) {
 			final c: Null<AccessorClause> = clauses[k];

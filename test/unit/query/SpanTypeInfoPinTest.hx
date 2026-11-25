@@ -4,6 +4,7 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using Lambda;
 
@@ -210,7 +211,7 @@ class SpanTypeInfoPinTest extends Test {
 	/** A span map as a key-ordered `[from=>value, ...]` string, so a mismatch reads as a diff rather than a count. */
 	private static function render<V>(m: Map<Int, V>): String {
 		final keys: Array<Int> = [ for (k in m.keys()) k ];
-		keys.sort((a, b) -> a - b);
+		keys.sort(Compare.compareInt);
 		return '[${keys.map(k -> '$k=>${m[k]}').join(', ')}]';
 	}
 

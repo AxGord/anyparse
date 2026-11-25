@@ -31,7 +31,7 @@ final class GraphText {
 		});
 		final heaviest: Array<GraphEdge> = edges.copy();
 		// a stable sort keeps the graph's own order among edges of one weight
-		ArraySort.sort(heaviest, (x, y) -> y.weight - x.weight);
+		ArraySort.sort(heaviest, (x, y) -> Compare.compareInt(y.weight, x.weight));
 		final changedNodes: Array<GraphNode> = graph.nodes().filter(n -> n.change != null);
 		// a graph comparing two versions marks every edge line, an unchanged one with a blank
 		final diff: Bool = changedNodes.length > 0 || edges.exists(e -> e.change != null);

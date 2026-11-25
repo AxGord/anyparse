@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.LexicalRegions.LexRegionKind;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 
@@ -58,7 +59,7 @@ final class ModulePathTokens {
 			if (oldSlash != rename.oldPath) for (at in occurrences(text, oldSlash, false))
 				out.push({ span: new Span(at, at + oldSlash.length), text: slashPath(rename.newPath) });
 		}
-		out.sort((a, b) -> a.span.from - b.span.from);
+		out.sort((a, b) -> Compare.compareInt(a.span.from, b.span.from));
 		return out;
 	}
 
@@ -143,7 +144,7 @@ final class ModulePathTokens {
 		final out: Array<Span> =
 			tree == null ? regions.map(r -> new Span(r.from, r.to)) : InertRegions.of(tree, regions, plugin.refShape());
 		if (tree != null) collectImportStatements(tree, out);
-		out.sort((a, b) -> a.from - b.from);
+		out.sort((a, b) -> Compare.compareInt(a.from, b.from));
 		return out;
 	}
 

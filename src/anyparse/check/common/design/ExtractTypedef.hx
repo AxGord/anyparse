@@ -8,6 +8,7 @@ import anyparse.check.common.design.AnonTypeDup.Plan;
 import anyparse.query.IndexScope;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
+import anyparse.util.Compare;
 import haxe.ds.Either;
 
 using anyparse.util.Arrays;
@@ -119,7 +120,7 @@ final class ExtractTypedef {
 		final here: Array<Occurrence> = [ for (key in order) for (hit in groups[key] ?? []) if (hit.file == entry.file) hit ];
 		final offset: Int = Span.offsetOf(entry.source, line, col ?? 1);
 		final holding: Array<Occurrence> = here.filter(h -> col != null && h.at.from <= offset && offset < h.at.to);
-		holding.sort((a, b) -> (a.at.to - a.at.from) - (b.at.to - b.at.from));
+		holding.sort((a, b) -> Compare.compareInt(a.at.to - a.at.from, b.at.to - b.at.from));
 		if (holding.length > 0) return Left(holding[0]);
 		final starting: Array<Occurrence> = col != null ? [] : here.filter(h -> h.at.lineCol(entry.source).line == line);
 		if (starting.length == 1) return Left(starting[0]);

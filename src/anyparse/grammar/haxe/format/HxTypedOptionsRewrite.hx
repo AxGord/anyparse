@@ -23,6 +23,7 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 import haxe.Exception;
 
 using anyparse.util.Strings;
@@ -353,7 +354,7 @@ final class HxTypedOptionsRewrite {
 	private static function applied(whole: String, from: Int, edits: Array<Edit>): String {
 		var text: String = whole;
 		final ordered: Array<Edit> = edits.copy();
-		ordered.sort((a, b) -> b.span.from - a.span.from);
+		ordered.sort((a, b) -> Compare.compareInt(b.span.from, a.span.from));
 		for (e in ordered) text = text.substring(0, e.span.from - from) + e.text + text.substring(e.span.to - from);
 		return text;
 	}

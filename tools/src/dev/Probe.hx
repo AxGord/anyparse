@@ -308,7 +308,7 @@ final class Probe {
 	public static function normalize(text: String, dir: String): String {
 		final real: String = FileSystem.exists(dir) ? FileSystem.fullPath(dir) : dir;
 		final spellings: Array<String> = real == dir ? [dir] : [real, dir];
-		spellings.sort((a, b) -> b.length - a.length);
+		spellings.sort((a, b) -> Compare.compareInt(b.length, a.length));
 		var result: String = text;
 		for (spelling in spellings) result = result.replace(spelling, FIXTURE_MARK);
 		return ~/anyparse-last-probe\.[0-9]+\./g.replace(result, 'anyparse-last-probe.N.');

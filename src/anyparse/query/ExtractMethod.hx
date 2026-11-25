@@ -7,6 +7,7 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.Span;
+import anyparse.util.Compare;
 
 using anyparse.util.Strings;
 using Lambda;
@@ -635,7 +636,7 @@ final class ExtractMethod {
 				params.push({ name: nm, from: b, type: type.trim() });
 			}
 		}
-		params.sort((a, c) -> a.from - c.from);
+		params.sort((a, c) -> Compare.compareInt(a.from, c.from));
 		return null;
 	}
 

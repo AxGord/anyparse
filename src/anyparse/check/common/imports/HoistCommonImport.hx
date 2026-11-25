@@ -19,6 +19,7 @@ import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.TypeNameBinding;
+import anyparse.util.Compare;
 import haxe.ds.ArraySort;
 import haxe.io.Path;
 
@@ -511,7 +512,7 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 	/** Whether `source` holds nothing but whitespace once every span of `spans` is cut out of it. */
 	private static function remainsBlank(source: String, spans: Array<Span>): Bool {
 		final ordered: Array<Span> = spans.copy();
-		ordered.sort((a, b) -> b.from - a.from);
+		ordered.sort((a, b) -> Compare.compareInt(b.from, a.from));
 		var rest: String = source;
 		for (span in ordered) rest = rest.substring(0, span.from) + rest.substr(span.to);
 		return rest.trim().length == 0;
