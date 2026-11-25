@@ -66,6 +66,11 @@ states:
     # stdout is the worktree path alone (no newline) — it becomes context.wt; the messages go to stderr.
     command: |-
       case "$SLICE" in ''|*[!A-Za-z0-9-]*) echo "refused slice id: '$SLICE'" >&2; exit 2;; esac
+      # The queue file must sit in the repo this pipeline runs in: a line whose repo column names another repo gets no
+      # worktree there. Exit 4 is refused before anything is made; state `misrouted` hands the one-line reason to the parent.
+      qroot=$(cd "$(dirname "$(dirname "$(dirname "$QUEUE")")")" && pwd -P) || exit 2
+      proot=$(cd "$WF_PROJECT_ROOT" && pwd -P) || exit 2
+      [ "$qroot" = "$proot" ] || { echo "line $SLICE has repo: $proot but no workflow: — set workflow (engine-task for the engine) and re-queue" >&2; exit 4; }
       t=$(awk -v id="$SLICE" '$0=="  - id: " id {f=1; next} f && /^  - /{exit} f && /^    touches: /{sub(/^    touches: \[ ?/, ""); sub(/ ?\]$/, ""); print; exit}' "$WF_PROJECT_ROOT/.claude/batch/queue.yaml")
       if [ -n "$t" ] && ! printf '%s\n' "$t" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v -E '^\.claude/workflows/lib/recon-arm$' | sed 's#^\.claude/workflows/#tracked-workflows/#' | grep -v -E "^(\.claude|~/\.claude|$HOME/\.claude)(/|\$)" | grep -q .; then
         echo "refused: every touches: path of $SLICE is git-ignored (.claude/ outside workflows/) — no commit can carry it; the parent applies such a line" >&2; exit 3
@@ -86,12 +91,24 @@ states:
     env:
       SLICE: "{{context.slice}}"
       WT_ROOT: "{{context.wt_root}}"
+      QUEUE: "{{context.queue_file}}"
     timeout: 60000
     context_set:
       wt: "{{stdout}}"
       lock_mode: ""
-    on_success: sweep_probe
-    on_error: prepare_failed
+    cases:
+      "0": sweep_probe
+      "4": misrouted
+    default: prepare_failed
+
+  misrouted:
+    # Exit 4 of prepare: no worktree was made and the line stays `[>]`. wf-queue cannot mark this queue (its CLI reads
+    # a queue.md with `## Tasks`), so the parent edits the line by its queue tools and frees the slot.
+    terminal: true
+    outcome: complete
+    prompt: |-
+      Pipeline {{context.slice}} refused before any worktree was made: {{stderr}}
+      The line stays `[>]` in {{context.queue_file}}. Set its workflow (engine-task for the engine) and re-queue it (`[ ]`) with the queue tools, then in the dispatcher session {{parent_session_id}} transition `slot_free`.
 
   prepare_failed:
     ask: parent
