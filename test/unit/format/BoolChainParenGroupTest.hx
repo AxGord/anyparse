@@ -34,9 +34,9 @@ final class BoolChainParenGroupTest extends Test {
 			'class C {\n\tfunction lambda(key:String, prefix:String):Bool {\n'
 			+ '\t\treturn items.exists((item:Item) -> item.enabled && (accepts(item, key) || item.children.exists((child:String) '
 			+ '-> child.startsWith(prefix)) || item.aliases.exists((alias:String) -> alias.startsWith(prefix))));\n\t}\n}',
-			'class C {\n\tfunction lambda(key:String, prefix:String):Bool {\n\t\treturn items.exists(\n\t\t\t(item:Item) '
-			+ '-> item.enabled && (\n\t\t\t\taccepts(item, key) || item.children.exists((child:String) -> child.startsWith(prefix))\n'
-			+ '\t\t\t\t|| item.aliases.exists((alias:String) -> alias.startsWith(prefix))\n\t\t\t)\n\t\t);\n\t}\n}'
+			'class C {\n\tfunction lambda(key:String, prefix:String):Bool {\n\t\treturn items.exists((item:Item) '
+			+ '-> item.enabled && (\n\t\t\taccepts(item, key) || item.children.exists((child:String) -> child.startsWith(prefix))\n'
+			+ '\t\t\t|| item.aliases.exists((alias:String) -> alias.startsWith(prefix))\n\t\t));\n\t}\n}'
 		);
 	}
 

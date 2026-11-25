@@ -197,12 +197,11 @@ final class SafeDeleteType {
 	/** Whether the module holds nothing but `decl`: no other type, field or region, only its header and the type's own annotations. */
 	private static function isOnlyType(tree: QueryNode, decl: TypeDeclMatch, plugin: GrammarPlugin, shape: RefShape): Bool {
 		final prefix: Array<String> = plugin.metaShape().metaKinds.concat(CheckScan.modifierKinds(shape));
-		return tree.children.foreach(
-			c ->
-				c == decl.declNode
-				|| ModuleScan.IMPORT_DECL_KINDS.contains(c.kind)
-				|| ModuleScan.PACKAGE_DECL_KINDS.contains(c.kind)
-				|| prefix.contains(c.kind)
+		return tree.children.foreach(c ->
+			c == decl.declNode
+			|| ModuleScan.IMPORT_DECL_KINDS.contains(c.kind)
+			|| ModuleScan.PACKAGE_DECL_KINDS.contains(c.kind)
+			|| prefix.contains(c.kind)
 		);
 	}
 

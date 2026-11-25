@@ -974,10 +974,9 @@ final class MemberReach {
 		return [
 			for (id in facts.faceted.keys())
 				if (
-					g.declarationsOf(id)
-						.exists(
-							d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to)
-						)
+					g.declarationsOf(id).exists(
+						d -> CallGraphNames.normalizePath(d.file) == key && spans.exists(s -> d.span.from < s.to && s.from < d.span.to)
+					)
 				)
 					id
 		];

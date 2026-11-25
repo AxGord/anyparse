@@ -200,9 +200,9 @@ final class LintScope {
 		final redone: Map<String, Bool> = [ for (file in scope) file => true ];
 		final narrow: Map<String, Bool> = [ for (id in dependent) id => true ];
 		return JValueWriter.write(
-			JArray(records.filter(record -> !(
-				redone.exists(JValueTools.stringAt(record, FILE_KEY) ?? '') && narrow.exists(JValueTools.stringAt(record, 'rule') ?? '')
-			))),
+			JArray(records.filter(record ->
+				!(redone.exists(JValueTools.stringAt(record, FILE_KEY) ?? '') && narrow.exists(JValueTools.stringAt(record, 'rule') ?? ''))
+			)),
 			JsonFormat.instance.expandedWriteOptions
 		);
 	}

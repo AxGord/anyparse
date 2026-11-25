@@ -783,10 +783,9 @@ final class SourceCommand implements CliCommand {
 		// is still better than no menu at all.
 		final spanning: Array<{ selector: String, from: Int, to: Int }> = found.filter(entry -> entry.to > entry.from);
 		final menu: Array<{ selector: String, from: Int, to: Int }> = spanning.length > 0 ? spanning : found;
-		return menu.map(
-			entry ->
-				'${entry.selector}   lines ${entry.from}-${entry.to}'
-				+ (entry.to - entry.from + 1 > budget ? ' (past the budget itself — prefer --range)' : '')
+		return menu.map(entry ->
+			'${entry.selector}   lines ${entry.from}-${entry.to}'
+			+ (entry.to - entry.from + 1 > budget ? ' (past the budget itself — prefer --range)' : '')
 		);
 	}
 

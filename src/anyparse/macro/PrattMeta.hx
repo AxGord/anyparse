@@ -22,8 +22,8 @@ final class PrattMeta {
 	public static final OPERAND_CHAIN: String = 'operandChain';
 
 	public static function hasPrattBranch(node: ShapeNode): Bool {
-		return node.children.exists(
-			branch -> branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
+		return node.children.exists(branch ->
+			branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
 		);
 	}
 

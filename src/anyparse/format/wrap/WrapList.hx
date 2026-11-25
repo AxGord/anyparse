@@ -2350,12 +2350,8 @@ class WrapList {
 	 * is the arrow item's column-independent flat token width (>= 0 since the
 	 * body has no structural hardline here). Mirrors fork
 	 * `preferLambdaSignatureInlineOverWrap`.
-	 * The arrow BODY must not be a top-level binary chain (opBool / opAddSub /
-	 * ternary): such a body, when it overflows, is the fork's condition-chain
-	 * case (`condition_wrapping_nested_with_opbool` — the C1 family deferred
-	 * from inc5) where fork OPENS the paren and puts the arrow on its own
-	 * continuation line regardless of width. Head-glue is fork-correct only
-	 * for a single non-chain body (call / method chain).
+	 * A binary-chain body (opBool / opAddSub / ternary) takes the same decision as a call body:
+	 * a chain that overflows the continuation line glues `f(c ->` and breaks under it by its own rules.
 	 */
 	private static function shapeSoleArrowContGlue(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
@@ -2369,7 +2365,7 @@ class WrapList {
 		) {
 			final body: Null<Doc> = arrowBodyDoc(items[0]);
 			final arrowFlatWidth: Int = DocMeasure.flatTokenWidth(items[0]);
-			if (arrowFlatWidth >= 0 && body != null && !isTopLevelChain(body)) {
+			if (arrowFlatWidth >= 0 && body != null) {
 				final glueShape: Doc = arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
 				final openShape: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, cols, appendTrailingComma);
 				return IfArrowContinuationFits(cols, arrowFlatWidth, lineWidth, glueShape, openShape);
@@ -2858,8 +2854,7 @@ class WrapList {
 	}
 
 	// ω-inc5-cont: the arrow body's FLAT side (the marker's `flatBody`), or null
-	// if `item` is not a recognized arrow-body marker. Used to inspect the body
-	// shape (e.g. `isTopLevelChain`) when deciding head-glue.
+	// if `item` is not a recognized arrow-body marker.
 
 	private static function arrowBodyDoc(item: Doc): Null<Doc> {
 		return switch item {

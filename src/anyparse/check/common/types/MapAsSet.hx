@@ -502,11 +502,8 @@ final class MapAsSet extends RuleBase implements DefaultOff implements ConfigAwa
 		final fields: Array<MemberInfo> = members.filter(member -> !member.isStatic && (shape.fieldDeclKinds ?? []).contains(member.kind));
 		final literals: Array<String> = shape.numericLiteralKinds ?? [];
 		return fields.length > 0
-			&& fields.filter(
-				field ->
-					!field.guarded
-					&& literals.contains(field.initializerKind ?? '')
-					&& (Std.parseInt(field.initializerSource ?? '') ?? -1) >= 0
+			&& fields.filter(field ->
+				!field.guarded && literals.contains(field.initializerKind ?? '') && (Std.parseInt(field.initializerSource ?? '') ?? -1) >= 0
 			)
 				.length
 				== fields.length;

@@ -43,13 +43,12 @@ final class GateExcerpt {
 	 * tool's own warnings; the last lines when the transcript names none.
 	 */
 	public static function suite(lines: Array<String>): Array<String> {
-		final red: Array<String> = lines.filter(
-			line ->
-				line.startsWith('  shard ')
-				|| line.startsWith('suite-shard: FAILED')
-				|| line.startsWith('dev shard:')
-				|| line.indexOf('exit-status disagreement') >= 0
-				|| line.indexOf('did NOT finish') >= 0
+		final red: Array<String> = lines.filter(line ->
+			line.startsWith('  shard ')
+			|| line.startsWith('suite-shard: FAILED')
+			|| line.startsWith('dev shard:')
+			|| line.indexOf('exit-status disagreement') >= 0
+			|| line.indexOf('did NOT finish') >= 0
 		);
 		return red.length == 0 ? Excerpt.tail(lines.join('\n')) : red;
 	}

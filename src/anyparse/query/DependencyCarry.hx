@@ -388,12 +388,11 @@ final class DependencyCarry {
 	 * condition, by `foldGuardedCarry`.
 	 */
 	private static function unguardedProviderOf(dep: String, cursorInfo: FileInfo): Null<ImportInfo> {
-		return cursorInfo.imports.find(
-			imp ->
-				!imp.guarded
-				&& (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
-				&& SymbolIndex.pathImportedBy(imp) != null
-				&& SourceText.lastSegment(imp.raw) == dep
+		return cursorInfo.imports.find(imp ->
+			!imp.guarded
+			&& (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using || imp.kind == ImportKind.Alias)
+			&& SymbolIndex.pathImportedBy(imp) != null
+			&& SourceText.lastSegment(imp.raw) == dep
 		);
 	}
 
@@ -442,11 +441,10 @@ final class DependencyCarry {
 		final body: Null<QueryNode> = ModuleScan.guardedBodyRegion(plugin.parseFileTypeRefs(destSource), destSource, plugin);
 		// A DIRECT child only: an import under a further `#if` inside the body guard holds in fewer builds than the arriving declaration.
 		return body != null
-			&& destInfo.imports.exists(
-				imp ->
-					imp.guarded
-					&& same(imp)
-					&& body.children.exists(c -> c.span != null && c.span.from == imp.span.from && c.span.to == imp.span.to)
+			&& destInfo.imports.exists(imp ->
+				imp.guarded
+				&& same(imp)
+				&& body.children.exists(c -> c.span != null && c.span.from == imp.span.from && c.span.to == imp.span.to)
 			);
 	}
 
@@ -670,12 +668,11 @@ final class DependencyCarry {
 				+ 'file\'s own references; import "$dep" explicitly at the source first, or move the dependency too';
 		final pkg: String = SourceText.parentPath(statement.raw);
 		final listed: Array<String> = names.wildcardTypes(pkg)?.map(m -> m.type.name) ?? StdTypes.moduleNamesIn(pkg) ?? [];
-		final clash: Null<String> = listed.find(
-			n ->
-				n != dep
-				&& NameMentionScan.destinationNamesType(destSource, destInfo, n, regions)
-				&& bindingOf(n, destInfo, names)?.path != '$pkg.$n'
-				&& names.bindingsOf(n, destInfo, null, true).bound == null
+		final clash: Null<String> = listed.find(n ->
+			n != dep
+			&& NameMentionScan.destinationNamesType(destSource, destInfo, n, regions)
+			&& bindingOf(n, destInfo, names)?.path != '$pkg.$n'
+			&& names.bindingsOf(n, destInfo, null, true).bound == null
 		);
 		return clash == null
 			? null

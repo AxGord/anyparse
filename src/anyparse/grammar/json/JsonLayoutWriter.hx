@@ -379,10 +379,9 @@ final class JsonLayoutWriter {
 	 * deletion touches the gap it closed up.
 	 */
 	private function isDirty(gap: Span): Bool {
-		return _marks.exists(
-			mark ->
-				(mark.from < gap.to && gap.from < mark.to)
-				|| ((mark.from == mark.to || gap.from == gap.to) && mark.from <= gap.to && gap.from <= mark.to)
+		return _marks.exists(mark ->
+			(mark.from < gap.to && gap.from < mark.to)
+			|| ((mark.from == mark.to || gap.from == gap.to) && mark.from <= gap.to && gap.from <= mark.to)
 		);
 	}
 

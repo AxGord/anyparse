@@ -1598,8 +1598,8 @@ final class RefShapeKindProjectionTest extends Test {
 	/** The `RefShape` fields the declared side reads: named `*Kind*`, listed as kind-bearing, or a kind-keyed map. */
 	private static function kindFieldsOf(shape: RefShape, projected: Array<String>): Array<String> {
 		return fieldsOf(shape)
-			.filter(
-				field -> field.indexOf('Kind') >= 0 || EXTRA_KIND_FIELDS.contains(field) || isKindKeyedMap(fieldOf(shape, field), projected)
+			.filter(field ->
+				field.indexOf('Kind') >= 0 || EXTRA_KIND_FIELDS.contains(field) || isKindKeyedMap(fieldOf(shape, field), projected)
 			);
 	}
 

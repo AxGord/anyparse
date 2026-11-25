@@ -108,11 +108,10 @@ private final class BodyText {
 	 */
 	public function builds(p: FactPos, built: String, constructions: Map<String, String>): Bool {
 		return holds(p)
-			&& _literals.exists(
-				l ->
-					l.span.from == p.span.from && p.span.to <= l.span.to
-					&& FLAGS.match(_text.substring(p.span.to, l.span.to))
-					&& constructions[l.kind] == built
+			&& _literals.exists(l ->
+				l.span.from == p.span.from && p.span.to <= l.span.to
+				&& FLAGS.match(_text.substring(p.span.to, l.span.to))
+				&& constructions[l.kind] == built
 			);
 	}
 
@@ -559,10 +558,9 @@ final class FactsProvenance {
 		final variables: Array<String> = _scope.shape.fieldDeclKinds ?? [];
 		return f.kinds.foreach(kind -> {
 			final variable: Bool = kind.startsWith('var(');
-			found.exists(
-				m ->
-					variables.contains(m.kind) == variable
-					&& (!variable || (throughCall(kind, 0) == m.hasGetter && throughCall(kind, 1) == m.hasSetter))
+			found.exists(m ->
+				variables.contains(m.kind) == variable
+				&& (!variable || (throughCall(kind, 0) == m.hasGetter && throughCall(kind, 1) == m.hasSetter))
 			);
 		});
 	}
@@ -751,11 +749,10 @@ final class FactsProvenance {
 			final at: FactPos = { file: n.at.file, span: site };
 			if (body.holds(at) && FactText.spellsCall(body.textAt(at), macroName)) return true;
 		}
-		return n.splices.exists(
-			other ->
-				other != splice
-				&& other.sites.exists(o -> splice.sites.exists(site -> site.from == o.from && site.to == o.to))
-				&& spells(other.body)
+		return n.splices.exists(other ->
+			other != splice
+			&& other.sites.exists(o -> splice.sites.exists(site -> site.from == o.from && site.to == o.to))
+			&& spells(other.body)
 		);
 	}
 
@@ -806,10 +803,8 @@ final class FactsProvenance {
 	 * `body` (`joined`): a fact there — the read's conversion, the value it flows as — is that read's.
 	 */
 	private function readJoined(n: FactNode, p: FactPos, body: BodyText): Bool {
-		return n.fields.exists(
-			f ->
-				!f.write && f.at.file == p.file && f.at.span.from == p.span.from && f.at.span.to == p.span.to
-				&& joined(n, f.at, f.field, body)
+		return n.fields.exists(f ->
+			!f.write && f.at.file == p.file && f.at.span.from == p.span.from && f.at.span.to == p.span.to && joined(n, f.at, f.field, body)
 		);
 	}
 

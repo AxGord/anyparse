@@ -1297,10 +1297,9 @@ final class TyperConformance {
 	private static function probes(dir: String, report: Report): Array<String> {
 		final start: String = Sys.getCwd();
 		final root: String = FileSystem.fullPath(dir);
-		final names: Array<String> = FileSystem.readDirectory(root).filter(
-			n ->
-				FileSystem.exists(Path.join([root, n, ConfigFinder.PROJECT_CONFIG]))
-				|| FileSystem.exists(Path.join([root, n, ConfigFinder.LEGACY_PROJECT_CONFIG]))
+		final names: Array<String> = FileSystem.readDirectory(root).filter(n ->
+			FileSystem.exists(Path.join([root, n, ConfigFinder.PROJECT_CONFIG]))
+			|| FileSystem.exists(Path.join([root, n, ConfigFinder.LEGACY_PROJECT_CONFIG]))
 		);
 		names.sort(Compare.compareString);
 		final refused: Array<String> = [];
@@ -1592,10 +1591,9 @@ final class TyperConformance {
 		final label: String = '$file:${at.from}: $compiled';
 		// an operator an inlined overload takes holds the overload's body at its range, its operands bound there
 		final spliced: Bool = typer.inlinedOverload(node)
-			|| oracle.facts.nodesAround(key, at).exists(
-				n ->
-					n.inlinedFrom != null
-					|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
+			|| oracle.facts.nodesAround(key, at).exists(n ->
+				n.inlinedFrom != null
+				|| n.calls.exists(c -> c.access == INLINED_ACCESS && c.site?.span.from == at.from && c.site?.span.to == at.to)
 			);
 		if (spliced)
 			report.unscored('facts/${node.kind}', '$label (inlined code)')

@@ -133,11 +133,10 @@ final class GraphView {
 	 */
 	public static function filter(graph: CodeGraph, filter: GraphFilter): CodeGraph {
 		final view: CodeGraph = new CodeGraph();
-		final kept: Array<GraphEdge> = graph.edges().filter(
-			e ->
-				(filter.external || (!nodeOf(graph, e.from).external && !nodeOf(graph, e.to).external))
-				&& (!filter.mutualOnly || graph.isMutual(e))
-				&& (graph.weightBetween(e.from, e.to) >= filter.minWeight || graph.weightBetween(e.to, e.from) >= filter.minWeight)
+		final kept: Array<GraphEdge> = graph.edges().filter(e ->
+			(filter.external || (!nodeOf(graph, e.from).external && !nodeOf(graph, e.to).external))
+			&& (!filter.mutualOnly || graph.isMutual(e))
+			&& (graph.weightBetween(e.from, e.to) >= filter.minWeight || graph.weightBetween(e.to, e.from) >= filter.minWeight)
 		);
 		final reached: Null<Map<String, Bool>> = filter.focus.length == 0 ? null : around(filter.focus, kept, filter.radius);
 		final pruned: Bool = reached != null || filter.minWeight > 1 || filter.mutualOnly;

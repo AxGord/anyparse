@@ -556,8 +556,8 @@ final class MemberKinds {
 	 * value-return / throw search that must not cross into a nested function or lambda.
 	 */
 	public static function subtreeContainsKindStopping(node: QueryNode, kinds: Array<String>, stopKinds: Array<String>): Bool {
-		return node.children.exists(
-			child -> !stopKinds.contains(child.kind) && (kinds.contains(child.kind) || subtreeContainsKindStopping(child, kinds, stopKinds))
+		return node.children.exists(child ->
+			!stopKinds.contains(child.kind) && (kinds.contains(child.kind) || subtreeContainsKindStopping(child, kinds, stopKinds))
 		);
 	}
 

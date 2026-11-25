@@ -295,10 +295,9 @@ final class SwallowedException extends RuleBase implements NoAutofix {
 		final loopSpan: Null<Span> = scan.loopKinds.contains(node.kind) ? node.span : null;
 		if (loopSpan == null || binding.from >= loopSpan.from) return false;
 		final once: Null<Span> = evaluatedOnce(node, scan);
-		return reads.exists(
-			r ->
-				r.from != writeSpan.from && r.from >= loopSpan.from && r.to <= loopSpan.to
-				&& (once == null || r.from < once.from || r.to > once.to)
+		return reads.exists(r ->
+			r.from != writeSpan.from && r.from >= loopSpan.from && r.to <= loopSpan.to
+			&& (once == null || r.from < once.from || r.to > once.to)
 		);
 	}
 

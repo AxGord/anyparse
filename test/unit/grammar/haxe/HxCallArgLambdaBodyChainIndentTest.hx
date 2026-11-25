@@ -144,12 +144,12 @@ final class HxCallArgLambdaBodyChainIndentTest extends Test {
 
 	/**
 	 * REGRESSION PIN (does NOT discriminate the fix): an arrow EXPRESSION body is not
-	 * a statement list either, so its chain keeps the call-argument base (fork parity).
+	 * a statement list either, so its chain keeps the call-argument base under the glued arrow head.
 	 */
 	public function testArrowExpressionBodyArgChainKeepsCallArgBase(): Void {
 		Assert.equals(
-			'class Sample {\n\n\tfunction run() {\n\t\tvisitAll(\n\t\t\t() ->\n\t\t\t\tpendingMarkers.length == 0 && sessionChanged && '
-			+ 'requestedAnchors.length == 0\n\t\t\t\t&& !seenBefore(index, spanPath, trailingNode, closingNode)\n\t\t);\n\t}\n\n}',
+			'class Sample {\n\n\tfunction run() {\n\t\tvisitAll(() ->\n\t\t\tpendingMarkers.length == 0 && sessionChanged && '
+			+ 'requestedAnchors.length == 0\n\t\t\t&& !seenBefore(index, spanPath, trailingNode, closingNode)\n\t\t);\n\t}\n\n}',
 			triviaWrite(
 				'class Sample {\n\tfunction run() {\n\t\tvisitAll(() -> pendingMarkers.length == 0 && sessionChanged '
 				+ '&& requestedAnchors.length == 0 && !seenBefore(index, spanPath, trailingNode, closingNode));\n\t}\n}',

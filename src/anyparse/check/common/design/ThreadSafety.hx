@@ -762,12 +762,11 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		final warned: Array<WarnedHold> = [ for (r in reported) if (r.finding.severity == Severity.Warning) r ];
 		for (r in warned) if (enclosed(r.hold)) {
 			final fn: String = r.hold.edge.from;
-			final around: Array<WarnedHold> = warned.filter(
-				w ->
-					w != r
-					&& !suppressed(w.finding)
-					&& w.hold.lock == r.hold.lock && w.hold.edge.from != fn
-					&& w.calls.exists(c -> w.taint.blockingTrail(w.hold, c, w.held)?.path.contains(fn) == true)
+			final around: Array<WarnedHold> = warned.filter(w ->
+				w != r
+				&& !suppressed(w.finding)
+				&& w.hold.lock == r.hold.lock && w.hold.edge.from != fn
+				&& w.calls.exists(c -> w.taint.blockingTrail(w.hold, c, w.held)?.path.contains(fn) == true)
 			);
 			if (around.length == 0) continue;
 			final members: Array<String> = [];
@@ -870,14 +869,13 @@ final class ThreadSafety extends RuleBase implements ConfigAware implements NoAu
 		reported.sort((x, y) -> (x.hold.edge.span?.from ?? 0) - (y.hold.edge.span?.from ?? 0));
 		final turned: Array<LockAcquire> = [];
 		for (inner in reported) if (!inner.handOff) {
-			final outer: Null<WarnedHold> = reported.find(
-				o ->
-					o.hold != inner.hold
-					&& !suppressed(o.finding)
-					&& !turned.contains(o.hold)
-					&& o.hold.edge.from == inner.hold.edge.from
-					&& (o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))
-					&& inner.calls.foreach(c -> o.hold.window.contains(c))
+			final outer: Null<WarnedHold> = reported.find(o ->
+				o.hold != inner.hold
+				&& !suppressed(o.finding)
+				&& !turned.contains(o.hold)
+				&& o.hold.edge.from == inner.hold.edge.from
+				&& (o.hold.window.contains(inner.hold.edge) || takenFirst(o.hold, inner.hold))
+				&& inner.calls.foreach(c -> o.hold.window.contains(c))
 			);
 			if (outer == null) continue;
 			turned.push(inner.hold);

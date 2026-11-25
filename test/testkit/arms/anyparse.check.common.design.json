@@ -558,7 +558,7 @@
 			"name": "M-TS-NEST-SUPPRESSED",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "nestHolds",
-			"find": "!suppressed(o.finding)\n\t\t\t\t\t&&",
+			"find": "!suppressed(o.finding)\n\t\t\t\t&&",
 			"replace": "",
 			"note": "a hold taken inside a hold whose warning a directive silences turns info onto it"
 		},
@@ -566,7 +566,7 @@
 			"name": "M-TS-ENCLOSED-SUPPRESSED",
 			"type": "anyparse.check.common.design.ThreadSafety",
 			"method": "foldEnclosed",
-			"find": "!suppressed(w.finding)\n\t\t\t\t\t&&",
+			"find": "!suppressed(w.finding)\n\t\t\t\t&&",
 			"replace": "",
 			"note": "a hold enclosed by a hold whose warning a directive silences turns info onto it"
 		},

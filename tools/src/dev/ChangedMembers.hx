@@ -181,10 +181,9 @@ final class ChangedMembers {
 			final lineFrom: Int = from;
 			final lineTo: Int = from + line.length;
 			from = lineTo + 1;
-			final held: Bool = spans.exists(
-				span ->
-					span.from < lineTo && span.to > lineFrom
-					&& text.substring(Std.int(Math.max(span.from, lineFrom)), Std.int(Math.min(span.to, lineTo))).trim() != ''
+			final held: Bool = spans.exists(span ->
+				span.from < lineTo && span.to > lineFrom
+				&& text.substring(Std.int(Math.max(span.from, lineFrom)), Std.int(Math.min(span.to, lineTo))).trim() != ''
 			);
 			if (held && !DOC_STAR.match(line)) code.push(line.trim());
 		}

@@ -478,10 +478,9 @@ final class StaticReflectionReach {
 	 * guarded header — holds a `using` of `module`, read off the declaration nodes so a commented-out one does not count.
 	 */
 	private static function writesUsing(node: QueryNode, module: String, shape: RefShape): Bool {
-		return node.children.exists(
-			c ->
-				(c.kind == UsingScan.USING_DECL_KIND && c.name == module)
-				|| (CondRegionScan.isConditionalKind(c.kind, shape) && writesUsing(c, module, shape))
+		return node.children.exists(c ->
+			(c.kind == UsingScan.USING_DECL_KIND && c.name == module)
+			|| (CondRegionScan.isConditionalKind(c.kind, shape) && writesUsing(c, module, shape))
 		);
 	}
 

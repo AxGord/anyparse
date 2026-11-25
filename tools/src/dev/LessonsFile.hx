@@ -268,12 +268,10 @@ final class LessonsFile {
 	private static function duplicateProblem(lesson: Lesson, queue: Array<QueueLine>): Null<String> {
 		final mine: String = fileSet(lesson.touches);
 		final names: Array<String> = ReconFacts.backtickedNames(lesson.text);
-		final twin: Null<QueueLine> = queue.find(
-			line -> OPEN.contains(line.status) && (
-				(lesson.text.length >= MIN_SHARED_BRIEF && line.text.contains(lesson.text))
-				|| (fileSet(line.touches) == mine && names.exists(name -> line.text.contains('`$name`')))
-			)
-		);
+		final twin: Null<QueueLine> = queue.find(line -> OPEN.contains(line.status) && (
+			(lesson.text.length >= MIN_SHARED_BRIEF && line.text.contains(lesson.text))
+			|| (fileSet(line.touches) == mine && names.exists(name -> line.text.contains('`$name`')))
+		));
 		return twin == null ? null : 'possible duplicate of ${twin.id}';
 	}
 

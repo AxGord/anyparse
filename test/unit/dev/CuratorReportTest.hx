@@ -167,10 +167,9 @@ final class CuratorReportTest extends Test {
 		final moves: Array<TableMove> = CuratorReport.movesOf(history(), [change()]);
 		Assert.same(
 			['execute d1-2 sonnet/high 1 -> haiku/xhigh 1'],
-			moves.map(
-				move ->
-					'${move.before.stage} d${move.before.from}-${move.before.upto} ${move.before.arm} ${move.before.n} -> ${move.after.arm}'
-					+ ' ${move.after.n}'
+			moves.map(move ->
+				'${move.before.stage} d${move.before.from}-${move.before.upto} ${move.before.arm} ${move.before.n} -> ${move.after.arm}'
+				+ ' ${move.after.n}'
 			)
 		);
 	}

@@ -559,10 +559,9 @@ final class ShortenTypeRef extends RuleBase implements ConfigAware implements Ri
 		final resolved: Map<String, String> = resolvedTypes(occurrences, printer);
 		for (path in distinctTypes(occurrences, resolved)) {
 			final simple: String = SourceText.lastSegment(path);
-			final eligible: Array<Occurrence> = occurrences.filter(
-				o ->
-					resolved[o.path] == path
-					&& (o.valueSite == null || (options.valuePositions && valueNameFree(simple, o, context, index, file)))
+			final eligible: Array<Occurrence> = occurrences.filter(o ->
+				resolved[o.path] == path
+				&& (o.valueSite == null || (options.valuePositions && valueNameFree(simple, o, context, index, file)))
 			);
 			final unguarded: Array<Occurrence> = eligible.filter(o -> !o.conditional);
 			// `targets` stays WHOLE-file — the finding set the fix path filters against `wanted` itself — while the two

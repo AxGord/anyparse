@@ -897,6 +897,14 @@
 			"find": "lastCh == ch || (ch == '['.code && lastCh == '{'.code && prevCh == '['.code)",
 			"replace": "lastCh == ch",
 			"note": "a call whose first break is a cuddled [{ no longer reads as breaking at its array, so an outer call holding it opens its parenthesis"
+		},
+		{
+			"name": "M-ARROW-CONT-GLUE-CHAIN-GATE",
+			"type": "anyparse.format.wrap.WrapList",
+			"method": "shapeSoleArrowContGlue",
+			"find": "if (arrowFlatWidth >= 0 && body != null) {",
+			"replace": "if (arrowFlatWidth >= 0 && body != null && !isTopLevelChain(body)) {",
+			"note": "a binary-chain lambda body is refused the head glue again, so the call opens its paren and the arrow parameter stands alone"
 		}
 	]
 }

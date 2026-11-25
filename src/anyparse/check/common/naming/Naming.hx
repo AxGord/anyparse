@@ -517,12 +517,11 @@ final class Naming extends RuleBase implements CrossFileFix implements RiskyArm 
 
 	/** The first rule in `policy` applicable to `decl` (category, modifier and name filters), or null. */
 	private static function applicableRule(decl: NamedDecl, policy: NamingPolicy): Null<NamingRule> {
-		return policy.find(
-			rule ->
-				rule.category == decl.category
-				&& rule.requireMods.foreach(m -> decl.mods.contains(m))
-				&& !rule.forbidMods.exists(m -> decl.mods.contains(m))
-				&& (rule.appliesTo?.match(decl.name) ?? true)
+		return policy.find(rule ->
+			rule.category == decl.category
+			&& rule.requireMods.foreach(m -> decl.mods.contains(m))
+			&& !rule.forbidMods.exists(m -> decl.mods.contains(m))
+			&& (rule.appliesTo?.match(decl.name) ?? true)
 		);
 	}
 

@@ -170,10 +170,9 @@ class ThreadSafetyReflectiveSealTest extends Test {
 		Assert.equals(1, all.filter(f -> f.indexOf('"D.risky" leaves') != -1 && f.indexOf(note) != -1).length, 'the hold left on a throw');
 		Assert.equals(
 			1,
-			all.filter(
-				f ->
-					f.indexOf('3 lock hold(s) lost the name of their lock member') != -1
-					&& f.indexOf('here: no closedWorld over the whole project, no reflectiveClasses') != -1
+			all.filter(f ->
+				f.indexOf('3 lock hold(s) lost the name of their lock member') != -1
+				&& f.indexOf('here: no closedWorld over the whole project, no reflectiveClasses') != -1
 			)
 				.length,
 			'the run counts them and says what is missing'

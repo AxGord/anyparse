@@ -208,11 +208,10 @@ final class ConstantHoist {
 	 * renaming in place.
 	 */
 	public static function constantRule(policy: NamingPolicy, mods: Array<String>): Null<NamingRule> {
-		return policy.find(
-			rule ->
-				rule.category == NamingCategory.Constant
-				&& rule.requireMods.foreach(m -> mods.contains(m))
-				&& !rule.forbidMods.exists(m -> mods.contains(m))
+		return policy.find(rule ->
+			rule.category == NamingCategory.Constant
+			&& rule.requireMods.foreach(m -> mods.contains(m))
+			&& !rule.forbidMods.exists(m -> mods.contains(m))
 		);
 	}
 

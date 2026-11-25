@@ -422,11 +422,10 @@ final class MustHeld {
 		if (found == null || points == null) return true;
 		final loops: Array<Span> = found;
 		final covered: String = cover ?? '';
-		return points.exists(
-			pos ->
-				pos > from
-				&& (pos < at || loops.exists(l -> l.from > from && l.from <= pos && pos < l.to))
-				&& (covered == '' || !coveredAt(id, valuation, file, covered, pos, at))
+		return points.exists(pos ->
+			pos > from
+			&& (pos < at || loops.exists(l -> l.from > from && l.from <= pos && pos < l.to))
+			&& (covered == '' || !coveredAt(id, valuation, file, covered, pos, at))
 		);
 	}
 

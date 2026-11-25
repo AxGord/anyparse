@@ -307,11 +307,10 @@ final class NamingCrossRename {
 	 * can edit, where a renamed bare occurrence would bind to that binding first.
 	 */
 	private static function boundWhereRenamed(newName: String, oldName: String, ctx: Context): Bool {
-		return ctx.project.exists(
-			entry ->
-				entry.source.indexOf(oldName) >= 0
-				&& entry.source.indexOf(newName) >= 0
-				&& OccurrenceScan.nameBoundInRange(entry.source, newName, 0, entry.source.length, [], ctx.plugin)
+		return ctx.project.exists(entry ->
+			entry.source.indexOf(oldName) >= 0
+			&& entry.source.indexOf(newName) >= 0
+			&& OccurrenceScan.nameBoundInRange(entry.source, newName, 0, entry.source.length, [], ctx.plugin)
 		);
 	}
 

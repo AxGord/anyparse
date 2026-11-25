@@ -357,10 +357,9 @@ final class ReconFacts {
 	private static function siblings(queueFile: String, line: QueueLine, sinceDate: String): String {
 		final same: Array<QueueLine> = line.owner == ''
 			? []
-			: QueueFile.read(File.getContent(queueFile)).filter(
-				other ->
-					other.id != line.id && other.owner == line.owner
-					&& (other.status == 'running' || (other.ended != '' && other.ended >= sinceDate))
+			: QueueFile.read(File.getContent(queueFile)).filter(other ->
+				other.id != line.id && other.owner == line.owner
+				&& (other.status == 'running' || (other.ended != '' && other.ended >= sinceDate))
 			);
 		return same.length == 0
 			? NONE

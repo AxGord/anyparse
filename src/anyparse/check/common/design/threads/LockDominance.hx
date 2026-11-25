@@ -146,10 +146,9 @@ final class LockDominance {
 		final lock: Null<String> = _sites.lockOf(take);
 		final object: Null<String> = _must.takeObject(take);
 		return lock != null && object != null
-			&& under.split(HELD_SEPARATOR).exists(
-				held ->
-					MustHeld.objectOf(held) == object
-					&& (lock == MustHeld.lockOf(held) ? reentrant : (dominators[lock] ?? []).contains(MustHeld.lockOf(held)))
+			&& under.split(HELD_SEPARATOR).exists(held ->
+				MustHeld.objectOf(held) == object
+				&& (lock == MustHeld.lockOf(held) ? reentrant : (dominators[lock] ?? []).contains(MustHeld.lockOf(held)))
 			);
 	}
 

@@ -273,10 +273,9 @@ final class MoveToHelper {
 			]) if (k != null) k
 		];
 		final overloadMeta: Null<String> = prep.shape.signatureOverloadMetaName;
-		final refusedModifier: Null<QueryNode> = m.group.modifiers.find(
-			mod ->
-				refusedKinds.contains(mod.kind)
-				|| (overloadMeta != null && MemberKinds.META_KINDS.contains(mod.kind) && metaText(prep, mod).startsWith(overloadMeta))
+		final refusedModifier: Null<QueryNode> = m.group.modifiers.find(mod ->
+			refusedKinds.contains(mod.kind)
+			|| (overloadMeta != null && MemberKinds.META_KINDS.contains(mod.kind) && metaText(prep, mod).startsWith(overloadMeta))
 		);
 		if (refusedModifier != null)
 			return '$head: it is declared `${metaText(prep, refusedModifier)}`, a meaning a static member does not keep';

@@ -128,9 +128,8 @@ final class StdTypes {
 		for (module in candidates) lookUp(plugin, module, member, 0, [], found, false);
 		if (found.length == 0) return null;
 		final first: StdMember = found[0];
-		final agree: Bool = found.foreach(
-			f ->
-				f.type == first.type && f.isFunction == first.isFunction && f.hasGetter == first.hasGetter && f.hasSetter == first.hasSetter
+		final agree: Bool = found.foreach(f ->
+			f.type == first.type && f.isFunction == first.isFunction && f.hasGetter == first.hasGetter && f.hasSetter == first.hasSetter
 		);
 		return agree ? first : null;
 	}

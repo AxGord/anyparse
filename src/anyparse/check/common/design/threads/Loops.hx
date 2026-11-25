@@ -139,10 +139,9 @@ final class Loops {
 		final fn: Null<String> = span == null ? null : _graph.functionAt(file, span.from);
 		if (span == null || fn == null) return true;
 		final reaching: Map<String, Bool> = sinkward();
-		return _graph.outEdges(fn).exists(
-			e ->
-				e.kind != Contains && e.span != null && e.span.from >= span.from && e.span.to <= span.to
-				&& (reaching.exists(e.to) || _listsOf(e.file).sinkIds.contains(e.to))
+		return _graph.outEdges(fn).exists(e ->
+			e.kind != Contains && e.span != null && e.span.from >= span.from && e.span.to <= span.to
+			&& (reaching.exists(e.to) || _listsOf(e.file).sinkIds.contains(e.to))
 		);
 	}
 
