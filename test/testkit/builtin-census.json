@@ -165,6 +165,7 @@
 	"prefer-typed-throw",
 	"prefer-using-over-static-import",
 	"prefer-value-loop",
+	"range-comprehension-feeds-call",
 	"redundant-ascription",
 	"redundant-braces",
 	"redundant-bypass-accessor",

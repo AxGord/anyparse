@@ -111,7 +111,7 @@ final class Monomorphs {
 		return switch [a, b] {
 			case [Mono(x), Mono(y)]: find(x) == find(y);
 			case [Of(x, xs, _), Of(y, ys, _)]:
-				AbstractCasts.same(x, y) && xs.length == ys.length && [ for (i in 0...xs.length) i ].foreach(i -> same(xs[i], ys[i]));
+				AbstractCasts.same(x, y) && xs.length == ys.length && sameEach(xs, ys);
 			case _: false;
 		};
 	}
@@ -131,6 +131,12 @@ final class Monomorphs {
 	/** Whether `term` mentions the root `root`. */
 	private function mentions(term: TypeTerm, root: Int): Bool {
 		return cellsOf(term).exists(m -> find(m) == root);
+	}
+
+	/** Whether the terms `xs` and `ys`, of one length, are known to be one type by one. */
+	private function sameEach(xs: Array<TypeTerm>, ys: Array<TypeTerm>): Bool {
+		for (i => x in xs) if (!same(x, ys[i])) return false;
+		return true;
 	}
 
 	/** The cells `term` mentions. */

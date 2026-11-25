@@ -273,6 +273,86 @@
 			"find": "declineAt(violations, f.span, reason);",
 			"replace": "{}",
 			"note": "a finding the fix leaves report-only carries no reason for the ledger"
+		},
+		{
+			"name": "M-RCFC-FOREACH-NOT-NEGATED",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "loopText",
+			"find": ": NegationScan.negateConditionText(body, source, s.negation, s.support, null, null, regions());",
+			"replace": ": source.substring(bodySpan.from, bodySpan.to);",
+			"note": "the foreach condition is written as it stands, so the loop returns false on the very element that satisfies it"
+		},
+		{
+			"name": "M-RCFC-ANY-STATEMENT-FIXED",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "matchOf",
+			"find": "parent.kind == s.returnKind && ",
+			"replace": "",
+			"note": "any one-child parent in a block counts as a return, so a bare expression statement is rewritten to a loop and a return it never had"
+		},
+		{
+			"name": "M-RCFC-ANY-PARENT-BLOCK",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "matchOf",
+			"find": "&& s.blockKinds.contains(grandparent.kind)",
+			"replace": "",
+			"note": "a return with no block around it is rewritten too, so the loop escapes the `if` that guarded it"
+		},
+		{
+			"name": "M-RCFC-BINDER-FROM-COMPREHENSION",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "loopText",
+			"find": "'for ($binder in $range)",
+			"replace": "'for (${loop.binder} in $range)",
+			"note": "the loop binds the comprehension's name, so the condition reads the lambda parameter it no longer has"
+		},
+		{
+			"name": "M-RCFC-ANY-BODY",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "matchOf",
+			"find": " || !MappedComprehension.isBinder(loop.body, loop.binder, s.comprehension)",
+			"replace": "",
+			"note": "a comprehension that computes its element is taken for an identity one, so its map is dropped"
+		},
+		{
+			"name": "M-RCFC-ANY-ITERABLE",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "readSeams",
+			"find": "operandKinds: [intervalKind]",
+			"replace": "operandKinds: [intervalKind, base.identKind]",
+			"note": "a comprehension over any collection counts, not only over a range"
+		},
+		{
+			"name": "M-RCFC-TYPED-PARAM-FIXED",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "loopText",
+			"find": " || param.type != null",
+			"replace": "",
+			"note": "a lambda parameter with a written type is rewritten, so the loop drops the ascription"
+		},
+		{
+			"name": "M-RCFC-BLOCK-BODY-FIXED",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "loopText",
+			"find": "s.blockKinds.contains(body.kind) || ",
+			"replace": "",
+			"note": "a lambda with a block body is rewritten, so its own return leaves the function"
+		},
+		{
+			"name": "M-RCFC-COMMENT-DROPPED",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "loopText",
+			"find": " || CheckScan.regionHoldsComment(regions, statement, [loop.iterableSpan, bodySpan])",
+			"replace": "",
+			"note": "a comment in the text the rewrite drops is deleted with it"
+		},
+		{
+			"name": "M-RCFC-EVERY-METHOD-FIXED",
+			"type": "anyparse.check.haxe.loops.RangeComprehensionFeedsCall",
+			"method": "loopText",
+			"find": "if (method != EXISTS && method != FOREACH) return null;",
+			"replace": "",
+			"note": "filter, map, count and find are rewritten as if they were exists"
 		}
 	]
 }

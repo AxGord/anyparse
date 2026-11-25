@@ -147,13 +147,23 @@ final class TypeSyntax {
 	public function spellsAs(other: TypeSyntax): Bool {
 		return switch [shape, other.shape] {
 			case [Nominal(p, xs), Nominal(q, ys)]:
-				p == q && xs.length == ys.length && [ for (i in 0...xs.length) i ].foreach(i -> xs[i].spellsAs(ys[i]));
+				p == q && xs.length == ys.length && spellEach(xs, ys);
 			case [Function(ps, r, _), Function(qs, s, _)]:
-				ps.length == qs.length
-					&& r.spellsAs(s)
-					&& [ for (i in 0...ps.length) i ].foreach(i -> ps[i].optional == qs[i].optional && ps[i].type.spellsAs(qs[i].type));
+				ps.length == qs.length && r.spellsAs(s) && paramsSpell(ps, qs);
 			case _: ~/\s+/g.replace(text, '') == ~/\s+/g.replace(other.text, '');
 		};
+	}
+
+	/** Whether the types `xs` and `ys`, of one length, spell one by one the same. */
+	private static function spellEach(xs: Array<TypeSyntax>, ys: Array<TypeSyntax>): Bool {
+		for (i => x in xs) if (!x.spellsAs(ys[i])) return false;
+		return true;
+	}
+
+	/** Whether the parameters `ps` and `qs`, of one length, agree one by one on being optional and on their type. */
+	private static function paramsSpell(ps: Array<TypeParam>, qs: Array<TypeParam>): Bool {
+		for (i => p in ps) if (p.optional != qs[i].optional || !p.type.spellsAs(qs[i].type)) return false;
+		return true;
 	}
 
 }

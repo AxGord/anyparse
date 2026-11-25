@@ -449,6 +449,7 @@
 		"redundant-isvar": true,
 		"redundant-lambda-wrapper": true,
 		"redundant-map-exists": true,
+		"range-comprehension-feeds-call": true,
 		"redundant-property-access": true,
 		"redundant-replace-loop": true,
 		"redundant-tostring": true,

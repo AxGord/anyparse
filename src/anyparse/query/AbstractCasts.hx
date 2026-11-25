@@ -399,7 +399,7 @@ final class AbstractCasts {
 		return switch [a, b] {
 			case [Declared(x), Declared(y)]: AncestorTable.same(x, y);
 			case [Applied(x, xs), Applied(y, ys)]:
-				AncestorTable.same(x, y) && xs.length == ys.length && [ for (i in 0...xs.length) i ].foreach(i -> same(xs[i], ys[i]));
+				AncestorTable.same(x, y) && xs.length == ys.length && sameEach(xs, ys);
 			case [Core(x), Core(y)]: x == y;
 			case [Dyn, Dyn]: true;
 			case _: false;
@@ -409,6 +409,12 @@ final class AbstractCasts {
 	/** The members of `r` the branch `b` declares: those whose declaration starts inside its range. */
 	private static function membersOf(r: ResolvedType, b: DeclBranch): Array<MemberInfo> {
 		return [ for (m in r.type.members) if (b.span.from <= m.declFrom && m.declFrom < b.span.to) m ];
+	}
+
+	/** Whether the ends `xs` and `ys`, of one length, are one end by one. */
+	private static function sameEach(xs: Array<TypeEnd>, ys: Array<TypeEnd>): Bool {
+		for (i => x in xs) if (!same(x, ys[i])) return false;
+		return true;
 	}
 
 }

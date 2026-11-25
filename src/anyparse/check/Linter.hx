@@ -242,6 +242,7 @@ import anyparse.check.haxe.loops.PreferForeach;
 import anyparse.check.haxe.loops.PreferMap;
 import anyparse.check.haxe.loops.PreferMapLiteral;
 import anyparse.check.haxe.loops.PreferSinglePass;
+import anyparse.check.haxe.loops.RangeComprehensionFeedsCall;
 import anyparse.check.haxe.members.StaticInitOrder;
 import anyparse.check.haxe.members.UnusedEnumAbstractValue;
 import anyparse.check.haxe.nullsafety.NullSafetyStrict;
@@ -503,6 +504,7 @@ final class Linter {
 			// null comparison, this one an `exists` call.
 			new RedundantMapExists(),
 			new MapAsSet(),
+			new RangeComprehensionFeedsCall(),
 			new UnresolvedTypeName(),
 			new PreferAccessMeta(),
 			new CatchDynamic(),
