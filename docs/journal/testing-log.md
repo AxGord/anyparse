@@ -4676,3 +4676,99 @@ F (duplication). The biggest single cost is in test, not src: test holds 3266 du
 G (slice cost). The biggest single cost is the worker phase: 58% of the mean wall (3796 of 6505 s per land, mean 108 min, median 98 min) plus fix rounds 15%; the land step is 12% (782 s mean; 34 land executions, 21,821 s total, one of 1653 s). Tokens follow turns times context: a band 4-6 worker averages 97 turns and 12.6M cached-read tokens, band 7+ 152 turns and 24.6M; the worker's cached-read tokens are 367M of about 516M over the 30 lands. Band 1-3 is cheap in tokens (2.3M) but not in wall (median 91 min), so its wall is mostly waiting stages (review 24%, land 24%). Gate and plan are not separate stages in the events log: the gate runs inside the land step or the worker's own turns, and plan and execute are one worker run.
 
 H (typer vs oracle). The biggest single cost is the compiler side of the census: the facts-hook compile is 99.5 s (51% of the 193.6 s profiled run) against 39.5 s for the plain typecheck of the same tree (2.5x), and the typer's own pass over the 2835 compiled files adds 76.2 s (39%) plus about 18 s of index and GC. The typer is not faster: the census as invoked takes 189-194 s against 39.5 s for the compiler (about 4.8x); even the typer's own pass alone (about 76 s) is about 2x the compiler's whole typecheck, and it answers 729,728 sites rather than only typechecking. Not measured: latency of one typer answer for one lint query, which is the case it is built for.
+
+## Comparator lambdas, named comparators and key-extractor helpers (COMPARATOR-LAMBDA-CENSUS, 2026-11-25)
+
+Read-only census at 771759e3b, `src` + `tools/src` (1877 files); `test` as its own row. Every body was read from the parse (`hxq ast --json`), not from text: a comparator is classified by its AST, "same modulo parameter names" is a canonical form with `a`/`b` renamed. Caveats: element types are NOT resolved (a duplicate group is equal comparison text, not proven the same element type); "capturing" = the body mentions a lowercase identifier other than its two parameters, so it counts a call to an unqualified own static as a capture (an upper bound); `Int` `a - b` is read as an Int key, `Reflect.compare` / `<`-`>` chains as a type-dependent key.
+
+### (1) Inline comparators (`$X.sort((a, b) -> …)` and `ArraySort.sort(xs, (a, b) -> …)`)
+
+`.sort(F)` with one argument: src+tools 264 (162 lambdas, 102 named references), test 180 (23 lambdas, 157 references). `ArraySort.sort(xs, cmp)`: 9 lambdas + 1 `Reflect.compare`. Named references in src: `Compare.compareString` 76, `Reflect.compare` 8, `Compare.compareFloat` 5, `Compare.compareInt` 2, own named methods 10 sites (`nearestFirst`, `byPlace`, `outerFirst`, `byPosition` x2, `compareRuleMovement`, `compareSeverity`, `compareNames` x2, `compareEntries`), one `function` literal. No other method takes a two-parameter comparator lambda (`sortBy`, `Lambda` and the like: 0).
+
+| shape (src+tools, 171 inline lambdas) | non-capturing | capturing | total |
+|---|---|---|---|
+| single key (one field, call or index, asc or desc) | 111 | 8 | 119 |
+| multi key (`!=`/`==` ternary or if chain of single keys) | 27 | 5 | 32 (30 two keys, 2 three keys) |
+| other (block with locals 10, delegating call with a context argument 8, one each of a `Sub` sum key and a bool-conditional ternary) | 1 | 19 | 20 |
+| test (23 lambdas) | 21 | 2 | 23 single key, 0 multi, 0 other |
+
+Single keys by kind (src+tools, 119): identity key (`a - b`, `Reflect.compare(a, b)`) 24 = asc Int 15, desc Int 2, asc type-dependent 7; field or derived key 95 = asc Int 57, desc Int 22, asc String 4, asc Float 2, desc Float 1, type-dependent 9. Multi keys: 16 of 32 have every key typed by its spelling; 16 hold a `Reflect.compare` or `<`/`>` key (the type needs the typer); 4 hold an identity key.
+
+Duplicates (same comparison modulo parameter names):
+- exact same body: 15 groups covering 87 of 171 sites (99 distinct bodies);
+- same key signature (multi keys included): 14 groups, 88 of 151 decomposable sites; groups of three or more: 7, 74 sites.
+
+| group (key signature) | sites | files |
+|---|---|---|
+| `a - b` on the element itself (Int) | 22 | 18 |
+| `a.span.from - b.span.from` | 18 | 16 |
+| `a.from - b.from` | 18 | 15 |
+| `b.count - a.count` | 5 | 3 |
+| `b.span.from - a.span.from` | 4 | 4 |
+| `a.span.from`, then `a.span.to` (asc, asc) | 4 | 4 |
+| `b.length - a.length` | 3 | 3 |
+| 7 groups of 2 (a `?? 0` span start, `b.from - a.from`, `a.cut.from`, `count` desc then `rule`, …) | 14 | |
+
+Test: 3 groups of two or more cover 18 of 23 sites (`a - b` on elements 12 in 8 files, `.file` 4 in 4 files, `b.span.from` 2).
+
+### (2) Typedefs with three or more static helpers taking them as the first parameter
+
+2018 `typedef` declarations (1991 anonymous structures, 27 aliases) in src+tools; 10 536 static functions with a typed first parameter. A helper is attributed to the typedef its first parameter names (`T` or `Null<T>`), resolved by: declared in the helper's own module, else imported, else same package, else the one public declaration of that name; 11 references were ambiguous and dropped.
+
+| helpers per typedef | 0 | 1 | 2 | 3 | 4 | 5 | 6+ |
+|---|---|---|---|---|---|---|---|
+| typedefs | 1536 | 248 | 78 | 50 | 18 | 20 | 68 |
+
+156 typedefs hold three or more (1291 helpers, 275 host classes; 88 hold five or more, 40 hold ten or more). By where the helpers live:
+- all in the typedef's own module: 82 (35 are `private` typedefs: `Ctx`, `Scan`, `FlowState`, `FileCtx`, the `*Ctx` of the writer-lowering macros; 47 are public). The helper sits in the class next to the typedef, which is the user's habit.
+- three or more outside the own module, spread over two or more modules: 46. The big ones: `FileInfo` 50 helpers in 20 modules (18 public), `MovePrep` 56 in 7 (28 outside its module), `OrderedMember` 38 in 6, `TypeDeclMatch` 22 in 14, `ResolvedType` 23 in 17, `FactNode` 23 in 11, `TypeDeclInfo` 18 in 13, `NamedDecl` 18 in 8, `CaseSeams` 32 in 7, `Violation` 15 in 10, `CallEdge` 14 in 10, `OracleConfig` 13 in 9.
+- mixed or one outside module: 28.
+Only 30 typedefs have three or more PUBLIC helpers (223 public helpers of the 1291), so most of the signal is private, file-local helpers.
+
+What `prefer-static-extension` reports for them: nothing. Its `apq.json` `types` list is `Lambda`, `StringTools`, `anyparse.util.Strings`, `anyparse.util.Arrays`, `anyparse.util.Groups`; over src+tools it reports 56 sites (`StringTools` 47, `Strings` 7, `Lambda` 2), none on a typedef's helper class. A helper class is reported only after it is listed there; the rule never derives "this class's static functions take one type first" by itself.
+`prefer-compare-function` (22 sites reported: 15 `Reflect.compare`, 7 hand-spelled `Compare.compareString`) covers only the identity comparison of one String/Int/Float operand; an `a - b` Int key is not reported.
+
+### (3) Speed, js/node (Haxe 4.3.7, `-D analyzer-optimize`, node 22.16, same flags as `bin/test.js`)
+
+Generated JS: an inline lambda becomes `a.sort(function(x,y){ var a = x.k; var b = y.k; if(a < b){return -1} else if(a > b){return 1} else {return 0} })` (the `inline` `Compare.compareInt` is expanded in place); a static reference becomes `a.sort(Cmp.byK)` with the same body in `Cmp.byK = function(a,b){…}` (the inline call is expanded inside it); a capturing lambda is the same `function(x,y){…}` with `* sign` on the result, closed over `sign`; `Compare.byInt(r -> r.k)` becomes `a.sort(Cmp.byInt(function(r){return r.k;}))` where `Cmp.byInt` returns `function(a,b){ var a1 = key(a); var b1 = key(b); … }` (one call of `key` per operand, per comparison); the macro form `Compare.by(r -> r.k)` would expand to exactly the inline lambda, so its JS is the inline row by construction (not built).
+
+Method: `Row = {k, k2, id}` (k in 0..999, many ties), seeded LCG; (a) one `sort` of 100 000 rows, (b) 100 000 sorts of 10 rows; 31 timed rounds after one warm-up, forms rotated per round, median of the per-round ratio to `inline`; the machine ran other work throughout (11-12 of 12 pool threads held), so single numbers move by about 10 % and only the ratios are read. Three mixed-form processes, then three with only the forms of the helper rows:
+
+| form | (a) 100k, ms | (b) 100k x 10, ms | ratio to inline, (a) / (b) |
+|---|---|---|---|
+| inline non-capturing | 25.4-29.4 | 68.8-83.4 | 1 |
+| static method reference | 26.8-28.1 | 71.5-73.6 | 0.91-1.04 / 0.88-1.00 |
+| capturing lambda | 27.3-28.5 | 71.5-78.6 | 1.00-1.06 / 0.99-1.03 |
+| inline desc / static desc | 24.9-27.7 / 25.5-27.7 | 68.8-75.8 / 72.7-75.8 | 0.93-1.02 / 0.98-1.02 (a); 0.92-1.03 / 0.91-1.09 (b) |
+| `Compare.byInt(r -> r.k)`, helper site shared with other key lambdas | 39.1-40.9 | 104.4-114.5 | 1.44-1.61 / 1.42-1.46 |
+| `Compare.byIntDesc(r -> r.k)`, helper site with ONE key lambda | 28.0-30.0 | 69.6-85.5 | 1.00-1.14 / 0.96-1.06 (1.04-1.06 / 1.01-1.06 alone) |
+| two keys: inline / static | 30.0-33.2 / 30.6-34.5 | 67.7-74.3 / 69.3-73.5 | 1.15-1.23 to inline; static2 = inline2 within 3 % |
+| two keys: `then(byInt, byInt)` | 58.2-62.3 | 103.4-122.3 | 1.88-1.94 (a) / 1.53-1.72 (b) to inline2 |
+
+Reading: an inline lambda, a static reference and a capturing lambda are indistinguishable (differences inside the run-to-run noise, no consistent sign), so "named method" costs nothing and is not faster either. A key-extractor helper costs nothing when its closure site sees one key function (`byIntDesc` row) and about 1.45-1.6x on the sort itself once the shared `function(a,b){…key(a)…key(b)}` site meets two or more different key lambdas (V8 call site goes polymorphic; any helper shared by the project is in that state); `then` adds a second layer, 1.9x. Absolute: about +13 ms per sort of 100 000 rows (about 8 ns per comparison over roughly 1.7 million comparisons), about +35 ms per 100 000 tiny sorts (0.35 microseconds per sort); the project's sorts are tens to thousands of rows, once per command.
+
+### (4) Key-extractor fit (`Compare.byInt/byIntDesc/byFloat/byString` + `then`, src+tools, 171 sites)
+
+| class | sites | helper form |
+|---|---|---|
+| identity key, Int or type-dependent (`a - b`, `Reflect.compare(a, b)`) | 24 | `Compare.compareInt` / `compareString` by name; desc needs a `compareIntDesc` or a lambda; no key helper |
+| single field or derived key: Int asc 57, Int desc 22, String asc 4, Float asc 2, Float desc 1 | 86 | `byInt`/`byIntDesc`/`byString`/`byFloat` (type read from the spelling) |
+| single field or derived key, type-dependent (`Reflect.compare`, `<`/`>` chain) | 9 | the same, the type needs the typer |
+| multi key, every key typed | 16 | `then(…, …)` chain |
+| multi key, a type-dependent key | 16 | `then` chain, the type needs the typer |
+| other (locals block 10, delegating call with a context argument 8: `ImportOrder.compare(order, …)` 6, `compareOrder(a, b, plan)`, one `Sub` sum key, one bool-conditional ternary) | 20 | not fitted (a locals block that only names its keys fits after inlining its locals; not counted as fitted) |
+
+Fit: 86 + 9 + 32 = 127 of 171 (74 %); 25 of them need the typer to choose the Int/String/Float form; 24 are plain `Compare.compareX` references; 20 do not fit. Test: 23 lambdas, 12 identity keys (use the named reference), 11 single field keys, no multi key.
+
+### (5) Macro form `Compare.by(r -> r.x)`, on paper only
+
+Zero runtime cost by construction (it emits the inline lambda), and it would pick compareInt/Float/String by the key's type. Against: the call site is no longer an `a.sort(…)` lambda, so the typer gives it the macro's declared return type, not the comparator's, and every tool that reads a lambda body (`prefer-compare-function`, the `hxq` call/refs answers, the duplicate-code rules, `--fix`) sees an opaque call; the key's parameter type is only known from the expected type of the `sort` argument, which the macro cannot always see. Recommended only if (3) had shown a measurable cost; it did, but only for a shared helper site (about 8 ns per comparison), so the plain function helper is the cheaper step: not recommended.
+
+### Proposed rule shapes and the sites each touches (src+tools; test counted apart)
+
+1. Extend `prefer-compare-function` to the Int identity key `a - b` (and `b - a`) → `Compare.compareInt` by name: 15 asc sites in src+tools (2 desc need a desc form), 5 in test; overflow-safe where `a - b` is not.
+2. Key-extractor helpers `Compare.byInt/byIntDesc/byFloat/byString/then` and a lint rule "single or multi key comparator lambda → helper": up to 127 sites (74 %), 25 of them typer-dependent; speed cost as in (3), absolute nil at these sizes, a measurable 1.5-1.9x only for 100k-row sorts.
+3. Duplicate comparator → one named method on the element's owner type (or a `<Type>Tools` extension): 7 groups of three or more cover 74 sites, but they exist only when the element type is the same, which needs the typer; the largest `.span.from` (18) and `.from` (18) groups sit on 16 and 15 files and probably several record types. A rule that fires on the TYPE's second same-key comparator (typed) is the tractable shape; one that fires on equal text is not.
+4. "Three or more static helpers over one typedef" as a signal (move-to-helper / extension): 46 spread typedefs (30 with three or more public helpers) are the real candidates; the 82 all-in-own-module ones are the class-next-to-the-typedef habit and the 35 private ones are file-local contexts, not a defect. `prefer-static-extension` needs the helper classes added to its `types` list to say anything about them.
+
+Not queued; the user decides.
