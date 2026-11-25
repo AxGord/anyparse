@@ -30,7 +30,13 @@ private typedef Chain = {
 /** A lambda of one plain parameter and an expression body. */
 private typedef Arrow = { final binder: String; final body: QueryNode; final bodySpan: Span; }
 
-private typedef Finding = { final span: Span; final message: String; final text: Null<String>; }
+/** What the fix does with a chain: the one-pass text, or the gate that kept it report-only. */
+private enum Merge {
+	Rewrite(text: String);
+	Keep(reason: String);
+}
+
+private typedef Finding = { final span: Span; final message: String; final merge: Merge; }
 
 private typedef Seams = {
 	final callKind: String;
@@ -59,6 +65,8 @@ private typedef Seams = {
  * once, and `filter(p).filter(q)` becomes `xs.filter(x -> p && q)`. `map(f).filter(p)` has no one-call spelling
  * (`f` would run twice), so it is always report-only; `[for (x in xs) { final y = f; if (p) y; }]` is the single pass.
  *
+ * Each finding the fix leaves unrewritten carries the gate that held it back in `Violation.declineReason`.
+ *
  * The innermost receiver must resolve to an `Array`. `RiskyFix`: a comprehension takes its element type from where it is
  * written, so the rewrite stands only where it compiles. `DefaultOff`: a style preference, opted in with
  * `"prefer-single-pass": { "enabled": true }`.
@@ -76,6 +84,21 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 
 	private static final FILTER: String = 'filter';
 	private static final MAP: String = 'map';
+
+	/** The reasons a chain stays report-only, in the words `lint --fix`'s ledger prints for it. */
+	private static final DECLINE_MAP_FILTER: String = 'map(f).filter(p) has no one-call spelling: f would run twice';
+
+	private static final DECLINE_LAMBDA_SHAPE: String = 'a side of the chain is not a lambda of one plain parameter and an expression body';
+	private static final DECLINE_NO_INDEX: String = 'no symbol index to prove the two bodies pure';
+	private static final DECLINE_COMMENT: String = 'a comment sits in the text the rewrite drops';
+	private static final DECLINE_RENAME: String = 'the second body cannot be renamed onto the first binder';
+	private static final DECLINE_RESULT_READS: String = 'the second body cannot take the first one\'s result in place of its binder';
+	private static final DECLINE_NO_AND: String = 'the grammar names no operator to join the two filters';
+	private static final DECLINE_IMPURE: String = 'a body is not proven pure, so running the two interleaved could change what they do';
+	private static final DECLINE_FIRST_THROWS: String =
+		'the first map body can throw and the second may skip it, so the exception that surfaces could change';
+	private static final DECLINE_BOTH_THROW: String = 'both bodies can throw, so the exception that surfaces first could change';
+	private static final DECLINE_CAPTURE: String = 'the second body reads the first binder\'s name, which the merged lambda would capture';
 
 	public function new() {
 		super(RULE_ID, 'an Array method chain (filter.map, map.map, filter.filter, map.filter) that one pass can do', RuleCategory.Loops);
@@ -102,10 +125,11 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 		final scope: String -> Null<SymbolIndex> = PreferBind.coveringIndex([{ file: file, source: source }], plugin, index);
 		return CheckScan.applyTextMatches(plugin, source, violations, (tree, text) -> {
 			final edits: Array<FixEdit> = [];
-			for (f in findings(tree, file, text, seams, plugin, scope)) {
-				final rewrite: Null<String> = f.text;
-				final edit: Null<FixEdit> = rewrite == null ? null : { span: f.span, text: rewrite };
-				if (edit != null) edits.push(edit);
+			for (f in findings(tree, file, text, seams, plugin, scope)) switch f.merge {
+				case Rewrite(rewrite):
+					edits.push({ span: f.span, text: rewrite });
+				case Keep(reason):
+					declineAt(violations, f.span, reason);
 			}
 			return edits;
 		});
@@ -136,9 +160,13 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 				final resolve: Null<(QueryNode) -> Null<String>> = types;
 				final type: Null<String> = resolve == null ? null : resolve(arrayBase(head.receiver, seams));
 				if (type != null && seams.arrayTypeNames.contains(type)) {
-					final text: Null<String> = merged(head, source, regions, seams, purity);
-					out.push({ span: head.span, message: message(head.pairing), text: text });
-					if (text != null) return;
+					final merge: Merge = merged(head, source, regions, seams, purity);
+					out.push({ span: head.span, message: message(head.pairing), merge: merge });
+					switch merge {
+						case Rewrite(_):
+							return;
+						case Keep(_):
+					}
 				}
 			}
 			for (c in node.children) walk(c);
@@ -199,47 +227,50 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 		}
 	}
 
-	/** The one-pass spelling of `c`, or null where the merge is not proven safe or has no one-call spelling. */
-	private static function merged(
-		c: Chain, source: String, regions: () -> Array<LexRegion>, s: Seams, purity: Null<PurityCtx>
-	): Null<String> {
+	/** The one-pass spelling of `c` (`Rewrite`), or the gate that keeps it report-only (`Keep`). */
+	private static function merged(c: Chain, source: String, regions: () -> Array<LexRegion>, s: Seams, purity: Null<PurityCtx>): Merge {
 		final p: Null<Arrow> = lambdaOf(c.first, source, s);
 		final q: Null<Arrow> = lambdaOf(c.second, source, s);
-		if (purity == null || p == null || q == null || c.pairing == MapFilter) return null;
-		if (!gapsHoldNoComment(c, p, q, regions()) || !interleavesSafely(c.pairing, p, q, purity, s)) return null;
+		if (c.pairing == MapFilter) return Keep(DECLINE_MAP_FILTER);
+		if (p == null || q == null) return Keep(DECLINE_LAMBDA_SHAPE);
+		if (purity == null) return Keep(DECLINE_NO_INDEX);
+		if (!gapsHoldNoComment(c, p, q, regions())) return Keep(DECLINE_COMMENT);
+		final unsafe: Null<String> = interleaveDecline(c.pairing, p, q, purity, s);
+		if (unsafe != null) return Keep(unsafe);
 		final shape: RefShape = s.shape;
 		final receiver: String = source.substring(c.receiverSpan.from, c.receiverSpan.to);
 		final firstText: String = source.substring(p.bodySpan.from, p.bodySpan.to);
 		final renamed: Null<String> = InlineMethod.substituteTexts(source, q.body, [q.binder], [p.binder], shape);
-		if (renamed == null) return null;
+		if (renamed == null) return Keep(DECLINE_RENAME);
 		return switch c.pairing {
-			case FilterMap: '[for (${p.binder} in $receiver) if ($firstText) $renamed]';
+			case FilterMap: Rewrite('[for (${p.binder} in $receiver) if ($firstText) $renamed]');
 			case MapMap:
 				final roots: Array<String> = MemberKinds.parenFreeRootKinds(shape);
 				final through: Null<String> = InlineMethod.countIdentExprNamed(q.body, q.binder, shape) == 1
 					? InlineMethod.substituteTexts(source, q.body, [q.binder], [InlineMethod.argText(source, p.body, roots)], shape)
 					: null;
-				through == null ? null : '$receiver.map(${p.binder} -> $through)';
+				through == null ? Keep(DECLINE_RESULT_READS) : Rewrite('$receiver.map(${p.binder} -> $through)');
 			case FilterFilter:
 				final andText: Null<String> = s.andText;
 				andText == null
-					? null
-					: '$receiver.filter(${p.binder} -> ${wrap(firstText, p.body, s)} $andText ${wrap(renamed, q.body, s)})';
-			case MapFilter: null;
+					? Keep(DECLINE_NO_AND)
+					: Rewrite('$receiver.filter(${p.binder} -> ${wrap(firstText, p.body, s)} $andText ${wrap(renamed, q.body, s)})');
+			case MapFilter: Keep(DECLINE_MAP_FILTER);
 		}
 	}
 
 	/**
-	 * Whether running the two bodies interleaved is the same as one after the other: both pure, neither able to be captured
-	 * by the other's binder, and at most one of them able to throw — so the same exception surfaces first.
+	 * Why running the two bodies interleaved is not the same as one after the other, or null where it is: both pure, neither
+	 * able to be captured by the other's binder, and at most one of them able to throw — so the same exception surfaces first.
 	 */
-	private static function interleavesSafely(pairing: Pairing, p: Arrow, q: Arrow, purity: PurityCtx, s: Seams): Bool {
-		if (!PurityScan.isPure(p.body, purity) || !PurityScan.isPure(q.body, purity)) return false;
+	private static function interleaveDecline(pairing: Pairing, p: Arrow, q: Arrow, purity: PurityCtx, s: Seams): Null<String> {
+		if (!PurityScan.isPure(p.body, purity) || !PurityScan.isPure(q.body, purity)) return DECLINE_IMPURE;
 		final firstCannotThrow: Bool = ThrowFreeScan.isThrowFree(p.body, purity);
 		// `g` may sit under a short circuit of its own, so `f` must be the one that cannot throw.
 		final throwSafe: Bool = pairing == MapMap ? firstCannotThrow : firstCannotThrow || ThrowFreeScan.isThrowFree(q.body, purity);
 		// Both bodies end up under `p`'s binder: a read of that name in `q` would be captured by it.
-		return throwSafe && (p.binder == q.binder || InlineMethod.countIdentExprNamed(q.body, p.binder, s.shape) == 0);
+		if (!throwSafe) return pairing == MapMap ? DECLINE_FIRST_THROWS : DECLINE_BOTH_THROW;
+		return p.binder == q.binder || InlineMethod.countIdentExprNamed(q.body, p.binder, s.shape) == 0 ? null : DECLINE_CAPTURE;
 	}
 
 	/** `x -> body` read off a lambda node: one plain parameter and an expression body. */
@@ -289,6 +320,14 @@ final class PreferSinglePass extends HaxeRule implements DefaultOff implements R
 			andLowerKinds: shape.andLowerPrecedenceKinds ?? [],
 			shape: shape
 		};
+	}
+
+	/** Writes `reason` onto the finding at `span`: `fix` is handed the caller's own violation objects, so the note reaches the ledger. */
+	private static function declineAt(violations: Array<Violation>, span: Span, reason: String): Void {
+		for (v in violations) {
+			final at: Null<Span> = v.span;
+			if (at != null && at.from == span.from && at.to == span.to) v.declineReason = reason;
+		}
 	}
 
 }
