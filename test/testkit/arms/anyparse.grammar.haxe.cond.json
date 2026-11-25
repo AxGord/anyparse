@@ -242,6 +242,15 @@
 			"find": "return literal.substring(1, literal.length - 1);",
 			"replace": "return literal;",
 			"note": "a quoted literal keeps its quotes, so no `version(\"…\")` names a version"
+		},
+		{
+			"name": "M-COND-VALUE-BLANK-NO-BLOCK-COMMENT",
+			"type": "anyparse.grammar.haxe.cond.HxPpCondFormat",
+			"method": "blockComment",
+			"kind": "VarMember",
+			"find": "{ open: '/*', close: '*/', doc: '/**' }",
+			"replace": "null",
+			"note": "a block comment is no blank of a condition, so `a /* c */ && b` no longer reads as `a && b`"
 		}
 	]
 }

@@ -205,6 +205,7 @@ final class CondValueInputsTest extends Test {
 	/** A condition spread over lines is the compiler's own: line breaks and comments are blanks like spaces. */
 	@:pin('control')
 	@:killer('M-COND-VALUE-SCHEMA-LINE-COMMENT')
+	@:killer('M-COND-VALUE-BLANK-NO-BLOCK-COMMENT')
 	public function testLineBreaksAndCommentsAreBlanks(): Void {
 		holds([
 			row('a\n&& b', true),
