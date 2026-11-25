@@ -4902,3 +4902,16 @@ Expected result, all 30 lands: items 1 to 3 and 5 sum to 5 to 10 rounds removed 
 Expected result, band 4-6 (the band the target is stated for; now 10 rounds over 11 lands = 0.91): under 0.4 means at most 4 rounds left, so at least 6 of 10 must go. Items 1 to 3 and 5 applied to that band's 10 rounds (3 real bug, 3 doc, 2 missing test, 1 scope, 1 style) remove 3 to 7 (0.27 to 0.64 left per land is 3 to 7 rounds over 11 lands: 0.27 to 0.64); the central case, 5 removed, leaves 5 rounds = 0.45. So under 0.4 in band 4-6 is reachable only at the upper end of the estimate and is NOT expected at the central case; the 0.57 all-lands figure falls under 0.4 more easily mostly because 11 lands of difficulty 2, 3 and 8 carry 0 rounds. The brief changes add worker report size and tokens (WORKER-CONTEXT-DIET just cut them); that the worker follows a longer checklist is not measured.
 
 Verifier (round 2, FIXES): 16 lands with no fix round, 11 with one, 3 with two (not 15). Of the 7 real bugs, 5 were found by the reviewer's own probe of an adjacent construct and 2 by reading (PIPELINE-LAND: the workflow prompt; HAND-WORD-CENSUS: the census hits); the gate caught none. FMT-COMMENT-AFTER-LEAD-VAR-INIT-REFUSED r1 is probably a real bug (a line-comment value left un-nested), inferred from the arms of 9eb214bfb, not read from review text.
+
+## MUT-1 (2026-11-25): can the hand-written mutation arms be generated mechanically
+
+Readings of HEAD 8d0b63721 (worktree pinned at 521a3cabf), 2026-11-25; scripts and raw results in the line's logs dir.
+- Hand arms: 7059 arms, 56414 json lines (7.99 per arm). The last 20 lands added 83 arms, 700 json lines (10.5% of the 6677 lines they added).
+- Operator-shaped cuts: 79.2% of the registry, 62 of the last 83. A first-version operator set reproduces 47 of 83 cut by cut (about 20 json lines per land); adding "Null<T> argument or initializer -> null" and "delete any statement" brings it to 51.
+- Mutants on the last 20 lands (v0 operator set, an upper bound for v1): 1587 on the changed lines (median 71 per land), 6895 in the changed members (median 179).
+- One mutant run on one test class: 0.58 s, median 0.63-0.68 s on two other classes; 4.7 s with six classes.
+- Kill rate of generated mutants (made on the compiled test.js, not Haxe source): 77.5% of 138, 75.3% of 308, 51% of 103 with consumer classes (30% with its own class alone).
+- Survivors read by hand: about 54% real gaps, about 43% equivalent or defensive (one rule read in full, two sampled).
+- Test selection: `dev suite-impact` selects the whole suite for 18 of the last 20 lands, so auto-mutants need a member-to-test reach map recorded on the mutation build.
+- Not sampled: writer, parser, grammar and macro code (a macro mutant is a build, 14-88 s).
+Conclusion: mechanical arms are feasible; start with the reach map and a report-only survivors row, decide on an `auto:` killer form after about 20 lands of survivor data.
