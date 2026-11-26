@@ -590,17 +590,20 @@ final class SliceGate {
 
 	/** The scrub row: `dev scrub-guard` over the tree and over what the slice's commits add. */
 	private function scrubOutcome(): Outcome {
+		final stale: Null<String> = ScrubRow.staleBase(_gate.tree, _gate.base);
+		if (stale != null) return Failed(stale);
+		final start: String = ScrubRow.rangeStart(_gate.tree);
 		final tree: Result = _gate.inTree(cmd('node bin/dev.js scrub-guard'));
-		final range: Result = _gate.inTree(cmd('node bin/dev.js scrub-guard --range ${_gate.base}..HEAD'));
+		final range: Result = _gate.inTree(cmd('node bin/dev.js scrub-guard --range $start..HEAD'));
 		final verdict: Outcome = ScrubRow.verdict(tree, range);
 		switch verdict {
 			case Failed(_):
 				final failing: Result = tree.ok ? range : tree;
 				_gate.summary.excerpt(Excerpt.linesOf(failing.out + failing.err));
 			case NotRun(_), Skipped(_):
-				_gate.summary.detail('${GateTree.short(_gate.base)}..HEAD clean of home paths only');
+				_gate.summary.detail('${GateTree.short(start)}..HEAD clean of home paths only');
 			case _:
-				_gate.summary.detail('tree and ${GateTree.short(_gate.base)}..HEAD clean');
+				_gate.summary.detail('tree and ${GateTree.short(start)}..HEAD clean');
 		}
 		return verdict;
 	}

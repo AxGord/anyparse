@@ -4695,6 +4695,22 @@
 			"find": "TolerantPaths.snapshotBefore(_repo, head, request.cache)",
 			"replace": "null",
 			"note": "a base behind commits no test reads has no snapshot, so a whole battery is run inside the lock to make one"
+		},
+		{
+			"name": "M-SCRUB-RANGE-FROM-HEAD",
+			"type": "dev.ScrubRow",
+			"method": "rangeStart",
+			"find": "['merge-base', 'main', 'HEAD']",
+			"replace": "['rev-parse', 'HEAD']",
+			"note": "the scrub range starts at the tip, so every commit of the slice and of its stale copy is passed unread"
+		},
+		{
+			"name": "M-SCRUB-STALE-BASE-ACCEPTED",
+			"type": "dev.ScrubRow",
+			"method": "staleBase",
+			"find": ".run().ok) return null;",
+			"replace": ".run().ok || true) return null;",
+			"note": "a base main does not contain is trusted as the start, so the gate scans from it and never reads the commits under it"
 		}
 	]
 }
