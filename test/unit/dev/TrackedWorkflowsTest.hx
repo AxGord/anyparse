@@ -39,6 +39,43 @@ final class TrackedWorkflowsTest extends Test {
 		}
 	}
 
+	public function testABlockedSliceWaitsForTheUserAtAHumanStateThatFreesTheSlot(): Void {
+		final pipeline: String = File.getContent('$ROOT/slice-pipeline.yaml');
+		final ask: String = stateBlock(pipeline, 'blocked_ask');
+		utest.Assert.isTrue(ask.contains('\n    human:'), 'blocked_ask is a human wait');
+		utest.Assert.isFalse(ask.contains('ask: parent'), 'a human wait is not a NEEDS-PARENT hold');
+		for (route in [
+			'decided: decided',
+			'close: mark_closed',
+			'stop: mark_stopped',
+			'split: mark_split'
+		]) utest.Assert.isTrue(ask.contains('      $route'), 'blocked_ask routes $route');
+		utest.Assert.isTrue(stateBlock(pipeline, 'blocked').contains('      ask_user: blocked_ask'), 'blocked reaches the wait');
+		utest.Assert.isTrue(stateBlock(pipeline, 'decided').contains('{{context.human_answer}}'), 'decided reads the user call');
+	}
+
+	public function testTheDispatcherRelaysAHumanWaitAndResumesItsAnsweredLine(): Void {
+		final dispatch: String = File.getContent('$ROOT/slice-dispatch.yaml');
+		utest.Assert.isTrue(stateBlock(dispatch, 'dispatch').contains('`resume=<P>`'), 'dispatch resumes an answered row');
+		final collect: String = stateBlock(dispatch, 'collect');
+		utest.Assert.isTrue(collect.contains('`AWAITING task=<ID>'), 'collect relays the question');
+		utest.Assert.isTrue(collect.contains('      refill: pick'), 'an answer refills the window');
+	}
+
+	public function testEveryHumanStateHasRoutesAndNoParentAsk(): Void {
+		for (file in filesUnder(ROOT)) if (file.endsWith('.yaml')) {
+			final text: String = File.getContent(file);
+			for (line in text.split('\n')) if (
+				line.startsWith('  ') && !line.startsWith('   ') && line.endsWith(':') && !line.startsWith('  #')
+			) {
+				final block: String = stateBlock(text, line.trim().substr(0, line.trim().length - 1));
+				if (!block.contains('\n    human:')) continue;
+				utest.Assert.isTrue(block.contains('\n    transitions:'), '$file: ${line.trim()} has routes');
+				utest.Assert.isFalse(block.contains('\n    ask: parent'), '$file: ${line.trim()} also asks the parent');
+			}
+		}
+	}
+
 	private static function filesUnder(dir: String): Array<String> {
 		final out: Array<String> = [];
 		if (!FileSystem.exists(dir)) return out;
@@ -50,6 +87,17 @@ final class TrackedWorkflowsTest extends Test {
 				out.push(path);
 		}
 		return out;
+	}
+
+	private static function stateBlock(text: String, name: String): String {
+		final out: Array<String> = [];
+		var inside: Bool = false;
+		for (line in text.split('\n')) {
+			final isStateKey: Bool = line.startsWith('  ') && !line.startsWith('   ') && !line.startsWith('  #') && line.endsWith(':');
+			if (isStateKey) inside = line == '  $name:';
+			if (inside) out.push(line);
+		}
+		return '\n' + out.join('\n');
 	}
 
 }

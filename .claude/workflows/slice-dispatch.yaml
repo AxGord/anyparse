@@ -35,7 +35,10 @@ states:
       {{stdout}}
       {{stderr}}
 
-      For EACH admitted line:
+      A row with an eighth column `resume=<P>` is an answered human wait (a `blocked_ask` of a slice): its session P goes on
+      at its state, so `start` nothing for it. Spawn its driver from `status({session_id: P, key: "driver_call"})` exactly
+      (steps 2 and 3 below: `link_agent` with `role: "driver"`, P into `tasks`); the driver takes the answered route.
+      For EACH other admitted line:
       1. `start({workflow: <its workflow column, the 5th, COPIED (`engine-task`, `research-task`, …); ONLY a `-` there → "slice-pipeline">, parent_session_id: "{{session_id}}",
          cwd: "<its repo column, the 4th>", reply: "id", context: {task: "<ID>", queue_file: "{{context.queue_file}}", difficulty: "<its difficulty column, the 6th>"}})`
          → session P (now at `claim`) and its DRIVER block. Do NOT drive P yourself. Never guess the workflow from the id or the repo.
@@ -59,8 +62,12 @@ states:
         a design choice → SendMessage the driver your decision and tell it to continue (it relays it verbatim);
         a rejected or blocked slice → decide whether to queue a follow-up line (queue_add) and free the slot
         (a rejected line is already `[!]`; a blocked one stays `[>]` until you message its driver `close`/`stop`,
-        which writes `[!]`; then `slot_free`; a `regate` keeps the slot); anything that needs the user → tell the user, keep the
-        slot. Never take over the slice's work yourself.
+        which writes `[!]`; then `slot_free`; a `regate` keeps the slot); a blocked slice whose block is a call only the user
+        makes → message its driver `ask_user` with the one-line question (it enters the human wait and hands back AWAITING);
+        any other need of the user → tell the user, keep the slot. Never take over the slice's work yourself.
+      - `AWAITING task=<ID> session=<P> question=…` — a human wait: the line is `awaiting` and holds no slot. Relay the
+        question to the user verbatim, drop the task from `tasks`, `slot_free`. The user's answer → `answer({session_id: P,
+        route, text: <their words verbatim>})`, then `refill`: the next pick resumes that line first (a `resume=<P>` row).
       - `WAITING slice=<ID> session=<P> agent=<A> step=<S>` — the driver waits on A; nothing to do.
       - a driver's notification "waiting on its own background work" twice with no state change on its P for 20 min →
         SendMessage that driver "probe your agent"; never read it as "the worker is still running".
@@ -71,6 +78,7 @@ states:
       → `stalled`. A task session ended `stopped` → `stop`.
     transitions:
       slot_free: pick
+      refill: pick
       stalled: cross_check
       stop: report
 

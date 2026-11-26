@@ -995,6 +995,9 @@ states:
       2026-11-13: a writer defect the slice's own change exposes is fixed inside that slice): run that repro with
       main's bin/apq.js first; main converges → widen this line (queue_edit touches) and transition `decided` with
       the WIP kept.
+      A block that is a design or taste call only the USER can make (the worker's options, no tool fault, nothing the parent
+      resolves from git or queue state) → `ask_user`: context_set `ask_question` (one line: the question and its options) beside
+      `fail_note`; the move enters `blocked_ask`, where the line goes `awaiting` and the slot is free until the user answers.
       The parent names the choice and SendMessages the driver (with the gate_flags value to set, if any): it never calls `transition` on P itself. An exec route (`regate`, `rebase_regate`) runs the whole gate inside the caller's MCP call, so the driver must make that call; it answers the driver directly, with no wake needed.
     transitions:
       close: mark_closed
@@ -1003,6 +1006,27 @@ states:
       regate: regate
       rebase_regate: rebase_regate
       decided: decided
+      ask_user: blocked_ask
+
+  blocked_ask:
+    # The one user wait of a blocked slice: the line is `awaiting` (slot free, touches kept) until the user answers.
+    # Every route is an answer; `decided` carries the user's call in `human_answer`.
+    max_visits: 3
+    on_exhausted: stopped
+    human:
+      question: "{{context.slice}} blocked, your call: {{context.ask_question}}"
+      answer_key: human_answer
+    prompt: |-
+      A slice driver: the worker of {{context.slice}} ended BLOCKED on a call only the user makes, and the line waits for
+      them with its slot free. Hand back ONE line, the question's own `AWAITING task=<ID> session=<P> question=…`, and stop;
+      take NO transition. A fresh driver is spawned once the answer is recorded: its `status` shows `HUMAN-ANSWER route=<r>`.
+      Take that route: `decided` (the user's call is `{{context.human_answer}}`), `close`, `stop` or `split` (the parent
+      queues the worker's proposed lines first). The worktree stays.
+    transitions:
+      decided: decided
+      close: mark_closed
+      stop: mark_stopped
+      split: mark_split
 
   decided:
     # A parent/user design call ends a block that needs more worker work; its own counter, review rounds untouched.
@@ -1010,7 +1034,8 @@ states:
     max_visits: 2
     on_exhausted: stopped
     prompt: |-
-      Parent decision {{visits.decided}} of 2 on a blocked worker (the parent's message holds the call).
+      Parent decision {{visits.decided}} of 2 on a blocked worker (the parent's message holds the call; entered from
+      `blocked_ask`, the user's call is `{{context.human_answer}}` and `why:` is `user`).
       1. Append to {{context.wt}}-logs/decisions.md: `## parent call (supersedes any earlier block on this choice)` /
          `decision: <the call verbatim>` / `why: parent`. The reviewer and the worker read that file.
       2. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context:
