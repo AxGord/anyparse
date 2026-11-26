@@ -4983,6 +4983,54 @@
 			"find": "if (method == ENTRY_POINT) return false;",
 			"replace": "if (false) return false;",
 			"note": "an entry point main counts as named by any test file that holds the type and the word, so everything within a few calls of it is green with no pin"
+		},
+		{
+			"name": "M-PROBE-FOLD-DROP-BLIND",
+			"type": "dev.ProbeFold",
+			"method": "decide",
+			"find": "area == null || lines.length == 0",
+			"replace": "area == null",
+			"note": "a row the engine already answers as expected is folded into the kit instead of dropped"
+		},
+		{
+			"name": "M-PROBE-FOLD-KIT-UNMARKED",
+			"type": "dev.ProbeFold",
+			"method": "kitRow",
+			"find": "JObject(put(withFiles(entries, document), defect))",
+			"replace": "JObject(withFiles(entries, document))",
+			"note": "the kit row records the engine answer without saying it is known to be wrong, so the kit gate cannot tell the row from a held answer"
+		},
+		{
+			"name": "M-PROBE-FOLD-QUEUE-UNJUDGED",
+			"type": "dev.ProbeFold",
+			"method": "unplaced",
+			"find": "if (expected == null) return",
+			"replace": "if (false) return",
+			"note": "a row with no expected answer is judged by the not-recorded line and lands in a kit instead of a queue line"
+		},
+		{
+			"name": "M-PROBE-FOLD-FILES-INHERITED",
+			"type": "dev.ProbeFold",
+			"method": "withFiles",
+			"find": "entry.key == FILES_KEY || entry.key == COMMITS_KEY",
+			"replace": "true",
+			"note": "a kit row without its own files runs in the kit's shared files instead of the ones the engine answered in, so the recorded answer no longer holds on that engine"
+		},
+		{
+			"name": "M-PROBE-FOLD-MAIN-ROW-UNROUTED",
+			"type": "dev.Probe",
+			"method": "main",
+			"find": "if (rowFile != null) return ProbeFold.command(",
+			"replace": "if (rowFile != null && given.length > 0) return ProbeFold.command(",
+			"note": "--row falls through to the kit path, which demands a positional the row mode does not take"
+		},
+		{
+			"name": "M-PROBE-FOLD-PLACED-NAME-FORGOTTEN",
+			"type": "dev.ProbeFold",
+			"method": "decide",
+			"find": "held.push(invocation.name);",
+			"replace": "held.length;",
+			"note": "two deviating rows of one name in a row file both join the kit, which then holds a duplicate name"
 		}
 	]
 }

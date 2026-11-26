@@ -94,13 +94,14 @@ typedef KitsReport = {
  * does (`--strict`: or when a known-defect row moved). `--record` writes what the engine answers into the kit instead.
  * The invocations run in `--threads` engine processes (`apq --batch`) when the engine has that entry,
  * else one process each; `--per-process` runs each in a process of its own whatever the engine, and
- * `--process-parity` runs the kit both ways and prints only the invocations whose answers differ.
+ * `--process-parity` runs the kit both ways and prints only the invocations whose answers differ. `--row <rows.json>` runs the rows
+ * of a probe-additions file instead of a kit and prints what becomes of each (`ProbeFold`).
  */
 @:nullSafety(Strict)
 final class Probe {
 
 	public static inline final USAGE: String =
-		'usage: dev probe <area|kit.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--per-process] [--process-parity] [--repo <tree>]';
+		'usage: dev probe <area|kit.json>|--row <rows.json> [--engine <apq.js>] [--compile] [--record] [--strict] [--threads <n>] [--per-process] [--process-parity] [--repo <tree>]';
 
 	/** The threads a gate's or a battery's kit run holds (`checkAll`). */
 	public static inline final GATE_THREADS: Int = 2;
@@ -145,12 +146,14 @@ final class Probe {
 		final parity: Bool = args.flag('--process-parity');
 		final compile: Bool = record || compileGiven;
 		final engineGiven: String = args.option('--engine') ?? Path.join([repo, 'bin', 'apq.js']);
-		final given: Array<String> = args.positionals(['<area|kit.json>']);
+		final rowFile: Null<String> = args.option('--row');
+		final given: Array<String> = rowFile == null ? args.positionals(['<area|kit.json>']) : [];
 		if (threads == null || threads < 1) throw new UsageError('--threads is a positive count, not $threadsGiven');
 		if (!FileSystem.exists(engineGiven) || FileSystem.isDirectory(engineGiven))
 			throw new UsageError('engine $engineGiven is not a file');
 		final engine: String = FileSystem.fullPath(engineGiven);
 		final oneProcess: Bool = Parity.oneProcessFor(repo, engine, !perProcess);
+		if (rowFile != null) return ProbeFold.command(repo, engine, rowFile, threads, oneProcess);
 		final kitFile: String = kitPath(repo, given[0]);
 		final kit: Kit = load(kitFile);
 		if (parity) {
@@ -425,6 +428,23 @@ final class Probe {
 		return files;
 	}
 
+	public static function firstLine(text: String): String {
+		final line: String = text.split('\n')[0];
+		return line.length <= QUOTE_WIDTH ? '`$line`' : '`${line.substr(0, QUOTE_WIDTH - 1)}…`';
+	}
+
+	/** The invocation `row` with its `expect` set to `answer`: in place when it holds one, last otherwise. */
+	public static function withExpectation(row: JValue, answer: Expectation): JValue {
+		return switch row {
+			case JObject(entries):
+				final value: JEntry = JValueTools.entry(EXPECT_KEY, expectationValue(answer));
+				final held: Bool = entries.exists(entry -> entry.key == EXPECT_KEY);
+				final replaced: Array<JEntry> = [ for (entry in entries) entry.key == EXPECT_KEY ? value : entry ];
+				JObject(held ? replaced : replaced.concat([value]));
+			case _: row;
+		}
+	}
+
 	/** Each case's fixture as its invocation left it, compiled by haxe under each of its define sets; fills `seen[i].answer.compiles`. */
 	private static function compileAll(kit: Kit, outcomes: Array<Outcome>, seen: Array<Seen>, work: TempDir, threads: Int): Void {
 		final commands: Array<Command> = [];
@@ -462,11 +482,6 @@ final class Probe {
 				answer.compiles?.push(done);
 			}
 		}
-	}
-
-	private static function firstLine(text: String): String {
-		final line: String = text.split('\n')[0];
-		return line.length <= QUOTE_WIDTH ? '`$line`' : '`${line.substr(0, QUOTE_WIDTH - 1)}…`';
 	}
 
 	/**
@@ -515,18 +530,6 @@ final class Probe {
 
 	private static function withExpectations(rows: JValue, seen: Array<Seen>): JValue {
 		return JArray([ for (i => row in JValueTools.items(rows)) withExpectation(row, seen[i].answer) ]);
-	}
-
-	/** The invocation `row` with its `expect` set to `answer`: in place when it holds one, last otherwise. */
-	private static function withExpectation(row: JValue, answer: Expectation): JValue {
-		return switch row {
-			case JObject(entries):
-				final value: JEntry = JValueTools.entry(EXPECT_KEY, expectationValue(answer));
-				final held: Bool = entries.exists(entry -> entry.key == EXPECT_KEY);
-				final replaced: Array<JEntry> = [ for (entry in entries) entry.key == EXPECT_KEY ? value : entry ];
-				JObject(held ? replaced : replaced.concat([value]));
-			case _: row;
-		}
 	}
 
 	/**
