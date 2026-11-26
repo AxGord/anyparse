@@ -361,6 +361,15 @@
 			"find": "if (jobs.exists(job -> job.leased == true)) return Std.int(MAX_BOUND);",
 			"replace": "",
 			"note": "a batch holding a leased job keeps the wall bound counted from the driver spawn, so the lease wait kills the whole batch"
+		},
+		{
+			"name": "M-LEASE-WAIT-COUNTS-AS-SILENCE",
+			"type": "anyparse.proc.ProcessSpawn",
+			"method": "PARALLEL_DRIVER",
+			"kind": "FinalMember",
+			"find": "if (c.grantFile && !fs.existsSync(c.grantFile)) { c.beat = Date.now(); return; }",
+			"replace": "",
+			"note": "the silence clock of a leased job runs while it queues for its grant, so a busy pool kills a correct branch for a stall it never had"
 		}
 	]
 }

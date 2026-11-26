@@ -132,7 +132,8 @@ final class Command {
 	 * This command killed once it has been silent for `ms` milliseconds — no byte on either stream and no change of the file
 	 * `progress` — which then answers a `failure` quoting the text of `progress`: where a stalled run stood. Runs through the
 	 * process driver. A process group the command leads is killed whole. With `awaitProgress` the silence counts only from the
-	 * first change of `progress`: a command that queues behind a lease wrapper has not begun, and is not silent.
+	 * first change of `progress`.
+	 * A leased command (`leasedUnder`) is never silent while it waits for its grant: its silence counts from the grant.
 	 */
 	public function watched(ms: Int, progress: String, awaitProgress: Bool = false): Command {
 		return new Command(argv, _cwd, _env, _timeout, _input, _upstream, _tethered, {

@@ -190,7 +190,7 @@ final class ProcessSpawn {
 	 * processes only when a signal 0 to the group says one is left. A job with `idle` is killed once neither its
 	 * streams nor the file `progress` names moved for that long, and answers a `failure` quoting
 	 * that file; with `awaitProgress` the silence counts only from the first change of that file. A `leased` job's
-	 * `timeout` counts from the moment the file `GRANT_ENV` names exists.
+	 * `timeout` and its silence count from the moment the file `GRANT_ENV` names exists: a wait for the pool is queueing, never silence.
 	 */
 	private static inline final PARALLEL_DRIVER: String = "const cp = require('child_process');"
 		+ "const TETHER = '"
@@ -237,7 +237,7 @@ final class ProcessSpawn {
 		+ ' c.stdout.destroy(); c.stderr.destroy(); answer(c.exitCode); }, 1000); }, PIPE_GRACE); }'
 		+ "function watchdog(c, j) { if (c.stalled) return; const fs = require('fs'); if (j.progress) try {"
 		+ ' const m = fs.statSync(j.progress).mtimeMs; if (m !== c.mark) { c.mark = m; c.beat = Date.now(); c.moved = true; } } catch (err) {}'
-		+ ' if (j.awaitProgress && !c.moved) return;'
+		+ ' if (c.grantFile && !fs.existsSync(c.grantFile)) { c.beat = Date.now(); return; } if (j.awaitProgress && !c.moved) return;'
 		+ " if (Date.now() - c.beat < j.idle) return; let last = '';"
 		+ " if (j.progress) try { last = fs.readFileSync(j.progress, 'utf8').trim().slice(-200); } catch (err) {}"
 		+ " c.stalled = 'no progress for ' + Math.round(j.idle / 1000) + ' s' + (last ? ' — last started: ' + last : ''); kill(c); }"
@@ -283,7 +283,7 @@ final class ProcessSpawn {
 		+ JOB_BOUND
 		+ ' : j.timeout;'
 		+ ' const arm = () => { if (bound > 0) c.timer = setTimeout(() => { c.timedOut = true; kill(c); }, bound); };'
-		+ " if (grant == null) arm(); else c.grant = setInterval(() => { if (!require('fs').existsSync(grant)) return;"
+		+ " c.grantFile = grant; if (grant == null) arm(); else c.grant = setInterval(() => { if (!require('fs').existsSync(grant)) return;"
 		+ ' clearInterval(c.grant); arm(); }, 100);'
 		+ " if (j.awaitProgress && j.progress) try { c.mark = require('fs').statSync(j.progress).mtimeMs; } catch (err) {}"
 		+ " c.beat = Date.now(); c.stdout.on('data', d => { c.beat = Date.now(); size += d.length;"
