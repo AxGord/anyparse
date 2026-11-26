@@ -554,6 +554,150 @@
 			"find": "a > b",
 			"replace": "!(a <= b)",
 			"note": "a NaN answers as larger instead of 0"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-ASC-ANSWER",
+			"type": "anyparse.util.CompareKeys",
+			"method": "step",
+			"find": "row.ascending ? macro 1 : macro -1",
+			"replace": "macro -1",
+			"note": "an ascending key answers -1 where the first operand is larger, so the comparator never ranks it after the second"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-DESC-ANSWER",
+			"type": "anyparse.util.CompareKeys",
+			"method": "step",
+			"find": "row.ascending ? macro -1 : macro 1",
+			"replace": "macro -1",
+			"note": "a descending key keeps the ascending lower answer, so it never ranks the larger operand first"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-ANSWER-RANGE",
+			"type": "anyparse.util.CompareKeys",
+			"method": "step",
+			"find": "final upper: Expr = row.ascending ? macro 1",
+			"replace": "final upper: Expr = row.ascending ? macro 2",
+			"note": "the larger operand answers 2, not 1: the sort still orders but the comparator leaves the -1, 0, 1 contract"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-TIE-DROPPED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "step",
+			"find": "$next;",
+			"replace": "0;",
+			"note": "a tie on a key answers 0 instead of passing to the next key"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-NAN-TIE",
+			"type": "anyparse.util.CompareKeys",
+			"method": "step",
+			"find": "else if ($i{left} > $i{right})",
+			"replace": "else if ($i{left} > $i{right} || $i{left} != $i{right})",
+			"note": "a NaN key answers as larger instead of passing the tie to the next key"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-DESC-WRAP-IGNORED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "collect",
+			"find": "collect(inner, false, rows)",
+			"replace": "collect(inner, ascending, rows)",
+			"note": "a key wrapped in Compare.desc keeps the enclosing call's direction"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-ASC-WRAP-IGNORED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "collect",
+			"find": "collect(inner, true, rows)",
+			"replace": "collect(inner, ascending, rows)",
+			"note": "a key wrapped in Compare.asc keeps the enclosing call's direction"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-WRAP-KEYS-LOST",
+			"type": "anyparse.util.CompareKeys",
+			"method": "collect",
+			"find": "collect(inner, false, rows)",
+			"replace": "collect(inner.slice(0, 1), false, rows)",
+			"note": "a wrapped call contributes only its first key"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-THIRD-DROPPED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "comparator",
+			"find": "var at: Int = rows.length;",
+			"replace": "var at: Int = rows.length > 2 ? 2 : rows.length;",
+			"note": "a comparator chains at most two keys: the third is silently dropped"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-LEFT-CAPTURE",
+			"type": "anyparse.util.CompareKeys",
+			"method": "step",
+			"find": "final left: String = '_cmpA$index';",
+			"replace": "final left: String = 'x';",
+			"note": "the generated left key is named x, so a later key reading a local x reads the generated one"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-RIGHT-CAPTURE",
+			"type": "anyparse.util.CompareKeys",
+			"method": "step",
+			"find": "final right: String = '_cmpB$index';",
+			"replace": "final right: String = 'y';",
+			"note": "the generated right key is named y, so a later key reading a local y reads the generated one"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-NO-KEYS",
+			"type": "anyparse.util.CompareKeys",
+			"method": "comparator",
+			"find": "rows.length == 0",
+			"replace": "rows.length == -1",
+			"note": "a call with no key lambda builds a comparator that answers 0"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-NULL-ALLOWED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "isNull",
+			"find": "a.get().name == 'Null'",
+			"replace": "a.get().name == 'Nul'",
+			"note": "a Null<T> key is accepted"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-NULL-ALIAS-ALLOWED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "isNull",
+			"find": "isNull(t.get().type)",
+			"replace": "false",
+			"note": "a Null<T> key reached through a typedef alias is accepted"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-BLOCK-ALLOWED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "keyRow",
+			"find": "body.expr.match(EBlock(_))",
+			"replace": "false",
+			"note": "a block body is accepted"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-RETURN-ALLOWED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "keyRow",
+			"find": "returns(body) ||",
+			"replace": "false ||",
+			"note": "a return inside a key expression is accepted and would leave the comparator"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-ARITY",
+			"type": "anyparse.util.CompareKeys",
+			"method": "keyRow",
+			"find": "f.args.length == 1 &&",
+			"replace": "true &&",
+			"note": "a lambda of two parameters is read as a key"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-NO-ELEMENT-TYPE",
+			"type": "anyparse.util.CompareKeys",
+			"method": "elementType",
+			"find": "return Context.error(",
+			"replace": "if (true) return macro : Dynamic; return Context.error(",
+			"note": "an unknown element type is accepted as Dynamic instead of refused"
 		}
 	]
 }
