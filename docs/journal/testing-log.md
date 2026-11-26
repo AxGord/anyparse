@@ -4957,3 +4957,15 @@ Billing and USD per model (weights and prices assumed); quality (lost findings, 
 
 ### Proposed, not queued
 RESUME-RULE-QUALITY (quality check and billing per model), DRIVER-IDLE-BRANCH (driver reads last turn time and context, applies the rule), DISPATCHER-CONTEXT-REFRESH (dispatcher context).
+
+## LINT-ORACLE-COLD-SHARE-RERUN (2026-11-26): the memo-hit oracle gap re-measured
+
+93582c70e, 2026-11-26, load 10-17; `hxq lint src test tools/src --format json`, private engine, fresh TMPDIR.
+- Cold with oracle 237 s; memo hit 121 s (profiled 117.7 s); `--no-oracle` 105 s (profiled 106.7 s).
+- Hit-vs-no-oracle gap 11-16 s, not the earlier 76 s:
+  - about 8.5 s inside hoist-common-import's lazy probe (10.8 s vs 2.4 s): facts-dump parse 4.9 s, ReachBuildsCache.store 2.0 s (the record is rewritten on a hit), part of OracleCache.scanned;
+  - about 2 s of oracle work outside it (remedy reach, coverage, the rest of the hashing);
+  - GC +3 s.
+- The old 76 s most likely went with e3e704cea (TypedFactsCache: before it a verdict hit still ran every facts compile; on TypedFactsMacro.hx the warm repeat with the oracle was 116 s vs about 38.5 s without it, and 19.7 s after the commit). That is measured on one file, not the whole project.
+- 659630c26 (word index) explains why both runs are about 2.5x faster, not the gap.
+- Not measured: a cold `--no-oracle` run and a cold profile, so the cold oracle share is an upper bound.
