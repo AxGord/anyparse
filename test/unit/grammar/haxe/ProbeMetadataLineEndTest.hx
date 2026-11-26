@@ -18,10 +18,8 @@ class ProbeMetadataLineEndTest extends Test {
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final SRC: String = 'class Main {\n\t@Test @doc("a") function main() {}\n\n\t@Test\n\t@doc("b") function main() {}\n}\n';
 
-	public function testNoneJoinsTheRunWithASpace(): Void {
-		final out: String = render(MetadataLineEndPolicy.None);
-		final expected: String = 'class Main {\n\t@Test @doc("a") function main() {}\n\n\t@Test @doc("b") function main() {}\n}\n';
-		Assert.equals(expected, out);
+	public function testNoneKeepsTheSourceLayout(): Void {
+		Assert.equals(SRC, render(MetadataLineEndPolicy.None));
 	}
 
 	public function testAfterForcesOnePerLine(): Void {

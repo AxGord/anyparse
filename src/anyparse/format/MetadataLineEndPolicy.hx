@@ -5,11 +5,12 @@ package anyparse.format;
  * inter-element separator and the gap between the LAST metadata and
  * the next sibling field (modifier / member keyword).
  *
- * No policy reads the source layout: the output is a function of the
- * AST and the knob.
+ * Only `None` reads the source layout; every other policy's output is a
+ * function of the AST and the knob.
  *
- * `None` — every inter-element separator is a single space; no forced
- * gap after the last element.
+ * `None` — no break is added: an inter-element separator is a single
+ * space unless the source breaks there, where one line break stays (a
+ * blank does not), and the gap after the last element follows the source.
  *
  * `After` — every inter-element separator becomes a hardline AND a
  * hardline fires after the last element: one metadata per line.

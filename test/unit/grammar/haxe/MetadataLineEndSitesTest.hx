@@ -165,9 +165,12 @@ class MetadataLineEndSitesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-META-SOURCE-SEP-BACK')
-	public function testNoneJoinsMetadataWithASpaceWhateverTheSource(): Void {
-		Assert.equals('@:a @:b\nclass C {}\n', trivia('@:a\n\n@:b\nclass C {}\n', o -> {}));
-		Assert.equals('class C {\n\t@:a @:b\n\tvar x:Int;\n}\n', trivia('class C {\n\t@:a\n\t@:b\n\tvar x:Int;\n}\n', o -> {}));
+	public function testNoneKeepsASourceBreakAndAfterLastJoins(): Void {
+		Assert.equals('@:a\n@:b\nclass C {}\n', trivia('@:a\n\n@:b\nclass C {}\n', o -> {}));
+		Assert.equals(
+			'class C {\n\t@:a @:b\n\tvar x:Int;\n}\n',
+			trivia('class C {\n\t@:a\n\t@:b\n\tvar x:Int;\n}\n', o -> o.metadataVarLineEnd = MetadataLineEndPolicy.AfterLast)
+		);
 	}
 
 	@:pin('control')

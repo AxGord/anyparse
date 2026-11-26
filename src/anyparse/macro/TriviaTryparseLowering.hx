@@ -491,6 +491,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		final linedBlanks: Expr = triviaTryparseLinedBlanksExpr(regionGapDecide);
 		final forceInlineCond: Expr = triviaTryparseForceInlineSepCond(_plan.forceInlineSep());
 		final metaSep: Expr = WriterMetaLineEndLowering.fitSepExpr();
+		final metaNoneBreak: Expr = WriterMetaLineEndLowering.noneKeepsBreakExpr(_plan.metaLineEndInline(), macro _t.newlineBefore);
 		return macro {
 			if ($_glueToPreviousExpr) {
 				// `@:fmt(glueToPrevious)`: no separator — the element continues the previous one's line.
@@ -532,9 +533,9 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				// for the After policy.
 				_docs.push(_dhl());
 			} else if (_si > 0 && _metaPolicy >= 0) {
-				// Every policy but After joins a metadata run with a space, a soft line inside a `Fit` row: its
-				// layout never follows a source newline between metas.
-				_docs.push($metaSep);
+				// Every policy but After joins a metadata run with a space, a soft line inside a `Fit` row; under `None` a
+				// source break between two metas stays, one line break and never a blank, as under After.
+				_docs.push($metaNoneBreak ? _dhl() : $metaSep);
 			} else if ($forceInlineCond) {
 				_docs.push(_dt(' '));
 			} else if (_si > 0 && (_t.newlineBefore || $v{_plan.elementPerLine()})) {

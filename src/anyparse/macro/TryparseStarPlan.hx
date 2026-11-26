@@ -47,4 +47,7 @@ final class TryparseStarPlan extends StarPlan {
 
 	public inline function siblingPad(): Null<Array<String>> return _meta.args('siblingPad');
 
+	/** `@:fmt(metaLineEndInline)`: a metadata run inside a declaration, which never breaks. */
+	public inline function metaLineEndInline(): Bool return _meta.flag('metaLineEndInline');
+
 }

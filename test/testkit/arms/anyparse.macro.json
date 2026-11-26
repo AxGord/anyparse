@@ -2437,7 +2437,7 @@
 			"name": "M-META-CHAIN-NO-SOURCE",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "chainJoinExpr",
-			"find": "if ((_policy: Int) < 0)\n\t\t\t\t_dc([$sourceSep, $doc]);\n\t\t\telse if (",
+			"find": "if ((_policy: Int) < 0 || _policy == anyparse.format.MetadataLineEndPolicy.None)\n\t\t\t\t_dc([$sourceSep, $doc]);\n\t\t\telse if (",
 			"replace": "if (",
 			"note": "an annotation chain whose tail is no var takes the None policy, so an own-line @doc before an array element joins its element"
 		},
@@ -3897,6 +3897,30 @@
 			"find": "!placed[index] && preceding[index].foreach(before -> placed[before])",
 			"replace": "!placed[index]",
 			"note": "the anchors are never waited on, so a cycle of them builds silently in name order"
+		},
+		{
+			"name": "M-META-NONE-DROPS-SOURCE-BREAK",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "noneKeepsBreakExpr",
+			"find": "return inDecl",
+			"replace": "return true",
+			"note": "a metadata run under None joins its entries with a space again, so a run written one entry per line becomes one long line"
+		},
+		{
+			"name": "M-META-NONE-BREAKS-INLINE",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "noneKeepsBreakExpr",
+			"find": "return inDecl",
+			"replace": "return false",
+			"note": "a metadata run inside a declaration keeps a source break under None, so var @:a / @:b x splits between its keyword and its name"
+		},
+		{
+			"name": "M-META-NONE-CHAIN-JOINS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "chainJoinExpr",
+			"find": "if ((_policy: Int) < 0 || _policy == anyparse.format.MetadataLineEndPolicy.None)",
+			"replace": "if ((_policy: Int) < 0)",
+			"note": "a local var chain under None no longer takes the source separator, so its entries break by the AfterLast rule"
 		}
 	]
 }

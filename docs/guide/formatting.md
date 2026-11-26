@@ -466,3 +466,17 @@ A row of several simple metadata is not measured by it, and nothing changes for 
 @:describe('a sentence in plain words')
 function g() {}
 ```
+
+## Metadata as written: `lineEnds.metadata*: none`
+
+`none` adds no break after a metadata, on all four `metadata*` keys and on a local `var`. Metadata written on one line
+stays on it; a break the source has between two metadata stays, as one line break (a blank line between them goes);
+the line of the declaration follows the source: the last metadata stays glued to it when written so. Metadata inside
+a declaration (`var @:a @:b x`, `<@:a T>`) is always joined with a space. With `{ "lineEnds": { "metadataType": "none" } }`
+this run is left as it is:
+
+```haxe
+@SuppressWarnings("x")
+@:forward(a, b)
+@:nullSafety(Strict) abstract X(Int) {}
+```

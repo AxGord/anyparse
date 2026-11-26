@@ -94,6 +94,15 @@ final class WriterMetaLineEndLowering {
 		return macro (_metaFit == 2 ? _dl() : _dt(' '));
 	}
 
+	/**
+	 * Whether the separator before an element of a run is the source's own break: under `None` a break the source has
+	 * between two elements stays, as `newlineBefore` reads it. Never for a run inside a declaration (`inDecl`, the
+	 * run's `metaLineEndInline`), where a break would split it.
+	 */
+	public static function noneKeepsBreakExpr(inDecl: Bool, newlineBefore: Expr): Expr {
+		return inDecl ? macro false : macro _metaPolicy == anyparse.format.MetadataLineEndPolicy.None && $newlineBefore;
+	}
+
 	/** The break after a run's last element: a lone simple one under `Fit` stays on the line it fits. */
 	public static function fitAfterLastExpr(): Expr {
 		return macro (_metaFit == 1 ? _dfle(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl());
@@ -141,8 +150,8 @@ final class WriterMetaLineEndLowering {
 	/**
 	 * The separator after one annotation of a chain joined to `doc`, the rest of the chain, or `null` when the field is
 	 * no chain. Every annotation of a chain shares the policy of the value at its tail: `After` breaks after each, every
-	 * other policy keeps the inner ones on one line, and the last one breaks unless the policy is `None`; no separator
-	 * of a chain follows the source. Under `Fit` the outermost link decides for the whole chain (`chainOptExpr` hands its
+	 * other policy but `None` keeps the inner ones on one line and breaks after the last one; under `None` every separator
+	 * is the source's own (`sourceSep`). Under `Fit` the outermost link decides for the whole chain (`chainOptExpr` hands its
 	 * answer down): a lone simple annotation joins the declaration when the line fits, several simple ones are one group
 	 * of soft lines whose closing break stays outside its measure, and a complex one breaks after each. A chain whose
 	 * tail no arm names is no metadata site: `sourceSep` stands. `writeFnFor` names the writer of a rule: a lone simple
@@ -167,7 +176,7 @@ final class WriterMetaLineEndLowering {
 		final decide: Expr = macro {
 			final _policy: anyparse.format.MetadataLineEndPolicy = $policy;
 			final _link: Bool = $fieldAccess.match($chainPat);
-			if ((_policy: Int) < 0)
+			if ((_policy: Int) < 0 || _policy == anyparse.format.MetadataLineEndPolicy.None)
 				_dc([$sourceSep, $doc]);
 			else if (_policy == anyparse.format.MetadataLineEndPolicy.Fit)
 				switch (opt._metaChain) {
@@ -182,9 +191,7 @@ final class WriterMetaLineEndLowering {
 					case _:
 						_dc([_dhl(), $doc]);
 				}
-			else if (
-				_policy != anyparse.format.MetadataLineEndPolicy.None && (!_link || _policy == anyparse.format.MetadataLineEndPolicy.After)
-			)
+			else if (!_link || _policy == anyparse.format.MetadataLineEndPolicy.After)
 				_dc([_dhl(), $doc]);
 			else
 				_dc([_dt(' '), $doc]);

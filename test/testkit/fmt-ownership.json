@@ -124,6 +124,7 @@
 		"forceInlineSep",
 		"lineLengthAwareSeps",
 		"listLayout",
+		"metaLineEndInline",
 		"nestBody",
 		"padLeading",
 		"padTrailing",
