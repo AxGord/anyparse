@@ -2717,8 +2717,8 @@
 			"name": "M-KEEP-FAIL-LOG-UNNAMED",
 			"type": "dev.MutationSlot",
 			"method": "track",
-			"find": "buildDetail(buildLog, keptFailure(ctx, row, own, buildLog))",
-			"replace": "buildDetail(buildLog)",
+			"find": "buildDetail(buildLog, keptFailure(ctx, row, own, buildLog), answer.cut)",
+			"replace": "buildDetail(buildLog, null, answer.cut)",
 			"note": "a failed build keeps no log and its row names the workroot's, which is removed when the run ends"
 		},
 		{
@@ -5031,6 +5031,46 @@
 			"find": "held.push(invocation.name);",
 			"replace": "held.length;",
 			"note": "two deviating rows of one name in a row file both join the kit, which then holds a duplicate name"
+		},
+		{
+			"name": "M-MUTSLOT-COLD-BUILD-UNBOUNDED",
+			"type": "dev.MutationSlot",
+			"method": "coldBuild",
+			"find": ".timeout(buildTimeoutMs())",
+			"replace": ".timeout(0)",
+			"note": "a build the compiler never finishes is waited out, so the track is silent until its slot ends"
+		},
+		{
+			"name": "M-MUTSLOT-COLD-BUILD-NO-SIGN",
+			"type": "dev.MutationSlot",
+			"method": "buildTrack",
+			"find": "signOfLife(name, 'building cold');",
+			"replace": "",
+			"note": "a track's cold build starts without telling the gate, so the gate sees a silence from the previous track's end"
+		},
+		{
+			"name": "M-MUTSLOT-SUITE-UNBOUNDED",
+			"type": "dev.MutationSlot",
+			"method": "suiteCommand",
+			"find": ".timeout(suiteTimeoutMs())",
+			"replace": ".timeout(0)",
+			"note": "a suite run that keeps writing and never ends is never cut, so it is no verdict"
+		},
+		{
+			"name": "M-MUTSLOT-SUITE-LIMIT-ABOVE-WATCH",
+			"type": "dev.MutationSlot",
+			"method": "suiteTimeoutMs",
+			"find": "SUITE_TIMEOUT_S",
+			"replace": "2 * 60 * 60",
+			"note": "the suite limit outlasts the limit the gate watches the arms branch by, so the gate cuts the branch before the run ends"
+		},
+		{
+			"name": "M-MUTSLOT-BUILD-CUT-UNSTATED",
+			"type": "dev.MutationSlot",
+			"method": "buildDetail",
+			"find": "if (cut != null) return '$cut (${kept ?? log})';",
+			"replace": "",
+			"note": "a build killed at its limit is reported as no error at all, so the verdict does not say the compiler hung"
 		}
 	]
 }

@@ -41,6 +41,8 @@ typedef SlotContext = {
 
 }
 
+/** How a track's build ended: `kind` says how it was built, null when it was not, and `cut` says why when the compiler had to be killed. */
+typedef Built = { var kind: Null<String>; var cut: Null<String>; }
 /** One classified run: the verdict label, the row detail, and the uncapped detail when the row elided names. */
 typedef Classified = { var verdict: String; var detail: String; var full: Null<String>; }
 
@@ -100,8 +102,12 @@ final class MutationSlot {
 	/** The slices a killer-first track's fallback run is dealt into, unless `APQ_MUTATION_FALLBACK_SLICES` says otherwise. */
 	private static inline final FALLBACK_SLICES: Int = 4;
 
-	/** What one suite run may take before it is killed. */
-	private static inline final SUITE_TIMEOUT_MS: Int = 2 * 60 * 60 * 1000;
+	/**
+	 * What one suite run may take before it is killed, unless `APQ_MUTATION_SUITE_TIMEOUT` (seconds) says otherwise: under the
+	 * limit the arms row's branch is watched by (`BranchWatch`), so a run the stall watch never cuts, one that keeps writing
+	 * bytes, ends as a verdict before the gate calls the branch stalled.
+	 */
+	private static inline final SUITE_TIMEOUT_S: Int = 40 * 60;
 
 	/**
 	 * Seconds a suite run may go without starting a test or writing a byte before it counts as hung, unless
@@ -209,8 +215,16 @@ final class MutationSlot {
 	 */
 	public static function writeVerdict(workroot: String, name: String, verdict: String, detail: String): Void {
 		File.saveContent(Path.join([workroot, '$name.verdict']), '$verdict\n$detail\n');
+		signOfLife(name, verdict);
+	}
+
+	/**
+	 * Say in the file `PROGRESS_VAR` names, when it names one, that track `name` is at `step`: a gate watching this run for silence
+	 * sees each phase of a track start, so the silence it can see is one build or one suite run, each bounded below the gate's limit.
+	 */
+	public static function signOfLife(name: String, step: String): Void {
 		final progress: String = Sys.getEnv(PROGRESS_VAR) ?? '';
-		if (progress != '') File.saveContent(progress, 'arms: $name $verdict');
+		if (progress != '') File.saveContent(progress, 'arms: $name $step');
 	}
 
 	/** Track `name`'s verdict and detail; `RUN-FAIL` when it left none. */
@@ -272,9 +286,11 @@ final class MutationSlot {
 
 	/**
 	 * The report cell naming why the build whose log is `log` failed, out of `BuildFailure`; the log's path when unreadable. The
-	 * path shown is `kept` when the log was copied out of the workroot.
+	 * path shown is `kept` when the log was copied out of the workroot. A build the compiler had to be killed in (`cut`) is named
+	 * by that, since a killed compiler leaves no error line for `BuildFailure` to read.
 	 */
-	public static function buildDetail(log: String, ?kept: String): String {
+	public static function buildDetail(log: String, ?kept: String, ?cut: String): String {
+		if (cut != null) return '$cut (${kept ?? log})';
 		final text: Null<String> = try File.getContent(log) catch (exception: Exception) null;
 		if (text == null) return log;
 		final failure: BuildFailureResult = BuildFailure.classify(text);
@@ -372,19 +388,26 @@ final class MutationSlot {
 			: { verdict: 'MISMATCH', detail: '$detail, no test the arm expects', full: null };
 	}
 
+	/** The limit of one suite run: `SUITE_TIMEOUT_S` unless `APQ_MUTATION_SUITE_TIMEOUT` says otherwise. */
+	public static function suiteTimeoutMs(): Int {
+		return envInt('APQ_MUTATION_SUITE_TIMEOUT', SUITE_TIMEOUT_S) * MS_PER_SECOND;
+	}
+
 	/** One track in this slot, its verdict left in the workroot. */
 	private static function track(ctx: SlotContext, row: TrackRow): Void {
 		final workroot: String = ctx.workroot;
 		final name: String = row.name;
+		signOfLife(name, 'started');
 		if (!prepare(ctx, row)) return;
 		final started: Float = Sys.time();
 		final mutant: Null<String> = schemaArm(ctx, name);
 		if (mutant == null && narrowTrack(ctx, row)) return;
 		final buildLog: String = Path.join([workroot, '$name.build.log']);
 		final own: String = Path.join([workroot, 'build-$name']);
-		final kind: Null<String> = mutant != null ? 'schema' : buildTrack(ctx, own, buildLog);
+		final answer: Built = mutant != null ? { kind: 'schema', cut: null } : buildTrack(ctx, name, own, buildLog);
+		final kind: Null<String> = answer.kind;
 		if (kind == null) {
-			writeVerdict(workroot, name, 'BUILD-FAIL', buildDetail(buildLog, keptFailure(ctx, row, own, buildLog)));
+			writeVerdict(workroot, name, 'BUILD-FAIL', buildDetail(buildLog, keptFailure(ctx, row, own, buildLog), answer.cut));
 			return;
 		}
 		// candidates are dealt last, so a slot that reaches one is done building: its server's memory goes back
@@ -413,13 +436,14 @@ final class MutationSlot {
 	 * built (`warm`, `restarted`, `cold`), or null when it does not build. A server answer is trusted only as a SUCCESS:
 	 * a failed warm build is repeated through a fresh server, and a second failure cold, whose log is the verdict's.
 	 */
-	private static function buildTrack(ctx: SlotContext, build: String, log: String): Null<String> {
+	private static function buildTrack(ctx: SlotContext, name: String, build: String, log: String): Built {
 		FileSystem.createDirectory(build);
 		final out: String = Path.join([build, TEST_JS]);
 		final server: Null<SlotServer> = ctx.server;
 		if (server != null) for (attempt in ['warm', 'restarted']) {
 			final port: Null<Int> = server.port(ctx.wt);
 			if (port == null) break;
+			signOfLife(name, 'building $attempt');
 			final warm: Result = cmd('haxe --connect 127.0.0.1:$port test-js-common.hxml ${Binaries.CODEGEN} -js $out')
 				.at(ctx.wt)
 				.timeout(buildTimeoutMs())
@@ -427,14 +451,18 @@ final class MutationSlot {
 			saveLog(log, warm);
 			if (warm.ok) {
 				server.recycleIfLarge();
-				return attempt;
+				return { kind: attempt, cut: null };
 			}
 			server.stop();
 			FileSystem.rename(log, '$log.$attempt');
 		}
+		signOfLife(name, 'building cold');
 		final cold: Result = coldBuild(out).at(ctx.wt).run();
 		saveLog(log, cold);
-		return cold.ok ? 'cold' : null;
+		final cut: Null<String> = cold.status == null
+			? 'build timed out after ${Std.int(buildTimeoutMs() / MS_PER_SECOND)}s: ${oneLine(cold.failure)}'
+			: null;
+		return { kind: cold.ok ? 'cold' : null, cut: cut };
 	}
 
 	/**
@@ -515,6 +543,7 @@ final class MutationSlot {
 	private static function runTests(ctx: SlotContext, row: TrackRow, suite: (String, String) -> Command, log: String): SuiteRun {
 		if (ctx.killerFirst && row.expected != '') {
 			final killers: String = '$log.killers';
+			signOfLife(row.name, 'running killers');
 			final run: Result = suite(killerTokens(row.expected), killers).run();
 			saveLog(killers, run);
 			final reading: Null<Classified> = hungOf(row.expected, run, killers) ?? classifyOrNull(row.expected, [killers]);
@@ -524,6 +553,7 @@ final class MutationSlot {
 			}
 			final slices: Null<Array<String>> = fallbackTokens(row.filter, envInt('APQ_MUTATION_FALLBACK_SLICES', FALLBACK_SLICES));
 			if (slices != null) {
+				signOfLife(row.name, 'running slices');
 				final logs: Array<String> = [ for (i in 0...slices.length) '$log.slice$i' ];
 				final runs: Array<Result> = Pool.of(slices.length).map([ for (i in 0...slices.length) i ], i -> suite(slices[i], logs[i]));
 				for (i => run in runs) saveLog(logs[i], run);
@@ -534,6 +564,7 @@ final class MutationSlot {
 				return { phase: 'sliced', reading: sliced, read: '$log.slice*' };
 			}
 		}
+		signOfLife(row.name, 'running filtered');
 		final run: Result = suite(row.filter, log).run();
 		saveLog(log, run);
 		return { phase: 'filtered', reading: hungOf(row.expected, run, log) ?? classifyOrNull(row.expected, [log]), read: log };
@@ -556,7 +587,7 @@ final class MutationSlot {
 				.env(ProcessSpawn.ANSWER_ENV, FixtureCache.answer(shimmed ? shim : null))
 				.env('APQ_TEST', filter == 'ALL' ? '' : filter)
 				.env('APQ_MUTANT', mutant ?? '')
-				.timeout(SUITE_TIMEOUT_MS),
+				.timeout(suiteTimeoutMs()),
 			log
 		));
 	}
@@ -587,7 +618,9 @@ final class MutationSlot {
 		final workroot: String = ctx.workroot;
 		final log: String = Path.join([workroot, '${row.name}.log']);
 		final clock: NarrowClock = { build: 0, run: 0 };
-		if (!narrowRun(ctx, classes, Path.join([workroot, 'narrow-${row.name}']), killerTokens(row.expected), '$log.narrow', clock))
+		if (!narrowRun(
+			ctx, row.name, classes, Path.join([workroot, 'narrow-${row.name}']), killerTokens(row.expected), '$log.narrow', clock
+		))
 			return false;
 		final reading: Null<Classified> = classifyOrNull(row.expected, ['$log.narrow']);
 		if (reading == null || !matchedAny(reading, row.expected)) return false;
@@ -597,7 +630,9 @@ final class MutationSlot {
 		if (!FileSystem.exists(baseVerdict)) {
 			if (!cmd('git -C ${ctx.wt} apply -R -- ${row.patch}').run().ok) return false;
 			final baseLog: String = Path.join([workroot, 'narrow-base-$key.log']);
-			final base: Null<Classified> = narrowRun(ctx, classes, Path.join([workroot, 'narrow-base-$key']), 'ALL', baseLog, clock)
+			final base: Null<Classified> = narrowRun(
+				ctx, row.name, classes, Path.join([workroot, 'narrow-base-$key']), 'ALL', baseLog, clock
+			)
 				? classifyOrNull('', [baseLog])
 				: null;
 			File.saveContent(baseVerdict, base?.verdict ?? RUN_FAIL);
@@ -623,9 +658,10 @@ final class MutationSlot {
 	 * the build fails.
 	 */
 	private static function narrowRun(
-		ctx: SlotContext, classes: Array<String>, dir: String, filter: String, log: String, clock: NarrowClock
+		ctx: SlotContext, name: String, classes: Array<String>, dir: String, filter: String, log: String, clock: NarrowClock
 	): Bool {
 		FileSystem.createDirectory(dir);
+		signOfLife(name, 'building narrow');
 		final from: Float = Sys.time();
 		final built: Result = cmd(
 			'haxe test-js-common.hxml ${Binaries.CODEGEN} -D ${NarrowBuild.define(classes)} -js ${Path.join([dir, TEST_JS])}'
@@ -634,6 +670,7 @@ final class MutationSlot {
 		final ran: Float = Sys.time();
 		clock.build += ran - from;
 		if (!built.ok) return false;
+		signOfLife(name, 'running narrow');
 		saveLog(log, suiteCommand(ctx, Path.join([dir, TEST_JS]), null)(filter, log).run());
 		clock.run += Sys.time() - ran;
 		return true;
@@ -644,9 +681,12 @@ final class MutationSlot {
 		return envInt('APQ_MUTATION_BUILD_TIMEOUT', BUILD_TIMEOUT_S) * MS_PER_SECOND;
 	}
 
-	/** The cold build of the runner `out`: what a track's verdict stands on when no warm server built it. */
+	/**
+	 * The cold build of the runner `out`: what a track's verdict stands on when no warm server built it. It is bounded like a warm
+	 * build, since a cut can hang the compiler through a macro, and a build nothing ends would silence the track until its slot's end.
+	 */
 	private static function coldBuild(out: String): Command {
-		return cmd('haxe test-js-common.hxml ${Binaries.CODEGEN} -js $out');
+		return cmd('haxe test-js-common.hxml ${Binaries.CODEGEN} -js $out').timeout(buildTimeoutMs());
 	}
 
 	/**

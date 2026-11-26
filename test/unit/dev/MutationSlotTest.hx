@@ -102,10 +102,10 @@ final class MutationSlotTest extends Test {
 	public function testATrackThatCannotBeResetOrPatchedNamesWhy(): Void {
 		TempDir.with(dir -> {
 			final workroot: String = dir.file('work');
-			committedSlot(workroot);
+			SlotWorkroot.committedSlot(workroot);
 			final slot: String = MutationSlot.slotDir(workroot, 1);
 			File.saveContent(dir.file('bad.patch'), '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-nope\n+b\n');
-			slotFiles(workroot, [
+			SlotWorkroot.slotFiles(workroot, [
 				{
 					name: 'P',
 					patch: dir.file('bad.patch'),
@@ -141,7 +141,7 @@ final class MutationSlotTest extends Test {
 			final workroot: String = dir.file('work');
 			FileSystem.createDirectory(workroot);
 			// a pid no process holds: past the largest one the system hands out
-			slotFiles(workroot, [{
+			SlotWorkroot.slotFiles(workroot, [{
 				name: 'P',
 				patch: dir.file('none.patch'),
 				filter: 'ALL',
@@ -298,13 +298,6 @@ final class MutationSlotTest extends Test {
 			+ '\n';
 	}
 
-	/** The files a parent writes for its slots: the rows, their deal order and the owner pid. */
-	private static function slotFiles(workroot: String, rows: Array<TrackRow>, owner: String): Void {
-		File.saveContent('$workroot/${MutationSlot.ROWS}', rows.map(row -> '${MutationSlot.encodeRow(row)}\n').join(''));
-		File.saveContent('$workroot/${MutationSlot.ORDER}', rows.map(row -> '${row.name}\n').join(''));
-		File.saveContent('$workroot/${MutationSlot.OWNER}', '$owner\n');
-	}
-
 	/** `body` with the kept-log directory set to `kept` (unset when empty), the caller's value put back after. */
 	private static function withFailLogs(kept: String, body: () -> Void): Void {
 		final saved: String = Sys.getEnv(MutationSlot.FAIL_LOGS_VAR) ?? '';
@@ -324,28 +317,9 @@ final class MutationSlotTest extends Test {
 	 */
 	private static function failingTrack(dir: TempDir, name: String): String {
 		final workroot: String = dir.file('work-${Std.random(1000000)}');
-		committedSlot(workroot);
-		final patch: String = '$workroot/$name.patch';
-		File.saveContent(patch, '--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-a\n+b\n');
-		slotFiles(workroot, [{
-			name: name,
-			patch: patch,
-			filter: 'ALL',
-			expected: ''
-		}], '${js.Node.process.pid}');
+		SlotWorkroot.oneTrack(workroot, name);
 		Assert.equals(0, MutationSlot.run(1, workroot));
 		return workroot;
-	}
-
-	/** Create the workroot `workroot` with its slot 1: a git tree holding one committed file, `a.txt`. */
-	private static function committedSlot(workroot: String): Void {
-		FileSystem.createDirectory(workroot);
-		final slot: String = MutationSlot.slotDir(workroot, 1);
-		FileSystem.createDirectory(slot);
-		cmd('git init -q $slot').check();
-		File.saveContent('$slot/a.txt', 'a\n');
-		cmd('git -C $slot -c user.name=t -c user.email=t@t add a.txt').check();
-		cmd('git -C $slot -c user.name=t -c user.email=t@t commit -q -m a').check();
 	}
 
 	/** A script that names `test` as the test it started, then goes silent until it exits on its own well past the stall limit. */
