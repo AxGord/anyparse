@@ -62,7 +62,7 @@ class DuplicateComparatorTest extends Test {
 		}];
 		final plugin: GrammarPlugin = new HaxeQueryPlugin();
 		final rule: DuplicateComparator = new DuplicateComparator();
-		final violations: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin);
+		final violations: Array<Violation> = CheckFixture.violationsIn(rule, files, plugin, _ -> LintConfig.parse(BARE));
 		Assert.equals(2, violations.length);
 		Assert.equals(0, rule.crossFileFix(files, violations.slice(1), plugin).length);
 	}

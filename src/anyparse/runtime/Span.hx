@@ -2,6 +2,8 @@ package anyparse.runtime;
 
 using StringTools;
 
+import anyparse.util.Compare;
+
 /**
  * Line-and-column position resolved from a `Span`'s byte offset.
  * Both fields are 1-indexed to match what editors and IDEs expect.
@@ -81,5 +83,7 @@ final class Span {
 		}
 		return source.length;
 	}
+
+	public static function byFrom(a: Span, b: Span): Int return Compare.compareInt(a.from, b.from);
 
 }

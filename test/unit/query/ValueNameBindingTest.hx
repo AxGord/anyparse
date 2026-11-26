@@ -250,7 +250,7 @@ class ValueNameBindingTest extends Test {
 
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
 		final entries: Array<{ file: String, source: String }> = [ for (file => source in files) { file: file, source: source } ];
-		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
+		entries.sort(DeclarationQueriesTest.byFile);
 		return CheckFixture.index(entries, new HaxeQueryPlugin());
 	}
 

@@ -194,7 +194,7 @@ final class Rename {
 	): Array<Capture> {
 		if (resolved.length == 0) return [];
 		final sorted: Array<Span> = edits.copy();
-		sorted.sort((a, b) -> Compare.compareInt(a.from, b.from));
+		sorted.sort(Span.byFrom);
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
 		final resolvedFrom: Array<Int> = resolved.map(occ -> occ.from);
 		final expected: Array<Int> = [];
@@ -676,7 +676,7 @@ final class Rename {
 		// over the edits that PRECEDE it (not `delta * i`, which is only right when every edit
 		// is also a resolved occurrence), then one prefix length per insertion at or before it.
 		final sorted: Array<Span> = edits.copy();
-		sorted.sort((a, b) -> Compare.compareInt(a.from, b.from));
+		sorted.sort(Span.byFrom);
 		final delta: Int = newName.length - (sorted[0].to - sorted[0].from);
 		final resolvedFrom: Array<Int> = resolved.map(occ -> occ.from);
 		final expected: Array<Int> = [];

@@ -418,7 +418,7 @@ final class ImportOrder {
 	public static function runsIn(source: String, root: QueryNode, gate: Null<WildcardImportGate>): Array<Array<ImportLine>> {
 		if (gate == null) return runsOf(source, slotsOf(root));
 		final slots: Array<ImportSlot> = slotsOf(root).concat(slotsOfKind(root, ModuleScan.WILDCARD_IMPORT_KIND));
-		slots.sort((a, b) -> Compare.compareInt(a.from, b.from));
+		slots.sort(byFrom);
 		return [ for (run in runsOf(source, slots)) for (piece in gate.split(run)) piece ];
 	}
 
@@ -497,7 +497,7 @@ final class ImportOrder {
 	 */
 	public static function linesOfKinds(source: String, root: QueryNode, kinds: Array<String>): Null<Array<ImportLine>> {
 		final slots: Array<ImportSlot> = [ for (kind in kinds) for (slot in slotsOfKind(root, kind)) slot ];
-		slots.sort((a, b) -> Compare.compareInt(a.from, b.from));
+		slots.sort(byFrom);
 		final out: Array<ImportLine> = [];
 		for (slot in slots) {
 			final line: Null<ImportLine> = lineOf(source, slot);
@@ -679,5 +679,7 @@ final class ImportOrder {
 		}
 		return from;
 	}
+
+	private static function byFrom(a: ImportSlot, b: ImportSlot): Int return Compare.compareInt(a.from, b.from);
 
 }

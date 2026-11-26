@@ -359,7 +359,7 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 		for (bucket in grams) if (bucket.length >= 2) collectFindings(blocks, source, bucket, findings);
 
 		final kept: Array<DupFinding> = dropOverlapping(findings);
-		kept.sort((a, b) -> Compare.compareInt(a.span.from, b.span.from));
+		kept.sort(byFrom);
 		for (f in kept) out.push({
 			file: file,
 			span: f.span,
@@ -570,7 +570,7 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 	 */
 	private static function dropOverlapping(findings: Array<DupFinding>): Array<DupFinding> {
 		final sorted: Array<DupFinding> = findings.copy();
-		sorted.sort((a, b) -> Compare.compareInt(a.span.from, b.span.from));
+		sorted.sort(byFrom);
 		final kept: Array<DupFinding> = [];
 		for (f in sorted) if (!overlapsKept(kept, f)) kept.push(f);
 		return kept;
@@ -797,5 +797,7 @@ final class DuplicateCode extends RuleBase implements NoAutofix implements Volat
 		final numeric: Null<Array<String>> = shape.numericLiteralKinds;
 		return node.kind == shape.negationKind && node.children.length == 1 && numeric != null && numeric.contains(node.children[0].kind);
 	}
+
+	private static function byFrom(a: DupFinding, b: DupFinding): Int return Compare.compareInt(a.span.from, b.span.from);
 
 }

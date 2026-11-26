@@ -7,7 +7,6 @@ import anyparse.query.CondDirectives.CondDirective;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.runtime.Span;
-import anyparse.util.Compare;
 
 /**
  * One `#if ... #end` region a grammar captured RAW, as `CondRegionScan.opaqueCondRegions`
@@ -431,7 +430,7 @@ final class CondRegionScan {
 	 */
 	private static function unmodelledGaps(node: QueryNode, span: Span): Array<Span> {
 		final covered: Array<Span> = [ for (c in node.children) if (c.span != null) (c.span: Span) ];
-		covered.sort((a, b) -> Compare.compareInt(a.from, b.from));
+		covered.sort(Span.byFrom);
 		final out: Array<Span> = [];
 		var at: Int = span.from;
 		for (c in covered) {

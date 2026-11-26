@@ -1044,7 +1044,7 @@ final class ReconCommand implements CliCommand {
 			if (hit == null) {
 				CliIo.stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
 				final keyEntries: Array<{ key: String, count: Int }> = [ for (k => v in clusters) { key: k, count: v.count } ];
-				keyEntries.sort((a, b) -> b.count - a.count);
+				keyEntries.sort(ReconPredict.byCountDesc);
 				final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
 				if (preview == 0) {
 					CliIo.stderr('  (no skip-parse failures in this sweep)\n');

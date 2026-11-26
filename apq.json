@@ -358,6 +358,14 @@
 		"dead-binder-counter-loop": true,
 		"default-repeated-argument": true,
 		"doc-length": true,
+		"duplicate-comparator": {
+			"enabled": true,
+			"compare": {
+				"Int": "anyparse.util.Compare.compareInt",
+				"String": "anyparse.util.Compare.compareString",
+				"Float": "anyparse.util.Compare.compareFloat"
+			}
+		},
 		"doc-measurement-claim": true,
 		"field-init-in-constructor": true,
 		"hoist-branch-string-affix": true,

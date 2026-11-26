@@ -151,7 +151,7 @@ final class ReconPredict {
 		if (matched.length == 0) {
 			CliIo.stderr('apq recon: --no-target-cluster "$filter" matched no NO TARGET records (predict-relax mode)\n');
 			if (noTargetReasonsTop.length > 0) {
-				noTargetReasonsTop.sort((a, b) -> b.count - a.count);
+				noTargetReasonsTop.sort(byCountDesc);
 				final maxKeys: Int = noTargetReasonsTop.length < ReconCommand.NO_TARGET_TOP_N
 					? noTargetReasonsTop.length
 					: ReconCommand.NO_TARGET_TOP_N;
@@ -200,7 +200,7 @@ final class ReconPredict {
 			+ ' skip-parse files) ---\n'
 		);
 		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
-			noTargetReasons.sort((a, b) -> b.count - a.count);
+			noTargetReasons.sort(byCountDesc);
 			CliIo.sysPrint(
 				'   no target breakdown ('
 				+ 'use --no-target-cluster <key> to drill into a specific shape, or --cluster <locus-key> for forward-locus drill):\n'
@@ -1103,5 +1103,7 @@ final class ReconPredict {
 		while (at < regions.length && regions[at].to <= i) at++;
 		return at;
 	}
+
+	public static function byCountDesc(a: { key: String, count: Int }, b: { key: String, count: Int }): Int return b.count - a.count;
 
 }

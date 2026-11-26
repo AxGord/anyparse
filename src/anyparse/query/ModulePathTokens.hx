@@ -144,7 +144,7 @@ final class ModulePathTokens {
 		final out: Array<Span> =
 			tree == null ? regions.map(r -> new Span(r.from, r.to)) : InertRegions.of(tree, regions, plugin.refShape());
 		if (tree != null) collectImportStatements(tree, out);
-		out.sort((a, b) -> Compare.compareInt(a.from, b.from));
+		out.sort(Span.byFrom);
 		return out;
 	}
 

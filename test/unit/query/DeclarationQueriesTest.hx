@@ -134,9 +134,12 @@ class DeclarationQueriesTest extends Test {
 		Assert.isFalse(index.typing.members.supertypesDeclareNone('Over', 'run'), 'a link naming two declarations of one module');
 	}
 
+	public static function byFile(a: { file: String, source: String }, b: { file: String, source: String }): Int
+		return Reflect.compare(a.file, b.file);
+
 	private static function indexOf(files: Map<String, String>): SymbolIndex {
 		final entries: Array<{ file: String, source: String }> = [ for (file => source in files) { file: file, source: source } ];
-		entries.sort((a, b) -> Reflect.compare(a.file, b.file));
+		entries.sort(byFile);
 		return CheckFixture.index(entries, new HaxeQueryPlugin());
 	}
 
