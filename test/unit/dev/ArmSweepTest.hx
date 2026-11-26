@@ -23,7 +23,7 @@ final class ArmSweepTest extends Test {
 	private static final REGISTRY: String = '{"arms": [{"name": "M-HELD", "type": "pkg.Held", "method": "f", "force": "0"}, '
 		+ '{"name": "M-ROTTED", "type": "pkg.Rotted", "method": "g", "force": "1"}]}';
 
-	public function testEveryThirtiethLandingIsDueAndNoOtherIs(): Void {
+	public function testEveryEightiethLandingIsDueAndNoOtherIs(): Void {
 		Assert.isTrue(ArmSweep.due(ArmSweep.EVERY, ArmSweep.EVERY));
 		Assert.isTrue(ArmSweep.due(2 * ArmSweep.EVERY, ArmSweep.EVERY));
 		Assert.isFalse(ArmSweep.due(ArmSweep.EVERY - 1, ArmSweep.EVERY));

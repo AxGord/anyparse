@@ -35,7 +35,7 @@ final class ArmSweep {
 	 * The landings from one sweep to the next: rare enough that a sweep of the whole registry ends long before the next is
 	 * due, frequent enough that an arm rotted since the last sweep is found before many slices trip on it.
 	 */
-	public static inline final EVERY: Int = 30;
+	public static inline final EVERY: Int = 80;
 
 	/** The verdict file of a sweep, beside its records. */
 	public static final VERDICT: String = 'verdict.txt';
