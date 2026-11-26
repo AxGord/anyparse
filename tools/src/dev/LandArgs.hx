@@ -23,6 +23,7 @@ final class LandArgs {
 	public final logs: Null<String>;
 	public final resolve: Array<String>;
 	public final queue: Null<String>;
+	public final probeAdditions: Null<String>;
 	public final recipe: WarmRecipe;
 
 	public function new(argv: Array<String>) {
@@ -38,6 +39,7 @@ final class LandArgs {
 		logs = args.option('--logs');
 		resolve = args.options('--resolve');
 		queue = args.option('--queue');
+		probeAdditions = args.option('--probe-additions');
 		recipe = { frozen: args.options('--warm-frozen'), infra: args.options('--warm-infra') };
 		branch = args.positionals(['<branch>'])[0];
 	}

@@ -223,8 +223,20 @@ final class LessonsFile {
 		return root == null || root == '' ? 'wf-queue' : Path.join([root, 'scripts', 'wf-queue']);
 	}
 
+	/** Files `lesson` as a line of `queue` through the queue CLI `script`; null when it took it, else why it refused. */
+	public static function add(script: String, queue: String, lesson: Lesson): Null<String> {
+		final row: String = mapping(lesson);
+		final run: Result = cmd('$script $queue --add $row').run();
+		return run.ok ? null : 'the queue CLI refused it: ${oneLine(run.firstError())}';
+	}
+
 	private static inline function fileable(kind: String): Bool {
 		return kind == UNVERIFIED || kind == ARM_ROT;
+	}
+
+	/** Null when the queue CLI added the line, else why it did not (its own message: archived id, unknown key, no lock). */
+	private static inline function submit(paths: LessonPaths, lesson: Lesson): Null<String> {
+		return add(paths.script, paths.queue, lesson);
 	}
 
 	private static function shapeProblem(lesson: Lesson): Null<String> {
@@ -283,15 +295,6 @@ final class LessonsFile {
 
 	private static function touched(entry: String): String {
 		return (entry.endsWith(NEW_MARK) ? entry.substr(0, entry.length - NEW_MARK.length) : entry).trim();
-	}
-
-	/** Null when the queue CLI added the line, else why it did not (its own message: archived id, unknown key, no lock). */
-	private static function submit(paths: LessonPaths, lesson: Lesson): Null<String> {
-		final script: String = paths.script;
-		final queue: String = paths.queue;
-		final row: String = mapping(lesson);
-		final run: Result = cmd('$script $queue --add $row').run();
-		return run.ok ? null : 'the queue CLI refused it: ${oneLine(run.firstError())}';
 	}
 
 	private static function triageRow(lesson: Lesson, reason: String): String {

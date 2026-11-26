@@ -625,8 +625,11 @@ states:
       while IFS= read -r r; do [ -n "$r" ] && set -- "$@" --resolve "$r"; done <<RESOLVE_EOF
       $LAND_RESOLVE
       RESOLVE_EOF
+      # The review's probe rows run on the engine this land installs (dev land's probe-fold step).
+      [ -f "$WT-logs/probe-additions.json" ] && set -- "$@" --probe-additions "$WT-logs/probe-additions.json"
       node bin/dev.js land "batch/hxqb-$SLICE" --allow-blast --snapshot $allow $metrics "$@"
     env:
+      WT: "{{context.wt}}"
       LAND_RESOLVE: "{{context.land_resolve}}"
       SLICE: "{{context.slice}}"
       GATE_FLAGS: "{{context.gate_flags}}"

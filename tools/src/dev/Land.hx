@@ -6,6 +6,7 @@ import dev.ArmSweep.SweepStart;
 import dev.BaselineWarm.WarmRecipe;
 import dev.BaselineWarm.WarmStart;
 import dev.LandFormat.FormatTools;
+import dev.LandProbeFold.FoldStep;
 import dev.LandSweep.ReapplyTools;
 import dev.MergeBrief.MergePlace;
 import dev.PostLand.PostLandStart;
@@ -112,6 +113,10 @@ typedef LandOptions = {
 	/** Starts the arm sweep of the landed commit on every `ArmSweep.EVERY`th landing (`ArmSweep.start`); absent starts none. */
 	@:optional
 	var sweep: Null<SweepStart>;
+
+	/** Folds the landed slice's probe-additions file on the installed engine (`LandProbeFold.afterwards`); absent folds none. */
+	@:optional
+	var probeFold: Null<FoldStep>;
 	var exec: BatteryExec;
 	var merged: MergedPaths;
 	var print: String -> Void;
@@ -130,7 +135,8 @@ typedef LandOptions = {
  * the landing, counted over every landing that runs the battery, is a multiple of ten — the battery row says which). Only
  * then is the checked-out branch fast-forwarded to that commit (`advance`), the binaries the candidate built copied into
  * it, the `prose-refs` row (`LandProse`: the prose that still names a path the commit deleted or renamed, report-only)
- * read — and one verdict line.
+ * read, and the landed slice's `probe-additions.json` (`--probe-additions`) folded on the installed engine (`LandProbeFold`) — and
+ * one verdict line.
  * A branch that does not carry exactly one commit over the checked-out one is refused; a conflict, a failed build or fmt, a
  * red battery, or a step that threw leaves the checked-out branch, index and files as they were, and the verdict names the
  * candidate commit; a place the merge driver left gets a `MergeBrief` with the `--resolve` choices that re-land it
@@ -141,7 +147,7 @@ final class Land {
 
 	public static inline final USAGE: String = 'usage: dev land <branch> [-m <message>] [--no-battery] [--full] [--allow-blast] '
 		+ '[--allow <row>]... [--snapshot] [--rounds <n>] [--tokens <n>] [--resolve <path>#<key>=<ours|theirs|both>]... '
-		+ '[--queue <file>] [--warm-frozen <dir>]... [--warm-infra <dir>]... [--logs <dir>] [--repo <tree>]';
+		+ '[--queue <file>] [--warm-frozen <dir>]... [--warm-infra <dir>]... [--logs <dir>] [--probe-additions <file>] [--repo <tree>]';
 
 	/** Every this-many-th landing runs the battery in full, whatever it touched. */
 	public static inline final FULL_EVERY: Int = 10;
@@ -256,6 +262,7 @@ final class Land {
 		final battery: Null<BatteryRequest> = options.battery;
 		final warm: Null<WarmStart> = options.warm;
 		final sweep: Null<SweepStart> = options.sweep;
+		final probeFold: Null<FoldStep> = options.probeFold;
 		final command: Null<String> = options.reapply;
 		// the re-application of the line's sweep command, or null for a line that names none
 		final reapply: Null<LandSweep> = command == null
@@ -283,6 +290,11 @@ final class Land {
 			final again: LandSweep = reapply;
 			steps.push({ name: 'reapply', step: () -> again.run(build) });
 		}
+		var foldNow: () -> Outcome = () -> Skipped('no probe-additions.json');
+		if (probeFold != null) {
+			final fold: FoldStep = probeFold;
+			foldNow = () -> fold(_repo, sliceId(_branch), _summary.detail);
+		}
 		final rest: Array<{ name: String, step: () -> Outcome }> = [
 			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message, reapply) },
@@ -290,6 +302,7 @@ final class Land {
 			{ name: 'advance', step: () -> _candidate.advance(_summary.detail) },
 			{ name: 'binaries', step: install },
 			{ name: 'prose-refs', step: _prose.run },
+			{ name: 'probe-fold', step: foldNow },
 			{
 				name: 'post-land',
 				step: () ->
@@ -607,6 +620,7 @@ final class Land {
 		final warming: Bool = !noBattery && (recipe.frozen.length > 0 || recipe.infra.length > 0);
 		final mode: LeaseMode = Lease.ofEnvironment();
 		final queued: String = Path.join([repo, LandSweep.QUEUE]);
+		final probed: Null<String> = args.probeAdditions;
 		return land({
 			repo: repo,
 			branch: branch,
@@ -624,6 +638,13 @@ final class Land {
 			postLand: PostLand.start,
 			warm: warming ? (tree, sha) -> BaselineWarm.start(tree, sha, request.cache, recipe) : null,
 			sweep: noBattery ? null : (tree, sha) -> ArmSweep.start(tree, sha, request.cache),
+			probeFold: probed == null
+				? null
+				: (tree, slice, note) ->
+					LandProbeFold.afterwards(
+						probed, tree, slice, LandProbeFold.onEngine, LandProbeFold.filing(LessonsFile.queueCli(), args.queue ?? queued),
+						note
+					),
 			exec: execBattery,
 			merged: mergedPaths,
 			print: Sys.println

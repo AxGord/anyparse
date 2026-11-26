@@ -34,6 +34,9 @@ private typedef Landing = {
 
 	/** The commits an arm sweep was started for. */
 	var swept: Array<String>;
+
+	/** One entry per probe-fold step call: the slice it was given and how many whole-suite starts had happened by then. */
+	var folded: Array<String>;
 	var impactBase: String;
 	var selected: String;
 
@@ -213,6 +216,10 @@ private typedef Setup = {
 	/** The baseline warm seam: `starts` or `throws`; no seam when absent. */
 	@:optional
 	var warm: String;
+
+	/** Whether the probe-fold seam is wired (it records its calls); no seam when absent. */
+	@:optional
+	var fold: Bool;
 
 	/** Whether an earlier land's whole suite ended red. */
 	@:optional
@@ -1019,9 +1026,13 @@ final class LandTest extends Test {
 		Assert.same([], run.flags);
 	}
 
-	public function testAPassedLandStartsTheBaselineWarmOfTheLandedCommit(): Void {
-		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { warm: 'starts' });
+	@:pin('control')
+	@:killer('M-LAND-PROBE-FOLD-SLICE-BLANK')
+	public function testAPassedLandStartsTheBaselineWarmAndFoldsTheProbeRowsBeforeTheBackgroundJobs(): Void {
+		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 }, null, { warm: 'starts', fold: true });
 		Assert.equals(0, run.status, run.output);
+		Assert.same(['S1 started=0'], run.folded, 'the fold is given the slice and runs before the landed commit\'s suite starts');
+		Assert.stringContains('probe-fold: seam ran', run.output);
 		Assert.equals(1, run.warmed.length, run.output);
 		Assert.isTrue(run.warmed[0].startsWith(run.headAfter), run.warmed.join(' '));
 
@@ -1038,6 +1049,8 @@ final class LandTest extends Test {
 		final run: Landing = landing(() -> Passed, 'docs/note.md', { full: false, landed: 0 });
 		Assert.equals(0, run.status, run.output);
 		Assert.same([], run.warmed);
+		Assert.same([], run.folded);
+
 	}
 
 	@:pin('control')
@@ -1132,6 +1145,7 @@ final class LandTest extends Test {
 			final started: Array<String> = [];
 			final warmed: Array<String> = [];
 			final swept: Array<String> = [];
+			final folded: Array<String> = [];
 			final bases: Array<String> = [];
 			var builtFrom: String = '';
 			var builtTree: String = '';
@@ -1165,6 +1179,7 @@ final class LandTest extends Test {
 					return Passed;
 				},
 				warm: warmSeam(shape, warmed),
+				probeFold: LandFoldSeam.of(shape.fold, folded, started),
 				sweep: (tree, sha) -> {
 					swept.push(sha);
 					return Passed;
@@ -1209,6 +1224,7 @@ final class LandTest extends Test {
 				started: started,
 				warmed: warmed,
 				swept: swept,
+				folded: folded,
 				impactBase: bases[0] ?? '',
 				selected: contentsOf('$logs/suite-impact.txt'),
 				headAfter: cmd('git -C $repo rev-parse --short=${dev.Battery.KEY_LENGTH} HEAD').run().out.trim(),

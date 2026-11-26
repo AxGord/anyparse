@@ -60,7 +60,9 @@ final class LandArgsTest extends Test {
 			'--warm-frozen',
 			'f',
 			'--warm-infra',
-			'i'
+			'i',
+			'--probe-additions',
+			'p.json'
 		]);
 		Assert.equals('B', parsed.branch);
 		Assert.equals('msg', parsed.message);
@@ -69,6 +71,7 @@ final class LandArgsTest extends Test {
 		Assert.same(['p#k=ours'], parsed.resolve);
 		Assert.same(['f'], parsed.recipe.frozen);
 		Assert.same(['i'], parsed.recipe.infra);
+		Assert.equals('p.json', parsed.probeAdditions);
 		Assert.equals(2, parsed.trailers.length);
 	}
 

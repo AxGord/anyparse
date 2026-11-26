@@ -3802,7 +3802,7 @@
 		{
 			"name": "M-LESSONS-CLI-REFUSAL",
 			"type": "dev.LessonsFile",
-			"method": "submit",
+			"method": "add",
 			"find": "return run.ok ? null : 'the queue CLI refused it: ${oneLine(run.firstError())}';",
 			"replace": "return null;",
 			"note": "a record the queue CLI refused counts as filed and is in neither the queue nor the triage file"
@@ -5071,6 +5071,70 @@
 			"find": "if (cut != null) return '$cut (${kept ?? log})';",
 			"replace": "",
 			"note": "a build killed at its limit is reported as no error at all, so the verdict does not say the compiler hung"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-COMMIT-DROPPED",
+			"type": "dev.LandProbeFold",
+			"method": "afterwards",
+			"find": "paths.length == 0 ? null : commit(repo, slice, paths, report)",
+			"replace": "null",
+			"note": "the kit rows are written and left uncommitted, so the next land finds the tree dirty"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-QUEUE-DROPPED",
+			"type": "dev.LandProbeFold",
+			"method": "afterwards",
+			"find": "for (line in enqueue(folds, slice, sink)) note(line);",
+			"replace": "note(\"\");",
+			"note": "a row nobody can place is never filed as a queue line"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-REFUSAL-SILENT",
+			"type": "dev.LandProbeFold",
+			"method": "enqueue",
+			"find": "if (why != null) refused.push(",
+			"replace": "if (why == null) refused.push(",
+			"note": "a queue refusal is not named in the land table"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-NO-FILE-UNSKIPPED",
+			"type": "dev.LandProbeFold",
+			"method": "afterwards",
+			"find": "if (file == null || !FileSystem.exists(file)) return",
+			"replace": "if (file == null) return",
+			"note": "a slice with no file runs the fold on a file that is not there"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-CAP-OFF",
+			"type": "dev.LandProbeFold",
+			"method": "afterwards",
+			"find": "if (rows > MAX_ROWS)",
+			"replace": "if (rows > MAX_ROWS * 1000)",
+			"note": "a file of any size runs under the land lock"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-RESTORE-DROPPED",
+			"type": "dev.LandProbeFold",
+			"method": "restore",
+			"find": "cmd('git -C $repo checkout -- $path').run();",
+			"replace": "repo.length;",
+			"note": "a commit that failed, or a fold that threw partway, leaves the kit rows in the tree and the next land refuses it"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-FILING-BLIND",
+			"type": "dev.LandProbeFold",
+			"method": "filing",
+			"find": "FileSystem.exists(queue) ?",
+			"replace": "true ?",
+			"note": "a queue file that is not there is filed into as if it were"
+		},
+		{
+			"name": "M-LAND-PROBE-FOLD-SLICE-BLANK",
+			"type": "dev.Land",
+			"method": "run",
+			"find": "fold(_repo, sliceId(_branch), _summary.detail)",
+			"replace": "fold(_repo, \"\", _summary.detail)",
+			"note": "the fold step is given no slice id"
 		}
 	]
 }
