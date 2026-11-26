@@ -163,7 +163,7 @@ class PreferCopyMethodCheckTest extends Test {
 		}
 	}
 
-	public function testInertWithoutAnOption(): Void {
+	public function testUnprovenTypeWithoutAnOptionIsSilent(): Void {
 		final json: String = '{"rules":{"prefer-copy-method":{"enabled":true}}}';
 		Assert.equals(
 			0,

@@ -809,7 +809,7 @@
 		},
 		{
 			"name": "M-COPYM-ANY-COPY",
-			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
 			"method": "isCopyOf",
 			"find": "&& m.paramTypeSources.length == 0",
 			"replace": "&& true",
@@ -818,7 +818,7 @@
 		{
 			"name": "M-COPYM-ANY-ORDER",
 			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
-			"method": "proved",
+			"method": "pairFor",
 			"find": "p.fields.join(',') == site.fields.join(',') && namesPair",
 			"replace": "namesPair",
 			"note": "a reordered, missing or extra argument is taken for the configured fields, so a different value is rewritten as a copy"
@@ -858,7 +858,7 @@
 		{
 			"name": "M-COPYM-NAMES-PAIR",
 			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
-			"method": "proved",
+			"method": "pairFor",
 			"find": "&& namesPair(p, site, index, home)",
 			"replace": "&& true",
 			"note": "a construction of another type built from the same fields is rewritten as a copy of the configured type"
@@ -894,6 +894,110 @@
 			"find": "site.enclosing.contains(pair.copy) ||",
 			"replace": "false ||",
 			"note": "the copy inside the copy method is rewritten to a call of that method, which calls itself"
+		},
+		{
+			"name": "M-INFER-FIELD-ONCE",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "assignedFields",
+			"find": "fields.contains(field) || ",
+			"replace": "",
+			"note": "two parameters stored in one field are taken for two fields"
+		},
+		{
+			"name": "M-INFER-FIELD-TYPE",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "isPlainField",
+			"find": "&& found[0].typeSource == written",
+			"replace": "",
+			"note": "a parameter stored into a field of another type, converting it, is taken for a plain copy"
+		},
+		{
+			"name": "M-INFER-FIELD-ACCESSOR",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "isPlainField",
+			"find": "&& !found[0].hasSetter",
+			"replace": "",
+			"note": "a store through a setter, which runs code, is taken for a plain store"
+		},
+		{
+			"name": "M-INFER-COPY-FIELDS",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "returnsCopy",
+			"find": "!= field) return false;",
+			"replace": "== null) return false;",
+			"note": "a copy that reads other fields than the constructor stores, or the same ones swapped, is taken for a copy"
+		},
+		{
+			"name": "M-INFER-COPY-ONE-STATEMENT",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "returnsCopy",
+			"find": "stmts.length == 1 ?",
+			"replace": "stmts.length > 0 ?",
+			"note": "a copy method that does more than return the construction is taken for a copy"
+		},
+		{
+			"name": "M-INFER-COPY-NEW-TYPE",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "returnsCopy",
+			"find": "|| made.name != type.type.name",
+			"replace": "",
+			"note": "a method returning another type built from the same fields is taken for the copy"
+		},
+		{
+			"name": "M-INFER-GENERIC",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "isPlain",
+			"find": "info.typeParamArity == 0 && ",
+			"replace": "",
+			"note": "a generic type, whose construction infers its arguments, is taken for a plain one"
+		},
+		{
+			"name": "M-INFER-CTOR-PLAIN",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "isPlainConstructor",
+			"find": "m.paramSkippableFrom == count && ",
+			"replace": "",
+			"note": "a constructor with a defaulted parameter is taken for one a copy fills in full"
+		},
+		{
+			"name": "M-INFER-ONE-COPY",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "of",
+			"find": "if (found != null) return null;",
+			"replace": "",
+			"note": "two proven copy methods leave the last one as the name the rewrite uses"
+		},
+		{
+			"name": "M-INFER-CONFIG-WINS",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "pairFor",
+			"find": "if (pairs.exists(p -> p.key == key)) return null;",
+			"replace": "",
+			"note": "a type the project configured is inferred as well, so a site the configuration does not name is rewritten"
+		},
+		{
+			"name": "M-INFER-SITE-FIELDS",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "pairFor",
+			"find": "? pair : null;",
+			"replace": "? pair : pair;",
+			"note": "a construction passing the fields in another order than the constructor stores them is rewritten as a copy"
+		},
+		{
+			"name": "M-INFER-USED",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "pairFor",
+			"find": "inferred[key] = inferredPair(named, key, plugin, index)",
+			"replace": "inferred[key] = null",
+			"note": "no pair is inferred from source, so a type the project did not configure is never rewritten"
+		},
+		{
+			"name": "M-INFER-CTOR-COUNT",
+			"type": "anyparse.check.haxe.expressions.CopyPairInference",
+			"method": "assignedFields",
+			"find": " || stmts.length != params.length",
+			"replace": "",
+			"note": "a constructor statement beyond the parameter stores, a call or a store of a non-parameter, is taken for a plain constructor"
 		}
 	]
 }

@@ -4,6 +4,7 @@ import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.OptionKeyed;
 import anyparse.check.haxe.expressions.CompareFunctions.ConfigProblem;
+import anyparse.check.haxe.expressions.CopyPairInference.InferredCopy;
 import anyparse.check.scan.PurityScan;
 import anyparse.grammar.json.JValue;
 import anyparse.query.ElementSpan;
@@ -13,7 +14,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
 
-/** A configured type, checked against the index: its simple name, the fields a copy reads in order, and its copy method. */
+/** A type with a proven copy method, configured or inferred: its simple name, the fields a copy reads in order, and the method. */
 private typedef Pair = {
 	final path: String;
 	final name: String;
@@ -51,9 +52,12 @@ private typedef Seams = {
 
 /**
  * Flags a hand copy through the constructor, `new Point(p.x, p.y)`, and rewrites it to the type's copy method,
- * `p.clone()`. `Severity.Info`, with an autofix. Inert until the project declares the pair in `apq.json` and enables the rule:
+ * `p.clone()`. `Severity.Info`, with an autofix. Off until the project enables it. The pair of constructor and copy method comes
+ * from the type's own source (`CopyPairInference`) or, for a type that source does not prove, from the project's `apq.json`:
  *
  *     "prefer-copy-method": { "enabled": true, "types": { "pkg.Point": { "fields": ["x", "y"], "copy": "clone" } } }
+ *
+ * A type declared under `types` is read from there alone, never inferred.
  *
  * ## What a site must be
  *
@@ -67,7 +71,7 @@ private typedef Seams = {
  * - **No subtype overrides the copy method.** A virtual `clone` of a subtype yields the subtype, `new T` yields exactly `T`.
  *   The question is asked of the widest index the project declared (`IndexScope.widestScopeIndex`); a hierarchy the index
  *   cannot resolve is no proof and refuses, except for a final class, which has no subtype at all.
- * - **The configured type's simple name is declared once in the index.** The typer answers by simple name, so with a second
+ * - **The type's simple name is declared once in the index.** The typer answers by simple name, so with a second
  *   declaration of it a receiver cannot be told from the configured type and the rule refuses. A same-named type outside the
  *   index is not seen.
  * - **The site is outside any method of the copy method's name**, which would call itself.
@@ -91,7 +95,6 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 	private static final OPTION_TYPES: String = 'types';
 	private static final KEY_FIELDS: String = 'fields';
 	private static final KEY_COPY: String = 'copy';
-	private static final PUBLIC_VISIBILITY: String = 'public';
 
 	/** The linter's per-file config resolver, or null to read each file's chain from disk. */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -215,7 +218,7 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 			return;
 		}
 		final found: Array<MemberInfo> = type.type.members.filter(m -> m.name == method);
-		if (found.length != 1 || !isCopyOf(found[0], name, methods, typeSyntax)) {
+		if (found.length != 1 || !CopyPairInference.isCopyOf(found[0], name, methods, typeSyntax)) {
 			out.problems.push('$label: "$path" has no one public instance method $method() returning $name');
 			return;
 		}
@@ -227,14 +230,6 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 			key: idx.refs.seenKey(type),
 			isFinal: type.type.isFinal
 		});
-	}
-
-	private static function isCopyOf(m: MemberInfo, type: String, methods: Array<String>, typeSyntax: TypeSyntaxReader): Bool {
-		final returned: Null<String> = m.returnSource;
-		return methods.contains(m.kind)
-			&& !m.isStatic && m.visibility == PUBLIC_VISIBILITY && !m.guarded && !m.isMacro && !m.isDynamic && !m.isOverload
-			&& !m.hasOverloadMeta && m.paramTypeSources.length == 0
-			&& (returned == null || NominalTypes.outerNominalOf(returned, typeSyntax) == type);
 	}
 
 	private static function candidates(tree: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Array<Site> {
@@ -288,16 +283,17 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 		sites: Array<Site>, pairs: Array<Pair>, tree: QueryNode, file: String, source: String, plugin: GrammarPlugin,
 		index: Null<SymbolIndex>
 	): Array<Copy> {
-		if (index == null || pairs.length == 0) return [];
+		if (index == null) return [];
 		final home: Null<FileInfo> = index.refs.fileNamed(file);
 		final purity: Null<PurityCtx> = PurityScan.contextOf(plugin, source, tree, index, file);
 		final nominal: Null<(QueryNode) -> Null<String>> = CheckScan.typeNominalResolver(source, plugin, tree, file, index);
 		if (home == null || purity == null || nominal == null) return [];
 		final widest: Null<SymbolIndex> = IndexScope.widestScopeIndex(plugin, index);
 		final refused: Map<String, Bool> = [];
+		final inferred: Map<String, Null<Pair>> = [];
 		final out: Array<Copy> = [];
 		for (site in sites) {
-			final pair: Null<Pair> = pairs.find(p -> p.fields.join(',') == site.fields.join(',') && namesPair(p, site, index, home));
+			final pair: Null<Pair> = pairFor(site, pairs, inferred, plugin, index, home);
 			if (pair == null || site.enclosing.contains(pair.copy) || nominal(site.receiver) != pair.name) continue;
 			if (!site.args.foreach(arg -> PurityScan.isPure(arg, purity))) continue;
 			if (!refused.exists(pair.key)) refused[pair.key] = refuses(index, widest, pair);
@@ -305,6 +301,34 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 			if (refused[chosen.key] != true) out.push({ span: site.span, site: site, pair: chosen });
 		}
 		return out;
+	}
+
+	/** The configured pair the site copies by, else the pair the type's own source proves; a configured type is never inferred. */
+	private static function pairFor(
+		site: Site, pairs: Array<Pair>, inferred: Map<String, Null<Pair>>, plugin: GrammarPlugin, index: SymbolIndex, home: FileInfo
+	): Null<Pair> {
+		final configured: Null<Pair> = pairs.find(p -> p.fields.join(',') == site.fields.join(',') && namesPair(p, site, index, home));
+		if (configured != null) return configured;
+		final named: Null<ResolvedType> = index.refs.resolveTypeRef(site.typeName, home, site.span.from);
+		if (named == null) return null;
+		final key: String = index.refs.seenKey(named);
+		if (pairs.exists(p -> p.key == key)) return null;
+		if (!inferred.exists(key)) inferred[key] = inferredPair(named, key, plugin, index);
+		final pair: Null<Pair> = inferred[key];
+		return pair != null && pair.fields.join(',') == site.fields.join(',') ? pair : null;
+	}
+
+	private static function inferredPair(type: ResolvedType, key: String, plugin: GrammarPlugin, index: SymbolIndex): Null<Pair> {
+		final proven: Null<InferredCopy> = CopyPairInference.of(type, plugin, index);
+		final name: String = type.type.name;
+		return proven == null ? null : {
+			path: type.file.pkg == '' ? name : '${type.file.pkg}.$name',
+			name: name,
+			fields: proven.fields,
+			copy: proven.copy,
+			key: key,
+			isFinal: type.type.isFinal
+		};
 	}
 
 	/** Whether the type a construction names, read in its file, is the configured declaration itself. */
