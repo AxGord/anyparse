@@ -102,7 +102,7 @@ final class SliceGate {
 	 */
 	public static final GATE_BRANCHES: Array<Array<String>> = [
 		['suite', 'corpus'],
-		['lists', 'fmt', 'scrub', 'artifacts', 'workflows'],
+		['lists', 'fmt', 'scrub', 'artifacts', 'claude-md', 'workflows'],
 		['lint'],
 		['jvm'],
 		['infra4'],
@@ -135,6 +135,7 @@ final class SliceGate {
 		'infra4',
 		'scrub',
 		'artifacts',
+		'claude-md',
 		'workflows',
 		'kits',
 		'typer probes'
@@ -286,6 +287,7 @@ final class SliceGate {
 			case 'arms': GateArms.outcome.bind(_gate);
 			case 'scrub': scrubOutcome;
 			case 'artifacts': artifactsOutcome;
+			case 'claude-md': () -> ClaudeMdRow.outcome(_gate.tree, _gate.base, _gate.touched, _gate.summary);
 			case 'workflows':
 				() ->
 					WorkflowsRow.reached(_gate.touched)

@@ -102,7 +102,10 @@ states:
       before any end of turn. After your VERDICT line is delivered, answer ONLY a harness `[handback-send-enforce]`
       prompt with the plain-text line `DELIVERED <the slice id>`, never the verdict again, never SendMessage to main.
       Add no synthetic load (no CPU burners): other slices' gates share this machine.
-      CLAUDE.md is already in your context (do not open it). Read: the principles ({{project_root}}/.claude/workflows/lib/principles.md, whole)
+      CLAUDE.md is already in your context (do not open it). When the diff touches it (`rtk proxy git diff <base>..HEAD -- CLAUDE.md`),
+      classify each hunk as move, cut, stale fix or RULE CHANGE and check the hunks match the reason the worker's report gives
+      (`touches_add`); a RULE CHANGE — a rule or invariant added, dropped or reworded in meaning — without the user's quote in the
+      queue line's text is a FIXES finding, and so is a hunk the reason does not cover. Read: the principles ({{project_root}}/.claude/workflows/lib/principles.md, whole)
       and this slice's task in {{project_root}}/.claude/batch/queue.yaml (`awk '/^  - id: <ID>$/{f=1;print;next} f&&/^  - /{exit} f' …`) (your cwd is the worktree, where .claude/batch does not exist); the worker's report (your brief) — when it is
       only a one-line DONE, read {{context.cwd}}-logs/report.md and {{context.cwd}}-logs/handoff.md (its "least sure"
       claims are where to push first).

@@ -19,7 +19,12 @@ states:
       arms, apqlint.json) → `apq get <file> <path>`. Never grep/sed/cat/head/tail a .hx or project json, never a whole-file Read of a .hx,
       never pipe hxq into head/grep (use `--limit N` / `--select`).
       CLAUDE.md is already in your context — do not open it; mind its (§ Non-negotiable invariants, § What a comment may say,
-      § Test framework). Read the user's standing principles whole: {{project_root}}/.claude/workflows/lib/principles.md;
+      § Test framework). Editing it is allowed only declared and within its byte budget (the gate's `claude-md` row, `dev.ClaudeMdRow`):
+      the moment you edit CLAUDE.md, add it to YOUR line's touches — `queue_edit({file: "{{project_root}}/.claude/batch/queue.yaml",
+      id: "<ID>", set: {touches: [<its current touches>, "CLAUDE.md"]}})` — before the first `gate`, which reads the line and fails an
+      undeclared change; and report `touches_add: "CLAUDE.md — <one-line reason>"` in the `done` set. A rule you add or change there
+      needs the user's quote in your line (else do not edit it: put the text in the report).
+      Read the user's standing principles whole: {{project_root}}/.claude/workflows/lib/principles.md;
       and YOUR task in {{project_root}}/.claude/batch/queue.yaml (`awk '/^  - id: <ID>$/{f=1;print;next} f&&/^  - /{exit} f' …`) —
       never the other tasks or the header (the parent's dispatch history).
 
@@ -708,13 +713,15 @@ states:
         lessons    — one record per defect seen but not owned and per tool defect (its `repro` names the command you
                      ran, the fixture path and what it printed: exit code or the refusal line; `kind: unverified` for
                      one you saw without running a command). Omit the key ONLY when you saw none. A STRING holding one JSON document: {"lessons": [{"id": "UPPER-CASE-ID", "kind": "<class>", "touches": ["file that exists on main", "path (new)"], "repro": "one line that shows it", "text": "the brief"}]}. kind (the dispatcher's words): unverified = not reproduced on a real tree, not a loss, not a user call (the script files it backlog, priority low); reproduced-on-real-tree = a defect you reproduced on a real tree or under a shipped config; loss = wrong code, a dropped comment, fmt refusing real code; arm-rot-on-base = a gate waived an arm, or you routed around it (the script files it pending, priority high); process = about the workflow, not code. Only unverified and arm-rot-on-base are filed by the script; the others go to the parent's triage file. touches: 1-8 FILES, never a directory or glob; no client project names. Prose in open_items stays for what is not a lesson.
+        touches_add — only when you edited CLAUDE.md (declared in your line's touches before the gate): `CLAUDE.md — <one-line reason>`;
+                     the reviewer classifies each hunk against it. Omit the key otherwise.
       And two more keys in the same `set` (never the Write tool, never a shell redirect: the engine writes the files):
         report_text  — your full report (≤40 lines): branch, tip, porcelain, the gate verdict line, reuse,
                        mechanism verdict with its number, open items. It is what the reviewer and the parent read.
         handoff_text — for whoever continues this slice WITHOUT your context (a fix round may be a fresh agent):
                        the decisions you took and why; approaches you tried and dropped, and why; where the change
                        lives (files, declarations); the claims you are LEAST sure of, what you ran against each and what it showed, and any refuter you could not run and why; anything a fix round must know (fixtures, probes, commands that reproduce).
-      Then ONE call: `transition({session_id, transition: "done", set: {sha: …, base: …, reuse: …, mechanism: …, open_items: …, lessons: …, report_text: …, handoff_text: …}})` (the keys are written first; an exec then writes report_text and handoff_text to {{context.cwd}}-logs/report.md and handoff.md; a refused call writes nothing: fix what its error names and send it again).
+      Then ONE call: `transition({session_id, transition: "done", set: {sha: …, base: …, reuse: …, mechanism: …, open_items: …, lessons: …, touches_add: …, report_text: …, handoff_text: …}})` (the keys are written first; an exec then writes report_text and handoff_text to {{context.cwd}}-logs/report.md and handoff.md; a refused call writes nothing: fix what its error names and send it again).
     transitions:
       done: write_report
 
@@ -725,6 +732,7 @@ states:
     command: |-
       logs="$(pwd -P)-logs"; mkdir -p "$logs"
       printf '%s\n' "$REPORT_TEXT" > "$logs/report.md"; case "$REUSE" in ''|*context.reuse*) ;; *) grep -qiE '^[ #*-]*reuse' "$logs/report.md" || printf '\nreuse: %s\n' "$REUSE" >> "$logs/report.md";; esac; printf '%s\n' "$HANDOFF_TEXT" > "$logs/handoff.md"; printf '%s\n' "$OPEN_ITEMS" > "$logs/open-items.txt"; case "$LESSONS" in ''|*context.lessons*) ;; *) printf '%s\n' "$LESSONS" > "$logs/lessons.json";; esac
+      case "$TOUCHES_ADD" in ''|*context.touches_add*) ;; *) printf '\ntouches+: %s\n' "$TOUCHES_ADD" >> "$logs/report.md";; esac
       echo "wrote $logs/report.md and handoff.md"
     env:
       LESSONS: "{{context.lessons}}"
@@ -732,6 +740,7 @@ states:
       HANDOFF_TEXT: "{{context.handoff_text}}"
       OPEN_ITEMS: "{{context.open_items}}"
       REUSE: "{{context.reuse}}"
+      TOUCHES_ADD: "{{context.touches_add}}"
     timeout: 30000
     on_success: finish
     on_error: finish

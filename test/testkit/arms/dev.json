@@ -4719,6 +4719,38 @@
 			"find": "fixpoint != null && outcome.status == 0",
 			"replace": "false && fixpoint != null",
 			"note": "a fixpoint row compiles the files the run left, so the formatted stdout is never compiled and a formatter output that does not compile passes on the strength of its input"
+		},
+		{
+			"name": "M-CLAUDE-MD-BUDGET-IGNORED",
+			"type": "dev.ClaudeMdRow",
+			"method": "verdict",
+			"find": "bytes > BUDGET && bytes > (baseBytes ?? 0)",
+			"replace": "false",
+			"note": "a CLAUDE.md past its byte budget passes the gate, so the file every agent reads on every turn grows without a stop"
+		},
+		{
+			"name": "M-CLAUDE-MD-SHRINK-HELD",
+			"type": "dev.ClaudeMdRow",
+			"method": "verdict",
+			"find": "bytes > BUDGET && bytes > (baseBytes ?? 0)",
+			"replace": "bytes > BUDGET",
+			"note": "a slice that shrinks an over-budget CLAUDE.md fails for the debt it did not make"
+		},
+		{
+			"name": "M-CLAUDE-MD-UNDECLARED-PASSES",
+			"type": "dev.ClaudeMdRow",
+			"method": "verdict",
+			"find": "if (!changed || declared == true) return Passed;",
+			"replace": "return Passed;",
+			"note": "a slice that changed CLAUDE.md without declaring it in its touches passes the gate"
+		},
+		{
+			"name": "M-CLAUDE-MD-DECLARED-BLIND",
+			"type": "dev.ClaudeMdRow",
+			"method": "declared",
+			"find": "line?.touches.contains(FILE)",
+			"replace": "false",
+			"note": "the declaration in the queue line is never seen, so a slice that declared its CLAUDE.md edit fails the gate"
 		}
 	]
 }

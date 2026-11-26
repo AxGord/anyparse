@@ -98,7 +98,7 @@ final class ReconFacts {
 	 * takes the line's lock (`holder`, the token of the run the recon belongs to, or none).
 	 */
 	public static function run(id: String, tree: String, queue: Null<String>, engine: Null<String>, holder: Null<String>): ReconVerdict {
-		final queueFile: String = queue ?? Path.join([Path.directory(commonDir(tree)), '.claude/batch/queue.yaml']);
+		final queueFile: String = queue ?? queueOf(tree);
 		final line: Null<QueueLine> = QueueFile.find(File.getContent(queueFile), id);
 		if (line == null) throw new Exception('$queueFile has no line $id');
 		final logs: String = '$tree-logs';
@@ -175,6 +175,11 @@ final class ReconFacts {
 	public static function mentionScope(tree: String, touches: Array<String>): Array<String> {
 		final touched: Array<String> = touches.filter(path -> hxScope(tree, path));
 		return touched.length > 0 ? touched : FALLBACK_SCOPE.filter(dir -> FileSystem.exists(Path.join([tree, dir])));
+	}
+
+	/** The queue file of the checkout `tree` belongs to: the worktrees share the main checkout's one. */
+	public static function queueOf(tree: String): String {
+		return Path.join([Path.directory(commonDir(tree)), '.claude/batch/queue.yaml']);
 	}
 
 	/** The line that names the route: first, and last when facts follow, because an exec keeps the tail of a long output. */
