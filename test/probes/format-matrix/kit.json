@@ -1,0 +1,703 @@
+{
+	"about": "hxq fmt of one program per host kind (class, macro class expression, abstract, enum abstract, interface, typedef, enum), each holding the construct families that host can carry (member blanks, metadata line ends, wraps, brace policy, comment runs and an else-closing `;`), under three configs: this repo's hxformat.json (repo/), a copy of a sibling library's hxformat.json kept as a fixture (sibling/), and the default `{}` (default/). Every output compiles. An interface and an enum have no statement bodies and a typedef or enum no brace policy: those families are omitted there.",
+	"files": {
+		"repo/hxformat.json": "{\n\t\"indentation\": {\n\t\t\"character\": \"tab\",\n\t\t\"tabWidth\": 4,\n\t\t\"trailingWhitespace\": false,\n\t\t\"alignInlineSwitchCaseBody\": true\n\t},\n\t\"comments\": {\n\t\t\"blockCommentBodyIndent\": \"verbatim\"\n\t},\n\t\"emptyLines\": {\n\t\t\"maxAnywhereInFile\": 2,\n\t\t\"afterLeftCurly\": \"keep\",\n\t\t\"beforeRightCurly\": \"keep\",\n\t\t\"beforeDocCommentEmptyLines\": \"one\",\n\t\t\"metadataCountsAsDocComment\": true,\n\t\t\"classEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"abstractEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"interfaceEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"externClassEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"macroClassEmptyLines\": {\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0\n\t\t},\n\t\t\"enumEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"typedefEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t},\n\t\t\"enumAbstractEmptyLines\": {\n\t\t\t\"metadataCountsAsDocComment\": true,\n\t\t\t\"betweenVars\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\"\n\t\t}\n\t},\n\t\"wrapping\": {\n\t\t\"maxLineLength\": 140,\n\t\t\"functionSignature\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 100}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"methodChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"itemsAfterCloseParenOnly\": true,\n\t\t\t\"rules\": [\n\t\t\t\t{\"conditions\": [{\"cond\": \"lineLength >= n\", \"value\": 160}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 3}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"totalItemLength <= n\", \"value\": 80}, {\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"anyItemLength >= n\", \"value\": 30}, {\"cond\": \"itemCount >= n\", \"value\": 4}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"itemCount >= n\", \"value\": 7}], \"type\": \"onePerLine\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"onePerLine\"}\n\t\t\t]\n\t\t},\n\t\t\"ternaryMultilineBranch\": \"break\",\n\t\t\"opBoolChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}], \"type\": \"noWrap\"},\n\t\t\t\t{\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 1}], \"type\": \"fillSimpleRuns\", \"location\": \"beforeLast\"}\n\t\t\t]\n\t\t},\n\t\t\"callParameter\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"itemCount <= n\", \"value\": 1}, {\"cond\": \"totalItemLength <= n\", \"value\": 100}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"expressionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"conditionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [{\"cond\": \"exceedsMaxLineLength\", \"value\": 0}],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"comprehensionFit\": true,\n\t\t\"soleObjectCuddledBrackets\": true\n\t},\n\t\"whitespace\": {\n\t\t\"addLineCommentSpace\": true,\n\t\t\"colonPolicy\": \"after\",\n\t\t\"typeHintColonPolicy\": \"after\",\n\t\t\"typeCheckColonPolicy\": \"after\",\n\t\t\"functionTypeHaxe3Policy\": \"around\",\n\t\t\"functionTypeHaxe4Policy\": \"around\",\n\t\t\"arrowFunctionsPolicy\": \"around\",\n\t\t\"ifPolicy\": \"around\",\n\t\t\"forPolicy\": \"around\",\n\t\t\"whilePolicy\": \"around\",\n\t\t\"switchPolicy\": \"around\",\n\t\t\"binopPolicy\": \"around\",\n\t\t\"intervalPolicy\": \"around\",\n\t\t\"bracesConfig\": {\n\t\t\t\"objectLiteralBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\",\n\t\t\t\t\"arrowBodyOpenPad\": true\n\t\t\t},\n\t\t\t\"anonTypeBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"singleStatementBraces\": \"symmetric\"\n\t\t},\n\t\t\"parenConfig\": {\n\t\t\t\"callParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"funcParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"conditionParens\": {\n\t\t\t\t\"openingPolicy\": \"before\",\n\t\t\t\t\"closingPolicy\": \"after\"\n\t\t\t},\n\t\t\t\"anonFuncParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t}\n\t\t},\n\t\t\"bracketConfig\": {\n\t\t\t\"comprehensionBrackets\": {\n\t\t\t\t\"openingPolicy\": \"onlyAfter\",\n\t\t\t\t\"closingPolicy\": \"onlyBefore\"\n\t\t\t}\n\t\t}\n\t},\n\t\"lineEnds\": {\n\t\t\"emptyCurly\": \"noBreak\"\n\t},\n\t\"sameLine\": {\n\t\t\"ifBody\": \"fitLine\",\n\t\t\"forBody\": \"fitLine\",\n\t\t\"whileBody\": \"fitLine\",\n\t\t\"functionBody\": \"fitLine\",\n\t\t\"returnBody\": \"fitLine\",\n\t\t\"returnBodySingleLine\": \"fitLine\",\n\t\t\"expressionIf\": \"next\",\n\t\t\"expressionIfFit\": true,\n\t\t\"expressionIfFitMaxBranches\": 3,\n\t\t\"expressionIfFitMaxValueWidth\": 8\n\t}\n}\n",
+		"repo/ClassHost.hx": "/** Class host: every family in one body. */\n@:keep class ClassHost {\n\tstatic var counter:Int = 0;\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a var. */\n\tvar c:Array<Int>;\n\t@:isVar var d(get, set):Int;\n\t@:keep\n\t@:native(\"e\") var e:Int;\n\t@:meta(1) @:meta2 static inline var K:Int = 3;\n\tpublic function new() {\n\t\ta = 1;\n\t}\n\tfunction get_d():Int return d;\n\tfunction set_d(v:Int):Int {\n\t\td = v;\n\t\treturn v;\n\t}\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction brace(x:Int):Int {\n\t\tif (x > 0) return 1;\n\t\telse if (x < 0) return -1;\n\t\telse return 0;\n\t}\n\tfunction braceLeft(x:Int):Int\n\t{\n\t\tif (x > 0)\n\t\t{\n\t\t\treturn 1;\n\t\t};\n\t\tfor (i in 0...x) a += i;\n\t\twhile (a > 100) a--;\n\t\treturn if (x == 0) 1 else 2;\n\t}\n\tfunction elseSemi(x:Int):Int {\n\t\tif (x > 0) {\n\t\t\ta = 1;\n\t\t} else {\n\t\t\ta = 2;\n\t\t};\n\t\ttry {\n\t\t\ta = 3;\n\t\t} catch (e:Dynamic) {\n\t\t\ta = 4;\n\t\t};\n\t\treturn a; // trailing\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\tvar arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36];\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t\tvar o = {name: \"value one\", other: \"value two\", third: \"value three\", fourth: \"value four\", fifth: \"value five\", sixth: 6};\n\t}\n\tstatic function main() {}\n}\n",
+		"repo/MacroClassHost.hx": "/** Macro class host: the `macro class` expression holds the members. */\nclass MacroClassHost {\n\tstatic var counter:Int = 0;\n\tstatic function main() {}\n\tstatic function build():haxe.macro.Expr.TypeDefinition {\n\t\treturn macro class {\n\t\t\tvar a:Int;\n\t\t\tvar b:String;\n\t\t\tstatic var counter:Int = 0;\n\n\n\t\t\t@:keep var c:Int;\n\t\t\t@:keep\n\t\t\t@:native(\"e\") var e:Int;\n\t\t\tpublic function new() {\n\t\t\t\ta = 1;\n\t\t\t}\n\t\t\t// line comment run\n\t\t\t/* block comment */\n\t\t\t// second line comment\n\t\t\tfunction brace(x:Int):Int {\n\t\t\t\tif (x > 0) return 1;\n\t\t\t\telse return 0;\n\t\t\t}\n\t\t\tfunction braceLeft(x:Int):Int\n\t\t\t{\n\t\t\t\tif (x > 0)\n\t\t\t\t{\n\t\t\t\t\ta = 1;\n\t\t\t\t}\n\t\t\t\telse\n\t\t\t\t{\n\t\t\t\t\ta = 2;\n\t\t\t\t};\n\t\t\t\treturn a; // trailing\n\t\t\t}\n\t\t\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0):Void {\n\t\t\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, \"a long literal string one\", \"another long literal string two\");\n\t\t\t}\n\t\t};\n\t}\n}\n",
+		"repo/AbstractHost.hx": "/** Abstract host: from/to casts, operators, forwarding. */\n@:forward\nabstract AbstractHost(Int) from Int to Int {\n\tstatic var counter:Int = 0;\n\tstatic var other:Int = 1;\n\tpublic inline function new(v:Int) {\n\t\tthis = v;\n\t}\n\n\n\t/** Doc comment before a function. */\n\t@:from static function fromString(s:String):AbstractHost return new AbstractHost(s.length);\n\t@:to function toStr():String return Std.string(this);\n\t@:op(A + B) static function add(lhs:AbstractHost, rhs:AbstractHost):AbstractHost return new AbstractHost(lhs.get() + rhs.get());\n\t@:keep\n\t@:op(A - B)\n\tstatic function sub(lhs:AbstractHost, rhs:AbstractHost):AbstractHost {\n\t\treturn new AbstractHost(lhs.get() - rhs.get());\n\t}\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction get():Int\n\t{\n\t\tif (this > 0)\n\t\t{\n\t\t\treturn this;\n\t\t}\n\t\telse return 0;\n\t}\n\tfunction elseSemi():Int {\n\t\tif (this > 0) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\treturn 2;\n\t\t};\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t}\n\tstatic function main() {}\n}\n",
+		"repo/EnumAbstractHost.hx": "/** Enum abstract host: values with metadata, doc comments and a function. */\nenum abstract EnumAbstractHost(Int) from Int to Int {\n\tvar A = 0;\n\tvar B = 1;\n\n\n\t/** Doc comment before a value. */\n\tvar C = 2;\n\t@:keep var D = 3;\n\t@:keep\n\t@:native(\"e\") var E = 4;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar F = 5; // trailing\n\tvar LongValueNameOne = 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000 + 7000000 + 8000000 + 9000000 + 10000000 + 11000000;\n\tstatic var counter:Int = 0;\n\tpublic inline function new(v:Int) {\n\t\tthis = v;\n\t}\n\tfunction brace():Int {\n\t\tif (this > 0) return 1;\n\t\telse return 0;\n\t}\n\tfunction braceLeft():Int\n\t{\n\t\tif (this > 0)\n\t\t{\n\t\t\treturn 1;\n\t\t}\n\t\telse\n\t\t{\n\t\t\treturn 2;\n\t\t};\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t}\n\tstatic function main() {}\n}\n",
+		"repo/InterfaceHost.hx": "/** Interface host: signatures only. */\n@:keep interface InterfaceHost {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a var. */\n\tvar c:Array<Int>;\n\t@:isVar var d(get, set):Int;\n\t@:keep\n\t@:native(\"e\") var e:Int;\n\tfunction get_d():Int;\n\tfunction set_d(v:Int):Int;\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction brace(x:Int):Int;\n\tfunction noBraces():Void; // trailing\n\t@:meta(1) @:meta2 function metaFn():Void;\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void;\n}\nclass InterfaceMain implements InterfaceHost {\n\tpublic var a:Int;\n\tpublic var b:String;\n\tpublic var c:Array<Int>;\n\tpublic var d(get, set):Int;\n\tpublic var e:Int;\n\tpublic function new() {}\n\tpublic function get_d():Int return 0;\n\tpublic function set_d(v:Int):Int return v;\n\tpublic function brace(x:Int):Int return x;\n\tpublic function noBraces():Void {}\n\tpublic function metaFn():Void {}\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {}\n\tstatic function main() {}\n}\n",
+		"repo/TypedefHost.hx": "/** Typedef host: anonymous structure fields. */\ntypedef TypedefHost = {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a field. */\n\tvar c:Array<Int>;\n\t@:optional var d:Int;\n\t@:optional\n\t@:native(\"e\") var e:Int;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar f:Int; // trailing\n\tfunction method(x:Int):Int;\n\tvar callback:(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int) -> Void;\n}\n\ntypedef Extended = TypedefHost & {\n\tvar more:Int;\n}\n\ntypedef Alias = Array<{name:String, other:String, third:String, fourth:String, fifth:String, sixth:String, seventh:String, eighth:String}>;\n\nclass TypedefMain {\n\tstatic function main() {}\n}\n",
+		"repo/EnumHost.hx": "/** Enum host: constructors with and without arguments. */\n@:keep enum EnumHost {\n\tA;\n\tB(x:Int);\n\n\n\t/** Doc comment before a constructor. */\n\tC(x:Int, y:String);\n\t@:keep D;\n\t@:keep\n\t@:native(\"e\") E(v:Int);\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tF; // trailing\n\tLongConstructor(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int, fifthArgument:Bool);\n}\n\nclass EnumMain {\n\tstatic function main() {}\n}\n",
+		"sibling/hxformat.json": "{\n\t\"indentation\": {\n\t\t\"character\": \"tab\",\n\t\t\"tabWidth\": 4,\n\t\t\"trailingWhitespace\": false,\n\t\t\"alignInlineSwitchCaseBody\": true\n\t},\n\t\"emptyLines\": {\n\t\t\"maxAnywhereInFile\": 2,\n\t\t\"afterBlocks\": \"remove\",\n\t\t\"afterLeftCurly\": \"keep\",\n\t\t\"beforeRightCurly\": \"keep\",\n\t\t\"classEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"interfaceEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"abstractEmptyLines\": {\n\t\t\t\"beginType\": 1,\n\t\t\t\"endType\": 1\n\t\t},\n\t\t\"enumEmptyLines\": {\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\",\n\t\t\t\"metadataCountsAsDocComment\": true\n\t\t},\n\t\t\"typedefEmptyLines\": {\n\t\t\t\"betweenFields\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\",\n\t\t\t\"metadataCountsAsDocComment\": true\n\t\t},\n\t\t\"enumAbstractEmptyLines\": {\n\t\t\t\"betweenVars\": 0,\n\t\t\t\"existingBetweenFields\": \"remove\",\n\t\t\t\"beginType\": 0,\n\t\t\t\"endType\": 0,\n\t\t\t\"beginTypeIfDocComments\": 1,\n\t\t\t\"endTypeIfDocComments\": 1,\n\t\t\t\"afterFieldsWithDocComments\": \"none\",\n\t\t\t\"metadataCountsAsDocComment\": true\n\t\t},\n\t\t\"beforeDocCommentEmptyLines\": \"one\",\n\t\t\"metadataCountsAsDocComment\": true\n\t},\n\t\"wrapping\": {\n\t\t\"maxLineLength\": 140,\n\t\t\"trailingComma\": \"remove\",\n\t\t\"comprehensionCuddledOpen\": true,\n\t\t\"methodChainCuddledLinks\": true,\n\t\t\"soleItemCuddledBrackets\": true,\n\t\t\"ternaryMultilineBranch\": \"break\",\n\t\t\"arrayWrap\": {\n\t\t\t\"defaultWrap\": \"ignore\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"hasMultilineItems\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength <= n\",\n\t\t\t\t\t\t\t\"value\": 80\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"equalItemLengths\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"allItemLengths <= n\",\n\t\t\t\t\t\t\t\"value\": 30\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 10\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLineWithLeadingBreak\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"allItemLengths <= n\",\n\t\t\t\t\t\t\t\"value\": 10\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 10\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLineWithLeadingBreak\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"anyItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 30\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 4\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"mapWrap\": {\n\t\t\t\"defaultWrap\": \"ignore\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"hasMultilineItems\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength <= n\",\n\t\t\t\t\t\t\t\"value\": 80\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"equalItemLengths\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"allItemLengths <= n\",\n\t\t\t\t\t\t\t\"value\": 30\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 10\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLineWithLeadingBreak\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"allItemLengths <= n\",\n\t\t\t\t\t\t\t\"value\": 10\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 10\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLineWithLeadingBreak\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"anyItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 30\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 3\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"arrayMatrixWrap\": \"matrixWrapWithAlign\",\n\t\t\"typeParameter\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"anyItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 50\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 70\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"functionSignature\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength <= n\",\n\t\t\t\t\t\t\t\"value\": 100\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount <= n\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"anonFunctionSignature\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 7\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"additionalIndent\": 1\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 80\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"additionalIndent\": 1\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"additionalIndent\": 1\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"callParameter\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount <= n\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength <= n\",\n\t\t\t\t\t\t\t\"value\": 100\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"metadataCallParameter\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 140\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"lineLength >= n\",\n\t\t\t\t\t\t\t\"value\": 140\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"objectLiteral\": {\n\t\t\t\"defaultWrap\": \"ignore\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"anonType\": {\n\t\t\t\"defaultWrap\": \"ignore\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount <= n\",\n\t\t\t\t\t\t\t\"value\": 3\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"anyItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 30\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 60\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLine\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"methodChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"lineLength >= n\",\n\t\t\t\t\t\t\t\"value\": 140\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLineAfterFirst\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount <= n\",\n\t\t\t\t\t\t\t\"value\": 3\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength <= n\",\n\t\t\t\t\t\t\t\"value\": 80\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"anyItemLength >= n\",\n\t\t\t\t\t\t\t\"value\": 30\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 4\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLineAfterFirst\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 7\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLineAfterFirst\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLineAfterFirst\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"opBoolChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount <= n\",\n\t\t\t\t\t\t\t\"value\": 3\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"totalItemLength <= n\",\n\t\t\t\t\t\t\t\"value\": 120\n\t\t\t\t\t\t},\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"location\": \"beforeLast\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"implementsExtends\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"lineLength >= n\",\n\t\t\t\t\t\t\t\"value\": 140\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"additionalIndent\": 2\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 4\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"additionalIndent\": 2\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"additionalIndent\": 2\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"opAddSubChain\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\",\n\t\t\t\t\t\"location\": \"beforeLast\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"multiVar\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"anyItemLength <= n\",\n\t\t\t\t\t\t\t\"value\": 15\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"lineLength >= n\",\n\t\t\t\t\t\t\t\"value\": 80\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLineAfterFirst\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLineAfterFirst\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"casePattern\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"itemCount >= n\",\n\t\t\t\t\t\t\t\"value\": 2\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t},\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"fillLine\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"conditionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"expressionWrapping\": {\n\t\t\t\"defaultWrap\": \"fillLineWithLeadingBreak\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 0\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"noWrap\"\n\t\t\t\t}\n\t\t\t]\n\t\t},\n\t\t\"ternaryExpression\": {\n\t\t\t\"defaultWrap\": \"noWrap\",\n\t\t\t\"rules\": [\n\t\t\t\t{\n\t\t\t\t\t\"conditions\": [\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t\"cond\": \"exceedsMaxLineLength\",\n\t\t\t\t\t\t\t\"value\": 1\n\t\t\t\t\t\t}\n\t\t\t\t\t],\n\t\t\t\t\t\"type\": \"onePerLineAfterFirst\",\n\t\t\t\t\t\"location\": \"beforeLast\"\n\t\t\t\t}\n\t\t\t]\n\t\t}\n\t},\n\t\"whitespace\": {\n\t\t\"addLineCommentSpace\": true,\n\t\t\"typeHintColonPolicy\": \"after\",\n\t\t\"typeCheckColonPolicy\": \"after\",\n\t\t\"colonPolicy\": \"after\",\n\t\t\"functionTypeHaxe3Policy\": \"around\",\n\t\t\"functionTypeHaxe4Policy\": \"around\",\n\t\t\"arrowFunctionsPolicy\": \"around\",\n\t\t\"commaPolicy\": \"after\",\n\t\t\"ifPolicy\": \"around\",\n\t\t\"forPolicy\": \"around\",\n\t\t\"whilePolicy\": \"around\",\n\t\t\"switchPolicy\": \"around\",\n\t\t\"catchPolicy\": \"around\",\n\t\t\"binopPolicy\": \"around\",\n\t\t\"conditionalCompilationBinop\": true,\n\t\t\"intervalPolicy\": \"around\",\n\t\t\"openingBracketPolicy\": \"none\",\n\t\t\"closingBracketPolicy\": \"none\",\n\t\t\"bracketConfig\": {\n\t\t\t\"comprehensionBrackets\": {\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t}\n\t\t},\n\t\t\"bracesConfig\": {\n\t\t\t\"singleStatementBraces\": \"remove\",\n\t\t\t\"objectLiteralBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"anonTypeBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"typedefBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"blockBraces\": {\n\t\t\t\t\"openingPolicy\": \"around\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t},\n\t\t\t\"unknownBraces\": {\n\t\t\t\t\"openingPolicy\": \"after\",\n\t\t\t\t\"closingPolicy\": \"before\"\n\t\t\t}\n\t\t},\n\t\t\"parenConfig\": {\n\t\t\t\"callParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"funcParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"conditionParens\": {\n\t\t\t\t\"openingPolicy\": \"before\",\n\t\t\t\t\"closingPolicy\": \"after\"\n\t\t\t},\n\t\t\t\"anonFuncParamParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t},\n\t\t\t\"forLoopParens\": {\n\t\t\t\t\"openingPolicy\": \"before\",\n\t\t\t\t\"closingPolicy\": \"after\"\n\t\t\t},\n\t\t\t\"expressionParens\": {\n\t\t\t\t\"openingPolicy\": \"none\",\n\t\t\t\t\"closingPolicy\": \"none\"\n\t\t\t}\n\t\t}\n\t},\n\t\"lineEnds\": {\n\t\t\"emptyCurly\": \"noBreak\",\n\t\t\"metadataType\": \"none\",\n\t\t\"metadataFunction\": \"none\",\n\t\t\"metadataVar\": \"none\",\n\t\t\"metadataOther\": \"none\"\n\t},\n\t\"sameLine\": {\n\t\t\"loopBodyIfElseNext\": true,\n\t\t\"ifBody\": \"fitLine\",\n\t\t\"forBody\": \"fitLine\",\n\t\t\"whileBody\": \"fitLine\",\n\t\t\"functionBody\": \"fitLine\",\n\t\t\"expressionIf\": \"next\",\n\t\t\"caseBody\": \"fitLine\",\n\t\t\"caseSiblings\": \"anyBreak\",\n\t\t\"expressionCase\": \"fitLine\",\n\t\t\"comprehensionFor\": \"fitLine\",\n\t\t\"elseSwitch\": \"same\",\n\t\t\"expressionIfWithBrackets\": true\n\t}\n}\n",
+		"sibling/ClassHost.hx": "/** Class host: every family in one body. */\n@:keep class ClassHost {\n\tstatic var counter:Int = 0;\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a var. */\n\tvar c:Array<Int>;\n\t@:isVar var d(get, set):Int;\n\t@:keep\n\t@:native(\"e\") var e:Int;\n\t@:meta(1) @:meta2 static inline var K:Int = 3;\n\tpublic function new() {\n\t\ta = 1;\n\t}\n\tfunction get_d():Int return d;\n\tfunction set_d(v:Int):Int {\n\t\td = v;\n\t\treturn v;\n\t}\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction brace(x:Int):Int {\n\t\tif (x > 0) return 1;\n\t\telse if (x < 0) return -1;\n\t\telse return 0;\n\t}\n\tfunction braceLeft(x:Int):Int\n\t{\n\t\tif (x > 0)\n\t\t{\n\t\t\treturn 1;\n\t\t};\n\t\tfor (i in 0...x) a += i;\n\t\twhile (a > 100) a--;\n\t\treturn if (x == 0) 1 else 2;\n\t}\n\tfunction elseSemi(x:Int):Int {\n\t\tif (x > 0) {\n\t\t\ta = 1;\n\t\t} else {\n\t\t\ta = 2;\n\t\t};\n\t\ttry {\n\t\t\ta = 3;\n\t\t} catch (e:Dynamic) {\n\t\t\ta = 4;\n\t\t};\n\t\treturn a; // trailing\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\tvar arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36];\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t\tvar o = {name: \"value one\", other: \"value two\", third: \"value three\", fourth: \"value four\", fifth: \"value five\", sixth: 6};\n\t}\n\tstatic function main() {}\n}\n",
+		"sibling/MacroClassHost.hx": "/** Macro class host: the `macro class` expression holds the members. */\nclass MacroClassHost {\n\tstatic var counter:Int = 0;\n\tstatic function main() {}\n\tstatic function build():haxe.macro.Expr.TypeDefinition {\n\t\treturn macro class {\n\t\t\tvar a:Int;\n\t\t\tvar b:String;\n\t\t\tstatic var counter:Int = 0;\n\n\n\t\t\t@:keep var c:Int;\n\t\t\t@:keep\n\t\t\t@:native(\"e\") var e:Int;\n\t\t\tpublic function new() {\n\t\t\t\ta = 1;\n\t\t\t}\n\t\t\t// line comment run\n\t\t\t/* block comment */\n\t\t\t// second line comment\n\t\t\tfunction brace(x:Int):Int {\n\t\t\t\tif (x > 0) return 1;\n\t\t\t\telse return 0;\n\t\t\t}\n\t\t\tfunction braceLeft(x:Int):Int\n\t\t\t{\n\t\t\t\tif (x > 0)\n\t\t\t\t{\n\t\t\t\t\ta = 1;\n\t\t\t\t}\n\t\t\t\telse\n\t\t\t\t{\n\t\t\t\t\ta = 2;\n\t\t\t\t};\n\t\t\t\treturn a; // trailing\n\t\t\t}\n\t\t\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0):Void {\n\t\t\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, \"a long literal string one\", \"another long literal string two\");\n\t\t\t}\n\t\t};\n\t}\n}\n",
+		"sibling/AbstractHost.hx": "/** Abstract host: from/to casts, operators, forwarding. */\n@:forward\nabstract AbstractHost(Int) from Int to Int {\n\tstatic var counter:Int = 0;\n\tstatic var other:Int = 1;\n\tpublic inline function new(v:Int) {\n\t\tthis = v;\n\t}\n\n\n\t/** Doc comment before a function. */\n\t@:from static function fromString(s:String):AbstractHost return new AbstractHost(s.length);\n\t@:to function toStr():String return Std.string(this);\n\t@:op(A + B) static function add(lhs:AbstractHost, rhs:AbstractHost):AbstractHost return new AbstractHost(lhs.get() + rhs.get());\n\t@:keep\n\t@:op(A - B)\n\tstatic function sub(lhs:AbstractHost, rhs:AbstractHost):AbstractHost {\n\t\treturn new AbstractHost(lhs.get() - rhs.get());\n\t}\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction get():Int\n\t{\n\t\tif (this > 0)\n\t\t{\n\t\t\treturn this;\n\t\t}\n\t\telse return 0;\n\t}\n\tfunction elseSemi():Int {\n\t\tif (this > 0) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\treturn 2;\n\t\t};\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t}\n\tstatic function main() {}\n}\n",
+		"sibling/EnumAbstractHost.hx": "/** Enum abstract host: values with metadata, doc comments and a function. */\nenum abstract EnumAbstractHost(Int) from Int to Int {\n\tvar A = 0;\n\tvar B = 1;\n\n\n\t/** Doc comment before a value. */\n\tvar C = 2;\n\t@:keep var D = 3;\n\t@:keep\n\t@:native(\"e\") var E = 4;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar F = 5; // trailing\n\tvar LongValueNameOne = 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000 + 7000000 + 8000000 + 9000000 + 10000000 + 11000000;\n\tstatic var counter:Int = 0;\n\tpublic inline function new(v:Int) {\n\t\tthis = v;\n\t}\n\tfunction brace():Int {\n\t\tif (this > 0) return 1;\n\t\telse return 0;\n\t}\n\tfunction braceLeft():Int\n\t{\n\t\tif (this > 0)\n\t\t{\n\t\t\treturn 1;\n\t\t}\n\t\telse\n\t\t{\n\t\t\treturn 2;\n\t\t};\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t}\n\tstatic function main() {}\n}\n",
+		"sibling/InterfaceHost.hx": "/** Interface host: signatures only. */\n@:keep interface InterfaceHost {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a var. */\n\tvar c:Array<Int>;\n\t@:isVar var d(get, set):Int;\n\t@:keep\n\t@:native(\"e\") var e:Int;\n\tfunction get_d():Int;\n\tfunction set_d(v:Int):Int;\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction brace(x:Int):Int;\n\tfunction noBraces():Void; // trailing\n\t@:meta(1) @:meta2 function metaFn():Void;\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void;\n}\nclass InterfaceMain implements InterfaceHost {\n\tpublic var a:Int;\n\tpublic var b:String;\n\tpublic var c:Array<Int>;\n\tpublic var d(get, set):Int;\n\tpublic var e:Int;\n\tpublic function new() {}\n\tpublic function get_d():Int return 0;\n\tpublic function set_d(v:Int):Int return v;\n\tpublic function brace(x:Int):Int return x;\n\tpublic function noBraces():Void {}\n\tpublic function metaFn():Void {}\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {}\n\tstatic function main() {}\n}\n",
+		"sibling/TypedefHost.hx": "/** Typedef host: anonymous structure fields. */\ntypedef TypedefHost = {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a field. */\n\tvar c:Array<Int>;\n\t@:optional var d:Int;\n\t@:optional\n\t@:native(\"e\") var e:Int;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar f:Int; // trailing\n\tfunction method(x:Int):Int;\n\tvar callback:(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int) -> Void;\n}\n\ntypedef Extended = TypedefHost & {\n\tvar more:Int;\n}\n\ntypedef Alias = Array<{name:String, other:String, third:String, fourth:String, fifth:String, sixth:String, seventh:String, eighth:String}>;\n\nclass TypedefMain {\n\tstatic function main() {}\n}\n",
+		"sibling/EnumHost.hx": "/** Enum host: constructors with and without arguments. */\n@:keep enum EnumHost {\n\tA;\n\tB(x:Int);\n\n\n\t/** Doc comment before a constructor. */\n\tC(x:Int, y:String);\n\t@:keep D;\n\t@:keep\n\t@:native(\"e\") E(v:Int);\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tF; // trailing\n\tLongConstructor(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int, fifthArgument:Bool);\n}\n\nclass EnumMain {\n\tstatic function main() {}\n}\n",
+		"default/hxformat.json": "{}\n",
+		"default/ClassHost.hx": "/** Class host: every family in one body. */\n@:keep class ClassHost {\n\tstatic var counter:Int = 0;\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a var. */\n\tvar c:Array<Int>;\n\t@:isVar var d(get, set):Int;\n\t@:keep\n\t@:native(\"e\") var e:Int;\n\t@:meta(1) @:meta2 static inline var K:Int = 3;\n\tpublic function new() {\n\t\ta = 1;\n\t}\n\tfunction get_d():Int return d;\n\tfunction set_d(v:Int):Int {\n\t\td = v;\n\t\treturn v;\n\t}\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction brace(x:Int):Int {\n\t\tif (x > 0) return 1;\n\t\telse if (x < 0) return -1;\n\t\telse return 0;\n\t}\n\tfunction braceLeft(x:Int):Int\n\t{\n\t\tif (x > 0)\n\t\t{\n\t\t\treturn 1;\n\t\t};\n\t\tfor (i in 0...x) a += i;\n\t\twhile (a > 100) a--;\n\t\treturn if (x == 0) 1 else 2;\n\t}\n\tfunction elseSemi(x:Int):Int {\n\t\tif (x > 0) {\n\t\t\ta = 1;\n\t\t} else {\n\t\t\ta = 2;\n\t\t};\n\t\ttry {\n\t\t\ta = 3;\n\t\t} catch (e:Dynamic) {\n\t\t\ta = 4;\n\t\t};\n\t\treturn a; // trailing\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\tvar arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36];\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t\tvar o = {name: \"value one\", other: \"value two\", third: \"value three\", fourth: \"value four\", fifth: \"value five\", sixth: 6};\n\t}\n\tstatic function main() {}\n}\n",
+		"default/MacroClassHost.hx": "/** Macro class host: the `macro class` expression holds the members. */\nclass MacroClassHost {\n\tstatic var counter:Int = 0;\n\tstatic function main() {}\n\tstatic function build():haxe.macro.Expr.TypeDefinition {\n\t\treturn macro class {\n\t\t\tvar a:Int;\n\t\t\tvar b:String;\n\t\t\tstatic var counter:Int = 0;\n\n\n\t\t\t@:keep var c:Int;\n\t\t\t@:keep\n\t\t\t@:native(\"e\") var e:Int;\n\t\t\tpublic function new() {\n\t\t\t\ta = 1;\n\t\t\t}\n\t\t\t// line comment run\n\t\t\t/* block comment */\n\t\t\t// second line comment\n\t\t\tfunction brace(x:Int):Int {\n\t\t\t\tif (x > 0) return 1;\n\t\t\t\telse return 0;\n\t\t\t}\n\t\t\tfunction braceLeft(x:Int):Int\n\t\t\t{\n\t\t\t\tif (x > 0)\n\t\t\t\t{\n\t\t\t\t\ta = 1;\n\t\t\t\t}\n\t\t\t\telse\n\t\t\t\t{\n\t\t\t\t\ta = 2;\n\t\t\t\t};\n\t\t\t\treturn a; // trailing\n\t\t\t}\n\t\t\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0):Void {\n\t\t\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, \"a long literal string one\", \"another long literal string two\");\n\t\t\t}\n\t\t};\n\t}\n}\n",
+		"default/AbstractHost.hx": "/** Abstract host: from/to casts, operators, forwarding. */\n@:forward\nabstract AbstractHost(Int) from Int to Int {\n\tstatic var counter:Int = 0;\n\tstatic var other:Int = 1;\n\tpublic inline function new(v:Int) {\n\t\tthis = v;\n\t}\n\n\n\t/** Doc comment before a function. */\n\t@:from static function fromString(s:String):AbstractHost return new AbstractHost(s.length);\n\t@:to function toStr():String return Std.string(this);\n\t@:op(A + B) static function add(lhs:AbstractHost, rhs:AbstractHost):AbstractHost return new AbstractHost(lhs.get() + rhs.get());\n\t@:keep\n\t@:op(A - B)\n\tstatic function sub(lhs:AbstractHost, rhs:AbstractHost):AbstractHost {\n\t\treturn new AbstractHost(lhs.get() - rhs.get());\n\t}\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction get():Int\n\t{\n\t\tif (this > 0)\n\t\t{\n\t\t\treturn this;\n\t\t}\n\t\telse return 0;\n\t}\n\tfunction elseSemi():Int {\n\t\tif (this > 0) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\treturn 2;\n\t\t};\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t}\n\tstatic function main() {}\n}\n",
+		"default/EnumAbstractHost.hx": "/** Enum abstract host: values with metadata, doc comments and a function. */\nenum abstract EnumAbstractHost(Int) from Int to Int {\n\tvar A = 0;\n\tvar B = 1;\n\n\n\t/** Doc comment before a value. */\n\tvar C = 2;\n\t@:keep var D = 3;\n\t@:keep\n\t@:native(\"e\") var E = 4;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar F = 5; // trailing\n\tvar LongValueNameOne = 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000 + 7000000 + 8000000 + 9000000 + 10000000 + 11000000;\n\tstatic var counter:Int = 0;\n\tpublic inline function new(v:Int) {\n\t\tthis = v;\n\t}\n\tfunction brace():Int {\n\t\tif (this > 0) return 1;\n\t\telse return 0;\n\t}\n\tfunction braceLeft():Int\n\t{\n\t\tif (this > 0)\n\t\t{\n\t\t\treturn 1;\n\t\t}\n\t\telse\n\t\t{\n\t\t\treturn 2;\n\t\t};\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t}\n\tstatic function main() {}\n}\n",
+		"default/InterfaceHost.hx": "/** Interface host: signatures only. */\n@:keep interface InterfaceHost {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a var. */\n\tvar c:Array<Int>;\n\t@:isVar var d(get, set):Int;\n\t@:keep\n\t@:native(\"e\") var e:Int;\n\tfunction get_d():Int;\n\tfunction set_d(v:Int):Int;\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction brace(x:Int):Int;\n\tfunction noBraces():Void; // trailing\n\t@:meta(1) @:meta2 function metaFn():Void;\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void;\n}\nclass InterfaceMain implements InterfaceHost {\n\tpublic var a:Int;\n\tpublic var b:String;\n\tpublic var c:Array<Int>;\n\tpublic var d(get, set):Int;\n\tpublic var e:Int;\n\tpublic function new() {}\n\tpublic function get_d():Int return 0;\n\tpublic function set_d(v:Int):Int return v;\n\tpublic function brace(x:Int):Int return x;\n\tpublic function noBraces():Void {}\n\tpublic function metaFn():Void {}\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {}\n\tstatic function main() {}\n}\n",
+		"default/TypedefHost.hx": "/** Typedef host: anonymous structure fields. */\ntypedef TypedefHost = {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a field. */\n\tvar c:Array<Int>;\n\t@:optional var d:Int;\n\t@:optional\n\t@:native(\"e\") var e:Int;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar f:Int; // trailing\n\tfunction method(x:Int):Int;\n\tvar callback:(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int) -> Void;\n}\n\ntypedef Extended = TypedefHost & {\n\tvar more:Int;\n}\n\ntypedef Alias = Array<{name:String, other:String, third:String, fourth:String, fifth:String, sixth:String, seventh:String, eighth:String}>;\n\nclass TypedefMain {\n\tstatic function main() {}\n}\n",
+		"default/EnumHost.hx": "/** Enum host: constructors with and without arguments. */\n@:keep enum EnumHost {\n\tA;\n\tB(x:Int);\n\n\n\t/** Doc comment before a constructor. */\n\tC(x:Int, y:String);\n\t@:keep D;\n\t@:keep\n\t@:native(\"e\") E(v:Int);\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tF; // trailing\n\tLongConstructor(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int, fifthArgument:Bool);\n}\n\nclass EnumMain {\n\tstatic function main() {}\n}\n"
+	},
+	"invocations": [
+		{
+			"name": "repo/ClassHost.hx",
+			"note": "hxq fmt of the class host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the repo config; the output compiles",
+			"fixpoint": "repo/ClassHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"repo/ClassHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"repo",
+					"--no-output",
+					"ClassHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "1da28d6635b1dcdf",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "repo/MacroClassHost.hx",
+			"note": "hxq fmt of the macro class expression host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the repo config; the output compiles",
+			"fixpoint": "repo/MacroClassHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"repo/MacroClassHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"repo",
+					"--no-output",
+					"MacroClassHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "6ce5a493d4778453",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "repo/AbstractHost.hx",
+			"note": "hxq fmt of the abstract host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the repo config; the output compiles",
+			"fixpoint": "repo/AbstractHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"repo/AbstractHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"repo",
+					"--no-output",
+					"AbstractHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "67ffe11728e5e6ca",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "repo/EnumAbstractHost.hx",
+			"note": "hxq fmt of the enum abstract host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the repo config; the output compiles",
+			"fixpoint": "repo/EnumAbstractHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"repo/EnumAbstractHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"repo",
+					"--no-output",
+					"EnumAbstractHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "fc7ed61aaa1ed54c",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "repo/InterfaceHost.hx",
+			"note": "hxq fmt of the interface host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the repo config; the output compiles",
+			"fixpoint": "repo/InterfaceHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"repo/InterfaceHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"repo",
+					"--no-output",
+					"InterfaceHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "a2bc3ebeb8b0953e",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "repo/TypedefHost.hx",
+			"note": "hxq fmt of the typedef host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the repo config; the output compiles",
+			"fixpoint": "repo/TypedefHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"repo/TypedefHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"repo",
+					"--no-output",
+					"TypedefHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "0dbcce77cd30960a",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "repo/EnumHost.hx",
+			"note": "hxq fmt of the enum host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the repo config; the output compiles",
+			"fixpoint": "repo/EnumHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"repo/EnumHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"repo",
+					"--no-output",
+					"EnumHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "4c2ba668dd487d03",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sibling/ClassHost.hx",
+			"note": "hxq fmt of the class host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the sibling config; the output compiles",
+			"fixpoint": "sibling/ClassHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sibling/ClassHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"sibling",
+					"--no-output",
+					"ClassHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "fce1503d76b68c68",
+				"err": "f7959f7666297277",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sibling/MacroClassHost.hx",
+			"note": "hxq fmt of the macro class expression host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the sibling config; the output compiles",
+			"fixpoint": "sibling/MacroClassHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sibling/MacroClassHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"sibling",
+					"--no-output",
+					"MacroClassHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "3d77934bd10cac86",
+				"err": "f7959f7666297277",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sibling/AbstractHost.hx",
+			"note": "hxq fmt of the abstract host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the sibling config; the output compiles",
+			"fixpoint": "sibling/AbstractHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sibling/AbstractHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"sibling",
+					"--no-output",
+					"AbstractHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e5b310b262968e24",
+				"err": "f7959f7666297277",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sibling/EnumAbstractHost.hx",
+			"note": "hxq fmt of the enum abstract host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the sibling config; the output compiles",
+			"fixpoint": "sibling/EnumAbstractHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sibling/EnumAbstractHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"sibling",
+					"--no-output",
+					"EnumAbstractHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "7cfe43e34f8ec48e",
+				"err": "f7959f7666297277",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sibling/InterfaceHost.hx",
+			"note": "hxq fmt of the interface host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the sibling config; the output compiles",
+			"fixpoint": "sibling/InterfaceHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sibling/InterfaceHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"sibling",
+					"--no-output",
+					"InterfaceHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "36571eb4a664a3fd",
+				"err": "f7959f7666297277",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sibling/TypedefHost.hx",
+			"note": "hxq fmt of the typedef host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the sibling config; the output compiles",
+			"fixpoint": "sibling/TypedefHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sibling/TypedefHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"sibling",
+					"--no-output",
+					"TypedefHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "36f8bc98e8f83955",
+				"err": "f7959f7666297277",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "sibling/EnumHost.hx",
+			"note": "hxq fmt of the enum host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the sibling config; the output compiles",
+			"fixpoint": "sibling/EnumHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"sibling/EnumHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"sibling",
+					"--no-output",
+					"EnumHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "6f3d7d76c703bfda",
+				"err": "f7959f7666297277",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "default/ClassHost.hx",
+			"note": "hxq fmt of the class host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the default config; the output compiles",
+			"fixpoint": "default/ClassHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"default/ClassHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"default",
+					"--no-output",
+					"ClassHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "3450af6b94a5d6b8",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "default/MacroClassHost.hx",
+			"note": "hxq fmt of the macro class expression host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the default config; the output compiles",
+			"fixpoint": "default/MacroClassHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"default/MacroClassHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"default",
+					"--no-output",
+					"MacroClassHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "99e3e310891c30a2",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "default/AbstractHost.hx",
+			"note": "hxq fmt of the abstract host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the default config; the output compiles",
+			"fixpoint": "default/AbstractHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"default/AbstractHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"default",
+					"--no-output",
+					"AbstractHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "c9fc02aa9462424c",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "default/EnumAbstractHost.hx",
+			"note": "hxq fmt of the enum abstract host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the default config; the output compiles",
+			"fixpoint": "default/EnumAbstractHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"default/EnumAbstractHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"default",
+					"--no-output",
+					"EnumAbstractHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "dd1d9566ab18c681",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "default/InterfaceHost.hx",
+			"note": "hxq fmt of the interface host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the default config; the output compiles",
+			"fixpoint": "default/InterfaceHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"default/InterfaceHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"default",
+					"--no-output",
+					"InterfaceHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "8288b5e3648f7f8f",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "default/TypedefHost.hx",
+			"note": "hxq fmt of the typedef host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the default config; the output compiles",
+			"fixpoint": "default/TypedefHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"default/TypedefHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"default",
+					"--no-output",
+					"TypedefHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "1ff9362301fcfab5",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "default/EnumHost.hx",
+			"note": "hxq fmt of the enum host program (member blanks, metadata line ends, wraps, brace policy, comment runs) under the default config; the output compiles",
+			"fixpoint": "default/EnumHost.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"default/EnumHost.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"default",
+					"--no-output",
+					"EnumHost"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e1c0dc8aa29748bd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		}
+	]
+}

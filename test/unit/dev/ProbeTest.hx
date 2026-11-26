@@ -330,6 +330,32 @@ final class ProbeTest extends Test {
 		});
 	}
 
+	/**
+	 * A fixpoint row's compile reads the run's stdout in the fixpoint file, so a
+	 * formatter's output that does not compile is not hidden by an input that does.
+	 */
+	@:pin('control')
+	@:killer('M-PROBE-COMPILE-READS-INPUT')
+	public function testAFixpointRowCompilesWhatTheRunPrintedNotWhatItRead(): Void {
+		final tree: Null<String> = Repo.ofScript();
+		if (tree == null) {
+			Assert.fail('the suite runs from a tree\'s bin/');
+			return;
+		}
+		TempDir.with(dir -> {
+			final stand: String = dir.file('stand.js');
+			File.saveContent(stand, "process.stdout.write('class A {\\n');");
+			final kitFile: String = dir.file('kit.json');
+			File.saveContent(
+				kitFile,
+				'{"invocations":[{"name":"fmt","argv":["apq","fmt","A.hx"],"files":{"A.hx":"class A {}"},"fixpoint":"A.hx",'
+				+ '"compile":{"args":["--no-output","-cp",".","A"]}}]}'
+			);
+			final seen: Array<Seen> = Probe.observe(tree, Path.normalize(stand), Probe.load(kitFile), true, 1, false);
+			Assert.same([false], seen[0].answer.compiles);
+		});
+	}
+
 	/** A stand-in engine at `file`: echoes its arguments, standard input and run directory, and writes `mark` on `write`. */
 	private static function engine(file: String, mark: String): String {
 		File.saveContent(file, [

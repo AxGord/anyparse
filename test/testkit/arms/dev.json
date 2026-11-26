@@ -4711,6 +4711,14 @@
 			"find": ".run().ok) return null;",
 			"replace": ".run().ok || true) return null;",
 			"note": "a base main does not contain is trusted as the start, so the gate scans from it and never reads the commits under it"
+		},
+		{
+			"name": "M-PROBE-COMPILE-READS-INPUT",
+			"type": "dev.Probe",
+			"method": "compiled",
+			"find": "fixpoint != null && outcome.status == 0",
+			"replace": "false && fixpoint != null",
+			"note": "a fixpoint row compiles the files the run left, so the formatted stdout is never compiled and a formatter output that does not compile passes on the strength of its input"
 		}
 	]
 }

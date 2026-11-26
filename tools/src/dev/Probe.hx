@@ -414,6 +414,17 @@ final class Probe {
 		return lines;
 	}
 
+	/**
+	 * The files a case's compile sees: what the invocation left, and for a `fixpoint` row whose run succeeded that file holds the
+	 * run's stdout, so a formatter's output is what gets compiled, not the input it read.
+	 */
+	public static function compiled(probeCase: ProbeCase, outcome: Outcome): Map<String, String> {
+		final files: Map<String, String> = outcome.files.copy();
+		final fixpoint: Null<String> = probeCase.fixpoint;
+		if (fixpoint != null && outcome.status == 0) files[fixpoint] = outcome.out;
+		return files;
+	}
+
 	/** Each case's fixture as its invocation left it, compiled by haxe under each of its define sets; fills `seen[i].answer.compiles`. */
 	private static function compileAll(kit: Kit, outcomes: Array<Outcome>, seen: Array<Seen>, work: TempDir, threads: Int): Void {
 		final commands: Array<Command> = [];
@@ -428,7 +439,9 @@ final class Probe {
 				// the run flag also compiles the files the invocation started from, to compare what the two programs print
 				for (original in sides) {
 					final label: String = original ? 'original' : 'compile';
-					final root: String = Parity.fixture(work.file('$label-$i-$k'), original ? kit.invocations[i].files : outcome.files);
+					final root: String = Parity.fixture(
+						work.file('$label-$i-$k'), original ? kit.invocations[i].files : compiled(kit.cases[i], outcome)
+					);
 					final at: String = spec.dir == null ? root : Path.join([root, spec.dir]);
 					commands.push(Command.of(['haxe'].concat(spec.args).concat(set)).at(at).timeout(COMPILE_TIMEOUT_MS));
 					owners.push(i);
