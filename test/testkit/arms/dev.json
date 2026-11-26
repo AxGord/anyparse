@@ -4831,6 +4831,14 @@
 			"find": "open.length == 0",
 			"replace": "true",
 			"note": "a moved file nobody named leaves the row green, so the worker never has to say why the change moved it"
+		},
+		{
+			"name": "M-TYPER-SWALLOWED-COUNT",
+			"type": "dev.TyperConformance.SwallowedExceptions",
+			"method": "note",
+			"find": "_count++;",
+			"replace": "",
+			"note": "a typer answer that throws is turned into UNKNOWN and never counted, so a typer fault shows only as a coverage drop"
 		}
 	]
 }

@@ -10,6 +10,7 @@ import anyparse.query.ConfigFinder;
 import anyparse.query.LexicalRegions;
 import anyparse.runtime.Span;
 import dev.TyperConformance;
+import haxe.Exception;
 
 /**
  * `dev typer-conformance probes` as a gate: a probe project's run counts only when it read something — every configuration
@@ -96,6 +97,23 @@ final class TyperConformanceTest extends Test {
 		final text: String = '{ a; "}" /* } */ // }\n b; } z }';
 		final code: Array<Span> = LexicalRegions.codeSpans(text.length, new HaxeQueryPlugin().lexicalRegions(text));
 		Assert.equals(text.indexOf('} z'), TyperConformance.closingBrace(text, code, 1));
+	}
+
+	/** A throwing typer answer reads as UNKNOWN and is counted, by currency and kind, with the first sites only. */
+	@:pin('control')
+	@:killer('M-TYPER-SWALLOWED-COUNT')
+	public function testAThrowingAnswerIsCountedWhereItIsSwallowed(): Void {
+		final swallowed: SwallowedExceptions = new SwallowedExceptions();
+		Assert.equals('Int', swallowed.guarded('source', () -> 'never', () -> 'Int'), 'an answer is passed through');
+		Assert.equals(0, swallowed.count(), 'an answer is no fault');
+		for (n in 0...5) Assert.isNull(swallowed.guarded('nominal', () -> 'F.hx:$n:1', () -> throw new Exception('boom $n')), 'UNKNOWN');
+		Assert.isNull(swallowed.guarded('source', () -> 'G.hx:1:1', () -> throw new Exception('late')));
+		Assert.equals(6, swallowed.count());
+		final fields: Array<String> = swallowed.line().split('\t');
+		Assert.equals('CENSUS-SWALLOWED', fields[0]);
+		Assert.equals('6', fields[1]);
+		Assert.equals('nominal/haxe.Exception=5, source/haxe.Exception=1', fields[2]);
+		Assert.equals('F.hx:0:1 boom 0 | F.hx:1:1 boom 1 | F.hx:2:1 boom 2', fields[3]);
 	}
 
 	private static function run(dropped: Array<String>, configurations: Int, compiled: Int, cases: Int): FactsRun {

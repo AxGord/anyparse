@@ -64,6 +64,11 @@ private final class FileTyper {
 	/** The kind of a written type annotation among a node's children. */
 	private static final ANNOTATION_KIND: String = ':';
 
+	/** The currencies a swallowed exception is counted under. */
+	private static final SOURCE_CURRENCY: String = 'source';
+
+	private static final NOMINAL_CURRENCY: String = 'nominal';
+
 	private final _file: String;
 	private final _source: String;
 	private final _tree: QueryNode;
@@ -72,12 +77,15 @@ private final class FileTyper {
 	private final _declared: Map<Int, String>;
 	private final _chain: ChainTypeContext;
 	private final _nominal: Null<(QueryNode) -> Null<String>>;
+	private final _swallowed: SwallowedExceptions;
 
 	private var _causes: Null<UnknownCauses> = null;
 
 	private function new(
-		plugin: CachingGrammarPlugin, index: SymbolIndex, file: String, source: String, tree: QueryNode, provider: TypeInfoProvider
+		plugin: CachingGrammarPlugin, index: SymbolIndex, file: String, source: String, tree: QueryNode, provider: TypeInfoProvider,
+		swallowed: SwallowedExceptions
 	) {
+		_swallowed = swallowed;
 		_file = file;
 		_source = source;
 		_tree = tree;
@@ -151,16 +159,16 @@ private final class FileTyper {
 
 	/** The written type source the deep walk gives `node` (`NominalTypes.expressionTypeSource`), or null. */
 	public function source(node: QueryNode): Null<String> {
-		return try
-			NominalTypes.expressionTypeSource(node, _tree, _shape, _declared, _index, _file, _chain)
-		catch (exception: Exception)
-			null;
+		return _swallowed.guarded(
+			SOURCE_CURRENCY, siteOf.bind(node),
+			() -> NominalTypes.expressionTypeSource(node, _tree, _shape, _declared, _index, _file, _chain)
+		);
 	}
 
 	/** The nominal the checks' door gives `node` (`CheckScan.typeNominalResolver`), or null. */
 	public function nominal(node: QueryNode): Null<String> {
 		final resolve: Null<(QueryNode) -> Null<String>> = _nominal;
-		return resolve == null ? null : try resolve(node) catch (exception: Exception) null;
+		return resolve == null ? null : _swallowed.guarded(NOMINAL_CURRENCY, siteOf.bind(node), () -> resolve(node));
 	}
 
 	/** The innermost node whose range holds `at`, its end included: the expression a display query at `at` types. */
@@ -296,6 +304,12 @@ private final class FileTyper {
 		return causes.of(node, sourceCurrency);
 	}
 
+	/** Where `node` is asked: its file, line and column. */
+	private function siteOf(node: QueryNode): String {
+		final at: Null<Position> = node.span?.lineCol(_source);
+		return '$_file:${at?.line ?? 0}:${at?.col ?? 0}';
+	}
+
 	/** `root` and every node under it, outer before inner. */
 	private function visitUnder(root: QueryNode, f: (QueryNode) -> Void): Void {
 		final stack: Array<QueryNode> = [root];
@@ -333,17 +347,21 @@ private final class FileTyper {
 	/** The typer of `file` over an index of `files` and the library `std`; null when it does not parse. */
 	public static function over(
 		plugin: CachingGrammarPlugin, files: Array<{ file: String, source: String }>, std: Array<{ file: String, source: String }>,
-		file: String
+		file: String, swallowed: SwallowedExceptions
 	): Null<FileTyper> {
 		final own: Null<{ file: String, source: String }> = files.find(f -> f.file == file);
-		return own == null ? null : within(plugin, IndexScope.over(files.concat(std), plugin, std.map(f -> f.file)), file, own.source);
+		return own == null
+			? null
+			: within(plugin, IndexScope.over(files.concat(std), plugin, std.map(f -> f.file)), file, own.source, swallowed);
 	}
 
 	/** The typer of `file` over `index`; null when it does not parse. */
-	public static function within(plugin: CachingGrammarPlugin, index: SymbolIndex, file: String, source: String): Null<FileTyper> {
+	public static function within(
+		plugin: CachingGrammarPlugin, index: SymbolIndex, file: String, source: String, swallowed: SwallowedExceptions
+	): Null<FileTyper> {
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
-		return tree == null || provider == null ? null : new FileTyper(plugin, index, file, source, tree, provider);
+		return tree == null || provider == null ? null : new FileTyper(plugin, index, file, source, tree, provider, swallowed);
 	}
 
 }
@@ -417,6 +435,67 @@ typedef FactsRun = {
 
 	/** The cases scored, every verdict counted. */
 	final cases: Int;
+
+}
+
+/**
+ * The exceptions one run's typer answers turned into UNKNOWN — the one answer to "how many typer faults did this run hide".
+ * A `Report` holds it, so the tally is run-scoped and never outlives the run it describes.
+ */
+@:nullSafety(Strict)
+final class SwallowedExceptions {
+
+	/** The first sites `--census` names. */
+	private static inline final SITE_SAMPLES: Int = 3;
+
+	/** The kind of an exception whose native value is no class instance. */
+	private static final UNTYPED_KIND: String = 'Exception';
+
+	private final _kinds: Map<String, Int> = [];
+	private final _sites: Array<String> = [];
+
+	private var _count: Int = 0;
+
+	public function new() {}
+
+	/** The exceptions counted so far. */
+	public inline function count(): Int {
+		return _count;
+	}
+
+	/**
+	 * `compute`'s answer; when it throws, null with the exception counted under `currency` and the question named by
+	 * `site`, which is read only then.
+	 */
+	public function guarded(currency: String, site: () -> String, compute: () -> Null<String>): Null<String> {
+		return try {
+			compute();
+		} catch (exception: Exception) {
+			note(currency, exception, site());
+			null;
+		};
+	}
+
+	/** The `--census` line: `CENSUS-SWALLOWED <n> <currency/kind=n, …> <the first sites>`. */
+	public function line(): String {
+		final kinds: Array<String> = [ for (k in _kinds.keys()) '$k=${_kinds[k]}' ];
+		kinds.sort(Compare.compareString);
+		return 'CENSUS-SWALLOWED\t$_count\t${kinds.join(', ')}\t${_sites.join(' | ')}';
+	}
+
+	private function note(currency: String, exception: Exception, site: String): Void {
+		_count++;
+		final kind: String = '$currency/${kindOf(exception)}';
+		_kinds[kind] = (_kinds[kind] ?? 0) + 1;
+		if (_sites.length < SITE_SAMPLES) _sites.push('$site ${exception.message}');
+	}
+
+	private static function kindOf(exception: Exception): String {
+		return switch Type.typeof(exception.native) {
+			case TClass(type): Type.getClassName(type) ?? UNTYPED_KIND;
+			case _: UNTYPED_KIND;
+		};
+	}
 
 }
 
@@ -985,6 +1064,10 @@ private final class Report {
 	/** The two currencies a type answer is scored in, as the area names spell them. */
 	private static final CURRENCIES: Array<String> = ['source', 'nominal'];
 
+	/** The exceptions the run's typers turned into UNKNOWN. */
+
+	public final swallowed: SwallowedExceptions = new SwallowedExceptions();
+
 	private final _areas: Array<String> = [];
 	private final _counts: Map<String, Array<Int>> = [];
 	private final _different: Array<String> = [];
@@ -1004,6 +1087,7 @@ private final class Report {
 	private final _census: Bool;
 
 	public function new(list: Bool, census: Bool) {
+
 		_list = list;
 		_census = census;
 	}
@@ -1062,6 +1146,7 @@ private final class Report {
 			Sys.println('$area\t${c[0]}\t${c[1]}\t${c[2]}\t${c[3]}\t${share(c[2], c[0])}\t${_unscored[area] ?? 0}');
 		}
 		for (d in _different) Sys.println('DIFFERENT  $d');
+		if (_census) Sys.println(swallowed.line());
 		if (_census) printCensus();
 	}
 
@@ -1392,7 +1477,7 @@ final class TyperConformance {
 			rest = marker.matchedRight();
 		}
 		source += rest;
-		final typer: Null<FileTyper> = FileTyper.over(plugin, [{ file: test.file, source: source }], std, test.file);
+		final typer: Null<FileTyper> = FileTyper.over(plugin, [{ file: test.file, source: source }], std, test.file, report.swallowed);
 		for (statement in test.statements) {
 			final area: Null<String> = DISPLAY_AREAS.find(a -> statement.contains('$a('));
 			if (area == null) continue;
@@ -1466,7 +1551,7 @@ final class TyperConformance {
 				report.unscored(area, '$label (the error names a part of the type, its chain the whole)');
 				continue;
 			}
-			if (!typers.exists(file)) typers[file] = FileTyper.over(plugin, project, std, file);
+			if (!typers.exists(file)) typers[file] = FileTyper.over(plugin, project, std, file, report.swallowed);
 			final typer: Null<FileTyper> = typers[file];
 			final span: Null<Span> = typer?.spanOfColumns(
 				group(MESSAGE, MESSAGE_LINE_GROUP), group(MESSAGE, MESSAGE_FROM_GROUP), group(MESSAGE, MESSAGE_TO_GROUP)
@@ -1554,7 +1639,7 @@ final class TyperConformance {
 		var compiledFiles: Int = 0;
 		for (f in project) {
 			final key: String = FileIdentity.realPath(f.file);
-			final typer: Null<FileTyper> = FileTyper.within(plugin, index, f.file, f.source);
+			final typer: Null<FileTyper> = FileTyper.within(plugin, index, f.file, f.source, report.swallowed);
 			if (typer == null || !oracle.facts.compiled(key)) continue;
 			compiledFiles++;
 			typer.visit(factsCase.bind(report, oracle, aliases, key, f.file, typer));
