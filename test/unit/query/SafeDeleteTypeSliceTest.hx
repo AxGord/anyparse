@@ -233,6 +233,32 @@ class SafeDeleteTypeSliceTest extends Test {
 		);
 	}
 
+	@:pin('control')
+	@:killer('M-SAFE-DELETE-MODULE-INSIDE')
+	public function testModuleReasonsLeaveTheOwnModuleOut(): Void {
+		final host: String = 'package pkg;\n\nclass Host {\n\tpublic var s: Sub;\n}\n\nclass Sub {}\n';
+		Assert.equals(0, moduleReasons('pkg/Host.hx', 'Sub', [file('pkg/Host.hx', host)]).length);
+	}
+
+	@:pin('control')
+	@:killer('M-SAFE-DELETE-TYPE-REFERENCES')
+	public function testModuleReasonsNameAnotherFileThatReachesTheType(): Void {
+		final host: String = 'package pkg;\n\nclass Host {\n\tpublic var s: Sub;\n}\n\nclass Sub {}\n';
+		final user: String = 'package pkg;\n\nimport pkg.Host.Sub;\n\nclass User {\n\tpublic var s: Sub;\n}\n';
+		final reasons: Array<String> = moduleReasons('pkg/Host.hx', 'Sub', [file('pkg/Host.hx', host), file('pkg/User.hx', user)]);
+		Assert.isTrue(reasons.exists(r -> r.contains('pkg/User.hx:3')), reasons.join('\n'));
+	}
+
+	@:pin('control')
+	@:killer('M-SAFE-DELETE-MODULE-OWN-BARE')
+	public function testModuleReasonsKeepABareConstructorOfAnotherFile(): Void {
+		final host: String = 'package pkg;\n\nclass Host {\n\tpublic var m: Mode = A;\n}\n\nenum Mode {\n\tA;\n\tB;\n}\n';
+		Assert.equals(0, moduleReasons('pkg/Host.hx', 'Mode', [file('pkg/Host.hx', host)]).length);
+		final user: String = 'package pkg;\n\nclass User {\n\tpublic function f(x: Dynamic): Bool {\n\t\treturn x == A;\n\t}\n}\n';
+		final reasons: Array<String> = moduleReasons('pkg/Host.hx', 'Mode', [file('pkg/Host.hx', host), file('pkg/User.hx', user)]);
+		Assert.isTrue(reasons.exists(r -> r.contains('named bare at pkg/User.hx')), reasons.join('\n'));
+	}
+
 	/** `result` is a refusal one of whose reasons contains `reason`. */
 	private function assertRefused(reason: String, result: SafeDeleteTypeResult): Void {
 		switch result {
@@ -265,6 +291,12 @@ class SafeDeleteTypeSliceTest extends Test {
 
 	private static function plugin(): CachingGrammarPlugin {
 		return new CachingGrammarPlugin(new HaxeQueryPlugin());
+	}
+
+	private static function moduleReasons(
+		srcFile: String, typeName: String, files: Array<{ file: String, source: String }>
+	): Array<String> {
+		return SafeDeleteType.moduleExternalReasons(srcFile, typeName, files, plugin());
 	}
 
 }

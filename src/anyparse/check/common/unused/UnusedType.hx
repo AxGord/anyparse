@@ -72,26 +72,21 @@ final class UnusedType extends RuleBase implements DefaultOff implements ConfigA
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final index: SymbolIndex = IndexScope.report(files, plugin);
-		final wide: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
-		final tokens: Map<String, Int> = PublicReach.tokenCounts(files, wide, plugin);
+		final reach: ReachScope = PublicReach.scopeOf(files, plugin);
 		final naming: Null<NamingSupport> = plugin.namingSupport();
 		final contracts: Array<FrameworkContract> = LintConfig.frameworksFor(_resolveConfig, files);
 		final build: BuildNamedTypes = BuildNamedTypes.read(files);
-		return RunScan.collect(files, plugin, (entry, tree, out) -> {
-			final scope: SymbolIndex = wide.fileInfo(entry.file) == null ? index : wide;
-			final host: Null<FileInfo> = scope.fileInfo(entry.file);
-			if (host == null) return;
-			for (declared in host.types) {
-				if (PublicReach.typeOutOfReach(declared)) continue;
-				if (build.names(declared.name, host.pkg)) continue;
-				if (!occursOnlyInOwnDeclaration(declared, entry.source, tokens, index, entry.file)) continue;
-				if (PublicReach.chainOutOfReach(scope, host, declared, true)) continue;
-				if (drivenWithoutReference(tree, declared.name, naming, contracts, scope)) continue;
+		return RunScan.collect(
+			files, plugin, (entry, tree, out) -> PublicReach.eachType(reach, entry.file, (scope, host, declared) -> {
+				if (PublicReach.typeOutOfReach(declared)) return;
+				if (build.names(declared.name, host.pkg)) return;
+				if (!occursOnlyInOwnDeclaration(declared, entry.source, reach.tokens, reach.index, entry.file)) return;
+				if (PublicReach.chainOutOfReach(scope, host, declared, true)) return;
+				if (drivenWithoutReference(tree, declared.name, naming, contracts, scope)) return;
 				final verdict: SafeDeleteTypeResult = SafeDeleteType.safeDeleteType(
 					entry.file, declared.name, false, files, plugin, '.', []
 				);
-				if (verdict.match(Refused(_))) continue;
+				if (verdict.match(Refused(_))) return;
 				out.push({
 					file: entry.file,
 					span: declared.span,
@@ -99,8 +94,8 @@ final class UnusedType extends RuleBase implements DefaultOff implements ConfigA
 					severity: Severity.Warning,
 					message: 'unused type ${declared.name}: no reference to it anywhere in scope'
 				});
-			}
-		});
+			})
+		);
 	}
 
 	private static function occursOnlyInOwnDeclaration(

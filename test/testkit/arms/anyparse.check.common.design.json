@@ -1441,6 +1441,61 @@
 			"note": "no finding gets a fix group, so no structure is rewritten to its typedef"
 		},
 		{
+			"name": "M-PPST-NO-FIX",
+			"type": "anyparse.check.common.design.PreferPrivateSecondaryType",
+			"method": "fix",
+			"force": "[]",
+			"note": "no finding gets an edit, so no type becomes private"
+		},
+		{
+			"name": "M-PPST-NO-PROOF",
+			"type": "anyparse.check.common.design.PreferPrivateSecondaryType",
+			"method": "run",
+			"find": "SafeDeleteType.moduleExternalReasons(entry.file, declared.name, files, plugin).length > 0",
+			"replace": "false",
+			"note": "the whole-scope proof is skipped, so an enum constructor another file spells bare no longer keeps its type public"
+		},
+		{
+			"name": "M-PPST-META",
+			"type": "anyparse.check.common.design.PreferPrivateSecondaryType",
+			"method": "run",
+			"find": "NamingCrossRename.unsafeTypeMeta(tree, entry.source, declared, plugin)",
+			"replace": "false",
+			"note": "metadata on the type is not read, so a type carrying keep, rtti, expose, native or build becomes private"
+		},
+		{
+			"name": "M-PPST-MAIN",
+			"type": "anyparse.check.common.design.PreferPrivateSecondaryType",
+			"method": "run",
+			"find": "declared.isMain || ",
+			"replace": "",
+			"note": "the module main type is a candidate, so it is reported though its module path is the type path"
+		},
+		{
+			"name": "M-PPST-CLASS-REWRITTEN",
+			"type": "anyparse.check.common.design.PreferPrivateSecondaryType",
+			"method": "declineOf",
+			"find": "return CLASS_DECLINE;",
+			"replace": "return null;",
+			"note": "a class or an interface is rewritten like a typedef, though its run-time path changes"
+		},
+		{
+			"name": "M-PPST-RUNTIME-NAMES",
+			"type": "anyparse.check.common.design.PreferPrivateSecondaryType",
+			"method": "declineOf",
+			"find": "return runtimeNames ? RUNTIME_NAME_DECLINE : null;",
+			"replace": "return null;",
+			"note": "an enum is rewritten though the project reads run-time type names"
+		},
+		{
+			"name": "M-PPST-AT-FILE-START",
+			"type": "anyparse.check.common.design.PreferPrivateSecondaryType",
+			"method": "fix",
+			"find": "new Span(at.from, at.from)",
+			"replace": "new Span(0, 0)",
+			"note": "private is inserted at the start of the file instead of at the declaration keyword after its metadata"
+		},
+		{
 			"name": "M-PET-AMBIGUOUS",
 			"type": "anyparse.check.common.design.PreferExistingTypedef",
 			"method": "judge",

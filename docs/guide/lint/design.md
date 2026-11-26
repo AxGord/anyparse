@@ -281,6 +281,35 @@ unresolved or `Dynamic`, the helper cannot be called on its first argument (`@:n
 another `using` of the file could supply the name, the file's only `using` of the module sits in a
 `#if` region that leaves the call out, or `addUsing` is `false` and the file has none.
 
+## `prefer-private-secondary-type`
+
+A secondary type that nothing outside its module refers to, marked `private`. `Info` and DEFAULT OFF; no keys. Run it
+over the whole project: a reference in a file that is not linted reads as absent. `lint --fix` inserts `private` before
+the declaration.
+
+```haxe
+// pkg/Panel.hx
+typedef PanelOptions = { width:Int, ?title:String }   // -> private typedef PanelOptions
+enum Mode { A; B; }                                    // -> private enum Mode
+class Panel { public function new(o:PanelOptions, m:Mode) {} }   // main type: untouched
+```
+
+A type is reported when it is not the module's main type, is not private, is not declared under `#if`, and its name
+occurs nowhere in the report and resolution scope outside its own file: no import, no qualified path, no `#if` branch, no
+string or class value that may name it at run time, no enum constructor spelled bare, no `using` of its module, no
+same-named type elsewhere. A private type in a public signature of the main type is accepted by Haxe, so a signature is
+no reason to keep a type public.
+
+Never reported: a type with `@:keep`, `@:rtti`, `@:build`, `@:expose`, `@:native` or any other metadata the grammar does not
+list as name-inert, an `extern` type, a type whose hierarchy carries RTTI or an `@:autoBuild` ancestor, a type the build
+names (`-main`, `--macro`, `include`).
+
+A typedef, an abstract and an enum abstract have no run-time name: the fix inserts `private`. An enum, a class and an
+interface take the run-time path `pkg._Module.Name` once private, which `Type.resolveEnum` / `resolveClass`,
+`getEnumName` / `getClassName` and data saved by `haxe.Serializer` see. An enum is rewritten only while no identifier of
+`resolveEnum`, `getEnumName`, `getEnum`, `Serializer` or `Unserializer` occurs in scope; otherwise it is reported with
+that reason. A class or an interface is always reported and never rewritten.
+
 ## `refusal-assert-ignores-message`
 
 A `case` arm over a refusal constructor that passes without reading what the refusal carries — an assertion any

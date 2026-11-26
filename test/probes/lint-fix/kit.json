@@ -3610,6 +3610,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PPST-INERT-META",
+			"note": "prefer-private-secondary-type over secondary types carrying a doc comment and name-inert metadata (@:forward, @:nullSafety): private goes after the metadata, before the declaration keyword; the program still compiles and prints the same",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-private-secondary-type",
+				"--all",
+				"--no-oracle",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "/** Options doc. */\ntypedef PanelOptions = {width:Int};\n\n@:forward\nabstract ForwardBox(Array<Int>) {\n\tpublic inline function new(a:Array<Int>)\n\t\tthis = a;\n}\n\n@:nullSafety(Strict)\nenum abstract Kind(Int) {\n\tvar K1 = 1;\n}\n\nclass Main {\n\tstatic function show(o:PanelOptions, w:ForwardBox, k:Kind):Void {\n\t\tSys.println('${o.width} ${w.length} ${k == K1}');\n\t}\n\n\tstatic function main() {\n\t\tshow({width: 3}, new ForwardBox([1, 2]), K1);\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "e34cedd636193189",
+				"files": "0bf2ba81366d4c61",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

@@ -33,6 +33,12 @@ enum SafeDeleteTypeResult {
 
 }
 
+/** What `SafeDeleteType.prove` found: every reason the type is still reached, or the parsed scope the decision goes on with. */
+private enum Proof {
+	Stopped(reasons: Array<String>);
+	Standing(parse: ScopeParse, src: ParsedFile, decl: TypeDeclMatch, shape: RefShape);
+}
+
 /**
  * The one answer to "is this type declaration provably unreferenced across a scope, and what does removing it take":
  * the type form of `SafeDelete`, with the same bias — refuse on any doubt, list every reason.
@@ -60,28 +66,63 @@ final class SafeDeleteType {
 		srcFile: String, typeName: String, reformat: Bool, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
 		scopeLabel: String, companions: Array<String>, ?optsJson: String
 	): SafeDeleteTypeResult {
+		return switch prove(srcFile, typeName, scopeFiles, plugin, false, 'delete of "$typeName"') {
+			case Stopped(reasons): Refused(reasons);
+			case Standing(parse, src, decl, shape):
+				removal(srcFile, parse, src, decl, shape, reformat, plugin, scopeLabel, companions, optsJson);
+		}
+	}
+
+	/**
+	 * Every reason something OUTSIDE the module of `typeName` in `srcFile` may reach it, one line each; empty when
+	 * nothing does, so the type may become module-private. The same proof as the deletion, with the whole of the
+	 * module (not only the declaration) counted as inside. PURE.
+	 */
+	public static function moduleExternalReasons(
+		srcFile: String, typeName: String, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin
+	): Array<String> {
+		return switch prove(srcFile, typeName, scopeFiles, plugin, true, 'making "$typeName" private') {
+			case Stopped(reasons): reasons;
+			case Standing(_, _, _, _): [];
+		}
+	}
+
+	/** The reasons the type is still reached, or what the rest of the decision reads; `moduleWide` counts the whole module as inside. */
+	private static function prove(
+		srcFile: String, typeName: String, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, moduleWide: Bool,
+		action: String
+	): Proof {
 		final parse: ScopeParse = ScopeFiles.parseScope(scopeFiles, plugin, 'safe-delete');
 		final parseError: Null<String> = parse.error;
-		if (parseError != null) return Refused([parseError]);
+		if (parseError != null) return Stopped([parseError]);
 		final srcEntry: Null<ParsedFile> = parse.parsed.find(p -> p.file == srcFile);
-		if (srcEntry == null) return Refused(['source file $srcFile is not in the scope file set']);
+		if (srcEntry == null) return Stopped(['source file $srcFile is not in the scope file set']);
 		final src: ParsedFile = srcEntry;
 		final uniqueness: Null<String> = ScopeFiles.uniquenessRefusal(parse.parsed, srcFile, typeName);
-		if (uniqueness != null) return Refused([uniqueness]);
+		if (uniqueness != null) return Stopped([uniqueness]);
 		final declOrNull: Null<TypeDeclMatch> = RefactorSupport.uniqueTypeDeclNamed(src.tree, typeName);
-		if (declOrNull == null) return Refused(['no type "$typeName" in $srcFile']);
+		if (declOrNull == null) return Stopped(['no type "$typeName" in $srcFile']);
 		final decl: TypeDeclMatch = declOrNull;
 		final shape: RefShape = plugin.refShape();
 
 		final reasons: Array<String> = [];
-		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parse.parsed, typeName, shape, 'delete of "$typeName"');
+		final opaque: Null<String> = CondRegionScan.opaqueCondRegionInAny(parse.parsed, typeName, shape, action);
 		if (opaque != null) reasons.push(opaque);
-		for (reference in references(parse.parsed, src, decl, plugin, shape)) reasons.push('"$typeName" is referenced at $reference');
+		for (reference in references(parse.parsed, src, decl, plugin, shape, moduleWide))
+			reasons.push('"$typeName" is referenced at $reference');
 		final index: Null<SymbolIndex> = IndexScope.lazySymbolIndex(scopeFiles, plugin)();
 		reflectiveReasons(src, decl, typeName, scopeFiles, plugin, index, reasons);
-		if (index != null) reachThroughScope(index, parse.parsed, src, decl, plugin, shape, reasons);
-		if (reasons.length > 0) return Refused(reasons);
+		if (index != null) reachThroughScope(index, parse.parsed, src, decl, plugin, shape, moduleWide, reasons);
+		return reasons.length > 0 ? Stopped(reasons) : Standing(parse, src, decl, shape);
+	}
 
+	/** The removal of a type `prove` found unreached: the file, or the declaration cut out of it. */
+	private static function removal(
+		srcFile: String, parse: ScopeParse, src: ParsedFile, decl: TypeDeclMatch, shape: RefShape, reformat: Bool, plugin: GrammarPlugin,
+		scopeLabel: String, companions: Array<String>, optsJson: Null<String>
+	): SafeDeleteTypeResult {
+		final typeName: String = decl.name;
+		final reasons: Array<String> = [];
 		final sole: Bool = isOnlyType(src.tree, decl, plugin, shape);
 		final removed: Null<String> = sole ? null : cutDeclaration(src.source, decl, reformat, plugin, optsJson, reasons);
 		if (reasons.length > 0) return Refused(reasons);
@@ -95,7 +136,7 @@ final class SafeDeleteType {
 
 	/** Every `file:line:col` at which the scope names the type, outside its own declaration. */
 	private static function references(
-		parsed: Array<ParsedFile>, src: ParsedFile, decl: TypeDeclMatch, plugin: GrammarPlugin, shape: RefShape
+		parsed: Array<ParsedFile>, src: ParsedFile, decl: TypeDeclMatch, plugin: GrammarPlugin, shape: RefShape, moduleWide: Bool
 	): Array<String> {
 		final module: ModulePath = ModuleScan.moduleOf(src.tree, src.file);
 		final out: Array<String> = [];
@@ -105,7 +146,9 @@ final class SafeDeleteType {
 				entry.source, decl.name, entry.tree, plugin, plugin.typeRefShape(), shape, module
 			);
 			for (hit in hits) {
-				final inside: Bool = entry.file == src.file && hit.from >= decl.fullSpan.from && hit.from < decl.fullSpan.to;
+				final inside: Bool = entry.file == src.file
+					&& (moduleWide || (hit.from >= decl.fullSpan.from && hit.from < decl.fullSpan.to));
+
 				if (inside) continue;
 				final at: Position = lines.lineColAt(hit.from);
 				out.push('${entry.file}:${at.line}:${at.col}');
@@ -121,7 +164,7 @@ final class SafeDeleteType {
 	 */
 	private static function reachThroughScope(
 		index: SymbolIndex, parsed: Array<ParsedFile>, src: ParsedFile, decl: TypeDeclMatch, plugin: GrammarPlugin, shape: RefShape,
-		out: Array<String>
+		moduleWide: Bool, out: Array<String>
 	): Void {
 		final declared: Null<TypeDeclInfo> = index.fileInfo(src.file)?.types.find(t -> t.name == decl.name);
 		if (declared == null) {
@@ -129,7 +172,7 @@ final class SafeDeleteType {
 			return;
 		}
 		final type: TypeDeclInfo = declared;
-		for (place in bareValueUses(parsed, src, decl, bareValueNames(type, shape), plugin))
+		for (place in bareValueUses(parsed, src, decl, bareValueNames(type, shape), plugin, moduleWide))
 			out.push('a constructor or value of "${decl.name}" is named bare at $place');
 		final hasStatic: Bool = type.members.exists(m -> m.isStatic && MemberKinds.FN_DECL_KINDS.contains(m.kind));
 		if (!type.isPrivate && !type.isMain && hasStatic)
@@ -149,13 +192,14 @@ final class SafeDeleteType {
 
 	/** Every `file:line:col` (and the name) at which the scope spells one of `names` unqualified, outside the type's own declaration. */
 	private static function bareValueUses(
-		parsed: Array<ParsedFile>, src: ParsedFile, decl: TypeDeclMatch, names: Array<String>, plugin: GrammarPlugin
+		parsed: Array<ParsedFile>, src: ParsedFile, decl: TypeDeclMatch, names: Array<String>, plugin: GrammarPlugin, moduleWide: Bool
 	): Array<String> {
 		final out: Array<String> = [];
 		for (entry in parsed) {
+
 			final lines: LineIndex = new LineIndex(entry.source);
 			final comments: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(entry.source));
-			final own: Array<Span> = entry.file == src.file ? [decl.fullSpan] : [];
+			final own: Array<Span> = entry.file == src.file ? [moduleWide ? new Span(0, entry.source.length) : decl.fullSpan] : [];
 			for (name in names) {
 				final found: Null<Array<ClassifiedOccurrence>> = OccurrenceScan.classifyOccurrences(
 					entry.source, name, plugin, 0, entry.source.length, own

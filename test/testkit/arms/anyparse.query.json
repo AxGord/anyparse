@@ -17391,8 +17391,8 @@
 		{
 			"name": "M-SAFE-DELETE-TYPE-UNIQUE",
 			"type": "anyparse.query.SafeDeleteType",
-			"method": "safeDeleteType",
-			"find": "if (uniqueness != null) return Refused([uniqueness]);",
+			"method": "prove",
+			"find": "if (uniqueness != null) return Stopped([uniqueness]);",
 			"replace": "",
 			"note": "a same-named type of another package is no longer refused as ambiguous"
 		},
@@ -17442,6 +17442,22 @@
 			"find": "if (!type.isPrivate && !type.isMain && hasStatic)",
 			"replace": "if (false)",
 			"note": "a using of the module no longer reaches its static-extension sub-type, so the type is deleted and the extension calls stop binding"
+		},
+		{
+			"name": "M-SAFE-DELETE-MODULE-INSIDE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "references",
+			"find": "moduleWide || (hit.from",
+			"replace": "false || (hit.from",
+			"note": "the module counts as nothing but the declaration, so a use in the sibling types of the module blocks the type"
+		},
+		{
+			"name": "M-SAFE-DELETE-MODULE-OWN-BARE",
+			"type": "anyparse.query.SafeDeleteType",
+			"method": "bareValueUses",
+			"find": "moduleWide ? new Span(0, entry.source.length) : decl.fullSpan",
+			"replace": "decl.fullSpan",
+			"note": "a constructor spelled bare in the own module counts as a use from outside it"
 		},
 		{
 			"name": "M-FACT-LINE-NARROWED",

@@ -372,7 +372,7 @@
 			"name": "M-UNUSED-TYPE-NO-WHOLE-SCOPE-PROOF",
 			"type": "anyparse.check.common.unused.UnusedType",
 			"method": "run",
-			"find": "if (verdict.match(Refused(_))) continue;",
+			"find": "if (verdict.match(Refused(_))) return;",
 			"replace": "",
 			"note": "the safe-delete verdict is ignored, so an enum whose constructor is spelled bare elsewhere (no written type name) is reported dead"
 		},
@@ -380,7 +380,7 @@
 			"name": "M-UNUSED-TYPE-BUILD-NAMED",
 			"type": "anyparse.check.common.unused.UnusedType",
 			"method": "run",
-			"find": "if (build.names(declared.name, host.pkg)) continue;",
+			"find": "if (build.names(declared.name, host.pkg)) return;",
 			"replace": "",
 			"note": "a type an hxml names with no written reference (the -main module, a --macro target, an include(pkg) package) is no longer exempt, so safe-delete of the reported type breaks that build"
 		},

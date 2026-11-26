@@ -148,6 +148,7 @@
 	"prefer-modulo-wrap",
 	"prefer-null-coalescing",
 	"prefer-null-guarded-loop",
+	"prefer-private-secondary-type",
 	"prefer-range-loop",
 	"prefer-read-only-field",
 	"prefer-safe-nav",

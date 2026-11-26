@@ -1,5 +1,6 @@
 package anyparse.check.scan;
 
+import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -10,6 +11,8 @@ using anyparse.util.Strings;
 /** One region of one file allowed to name a member - its own declaration, its type, a subtype. */
 typedef ReachRegion = { final file: String; final source: String; final span: Span; };
 
+/** The scope a reach proof reads: the report index, the resolution index (the report one if none is declared), the token counts. */
+typedef ReachScope = { final index: SymbolIndex; final wide: SymbolIndex; final tokens: Map<String, Int>; };
 /** What a member's modifier / metadata run says, as `PublicReach.readRun` reads it. */
 typedef MemberRun = {
 
@@ -195,6 +198,21 @@ final class PublicReach {
 			isStatic: isStatic,
 			annotated: annotated
 		};
+	}
+
+	/** The one reading of the scope every reach proof starts from; `files` are the report set. */
+	public static function scopeOf(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): ReachScope {
+		final index: SymbolIndex = IndexScope.report(files, plugin);
+		final wide: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? index;
+		return { index: index, wide: wide, tokens: tokenCounts(files, wide, plugin) };
+	}
+
+	/** Calls `visit` with each type `file` declares, the index that knows the file and the file's record; nothing for an unindexed file. */
+	public static function eachType(reach: ReachScope, file: String, visit: (SymbolIndex, FileInfo, TypeDeclInfo) -> Void): Void {
+		final scope: SymbolIndex = reach.wide.fileInfo(file) == null ? reach.index : reach.wide;
+		final host: Null<FileInfo> = scope.fileInfo(file);
+		if (host == null) return;
+		for (declared in host.types) visit(scope, host, declared);
 	}
 
 	/**

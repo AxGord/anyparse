@@ -162,6 +162,22 @@ final class NamingCrossRename {
 		return out;
 	}
 
+	/**
+	 * Whether `type` carries metadata outside the grammar's name-inert list
+	 * (`RefShape.nameInertTypeMetaNames`), or one the projection could not attribute.
+	 */
+	public static function unsafeTypeMeta(tree: QueryNode, source: String, type: TypeDeclInfo, plugin: GrammarPlugin): Bool {
+		if (type.hasBuild || type.hasAutoBuild || type.hasKeep || type.hasRtti || type.isExtern || type.bringsExtensions) return true;
+		final inert: Array<String> = plugin.refShape().nameInertTypeMetaNames ?? [];
+		for (hit in Meta.find(tree, plugin.metaShape(), source)) {
+			final owner: Null<Span> = hit.declSpan;
+			if (owner == null) return true;
+			if (owner.from <= type.span.from && type.span.from < owner.to && hit.declName == type.name && !inert.contains(hit.annotation))
+				return true;
+		}
+		return false;
+	}
+
 	/** The edit set for `v`, or null with the reason noted on it. */
 	private static function renameFor(v: Violation, ctx: Context): Null<RiskyCrossFileEdit> {
 		final span: Null<Span> = v.span;
@@ -267,22 +283,6 @@ final class NamingCrossRename {
 	/** The index record of the type `name` declared in `file`, or null. */
 	private static function typeDeclared(ctx: Context, file: String, name: String): Null<TypeDeclInfo> {
 		return ctx.index.fileInfo(file)?.types.find(t -> t.name == name);
-	}
-
-	/**
-	 * Whether `type` carries metadata outside the grammar's name-inert list
-	 * (`RefShape.nameInertTypeMetaNames`), or one the projection could not attribute.
-	 */
-	private static function unsafeTypeMeta(tree: QueryNode, source: String, type: TypeDeclInfo, plugin: GrammarPlugin): Bool {
-		if (type.hasBuild || type.hasAutoBuild || type.hasKeep || type.hasRtti || type.isExtern || type.bringsExtensions) return true;
-		final inert: Array<String> = plugin.refShape().nameInertTypeMetaNames ?? [];
-		for (hit in Meta.find(tree, plugin.metaShape(), source)) {
-			final owner: Null<Span> = hit.declSpan;
-			if (owner == null) return true;
-			if (owner.from <= type.span.from && type.span.from < owner.to && hit.declName == type.name && !inert.contains(hit.annotation))
-				return true;
-		}
-		return false;
 	}
 
 	/**
