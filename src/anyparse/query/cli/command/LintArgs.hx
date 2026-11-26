@@ -163,6 +163,10 @@ final class LintArgs {
 			// the active SUBSET the denominator is whatever the last pass rewrote, so the same directory
 			// answers a different share each pass and the decision flips under the fixed-point loop.
 			'hoist-common-import',
+			// duplicate-comparator groups the sort callbacks of the whole set: the site count, the package span and the host are
+			// read across files. On the active SUBSET a group pass 1 refused for spanning packages shrinks to its sites in the
+			// files pass 1 rewrote, and a later pass extracts part of it.
+			'duplicate-comparator',
 			// scratch-field's reference gates are whole-project like unused-private's: a subtype or an
 			// `@:access` grantee MENTIONING the field, and the reflection-name scan over every string literal.
 			// On the active subset an unchanged file that spells the name reads as absent.

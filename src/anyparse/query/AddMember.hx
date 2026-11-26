@@ -50,18 +50,33 @@ final class AddMember {
 
 		final trimmed: String = memberText.trim();
 		if (trimmed.length == 0) return Err('add-member requires a non-empty member text');
+		final planned: MemberEdit = memberEdit(source, tree, typeName, trimmed, plugin);
+		final edit: Null<{ span: Span, text: String }> = planned.edit;
+		return edit == null ? Err(planned.refusal) : CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
+	}
 
+	/**
+	 * The one edit that appends `memberText`, trimmed and not empty, as the last member of the type `typeName` of `source`
+	 * parsed as `tree`, with the blank line the body's layout wants — or, with no edit, why it cannot. `addMember` reads it,
+	 * and so does a fix that inserts a member among edits of its own.
+	 */
+	public static function memberEdit(
+		source: String, tree: QueryNode, typeName: String, memberText: String, plugin: GrammarPlugin
+	): MemberEdit {
+		function refused(why: String): MemberEdit {
+			return { edit: null, refusal: why };
+		}
 		final matches: Array<TypeDeclMatch> = RefactorSupport.typeDeclsNamed(tree, typeName);
-		if (matches.length == 0) return Err('no type named "$typeName"');
-		if (matches.length > 1) return Err('ambiguous: ${matches.length} types named "$typeName"');
+		if (matches.length == 0) return refused('no type named "$typeName"');
+		if (matches.length > 1) return refused('ambiguous: ${matches.length} types named "$typeName"');
 		if (carriesOpaqueMemberRegion(matches[0].nameNode))
-			return Err(
+			return refused(
 				'"$typeName" carries a conditional member region whose declarations the tree does not expose — a duplicate name would go '
 				+ 'undetected; add the member by hand'
 			);
 
 		final closeAt: Null<Int> = RefactorSupport.typeBodyCloseOffset(source, matches[0]);
-		if (closeAt == null) return Err('"$typeName" has no brace body to add a member to');
+		if (closeAt == null) return refused('"$typeName" has no brace body to add a member to');
 		final bodyClose: Int = closeAt;
 
 		// The leading newline is the SEPARATOR the new member needs from the one above it. Under a
@@ -75,10 +90,10 @@ final class AddMember {
 		// drift to the other end, leaving the closing brace with no blank above it under a config
 		// that keeps but never emits one.
 		final edit: { span: Span, text: String } = blankLinePrecedes(source, bodyClose)
-			? { span: new Span(bodyClose, bodyClose), text: '$trimmed\n\n' }
-			: { span: new Span(bodyClose, bodyClose), text: '\n$trimmed\n' };
+			? { span: new Span(bodyClose, bodyClose), text: '$memberText\n\n' }
+			: { span: new Span(bodyClose, bodyClose), text: '\n$memberText\n' };
 		final refusal: Null<String> = spliceRefusal(source, edit, typeName, plugin);
-		return refusal != null ? Err(refusal) : CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return refusal != null ? refused(refusal) : { edit: edit, refusal: '' };
 	}
 
 	/**

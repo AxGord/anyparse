@@ -7,6 +7,7 @@ import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.Supersedes;
 import anyparse.check.common.control.BranchChain;
+import anyparse.check.haxe.expressions.CompareFunctions.ConfigProblem;
 import anyparse.check.haxe.expressions.CompareFunctions.NamedCompare;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.PurityScan;
@@ -94,9 +95,6 @@ private typedef Match = {
 	noFix: Null<String>,
 	asReturn: Bool
 }
-
-/** A configuration error, and the file it is reported on; `enabled` says the rule runs on that file. */
-private typedef ConfigProblem = { message: String, file: String, enabled: Bool }
 
 /** The two operands of a written call, as source text. */
 private typedef Operands = { left: String, right: String }
@@ -198,7 +196,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 		final found: Array<Violation> = RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, out) -> {
 			final named: CompareFunctions = compareFunctionsOf(entry.file, plugin, seams, index);
 			final enabled: Bool = Linter.enabledBy(LintConfig.resolveWith(_resolveConfig, entry.file), this);
-			for (problem in named.problems) anchorProblem(problems, problem, entry.file, enabled);
+			for (problem in named.problems) CompareFunctions.anchorProblem(problems, problem, entry.file, enabled);
 			// A broken name stops the rule on the files it governs: a fix would otherwise write another function than the project named.
 			if (named.problems.length > 0) return;
 			for (m in matches(tree, entry.file, entry.source, seams, plugin, index, named)) out.push({
@@ -691,20 +689,6 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	private static function isBoundHere(type: QueryNode, tree: QueryNode, s: Seams): Bool {
 		final span: Null<Span> = type.span;
 		return span == null || TypeResolver.resolveBindingFrom(REFLECT, span, tree, s.shape) != null;
-	}
-
-	/**
-	 * Records `message` once, on a file the rule is enabled on when there is one: the linter's per-file gate drops a finding
-	 * of a default-off rule on any other file, so a problem anchored there would vanish from a normal run.
-	 */
-	private static function anchorProblem(problems: Array<ConfigProblem>, message: String, file: String, enabled: Bool): Void {
-		final known: Null<ConfigProblem> = problems.find(p -> p.message == message);
-		if (known == null) {
-			problems.push({ message: message, file: file, enabled: enabled });
-		} else if (enabled && !known.enabled) {
-			known.file = file;
-			known.enabled = true;
-		}
 	}
 
 	/** The expression an ARROW lambda's block yields as its last statement, when that statement is a bare expression. */

@@ -10,6 +10,10 @@ import anyparse.query.TypeSyntax.TypeSyntaxReader;
  */
 typedef NamedCompare = { final typePath: String; final member: String; final nullable: Bool; }
 
+/** What a member path names: the type's path, the member's name, and every member of that name the type declares. */
+private typedef NamedMembers = { final typePath: String; final member: String; final found: Array<MemberInfo>; }
+/** A configuration error, and the file it is reported on; `enabled` says the rule runs on that file. */
+typedef ConfigProblem = { message: String, file: String, enabled: Bool }
 /**
  * The compare functions one config chain names, each checked against the resolution index: the one answer to "which
  * function compares two values of this type in this file". A name the index cannot find, or whose signature is not
@@ -65,10 +69,81 @@ final class CompareFunctions {
 		key: String, type: String, path: String, intType: String, nullableWrapper: Null<String>, typeSyntax: TypeSyntaxReader,
 		index: () -> Null<SymbolIndex>
 	): Void {
+		final at: Null<NamedMembers> = membersAt('$key.$type', path, index, problems);
+		if (at == null) return;
+		final found: Array<MemberInfo> = at.found;
+		final plain: Bool = found.length == 1 && isCompareOf(found[0], type, intType, null, typeSyntax);
+		final nullable: Bool = !plain && found.length == 1 && nullableWrapper != null
+			&& isCompareOf(found[0], type, intType, nullableWrapper, typeSyntax);
+		final named: NamedCompare = { typePath: at.typePath, member: at.member, nullable: nullable };
+		if (plain || nullable)
+			_named[type] = named;
+		else
+			problems.push('$key.$type: "$path" is not one public static function ($type, $type): $intType');
+	}
+
+	/**
+	 * Records `message` once, on a file the rule is enabled on when there is one: the linter's per-file gate drops a finding
+	 * of a default-off rule on any other file, so a problem anchored there would vanish from a normal run.
+	 */
+	public static function anchorProblem(problems: Array<ConfigProblem>, message: String, file: String, enabled: Bool): Void {
+		final known: Null<ConfigProblem> = problems.find(p -> p.message == message);
+		if (known == null) {
+			problems.push({ message: message, file: file, enabled: enabled });
+		} else if (enabled && !known.enabled) {
+			known.file = file;
+			known.enabled = true;
+		}
+	}
+
+	/**
+	 * The macros an option `{ "<name>": "a.b.C.fn", … }` names for each of `names`, each checked to be one public static macro
+	 * function the index declares; a broken entry is a `key`-prefixed line in `problems` and not an entry.
+	 */
+	public static function macrosOf(
+		option: Null<JValue>, key: String, names: Array<String>, index: () -> Null<SymbolIndex>, problems: Array<String>
+	): Map<String, NamedCompare> {
+		final out: Map<String, NamedCompare> = [];
+		if (option == null) return out;
+		switch option {
+			case JObject(fields):
+				for (field in fields) {
+					final name: String = field.key;
+					final label: String = '$key.$name';
+					if (!names.contains(name)) {
+						problems.push('$label: the macros that can be named are ${names.join(', ')}');
+						continue;
+					}
+					switch field.value {
+						case JString(path):
+							final at: Null<NamedMembers> = membersAt(label, path, index, problems);
+							if (at == null) continue;
+							final m: MemberInfo = at.found[0];
+							final named: NamedCompare = { typePath: at.typePath, member: at.member, nullable: false };
+							if (at.found.length == 1 && m.isStatic && m.isMacro && m.visibility == PUBLIC_VISIBILITY)
+								out[name] = named;
+							else
+								problems.push('$label: "$path" is not one public static macro function');
+						case _: problems.push('$label is not a string');
+					}
+				}
+			case _:
+				problems.push('$key is not an object of a macro name to a macro path');
+		}
+		return out;
+	}
+
+	/**
+	 * The members a config path `a.b.C.fn` names on the one public type the resolution index declares as `a.b.C`, or null with
+	 * a `label`-prefixed line in `problems` saying why it names none: the one answer to "what does a member path of a rule option name".
+	 */
+	private static function membersAt(
+		label: String, path: String, index: () -> Null<SymbolIndex>, problems: Array<String>
+	): Null<NamedMembers> {
 		final dot: Int = path.lastIndexOf('.');
 		if (dot <= 0 || dot == path.length - 1) {
-			problems.push('$key.$type: "$path" is not a path of the form a.b.C.fn');
-			return;
+			problems.push('$label: "$path" is not a path of the form a.b.C.fn');
+			return null;
 		}
 		final typePath: String = path.substring(0, dot);
 		final member: String = path.substring(dot + 1);
@@ -77,26 +152,19 @@ final class CompareFunctions {
 		if (types.length != 1) {
 			problems.push(
 				types.length == 0
-					? '$key.$type: "$path" names no type: the resolution index declares no "$typePath"'
-					: '$key.$type: "$path" is ambiguous: "$typePath" names ${types.length} types in the resolution index'
+					? '$label: "$path" names no type: the resolution index declares no "$typePath"'
+					: '$label: "$path" is ambiguous: "$typePath" names ${types.length} types in the resolution index'
 			);
-			return;
+			return null;
 		}
 		if (types[0].type.isPrivate) {
-			problems.push('$key.$type: "$path" names a private type, which no other file can call');
-			return;
+			problems.push('$label: "$path" names a private type, which no other file can call');
+			return null;
 		}
 		final found: Array<MemberInfo> = types[0].type.members.filter(m -> m.name == member);
-		final plain: Bool = found.length == 1 && isCompareOf(found[0], type, intType, null, typeSyntax);
-		final nullable: Bool = !plain && found.length == 1 && nullableWrapper != null
-			&& isCompareOf(found[0], type, intType, nullableWrapper, typeSyntax);
-		final named: NamedCompare = { typePath: typePath, member: member, nullable: nullable };
-		if (found.length == 0)
-			problems.push('$key.$type: the resolution index declares no "$path"');
-		else if (plain || nullable)
-			_named[type] = named;
-		else
-			problems.push('$key.$type: "$path" is not one public static function ($type, $type): $intType');
+		if (found.length != 0) return { typePath: typePath, member: member, found: found };
+		problems.push('$label: the resolution index declares no "$path"');
+		return null;
 	}
 
 	/** `wrapper` set asks for both parameters as `wrapper<type>`, null for both as the bare `type`. */

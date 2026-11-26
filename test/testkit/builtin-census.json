@@ -35,6 +35,7 @@
 	"duplicate-case",
 	"duplicate-code",
 	"duplicate-code-renamed",
+	"duplicate-comparator",
 	"duplicate-import",
 	"duplicate-ternary-branches",
 	"empty-ambient-source",

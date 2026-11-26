@@ -284,15 +284,15 @@
 		{
 			"name": "M-RCMP-UNRESOLVED-SILENT",
 			"type": "anyparse.check.haxe.expressions.CompareFunctions",
-			"method": "read",
-			"find": "problems.push('$key.$type: the resolution index declares no \"$path\"');",
+			"method": "membersAt",
+			"find": "problems.push('$label: the resolution index declares no \"$path\"');",
 			"replace": "{}",
 			"note": "a name the index cannot find is dropped in silence and the rule falls back to Reflect.compare"
 		},
 		{
 			"name": "M-RCMP-PRIVATE-TYPE",
 			"type": "anyparse.check.haxe.expressions.CompareFunctions",
-			"method": "read",
+			"method": "membersAt",
 			"find": "if (types[0].type.isPrivate) {",
 			"replace": "if (false) {",
 			"note": "a private type is accepted as the home of the function, so the fix writes an import or a path that does not compile"
@@ -300,7 +300,7 @@
 		{
 			"name": "M-RCMP-FILE-SCOPED",
 			"type": "anyparse.check.haxe.expressions.CompareFunctions",
-			"method": "read",
+			"method": "membersAt",
 			"find": "idx == null ? [] : idx.refs.resolveQualifiedRefAll(typePath)",
 			"replace": "[]",
 			"note": "the configured path resolves to nothing, as it did whenever the scanned file held a guarded or unread import of the package"
@@ -322,7 +322,7 @@
 		},
 		{
 			"name": "M-RCMP-ERROR-FIRST-FILE",
-			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
 			"method": "anchorProblem",
 			"find": "enabled && !known.enabled",
 			"replace": "false",
@@ -638,6 +638,174 @@
 			"find": "NominalTypes.outerNominalOf(element, plugin.typeSyntax)",
 			"replace": "element",
 			"note": "the element type is answered whole, so Null<T> elements answer Null<T> instead of Null"
+		},
+		{
+			"name": "M-DUPCMP-FIX-DROPPED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "crossFileFix",
+			"find": "out.push(plan.slices);",
+			"replace": "out.push([]);",
+			"note": "every group's edits are dropped, so `duplicate-comparator` reports the duplicates and never extracts the static"
+		},
+		{
+			"name": "M-DUPCMP-SINGLE-SITE",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "run",
+			"find": "if (sites.length < 2) continue;",
+			"replace": "if (sites.length < 1) continue;",
+			"note": "a comparator written at ONE sort call is reported as a duplicate of nothing"
+		},
+		{
+			"name": "M-DUPCMP-ELEMENT-BLIND",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "collect",
+			"find": "final key: String = '${declared == null ? element : SymbolIndex.typePath(declared)}\\n${callback.canonical}';",
+			"replace": "final key: String = '${callback.canonical}';",
+			"note": "the group key forgets the element type, so the same body over two element types is merged into one static"
+		},
+		{
+			"name": "M-DUPCMP-PARAMS-MERGED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "lambdaOf",
+			"find": "[params[0] => FIRST, params[1] => SECOND]",
+			"replace": "[params[0] => FIRST, params[1] => FIRST]",
+			"note": "both parameters canonicalise to one mark, so the descending comparator joins the ascending one"
+		},
+		{
+			"name": "M-DUPCMP-CAPTURE-BLIND",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "readsOnly",
+			"find": "if (!s.upperTypes || !SourceText.isUpperInitial(name)) return false;",
+			"replace": "if (!s.upperTypes || !SourceText.isUpperInitial(name)) return true;",
+			"note": "a lambda reading a local of its enclosing function counts as capture-free and is extracted into a static that cannot see it"
+		},
+		{
+			"name": "M-DUPCMP-UNRESOLVED-UNCOUNTED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "collect",
+			"find": "unresolved++;",
+			"replace": "unresolved += 0;",
+			"note": "sites left alone for an unresolved element type are no longer counted, so the config note never says them"
+		},
+		{
+			"name": "M-DUPCMP-MACRO-FORM-DROPPED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "lambdaOf",
+			"find": "final keys: Null<Array<Key>> = key == null ? null : [key];",
+			"replace": "final keys: Null<Array<Key>> = null;",
+			"note": "a lambda comparing one key through Compare is read as a plain body: no macro form, and no merge with the Compare.asc call over the same key"
+		},
+		{
+			"name": "M-DUPCMP-ELEMENT-HOST-DROPPED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "hostOf",
+			"find": "if (onElement != null) return { host: onElement, why: '' };",
+			"replace": "",
+			"note": "the element class the scope declares is never the host, so a cross-module group lands in the module holding most sites"
+		},
+		{
+			"name": "M-DUPCMP-CLASH-BLIND",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "planOf",
+			"find": "if (taken.exists(hostKey) || host.type.members.exists(m -> m.name == name))",
+			"replace": "if (taken.exists(hostKey))",
+			"note": "a host already declaring the name gets a second member of it"
+		},
+		{
+			"name": "M-DUPCMP-PACKAGES-BLIND",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "hostOf",
+			"find": "if (sites.exists(site -> index.fileInfo(site.file)?.pkg != module.pkg))",
+			"replace": "if (false)",
+			"note": "a group spanning packages on an anonymous element is fixed into one package's module, which the other cannot import"
+		},
+		{
+			"name": "M-DUPCMP-IMPORTS-DROPPED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "planOf",
+			"find": "byFile.push(file, { span: edit.span, text: edit.text });",
+			"replace": "{}",
+			"note": "a site module that does not import the host type gets the reference without the import"
+		},
+		{
+			"name": "M-DUPCMP-TYPE-PARAMETER-BLIND",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "isTypeParameter",
+			"find": "return owned != null && owned.exists(scope -> scope.from <= span.from && span.to <= scope.to);",
+			"replace": "return false;",
+			"note": "a type parameter element is grouped as a type, and the extracted static names a type parameter it cannot see"
+		},
+		{
+			"name": "M-DUPCMP-PARTIAL-GROUP",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "crossFileFix",
+			"find": "if (plan.sites.exists(site -> !handed.exists('${site.file}:${site.span.from}'))) continue;",
+			"replace": "",
+			"note": "a group is fixed with a suppressed site among it, so the suppressed lambda is rewritten too"
+		},
+		{
+			"name": "M-DUPCMP-UNSEEN-TYPE-BLIND",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "unseenType",
+			"find": "if (resolved.length != 1) return type;",
+			"replace": "",
+			"note": "a body naming a type the scope does not resolve is moved into a host that may not see it"
+		},
+		{
+			"name": "M-DUPCMP-KEYED-DEFAULTED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "optionsOf",
+			"find": "asc: macros[ASC],",
+			"replace": "asc: macros[ASC] ?? { typePath: 'lib.Order', member: 'asc', nullable: false },",
+			"note": "an absent keyed option falls back to a built-in macro path, a hidden profile, and a key comparator takes a macro form the project never named"
+		},
+		{
+			"name": "M-DUPCMP-NULL-KEY-MACRO",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "collect",
+			"find": "ordered: keys != null && (callback.value == null || orderedKeys(keys, element, entry.file, idx, s)),",
+			"replace": "ordered: keys != null,",
+			"note": "a key comparator over a Null<Int> key is extracted in the macro form, which refuses a nullable key at compile time"
+		},
+		{
+			"name": "M-DUPCMP-BROKEN-OPTION-RUNS",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "run",
+			"find": "if (options.problems.length > 0) continue;",
+			"replace": "{}",
+			"note": "a broken option is reported and the rule still runs on the files it governs, so a fix could call another function than the project named"
+		},
+		{
+			"name": "M-DUPCMP-KEYED-NOT-MACRO",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
+			"method": "macrosOf",
+			"find": "m.isStatic && m.isMacro &&",
+			"replace": "m.isStatic &&",
+			"note": "a keyed path naming a plain function is accepted as a key macro, and the extracted static calls it with key lambdas"
+		},
+		{
+			"name": "M-DUPCMP-THIS-BOUND",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "readsOnly",
+			"find": "if (bound.contains(name)) return true;",
+			"replace": "if (bound.contains(name) || name == 'this') return true;",
+			"note": "a lambda reading this counts as capture-free and is extracted into a static that has no this"
+		},
+		{
+			"name": "M-DUPCMP-PRIVATE-HOST",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "hostOf",
+			"find": "if (type.isPrivate && sites.exists(site -> site.file != best))",
+			"replace": "if (false)",
+			"note": "a private class becomes the host of a group with a site in another module, which cannot name it"
+		},
+		{
+			"name": "M-DUPCMP-HOST-OUTSIDE-RUN",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "planOf",
+			"find": "if (!inRun.exists(host.file))",
+			"replace": "if (false)",
+			"note": "an element class outside the run's files is promised as the host, and the fix driver drops the whole group without saying why"
 		}
 	]
 }

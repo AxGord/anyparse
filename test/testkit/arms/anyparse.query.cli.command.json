@@ -1676,6 +1676,14 @@
 			"find": ", !o.noOracle)",
 			"replace": ")",
 			"note": "the report's reach probes the declared builds under --no-oracle, so a run that compiles nothing spawns haxe for a remedy"
+		},
+		{
+			"name": "M-DUPCMP-ACTIVE-SCOPE",
+			"type": "anyparse.query.cli.command.LintArgs",
+			"method": "partitionChecks",
+			"find": "'duplicate-comparator',",
+			"replace": "'duplicate-comparator-cut',",
+			"note": "duplicate-comparator runs over the files a pass changed, so a group refused in pass 1 for spanning packages is partly extracted in pass 2"
 		}
 	]
 }
