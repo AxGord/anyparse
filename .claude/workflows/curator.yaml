@@ -1,0 +1,15 @@
+name: curator
+extends: curator
+# anyparse's model rows for the curator run. This is an explicit exception to the budget-mode model rows
+# (user 2026-11-25, asked for maximal memory and skill quality): the judge and the verifier carry the run's quality
+# and run on opus/high. The judge is also the calibration decision (one judge covers every job); the counts, the
+# plan and the apply are scripts, so no model row exists for them; `execute` is the fallback for any stage that runs
+# a model without its own row. Tuning of the curator lives here, never in the engine repo.
+model_table:
+  stages:
+    execute:
+      - { upto: 10, model: sonnet, effort: medium }
+    judge:
+      - { upto: 10, model: opus, effort: high }
+    verify:
+      - { upto: 10, model: opus, effort: high }
