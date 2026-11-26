@@ -38,6 +38,13 @@ A `lint` run that reads a resolution scope (`resolutionRoots`, `resolutionLibs`,
 - **Records derived from a parse.** `owner` and `symbols` read each project file's record beside its entry (`ProjectOutlines`): its declarations, or its owner entries and distinct code words, so a warm run parses and lexes nothing; the mention counts, the one cross-file fact, are folded from the stored words (`OwnerIndex.fromOutlines`). A record's header also carries a digest of the code that derives it (`ParseProjectionEngine.outlineDigest`: every source under `core/`, `ds/`, `runtime/`, `macro/`, `format/`, `grammar/`, `query/` but `query/cli/`, and `util/`), so editing that code is a miss. A missed file alone is parsed again, and the records are written back under the same time budget as the trees (`ProjectParseStore`), so successive runs fill the store.
 - **Upkeep.** A new engine's first run removes the directories of other engines that sat unused for an hour. `APQ_PARSE_CACHE=0` turns the cache off for a run.
 
+## The call-graph store of `callers` / `callees`
+
+A call edge is not a fact of one file: its target resolves against the index of the whole scope. So `anyparse.query.CallGraphStore` keeps one entry per scope, a record of the parse cache above (`ParseDiskCache.lookupRecord` / `storeRecord`) of kind `call-graph`. An entry holds what `callers` / `callees` read of the graph: its nodes and edges, the sites left unresolved, the files that failed to parse, and the tables a target query resolves through. A run whose scope's files all hold what an entry was built from takes that graph back over a fresh index (`CallGraph.build` with `stored`; the index reads the stored parses). It does not parse every file or collect a single edge. Any other run builds the graph and writes the entry.
+
+- **The key is content.** An entry is named by the language, the working directory and the scope's paths in place of a file. Its header holds the hash of every path and text, and a tag carrying `ParseProjectionEngine.outlineDigest`, the code that builds a graph. A changed, added or removed file misses and replaces the entry.
+- **Only these two commands read it.** `reach`, `clusters` and `graph` read more of a graph than the store keeps, so they build their graphs as before. `APQ_CALL_GRAPH_STORE=0` turns the store off for a run, and so does `APQ_PARSE_CACHE=0`.
+
 ## Exit codes
 
 `anyparse.query.ExitCode`: **0** success, **2** usage error (`EXIT_USAGE`), **1** runtime error or refusal (`EXIT_RUNTIME`), **3** residue of a fix run (`EXIT_RESIDUE`, `lint --fix` only). The conventions every command follows:

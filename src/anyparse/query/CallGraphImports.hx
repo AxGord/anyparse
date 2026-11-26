@@ -60,6 +60,17 @@ final class CallGraphImports {
 		return _foreign[simple] ?? [];
 	}
 
+	/** Every simple name's foreign paths as they stand: what `pathType` met while the graph read its files. */
+	public inline function foreignTable(): Map<String, Array<String>> {
+		return _foreign;
+	}
+
+	/** Replace the foreign paths with `table`, the `foreignTable` of a graph built over the same files, in its order. */
+	public function restoreForeign(table: Map<String, Array<String>>): Void {
+		_foreign.clear();
+		for (simple => paths in table) _foreign[simple] = paths;
+	}
+
 	/**
 	 * Whether an indexed enum declares a constructor named `name` — which a bare call may build without any
 	 * import, since the language resolves a constructor against the expected type (`MemberLookup.declaresMemberAs`).

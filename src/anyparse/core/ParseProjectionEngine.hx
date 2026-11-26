@@ -30,9 +30,9 @@ final class ParseProjectionEngine {
 	}
 
 	/**
-	 * md5 over every source a record derived from a stored parse depends on (`ProjectOutlines`): what `digest` covers, the
-	 * shared `util` and `ds` packages, and the whole query layer that reads a record off a parse, its command layer aside —
-	 * a record is derived by code `digest` leaves out, so an edit of that code is a miss too.
+	 * md5 over every source a record derived from stored parses depends on (`ProjectOutlines`, `CallGraphStore`): what
+	 * `digest` covers, the shared `util` and `ds` packages, and the whole query layer that reads a record off a parse, its
+	 * command layer aside — a record is derived by code `digest` leaves out, so an edit of that code is a miss too.
 	 */
 	public static macro function outlineDigest(): haxe.macro.Expr {
 		return macro $v{hashOf(outlinePaths())};

@@ -17693,6 +17693,38 @@
 			"find": "return first < 0 || text.substr(0, first) != header(tag, source) ? null : text.substr(first + 1);",
 			"replace": "return first < 0 ? null : text.substr(first + 1);",
 			"note": "a record is served whatever bytes its file now holds, so an edited file answers with the declarations it had when it was stored"
+		},
+		{
+			"name": "M-CALL-GRAPH-STORE-EDGES",
+			"type": "anyparse.query.CallGraphStore",
+			"method": "restoreInto",
+			"find": "for (edge in stored.edges) graph.indexEdge(edge);",
+			"replace": "",
+			"note": "a graph taken back from the store has no edges, so callers and callees of a warm run print none"
+		},
+		{
+			"name": "M-CALL-GRAPH-STORE-FOREIGN",
+			"type": "anyparse.query.CallGraphStore",
+			"method": "restoreInto",
+			"find": "graph.types.imports.restoreForeign(stored.foreign);",
+			"replace": "",
+			"note": "a graph taken back from the store forgets the library paths its edges met, so a target query misses the imported type of the same simple name"
+		},
+		{
+			"name": "M-CALL-GRAPH-STORE-CONTENT",
+			"type": "anyparse.query.CallGraphStore",
+			"method": "contentOf",
+			"find": "ContentHash.md5(f.source)",
+			"replace": "0",
+			"note": "an entry no longer holds what its files said, so a scope whose file changed is served the stale graph"
+		},
+		{
+			"name": "M-CALL-GRAPH-STORE-SWITCH",
+			"type": "anyparse.query.CallGraphStore",
+			"method": "switchedOff",
+			"find": "Sys.getEnv(SWITCH_VARIABLE) == '0'",
+			"replace": "false",
+			"note": "the call-graph store switched off by its variable still reads and writes"
 		}
 	]
 }

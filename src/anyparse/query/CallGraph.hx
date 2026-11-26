@@ -266,6 +266,23 @@ typedef ParsedEntry = {
 }
 
 /**
+ * What `callers` / `callees` read of a graph built without compiler facts, as `CallGraphStore.storedOf` takes it and
+ * `CallGraph.build` takes it back over the same files: the nodes and edges in the order they were added, every site left
+ * unresolved, the files that failed to parse, the name and body tables a target query resolves through, and the foreign
+ * paths the edge collection met (`CallGraphImports.foreignTable`).
+ */
+typedef StoredCallGraph = {
+	final nodes: Map<String, FnNode>;
+	final edges: Array<CallEdge>;
+	final unresolved: Array<UnresolvedCall>;
+	final unresolvedAccess: Array<UnresolvedAccess>;
+	final skippedFiles: Array<String>;
+	final byMember: Map<String, Array<String>>;
+	final bodies: Map<String, Array<String>>;
+	final foreign: Map<String, Array<String>>;
+}
+
+/**
  * Project-wide approximate call graph over the `QueryNode` projection — the
  * shared core of the `callees` / `callers` / `reach` subcommands, the
  * `thread-safety` check and `MemberReach`.
@@ -910,10 +927,12 @@ final class CallGraph {
 	 * once; a prebuilt `SymbolIndex` is reused when supplied — and one wider than
 	 * `files` (a resolution index that also covers libraries) gives the graph the
 	 * supertypes, member kinds and property accessors of types it holds no file for.
-	 * A grammar without call/ident/field-access shape seams yields an empty graph.
+	 * A grammar without call/ident/field-access shape seams yields an empty graph. Given `stored`, what a build of the same
+	 * files without facts stored (`CallGraphStore`), the graph takes that back instead of collecting the files.
 	 */
 	public static function build(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex, ?facts: FactsView
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex, ?facts: FactsView,
+		?stored: StoredCallGraph
 	): CallGraph {
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 		final shape: RefShape = cached.refShape();
@@ -923,7 +942,10 @@ final class CallGraph {
 		final seed: SymbolIndex = index ?? IndexScope.report(files, cached);
 		final types: CallGraphTypes = new CallGraphTypes(seed, shape);
 		final graph: CallGraph = new CallGraph(cached, shape, provider, types, facts == null ? null : new CallGraphFacts(facts), seed);
-		graph.addFiles(files);
+		if (stored == null)
+			graph.addFiles(files)
+		else
+			CallGraphStore.restoreInto(graph, stored);
 		return graph;
 	}
 

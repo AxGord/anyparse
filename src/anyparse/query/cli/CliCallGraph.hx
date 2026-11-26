@@ -1,6 +1,7 @@
 package anyparse.query.cli;
 
 import anyparse.query.CallGraph.EdgeKind;
+import anyparse.query.CallGraph.StoredCallGraph;
 import anyparse.query.cli.CliArgs;
 import anyparse.query.cli.GitRevision.RevisionFile;
 import anyparse.query.format.GraphJson;
@@ -101,29 +102,32 @@ final class CliCallGraph {
 	 * progress feedback. Null on an empty scope (message already printed).
 	 */
 	public static function readScope(cmd: String, inputSpecs: Array<String>, lang: String): Null<GraphScope> {
-		final cached: GrammarPlugin = new CachingGrammarPlugin(CliArgs.pickPlugin(lang));
-		final expanded: ExpandedInputs = CliArgs.expandFor(lang, inputSpecs);
-		final paths: Array<String> = expanded.paths;
-		if (paths.length == 0) {
-			CliIo.stderr('apq $cmd: no input files matched ${CliArgs.quotedSpecs(inputSpecs)}\n');
-			return null;
-		}
-		final files: Array<{ file: String, source: String }> = [];
-		final sources: Map<String, String> = [];
-		var scanned: Int = 0;
-		for (path in paths) {
-			final source: String = CliIo.readSourceForParse(path);
-			files.push({ file: path, source: source });
-			sources[path] = source;
-			try cached.parseFile(source) catch (exception: ParseError) {} catch (exception: Exception) {}
-			CliIo.streamProgress(cmd, ++scanned, paths.length, expanded.singleFile);
-		}
-		return {
-			files: files,
-			sources: sources,
-			plugin: cached,
-			singleFile: expanded.singleFile
+		final scope: Null<GraphScope> = sourceScope(cmd, inputSpecs, lang);
+		if (scope != null) parseScope(cmd, scope);
+		return scope;
+	}
+
+	/**
+	 * `buildCallGraphScope` through the call-graph store (`CallGraphStore`): a scope whose files all hold what a previous
+	 * run stored takes that graph back over a fresh index of them; any other is parsed, built and stored. Only for the
+	 * commands that read no more of the graph than the store keeps — `callers` / `callees`.
+	 */
+	public static function storedCallGraphScope(
+		cmd: String, inputSpecs: Array<String>, lang: String
+	): Null<{ graph: CallGraph, sources: Map<String, String> }> {
+		final scope: Null<GraphScope> = sourceScope(cmd, inputSpecs, lang);
+		if (scope == null) return null;
+		final store: CallGraphStore = new CallGraphStore(lang);
+		final held: Null<StoredCallGraph> = store.lookup(scope.files);
+		final graph: CallGraph = if (held == null) {
+			parseScope(cmd, scope);
+			final built: CallGraph = CallGraph.build(scope.files, scope.plugin);
+			store.keep(scope.files, built);
+			built;
+		} else {
+			CallGraph.build(scope.files, scope.plugin, null, null, held);
 		};
+		return skippedEndRun(cmd, graph.skippedFiles, scope) ? null : { graph: graph, sources: scope.sources };
 	}
 
 	/**
@@ -181,6 +185,41 @@ final class CliCallGraph {
 				CliIo.sysPrint(GraphJson.write(graph));
 			case Text:
 				throw new Exception('the text report of a call-graph command is its own');
+		}
+	}
+
+	/**
+	 * The files of a graph command's scope, read and not yet parsed, with the
+	 * caching plugin to parse them. Null on an empty scope (message already printed).
+	 */
+	private static function sourceScope(cmd: String, inputSpecs: Array<String>, lang: String): Null<GraphScope> {
+		final expanded: ExpandedInputs = CliArgs.expandFor(lang, inputSpecs);
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			CliIo.stderr('apq $cmd: no input files matched ${CliArgs.quotedSpecs(inputSpecs)}\n');
+			return null;
+		}
+		final files: Array<{ file: String, source: String }> = [];
+		final sources: Map<String, String> = [];
+		for (path in paths) {
+			final source: String = CliIo.readSourceForParse(path);
+			files.push({ file: path, source: source });
+			sources[path] = source;
+		}
+		return {
+			files: files,
+			sources: sources,
+			plugin: new CachingGrammarPlugin(CliArgs.pickPlugin(lang)),
+			singleFile: expanded.singleFile
+		};
+	}
+
+	/** Parse every file of `scope` once into its caching plugin, with progress feedback. */
+	private static function parseScope(cmd: String, scope: GraphScope): Void {
+		var scanned: Int = 0;
+		for (f in scope.files) {
+			try scope.plugin.parseFile(f.source) catch (exception: ParseError) {} catch (exception: Exception) {}
+			CliIo.streamProgress(cmd, ++scanned, scope.files.length, scope.singleFile);
 		}
 	}
 

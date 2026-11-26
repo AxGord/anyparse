@@ -94,7 +94,7 @@ final class CalleesCommand implements CliCommand implements LeadingQuery {
 		}
 		final targetStr: String = target;
 
-		final built: Null<{ graph: CallGraph, sources: Map<String, String> }> = CliCallGraph.buildCallGraphScope(cmd, inputSpecs, lang);
+		final built: Null<{ graph: CallGraph, sources: Map<String, String> }> = CliCallGraph.storedCallGraphScope(cmd, inputSpecs, lang);
 		if (built == null) return EXIT_RUNTIME;
 		final graph: CallGraph = built.graph;
 		final sources: Map<String, String> = built.sources;

@@ -577,7 +577,7 @@
 		{
 			"name": "M-GRAPH-SCOPE-WALK-HX",
 			"type": "anyparse.query.cli.CliCallGraph",
-			"method": "readScope",
+			"method": "sourceScope",
 			"find": "CliArgs.expandFor(lang, inputSpecs)",
 			"replace": "CliArgs.expandFor('haxe', inputSpecs)",
 			"note": "a graph command's scope is the .hx files whatever its grammar"
@@ -807,6 +807,14 @@
 			"find": "command is PositionAddressed ? CliArgs.fileOfAddress(args[i]) : args[i]",
 			"replace": "args[i]",
 			"note": "the position suffix of an addressed file hides its extension, so a command addressed by file:line names no grammar"
+		},
+		{
+			"name": "M-CALL-GRAPH-STORE-ROUTE",
+			"type": "anyparse.query.cli.CliCallGraph",
+			"method": "storedCallGraphScope",
+			"find": "store.lookup(scope.files)",
+			"replace": "null",
+			"note": "callers / callees never read the call-graph store, so every run parses and builds the graph"
 		}
 	]
 }
