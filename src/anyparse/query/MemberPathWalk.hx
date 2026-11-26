@@ -19,9 +19,6 @@ using Lambda;
 @:nullSafety(Strict)
 final class MemberPathWalk {
 
-	/** Every indexed file's `FileInfo`, handed over by the owning index. */
-	private final _files: Array<FileInfo>;
-
 	/** The name -> declaration layer this one resolves each hop's type through. */
 	private final _refs: TypeRefIndex;
 
@@ -32,8 +29,7 @@ final class MemberPathWalk {
 	private final _typeSyntax: TypeSyntaxReader;
 
 	/** Built once by the owning `SymbolIndex`, which hands over the shared, immutable index data. */
-	public function new(files: Array<FileInfo>, refs: TypeRefIndex, members: MemberLookup, typeSyntax: TypeSyntaxReader) {
-		_files = files;
+	public function new(refs: TypeRefIndex, members: MemberLookup, typeSyntax: TypeSyntaxReader) {
 		_refs = refs;
 		_members = members;
 		_typeSyntax = typeSyntax;
@@ -97,7 +93,7 @@ final class MemberPathWalk {
 		fromFile: String, startSource: String, memberPath: Array<String>, substitute: Bool, transparentWrappers: Array<String>
 	): Null<String> {
 		if (memberPath.length == 0) return null;
-		final origin: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+		final origin: Null<FileInfo> = _refs.fileNamed(fromFile);
 		if (origin == null) return null;
 		var args: Array<String> = [];
 		var startName: String = startSource;

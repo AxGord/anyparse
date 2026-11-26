@@ -363,10 +363,12 @@ class AmbientImportResolutionTest extends Test {
 			{ file: 'lib/T.hx', source: 'package lib;\n\nclass T {}\n' },
 			{ file: 'a/T.hx', source: 'package a;\n\nclass T {}\n' }
 		];
-		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		Assert.equals(
-			'lib/T.hx', declaringFile(index, 'T', 'lib/Plain.hx'), 'with no ambient source only the same-package `lib.T` is in scope'
+			'lib/T.hx', declaringFile(CheckFixture.index(files, new HaxeQueryPlugin()), 'T', 'lib/Plain.hx'),
+			'with no ambient source only the same-package `lib.T` is in scope'
 		);
+		// A name asked of an index is answered once for the run, so the chain is handed over before the first ask.
+		final index: SymbolIndex = CheckFixture.index(files, new HaxeQueryPlugin());
 		final host: Null<ResolvedType> = index.refs.findDeclaredType('lib/Plain.hx', 'Plain');
 		if (host == null) {
 			Assert.fail('the fixture file must be indexed');

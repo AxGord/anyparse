@@ -93,6 +93,34 @@ private enum Answer {
 
 }
 
+/** One file's `tierOf` answers by name and offset; `file` is the `FileInfo` they were read for, so another one of the path reads none. */
+private typedef FileTiers = { final file: FileInfo; final answers: Map<String, Tier>; }
+
+/**
+ * What one `TypeNameBinding` has answered so far, so a run resolves each question once. Instance state of the run that built the index —
+ * never shared across runs (docs/design-principles.md § 2).
+ */
+private final class NameMemos {
+
+	/** File path -> its `#if` directive marks (`CondBranchPath.scan`), read on the first question about the file. */
+	public final branches: Map<String, CondBranchIndex> = [];
+
+	/**
+	 * `splitPath` per import path, null included: `statementAnswer` reads every import of a file once per NAME the
+	 * file asks about, and split the same path anew each time.
+	 */
+	public final importPaths: Map<String, Null<ImportPath>> = [];
+
+	/** File path -> the `tierOf` answers read for it. */
+	public final tiers: Map<String, FileTiers> = [];
+
+	/** `packageAnswer` per package, name and mode. */
+	public final packages: Map<String, Answer> = [];
+
+	public function new() {}
+
+}
+
 /**
  * THE meaning of a SIMPLE type name written in a file, the one answer to "which declaration
  * does this simple type name bind" — the one implementation every reader of a bare
@@ -147,14 +175,8 @@ final class TypeNameBinding {
 		'ArrayAccess'
 	];
 
-	/** File path -> its `#if` directive marks (`CondBranchPath.scan`), read on the first question about the file. */
-	private final _branches: Map<String, CondBranchIndex> = [];
-
-	/**
-	 * `splitPath` per import path, null included: `statementAnswer` reads every import of a file once per NAME the
-	 * file asks about, and split the same path anew each time. Read only here.
-	 */
-	private final _importPaths: Map<String, Null<ImportPath>> = [];
+	/** The answers given so far in this run (`NameMemos`). */
+	private final _memos: NameMemos = new NameMemos();
 
 	/** Every indexed file, handed over by the owning `TypeRefIndex`. */
 	private final _files: Array<FileInfo>;
@@ -203,17 +225,38 @@ final class TypeNameBinding {
 	 * statement as redundant asks: the deletion changes no name exactly where both readings bind the same declarations.
 	 */
 	public function tierOf(name: String, fi: FileInfo, ?at: Int, ?without: ImportInfo): Tier {
+		var answers: Null<Map<String, Tier>> = null;
+		final key: String = at == null ? name : '$name@$at';
+		if (without == null) {
+			var entry: Null<FileTiers> = _memos.tiers[fi.file];
+			if (entry == null || entry.file != fi) {
+				entry = { file: fi, answers: [] };
+				_memos.tiers[fi.file] = entry;
+			}
+			answers = entry.answers;
+			final known: Null<Tier> = answers[key];
+			if (known != null) return known;
+		}
 		final own: Array<TypeDeclInfo> = fi.types.filter(t -> t.name == name);
-		if (own.length > 0) return Bound(own.map(t -> { file: fi, type: t }));
-		final order: StatementOrder = orderOf(fi, at);
-		final asked: StatementOrder = without == null
-			? order
-			: { explicit: order.explicit.filter(o -> o != without), wildcards: order.wildcards.filter(o -> o != without), use: order.use };
-		return switch explicitFrom(name, fi, asked, 0, false) {
-			case Decls(decls): Bound(decls);
-			case Unreadable(_), Either(_): Unknown;
-			case Outside(_), Pass: Free;
-		};
+		final answered: Tier = if (own.length > 0) {
+			Bound(own.map(t -> { file: fi, type: t }));
+		} else {
+			final order: StatementOrder = orderOf(fi, at);
+			final asked: StatementOrder = without == null
+				? order
+				: {
+					explicit: order.explicit.filter(o -> o != without),
+					wildcards: order.wildcards.filter(o -> o != without),
+					use: order.use
+				};
+			switch explicitFrom(name, fi, asked, 0, false) {
+				case Decls(decls): Bound(decls);
+				case Unreadable(_), Either(_): Unknown;
+				case Outside(_), Pass: Free;
+			}
+		}
+		if (answers != null) answers[key] = answered;
+		return answered;
 	}
 
 	/**
@@ -365,7 +408,7 @@ final class TypeNameBinding {
 				return out;
 			}
 		}
-		out.bound = bindingOf(packageAnswer(name, fi.pkg, false, true));
+		out.bound = bindingOf(memoisedPackageAnswer(name, fi.pkg, false, true));
 		return out;
 	}
 
@@ -419,13 +462,13 @@ final class TypeNameBinding {
 
 	/** The `#if` regions and branches open at offset `at` of `fi` (`CondBranchPath`), its directives read once per file. */
 	public function branchPathAt(fi: FileInfo, at: Int): Array<CondFrame> {
-		var index: Null<CondBranchIndex> = _branches[fi.file];
+		var index: Null<CondBranchIndex> = _memos.branches[fi.file];
 		if (index == null) {
 			final source: Null<String> = _sources[fi.file];
 			final read: CondBranchIndex = source == null
 				? []
 				: CondBranchPath.scan(source, _plugin.refShape(), _plugin.lexicalRegions(source));
-			_branches[fi.file] = read;
+			_memos.branches[fi.file] = read;
 			index = read;
 		}
 		return CondBranchPath.pathAt(index, at);
@@ -486,7 +529,7 @@ final class TypeNameBinding {
 					return answer;
 			}
 		}
-		return packageAnswer(name, fi.pkg, strict);
+		return memoisedPackageAnswer(name, fi.pkg, strict);
 	}
 
 	/**
@@ -563,7 +606,17 @@ final class TypeNameBinding {
 	 * one is an answer of its own rather than nothing; with `listed`, each package past the index also holds the std core
 	 * modules the std listing knows (`StdTypes.declaresModule`) — the toplevel's none — found there before a farther package's.
 	 */
-	private function packageAnswer(name: String, pkg: String, strict: Bool, listed: Bool = false): Answer {
+	private function memoisedPackageAnswer(name: String, pkg: String, strict: Bool, listed: Bool = false): Answer {
+		final key: String = '${strict ? 's' : 'l'}${listed ? 'L' : '.'}$pkg:$name';
+		final known: Null<Answer> = _memos.packages[key];
+		if (known != null) return known;
+		final answered: Answer = packageAnswer(name, pkg, strict, listed);
+		_memos.packages[key] = answered;
+		return answered;
+	}
+
+	/** The walk `memoisedPackageAnswer` memoises; asked only through it. */
+	private function packageAnswer(name: String, pkg: String, strict: Bool, listed: Bool): Answer {
 		if (_skipped.exists(f -> f == '$name.hx' || f.endsWith('/$name.hx'))) return Unreadable(null);
 		final packages: Map<String, Array<FileInfo>> = tables().packages;
 		final chain: Array<String> = [];
@@ -634,9 +687,9 @@ final class TypeNameBinding {
 
 	/** `splitPath(path)`, memoised for this binding (`_importPaths`). */
 	private function importPathOf(path: String): Null<ImportPath> {
-		if (_importPaths.exists(path)) return _importPaths[path];
+		if (_memos.importPaths.exists(path)) return _memos.importPaths[path];
 		final split: Null<ImportPath> = splitPath(path);
-		_importPaths[path] = split;
+		_memos.importPaths[path] = split;
 		return split;
 	}
 

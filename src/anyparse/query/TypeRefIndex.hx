@@ -41,6 +41,9 @@ final class TypeRefIndex {
 	/** Every indexed file's `FileInfo`, handed over by the owning index. */
 	private final _files: Array<FileInfo>;
 
+	/** File path -> its `FileInfo` (`fileNamed`): built on first need. */
+	private var _byFile: Null<Map<String, FileInfo>> = null;
+
 	/** Every declaration by simple name, with its file, in index order (`named`): built on first need. */
 	private var _byName: Null<Map<String, Array<ResolvedType>>> = null;
 
@@ -143,9 +146,24 @@ final class TypeRefIndex {
 		return at;
 	}
 
+	/**
+	 * The one answer to "which indexed file is this path": the first entry of the list, as a scan would find it, or null.
+	 * Every layer of the owning index asks here instead of scanning `_files`.
+	 */
+	public function fileNamed(file: String): Null<FileInfo> {
+		var byFile: Null<Map<String, FileInfo>> = _byFile;
+		if (byFile == null) {
+			final built: Map<String, FileInfo> = [];
+			for (fi in _files) if (!built.exists(fi.file)) built[fi.file] = fi;
+			_byFile = built;
+			byFile = built;
+		}
+		return byFile[file];
+	}
+
 	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
 	public function findDeclaredType(file: String, typeName: String): Null<ResolvedType> {
-		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
+		final fi: Null<FileInfo> = fileNamed(file);
 		if (fi == null) return null;
 		final host: FileInfo = fi;
 		final t: Null<TypeDeclInfo> = host.types.find(td -> td.name == typeName);
@@ -236,7 +254,7 @@ final class TypeRefIndex {
 	 */
 	public function resolveStartType(typeName: String, fromFile: Null<String>, ?at: Int): Null<ResolvedType> {
 		if (fromFile != null) {
-			final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+			final host: Null<FileInfo> = fileNamed(fromFile);
 			if (host != null) return resolveTypeRef(typeName, host, at);
 		}
 		if (typeName.indexOf('.') >= 0) {
@@ -254,7 +272,7 @@ final class TypeRefIndex {
 	public function resolveStartCopy(typeName: String, fromFile: Null<String>, ?at: Int): Null<ResolvedType> {
 		final found: Null<ResolvedType> = resolveStartType(typeName, fromFile, at);
 		if (found != null) return found;
-		final host: Null<FileInfo> = fromFile == null ? null : _files.find(f -> f.file == fromFile);
+		final host: Null<FileInfo> = fromFile == null ? null : fileNamed(fromFile);
 		return oneDeclaration(
 			if (host != null)
 				resolveTypeRefAll(typeName, host, at)
@@ -318,7 +336,7 @@ final class TypeRefIndex {
 	public function readsAlikeFromEach(
 		text: String, writers: Array<FileInfo>, to: String, skip: Array<String>, syntax: TypeSyntaxReader
 	): Bool {
-		final reader: Null<FileInfo> = _files.find(f -> f.file == to);
+		final reader: Null<FileInfo> = fileNamed(to);
 		return reader == null || writers.foreach(w -> readsAlike(text, w, reader, skip, syntax));
 	}
 

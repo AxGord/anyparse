@@ -834,7 +834,7 @@ final class SymbolIndex {
 		typing = new TypingService(
 			files, refs, subtypes, plugin.typeSyntax, plugin.refShape(), new BuildBranches(plugin, file -> sources[file])
 		);
-		paths = new MemberPathWalk(files, refs, typing.members, plugin.typeSyntax);
+		paths = new MemberPathWalk(refs, typing.members, plugin.typeSyntax);
 		traits = new TypeTraits(files, sources, refs);
 		text = new RawSourceScan(files, skipped, sources, plugin, thirdParty, refs, traits);
 		final shape: RefShape = plugin.refShape();
@@ -866,6 +866,16 @@ final class SymbolIndex {
 		return _thirdParty.exists(file);
 	}
 
+	/** The `FileInfo` for `file`, or null when the file is not indexed. */
+	public inline function fileInfo(file: String): Null<FileInfo> {
+		return refs.fileNamed(file);
+	}
+
+	/** Files that failed to parse and were excluded from the index. */
+	public inline function skippedFiles(): Array<String> {
+		return _skipped.copy();
+	}
+
 	/**
 	 * The index over every file of this one but `files`, parsed or skipped: what it answers is what this one would
 	 * answer had those files never been in scope. The files' declarations are not parsed again.
@@ -877,11 +887,6 @@ final class SymbolIndex {
 			[ for (fi in _files) if (!files.contains(fi.file)) fi ], [ for (file in _skipped) if (!files.contains(file)) file ],
 			sources, _plugin, thirdParty
 		);
-	}
-
-	/** The `FileInfo` for `file`, or null when the file is not indexed. */
-	public function fileInfo(file: String): Null<FileInfo> {
-		return _files.find(f -> f.file == file);
 	}
 
 	/**
@@ -901,11 +906,6 @@ final class SymbolIndex {
 		return found.length == 1 && StdResolver.isStdFile(found[0].file.file) ? found[0] : null;
 	}
 
-	/** Files that failed to parse and were excluded from the index. */
-	public function skippedFiles(): Array<String> {
-		return _skipped.copy();
-	}
-
 	/**
 	 * Whether `name` denotes ONE indexed TYPE as `fromFile` binds it (`resolveTypeRef`
 	 * -> `TypeNameBinding`, the compiler's resolution order). Distinct
@@ -917,7 +917,7 @@ final class SymbolIndex {
 	 * `fromFile` is not indexed, or the name resolves to no type or to several.
 	 */
 	public function declaresTypeInScope(name: String, fromFile: String): Bool {
-		final host: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+		final host: Null<FileInfo> = refs.fileNamed(fromFile);
 		return host != null && refs.resolveTypeRef(name, host) != null;
 	}
 
@@ -1012,7 +1012,7 @@ final class SymbolIndex {
 	 * only as `receiver.name()`, never as a bare `name`.
 	 */
 	public function fileImportsMemberName(file: String, name: String): Bool {
-		final host: Null<FileInfo> = _files.find(f -> f.file == file);
+		final host: Null<FileInfo> = refs.fileNamed(file);
 		if (host == null) return false;
 		// An AMBIENT source's static import binds the bare name here exactly as one written in the file
 		// would, and the answer is read as a veto, so the two lists answer as a union.

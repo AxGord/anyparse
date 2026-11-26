@@ -413,7 +413,7 @@ final class RawSourceScan {
 	 */
 	private function privilegedFileSpells(file: String, name: String): Bool {
 		if (_waiverFiles.contains(file) && waiverFileMayReference(file, name)) return true;
-		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
+		final fi: Null<FileInfo> = _refs.fileNamed(file);
 		if (fi == null || fi.accessGrants.length == 0) return false;
 		final src: Null<String> = _sources[file];
 		return src == null

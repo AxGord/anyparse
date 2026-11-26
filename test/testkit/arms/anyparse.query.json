@@ -5474,8 +5474,8 @@
 			"name": "M-BINDING-OWN-TIER-CUT",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "tierOf",
-			"find": "if (own.length > 0) return Bound(own.map(t -> { file: fi, type: t }));",
-			"replace": "",
+			"find": "final answered: Tier = if (own.length > 0) {",
+			"replace": "final answered: Tier = if (false) {",
 			"note": "the module's own types are not asked first, so an import answers for a name the module itself declares"
 		},
 		{
@@ -9666,7 +9666,7 @@
 			"name": "M-TS-PACKAGE-LOOKUP",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bindingsOf",
-			"find": "out.bound = bindingOf(packageAnswer(name, fi.pkg, false, true));",
+			"find": "out.bound = bindingOf(memoisedPackageAnswer(name, fi.pkg, false, true));",
 			"replace": "out.bound = null;",
 			"note": "a name no import binds is the project namesake, whatever the file's own package declares (review R4 F7)"
 		},
@@ -14567,7 +14567,7 @@
 			"name": "M-PRINTER-PACKAGE-CHAIN-BLIND",
 			"type": "anyparse.query.TypeNameBinding",
 			"method": "bindingsOf",
-			"find": "out.bound = bindingOf(packageAnswer(name, fi.pkg, false, true));",
+			"find": "out.bound = bindingOf(memoisedPackageAnswer(name, fi.pkg, false, true));",
 			"replace": "out.bound = null;",
 			"note": "the package chain binds nothing, so a type of an ENCLOSING package is written fully qualified although its bare name resolves to it here"
 		},
@@ -17725,6 +17725,46 @@
 			"find": "Sys.getEnv(SWITCH_VARIABLE) == '0'",
 			"replace": "false",
 			"note": "the call-graph store switched off by its variable still reads and writes"
+		},
+		{
+			"name": "M-BINDING-TIER-NOMEMO",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "tierOf",
+			"find": "if (answers != null) answers[key] = answered;",
+			"replace": "",
+			"note": "a tier is resolved afresh on every ask, so a run pays the whole resolution order for each repeat of one name"
+		},
+		{
+			"name": "M-BINDING-TIER-WITHOUT-MEMO",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "tierOf",
+			"find": "if (without == null) {",
+			"replace": "if (true) {",
+			"note": "a question with a statement deleted reads and writes the plain answers, so a redundancy check is told the statement binds nothing"
+		},
+		{
+			"name": "M-BINDING-TIER-FILE-GUARD",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "tierOf",
+			"find": "if (entry == null || entry.file != fi) {",
+			"replace": "if (entry == null) {",
+			"note": "a memo is read by path alone, so another FileInfo of the path is answered from the first one"
+		},
+		{
+			"name": "M-BINDING-PACKAGE-NOMEMO",
+			"type": "anyparse.query.TypeNameBinding",
+			"method": "memoisedPackageAnswer",
+			"find": "_memos.packages[key] = answered;",
+			"replace": "",
+			"note": "the package tier is walked afresh on every ask"
+		},
+		{
+			"name": "M-FILENAMED-FIRST",
+			"type": "anyparse.query.TypeRefIndex",
+			"method": "fileNamed",
+			"find": "if (!built.exists(fi.file)) built[fi.file] = fi;",
+			"replace": "built[fi.file] = fi;",
+			"note": "the file table keeps the LAST entry of a repeated path where the scan it replaced answered the first"
 		}
 	]
 }
