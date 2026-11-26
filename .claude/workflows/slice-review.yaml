@@ -103,6 +103,7 @@ states:
       prompt with the plain-text line `DELIVERED <the slice id>`, never the verdict again, never SendMessage to main.
       Add no synthetic load (no CPU burners): other slices' gates share this machine.
       When the report holds a `moved files` section (the files the slice's writer or config change formats otherwise than the base engine; the gate's `fmt` row refused the slice until each was named), check each entry's reason against the diff: a file moved with no change that explains it, or a reason that says only "formatting", is a FIXES finding.
+      When the report holds a `reach exempt` section (functions the gate's `reach` row found no test, arm or pinned caller for, and the worker opted out), check each reason against the code: a function that holds a branch or a decision, or a reason that says only "trivial" or "covered elsewhere" without naming the caller, is a FIXES finding: it needs a pin.
       CLAUDE.md is already in your context (do not open it). When the diff touches it (`rtk proxy git diff <base>..HEAD -- CLAUDE.md`),
       classify each hunk as move, cut, stale fix or RULE CHANGE and check the hunks match the reason the worker's report gives
       (`touches_add`); a RULE CHANGE — a rule or invariant added, dropped or reworded in meaning — without the user's quote in the

@@ -506,6 +506,11 @@ states:
       `<path or glob> — <why>` line per file or group (the first gate prints the list; `slice-gate/moved-files.txt` keeps it). Write that
       file with the Write tool, then `gate` again; write_report files it into report.md as the `moved files` section the reviewer reads.
 
+      Reach: the gate's `reach` row (dev.ReachRow) goes red on a function you added or changed that no test names, no arm cuts and no pinned
+      caller reaches (the first gate prints the names; `slice-gate/reach-open.txt` keeps them): pin it (a test naming its type and it, or an arm)
+      or, only for a pure delegation or a member only a macro or a framework calls, name it in {{context.cwd}}-logs/reach-exempt.md as one
+      `<Type.function> — <why>` line; write_report files it into report.md as the `reach exempt` section the reviewer reads.
+
       Harder than its score? You are on sonnet and the slice turns out to need opus (an anchor ≥7 you now see: a new shared
       component, a cause you still cannot name after two attempts, a change several owners must make together): do not grind.
       ONE `transition` `rescore` with `set: {rescore: <the number>, rescore_note: …}`, the note ≤10 lines with no `|`: what is done, what is left (a review fix list
@@ -740,6 +745,7 @@ states:
       printf '%s\n' "$REPORT_TEXT" > "$logs/report.md"; case "$REUSE" in ''|*context.reuse*) ;; *) grep -qiE '^[ #*-]*reuse' "$logs/report.md" || printf '\nreuse: %s\n' "$REUSE" >> "$logs/report.md";; esac; printf '%s\n' "$HANDOFF_TEXT" > "$logs/handoff.md"; printf '%s\n' "$OPEN_ITEMS" > "$logs/open-items.txt"; case "$LESSONS" in ''|*context.lessons*) ;; *) printf '%s\n' "$LESSONS" > "$logs/lessons.json";; esac
       case "$TOUCHES_ADD" in ''|*context.touches_add*) ;; *) printf '\ntouches+: %s\n' "$TOUCHES_ADD" >> "$logs/report.md";; esac
       if [ -s "$logs/moved-files.md" ]; then printf '\nmoved files:\n' >> "$logs/report.md"; cat "$logs/moved-files.md" >> "$logs/report.md"; fi
+      if [ -s "$logs/reach-exempt.md" ]; then printf '\nreach exempt:\n' >> "$logs/report.md"; cat "$logs/reach-exempt.md" >> "$logs/report.md"; fi
       echo "wrote $logs/report.md and handoff.md"
     env:
       LESSONS: "{{context.lessons}}"

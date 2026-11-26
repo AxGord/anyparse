@@ -2046,7 +2046,7 @@
 		{
 			"name": "M-GATE-ARMS-NEIGHBOUR-SUB-SPELLING",
 			"type": "dev.GateArms",
-			"method": "cutsMember",
+			"method": "cutOf",
 			"find": "ArmTypePath.graphMember(type, method)",
 			"replace": "'$type.$method'",
 			"note": "an arm on a sub-module type is compared to the call graph under its record's spelling, which the graph never uses, so a change to a callee of its member does not run it"
@@ -4839,6 +4839,150 @@
 			"find": "_count++;",
 			"replace": "",
 			"note": "a typer answer that throws is turned into UNKNOWN and never counted, so a typer fault shows only as a coverage drop"
+		},
+		{
+			"name": "M-REACH-OPEN-PASSES",
+			"type": "dev.ReachRow",
+			"method": "verdict",
+			"find": "if (red.length == 0) return Passed;",
+			"replace": "return Passed;",
+			"note": "a function nothing reaches passes the gate, so a new unpinned branch lands"
+		},
+		{
+			"name": "M-REACH-EXEMPT-BLIND",
+			"type": "dev.ReachRow",
+			"method": "covers",
+			"find": "'.$seed.'.indexOf('.$name.') >= 0",
+			"replace": "false",
+			"note": "a declared exemption covers nothing, so the opt-out is dead and a pure delegation stays red"
+		},
+		{
+			"name": "M-REACH-DIRECT-IGNORED",
+			"type": "dev.ReachRow",
+			"method": "climbs",
+			"find": "if (layer.exists(direct)) return true;",
+			"replace": "if (layer.exists(direct)) return false;",
+			"note": "a function a test or an arm names is still red, so a pinned branch fails the gate"
+		},
+		{
+			"name": "M-REACH-EVERY-SEED-REACHED",
+			"type": "dev.ReachRow",
+			"method": "climbs",
+			"find": "if (layer.exists(direct)) return true;",
+			"replace": "return true;",
+			"note": "every function counts as reached, so a new unpinned branch passes"
+		},
+		{
+			"name": "M-REACH-NO-CLIMB",
+			"type": "dev.ReachRow",
+			"method": "climbs",
+			"find": "layer = next;",
+			"replace": "layer = [];",
+			"note": "the chain never leaves the function itself, so a private helper of a pinned member is red"
+		},
+		{
+			"name": "M-REACH-DEPTH-UNBOUNDED",
+			"type": "dev.ReachRow",
+			"method": "climbs",
+			"find": "for (_ in 0...depth + 1)",
+			"replace": "for (_ in 0...1000)",
+			"note": "the depth cap is ignored, so a chain of any length reaches"
+		},
+		{
+			"name": "M-REACH-CALLERS-REVERSED",
+			"type": "dev.ReachRow",
+			"method": "callersOf",
+			"find": "known.pushUnique(from);",
+			"replace": "known.pushUnique(to);",
+			"note": "the callees are read as callers, so a helper is never reached through its pinned caller"
+		},
+		{
+			"name": "M-REACH-CONTAINS-IS-CALL",
+			"type": "dev.ReachRow",
+			"method": "callersOf",
+			"find": "edge.kind == CONTAINS || ",
+			"replace": "",
+			"note": "a holding edge counts as a call, so a function is reached through a member that merely contains it"
+		},
+		{
+			"name": "M-REACH-CONSTRUCTOR-READ",
+			"type": "dev.ReachRow",
+			"method": "functionsOf",
+			"find": "name != CONSTRUCTOR && ",
+			"replace": "",
+			"note": "constructors are read as functions, so every new type is red on its constructor"
+		},
+		{
+			"name": "M-REACH-TOUCH-ALL",
+			"type": "dev.ReachRow",
+			"method": "seedsOf",
+			"find": "members.contains(name.substring(name.lastIndexOf('.') + 1))",
+			"replace": "true",
+			"note": "every function of a touched module is a seed, so an untouched one turns the row red"
+		},
+		{
+			"name": "M-REACH-NEW-FILE-UNREAD",
+			"type": "dev.ReachRow",
+			"method": "seedsOf",
+			"find": "else if (fresh)",
+			"replace": "else if (false)",
+			"note": "a new module is read as none, so a whole new class passes unpinned"
+		},
+		{
+			"name": "M-REACH-ARM-IGNORED",
+			"type": "dev.ReachRow",
+			"method": "armed",
+			"find": "GateArms.cutOf(record)",
+			"replace": "GateArms.cutOf({ key: '', text: '{\"name\": \"\"}' })",
+			"note": "an arm reaches nothing, so a function reached only by its arm is red"
+		},
+		{
+			"name": "M-REACH-TEST-NAME-BLIND",
+			"type": "dev.ReachRow",
+			"method": "named",
+			"find": "found.ok && found.lines().exists(file -> file.endsWith('.hx'))",
+			"replace": "false",
+			"note": "a test naming a function is never seen, so a call the graph cannot resolve turns red"
+		},
+		{
+			"name": "M-REACH-TEST-NAME-ANY-FILE",
+			"type": "dev.ReachRow",
+			"method": "named",
+			"find": "--all-match -e",
+			"replace": "-e",
+			"note": "the type and the function may lie in different files, so any test naming a common word reaches"
+		},
+		{
+			"name": "M-REACH-TEST-FILE-READ",
+			"type": "dev.ReachRow",
+			"method": "reached",
+			"find": "SOURCE_ROOTS.exists(root -> file.startsWith(root))",
+			"replace": "true",
+			"note": "a test file is a source file the row reads, so a slice of tests alone is read"
+		},
+		{
+			"name": "M-REACH-DECLARATION-IN-LOGS",
+			"type": "dev.ReachRow",
+			"method": "declaration",
+			"find": "Path.directory(Path.removeTrailingSlashes(logs))",
+			"replace": "Path.removeTrailingSlashes(logs)",
+			"note": "the declaration is read from the gate logs directory, where the worker never writes"
+		},
+		{
+			"name": "M-REACH-FILE-BLIND",
+			"type": "dev.ReachRow",
+			"method": "fileOf",
+			"find": "file == root + path",
+			"replace": "false",
+			"note": "no touched file holds a module, so every changed function of the slice goes unread and the row passes"
+		},
+		{
+			"name": "M-REACH-ENTRY-POINT-REACHES",
+			"type": "dev.ReachRow",
+			"method": "named",
+			"find": "if (method == ENTRY_POINT) return false;",
+			"replace": "if (false) return false;",
+			"note": "an entry point main counts as named by any test file that holds the type and the word, so everything within a few calls of it is green with no pin"
 		}
 	]
 }

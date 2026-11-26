@@ -298,6 +298,28 @@ final class GateArms {
 		return Lease.threadsOf(mode, planAsk());
 	}
 
+	/**
+	 * The modules the slice changed and the members of each that it did: `readingOf` without its layout list.
+	 */
+	public static function touchesOf(gate: GateTree, lease: Command -> Command): Array<ModuleTouch> {
+		return readingOf(gate, gate.base, gate.touched, lease).touches;
+	}
+
+	/** The graph `hxq graph` prints over `GRAPH_SCOPE` for the arguments `args`, read as JSON. */
+	public static function graphOf(gate: GateTree, args: Array<String>, lease: Command -> Command): CodeGraphJson {
+		return CodeGraphJsonParser.parse(
+			lease(gate.hxq(gate.tree, ['graph'].concat(args).concat(GRAPH_SCOPE)).timeout(PLAN_TIMEOUT_MS)).check().out
+		);
+	}
+
+	/** The member (`<type>.<method>`, as `hxq graph` names it) the arm `record` cuts, or null when it names none. */
+	public static function cutOf(record: ArmRecord): Null<String> {
+		final head: ArmHead = ArmHeadParser.parse(record.text);
+		final type: Null<String> = head.type;
+		final method: Null<String> = head.method;
+		return type == null || method == null ? null : ArmTypePath.graphMember(type, method);
+	}
+
 	/** The file the arms branch is watched through: each track a kill run ends is a sign of life. */
 	private static inline function progressOf(gate: GateTree): String {
 		return gate.branchProgress(SliceGate.ARMS_ROW);
@@ -526,9 +548,7 @@ final class GateArms {
 	private static function callNeighbours(
 		gate: GateTree, base: String, layout: Array<String>, touches: Array<ModuleTouch>, lease: Command -> Command
 	): Array<String> {
-		final diff: CodeGraphJson = CodeGraphJsonParser.parse(
-			lease(gate.hxq(gate.tree, ['graph', '--diff', base, 'HEAD'].concat(GRAPH_SCOPE)).timeout(PLAN_TIMEOUT_MS)).check().out
-		);
+		final diff: CodeGraphJson = graphOf(gate, ['--diff', base, 'HEAD'], lease);
 		final seeds: Array<String> = [
 			for (node in diff.nodes)
 				if (
@@ -540,21 +560,14 @@ final class GateArms {
 		];
 		if (seeds.length == 0) return [];
 		final focus: Array<String> = [ for (seed in seeds) for (arg in ['--focus', seed]) arg ];
-		final around: CodeGraphJson = CodeGraphJsonParser.parse(
-			lease(
-				gate.hxq(gate.tree, ['graph', '--level', 'member', '--edges', 'calls', '--radius', '1'].concat(focus).concat(GRAPH_SCOPE))
-					.timeout(PLAN_TIMEOUT_MS)
-			).check().out
-		);
+		final around: CodeGraphJson = graphOf(gate, ['--level', 'member', '--edges', 'calls', '--radius', '1'].concat(focus), lease);
 		return [ for (node in around.nodes) if (node.level == 'member' && !seeds.contains(node.name)) node.name ];
 	}
 
 	/** Whether `record` cuts one of `members` (`<type>.<method>`). */
 	private static function cutsMember(record: ArmRecord, members: Array<String>): Bool {
-		final head: ArmHead = ArmHeadParser.parse(record.text);
-		final type: Null<String> = head.type;
-		final method: Null<String> = head.method;
-		return type != null && method != null && members.contains(ArmTypePath.graphMember(type, method));
+		final cut: Null<String> = cutOf(record);
+		return cut != null && members.contains(cut);
 	}
 
 	/**
