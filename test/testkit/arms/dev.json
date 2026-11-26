@@ -4751,6 +4751,86 @@
 			"find": "line?.touches.contains(FILE)",
 			"replace": "false",
 			"note": "the declaration in the queue line is never seen, so a slice that declared its CLAUDE.md edit fails the gate"
+		},
+		{
+			"name": "M-MOVED-FILES-COVERS-LITERAL",
+			"type": "dev.MovedFiles",
+			"method": "covers",
+			"find": "Glob.expandListed(name, '', [file]).length > 0",
+			"replace": "name == file",
+			"note": "a glob or a directory in the declaration names no file, so each moved file must be spelled out"
+		},
+		{
+			"name": "M-MOVED-FILES-DECLARATION-IN-LOGS",
+			"type": "dev.MovedFiles",
+			"method": "declaration",
+			"find": "Path.directory(Path.removeTrailingSlashes(logs))",
+			"replace": "Path.removeTrailingSlashes(logs)",
+			"note": "the gate reads the declaration from a directory the worker never writes to, so the row can never turn green"
+		},
+		{
+			"name": "M-MOVED-FILES-HUNK-ALL-REGIONS",
+			"type": "dev.MovedFiles",
+			"method": "hunk",
+			"find": "if (row == DeclarationDelta.ELIDED && first.length > 0) break;",
+			"replace": "if (false) break;",
+			"note": "the hunk runs on past the first differing region into every later one, so a file with several changes prints as one long block"
+		},
+		{
+			"name": "M-MOVED-FILES-NO-REASON",
+			"type": "dev.MovedFiles",
+			"method": "named",
+			"find": "if (at < 0) continue;",
+			"replace": "if (at < 0) { names.push(line); break; }",
+			"note": "a path declared with no reason counts as named, so the section the reviewer reads says nothing"
+		},
+		{
+			"name": "M-MOVED-FILES-ONE-SIDED",
+			"type": "dev.MovedFiles",
+			"method": "between",
+			"find": "for (file in base) if (!tip.contains(file)) files.push(file);",
+			"replace": "if (false) files.push('');",
+			"note": "a file the change now leaves alone (listed by the base engine only) is not reported as moved"
+		},
+		{
+			"name": "M-MOVED-FILES-REACHED-ANY",
+			"type": "dev.MovedFiles",
+			"method": "reached",
+			"find": "GateTree.FORMATTER_CONFIGS.contains(file)",
+			"replace": "file.endsWith('hxformat.json')",
+			"note": "a fixture's own formatter config reaches the row and builds the base engine for a slice that cannot move a file"
+		},
+		{
+			"name": "M-MOVED-FILES-READ-TIP-ONLY",
+			"type": "dev.MovedFiles",
+			"method": "read",
+			"find": "final files: Array<String> = between(base, tip);",
+			"replace": "final files: Array<String> = tip;",
+			"note": "a file both engines would rewrite is reported as moved, so the list is the tip's whole set and not what changed"
+		},
+		{
+			"name": "M-MOVED-FILES-SETTLE-UNDECLARED",
+			"type": "dev.MovedFiles",
+			"method": "settle",
+			"find": "FileSystem.exists(declared) ? named(File.getContent(declared)) : []",
+			"replace": "moved",
+			"note": "the row passes with no declaration file, so the section is optional again"
+		},
+		{
+			"name": "M-MOVED-FILES-SKIP-GONE",
+			"type": "dev.MovedFiles",
+			"method": "outcome",
+			"find": "if (!reached(touched)) return Skipped('no writer or formatter config change');",
+			"replace": "if (false) return Passed;",
+			"note": "a slice that touched no writer code builds the base engine and formats two trees"
+		},
+		{
+			"name": "M-MOVED-FILES-VERDICT-BLIND",
+			"type": "dev.MovedFiles",
+			"method": "verdict",
+			"find": "open.length == 0",
+			"replace": "true",
+			"note": "a moved file nobody named leaves the row green, so the worker never has to say why the change moved it"
 		}
 	]
 }

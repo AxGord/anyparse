@@ -685,11 +685,14 @@ final class SliceGate {
 	}
 
 	/**
-	 * The fmt row: the project-config half and the cross-config half. A slice that moves a file the vendored second config needs two
-	 * rewrites for fails here, not in the battery after the merge.
+	 * The fmt row: the project-config half, the cross-config half and the moved-files half. A slice that moves a file the vendored
+	 * second config needs two rewrites for fails here, not in the battery after the merge.
 	 */
 	private function fmtOutcome(): Outcome {
-		return fmtCombined(projectFmtOutcome(), crossConfigFmtOutcome());
+		return fmtCombined(
+			fmtCombined(projectFmtOutcome(), crossConfigFmtOutcome()),
+			MovedFiles.outcome(_gate.tree, _gate.base, _gate.touched, _gate.logs, _gate.summary)
+		);
 	}
 
 	/**
