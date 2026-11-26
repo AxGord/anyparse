@@ -144,9 +144,11 @@ final class BodyFit {
 	 * stacks its own closers under the container's, so it keeps the refusal whatever
 	 * its first line looks like.
 	 *
-	 * A body that renders flat keeps the shared `fitLineLayout` answer behind the rest
-	 * cut, so its width cannot make the head wrap its own iterable call; the glue verdict
-	 * for a body that cannot render flat is the only thing this function decides.
+	 * A body that is itself a link of a clause chain goes through `strictChainGate`, which
+	 * breaks every clause or none, so the head's iterable call is never wrapped to keep the
+	 * chain on the line. A body that renders flat keeps the shared `fitLineLayout` answer;
+	 * the glue verdict for a body that cannot render flat is the only thing this function
+	 * decides.
 	 */
 	public static function strictFitLineLayout(cols: Int, body: Doc, lineWidth: Int, keywordLedBody: Bool): Doc {
 		return if (WrapList.flatLength(body) != -1)
@@ -154,7 +156,10 @@ final class BodyFit {
 		else if (!keywordLedBody || lineWidth <= 0)
 			breakLayout(cols, body);
 		else
-			Doc.IfNaturalFirstLineFitsOpenDelim(lineWidth, breakLayout(cols, body), Doc.Concat([Doc.OptSpace(' '), body]));
+			strictChainGate(
+				cols, body, Doc.IfNaturalFirstLineFitsOpenDelim(lineWidth, breakLayout(cols, body), Doc.Concat([Doc.OptSpace(' '), body])),
+				lineWidth
+			);
 	}
 
 	/**
@@ -308,9 +313,7 @@ final class BodyFit {
 		final second: Null<Doc> = chainBodyInner(body);
 		if (second == null) return sameLine;
 		if (chainBodyInner(second) == null) return chainHeadGate(cols, body, second, sameLine, lineWidth);
-		final charged: Int = DocMeasure.flatFirstLineWidthThroughBodyGroup(body);
-		final n: Int = lineWidth + DocMeasure.flatTokenWidth(sameLine) - charged;
-		return Doc.IfLineExceeds(n, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), forceChainBreaks(body)])), sameLine);
+		return chainBreakGate(body, sameLine, lineWidth, Doc.Nest(cols, Doc.Concat([Doc.Line('\n'), forceChainBreaks(body)])));
 	}
 
 	/** Index of the last element of `items` that is not an `Empty` placeholder, or `-1`. */
@@ -644,6 +647,58 @@ final class BodyFit {
 			case _:
 				return null;
 		}
+	}
+
+	/**
+	 * The all-or-nothing answer for a keyword-led body that is itself a link of a chain (`for … for … if … {`): when the
+	 * whole chain head, flat through the `{` that ends it, does not fit the line, every clause takes its own line one
+	 * indent deeper. Left to the per-link glue probe each link decides alone, so the first clause keeps the line and the
+	 * last one breaks inside its own condition. A body that is not a link keeps `sameLine`.
+	 */
+	private static function strictChainGate(cols: Int, body: Doc, sameLine: Doc, lineWidth: Int): Doc {
+		return strictTail(body) == null
+			? sameLine
+			: chainBreakGate(body, sameLine, lineWidth - 1, breakLayout(cols, forceStrictBreaks(body)));
+	}
+
+	/** The `strictFitLineLayout` glue probe at the tail of `d`, or `null`. */
+	private static function strictTail(d: Doc): Null<Doc> {
+		return switch d {
+			case Doc.IfNaturalFirstLineFitsOpenDelim(_, _, _): d;
+			// A link `strictChainGate` already claimed carries its probe on the same-line branch.
+			case Doc.IfLineExceeds(_, _, fl): strictTail(fl);
+			case Doc.Concat(items):
+				final i: Int = lastNonEmptyIdx(items);
+				i < 0 ? null : strictTail(items[i]);
+			case _: null;
+		};
+	}
+
+	/** `d` with the glue probe at its tail, and at the tails of the links below it, replaced by its break layout. */
+	private static function forceStrictBreaks(d: Doc): Doc {
+		return forceStrictTail(d) ?? d;
+	}
+
+	private static function forceStrictTail(d: Doc): Null<Doc> {
+		return switch d {
+			case Doc.IfNaturalFirstLineFitsOpenDelim(_, Doc.Nest(n, Doc.Concat([line, inner])), _):
+				Doc.Nest(n, Doc.Concat([line, forceStrictBreaks(inner)]));
+			// The forced form of a link that already carries the gate IS its own break branch.
+			case Doc.IfLineExceeds(_, brk, fl) if (strictTail(fl) != null): brk;
+			case Doc.Concat(items): rebuiltTail(items, forceStrictTail);
+			case _: null;
+		};
+	}
+
+	/**
+	 * The one threshold both chain gates share: `breakDoc` when the chain head `body`, flat through the `{` or statement
+	 * that ends it, no longer fits `limit` columns. The arithmetic is static: `flatTokenWidth(sameLine)` cancels against the
+	 * same measure the probe takes at render time, leaving the head width the `BodyGroup` deferral hides. The strict glue
+	 * probe counts a line landing ON the limit as too wide, so its gate passes `lineWidth - 1`.
+	 */
+	private static function chainBreakGate(body: Doc, sameLine: Doc, limit: Int, breakDoc: Doc): Doc {
+		final charged: Int = DocMeasure.flatFirstLineWidthThroughBodyGroup(body);
+		return Doc.IfLineExceeds(limit + DocMeasure.flatTokenWidth(sameLine) - charged, breakDoc, sameLine);
 	}
 
 }

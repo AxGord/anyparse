@@ -805,6 +805,30 @@
 			"find": "!(innerSelfTerminates(value) && spineTerminated(value))",
 			"replace": "!innerSelfTerminates(value)",
 			"note": "a block wrapped around a loop or an if/else whose last statement the else closed writes no `;`, so the braced form does not compile"
+		},
+		{
+			"name": "M-STRICT-CHAIN-GATE",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictChainGate",
+			"find": "return strictTail(body) == null",
+			"replace": "return true",
+			"note": "a wide keyword-led clause chain goes back to the per-link glue probe: the first clause keeps the line and the last one breaks inside its own condition"
+		},
+		{
+			"name": "M-STRICT-CHAIN-ALWAYS-BREAK",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictChainGate",
+			"find": "chainBreakGate(body, sameLine, lineWidth - 1,",
+			"replace": "chainBreakGate(body, sameLine, -1000,",
+			"note": "a keyword-led clause chain breaks between its clauses whatever its width, so a head that fits no longer hugs its brackets"
+		},
+		{
+			"name": "M-STRICT-CHAIN-LIMIT-OFF-BY-ONE",
+			"type": "anyparse.format.BodyFit",
+			"method": "strictChainGate",
+			"find": "lineWidth - 1,",
+			"replace": "lineWidth,",
+			"note": "the chain gate counts a head landing exactly on the limit as fitting while the per-link glue probe does not, so the clauses break after the first only"
 		}
 	]
 }
