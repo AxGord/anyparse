@@ -188,8 +188,8 @@
 		},
 		{
 			"name": "M-RCMP-ANY-CALL",
-			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
-			"method": "matches",
+			"type": "anyparse.check.haxe.expressions.SortComparatorWalk",
+			"method": "each",
 			"find": "callee.name == SORT",
 			"replace": "true",
 			"note": "every two-parameter function literal passed to any call is read as a comparator, whose exact -1 / 1 a caller outside a sort may read"
@@ -609,11 +609,35 @@
 		},
 		{
 			"name": "M-PCF-SUB-ANY-CALL",
-			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
-			"method": "matches",
+			"type": "anyparse.check.haxe.expressions.SortComparatorWalk",
+			"method": "each",
 			"find": "callee.name == SORT",
 			"replace": "true",
 			"note": "a two-parameter callback of any call is read as a comparator"
+		},
+		{
+			"name": "M-SCW-WALK-ANY-CALL",
+			"type": "anyparse.check.haxe.expressions.SortComparatorWalk",
+			"method": "each",
+			"find": "callee.name == SORT",
+			"replace": "true",
+			"note": "the arguments of every call with a field callee are visited, not only those of sort"
+		},
+		{
+			"name": "M-SCW-COMPARATOR-ARITY",
+			"type": "anyparse.check.haxe.expressions.SortComparatorWalk",
+			"method": "isComparator",
+			"find": "== COMPARATOR_PARAMS",
+			"replace": "!= COMPARATOR_PARAMS",
+			"note": "a function literal is a comparator by any parameter count but two"
+		},
+		{
+			"name": "M-SCW-ELEMENT-INNER",
+			"type": "anyparse.check.haxe.expressions.SortComparatorWalk",
+			"method": "elementResolver",
+			"find": "NominalTypes.outerNominalOf(element, plugin.typeSyntax)",
+			"replace": "element",
+			"note": "the element type is answered whole, so Null<T> elements answer Null<T> instead of Null"
 		}
 	]
 }

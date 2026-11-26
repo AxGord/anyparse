@@ -153,17 +153,11 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** A `Reflect.compare` call's children: its callee and two operands. */
 	private static inline final OPERANDS_CALL: Int = 3;
 
-	/** A callback of this many parameters is a comparator. */
-	private static inline final COMPARATOR_PARAMS: Int = 2;
-
 	/** The operands of a binary operator. */
 	private static inline final BINARY_OPERANDS: Int = 2;
 
 	/** A chain of this many comparisons, then a terminal value, is a three-way comparison. */
 	private static inline final RUNGS: Int = 2;
-
-	/** The method whose callback is read for its sign only. */
-	private static final SORT: String = 'sort';
 
 	/** The node a call-site `inline` projects as. */
 	private static final INLINE_EXPR: String = 'InlineExpr';
@@ -303,7 +297,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 				typed = purity == null || nominal == null || written == null ? null : {
 					purity: purity,
 					nominal: nominal,
-					element: elementResolver(written, seams, plugin),
+					element: SortComparatorWalk.elementResolver(written, seams.shape, plugin),
 					nonNull: operand -> TypeResolver.isProvablyNonNull(operand, tree, seams.shape, nullity),
 					elementNonNull: elementProof(tree, seams),
 					isStdReflect: type -> !NominalTypes.shadowedByNonStdType(idx, REFLECT) && !isBoundHere(type, tree, seams)
@@ -311,24 +305,13 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 			}
 			return typed;
 		}
-		function walk(node: QueryNode): Void {
-			final callee: Null<QueryNode> = node.children[0];
-			if (
-				node.kind == seams.callKind && callee != null && callee.kind == seams.fieldAccessKind && callee.name == SORT
-			) for (arg in node.children) {
-				if (isComparator(arg, seams))
-					fromCallback(arg, source, regions, seams, typing, comments, named, out);
-				else if (!named.isEmpty() && isReflectCompare(arg, seams))
-					fromBareReference(callee, arg, typing, named, out);
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
+		SortComparatorWalk.each(tree, seams, (callee, arg) -> {
+			if (SortComparatorWalk.isComparator(arg, seams))
+				fromCallback(arg, source, regions, seams, typing, comments, named, out);
+			else if (!named.isEmpty() && isReflectCompare(arg, seams))
+				fromBareReference(callee, arg, typing, named, out);
+		});
 		return out;
-	}
-
-	private static function isComparator(node: QueryNode, s: Seams): Bool {
-		return s.lambdaKinds.contains(node.kind) && node.children.count(c -> s.paramKinds.contains(c.kind)) == COMPARATOR_PARAMS;
 	}
 
 	/** The comparisons a callback's body holds: its value, a returned value, or the statements closing it. */
@@ -679,23 +662,11 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 	/** Whether `left` and `right` are the two plain parameters of `fn`, read in the order they are declared. */
 	private static function comparesParameters(fn: QueryNode, left: QueryNode, right: QueryNode, s: Seams): Bool {
 		final params: Array<QueryNode> = fn.children.filter(c -> s.paramKinds.contains(c.kind));
-		return params.length == COMPARATOR_PARAMS
+		return params.length == SortComparatorWalk.COMPARATOR_PARAMS
 			&& params.foreach(p -> p.kind != s.shape.optionalParamKind && p.kind != s.shape.restParamKind && p.children.length == 0)
 			&& left.kind == s.identKind && right.kind == s.identKind
 			&& left.name == params[0].name
 			&& right.name == params[1].name;
-	}
-
-	/** The bare type name of the elements of a receiver, as `written` answers its type: `Null<T>` elements answer `Null`, never `T`. */
-	private static function elementResolver(
-		written: (QueryNode) -> Null<String>, s: Seams, plugin: GrammarPlugin
-	): (QueryNode) -> Null<String> {
-		final params: Map<String, Int> = s.shape.indexedElementTypeParams ?? [];
-		return receiver -> {
-			final source: Null<String> = written(receiver);
-			final element: Null<String> = source == null ? null : NominalTypes.elementTypeSourceOf(source, params, [], plugin.typeSyntax);
-			return element == null ? null : NominalTypes.outerNominalOf(element, plugin.typeSyntax);
-		};
 	}
 
 	private static function spanKey(span: Null<Span>): String {
