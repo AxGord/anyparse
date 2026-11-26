@@ -89,6 +89,7 @@ states:
     full_on_revisit: true
     max_visits: 3
     on_exhausted: blocked
+    delivers: { key: report_text, tokens: tokens_worker, agent: investigator_agent }
     prompt: |-
       {{stderr}}
       Research line {{context.slice}}: one investigator reads its line, answers the question in a report. Worktree {{context.wt}}, detached at the commit in {{context.wt}}-logs/pinned.txt.
@@ -109,7 +110,7 @@ states:
            Before that last message nothing you started may still run: wait for every background command, Monitor or `&` job you started, or stop it (a live one keeps your turn from ending, and the driver never hears of your report).
            Your LAST message is exactly `REPORT context report_text`.
 
-      2. context_set `investigator_agent` = the id Agent returned. END your turn on this line with the WAITING line. On its notification, context_set `tokens_worker` (digits only, the notification's context size), then transition `reported`.
+      2. context_set `investigator_agent` = the id Agent returned. END your turn on this line with the WAITING line. Its `context_set` of report_text is the delivery: on a `DELIVERY:` line naming report_text, or on its notification, whichever comes first, transition `reported` (the engine fills `tokens_worker` from its transcript; only a notification with no DELIVERY line before it: context_set `tokens_worker` yourself, digits only, the notification's context size).
       A later visit of this state means the previous investigator is gone (a restart or an agent that left no report): spawn it again the same way.
     transitions:
       reported: check
