@@ -272,8 +272,8 @@
 			"name": "M-LAND-ADVANCE-RESETS-HARD",
 			"type": "dev.LandCandidate",
 			"method": "advance",
-			"find": "main(['merge', '--ff-only', '--quiet', candidate])",
-			"replace": "main(['reset', '--hard', candidate])",
+			"find": "main(['merge', '--ff-only', '--quiet', landed])",
+			"replace": "main(['reset', '--hard', landed])",
 			"note": "main is moved by a hard reset instead of a fast-forward, so what the user edited in main's checkout while the landing ran is lost"
 		},
 		{
@@ -334,7 +334,7 @@
 			"type": "dev.Land",
 			"method": "commit",
 			"find": "_summary.detail(_candidate.made());",
-			"replace": "{ _summary.detail(_candidate.made()); _candidate.advance(); }",
+			"replace": "{ _summary.detail(_candidate.made()); _candidate.advance(_summary.detail); }",
 			"note": "main is moved to the candidate as soon as it is committed, so a red battery leaves the landing on main as before"
 		},
 		{
@@ -4647,6 +4647,54 @@
 			"find": "if (path == '' || Path.isAbsolute(path) || path.startsWith('..'))",
 			"replace": "if (false)",
 			"note": "a path outside the tree or an empty one reaches git add"
+		},
+		{
+			"name": "M-LAND-FOLLOW-NEVER",
+			"type": "dev.LandCandidate",
+			"method": "follow",
+			"find": "if (!TolerantPaths.ancestor(",
+			"replace": "if (true || !TolerantPaths.ancestor(",
+			"note": "a main that moved on by commits no test reads is refused like any other, so the landing is redone in full"
+		},
+		{
+			"name": "M-LAND-FOLLOW-ANY-MOVE",
+			"type": "dev.LandCandidate",
+			"method": "follow",
+			"find": "|| !TolerantPaths.onlyBetween(_repo, before, head)",
+			"replace": "|| false",
+			"note": "a main that moved on by any commit is followed, so a source change nobody judged lands under a battery that never saw it"
+		},
+		{
+			"name": "M-LAND-FOLLOW-NOT-AHEAD",
+			"type": "dev.LandCandidate",
+			"method": "follow",
+			"find": "!TolerantPaths.ancestor(_repo, before, head) ||",
+			"replace": "false ||",
+			"note": "a main taken back is followed too, so a commit the user took off main comes back with the candidate"
+		},
+		{
+			"name": "M-TOLERANT-SNAPSHOT-ANY-ANCESTOR",
+			"type": "dev.TolerantPaths",
+			"method": "snapshotBefore",
+			"find": "if (!onlyBetween(repo, ancestor, head)) return null;",
+			"replace": "if (false) return null;",
+			"note": "a snapshot behind a commit that changed a source file is borrowed too, so a base is judged against numbers of another tree"
+		},
+		{
+			"name": "M-TOLERANT-SNAPSHOT-NEVER",
+			"type": "dev.TolerantPaths",
+			"method": "snapshotBefore",
+			"find": ".slice(1)",
+			"replace": ".slice(1000)",
+			"note": "no ancestor is looked at, so a base after a docs commit has no snapshot and a whole battery is run to make one"
+		},
+		{
+			"name": "M-LAND-BASE-CARRY-NEVER",
+			"type": "dev.Land",
+			"method": "baseSnapshot",
+			"find": "TolerantPaths.snapshotBefore(_repo, head, request.cache)",
+			"replace": "null",
+			"note": "a base behind commits no test reads has no snapshot, so a whole battery is run inside the lock to make one"
 		}
 	]
 }

@@ -801,6 +801,20 @@ final class Battery {
 		};
 	}
 
+	/**
+	 * What an impact run could not measure, taken from the snapshot it compared with: the sweep (no corpus case ran, so the
+	 * corpus is the base's) and provisionally the suite counts, which the whole suite after the land rewrites. `whole` carries the
+	 * lint snapshots too, for a commit whose tree no test tells from the one the snapshot was taken of. A snapshot with no suite
+	 * line does not exist for the next land, which would then measure its base in full.
+	 */
+	public static function carryOver(from: String, to: String, swept: Bool, whole: Bool = false): Void {
+		if (whole)
+			for (suffix in ['-anyparse.json', '-client.json'])
+				if (FileSystem.exists('$from$suffix')) File.copy('$from$suffix', '$to$suffix');
+		if (!swept && FileSystem.exists('$from-sweep.json')) File.copy('$from-sweep.json', '$to-sweep.json');
+		if (FileSystem.exists('$from-suite.txt')) File.copy('$from-suite.txt', '$to-suite.txt');
+	}
+
 	/** The shard count `text` names; anything but a positive integer is a usage error. */
 	private static function shardCount(text: String): Int {
 		final shards: Null<Int> = Std.parseInt(text);
@@ -840,16 +854,6 @@ final class Battery {
 		} catch (_: Exception) {
 			return false;
 		}
-	}
-
-	/**
-	 * What an impact run could not measure, taken from the snapshot it compared with: the sweep (no corpus case ran, so the
-	 * corpus is the base's) and provisionally the suite counts, which the whole suite after the land rewrites. A snapshot with
-	 * no suite line does not exist for the next land, which would then measure its base in full.
-	 */
-	private static function carryOver(from: String, to: String, swept: Bool): Void {
-		if (!swept && FileSystem.exists('$from-sweep.json')) File.copy('$from-sweep.json', '$to-sweep.json');
-		if (FileSystem.exists('$from-suite.txt')) File.copy('$from-suite.txt', '$to-suite.txt');
 	}
 
 }

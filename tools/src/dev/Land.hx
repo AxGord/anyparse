@@ -287,7 +287,7 @@ final class Land {
 			{ name: 'fmt', step: _format.run },
 			{ name: 'commit', step: commit.bind(message, reapply) },
 			{ name: 'battery', step: () -> runBattery(battery, claimed -> landing = claimed, batteryRows) },
-			{ name: 'advance', step: _candidate.advance },
+			{ name: 'advance', step: () -> _candidate.advance(_summary.detail) },
 			{ name: 'binaries', step: install },
 			{ name: 'prose-refs', step: _prose.run },
 			{
@@ -513,6 +513,12 @@ final class Land {
 	private function baseSnapshot(request: BatteryRequest, base: String, head: String, rows: String): Outcome {
 		final file: String = Path.join([request.cache, '$base-suite.txt']);
 		if (FileSystem.exists(file)) return Passed;
+		final from: Null<String> = TolerantPaths.snapshotBefore(_repo, head, request.cache);
+		if (from != null) {
+			Battery.carryOver(Path.join([request.cache, from]), Path.join([request.cache, base]), false, true);
+			_summary.detail('base $base carries the snapshot of $from — the commits between touch only paths no test reads');
+			return Passed;
+		}
 		final tree: String = Path.join([_logs, 'base-$base']);
 		dropTree(tree);
 		final added: Result = git(['worktree', 'add', '--detach', tree, head]);

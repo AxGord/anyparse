@@ -25,6 +25,9 @@ final class LandCandidate {
 	/** Whether main was fast-forwarded to the candidate. */
 	public var advanced(default, null): Bool = false;
 
+	/** The commit the battery judged, when main moved on by commits no test reads and the candidate was picked onto it; else null. */
+	public var rebasedFrom(default, null): Null<String> = null;
+
 	/** The directory of the candidate tree. */
 	public final tree: String;
 
@@ -59,17 +62,24 @@ final class LandCandidate {
 
 	/**
 	 * Main's checkout fast-forwarded to the candidate commit. Refused while main is not at the commit the candidate grew from
-	 * (a fast-forward from an older commit would bring back what was taken off main), and by git when the move would
-	 * overwrite a file changed in main's checkout; a refusal leaves main as it is.
+	 * (a fast-forward from an older commit would bring back what was taken off main), unless main only moved on by commits
+	 * touching `TolerantPaths` alone: the candidate is then picked onto main and `rebasedFrom` names the commit judged. Also
+	 * refused by git when the move would overwrite a file changed in main's checkout; a refusal leaves main as it is.
 	 */
-	public function advance(): Outcome {
+	public function advance(note: String -> Void): Outcome {
 		final candidate: Null<String> = commit;
 		if (candidate == null) return Failed('no candidate commit to move main to');
 		final head: String = main(['rev-parse', 'HEAD']).out.trim();
-		if (head != before) return Failed('main moved since the landing began (${short(before)} is now ${short(head)}) — not advanced');
-		final moved: Result = main(['merge', '--ff-only', '--quiet', candidate]);
+		if (head != before) {
+			final stopped: Null<String> = follow(head, candidate);
+			if (stopped != null) return Failed(stopped);
+		}
+		final landed: String = commit ?? candidate;
+		final moved: Result = main(['merge', '--ff-only', '--quiet', landed]);
 		if (!moved.ok) return Failed('`git merge --ff-only` refused: ${moved.firstError()} — main is as it was');
 		advanced = true;
+		if (rebasedFrom != null)
+			note('main moved on by commits that touch only paths no test reads — the candidate was picked onto it, not judged again');
 		return Passed;
 	}
 
@@ -99,6 +109,31 @@ final class LandCandidate {
 
 	private function short(sha: String): String {
 		return main(['rev-parse', '--short', sha]).out.trim();
+	}
+
+	/**
+	 * The candidate picked onto `head`, main as it moved on by commits that touch only `TolerantPaths`; answers why it is not,
+	 * or null. The tree is left at the candidate it was when the pick does not apply.
+	 */
+	private function follow(head: String, candidate: String): Null<String> {
+		final stopped: String = 'main moved since the landing began (${short(before)} is now ${short(head)}) — not advanced';
+		if (!TolerantPaths.ancestor(_repo, before, head) || !TolerantPaths.onlyBetween(_repo, before, head)) return stopped;
+		final onto: Result = detach(head);
+		if (!onto.ok) return '$stopped: ${onto.firstError()}';
+		final picked: Result = git(['cherry-pick', candidate]);
+		if (!picked.ok) {
+			final restored: Bool = git(['cherry-pick', '--abort']).ok && detach(candidate).ok;
+			return
+				'$stopped: the candidate does not apply onto it: ${picked.firstError()}${restored ? '' : ' (its tree is left mid-pick)'}';
+		}
+		rebasedFrom = candidate;
+		commit = git(['rev-parse', 'HEAD']).out.trim();
+		return null;
+	}
+
+	/** The candidate tree's HEAD moved to `rev`, quietly. */
+	private function detach(rev: String): Result {
+		return git(['checkout', '--quiet', '--detach', rev]);
 	}
 
 }

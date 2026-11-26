@@ -26,6 +26,22 @@
 			"find": "File.saveContent(Path.join([tree, 'src/keep']), tree);",
 			"replace": "File.saveContent(Path.join([tree, 'src/keep']), '');",
 			"note": "two scratch trees made in one second share a base commit and with it a baseline cache entry"
+		},
+		{
+			"name": "M-TOLERANT-HONESTY-BLIND",
+			"type": "unit.dev.TolerantPathsHonestyTest",
+			"method": "names",
+			"find": "for (tolerated in TolerantPaths.PATHS) if (text.contains(tolerated) ||",
+			"replace": "for (tolerated in TolerantPaths.PATHS) if (false ||",
+			"note": "a path spelled whole in a literal is not seen, so a test that reads one of the tolerated paths goes unnoticed"
+		},
+		{
+			"name": "M-TOLERANT-HONESTY-LEDGER-BLIND",
+			"type": "unit.dev.TolerantPathsHonestyTest",
+			"method": "testNoTestNamesTheLedgerThroughItsConstantBeyondTheRecordedFixtures",
+			"find": "node.name == 'LEDGER'",
+			"replace": "node.name == 'NO-SUCH-NAME'",
+			"note": "the ledger named through its constant is not seen, so a test that reads docs/decisions.md that way goes unnoticed"
 		}
 	]
 }
