@@ -425,7 +425,9 @@ final class LintCommand implements CliCommand {
 		// A MAP, not an array: the library always carries the std files, so a linear `contains` over
 		// the report would be one string compare per (report x library) pair, for a lookup that is
 		// answered in one hash.
-		final reportPaths: Map<String, Bool> = [ for (f in files) FileIdentity.realPath(f.file) => true ];
+		// One run asks the identity of a file at every dedup below; each is resolved once.
+		final identity: (String) -> String = FileIdentity.memoised();
+		final reportPaths: Map<String, Bool> = [ for (f in files) identity(f.file) => true ];
 		var projectRoots: Null<Array<{ file: String, source: String }>> = null;
 		var library: Null<Array<{ file: String, source: String }>> = null;
 		var declaredLibrary: Null<Array<{ file: String, source: String }>> = null;
@@ -438,7 +440,7 @@ final class LintCommand implements CliCommand {
 				final memoised: Null<Array<{ file: String, source: String }>> = library;
 				if (memoisedRoots == null || memoised == null) {
 					final read: { files: Array<{ file: String, source: String }>, matched: Bool, allMatched: Bool } = readResolutionRoots(
-						lang, roots, reportPaths, ledger
+						lang, roots, reportPaths, ledger, identity
 					);
 					final rootFiles: Array<{ file: String, source: String }> = read.files;
 					rootsMatched = read.matched;
@@ -448,7 +450,7 @@ final class LintCommand implements CliCommand {
 					// process-scoped parse tier keeps promoting exactly what it did, and it stays ONE
 					// memoised array instance (`SharedParseTier.promote` keys on the instance).
 					final libraryRead: { declared: Array<{ file: String, source: String }>, std: Array<{ file: String, source: String }> } =
-						readResolutionLibrary(lang, libNames, stdEnabled, reportPaths, rootFiles);
+						readResolutionLibrary(lang, libNames, stdEnabled, reportPaths, rootFiles, identity);
 					declaredLibrary = rootFiles.concat(libraryRead.declared);
 					library = rootFiles.concat(libraryRead.declared).concat(libraryRead.std);
 				}
@@ -559,7 +561,7 @@ final class LintCommand implements CliCommand {
 	 * spells (`speed`, `panel`, `timer`, `ready`, `names`) and gains none.
 	 */
 	private static function readResolutionRoots(
-		lang: String, roots: Array<String>, reportPaths: Map<String, Bool>, ledger: RunLedger
+		lang: String, roots: Array<String>, reportPaths: Map<String, Bool>, ledger: RunLedger, identity: (String) -> String
 	): { files: Array<{ file: String, source: String }>, matched: Bool, allMatched: Bool } {
 		// Expanded per ROOT rather than in one call, so a root that matches nothing can be NAMED.
 		// A declared root resolving to no file of the grammar — a typo, a directory since moved, a path written
@@ -580,8 +582,8 @@ final class LintCommand implements CliCommand {
 				unreachable.push(root);
 				continue;
 			}
-			for (entry in readExpanded(paths, seen)) {
-				seen[FileIdentity.realPath(entry.file)] = true;
+			for (entry in readExpanded(paths, seen, identity)) {
+				seen[identity(entry.file)] = true;
 				out.push(entry);
 			}
 		}
@@ -606,7 +608,7 @@ final class LintCommand implements CliCommand {
 	 */
 	private static function readResolutionLibrary(
 		lang: String, libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>,
-		alreadyRead: Array<{ file: String, source: String }>
+		alreadyRead: Array<{ file: String, source: String }>, identity: (String) -> String
 	): { declared: Array<{ file: String, source: String }>, std: Array<{ file: String, source: String }> } {
 		// Resolve the declared haxelib NAMES to source dirs ON FIRST DEMAND ONLY — the
 		// `haxelib libpath` spawn lives here, reached only through the thunk, never in its
@@ -639,23 +641,25 @@ final class LintCommand implements CliCommand {
 			? []
 			: [ for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) spec ];
 		final exclude: Map<String, Bool> = reportPaths.copy();
-		for (entry in alreadyRead) exclude[FileIdentity.realPath(entry.file)] = true;
-		final declared: Array<{ file: String, source: String }> = readResolutionSources(lang, scanRoots, exclude);
-		for (entry in declared) exclude[FileIdentity.realPath(entry.file)] = true;
-		return { declared: declared, std: stdSpecs.length == 0 ? [] : readResolutionSources(lang, stdSpecs, exclude) };
+		for (entry in alreadyRead) exclude[identity(entry.file)] = true;
+		final declared: Array<{ file: String, source: String }> = readResolutionSources(lang, scanRoots, exclude, identity);
+		for (entry in declared) exclude[identity(entry.file)] = true;
+		return { declared: declared, std: stdSpecs.length == 0 ? [] : readResolutionSources(lang, stdSpecs, exclude, identity) };
 	}
 
 	/** Every file of grammar `lang` matched by `specs`, read, skipping any whose `realPath` is in `exclude` and any that cannot be read. */
 	private static function readResolutionSources(
-		lang: String, specs: Array<String>, exclude: Map<String, Bool>
+		lang: String, specs: Array<String>, exclude: Map<String, Bool>, identity: (String) -> String
 	): Array<{ file: String, source: String }> {
-		return readExpanded(CliArgs.expandFor(lang, specs).paths, exclude);
+		return readExpanded(CliArgs.expandFor(lang, specs).paths, exclude, identity);
 	}
 
 	/** Read each of `paths`, skipping any whose `realPath` is in `exclude` and any that cannot be read. */
-	private static function readExpanded(paths: Array<String>, exclude: Map<String, Bool>): Array<{ file: String, source: String }> {
+	private static function readExpanded(
+		paths: Array<String>, exclude: Map<String, Bool>, identity: (String) -> String
+	): Array<{ file: String, source: String }> {
 		final out: Array<{ file: String, source: String }> = [];
-		for (path in paths) if (!exclude.exists(FileIdentity.realPath(path))) {
+		for (path in paths) if (!exclude.exists(identity(path))) {
 			final src: Null<String> = try CliIo.readSourceForParse(path) catch (exception: Exception) null;
 			if (src != null) out.push({ file: path, source: src });
 		}

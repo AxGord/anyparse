@@ -86,6 +86,24 @@ final class ParseDiskCache {
 		#end
 	}
 
+	/** Whether this cache reads and writes at all: false when it is switched off or its directory cannot be made. */
+	public function open(): Bool {
+		return #if (sys || nodejs) directoryOrNull() != null #else false #end;
+	}
+
+	/**
+	 * Whether an entry is stored for `file`, of whatever text: one file test, no read, for a caller that defers the
+	 * `lookup` until the projections are asked and takes a miss then.
+	 */
+	public function holds(file: String): Bool {
+		#if (sys || nodejs)
+		final directory: Null<String> = directoryOrNull();
+		return directory != null && sys.FileSystem.exists(entryPath(directory, file));
+		#else
+		return false;
+		#end
+	}
+
 	/** Keep `tree` and `spans` as the projections of `source` at `file`, replacing what the entry held; a failure is silent. */
 	public function store(file: String, source: String, tree: QueryNode, spans: Null<SpanTypeInfo>): Void {
 		#if (sys || nodejs)

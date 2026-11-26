@@ -136,7 +136,8 @@ final class SymbolIndexBuilder {
 	 * Parse every entry with `plugin` and extract its `FileInfo`. Entries whose source does not
 	 * parse are collected into `skipped` and excluded; every parsed entry's source is retained in
 	 * `sources` so a later body scan can inspect a declaration's raw span. The three results are
-	 * exactly the state `SymbolIndex`'s constructor takes.
+	 * exactly the state `SymbolIndex`'s constructor takes. With a `store`, a file whose `FileInfo` it holds for these bytes
+	 * is neither parsed nor walked, and one it misses is kept: the record is file-local, the ambient pass runs over both.
 	 */
 	public static function extract(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?store: ProjectParseStore
@@ -149,21 +150,30 @@ final class SymbolIndexBuilder {
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		final memberSeams: MemberSeams = SymbolIndexMembers.memberSeamsOf(shape);
 		for (entry in files) {
-			final stored: Null<StoredProjections> = store?.seat(entry.file, entry.source);
-			final storedSpans: Null<SpanTypeInfo> = stored?.spans;
-			final tree: Null<QueryNode> = stored?.tree ?? (try plugin.parseFile(entry.source) catch (_: Exception) null);
 			// The SOURCE is retained for a skipped file too. Nothing structural can be read from
 			// it, but its raw text still answers the one question every confinement gate asks —
 			// could this file reference the member at all — and that turns a whole-project veto
 			// into a per-member one (`RawSourceScan.skippedMayReference`).
 			sources[entry.file] = entry.source;
+			final kept: Null<FileInfo> = store?.declarations(entry.file, entry.source);
+			if (kept != null) {
+				infos.push(kept);
+				continue;
+			}
+			final stored: Null<StoredProjections> = store?.seat(entry.file, entry.source);
+			final storedSpans: Null<SpanTypeInfo> = stored?.spans;
+			final tree: Null<QueryNode> = stored?.tree ?? (try plugin.parseFile(entry.source) catch (_: Exception) null);
 			if (tree == null) {
 				skipped.push(entry.file);
 				continue;
 			}
 			final spans: SpanTypeInfo = storedSpans ?? spanInfoOf(plugin, provider, entry.source);
 			if (storedSpans == null) store?.keep(entry.file, entry.source, tree, spans);
-			infos.push(extractFileInfo(entry.file, entry.source, tree, spans, shape, memberSeams, abstractKinds, plugin.typeSyntax));
+			final info: FileInfo = extractFileInfo(
+				entry.file, entry.source, tree, spans, shape, memberSeams, abstractKinds, plugin.typeSyntax
+			);
+			store?.keepDeclarations(info, entry.source);
+			infos.push(info);
 		}
 		attachAmbientImports(infos, plugin, shape, memberSeams, abstractKinds, provider);
 		return { files: infos, skipped: skipped, sources: sources };
@@ -1098,8 +1108,7 @@ final class SymbolIndexBuilder {
 	): Void {
 		final chains: Map<String, AmbientImports> = [];
 		final extracted: Map<String, Null<Array<ImportInfo>>> = [];
-		final identities: Map<String, String> = [];
-		final identity: (String) -> String = path -> identities[path] ?? (identities[path] = FileIdentity.realPath(path));
+		final identity: (String) -> String = FileIdentity.memoised();
 		for (fi in infos) {
 			final key: String = '${Path.directory(fi.file)}#${fi.pkg}';
 			var chain: Null<AmbientImports> = chains[key];

@@ -36,6 +36,33 @@ class FileIdentityTest extends Test {
 		#end
 	}
 
+	/**
+	 * A memoised identity answers a spelling as `realPath` did when it was first asked, and keeps that answer while the
+	 * caller holds it: a link turned to another target since is seen by `realPath` and by a new memo, not by the old one.
+	 */
+	@:pin('control')
+	@:killer('M-FILE-IDENTITY-MEMO-FORGETS')
+	public function testMemoisedAnswersEachSpellingOnce(): Void {
+		#if nodejs
+		final dir: String = CliFixture.writeTree('fileidentitymemo', [
+			{ name: 'one/A.hx', source: 'class A {}\n' },
+			{ name: 'two/A.hx', source: 'class A {}\n' }
+		]);
+		js.node.Fs.symlinkSync('$dir/one', '$dir/link');
+		final identity: (String) -> String = FileIdentity.memoised();
+		final first: String = identity('$dir/link/A.hx');
+		Assert.equals(FileIdentity.realPath('$dir/one/A.hx'), first, 'the first answer is the realPath');
+		js.node.Fs.unlinkSync('$dir/link');
+		js.node.Fs.symlinkSync('$dir/two', '$dir/link');
+		Assert.equals(first, identity('$dir/link/A.hx'), 'the memo keeps it');
+		Assert.equals(FileIdentity.realPath('$dir/two/A.hx'), FileIdentity.memoised()('$dir/link/A.hx'), 'a new memo sees the link move');
+		js.node.Fs.unlinkSync('$dir/link');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('symlinks need the node target');
+		#end
+	}
+
 	/** A file that does not exist yet resolves its nearest existing ancestor, so it keys like the file it will become. */
 	@:pin('control')
 	@:killer('M-FILE-IDENTITY-ANCESTOR')

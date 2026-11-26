@@ -46,8 +46,11 @@ final class ReachRow {
 	/** The one edge kind that is no call: a type holding a member. */
 	private static final CONTAINS: String = 'contains';
 
-	/** The outline row of a declaration: its indent, kind and name. */
-	private static final OUTLINE_ROW: EReg = ~/^\d+-\d+  ( *)(\w+):(\S+)/;
+	/**
+	 * The outline row of a declaration: its indent, kind and name. A name its file declares twice is addressed through its type
+	 * (`ClassForm:T >> FnMember:new`), and the last step is the row's own.
+	 */
+	private static final OUTLINE_ROW: EReg = ~/^\d+-\d+  ( *)(?:\S+ >> )*(\w+):(\S+)/;
 
 	private static final TYPE_KINDS: Array<String> = ['ClassForm', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl'];
 	private static final CONSTRUCTOR: String = 'new';

@@ -39,6 +39,15 @@ final class FileIdentity {
 		return a == b || realPath(a) == realPath(b);
 	}
 
+	/**
+	 * `realPath` answering each spelling once: for one run that asks the same paths again and again, held by the caller and
+	 * dropped with it, so a link changed between runs is never answered from an earlier one.
+	 */
+	public static function memoised(): (String) -> String {
+		final known: Map<String, String> = [];
+		return path -> known[path] ?? (known[path] = realPath(path));
+	}
+
 	#if (sys || nodejs)
 	/**
 	 * `path` resolved against `root` when relative, then symlink-resolved. Both sides of

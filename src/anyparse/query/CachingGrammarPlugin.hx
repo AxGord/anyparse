@@ -650,14 +650,18 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	 * (`setResolutionIndex`, the `--fix` loop's per-pass index) when present, else built once
 	 * over the thunk's file set (report UNION library) and memoised for the report path, else
 	 * null when no scope was injected. The self-build runs through `this`, so library parses
-	 * land in this wrapper's parse cache.
+	 * land in this wrapper's parse cache, and over the disk store, so a file whose declarations it
+	 * holds for these bytes is not parsed at all. Its writes are not budgeted: like the trees
+	 * `promote` stores, the scope is read-only for the run, so one run fills the store for the next.
 	 */
 	public function resolutionIndex(): Null<SymbolIndex> {
 		if (_resolutionIndexBuilt) return _resolutionIndex;
 		final files: Null<Array<{ file: String, source: String }>> = resolutionFiles();
 		if (files == null) return null;
 		_resolutionIndexBuilt = true;
-		_resolutionIndex = SymbolIndex.build(files, this, thirdPartyFiles());
+		_resolutionIndex = SymbolIndex.build(
+			files, this, thirdPartyFiles(), new ProjectParseStore(_inner.langName(), Math.POSITIVE_INFINITY)
+		);
 		return _resolutionIndex;
 	}
 

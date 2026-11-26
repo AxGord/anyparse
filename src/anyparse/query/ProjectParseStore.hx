@@ -3,6 +3,8 @@ package anyparse.query;
 import anyparse.core.ParseProjectionEngine;
 import anyparse.query.ParseDiskCache.StoredProjections;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
+import anyparse.query.SymbolIndex.FileInfo;
+import haxe.Exception;
 import haxe.Timer;
 
 /**
@@ -22,6 +24,9 @@ final class ProjectParseStore {
 
 	/** A record is derived from a parse by query code the parse's own engine key leaves out, so it is keyed by that code too. */
 	private static final RECORD_TAG: String = 'apq-derived-record v1 ${ParseProjectionEngine.outlineDigest()}';
+
+	/** The record kind of a file's extracted `FileInfo`, kept before the index's cross-file ambient pass fills it in. */
+	private static final DECLARATIONS_KIND: String = 'declarations';
 
 	private final _started: Float = Timer.stamp();
 	private final _disk: ParseDiskCache;
@@ -67,12 +72,33 @@ final class ProjectParseStore {
 		writeWithinBudget(file, () -> _disk.storeRecord(file, source, kind, RECORD_TAG, record()));
 	}
 
+	/**
+	 * The `FileInfo` an index build extracted from `file` when its bytes were `source`, for a build to take instead of
+	 * parsing and walking it; null for a file not on disk, a miss, or a record that does not decode to that file.
+	 */
+	public function declarations(file: String, source: String): Null<FileInfo> {
+		final text: Null<String> = record(file, source, DECLARATIONS_KIND);
+		if (text == null) return null;
+		try {
+			final info: FileInfo = haxe.Unserializer.run(text);
+			return info.file == file ? info : null;
+		} catch (_: Exception) {
+			return null;
+		}
+	}
+
+	/** Keep `info`, extracted from `source`, as its file's `declarations`, under the same budget as `keep`. */
+	public function keepDeclarations(info: FileInfo, source: String): Void {
+		keepRecord(info.file, source, DECLARATIONS_KIND, () -> haxe.Serializer.run(info));
+	}
+
 	private inline function withinBudget(now: Float): Bool {
 		return _written == 0 || _spent <= _budget * (now - _started);
 	}
 
 	private function writeWithinBudget(file: String, write: () -> Void): Void {
-		if (!onDisk(file)) return;
+		// A closed cache writes nothing, so the record is not even derived.
+		if (!onDisk(file) || !_disk.open()) return;
 		final before: Float = Timer.stamp();
 		if (!withinBudget(before)) return;
 		write();

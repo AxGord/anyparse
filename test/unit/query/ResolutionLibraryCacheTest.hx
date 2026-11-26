@@ -59,9 +59,13 @@ class ResolutionLibraryCacheTest extends Test {
 	 * library file that does not parse — recurs identically in run 2, so subtracting the
 	 * promotion count is precisely "run 2 inner-parses ZERO library sources". A deleted serve
 	 * lookup sends the whole library back through `_inner` and the identity fails by ~200.
+	 * The disk level is switched off for it: a stored declarations record spares run 2 the report
+	 * file's extraction as well, which is that level's saving, not this tier's.
 	 */
 	public function testSecondRunPerformsNoInnerParseOfLibrarySources(): Void {
 		#if (sys || nodejs)
+		final diskSwitch: Null<String> = Sys.getEnv('APQ_PARSE_CACHE');
+		Sys.putEnv('APQ_PARSE_CACHE', '0');
 		final lib: String = CliFixture.writeDir('resservelib', [{ name: 'ServeBase.hx', source: SERVE_BASE }]);
 		final proj: String = CliFixture.writeDir('resserveproj', [
 			{ name: 'ServeDerived.hx', source: SERVE_DERIVED },
@@ -95,6 +99,7 @@ class ResolutionLibraryCacheTest extends Test {
 		);
 		Assert.isTrue(SharedParseTier.librarySpanHits - spanHitsBefore >= promoted, 'the span half of the tier served the second run too');
 
+		Sys.putEnv('APQ_PARSE_CACHE', diskSwitch ?? '');
 		CliFixture.removeDir(proj);
 		CliFixture.removeDir(lib);
 		#else

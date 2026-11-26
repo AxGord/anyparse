@@ -109,6 +109,19 @@ final class ReachRowTest extends Test {
 		Assert.same(['Foo.run', 'Foo.help', 'Side.go'], ReachRow.functionsOf(OUTLINE, 'Foo'));
 	}
 
+	/** A member the outline addresses through its type, for a name its file declares twice, is a member of that type, not a type. */
+	@:pin('control')
+	@:killer('M-REACH-CONSTRUCTOR-READ')
+	public function testAMemberAddressedThroughItsTypeStaysInThatType(): Void {
+		final outline: String = [
+			'10-80  ClassForm:Foo  final class Foo',
+			'14-20    ClassForm:Foo >> FnMember:new  public function new()',
+			'22-30    FnMember:run  public function run(): Void',
+			''
+		].join('\n');
+		Assert.same(['pk.Foo.run'], ReachRow.functionsOf(outline, 'pk.Foo'));
+	}
+
 	@:pin('control')
 	@:killer('M-REACH-TOUCH-ALL')
 	public function testOnlyTheFunctionsTheReportNamesAreSeeds(): Void {

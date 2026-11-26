@@ -98,6 +98,49 @@ class ParseDiskCacheTest extends Test {
 		#end
 	}
 
+	/**
+	 * A damaged declarations record — cut short, not a record at all, or another file's with the same bytes — answers null,
+	 * and the next build derives the file's declarations again instead of throwing.
+	 */
+	@:pin('control')
+	@:killer('M-DECLARATIONS-DECODE-UNGUARDED')
+	public function testDamagedDeclarationsRecordIsDerivedAgain(): Void {
+		#if (sys || nodejs)
+		final file: String = CliFixture.write('diskcachedeclarationstorn', SOURCE);
+		final twin: String = CliFixture.write('diskcachedeclarationstwin', SOURCE);
+		final files: Array<{ file: String, source: String }> = [{ file: file, source: SOURCE }];
+		final before: Array<String> = entryFiles();
+		final fromParse: String = haxe.Serializer.run(
+			SymbolIndex.build(files, plugin(), null, new ProjectParseStore('haxe', Math.POSITIVE_INFINITY)).allFiles()
+		);
+		final record: Null<String> = entryFiles().filter(path -> !before.contains(path) && path.endsWith('.declarations')).pop();
+		final beforeTwin: Array<String> = entryFiles();
+		Assert.equals(
+			1, indexed([{ file: twin, source: SOURCE }], new ProjectParseStore('haxe', Math.POSITIVE_INFINITY)),
+			'the twin build indexes its file'
+		);
+		final twinRecord: Null<String> = entryFiles().filter(path -> !beforeTwin.contains(path) && path.endsWith('.declarations')).pop();
+		Assert.notNull(record, 'the build stored the declarations record');
+		Assert.notNull(twinRecord, 'and the twin build its own');
+		if (record == null || twinRecord == null) return;
+		final whole: String = File.getContent(record);
+		final header: String = whole.substr(0, whole.indexOf('\n') + 1);
+
+		File.saveContent(record, whole.substr(0, header.length + Std.int((whole.length - header.length) / 2)));
+		Assert.isNull(new ProjectParseStore('haxe').declarations(file, SOURCE), 'a record cut short answers null');
+		File.saveContent(record, '${header}not a record');
+		Assert.isNull(new ProjectParseStore('haxe').declarations(file, SOURCE), 'a record that does not decode answers null');
+		File.saveContent(record, File.getContent(twinRecord));
+		Assert.isNull(new ProjectParseStore('haxe').declarations(file, SOURCE), 'another file\'s record answers null');
+		Assert.equals(
+			fromParse, haxe.Serializer.run(SymbolIndex.build(files, plugin(), null, new ProjectParseStore('haxe')).allFiles()),
+			'and the next build derives the declarations a parse gives'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** `APQ_PARSE_CACHE=0` reads nothing and writes nothing. */
 	public function testSwitchedOffCacheStoresAndReadsNothing(): Void {
 		#if (sys || nodejs)
@@ -121,8 +164,11 @@ class ParseDiskCacheTest extends Test {
 
 	/**
 	 * The tier reads the disk level before it parses: a second tier — a stand-in for the next process, whose memory holds
-	 * nothing — takes the entry the first one stored, and the library parse count does not move for it.
+	 * nothing — takes the entry the first one stored, and the library parse count does not move for it. It reads the entry
+	 * when the source is first served, not when the library is promoted.
 	 */
+	@:pin('control')
+	@:killer('M-PROMOTE-READS-EVERY-STORED-TREE')
 	public function testTierFillsFromTheDiskLevelInsteadOfParsing(): Void {
 		#if (sys || nodejs)
 		final file: String = CliFixture.write('diskcachetier', SOURCE);
@@ -138,12 +184,57 @@ class ParseDiskCacheTest extends Test {
 		final parsesAfterFirst: Int = SharedParseTier.libraryParses;
 		final hitsBefore: Int = SharedParseTier.diskHits;
 		second.promote(new LibrarySources([{ file: file, source: SOURCE }]), parsing);
-		Assert.equals(1, SharedParseTier.diskHits - hitsBefore, 'the second tier took the stored projections');
+		Assert.equals(hitsBefore, SharedParseTier.diskHits, 'the second tier read nothing up front');
 		Assert.equals(parsesAfterFirst, SharedParseTier.libraryParses, 'and parsed nothing into the library');
 		final served: Null<QueryNode> = second.servedParse(SOURCE);
+		Assert.equals(1, SharedParseTier.diskHits - hitsBefore, 'the first serve took the stored projections');
 		Assert.notNull(served, 'the second tier serves the source');
 		if (served != null) Assert.isTrue(sameTree(parsing.parseFile(SOURCE), served), 'with the tree a parse gives');
 		Assert.notNull(second.servedSpanInfo(SOURCE), 'and its span info');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * A library file the disk level holds for other bytes is deferred like any held file, but its first serve misses: the
+	 * wrapper parses the current source and never serves the tree stored for the old one.
+	 */
+	@:pin('control')
+	@:killer('M-DISK-ENTRY-IGNORES-SOURCE')
+	public function testChangedLibraryFileIsParsedNotServedStale(): Void {
+		#if (sys || nodejs)
+		final file: String = CliFixture.write('diskcachestale', SOURCE);
+		final disk: ParseDiskCache = stored(file, SOURCE);
+		final changed: String = SOURCE.replace('class Holder', 'class Changed');
+		File.saveContent(file, changed);
+		final library: LibrarySources = new LibrarySources([{ file: file, source: changed }]);
+
+		final tier: SharedParseTier = new SharedParseTier('disk-cache-tier-stale', disk);
+		final parsesBefore: Int = SharedParseTier.libraryParses;
+		final hitsBefore: Int = SharedParseTier.diskHits;
+		tier.promote(library, plugin());
+		Assert.equals(parsesBefore, SharedParseTier.libraryParses, 'the held library file is deferred, not parsed');
+		Assert.isNull(tier.servedParse(changed), 'its first serve misses');
+		Assert.isNull(tier.servedSpanInfo(changed), 'and so does its span info');
+		Assert.equals(hitsBefore, SharedParseTier.diskHits, 'the entry stored for the old bytes is not taken');
+
+		final wrapper: CachingGrammarPlugin = plugin();
+		wrapper.setResolutionScope({
+			declared: true,
+			sources: () -> {
+				report: [],
+				projectRoots: [],
+				library: library,
+				rootsMatched: true,
+				rootsAllMatched: true
+			}
+		});
+		Assert.notNull(wrapper.resolutionFiles(), 'the wrapper promotes its library');
+		final served: QueryNode = wrapper.parseFile(changed);
+		Assert.equals(hitsBefore, SharedParseTier.diskHits, 'the wrapper takes no stored entry either');
+		Assert.isTrue(sameTree(plugin().parseFile(changed), served), 'it gives the tree of the current source');
+		Assert.isFalse(sameTree(plugin().parseFile(SOURCE), served), 'not the stored one');
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -212,7 +303,7 @@ class ParseDiskCacheTest extends Test {
 		final roots: Array<{ file: String, source: String }> = [{ file: first, source: SOURCE }, { file: second, source: OTHER }];
 		final cold: ProjectParseStore = new ProjectParseStore('haxe', Math.POSITIVE_INFINITY);
 		Assert.equals(2, indexed(roots, cold), 'the cold build indexes both files');
-		Assert.equals(2, cold.written(), 'the cold build wrote both files');
+		Assert.equals(4, cold.written(), 'the cold build wrote the parse and the declarations of both files');
 
 		final parsesBefore: Int = SharedParseTier.innerParses;
 		final spansBefore: Int = SharedParseTier.innerSpanParses;
@@ -230,6 +321,50 @@ class ParseDiskCacheTest extends Test {
 		#end
 	}
 
+	/**
+	 * A store holding a file's declarations for its bytes spares the build the parse: with the parse entry gone, the warm build
+	 * parses nothing and holds the declarations the cold build extracted.
+	 */
+	@:pin('control')
+	@:killer('M-DECLARATIONS-RECORD-NEVER-HITS')
+	public function testStoredDeclarationsStandInForTheParse(): Void {
+		#if (sys || nodejs)
+		final file: String = CliFixture.write('diskcachedeclarations', SOURCE);
+		final files: Array<{ file: String, source: String }> = [{ file: file, source: SOURCE }];
+		final before: Array<String> = entryFiles();
+		final cold: ProjectParseStore = new ProjectParseStore('haxe', Math.POSITIVE_INFINITY);
+		final fromParse: String = haxe.Serializer.run(SymbolIndex.build(files, plugin(), null, cold).allFiles());
+		Assert.notNull(cold.declarations(file, SOURCE), 'the cold build kept the declarations');
+		Assert.isNull(cold.declarations(file, OTHER), 'which answer only for the bytes they came from');
+		for (entry in entryFiles()) if (!before.contains(entry) && !entry.endsWith('.declarations')) FileSystem.deleteFile(entry);
+
+		final parsesBefore: Int = SharedParseTier.innerParses;
+		final warm: SymbolIndex = SymbolIndex.build(files, plugin(), null, new ProjectParseStore('haxe'));
+		Assert.equals(parsesBefore, SharedParseTier.innerParses, 'the warm build parsed nothing');
+		Assert.equals(fromParse, haxe.Serializer.run(warm.allFiles()), 'and holds what the parse gave');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A plugin's resolution index is built over the store: it keeps the declarations of its files, and the next process's reads them. */
+	@:pin('control')
+	@:killer('M-RESOLUTION-INDEX-WITHOUT-STORE')
+	public function testResolutionIndexKeepsAndReadsTheDeclarations(): Void {
+		#if (sys || nodejs)
+		final file: String = CliFixture.write('diskcacheresolution', SOURCE);
+		final first: CachingGrammarPlugin = scoped(file, SOURCE);
+		Assert.notNull(first.resolutionIndex(), 'the first plugin builds its resolution index');
+		Assert.notNull(new ProjectParseStore('haxe').declarations(file, SOURCE), 'and keeps the declarations of its file');
+
+		final parsesBefore: Int = SharedParseTier.innerParses;
+		Assert.equals(1, scoped(file, SOURCE).resolutionIndex()?.allFiles().length, 'the next plugin indexes the file');
+		Assert.equals(parsesBefore, SharedParseTier.innerParses, 'without parsing it');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** A build writes at most its share of files, at least one, so repeated builds fill the store and the last one parses nothing. */
 	@:pin('control')
 	@:killer('M-PROJECT-STORE-IGNORES-BUDGET')
@@ -239,10 +374,11 @@ class ParseDiskCacheTest extends Test {
 		final files: Array<{ file: String, source: String }> = [
 			for (i => source in sources) { file: CliFixture.write('diskcachebudget$i', source), source: source }
 		];
-		for (round in 0...sources.length) {
+		// Each file is two entries, its parse and its declarations.
+		for (round in 0...2 * sources.length) {
 			final store: ProjectParseStore = new ProjectParseStore('haxe', 0);
 			Assert.equals(3, indexed(files, store), 'the build indexes every file');
-			Assert.equals(1, store.written(), 'build ${round + 1} wrote exactly one file under a zero budget');
+			Assert.equals(1, store.written(), 'build ${round + 1} wrote exactly one entry under a zero budget');
 		}
 		final parsesBefore: Int = SharedParseTier.innerParses;
 		final last: ProjectParseStore = new ProjectParseStore('haxe', 0);
@@ -256,6 +392,22 @@ class ParseDiskCacheTest extends Test {
 
 	private static function plugin(): CachingGrammarPlugin {
 		return new CachingGrammarPlugin(new HaxeQueryPlugin());
+	}
+
+	/** A fresh plugin whose resolution scope is `file` alone, as the report. */
+	private static function scoped(file: String, source: String): CachingGrammarPlugin {
+		final scopedPlugin: CachingGrammarPlugin = plugin();
+		scopedPlugin.setResolutionScope({
+			declared: true,
+			sources: () -> {
+				report: [{ file: file, source: source }],
+				projectRoots: [],
+				library: new LibrarySources([]),
+				rootsMatched: true,
+				rootsAllMatched: true
+			}
+		});
+		return scopedPlugin;
 	}
 
 	/** Whether two trees are the same tree: kind, name, span, type arguments, own tokens, declared type, every child, recursively. */

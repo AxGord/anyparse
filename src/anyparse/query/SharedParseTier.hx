@@ -64,6 +64,13 @@ final class SharedParseTier {
 	private static final PARSE_TIERS: Map<String, Map<String, QueryNode>> = [];
 	private static final SPAN_TIERS: Map<String, Map<String, SpanTypeInfo>> = [];
 
+	/**
+	 * Library entries `promote` found on the disk level and left there, by source: one is read the first time a parse or a
+	 * span-info of it is asked, so a run that reads only a few library trees decodes only those. Held by this wrapper's
+	 * tier and dropped with it.
+	 */
+	private final _deferred: Map<String, { file: String, source: String }> = [];
+
 	// One wrapper's language slices of the two process-scoped tiers above, resolved once in the
 	// constructor so a lookup is one map read against the caller's own source string.
 	private final _parses: Map<String, QueryNode>;
@@ -88,6 +95,7 @@ final class SharedParseTier {
 
 	/** The tier's parse of `source` — counting the serve — or null when it holds none. */
 	public function servedParse(source: String): Null<QueryNode> {
+		adoptDeferred(source);
 		final shared: Null<QueryNode> = _parses[source];
 		if (shared != null) libraryHits++;
 		return shared;
@@ -95,6 +103,7 @@ final class SharedParseTier {
 
 	/** The span-info twin of `servedParse`. */
 	public function servedSpanInfo(source: String): Null<SpanTypeInfo> {
+		adoptDeferred(source);
 		final shared: Null<SpanTypeInfo> = _spans[source];
 		if (shared != null) librarySpanHits++;
 		return shared;
@@ -104,7 +113,8 @@ final class SharedParseTier {
 	 * PROMOTE every library source's parse and span-info into this tier, so the next `Cli.run`
 	 * over the same library serves them instead of re-parsing 200+ std files from scratch.
 	 * Idempotent and content-addressed: an entry already present is a HIT and costs nothing, and
-	 * only a byte-identical source can serve it.
+	 * only a byte-identical source can serve it. A source the disk level holds is not read here: it is
+	 * adopted when it is first served, and one whose stored text turns out to differ is parsed by the wrapper then.
 	 *
 	 * A source that does not parse is left out entirely (`SymbolIndexBuilder.extract` re-tries
 	 * it and records the file as skipped) — the same treatment the instance parse cache gives a
@@ -119,7 +129,10 @@ final class SharedParseTier {
 			// so an already-promoted entry goes through the SERVE branch, the one thing this tier
 			// exists for. Short-circuiting here is what made the serve path deletable with a green
 			// suite: the counters then measured this loop, never the lookup.
-			if (!_parses.exists(entry.source)) adoptStored(entry);
+			if (!_parses.exists(entry.source) && _disk.holds(entry.file)) {
+				_deferred[entry.source] = entry;
+				continue;
+			}
 			final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, entry.source);
 			if (tree == null || _parses.exists(entry.source)) continue;
 			final spans: SpanTypeInfo = plugin.spanTypeInfo(entry.source);
@@ -128,6 +141,14 @@ final class SharedParseTier {
 			_disk.store(entry.file, entry.source, tree, spans);
 			libraryParses++;
 		}
+	}
+
+	/** Adopt the stored projections of a source `promote` deferred, once: a miss leaves the parse to the wrapper. */
+	private function adoptDeferred(source: String): Void {
+		final entry: Null<{ file: String, source: String }> = _deferred[source];
+		if (entry == null) return;
+		_deferred.remove(source);
+		if (!_parses.exists(source)) adoptStored(entry);
 	}
 
 	/** Enter the projections an earlier process stored for `entry` into the process level, counting the hit. */

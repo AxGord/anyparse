@@ -17845,6 +17845,60 @@
 			"find": "if (gluedTok != null && !blankLineWithin(source, gluedTok.to, heading)) return lead;",
 			"replace": "",
 			"note": "a `//` heading glued under a block comment is taken alone, splitting a comment run and leaving the block comment orphaned"
+		},
+		{
+			"name": "M-PROMOTE-READS-EVERY-STORED-TREE",
+			"type": "anyparse.query.SharedParseTier",
+			"method": "promote",
+			"find": "_deferred[entry.source] = entry;",
+			"replace": "adoptStored(entry);",
+			"note": "promote reads every stored library tree up front again, so a run that serves a few library trees still decodes them all"
+		},
+		{
+			"name": "M-DECLARATIONS-RECORD-NEVER-HITS",
+			"type": "anyparse.query.ProjectParseStore",
+			"method": "declarations",
+			"find": "final text: Null<String> = record(file, source, DECLARATIONS_KIND);",
+			"replace": "final text: Null<String> = null;",
+			"note": "a stored FileInfo is never read back, so every index build parses and walks every file again"
+		},
+		{
+			"name": "M-FILE-IDENTITY-MEMO-FORGETS",
+			"type": "anyparse.query.FileIdentity",
+			"method": "memoised",
+			"find": "return path -> known[path] ?? (known[path] = realPath(path));",
+			"replace": "return realPath;",
+			"note": "the memo resolves every ask again, so a run pays one realpath per dedup instead of one per file"
+		},
+		{
+			"name": "M-RESOLUTION-INDEX-WITHOUT-STORE",
+			"type": "anyparse.query.CachingGrammarPlugin",
+			"method": "resolutionIndex",
+			"find": "thirdPartyFiles(), new ProjectParseStore(_inner.langName(), Math.POSITIVE_INFINITY)",
+			"replace": "thirdPartyFiles(), null",
+			"note": "the resolution index is built without the store again, so every process parses and walks every file of its scope"
+		},
+		{
+			"name": "M-DECLARATIONS-DECODE-UNGUARDED",
+			"type": "anyparse.query.ProjectParseStore",
+			"method": "declarations",
+			"find": [
+				"return info.file == file ? info : null;",
+				"} catch (_: Exception) {\n\treturn null;"
+			],
+			"replace": [
+				"return info;",
+				"} catch (e: Exception) {\n\tthrow e;"
+			],
+			"note": "a damaged or foreign declarations record is decoded unguarded, so a torn record throws out of the index build and another file's record stands in for this one"
+		},
+		{
+			"name": "M-DISK-ENTRY-IGNORES-SOURCE",
+			"type": "anyparse.query.ParseDiskCache",
+			"method": "lookup",
+			"find": "if (first < 0 || second < 0 || text.substr(0, first) != header(FORMAT_TAG, source)) return null;",
+			"replace": "if (first < 0 || second < 0) return null;",
+			"note": "an entry is served whatever bytes its file now holds, so a changed library file deferred by the tier answers with the tree stored for its old source"
 		}
 	]
 }
