@@ -1170,7 +1170,7 @@
 			"expect": {
 				"exit": 3,
 				"out": "e3b0c44298fc1c14",
-				"err": "984bd6a925ec57b3",
+				"err": "2262a606f14f6de5",
 				"files": "90fc96979480c2c1",
 				"compiles": [
 					true,
@@ -1712,7 +1712,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "1bf07297915c37f6",
+				"err": "d48527f1d2885af1",
 				"files": "5ac73425cffbf6fb",
 				"compiles": [
 					false,
@@ -3497,7 +3497,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "e61f08b9c8a08ea7",
+				"err": "8f137ea24ea3bc9c",
 				"files": "76bedd72fe22d0dd",
 				"compiles": [
 					false,
@@ -3527,7 +3527,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "a09dbe19bdf1db3e",
+				"err": "95045022a95d6a7c",
 				"files": "a12790452d759eb9",
 				"compiles": [
 					false,
@@ -3557,7 +3557,7 @@
 			"expect": {
 				"exit": 0,
 				"out": "e3b0c44298fc1c14",
-				"err": "466e8629596c0a5e",
+				"err": "4c58dbee5e3fa366",
 				"files": "12ac10f37b42d453",
 				"compiles": [
 					false,

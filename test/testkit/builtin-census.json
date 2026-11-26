@@ -181,6 +181,7 @@
 	"redundant-lambda-wrapper",
 	"redundant-map-exists",
 	"redundant-map-iter-key",
+	"redundant-meta-parens",
 	"redundant-narrowing-copy",
 	"redundant-null-coalescing",
 	"redundant-parens",
