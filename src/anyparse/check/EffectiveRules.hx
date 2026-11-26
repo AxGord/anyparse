@@ -70,10 +70,13 @@ final class EffectiveRules {
 		final minimum: Null<String> = check is VersionGated ? (cast check: VersionGated).minLanguageVersion() : null;
 		final gated: Bool = enabled && minimum != null && !config.allowsLanguageVersion(minimum);
 		final skipped: Null<String> = enabled && !gated && check is FileGated ? (cast check: FileGated).skipReason(file, config) : null;
+		final excluded: Bool = enabled && !gated && skipped == null && ExcludedScope.excludesFile(config, id, file);
 		final reason: String = if (gated)
 			'needs-language-$minimum'
 		else if (skipped != null)
 			skipped
+		else if (excluded)
+			'config-excluded'
 		else if (stated != null)
 			stated.byCategory ? 'category' : 'config'
 		else if (enabled)
@@ -82,7 +85,7 @@ final class EffectiveRules {
 			'default-off';
 		return {
 			id: id,
-			on: enabled && !gated && skipped == null,
+			on: enabled && !gated && skipped == null && !excluded,
 			reason: reason,
 			description: check.description()
 		};

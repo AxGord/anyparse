@@ -1,7 +1,6 @@
 package anyparse.check.common.types;
 
 import anyparse.check.Check.ConfigAware;
-import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.GroupedEdit;
 import anyparse.check.Check.GroupedFix;
@@ -163,7 +162,7 @@ private typedef InitInfo = { var present: Bool; var isNull: Bool; var type: Null
  */
 @:nullSafety(Strict)
 final class AvoidDynamic extends RuleBase implements ConfigAware implements RiskyFix implements OracleAssisted implements GroupedFix
-		implements FileGated implements OptionKeyed {
+		implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'avoid-dynamic';
 
@@ -319,13 +318,8 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 		return DynamicBag.bagEdits(source, violations.filter(v -> v.rule == RULE_ID), plugin, oracle);
 	}
 
-	/** `config-excluded` for a file whose path contains an `excludePaths` entry. */
-	public function skipReason(file: String, config: LintConfig): Null<String> {
-		return pathExcluded(file, config.stringListOption(RULE_ID, 'excludePaths') ?? []) ? 'config-excluded' : null;
-	}
-
 	public function acceptedOptions(): Array<String> {
-		return ['excludePaths', 'excludeMeta', 'boundaryCalls'];
+		return ['excludeMeta', 'boundaryCalls'];
 	}
 
 	/**
@@ -346,7 +340,7 @@ final class AvoidDynamic extends RuleBase implements ConfigAware implements Risk
 		return unique;
 	}
 
-	/** Whether `file`'s path contains any of the configured exclusion substrings. */
+	/** Whether `file`'s path contains any of the configured substrings — the path scope `hand-source-scanner`'s `allow` keys keep. */
 	public static function pathExcluded(file: String, patterns: Array<String>): Bool {
 		return patterns.exists(p -> p.length > 0 && file.indexOf(p) >= 0);
 	}

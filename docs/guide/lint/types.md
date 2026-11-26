@@ -18,7 +18,7 @@ typedef P = {
 
 ## `avoid-any`
 
-`Any` in a declared type position — a field, parameter or return type, a type argument (`Array<Any>`), or an annotated local — read through the walk `avoid-dynamic` runs, so a position, the exact-token span, the extern skip and the options mean the same in both. `Info`, report-only, DEFAULT OFF, enabled in this project's `apq.json`. `Any` is safe where `Dynamic` is not, so a finding is not an error: it says a narrower type exists. The message names the way for a value read from a JSON document: a `@:schema(JsonFormat)` typedef and its generated parser. Options: `excludePaths`, `excludeMeta`.
+`Any` in a declared type position — a field, parameter or return type, a type argument (`Array<Any>`), or an annotated local — read through the walk `avoid-dynamic` runs, so a position, the exact-token span, the extern skip and the options mean the same in both. `Info`, report-only, DEFAULT OFF, enabled in this project's `apq.json`. `Any` is safe where `Dynamic` is not, so a finding is not an error: it says a narrower type exists. The message names the way for a value read from a JSON document: a `@:schema(JsonFormat)` typedef and its generated parser. Options: `excludeMeta`; `excludePaths` is the generic scope key (`docs/guide/lint-config.md`).
 
 A true top type is a seam that must accept any value: the root a grammar plugin hands across the `GrammarPlugin` seam (each grammar's generated AST is its own type), a generated-AST element held by a format helper, a callback of a JS host API, a function that only throws. The rule does not tell those from a lazy `Any` by reading code; a project lists such files under `excludePaths` (or marks a declaration with a meta named in `excludeMeta`), and what is left reports. What still reports in `src` and `tools/src` is a value of a JSON document held as `Any`: a `Json.parse` or `Reflect.field` result, a hand-walked `DynamicAccess<Any>`, or a field that is a string in one record and a list in another. Those have a narrower type, the schema the JSON grammar describes.
 
@@ -41,7 +41,7 @@ behaviour); moves a parameter's type into the signature when every read is `(p :
 and turns a local or private field used only through `Reflect.field` / `setField` into
 `haxe.DynamicAccess<T>` with map syntax. Fields, returns and type arguments stay report-only. A local
 initialized from `Reflect` / `Json` gets a separate "narrow where consumed" message. Options:
-`excludePaths`, `excludeMeta`, `boundaryCalls` (default `Reflect`, `Json`).
+`excludeMeta`, `boundaryCalls` (default `Reflect`, `Json`); a file is scoped out with the generic `excludePaths` (`docs/guide/lint-config.md`).
 
 ```haxe
 var item:Dynamic = new Item();  // --fix (with an oracle): var item:Item = new Item();

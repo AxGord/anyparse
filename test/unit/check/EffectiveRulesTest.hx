@@ -160,7 +160,7 @@ class EffectiveRulesTest extends Test {
 
 	@:pin('control')
 	@:killer('M-GATE-TS-EXCLUDE-BLIND')
-	@:killer('M-GATE-AD-EXCLUDE-BLIND')
+	@:killer('M-EXCLUDED-SCOPE-PATHS-BLIND')
 	public function testAPathARuleExcludesIsOffForThatFileOnly(): Void {
 		#if (sys || nodejs)
 		final root: String = project(
@@ -202,7 +202,8 @@ class EffectiveRulesTest extends Test {
 
 	/** The listing and the run answer from one predicate: a file the listing reports off yields no finding. */
 	@:pin('control')
-	@:killer('M-GATE-COLLECT-BYPASS')
+	@:killer('M-EXCLUDED-SCOPE-NOT-COLLECTED')
+	@:killer('M-EFFECTIVE-EXCLUDED')
 	public function testTheRunSkipsWhatTheListingReportsOff(): Void {
 		final config: LintConfig = LintConfig.parse('{"rules": {"avoid-dynamic": {"excludePaths": ["gen/"]}}}');
 		final source: String = 'class C {\n\tvar x:Dynamic;\n}\n';

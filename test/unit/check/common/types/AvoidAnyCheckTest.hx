@@ -66,7 +66,7 @@ class AvoidAnyCheckTest extends Test {
 	}
 
 	public function testExcludePathsConfig(): Void {
-		final config: LintConfig = LintConfig.parse('{"rules":{"avoid-any":{"excludePaths":["interop/"]}}}');
+		final config: LintConfig = LintConfig.parse('{"rules":{"avoid-any":{"excludePaths":["src/interop/"]}}}');
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'src/interop/Native.hx', source: 'class C {\n\tvar x:Any;\n}' },
 			{ file: 'src/app/Main.hx', source: 'class D {\n\tvar y:Any;\n}' }

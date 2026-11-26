@@ -10,7 +10,15 @@ JSON, or a wrong-typed top-level key — the file is read through a declared typ
 schema) is skipped with one stderr line naming it, and the documents ABOVE it
 still apply. Wrong-typed values INSIDE a rule's own options stay per-field lenient.
 
-**An option a rule does not read is said.** A key in a rule's entry that the rule does not accept (a typo such as `excludePath`, or a key borrowed from another rule) is ignored, but not silently: one stderr line per document names the rule, the key and the keys the rule accepts, nearest to the typo first, or `accepts: none` for a rule with no options. `enabled` and `severity` are always accepted. The line is a note, not a finding: it never changes the exit code. Every rule that reads an option declares its keys and is checked; a key under a rule that reads none says `accepts: none`. A rule id the registry does not know (`rules "typo-rule"`) is said the same way, with the ids nearest it, and the entry is ignored.
+**An option a rule does not read is said.** A key in a rule's entry that the rule does not accept (a typo such as `excludePath`, or a key borrowed from another rule) is ignored, but not silently: one stderr line per document names the rule, the key and the keys the rule accepts, nearest to the typo first, or `accepts: none` for a rule with no options. `enabled`, `severity`, `excludePaths` and `excludeTypes` are always accepted. The line is a note, not a finding: it never changes the exit code. Every rule that reads an option declares its keys and is checked; a key under a rule that reads none says `accepts: none`. A rule id the registry does not know (`rules "typo-rule"`) is said the same way, with the ids nearest it, and the entry is ignored.
+
+**Scoping a rule out.** Two keys of any rule's entry take the rule away from a file or a type, whichever rule it is; the rule never reads them:
+
+```json
+{"rules": {"unused-public-member": {"excludePaths": ["src/res/Ids.hx", "gen/**"], "excludeTypes": ["res.Ids", "res.gen.*"]}}}
+```
+
+`excludePaths` are globs (`*` within a segment, `**` across segments, `?`, `[...]`) relative to the directory of the document that wrote them, so a nested document's entry means ITS directory; a pattern naming a directory covers every file below it. `excludeTypes` are dotted names (`*` / `**` globs allowed) matched against the top-level type a finding sits in: `pkg.Type`, or `pkg.Module.Type` for a secondary type of a module. Only the rule's FINDINGS are dropped, never what it reads: a reference from an excluded file still counts for a cross-file rule, and `--fix` never edits a finding that was dropped. `--list-rules` reports the rule off (`config-excluded`) for an excluded file. Like every array, the list of a nearer document replaces the one above it. `avoid-any` and `avoid-dynamic` read the same key: it was a substring of the path before, it is a glob now.
 
 **The legacy name.** `apqlint.json` is still read, in the same format and the same chain, where a directory has no `apq.json`. A directory holding both is an error naming the directory, exit 1, with nothing left written (a creating op removes what it made) — so keep one; rename with `git mv apqlint.json apq.json`.
 

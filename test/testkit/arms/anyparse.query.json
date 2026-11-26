@@ -17765,6 +17765,14 @@
 			"find": "if (!built.exists(fi.file)) built[fi.file] = fi;",
 			"replace": "built[fi.file] = fi;",
 			"note": "the file table keeps the LAST entry of a repeated path where the scan it replaced answered the first"
+		},
+		{
+			"name": "M-GLOB-COVERS-DIRECTORY",
+			"type": "anyparse.query.Glob",
+			"method": "covers",
+			"find": "end = file.lastIndexOf('/', end - 1);",
+			"replace": "end = 0;",
+			"note": "a spec naming a directory covers only the directory itself, not the files beneath it"
 		}
 	]
 }

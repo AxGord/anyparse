@@ -2,7 +2,6 @@ package anyparse.check.common.types;
 
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.DefaultOff;
-import anyparse.check.Check.FileGated;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.OptionKeyed;
@@ -24,8 +23,7 @@ import anyparse.query.SymbolIndex;
  * Off by default; report-only.
  */
 @:nullSafety(Strict)
-final class AvoidAny extends RuleBase implements ConfigAware implements FileGated implements NoAutofix implements DefaultOff
-		implements OptionKeyed {
+final class AvoidAny extends RuleBase implements ConfigAware implements NoAutofix implements DefaultOff implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'avoid-any';
 	private static inline final ADVICE: String = ' — name the narrower type; a value read from a JSON document is read through a '
@@ -66,16 +64,11 @@ final class AvoidAny extends RuleBase implements ConfigAware implements FileGate
 	}
 
 	public function acceptedOptions(): Array<String> {
-		return ['excludePaths', 'excludeMeta'];
+		return ['excludeMeta'];
 	}
 
 	public function noAutofixReason(): String {
 		return 'the narrower type is the author\'s choice';
-	}
-
-	/** `config-excluded` for a file whose path contains an `excludePaths` entry. */
-	public function skipReason(file: String, config: LintConfig): Null<String> {
-		return AvoidDynamic.pathExcluded(file, config.stringListOption(RULE_ID, 'excludePaths') ?? []) ? 'config-excluded' : null;
 	}
 
 	private static function where(position: DynPos): String {

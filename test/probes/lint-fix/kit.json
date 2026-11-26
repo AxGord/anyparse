@@ -3568,6 +3568,48 @@
 					false
 				]
 			}
+		},
+		{
+			"name": "X1",
+			"note": "an anon-type-dup group anchored at a file its excludePaths scopes out is reported once, at an in-scope occurrence",
+			"argv": [
+				"hxq",
+				"lint",
+				"--no-oracle",
+				"--rule",
+				"anon-type-dup",
+				"A.hx",
+				"B.hx",
+				"C.hx"
+			],
+			"files": {
+				"A.hx": "class A {\n\tpublic static function f(p: { name: String, size: Int, kind: String }): Void {}\n}\n",
+				"B.hx": "class B {\n\tpublic static function g(q: { name: String, size: Int, kind: String }): Void {}\n}\n",
+				"C.hx": "class C {\n\tpublic static function h(r: { name: String, size: Int, kind: String }): Void {}\n}\n",
+				"apq.json": "{\"rules\":{\"anon-type-dup\":{\"excludePaths\":[\"A.hx\"]}}}\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"--no-output",
+					"A",
+					"B",
+					"C"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "f40855be95de671f",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
 		}
 	]
 }

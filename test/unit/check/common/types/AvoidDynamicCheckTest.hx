@@ -121,9 +121,8 @@ class AvoidDynamicCheckTest extends Test {
 	}
 
 	public function testExcludePathsConfig(): Void {
-		// A file whose path matches a configured `excludePaths` pattern is skipped entirely.
-		// Through `Linter.run`: `excludePaths` is a `FileGated` answer, applied where findings enter the tool.
-		final config: LintConfig = LintConfig.parse('{"rules":{"avoid-dynamic":{"excludePaths":["interop/"]}}}');
+		// A file the generic `excludePaths` covers has no finding: `Linter.run` drops them where findings enter the tool.
+		final config: LintConfig = LintConfig.parse('{"rules":{"avoid-dynamic":{"excludePaths":["src/interop/"]}}}');
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'src/interop/Native.hx', source: 'class C {\n\tvar x:Dynamic;\n}' },
 			{ file: 'src/app/Main.hx', source: 'class D {\n\tvar y:Dynamic;\n}' }

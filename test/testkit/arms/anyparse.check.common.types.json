@@ -12,13 +12,6 @@
 			"note": "the catch-clause gate narrows to the report files, so a one-file `--fix` boxes a raw-string throw that a `catch (e: String)` in an unlinted sibling still catches — the wholesale-degrade twin of the S177 shape, found by T919's `string-catch` cell"
 		},
 		{
-			"name": "M-GATE-AD-EXCLUDE-BLIND",
-			"type": "anyparse.check.common.types.AvoidDynamic",
-			"method": "skipReason",
-			"force": "null",
-			"note": "an avoid-dynamic excludePaths file is reported as scanned"
-		},
-		{
 			"name": "M-EXPLICIT-TYPE-ORACLE-PARAMS",
 			"type": "anyparse.check.common.types.ExplicitType",
 			"method": "functionOracleEdits",
@@ -469,16 +462,16 @@
 			"name": "M-OPTKEYS-AVOID-ANY-DECLARED",
 			"type": "anyparse.check.common.types.AvoidAny",
 			"method": "acceptedOptions",
-			"find": "return ['excludePaths', 'excludeMeta'];",
-			"replace": "return ['excludePaths'];",
+			"find": "return ['excludeMeta'];",
+			"replace": "return [];",
 			"note": "avoid-any leaves out a key it reads"
 		},
 		{
 			"name": "M-OPTKEYS-AVOID-DYNAMIC-DECLARED",
 			"type": "anyparse.check.common.types.AvoidDynamic",
 			"method": "acceptedOptions",
-			"find": "return ['excludePaths', 'excludeMeta', 'boundaryCalls'];",
-			"replace": "return ['excludePaths', 'excludeMeta'];",
+			"find": "return ['excludeMeta', 'boundaryCalls'];",
+			"replace": "return ['excludeMeta'];",
 			"note": "avoid-dynamic leaves out a key it reads"
 		},
 		{

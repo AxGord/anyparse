@@ -7,6 +7,7 @@ import anyparse.check.config.ApqLintConfig;
 import anyparse.check.config.ApqLintConfigParser;
 import anyparse.check.config.OwnedTypesDeclaration;
 import anyparse.grammar.json.JValue;
+import anyparse.query.FileIdentity;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.runtime.EditDistance;
 import anyparse.util.Compare;
@@ -163,7 +164,7 @@ final class LintDocuments {
 		final rules: Map<String, RuleConfig> = [];
 		final declared: Null<Map<String, JValue>> = config.rules;
 		if (declared != null) for (id => raw in declared) {
-			final rule: Null<RuleConfig> = parseRule(raw);
+			final rule: Null<RuleConfig> = parseRule(raw, baseDir);
 			if (rule != null)
 				rules[id] = rule;
 			else
@@ -253,8 +254,8 @@ final class LintDocuments {
 			}
 			final keys: Array<String> = [ for (key in entry.props.keys()) key ];
 			keys.sort(Compare.compareString);
-			for (key in keys) if (key != 'enabled' && key != 'severity' && !known.contains(key)) {
-				final nearest: Array<String> = EditDistance.closest(key, known);
+			for (key in keys) if (key != 'enabled' && key != 'severity' && !known.contains(key) && !ExcludedScope.KEYS.contains(key)) {
+				final nearest: Array<String> = EditDistance.closest(key, known.concat(ExcludedScope.KEYS));
 				final ordered: Array<String> = nearest.concat(known.filter(candidate -> !nearest.contains(candidate)));
 				lines.push(
 					'rules "$id" has unknown option "$key" — ignored; accepts: ${ordered.length == 0 ? 'none' : ordered.join(', ')}'
@@ -284,7 +285,7 @@ final class LintDocuments {
 	 * through `Severity.fromName`, an unknown label yielding no override) and keeps every other key in `props` verbatim for the
 	 * owning check to read. A string is reserved for a severity shorthand and is no entry yet.
 	 */
-	private static function parseRule(raw: JValue): Null<RuleConfig> {
+	private static function parseRule(raw: JValue, baseDir: Null<String>): Null<RuleConfig> {
 		return switch raw {
 			case JBool(v): { enabled: v, props: [] };
 			case JObject(entries):
@@ -299,6 +300,8 @@ final class LintDocuments {
 							enabled = v;
 						case ['severity', JString(v)]:
 							severity = Severity.fromName(v);
+						case [ExcludedScope.PATHS_KEY, _]:
+							props[key] = resolveScopePaths(baseDir, value);
 						case _:
 							props[key] = value;
 					}
@@ -394,6 +397,25 @@ final class LintDocuments {
 				drops.push('categories "$id" is neither true nor false — ignored');
 		}
 		return categories;
+	}
+
+	/**
+	 * The `excludePaths` array `raw` with each non-empty string resolved against the directory `baseDir` of the document it was
+	 * written in, so a nested document's entry stays relative to ITS directory; a value of any other shape is returned as
+	 * written, and a relative entry stays relative when the document has no directory.
+	 */
+	private static function resolveScopePaths(baseDir: Null<String>, raw: JValue): JValue {
+		final root: Null<String> = baseDir == null ? null : FileIdentity.realPath(baseDir);
+		return switch raw {
+			case JArray(items): JArray([
+				for (item in items)
+					switch item {
+						case JString(path) if (path != ''): JString(resolveAgainstConfigDir(root, path));
+						case _: item;
+					}
+			]);
+			case _: raw;
+		};
 	}
 
 }

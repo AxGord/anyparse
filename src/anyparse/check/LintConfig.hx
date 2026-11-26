@@ -573,6 +573,20 @@ final class LintConfig {
 		);
 	}
 
+	/**
+	 * The strings of the framework-read scope option `key` (`ExcludedScope.PATHS_KEY` / `TYPES_KEY`) of rule `id`, empty when
+	 * absent. Read straight off the entry: no rule asks for the key, so the census of options a check reads stays its own.
+	 */
+	public function scopeList(id: String, key: String): Array<String> {
+		final out: Array<String> = [];
+		switch _rules[id]?.props[key] {
+			case JArray(items):
+				LintDocuments.collectStrings(items, out);
+			case _:
+		}
+		return out.filter(entry -> entry != '');
+	}
+
 	/** The raw array prop `key` of rule `id`, or null when it is unset or not an array — the array base for the list accessors. */
 	private function arrayOption(id: String, key: String): Null<Array<JValue>> {
 		return switch jsonOption(id, key) {

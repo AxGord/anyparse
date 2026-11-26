@@ -79,6 +79,28 @@ final class Glob {
 		return out;
 	}
 
+	/**
+	 * Whether the glob `spec` selects `path` — the path itself, or any directory above it (a spec naming a directory selects
+	 * everything beneath it). The one answer to "does this configured path pattern cover this file".
+	 */
+	public static function covers(spec: String, path: String): Bool {
+		final norm: String = listedForm(spec);
+		if (norm == '') return true;
+		final file: String = listedForm(path);
+		final matches: String -> Bool = if (isGlob(norm)) {
+			final re: EReg = globToRegex(norm, '/');
+			re.match;
+		} else {
+			p -> p == norm;
+		};
+		var end: Int = file.length;
+		while (end > 0) {
+			if (matches(file.substr(0, end))) return true;
+			end = file.lastIndexOf('/', end - 1);
+		}
+		return false;
+	}
+
 	/** Where a walk for `spec` starts: the literal part of a glob before its first wildcard, else `spec`; `.` for the top. */
 	public static function walkRoot(spec: String): String {
 		final norm: String = listedForm(spec);

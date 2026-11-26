@@ -134,7 +134,7 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 		}
 		final dir: String = CliFixture.writeDir('addyn', [{ name: 'Good.hx', source: APPLIES }, { name: 'check.hxml', source: HXML }]);
 		final path: String = '$dir/Good.hx';
-		final excluding: LintConfig = LintConfig.parse('{"rules":{"avoid-dynamic":{"excludePaths":["${Path.withoutDirectory(dir)}"]}}}');
+		final excluding: LintConfig = LintConfig.parse('{"rules":{"avoid-dynamic":{"excludePaths":["**/${Path.withoutDirectory(dir)}"]}}}');
 		final result: FixVerifyResult = FixVerifier.verify(
 			[{ file: path, source: APPLIES }], [new AvoidDynamic()],
 			new HaxeQueryPlugin(), [{ hxml: 'check.hxml', dir: dir, defines: [] }],

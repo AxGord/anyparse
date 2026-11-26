@@ -80,9 +80,7 @@ final class RuleOptionKeysTest extends Test {
 		Assert.same(
 			[],
 			unknown(
-				'{"rules":{"avoid-any":{"excludePaths":[],"excludeMeta":[]},"avoid-dynamic":{"excludePaths":[],"excludeMeta":[],'
-				+ '"boundaryCalls":[]}}}',
-				Linter.acceptedOptions()
+				'{"rules":{"avoid-any":{"excludeMeta":[]},"avoid-dynamic":{"excludeMeta":[],"boundaryCalls":[]}}}', Linter.acceptedOptions()
 			)
 		);
 	}
@@ -92,8 +90,8 @@ final class RuleOptionKeysTest extends Test {
 	@:killer('M-OPTKEYS-ACCEPTS-NONE')
 	public function testARuleWithNoOptionsAcceptsNone(): Void {
 		Assert.same(
-			['rules "bare" has unknown option "excludePaths" — ignored; accepts: none'],
-			unknown('{"rules":{"bare":{"enabled":true,"excludePaths":["x"]}}}', ['bare' => []])
+			['rules "bare" has unknown option "limit" — ignored; accepts: none'],
+			unknown('{"rules":{"bare":{"enabled":true,"limit":["x"]}}}', ['bare' => []])
 		);
 	}
 

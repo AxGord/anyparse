@@ -81,14 +81,6 @@
 			"note": "the chain climbs past the project root and folds a stray ancestor document"
 		},
 		{
-			"name": "M-GATE-COLLECT-BYPASS",
-			"type": "anyparse.check.Linter",
-			"method": "scannedBy",
-			"find": "if (!(check is FileGated)) return files;",
-			"replace": "return files;",
-			"note": "the run ignores the FileGated answer the listing reports, so an excluded file is scanned"
-		},
-		{
 			"name": "M-EFFECTIVE-IGNORES-FILEGATE",
 			"type": "anyparse.check.EffectiveRules",
 			"method": "stateOf",
@@ -662,6 +654,77 @@
 			"find": "for (check in builtins()) out[check.id()] = check is OptionKeyed ? (cast check: OptionKeyed).acceptedOptions() : [];",
 			"replace": "for (check in builtins()) if (check is OptionKeyed) out[check.id()] = (cast check: OptionKeyed).acceptedOptions();",
 			"note": "a check that reads no option is left out of the table, so its id reads as no rule"
+		},
+		{
+			"name": "M-EXCLUDED-SCOPE-PATHS-BLIND",
+			"type": "anyparse.check.ExcludedScope",
+			"method": "excludesFile",
+			"force": "false",
+			"note": "no file is ever scoped out by its excludePaths"
+		},
+		{
+			"name": "M-EXCLUDED-SCOPE-TYPES-BLIND",
+			"type": "anyparse.check.ExcludedScope",
+			"method": "without",
+			"find": "!enclosing.exists(path -> patterns.exists(pattern -> Glob.qualifiedNames(pattern).match(path)))",
+			"replace": "true",
+			"note": "a finding inside an excludeTypes type is kept"
+		},
+		{
+			"name": "M-EXCLUDED-SCOPE-RELATIVE-TO-DOCUMENT",
+			"type": "anyparse.check.LintDocuments",
+			"method": "resolveScopePaths",
+			"find": "JString(resolveAgainstConfigDir(root, path))",
+			"replace": "JString(path)",
+			"note": "an excludePaths entry stays relative to nothing instead of to the directory of the document that wrote it"
+		},
+		{
+			"name": "M-EXCLUDED-SCOPE-NOT-COLLECTED",
+			"type": "anyparse.check.Linter",
+			"method": "collect",
+			"find": "ExcludedScope.without(enabled, files, plugin, resolveConfig)",
+			"replace": "enabled",
+			"note": "the run never applies the scope keys, so every excluded finding is reported and fixed"
+		},
+		{
+			"name": "M-EFFECTIVE-EXCLUDED",
+			"type": "anyparse.check.EffectiveRules",
+			"method": "stateOf",
+			"find": "skipped == null && !excluded,",
+			"replace": "skipped == null,",
+			"note": "the listing reports a rule on for a file its excludePaths scope out"
+		},
+		{
+			"name": "M-OPTKEYS-SCOPE-KEYS",
+			"type": "anyparse.check.LintDocuments",
+			"method": "unknownOptions",
+			"find": " && !ExcludedScope.KEYS.contains(key)",
+			"replace": "",
+			"note": "the scope keys every rule takes are called unknown options"
+		},
+		{
+			"name": "M-EXCLUDED-SCOPE-EMPTY-ENTRY",
+			"type": "anyparse.check.LintDocuments",
+			"method": "resolveScopePaths",
+			"find": "case JString(path) if (path != ''):",
+			"replace": "case JString(path):",
+			"note": "an empty excludePaths entry resolves to the document directory and scopes out every file under it"
+		},
+		{
+			"name": "M-LINTER-REPORTABLE-IGNORES-SCOPE",
+			"type": "anyparse.check.Linter",
+			"method": "reportableFor",
+			"find": " && !ExcludedScope.excludesFile(config, check.id(), file)",
+			"replace": "",
+			"note": "a cross-file finding is anchored at a file its own excludePaths scopes out, and is dropped with the anchor"
+		},
+		{
+			"name": "M-GATE-COLLECT-BYPASS",
+			"type": "anyparse.check.Linter",
+			"method": "scannedBy",
+			"find": "if (!(check is FileGated)) return files;",
+			"replace": "return files;",
+			"note": "the run ignores the FileGated answer the listing reports, so an excluded file is scanned"
 		}
 	]
 }

@@ -139,7 +139,8 @@ final class Linter {
 		final raw: Array<Violation> = [ for (check in checks) for (violation in runGated(check, files, plugin, resolveConfig)) violation ];
 		final unquoted: Array<Violation> = ReificationScan.withoutQuoted(raw, files, plugin, ReificationScan.exemptIdsOf(checks));
 		final kept: Array<Violation> = Suppression.apply(unquoted, files, plugin.lexicalRegions);
-		final gated: Array<Violation> = resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);
+		final enabled: Array<Violation> = resolveConfig == null ? kept : gatedPerFile(kept, checks, resolveConfig, applyEnablement);
+		final gated: Array<Violation> = resolveConfig == null ? enabled : ExcludedScope.without(enabled, files, plugin, resolveConfig);
 		return withoutSuperseded(narrow == null ? gated : narrow(gated), checks);
 	}
 
@@ -258,7 +259,8 @@ final class Linter {
 
 	/** `passesGates` for `check` in `file`, asked of `file`'s own config — the answer a `CrossFileAnchored` check anchors by. */
 	private static function reportableFor(check: Check, resolve: (String) -> LintConfig, applyEnablement: Bool, file: String): Bool {
-		return passesGates(check, resolve(file), applyEnablement);
+		final config: LintConfig = resolve(file);
+		return passesGates(check, config, applyEnablement) && !ExcludedScope.excludesFile(config, check.id(), file);
 	}
 
 	/**
