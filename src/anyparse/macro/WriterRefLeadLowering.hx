@@ -130,6 +130,8 @@ final class WriterRefLeadLowering {
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _rhs: anyparse.core.Doc = $writeCall;
+			// Every shape below ends the declaration's head at the `=`, whether or not it may break there.
+			final _lead: anyparse.core.Doc = _dtt($v{leadText}, anyparse.core.LeafTag.HeadEnd);
 			final _lhsType = $typeAccess;
 			final _lhsHasTypeParam: Bool = _lhsType != null && Type.enumConstructor(_lhsType) == 'Named' && {
 				final _p = Reflect.field(Type.enumParameters(_lhsType)[0], 'params');
@@ -168,7 +170,7 @@ final class WriterRefLeadLowering {
 			};
 			if ((_lhsHasTypeParam && !_rhsIsComprehension) || _rhsCtor == 'SingleStringExpr' || _rhsCtor == 'DoubleStringExpr') {
 				_dc([
-					_dt($v{leadText}),
+					_lead,
 					_dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _rhs])), _dc([_dop(' '), _rhs]))
 				]);
 			} else {
@@ -194,11 +196,11 @@ final class WriterRefLeadLowering {
 				final _flatW: Int = anyparse.core.DocMeasure.flatTokenWidth(_eqGlued);
 				if (_head.endsAtOpenDelim)
 					_dc([
-						_dt($v{leadText}),
+						_lead,
 						_diwe(opt.lineWidth + 1 - _head.width + _flatW, _dn(_cols, _dc([_dhl(), _rhs])), _eqGlued)
 					]);
 				else
-					_dc([_dt($v{leadText}), _dop(' '), _rhs]);
+					_dc([_lead, _dop(' '), _rhs]);
 			}
 		};
 	}

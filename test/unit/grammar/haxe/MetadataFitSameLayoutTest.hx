@@ -10,9 +10,9 @@ import utest.Test;
 using StringTools;
 
 /**
- * Under `fit` a lone simple metadata glues to its declaration only when the declaration keeps the layout it
+ * Under `fit` a lone simple metadata glues to its declaration only when the declaration's head keeps the layout it
  * takes without the metadata: a head the glue alone would break keeps the metadata on its own line, and a head
- * that breaks anyway keeps it glued.
+ * that breaks anyway keeps it glued. A var's head ends at its initializer's `=`.
  */
 @:nullSafety(Strict)
 final class MetadataFitSameLayoutTest extends Test {
@@ -114,18 +114,19 @@ final class MetadataFitSameLayoutTest extends Test {
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, FIT));
 	}
 
-	/** A variable whose initializer fits alone but not after the metadata keeps the metadata above it. */
+	/** A variable whose initializer fits alone but not after the metadata keeps the metadata on a head that fits and breaks after `=`. */
 	@:pin('control')
-	@:killer('M-META-FIT-NATURAL-BREAK-ASSUMED')
-	public function testAnInitializerOnlyTheGlueWouldBreakStaysWhole(): Void {
-		final src: String = 'class C {\n\t@:allow(pkg.sub)\n\tvar holderOfTheSavedAnimationData:Map<SomeVeryLongKeyTypeName, '
-			+ 'Array<AnotherVeryLongValueTypeName>> = new Map<Int, Int>();\n}';
-		Assert.equals(src, HxWriteFixture.triviaWrite(src, FIT));
+	@:killer('M-META-FIT-HEAD-ENDS-AT-INITIALIZER')
+	public function testAnInitializerOnlyTheGlueWouldBreakBreaksUnderTheMetadata(): Void {
+		final decl: String = 'var holderOfTheSavedAnimationData:Map<SomeVeryLongKeyTypeName, Array<AnotherVeryLongValueTypeName>> =';
+		Assert.equals(
+			'class C {\n\t@:allow(pkg.sub) $decl\n\t\tnew Map<Int, Int>();\n}',
+			HxWriteFixture.triviaWrite('class C {\n\t@:allow(pkg.sub)\n\t$decl new Map<Int, Int>();\n}', FIT)
+		);
 	}
 
 	/** A variable that breaks after `=` even without the metadata keeps it glued. */
-	@:pin('control')
-	@:killer('M-META-FIT-NATURAL-BREAK-IGNORED')
+	@:pin('guard')
 	public function testAnInitializerThatBreaksAnywayKeepsTheMetadata(): Void {
 		final decl: String = 'var holderOfTheSavedAnimationData:Map<SomeVeryLongKeyTypeName, Array<AnotherVeryLongValueTypeName>> =';
 		Assert.equals(
@@ -147,13 +148,15 @@ final class MetadataFitSameLayoutTest extends Test {
 		);
 	}
 
-	/** Call arguments that pack an item fewer at the glued column keep their first line, the metadata above it. */
+	/**
+	 * A var's head ends at `=`: the call arguments of its initializer pack from the glued column and the metadata stays.
+	 */
 	@:pin('guard')
-	public function testCallArgumentsThePackingOfWhichTheGlueChangesKeepTheirFirstLine(): Void {
-		final decl: String = 'var ${''.lpad('x', 66)}:Int = callSomething(aaaaaaaa, function(q:Int) return q + 1,';
+	public function testCallArgumentsOfAnInitializerPackFromTheGluedColumn(): Void {
+		final decl: String = 'var ${''.lpad('x', 66)}:Int = callSomething(aaaaaaaa,';
 		Assert.equals(
-			'class C {\n\t@:keep\n\t$decl\n\t\tccccccc);\n}',
-			HxWriteFixture.triviaWrite('class C {\n\t@:keep $decl ccccccc);\n}\n', FIT_SIGNATURE)
+			'class C {\n\t@:keep $decl\n\t\tfunction(q:Int) return q + 1, ccccccc);\n}',
+			HxWriteFixture.triviaWrite('class C {\n\t@:keep $decl function(q:Int) return q + 1, ccccccc);\n}\n', FIT_SIGNATURE)
 		);
 	}
 

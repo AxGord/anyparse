@@ -427,14 +427,17 @@ block is in the then branch (`c ? {…} : x` would hide `: x`). `0` (the default
 `fit` is a value of `lineEnds.metadataType`, `metadataFunction`, `metadataVar` and `metadataOther`, not part of
 haxe-formatter's schema. It is decided by width and never reads the source layout:
 
-- one simple metadata stays on the declaration's line when that line fits `wrapping.maxLineLength`, else takes a line of its own —
-  and, when `lineEnds.metadataInlineMaxLength` is set, also when the metadata itself is wider than that (below);
+- one simple metadata stays on the declaration's line when the declaration's head fits `wrapping.maxLineLength`, else takes a
+  line of its own — and, when `lineEnds.metadataInlineMaxLength` is set, also when the metadata itself is wider than that
+  (below). The head ends where the body or the initializer may break: at a var's `=`, before a body
+  `sameLine.functionBody: fitLine` may move. A body or initializer that does not fit breaks first, and the metadata stays;
 - several simple metadata share one line above the declaration when that row fits, and are never joined to the declaration itself;
 - otherwise — a complex metadata, a row that does not fit, a comment between metadata or after the last one, a `#if` in the run — one per line, as `after`.
 
-Simple is no argument, or exactly one that is a number, `true` / `false` / `null`, an identifier, a dotted path or a
-one-line string without interpolation (`@:nullSafety(Strict)`, `@:access(pkg.Type)`, `@:xml('action')`). A call, several
-arguments, an object, array or function literal and an interpolated or multi-line string are complex. With `fit` on all four keys:
+Simple is no argument, or exactly one that is a number, `true` / `false` / `null`, an identifier, a dotted path, a
+one-line string without interpolation, or a prefix or binary operator over such operands (`@:nullSafety(Strict)`,
+`@:access(pkg.Type)`, `@:xml('action')`, `@:op(A + B)`, `@:op(-A)`). A call, several arguments, an object, array or
+function literal, an operator over any of them and an interpolated or multi-line string are complex. With `fit` on all four keys:
 
 ```haxe
 @:access(a.B) @:nullSafety(Strict)

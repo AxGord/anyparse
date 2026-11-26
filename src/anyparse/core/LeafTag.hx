@@ -312,4 +312,10 @@ enum LeafTag {
 	 */
 	Delimiter(opens: OpenEdge, ends: EndEdge);
 
+	/**
+	 * Writer syntax that ends a declaration's head, a var's `=`: what follows is an initializer that breaks on its
+	 * own, so a decision taken on the head's width (a glued metadata's line) measures up to this leaf and no further.
+	 */
+	HeadEnd;
+
 }

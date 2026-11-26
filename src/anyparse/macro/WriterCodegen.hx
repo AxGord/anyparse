@@ -1361,6 +1361,7 @@ class WriterCodegen {
 				macro anyparse.core.LeafTag.Delimiter(anyparse.core.LeafTag.OpenEdge.$open, anyparse.core.LeafTag.EndEdge.$end);
 			case LineComment: macro anyparse.core.LeafTag.LineComment;
 			case BlockComment: macro anyparse.core.LeafTag.BlockComment;
+			case HeadEnd: macro anyparse.core.LeafTag.HeadEnd;
 		};
 	}
 

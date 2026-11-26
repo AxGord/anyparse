@@ -4034,6 +4034,9 @@ class Renderer {
 			return { add: 0, aborted: false };
 		}
 		return switch node.doc {
+			// A glued asker's line ends with the declaration's head: what follows may break at the glued column as it would
+			// on any line too short for it, so it is not the asker's to fit.
+			case Text(s, _, HeadEnd) if (sibling.glue != null): { add: s.length, aborted: true };
 			case Group(innerDoc) if (renderCol >= 0): fitsFlat(sibling.width - renderCol, 0, innerDoc) ? null : broken(innerDoc);
 			case GroupWithRestProbe(_), Fill(_, _, _), FillWithRestProbe(_, _, _), FillBreakAfterWrap(_, _, _),
 				IfNaturalFirstLineExceeds(_, _, _) if (sibling.glue != null && renderCol >= 0):
@@ -4094,8 +4097,8 @@ class Renderer {
 
 	/**
 	 * The `siblingRestStep` of a probe under a glued asker (`RestSibling.glue`), whose columns are the unglued line's:
-	 * each break decides the layout the declaration takes without the glue, so only a break it takes anyway ends the
-	 * asker's line. `null` measures the node flat.
+	 * each break of the declaration's head decides the layout the head takes without the glue, so only a break it takes
+	 * anyway ends the asker's line. `null` measures the node flat.
 	 */
 	private static function ungluedRestStep(
 		doc: Doc, inner: Array<{ doc: Doc, mode: Mode }>, sibling: RestSibling, renderCol: Int, penCol: Int
@@ -4130,7 +4133,7 @@ class Renderer {
 				}
 				return null;
 			case IfNaturalFirstLineExceeds(n, _, flatDoc):
-				// A relocating `=` break the unglued line does not take leaves the right side on the asker's line.
+				// A relocating break the unglued line does not take leaves its content on the asker's line.
 				if (naturalFirstLineWidth(flatDoc, renderCol, sibling.col, sibling.width, true) >= n) return { add: 0, aborted: true };
 				inner.push({ doc: flatDoc, mode: MFlat });
 				return { add: 0, aborted: false };

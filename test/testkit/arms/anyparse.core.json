@@ -1061,20 +1061,12 @@
 			"note": "a glued metadata measures a fill's first line by its first item only, so it stays glued though it pushes later items off that line"
 		},
 		{
-			"name": "M-META-FIT-NATURAL-BREAK-ASSUMED",
+			"name": "M-META-FIT-HEAD-ENDS-AT-INITIALIZER",
 			"type": "anyparse.core.Renderer",
-			"method": "ungluedRestStep",
-			"find": "if (naturalFirstLineWidth(flatDoc, renderCol, sibling.col, sibling.width, true) >= n)",
-			"replace": "if (true)",
-			"note": "a relocating `=` break ends a glued metadata's line though the unglued line keeps its right side, so the glue alone breaks the initializer"
-		},
-		{
-			"name": "M-META-FIT-NATURAL-BREAK-IGNORED",
-			"type": "anyparse.core.Renderer",
-			"method": "ungluedRestStep",
-			"find": "if (naturalFirstLineWidth(flatDoc, renderCol, sibling.col, sibling.width, true) >= n)",
-			"replace": "if (false)",
-			"note": "a glued metadata measures an initializer flat past the `=` break it takes anyway, so it leaves a declaration whose first line fits"
+			"method": "siblingRestStep",
+			"find": "case Text(s, _, HeadEnd) if (sibling.glue != null):",
+			"replace": "case Text(s, _, HeadEnd) if (sibling.glue != null && false):",
+			"note": "a glued metadata measures a var initializer past its `=`, so an initializer that does not fit after the metadata sends it above a head that fits"
 		},
 		{
 			"name": "M-META-FIT-FILL-TAIL-UNRESERVED",

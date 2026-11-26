@@ -453,7 +453,11 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				final _elem: anyparse.core.Doc = $_elemCall;
 				$_metaInlineCap;
 				final _tc: Null<String> = _t.trailingComment;
-				_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
+				_docs.push(
+					_tc != null
+						? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt))
+						: ${WriterMetaLineEndLowering.fitLoneDocExpr(macro _elem)}
+				);
 				// ω-cond-indent-policy AlignedNestedIncrease: if this body
 				// element is itself a nested `Conditional`, lift its whole
 				// span (leading separator + markers + guarded body, captured

@@ -89,6 +89,16 @@ final class WriterMetaLineEndLowering {
 		return wide == null ? macro {} : macro if (_metaFit == 1 && $wide) _metaFit = 0;
 	}
 
+	/**
+	 * The doc a lone element of a `Fit` run is pushed as: flat whenever it fits its own line, as it then stands in
+	 * either outcome, so a break inside it (an operator argument's) never weighs the declaration that may follow it.
+	 */
+	public static function fitLoneDocExpr(elemDoc: Expr): Expr {
+		return macro _metaFit == 1
+			? anyparse.core.Doc.IfWidthExceeds(opt.lineWidth + 1, $elemDoc, anyparse.core.Doc.HardFlatten($elemDoc))
+			: $elemDoc;
+	}
+
 	/** The separator between two elements of a run that does not break after each: a soft line inside a `Fit` row. */
 	public static function fitSepExpr(): Expr {
 		return macro (_metaFit == 2 ? _dl() : _dt(' '));

@@ -3921,6 +3921,21 @@
 			"find": "if ((_policy: Int) < 0 || _policy == anyparse.format.MetadataLineEndPolicy.None)",
 			"replace": "if ((_policy: Int) < 0)",
 			"note": "a local var chain under None no longer takes the source separator, so its entries break by the AfterLast rule"
+		},
+		{
+			"name": "M-META-FIT-LONE-BREAKS-INSIDE",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitLoneDocExpr",
+			"force": "elemDoc",
+			"note": "a lone metadata that fits its own line breaks inside when the declaration after it does not fit, as if it shared that line"
+		},
+		{
+			"name": "M-META-FIT-HEAD-PLAIN-UNTAGGED",
+			"type": "anyparse.macro.WriterRefLeadLowering",
+			"method": "breakAfterLeadOnOverflowWrap",
+			"find": "_dc([_lead, _dop(' '), _rhs]);",
+			"replace": "_dc([_dt($v{leadText}), _dop(' '), _rhs]);",
+			"note": "a var whose `=` never breaks (an operator initializer) leaves its head untagged, so a glued metadata measures the whole initializer and goes above a head that fits"
 		}
 	]
 }

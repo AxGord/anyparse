@@ -338,6 +338,30 @@
 			"find": "if (holdsBlock(list[i], 0)) return null;",
 			"replace": "if (false) return null;",
 			"note": "a block in an argument before the tail is not seen, so the ternary hugs a call whose earlier argument breaks too"
+		},
+		{
+			"name": "M-META-FIT-OPERATOR-COMPLEX",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "if (MetaInspect.hasMeta(branch, ':infix'))",
+			"replace": "if (false)",
+			"note": "an operator argument is complex, so `@:op(A + B)` never stays on a declaration head that fits"
+		},
+		{
+			"name": "M-META-FIT-PREFIX-COMPLEX",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "else if (MetaInspect.hasMeta(branch, ':prefix'))",
+			"replace": "else if (false)",
+			"note": "a prefix operator argument is complex, so `@:op(-A)` never stays on a declaration head that fits"
+		},
+		{
+			"name": "M-META-FIT-OPERANDS-UNREAD",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "macro ${operand('_l')} && ${operand('_r')}",
+			"replace": "macro true",
+			"note": "a binary operator argument is simple whatever its operands, so an operator over a call joins the declaration's line"
 		}
 	]
 }

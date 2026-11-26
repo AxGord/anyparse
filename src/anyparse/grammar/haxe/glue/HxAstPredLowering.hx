@@ -1237,8 +1237,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	}
 
 	/**
-	 * `metadataIsSimple(m)`: no argument, or exactly one that is a literal or a dotted path — the metadata the `Fit`
-	 * line-end policy may place by width alone. A raw `PlainMeta` and a `#if` region are never simple.
+	 * `metadataIsSimple(m)`: no argument, or exactly one that is a literal, a dotted path or an operator over them — the
+	 * metadata the `Fit` line-end policy may place by width alone. A raw `PlainMeta` and a `#if` region are never simple.
 	 */
 	private function metadataIsSimpleField(): Field {
 		final args: Expr = field(ident('_c'), 'args');
@@ -1250,21 +1250,39 @@ final class HxAstPredLowering extends AstPredLowering {
 		], macro false);
 		return predField(
 			'metadataIsSimple', [valueArg('m', HX_METADATA)],
-			macro : Bool, body, 'True iff a metadata takes no argument, or one literal, identifier or dotted path.'
+			macro : Bool, body, 'True iff a metadata takes no argument, or one literal, identifier, dotted path or operator over them.'
 		);
 	}
 
-	/** A metadata argument is simple when it is a number, `true`/`false`/`null`, a one-line plain string or a dotted path. */
+	/**
+	 * A metadata argument is simple when it is a number, `true`/`false`/`null`, a one-line plain string, a dotted path, or a
+	 * prefix or binary operator over simple operands (`@:op(A + B)`, `@:op(-A)`). The operator constructors are read off the
+	 * grammar's own `@:prefix` / `@:infix` annotations, so no operator table can drift from it.
+	 */
 	private function metaArgIsSimpleField(): Field {
+		final exprRule: ShapeNode = _shape.rules[HX_EXPR] ?? Context.fatalError(
+			'HxAstPredLowering: $HX_EXPR is not a rule', Context.currentPos()
+		);
 		final path: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('e')]), pos: Context.currentPos() };
 		final plain: Expr = { expr: ECall(ident(INTERP_STRING_IS_PLAIN), [ident('_s')]), pos: Context.currentPos() };
-		final body: Expr = nullSwitch(ident('e'), macro false, [
+		final operand: String -> Expr = name -> { expr: ECall(ident(META_ARG_IS_SIMPLE), [ident(name)]), pos: Context.currentPos() };
+		final cases: Array<Case> = [
 			caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro true),
 			caseBind(HX_EXPR, 'DoubleStringExpr', [0 => '_d'], macro !StringTools.contains(_d, '\n')),
 			caseBind(HX_EXPR, 'SingleStringExpr', [0 => '_s'], plain)
-		], path);
+		];
+		for (branch in exprRule.children) {
+			final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
+			if (branch.children.filter(c -> c.annotations.get(AnnotationKeys.BASE_REF) != HX_EXPR).length > 0) continue;
+			if (MetaInspect.hasMeta(branch, ':infix'))
+				cases.push(caseBind(HX_EXPR, ctor, [0 => '_l', 1 => '_r'], macro ${operand('_l')} && ${operand('_r')}));
+			else if (MetaInspect.hasMeta(branch, ':prefix'))
+				cases.push(caseBind(HX_EXPR, ctor, [0 => '_o'], operand('_o')));
+		}
 		return predField(
-			META_ARG_IS_SIMPLE, [valueArg('e', HX_EXPR)], macro : Bool, body, 'True iff a metadata argument is a literal or a dotted path.'
+			META_ARG_IS_SIMPLE, [valueArg('e', HX_EXPR)],
+			macro : Bool, nullSwitch(ident('e'), macro false, cases, path),
+			'True iff a metadata argument is a literal, a dotted path or an operator over simple operands.'
 		);
 	}
 
