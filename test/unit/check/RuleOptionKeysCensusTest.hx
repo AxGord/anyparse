@@ -15,14 +15,14 @@ final class RuleOptionKeysCensusTest extends Test {
 
 	/**
 	 * One source holding the shapes whose option reads real code does not reach: a caught `Dynamic`, a `Map` used as a set
-	 * that grows, a `split` cut of a `String`, and an untyped local.
+	 * that grows, a `split` cut of a `String`, an untyped local, and a construction copying the fields of one value.
 	 */
 	private static final FIXTURES: Array<{ file: String, source: String }> = [{
 		file: 'fixture/A.hx',
-		source: 'import haxe.ds.StringMap;\nimport haxe.ds.IntMap;\nclass A {\n'
-			+ '\tpublic function f(s: String, m: Map<String, Bool>): Void {\n\t\ttry {} catch (e: Dynamic) {}\n'
-			+ '\t\tfinal i = s.indexOf(",");\n\t\tfinal t = s.substr(i + 1);\n\t\tvar local = new StringMap<Int>();\n\t\tfinal seen: '
-			+ 'Map<String, Bool> = [];\n\t\tfor (k in [s]) seen[k] = true;\n\t\tfinal head: String = s.split(",")[0];\n\t}\n}\n'
+		source: 'import haxe.ds.StringMap;\nimport haxe.ds.IntMap;\nclass A {\n\tpublic function f(s: String, m: Map<String, Bool>): Void {'
+			+ '\n\t\ttry {} catch (e: Dynamic) {}\n\t\tfinal i = s.indexOf(",");\n\t\tfinal t = s.substr(i + 1);\n'
+			+ '\t\tvar local = new StringMap<Int>();\n\t\tfinal seen: Map<String, Bool> = [];\n\t\tfor (k in [s]) seen[k] = true;\n'
+			+ '\t\tfinal head: String = s.split(",")[0];\n\t\tfinal copy = new A(s.length, s.length);\n\t}\n}\n'
 	}];
 
 	/**

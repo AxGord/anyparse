@@ -7,6 +7,7 @@ import anyparse.check.haxe.facts.FactsTypeOracle;
 import anyparse.check.scan.ReceiverShadow;
 import anyparse.check.scan.SpanRender;
 import anyparse.check.scan.UsingScan;
+import anyparse.query.BoolExprShape;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;

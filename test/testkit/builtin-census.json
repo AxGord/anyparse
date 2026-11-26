@@ -115,6 +115,7 @@
 	"prefer-case-wildcard",
 	"prefer-compare-function",
 	"prefer-comprehension",
+	"prefer-copy-method",
 	"prefer-count",
 	"prefer-doc-comment",
 	"prefer-enum-abstract",

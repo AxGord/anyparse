@@ -159,6 +159,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/check/config/OwnedTypesDeclaration.hx',
 			'src/anyparse/check/config/import.hx',
 			'src/anyparse/check/haxe/expressions/CompareFunctions.hx',
+			'src/anyparse/check/haxe/expressions/PreferCopyMethod.hx',
 			'src/anyparse/check/haxe/expressions/PreferSplitPart.hx',
 			'src/anyparse/check/haxe/facts/TypedFactsMacro.hx',
 			'src/anyparse/check/haxe/facts/TypedFactsProbe.hx',

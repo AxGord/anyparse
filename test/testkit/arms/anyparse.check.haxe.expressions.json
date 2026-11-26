@@ -314,8 +314,8 @@
 		},
 		{
 			"name": "M-RCMP-ERROR-NO-FILE",
-			"type": "anyparse.check.haxe.expressions.PreferCompareFunction",
-			"method": "run",
+			"type": "anyparse.check.haxe.expressions.CompareFunctions",
+			"method": "problemViolations",
 			"find": "file: problem.file,",
 			"replace": "file: '',",
 			"note": "the configuration error stands on no file, where the per-file gate reads a default-off rule as off and drops it from every normal run"
@@ -806,6 +806,94 @@
 			"find": "if (!inRun.exists(host.file))",
 			"replace": "if (false)",
 			"note": "an element class outside the run's files is promised as the host, and the fix driver drops the whole group without saying why"
+		},
+		{
+			"name": "M-COPYM-ANY-COPY",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "isCopyOf",
+			"find": "&& m.paramTypeSources.length == 0",
+			"replace": "&& true",
+			"note": "a copy method that takes a parameter is accepted as the named copy"
+		},
+		{
+			"name": "M-COPYM-ANY-ORDER",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "proved",
+			"find": "p.fields.join(',') == site.fields.join(',') && namesPair",
+			"replace": "namesPair",
+			"note": "a reordered, missing or extra argument is taken for the configured fields, so a different value is rewritten as a copy"
+		},
+		{
+			"name": "M-COPYM-ANY-RECEIVER",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "siteAt",
+			"find": "text != null && spelled != text",
+			"replace": "false",
+			"note": "arguments read off different receivers are taken for one value, so the copy takes both fields from one of them"
+		},
+		{
+			"name": "M-COPYM-ANY-TYPE",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "proved",
+			"find": "|| nominal(site.receiver) != pair.name",
+			"replace": "|| false",
+			"note": "a receiver of another type is rewritten as a copy, which converts a position instead"
+		},
+		{
+			"name": "M-COPYM-COMMENT",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "siteAt",
+			"find": "LexicalRegions.commentIntersects(span.from, span.to, regions())",
+			"replace": "false",
+			"note": "a comment inside the construction is deleted by the rewrite"
+		},
+		{
+			"name": "M-COPYM-IMPURE",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "proved",
+			"find": "!site.args.foreach(arg -> PurityScan.isPure(arg, purity))",
+			"replace": "false",
+			"note": "a call or a getter among the arguments is dropped by the rewrite"
+		},
+		{
+			"name": "M-COPYM-NAMES-PAIR",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "proved",
+			"find": "&& namesPair(p, site, index, home)",
+			"replace": "&& true",
+			"note": "a construction of another type built from the same fields is rewritten as a copy of the configured type"
+		},
+		{
+			"name": "M-COPYM-OVERRIDE",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "refuses",
+			"find": "widest == null || isOverridden(widest, pair)",
+			"replace": "false",
+			"note": "a copy method overridden in a subtype is still rewritten, which yields the subtype where the constructor yields the type"
+		},
+		{
+			"name": "M-COPYM-ONE-DECL",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "refuses",
+			"find": "index.refs.onlyDeclaration(pair.name) == null || ",
+			"replace": "",
+			"note": "a receiver of a same-named type from another package is rewritten to a copy of the configured type"
+		},
+		{
+			"name": "M-COPYM-FINAL",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "refuses",
+			"find": "!pair.isFinal && ",
+			"replace": "",
+			"note": "a final type is refused whenever an unrelated type with an unresolvable ancestry overrides a method of that name"
+		},
+		{
+			"name": "M-COPYM-SELF-CALL",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "proved",
+			"find": "site.enclosing.contains(pair.copy) ||",
+			"replace": "false ||",
+			"note": "the copy inside the copy method is rewritten to a call of that method, which calls itself"
 		}
 	]
 }

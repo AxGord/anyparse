@@ -1,6 +1,7 @@
 package anyparse.check.haxe.expressions;
 
 import anyparse.check.haxe.facts.FactsTypeOracle;
+import anyparse.query.BoolExprShape;
 import anyparse.query.CasePatterns;
 
 using anyparse.util.Arrays;

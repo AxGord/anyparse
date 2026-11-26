@@ -11,6 +11,7 @@ import anyparse.check.haxe.expressions.CompareFunctions.ConfigProblem;
 import anyparse.check.haxe.expressions.CompareFunctions.NamedCompare;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.check.scan.PurityScan;
+import anyparse.query.BoolExprShape;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ParseGate;
@@ -208,14 +209,7 @@ final class PreferCompareFunction extends HaxeRule implements DefaultOff impleme
 				remedy: m.compare?.typePath
 			});
 		});
-		for (problem in problems) found.push({
-			file: problem.file,
-			span: null,
-			rule: RULE_ID,
-			severity: Severity.Error,
-			message: problem.message
-		});
-		return found;
+		return found.concat(CompareFunctions.problemViolations(problems, RULE_ID));
 	}
 
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {

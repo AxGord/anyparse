@@ -364,6 +364,13 @@ typedef TypeDeclInfo = {
 	var isExtern: Bool;
 
 	/**
+	 * Whether the declaration is a FINAL class — no type can extend it, so a method it declares has no
+	 * override anywhere. Read from the grammar's final-class declaration kind (`RefShape.finalClassDeclKind`);
+	 * false for every other kind of declaration.
+	 */
+	var isFinal: Bool;
+
+	/**
 	 * The number of type parameters written on the declaration header
 	 * (`class Box<T, U>` → 2; 0 = non-generic). Drives bare-`new` local-type
 	 * annotation: an arity-0 type's written name IS its complete type.

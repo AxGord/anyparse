@@ -364,6 +364,7 @@ class BuildMacroMetaSeamTest extends Test {
 			isMain: false,
 			isPrivate: false,
 			isExtern: false,
+			isFinal: false,
 			typeParamArity: 0,
 			typeParamNames: [],
 			typeParamDefaults: [],

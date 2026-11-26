@@ -133,6 +133,17 @@ final class CompareFunctions {
 		return out;
 	}
 
+	/** The findings that report `problems`, each an `Error` with no span, on the file `anchorProblem` chose. */
+	public static function problemViolations(problems: Array<ConfigProblem>, rule: String): Array<Violation> {
+		return problems.map(problem -> ({
+			file: problem.file,
+			span: null,
+			rule: rule,
+			severity: Severity.Error,
+			message: problem.message
+		}: Violation));
+	}
+
 	/**
 	 * The members a config path `a.b.C.fn` names on the one public type the resolution index declares as `a.b.C`, or null with
 	 * a `label`-prefixed line in `problems` saying why it names none: the one answer to "what does a member path of a rule option name".
