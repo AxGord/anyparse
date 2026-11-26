@@ -229,10 +229,14 @@ directly. Left out, an enum or typedef keeps the source blank and an `enum abstr
 ## Metadata counts as a doc comment: `emptyLines.<kind>.metadataCountsAsDocComment`
 
 `metadataCountsAsDocComment` (`true` / `false`) in `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines`,
-and at `emptyLines` level for class, interface and plain `abstract` bodies: a member whose head carries metadata
-(`@:meta`, `@:fmt(...)`) is laid out for blank lines as a doc-commented member is, so `beforeDocCommentEmptyLines`,
-`afterFieldsWithDocComments` and `beginTypeIfDocComments` / `endTypeIfDocComments` fire on it too. A member with both a
-doc comment and metadata still takes one blank line, not two. The metadata is read from the member's AST, so a
+and at `emptyLines` level for class, interface and plain `abstract` bodies: a member whose metadata (`@:meta`,
+`@:fmt(...)`) stands on a line of its own above the declaration, as a doc comment would (one annotation on a line above
+it is enough: `@:keep` over `@:native("e") var e`), is laid out for blank lines as a
+doc-commented member is, so `beforeDocCommentEmptyLines`, `afterFieldsWithDocComments` and `beginTypeIfDocComments` /
+`endTypeIfDocComments` fire on it too. Metadata the output keeps on the declaration's line leaves a plain member, so a run
+of `@:auto public var a:Signal;` lines stays tight: that is `lineEnds.metadataVar` (and its siblings) at `none` with the
+source glued, or `fit` joining a lone simple annotation (counted as joined even when a long line later breaks it). A
+member with both a doc comment and metadata still takes one blank line, not two. The metadata is read from the member's AST, so a
 `#if` member counts only by its doc comment. Off by default (haxe-formatter has no such key):
 
 ```json
@@ -297,7 +301,7 @@ The group ends at the first member that:
   kind's own keys (`alpha` above takes `betweenVars`);
 - is of another kind, such as a function after the group's vars;
 - carries a comment of its own: a block comment, a doc comment or the next `//` heading;
-- counts as documented — a doc comment, or metadata under `metadataCountsAsDocComment`.
+- counts as documented — a doc comment, or metadata on its own line under `metadataCountsAsDocComment`.
 
 The key only holds blank lines back: a blank line the author wrote is never removed, the doc-comment keys
 (`beforeDocCommentEmptyLines`, `afterFieldsWithDocComments`) and `beforeCommentedFields` keep their blank lines, and

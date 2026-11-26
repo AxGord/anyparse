@@ -2868,9 +2868,9 @@
 		},
 		{
 			"name": "M-META-FIT-COMMENT-IGNORED",
-			"type": "anyparse.macro.TriviaTryparseLowering",
-			"method": "new",
-			"find": "|| Lambda.exists(_arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "decisionDecls",
+			"find": "|| Lambda.exists($arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);",
 			"replace": "|| false;",
 			"note": "a comment inside a metadata run no longer breaks it, so fit lays a commented run out by width"
 		},
@@ -3936,6 +3936,38 @@
 			"find": "_dc([_lead, _dop(' '), _rhs]);",
 			"replace": "_dc([_dt($v{leadText}), _dop(' '), _rhs]);",
 			"note": "a var whose `=` never breaks (an operator initializer) leaves its head untagged, so a glued metadata measures the whole initializer and goes above a head that fits"
+		},
+		{
+			"name": "M-META-OWN-LINE-UNREAD",
+			"type": "anyparse.macro.WriterTriviaStarDispatch",
+			"method": "docLedReads",
+			"find": "return ownLine == null ? macro $list.length > 0 : macro ($list.length > 0 && $ownLine);",
+			"replace": "return macro $list.length > 0;",
+			"note": "a member's metadata counts as doc-led wherever it stands, so a run of glued metadata members takes blank lines"
+		},
+		{
+			"name": "M-META-OWN-LINE-NONE-SOURCE",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "ownLineExpr",
+			"find": "$sourceBreak;",
+			"replace": "false;",
+			"note": "under lineEnds metadata none the source's break after the run is not read, so metadata kept on its own line counts as glued"
+		},
+		{
+			"name": "M-META-OWN-LINE-FIT",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "ownLineExpr",
+			"find": "_metaFit != 1;",
+			"replace": "true;",
+			"note": "a lone simple annotation fit joins to its declaration's line still counts as standing on its own line"
+		},
+		{
+			"name": "M-META-OWN-LINE-RUN-BREAK",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "ownLineExpr",
+			"find": "macro Lambda.exists(_omArr.slice(1), _fe -> _fe.newlineBefore);",
+			"replace": "macro false;",
+			"note": "under lineEnds metadata none a break between two annotations of the run is not read, so an annotation on its own line above one glued to the declaration leaves a plain member"
 		}
 	]
 }

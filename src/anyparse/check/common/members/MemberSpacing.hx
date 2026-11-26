@@ -274,8 +274,8 @@ final class MemberSpacing {
 		final writer: Null<MemberGapPolicy> = writerSpaced(a, b) ? spacing.writer : null;
 		final own: Null<GapWant> = ownWant(a, b, source, spacing);
 		if (writer == null) return own;
-		final headA: MemberGapHead = { leading: a.leadComments, hasMeta: a.hasMeta };
-		final headB: MemberGapHead = { leading: b.leadComments, hasMeta: b.hasMeta };
+		final headA: MemberGapHead = { leading: a.leadComments, metaOwnLine: a.metaOwnLine };
+		final headB: MemberGapHead = { leading: b.leadComments, metaOwnLine: b.metaOwnLine };
 		final forced: Null<Int> = writer.docBlanks(headA, headB);
 		final base: Null<GapWant> = if (forced == null)
 			own

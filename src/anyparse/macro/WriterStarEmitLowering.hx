@@ -1152,7 +1152,8 @@ final class WriterStarEmitLowering {
 		return new TriviaSepLowering(
 			plan, c.argsAccess, slots, slots.sepTrailPresentAccess, c.elemFn, c.leadText, c.trailText, c.sepText, plan.leftCurly(),
 			openInsideExpr, closeInsideExpr, bodyAware, ctx.mapWrapFor(plan.mapWrapRules(), plan.typedefWrapRules()),
-			TriviaTailRehome.fnRefFor(c.starNode.children[0], ctx.shape.root), WriterTriviaStarDispatch.afterDocPolicy(branch)
+			TriviaTailRehome.fnRefFor(c.starNode.children[0], ctx.shape.root), WriterTriviaStarDispatch.afterDocPolicy(branch),
+			WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc(), ctx.triviaStar, c.starNode)
 		).triviaSepStarExpr();
 	}
 

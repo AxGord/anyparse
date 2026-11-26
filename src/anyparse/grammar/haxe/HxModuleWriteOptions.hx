@@ -518,9 +518,11 @@ final class HxModuleWriteOptions {
 	public var enumAbstractAfterFieldsWithDocComments: Null<CommentEmptyLinesPolicy> = null;
 
 	/**
-	 * Whether a member whose head carries metadata (`@:meta`, `@:fmt(...)`) counts as doc-commented for every blank-line rule
-	 * keyed on a doc comment (`beforeDocCommentEmptyLines`, `afterFieldsWithDocComments`, `…TypeIfDocComments`) — read from
-	 * the member's metadata list, named by its body Star's `@:fmt(metadataCountsAsDoc(...))`. `metadataCountsAsDocComment`
+	 * Whether a member whose head carries metadata (`@:meta`, `@:fmt(...)`) on a line of its own above the declaration, as a
+	 * doc comment stands, counts as doc-commented for every blank-line rule keyed on a doc comment
+	 * (`beforeDocCommentEmptyLines`, `afterFieldsWithDocComments`, `…TypeIfDocComments`) — read from the member's metadata
+	 * list, named by its body Star's `@:fmt(metadataCountsAsDoc(...))`, and the line-end its `metadata*LineEnd` knob gives
+	 * it; metadata kept on the declaration's line leaves a plain member. `metadataCountsAsDocComment`
 	 * is the class, interface and abstract body's; the other three are their kind's. Off by default: the fork has none.
 	 */
 	public var metadataCountsAsDocComment: Bool = false;

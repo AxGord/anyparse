@@ -745,16 +745,16 @@
 			"name": "M-MO-WRITER-META-UNREAD-PREV",
 			"type": "anyparse.check.common.members.MemberSpacing",
 			"method": "wantedBlanks",
-			"find": "final headA: MemberGapHead = { leading: a.leadComments, hasMeta: a.hasMeta };",
-			"replace": "final headA: MemberGapHead = { leading: a.leadComments, hasMeta: false };",
+			"find": "final headA: MemberGapHead = { leading: a.leadComments, metaOwnLine: a.metaOwnLine };",
+			"replace": "final headA: MemberGapHead = { leading: a.leadComments, metaOwnLine: false };",
 			"note": "the check hands the writer policy no metadata for the earlier member, so the blank the writer sets after a metadata member under metadataCountsAsDocComment is not demanded"
 		},
 		{
 			"name": "M-MO-WRITER-META-UNREAD",
 			"type": "anyparse.check.common.members.MemberSpacing",
 			"method": "wantedBlanks",
-			"find": "final headB: MemberGapHead = { leading: b.leadComments, hasMeta: b.hasMeta };",
-			"replace": "final headB: MemberGapHead = { leading: b.leadComments, hasMeta: false };",
+			"find": "final headB: MemberGapHead = { leading: b.leadComments, metaOwnLine: b.metaOwnLine };",
+			"replace": "final headB: MemberGapHead = { leading: b.leadComments, metaOwnLine: false };",
 			"note": "the check hands the writer policy no metadata for the later member, so a glued metadata member under metadataCountsAsDocComment is not reported"
 		},
 		{
@@ -1526,6 +1526,22 @@
 			"find": "a.isInline == b.isInline",
 			"replace": "true",
 			"note": "the documented boundary also fires at the inline seam, which belongs to separateInlineSubgroup and the writer's doc gap, so the finding names the wrong gap"
+		},
+		{
+			"name": "M-MO-META-OWN-LINE-UNREAD",
+			"type": "anyparse.check.common.members.MemberSlots",
+			"method": "collectInto",
+			"find": "if (afterMeta && s != null && startsOwnLine(source, s.from)) metaOwnLine = true;",
+			"replace": "if (afterMeta) metaOwnLine = true;",
+			"note": "the check reads every metadata run as standing on its own line, so it demands blanks around glued metadata members fmt keeps tight"
+		},
+		{
+			"name": "M-MO-META-RUN-BREAK-UNREAD",
+			"type": "anyparse.check.common.members.MemberSlots",
+			"method": "collectInto",
+			"find": "noteBreak(child, true);",
+			"replace": "afterMeta = true;",
+			"note": "the check stops reading a break between two annotations of a run, so an annotation on its own line above one glued to the declaration leaves a plain member"
 		}
 	]
 }

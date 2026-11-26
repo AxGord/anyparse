@@ -89,7 +89,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		plan: SepStarPlan, fieldAccess: Expr, slots: TriviaStarEmit.TrailSlots, trailPresentAccess: Null<Expr>, elemFn: String,
 		openText: String, closeText: String, sepText: String, leftCurlyKnob: Null<String>, openInsideExpr: Null<Expr>,
 		closeInsideExpr: Null<Expr>, suppressAdditionalIndent: Null<Expr>, mapWrap: Null<WriterLowering.SepStarMapWrap>,
-		tailRehomeFn: Null<Expr>, afterDocPolicy: Null<Expr>
+		tailRehomeFn: Null<Expr>, afterDocPolicy: Null<Expr>, docLedReads: Null<WriterTriviaStarDispatch.DocLedReads>
 	) {
 		// noqa: complexity
 		super(plan, fieldAccess, slots, openText, closeText);
@@ -100,7 +100,7 @@ final class TriviaSepLowering extends TriviaStarEmit<SepStarPlan> {
 		// dispatch it built); absent, the wrap-rules branch pads nothing.
 		_openInsideDoc = openInsideExpr ?? macro _de();
 		_closeInsideDoc = closeInsideExpr ?? macro _de();
-		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
+
 		final headingAdds: Null<Expr> = WriterTriviaStarDispatch.headingAddsExpr(plan.beforeCommentedFields());
 		_blanks = triviaSepTypedefBlanksExprs(
 			plan.beforeDocCommentEmptyLines(), plan.typedefBodyBlanks(), plan.uniformStmtBlanks(), afterDocPolicy, docLedReads, headingAdds

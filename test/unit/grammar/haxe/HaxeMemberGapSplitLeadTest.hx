@@ -35,7 +35,7 @@ class HaxeMemberGapSplitLeadTest extends Test {
 		on.metadataCountsAsDocComment = true;
 		final off: HxModuleWriteOptions = new HxModuleWriteOptions();
 		final plain: MemberGapHead = head([]);
-		final meta: MemberGapHead = { leading: [], hasMeta: true };
+		final meta: MemberGapHead = { leading: [], metaOwnLine: true };
 		Assert.equals(1, HaxeMemberGap.policy(on).docBlanks(plain, meta));
 		Assert.equals(1, HaxeMemberGap.policy(on).docBlanks(meta, plain));
 		Assert.isNull(HaxeMemberGap.policy(off).docBlanks(plain, meta));
@@ -43,7 +43,7 @@ class HaxeMemberGapSplitLeadTest extends Test {
 	}
 
 	private static function head(leading: Array<String>): MemberGapHead {
-		return { leading: leading, hasMeta: false };
+		return { leading: leading, metaOwnLine: false };
 	}
 
 }

@@ -13,7 +13,8 @@ using anyparse.util.Strings;
  * One type-member paired with its canonical-order rank and its full source slot (leading doc +
  * modifier/`@:meta` run + decl), for the order check and the reordering autofix. `hasMeta` says
  * the slot carries an annotation, which is what pins a member's relative position inside a type
- * whose build macro reads the field list in declaration order (`macroBuiltMetaOrderKept`).
+ * whose build macro reads the field list in declaration order (`macroBuiltMetaOrderKept`); `metaOwnLine` that the
+ * annotation run ends its line, what the writer's metadata-as-doc blank-line rule reads.
  *
  * Slots are DISJOINT and each ends at the member's own last code byte: the parser stretches some
  * expression-body spans over the trailing trivia, and `ownSourceEnd` cuts that back off
@@ -31,6 +32,7 @@ typedef OrderedMember = {
 	var isStatic: Bool;
 	var isInline: Bool;
 	var hasMeta: Bool;
+	var metaOwnLine: Bool;
 	var initNode: Null<QueryNode>;
 	var condition: Null<String>;
 	var branch: Null<BranchInfo>;
@@ -285,25 +287,42 @@ final class MemberSlots {
 		var isPublic: Bool = false;
 		var isInline: Bool = false;
 		var hasMeta: Bool = false;
+		var metaOwnLine: Bool = false;
+		var afterMeta: Bool = false;
 		inline function resetModifiers(): Void {
 			isStatic = false;
 			isPublic = false;
 			isInline = false;
 			hasMeta = false;
+			metaOwnLine = false;
+			afterMeta = false;
+		}
+		// Metadata stands on a line of its own when a node after one of its annotations, inside the run or after it, starts a line.
+		inline function noteBreak(next: QueryNode, isMeta: Bool): Void {
+			final s: Null<Span> = next.span;
+			if (afterMeta && s != null && startsOwnLine(source, s.from)) metaOwnLine = true;
+			afterMeta = isMeta;
 		}
 		for (child in parent.children) {
 			if (condKind != null && child.kind == condKind) {
 				if (collectConditional(out, child, source, shape, metaKinds, comments, directives, condStack, outerCond, accessors))
 					resetModifiers();
 			} else if (members.contains(child.kind)) {
+				noteBreak(child, false);
 				pushMember(
-					out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, isInline, hasMeta, accessors
+					out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, isInline, hasMeta, metaOwnLine,
+					accessors
 				);
 				resetModifiers();
 			} else {
 				if (staticKind != null && child.kind == staticKind) isStatic = true;
 				if (inlineKind != null && child.kind == inlineKind) isInline = true;
-				if (metaKinds.contains(child.kind)) hasMeta = true;
+				if (metaKinds.contains(child.kind)) {
+					hasMeta = true;
+					noteBreak(child, true);
+				} else {
+					noteBreak(child, false);
+				}
 				if (visibility.contains(child.kind)) {
 					final s: Null<Span> = child.span;
 					if (s != null && source.substring(s.from, s.to).trim() != defaultVis) isPublic = true;
@@ -394,7 +413,7 @@ final class MemberSlots {
 	private static function pushMember(
 		out: Array<OrderedMember>, child: QueryNode, parent: QueryNode, source: String, shape: RefShape,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, isStatic: Bool,
-		isPublic: Bool, isInline: Bool, hasMeta: Bool, accessors: Map<Int, Bool>
+		isPublic: Bool, isInline: Bool, hasMeta: Bool, metaOwnLine: Bool, accessors: Map<Int, Bool>
 	): Void {
 		final span: Null<Span> = child.span;
 		if (span == null) return;
@@ -412,6 +431,7 @@ final class MemberSlots {
 			isStatic: isStatic,
 			isInline: isInline,
 			hasMeta: hasMeta,
+			metaOwnLine: metaOwnLine,
 			initNode: isField && child.children.length > 0 ? child.children[0] : null,
 			condition: condStack.length == 0 ? null : joinConds(condStack),
 			branch: null,

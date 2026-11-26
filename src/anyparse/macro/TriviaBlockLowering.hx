@@ -132,7 +132,7 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final afterFieldsWithDocComments: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.afterDocPolicy(source.starNode);
 		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = source == null
 			? null
-			: WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
+			: WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc(), source.tc, source.starNode);
 		final headingAdds: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.headingAddsExpr(plan.beforeCommentedFields());
 		final groupGlue: Null<Expr> = source == null ? null : WriterTriviaStarDispatch.groupGlueExpr(plan.glueCommentedGroups());
 		final existingBetweenFields: Null<Expr> = source == null
@@ -1142,7 +1142,9 @@ final class TriviaBlockLowering extends TriviaStarEmit<BlockStarPlan> {
 		final existing: Null<Expr> = WriterTriviaStarDispatch.starKnobReads(
 			BlockStarPlan.EXISTING_BETWEEN_FIELDS, plan.existingBetweenFields(), 1
 		)?.pop();
-		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = WriterTriviaStarDispatch.docLedReads(plan.metadataCountsAsDoc());
+		final docLedReads: Null<WriterTriviaStarDispatch.DocLedReads> = WriterTriviaStarDispatch.docLedReads(
+			plan.metadataCountsAsDoc(), tc, starNode
+		);
 		final beforeDoc: Bool = plan.beforeDocCommentEmptyLines();
 		final infos: WriterLowering.TriviaBlockInfos = WriterTriviaStarDispatch.buildTriviaBlockInfos(tc, starNode, elemRefName, beforeDoc);
 		final interMemberInfo: Null<WriterLowering.InterMemberClassifyInfo> = infos.interMemberInfo;

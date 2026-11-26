@@ -51,6 +51,33 @@ class MemberOrderMetadataAsDocTest extends Test {
 		Assert.equals(0, violations(file, META_TIGHT).length);
 	}
 
+	/**
+	 * Metadata kept on its declaration's line leaves a plain member: the writer keeps a glued run tight under
+	 * `lineEnds.metadataVar: none`, and the check reports none of its gaps.
+	 */
+	@:pin('control')
+	@:killer('M-MO-META-OWN-LINE-UNREAD')
+	public function testAGluedMetadataRunIsPlain(): Void {
+		final json: String = '{"emptyLines": {"metadataCountsAsDocComment": true}, "lineEnds": {"metadataVar": "none"}}';
+		final src: String = 'class C {\n\t@:auto public var a:Int;\n\t@:auto public var b:Int;\n\t@:auto public var c:Int;\n}\n';
+		Assert.equals(src, new HaxeQueryPlugin().writeRoundTrip(src, json) ?? '');
+		final file: String = Path.join([_trees.withFormatConfig('tree-glued', json), 'C.hx']);
+		Assert.equals(0, violations(file, src).length);
+	}
+
+	/** An annotation on a line of its own above one glued to the declaration sets the member off, in the writer and the check alike. */
+	@:pin('control')
+	@:killer('M-MO-META-RUN-BREAK-UNREAD')
+	public function testASplitMetadataRunIsDocLed(): Void {
+		final json: String = '{"emptyLines": {"metadataCountsAsDocComment": true}, "lineEnds": {"metadataVar": "none"}}';
+		final src: String = 'class C {\n\tprivate var a:Int;\n\t@:keep\n\t@:x private var b:Int;\n\tprivate var c:Int;\n}\n';
+		final written: String = new HaxeQueryPlugin().writeRoundTrip(src, json) ?? '';
+		Assert.equals(1, blanksBetween(written, 'private var a:Int;', '@:keep'), written);
+		final file: String = Path.join([_trees.withFormatConfig('tree-split', json), 'C.hx']);
+		Assert.isTrue(violations(file, src).length > 0);
+		Assert.equals(0, violations(file, written).length, 'the writer\'s own output is not reported');
+	}
+
 	private function violations(file: String, src: String): Array<Violation> {
 		return CheckFixture.violationsIn(new MemberOrder(), [{ file: file, source: src }], null, emptyConfig());
 	}

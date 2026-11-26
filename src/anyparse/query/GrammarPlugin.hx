@@ -3893,10 +3893,11 @@ typedef LayoutMetrics = { final lineWidth: Int; final indentWidth: Int; }
 
 /**
  * What `MemberGapPolicy` reads of one member: its leading comments in source order and whether its head carries
- * metadata (`@:meta`, read from the node, never from text).
+ * metadata (`@:meta`, read from the nodes, never from text) on a line of its own above the declaration, as a formatted
+ * source stands where the writer puts it.
  */
 @:nullSafety(Strict)
-typedef MemberGapHead = { final leading: Array<String>; final hasMeta: Bool; }
+typedef MemberGapHead = { final leading: Array<String>; final metaOwnLine: Bool; }
 
 /**
  * The member-gap half of a writer's blank-line policy under one format config (`GrammarPlugin.memberGapPolicy`):

@@ -1456,7 +1456,9 @@ class WriterLowering {
 			shape: shape,
 			formatInfo: formatInfo,
 			isSpacedLead: isSpacedLead,
-			mapWrapFor: mapWrapFor
+			mapWrapFor: mapWrapFor,
+			ctorPat: _ctorPat,
+			writeFnFor: writeFnFor
 		};
 		_kwRef = {
 			shape: shape,

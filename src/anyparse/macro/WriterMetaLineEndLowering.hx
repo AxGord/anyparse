@@ -32,6 +32,7 @@ final class WriterMetaLineEndLowering {
 	private static final SIMPLE_META: String = 'metaLineEndSimple';
 	private static final CHAIN_META: String = 'metaLineEndChain';
 	private static final INLINE_MAX_META: String = 'metaLineEndInlineMax';
+	private static final TRIVIA_META: String = ':trivia';
 
 	/**
 	 * The runtime locals of a metadata run under its knob `raw`: `_metaFit` is `1` for one simple element, which
@@ -130,10 +131,11 @@ final class WriterMetaLineEndLowering {
 	 * The runtime policy of a metadata run, or `null` when the field names no knob. `@:fmt(metaLineEndInline)`
 	 * answers `None` for a run that sits inside a declaration (between a `var` keyword and its name), where a
 	 * break would split it. `subject` replaces the sibling's own value for a chain, whose annotated value is
-	 * known only at the tail. With no knob of its own, a value no arm names answers `-1`: no metadata site.
+	 * known only at the tail; `owner` replaces `value` as the struct holding the sibling. With no knob of its own, a
+	 * value no arm names answers `-1`: no metadata site.
 	 */
 	public static function policyExpr(
-		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, ?subject: Expr
+		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, ?subject: Expr, ?owner: Expr
 	): Null<Expr> {
 		if (MetaInspect.fmtHasFlag(field, 'metaLineEndInline')) return macro anyparse.format.MetadataLineEndPolicy.None;
 		final own: Null<String> = MetaInspect.fmtReadString(field, 'metaLineEndPolicy');
@@ -153,7 +155,7 @@ final class WriterMetaLineEndLowering {
 			final patterns: Array<Expr> = [ for (i in 2...arm.length) ctorPattern(ctx, refName, arm[i]) ];
 			cases.push({ values: patterns, expr: WriterLoweringSupport.optFieldAccess(arm[1]), guard: null });
 		}
-		final access: Expr = subject ?? { expr: EField(macro value, sibling), pos: pos };
+		final access: Expr = subject ?? { expr: EField(owner ?? macro value, sibling), pos: pos };
 		return { expr: ESwitch(access, cases, fallback), pos: pos };
 	}
 
@@ -281,25 +283,79 @@ final class WriterMetaLineEndLowering {
 		};
 		if (rule == null || owner == null) return macro false;
 		final at: Int = rule.children.indexOf(field);
-		if (at < 0) return macro false;
-		final pos: Position = fieldAccess.pos;
-		var test: Expr = macro false;
-		var i: Int = rule.children.length;
-		while (--i > at) {
-			final next: ShapeNode = rule.children[i];
-			final name: String = next.annotations[AnnotationKeys.BASE_FIELD_NAME];
-			final access: Expr = { expr: EField(owner, name), pos: pos };
-			test = if (next.kind == Star) {
-				final first: Expr = MetaInspect.hasMeta(next, ':trivia') ? macro $access[0].leadingComments.length > 0 : macro false;
-				macro $access.length == 0 ? $test : $first;
-			} else if (TriviaPairSlots.isBareNonFirstRef(next, rule)) {
-				final gap: Expr = { expr: EField(owner, name + TriviaTypeSynth.BEFORE_LEADING_SUFFIX), pos: pos };
-				macro $gap.length > 0;
-			} else {
-				macro false;
-			};
-		}
-		return test;
+		return at < 0
+			? macro false
+			: nextFieldGapExpr(
+				rule, field, owner, fieldAccess.pos, e -> macro $e.leadingComments.length > 0, TriviaTypeSynth.BEFORE_LEADING_SUFFIX,
+				g -> macro $g.length > 0
+			);
+	}
+
+	/**
+	 * Whether the metadata run in the field `fieldName` of the struct `typePath`, read off `owner`, ends on a line of its own
+	 * above what it annotates, as this module's policy writes it: the one answer to "does a member's metadata stand on its own
+	 * line": one annotation of the run on a line above it is enough. `None`, and a site with no knob, keep the source's
+	 * breaks, inside the run and after it; `Fit` keeps a lone simple annotation on the
+	 * declaration's line, read as kept even where that line overflows at render; every other policy breaks after the run.
+	 * `null` when the field is no metadata run. `writeFnFor` names the writer of a rule, which measures a lone annotation
+	 * against its inline cap.
+	 */
+	public static function ownLineExpr(
+		ctx: WriterCtorPatternLowering.CtorPatternCtx, writeFnFor: String -> String, typePath: String, fieldName: String, owner: Expr
+	): Null<Expr> {
+		final rule: Null<ShapeNode> = ctx.shape.rules[typePath];
+		if (rule == null) return null;
+		final field: Null<ShapeNode> = rule.children.find(c -> c.annotations[AnnotationKeys.BASE_FIELD_NAME] == fieldName);
+		if (field == null || field.kind != Star || !MetaInspect.hasMeta(field, TRIVIA_META)) return null;
+		final pos: Position = Context.currentPos();
+		final access: Expr = { expr: EField(owner, fieldName), pos: pos };
+		final trailLC: Expr = { expr: EField(owner, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: pos };
+		final decls: Expr = decisionDecls(ctx, field, typePath, access, macro _omArr, trailLC, owner);
+		final elemRef: Null<String> = field.children.length == 1 ? field.children[0].annotations[AnnotationKeys.BASE_REF] : null;
+		final cap: Expr = elemRef == null
+			? macro {}
+			: fitInlineCapExpr(field, { expr: ECall(macro $i{writeFnFor(elemRef)}, [macro _omArr[0].node, macro opt]), pos: pos });
+		final nextBreak: Expr = nextFieldGapExpr(
+			rule, field, owner, pos, e -> macro $e.newlineBefore, TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, g -> g
+		);
+		final runBreak: Expr = macro Lambda.exists(_omArr.slice(1), _fe -> _fe.newlineBefore);
+		final sourceBreak: Expr = macro $runBreak || $nextBreak;
+		return macro {
+			final _omArr = $access;
+			$decls;
+			$cap;
+			if (_metaRaw == -2)
+				true;
+			else if (_metaPolicy < 0 || _metaPolicy == anyparse.format.MetadataLineEndPolicy.None)
+				$sourceBreak;
+			else
+				_metaFit != 1;
+		};
+	}
+
+	/**
+	 * The `fitDecls` locals of the run `arr` in `field` of the struct `typePath`, reached as `fieldAccess`, with `trailLC` its
+	 * trailing comments: the one composition the run's writer and `ownLineExpr` both read, so the blank-line verdict decides
+	 * from the decision the writer makes. A run that annotates nothing answers `-2`, keeping its source layout with no break
+	 * owed after its last element; a run holding a comment, or followed by one before what it annotates, breaks as under
+	 * `After`. `owner` is `policyExpr`'s.
+	 */
+	public static function decisionDecls(
+		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, fieldAccess: Expr, arr: Expr, trailLC: Expr,
+		?owner: Expr
+	): Expr {
+		final own: Null<Expr> = policyExpr(ctx, field, typePath, null, owner);
+		final annotates: Null<Expr> = own == null ? null : annotatesExpr(ctx, field, typePath, fieldAccess);
+		final raw: Expr = if (own == null)
+			macro -1
+		else if (annotates == null)
+			own
+		else
+			macro ($annotates ? ($own: Int) : -2);
+		final broken: Expr = macro ${gapCommentExpr(ctx, field, typePath, fieldAccess)}
+			|| $trailLC.length > 0
+			|| Lambda.exists($arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);
+		return fitDecls(simplePred(field, ctx.shape.root, true), raw, arr, e -> macro $e.node, broken);
 	}
 
 	/** Whether the written `doc` of one annotation is wider than the cap `field` names, or `null` when it names none. */
@@ -379,6 +435,33 @@ final class WriterMetaLineEndLowering {
 			case ECall(target, args) if (args.length > 0): { expr: ECall(target, [macro _mv].concat(args.slice(1))), pos: pattern.pos };
 			case _: Context.fatalError('WriterLowering: @:fmt(metaLineEndChain) ctor takes no argument', pattern.pos);
 		};
+	}
+
+	/**
+	 * What the source holds right after the run in `field` of `rule`, read off `owner`: `first` of the first element of the
+	 * next non-empty trivia run, or `bare` of the slot `<name><bareSuffix>` the parser keeps in the gap before the next bare
+	 * field (`TriviaPairSlots.isBareNonFirstRef`). Any other next field answers `false`.
+	 */
+	private static function nextFieldGapExpr(
+		rule: ShapeNode, field: ShapeNode, owner: Expr, pos: Position, first: Expr -> Expr, bareSuffix: String, bare: Expr -> Expr
+	): Expr {
+		final at: Int = rule.children.indexOf(field);
+		var test: Expr = macro false;
+		var i: Int = rule.children.length;
+		while (--i > at) {
+			final next: ShapeNode = rule.children[i];
+			final name: String = next.annotations[AnnotationKeys.BASE_FIELD_NAME];
+			final access: Expr = { expr: EField(owner, name), pos: pos };
+			test = if (next.kind == Star) {
+				final head: Expr = MetaInspect.hasMeta(next, TRIVIA_META) ? first(macro $access[0]) : macro false;
+				macro $access.length == 0 ? $test : $head;
+			} else if (TriviaPairSlots.isBareNonFirstRef(next, rule)) {
+				bare({ expr: EField(owner, name + bareSuffix), pos: pos });
+			} else {
+				macro false;
+			};
+		}
+		return test;
 	}
 
 }

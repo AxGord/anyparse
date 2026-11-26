@@ -40,7 +40,7 @@
 			"name": "M-MEMBER-GAP-POLICY-META-UNREAD",
 			"type": "anyparse.grammar.haxe.HaxeMemberGap",
 			"method": "body",
-			"find": "MemberGap.docLed(head.leading) || (metaCountsAsDoc && head.hasMeta)",
+			"find": "MemberGap.docLed(head.leading) || (metaCountsAsDoc && head.metaOwnLine)",
 			"replace": "MemberGap.docLed(head.leading)",
 			"note": "the member-order policy stops counting a metadata member as doc-led under metadataCountsAsDocComment, so it predicts no blank around a member fmt sets off"
 		},

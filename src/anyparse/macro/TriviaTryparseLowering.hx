@@ -109,19 +109,8 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				Context.fatalError('WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos());
 			[raw.substr(0, eq), raw.substr(eq + 1)];
 		} ];
-		// A run that annotates nothing answers `-2`, so it keeps its source layout and owes no break after its last element;
-		// a run holding a comment, or followed by one before what it annotates, breaks as under `After`.
-		final ownMetaPolicy: Null<Expr> = WriterMetaLineEndLowering.policyExpr(ctx.ctorPat, starNode, c.typePath);
-		final metaAnnotates: Null<Expr> = ownMetaPolicy == null
-			? null
-			: WriterMetaLineEndLowering.annotatesExpr(ctx.ctorPat, starNode, c.typePath, c.fieldAccess);
-		final metaLineEndPolicy: Null<Expr> = metaAnnotates == null ? ownMetaPolicy : macro ($metaAnnotates ? ($ownMetaPolicy: Int) : -2);
-		final gapComment: Expr = WriterMetaLineEndLowering.gapCommentExpr(ctx.ctorPat, starNode, c.typePath, c.fieldAccess);
-		final runComment: Expr = macro _trailLC.length > 0
-			|| Lambda.exists(_arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);
-		_metaPolicyExpr = WriterMetaLineEndLowering.fitDecls(
-			WriterMetaLineEndLowering.simplePred(starNode, ctx.ctorPat.shape.root, true), metaLineEndPolicy ?? macro -1, macro _arr,
-			e -> macro $e.node, macro $gapComment || $runComment
+		_metaPolicyExpr = WriterMetaLineEndLowering.decisionDecls(
+			ctx.ctorPat, starNode, c.typePath, c.fieldAccess, macro _arr, macro _trailLC
 		);
 		_metaInlineCap = WriterMetaLineEndLowering.fitInlineCapExpr(starNode, macro _elem);
 		final cascadeInfos: CascadeInfos = WriterCtorBlankLowering.readCascadeInfosFromStar(ctx.ctorBlank, starNode, c.elemRefName);

@@ -92,7 +92,7 @@ final class HaxeMemberGap {
 		multiline: (slot: String) -> Null<Bool>, forKind: (kind: String) -> Null<MemberGapPolicy>
 	): MemberGapPolicy {
 		inline function docLed(head: MemberGapHead): Bool {
-			return MemberGap.docLed(head.leading) || (metaCountsAsDoc && head.hasMeta);
+			return MemberGap.docLed(head.leading) || (metaCountsAsDoc && head.metaOwnLine);
 		}
 		inline function docGap(prev: MemberGapHead, next: MemberGapHead): DocGapVerdict {
 			return MemberGap.headedGap(

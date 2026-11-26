@@ -22,6 +22,8 @@ typedef TriviaStarDispatchCtx = {
 	final formatInfo: FormatReader.FormatInfo;
 	final isSpacedLead: (openText: Null<String>) -> Bool;
 	final mapWrapFor: (field: Null<String>, typedefField: Null<String>) -> Null<WriterLowering.SepStarMapWrap>;
+	final ctorPat: WriterCtorPatternLowering.CtorPatternCtx;
+	final writeFnFor: (refName: String) -> String;
 }
 
 /**
@@ -83,11 +85,12 @@ final class WriterTriviaStarDispatch {
 
 	/**
 	 * The runtime reads of `@:fmt(metadataCountsAsDoc('<field>', '<knob>'[, '<flag>', '<alt>']))` (`args`, null without the
-	 * flag): whether the element `_t` counts as doc-led because its `<field>` list is non-empty, and whether any member of
-	 * `_arr` does. `<knob>` is an `opt` Bool, `''` for off; under `opt.<flag>` the `<alt>` Bool decides instead. Without the
-	 * flag both reads are null, so the Star splices its doc-comment reads unchanged.
+	 * flag): whether the element `_t` of `starNode` counts as doc-led because its `<field>` list is non-empty and the writer
+	 * puts it on a line of its own (`WriterMetaLineEndLowering.ownLineExpr`), and whether any member of `_arr` does.
+	 * `<knob>` is an `opt` Bool, `''` for off; under `opt.<flag>` the `<alt>` Bool decides instead. Without the flag both
+	 * reads are null, so the Star splices its doc-comment reads unchanged.
 	 */
-	public static function docLedReads(args: Null<Array<String>>): Null<DocLedReads> {
+	public static function docLedReads(args: Null<Array<String>>, tc: TriviaStarDispatchCtx, starNode: ShapeNode): Null<DocLedReads> {
 		if (args == null) return null;
 		if (args.length != 2 && args.length != 4)
 			Context.fatalError(
@@ -98,12 +101,19 @@ final class WriterTriviaStarDispatch {
 		final on: Expr = args.length == 2 ? own : macro (${knobRead(args[2])} ? ${args[3] == '' ? macro false : knobRead(args[3])} : $own);
 		final pos: Position = Context.currentPos();
 		final field: String = args[0];
-		final elemList: Expr = { expr: EField(macro _t.node, field), pos: pos };
-		final memberList: Expr = { expr: EField(macro _m.node, field), pos: pos };
+		final elem: Null<ShapeNode> = starNode.children.length == 1 ? starNode.children[0] : null;
+		final elemType: Null<String> = elem != null && elem.kind == Ref ? elem.annotations[AnnotationKeys.BASE_REF] : null;
+		function metaLed(owner: Expr): Expr {
+			final list: Expr = { expr: EField(owner, field), pos: pos };
+			final ownLine: Null<Expr> = elemType == null
+				? null
+				: WriterMetaLineEndLowering.ownLineExpr(tc.ctorPat, tc.writeFnFor, elemType, field, owner);
+			return ownLine == null ? macro $list.length > 0 : macro ($list.length > 0 && $ownLine);
+		}
 		return {
 			on: on,
-			elem: macro ($on && $elemList.length > 0),
-			body: macro ($on && Lambda.exists(_arr, _m -> $memberList.length > 0))
+			elem: macro ($on && ${metaLed(macro _t.node)}),
+			body: macro ($on && Lambda.exists(_arr, _m -> ${metaLed(macro _m.node)}))
 		};
 	}
 
@@ -239,7 +249,8 @@ final class WriterTriviaStarDispatch {
 				delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false),
 				delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true),
 				bodyEmptySuppressExpr(starNode, tc.shape.root, true), tc.mapWrapFor(plan.mapWrapRules(), plan.typedefWrapRules()),
-				TriviaTailRehome.fnRefFor(starNode.children[0], tc.shape.root), afterDocPolicy(starNode)
+				TriviaTailRehome.fnRefFor(starNode.children[0], tc.shape.root), afterDocPolicy(starNode),
+				docLedReads(plan.metadataCountsAsDoc(), tc, starNode)
 			).triviaSepStarExpr());
 			return;
 		}

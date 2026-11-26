@@ -728,12 +728,17 @@ and a property below them, while a plain `enum abstract` value list still loses 
 
 anyparse-only, a Bool, `false` by default. At `emptyLines` level it covers class, interface and
 plain `abstract` bodies; `enumEmptyLines`, `typedefEmptyLines` and `enumAbstractEmptyLines` each
-carry their own. Set, a member whose head carries metadata (`@:meta`, `@:fmt(...)`) is laid out
-for blank lines as a doc-commented member: `beforeDocCommentEmptyLines`,
-`afterFieldsWithDocComments` and `beginTypeIfDocComments` / `endTypeIfDocComments` fire on it. A
-member with both a doc comment and metadata takes one blank line, not two; a `#if` member counts
-only by its doc comment. The `member-order` check reads the same keys (`MemberGapPolicy.forKind`).
-Runtime: `WriterTriviaStarDispatch.docLedReads`.
+carry their own. Set, a member whose metadata (`@:meta`, `@:fmt(...)`) the output puts on a line
+of its own above the declaration (one annotation on a line above it is enough) is laid out for
+blank lines as a doc-commented member:
+`beforeDocCommentEmptyLines`, `afterFieldsWithDocComments` and `beginTypeIfDocComments` /
+`endTypeIfDocComments` fire on it. Metadata kept on the declaration's line leaves a plain member:
+under `lineEnds.metadata*` `none` the source's breaks decide, under `fit` a lone simple annotation
+counts as joined (even where a long line breaks it at render), every other value breaks after the
+run. A member with both a doc comment and metadata takes one blank line, not two; a `#if` member
+counts only by its doc comment. The `member-order` check reads the same keys
+(`MemberGapPolicy.forKind`) and the metadata's line as the source stands. Runtime:
+`WriterTriviaStarDispatch.docLedReads`, the line-end verdict `WriterMetaLineEndLowering.ownLineExpr`.
 
 ```json
 {"emptyLines": {"metadataCountsAsDocComment": true, "typedefEmptyLines": {"metadataCountsAsDocComment": true}}}
@@ -763,7 +768,7 @@ anyparse-only, a Bool, `false` by default. At `emptyLines` level it covers class
 plain `abstract` bodies; `enumEmptyLines` and `enumAbstractEmptyLines` each carry their own (a
 typedef body has none). `true` makes a run of line comments (`//`) head a subgroup: a member that
 follows the group's last member with no source blank between them, of the same kind, with no
-leading comment of its own and not doc-led (metadata counts under `metadataCountsAsDocComment`)
+leading comment of its own and not doc-led (own-line metadata counts under `metadataCountsAsDocComment`)
 is glued into it and takes no `betweenVars` / `betweenFunctions` / enum `betweenFields` blank.
 A source blank ends the group and stays. The doc-comment keys, `beforeCommentedFields` and
 `aroundMultilineFields` are not held back. The `member-order` check reads none of these
