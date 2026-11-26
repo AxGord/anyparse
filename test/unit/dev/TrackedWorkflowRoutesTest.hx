@@ -37,11 +37,14 @@ final class TrackedWorkflowRoutesTest extends Test {
 		'names where the worker came from in a prompt; stale or empty after a failed step, part of the sync_from defect below';
 	private static inline final RESUME_ROUTES_BY_STALE_KEY: String =
 		'DEFECT, own queue line: sync_resume routes the resumed worker by sync_from, which a failed or conflicting step never sets';
+	private static inline final SPLITTER_DELIVERS: String =
+		'the design route passes split_design or split_retry, whose splitter delivers split_lines by its own context_set';
 	private static final ROOT: String = '.claude/workflows';
 	private static final PIPELINE: String = '$ROOT/slice-pipeline.yaml';
 	private static final COMMIT_MODE: String = '--commit';
 	private static final SWEEP_NEXT_REVIEW: Int = 10;
 	private static final MAX_PATH: Int = 40;
+	private static final MIN_SPLIT_OUTPUT: Int = 262144;
 	private static final ENDS: Array<String> = ['review', 'recon_route', 'land'];
 
 	/**
@@ -81,7 +84,9 @@ final class TrackedWorkflowRoutesTest extends Test {
 		'slice-worker.yaml:sync_gate/sync_from/sync_resume' => RESUME_ROUTES_BY_STALE_KEY,
 		'slice-worker.yaml:sync_gate_run/sync_from/sync_conflict' => CAME_FROM_TEXT,
 		'slice-worker.yaml:sync_gate_run/sync_from/sync_failed' => CAME_FROM_TEXT,
-		'slice-worker.yaml:sync_gate_run/sync_from/sync_resume' => RESUME_ROUTES_BY_STALE_KEY
+		'slice-worker.yaml:sync_gate_run/sync_from/sync_resume' => RESUME_ROUTES_BY_STALE_KEY,
+		'slice-pipeline.yaml:recon_split/split_lines/split_apply' => SPLITTER_DELIVERS,
+		'slice-pipeline.yaml:worker_split/split_lines/split_apply' => SPLITTER_DELIVERS
 	];
 
 	public function testNoFailureRouteReadsAKeyItsStateSetsOnSuccess(): Void {
@@ -173,6 +178,46 @@ final class TrackedWorkflowRoutesTest extends Test {
 		utest.Assert.same(
 			['prepare', 'sweep_probe', 'sweep_next', 'recon_route'], follow(WorkflowRoutes.statesOf(PIPELINE), 'prepare', [])
 		);
+	}
+
+	/** A classified split of the recon or the worker is checked and added by execs alone: no state on the way asks the parent. */
+	public function testAMechanicalSplitIsAddedWithNoParentTurn(): Void {
+		final states: Map<String, WorkflowState> = WorkflowRoutes.statesOf(PIPELINE);
+		final fromRecon: Array<String> = follow(states, 'recon_end', ['recon_end' => 12]);
+		final fromWorker: Array<String> = follow(states, 'worker_end', ['worker_end' => 6]);
+		utest.Assert.same(['recon_end', 'recon_split', 'split_apply', 'split_done'], fromRecon);
+		utest.Assert.same(['worker_end', 'worker_split', 'split_apply', 'split_done'], fromWorker);
+		for (name in fromRecon.concat(fromWorker)) if (name != 'split_done')
+			utest.Assert.equals('exec', states[name]?.fields['type'], '$name runs with no agent and no parent');
+		// The engine keeps only the tail of an output past max_output (default 10 KB), and a cut list is no JSON.
+		for (name in ['recon_split', 'worker_split'])
+			utest.Assert.isTrue(
+				(Std.parseInt(states[name]?.fields['max_output'] ?? '') ?? 0) >= MIN_SPLIT_OUTPUT, '$name prints a whole list'
+			);
+	}
+
+	/**
+	 * A design split spawns one splitter on the `split` model row; a refused list goes back once, then to the parent.
+	 */
+	public function testADesignSplitSpawnsTheSplitterAndARefusalGoesBackOnce(): Void {
+		final states: Map<String, WorkflowState> = WorkflowRoutes.statesOf(PIPELINE);
+		final take: Null<WorkflowState> = states['recon_split'];
+		final design: Null<WorkflowState> = states['split_design'];
+		final apply: Null<WorkflowState> = states['split_apply'];
+		final retry: Null<WorkflowState> = states['split_retry'];
+		final refused: Null<WorkflowState> = states['split_refused'];
+		if (take == null || design == null || apply == null || retry == null || refused == null) {
+			utest.Assert.fail('recon_split, split_design, split_apply, split_retry and split_refused exist');
+			return;
+		}
+		utest.Assert.equals('split_design', WorkflowRoutes.nextOf(take, 14));
+		utest.Assert.isTrue(WorkflowRoutes.reads(design, 'model_split'), 'the splitter runs on the split model row');
+		utest.Assert.stringContains('key: split_lines', design.fields['delivers'] ?? '');
+		utest.Assert.equals('split_apply', design.transitions['delivered']);
+		utest.Assert.equals('split_retry', WorkflowRoutes.nextOf(apply, 1));
+		utest.Assert.equals('1', retry.fields['max_visits']);
+		utest.Assert.equals('split_refused', retry.fields['on_exhausted']);
+		utest.Assert.equals('parent', refused.fields['ask']);
 	}
 
 	/** The states a chain visits from `start`, each leaving by its scripted exit (0 when unscripted) until one of `ENDS`. */

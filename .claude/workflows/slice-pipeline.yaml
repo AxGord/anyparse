@@ -13,6 +13,9 @@ model_table:
   stages:
     recon:
       - { upto: 10, model: sonnet, effort: medium }
+    # The splitter of a `design` split, stronger than the recon (user 2026-11-26).
+    split:
+      - { upto: 10, model: opus, effort: high }
     # Haiku trial, plan row (user 2026-11-21 «Давай попробуем»): the worker is spawned on the PLAN row and finishes a
     # d<=6 slice itself, so d1-2 runs on haiku only when this row says so; revert = drop the upto-2 row.
     plan:
@@ -316,9 +319,129 @@ states:
     cases:
       "0": recon_scored
       "11": recon_blocked
-      "12": recon_blocked
+      "12": recon_split
       "30": recon_missing
     default: recon_missing
+
+  recon_split:
+    station: false
+    type: exec
+    # A split is read from the recon's own session record (the keys of its `written`), never from a driver's copy:
+    # mechanical → its lines are checked and added with no model; design → a splitter makes them; unclassified → the parent.
+    command: &split_take |-
+      case "$S" in ''|*[!0-9a-f]*) echo "refused session id: '$S'"; exit 2;; esac
+      f="${STATE_DIR:-$HOME/.claude/workflow-state}/$S.json"
+      [ -f "$f" ] || { echo "no session file $f"; exit 2; }
+      node -e '
+        const c = require(process.argv[1]).context || {};
+        const kind = String(c.split_kind || "");
+        if (kind === "design") { console.log("split_kind design: a splitter makes the lines"); process.exit(14); }
+        if (kind !== "mechanical") { console.log("no split_kind mechanical or design (" + (kind || "unset") + ")"); process.exit(12); }
+        const lines = c.split_lines;
+        const text = (typeof lines === "string" ? lines : JSON.stringify(lines ?? "")).trim();
+        if (!text.startsWith("[")) { console.log("split_kind mechanical without a split_lines list: a splitter makes the lines"); process.exit(14); }
+        if (text.length > 250000) { console.log("split_lines is past the max_output of this step: a splitter makes the lines"); process.exit(14); }
+        process.stdout.write(text);' "$f"
+    env:
+      S: "{{context.recon_session}}"
+    timeout: 30000
+    # stdout is the whole list: the engine keeps only the tail of a longer output, which is no JSON.
+    max_output: 262144
+    context_set:
+      split_lines: "{{stdout}}"
+    cases:
+      "0": split_apply
+      "14": split_design
+    default: recon_blocked
+
+  worker_split:
+    station: false
+    type: exec
+    # The worker's split (orient scored ≥9): the same reading, from the worker's session record.
+    command: *split_take
+    env:
+      S: "{{context.worker_session}}"
+    timeout: 30000
+    max_output: 262144
+    context_set:
+      split_lines: "{{stdout}}"
+    cases:
+      "0": split_apply
+      "14": split_design
+    default: blocked
+
+  split_design:
+    max_visits: 1
+    on_exhausted: split_refused
+    delivers: &split_delivers { key: split_lines, tokens: tokens_splitter, agent: splitter_agent }
+    prompt: &split_prompt |-
+      {{stdout}}
+      Line {{context.slice}} is cut into new queue lines by ONE splitter agent; the engine checks the list and adds it whole.
+      1. Spawn ONE splitter: Agent (plain, no `subagent_type`), model {{context.model_split}}, effort {{context.effort_split}},
+         `run_in_background: true`, prompt exactly:
+
+           You are the SPLITTER of anyparse line {{context.slice}}: you cut it into queue lines; you change no file, no queue, no tree.
+           Read: the line (`awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{project_root}}/.claude/batch/queue.yaml`),
+           {{context.wt}}-logs/recon.md and, when it exists, {{context.wt}}-logs/report.md (a blocked worker's reason),
+           {{project_root}}/.claude/workflows/lib/difficulty.md ("How to cut a split"), and the code read-only through
+           `HXQ_BIN={{project_root}}/bin/apq.js hxq owner|mentions|callers|show --select` (grep, sed and cat on .hx are refused).
+           Deliver a JSON list, one object per line in the queue's task shape: `id` (new: capitals, digits, `-`), `difficulty`
+           (1..10, by difficulty.md), `kind`, `touches` (paths on main; a file the line creates gets ` (new)`), `owner`, `after`,
+           `text` (the scope in one sentence, its split type, what keeps it green alone at its land). Search the queue's open
+           lines (status pending, backlog or running) for one with the same owner or a touched path one inside the other: name
+           each in the new line's `after:` when the order matters, else in its text. Copy every user quote («…») of the line's
+           text verbatim into each new text. The engine refuses the whole list on any miss; a refusal it already gave, if any:
+           {{stdout}}
+           Deliver it: ToolSearch query `select:mcp__plugin_workflow_wf__context_set` (max_results 1), then ONE call
+           `context_set({session_id: "{{session_id}}", key: "split_lines", value: <the JSON list>, force: true})`.
+           Your LAST message is exactly `SPLIT LINES context split_lines`.
+
+      2. context_set `splitter_agent` = the id Agent returned. END your turn with the WAITING line. Its `context_set` of
+         split_lines is the delivery: on a `DELIVERY:` line naming split_lines, or on its notification, transition `delivered`.
+    transitions:
+      delivered: split_apply
+
+  split_retry:
+    # A refused list goes back to a splitter once, the refusal in its prompt; a second refusal goes to the parent.
+    max_visits: 1
+    on_exhausted: split_refused
+    delivers: *split_delivers
+    prompt: *split_prompt
+    transitions:
+      delivered: split_apply
+
+  split_apply:
+    type: exec
+    # No model: dev split-apply checks the list, then the queue CLI's batch add writes it whole with the split mark (the
+    # line ends failed with split_into, its slot frees) or refuses it whole. stdout is the one `SPLIT <ID> -> <ids>` line.
+    command: |-
+      f="$WT-logs/split-lines.json"
+      printf '%s\n' "$SPLIT_LINES" > "$f"
+      node "$WF_PROJECT_ROOT/bin/dev.js" split-apply "$SLICE" --lines "$f" --repo "$WF_PROJECT_ROOT" --record "$WT-logs/split-applied.json" || exit $?
+      node "$WF_PROJECT_ROOT/bin/dev.js" sweep-lock "$SLICE" --tree "$WT" --release >&2 || echo "sweep-lock --release failed: the line keeps its footprint touches until a recompute" >&2
+    env:
+      SPLIT_LINES: "{{context.split_lines}}"
+      SLICE: "{{context.slice}}"
+      WT: "{{context.wt}}"
+    timeout: 60000
+    cases:
+      "0": split_done
+      "1": split_retry
+    default: split_refused
+
+  split_refused:
+    ask: parent
+    prompt: |-
+      {{stdout}}
+      The split of {{context.slice}} was refused twice, or the split tool failed (the output above). A slice driver:
+      context_set `fail_note` on THIS session (one line, `split refused — <the first reason>`; no `|`, no `⏸`), reply
+      NEEDS-PARENT see={{context.wt}}-logs/split-lines.json and take NO transition. The parent picks: `split` when it
+      queues the lines itself (marked `[!]`), `close`, `stop`, or `proceed` (a worker runs the line whole).
+    transitions:
+      split: mark_split
+      close: mark_closed
+      stop: mark_stopped
+      proceed: work
 
   recon_scored:
     prompt: |-
@@ -335,8 +458,9 @@ states:
     ask: parent
     prompt: |-
       Recon of {{context.slice}} stopped the line before any worker: `{{stdout}}` — {{context.wt}}-logs/recon.md
-      (a premise that fails, or a score ≥9 whose proposed lines are under `## split`). No worker session exists.
-      A slice driver: context_set on THIS session, each its own call: `recon_score` = the number after `score:`,
+      (a premise that fails, or a score ≥9 the recon left without `split_kind` mechanical or design: a classified split
+      goes to split_apply or split_design with no parent turn). No worker session exists.
+      A slice driver: context_set on THIS session, each its own call: `recon_score` = the number after `score:` on line 1 of recon.md,
       `recon_premise` = `ok` or `fail`, `fail_note` = one line (`recon scored N, split proposed` or `recon premise
       failed — …`; no `|`, no `⏸`); reply NEEDS-PARENT see={{context.wt}}-logs/recon.md and take NO transition. The
       parent picks: `split` when it queues the proposed lines (marked `[!]` like `close`; the ledger counts the visit
@@ -857,7 +981,8 @@ states:
       The worker of {{context.slice}} ended BLOCKED: read `status({session_id: "{{context.worker_session}}", key:
       "blocked_reason"})` and its last message. Keep the worktree. Transition `close`, or `stop` for a hard fail, or
       `split` when blocked_reason is the worker's split (its proposed queue lines) and the parent queues them: marked
-      `[!]` like `close`, and the ledger counts the visit `mark_split`.
+      `[!]` like `close`, and the ledger counts the visit `mark_split`. A worker split that set `split_kind` mechanical or
+      design never reaches this state: worker_end sends it to worker_split, which adds the lines with no parent turn.
       A block that is the BASELINE's, not the branch's (`infra4 not run — … the baseline recorded no --infra-tree`, a
       baseline taken on a different base) → `regate`: the engine re-takes the baseline on the base commit and re-runs
       the gate through the pool; a block whose cause was fixed on main since → the parent's `rebase_regate` rebases
@@ -1070,6 +1195,8 @@ states:
           console.log(s.context.rescore); process.exit(4);
         }
         if (s.outcome === "completed") { console.log((s.context || {}).gate_flags || ""); process.exit(0); }
+        const kind = String((s.context || {}).split_kind || "");
+        if (s.outcome === "failed" && (kind === "mechanical" || kind === "design")) { console.log("worker " + s.session_id + " split the line (" + kind + ")"); process.exit(6); }
         if (s.outcome === "failed" || s.outcome === "abandoned") { console.log("worker " + s.session_id + " ended " + s.outcome); process.exit(1); }
         console.log("worker " + s.session_id + " is still at " + at); process.exit(3);' "$f"
     env:
@@ -1086,6 +1213,7 @@ states:
       "3": worker_running
       "4": rescored
       "5": round_not_started
+      "6": worker_split
     default: worker_end_unknown
 
   fmt_race_skip:
@@ -1179,6 +1307,14 @@ states:
     terminal: true
     outcome: complete
     prompt: "Pipeline {{context.slice}} closed without landing (`[!]`): its slot is free — in the dispatcher session {{parent_session_id}} transition `slot_free`."
+
+  split_done:
+    terminal: true
+    outcome: complete
+    prompt: |-
+      Pipeline {{context.slice}} was split with no parent turn: {{stdout}} (the queue CLI marked the line failed with
+      `split_into:`; the applied lines: {{context.wt}}-logs/split-applied.json). Its slot is free — in the dispatcher
+      session {{parent_session_id}} transition `slot_free`. Your last line: `CLOSED task={{context.slice}} reason={{stdout}} lessons=none`.
 
   released:
     terminal: true

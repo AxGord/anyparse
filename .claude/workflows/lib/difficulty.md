@@ -18,6 +18,8 @@ How to cut a split, by what the work is (user yes 2026-11-12, measured in .claud
 - independent — features under one theme that share no `touches:`: separate lines with no `after:` between them, so they run in parallel; an `after:` only where their touches overlap.
 - re-score — a line scored 3 or more above its number: cut into lines of ≤6 at once, so no piece needs a second split (3 of 12 did).
 
+Who cuts it (user 2026-11-26, «То есть часть вообще детерменированна…»): the recon or the worker that scores ≥9 sets the context key `split_kind`. `mechanical` = every line is a sweep, migration or independent cut written whole now, delivered as `split_lines` (a JSON list in the queue's task shape: `id`, `difficulty`, `kind`, `touches`, `owner`, `after`, `text`); `design` = any other cut, made by a splitter agent on the pipeline's `split` model row. Either way `dev split-apply` checks the list and the queue CLI adds it whole with the split mark, no parent turn; a refused list goes back to a splitter once, then to the parent.
+
 Add 1 when the line's premise is a measurement older than a week, or its cause is a hypothesis.
 
 Before writing a line: `touches:` and `owner:` name paths and types that exist on main (`ls`, `hxq owner "<question>" src`); a file the slice creates says `(new)`. A wrong path means the line was written blind, which is the signal to score it again.

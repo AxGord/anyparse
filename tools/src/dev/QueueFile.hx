@@ -15,6 +15,7 @@ typedef QueueLine = {
 	final id: String;
 	final status: String;
 	final owner: String;
+	final priority: String;
 	final text: String;
 	final ended: String;
 	final base: String;
@@ -79,6 +80,7 @@ final class QueueFile {
 			id: fields['id'] ?? '',
 			status: fields['status'] ?? '',
 			owner: fields['owner'] ?? '',
+			priority: fields['priority'] ?? '',
 			text: fields['text'] ?? '',
 			ended: fields['ended'] ?? '',
 			base: fields['base'] ?? '',

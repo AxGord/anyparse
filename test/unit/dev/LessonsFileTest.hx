@@ -273,6 +273,7 @@ final class LessonsFileTest extends Test {
 			id: id,
 			status: status,
 			owner: '',
+			priority: '',
 			text: text,
 			ended: '',
 			base: '',

@@ -230,6 +230,23 @@ final class LessonsFile {
 		return run.ok ? null : 'the queue CLI refused it: ${oneLine(run.firstError())}';
 	}
 
+	/**
+	 * Why one `touches:` entry names no path of the tree (not relative, a glob, absent without `(new)`); null when it names one.
+	 */
+	public static function pathProblem(entry: String, repo: String): Null<String> {
+		final path: String = touched(entry);
+		return if (path == '' || path.startsWith('/') || path.split('/').contains('..') || GLOB.match(path))
+			'touches `$entry` is not a file path relative to the tree'
+		else if (entry.endsWith(NEW_MARK) || FileSystem.exists(Path.join([repo, path])))
+			null
+		else
+			'touches `$entry` does not exist on main and is not marked (new)';
+	}
+
+	public static function touched(entry: String): String {
+		return (entry.endsWith(NEW_MARK) ? entry.substr(0, entry.length - NEW_MARK.length) : entry).trim();
+	}
+
 	private static inline function fileable(kind: String): Bool {
 		return kind == UNVERIFIED || kind == ARM_ROT;
 	}
@@ -260,13 +277,10 @@ final class LessonsFile {
 		if (touches.length == 0) return 'no touches: a line without them conflicts with every line';
 		if (touches.length > MAX_TOUCHES) return '${touches.length} touches, over $MAX_TOUCHES: it would conflict with most lines';
 		for (entry in touches) {
-			final path: String = touched(entry);
-			if (path == '' || path.startsWith('/') || path.split('/').contains('..') || GLOB.match(path))
-				return 'touches `$entry` is not a file path relative to the tree';
-			if (entry.endsWith(NEW_MARK)) continue;
-			final full: String = Path.join([repo, path]);
-			if (!FileSystem.exists(full)) return 'touches `$entry` does not exist on main and is not marked (new)';
-			if (FileSystem.isDirectory(full)) return 'touches `$entry` is a directory: name the files the line edits';
+			final problem: Null<String> = pathProblem(entry, repo);
+			if (problem != null) return problem;
+			if (!entry.endsWith(NEW_MARK) && FileSystem.isDirectory(Path.join([repo, touched(entry)])))
+				return 'touches `$entry` is a directory: name the files the line edits';
 		}
 		return null;
 	}
@@ -291,10 +305,6 @@ final class LessonsFile {
 		final paths: Array<String> = touches.map(touched);
 		paths.sort(Compare.compareString);
 		return paths.join(',');
-	}
-
-	private static function touched(entry: String): String {
-		return (entry.endsWith(NEW_MARK) ? entry.substr(0, entry.length - NEW_MARK.length) : entry).trim();
 	}
 
 	private static function triageRow(lesson: Lesson, reason: String): String {

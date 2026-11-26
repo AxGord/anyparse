@@ -3811,8 +3811,8 @@
 			"name": "M-LESSONS-DIRECTORY",
 			"type": "dev.LessonsFile",
 			"method": "touchesProblem",
-			"find": "if (FileSystem.isDirectory(full)) return",
-			"replace": "if (false) return",
+			"find": "if (!entry.endsWith(NEW_MARK) && FileSystem.isDirectory(",
+			"replace": "if (false && FileSystem.isDirectory(",
 			"note": "a directory is filed as a touched path and conflicts with nothing under overlap: files"
 		},
 		{
@@ -3850,9 +3850,9 @@
 		{
 			"name": "M-LESSONS-MISSING-PATH",
 			"type": "dev.LessonsFile",
-			"method": "touchesProblem",
-			"find": "if (!FileSystem.exists(full)) return",
-			"replace": "if (false) return",
+			"method": "pathProblem",
+			"find": "FileSystem.exists(Path.join([repo, path]))",
+			"replace": "true",
 			"note": "a touched path that is not on main and not marked (new) is filed"
 		},
 		{
@@ -5174,6 +5174,94 @@
 			"find": "final kept: Baseline = reused;\n\t\trecordFrozen();",
 			"replace": "final kept: Baseline = reused;",
 			"note": "a reused baseline prints no frozen row, so the snapshot directory a slice is told to read is named nowhere"
+		},
+		{
+			"name": "M-SPLIT-WHOLE",
+			"type": "dev.SplitApply",
+			"method": "check",
+			"find": "lines: problems.length > 0 ? [] : parsed.tasks",
+			"replace": "lines: parsed.tasks",
+			"note": "a list with a refused line still hands its valid lines on to be added"
+		},
+		{
+			"name": "M-SPLIT-REFUSED-UNAPPLIED",
+			"type": "dev.SplitApply",
+			"method": "main",
+			"find": "if (verdict.problems.length > 0) {",
+			"replace": "if (false) {",
+			"note": "a refused list is handed to the queue CLI anyway"
+		},
+		{
+			"name": "M-SPLIT-PATHS",
+			"type": "dev.SplitApply",
+			"method": "lineProblems",
+			"find": "if (problem != null) problems.push(problem);",
+			"replace": "",
+			"note": "a touched path missing from the tree and not marked (new) is added"
+		},
+		{
+			"name": "M-SPLIT-DIFFICULTY",
+			"type": "dev.SplitApply",
+			"method": "lineProblems",
+			"find": "if (line.difficulty == null) problems.push('no difficulty');",
+			"replace": "",
+			"note": "a line without a difficulty passes the check"
+		},
+		{
+			"name": "M-SPLIT-QUOTES",
+			"type": "dev.SplitApply",
+			"method": "lineProblems",
+			"find": "if (!line.text.contains(quote))",
+			"replace": "if (false)",
+			"note": "a new line that drops the parent's user quotes is added"
+		},
+		{
+			"name": "M-SPLIT-OVERLAP",
+			"type": "dev.SplitApply",
+			"method": "sharedWith",
+			"find": "if (a == b || a.startsWith('$b/') || b.startsWith('$a/'))",
+			"replace": "if (false)",
+			"note": "an open line on the same touched path goes unnamed"
+		},
+		{
+			"name": "M-SPLIT-OWNER",
+			"type": "dev.SplitApply",
+			"method": "sharedWith",
+			"find": "if (owner != '' && owner == other.owner)",
+			"replace": "if (false)",
+			"note": "an open line of the same owner goes unnamed"
+		},
+		{
+			"name": "M-SPLIT-PRIORITY",
+			"type": "dev.SplitApply",
+			"method": "inherit",
+			"find": "line.priority != null || priority == ''",
+			"replace": "true",
+			"note": "a new line without a priority loses the parent's"
+		},
+		{
+			"name": "M-SPLIT-BATCH-MARK",
+			"type": "dev.SplitApply",
+			"method": "main",
+			"find": "--add-batch $out --split $id",
+			"replace": "--add-batch $out",
+			"note": "the lines are added but the parent line is not marked split and keeps its slot"
+		},
+		{
+			"name": "M-SPLIT-SUMMARY",
+			"type": "dev.SplitApply",
+			"method": "summary",
+			"find": ".join(', ')",
+			"replace": ".join(' ')",
+			"note": "the parent's SPLIT line no longer names the new ids as a list"
+		},
+		{
+			"name": "M-SPLIT-CLI-REFUSAL",
+			"type": "dev.SplitApply",
+			"method": "main",
+			"find": "if (!run.ok) {",
+			"replace": "if (false) {",
+			"note": "a list the queue CLI refused is reported as applied and its record stays"
 		}
 	]
 }

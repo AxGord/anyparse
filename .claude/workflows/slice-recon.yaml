@@ -3,7 +3,8 @@ description: >-
   Read-only recon of one anyparse slice line (session cwd = its worktree), a child session of slice-pipeline:
   load [exec: the engine hands the facts dev recon-facts collected straight to the recon's prompt] → recon (one
   agent writes <wt>-logs/recon.md; an update reads the previous one first) → check [exec: the file was rewritten
-  this run and line 1 has its shape] → done. The pipeline's recon_end reads the verdict from the file.
+  this run, line 1 has its shape and `split_kind` matches the score] → done. The pipeline's recon_end reads the verdict
+  from the file, its recon_split the split from this session's keys.
 initial: load
 max_transitions: 12
 
@@ -98,7 +99,17 @@ states:
       callers one hop on; each caller falls in an earlier line's scope or gets its own line; a caller claim you did not
       count goes under `## unchecked`. Write recon.md with the Write tool at that absolute path: a Bash heredoc naming a .hx file is
       refused by the hxq gate hook, and a relative path after `cd` lands in the worktree.
-      Then transition `written` on session {{session_id}}.
+      4. The split goes to the workflow by context key, never by a parent turn: `split_kind` = `none` below score 9; at 9 or
+         more `mechanical` when every proposed line is a cut difficulty.md already rules (sweep, migration, independent) and
+         you can write each line whole now, else `design` (a stronger splitter agent then makes the lines). For `mechanical`
+         also `split_lines` = a JSON list, one object per line in the queue's task shape: `id`, `difficulty`, `kind`,
+         `touches` (a file the line creates gets ` (new)`), `owner`, `after`, `text`. Before writing it, search the queue's
+         open lines (status pending, backlog or running) for one with the same owner or a touched path one inside the
+         other: name each in the new line's `after:` when the order matters, else in its text; and copy every user quote
+         («…») of the line's text verbatim into each new text. The engine refuses the whole list on any miss and hands
+         it to a splitter.
+      Then ONE `transition` `written` on session {{session_id}} with `set: {split_kind: "<none|mechanical|design>"}` (for
+      `mechanical` also `split_lines: [<the lines>]` in the same `set`).
     transitions:
       written: check
 
@@ -112,6 +123,17 @@ states:
       [ "$f" -nt "$WT-logs/facts.md" ] || { echo "$f is older than this run's facts.md: rewrite it whole"; exit 31; }
       h=$(head -1 "$f")
       printf '%s\n' "$h" | grep -q -E '^score: [0-9]+ premise: (ok|fail)' || { echo "line 1 of $f is not 'score: N premise: ok|fail …': $h"; exit 32; }
+      # The split's kind matches the score, and a mechanical split carries its lines: the pipeline routes on these keys.
+      s=$(printf '%s\n' "$h" | sed -n 's/^score: \([0-9][0-9]*\) .*/\1/p')
+      want=none; [ "$s" -ge 9 ] && want="mechanical or design"
+      case "$SPLIT_KIND" in
+        none) [ "$s" -lt 9 ] || { echo "score $s is a split: set split_kind $want in the set of written"; exit 34; };;
+        mechanical|design) [ "$s" -ge 9 ] || { echo "score $s is no split: set split_kind none in the set of written"; exit 34; };;
+        *) echo "split_kind is '$SPLIT_KIND': set split_kind $want in the set of written"; exit 34;;
+      esac
+      if [ "$SPLIT_KIND" = mechanical ]; then
+        case "$(printf '%s' "$SPLIT_LINES" | tr -d ' \n')" in '['*']') ;; *) echo "split_kind mechanical needs split_lines, a JSON list of lines, in the same set"; exit 34;; esac
+      fi
       # Entries of `git status` that are new since `load`, in the main checkout and in the worktree. Refused ONCE
       # (the recon restores what it wrote); what still differs after that is another process's and is left for the
       # parent in main-dirty.txt, so a concurrent edit of the main tree never loops or gets reverted here.
@@ -132,6 +154,8 @@ states:
     env:
       WT: "{{context.wt}}"
       MAIN: "{{project_root}}"
+      SPLIT_KIND: "{{context.split_kind}}"
+      SPLIT_LINES: "{{context.split_lines}}"
     timeout: 10000
     cases:
       "0": done
@@ -142,7 +166,8 @@ states:
     on_exhausted: failed
     prompt: |-
       check refused recon.md: {{stdout}}
-      Fix {{context.wt}}-logs/recon.md as the recon step says, then transition `written`.
+      Fix {{context.wt}}-logs/recon.md, or the keys of the set, as the recon step says, then ONE `transition` `written`
+      with `set: {split_kind: …}` (and `split_lines` for a mechanical split).
     transitions:
       written: check
 

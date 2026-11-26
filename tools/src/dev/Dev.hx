@@ -48,6 +48,7 @@ final class Dev {
 		{ name: 'main-commit', main: MainCommit.main, usage: MainCommit.USAGE },
 		{ name: 'lessons-file', main: LessonsFile.main, usage: LessonsFile.USAGE },
 		{ name: 'recon-facts', main: ReconFacts.main, usage: ReconFacts.USAGE },
+		{ name: 'split-apply', main: SplitApply.main, usage: SplitApply.USAGE },
 		{ name: 'sweep-lock', main: SweepLock.main, usage: SweepLock.USAGE },
 		{ name: 'tmp-lifecycle', main: Tmp.main, usage: Tmp.USAGE },
 		{ name: 'fixture-cache', main: FixtureCacheCli.main, usage: FixtureCacheCli.USAGE },
