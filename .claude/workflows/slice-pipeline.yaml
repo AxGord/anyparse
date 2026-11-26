@@ -717,7 +717,7 @@ states:
       # The battery's own reuse verdict: the land row says only that a gate record was offered.
       reuse=$(sed -n -E 's/^battery: ((reused gate|gate record not reused|the gate record covers) .*)$/\1/p' "${TMPDIR%/}/anyparse-land/batch-hxqb-$SLICE/battery.log" 2>/dev/null | head -1)
       "$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --done "$SLICE" --note "LANDED $sha $(date +%F); ${battery:-battery row not read}; ${reuse:-gate reuse not read}; review $VERDICT, $ROUNDS review(s); tokens: worker $TOKENS_WORKER, review $TOKENS_REVIEW"
-      rc=$?; cat "$WT-logs/open-items.txt" 2>/dev/null; sed -n '/Notes (non-blocking)/,/^$/p' "$WT-logs/review.md" 2>/dev/null | head -12; cat "$WT-logs/probe-additions.txt" 2>/dev/null; node bin/dev.js lessons-file "$WT-logs" --slice "$SLICE" --queue "$QUEUE" 2>&1 || echo "lessons=not run (exit $?)"; exit $rc
+      rc=$?; cat "$WT-logs/open-items.txt" 2>/dev/null; sed -n '/Notes (non-blocking)/,/^$/p' "$WT-logs/review.md" 2>/dev/null | head -12; if [ -f "$WT-logs/probe-additions.json" ]; then echo "probe-additions: $WT-logs/probe-additions.json (row i: apq get <file> invocations.i.argv)"; fi; node bin/dev.js lessons-file "$WT-logs" --slice "$SLICE" --queue "$QUEUE" 2>&1 || echo "lessons=not run (exit $?)"; exit $rc
     env:
       QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
       SLICE: "{{context.slice}}"
@@ -778,7 +778,7 @@ states:
       else
         echo "batch/hxqb-$SLICE is not on main (no merge, no 'Slice: $SLICE' trailer): branch kept"; exit 1
       fi
-      keep=.claude/backups/slice-logs/$SLICE; mkdir -p "$keep" && for n in report.md handoff.md review.md decisions.md open-items.txt lessons.json review-lessons.json probe-additions.txt repro.txt repro-verdict.txt; do [ -f "$WT-logs/$n" ] && cp -p "$WT-logs/$n" "$keep/"; done
+      keep=.claude/backups/slice-logs/$SLICE; mkdir -p "$keep" && for n in report.md handoff.md review.md decisions.md open-items.txt lessons.json review-lessons.json probe-additions.json repro.txt repro-verdict.txt; do [ -f "$WT-logs/$n" ] && cp -p "$WT-logs/$n" "$keep/"; done
       [ -f "$WT-logs/slice-gate/table.txt" ] && cp -p "$WT-logs/slice-gate/table.txt" "$keep/gate-table.txt"
       [ -f "$WT-logs/slice-gate/lint-touched.err" ] && grep -h 'compiler oracle' "$WT-logs/slice-gate/lint-touched.err" > "$keep/gate-oracle.txt"
       [ -f "$WT-logs/commit/fix.txt" ] && grep -h 'edit(s) in' "$WT-logs/commit/fix.txt" > "$keep/commit-fix.txt"
@@ -787,8 +787,8 @@ states:
       for d in $(find "$WT-logs" -type d -name arm-fail 2>/dev/null); do mkdir -p "$keep/arm-fail" && cp -p "$d"/* "$keep/arm-fail/" 2>/dev/null; done
       b="${TMPDIR:-/tmp}/anyparse-land/batch-hxqb-$SLICE/battery.log"; [ -f "$b" ] && sed -n "/^build/,\$p" "$b" > "$keep/battery-table.txt"
       [ -f "$keep/battery-table.txt" ] || printf '%s\n' "$LAND_TABLE" > "$keep/land-table.txt"
-      [ -f "$WT-logs/probe-additions.txt" ] && [ -d "$WT-logs/review-probe" ] && [ "$(du -sk "$WT-logs/review-probe" | cut -f1)" -le 20000 ] && cp -Rp "$WT-logs/review-probe" "$keep/"
-      { echo "== $SLICE"; cat "$keep/open-items.txt" "$keep/probe-additions.txt" 2>/dev/null; sed -n '/^Open for the parent/p;/Notes (non-blocking)/,/^$/p' "$keep/review.md" 2>/dev/null; } >> .claude/backups/slice-logs/lessons-pending.txt
+      [ -f "$WT-logs/probe-additions.json" ] && [ -d "$WT-logs/review-probe" ] && [ "$(du -sk "$WT-logs/review-probe" | cut -f1)" -le 20000 ] && cp -Rp "$WT-logs/review-probe" "$keep/"
+      { echo "== $SLICE"; cat "$keep/open-items.txt" 2>/dev/null; if [ -f "$keep/probe-additions.json" ]; then echo "probe-additions: $keep/probe-additions.json"; fi; sed -n '/^Open for the parent/p;/Notes (non-blocking)/,/^$/p' "$keep/review.md" 2>/dev/null; } >> .claude/backups/slice-logs/lessons-pending.txt
       rm -rf "$WT-logs" "/tmp/pony-$SLICE"
       echo "removed $WT, batch/hxqb-$SLICE, its logs"
     env:

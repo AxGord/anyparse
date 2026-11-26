@@ -18,7 +18,7 @@ states:
       case "$tree" in /private/tmp/hxqb-*|/tmp/hxqb-*|*/.wt/anyparse/*) ;; *) echo "refused: session cwd $tree is not a slice worktree (<root>/.wt/anyparse/<ID> or /tmp/hxqb-<ID>)"; exit 2;; esac
       logs="$tree-logs/slice-gate"
       # Probe rows describe the tip their round reviewed: this round re-runs them or they are dropped.
-      if [ -f "$tree-logs/probe-additions.txt" ]; then mv "$tree-logs/probe-additions.txt" "$tree-logs/probe-additions.prev.txt"; fi
+      if [ -f "$tree-logs/probe-additions.json" ]; then mv "$tree-logs/probe-additions.json" "$tree-logs/probe-additions.prev.json"; fi
       base=$(git merge-base HEAD main)
       # The whole digest goes to a file the reviewer reads; stdout (which also reaches whoever starts the review)
       # carries only the slice's identity and the gate verdict.
@@ -126,7 +126,7 @@ states:
       `node {{project_root}}/bin/dev.js probe {{context.cwd}}/test/probes/<area>/kit.json --engine {{context.cwd}}/bin/apq.js --compile`
       (the WORKTREE's kit — main's misses the rows this slice added) BEFORE
       writing probes of your own; quote its last line. A deviating row is a finding unless it is the slice's intended
-      change; a moved known-defect row is checked fixed (exit 0, compiles) not merely changed. Probes you still need: a row showing THIS slice's change (base wrong, tip right) when your verdict is FIXES anyway → a fix-list item `add kit row <invocation> to test/probes/<area>, fixture <path>` (the worker records it with `dev probe <area> --record`); every other row → {{context.cwd}}-logs/probe-additions.txt (the invocation + why, fixtures under {{context.cwd}}-logs/review-probe) for the parent. An earlier round's rows, when {{context.cwd}}-logs/probe-additions.prev.txt exists: re-run each on this tip; copy into probe-additions.txt only those that still deviate.
+      change; a moved known-defect row is checked fixed (exit 0, compiles) not merely changed. Probes you still need: a row showing THIS slice's change (base wrong, tip right) when your verdict is FIXES anyway → a fix-list item `add kit row <invocation> to test/probes/<area>, fixture <path>` (the worker records it with `dev probe <area> --record`); every other row → {{context.cwd}}-logs/probe-additions.json, a kit-shaped JSON document `{"area": "<test/probes area, optional>", "invocations": [{"name", "argv", "note", "files"?, "stdin"?, "expect"?}]}` — `note` says what the row shows and what the tip answers wrongly (shape: docs/testing.md § "Review probe kits"; fixtures under {{context.cwd}}-logs/review-probe). An earlier round's rows, when {{context.cwd}}-logs/probe-additions.prev.json exists: re-run each on this tip; copy into probe-additions.json only those that still deviate.
       Then transition `axes`.
     transitions:
       axes: axes
