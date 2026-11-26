@@ -185,7 +185,7 @@ final class CondRegionMerge extends RuleBase {
 			paired.push(second.open);
 			out.push(site);
 		}
-		out.sort((a, b) -> Compare.compareInt(a.boundary.from, b.boundary.from));
+		out.sort(Compare.asc(a -> a.boundary.from));
 		return out;
 	}
 

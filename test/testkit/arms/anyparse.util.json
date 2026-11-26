@@ -698,6 +698,22 @@
 			"find": "return Context.error(",
 			"replace": "if (true) return macro : Dynamic; return Context.error(",
 			"note": "an unknown element type is accepted as Dynamic instead of refused"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-ALIAS-BLIND",
+			"type": "anyparse.util.CompareKeys",
+			"method": "isCompareClass",
+			"find": "c.get().module == 'anyparse.util.Compare' && c.get().name == 'Compare'",
+			"replace": "ExprTools.toString(e).indexOf('Compare') >= 0",
+			"note": "a Compare imported under another name is no longer recognised inside a key list, so its nested asc / desc is read as a key lambda and refused"
+		},
+		{
+			"name": "M-UTIL-COMPARE-KEY-UNORDERED-ALLOWED",
+			"type": "anyparse.util.CompareKeys",
+			"method": "refuseUnorderedKey",
+			"find": "!Context.unify(keyType, Context.getType('Float')) &&",
+			"replace": "false &&",
+			"note": "a key that is no Int, Float or String is accepted here and fails later inside the generated comparison, at a position in the macro"
 		}
 	]
 }

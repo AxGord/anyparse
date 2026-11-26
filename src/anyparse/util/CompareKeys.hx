@@ -5,6 +5,7 @@ import haxe.macro.Context;
 import haxe.macro.Expr;
 import haxe.macro.ExprTools;
 import haxe.macro.Type;
+import haxe.macro.TypeTools;
 
 /** One ordering key: the lambda's parameter name, the expression reading the key from it, and its direction. */
 private typedef KeyRow = {
@@ -53,11 +54,15 @@ final class CompareKeys {
 		}
 	}
 
+	/**
+	 * Whether `e` names `anyparse.util.Compare` in this scope under any import alias; an expression that is no type is not.
+	 */
 	private static function isCompareClass(e: Expr): Bool {
-		return switch e.expr {
-			case EConst(CIdent('Compare')), EField({ expr: EField({ expr: EConst(CIdent('anyparse')) }, 'util', _) }, 'Compare', _): true;
+		return try switch Context.typeExpr(e).expr {
+			case TTypeExpr(TClassDecl(c)):
+				c.get().module == 'anyparse.util.Compare' && c.get().name == 'Compare';
 			case _: false;
-		}
+		} catch (_: haxe.Exception) false;
 	}
 
 	/** The row of one key lambda; anything but a one-parameter, one-expression lambda is a compile error. */
@@ -134,7 +139,7 @@ final class CompareKeys {
 		final upper: Expr = row.ascending ? macro 1 : macro -1;
 		final leftKey: Expr = read(row, macro _cmpL);
 		final rightKey: Expr = read(row, macro _cmpR);
-		refuseNullable(row, type);
+		refuseUnorderedKey(row, type);
 		return macro {
 			final $left = $leftKey;
 			final $right = $rightKey;
@@ -147,8 +152,11 @@ final class CompareKeys {
 		};
 	}
 
-	/** A `Null<…>` key would order by the target's null coercion, which differs between targets: refused. */
-	private static function refuseNullable(row: KeyRow, type: ComplexType): Void {
+	/**
+	 * A `Null<…>` key would order by the target's null coercion, which differs between targets, and a key that is no Int,
+	 * Float or String has no `<`: both are refused at the key.
+	 */
+	private static function refuseUnorderedKey(row: KeyRow, type: ComplexType): Void {
 		final name: String = row.param;
 		final body: Expr = row.body;
 		final keyType: Type = Context.typeof(macro {
@@ -159,6 +167,8 @@ final class CompareKeys {
 			Context.error(
 				'Compare key is Null<…>: a nullable key has no portable order, compare a non-null value (r -> r.a ?? 0)', body.pos
 			);
+		if (!Context.unify(keyType, Context.getType('Float')) && !Context.unify(keyType, Context.getType('String')))
+			Context.error('Compare key must be an Int, a Float or a String, not ${TypeTools.toString(keyType)}', body.pos);
 	}
 
 	/** Follows typedef, lazy and monomorph layers one at a time: a full `Context.follow` strips `Null` itself. */

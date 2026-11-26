@@ -343,6 +343,25 @@ final class CompareTest extends Test {
 		assertRefused('rows.sort(Compare.asc(r -> r.m));', 'Compare key is Null');
 	}
 
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-KEY-ALIAS-BLIND')
+	public function testAnImportAliasOfCompareIsRecognisedInsideAKey(): Void {
+		final run: Null<ProcessRun> = typecheck(
+			'rows.sort(Order.asc(r -> r.a, Order.desc(r -> r.b)));', 'import anyparse.util.Compare as Order;'
+		);
+		if (run != null) Assert.equals(0, run.status, run.err);
+	}
+
+	@:pin('control')
+	@:killer('M-UTIL-COMPARE-KEY-UNORDERED-ALLOWED')
+	public function testABoolKeyIsRefusedAtTheCall(): Void {
+		assertRefused('rows.sort(Compare.asc(r -> r.flag));', 'Compare key must be an Int, a Float or a String, not Bool');
+		final run: Null<ProcessRun> = typecheck('rows.sort(Compare.asc(r -> r.flag));');
+		if (run == null) return;
+		Assert.isTrue(run.err.indexOf('Main.hx:') >= 0, run.err);
+		Assert.isTrue(run.err.indexOf('CompareKeys.hx') < 0, run.err);
+	}
+
 	private static function row(a: Int, b: Int, c: Int): Row {
 		return {
 			a: a,
@@ -383,10 +402,10 @@ final class CompareTest extends Test {
 		};
 	}
 
-	private static function typecheck(statement: String): Null<ProcessRun> {
+	private static function typecheck(statement: String, header: String = 'import anyparse.util.Compare;'): Null<ProcessRun> {
 		#if (sys || nodejs)
-		final main: String = 'import anyparse.util.Compare;\n\ntypedef MaybeInt = Null<Int>;\n\n'
-			+ 'typedef Row = {final a: Int; final b: Int; final n: Null<Int>; final m: MaybeInt;}\n\nclass Main {\n'
+		final main: String = '$header\n\ntypedef MaybeInt = Null<Int>;\n\n'
+			+ 'typedef Row = {final a: Int; final b: Int; final n: Null<Int>; final m: MaybeInt; final flag: Bool;}\n\nclass Main {\n'
 			+ '\tstatic function main():Void {\n\t\tfinal rows:Array<Row> = [];\n\t\t$statement\n\t}\n}\n';
 		final dir: String = CliFixture.writeTree('comparekeys', [{ name: 'Main.hx', source: main }]);
 		final run: ProcessRun = ProcessSpawn.run(['-cp', '.', '-cp', '${Sys.getCwd()}src', '-main', 'Main', '--no-output'], dir, 1 << 20);
