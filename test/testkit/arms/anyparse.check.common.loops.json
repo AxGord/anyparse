@@ -1114,6 +1114,109 @@
 			"find": " && NumericLiteral.valueOf(node.name ?? '') == 0",
 			"replace": "",
 			"note": "any numeric literal is a zero lower bound, so a loop that stops at 1 is rewritten to one that stops at 0"
+		},
+		{
+			"name": "M-RME-STMT-ARM",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "collect",
+			"find": "if (parent != null && cfg.ifStatementKinds.contains(node.kind)",
+			"replace": "if (false && parent != null && cfg.ifStatementKinds.contains(node.kind)",
+			"note": "the statement form is never matched, so if (m.exists(k)) return m[k]; keeps its double lookup"
+		},
+		{
+			"name": "M-RME-STMT-READS",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "rewriteOf",
+			"find": "(i == 0 ? '$local != null' : local)",
+			"replace": "(i == 0 ? '$local != null' : source.substring(spans[i].from, spans[i].to))",
+			"note": "the then-branch reads keep the index lookup, so the rewrite tests the local and still reads the map again"
+		},
+		{
+			"name": "M-RME-STMT-PROOF",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "statementEdits",
+			"find": " && proofOf(s.name, s.bindingFrom))",
+			"replace": ")",
+			"note": "a statement over a map that may store null is rewritten, so a stored null now skips the branch the exists test took"
+		},
+		{
+			"name": "M-RME-STMT-DECLINE",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "run",
+			"find": "declineReason: proof ? s.refusal : STATEMENT_DECLINE_REASON",
+			"replace": "declineReason: s.refusal",
+			"note": "an unproven statement carries no decline, so the fix ledger cannot say a stored null is why the memo is left alone"
+		},
+		{
+			"name": "M-RME-STMT-RUNS-BEFORE",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "runsBefore",
+			"force": "false",
+			"note": "a call between two reads no longer refuses, so a callee writing the map makes the original reads differ while the rewrite answers the first value twice"
+		},
+		{
+			"name": "M-RME-STMT-WRITE-TARGET",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "gatherReads",
+			"find": "if (deferred || (parent != null && cfg.writeParentKinds.contains(parent.kind) && parent.children[0] == node)) return false;",
+			"replace": "if (deferred) return false;",
+			"note": "an index write m[k] = … is counted as a read, so the rewrite assigns to the local and the map is never written"
+		},
+		{
+			"name": "M-RME-STMT-OTHER-USE",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "gatherReads",
+			"find": "\t\tif (node.name == test.name) return false;\n",
+			"replace": "",
+			"note": "a then-branch redeclaring the map name is matched, so a read of the shadowing map is re-spelled as the outer map value"
+		},
+		{
+			"name": "M-RME-STMT-DEFERRED",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "gatherReads",
+			"find": "final inner: Bool = deferred || cfg.deferredKinds.contains(node.kind);",
+			"replace": "final inner: Bool = deferred;",
+			"note": "a read inside a closure is re-spelled as the local, so a closure run after a write sees the value at the test instead"
+		},
+		{
+			"name": "M-RME-STMT-COLLISION",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "nameRefusal",
+			"find": "return taken ? 'the local name `$local` is already spelled in the enclosing declaration' : null;",
+			"replace": "return null;",
+			"note": "a local name already spelled in the function is declared again, shadowing or capturing the existing binding"
+		},
+		{
+			"name": "M-RME-STMT-KEY-NAME",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "localName",
+			"find": "key + KEY_VALUE_SUFFIX",
+			"replace": "key",
+			"note": "a map with no singular names its local after the key itself, which is always taken, so the site is never rewritten"
+		},
+		{
+			"name": "M-RME-STMT-LOOP",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "config",
+			"find": ".concat(ShapeVocab.loopKinds(shape))",
+			"replace": "",
+			"note": "a read inside a loop is re-spelled as the local, so a write on an earlier turn is missed and later turns answer the first value"
+		},
+		{
+			"name": "M-RME-STMT-UNTYPED",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "statementMatch",
+			"find": " ?? (type == null ? UNTYPED_REFUSAL : null)",
+			"replace": "",
+			"note": "a map whose declaration writes no value type gets no edit and no reason, so the fix ledger says the check declined nothing"
+		},
+		{
+			"name": "M-RME-STMT-COMMENT",
+			"type": "anyparse.check.common.loops.RedundantMapExists",
+			"method": "statementMatch",
+			"find": "if (at == null || LexicalRegions.commentIntersects(at.from, at.to, f.regions())) return null;",
+			"replace": "if (at == null) return null;",
+			"note": "a comment inside the exists test or a read is matched, so the rewrite deletes it with the span it re-spells"
 		}
 	]
 }

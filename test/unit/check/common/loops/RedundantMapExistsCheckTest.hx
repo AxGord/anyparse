@@ -181,6 +181,137 @@ class RedundantMapExistsCheckTest extends Test {
 		Assert.equals(1, violations(cls('m', "'a' => 'b'", '', 'private', "m.exists('//') ? m['//'] : k")).length);
 	}
 
+	/** `if (m.exists(k)) return m[k];` reads the map once into a local typed `Null<V>` and tests the local. */
+	@:pin('control')
+	@:killer('M-RME-STMT-ARM')
+	public function testReturnFormReadsTheMapOnce(): Void {
+		final out: String = fixStatement('', 'if (counts.exists(k)) return counts[k];\n\t\treturn 0;');
+		Assert.isTrue(out.indexOf('final count:Null<Int> = counts[k];\n\t\tif (count != null) return count;') != -1, out);
+	}
+
+	/** Every read of the block form becomes the local, and the else branch is kept as written. */
+	@:pin('control')
+	@:killer('M-RME-STMT-READS')
+	public function testBlockFormRespellsEveryReadAndKeepsTheElse(): Void {
+		final out: String = fixStatement(
+			'',
+			'if (counts.exists(k)) {\n\t\t\tfinal twice: Int = counts[k] * 2;\n\t\t\treturn twice + counts[k];\n\t\t} else {\n'
+			+ '\t\t\treturn -1;\n\t\t}'
+		);
+		Assert.isTrue(
+			out.indexOf(
+				'final count:Null<Int> = counts[k];\n\t\tif (count != null) {\n\t\t\tfinal twice:Int = count * 2;\n'
+				+ '\t\t\treturn twice + count;\n\t\t} else {\n\t\t\treturn -1;\n\t\t}'
+			) != -1,
+			out
+		);
+	}
+
+	/** A map the census cannot prove free of stored nulls is reported with the reason and left as written. */
+	@:pin('control')
+	@:killer('M-RME-STMT-PROOF')
+	public function testNullStoringMapLeftAlone(): Void {
+		final body: String = 'if (counts.exists(k)) return counts[k];\n\t\tcounts[k] = null;\n\t\treturn 0;';
+		final vs: Array<Violation> = violations(statementClass('', body));
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue(vs[0].message.indexOf('cannot be ruled out') != -1, vs[0].message);
+		Assert.isTrue(fixStatement('', body).indexOf('if (counts.exists(k)) return counts[k];') != -1);
+	}
+
+	/** A public memo field of `Null<V>` values — a memo that stores null by design — is left alone, and the finding says why. */
+	@:pin('control')
+	@:killer('M-RME-STMT-DECLINE')
+	public function testPublicNullableMemoFieldLeftAlone(): Void {
+		final fields: String = '\tpublic final paths: Map<String, Null<String>> = [];\n\n';
+		final body: String = 'if (paths.exists(k)) return paths[k] == null ? 1 : 2;\n\t\treturn 0;';
+		final vs: Array<Violation> = violations(statementClass(fields, body));
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue((vs[0].declineReason ?? '').indexOf('stored null') != -1, vs[0].message);
+		Assert.isTrue(fixStatement(fields, body).indexOf('if (paths.exists(k)) return paths[k] == null') != -1);
+	}
+
+	/** A call that runs between two reads may write the map, so the reads may answer differently: no finding. */
+	@:pin('control')
+	@:killer('M-RME-STMT-RUNS-BEFORE')
+	public function testCallBetweenTheReadsNotFlagged(): Void {
+		final body: String =
+			'if (counts.exists(k)) {\n\t\t\tfinal a: Int = counts[k];\n\t\t\tpoke(k);\n\t\t\treturn a + counts[k];\n\t\t}\n\t\treturn 0;';
+		Assert.equals(0, violations(statementClass('', body)).length);
+	}
+
+	/** A read that is the target of a write writes the map, and the local cannot stand for it: no finding. */
+	@:pin('control')
+	@:killer('M-RME-STMT-WRITE-TARGET')
+	public function testIndexWriteInTheThenBranchNotFlagged(): Void {
+		Assert.equals(0, violations(statementClass('', 'if (counts.exists(k)) counts[k] = counts[k] + 1;\n\t\treturn 0;')).length);
+	}
+
+	/** A then-branch that redeclares the map's name reads another map through the same spelling: no finding. */
+	@:pin('control')
+	@:killer('M-RME-STMT-OTHER-USE')
+	public function testRedeclaredMapNameNotFlagged(): Void {
+		final body: String =
+			'if (counts.exists(k)) {\n\t\t\tfinal counts: Map<String, Int> = [\'a\' => 1];\n\t\t\treturn counts[k];\n\t\t}\n\t\treturn 0;';
+		Assert.equals(0, violations(statementClass('', body)).length);
+	}
+
+	/** A read inside a closure runs when the closure does, after code that may write the map: no finding. */
+	@:pin('control')
+	@:killer('M-RME-STMT-DEFERRED')
+	public function testReadInAClosureNotFlagged(): Void {
+		final body: String = 'if (counts.exists(k)) {\n\t\t\tfinal later: () -> Null<Int> = () -> counts[k];\n\t\t\tpoke(k);\n'
+			+ '\t\t\treturn later();\n\t\t}\n\t\treturn 0;';
+		Assert.equals(0, violations(statementClass('', body)).length);
+	}
+
+	/** A local name already spelled in the enclosing function is refused: the site is reported with the reason and not rewritten. */
+	@:pin('control')
+	@:killer('M-RME-STMT-COLLISION')
+	public function testNameCollisionRefused(): Void {
+		final body: String = 'final count: Int = 1;\n\t\tif (counts.exists(k)) return counts[k] + count;\n\t\treturn 0;';
+		final vs: Array<Violation> = violations(statementClass('', body));
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue((vs[0].declineReason ?? '').indexOf('already spelled') != -1, vs[0].message);
+		Assert.isTrue(fixStatement('', body).indexOf('if (counts.exists(k)) return counts[k] + count;') != -1);
+	}
+
+	/** A map name with no singular names the local after the key. */
+	@:pin('control')
+	@:killer('M-RME-STMT-KEY-NAME')
+	public function testKeyNamesTheLocalWhenTheMapNameHasNoSingular(): Void {
+		final fields: String = '\tprivate var cache: Map<String, Int> = [];\n\n';
+		final out: String = fixStatement(fields, 'if (cache.exists(k)) return cache[k];\n\t\treturn 0;');
+		Assert.isTrue(out.indexOf('final kValue:Null<Int> = cache[k];\n\t\tif (kValue != null) return kValue;') != -1, out);
+	}
+
+	/** A read inside a loop runs again after code textually behind it, which may write the map: no finding. */
+	@:pin('control')
+	@:killer('M-RME-STMT-LOOP')
+	public function testReadInALoopNotFlagged(): Void {
+		final body: String = 'var total: Int = 0;\n\t\tif (counts.exists(k)) {\n\t\t\tfor (i in 0...2) {\n\t\t\t\ttotal += counts[k];\n'
+			+ '\t\t\t\tpoke(k);\n\t\t\t}\n\t\t}\n\t\treturn total;';
+		Assert.equals(0, violations(statementClass('', body)).length);
+	}
+
+	/** A map declared without its `Map<K, V>` arguments gives the local no type: reported with the reason, not rewritten. */
+	@:pin('control')
+	@:killer('M-RME-STMT-UNTYPED')
+	public function testUntypedMapDeclarationRefused(): Void {
+		final fields: String = '\tprivate var raw: Map = new Map();\n\n';
+		final body: String = 'if (raw.exists(k)) return raw[k];\n\t\treturn 0;';
+		final vs: Array<Violation> = violations(statementClass(fields, body));
+		Assert.equals(1, vs.length);
+		if (vs.length == 1) Assert.isTrue((vs[0].declineReason ?? '').indexOf('writes no value type') != -1, vs[0].message);
+		Assert.isTrue(fixStatement(fields, body).indexOf('if (raw.exists(k)) return raw[k];') != -1);
+	}
+
+	/** A comment inside a span the rewrite re-spells would be deleted with it, so the site is not matched. */
+	@:pin('control')
+	@:killer('M-RME-STMT-COMMENT')
+	public function testCommentInARespelledSpanNotFlagged(): Void {
+		Assert.equals(0, violations(statementClass('', 'if (counts.exists(/* why */ k)) return counts[k];\n\t\treturn 0;')).length);
+	}
+
 	/** A base class with two map fields, one of which a subtype fixture may poison. */
 	private inline function base(): String {
 		return 'class Base {\n\n\tprivate var good:Map<String, String> = [];\n\n\tprivate var bad:Map<String, String> = [];\n\n'
@@ -222,6 +353,20 @@ class RedundantMapExistsCheckTest extends Test {
 				Assert.fail('canonicalize Err: $message');
 		}
 		return '';
+	}
+
+	/** One class with a proven `counts` map, optional extra fields, a `read` body and a `poke` that writes the map. */
+	private function statementClass(fields: String, body: String): Array<{ file: String, source: String }> {
+		return [{
+			file: 'S.hx',
+			source: 'class S {\n\n\tprivate var counts: Map<String, Int> = [];\n\n$fields\tpublic function new() {}\n\n\tpublic function '
+				+ 'read(k: String): Int {\n\t\t$body\n\t}\n\n\tprivate function poke(k: String): Void {\n\t\tcounts[k] = 2;\n\t}\n\n}'
+		}];
+	}
+
+	/** The fixed source of `statementClass(fields, body)`. */
+	private function fixStatement(fields: String, body: String): String {
+		return fixResult(statementClass(fields, body), 'S.hx');
 	}
 
 }

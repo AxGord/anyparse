@@ -84,6 +84,14 @@ final class ElementLoopRewrite {
 	}
 
 	/**
+	 * The element name derived from a collection named `collection`: the singular of the name with its
+	 * leading underscores dropped (`_points` -> `point`), or null when it has none.
+	 */
+	public static inline function elementNameOf(collection: String): Null<String> {
+		return singularOf(withoutLeadingUnderscores(collection));
+	}
+
+	/**
 	 * The singular of a plural collection name, or null when no rule applies. An English
 	 * identifier convention, so it lives here rather than in the grammar seam: a plural is a
 	 * property of how people name collections, not of the language being parsed.
@@ -327,14 +335,6 @@ final class ElementLoopRewrite {
 			case Proven: null;
 			case _: '$SELF_CALL_DECLINE: ${reach.explain(result)}';
 		};
-	}
-
-	/**
-	 * The element name derived from a collection named `collection`: the singular of the name with its
-	 * leading underscores dropped (`_points` -> `point`), or null when it has none.
-	 */
-	private static inline function elementNameOf(collection: String): Null<String> {
-		return singularOf(withoutLeadingUnderscores(collection));
 	}
 
 	/** Whether a word of `name` ends at `end`: the end of the name, or before a character that is not a lower-case letter. */
