@@ -5135,6 +5135,45 @@
 			"find": "fold(_repo, sliceId(_branch), _summary.detail)",
 			"replace": "fold(_repo, \"\", _summary.detail)",
 			"note": "the fold step is given no slice id"
+		},
+		{
+			"name": "M-FROZEN-SNAPSHOT-IS-LIVE",
+			"type": "dev.FrozenSnapshot",
+			"method": "take",
+			"find": "return entry;",
+			"replace": "return live;",
+			"note": "the frozen record names the live downstream checkout instead of its snapshot, so the owner's edits move the row again"
+		},
+		{
+			"name": "M-FROZEN-SNAPSHOT-KEY-MOVES",
+			"type": "dev.FrozenSnapshot",
+			"method": "take",
+			"find": "final head: String = GateTree.gitIn(live, ['rev-parse', 'HEAD']).trim();",
+			"replace": "final head: String = GateTree.gitIn(live, ['rev-parse', 'HEAD']).trim() + Std.string(Math.random());",
+			"note": "the snapshot is keyed by more than its commit, so gates of one commit read different directories and each pays an extraction"
+		},
+		{
+			"name": "M-FROZEN-SNAPSHOT-KEY-CONSTANT",
+			"type": "dev.FrozenSnapshot",
+			"method": "take",
+			"find": "final head: String = GateTree.gitIn(live, ['rev-parse', 'HEAD']).trim();",
+			"replace": "final head: String = 'head';",
+			"note": "every commit of the live tree reads the first snapshot taken, so a downstream commit is never seen"
+		},
+		{
+			"name": "M-FROZEN-SNAPSHOT-DIGEST-BLIND",
+			"type": "dev.FrozenSnapshot",
+			"method": "digest",
+			"force": "\"same\"",
+			"note": "a write into the snapshot leaves its digest as it was, so the frozen row never fails"
+		},
+		{
+			"name": "M-GATE-REUSED-BASELINE-HIDES-FROZEN",
+			"type": "dev.SliceGate",
+			"method": "recordBaseline",
+			"find": "final kept: Baseline = reused;\n\t\trecordFrozen();",
+			"replace": "final kept: Baseline = reused;",
+			"note": "a reused baseline prints no frozen row, so the snapshot directory a slice is told to read is named nowhere"
 		}
 	]
 }

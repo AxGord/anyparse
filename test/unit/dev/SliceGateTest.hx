@@ -7,6 +7,8 @@ import dev.BaseLint;
 import dev.BaseSuite;
 import dev.BaselineWriter;
 import dev.BranchWatch;
+import dev.FrozenSnapshot;
+import dev.FrozenTree;
 import dev.Probe;
 import dev.SliceGate;
 import devkit.Branches;
@@ -720,11 +722,69 @@ final class SliceGateTest extends Test {
 	}
 
 	/**
+	 * The frozen row guards the slice, not the downstream tree's owner: an edit of the live downstream tree after the baseline
+	 * is not a write by the slice, so the row stays green.
+	 */
+	@:pin('control')
+	@:killer('M-FROZEN-SNAPSHOT-IS-LIVE')
+	public function testAnEditOfTheLiveDownstreamTreeAfterTheBaselineDoesNotFailTheFrozenRow(): Void {
+		TempDir.with(dir -> {
+			final live: String = LiveGitTree.make(dir);
+			final recorded: Array<FrozenTree> = [FrozenSnapshot.record(dir.file('snapshots'), live)];
+			File.saveContent(Path.join([live, 'a.hx']), 'class A { var edited: Int; }\n');
+
+			final row: String = frozenRow(gateRun(BASE_REGISTRY, [], GRAPH_HXQ, null, null, 'notes.txt', false, recorded));
+			Assert.isFalse(row.contains('FAILED'), row);
+			Assert.isTrue(row.contains('passed'), row);
+		});
+	}
+
+	/** A write by the slice into the snapshot the baseline recorded fails the frozen row, naming the snapshot. */
+	@:pin('control')
+	@:killer('M-FROZEN-SNAPSHOT-DIGEST-BLIND')
+	public function testAWriteIntoTheRecordedSnapshotFailsTheFrozenRow(): Void {
+		TempDir.with(dir -> {
+			final recorded: Array<FrozenTree> = [FrozenSnapshot.record(dir.file('snapshots'), LiveGitTree.make(dir))];
+			File.saveContent(Path.join([recorded[0].dir, 'a.hx']), 'class A { var written: Int; }\n');
+
+			final row: String = frozenRow(gateRun(BASE_REGISTRY, [], GRAPH_HXQ, null, null, 'notes.txt', false, recorded));
+			Assert.isTrue(row.contains('FAILED') && row.contains('frozen snapshot ${recorded[0].dir} changed'), row);
+		});
+	}
+
+	/**
+	 * A `--baseline` run that reuses a kept baseline still names the snapshot directory of each `--frozen` tree in a `frozen` row:
+	 * that directory is what a slice reads as its downstream tree.
+	 */
+	@:pin('control')
+	@:killer('M-GATE-REUSED-BASELINE-HIDES-FROZEN')
+	public function testAReusedBaselineNamesTheFrozenSnapshotDirectory(): Void {
+		TempDir.with(dir -> {
+			final snapshots: String = dir.file('snapshots');
+			final was: Null<String> = Sys.getEnv(FrozenSnapshot.CACHE_VAR);
+			CliFixture.always(() -> {
+				if (was == null)
+					js.Syntax.code('delete process.env[{0}]', FrozenSnapshot.CACHE_VAR);
+				else
+					Sys.putEnv(FrozenSnapshot.CACHE_VAR, was);
+			}, () -> {
+				Sys.putEnv(FrozenSnapshot.CACHE_VAR, snapshots);
+				final ran: GateRan = gateRun(
+					BASE_REGISTRY, ['--baseline', '--frozen', LiveGitTree.make(dir)], GRAPH_HXQ, null, null, 'notes.txt', false, null, 2
+				);
+				Assert.equals(0, ran.status, ran.table);
+				Assert.stringContains('reused the baseline', ran.table);
+				Assert.stringContains(snapshots, frozenRow(ran));
+			});
+		});
+	}
+
+	/**
 	 * A scratch tree whose base commit holds the arm registry `BASE_REGISTRY` and whose slice commit holds `registry`, with the
 	 * stand-ins the gate's tools need; it answers the baseline record the gate reads.
 	 */
 	private static function scratchTree(
-		dir: TempDir, registry: String, hxq: String, touched: String = 'notes.txt', infra: Bool = false
+		dir: TempDir, registry: String, hxq: String, touched: String = 'notes.txt', infra: Bool = false, ?frozen: Array<FrozenTree>
 	): String {
 		final tree: String = dir.file('tree');
 		final registryFile: String = Path.join([tree, 'test/testkit/arms/a.json']);
@@ -759,7 +819,7 @@ final class SliceGateTest extends Test {
 
 				lists: JObject([]),
 				infra: infra ? [{ tree: dir.file('infra'), snapshot: dir.file('infra.json') }] : [],
-				frozen: []
+				frozen: frozen ?? []
 			}, JsonFormat.instance.compactWriteOptions)
 		);
 		File.saveContent('$tree-logs/sweep-base.json', '{}');
@@ -771,7 +831,7 @@ final class SliceGateTest extends Test {
 	/** A whole `check()` over a scratch tree whose slice leaves `registry`, the compiler, the branches' script and the pool faked. */
 	private static function gateRun(
 		registry: String, ?extra: Array<String>, hxq: String = GRAPH_HXQ, ?self: String, ?idleMs: Int, touched: String = 'notes.txt',
-		infra: Bool = false
+		infra: Bool = false, ?frozen: Array<FrozenTree>, runs: Int = 1
 	): GateRan {
 		var ran: GateRan = {
 			branches: '',
@@ -784,7 +844,7 @@ final class SliceGateTest extends Test {
 			table: ''
 		};
 		TempDir.with(dir -> {
-			final tree: String = scratchTree(dir, registry, hxq, touched, infra);
+			final tree: String = scratchTree(dir, registry, hxq, touched, infra, frozen);
 
 			final root: String = dir.file('plugin');
 			final fakeBin: String = dir.file('fakebin');
@@ -812,7 +872,7 @@ final class SliceGateTest extends Test {
 				Sys.putEnv('PATH', '$fakeBin:${saved['PATH']}');
 				Sys.putEnv(SliceGate.SELF_VAR, dir.file('self.js'));
 				Sys.putEnv(BranchWatch.IDLE_VAR, idleMs == null ? '' : '$idleMs');
-				status = SliceGate.main([tree, '--logs', '$tree-logs'].concat(extra ?? []));
+				for (_ in 0...runs) status = SliceGate.main([tree, '--logs', '$tree-logs'].concat(extra ?? []));
 
 			});
 			final read: String -> String = file -> FileSystem.exists(file) ? File.getContent(file) : '';
@@ -859,6 +919,11 @@ final class SliceGateTest extends Test {
 			};
 		});
 		return why;
+	}
+
+	/** The line of `ran`'s table that holds the frozen row. */
+	private static function frozenRow(ran: GateRan): String {
+		return ran.table.split('\n').filter(line -> line.startsWith('frozen '))[0] ?? 'no frozen row in ${ran.table}';
 	}
 
 }

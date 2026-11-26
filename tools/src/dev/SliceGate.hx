@@ -60,7 +60,7 @@ typedef GateDemand = {
  * `dev slice-gate <worktree>` — every gate a worker's slice must pass, as ONE command whose report is one row per gate
  * and a verdict, a failed row quoting its first error (docs/testing.md § "The slice gate"). `--baseline`, run once on the
  * untouched worktree, records what the gates later compare with: the base commit, the registry counts, the whole-tree
- * lint, the infra trees' lint and the frozen trees' diff digests; the base suite's counts and corpus snapshot are read
+ * lint, the infra trees' lint and the frozen trees' snapshots (`FrozenSnapshot`); the base suite's counts and corpus snapshot are read
  * by a branch of the first whole-suite gate that compares with them (`BaseSuite`). The rows run as
  * branches at once (`devkit.Branches`, each branch a `--rows` process of this tool): a run its caller gave a pool lease
  * splits that lease among them, and a run without one, inside a workflow, lets the build and each branch take a lease of
@@ -175,10 +175,19 @@ final class SliceGate {
 			_gate.base, _gate.options.infra, _gate.options.allow, _gate.git(['status', '--porcelain']).trim() == '', BaseEngine.toolchain()
 		);
 		if (!build()) return finish(title);
-		final digests: Array<FrozenTree> = _gate.options.frozen.map(dir -> { dir: dir, digest: GateTree.diffDigest(dir) });
+		final digests: Array<FrozenTree> = _gate.options.frozen.map(live -> FrozenSnapshot.record(FrozenSnapshot.defaultCache(), live));
 		final reused: Null<Baseline> = key == null ? null : BaselineCache.restore(BaselineCache.defaultCache(), key, _gate.logs, digests);
+		// each snapshot's directory is what a slice reads as its downstream tree, so a reused baseline names it as a fresh one does
+		function recordFrozen(): Void {
+			gate('frozen', () -> {
+				if (digests.length == 0) return Skipped('no --frozen');
+				_gate.summary.detail(digests.map(d -> '${d.dir} ${GateTree.short(d.digest)}').join(', '));
+				return Passed;
+			});
+		}
 		if (reused != null) {
 			final kept: Baseline = reused;
+			recordFrozen();
 			gate('baseline', () -> {
 				File.saveContent(_gate.log(GateTree.BASELINE_FILE), BaselineWriter.write(kept, JsonFormat.instance.defaultWriteOptions));
 				_gate.summary.detail('reused the baseline recorded for ${GateTree.short(_gate.base)}, ${GateTree.short(key ?? '')}');
@@ -187,11 +196,7 @@ final class SliceGate {
 			return finish(title);
 		}
 		fanOut(self, BASELINE_BRANCHES, BASELINE_ROWS);
-		gate('frozen', () -> {
-			if (digests.length == 0) return Skipped('no --frozen');
-			_gate.summary.detail(digests.map(d -> '${Path.withoutDirectory(d.dir)} ${GateTree.short(d.digest)}').join(', '));
-			return Passed;
-		});
+		recordFrozen();
 		gate('baseline', () -> {
 			final unfit: Array<String> = _gate.summary.unfit();
 			if (unfit.length > 0)
@@ -640,14 +645,14 @@ final class SliceGate {
 		return Passed;
 	}
 
-	/** The frozen row: every tree recorded by `--frozen` still has the `git diff` it had at the baseline. */
+	/** The frozen row: every snapshot recorded by `--frozen` is still what it was at the baseline; the live tree is never read. */
 	private function frozenOutcome(): Outcome {
 		final baseline: Null<Baseline> = _gate.baseline;
 		if (baseline == null) return NotRun(GateTree.NO_BASELINE);
 		if (baseline.frozen.length == 0) return Skipped('none recorded at --baseline');
-		final moved: Array<String> = [ for (f in baseline.frozen) if (GateTree.diffDigest(f.dir) != f.digest) f.dir ];
+		final moved: Array<String> = [ for (f in baseline.frozen) if (FrozenSnapshot.digest(f.dir) != f.digest) f.dir ];
 		_gate.summary.detail(baseline.frozen.map(f -> '${Path.withoutDirectory(f.dir)} ${GateTree.short(f.digest)} unchanged').join(', '));
-		return moved.length == 0 ? Passed : Failed('the git diff of ${moved.join(', ')} changed since the baseline');
+		return moved.length == 0 ? Passed : Failed('the frozen snapshot ${moved.join(', ')} changed since the baseline');
 	}
 
 	/** The lines of every registry `bin/test.js` lists, all listed at once. */
