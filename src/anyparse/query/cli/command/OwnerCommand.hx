@@ -89,7 +89,7 @@ final class OwnerCommand implements CliCommand implements LeadingQueryCount {
 				return EXIT_RUNTIME;
 			}: String)
 		} ];
-		final owners: OwnerIndex = OwnerIndex.build(IndexScope.over(files, io.plugin), io.plugin);
+		final owners: OwnerIndex = OwnerIndex.fromOutlines(ProjectOutlines.owners(files, io.plugin));
 
 		if (question == null) {
 			for (entry in owners.owned()) CliIo.sysPrint('${entry.question}\t${OwnerIndex.nameOf(entry)}\t${entry.file}:${entry.line}\n');

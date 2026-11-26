@@ -1195,6 +1195,14 @@
 			"find": "width != D.DECIDED_ARROW_BREAK",
 			"replace": "true",
 			"note": "a brace body under a line comment after `->` takes the marker's flat side: its `{` goes below the comment but its statements and `}` stay at the head's indent"
+		},
+		{
+			"name": "M-RECORD-KEY-SKIPS-QUERY",
+			"type": "anyparse.core.ParseProjectionEngine",
+			"method": "outlineDigest",
+			"find": "hashOf(outlinePaths())",
+			"replace": "hashOf(outlinePaths().filter(path -> !path.startsWith('query/')))",
+			"note": "the record key leaves out the query code that derives a record, so an edit of OwnerIndex or SymbolIndexBuilder leaves stale records in use"
 		}
 	]
 }

@@ -1,7 +1,5 @@
 package anyparse.query;
 
-import anyparse.runtime.Span.Position;
-
 /**
  * One row of the `apq symbols` listing: a top-level type declaration
  * resolved to its canonical import path plus its source coordinate.
@@ -48,27 +46,18 @@ final class SymbolQuery {
 	public static function symbols(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?kindFilter: String
 	): Array<SymbolRow> {
-		final sourceOf: Map<String, String> = [];
-		for (entry in files) sourceOf[entry.file] = entry.source;
-
-		final index: SymbolIndex = IndexScope.over(files, plugin);
-		final rows: Array<SymbolRow> = [];
-		for (info in index.allFiles()) {
-			final maybeSrc: Null<String> = sourceOf[info.file];
-			final src: String = maybeSrc ?? '';
-			for (type in info.types) if (kindFilter == null || type.kind == kindFilter) {
-				final pos: Position = type.span.lineCol(src);
-				rows.push({
-					qualified: ModuleScan.pathOfDecl(info, type),
-					name: type.name,
-					kind: type.kind,
-					file: info.file,
-					line: pos.line,
-					col: pos.col
-				});
+		return [
+			for (outline in ProjectOutlines.symbols(
+				files, plugin
+			)) for (symbol in outline.symbols) if (kindFilter == null || symbol.kind == kindFilter) {
+				qualified: symbol.qualified,
+				name: symbol.name,
+				kind: symbol.kind,
+				file: outline.file,
+				line: symbol.line,
+				col: symbol.col
 			}
-		}
-		return rows;
+		];
 	}
 
 	/**

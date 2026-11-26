@@ -17677,6 +17677,22 @@
 			"find": "return _written == 0 || _spent <= _budget * (now - _started);",
 			"replace": "return true;",
 			"note": "a store with no write budget writes every parsed file in one run, so a run is no longer bounded and the stretch-by-stretch fill is not observable"
+		},
+		{
+			"name": "M-OUTLINE-STORE-NEVER-HITS",
+			"type": "anyparse.query.ProjectParseStore",
+			"method": "record",
+			"find": "return onDisk(file) ? _disk.lookupRecord(file, source, kind, RECORD_TAG) : null;",
+			"replace": "return null;",
+			"note": "a stored record is never read back, so every owner and symbols run derives every file again from a parse and the warm run writes the records anew"
+		},
+		{
+			"name": "M-DISK-RECORD-IGNORES-SOURCE",
+			"type": "anyparse.query.ParseDiskCache",
+			"method": "lookupRecord",
+			"find": "return first < 0 || text.substr(0, first) != header(tag, source) ? null : text.substr(first + 1);",
+			"replace": "return first < 0 ? null : text.substr(first + 1);",
+			"note": "a record is served whatever bytes its file now holds, so an edited file answers with the declarations it had when it was stored"
 		}
 	]
 }

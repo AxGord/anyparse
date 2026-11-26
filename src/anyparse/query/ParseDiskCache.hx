@@ -74,7 +74,7 @@ final class ParseDiskCache {
 			final text: String = sys.io.File.getContent(entryPath(directory, file));
 			final first: Int = text.indexOf('\n');
 			final second: Int = text.indexOf('\n', first + 1);
-			if (first < 0 || second < 0 || text.substr(0, first) != header(source)) return null;
+			if (first < 0 || second < 0 || text.substr(0, first) != header(FORMAT_TAG, source)) return null;
 			final stored: String = text.substr(second + 1);
 			final spans: Null<SpanTypeInfo> = stored == '' ? null : haxe.Unserializer.run(stored);
 			return { tree: decodeTree(text.substring(first + 1, second)), spans: spans };
@@ -96,11 +96,46 @@ final class ParseDiskCache {
 		final temporary: String = TempScratch.slot(entryName(file), '.staged');
 		try {
 			sys.io.File.saveContent(
-				temporary, '${header(source)}\n${encodeTree(tree)}\n${spans == null ? '' : haxe.Serializer.run(spans)}'
+				temporary, '${header(FORMAT_TAG, source)}\n${encodeTree(tree)}\n${spans == null ? '' : haxe.Serializer.run(spans)}'
 			);
 			sys.FileSystem.rename(temporary, path);
 		} catch (_: Exception) {
 			// A cache that cannot write costs the next run a parse and nothing else.
+		}
+		#end
+	}
+
+	/**
+	 * The record of kind `kind` stored beside `file`'s parse when it was made from `source` under `tag`; null on any doubt. A
+	 * record is derived from a parse by code the engine digest may not cover, so its `tag` carries the key of that code.
+	 */
+	public function lookupRecord(file: String, source: String, kind: String, tag: String): Null<String> {
+		#if (sys || nodejs)
+		final directory: Null<String> = directoryOrNull();
+		if (directory == null) return null;
+		try {
+			final text: String = sys.io.File.getContent('${entryPath(directory, file)}.$kind');
+			final first: Int = text.indexOf('\n');
+			return first < 0 || text.substr(0, first) != header(tag, source) ? null : text.substr(first + 1);
+		} catch (_: Exception) {
+			return null;
+		}
+		#else
+		return null;
+		#end
+	}
+
+	/** Write `record` as the record of kind `kind` of `file` made from `source` under `tag`, atomically as `store` writes a parse. */
+	public function storeRecord(file: String, source: String, kind: String, tag: String, record: String): Void {
+		#if (sys || nodejs)
+		final directory: Null<String> = directoryOrNull();
+		if (directory == null) return;
+		final temporary: String = TempScratch.slot('${entryName(file)}.$kind', '.staged');
+		try {
+			sys.io.File.saveContent(temporary, '${header(tag, source)}\n$record');
+			sys.FileSystem.rename(temporary, '${entryPath(directory, file)}.$kind');
+		} catch (_: Exception) {
+			// A record that cannot be written is derived again on the next run.
 		}
 		#end
 	}
@@ -229,8 +264,8 @@ final class ParseDiskCache {
 		sys.FileSystem.deleteDirectory(path);
 	}
 
-	private static function header(source: String): String {
-		return '$FORMAT_TAG ${ContentHash.md5(source)}';
+	private static function header(tag: String, source: String): String {
+		return '$tag ${ContentHash.md5(source)}';
 	}
 	#end
 

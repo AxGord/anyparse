@@ -180,6 +180,7 @@ class LexicalRegionsSeamTest extends Test {
 			'src/anyparse/query/MoveToHelperArms.hx',
 			'src/anyparse/query/PackageDocumentCarry.hx',
 			'src/anyparse/query/ParseDiskCache.hx',
+			'src/anyparse/query/ProjectOutlines.hx',
 			'src/anyparse/query/TypePathRegistries.hx',
 			'src/anyparse/query/cli/BatchRun.hx',
 			'src/anyparse/query/cli/CliArgs.hx',

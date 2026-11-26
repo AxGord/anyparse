@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.core.ParseProjectionEngine;
 import anyparse.query.ParseDiskCache.StoredProjections;
 import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 import haxe.Timer;
@@ -7,7 +8,8 @@ import haxe.Timer;
 /**
  * The one answer to "do this project's file parses come from, and go to, the disk store": it hands an index build the
  * parse `ParseDiskCache` holds for a project file (`seat`) and takes back what the build parsed (`keep`), one file at a
- * time so nothing is retained beyond the build. Writes are capped by a share of the build's own elapsed time, so a cold
+ * time so nothing is retained beyond the build; a record derived from the parse (`ProjectOutlines`) goes the same way
+ * (`record`, `keepRecord`), keyed also by the code that derives it. Writes are capped by a share of the build's own elapsed time, so a cold
  * run costs a bounded amount more and successive runs fill the store.
  *
  * Nothing enters a process-scoped map (`docs/design-principles.md` § 2); the store itself checks each entry against the
@@ -17,6 +19,9 @@ import haxe.Timer;
 final class ProjectParseStore {
 
 	private static inline final DEFAULT_BUDGET: Float = 0.03;
+
+	/** A record is derived from a parse by query code the parse's own engine key leaves out, so it is keyed by that code too. */
+	private static final RECORD_TAG: String = 'apq-derived-record v1 ${ParseProjectionEngine.outlineDigest()}';
 
 	private final _started: Float = Timer.stamp();
 	private final _disk: ParseDiskCache;
@@ -46,16 +51,33 @@ final class ProjectParseStore {
 	 * first write is always allowed, so repeated runs fill the store one stretch at a time and converge to all stored.
 	 */
 	public function keep(file: String, source: String, tree: QueryNode, spans: SpanTypeInfo): Void {
-		if (!onDisk(file)) return;
-		final before: Float = Timer.stamp();
-		if (!withinBudget(before)) return;
-		_disk.store(file, source, tree, spans);
-		_written++;
-		_spent += Timer.stamp() - before;
+		writeWithinBudget(file, () -> _disk.store(file, source, tree, spans));
+	}
+
+	/** The record of kind `kind` the store holds for `file` when its bytes are `source`; null for a file not on disk or a miss. */
+	public function record(file: String, source: String, kind: String): Null<String> {
+		return onDisk(file) ? _disk.lookupRecord(file, source, kind, RECORD_TAG) : null;
+	}
+
+	/**
+	 * Write the record of kind `kind` a build derived from `file`, under the same share of the build's elapsed time as `keep`;
+	 * `record` is only called when the budget allows the write.
+	 */
+	public function keepRecord(file: String, source: String, kind: String, record: () -> String): Void {
+		writeWithinBudget(file, () -> _disk.storeRecord(file, source, kind, RECORD_TAG, record()));
 	}
 
 	private inline function withinBudget(now: Float): Bool {
 		return _written == 0 || _spent <= _budget * (now - _started);
+	}
+
+	private function writeWithinBudget(file: String, write: () -> Void): Void {
+		if (!onDisk(file)) return;
+		final before: Float = Timer.stamp();
+		if (!withinBudget(before)) return;
+		write();
+		_written++;
+		_spent += Timer.stamp() - before;
 	}
 
 	private static function onDisk(file: String): Bool {

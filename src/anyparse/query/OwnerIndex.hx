@@ -251,29 +251,50 @@ final class OwnerIndex {
 		return out;
 	}
 
-	/** Every type and member `index` holds, each with the doc it owns read off its file's source and how many files name its type. */
+	/** The index over every type and member `index` holds, each with the doc it owns. */
 	public static function build(index: SymbolIndex, plugin: GrammarPlugin): OwnerIndex {
-		final declared: Map<String, Int> = [];
-		for (info in index.allFiles()) for (type in info.types) declared[type.name] = 0;
-		final read: Array<{ info: FileInfo, source: String, regions: Array<LexRegion> }> = [];
+		final outlines: Array<FileOwners> = [];
 		for (info in index.allFiles()) {
 			final source: Null<String> = index.sourceOf(info.file);
-			if (source == null) continue;
-			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
-			for (name in codeWords(source, regions)) if (declared.exists(name)) declared[name] = (declared[name] ?? 0) + 1;
-			read.push({ info: info, source: source, regions: regions });
+			if (source != null) outlines.push(ProjectOutlines.ownersOf(info, source, plugin));
 		}
-		final entries: Array<OwnerEntry> = [];
-		for (file in read) {
-			final lines: LineIndex = new LineIndex(file.source);
-			for (type in file.info.types) {
-				final mentions: Int = Std.int(Math.max(0, (declared[type.name] ?? 0) - 1));
-				entries.push(entryOf(file.source, file.regions, lines, file.info.file, type.name, null, type.span.from, mentions));
-				for (member in type.members)
-					entries.push(entryOf(file.source, file.regions, lines, file.info.file, type.name, member.name, member.declFrom, 0));
-			}
-		}
+		return fromOutlines(outlines);
+	}
+
+	/**
+	 * The index over the declarations of a scope's files, each file's read off it alone: a type's mention count, the one
+	 * cross-file fact, is the number of OTHER files whose code spells its name, folded here from every file's code words.
+	 */
+	public static function fromOutlines(outlines: Array<FileOwners>): OwnerIndex {
+		final declared: Map<String, Int> = [
+			for (outline in outlines) for (entry in outline.entries) if (entry.member == null) entry.type => 0
+		];
+		for (outline in outlines) for (word in outline.words) if (declared.exists(word)) declared[word] = (declared[word] ?? 0) + 1;
+		final entries: Array<OwnerEntry> = [ for (outline in outlines) for (entry in outline.entries) {
+			type: entry.type,
+			member: entry.member,
+			file: outline.file,
+			line: entry.line,
+			summary: entry.summary,
+			question: entry.question,
+			nameTerms: entry.nameTerms,
+			questionTerms: entry.questionTerms,
+			summaryTerms: entry.summaryTerms,
+			docTerms: entry.docTerms,
+			mentions: entry.member == null ? Std.int(Math.max(0, (declared[entry.type] ?? 0) - 1)) : 0
+		} ];
 		return new OwnerIndex(entries);
+	}
+
+	/** The entries of `info`'s types and their members, in declaration order, each read off the file's own source. */
+	public static function entriesOf(info: FileInfo, source: String, regions: Array<LexRegion>): Array<OutlineEntry> {
+		final lines: LineIndex = new LineIndex(source);
+		final entries: Array<OutlineEntry> = [];
+		for (type in info.types) {
+			entries.push(entryOf(source, regions, lines, type.name, null, type.span.from));
+			for (member in type.members) entries.push(entryOf(source, regions, lines, type.name, member.name, member.declFrom));
+		}
+		return entries;
 	}
 
 	/** `Type` or `Type.member`: how a row names the declaration. */
@@ -335,6 +356,34 @@ final class OwnerIndex {
 		return close >= prose.length || close == open + 1 ? null : prose.substring(open + 1, close);
 	}
 
+	/** The distinct words of `source` outside its comments and literals, each once. */
+	public static function codeWords(source: String, regions: Array<LexRegion>): Array<String> {
+		final seen: Set<String> = new Set<String>();
+		final out: Array<String> = [];
+		var region: Int = 0;
+		var i: Int = 0;
+		while (i < source.length) {
+			while (region < regions.length && regions[region].to <= i) region++;
+			if (region < regions.length && regions[region].from <= i) {
+				i = regions[region].to;
+				continue;
+			}
+			if (!isWordCode(source.fastCodeAt(i)) && source.fastCodeAt(i) != '_'.code) {
+				i++;
+				continue;
+			}
+			var end: Int = i;
+			while (end < source.length && (isWordCode(source.fastCodeAt(end)) || source.fastCodeAt(end) == '_'.code)) end++;
+			final word: String = source.substring(i, end);
+			if (!seen.has(word)) {
+				seen.add(word);
+				out.push(word);
+			}
+			i = end;
+		}
+		return out;
+	}
+
 	/** Whether `a` ranks before `b`: a higher score, and on equal scores the earlier declaration. */
 	private static inline function outranks(a: OwnerHit, b: OwnerHit): Bool {
 		return a.score > b.score || (a.score == b.score && entryOrder(a.entry, b.entry) < 0);
@@ -378,9 +427,8 @@ final class OwnerIndex {
 	}
 
 	private static function entryOf(
-		source: String, regions: Array<LexRegion>, lines: LineIndex, file: String, type: String, member: Null<String>, from: Int,
-		mentions: Int
-	): OwnerEntry {
+		source: String, regions: Array<LexRegion>, lines: LineIndex, type: String, member: Null<String>, from: Int
+	): OutlineEntry {
 		final block: Null<Span> = SourceSlice.leadingDocBlock(source, new Span(from, from), regions);
 		final doc: String = block == null ? '' : SourceSlice.docProse(source, block);
 		final summary: String = firstSentence(doc);
@@ -388,44 +436,14 @@ final class OwnerIndex {
 		return {
 			type: type,
 			member: member,
-			file: file,
 			line: lines.lineColAt(from).line,
 			summary: summary,
 			question: question,
 			nameTerms: distinct(terms(member ?? type)),
 			questionTerms: distinct(terms(question ?? '')),
 			summaryTerms: distinct(terms(summary)),
-			docTerms: distinct(terms(doc)),
-			mentions: mentions
+			docTerms: distinct(terms(doc))
 		};
-	}
-
-	/** The distinct words of `source` outside its comments and literals, each once. */
-	private static function codeWords(source: String, regions: Array<LexRegion>): Array<String> {
-		final seen: Set<String> = new Set<String>();
-		final out: Array<String> = [];
-		var region: Int = 0;
-		var i: Int = 0;
-		while (i < source.length) {
-			while (region < regions.length && regions[region].to <= i) region++;
-			if (region < regions.length && regions[region].from <= i) {
-				i = regions[region].to;
-				continue;
-			}
-			if (!isWordCode(source.fastCodeAt(i)) && source.fastCodeAt(i) != '_'.code) {
-				i++;
-				continue;
-			}
-			var end: Int = i;
-			while (end < source.length && (isWordCode(source.fastCodeAt(end)) || source.fastCodeAt(end) == '_'.code)) end++;
-			final word: String = source.substring(i, end);
-			if (!seen.has(word)) {
-				seen.add(word);
-				out.push(word);
-			}
-			i = end;
-		}
-		return out;
 	}
 
 	/** Push the terms of one word, split where its case or its digits change (`HTTPServer64` is `http`, `server`, `64`). */
