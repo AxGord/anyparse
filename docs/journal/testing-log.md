@@ -4969,3 +4969,16 @@ RESUME-RULE-QUALITY (quality check and billing per model), DRIVER-IDLE-BRANCH (d
 - The old 76 s most likely went with e3e704cea (TypedFactsCache: before it a verdict hit still ran every facts compile; on TypedFactsMacro.hx the warm repeat with the oracle was 116 s vs about 38.5 s without it, and 19.7 s after the commit). That is measured on one file, not the whole project.
 - 659630c26 (word index) explains why both runs are about 2.5x faster, not the gap.
 - Not measured: a cold `--no-oracle` run and a cold profile, so the cold oracle share is an upper bound.
+
+## TYPER-QUERY-LATENCY (2026-11-26): one typer question against `haxe`, on b9e2407d3
+Readings on b9e2407d3a4b92f10045f2ef746631595f275cd4, load 10-20. 17 lint sites in src/ (rules prefer-compare-function, prefer-map, identity-map, unguarded-nullable-deref, guard-continue, prefer-find, prefer-single-pass: 14 that ask the typer; map-as-set: 3 that do not).
+| What | Reading | Command |
+|---|---|---|
+| typer, one-shot process, parse cache warm | 14 typer questions 2.66-3.45 s, median 2.76 s (floor 0.25-0.44 s); 2.0 s of 2.6 s profiled (q01) is `resolutionIndex`, paid by typer-free rules too (q09 2.79 s, q10 3.07 s; q11 0.91 s skips it) | `hxq lint <file> --rule <R> --no-oracle --all` |
+| same, parse cache empty | 5.84 / 6.21 / 5.89 s | `APQ_PARSE_CACHE=0 node apq.js lint ...` |
+| typer, index warm, per ask | prefer-compare-function + identity-map + prefer-map: about 0.32 ms per nominal ask (1175), 0.83 ms per source ask (55); nullsafety rules about 13 us (43,984); about 1.0 ms per extra file | instrumented engine copy; `lint src --rule ... --no-oracle --all` |
+| whole tree, 18 typer rules | 15.98 s wall, 3761 files | `hxq lint src test tools/src --rule ... --no-oracle --all` |
+| haxe cold typecheck | 14.05 / 14.58 / 14.82 s (engine hxml); 45.98 / 46.85 s (test hxml) | `haxe bin/apq-js-check.hxml`, `haxe test-js-check.hxml` |
+| haxe server | first compile 20.13 s; unchanged re-request 0.89-0.96 s; `--display @type` 0.11-0.23 s best group, 1.19-2.30 s second group, median of answered 0.22 s | `haxe --wait`, `haxe --connect` |
+Plain reading: the typer beats a cold haxe typecheck (5x-17x one-shot) and, with its index resident, a warm display request by about 350x-7,000x for these rules; from a one-shot CLI process it is slower than a warm display server (2.7 s vs 0.11-2.3 s) because the resolution index is rebuilt each process.
+
