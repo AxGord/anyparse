@@ -232,6 +232,30 @@
 			"find": "return LexicalRegions.commentIntersects(recvSpan.to, callSpan.to, ctx.regions)",
 			"replace": "return false",
 			"note": "a comment between the receiver and the call's end is deleted by the fix"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-MACRO-ARG-LEAK",
+			"type": "anyparse.check.common.literals.StringLiteralDup",
+			"method": "collect",
+			"find": "i > 0 ? argsSkipped : here",
+			"replace": "here",
+			"note": "a listed call's arguments are walked like any other, so the literal a macro needs as syntax is reported again and its extraction hint breaks the build"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-MACRO-ARG-ANY",
+			"type": "anyparse.check.common.literals.StringLiteralDup",
+			"method": "collect",
+			"find": "here || (callee != null && MacroGate.listsCall(ctx.literalMacros, callee))",
+			"replace": "here || callee != null",
+			"note": "every call's arguments are exempt, not only the listed ones, so a literal repeated in ordinary calls is never reported"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-MACRO-ARG-BARE-QUALIFIED",
+			"type": "anyparse.check.common.literals.MacroGate",
+			"method": "listsCall",
+			"find": "receiver == null ? listed(entries, call.name) : listed(entries, '$receiver.${call.name}')",
+			"replace": "listed(entries, call.name) || (receiver != null && listed(entries, '$receiver.${call.name}'))",
+			"note": "a qualified call is also matched by its bare member name, so another type's same-named member (`cfg.load(...)` against a listed `cpp.Prime.load`) is exempt as well"
 		}
 	]
 }

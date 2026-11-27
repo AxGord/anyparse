@@ -59,6 +59,16 @@ metadata arguments (`@:native('…')`) and entries of a data table — an array 
 of literals, which already is the one named place. Quote style does not matter: `"foo"` and `'foo'`
 group together.
 
+`literalMacros` (a list of call targets in the rule's `apq.json` entry) exempts every literal in the
+arguments of a listed call: a macro or compiler intrinsic reads its arguments as syntax, so the extracted
+constant this rule asks for breaks the build (`cpp.Prime.load("mylib", …)` needs the literal). A target is
+its qualified path (`cpp.Prime.load`) or any dotted suffix of it (`Prime.load`, `load`), matched against the
+spelling at the call site, the same way `concatFoldingMacros` names a target: an unqualified `load(…)` (after
+`import cpp.Prime.load`) by its member name, a qualified `Prime.load(…)` by `Receiver.member`, so `cfg.load(…)`
+is not a listed `cpp.Prime.load` (a bare `load` entry does match `cfg.load(…)`, being a suffix of it).
+An unlisted call is reported as before.
+`{ "rules": { "string-literal-dup": { "literalMacros": ["cpp.Prime.load"] } } }`
+
 ```haxe
 if (mode == 'preview') … ;
 setMode('preview');

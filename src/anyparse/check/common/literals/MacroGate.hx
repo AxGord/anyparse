@@ -226,6 +226,18 @@ final class MacroGate {
 	}
 
 	/**
+	 * Whether `path` is listed. Matching is by dotted SUFFIX in BOTH directions, because
+	 * the two sides name the same target at different lengths and neither side chooses:
+	 * a project writes the fully qualified `pkg.Lang.t`, while what the gate holds is
+	 * whatever the CALL SITE said — the resolved `pkg.Lang.t` for a macro the index
+	 * carries, the import's `m.Lang`, or a written `Lang.t`. Comparing one direction only
+	 * meant the entry that worked depended on the invocation's scope.
+	 */
+	private inline function whitelisted(path: String): Bool {
+		return listed(_whitelist, path);
+	}
+
+	/**
 	 * Whether `call` refuses the rewrite — the two refusals in the type doc, in order.
 	 *
 	 * The whitelist is consulted against every spelling of the target the call site can
@@ -247,16 +259,20 @@ final class MacroGate {
 		return binding != null ? !whitelisted('$binding.${call.name}') : call.qualified;
 	}
 
+	/** Whether `path` names a target of `entries`, by the dotted-suffix match in both directions `whitelisted` describes. */
+	public static function listed(entries: Array<String>, path: String): Bool {
+		return entries.exists(entry -> entry == path || entry.endsWith('.$path') || path.endsWith('.$entry'));
+	}
+
 	/**
-	 * Whether `path` is listed. Matching is by dotted SUFFIX in BOTH directions, because
-	 * the two sides name the same target at different lengths and neither side chooses:
-	 * a project writes the fully qualified `pkg.Lang.t`, while what the gate holds is
-	 * whatever the CALL SITE said — the resolved `pkg.Lang.t` for a macro the index
-	 * carries, the import's `m.Lang`, or a written `Lang.t`. Comparing one direction only
-	 * meant the entry that worked depended on the invocation's scope.
+	 * Whether `call` is a target of `entries`, read from the spelling the call site carries: the bare member name for an
+	 * unqualified call, `Receiver.member` for one written with a receiver. A receiver is the caller's own statement of the type,
+	 * so another type's same-named member is no target. The one answer to "is this call on a project-declared list of targets",
+	 * for a list that needs no macro index (an exemption, not a claim about the callee's implementation).
 	 */
-	private function whitelisted(path: String): Bool {
-		return _whitelist.exists(entry -> entry == path || entry.endsWith('.$path') || path.endsWith('.$entry'));
+	public static function listsCall(entries: Array<String>, call: CallRef): Bool {
+		final receiver: Null<String> = call.receiver;
+		return receiver == null ? listed(entries, call.name) : listed(entries, '$receiver.${call.name}');
 	}
 
 	/**

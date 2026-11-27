@@ -304,6 +304,51 @@ class StringLiteralDupCheckTest extends Test {
 		Assert.equals(3, violations(src).length);
 	}
 
+	/**
+	 * A literal in the arguments of a call `literalMacros` lists is no finding: a macro reads it as syntax, so the
+	 * extracted constant the hint asks for breaks the build. The call is listed by a dotted suffix of its qualified path.
+	 * Killed by arm `M-STRING-LITERAL-DUP-MACRO-ARG-LEAK`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-MACRO-ARG-LEAK')
+	public function testListedMacroArgumentsAreExempt(): Void {
+		Assert.equals(0, findingsWithConfig('sld_macro', macroConfig('cpp.Prime.load'), primeCalls()));
+		Assert.equals(0, findingsWithConfig('sld_macro_suffix', macroConfig('Prime.load'), primeCalls()));
+	}
+
+	/**
+	 * An unlisted call keeps its finding, and so does the same literal when the project lists a different call.
+	 * Killed by arm `M-STRING-LITERAL-DUP-MACRO-ARG-ANY`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-MACRO-ARG-ANY')
+	public function testUnlistedCallStillFlagged(): Void {
+		Assert.equals(1, violations(primeCalls()).length);
+		Assert.equals(1, findingsWithConfig('sld_macro_other', macroConfig('cpp.Prime.other'), primeCalls()));
+	}
+
+	public function testLiteralMacrosIsADeclaredOption(): Void {
+		// An option the rule reads but does not declare is reported as unknown in the project's config.
+		Assert.contains('literalMacros', new StringLiteralDup().acceptedOptions());
+	}
+
+	/**
+	 * A QUALIFIED call matches a listed target by its receiver too: `cfg.load(...)` is no `cpp.Prime.load`, so with only the latter
+	 * listed its repeated literal still reports. Killed by arm `M-STRING-LITERAL-DUP-MACRO-ARG-BARE-QUALIFIED`.
+	 */
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-MACRO-ARG-BARE-QUALIFIED')
+	public function testQualifiedCallOfAnotherTypeIsNotListed(): Void {
+		final calls: String = body('cfg.load("mylibname", 1); cfg.load("mylibname", 2); cfg.load("mylibname", 3);');
+		Assert.equals(1, findingsWithConfig('sld_macro_recv', macroConfig('cpp.Prime.load'), calls));
+	}
+
+	/** An unqualified call (`load(...)` after `import cpp.Prime.load`) is listed by the bare member name of a qualified entry. */
+	public function testUnqualifiedCallIsListedByItsMemberName(): Void {
+		final calls: String = body('load("mylibname", 1); load("mylibname", 2); load("mylibname", 3);');
+		Assert.equals(0, findingsWithConfig('sld_macro_bare', macroConfig('cpp.Prime.load'), calls));
+	}
+
 	/** Wrap `stmts` in a one-method class so the fixtures stay terse. */
 	private function body(stmts: String): String {
 		return 'class C {\n\tfunction f(x:Int) { $stmts }\n}';
@@ -342,6 +387,14 @@ class StringLiteralDupCheckTest extends Test {
 	private function messageOf(check: StringLiteralDup, stmts: String): String {
 		final src: String = body(stmts);
 		return CheckFixture.violations(check, src)[0].message;
+	}
+
+	private function macroConfig(target: String): String {
+		return '{"rules":{"string-literal-dup":{"literalMacros":["$target"]}}}';
+	}
+
+	private function primeCalls(): String {
+		return body('cpp.Prime.load("mylibname", "a", 1); cpp.Prime.load("mylibname", "b", 2); cpp.Prime.load("mylibname", "c", 3);');
 	}
 
 }

@@ -5,6 +5,7 @@ import anyparse.check.Check.NoAutofix;
 import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.VolatileMessage;
 import anyparse.check.common.literals.LiteralTables.LiteralTableShape;
+import anyparse.check.common.literals.MacroGate.CallRef;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.util.Compare;
@@ -19,6 +20,8 @@ private typedef ScanCtx = {
 	final tables: LiteralTableShape;
 	final casePatternKind: Null<String>;
 	final minLen: Int;
+	final shape: RefShape;
+	final literalMacros: Array<String>;
 };
 
 /**
@@ -169,6 +172,9 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 	private static final MIN_LENGTH_KEY: String = 'minLength';
 	private static final MIN_OCCURRENCES_KEY: String = 'minOccurrences';
 
+	/** The `apq.json` option naming calls whose arguments a macro or intrinsic reads as syntax, so a constant cannot replace them. */
+	private static final LITERAL_MACROS_KEY: String = 'literalMacros';
+
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -201,7 +207,9 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 				metaKinds: metaKinds,
 				tables: tables,
 				casePatternKind: shape.plainCasePatternKind,
-				minLen: positiveOr(config.intOption(RULE_ID, MIN_LENGTH_KEY), DEFAULT_MIN_LENGTH)
+				minLen: positiveOr(config.intOption(RULE_ID, MIN_LENGTH_KEY), DEFAULT_MIN_LENGTH),
+				shape: shape,
+				literalMacros: config.stringListOption(RULE_ID, LITERAL_MACROS_KEY) ?? []
 			};
 			scanFile(violations, entry.file, entry.source, tree, ctx, minOcc);
 		});
@@ -220,7 +228,7 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 	}
 
 	public function acceptedOptions(): Array<String> {
-		return [MIN_OCCURRENCES_KEY, MIN_LENGTH_KEY];
+		return [MIN_OCCURRENCES_KEY, MIN_LENGTH_KEY, LITERAL_MACROS_KEY];
 	}
 
 	/** A configured value when it is a positive integer, else the built-in default (a zero / negative option is ignored). */
@@ -259,7 +267,9 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 	/**
 	 * Walk `node`, recording each eligible plain literal's span under its content
 	 * key. `inMeta` is sticky: once a `metaKinds` node is entered, every literal in
-	 * its subtree is a contract token and is skipped. A literal shorter than
+	 * its subtree is a contract token and is skipped, and so is every literal in the
+	 * ARGUMENTS of a call `literalMacros` lists (a macro reads them as syntax, and an
+	 * extracted constant would break it). A literal shorter than
 	 * `minLen`, or interpolated / non-literal (`literalOf` null), is not recorded.
 	 */
 	private static function collect(
@@ -288,7 +298,9 @@ final class StringLiteralDup extends RuleBase implements ConfigAware implements 
 		// inside another — which the seam's own contract rules out (a PLAIN literal carries no
 		// interpolated expression, and an interpolated one is not `literalOf`-positive).
 		if (isTable(node, source, ctx, pattern)) return;
-		for (child in node.children) collect(child, source, ctx, here, pattern, groups);
+		final callee: Null<CallRef> = MacroGate.callOf(node, ctx.shape.callKind, ctx.shape.fieldAccessKind, ctx.shape.identKind);
+		final argsSkipped: Bool = here || (callee != null && MacroGate.listsCall(ctx.literalMacros, callee));
+		for (i => child in node.children) collect(child, source, ctx, i > 0 ? argsSkipped : here, pattern, groups);
 	}
 
 	/**
