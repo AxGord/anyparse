@@ -498,16 +498,17 @@ haxe-formatter's schema. It is decided by width and never reads the source layou
 - otherwise — a complex metadata, a row that does not fit, a comment between metadata or after the last one, a `#if` in the run — one per line, as `after`.
 
 Simple is no argument, or exactly one that is a number, `true` / `false` / `null`, an identifier, a dotted path, a
-one-line string without interpolation, or a prefix or binary operator over such operands (`@:nullSafety(Strict)`,
-`@:access(pkg.Type)`, `@:xml('action')`, `@:op(A + B)`, `@:op(-A)`). A call, several arguments, an object, array or
-function literal, an operator over any of them and an interpolated or multi-line string are complex. With `fit` on all four keys:
+one-line string without interpolation, a prefix or binary operator over such operands, or a call of a dotted path whose
+arguments are all such operands (`@:nullSafety(Strict)`, `@:access(pkg.Type)`, `@:xml('action')`, `@:op(A + B)`, `@:op(-A)`,
+`@:op(a())`). A call of anything but a path, several arguments, an object, array or function literal, an operator over any
+of them and an interpolated or multi-line string are complex. With `fit` on all four keys:
 
 ```haxe
 @:access(a.B) @:nullSafety(Strict)
 abstract class C {
 	@:from public static inline function f(v:Int):C {}
 
-	@:build(macros.X.build())
+	@:build(a().b())
 	@:a
 	var t:Int;
 }

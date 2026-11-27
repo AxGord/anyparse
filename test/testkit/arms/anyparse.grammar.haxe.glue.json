@@ -378,6 +378,30 @@
 			"find": "Type.enumConstructor(operand) == 'IdentExpr'",
 			"replace": "true",
 			"note": "a field of any receiver counts as simple, so a two-step field rides the closing line"
+		},
+		{
+			"name": "M-META-FIT-CALL-COMPLEX",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "macro $callee && Lambda.foreach(_a, _x -> ${operandOf(ctorStarElem(HX_EXPR, 'Call', macro _x))})",
+			"replace": "macro false",
+			"note": "a call never reads as a simple metadata argument, so it breaks the run again"
+		},
+		{
+			"name": "M-META-FIT-CALL-CALLEE-UNCHECKED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "macro $callee && Lambda.foreach(_a, _x -> ${operandOf(ctorStarElem(HX_EXPR, 'Call', macro _x))})",
+			"replace": "macro Lambda.foreach(_a, _x -> ${operandOf(ctorStarElem(HX_EXPR, 'Call', macro _x))})",
+			"note": "a call of any callee reads as simple, so a call on a non-path no longer breaks the run"
+		},
+		{
+			"name": "M-META-FIT-CALL-ARGS-UNCHECKED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "metaArgIsSimpleField",
+			"find": "macro $callee && Lambda.foreach(_a, _x -> ${operandOf(ctorStarElem(HX_EXPR, 'Call', macro _x))})",
+			"replace": "macro $callee",
+			"note": "a call reads as simple whatever its arguments, so a complex argument no longer breaks the run"
 		}
 	]
 }

@@ -1261,7 +1261,8 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	/**
 	 * A metadata argument is simple when it is a number, `true`/`false`/`null`, a one-line plain string, a dotted path, or a
-	 * prefix or binary operator over simple operands (`@:op(A + B)`, `@:op(-A)`). The operator constructors are read off the
+	 * prefix or binary operator over simple operands (`@:op(A + B)`, `@:op(-A)`), or a call of a dotted path over simple
+	 * arguments (`@:op(a())`). The operator constructors are read off the
 	 * grammar's own `@:prefix` / `@:infix` annotations, so no operator table can drift from it.
 	 */
 	private function metaArgIsSimpleField(): Field {
@@ -1271,10 +1272,16 @@ final class HxAstPredLowering extends AstPredLowering {
 		final path: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('e')]), pos: Context.currentPos() };
 		final plain: Expr = { expr: ECall(ident(INTERP_STRING_IS_PLAIN), [ident('_s')]), pos: Context.currentPos() };
 		final operand: String -> Expr = name -> { expr: ECall(ident(META_ARG_IS_SIMPLE), [ident(name)]), pos: Context.currentPos() };
+		final callee: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('_f')]), pos: Context.currentPos() };
+		final operandOf: Expr -> Expr = arg -> { expr: ECall(ident(META_ARG_IS_SIMPLE), [arg]), pos: Context.currentPos() };
 		final cases: Array<Case> = [
 			caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro true),
 			caseBind(HX_EXPR, 'DoubleStringExpr', [0 => '_d'], macro !StringTools.contains(_d, '\n')),
-			caseBind(HX_EXPR, 'SingleStringExpr', [0 => '_s'], plain)
+			caseBind(HX_EXPR, 'SingleStringExpr', [0 => '_s'], plain),
+			caseBind(
+				HX_EXPR, 'Call', [0 => '_f', 1 => '_a'],
+				macro $callee && Lambda.foreach(_a, _x -> ${operandOf(ctorStarElem(HX_EXPR, 'Call', macro _x))})
+			)
 		];
 		for (branch in exprRule.children) {
 			final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
@@ -1287,7 +1294,8 @@ final class HxAstPredLowering extends AstPredLowering {
 		return predField(
 			META_ARG_IS_SIMPLE, [valueArg('e', HX_EXPR)],
 			macro : Bool, nullSwitch(ident('e'), macro false, cases, path),
-			'True iff a metadata argument is a literal, a dotted path or an operator over simple operands.'
+			'True iff a metadata argument is a literal, a dotted path, an operator over simple operands or a call of a path over simple '
+			+ 'arguments.'
 		);
 	}
 

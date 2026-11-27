@@ -70,7 +70,8 @@ class MetadataFitHeadTest extends Test {
 	@:killer('M-META-FIT-OPERANDS-UNREAD')
 	public function testAnOperatorOverACallIsComplex(): Void {
 		Assert.equals(
-			'class T {\n\t@:a(f() + 1)\n\tpublic function g(): T {}\n}\n', fit('class T {\n\t@:a(f() + 1) public function g(): T {}\n}\n')
+			'class T {\n\t@:a(f().x + 1)\n\tpublic function g(): T {}\n}\n',
+			fit('class T {\n\t@:a(f().x + 1) public function g(): T {}\n}\n')
 		);
 	}
 
@@ -106,6 +107,18 @@ class MetadataFitHeadTest extends Test {
 			'class T {\n\t@:x public static final someLongConstantName: Int = $lhs\n\t\t+ $rhs;\n}\n',
 			fit('class T {\n\t@:x public static final someLongConstantName: Int = $lhs + $rhs;\n}\n')
 		);
+	}
+
+	/**
+	 * A call of a path over simple arguments is simple: it joins an expression, a block and a `return` bodied function.
+	 */
+	@:pin('control')
+	@:killer('M-META-FIT-CALL-COMPLEX')
+	public function testACallMetadataJoinsTheDeclarationLine(): Void {
+		final src: String = 'class T {\n\t@:op(a()) public inline function d(): Void dispatchWithFlag(false);\n\n'
+			+ '\t@:op(a()) public inline function e(): Void {\n\t\tdispatchWithFlag(false);\n\t}\n\n'
+			+ '\t@:op(a.b(c, 1)) public inline function r(): Int return 1;\n}\n';
+		Assert.equals(src, fit(src));
 	}
 
 	private static function fit(src: String): String {

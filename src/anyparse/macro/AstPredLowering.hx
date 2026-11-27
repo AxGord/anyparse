@@ -255,6 +255,20 @@ class AstPredLowering {
 		return starElemWrapped(ownerRule, fieldName) ? field(elemExpr, 'node') : elemExpr;
 	}
 
+	/**
+	 * `starElem` for the Star argument of the constructor `ctor` of the Alt rule `ownerRule` (a postfix call's argument list):
+	 * `<elemExpr>.node` when the family wraps that Star's elements in `Trivial<…>`, else the element unchanged.
+	 */
+	private function ctorStarElem(ownerRule: String, ctor: String, elemExpr: Expr): Expr {
+		final node: Null<ShapeNode> = _shape.rules[ownerRule];
+		final branch: Null<ShapeNode> = node?.children.find(b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor);
+		final star: ShapeNode = branch?.children.find(c ->
+			c.kind == Star
+		) ?? Context.fatalError('AstPredLowering: $ownerRule has no constructor $ctor with a Star argument', Context.currentPos());
+		final wrapped: Bool = isTriviaBearing(ownerRule) && star.annotations[AnnotationKeys.TRIVIA_STAR_COLLECTS] == true;
+		return wrapped ? field(elemExpr, 'node') : elemExpr;
+	}
+
 	private function ident(name: String): Expr {
 		return { expr: EConst(CIdent(name)), pos: Context.currentPos() };
 	}

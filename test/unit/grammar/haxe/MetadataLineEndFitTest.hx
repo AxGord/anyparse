@@ -87,10 +87,10 @@ class MetadataLineEndFitTest extends Test {
 	@:killer('M-META-FIT-ARGS-IGNORED')
 	public function testAComplexMetadataPutsItsRunOnePerLine(): Void {
 		Assert.equals(
-			'class C {\n\t@:build(macros.X.build())\n\t@:a\n\tvar t:Int;\n\n\t@:overload(function(a:Int):Void {})\n\tfunction o() {}\n\n'
+			'class C {\n\t@:build(a().b())\n\t@:a\n\tvar t:Int;\n\n\t@:overload(function(a:Int):Void {})\n\tfunction o() {}\n\n'
 			+ '\t@:a(1, 2)\n\tvar u:Int;\n\t@:a({x: 1})\n\tvar v:Int;\n}\n',
 			fit(
-				'class C {\n\t@:build(macros.X.build()) @:a var t:Int;\n\t@:overload(function(a:Int):Void {}) function o() {}\n\n'
+				'class C {\n\t@:build(a().b()) @:a var t:Int;\n\t@:overload(function(a:Int):Void {}) function o() {}\n\n'
 				+ '\t@:a(1, 2) var u:Int;\n\t@:a({x: 1}) var v:Int;\n}\n'
 			)
 		);
@@ -145,8 +145,8 @@ class MetadataLineEndFitTest extends Test {
 	@:killer('M-META-FIT-CHAIN-BREAKS', 'M-META-FIT-CHAIN-UNWIRED')
 	public function testALocalVarKeepsOneSimpleMetadataOnItsLine(): Void {
 		Assert.equals(
-			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) var x = 1;\n\t\t@:build(x())\n\t\tvar y = 1;\n\t}\n}\n',
-			fit('class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) var x = 1;\n\t\t@:build(x()) var y = 1;\n\t}\n}\n')
+			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) var x = 1;\n\t\t@:build(x().y)\n\t\tvar y = 1;\n\t}\n}\n',
+			fit('class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) var x = 1;\n\t\t@:build(x().y) var y = 1;\n\t}\n}\n')
 		);
 	}
 
@@ -179,10 +179,10 @@ class MetadataLineEndFitTest extends Test {
 	public function testALocalRowPastTheMaximumIsOneMetadataPerLine(): Void {
 		Assert.equals(
 			'class C {\n\tfunction f() {\n\t\t@:a(\'${run(121)}\') @:b\n\t\tvar x = 1;\n\t\t@:a(\'${run(122)}\')\n\t\t@:b\n\t\tvar y = 2;\n'
-			+ '\t\t@:a(f())\n\t\t@:b\n\t\tvar w = 4;\n\t}\n}\n',
+			+ '\t\t@:a(f().g)\n\t\t@:b\n\t\tvar w = 4;\n\t}\n}\n',
 			fit(
 				'class C {\n\tfunction f() {\n\t\t@:a(\'${run(121)}\') @:b var x = 1;\n\t\t@:a(\'${run(122)}\') @:b var y = 2;\n'
-				+ '\t\t@:a(f()) @:b var w = 4;\n\t}\n}\n'
+				+ '\t\t@:a(f().g) @:b var w = 4;\n\t}\n}\n'
 			)
 		);
 	}
@@ -192,11 +192,11 @@ class MetadataLineEndFitTest extends Test {
 	@:killer('M-META-FIT-CHAIN-TAIL-INHERITS')
 	public function testALocalInsideAChainedVarDecidesItsOwnMetadata(): Void {
 		Assert.equals(
-			'class C {\n\tfunction f() {\n\t\t@:a @:b\n\t\tvar t = () -> {\n\t\t\t@:c var s = 1;\n\t\t};\n\t\t@:a(f())\n\t\t@:b\n'
+			'class C {\n\tfunction f() {\n\t\t@:a @:b\n\t\tvar t = () -> {\n\t\t\t@:c var s = 1;\n\t\t};\n\t\t@:a(f().g)\n\t\t@:b\n'
 			+ '\t\tvar u = () -> {\n\t\t\t@:c var s = 1;\n\t\t};\n\t}\n}\n',
 			fit(
 				'class C {\n\tfunction f() {\n\t\t@:a @:b var t = () -> {\n\t\t\t@:c var s = 1;\n\t\t};\n'
-				+ '\t\t@:a(f()) @:b var u = () -> {\n\t\t\t@:c var s = 1;\n\t\t};\n\t}\n}\n'
+				+ '\t\t@:a(f().g) @:b var u = () -> {\n\t\t\t@:c var s = 1;\n\t\t};\n\t}\n}\n'
 			)
 		);
 	}
@@ -244,22 +244,53 @@ class MetadataLineEndFitTest extends Test {
 			'@:access(a.B) @:nullSafety(Strict) abstract class C {\n\t@:describe(\'text\') @:access(pkg.Type) function g() {}\n}\n',
 			'@:access(some.very.long.package.path.TypeName) @:access(another.very.long.package.path.TypeName) '
 			+ '@:access(third.very.long.pkg.TypeNameLonger) class C {}\n',
-			'class C {\n\t@:build(macros.X.build()) @:a var t:Int;\n\t@:overload(function(a:Int):Void {}) function o() {}\n\n'
+			'class C {\n\t@:build(a().b()) @:a var t:Int;\n\t@:overload(function(a:Int):Void {}) function o() {}\n\n'
 			+ '\t@:a(1, 2) var u:Int;\n\t@:a({x: 1}) var v:Int;\n}\n',
 			'class C {\n\t@:describe(\'$$x text\') function h() {}\n}\n',
 			'@:cppFileCode(\'a\nb\') class Q {}\n',
 			'@:access(pkg.sub.Type) class C {}\n',
 			'class C {\n\t@:priority(1) function f() {}\n\n\t@:keep(true) var b:Bool;\n}\n',
 			'class C {\n\t@:a /* c */ @:b var q:Int;\n\t@:a // c\n\t@:b var r:Int;\n}\n',
-			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) var x = 1;\n\t\t@:build(x()) var y = 1;\n\t}\n}\n',
+			'class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) var x = 1;\n\t\t@:build(x().y) var y = 1;\n\t}\n}\n',
 			'@:a\n// c1\nclass X {\n\t@:a\n\t/* c2 */\n\tfunction f() {}\n}\n',
-			'class C {\n\tfunction f() {\n\t\t@:a @:b var x = 1;\n\t\t@:a(\'${run(121)}\') @:b var y = 2;\n\t\t@:a(f()) @:b var w = 4;\n'
+			'class C {\n\tfunction f() {\n\t\t@:a @:b var x = 1;\n\t\t@:a(\'${run(121)}\') @:b var y = 2;\n\t\t@:a(f().g) @:b var w = 4;\n'
 			+ '\t}\n}\n',
 			'enum E {\n\t@:a A;\n\t@:a @:b(1) B;\n}\n\ntypedef T = {\n\t@:optional var a:Int;\n\t@:a @:b var b:Int;\n}\n'
 		]) {
 			final once: String = fit(src);
 			Assert.equals(once, fit(once));
 		}
+	}
+
+	/**
+	 * A call whose callee is no path, or whose argument is complex, keeps the metadata complex.
+	 */
+	@:pin('control')
+	@:killer('M-META-FIT-CALL-CALLEE-UNCHECKED', 'M-META-FIT-CALL-ARGS-UNCHECKED')
+	public function testACallWithAComplexPartStaysComplex(): Void {
+		Assert.equals(
+			'class C {\n\t@:op(a().b())\n\tfunction f() {}\n\n\t@:op(a({x: 1}))\n\tfunction g() {}\n\n\t@:op(a(b, [1]))\n'
+			+ '\tfunction h() {}\n}\n',
+			fit('class C {\n\t@:op(a().b()) function f() {}\n\n\t@:op(a({x: 1})) function g() {}\n\n\t@:op(a(b, [1])) function h() {}\n}\n')
+		);
+	}
+
+	/** A call-bearing metadata whose declaration head alone passes the maximum keeps its own line. */
+	@:pin('control')
+	@:killer('M-META-FIT-ONE-GLUES')
+	public function testACallMetadataPastTheMaximumTakesItsOwnLine(): Void {
+		final head: String =
+			'public inline function veryLongFunctionNameToPushPastTheLimit(argumentNumberOne:Int, argumentNumberTwo:String, third:Int):Int';
+		Assert.equals('class C {\n\t@:op(a())\n\t$head {}\n}\n', fit('class C {\n\t@:op(a()) $head {}\n}\n'));
+	}
+
+	/** Under `None` the call-bearing metadata stays on the declaration's line, as the source has it. */
+	@:pin('guard')
+	public function testNoneLeavesACallMetadataWhereTheSourceHasIt(): Void {
+		final opt: HxModuleWriteOptions = options();
+		opt.metadataFunctionLineEnd = MetadataLineEndPolicy.None;
+		final src: String = 'class C {\n\t@:op(a()) public inline function d():Void {}\n}\n';
+		Assert.equals(src, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opt));
 	}
 
 	/** A run of `n` letters, the filler that puts a line at a chosen width. */
