@@ -6,11 +6,13 @@ import anyparse.query.ElementSpan;
 import anyparse.query.ParseGate;
 import anyparse.query.QueryNode;
 import anyparse.query.RemoveMember;
+import anyparse.query.SafeDelete;
 
 /**
  * A member deletion takes a lone `//` section heading with the section it leads, when every member
- * of that section goes: the heading is one own-line `//` comment directly above the section's first
- * member, and the section runs to the next comment, a blank line or the end of the body. A section
+ * of that section goes: the heading is one own-line `//` comment above the section's first
+ * member, with at most one blank line between them, and the section runs
+ * to the next comment, a blank line or the end of the body. A section
  * that keeps a live member keeps its heading; a heading of several lines or a block comment is left
  * to the comment guard, which refuses the weld as before.
  */
@@ -163,11 +165,97 @@ class SectionHeadingDeletionTest extends Test {
 		);
 	}
 
-	/** A heading with a blank line under it leads nothing: the blank line ends its section, so it stays and the weld is refused. */
-	@:pin('guard')
-	public function testBlankLineUnderTheHeadingEndsItsSection(): Void {
+	/** A lone heading with ONE blank line under it still leads its section: it goes with the section's last dead member. */
+	@:pin('control')
+	@:killer('M-SECTION-HEADING-STOPS-AT-A-BLANK')
+	public function testHeadingAcrossOneBlankLineGoesWithItsSection(): Void {
+		Assert.equals(
+			'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t// Gamma\n'
+			+ '\tpublic static inline final C_USED:Int = 3;\n}\n',
+			okRemove(
+				'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t// Beta\n\n'
+				+ '\tpublic static inline final B_UNUSED:Int = 2;\n\t// Gamma\n\tpublic static inline final C_USED:Int = 3;\n}\n'
+			)
+		);
+	}
+
+	/** The reported shape: blank lines on both sides of the lone heading; the lint fix takes heading, its blank and the member. */
+	@:pin('control')
+	@:killer('M-SECTION-HEADING-STOPS-AT-A-BLANK')
+	public function testFixTakesAHeadingSeparatedFromItsSectionByABlank(): Void {
+		final src: String = 'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t// Beta\n\n'
+			+ '\tpublic static inline final B_UNUSED:Int = 2;\n\n\t// Gamma\n\tpublic static inline final C_USED:Int = 3;\n}\n';
+		final expected: String = 'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t// Gamma\n'
+			+ '\tpublic static inline final C_USED:Int = 3;\n}\n';
+		Assert.equals(expected + USER, fixed(src + USER));
+		Assert.equals(expected, okRemove(src));
+		Assert.equals(expected, safeDeleted(src));
+	}
+
+	/**
+	 * A `//` note glued under the previous member, then a blank line, is
+	 * that member's trailing note: it stays when the next member goes.
+	 */
+	@:pin('control')
+	@:killer('M-SECTION-HEADING-ACROSS-BLANK-TAKES-TRAILING-NOTE')
+	public function testTrailingNoteUnderThePreviousMemberStays(): Void {
+		final src: String = 'class K {\n\tpublic static inline final A_USED:Int = 1;\n\t// keep A_USED in sync with C_USED\n\n'
+			+ '\tpublic static inline final B_UNUSED:Int = 2;\n\n\tpublic static inline final C_USED:Int = 3;\n}\n';
+		Assert.equals(
+			'class K {\n\tpublic static inline final A_USED:Int = 1;\n\t// keep A_USED in sync with C_USED\n\n'
+			+ '\tpublic static inline final C_USED:Int = 3;\n}\n',
+			okRemove(src)
+		);
+	}
+
+	/** A heading right under the body's `{`, with one blank line under it, leads the first section. */
+	@:pin('control')
+	@:killer('M-SECTION-HEADING-ACROSS-BLANK-NEEDS-NO-OPENER')
+	public function testHeadingUnderTheBodyBraceAcrossABlankGoes(): Void {
+		final src: String = 'class K {\n\t// Beta\n\n\tpublic static inline final B_UNUSED:Int = 2;\n\t// Gamma\n'
+			+ '\tpublic static inline final C_USED:Int = 3;\n}\n';
+		Assert.equals('class K {\n\t// Gamma\n\tpublic static inline final C_USED:Int = 3;\n}\n', okRemove(src));
+	}
+
+	/** A live member of the section keeps the heading and the blank line under it. */
+	@:pin('control')
+	@:killer('M-SECTION-HEADING-IGNORES-LIVE-MEMBER')
+	public function testLiveMemberKeepsAHeadingAcrossABlank(): Void {
+		final src: String = 'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t// Beta\n\n'
+			+ '\tpublic static inline final B_UNUSED:Int = 2;\n\tpublic static inline final B_LIVE:Int = 2;\n\t// Gamma\n'
+			+ '\tpublic static inline final C_USED:Int = 3;\n}\n';
+		Assert.equals(
+			'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t// Beta\n\n'
+			+ '\tpublic static inline final B_LIVE:Int = 2;\n\t// Gamma\n\tpublic static inline final C_USED:Int = 3;\n}\n',
+			okRemove(src)
+		);
+	}
+
+	/** Two blank lines set a comment apart from the member: it is not that member's heading, the weld refusal stands. */
+	@:pin('control')
+	@:killer('M-SECTION-HEADING-TAKES-TWO-BLANKS')
+	public function testHeadingTwoBlankLinesAboveIsRefused(): Void {
 		assertWeldRefused(
-			'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\t// Beta\n\n'
+			'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t// Beta\n\n\n'
+			+ '\tpublic static inline final B_UNUSED:Int = 2;\n\t// Gamma\n\tpublic static inline final C_USED:Int = 3;\n}\n'
+		);
+	}
+
+	/** A block comment above the blank line is not a `//` heading: the weld refusal stands. */
+	@:pin('control')
+	@:killer('M-SECTION-HEADING-ACROSS-BLANK-TAKES-BLOCK')
+	public function testBlockCommentAboveABlankLineIsRefused(): Void {
+		assertWeldRefused(
+			'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\n\t/* Beta */\n\n'
+			+ '\tpublic static inline final B_UNUSED:Int = 2;\n\t// Gamma\n\tpublic static inline final C_USED:Int = 3;\n}\n'
+		);
+	}
+
+	/** A run of `//` lines above the blank line is not a lone heading: the weld refusal stands. */
+	@:pin('guard')
+	public function testTwoLineHeadingAboveABlankLineIsRefused(): Void {
+		assertWeldRefused(
+			'class K {\n\t// Alpha\n\tpublic static inline final A_USED:Int = 1;\n\t// Beta one\n\t// Beta two\n\n'
 			+ '\tpublic static inline final B_UNUSED:Int = 2;\n\t// Gamma\n\tpublic static inline final C_USED:Int = 3;\n}\n'
 		);
 	}
@@ -214,6 +302,17 @@ class SectionHeadingDeletionTest extends Test {
 		if (tree != null) walk(tree);
 		Assert.equals(names.length, targets.length);
 		switch ElementSpan.deleteNodes(source, targets, true, plugin) {
+			case Ok(text):
+				return text;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				return '';
+		}
+	}
+
+	private function safeDeleted(source: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		switch SafeDelete.safeDelete('K.hx', 'K', 'B_UNUSED', true, [{ file: 'K.hx', source: source }], plugin, plugin.refShape()) {
 			case Ok(text):
 				return text;
 			case Err(message):

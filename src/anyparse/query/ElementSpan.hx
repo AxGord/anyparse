@@ -591,7 +591,7 @@ final class ElementSpan {
 		source: String, lead: Span, node: QueryNode, host: QueryNode, deleting: Array<QueryNode>, tokens: Array<CommentTok>
 	): Span {
 		if (!deleting.contains(node)) return lead;
-		final heading: Int = SourceComments.lineNotesAbove(source, tokens, lead.from);
+		final heading: Int = headingAboveBlank(source, tokens, lead.from);
 		if (heading == lead.from || SourceComments.ownLineCommentAbove(source, tokens, lead.from, false) != heading) return lead;
 		final glued: Int = SourceComments.ownLineCommentAbove(source, tokens, heading, false);
 		final gluedTok: Null<CommentTok> = glued < 0 ? null : tokens.find(t -> t.from == glued);
@@ -818,6 +818,31 @@ final class ElementSpan {
 	/** Whitespace inside a line — a line break is the edge `ownedLinesSpan` scans up to, never skipped. */
 	private static inline function isLineSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\r'.code;
+	}
+
+	/**
+	 * Where the heading of the member starting at `from` begins: the `//` run directly above it, or, when none sits there, a lone
+	 * `//` line with exactly one blank line between it and `from`. A run of several lines above the blank is not a heading.
+	 */
+	private static function headingAboveBlank(source: String, tokens: Array<CommentTok>, from: Int): Int {
+		final direct: Int = SourceComments.lineNotesAbove(source, tokens, from);
+		if (direct != from) return direct;
+		final open: Int = SourceComments.ownLineCommentAbove(source, tokens, from, false);
+		final note: Null<CommentTok> = open < 0 ? null : tokens.find(t -> t.from == open);
+		if (note == null || !note.isLine) return from;
+		final gap: String = source.substring(note.to, from);
+		final first: Int = gap.indexOf('\n');
+		return first >= 0 && gap.indexOf('\n', first + 1) == gap.lastIndexOf('\n') && opensASection(source, open) ? open : from;
+	}
+
+	/**
+	 * A comment at `open` heads a section when a blank line or the body's
+	 * `{` precedes it; under a member it is that member's trailing note.
+	 */
+	private static function opensASection(source: String, open: Int): Bool {
+		var at: Int = open - 1;
+		while (at >= 0 && SourceText.isSpace(source.fastCodeAt(at))) at--;
+		return at < 0 || source.fastCodeAt(at) == '{'.code || blankLineWithin(source, at, open);
 	}
 
 	/**

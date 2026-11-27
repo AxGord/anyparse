@@ -18035,6 +18035,46 @@
 			"find": "if (decl.declNode.kind == SPLIT_HEADER_KIND) return null;",
 			"replace": "if (false) return null;",
 			"note": "a body-brace offset answered for a split-header type points into one branch's header, so a check inserting after it writes into one build only"
+		},
+		{
+			"name": "M-SECTION-HEADING-STOPS-AT-A-BLANK",
+			"type": "anyparse.query.ElementSpan",
+			"method": "headingAboveBlank",
+			"find": "final open: Int = SourceComments.ownLineCommentAbove(source, tokens, from, false);",
+			"replace": "final open: Int = -1;",
+			"note": "a lone heading with one blank line under it is not taken, so the weld refusal reverts a deletion its section should own"
+		},
+		{
+			"name": "M-SECTION-HEADING-TAKES-TWO-BLANKS",
+			"type": "anyparse.query.ElementSpan",
+			"method": "headingAboveBlank",
+			"find": "gap.indexOf('\\n', first + 1) == gap.lastIndexOf('\\n')",
+			"replace": "true",
+			"note": "a comment two or more blank lines above the member is taken as its heading"
+		},
+		{
+			"name": "M-SECTION-HEADING-ACROSS-BLANK-TAKES-BLOCK",
+			"type": "anyparse.query.ElementSpan",
+			"method": "headingAboveBlank",
+			"find": "if (note == null || !note.isLine) return from;",
+			"replace": "if (note == null) return from;",
+			"note": "a block comment above the blank line is taken as the heading, deleting a comment the rule leaves report-only"
+		},
+		{
+			"name": "M-SECTION-HEADING-ACROSS-BLANK-TAKES-TRAILING-NOTE",
+			"type": "anyparse.query.ElementSpan",
+			"method": "headingAboveBlank",
+			"find": "&& opensASection(source, open) ? open : from",
+			"replace": "? open : from",
+			"note": "a note glued under the previous member with one blank line below it is taken as the next member's heading and deleted with it"
+		},
+		{
+			"name": "M-SECTION-HEADING-ACROSS-BLANK-NEEDS-NO-OPENER",
+			"type": "anyparse.query.ElementSpan",
+			"method": "opensASection",
+			"find": "source.fastCodeAt(at) == '{'.code || ",
+			"replace": "",
+			"note": "a heading right under the body's opening brace is not taken across a blank line, so the weld refusal stands"
 		}
 	]
 }
