@@ -17899,6 +17899,30 @@
 			"find": "if (first < 0 || second < 0 || text.substr(0, first) != header(FORMAT_TAG, source)) return null;",
 			"replace": "if (first < 0 || second < 0) return null;",
 			"note": "an entry is served whatever bytes its file now holds, so a changed library file deferred by the tier answers with the tree stored for its old source"
+		},
+		{
+			"name": "M-PFTF-UNVERIFIED-REGION",
+			"type": "anyparse.query.ReachLiveness",
+			"method": "collectUnverified",
+			"find": "out[name] = true;",
+			"replace": "{}",
+			"note": "a name inside conditional code no configuration is known to compile is taken for verified, so a typedef used only there is flagged and the rewrite breaks the other define sets"
+		},
+		{
+			"name": "M-PFTF-DEAD-BRANCH-LIVE",
+			"type": "anyparse.query.ReachLiveness",
+			"method": "collectUnverified",
+			"find": "!liveness.live(entry.file, entry.source, node.span)",
+			"replace": "false",
+			"note": "a branch the declared builds never take is taken for compiled, so a typedef used only there is flagged though no configuration types the use"
+		},
+		{
+			"name": "M-PFTF-LIVE-BRANCH-DEAD",
+			"type": "anyparse.query.ReachLiveness",
+			"method": "collectUnverified",
+			"find": "!liveness.live(entry.file, entry.source, node.span)",
+			"replace": "true",
+			"note": "a branch a declared build takes is taken for unverified, so a typedef the oracle checks through that branch is refused for nothing"
 		}
 	]
 }

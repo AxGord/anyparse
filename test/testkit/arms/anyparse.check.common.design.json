@@ -1738,28 +1738,98 @@
 			"note": "an edit planned for one text applies to another, splicing at offsets that no longer hold the typedef"
 		},
 		{
-			"name": "M-PFTF-UNVERIFIED-REGION",
-			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
-			"method": "collectUnverified",
-			"find": "out[name] = true;",
-			"replace": "{}",
-			"note": "a name inside conditional code no configuration is known to compile is taken for verified, so a typedef used only there is flagged and the rewrite breaks the other define sets"
+			"name": "M-PROA-NO-FIX",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "fix",
+			"force": "[]",
+			"note": "the check returns no edit, so a flagged declaration is reported and never retyped"
 		},
 		{
-			"name": "M-PFTF-DEAD-BRANCH-LIVE",
-			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
-			"method": "collectUnverified",
-			"find": "!liveness.live(entry.file, entry.source, node.span)",
+			"name": "M-PROA-OPEN-WORLD",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "refused",
+			"find": "(exposed && !ctx.closedWorld)",
 			"replace": "false",
-			"note": "a branch the declared builds never take is taken for compiled, so a typedef used only there is flagged though no configuration types the use"
+			"note": "a public position is retyped with no closedWorld declared, though callers outside the run may hand it on as an Array"
 		},
 		{
-			"name": "M-PFTF-LIVE-BRANCH-DEAD",
-			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
-			"method": "collectUnverified",
-			"find": "!liveness.live(entry.file, entry.source, node.span)",
-			"replace": "true",
-			"note": "a branch a declared build takes is taken for unverified, so a typedef the oracle checks through that branch is refused for nothing"
+			"name": "M-PROA-IGNORE-MUTATIONS",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "mark",
+			"find": "into.names[name] = true;",
+			"replace": "{}",
+			"note": "a mutation through the name is not recorded, so an array pushed onto, sorted, index-written or cast is flagged"
+		},
+		{
+			"name": "M-PROA-IGNORE-CALL-MUTATIONS",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "mark",
+			"find": "into.calls[name] = true;",
+			"replace": "{}",
+			"note": "a mutation of what a call returns is not recorded, so the return type of a function whose result is pushed onto is flagged"
+		},
+		{
+			"name": "M-PROA-RUN-WIDE-SCOPE",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "judgeClass",
+			"find": "ctx.facts.mutated.calls, scope, ctx",
+			"replace": "ctx.facts.mutated.calls, ctx.facts.mutated, ctx",
+			"note": "a parameter is judged against every file of the run, so one another function of the same parameter name pushes onto is refused"
+		},
+		{
+			"name": "M-PROA-UNPINNED",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "pinned",
+			"force": "false",
+			"note": "an extern declaration, or one kept or described by name for reflection, is retyped"
+		},
+		{
+			"name": "M-PROA-NO-CONTRACT",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "judgeClass",
+			"find": "if (!contract) signature(",
+			"replace": "signature(",
+			"note": "the signature of an override, an overridden method or an interface implementation is retyped alone, which its siblings do not match"
+		},
+		{
+			"name": "M-PROA-SUBCLASS-REACH",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "judgeClass",
+			"find": "(!sealed || ",
+			"replace": "(",
+			"note": "a private member of a class that is not final is retyped with no closedWorld declared, though a subclass outside the run may mutate it or override it with an Array parameter"
+		},
+		{
+			"name": "M-PROA-UNVERIFIED-PASSES",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "refused",
+			"find": "ctx.facts.unverified.exists(name)",
+			"replace": "false",
+			"note": "a name used in conditional code no build compiles is retyped, though no oracle configuration types that use"
+		},
+		{
+			"name": "M-PROA-SOURCES-FIRST",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "fix",
+			"find": "return sinks.concat(sources);",
+			"replace": "return sources.concat(sinks);",
+			"note": "the declarations handing an array on are listed before the ones receiving it"
+		},
+		{
+			"name": "M-PROA-ALWAYS-FULL-PATH",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "spelling",
+			"find": "printed.importPath == null ? printed.text : readOnly",
+			"replace": "readOnly",
+			"note": "a file that already sees the read-only type by its short name is written its full path"
+		},
+		{
+			"name": "M-PROA-SHORT-FUNCTION-TYPE",
+			"type": "anyparse.check.common.design.PreferReadOnlyArray",
+			"method": "shortHead",
+			"find": "refs.length == 2",
+			"replace": "refs.length >= 2",
+			"note": "a short typedef field of a function type taking an array is retyped at its first argument"
 		}
 	]
 }

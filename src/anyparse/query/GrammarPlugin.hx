@@ -3680,6 +3680,14 @@ typedef ExecutionShape = {
 	var fixedLengthArrayTypes: Array<String>;
 
 	/**
+	 * The fully qualified path of the grammar's READ-ONLY VIEW of its built-in array type (Haxe `haxe.ds.ReadOnlyArray`):
+	 * an array converts to it implicitly and it offers every method of `nonMutatingArrayMethods`, none of
+	 * `mutatingArrayMethods`, and no index write. Optional; unset leaves no declaration a read-only view to take.
+	 */
+	@:optional
+	var readOnlyArrayType: String;
+
+	/**
 	 * The integer arithmetic a binary node kind performs, by kind, as one of `add`, `subtract`,
 	 * `multiply` — what a check folding a constant bound (`0...N + 1`) evaluates. Named, not spelled as
 	 * the operator: the value is a meaning, and a punctuation token here would be a token slot no parse

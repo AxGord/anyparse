@@ -562,6 +562,7 @@ final class HaxeRefShape {
 				]
 			],
 			fixedLengthArrayTypes: ['haxe.ds.Vector'],
+			readOnlyArrayType: 'haxe.ds.ReadOnlyArray',
 			integerFoldOperators: ['Add' => 'add', 'Sub' => 'subtract', 'Mul' => 'multiply'],
 			orderedComparisonOperators: ['Lt' => 'lt', 'LtEq' => 'le', 'Gt' => 'gt', 'GtEq' => 'ge'],
 			mapTypeNames: ['Map', 'IntMap', 'StringMap', 'ObjectMap', 'EnumValueMap', 'BalancedTree'],

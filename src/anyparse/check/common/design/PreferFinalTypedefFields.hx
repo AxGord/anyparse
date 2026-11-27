@@ -158,7 +158,7 @@ final class PreferFinalTypedefFields extends RuleBase implements RiskyFix implem
 		for (item in parsed) collectWrites(item.tree, item.entry.source, false, seams, written);
 		final unverified: Map<String, Bool> = [];
 		final live: () -> Null<ReachLiveness> = ReachLiveness.ofRun(plugin);
-		for (item in parsed) collectUnverified(item.tree, item.entry, false, seams, live, unverified);
+		for (item in parsed) ReachLiveness.collectUnverified(item.tree, item.entry, false, seams.conditionalKinds, live, unverified);
 		final out: Array<Violation> = [];
 		for (item in parsed) {
 			final ctx: FileCtx = {
@@ -409,27 +409,6 @@ final class PreferFinalTypedefFields extends RuleBase implements RiskyFix implem
 		return SourceText.withoutSpace(ctx.source.substring(span.from, declSpan.from)) == VAR_TOKEN
 			? { span: new Span(span.from, declSpan.from), text: FINAL_KEYWORD }
 			: null;
-	}
-
-	/**
-	 * Record into `out` every name that sits in conditional-compilation code of `entry` no build is known to compile: the typedef
-	 * the rewrite makes final may be unified with, or written through, a structure there, which no oracle configuration types.
-	 * Code a configuration may compile (`ReachLiveness.live`) is the oracle's to check; with no builds declared complete
-	 * every conditional region counts as unverified.
-	 */
-	private static function collectUnverified(
-		node: QueryNode, entry: { file: String, source: String }, inRegion: Bool, seams: Seams, live: () -> Null<ReachLiveness>,
-		out: Map<String, Bool>
-	): Void {
-		final within: Bool = inRegion || seams.conditionalKinds.contains(node.kind);
-		final name: Null<String> = node.name;
-		if (within && name != null && !out.exists(name)) {
-			final liveness: Null<ReachLiveness> = live();
-			if (liveness == null || !liveness.live(entry.file, entry.source, node.span)) out[name] = true;
-		}
-		for (child in node.children) collectUnverified(child, entry, within, seams, live, out);
-		final declared: Null<QueryNode> = node.type;
-		if (declared != null) collectUnverified(declared, entry, within, seams, live, out);
 	}
 
 }

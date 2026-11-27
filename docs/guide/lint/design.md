@@ -347,6 +347,54 @@ interface take the run-time path `pkg._Module.Name` once private, which `Type.re
 `resolveEnum`, `getEnumName`, `getEnum`, `Serializer` or `Unserializer` occurs in scope; otherwise it is reported with
 that reason. A class or an interface is always reported and never rewritten.
 
+## `prefer-read-only-array`
+
+A declaration of type `Array<T>` that nothing mutates through, retyped `haxe.ds.ReadOnlyArray<T>`: a class field (instance or
+static), a typedef field, a function parameter, a return type or an annotated local. `Info`, DEFAULT OFF, a risky fix: with
+a `compilerOracle` each edit is typechecked and one the compiler rejects (a mutation the scan missed, a pass into an
+`Array<T>` parameter, a unification with an `Array<T>` declaration) is reverted while the file's others stay; with none the
+rule only reports. `ReadOnlyArray` is a VIEW, not a copy: whoever holds the array as `Array<T>` may still change it, it is no
+snapshot between threads, and its elements stay mutable. `final` stops a reassignment (`prefer-final-field`,
+`prefer-final-typedef-fields`); this rule stops an in-place change.
+
+```haxe
+final class Panel {
+	final items:Array<Item> = [];                     // -> final items:haxe.ds.ReadOnlyArray<Item> = [];
+	function draw(list:Array<Item>):Void {            // -> list:haxe.ds.ReadOnlyArray<Item>
+		for (i in list) paint(i);
+	}
+	public function all():Array<Item> return items;   // -> all():haxe.ds.ReadOnlyArray<Item> (with closedWorld)
+}
+```
+
+A file that already sees `ReadOnlyArray` by its short name (an `import haxe.ds.ReadOnlyArray;`) gets the short name; any other
+gets the full path, since an import every edit needs would make the file's edits stand or fall together — `shorten-type-ref`
+brings the import in afterwards.
+
+Not a candidate (the syntactic pre-filter): a declaration whose name has a mutating array method read off it (`push`, `pop`,
+`shift`, `unshift`, `splice`, `insert`, `remove`, `sort`, `reverse`, `resize`), is the target of an index or field write
+(`xs[i] = v`, `xs[i]++`, `xs.length = 0`), is cast (`cast xs`, `cast(xs, T)`), or is named by a literal key of a reflective
+call (`Reflect.setField(o, "xs", v)`); a return type when the same is done to a call of its function (`all().push(x)`).
+Fields and return types are judged against every file of the run, by name; parameters and locals against the member function
+holding them.
+
+Refused: an `extern` type or member; one carrying `@:keep` or `@:rtti`; a declaration under `#if`, and a name occurring in
+conditional code no declared build compiles (as for `prefer-final-typedef-fields`); every member of an interface, and the
+signature of a method that overrides, is overridden or shares its name with an interface member of the run (its siblings would
+have to change with it; the locals of such a method are still judged). A PUBLIC position — a public member of a type that is
+not `private`, ANY member of a class that is neither `private` nor `final` (Haxe `private` is visible to subclasses, and a
+subclass outside the run may push onto the inherited field or override the method with an `Array<T>` parameter), a field of
+a typedef that is not `private` — has users the oracle sees only when a configured build compiles them all, so it is refused unless the rule's own key `closedWorld` is `true` (`"prefer-read-only-array": {"closedWorld":
+true}`: every caller of a public member is compiled by a `compilerOracle` build; it is not the `thread-safety` key of the same
+name).
+
+A field handed to a parameter compiles read-only only once the parameter is, and the oracle judges a file's edits in one round,
+bisecting the rejected ones: the parameters and return types are listed first, and a declaration the round leaves as written
+is taken by the next `lint --fix`, once what receives it is read-only (the run's `oracle round(s)` count is on its summary
+line). Out of scope: `Null<Array<T>>`, a short typedef field whose element type is itself generic or a function type, `Map`, and the
+encapsulating shape of a public field mutated only inside its class (`private final _items:Array<T>` behind
+`public var items(get, never):ReadOnlyArray<T>`).
+
 ## `refusal-assert-ignores-message`
 
 A `case` arm over a refusal constructor that passes without reading what the refusal carries — an assertion any

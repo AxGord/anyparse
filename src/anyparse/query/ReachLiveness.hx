@@ -198,4 +198,25 @@ final class ReachLiveness {
 		};
 	}
 
+	/**
+	 * The one answer to "which names of a run sit in conditional code no declared build compiles": record into `out` every name
+	 * under a `conditionalKinds` region of `entry` that no configuration is known to compile (`live`). A declaration whose type a
+	 * rule changes may be unified with, or written through, a use there that no oracle configuration types; with no builds
+	 * declared complete every conditional region counts as unverified.
+	 */
+	public static function collectUnverified(
+		node: QueryNode, entry: { file: String, source: String }, inRegion: Bool, conditionalKinds: Array<String>,
+		live: () -> Null<ReachLiveness>, out: Map<String, Bool>
+	): Void {
+		final within: Bool = inRegion || conditionalKinds.contains(node.kind);
+		final name: Null<String> = node.name;
+		if (within && name != null && !out.exists(name)) {
+			final liveness: Null<ReachLiveness> = live();
+			if (liveness == null || !liveness.live(entry.file, entry.source, node.span)) out[name] = true;
+		}
+		for (child in node.children) collectUnverified(child, entry, within, conditionalKinds, live, out);
+		final declared: Null<QueryNode> = node.type;
+		if (declared != null) collectUnverified(declared, entry, within, conditionalKinds, live, out);
+	}
+
 }

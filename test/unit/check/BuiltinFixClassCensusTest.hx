@@ -126,6 +126,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'prefer-map-type',
 			'prefer-null-coalescing',
 			'prefer-null-guarded-loop',
+			'prefer-read-only-array',
 			'prefer-single-pass',
 			'prefer-using-over-static-import',
 			'redundant-import',
