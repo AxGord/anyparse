@@ -95,6 +95,7 @@
 	"module-type-order",
 	"naming",
 	"narrow-local-scope",
+	"never-passed-parameter",
 	"no-underscore-prefix",
 	"null-dereference",
 	"null-safety-strict",

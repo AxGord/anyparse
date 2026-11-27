@@ -171,6 +171,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'jvm-short-circuit-inline-local-fn',
 			'loop-bound-length-mismatch',
 			'magic-number',
+			'never-passed-parameter',
 			'null-dereference',
 			'nullable-switch-missing-null',
 			'oversized-type',

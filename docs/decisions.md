@@ -5696,3 +5696,4 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - fit-driven methodChain threshold override refused by the user 2026-08-17; still true, there is no methodChain fit key (DOCS-SIBLING-TAKE) → DOCS-SIBLING-TAKE
 - built-in odd-prefix strip list or naming arm refused 2026-07-25: hxq rename --scope already does it (DOCS-SIBLING-TAKE) → DOCS-SIBLING-TAKE
 - translating or vendoring a GPL compiler port as the typer refused: anyparse is MIT, ports are read as specification only (DOCS-SIBLING-TAKE) → DOCS-SIBLING-TAKE
+- a rule deleting a parameter that no caller passes, public methods included, refused 2026-10-06: a public parameter may be room for extension → only a confined private method or local function is judged, report-only (never-passed-parameter) → NEVER-PASSED-PARAM-PRIVATE

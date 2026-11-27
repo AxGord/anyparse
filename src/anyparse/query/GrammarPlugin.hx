@@ -3515,6 +3515,14 @@ typedef ExecutionShape = {
 	var staticInitFunctionNames: Array<String>;
 
 	/**
+	 * The declared types whose parameter the COMPILER fills at a call that omits it (Haxe `haxe.PosInfos`, spelled
+	 * qualified or not): such a parameter is never passed by hand, so "no call passes it" says nothing about it. Optional;
+	 * unset means no parameter type is compiler-supplied.
+	 */
+	@:optional
+	var compilerSuppliedParamTypes: Array<String>;
+
+	/**
 	 * The callee names (a bare intrinsic or the last segment of a qualified call) whose FIRST argument the compiler pastes
 	 * into the output as target code and so requires as a compile-time constant (Haxe `__js__`, `js.Syntax.code`).
 	 * Optional; unset means none.

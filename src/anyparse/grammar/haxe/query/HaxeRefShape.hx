@@ -397,6 +397,7 @@ final class HaxeRefShape {
 		table.optionalFieldMetaName = '@:optional';
 		table.execution = {
 			staticInitFunctionNames: ['__init__'],
+			compilerSuppliedParamTypes: ['haxe.PosInfos', 'PosInfos'],
 			targetCodeCallNames: FactKinds.SYNTAX_CODE_MEMBERS.concat(FactKinds.CODE_INTRINSICS),
 			implicitConversionMetaName: '@:from',
 			implicitOutwardConversionMetaName: '@:to',

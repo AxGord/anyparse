@@ -450,6 +450,76 @@
 			"find": "plugin.lexicalRegions(source), surviving)",
 			"replace": "plugin.lexicalRegions(source), [member])",
 			"note": "unused-private deletes without its deletion set, so the heading of a section it empties stays behind"
+		},
+		{
+			"name": "M-NEVER-PASSED-WIDEST-SITE",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "firstUnpassed",
+			"find": "for (call in sites) if (call.children.length - 1 > passed) passed = call.children.length - 1;",
+			"replace": "",
+			"note": "the widest argument list among the calls is ignored, so a parameter some call passes is reported because other calls omit it"
+		},
+		{
+			"name": "M-NEVER-PASSED-CONFINED",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "isConfined",
+			"find": "&& !UnusedParameter.isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)",
+			"replace": "",
+			"note": "a public or unconfined method is judged like a private one, so a parameter that an outside caller may pass is reported"
+		},
+		{
+			"name": "M-NEVER-PASSED-SITES",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "firstUnpassed",
+			"find": "if (sites.length == 0) return params.length;",
+			"replace": "",
+			"note": "a function nobody calls reads as one whose every call omits the parameter, so unused-private's dead method is reported twice"
+		},
+		{
+			"name": "M-NEVER-PASSED-DYNAMIC",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "isConfined",
+			"find": "&& !UnusedParameter.isDynamicFn(fn, parent, visibilityKinds, modifierKinds, shape.dynamicModifierKind)",
+			"replace": "",
+			"note": "a dynamic function, a slot external assigners replace, is judged by its in-file calls alone"
+		},
+		{
+			"name": "M-NEVER-PASSED-REFLECTION",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "isConfined",
+			"find": "&& !ReflectionScan.runtimeName(reflection, name)",
+			"replace": "",
+			"note": "a method reached by a runtime name string (Reflect.field) is judged by its in-file calls alone, so a parameter the reflective caller passes is reported"
+		},
+		{
+			"name": "M-NEVER-PASSED-COMPILER-SUPPLIED",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "isCompilerSupplied",
+			"force": "false",
+			"note": "a haxe.PosInfos parameter, which the compiler fills at every call, reads as one nobody passes"
+		},
+		{
+			"name": "M-NEVER-PASSED-TYPE-SKIP",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "firstUnpassed",
+			"find": "for (pi in 0...from) if (isOptionalSlot(params[pi], shape)) return params.length;",
+			"replace": "",
+			"note": "an optional slot below the unpassed ones is read as passed by position, though Haxe binds an argument to the next slot of its type, so the slot the argument really filled is reported"
+		},
+		{
+			"name": "M-NEVER-PASSED-REST",
+			"type": "anyparse.check.common.unused.NeverPassedParameter",
+			"method": "checkFunction",
+			"find": "if (fn.children.exists(c -> c.kind == restKind)) return;",
+			"replace": "",
+			"note": "a function with a rest parameter is judged by its argument counts, though a spread argument can fill the slots before the rest"
+		},
+		{
+			"name": "M-NEVER-PASSED-CONTRACT",
+			"type": "anyparse.check.common.unused.UnusedParameter",
+			"method": "isContractCandidate",
+			"force": "false",
+			"note": "a type with an extends or implements clause is no contract candidate, so its private methods are judged like those of a plain class"
 		}
 	]
 }

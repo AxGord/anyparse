@@ -133,11 +133,8 @@ final class UnusedParameter extends RuleBase implements ConfigAware implements O
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		if (functionKinds.length == 0 || paramKinds.length == 0) return [];
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final supertypeClauseKinds: Array<String> = shape.supertypeClauseKinds ?? [];
 		final visibilityKinds: Array<String> = shape.visibilityModifierKinds ?? [];
 		final modifierKinds: Array<String> = shape.modifierOrderKinds ?? [];
-		final noBodyKind: Null<String> = shape.noBodyKind;
 		final dynamicKind: Null<String> = shape.dynamicModifierKind;
 		// The autofixable subset (a confined private method) is proven against the WIDEST index
 		// there is, exactly as `unused-private`: the project's DECLARED resolution scope when it has
@@ -155,8 +152,7 @@ final class UnusedParameter extends RuleBase implements ConfigAware implements O
 		// removal is ever invented.
 		final index: SymbolIndex = IndexScope.widest(files, plugin);
 		return RunScan.collect(files, plugin, (entry, tree, violations) -> {
-			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
-			walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
+			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = candidateFunctions(tree, shape);
 			final captured: Array<String> = valueCapturedNames(tree, shape);
 			// An operator overload's arity is dictated by the OPERATOR, so an ignored operand is
 			// mandated rather than dead — and nothing NAMES such a method, so the in-file call-set
@@ -247,12 +243,79 @@ final class UnusedParameter extends RuleBase implements ConfigAware implements O
 	}
 
 	/**
-	 * Whether `config` opts the `_<name>` silence-rename in — the ONE seat for the option
-	 * key and its default, so a cross-rule guard cannot drift from the rule it guards
-	 * (`NoUnderscorePrefix` reads it to decide whether the rename it must not fight is live).
+	 * Every name the module references in VALUE position — a bare `IdentExpr`, or a
+	 * `this.<name>` field access, that is NOT the callee of a call. A function whose
+	 * name is in this set is captured as a value somewhere in the file (passed as an
+	 * argument to `addEventListener` and friends, assigned to a var / field, returned,
+	 * `.bind`-partialled), which fixes its signature from OUTSIDE: the parameter its
+	 * body ignores is mandated by whatever consumes the reference, so the finding is
+	 * not actionable and is dropped rather than reported.
+	 *
+	 * The scan is by NAME only — no binding resolution — so an unrelated identifier
+	 * that merely shares a function's name silences it too. That is the conservative
+	 * direction: it only ever drops a finding, never invents one. It is also
+	 * FILE-scoped, so a capture living in another file is invisible; a public method
+	 * only ever CALLED in its own file keeps its `Info` finding, as intended.
+	 *
+	 * A `<other>.<name>` field access is deliberately NOT counted — a member of an
+	 * unrelated receiver shares nothing with the function but its spelling.
+	 *
+	 * Callee position propagates through a `ParenExpr` — `(foo)(x)` is a direct call,
+	 * not a capture. It deliberately does NOT propagate through any construct that
+	 * COMPUTES the callee (a ternary, a cast, an index access): `(cond ? f : g)(x)`
+	 * hands both functions to an expression that selects between them as values, which
+	 * is a capture in every sense that matters here.
 	 */
-	private static function renameSilenceLive(config: LintConfig): Bool {
-		return config.boolOption(RULE_ID, RENAME_SILENCE_KEY) ?? DEFAULT_RENAME_SILENCE;
+	public static function valueCapturedNames(tree: QueryNode, shape: RefShape): Array<String> {
+		final out: Array<String> = [];
+		function scan(node: QueryNode, calleePosition: Bool): Void {
+			final name: Null<String> = node.name;
+			if (!calleePosition && name != null && !out.contains(name) && isValueReference(node, shape)) out.push(name);
+			final isCall: Bool = node.kind == shape.callKind;
+			final parenthesizedCallee: Bool = calleePosition && node.kind == shape.parenKind;
+			for (i in 0...node.children.length) scan(node.children[i], parenthesizedCallee || (isCall && i == 0));
+		}
+		scan(tree, false);
+		return out;
+	}
+
+	/**
+	 * Whether the method `fn` carries an explicit `public` visibility modifier
+	 * — a preceding sibling in `parent`'s child list whose source is `public`.
+	 * Default (no modifier) is `private` in Haxe, so its absence means private.
+	 * The backward scan stops at the first non-modifier sibling (the previous
+	 * member), so it never crosses into an earlier declaration's modifiers.
+	 */
+	public static function isPublicDecl(
+		fn: QueryNode, parent: QueryNode, source: String, visibilityKinds: Array<String>, modifierKinds: Array<String>
+	): Bool {
+		return MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds))
+			.exists(sib -> visibilityKinds.contains(sib.kind) && NodeTokens.firstSpelling(sib, source, 'public') != -1);
+	}
+
+	/**
+	 * Whether `fn` carries the `dynamic` modifier among its preceding sibling
+	 * modifiers — a reassignable callback slot whose signature external
+	 * assigners rely on (see the class docstring). Mirrors `isPublicDecl`'s
+	 * backward sibling scan, additionally treating the dynamic modifier itself
+	 * as part of the modifier run so the scan does not stop short of it.
+	 */
+	public static function isDynamicFn(
+		fn: QueryNode, parent: QueryNode, visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>
+	): Bool {
+		return dynamicKind != null
+			&& MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds).concat([dynamicKind]))
+				.exists(sib -> sib.kind == dynamicKind);
+	}
+
+	/**
+	 * Every function a parameter rule judges: `walk` over the grammar's
+	 * function, reification, supertype-clause and body-less vocabulary.
+	 */
+	public static function candidateFunctions(tree: QueryNode, shape: RefShape): Array<{ fn: QueryNode, parent: QueryNode }> {
+		final out: Array<{ fn: QueryNode, parent: QueryNode }> = [];
+		walk(out, tree, null, shape.functionKinds ?? [], shape.opaqueKinds ?? [], shape.supertypeClauseKinds ?? [], shape.noBodyKind);
+		return out;
 	}
 
 	/**
@@ -275,6 +338,15 @@ final class UnusedParameter extends RuleBase implements ConfigAware implements O
 		)
 			out.push({ fn: node, parent: parent });
 		for (c in node.children) walk(out, c, node, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
+	}
+
+	/**
+	 * Whether `config` opts the `_<name>` silence-rename in — the ONE seat for the option
+	 * key and its default, so a cross-rule guard cannot drift from the rule it guards
+	 * (`NoUnderscorePrefix` reads it to decide whether the rename it must not fight is live).
+	 */
+	private static function renameSilenceLive(config: LintConfig): Bool {
+		return config.boolOption(RULE_ID, RENAME_SILENCE_KEY) ?? DEFAULT_RENAME_SILENCE;
 	}
 
 	/** Whether `parent` (a function's enclosing node) carries a supertype clause — making the function a contract candidate. */
@@ -340,78 +412,12 @@ final class UnusedParameter extends RuleBase implements ConfigAware implements O
 		}
 	}
 
-	/**
-	 * Every name the module references in VALUE position — a bare `IdentExpr`, or a
-	 * `this.<name>` field access, that is NOT the callee of a call. A function whose
-	 * name is in this set is captured as a value somewhere in the file (passed as an
-	 * argument to `addEventListener` and friends, assigned to a var / field, returned,
-	 * `.bind`-partialled), which fixes its signature from OUTSIDE: the parameter its
-	 * body ignores is mandated by whatever consumes the reference, so the finding is
-	 * not actionable and is dropped rather than reported.
-	 *
-	 * The scan is by NAME only — no binding resolution — so an unrelated identifier
-	 * that merely shares a function's name silences it too. That is the conservative
-	 * direction: it only ever drops a finding, never invents one. It is also
-	 * FILE-scoped, so a capture living in another file is invisible; a public method
-	 * only ever CALLED in its own file keeps its `Info` finding, as intended.
-	 *
-	 * A `<other>.<name>` field access is deliberately NOT counted — a member of an
-	 * unrelated receiver shares nothing with the function but its spelling.
-	 *
-	 * Callee position propagates through a `ParenExpr` — `(foo)(x)` is a direct call,
-	 * not a capture. It deliberately does NOT propagate through any construct that
-	 * COMPUTES the callee (a ternary, a cast, an index access): `(cond ? f : g)(x)`
-	 * hands both functions to an expression that selects between them as values, which
-	 * is a capture in every sense that matters here.
-	 */
-	private static function valueCapturedNames(tree: QueryNode, shape: RefShape): Array<String> {
-		final out: Array<String> = [];
-		function scan(node: QueryNode, calleePosition: Bool): Void {
-			final name: Null<String> = node.name;
-			if (!calleePosition && name != null && !out.contains(name) && isValueReference(node, shape)) out.push(name);
-			final isCall: Bool = node.kind == shape.callKind;
-			final parenthesizedCallee: Bool = calleePosition && node.kind == shape.parenKind;
-			for (i in 0...node.children.length) scan(node.children[i], parenthesizedCallee || (isCall && i == 0));
-		}
-		scan(tree, false);
-		return out;
-	}
-
 	/** Whether `node` is one of the two reference forms a value capture takes: a bare identifier, or a `this.<name>` field access. */
 	private static function isValueReference(node: QueryNode, shape: RefShape): Bool {
 		if (node.kind == shape.identKind) return true;
 		if (node.kind != shape.fieldAccessKind || node.children.length == 0) return false;
 		final receiver: QueryNode = node.children[0];
 		return receiver.kind == shape.identKind && receiver.name == 'this';
-	}
-
-	/**
-	 * Whether the method `fn` carries an explicit `public` visibility modifier
-	 * — a preceding sibling in `parent`'s child list whose source is `public`.
-	 * Default (no modifier) is `private` in Haxe, so its absence means private.
-	 * The backward scan stops at the first non-modifier sibling (the previous
-	 * member), so it never crosses into an earlier declaration's modifiers.
-	 */
-	private static function isPublicDecl(
-		fn: QueryNode, parent: QueryNode, source: String, visibilityKinds: Array<String>, modifierKinds: Array<String>
-	): Bool {
-		return MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds))
-			.exists(sib -> visibilityKinds.contains(sib.kind) && NodeTokens.firstSpelling(sib, source, 'public') != -1);
-	}
-
-	/**
-	 * Whether `fn` carries the `dynamic` modifier among its preceding sibling
-	 * modifiers — a reassignable callback slot whose signature external
-	 * assigners rely on (see the class docstring). Mirrors `isPublicDecl`'s
-	 * backward sibling scan, additionally treating the dynamic modifier itself
-	 * as part of the modifier run so the scan does not stop short of it.
-	 */
-	private static function isDynamicFn(
-		fn: QueryNode, parent: QueryNode, visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>
-	): Bool {
-		return dynamicKind != null
-			&& MemberKinds.precedingModifiers(fn, parent, visibilityKinds.concat(modifierKinds).concat([dynamicKind]))
-				.exists(sib -> sib.kind == dynamicKind);
 	}
 
 	/**
