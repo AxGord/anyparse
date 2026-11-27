@@ -99,6 +99,8 @@ final class InheritanceMove {
 		final targetDeclOpt: Null<TypeDeclMatch> = TypeExtraction.uniqueClass(target.tree, targetType);
 		if (targetDeclOpt == null) return Err('no unique class "$targetType" under scope');
 		final targetDecl: TypeDeclMatch = targetDeclOpt;
+		final split: Null<String> = RefactorSupport.splitHeaderRefusal(srcDeclNN) ?? RefactorSupport.splitHeaderRefusal(targetDecl);
+		if (split != null) return Err(split);
 
 		// Verify the DIRECT inheritance relationship.
 		final subDecl: TypeDeclMatch = dir == Up ? srcDeclNN : targetDecl;

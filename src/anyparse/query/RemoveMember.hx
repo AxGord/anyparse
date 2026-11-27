@@ -136,7 +136,7 @@ final class RemoveMember {
 		var result: Null<QueryNode> = null;
 		function walk(node: QueryNode): Void {
 			if (result != null) return;
-			final m: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			final m: Null<RefactorSupport.TypeDeclMatch> = RefactorSupport.typeDeclOf(node) ?? RefactorSupport.condSharedBodyDeclOf(node);
 			if (m != null && m.name == typeName) {
 				result = node;
 				return;

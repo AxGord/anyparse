@@ -288,6 +288,18 @@ class ExtractSuperclassSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * A split-header class carries one head per branch and the tree only the first, so neither the already-extends gate nor the
+	 * `extends` splice can serve every branch: the op refuses naming the split header instead of writing `extends A extends B`.
+	 */
+	@:pin('control')
+	@:killer('M-SPLIT-HEADER-REFUSED-SOURCE-CLASS')
+	public function testSplitHeaderClassRefused(): Void {
+		final src: String = 'package pkg;\n\n#if js\nclass S {\n#else\nclass S extends Other {\n#end\n\tpublic function new() {}\n\n'
+			+ '\tpublic function a():Void {}\n}\n\nclass Other {}\n';
+		assertErr('split `#if` header', ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['a'], src, plugin()));
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, superName: String, superFile: String, memberNames: Array<String>, srcSource: String
 	): Array<MoveChange> {

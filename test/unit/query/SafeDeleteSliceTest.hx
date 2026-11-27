@@ -209,6 +209,17 @@ class SafeDeleteSliceTest extends Test {
 		);
 	}
 
+	/** A member of a type whose header alone is split across a `#if` is deletable by the type's name. */
+	@:pin('control')
+	@:killer('M-REMOVE-MEMBER-SPLIT-HEADER-TYPE')
+	public function testDeadMemberOfSplitHeaderTypeRemoved(): Void {
+		final svc: String = '#if js\nclass Svc {\n#else\nclass Svc extends Base {\n#end\n\tpublic function new() {}\n\n'
+			+ '\tpublic function dead():Int return 2;\n}\n\nclass Base {}\n';
+		final text: String = okRemove('Svc.hx', 'Svc', 'dead', [{ file: 'Svc.hx', source: svc }]);
+		Assert.isFalse(text.contains('function dead'), text);
+		Assert.isTrue(text.contains('class Svc extends Base'), text);
+	}
+
 	private function okRemove(
 		srcFile: String, srcType: String, member: String, scopeFiles: Array<{ file: String, source: String }>
 	): String {

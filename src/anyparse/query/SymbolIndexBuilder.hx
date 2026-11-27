@@ -125,14 +125,6 @@ final class SymbolIndexBuilder {
 	private static inline final EXTENDS_FIELD_KIND: String = 'ExtendsField';
 
 	/**
-	 * The bodyless declaration heads a `CondSharedBodyDecl` region can carry,
-	 * mapped to the decl kind the same declaration projects as when written
-	 * whole. `HxDeclHead` has exactly these two branches (`class` / `abstract`
-	 * are the only forms observed splitting a header across `#if`).
-	 */
-	private static final DECL_HEAD_KINDS: Map<String, String> = ['ClassHead' => 'ClassDecl', 'AbstractHead' => 'AbstractDecl'];
-
-	/**
 	 * Parse every entry with `plugin` and extract its `FileInfo`. Entries whose source does not
 	 * parse are collected into `skipped` and excluded; every parsed entry's source is retained in
 	 * `sources` so a later body scan can inspect a declaration's raw span. The three results are
@@ -213,7 +205,7 @@ final class SymbolIndexBuilder {
 	 * disagree about what counts as a declaration.
 	 */
 	private static inline function typeDeclAt(node: QueryNode): Null<TypeDeclMatch> {
-		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
+		return RefactorSupport.typeDeclOf(node) ?? RefactorSupport.condSharedBodyDeclOf(node);
 	}
 
 	/** Whether `pendingMeta` holds the grammar's (optional) tag `name` — false when the grammar names none. */
@@ -963,42 +955,6 @@ final class SymbolIndexBuilder {
 	/** Every entry of `a`, then each of `b` it lacks. */
 	private static function union(a: Array<String>, b: Array<String>): Array<String> {
 		return a.concat([ for (x in b) if (!a.contains(x)) x ]);
-	}
-
-	/**
-	 * The FIRST branch's type declaration of a split-header conditional region
-	 * (`CondSharedBodyDecl`), or null for any other node and for a region
-	 * carrying no recognised head. The head child holds the name, the type
-	 * parameters and the heritage; the shared members are that head's
-	 * SIBLINGS, written after `#end`.
-	 *
-	 * `fullSpan` is the WRAPPER's span, not the head's. It is the only span
-	 * that CONTAINS the members, so a span-containment lookup (the
-	 * innermost-enclosing-type scan in `RedundantBypassAccessor`) resolves
-	 * them; and it is the only one that is a complete syntactic unit - the
-	 * head stops at the `{` it opens, so a mutation addressed by the head span
-	 * would leave a dangling `#else ... #end` and an unmatched `}`. `nameNode`
-	 * is the head, which keeps the type-parameter scan anchored past the `#if`
-	 * line.
-	 */
-	private static function condSharedBodyDeclOf(node: QueryNode): Null<TypeDeclMatch> {
-		if (node.kind != 'CondSharedBodyDecl') return null;
-		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		// A plain `find` would have to re-read the map for the kind, so the head is
-		// resolved and mapped in one pass.
-		for (child in node.children) {
-			final kind: Null<String> = DECL_HEAD_KINDS[child.kind];
-			final name: Null<String> = child.name;
-			if (kind != null && name != null) return {
-				name: name,
-				kind: kind,
-				nameNode: child,
-				declNode: node,
-				fullSpan: span
-			};
-		}
-		return null;
 	}
 
 	/**

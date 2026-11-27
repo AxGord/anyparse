@@ -369,6 +369,17 @@ class RemoveMemberSliceTest extends Test {
 		}
 	}
 
+	/** A type whose header alone is split across a `#if` is addressed by its name: the member leaves the shared body,
+		the directives stay. */
+	@:pin('control')
+	@:killer('M-REMOVE-MEMBER-SPLIT-HEADER-TYPE')
+	public function testRemoveMemberOfSplitHeaderType(): Void {
+		final source: String = '#if js\nclass Split {\n#else\nclass Split extends Other {\n#end\n\tvar keep:Int;\n\n'
+			+ '\tpublic function drop():Void {}\n}\n\nclass Other {}\n';
+		final text: String = okText(source, 'Split', 'drop');
+		Assert.equals('#if js\nclass Split {\n#else\nclass Split extends Other {\n#end\n\tvar keep:Int;\n}\n\nclass Other {}\n', text);
+	}
+
 	/**
 	 * The pair a `replace-node` leaves behind when its replacement re-declares the member it was
 	 * aimed at: two `drop`s inside ONE `#if` branch. Their TYPES differ, so a removal that took the

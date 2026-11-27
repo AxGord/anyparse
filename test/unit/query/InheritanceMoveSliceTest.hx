@@ -139,6 +139,21 @@ class InheritanceMoveSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * A split-header class on either side is refused naming the header, not as `does not directly extend`: the head the tree
+	 * carries is one branch's, so the `extends` it reads says nothing about the other build.
+	 */
+	@:pin('control')
+	@:killer('M-SPLIT-HEADER-REFUSED-INHERITANCE')
+	public function testSplitHeaderClassRefused(): Void {
+		final sub: String = 'package pkg;\n\n#if js\nclass Dog {\n#else\nclass Dog extends Animal {\n#end\n\tpublic function new() {}\n\n'
+			+ '\tpublic function describe():Void {}\n}\n';
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Animal.hx', source: ANIMAL }, { file: 'pkg/Dog.hx', source: sub }];
+		assertRefusal('split `#if` header', InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'describe', 'Animal', files, plugin()));
+		assertRefusal('split `#if` header', InheritanceMove.pushDown('pkg/Animal.hx', 'Animal', 'name', 'Dog', files, plugin()));
+	}
+
 	private function okChanges(result: MoveResult): Array<MoveChange> {
 		switch result {
 			case Ok(changes, advisory):

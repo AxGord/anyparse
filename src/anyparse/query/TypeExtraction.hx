@@ -41,7 +41,8 @@ final class TypeExtraction {
 		final decl: Null<TypeDeclMatch> = uniqueClass(tree, srcTypeName);
 		if (decl == null) return Left('no unique class "$srcTypeName" in $srcFile');
 		final declNN: TypeDeclMatch = decl;
-		return Right({ tree: tree, decl: declNN });
+		final split: Null<String> = RefactorSupport.splitHeaderRefusal(declNN);
+		return split != null ? Left(split) : Right({ tree: tree, decl: declNN });
 	}
 
 	/**

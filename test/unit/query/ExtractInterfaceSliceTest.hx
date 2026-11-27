@@ -311,6 +311,15 @@ class ExtractInterfaceSliceTest extends Test {
 		Assert.isTrue(iface.contains('function g():Int;'), 'the ordinary expression body still works: $iface');
 	}
 
+	/** A split-header class is refused naming the header: an `implements` clause written to one head leaves the other branch without it. */
+	@:pin('control')
+	@:killer('M-SPLIT-HEADER-REFUSED-SOURCE-CLASS')
+	public function testSplitHeaderClassRefused(): Void {
+		final src: String = 'package pkg;\n\n#if js\nclass S {\n#else\nclass S extends Other {\n#end\n\tpublic function new() {}\n\n'
+			+ '\tpublic function a():Void {}\n}\n\nclass Other {}\n';
+		assertErr('split `#if` header', ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src, plugin()));
+	}
+
 	private function okChanges(
 		srcFile: String, srcType: String, ifaceName: String, ifaceFile: String, memberNames: Null<Array<String>>, srcSource: String
 	): Array<MoveChange> {

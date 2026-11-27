@@ -220,28 +220,20 @@ class CrossRenameMemberSliceTest extends Test {
 
 	/**
 	 * A same-named type declared by a CONDITIONAL-compilation header (`#if js class Other {
-	 * #else class Other implements Iface { #end`) is invisible to `checkTypeUniqueness` —
-	 * `RefactorSupport.typeDeclOf` does not know the shared-body decl kind — so the uniqueness
-	 * refusal never fires and the receiver proof is the ONLY thing standing between the rename
-	 * and a foreign `w.tag()`. It holds because the resolved declaration must live in the CURSOR's
-	 * file, the conjunct nothing else in this suite can flip.
+	 * #else class Other implements Iface { #end`) counts as a declaration of that name exactly like
+	 * a plain one, so the uniqueness refusal fires on it: the receiver proof alone would not stand
+	 * between the rename and a foreign `w.tag()` while the by-name lookup could not see the type.
 	 */
-	public function testConditionalHomonymInAnotherPackageUntouched(): Void {
+	public function testConditionalHomonymInAnotherPackageRefused(): Void {
 		final a: String = 'package pkg;\n\nclass Other {\n\tpublic function new() {}\n\tpublic function tag():Void {}\n}';
 		final foreign: String = 'package other;\n\n#if js\nclass Other {\n#else\nclass Other implements Iface {\n#end\n'
 			+ '\tpublic function new() {}\n\tpublic function ping():Void {}\n}';
 		final use: String = 'package other;\n\nclass Use {\n\tfunction m(w:Other):Void w.tag();\n}';
-		final changes: Array<FileChange> = okChanges('pkg/Other.hx', a, 'tag', 'mark', [
+		assertErr('is declared in 2 files', run('pkg/Other.hx', a, 'tag', 'mark', [
 			{ file: 'pkg/Other.hx', source: a },
 			{ file: 'other/Other.hx', source: foreign },
 			{ file: 'other/Use.hx', source: use }
-		]);
-		Assert.equals(1, changes.length);
-		Assert.equals(
-			'package pkg;\n\nclass Other {\n\tpublic function new() {}\n\tpublic function mark():Void {}\n}',
-			changeFor(changes, 'pkg/Other.hx').newSource
-		);
-		Assert.isNull(changeOrNull(changes, 'other/Use.hx'));
+		]));
 	}
 
 	/**

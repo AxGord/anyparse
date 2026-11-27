@@ -72,6 +72,17 @@ typedef ModulePath = { final path: String; final pkg: String; final base: String
 final class RefactorSupport {
 
 	/**
+	 * The bodyless declaration heads a `CondSharedBodyDecl` region can carry,
+	 * mapped to the decl kind the same declaration projects as when written
+	 * whole. `HxDeclHead` has exactly these two branches (`class` / `abstract`
+	 * are the only forms observed splitting a header across `#if`).
+	 */
+	private static final DECL_HEAD_KINDS: Map<String, String> = ['ClassHead' => 'ClassDecl', 'AbstractHead' => 'AbstractDecl'];
+
+	/** The grammar kind of a type declaration whose header is split across a conditional-compilation region. */
+	private static final SPLIT_HEADER_KIND: String = 'CondSharedBodyDecl';
+
+	/**
 	 * The two file-wide vetoes `isPrivateMemberConfined` pairs with its per-type ones: no skipped
 	 * file spells `member` (an unreadable one could hide any writer at all) and no `@:allow` hands
 	 * the member to a type the index cannot name from here. Both are per-SUBJECT, not per-run - the
@@ -370,7 +381,7 @@ final class RefactorSupport {
 	public static function typeDeclsNamed(tree: QueryNode, typeName: String): Array<TypeDeclMatch> {
 		final matches: Array<TypeDeclMatch> = [];
 		function walk(node: QueryNode): Void {
-			final match: Null<TypeDeclMatch> = typeDeclOf(node);
+			final match: Null<TypeDeclMatch> = typeDeclOf(node) ?? bodyRooted(condSharedBodyDeclOf(node));
 			if (match != null && match.name == typeName) matches.push(match);
 			for (child in node.children) walk(child);
 		}
@@ -779,6 +790,8 @@ final class RefactorSupport {
 	public static function typeBodyBraceOffset(
 		source: String, decl: TypeDeclMatch, typeName: String, regions: Array<LexRegion>
 	): Null<Int> {
+		// A split-header type opens one brace per branch, so no single offset is the body's start.
+		if (decl.declNode.kind == SPLIT_HEADER_KIND) return null;
 		// A parsed type answers with the brace its own grammar matched. A tree with no token log scans the header text, and
 		// so does a type whose braces a child matched (a typedef's anonymous structure).
 		final own: Null<Span> = decl.nameNode.tokenSpelled('{', source);
@@ -861,6 +874,69 @@ final class RefactorSupport {
 	public static function renamedNameAt(tree: QueryNode, cursor: Int, source: String): Null<String> {
 		final decl: Null<TypeDeclMatch> = resolveTypeDeclAtCursor(tree, cursor, source);
 		return decl == null ? resolveCursorNode(tree, cursor, source)?.name : decl.name;
+	}
+
+	/**
+	 * The FIRST branch's type declaration of a split-header conditional region
+	 * (`CondSharedBodyDecl`), or null for any other node and for a region
+	 * carrying no recognised head. The head child holds the name, the type
+	 * parameters and the heritage; the shared members are that head's
+	 * SIBLINGS, written after `#end`.
+	 *
+	 * `fullSpan` is the WRAPPER's span, not the head's. It is the only span
+	 * that CONTAINS the members, so a span-containment lookup (the
+	 * innermost-enclosing-type scan in `RedundantBypassAccessor`) resolves
+	 * them; and it is the only one that is a complete syntactic unit - the
+	 * head stops at the `{` it opens, so a mutation addressed by the head span
+	 * would leave a dangling `#else ... #end` and an unmatched `}`. `nameNode`
+	 * is the head, which keeps the type-parameter scan anchored past the `#if`
+	 * line.
+	 */
+	public static function condSharedBodyDeclOf(node: QueryNode): Null<TypeDeclMatch> {
+		if (node.kind != SPLIT_HEADER_KIND) return null;
+		final span: Null<Span> = node.span;
+		if (span == null) return null;
+		// A plain `find` would have to re-read the map for the kind, so the head is
+		// resolved and mapped in one pass.
+		for (child in node.children) {
+			final kind: Null<String> = DECL_HEAD_KINDS[child.kind];
+			final name: Null<String> = child.name;
+			if (kind != null && name != null) return {
+				name: name,
+				kind: kind,
+				nameNode: child,
+				declNode: node,
+				fullSpan: span
+			};
+		}
+		return null;
+	}
+
+	/**
+	 * `decl` with `nameNode` re-pointed at the node that HOLDS the members, for the ops that read or splice a type body: a
+	 * split-header region keeps its members as siblings of the head, so only the wrapper reaches them, and its closing brace
+	 * is the wrapper's own token. Every other match already has a body-holding `nameNode` and comes back as is.
+	 */
+	public static function bodyRooted(decl: Null<TypeDeclMatch>): Null<TypeDeclMatch> {
+		return decl == null || decl.declNode.kind != SPLIT_HEADER_KIND ? decl : {
+			name: decl.name,
+			kind: decl.kind,
+			nameNode: decl.declNode,
+			declNode: decl.declNode,
+			fullSpan: decl.fullSpan
+		};
+	}
+
+	/**
+	 * Why an op that READS or WRITES a type's header (`extends`, `implements`) cannot act on `decl`, or null when it can. A
+	 * split-header type has one head per branch and the tree carries only the first, so a clause read from it describes one build
+	 * and a clause written to it leaves the other branch's head without it; the body-only ops are not asked.
+	 */
+	public static function splitHeaderRefusal(decl: TypeDeclMatch): Null<String> {
+		return decl.declNode.kind != SPLIT_HEADER_KIND
+			? null
+			: '"${decl.name}" has a split `#if` header, one head per branch, and the tree carries only the first: its `extends` / '
+				+ '`implements` clauses cannot be read or written for every branch — edit the headers by hand';
 	}
 
 	/** The offset just past `decl`'s NAME token — where its header (supertype clauses, type params) begins. */

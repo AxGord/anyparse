@@ -17987,6 +17987,54 @@
 			"find": "return new Span(from, to);",
 			"replace": "return slot;",
 			"note": "the only slot of a hand-wrapped list is cut without the whitespace around it, so a raw-splice removal leaves hollow parens"
+		},
+		{
+			"name": "M-ADD-MEMBER-SPLIT-HEADER-TYPE",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "typeDeclsNamed",
+			"find": "typeDeclOf(node) ?? bodyRooted(condSharedBodyDeclOf(node))",
+			"replace": "typeDeclOf(node)",
+			"note": "a by-name type lookup that does not read a split-header region answers no type named, so the mutation ops refuse a type the index lists"
+		},
+		{
+			"name": "M-ADD-MEMBER-SPLIT-HEADER-BODY-ROOT",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "bodyRooted",
+			"find": "nameNode: decl.declNode,",
+			"replace": "nameNode: decl.nameNode,",
+			"note": "a split-header match anchored on its head sees no member and no closing brace, so the member scan and the splice point read an empty body"
+		},
+		{
+			"name": "M-REMOVE-MEMBER-SPLIT-HEADER-TYPE",
+			"type": "anyparse.query.RemoveMember",
+			"method": "findType",
+			"find": "RefactorSupport.typeDeclOf(node) ?? RefactorSupport.condSharedBodyDeclOf(node);",
+			"replace": "RefactorSupport.typeDeclOf(node);",
+			"note": "remove-member's own type walk that skips a split-header region answers no type named for a type the index lists"
+		},
+		{
+			"name": "M-SPLIT-HEADER-REFUSED-SOURCE-CLASS",
+			"type": "anyparse.query.TypeExtraction",
+			"method": "sourceClass",
+			"find": "return split != null ? Left(split) : Right({ tree: tree, decl: declNN });",
+			"replace": "return Right({ tree: tree, decl: declNN });",
+			"note": "the extracting ops resolve a split-header class without refusing it, so the header clause is read from one branch and spliced into one"
+		},
+		{
+			"name": "M-SPLIT-HEADER-REFUSED-INHERITANCE",
+			"type": "anyparse.query.InheritanceMove",
+			"method": "move",
+			"find": "if (split != null) return Err(split);",
+			"replace": "",
+			"note": "pull-up and push-down read the extends clause of a split-header class from its first head only and answer a false does-not-extend"
+		},
+		{
+			"name": "M-SPLIT-HEADER-BODY-BRACE-NULL",
+			"type": "anyparse.query.RefactorSupport",
+			"method": "typeBodyBraceOffset",
+			"find": "if (decl.declNode.kind == SPLIT_HEADER_KIND) return null;",
+			"replace": "if (false) return null;",
+			"note": "a body-brace offset answered for a split-header type points into one branch's header, so a check inserting after it writes into one build only"
 		}
 	]
 }

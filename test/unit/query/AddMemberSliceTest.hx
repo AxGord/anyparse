@@ -286,6 +286,37 @@ class AddMemberSliceTest extends Test {
 	}
 
 	/**
+	 * A type whose HEADER alone is split across a `#if` (`#if js class T { #else class T extends B { #end`) is one type with one
+	 * shared body, and the index lists it: the member lands in that body once, the directive lines stay byte-intact, and a name
+	 * the body already declares is refused. The head sits beside the members, not above them, so the op must look in the region.
+	 */
+	@:pin('control')
+	@:killer('M-ADD-MEMBER-SPLIT-HEADER-TYPE')
+	public function testAddsToSplitHeaderType(): Void {
+		final expected: String = splitHeaderSource()
+			.replace('\tpublic function foo():Void {}\n}\n', '\tpublic function foo():Void {}\n\n\tpublic function bar():Void {}\n}\n');
+		assertAdd(splitHeaderSource(), 'Split', 'public function bar():Void {}', expected);
+	}
+
+	/** The shared body's own members answer the duplicate-name gate, so a split header does not hide a collision. */
+	@:pin('control')
+	@:killer('M-ADD-MEMBER-SPLIT-HEADER-BODY-ROOT')
+	public function testRefuseDuplicateMemberOfSplitHeaderType(): Void {
+		assertRefusedNaming(splitHeaderSource(), 'Split', 'public function foo():Int return 1;', 'foo');
+	}
+
+	/** A split `abstract` header resolves the same way. */
+	@:pin('control')
+	@:killer('M-ADD-MEMBER-SPLIT-HEADER-TYPE')
+	public function testAddsToSplitHeaderAbstract(): Void {
+		final source: String = '#if js\nabstract A(Int) {\n#else\nabstract A(String) {\n#end\n\tpublic function new() {}\n}\n';
+		final expected: String = source.replace(
+			'\tpublic function new() {}\n}\n', '\tpublic function new() {}\n\n\tpublic function bar():Void {}\n}\n'
+		);
+		assertAdd(source, 'A', 'public function bar():Void {}', expected);
+	}
+
+	/**
 	 * Refusal naming the HOST type as carrying an opaque region.
 	 */
 	private inline function assertRefusedForOpaqueRegion(source: String, typeName: String, memberText: String): Void {
@@ -353,6 +384,11 @@ class AddMemberSliceTest extends Test {
 	private static inline function condSpliceSource(): String {
 		return 'class T {\n\t#if js\n\tpublic function alpha(): Int\n\t#else\n\tpublic function beta(): Int\n\t#end\n\t{\n\t\treturn 1;\n'
 			+ '\t}\n}\n\nclass U {\n\tvar x:Int;\n}\n';
+	}
+
+	private static inline function splitHeaderSource(): String {
+		return '#if js\nclass Split {\n#else\nclass Split extends Other {\n#end\n\tpublic var x:Int;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function foo():Void {}\n}\n\nclass Other {}\n';
 	}
 
 	private static function addOf(source: String, typeName: String, memberText: String, reformat: Bool): EditResult {
