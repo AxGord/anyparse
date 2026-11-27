@@ -239,6 +239,14 @@ class CachingGrammarPluginTest extends Test {
 		CliFixture.removeDir(dir);
 	}
 
+	public function testCachingPluginForwardsEveryCapabilityOfTheHaxePlugin(): Void {
+		final plugin: Array<String> = ImplementedInterfaces.of('anyparse.grammar.haxe.query.HaxeQueryPlugin');
+		final cached: Array<String> = ImplementedInterfaces.of('anyparse.query.CachingGrammarPlugin');
+		final consumedFromWrapped: Array<String> = ['anyparse.query.ParsedRootProvider', 'anyparse.query.OracleProvider'];
+		Assert.same([], plugin.filter(n -> !cached.contains(n) && !consumedFromWrapped.contains(n)));
+		Assert.same([], consumedFromWrapped.filter(n -> !plugin.contains(n)));
+	}
+
 	/** Every source-taking projection of one source, in the order a lint run demands them. */
 	private static function projectEveryWay(cached: CachingGrammarPlugin, source: String): Void {
 		// The four results are deliberately discarded: this helper exists to DEMAND each
