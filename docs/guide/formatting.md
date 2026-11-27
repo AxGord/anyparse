@@ -82,6 +82,21 @@ typedef Tail = Base & {x:Int}
 typedef Callback = (a:Int) -> Void;
 ```
 
+## The `;` after a brace-ended `return`: `whitespace.returnSemicolon`
+
+A key of its own, not part of haxe-formatter's schema, with the three values of `whitespace.optionalSemicolon`: `preserve` writes the `;` where the source has it, `always` writes it, `never` drops it. It governs `return {…}` and `return switch … {…}` (a `return` inside a lambda or function literal included); a value that does not end with `}` keeps its `;` under every setting.
+
+Stated, the key alone decides the `return` slot, so `optionalSemicolon: always` for the other statements composes with `returnSemicolon: preserve`. Absent, the slot follows `optionalSemicolon`, so a config written before the key keeps its output. Trivia-mode writer only.
+
+```haxe
+// "returnSemicolon": "never"
+return {a: 1}
+return switch (v) {
+	case _: 1;
+}
+return 42;
+```
+
 ## Braces that `remove` keeps: `whitespace.bracesConfig.singleStatementBraces`
 
 `remove` drops the braces around a single-statement body, but never where the bare form reads as a dangling-else puzzle: a bare `if` in the then-position of an `if`, and a bare `for` / `while` there when an `else` follows it. Those gain braces, and the `else` gains its own so the pair stays symmetric. There is no separate key: it is part of `remove`. `symmetric` only repairs a pair with one braced branch, so it leaves two bare branches alone, and `keep` changes nothing.

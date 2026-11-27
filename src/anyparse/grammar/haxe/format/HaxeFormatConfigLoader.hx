@@ -1203,6 +1203,11 @@ final class HaxeFormatConfigLoader {
 		if (semiElse != null) opt.semicolonBeforeElse = HaxeFormatValues.optionalSemicolonToRuntime(semiElse);
 		final semiTypedef: Null<HxFormatOptionalSemicolonPolicy> = section.typedefSemicolon;
 		if (semiTypedef != null) opt.typedefSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semiTypedef);
+		// The return slot follows `optionalSemicolon` until its own key is stated, so a config that
+		// predates the key keeps its bytes.
+		opt.returnSemicolon = opt.optionalSemicolon;
+		final semiReturn: Null<HxFormatOptionalSemicolonPolicy> = section.returnSemicolon;
+		if (semiReturn != null) opt.returnSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semiReturn);
 	}
 
 	/**

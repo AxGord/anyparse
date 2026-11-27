@@ -20,6 +20,15 @@
 			"find": "@:lit('....')",
 			"replace": "@:lit('.....')",
 			"note": "the statement-scope `....` placeholder is respelled as a five-dot token. The ctor stays declared and stays projected, and no source under PARSE_ROOTS spells the token at all, so nothing in the tree changes except that one row of the kind-source table stops emitting the kind it claims - the fail-open shape the coverage census exists to see"
+		},
+		{
+			"name": "M-RETSEMI-GRAMMAR-KEY-UNNAMED",
+			"type": "anyparse.grammar.haxe.stmt.HxStatement",
+			"method": "ReturnStmt",
+			"kind": "ParamCtor",
+			"find": "optionalSemicolon('endsWithCloseBrace', 'returnSemicolon')",
+			"replace": "optionalSemicolon('endsWithCloseBrace')",
+			"note": "the return slot names no policy field of its own, so it follows `optionalSemicolon` and `whitespace.returnSemicolon` is dead"
 		}
 	]
 }

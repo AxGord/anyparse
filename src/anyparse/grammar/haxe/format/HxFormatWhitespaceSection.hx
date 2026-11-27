@@ -145,6 +145,15 @@ typedef HxFormatWhitespaceSection = {
 	@:optional
 	var typedefSemicolon: HxFormatOptionalSemicolonPolicy;
 
+	/**
+	 * The optional `;` after a brace-terminated `return` value (`return {a: 1}`, `return switch x {...}`) --
+	 * a separate key from `optionalSemicolon`, sharing its three-way policy type. Absent, the return slot
+	 * follows `optionalSemicolon`; present, it alone decides: `"preserve"` re-emits what the source had,
+	 * `"never"` drops the `;` (a non-brace value keeps it), `"always"` writes it. Feeds `opt.returnSemicolon`.
+	 */
+	@:optional
+	var returnSemicolon: HxFormatOptionalSemicolonPolicy;
+
 	@:optional
 	var parenConfig: HxFormatParenConfigSection;
 

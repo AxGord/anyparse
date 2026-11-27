@@ -108,8 +108,8 @@ enum HxStatement {
 		bodyPolicySingleLine(
 			'returnBodySingleLine', 'IfExpr', 'ForExpr', 'WhileExpr', 'SwitchExpr', 'SwitchExprBare', 'TryExpr', 'BlockExpr'
 		), indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
-		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), optionalSemicolon('endsWithCloseBrace'), widthAware,
-		propagateExprPosition, ctorKwTrivia)
+		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), optionalSemicolon('endsWithCloseBrace', 'returnSemicolon'),
+		widthAware, propagateExprPosition, ctorKwTrivia)
 	ReturnStmt(value: HxExpr);
 
 	@:kw('return')

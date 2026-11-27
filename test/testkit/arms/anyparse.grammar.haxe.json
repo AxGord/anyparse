@@ -141,6 +141,15 @@
 			"find": "overflowByFirstLine: true",
 			"replace": "overflowByFirstLine: false",
 			"note": "an overflowing array of containers is a group again, so the `=` and call-argument seams no longer move it whole and it breaks one element per line on the line it starts"
+		},
+		{
+			"name": "M-RETSEMI-DEFAULT-NEVER",
+			"type": "anyparse.grammar.haxe.HxModuleWriteOptions",
+			"method": "returnSemicolon",
+			"kind": "VarMember",
+			"find": "OptionalSemicolon = OptionalSemicolon.Preserve",
+			"replace": "OptionalSemicolon = OptionalSemicolon.Never",
+			"note": "options built without the config loader drop the return `;` after a brace, so the default is no longer byte-inert"
 		}
 	]
 }

@@ -24,7 +24,9 @@
 		"default/EnumAbstractHost.hx": "/** Enum abstract host: values with metadata, doc comments and a function. */\nenum abstract EnumAbstractHost(Int) from Int to Int {\n\tvar A = 0;\n\tvar B = 1;\n\n\n\t/** Doc comment before a value. */\n\tvar C = 2;\n\t@:keep var D = 3;\n\t@:keep\n\t@:native(\"e\") var E = 4;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar F = 5; // trailing\n\tvar LongValueNameOne = 1000000 + 2000000 + 3000000 + 4000000 + 5000000 + 6000000 + 7000000 + 8000000 + 9000000 + 10000000 + 11000000;\n\tstatic var counter:Int = 0;\n\tpublic inline function new(v:Int) {\n\t\tthis = v;\n\t}\n\tfunction brace():Int {\n\t\tif (this > 0) return 1;\n\t\telse return 0;\n\t}\n\tfunction braceLeft():Int\n\t{\n\t\tif (this > 0)\n\t\t{\n\t\t\treturn 1;\n\t\t}\n\t\telse\n\t\t{\n\t\t\treturn 2;\n\t\t};\n\t}\n\tpublic static function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {\n\t\ttrace(firstArgument, secondArgument, thirdArgument, fourthArgument, fifthArgument, \"a long literal string one\", \"another long literal string two\");\n\t}\n\tstatic function main() {}\n}\n",
 		"default/InterfaceHost.hx": "/** Interface host: signatures only. */\n@:keep interface InterfaceHost {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a var. */\n\tvar c:Array<Int>;\n\t@:isVar var d(get, set):Int;\n\t@:keep\n\t@:native(\"e\") var e:Int;\n\tfunction get_d():Int;\n\tfunction set_d(v:Int):Int;\n\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tfunction brace(x:Int):Int;\n\tfunction noBraces():Void; // trailing\n\t@:meta(1) @:meta2 function metaFn():Void;\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void;\n}\nclass InterfaceMain implements InterfaceHost {\n\tpublic var a:Int;\n\tpublic var b:String;\n\tpublic var c:Array<Int>;\n\tpublic var d(get, set):Int;\n\tpublic var e:Int;\n\tpublic function new() {}\n\tpublic function get_d():Int return 0;\n\tpublic function set_d(v:Int):Int return v;\n\tpublic function brace(x:Int):Int return x;\n\tpublic function noBraces():Void {}\n\tpublic function metaFn():Void {}\n\tpublic function longSignature(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int = 0, fifthArgument:Bool = false):Void {}\n\tstatic function main() {}\n}\n",
 		"default/TypedefHost.hx": "/** Typedef host: anonymous structure fields. */\ntypedef TypedefHost = {\n\tvar a:Int;\n\tvar b:String;\n\n\n\t/** Doc comment before a field. */\n\tvar c:Array<Int>;\n\t@:optional var d:Int;\n\t@:optional\n\t@:native(\"e\") var e:Int;\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tvar f:Int; // trailing\n\tfunction method(x:Int):Int;\n\tvar callback:(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int) -> Void;\n}\n\ntypedef Extended = TypedefHost & {\n\tvar more:Int;\n}\n\ntypedef Alias = Array<{name:String, other:String, third:String, fourth:String, fifth:String, sixth:String, seventh:String, eighth:String}>;\n\nclass TypedefMain {\n\tstatic function main() {}\n}\n",
-		"default/EnumHost.hx": "/** Enum host: constructors with and without arguments. */\n@:keep enum EnumHost {\n\tA;\n\tB(x:Int);\n\n\n\t/** Doc comment before a constructor. */\n\tC(x:Int, y:String);\n\t@:keep D;\n\t@:keep\n\t@:native(\"e\") E(v:Int);\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tF; // trailing\n\tLongConstructor(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int, fifthArgument:Bool);\n}\n\nclass EnumMain {\n\tstatic function main() {}\n}\n"
+		"default/EnumHost.hx": "/** Enum host: constructors with and without arguments. */\n@:keep enum EnumHost {\n\tA;\n\tB(x:Int);\n\n\n\t/** Doc comment before a constructor. */\n\tC(x:Int, y:String);\n\t@:keep D;\n\t@:keep\n\t@:native(\"e\") E(v:Int);\n\t// line comment run\n\t/* block comment */\n\t// second line comment\n\tF; // trailing\n\tLongConstructor(firstArgument:String, secondArgument:Array<String>, thirdArgument:Map<String, Int>, fourthArgument:Int, fifthArgument:Bool);\n}\n\nclass EnumMain {\n\tstatic function main() {}\n}\n",
+		"returnsemicolon/hxformat.json": "{\"whitespace\": {\"returnSemicolon\": \"never\"}}\n",
+		"returnsemicolon/C.hx": "class C {\n\tfunction f(v: Int): Int {\n\t\tfinal g = () -> {\n\t\t\treturn {a: 1};\n\t\t};\n\t\treturn switch (v) {\n\t\t\tcase _: 1;\n\t\t};\n\t}\n}\n"
 	},
 	"invocations": [
 		{
@@ -690,6 +692,38 @@
 			"expect": {
 				"exit": 0,
 				"out": "e1c0dc8aa29748bd",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "returnsemicolon/C.hx",
+			"note": "hxq fmt of a program holding an arrow-lambda return and a return switch under whitespace.returnSemicolon never: both `;` are dropped and the case body keeps its own; the output compiles",
+			"fixpoint": "returnsemicolon/C.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"returnsemicolon/C.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"returnsemicolon",
+					"--no-output",
+					"C"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "58af306176b433d4",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [

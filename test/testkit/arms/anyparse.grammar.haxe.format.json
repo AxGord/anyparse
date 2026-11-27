@@ -664,6 +664,22 @@
 			"find": "section.enumAbstractEmptyLines?.glueCommentedGroups",
 			"replace": "null",
 			"note": "the enumAbstractEmptyLines.glueCommentedGroups key no longer reaches its knob"
+		},
+		{
+			"name": "M-RETSEMI-KEY-NOT-LOADED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceToggles",
+			"find": "if (semiReturn != null) opt.returnSemicolon = HaxeFormatValues.optionalSemicolonToRuntime(semiReturn);",
+			"replace": "",
+			"note": "`whitespace.returnSemicolon` is read and ignored, so the return slot always follows `optionalSemicolon`"
+		},
+		{
+			"name": "M-RETSEMI-FALLBACK-DROPPED",
+			"type": "anyparse.grammar.haxe.format.HaxeFormatConfigLoader",
+			"method": "applyWhitespaceToggles",
+			"find": "opt.returnSemicolon = opt.optionalSemicolon;",
+			"replace": "",
+			"note": "a config that sets only `optionalSemicolon` no longer reaches the return slot, so its bytes move"
 		}
 	]
 }
