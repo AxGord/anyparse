@@ -142,9 +142,7 @@ final class PreferIndexAccess extends RuleBase {
 				}
 				return binders;
 			};
-			final matcher: (
-				QueryNode, Null<String>
-			) -> Null<Match> = (call, parentKind) ->
+			final matcher: (QueryNode, Null<String>) -> Null<Match> = (call, parentKind) ->
 				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file, resolveBinders);
 			collect(
 				root, null, c, matcher,

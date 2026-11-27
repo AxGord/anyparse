@@ -203,9 +203,7 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 		final proven: Map<String, Bool> = [];
 		return RunScan.collect(files, plugin, (entry, root, violations) -> {
 			final f: FileScan = fileScan(entry.source, root, ElementSpan.lazyRegions(entry.source, plugin), cfg);
-			final proofOf: (
-				String, Int
-			) -> Bool = (name, bindingFrom) ->
+			final proofOf: (String, Int) -> Bool = (name, bindingFrom) ->
 				isProven(name, bindingFrom, entry.file, entry.source, root, valueSeams, resolveSymbols(), plugin, proven);
 			collect(root, null, root, f, cfg, m -> {
 				final proof: Bool = proofOf(m.name, m.bindingFrom);
@@ -256,9 +254,8 @@ final class RedundantMapExists extends RuleBase implements DefaultOff {
 			final f: FileScan = fileScan(source, tree, ElementSpan.lazyRegions(source, plugin), c);
 			final proven: Map<String, Bool> = [];
 			final file: String = violations.length > 0 ? violations[0].file : '';
-			final proofOf: (
-				String, Int
-			) -> Bool = (name, bindingFrom) -> isProven(name, bindingFrom, file, source, tree, valueSeams, report, plugin, proven);
+			final proofOf: (String, Int) -> Bool = (name, bindingFrom) ->
+				isProven(name, bindingFrom, file, source, tree, valueSeams, report, plugin, proven);
 			final guarded: Array<GuardedEdit> = [];
 			final plain: Array<{ span: Span, text: String }> = CheckScan.applyBySpan(
 				plugin, source, violations, [c.ternaryKind], (node, span) -> {

@@ -124,9 +124,7 @@ final class LeaseHistoryTest extends Test {
 			final key: String = Branches.timingKey('battery fedcba98', ['suite', 'corpus']);
 			runs(history, key, 2, 100, 3);
 			runs(history, key, 6, 40, 3);
-			final take: (
-				String, Null<LeaseHistory>
-			) -> Array<String> = (head, known) ->
+			final take: (String, Null<LeaseHistory>) -> Array<String> = (head, known) ->
 				Branches.leased(
 					Own('/p/scripts/wf-run', 10), [['suite', 'corpus'], ['lint']],
 					rows -> rows[0] == 'suite' ? null : 1, _ -> Command.of(['node', 'dev.js']), 'battery $head', known

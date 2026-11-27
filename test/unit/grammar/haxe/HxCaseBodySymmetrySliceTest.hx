@@ -311,9 +311,7 @@ final class HxCaseBodySymmetrySliceTest extends Test {
 	 */
 	@:pin('guard')
 	public function testTheKeyMovesNothingOutsideFitLine(): Void {
-		final cfg: (
-			String, String
-		) -> String = (policy, siblings) ->
+		final cfg: (String, String) -> String = (policy, siblings) ->
 			'{"wrapping": {"maxLineLength": 39}, "sameLine": '
 				+ '{"caseSiblings": "$siblings", "caseBody": "$policy", "expressionCase": "$policy"}}';
 		for (src in [MIXED_SRC, SPLICE_CASE_SRC, TWO_SPLICE_CASES_SRC]) {

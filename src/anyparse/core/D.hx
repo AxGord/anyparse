@@ -301,7 +301,8 @@ class D {
 
 	/**
 	 * `d` with its outermost rest-aware group told to yield to the rest of its line (`Doc.GroupWithRestProbe`'s
-	 * `yieldsToRest`), reached through the wrappers that only place it; any other shape is returned unchanged.
+	 * `yieldsToRest`), reached through the wrappers that only place it and through the first part of a `Concat` that holds one (a function
+	 * type's parameter list ahead of its `-> ret`); any other shape is returned unchanged.
 	 */
 	public static function yieldsToRest(d: Doc): Doc {
 		return switch d {
@@ -309,6 +310,7 @@ class D {
 			case WrapBoundary(inner): WrapBoundary(yieldsToRest(inner));
 			case Nest(n, inner): Nest(n, yieldsToRest(inner));
 			case BreakCommit(brk, flat, token): BreakCommit(yieldsToRest(brk), yieldsToRest(flat), token);
+			case Concat(parts): Concat(yieldsToFirstRestPart(parts));
 			case _: d;
 		};
 	}
@@ -346,6 +348,26 @@ class D {
 				IfIndentWidthExceeds(_, _, _, fl), IfGluedFirstLineExceeds(_, _, _, fl), IfTrailingCommentOverflows(_, _, _, _, fl):
 				flatten(fl);
 			case _: null;
+		};
+	}
+
+	/** `parts` with only the first part that reaches a rest-aware group told to yield: a later group stays as it was. */
+	private static function yieldsToFirstRestPart(parts: Array<Doc>): Array<Doc> {
+		var done: Bool = false;
+		return parts.map(p -> {
+			if (done || !reachesRestGroup(p)) return p;
+			done = true;
+			yieldsToRest(p);
+		});
+	}
+
+	/** True iff `yieldsToRest` finds a rest-aware group in `d`, by the same walk. */
+	private static function reachesRestGroup(d: Doc): Bool {
+		return switch d {
+			case GroupWithRestProbe(_, _): true;
+			case WrapBoundary(inner), Nest(_, inner), BreakCommit(inner, _, _): reachesRestGroup(inner);
+			case Concat(parts): parts.filter(reachesRestGroup).length > 0;
+			case _: false;
 		};
 	}
 

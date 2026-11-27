@@ -39,7 +39,7 @@ typedef HxParamBody = {
 	var name: HxIdentLit;
 
 	@:optional
-	@:fmt(space('typeHintColon', 'lead'))
+	@:fmt(space('typeHintColon', 'lead'), yieldsToRest)
 	@:lead(':')
 	@:queryTypeSlot
 	var type: Null<HxType>;

@@ -1025,9 +1025,7 @@ class HoistCommonImportTest extends Test {
 	 * `using` modules a source carries are on this fixture's allow-list.
 	 */
 	private static function usingSinkTree(parent: String): Array<TreeFile> {
-		final extension: (
-			String, String
-		) -> String = (type, method) ->
+		final extension: (String, String) -> String = (type, method) ->
 			'package qqz;\n\nclass $type {\n\n\tpublic static function $method(s:String):String {\n\t\treturn s;\n\t}\n\n}\n';
 		final tree: Array<TreeFile> = [
 			{ name: 'apq.json', source: '{ "rules": { "hoist-common-import": { "usingAllowList": ["qqz.Sqqwwee", "qqz.Pqqwwee"] } } }\n' },

@@ -267,9 +267,7 @@ class MoveMemberSplitSliceTest extends Test {
 			file: 'p/Lib.hx',
 			source: 'package p;\n\nclass Lib {\n\tpublic function new() {}\n}'
 		};
-		final g: (
-			String, String
-		) -> { file: String, source: String } = (head, modifier) ->
+		final g: (String, String) -> { file: String, source: String } = (head, modifier) ->
 			{
 				file: 'p/G.hx',
 				source: 'package p;\n\nclass G$head {\n\tpublic final library:Lib;\n\n\tpublic function new() {\n\t\tlibrary = new Lib();\n'

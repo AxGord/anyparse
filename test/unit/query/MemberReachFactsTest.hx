@@ -1384,9 +1384,8 @@ class MemberReachFactsTest extends Test {
 		];
 		for (main in reached) assertMatch(heldAsk(main), r -> !r.match(Proven));
 		// a call of an access no reader knows may run it with anything
-		final future: (
-			String, String
-		) -> String = (id, text) -> id == 'Main.main' ? text.replace('"t":"rework","a":"FDynamic"', '"t":"rework","a":"future"') : text;
+		final future: (String, String) -> String = (id, text) ->
+			id == 'Main.main' ? text.replace('"t":"rework","a":"FDynamic"', '"t":"rework","a":"future"') : text;
 		assertMatch(heldAsk(called, future), r -> !r.match(Proven));
 		// without the truth, an escaped `Rx` is reason enough
 		assertMatch(ask(['Main.hx' => fixture(escaped)]), r -> !r.match(Proven));

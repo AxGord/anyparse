@@ -1203,6 +1203,14 @@
 			"find": "final slot: Doc = resolveAllBreaks || (resolveForcedBreaks && hasForcedBreak(flatDoc)) ? breakDoc : flatDoc;",
 			"replace": "final slot: Doc = resolveForcedBreaks && hasForcedBreak(flatDoc) ? breakDoc : flatDoc;",
 			"note": "the closing line of a construct broken by width is not found, so only a block body glues its tail"
+		},
+		{
+			"name": "M-YIELDS-TO-REST-CONCAT-OFF",
+			"type": "anyparse.core.D",
+			"method": "yieldsToRest",
+			"find": "case Concat(parts): Concat(yieldsToFirstRestPart(parts));",
+			"replace": "case Concat(_): d;",
+			"note": "a hint whose Doc is a Concat (a function type: its parameter list, then `-> ret`) is never told to yield, so its parameter list opens ahead of an initializer that has a seam of its own"
 		}
 	]
 }

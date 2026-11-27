@@ -515,9 +515,8 @@ final class FieldWrites {
 	private function storedTypes(site: FieldWriteSite): Null<Array<String>> {
 		var stores: Null<Array<{ site: FieldWriteSite, types: Null<Array<String>> }>> = _stores;
 		if (stores == null) {
-			final typer: (
-				String, Null<String>, QueryNode
-			) -> Null<String> = (file, fn, node) -> typeOf(file, _graph.sourceOf(file) ?? '', fn, node);
+			final typer: (String, Null<String>, QueryNode) -> Null<String> = (file, fn, node) ->
+				typeOf(file, _graph.sourceOf(file) ?? '', fn, node);
 			final all: Array<FieldWriteSite> = [ for (sites in _byName) for (s in sites) if (s.reflective && s.reaches == null) s ];
 			stores = all.concat(unplaced()).map(s -> { site: s, types: _values.typesOf(s.file, s.fn, s.stored, typer) });
 			_stores = stores;
