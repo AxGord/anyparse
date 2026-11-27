@@ -358,7 +358,7 @@ final class UnusedPrivate extends RuleBase implements ConfigAware implements Fra
 			final span: Null<Span> = member.span;
 			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = span == null ? null : memberByFrom[span.from];
 			if (span != null && hit != null)
-				edits.push(CheckScan.deletionEdit(source, member, hit.parent, span, plugin.lexicalRegions(source)));
+				edits.push(CheckScan.deletionEdit(source, member, hit.parent, span, plugin.lexicalRegions(source), surviving));
 		}
 		return edits;
 	}

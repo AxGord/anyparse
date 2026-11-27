@@ -442,6 +442,14 @@
 				"final news: Array<Int> = plugin.tokenSpans(source, 0, source.length).filter(t -> TokenSpans.spellsWord(t, source, 'new')).map(t -> t.from);"
 			],
 			"note": "only top-level tokens are searched, so a construction written as code inside a string-interpolation hole counts for nothing and a private constructor only built there is reported"
+		},
+		{
+			"name": "M-UNUSED-PRIVATE-SECTION-UNSEEN",
+			"type": "anyparse.check.common.unused.UnusedPrivate",
+			"method": "fix",
+			"find": "plugin.lexicalRegions(source), surviving)",
+			"replace": "plugin.lexicalRegions(source), [member])",
+			"note": "unused-private deletes without its deletion set, so the heading of a section it empties stays behind"
 		}
 	]
 }

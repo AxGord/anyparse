@@ -1542,6 +1542,14 @@
 			"find": "noteBreak(child, true);",
 			"replace": "afterMeta = true;",
 			"note": "the check stops reading a break between two annotations of a run, so an annotation on its own line above one glued to the declaration leaves a plain member"
+		},
+		{
+			"name": "M-SCRATCH-SECTION-UNSEEN",
+			"type": "anyparse.check.common.members.ScratchField",
+			"method": "editsFor",
+			"find": "fieldSpan, plugin.lexicalRegions(source), [c.field])",
+			"replace": "fieldSpan, plugin.lexicalRegions(source), [])",
+			"note": "the field's deletion no longer names the field as deleted, so the lone heading of its section stays behind above the next member"
 		}
 	]
 }

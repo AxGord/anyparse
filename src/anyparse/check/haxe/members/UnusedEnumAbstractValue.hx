@@ -20,7 +20,6 @@ import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
-using anyparse.util.Strings;
 using StringTools;
 
 /** What one run of the rule reads for every type it weighs. */
@@ -315,15 +314,7 @@ final class UnusedEnumAbstractValue extends HaxeRule implements DefaultOff imple
 			next = siblings[i].span;
 			if (next != null) break;
 		}
-		if (next == null) return true;
-		// the first whole line after the member: the rest of a line it ends on is no blank line
-		var at: Int = source.lineEnd(end - 1) + 1;
-		while (at < next.from) {
-			final eol: Int = source.lineEnd(at);
-			if (source.substring(at, eol).isBlank()) return true;
-			at = eol + 1;
-		}
-		return false;
+		return next == null || ElementSpan.blankLineWithin(source, end - 1, next.from);
 	}
 
 	/** The name tokens of the members called `name` that `entry` declares: a declaration of another value reads none. */

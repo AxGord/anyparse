@@ -46,6 +46,18 @@ class ScratchFieldCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return a + point.x;') >= 0, out);
 	}
 
+	/** The field's lone `//` heading over a section of that field alone goes with the field. */
+	@:pin('control')
+	@:killer('M-SCRATCH-SECTION-UNSEEN')
+	public function testTheFieldTakesTheHeadingOfItsSection(): Void {
+		final out: String = fixed(
+			'class C {\n\t// scratch\n\tprivate var _tmp:Int = 0;\n\n\tpublic function new() {}\n\n'
+			+ '\tfunction sum(n:Int):Int {\n\t\t_tmp = n;\n\t\treturn _tmp * 2;\n\t}\n}\n\n$SUPPORT'
+		);
+		Assert.isTrue(out.indexOf('final tmp:Int = n;') >= 0, out);
+		Assert.isTrue(out.indexOf('// scratch') < 0, out);
+	}
+
 	/** More than one write declares a `var`. */
 	@:pin('control')
 	@:killer('M-SCRATCH-SILENT')

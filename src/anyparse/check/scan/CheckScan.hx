@@ -170,17 +170,22 @@ final class CheckScan {
 	 * The delete-the-whole-member edit for `node`: its modifier / metadata run (`declGroupSpan`,
 	 * which needs the declaring `parent` for the sibling run) folded in, then the LEADING
 	 * `/**` DOC (`docExtendedSpan` with `docOnly`, so a section banner or licence header
-	 * above the member is NOT deleted with it), then the whole line (`lineExtendedSpan`) so no blank
+	 * above the member is NOT deleted with it, unless it is the lone heading of a section every member of
+	 * which is in `deleting`, `ElementSpan.sectionHeadedSpan`), then the whole line (`lineExtendedSpan`) so no blank
 	 * modifier line is left behind, and finally ONE flanking blank line (`blankExtendedSpan`) so the deletion gives
 	 * back the separator the member owned instead of leaving a doubled run. The doc goes because a deleted member takes its
 	 * documentation with it — kept behind, the block silently becomes the doc of whatever
 	 * declaration follows, which is exactly the orphan `fragmented-doc-comment` reports.
 	 */
 	public static inline function deletionEdit(
-		source: String, node: QueryNode, parent: QueryNode, span: Span, regions: Array<LexRegion>
+		source: String, node: QueryNode, parent: QueryNode, span: Span, regions: Array<LexRegion>, deleting: Array<QueryNode>
 	): { span: Span, text: String } {
 		final group: Span = ElementSpan.declGroupSpan(node, parent, span);
-		final lines: Span = ElementSpan.lineExtendedSpan(source, ElementSpan.docExtendedSpan(source, group, regions, true));
+		final lead: Span = ElementSpan.sectionHeadedSpan(
+			source, ElementSpan.docExtendedSpan(source, group, regions, true), node, parent, deleting,
+			SourceComments.collectCommentTokens(regions)
+		);
+		final lines: Span = ElementSpan.lineExtendedSpan(source, lead);
 		return { span: ElementSpan.blankExtendedSpan(source, lines), text: '' };
 	}
 
@@ -640,10 +645,13 @@ final class CheckScan {
 		final edits: Array<{ span: Span, text: String }> = [];
 		final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 		for (cls in classBodies(tree)) MemberKinds.eachMemberHost(cls, host -> {
-			for (child in host.children) {
+			final dead: Array<QueryNode> = host.children.filter(child -> {
 				final span: Null<Span> = child.span;
-				if (span != null && DELETABLE_MEMBER_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}'))
-					edits.push(deletionEdit(source, child, host, span, regions));
+				span != null && DELETABLE_MEMBER_KINDS.contains(child.kind) && wanted.contains('${span.from}:${span.to}');
+			});
+			for (child in dead) {
+				final span: Null<Span> = child.span;
+				if (span != null) edits.push(deletionEdit(source, child, host, span, regions, dead));
 			}
 		});
 		return edits;

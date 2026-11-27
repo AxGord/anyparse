@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
+import anyparse.query.SourceComments.CommentTok;
 import anyparse.runtime.Span;
 
 using anyparse.util.Strings;
@@ -387,10 +388,13 @@ final class ElementSpan {
 		final edits: Array<{ span: Span, text: String }> = [];
 		final regionsOf: () -> Array<LexRegion> = lazyRegions(source, plugin);
 		final shape: RefShape = plugin.refShape();
+		final deleting: Array<QueryNode> = targets.map(target -> target.node);
 		for (target in targets) {
 			final nodeSpan: Null<Span> = target.node.span;
 			if (nodeSpan == null) return Err('the node to remove has no source span');
-			edits.push({ span: elementCut(source, target.node, target.parent, nodeSpan, withDoc, regionsOf, shape).span, text: '' });
+			edits.push(
+				{ span: elementCut(source, target.node, target.parent, nodeSpan, withDoc, regionsOf, shape, deleting).span, text: '' }
+			);
 		}
 		// A target nested in another — a member and the region holding it, two nested regions — is
 		// dropped in favour of the outer one, which removes it anyway. `isContainedEdit` is the same
@@ -541,7 +545,7 @@ final class ElementSpan {
 	 */
 	public static function elementCut(
 		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, regionsOf: () -> Array<LexRegion>,
-		shape: RefShape
+		shape: RefShape, deleting: Array<QueryNode>
 	): { span: Span, doc: Bool, annotations: Int } {
 		final group: Span = trailingTrimmedSpan(source, declGroupSpan(node, parent, nodeSpan), regionsOf);
 		// A declaration's doc comment is trivia OUTSIDE its node span, so the group span
@@ -556,7 +560,11 @@ final class ElementSpan {
 		// 79-line Pony class took the class's own `/** … */` with it — orphaning nothing,
 		// just deleting documentation the caller never addressed.
 		final inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);
-		final lead: Span = withDoc && !isAnnotationElement(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;
+		final own: Span = withDoc && !isAnnotationElement(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;
+		// A member's lone `//` section heading goes with the section when this deletion empties it.
+		final lead: Span = withDoc && parent != null && !inStatements && (shape.memberDeclKinds ?? []).contains(node.kind)
+			? sectionHeadedSpan(source, own, node, parent, deleting, SourceComments.collectCommentTokens(regionsOf()))
+			: own;
 		// A comment that closes the element's own line is the element's trailing note and leaves with it.
 		final span: Span = lineClosingCommentSpan(source, lead, regionsOf);
 
@@ -570,6 +578,39 @@ final class ElementSpan {
 			? commaListCut(source, span, parent, regionsOf)
 			: braceEdgeSpan(source, blankExtendedSpan(source, lineExtendedSpan(source, span)));
 		return { span: cut, doc: span.from < group.from, annotations: annotationPrefixCount(node, parent) };
+	}
+
+	/**
+	 * `lead`, the cut of `node` (a member of `host`) over its own doc, widened over the lone `//` section heading above it
+	 * when every member of that section is in `deleting`: the one answer to "does a member deletion take the section heading
+	 * with it". The heading is one own-line `//` comment with no blank line under it and no comment glued above it; its
+	 * section runs from `node` to the next own-line comment that is not a doc, a blank line or the end of the body. Any
+	 * other shape returns `lead`, and `CommentOwnerGuard` refuses the weld it would leave.
+	 */
+	public static function sectionHeadedSpan(
+		source: String, lead: Span, node: QueryNode, host: QueryNode, deleting: Array<QueryNode>, tokens: Array<CommentTok>
+	): Span {
+		if (!deleting.contains(node)) return lead;
+		final heading: Int = SourceComments.lineNotesAbove(source, tokens, lead.from);
+		if (heading == lead.from || SourceComments.ownLineCommentAbove(source, tokens, lead.from, false) != heading) return lead;
+		final glued: Int = SourceComments.ownLineCommentAbove(source, tokens, heading, false);
+		final gluedTok: Null<CommentTok> = glued < 0 ? null : tokens.find(t -> t.from == glued);
+		if (gluedTok != null && !blankLineWithin(source, gluedTok.to, heading)) return lead;
+		final siblings: Array<QueryNode> = host.children;
+		final own: Null<Span> = node.span;
+		final at: Int = siblings.indexOf(node);
+		if (own == null || at < 0) return lead;
+		var end: Int = own.to;
+		for (i in at + 1...siblings.length) {
+			final sibling: QueryNode = siblings[i];
+			final span: Null<Span> = sibling.span;
+			if (span == null) continue;
+			if (sectionBreakWithin(source, tokens, end, span.from)) break;
+			// A modifier or `@:meta` sibling belongs to the declaration after it, which answers for the pair.
+			if (!isDeclPrefixSibling(sibling) && !deleting.contains(sibling)) return lead;
+			end = span.to;
+		}
+		return new Span(heading, lead.to);
 	}
 
 	/**
@@ -624,7 +665,7 @@ final class ElementSpan {
 		source: String, node: QueryNode, parent: Null<QueryNode>, nodeSpan: Span, withDoc: Bool, plugin: GrammarPlugin
 	): String {
 		final cut: { span: Span, doc: Bool, annotations: Int } = elementCut(
-			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin), plugin.refShape()
+			source, node, parent, nodeSpan, withDoc, lazyRegions(source, plugin), plugin.refShape(), [node]
 		);
 		final subject: QueryNode = cutSubject(node, parent);
 		// A wrapper that folds a type's modifier in reads as the declaration it names (`ClassDecl X`).
@@ -756,6 +797,17 @@ final class ElementSpan {
 			&& ownsItsLines(source, declEditSpan(source, tree, parent, parentSpan, regions), regions)
 			? parent
 			: null;
+	}
+
+	/** Whether a whole blank line lies after the line holding `from` and before `to`. */
+	public static function blankLineWithin(source: String, from: Int, to: Int): Bool {
+		var at: Int = source.lineEnd(from) + 1;
+		while (at < to) {
+			final eol: Int = source.lineEnd(at);
+			if (source.substring(at, eol).isBlank()) return true;
+			at = eol + 1;
+		}
+		return false;
 	}
 
 	/** `n` with its noun, singular or plural — the one place the report's `s` is decided. */
@@ -902,6 +954,17 @@ final class ElementSpan {
 		var p: Int = from;
 		while (p < source.length && SourceText.isHorizontalSpace(source.fastCodeAt(p))) p++;
 		return p;
+	}
+
+	/**
+	 * Whether a section ends between two adjacent members: a blank line or an own-line comment other than a doc lies
+	 * between `from` and `to`.
+	 */
+	private static function sectionBreakWithin(source: String, tokens: Array<CommentTok>, from: Int, to: Int): Bool {
+		return blankLineWithin(source, from, to)
+			|| tokens.exists(
+				t -> t.from >= from && t.to <= to && SourceText.startsItsLine(source, t.from) && !SourceComments.isDocBlock(source, t)
+			);
 	}
 
 	/**

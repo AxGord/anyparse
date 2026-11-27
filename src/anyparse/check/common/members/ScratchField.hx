@@ -397,7 +397,7 @@ final class ScratchField extends RuleBase implements RiskyFix implements OracleR
 		final stmtSpan: Null<Span> = plan.declStmt.span;
 		final valueSpan: Null<Span> = plan.declValue.span;
 		if (fieldSpan == null || stmtSpan == null || valueSpan == null) return [];
-		out.push(CheckScan.deletionEdit(source, c.field, c.container, fieldSpan, plugin.lexicalRegions(source)));
+		out.push(CheckScan.deletionEdit(source, c.field, c.container, fieldSpan, plugin.lexicalRegions(source), [c.field]));
 		final keyword: String = plan.writes == 1 ? c.seams.finalKeyword : c.seams.varKeyword;
 		final value: String = source.substring(valueSpan.from, valueSpan.to);
 		out.push({ span: stmtSpan, text: '$keyword ${plan.localName}:$typeSource = $value;' });

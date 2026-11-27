@@ -1008,8 +1008,8 @@
 			"name": "M-CUT-DOC-KEPT-BY-ANY-PREFIX",
 			"type": "anyparse.query.ElementSpan",
 			"method": "elementCut",
-			"find": "\tfinal inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);\n\t\tfinal lead: Span = withDoc && !isAnnotationElement(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;",
-			"replace": "\tfinal inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);\n\t\tfinal lead: Span = withDoc && !isDeclPrefixSibling(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;",
+			"find": "\tfinal inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);\n\t\tfinal own: Span = withDoc && !isAnnotationElement(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;\n\t\t// A member's lone `//` section heading goes with the section when this deletion empties it.\n\t\tfinal lead: Span = withDoc && parent != null && !inStatements && (shape.memberDeclKinds ?? []).contains(node.kind)\n\t\t\t? sectionHeadedSpan(source, own, node, parent, deleting, SourceComments.collectCommentTokens(regionsOf()))\n\t\t\t: own;",
+			"replace": "\tfinal inStatements: Bool = parent != null && (shape.positionScopedKinds ?? []).contains(parent.kind);\n\t\tfinal own: Span = withDoc && !isDeclPrefixSibling(node) ? noteExtendedSpan(source, group, regionsOf, inStatements) : group;\n\t\t// A member's lone `//` section heading goes with the section when this deletion empties it.\n\t\tfinal lead: Span = withDoc && parent != null && !inStatements && (shape.memberDeclKinds ?? []).contains(node.kind)\n\t\t\t? sectionHeadedSpan(source, own, node, parent, deleting, SourceComments.collectCommentTokens(regionsOf()))\n\t\t\t: own;",
 			"note": "the doc exception widens from annotations to every declaration prefix sibling, so a cursor on a bare modifier removes the member and leaves its doc block behind to document the next one"
 		},
 		{
@@ -17789,6 +17789,62 @@
 			"find": "end = file.lastIndexOf('/', end - 1);",
 			"replace": "end = 0;",
 			"note": "a spec naming a directory covers only the directory itself, not the files beneath it"
+		},
+		{
+			"name": "M-SECTION-HEADING-NEVER-TAKEN",
+			"type": "anyparse.query.ElementSpan",
+			"method": "sectionHeadedSpan",
+			"find": "return new Span(heading, lead.to);",
+			"replace": "return lead;",
+			"note": "a deletion that empties a section leaves its lone heading behind, welded to the next heading or dangling above the brace"
+		},
+		{
+			"name": "M-SECTION-HEADING-IGNORES-LIVE-MEMBER",
+			"type": "anyparse.query.ElementSpan",
+			"method": "sectionHeadedSpan",
+			"find": "if (!isDeclPrefixSibling(sibling) && !deleting.contains(sibling)) return lead;",
+			"replace": "",
+			"note": "a heading whose section keeps a live member goes with the dead one, so the live member loses its heading"
+		},
+		{
+			"name": "M-SECTION-HEADING-TAKES-A-RUN",
+			"type": "anyparse.query.ElementSpan",
+			"method": "sectionHeadedSpan",
+			"find": "if (heading == lead.from || SourceComments.ownLineCommentAbove(source, tokens, lead.from, false) != heading) return lead;",
+			"replace": "if (heading == lead.from) return lead;",
+			"note": "a heading of several `//` lines is taken as if it were one, deleting a multi-line comment the rule leaves report-only"
+		},
+		{
+			"name": "M-SECTION-RUNS-PAST-A-HEADING",
+			"type": "anyparse.query.ElementSpan",
+			"method": "sectionBreakWithin",
+			"find": "!SourceComments.isDocBlock(source, t)",
+			"replace": "false",
+			"note": "the next heading no longer ends a section, so the following section's live members keep the dead section's heading in place"
+		},
+		{
+			"name": "M-SECTION-RUNS-PAST-A-BLANK",
+			"type": "anyparse.query.ElementSpan",
+			"method": "sectionBreakWithin",
+			"find": "return blankLineWithin(source, from, to)",
+			"replace": "return false",
+			"note": "a blank line no longer ends a section, so a live member after it keeps the dead section's heading in place"
+		},
+		{
+			"name": "M-SECTION-HEADING-META-SIBLING-LIVE",
+			"type": "anyparse.query.ElementSpan",
+			"method": "sectionHeadedSpan",
+			"find": "!isDeclPrefixSibling(sibling) && ",
+			"replace": "",
+			"note": "a `@:meta` or modifier sibling is judged as a member of its own, never in the deletion set, so a section whose annotated members all go keeps its heading"
+		},
+		{
+			"name": "M-SECTION-HEADING-GLUED-RUN-TAKEN",
+			"type": "anyparse.query.ElementSpan",
+			"method": "sectionHeadedSpan",
+			"find": "if (gluedTok != null && !blankLineWithin(source, gluedTok.to, heading)) return lead;",
+			"replace": "",
+			"note": "a `//` heading glued under a block comment is taken alone, splitting a comment run and leaving the block comment orphaned"
 		}
 	]
 }

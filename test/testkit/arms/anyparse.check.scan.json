@@ -1957,6 +1957,14 @@
 			"find": "return access.kind == ctx.fieldAccessKind && !accessRunsCode(access, ctx);",
 			"replace": "return access.kind == ctx.fieldAccessKind;",
 			"note": "a getter step off a typed root passes as a plain read and runs twice under the guard"
+		},
+		{
+			"name": "M-DELETE-MEMBERS-SECTION-ONE-AT-A-TIME",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "deleteMembersFix",
+			"find": "deletionEdit(source, child, host, span, regions, dead)",
+			"replace": "deletionEdit(source, child, host, span, regions, [child])",
+			"note": "each deleted member is judged alone, so a section whose members all go keeps its heading because each sees the others as live"
 		}
 	]
 }
