@@ -194,6 +194,13 @@ typedef HxFormatSameLineSection = {
 	@:optional
 	var ternaryTailGlueMaxLength: Int;
 
+	/**
+	 * An `&&` / `||` chain whose last operand opens a multi-line construct and is too wide for its own continuation line
+	 * keeps its earlier operands on the head line (`k != null && xs.exists(x ->`), in any host; `false` (default) is off.
+	 */
+	@:optional
+	var chainHeadLift: Bool;
+
 	@:optional
 	var elseIfCommentReflow: Bool;
 

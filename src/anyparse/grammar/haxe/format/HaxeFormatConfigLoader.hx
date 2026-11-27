@@ -293,8 +293,7 @@ final class HaxeFormatConfigLoader {
 		// a value-if chain that is the direct body of an arrow lambda.
 		if (section.expressionIfArrowBodyReflow != null) opt.expressionIfArrowBodyReflow = section.expressionIfArrowBodyReflow;
 		applyValueIfFit(section, opt);
-		if (section.ternaryTailBlockMaxThenLength != null) opt.ternaryTailBlockMaxThenLength = section.ternaryTailBlockMaxThenLength;
-		if (section.ternaryTailGlueMaxLength != null) opt.ternaryTailGlueMaxLength = section.ternaryTailGlueMaxLength;
+		applyTailGlue(section, opt);
 		// omega-elseif-comment-reflow: an independent Bool knob on the `elseIf`
 		// glue path - it changes no body policy, it decides whether ONE interposed
 		// line comment may move to the nested if's head line.
@@ -322,6 +321,16 @@ final class HaxeFormatConfigLoader {
 		// sits. Riding on `expressionIfWithBlocks` would have made a config that
 		// wants `return if (c) [` also flatten every `{ … }` value-if body it owns.
 		if (section.expressionIfWithBrackets != null) opt.expressionIfWithBrackets = section.expressionIfWithBrackets;
+	}
+
+	/**
+	 * The `sameLine` keys that keep a construct's head on its line across the
+	 * break it ends in: the ternary tail block and tail glue, the chain head lift.
+	 */
+	private static function applyTailGlue(section: HxFormatSameLineSection, opt: HxModuleWriteOptions): Void {
+		if (section.ternaryTailBlockMaxThenLength != null) opt.ternaryTailBlockMaxThenLength = section.ternaryTailBlockMaxThenLength;
+		if (section.ternaryTailGlueMaxLength != null) opt.ternaryTailGlueMaxLength = section.ternaryTailGlueMaxLength;
+		if (section.chainHeadLift != null) opt.chainHeadLift = section.chainHeadLift;
 	}
 
 	private static function applyTrailingCommas(section: HxFormatTrailingCommasSection, opt: HxModuleWriteOptions): Void {

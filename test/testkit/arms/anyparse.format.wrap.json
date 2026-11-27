@@ -969,6 +969,54 @@
 			"find": "else if (WrapList.flatLength(part) < 0 || CollapsePass.holdsDecision(part, decided))",
 			"replace": "else if (WrapList.flatLength(part) < 0)",
 			"note": "an earlier operand the base opens at render is pinned flat on the head line and breaks inside the pin at column 0"
+		},
+		{
+			"name": "M-CHAIN-HEAD-LIFT-NONE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "layout",
+			"find": "return headLift && isChainOps(ops)",
+			"replace": "return false && isChainOps(ops)",
+			"note": "a chain whose last operand opens a multi-line construct keeps breaking at its operator"
+		},
+		{
+			"name": "M-CHAIN-HEAD-LIFT-NO-FIT",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "chainHeadLift",
+			"find": ": WrapBoundary(IfArrowContinuationFits(cols, head.lastLine, limit, opens, inner));",
+			"replace": ": WrapBoundary(opens);",
+			"note": "a last operand that fits its own continuation line is lifted and broken anyway"
+		},
+		{
+			"name": "M-CHAIN-HEAD-LIFT-NO-CLOSE-LINE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "chainHeadLift",
+			"find": " || DocMeasure.breakingCloseLineRun(head.cond) < 0",
+			"replace": "",
+			"note": "a chain whose closing line carries more than closers is lifted"
+		},
+		{
+			"name": "M-CHAIN-HEAD-LIFT-PAREN-TAIL",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "chainHeadLift",
+			"find": "if (hasBareParenTail(items)) return laid;",
+			"replace": "if (false) return laid;",
+			"note": "a bare paren last operand is lifted over the paren-tail break that owns it"
+		},
+		{
+			"name": "M-CHAIN-HEAD-LIFT-HARDLINE-FLAT",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "chainHeadLift",
+			"find": "IfFirstLineExceeds(opt.lineWidth, inner, opens)",
+			"replace": "opens",
+			"note": "a block last operand whose head does not reach its first break flat is lifted by breaking a paren inside it"
+		},
+		{
+			"name": "M-CHAIN-HEAD-LIFT-TAIL-GLUE",
+			"type": "anyparse.format.wrap.BinaryChainEmit",
+			"method": "headLiftedCondition",
+			"find": "case WrapBoundary(IfArrowContinuationFits(_, _, _, _, inner)): WrapBoundary(inner);",
+			"replace": "case WrapBoundary(IfArrowContinuationFits(_, _, _, _, _)): cond;",
+			"note": "with chainHeadLift on, a ternary condition the head lift wrapped is not seen as a chain and the short tail breaks off the closer"
 		}
 	]
 }

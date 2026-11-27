@@ -132,7 +132,8 @@ final class BinaryChainEmit {
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, forceKeep: Bool = false, ?afterComments: Array<Null<Doc>>,
 		restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>, inlineMultilineBranch: Bool = false,
-		?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList, tailBlockMaxThen: Int = 0, tailGlueMax: Int = 0
+		?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList, tailBlockMaxThen: Int = 0, tailGlueMax: Int = 0,
+		headLift: Bool = false
 	): Doc {
 		final items: Array<Doc> = isTernaryOps(ops)
 			? items.map(item -> WrapList.namedThresholdLiteral(item, true))
@@ -140,7 +141,7 @@ final class BinaryChainEmit {
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
 				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, forceKeep, afterComments, restAware,
-				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list, tailBlockMaxThen, tailGlueMax
+				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list, tailBlockMaxThen, tailGlueMax, headLift
 			);
 		}
 		return BreakCommits.offerItemBreaks(
@@ -311,7 +312,7 @@ final class BinaryChainEmit {
 		?aboveComments: Array<Null<Doc>>,
 		// The list this chain writes (`ElemChainEmit`). Null for every plain chain.
 		?list: ChainList,
-		tailBlockMaxThen: Int = 0, tailGlueMax: Int = 0
+		tailBlockMaxThen: Int = 0, tailGlueMax: Int = 0, headLift: Bool = false
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -461,7 +462,7 @@ final class BinaryChainEmit {
 				items, ops, opt, cols, evalAt, shapeAt, extraThresholds.length == 0,
 				emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds)
 			);
-		return closerTailGlue(laid, items, ops, opt, tailGlueMax);
+		return headLift && isChainOps(ops) ? chainHeadLift(laid, items, opt, cols) : closerTailGlue(laid, items, ops, opt, tailGlueMax);
 	}
 
 	/**
@@ -1635,13 +1636,42 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * `laid`, an `&&` / `||` chain's own layout, offered once more with every operand before the last on the head line
+	 * (`headLiftedCondition`, `k != null && xs.exists(x ->`): the head line fits and ends at an opener of the last operand, the
+	 * chain's closing line holds closers alone at the chain's indent, and the last operand is too wide for its own continuation
+	 * line in `laid` (`cols` deeper than the chain's line); a last operand that cannot be one line must also reach its first
+	 * break flat on the head line. A last operand that is a bare paren keeps `laid`, whose paren-tail break owns it. The probe
+	 * sits inside the chain's own `WrapBoundary` and every walker reads `laid`'s shape, so a host matching the chain by its root
+	 * still finds it.
+	 */
+	private static function chainHeadLift(laid: Doc, items: Array<Doc>, opt: WriteOptions, cols: Int): Doc {
+		final inner: Doc = switch laid {
+			case WrapBoundary(d): d;
+			case _: return laid;
+		};
+		if (hasBareParenTail(items)) return laid;
+		final head: Null<{ cond: Doc, lastLine: Int }> = headLiftedCondition(laid);
+		if (head == null || head.cond == laid || DocMeasure.breakingCloseLineRun(head.cond) < 0) return laid;
+		final limit: Int = opt.lineWidth + 1;
+		final opens: Doc = IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, inner, head.cond);
+		return head.lastLine < 0
+			? WrapBoundary(IfArrowContinuationFits(0, limit, limit, IfFirstLineExceeds(opt.lineWidth, inner, opens), inner))
+			: WrapBoundary(IfArrowContinuationFits(cols, head.lastLine, limit, opens, inner));
+	}
+
+	/**
 	 * A ternary's condition `cond` as `closerTailGlue` writes its head line: an `&&` / `||` chain glued, every operand before
 	 * the last pinned flat so the head breaks only inside the last one; any other condition as it is. `lastLine` is what the
 	 * chain's last operand, operator included, takes on its own continuation line flat, `-1` for no chain or an operand that
 	 * cannot be one line. Null for such a chain with an operand before the last that cannot be one line.
 	 */
 	private static function headLiftedCondition(cond: Doc): Null<{ cond: Doc, lastLine: Int }> {
-		final glued: Null<Doc> = switch cond {
+		// `chainHeadLift`'s probe keeps the chain as it was before the lift in its last slot: the tail glue lifts that chain itself.
+		final unlifted: Doc = switch cond {
+			case WrapBoundary(IfArrowContinuationFits(_, _, _, _, inner)): WrapBoundary(inner);
+			case _: cond;
+		};
+		final glued: Null<Doc> = switch unlifted {
 			case WrapBoundary(Group(IfBreak(_, flat))), WrapBoundary(GroupWithRestProbe(IfBreak(_, flat), _)): flat;
 			// `hardlineChainShape`'s last-operand hug, the chain's own glue when its last operand carries a hardline.
 			case WrapBoundary(IfFirstLineExceeds(_, _, IfNaturalFirstLineFitsOpenDelim(_, _, flat))): flat;

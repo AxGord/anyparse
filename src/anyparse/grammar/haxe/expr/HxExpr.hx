@@ -488,12 +488,14 @@ enum HxExpr {
 	@:fmt(captureRhsTrail)
 	Is(left: HxExpr, right: HxType);
 
+	// `chainHeadLift`: `sameLine.chainHeadLift` keeps the earlier operands on the head line of a chain whose last operand
+	// opens a multi-line construct (`k != null && xs.exists(x ->`).
 	@:infix('&&', 3)
-	@:fmt(captureChainNewline, relocateTrailingComments)
+	@:fmt(captureChainNewline, relocateTrailingComments, chainHeadLift('chainHeadLift'))
 	And(left: HxExpr, right: HxExpr);
 
 	@:infix('||', 2)
-	@:fmt(captureChainNewline, relocateTrailingComments)
+	@:fmt(captureChainNewline, relocateTrailingComments, chainHeadLift('chainHeadLift'))
 	Or(left: HxExpr, right: HxExpr);
 
 	// `multilineBranchInline`: `wrapping.ternaryMultilineBranch: "inline"` keeps a branch's

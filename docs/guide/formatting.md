@@ -463,6 +463,28 @@ and the closing line must fit with what follows it. The ladder stays for a wider
 a ternary nested in another one, a condition ending past its closer (`xs.filter(…).length > 0`), a last operand that
 fits its own line, and an `if` condition, which is not a ternary. `0` (the default) is off.
 
+## A chain's head on its first line: `sameLine.chainHeadLift`
+
+An `&&` / `||` chain whose last operand opens a call or lambda too wide for its own continuation line breaks at its
+operator by default (`return k != null` / `&& xs.exists(x ->` / … / `);`). With `"chainHeadLift": true` its earlier
+operands stay on the head line with the construct that breaks, in a `return`, an initializer, an assignment and a
+condition alike (here at `"maxLineLength": 80`):
+
+```haxe
+return k != null && xs.exists(x ->
+	x > 0
+		&& k.length > x
+		&& k.charCodeAt(x) == 32
+		&& k.charCodeAt(x) == 33
+);
+```
+
+The head line must fit and end at the construct's opener, and the chain's closing line must hold closers alone. The
+break stays for a last operand that fits its own line, a chain ending past its closer (`xs.filter(…).length == n`), a
+last operand that is a parenthesised expression, a block operand whose head does not reach the block flat, and a
+chain inside an explicit paren. A condition whose paren opens on its own line (`conditionWrapping`) keeps that paren;
+the lift applies inside it. `false` (the default) is off.
+
 ## Metadata placed by width: `lineEnds.metadata*: fit`
 
 `fit` is a value of `lineEnds.metadataType`, `metadataFunction`, `metadataVar` and `metadataOther`, not part of

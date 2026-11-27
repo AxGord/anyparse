@@ -816,6 +816,10 @@ final class HxModuleWriteOptions {
 	// field, in a ternary not nested in another. `0` (the default) is off. Fed by `sameLine.ternaryTailGlueMaxLength`; read
 	// through the Ternary ctor's `@:fmt(closerTailGlue)`.
 	public var ternaryTailGlueMaxLength: Int = 0;
+	// An `&&` / `||` chain whose last operand opens a multi-line construct, too wide for its own continuation line, keeps its
+	// earlier operands on the head line (`k != null && xs.exists(x ->`). `false` (the default) is off. Fed by
+	// `sameLine.chainHeadLift`; read through the And / Or ctors' `@:fmt(chainHeadLift)`.
+	public var chainHeadLift: Bool = false;
 	public var functionSignatureWrap: WrapRules = HaxeFormat.defaultFunctionSignatureWrap();
 	public var anonFunctionSignatureWrap: WrapRules = HaxeFormat.defaultAnonFunctionSignatureWrap();
 	public var metadataCallParameterWrap: WrapRules = HaxeFormat.defaultMetadataCallParameterWrap();

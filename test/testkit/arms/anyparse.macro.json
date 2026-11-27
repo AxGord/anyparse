@@ -3992,6 +3992,14 @@
 			"find": "!opt._keepChainInParen",
 			"replace": "true",
 			"note": "a ternary inside an explicit paren offers the glue the paren owns"
+		},
+		{
+			"name": "M-CHAIN-HEAD-LIFT-IN-PAREN",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "chainHeadLiftExpr",
+			"find": "!opt._keepChainInParen",
+			"replace": "true",
+			"note": "a chain inside an explicit paren lifts its head, though the paren owns its wrap"
 		}
 	]
 }

@@ -604,13 +604,15 @@ final class WriterPrattLowering {
 			_gather($i{argNames[1]});
 		};
 		// Thread `_breaks` (sourceBreakBefore) only in Trivia mode.
+		final headLiftExpr: Expr = chainHeadLiftExpr(branch);
 		final emitCall: Expr = threadBreaks
 			? macro anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _hasLeadComment, _afterComments,
-				_restAware, null, false, _ownComments, _aboveComments
+				_restAware, null, false, _ownComments, _aboveComments, null, 0, 0, _headLift
 			)
 			: macro anyparse.format.wrap.BinaryChainEmit.emit(
-				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, null, false, null, _restAware
+				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, null, false, null, _restAware, null, false, null,
+				null, null, 0, 0, _headLift
 			);
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [];
@@ -657,6 +659,7 @@ final class WriterPrattLowering {
 			// groupless NoWrap shape. Read before the re-bind below clears
 			// `_keepChainInParen`.
 			final _restAware: Bool = !opt._keepChainInParen && !_condWrapForced;
+			final _headLift: Bool = $headLiftExpr;
 			final opt = $clearOptExpr;
 			final _leafOpen: Array<Bool> = [];
 			function _gather(_e: $argTypeCT): Void $gatherSwitch;
@@ -1409,6 +1412,18 @@ final class WriterPrattLowering {
 		if (args == null || args.length == 0) return base;
 		final optAccess: Expr = optFieldAccess(args[0]);
 		return macro _setInTernaryBranch($base, $optAccess > 0, opt);
+	}
+
+	/**
+	 * The infix chain's `headLift` for `BinaryChainEmit.emit`, read off `@:fmt(chainHeadLift('<optBoolField>'))`: the option,
+	 * except in the content of an explicit paren, which owns its wrap (`_keepChainInParen`, read before the chain's opt clears
+	 * it); `false` for a branch with no such flag.
+	 */
+	private static function chainHeadLiftExpr(branch: ShapeNode): Expr {
+		final args: Null<Array<String>> = branch.fmtReadStringArgs('chainHeadLift');
+		if (args == null || args.length == 0) return macro false;
+		final optAccess: Expr = optFieldAccess(args[0]);
+		return macro $optAccess && !opt._keepChainInParen;
 	}
 
 	/**
