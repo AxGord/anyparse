@@ -163,6 +163,7 @@ class BuiltinFixClassCensusTest extends Test {
 			'duplicate-code-renamed',
 			'english-comments',
 			'extract-repeated-expression',
+			'fix-text-syntax',
 			'guard-pin-arm-reach',
 			'hand-source-scanner',
 			'helper-copy',

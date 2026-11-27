@@ -367,6 +367,19 @@
 			}
 		},
 		"doc-measurement-claim": true,
+		"fix-text-syntax": {
+			"enabled": true,
+			"roots": [
+				"src/anyparse/check",
+				"src/anyparse/query"
+			],
+			"baseline": "test/testkit/fix-text-syntax.baseline.json",
+			"sinks": [
+				"AddMember.memberEdit",
+				"AddMember.addMember",
+				"ExtractConstant.buildModuleSource"
+			]
+		},
 		"field-init-in-constructor": true,
 		"hoist-branch-string-affix": true,
 		"hoist-common-import": {

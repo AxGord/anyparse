@@ -1,0 +1,2418 @@
+[
+  {
+    "file": "src/anyparse/check/common/control/AsymmetricBranchBraces.hx",
+    "line": 310,
+    "col": 10,
+    "endLine": 311,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`{`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "AsymmetricBranchBraces.bracedEdit",
+      "subject": "{",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/CollapsibleIf.hx",
+    "line": 118,
+    "col": 17,
+    "endLine": 120,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `wrap` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "CollapsibleIf.wrap",
+      "subject": "wrap -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/ComparisonToBoolean.hx",
+    "line": 573,
+    "col": 31,
+    "endLine": 573,
+    "endCol": 64,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`true`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ComparisonToBoolean.comparisonEdit",
+      "subject": "true",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/ComparisonToBoolean.hx",
+    "line": 538,
+    "col": 17,
+    "endLine": 543,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `negate` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "ComparisonToBoolean.negate",
+      "subject": "negate -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/ConstantCondition.hx",
+    "line": 169,
+    "col": 108,
+    "endLine": 169,
+    "endCol": 112,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`{}`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ConstantCondition.branchEdit",
+      "subject": "{}",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/GuardContinue.hx",
+    "line": 645,
+    "col": 55,
+    "endLine": 645,
+    "endCol": 98,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "GuardContinue.editFor",
+      "subject": "if",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/GuardReturn.hx",
+    "line": 548,
+    "col": 84,
+    "endLine": 548,
+    "endCol": 115,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "GuardReturn.editFor",
+      "subject": "if",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/GuardReturn.hx",
+    "line": 552,
+    "col": 64,
+    "endLine": 552,
+    "endCol": 99,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "GuardReturn.editFor",
+      "subject": "if",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/PreferIfExpressionAssignment.hx",
+    "line": 277,
+    "col": 57,
+    "endLine": 277,
+    "endCol": 83,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferIfExpressionAssignment.buildEdit",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/PreferIfExpressionAssignment.hx",
+    "line": 299,
+    "col": 80,
+    "endLine": 299,
+    "endCol": 114,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferIfExpressionAssignment.declEdits",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/PreferIfExpressionReturn.hx",
+    "line": 714,
+    "col": 25,
+    "endLine": 714,
+    "endCol": 51,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`;`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferIfExpressionReturn.mergedEdit",
+      "subject": ";",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/PreferTernaryAssignment.hx",
+    "line": 387,
+    "col": 30,
+    "endLine": 387,
+    "endCol": 43,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`;`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferTernaryAssignment.passThroughEdit",
+      "subject": ";",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/PreferTernaryReturn.hx",
+    "line": 643,
+    "col": 17,
+    "endLine": 655,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `reducedReturn` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "PreferTernaryReturn.reducedReturn",
+      "subject": "reducedReturn -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/PreferTernaryReturn.hx",
+    "line": 416,
+    "col": 34,
+    "endLine": 416,
+    "endCol": 38,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`?`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferTernaryReturn.buildEdit",
+      "subject": "?",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/PreferTryExpressionReturn.hx",
+    "line": 105,
+    "col": 55,
+    "endLine": 105,
+    "endCol": 71,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferTryExpressionReturn.fix",
+      "subject": "return",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/SimplifyBooleanReturnChain.hx",
+    "line": 106,
+    "col": 55,
+    "endLine": 106,
+    "endCol": 70,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "SimplifyBooleanReturnChain.fix",
+      "subject": "return",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/UnnecessarySwitch.hx",
+    "line": 221,
+    "col": 61,
+    "endLine": 221,
+    "endCol": 114,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`{`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UnnecessarySwitch.candidateOf",
+      "subject": "{",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/control/UnnecessarySwitch.hx",
+    "line": 225,
+    "col": 46,
+    "endLine": 225,
+    "endCol": 111,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`;`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UnnecessarySwitch.candidateOf",
+      "subject": ";",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/design/RepeatedCast.hx",
+    "line": 362,
+    "col": 26,
+    "endLine": 362,
+    "endCol": 38,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "RepeatedCast.edits",
+      "subject": "final",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/design/RepeatedCast.hx",
+    "line": 364,
+    "col": 86,
+    "endLine": 364,
+    "endCol": 90,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "RepeatedCast.edits",
+      "subject": "final",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/design/TypedEventConstant.hx",
+    "line": 231,
+    "col": 56,
+    "endLine": 231,
+    "endCol": 74,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`<`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "TypedEventConstant.fix",
+      "subject": "<",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/docs/PreferDocComment.hx",
+    "line": 285,
+    "col": 55,
+    "endLine": 285,
+    "endCol": 109,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`*/`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferDocComment.trailingRewriteOf",
+      "subject": "*/",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/docs/PreferDocComment.hx",
+    "line": 517,
+    "col": 17,
+    "endLine": 521,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `docText` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "PreferDocComment.docText",
+      "subject": "docText -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/CPrecedenceTrap.hx",
+    "line": 68,
+    "col": 66,
+    "endLine": 68,
+    "endCol": 75,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CPrecedenceTrap.wrapEdits",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/JoinDeclarationAssignment.hx",
+    "line": 115,
+    "col": 88,
+    "endLine": 115,
+    "endCol": 121,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "JoinDeclarationAssignment.fix",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/LambdaBranchingBodyBlock.hx",
+    "line": 132,
+    "col": 26,
+    "endLine": 132,
+    "endCol": 53,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`{\\n`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "LambdaBranchingBodyBlock.fix",
+      "subject": "{\\n",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/NarrowLocalScope.hx",
+    "line": 172,
+    "col": 64,
+    "endLine": 172,
+    "endCol": 93,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`;\\n`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "NarrowLocalScope.fix",
+      "subject": ";\\n",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/PreferArrowCallback.hx",
+    "line": 334,
+    "col": 17,
+    "endLine": 359,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `rewrite` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "PreferArrowCallback.rewrite",
+      "subject": "rewrite -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/PreferFinal.hx",
+    "line": 119,
+    "col": 94,
+    "endLine": 119,
+    "endCol": 101,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferFinal.fix",
+      "subject": "final",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/PreferLocalFunction.hx",
+    "line": 601,
+    "col": 17,
+    "endLine": 614,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `declarationText` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "PreferLocalFunction.declarationText",
+      "subject": "declarationText -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/RedundantParens.hx",
+    "line": 482,
+    "col": 37,
+    "endLine": 482,
+    "endCol": 46,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "RedundantParens.fix",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/expressions/SplitVarDeclaration.hx",
+    "line": 242,
+    "col": 61,
+    "endLine": 242,
+    "endCol": 96,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`;`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "SplitVarDeclaration.matchDeclaration",
+      "subject": ";",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/literals/RedundantToString.hx",
+    "line": 620,
+    "col": 24,
+    "endLine": 620,
+    "endCol": 33,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`$$`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "RedundantToString.collapse",
+      "subject": "$$",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/DeadBinderCounterLoop.hx",
+    "line": 494,
+    "col": 65,
+    "endLine": 494,
+    "endCol": 115,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`for`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "DeadBinderCounterLoop.buildEdit",
+      "subject": "for",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/JoinArrayPushes.hx",
+    "line": 796,
+    "col": 78,
+    "endLine": 796,
+    "endCol": 104,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`[`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "JoinArrayPushes.foldEdits",
+      "subject": "[",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/LoopGuard.hx",
+    "line": 211,
+    "col": 41,
+    "endLine": 211,
+    "endCol": 104,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "LoopGuard.fix",
+      "subject": "if",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/LoopGuard.hx",
+    "line": 222,
+    "col": 40,
+    "endLine": 222,
+    "endCol": 49,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`{`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "LoopGuard.fix",
+      "subject": "{",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/MapKeysLookup.hx",
+    "line": 548,
+    "col": 10,
+    "endLine": 548,
+    "endCol": 87,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=>`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MapKeysLookup.buildMapEdits",
+      "subject": "=>",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/NewLiteral.hx",
+    "line": 76,
+    "col": 37,
+    "endLine": 76,
+    "endCol": 41,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`[]`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "NewLiteral.fix",
+      "subject": "[]",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferForIn.hx",
+    "line": 265,
+    "col": 45,
+    "endLine": 265,
+    "endCol": 83,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`for`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferForIn.tryMatch",
+      "subject": "for",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferForIn.hx",
+    "line": 309,
+    "col": 34,
+    "endLine": 309,
+    "endCol": 72,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`for`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferForIn.tryUnbound",
+      "subject": "for",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferForIn.hx",
+    "line": 392,
+    "col": 58,
+    "endLine": 392,
+    "endCol": 96,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`for`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferForIn.inlineDeclaration",
+      "subject": "for",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferIndexAccess.hx",
+    "line": 253,
+    "col": 17,
+    "endLine": 265,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `editText` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "PreferIndexAccess.editText",
+      "subject": "editText -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferKeyValueLoop.hx",
+    "line": 284,
+    "col": 65,
+    "endLine": 284,
+    "endCol": 122,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`for`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferKeyValueLoop.buildEdit",
+      "subject": "for",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferModuloWrap.hx",
+    "line": 197,
+    "col": 25,
+    "endLine": 197,
+    "endCol": 44,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`%=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferModuloWrap.matchPair",
+      "subject": "%=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferModuloWrap.hx",
+    "line": 198,
+    "col": 23,
+    "endLine": 198,
+    "endCol": 57,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferModuloWrap.matchPair",
+      "subject": "if",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferRangeLoop.hx",
+    "line": 460,
+    "col": 65,
+    "endLine": 460,
+    "endCol": 69,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`for`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferRangeLoop.buildRangeEdit",
+      "subject": "for",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/PreferRangeLoop.hx",
+    "line": 590,
+    "col": 17,
+    "endLine": 592,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `stepHeader` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "PreferRangeLoop.stepHeader",
+      "subject": "stepHeader -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/loops/WhileTrueCondition.hx",
+    "line": 270,
+    "col": 34,
+    "endLine": 270,
+    "endCol": 91,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`while`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "WhileTrueCondition.tryMatch",
+      "subject": "while",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/BackingFieldRefs.hx",
+    "line": 85,
+    "col": 48,
+    "endLine": 85,
+    "endCol": 67,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`@:bypassAccessor`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "BackingFieldRefs.applyBypassMarks",
+      "subject": "@:bypassAccessor",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/BackingFieldRefs.hx",
+    "line": 272,
+    "col": 70,
+    "endLine": 272,
+    "endCol": 125,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`this.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "BackingFieldRefs.classifyOwnerBinding",
+      "subject": "this.",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/DefaultRepeatedArgument.hx",
+    "line": 275,
+    "col": 76,
+    "endLine": 275,
+    "endCol": 97,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "DefaultRepeatedArgument.slices",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/FieldInitAtDeclaration.hx",
+    "line": 437,
+    "col": 62,
+    "endLine": 437,
+    "endCol": 112,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "FieldInitAtDeclaration.fixNoted",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/FieldInitAtDeclaration.hx",
+    "line": 463,
+    "col": 61,
+    "endLine": 463,
+    "endCol": 111,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "FieldInitAtDeclaration.fixNoted",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/InlineConstant.hx",
+    "line": 300,
+    "col": 62,
+    "endLine": 300,
+    "endCol": 71,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`inline`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "InlineConstant.fix",
+      "subject": "inline",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/OptionalParamShorthand.hx",
+    "line": 707,
+    "col": 34,
+    "endLine": 707,
+    "endCol": 57,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`?`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "OptionalParamShorthand.collectEdits",
+      "subject": "?",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/OptionalParamShorthand.hx",
+    "line": 711,
+    "col": 34,
+    "endLine": 711,
+    "endCol": 78,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "OptionalParamShorthand.collectEdits",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/PreferInline.hx",
+    "line": 331,
+    "col": 63,
+    "endLine": 331,
+    "endCol": 72,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`inline`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferInline.fix",
+      "subject": "inline",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/PreferReadOnlyField.hx",
+    "line": 124,
+    "col": 65,
+    "endLine": 124,
+    "endCol": 82,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(default,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferReadOnlyField.fix",
+      "subject": "(default,",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/ScratchField.hx",
+    "line": 403,
+    "col": 36,
+    "endLine": 403,
+    "endCol": 86,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ScratchField.editsFor",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/StaticConstant.hx",
+    "line": 189,
+    "col": 51,
+    "endLine": 189,
+    "endCol": 60,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`static`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "StaticConstant.fix",
+      "subject": "static",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/TrivialGetter.hx",
+    "line": 584,
+    "col": 83,
+    "endLine": 584,
+    "endCol": 92,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`inline`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "TrivialGetter.buildFix",
+      "subject": "inline",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/members/TrivialGetter.hx",
+    "line": 597,
+    "col": 51,
+    "endLine": 597,
+    "endCol": 103,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "TrivialGetter.buildFix",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/naming/NamingRenames.hx",
+    "line": 676,
+    "col": 53,
+    "endLine": 676,
+    "endCol": 69,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "NamingRenames.qualifyCapturedEdits",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/naming/NamingRenames.hx",
+    "line": 678,
+    "col": 47,
+    "endLine": 678,
+    "endCol": 105,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "NamingRenames.qualifyCapturedEdits",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/naming/ShadowingLocal.hx",
+    "line": 618,
+    "col": 75,
+    "endLine": 618,
+    "endCol": 85,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ShadowingLocal.assignmentEdit",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/nullsafety/DeadSafeNav.hx",
+    "line": 85,
+    "col": 59,
+    "endLine": 85,
+    "endCol": 62,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "DeadSafeNav.fix",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/nullsafety/GroupSafeNav.hx",
+    "line": 107,
+    "col": 17,
+    "endLine": 117,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `guarded` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "GroupSafeNav.guarded",
+      "subject": "guarded -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/nullsafety/PreferNullGuardedLoop.hx",
+    "line": 126,
+    "col": 12,
+    "endLine": 126,
+    "endCol": 92,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`!=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferNullGuardedLoop.fix",
+      "subject": "!=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/nullsafety/PreferSafeNav.hx",
+    "line": 276,
+    "col": 31,
+    "endLine": 276,
+    "endCol": 35,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferSafeNav.fix",
+      "subject": "if",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/nullsafety/UnnecessarySafeNav.hx",
+    "line": 73,
+    "col": 54,
+    "endLine": 73,
+    "endCol": 57,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UnnecessarySafeNav.fix",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/CatchDynamic.hx",
+    "line": 321,
+    "col": 67,
+    "endLine": 321,
+    "endCol": 91,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CatchDynamic.swapEdit",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/CatchDynamic.hx",
+    "line": 334,
+    "col": 107,
+    "endLine": 334,
+    "endCol": 131,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CatchDynamic.bareSwapEdit",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/CatchDynamic.hx",
+    "line": 394,
+    "col": 91,
+    "endLine": 394,
+    "endCol": 108,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CatchDynamic.loggingSwapEdits",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/CatchDynamic.hx",
+    "line": 397,
+    "col": 47,
+    "endLine": 397,
+    "endCol": 100,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`$$`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CatchDynamic.loggingSwapEdits",
+      "subject": "$$",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/DynamicBag.hx",
+    "line": 110,
+    "col": 37,
+    "endLine": 110,
+    "endCol": 56,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`DynamicAccess<`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "DynamicBag.bagEdits",
+      "subject": "DynamicAccess<",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/ExplicitLocalType.hx",
+    "line": 338,
+    "col": 47,
+    "endLine": 338,
+    "endCol": 61,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExplicitLocalType.fix",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/ExplicitLocalType.hx",
+    "line": 400,
+    "col": 48,
+    "endLine": 400,
+    "endCol": 56,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExplicitLocalType.fixWithOracle",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/ExplicitType.hx",
+    "line": 414,
+    "col": 60,
+    "endLine": 414,
+    "endCol": 68,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExplicitType.annotation",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/ExplicitType.hx",
+    "line": 553,
+    "col": 60,
+    "endLine": 553,
+    "endCol": 67,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:Void`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExplicitType.collectVoidReturnEdits",
+      "subject": ":Void",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/ExplicitType.hx",
+    "line": 634,
+    "col": 38,
+    "endLine": 634,
+    "endCol": 46,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExplicitType.macroReturnEdit",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/ExplicitType.hx",
+    "line": 788,
+    "col": 59,
+    "endLine": 788,
+    "endCol": 75,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExplicitType.paramEdit",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/ExplicitType.hx",
+    "line": 935,
+    "col": 60,
+    "endLine": 935,
+    "endCol": 74,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExplicitType.collectInitializerEdits",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/MapAsSet.hx",
+    "line": 375,
+    "col": 24,
+    "endLine": 375,
+    "endCol": 126,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.add(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MapAsSet.respellOccurrence",
+      "subject": ".add(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/MapAsSet.hx",
+    "line": 411,
+    "col": 76,
+    "endLine": 411,
+    "endCol": 106,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`<`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MapAsSet.respellDeclaration",
+      "subject": "<",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/MapAsSet.hx",
+    "line": 424,
+    "col": 34,
+    "endLine": 424,
+    "endCol": 70,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`new`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MapAsSet.respellInitialiser",
+      "subject": "new",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/PreferTypedThrow.hx",
+    "line": 204,
+    "col": 36,
+    "endLine": 204,
+    "endCol": 92,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`new`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferTypedThrow.fix",
+      "subject": "new",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/common/types/RedundantCastType.hx",
+    "line": 89,
+    "col": 61,
+    "endLine": 89,
+    "endCol": 121,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`cast`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "RedundantCastType.fix",
+      "subject": "cast",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/expressions/DuplicateComparator.hx",
+    "line": 575,
+    "col": 17,
+    "endLine": 603,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `memberOf` returns text that spells syntax of the grammar it edits, and its result reaches AddMember.memberEdit — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "DuplicateComparator.memberOf",
+      "subject": "memberOf -> AddMember.memberEdit",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/expressions/DuplicateComparator.hx",
+    "line": 557,
+    "col": 30,
+    "endLine": 557,
+    "endCol": 118,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "DuplicateComparator.planOf",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/expressions/PreferCopyMethod.hx",
+    "line": 150,
+    "col": 32,
+    "endLine": 150,
+    "endCol": 73,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferCopyMethod.fix",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/expressions/PreferStaticExtension.hx",
+    "line": 484,
+    "col": 50,
+    "endLine": 484,
+    "endCol": 58,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferStaticExtension.rewriteEdits",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/literals/TrigraphInString.hx",
+    "line": 162,
+    "col": 17,
+    "endLine": 168,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `rewritten` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "TrigraphInString.rewritten",
+      "subject": "rewritten -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/IdentityMap.hx",
+    "line": 135,
+    "col": 41,
+    "endLine": 135,
+    "endCol": 78,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "IdentityMap.matches",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/LambdaLoopScan.hx",
+    "line": 1103,
+    "col": 50,
+    "endLine": 1103,
+    "endCol": 110,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "LambdaLoopScan.buildEdit",
+      "subject": "return",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/LambdaLoopScan.hx",
+    "line": 1109,
+    "col": 32,
+    "endLine": 1109,
+    "endCol": 63,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "LambdaLoopScan.buildEdit",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
+    "line": 731,
+    "col": 31,
+    "endLine": 731,
+    "endCol": 55,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferFind.buildEdits",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
+    "line": 497,
+    "col": 17,
+    "endLine": 499,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `findCall` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "PreferFind.findCall",
+      "subject": "findCall -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
+    "line": 745,
+    "col": 68,
+    "endLine": 745,
+    "endCol": 87,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferFind.buildEdits",
+      "subject": "return",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
+    "line": 752,
+    "col": 50,
+    "endLine": 752,
+    "endCol": 64,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`;`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferFind.buildEdits",
+      "subject": ";",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/PreferMap.hx",
+    "line": 140,
+    "col": 33,
+    "endLine": 140,
+    "endCol": 113,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.map(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferMap.matches",
+      "subject": ".map(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/loops/RangeComprehensionFeedsCall.hx",
+    "line": 127,
+    "col": 17,
+    "endLine": 147,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `loopText` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "RangeComprehensionFeedsCall.loopText",
+      "subject": "loopText -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/nullsafety/NullSafetyStrict.hx",
+    "line": 95,
+    "col": 81,
+    "endLine": 95,
+    "endCol": 86,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "NullSafetyStrict.findings",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/haxe/types/PreferMapType.hx",
+    "line": 650,
+    "col": 98,
+    "endLine": 650,
+    "endCol": 107,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`<`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "PreferMapType.rewriteEdits",
+      "subject": "<",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/scan/CheckScan.hx",
+    "line": 934,
+    "col": 24,
+    "endLine": 934,
+    "endCol": 28,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`{}`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CheckScan.ifShapeEdit",
+      "subject": "{}",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/scan/UsingScan.hx",
+    "line": 358,
+    "col": 89,
+    "endLine": 358,
+    "endCol": 107,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UsingScan.usingInsertEdit",
+      "subject": "using",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/scan/UsingScan.hx",
+    "line": 362,
+    "col": 84,
+    "endLine": 362,
+    "endCol": 102,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UsingScan.usingInsertEdit",
+      "subject": "using",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/scan/UsingScan.hx",
+    "line": 364,
+    "col": 74,
+    "endLine": 364,
+    "endCol": 92,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UsingScan.usingInsertEdit",
+      "subject": "using",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/scan/UsingScan.hx",
+    "line": 368,
+    "col": 36,
+    "endLine": 368,
+    "endCol": 56,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UsingScan.usingInsertEdit",
+      "subject": "using",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/check/scan/UsingScan.hx",
+    "line": 369,
+    "col": 44,
+    "endLine": 369,
+    "endCol": 62,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "UsingScan.usingInsertEdit",
+      "subject": "using",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/AddElement.hx",
+    "line": 192,
+    "col": 54,
+    "endLine": 192,
+    "endCol": 89,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "AddElement.addElement",
+      "subject": ",",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/AddElement.hx",
+    "line": 193,
+    "col": 57,
+    "endLine": 193,
+    "endCol": 99,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "AddElement.addElement",
+      "subject": ",",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/AddElement.hx",
+    "line": 511,
+    "col": 91,
+    "endLine": 511,
+    "endCol": 94,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "AddElement.computeAppendEdit",
+      "subject": ",",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/AddElement.hx",
+    "line": 512,
+    "col": 68,
+    "endLine": 512,
+    "endCol": 117,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "AddElement.computeAppendEdit",
+      "subject": ",",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/AddImport.hx",
+    "line": 96,
+    "col": 10,
+    "endLine": 96,
+    "endCol": 79,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`;\\n`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "AddImport.importEdit",
+      "subject": ";\\n",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/AddParam.hx",
+    "line": 129,
+    "col": 98,
+    "endLine": 129,
+    "endCol": 108,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "AddParam.addParam",
+      "subject": ",",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/CtorFieldFold.hx",
+    "line": 156,
+    "col": 94,
+    "endLine": 156,
+    "endCol": 101,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CtorFieldFold.varKeywordToFinalEdits",
+      "subject": "final",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/CtorFieldFold.hx",
+    "line": 240,
+    "col": 42,
+    "endLine": 240,
+    "endCol": 118,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "CtorFieldFold.ctorConditionalDefaultFinalEdits",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/DeclaredSortedLists.hx",
+    "line": 70,
+    "col": 38,
+    "endLine": 70,
+    "endCol": 103,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`[`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "DeclaredSortedLists.resort",
+      "subject": "[",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/ExtractConstant.hx",
+    "line": 88,
+    "col": 10,
+    "endLine": 88,
+    "endCol": 57,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`private`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExtractConstant.extractConstant",
+      "subject": "private",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/ExtractConstant.hx",
+    "line": 125,
+    "col": 97,
+    "endLine": 125,
+    "endCol": 100,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExtractConstant.extractInto",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/ExtractConstantTo.hx",
+    "line": 191,
+    "col": 24,
+    "endLine": 195,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `memberText` returns text that spells syntax of the grammar it edits, and its result reaches ExtractConstant.buildModuleSource — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "ExtractConstantTo.memberText",
+      "subject": "memberText -> ExtractConstant.buildModuleSource",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/ExtractSuperclass.hx",
+    "line": 205,
+    "col": 66,
+    "endLine": 205,
+    "endCol": 87,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`extends`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExtractSuperclass.extendsEdit",
+      "subject": "extends",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/ExtractVar.hx",
+    "line": 185,
+    "col": 10,
+    "endLine": 185,
+    "endCol": 47,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ExtractVar.extractVar",
+      "subject": "final",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/FieldRename.hx",
+    "line": 55,
+    "col": 24,
+    "endLine": 57,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `shadowQualifier` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "FieldRename.shadowQualifier",
+      "subject": "shadowQualifier -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/Inline.hx",
+    "line": 314,
+    "col": 41,
+    "endLine": 314,
+    "endCol": 60,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`$${`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "Inline.buildInlineEdits",
+      "subject": "$${",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/Inline.hx",
+    "line": 317,
+    "col": 76,
+    "endLine": 317,
+    "endCol": 88,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "Inline.buildInlineEdits",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/IntroduceParameterObject.hx",
+    "line": 94,
+    "col": 54,
+    "endLine": 94,
+    "endCol": 77,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "IntroduceParameterObject.introduce",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/IntroduceParameterObject.hx",
+    "line": 250,
+    "col": 61,
+    "endLine": 250,
+    "endCol": 68,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "IntroduceParameterObject.bodyRefEdits",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/IntroduceParameterObject.hx",
+    "line": 278,
+    "col": 49,
+    "endLine": 278,
+    "endCol": 56,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`{`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "IntroduceParameterObject.callSiteEdits",
+      "subject": "{",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveMember.hx",
+    "line": 774,
+    "col": 103,
+    "endLine": 774,
+    "endCol": 124,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`$${`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveMember.nameQualifyEdit",
+      "subject": "$${",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveMember.hx",
+    "line": 866,
+    "col": 51,
+    "endLine": 866,
+    "endCol": 59,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`public`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveMember.promotionEdit",
+      "subject": "public",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveMember.hx",
+    "line": 871,
+    "col": 56,
+    "endLine": 871,
+    "endCol": 65,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`public`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveMember.promotionEdit",
+      "subject": "public",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveMember.hx",
+    "line": 892,
+    "col": 70,
+    "endLine": 892,
+    "endCol": 102,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`@:access(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveMember.accessEdit",
+      "subject": "@:access(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveMember.hx",
+    "line": 894,
+    "col": 96,
+    "endLine": 894,
+    "endCol": 120,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`@:access(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveMember.accessEdit",
+      "subject": "@:access(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveMember.hx",
+    "line": 1157,
+    "col": 83,
+    "endLine": 1157,
+    "endCol": 97,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveMember.collectCallerRewires",
+      "subject": ".",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveScaffold.hx",
+    "line": 188,
+    "col": 17,
+    "endLine": 196,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `scaffoldDestBlock` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "MoveScaffold.scaffoldDestBlock",
+      "subject": "scaffoldDestBlock -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveScaffold.hx",
+    "line": 150,
+    "col": 56,
+    "endLine": 150,
+    "endCol": 109,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveScaffold.scaffoldViaField",
+      "subject": "final",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveScaffold.hx",
+    "line": 155,
+    "col": 42,
+    "endLine": 155,
+    "endCol": 93,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveScaffold.scaffoldViaField",
+      "subject": "=",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveSymbol.hx",
+    "line": 349,
+    "col": 64,
+    "endLine": 349,
+    "endCol": 110,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`import`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveSymbol.addImportEdit",
+      "subject": "import",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveSymbol.hx",
+    "line": 891,
+    "col": 17,
+    "endLine": 900,
+    "endCol": 3,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "helper `importStatementText` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "helper",
+      "function": "MoveSymbol.importStatementText",
+      "subject": "importStatementText -> edit text",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelper.hx",
+    "line": 337,
+    "col": 78,
+    "endLine": 337,
+    "endCol": 87,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`static`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelper.signatureEdits",
+      "subject": "static",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelper.hx",
+    "line": 340,
+    "col": 56,
+    "endLine": 340,
+    "endCol": 65,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`static`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelper.signatureEdits",
+      "subject": "static",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelper.hx",
+    "line": 346,
+    "col": 62,
+    "endLine": 346,
+    "endCol": 75,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelper.signatureEdits",
+      "subject": ",",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelper.hx",
+    "line": 349,
+    "col": 75,
+    "endLine": 349,
+    "endCol": 83,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`:`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelper.signatureEdits",
+      "subject": ":",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelperRefs.hx",
+    "line": 253,
+    "col": 54,
+    "endLine": 253,
+    "endCol": 106,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`$$`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelperRefs.rewriteMovedRef",
+      "subject": "$$",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelperRefs.hx",
+    "line": 381,
+    "col": 59,
+    "endLine": 381,
+    "endCol": 80,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelperRefs.receiverCallRewrite",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelperRefs.hx",
+    "line": 382,
+    "col": 52,
+    "endLine": 382,
+    "endCol": 72,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`,`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelperRefs.receiverCallRewrite",
+      "subject": ",",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/MoveToHelperRefs.hx",
+    "line": 407,
+    "col": 11,
+    "endLine": 407,
+    "endCol": 58,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "MoveToHelperRefs.callRewrite",
+      "subject": "(",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/ParenGuard.hx",
+    "line": 229,
+    "col": 30,
+    "endLine": 229,
+    "endCol": 62,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`?`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "ParenGuard.ternaryEdit",
+      "subject": "?",
+      "chain": []
+    }
+  },
+  {
+    "file": "src/anyparse/query/Rename.hx",
+    "line": 462,
+    "col": 71,
+    "endLine": 462,
+    "endCol": 79,
+    "severity": "info",
+    "rule": "fix-text-syntax",
+    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
+    "data": {
+      "family": "literal",
+      "function": "Rename.qualifyCaptured",
+      "subject": ".",
+      "chain": []
+    }
+  }
+]

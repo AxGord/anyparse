@@ -97,6 +97,39 @@ h = layout.bounds.width / ratio;
 log(layout.bounds.width);   // reported: layout.bounds.width appears 3 times
 ```
 
+## `fix-text-syntax`
+
+The text of an EDIT that spells syntax of the grammar it edits: a fix that builds `return v;`, `final x = e;` or
+`inline ` as a string instead of asking a grammar component to spell the construct. `Info`, DEFAULT OFF, report-only and
+without an autofix (the replacement is a call into a component, not a text). Inert until the config names the `roots` it
+reads.
+
+An edit is an object literal setting both `spanField` and `textField` (default `span` and `text`). Its text spells syntax
+when a literal part of it carries a token of the grammar's own vocabulary (`GrammarPlugin.tokenSpans`: a keyword, a
+delimiter, an operator) — a string literal written there, joined by `+` or a ternary, or held by a local the text names.
+A name, whitespace, a hole, a deletion and a copied source span spell none. No word list is kept: the grammar that parsed
+the file says what its tokens are.
+
+One hop through a helper: a function of the same file whose `return` holds such a literal is reported (at the function)
+when its call is the text of an edit or an argument of a `sinks` call, directly or through a local holding the result.
+`sinks` are dotted callee spellings. A builder spread over two calls, or a helper in another file, is not followed.
+A helper is found only through a BARE-identifier call: `this.h()` and `T.h()` are silent, because a name before a dot
+would need type resolution to say which `h` it reaches. A local's initializer is the FIRST declaration of that name in
+the enclosing function, with no scope resolution, so a shadowed or later re-declared local can be misread.
+
+```json
+"fix-text-syntax": { "roots": ["src/anyparse/check", "src/anyparse/query"],
+    "sinks": ["AddMember.memberEdit", "AddMember.addMember"], "baseline": "known-sites.json" }
+```
+
+A finding carries its identity as data (type and function, then the literal part or `helper -> sink`), so a snapshot
+of `apq lint --format json` identifies a site however lines move. The `baseline` option names such a snapshot, resolved
+beside each `apq.json` of the file's chain; the rule then reports only the sites it does not hold, so a project adopts
+the rule with its standing sites recorded. This project commits the snapshot at `test/testkit/fix-text-syntax.baseline.json`;
+`unit.check.common.design.FixTextSyntaxBaselineTest` runs the rule without the option and fails on a site the snapshot
+lacks and on a recorded site that is gone, so the list only shrinks. A slice that migrates sites away records it again
+(`APQ_FIX_TEXT_RECORD=1`, the command is in the test's class doc).
+
 ## `guard-pin-arm-reach`
 
 A test pinned as a GUARD whose class names a mutation arm (a killer on a sibling test) that cuts a member this test

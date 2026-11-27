@@ -1858,6 +1858,70 @@
 			"method": "acrossModules",
 			"force": "false",
 			"note": "the acrossModules option is ignored"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-HELPER-UNFOLLOWED",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "collectHelpers",
+			"find": "scan.helpers[name] = node;",
+			"replace": "if (name == '') scan.helpers[name] = node;",
+			"note": "no function is a syntax helper, so a call that feeds an edit text is not reported"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-LOCAL-UNFOLLOWED",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "classify",
+			"find": "final init: Null<QueryNode> = host == null || name == null || hops >= MAX_LOCAL_HOPS ? null : localInit(scan, host, name);",
+			"replace": "final init: Null<QueryNode> = null;",
+			"note": "a local holding the template is not read, so the text that names it escapes"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-NAME-IS-SYNTAX",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "holdsToken",
+			"find": "return tokens.exists(token -> token.kind == TokenKind.Literal);",
+			"replace": "return tokens.length > 0;",
+			"note": "any token counts, so a name or a hole-free word reads as syntax and a rename is reported"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-ROOTS-IGNORED",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "within",
+			"find": "return roots.exists(root -> path.contains('/${Path.removeTrailingSlashes(root)}/'));",
+			"replace": "return roots.length > 0;",
+			"note": "every file counts as under the roots, so a file outside them is scanned"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-SINK-UNREAD",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "sinkArguments",
+			"find": "if (!scan.options.sinks.contains(callee)) return;",
+			"replace": "if (callee.length >= 0) return;",
+			"note": "a configured sink is never read, so a helper result handed to it escapes"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-TOKEN-UNREAD",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "holdsToken",
+			"find": "return tokens.exists(token -> token.kind == TokenKind.Literal);",
+			"replace": "return tokens.length < 0;",
+			"note": "no fragment reads as holding a token of the grammar, so an edit text that spells a keyword is no finding"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-BASELINE-UNREAD",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "unrecorded",
+			"find": "return recorded == null ? found : LintBaseline.added(found, recorded, directory, []);",
+			"replace": "return found;",
+			"note": "the snapshot is never subtracted, so a recorded site is reported again"
+		},
+		{
+			"name": "M-FIX-TEXT-SYNTAX-FINAL-CLASS-NAMELESS",
+			"type": "anyparse.check.common.design.FixTextSyntax",
+			"method": "visit",
+			"find": "CheckScan.typeDeclName(node, seams.containerKinds)",
+			"replace": "node.name",
+			"note": "a type declaration is named by its own name only, so the identity of a finding in a final class (whose name sits on the inner class form) loses its type"
 		}
 	]
 }

@@ -50,6 +50,7 @@
 	"extract-repeated-expression",
 	"field-init-at-declaration",
 	"field-init-in-constructor",
+	"fix-text-syntax",
 	"fold-adjacent-string-literals",
 	"fragmented-doc-comment",
 	"group-safe-nav",
