@@ -409,8 +409,7 @@ class PreferValueLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrap('items:Array<Item>, sink:Sink', push)).length);
 	}
 
-	@:pin('control')
-	@:killer('M-REACH-ESCAPE-ARGUMENT')
+	@:pin('guard')
 	public function testMethodOfAnotherObjectHoldingTheCollectionIsReportOnly(): Void {
 		// `sink` was handed the very array, so `sink.use` changes it without ever naming `items`.
 		final shared: String = owned('sink.held = items;\n\t\tfor (i in 0...items.length) sink.use(items[i].clone());')

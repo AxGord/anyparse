@@ -14944,7 +14944,7 @@
 			"type": "anyparse.query.SafeDelete",
 			"method": "collectReferences",
 			"find": "receivers.read(node.children[0], memberName) != OtherType",
-			"replace": "false",
+			"replace": "true",
 			"note": "a receiver naming another type declaring its own member of the name still counts, so another file calling that type's member blocks the delete"
 		},
 		{

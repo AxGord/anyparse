@@ -132,9 +132,10 @@ class FactsFixGateE2ETest extends Test {
 		+ '\t\tif (!done) {\n\t\t\tdone = true;\n\t\t\tstuff = [10, 20, 30, 40];\n\t\t}\n\t}\n}\n';
 	private static final HELD_MAIN: String = 'class Main {\n\tstatic function main() {\n\t\tnew Grid().run();\n\t\tnew Pushed().run();\n'
 		+ '\t\tnew Handed().run();\n\t\tnew Captured().run();\n\t\tnew Returned().run();\n\t\tnew Shadowed().run();\n'
-		+ '\t\tnew Region().run();\n\t}\n}\n\nclass Line {\n\tpublic var n:Int = 0;\n\n\tpublic function new() {}\n\n'
-		+ '\tpublic function redraw():Void {\n\t\tn++;\n\t}\n}\n\nclass Grid {\n\tvar verticals:Array<Line> = ['
-		+ 'new Line(), new Line()];\n\tvar horizontals:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
+		+ '\t\tnew Region().run();\n\t}\n}\n\nclass Line {\n\tpublic static var trail:Array<Line> = [];\n\n'
+		+ '\tpublic var n:Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function redraw():Void {\n\t\tn++;\n'
+		+ '\t\ttrail.push(this);\n\t}\n}\n\nclass Grid {\n\tvar verticals:Array<Line> = [new Line(), new Line()];\n'
+		+ '\tvar horizontals:Array<Line> = [new Line()];\n\n\tpublic function new() {}\n\n'
 		+ '\tfunction move(c:String):Void {\n\t\tvar lines:Array<Line> = null;\n\t\tif (c == \'h\')\n\t\t\tlines = '
 		+ 'verticals;\n\t\telse if (c == \'v\')\n\t\t\tlines = horizontals;\n\t\tfor (i => line in lines) '
 		+ 'line.n += i;\n\t\tvar copy:Array<Line> = lines;\n\t\tfor (l in copy) l.n += copy.length;\n\t}\n\n\tpublic '

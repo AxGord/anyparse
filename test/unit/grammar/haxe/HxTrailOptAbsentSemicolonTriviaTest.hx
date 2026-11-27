@@ -21,8 +21,7 @@ final class HxTrailOptAbsentSemicolonTriviaTest extends Test {
 	}
 
 	/** A non-brace typedef written without `;` keeps the blank lines after it. */
-	@:pin('control')
-	@:killer('M-RESTORE-GAP-LINE-BREAK-IGNORED')
+	@:pin('guard')
 	public function testNoSemicolonNonBraceTypedefKeepsBlankLines(): Void {
 		final src: String = 'typedef B = Base & Other\n\ntypedef X = Int\n\nclass K {}';
 		Assert.equals(src, HxWriteFixture.triviaWrite(src, PRESERVE));
@@ -37,8 +36,7 @@ final class HxTrailOptAbsentSemicolonTriviaTest extends Test {
 	}
 
 	/** A comment between the body and a `;` the policy drops stays on the line, and the blank after it stays. */
-	@:pin('control')
-	@:killer('M-RESTORE-GAP-LINE-BREAK-IGNORED')
+	@:pin('guard')
 	public function testNeverKeepsTheCommentAndTheBlankLineOfATypedef(): Void {
 		final src: String = 'typedef A = {a:Int} /* c */ ;\n\nclass K {}';
 		final once: String = HxWriteFixture.triviaWrite(src, TYPEDEF_NEVER);

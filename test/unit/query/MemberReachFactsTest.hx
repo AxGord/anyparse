@@ -4136,7 +4136,7 @@ class MemberReachFactsTest extends Test {
 			+ '\tstatic function main() {\n\t\tfor (i in 0...items.length) { /*<*/ calm(); /*>*/ }\n\t\tkeep();\n\t}\n'
 			+ '\tstatic function calm():Void {}\n\tstatic function keep():Void {\n\t\tvar p = items.push;\n\t\tp(1);\n\t}\n}\n';
 		assertMatch(truthAsk(['Main.hx' => growing(main)]), sharedValue);
-		assertMatch(ask(['Main.hx' => main]), r -> r.match(Proven));
+		assertMatch(ask(['Main.hx' => growing(main)]), r -> r.match(Proven));
 	}
 
 	@:pin('control')
@@ -5238,7 +5238,8 @@ class MemberReachFactsTest extends Test {
 			+ '\tfunction g():Void {\n\t\tfor (i => p in _points) p.x = i;\n\t\tfor (p in _points) p.x = 0;\n\t\tit = _points.iterator();\n'
 			+ '\t}\n\tfunction f():Void {\n\t\tfor (i in 0..._points.length) { /*<*/ _points[i].x = i; poke(); /*>*/ }\n\t}\n'
 			+ '\tfunction poke():Void Other.poke(this);\n}\nclass P {\n\tpublic var x:Int = 0;\n\tpublic function new() {}\n}\n'
-			+ 'class Other {\n\tpublic static var seen:Null<Main> = null;\n\tpublic static function poke(m:Main):Void seen = m;\n}\n';
+			+ 'class Other {\n\tpublic static var seen:Null<Main> = null;\n\tpublic static var spare:Array<P> = [];\n'
+			+ '\tpublic static function poke(m:Main):Void {\n\t\tseen = m;\n\t\tspare[spare.length] = new P();\n\t}\n}\n';
 		final points: MemberRef = { owner: 'Main', name: '_points' };
 		assertMatch(ask(['Main.hx' => main], null, true, points, false, null, null, null, true), r -> r.match(Proven));
 		// the syntax reads a loop's iterable, and a call of the array's own reader, as no escape
