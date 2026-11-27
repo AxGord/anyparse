@@ -463,6 +463,38 @@
 			"find": "final file: String = violations.length == 0 ? '' : violations[0].file;",
 			"replace": "final file: String = '';",
 			"note": "the fix re-proves with no file, so a capture the run accepted is left unrewritten"
+		},
+		{
+			"name": "M-PSN-RUN-LAST-ONLY",
+			"type": "anyparse.check.common.nullsafety.PreferSafeNav",
+			"method": "guardRuns",
+			"find": "if (subject == null || (deepestFirst.length > 0 && !isStepOf(deepestFirst[deepestFirst.length - 1], subject, s))) break;",
+			"replace": "if (subject == null || deepestFirst.length > 0) break;",
+			"note": "a conjunction reads only its last null-check, so a nested guard folds one link and leaves the half-folded form behind"
+		},
+		{
+			"name": "M-PSN-LATER-SAFE-NOT-CHAIN",
+			"type": "anyparse.check.common.nullsafety.PreferSafeNav",
+			"method": "readSeams",
+			"find": "if (safeAccessKind != null) chainKinds.push(safeAccessKind);",
+			"replace": "",
+			"note": "the receiver spine stops at an already-safe access, so a body holding a later `?.` never meets its guard subject and the half-folded form is a fixed point"
+		},
+		{
+			"name": "M-PSN-RUN-PREFIX-FREE",
+			"type": "anyparse.check.common.nullsafety.PreferSafeNav",
+			"method": "guardRuns",
+			"find": "!isStepOf(deepestFirst[deepestFirst.length - 1], subject, s)",
+			"replace": "false",
+			"note": "every path null-check joins the run whether or not it is the prefix of the next, so an unrelated conjunct is dropped from the surviving condition"
+		},
+		{
+			"name": "M-PSN-RUN-MENTIONS-LAST-ONLY",
+			"type": "anyparse.check.common.nullsafety.PreferSafeNav",
+			"method": "matchRun",
+			"find": "for (i => subject in subjects) if (mentionsOutsideRoot(stmt.children[0], junctions[i].children[0], subject, s)) return null;",
+			"replace": "if (mentionsOutsideRoot(stmt.children[0], junctions[subjects.length - 1].children[0], condIdent, s)) return null;",
+			"note": "only the deepest subject is checked for a mention outside the chain, so a prefix subject passed as an argument is folded into `?.` and stays typed Null<T>"
 		}
 	]
 }

@@ -466,6 +466,76 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(0, violations(local('var r:Null<Int> = null;\n\t\tif (x != null) /* why */ r = x.count();')).length);
 	}
 
+	/** A two-level guard folds BOTH links in one step: the conjunction no longer stops after the last null-check. */
+	@:pin('control')
+	@:killer('M-PSN-RUN-LAST-ONLY')
+	public function testNestedGuardFoldsEveryLinkInOneStep(): Void {
+		final source: String = axisSource('if (_axis != null && _axis.bar != null) _axis.bar.on();');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(axisSource('_axis?.bar?.on();'), applyFix(source));
+	}
+
+	/** The half-folded form `if (x != null) x.f?.g()` is itself a guard: a later `?.` on the chain does not hide the subject. */
+	@:pin('control')
+	@:killer('M-PSN-LATER-SAFE-NOT-CHAIN')
+	public function testBodyWithLaterSafeNavIsFolded(): Void {
+		final source: String = axisSource('if (_axis != null) _axis.bar?.on();');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(axisSource('_axis?.bar?.on();'), applyFix(source));
+	}
+
+	/** A later `?.` is accepted on the ternary arm too, and the dot off the SUBJECT is still the only one rewritten. */
+	@:pin('control')
+	@:killer('M-PSN-LATER-SAFE-NOT-CHAIN')
+	public function testTernaryBodyWithLaterSafeNavIsFolded(): Void {
+		final source: String = axisSource('final b: Null<Bar> = _axis != null ? _axis.bar?.on() : null;');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(axisSource('final b: Null<Bar> = _axis?.bar?.on();'), applyFix(source));
+	}
+
+	/** A `?.` ON the guard subject stays refused: the junction off the subject must be a plain `.`. */
+	public function testSafeNavOnTheSubjectIsStillNotFlagged(): Void {
+		Assert.equals(0, violations(axisSource('if (_axis != null) _axis?.bar.on();')).length);
+	}
+
+	/** A three-level guard folds every link: `x != null && x.a != null && x.a.b != null` with body `x.a.b.m()` → `x?.a?.b?.m()`. */
+	@:pin('control')
+	@:killer('M-PSN-RUN-LAST-ONLY')
+	public function testThreeLevelGuardFoldsEveryLink(): Void {
+		final source: String = rigSource('if (_rig != null && _rig.axis != null && _rig.axis.bar != null) _rig.axis.bar.on();', false);
+		Assert.equals(1, violations(source).length);
+		Assert.equals(rigSource('_rig?.axis?.bar?.on();', false), applyFix(source));
+	}
+
+	/** A getter on a MIDDLE step leaves the deeper path unproven, so the guard stays unflagged. */
+	public function testGetterOnMiddleStepNotFlagged(): Void {
+		final source: String = rigSource('if (_rig != null && _rig.axis != null && _rig.axis.bar != null) _rig.axis.bar.on();', true);
+		Assert.equals(0, violations(source).length);
+	}
+
+	/** A conjunct that is not the prefix of the next one stays in the surviving condition; only the trailing run is dropped. */
+	@:pin('control')
+	@:killer('M-PSN-RUN-PREFIX-FREE')
+	public function testNonPrefixConjunctIsKept(): Void {
+		final source: String = axisSource('if (_axis != null && _axis.other != null && _axis.bar != null) _axis.bar.on();');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(axisSource('if (_axis != null && _axis.other != null) _axis.bar?.on();'), applyFix(source));
+	}
+
+	/** When the body mentions a prefix subject elsewhere the full run cannot fold; the last null-check alone still does, as before. */
+	@:pin('control')
+	@:killer('M-PSN-RUN-MENTIONS-LAST-ONLY')
+	public function testPrefixSubjectMentionedInBodyFallsBackToTheLastConjunct(): Void {
+		final source: String = axisSource('if (_axis != null && _axis.bar != null) _axis.bar.on(_axis);');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(axisSource('if (_axis != null) _axis.bar?.on(_axis);'), applyFix(source));
+	}
+
+	/** A call is never a guard subject, so a run of calls folds nothing. */
+	public function testCallSubjectRunNotFlagged(): Void {
+		Assert.equals(0, violations(axisSource('if (mk() != null && mk().bar != null) mk().bar.on();')).length);
+	}
+
 	private function fixCanonical(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferSafeNav = new PreferSafeNav();
@@ -493,6 +563,25 @@ class PreferSafeNavCheckTest extends Test {
 
 	private function applyFix(source: String): String {
 		return CheckFixture.fixedSource(new PreferSafeNav(), source);
+	}
+
+	/** `Axis` guards a nullable `Bar` through `bar`, and `other` is a sibling step; `C` reads it through the final field `_axis`. */
+	private function axisSource(stmt: String): String {
+		return 'class Bar {\n\tpublic function new() {}\n\n\tpublic function on(?a:Axis):Null<Bar> {\n\t\treturn null;\n\t}\n}\n\n'
+			+ 'class Axis {\n\tpublic var bar(default, null):Null<Bar> = null;\n\tpublic var other(default, null):Null<Bar> = null;\n\n'
+			+ '\tpublic function new() {}\n}\n\nclass C {\n\tprivate final _axis:Null<Axis> = null;\n\n\tpublic function new() {}\n\n'
+			+ '\tpublic function f():Void {\n\t\t$stmt\n\t}\n}';
+	}
+
+	/** A three-level path `C._rig.axis.bar`; `axis` is a plain `var`, or a read-getter property when `axisGetter`. */
+	private function rigSource(stmt: String, axisGetter: Bool): String {
+		final axisDecl: String = axisGetter
+			? '\tpublic var axis(get, never):Null<Axis>;\n\n\tpublic function new() {}\n\n\tfunction get_axis():Null<Axis> {\n'
+				+ '\t\treturn null;\n\t}\n'
+			: '\tpublic var axis(default, null):Null<Axis> = null;\n\n\tpublic function new() {}\n';
+		return 'class Bar {\n\tpublic function new() {}\n\n\tpublic function on():Void {}\n}\n\nclass Axis {\n'
+			+ '\tpublic var bar(default, null):Null<Bar> = null;\n\n\tpublic function new() {}\n}\n\nclass Rig {\n$axisDecl}\n\nclass C {\n'
+			+ '\tprivate final _rig:Null<Rig> = null;\n\n\tpublic function new() {}\n\n\tpublic function f():Void {\n\t\t$stmt\n\t}\n}';
 	}
 
 }

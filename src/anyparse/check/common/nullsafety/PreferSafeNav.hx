@@ -54,10 +54,15 @@ private typedef Seams = {
 private typedef Candidate = {
 	var condIdent: QueryNode;
 	var stmt: QueryNode;
-	var rootIdent: QueryNode;
+	var junctions: Array<QueryNode>;
 	var restCond: Null<QueryNode>;
 }
 
+/**
+ * A trailing run of `<path> != null` conjuncts of an `if` condition: `subjects` ascending, each the previous one plus one
+ * plain `.` step, and `rest` the condition to their left that survives the fold (null when the run is the whole condition).
+ */
+private typedef GuardRun = { var subjects: Array<QueryNode>; var rest: Null<QueryNode>; }
 /**
  * A matched ASSIGNMENT-arm guard: the null-checked identifier, the guarding `if` statement the
  * fold deletes, the assigned right-hand side and its chain-root identifier, and the `null`
@@ -67,7 +72,7 @@ private typedef AssignGuard = {
 	var condIdent: QueryNode;
 	var ifNode: QueryNode;
 	var rhs: QueryNode;
-	var rootIdent: QueryNode;
+	var junction: QueryNode;
 	var nullLiteral: QueryNode;
 }
 
@@ -97,9 +102,10 @@ private typedef AssignGuard = {
  *
  * `x` above stands for the guard SUBJECT, which `subjectOf` admits in two shapes: a plain
  * identifier, and a one-step field path reached by a plain `.` (`fld.parent != null`,
- * `this.fld != null`). A DEEPER path (`a.b.c`) refuses — each step would need its own
- * proof — and so does an already-safe `x?.f`, which projects as another kind and is the
- * dead- / unnecessary-safe-nav checks' territory.
+ * `this.fld != null`). A LONE deeper path (`a.b.c != null`) refuses, and so does an
+ * already-safe `x?.f`, which projects as another kind and is the dead- / unnecessary-safe-nav
+ * checks' territory. A deeper path is admitted only as a later link of a run of conjuncts that
+ * starts at such a subject (see "Conjunction").
  *
  * ## Soundness — an accessor-free subject, a CALL body, no else, `x` only as the root
  *
@@ -136,9 +142,9 @@ private typedef AssignGuard = {
  *   deliberately);
  * - an assignment l-value (`x.f = v`) is NOT flagged — `x?.f = v` does not
  *   compile;
- * - a body already using `?.` on the root (`x?.m()`) is NOT flagged — its first
- *   access projects as `nullSafeAccessKind`, not `fieldAccessKind` (the dead- /
- *   unnecessary-safe-nav checks' territory);
+ * - a body already using `?.` ON the guard subject (`x?.m()`) is NOT flagged — its junction
+ *   projects as `nullSafeAccessKind`, not `fieldAccessKind` (the dead- / unnecessary-safe-nav
+ *   checks' territory); a LATER `?.` in the chain (`x.f?.m()`) is fine and stays as written;
  * - an `else` branch makes the guard a real two-way choice — NOT flagged;
  * - the guard subject appearing in the body anywhere but the chain root
  *   (`x.m(x)`, `x.a(x).b()`, `x.arr[x]`) is NOT flagged — after `x?.` it stays
@@ -148,12 +154,16 @@ private typedef AssignGuard = {
  *   `this.f` are one narrowed value under two spellings, so either spelling elsewhere
  *   in the body refuses the guard (`denotesSubject`).
  *
- * ## Conjunction — the null-check must be the LAST conjunct
+ * ## Conjunction — a trailing RUN of null-checks, each the prefix of the next
  *
  * Conjuncts evaluate left-to-right, so a conjunct AFTER `x != null` may rely on
- * `x` being non-null (`if (x != null && x.len > 0) …`). Only a null-check that is
- * the LAST conjunct is dropped, leaving the preceding conjuncts as the surviving
- * `if` condition (kept verbatim, so a comment inside them is preserved). The assignment
+ * `x` being non-null (`if (x != null && x.len > 0) …`). Only the trailing run of null-checks
+ * is dropped, leaving the preceding conjuncts as the surviving `if` condition (kept verbatim,
+ * so a comment inside them is preserved). A run is read from the right (`guardRuns`): each
+ * earlier null-check joins it only when its subject is the one-step prefix of the subject after
+ * it, so `x != null && x.f != null` with body `x.f.g()` folds in ONE step to `x?.f?.g()` and
+ * every subject of the run must be met by the body's chain. A null-check that is not such a
+ * prefix (`c != null && x != null`) stays in the surviving condition. The assignment
  * arm takes no conjunction at all — its `if` disappears entirely, leaving nowhere to keep
  * the surviving conjuncts.
  *
@@ -162,7 +172,7 @@ private typedef AssignGuard = {
  * The rewrite replaces the whole guard with the kept region, so that region has to be the
  * receiver chain itself and nothing more. `subjectAccess` therefore descends the
  * `children[0]` receiver spine through CHAIN steps only (`chainKinds` — `fieldAccessKind`,
- * `callKind`, `indexAccessKind`) until the receiver IS the subject, and the junction off it
+ * `callKind`, `indexAccessKind`, `nullSafeAccessKind`) until the receiver IS the subject, and the junction off it
  * must be a plain `.` (`fieldAccessKind`), so an index root (`x[0].f`) and an already-safe
  * `x?.f` root are left alone. `?.` short-circuits every chain step after it, so an index or
  * a call MID-chain (`x.arr[0].c`, `x.map(f).join(',')`) collapses fine — but a `cast`, a
@@ -180,7 +190,7 @@ private typedef AssignGuard = {
  *
  * The whole `if` statement (or the whole ternary) is replaced by the body statement /
  * guarded branch — for the statement arm optionally under `if (<surviving condition>)`
- * (conjunction) — with the FIRST dot off the guard subject turned into `?.`
+ * (conjunction) — with the FIRST dot off each guarded subject turned into `?.`
  * (`if (x != null) x.a.b();` → `x?.a.b();`, `if (x.f != null) x.f.b();` → `x.f?.b();`):
  * only the guard being removed is encoded, inner nullables stay the author's concern.
  * The assignment arm instead emits TWO edits — the declaration's `null` becomes the
@@ -256,9 +266,8 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 			final m: Null<Candidate> = candidate(node, source, regions, seams);
 			if (m == null) return null;
 			final stmtSpan: Null<Span> = m.stmt.span;
-			final rootSpan: Null<Span> = m.rootIdent.span;
-			if (stmtSpan == null || rootSpan == null) return null;
-			final body: Null<String> = safeNavText(source, regions(), rootSpan, stmtSpan);
+			if (stmtSpan == null) return null;
+			final body: Null<String> = safeNavText(source, regions(), m.junctions, stmtSpan);
 			if (body == null) return null;
 			final rest: Null<QueryNode> = m.restCond;
 			final restSpan: Null<Span> = rest?.span;
@@ -294,6 +303,8 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final chainKinds: Array<String> = [fieldAccessKind, callKind];
 		final indexAccessKind: Null<String> = shape.indexAccessKind;
 		if (indexAccessKind != null) chainKinds.push(indexAccessKind);
+		final safeAccessKind: Null<String> = shape.nullSafeAccessKind;
+		if (safeAccessKind != null) chainKinds.push(safeAccessKind);
 		return {
 			ifKinds: ifKinds,
 			notEqKind: notEqKind,
@@ -368,7 +379,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	): Null<AssignGuard> {
 		final target: Null<{ name: String, nullLiteral: QueryNode }> = nullInitLocal(decl, s);
 		if (target == null) return null;
-		final found: Null<{ condIdent: QueryNode, rhs: QueryNode, root: QueryNode }> = guardedChainAssignment(ifNode, target.name, s);
+		final found: Null<{ condIdent: QueryNode, rhs: QueryNode, junction: QueryNode }> = guardedChainAssignment(ifNode, target.name, s);
 		if (found == null) return null;
 		final ifSpan: Null<Span> = ifNode.span;
 		final rhsSpan: Null<Span> = found.rhs.span;
@@ -379,7 +390,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 			condIdent: found.condIdent,
 			ifNode: ifNode,
 			rhs: found.rhs,
-			rootIdent: found.root,
+			junction: found.junction,
 			nullLiteral: target.nullLiteral
 		};
 	}
@@ -406,7 +417,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 */
 	private static function guardedChainAssignment(
 		ifNode: QueryNode, declName: String, s: Seams
-	): Null<{ condIdent: QueryNode, rhs: QueryNode, root: QueryNode }> {
+	): Null<{ condIdent: QueryNode, rhs: QueryNode, junction: QueryNode }> {
 		final assignKind: Null<String> = s.assignKind;
 		if (assignKind == null || !s.ifKinds.contains(ifNode.kind) || BranchChain.hasElse(ifNode)) return null;
 		final condIdent: Null<QueryNode> = guardOperand(BranchChain.condOf(ifNode), s);
@@ -423,7 +434,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		final root: QueryNode = access.children[0];
 		return mentionsOutsideRoot(rhs, root, condIdent, s) || mentionsOutsideRoot(rhs, root, lhs, s)
 			? null
-			: { condIdent: condIdent, rhs: rhs, root: root };
+			: { condIdent: condIdent, rhs: rhs, junction: access };
 	}
 
 	/** Index every ASSIGNMENT-arm guard by its `if` statement's `from:to` span — the key `run` anchors its finding on. */
@@ -446,10 +457,10 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	): Null<Array<{ span: Span, text: String }>> {
 		final ifSpan: Null<Span> = g.ifNode.span;
 		final rhsSpan: Null<Span> = g.rhs.span;
-		final rootSpan: Null<Span> = g.rootIdent.span;
+
 		final nullSpan: Null<Span> = g.nullLiteral.span;
-		if (ifSpan == null || rhsSpan == null || rootSpan == null || nullSpan == null) return null;
-		final nav: Null<String> = safeNavText(source, regions, rootSpan, rhsSpan);
+		if (ifSpan == null || rhsSpan == null || nullSpan == null) return null;
+		final nav: Null<String> = safeNavText(source, regions, [g.junction], rhsSpan);
 		// The `if` occupies a whole line of its own in the common case; deleting the bare span
 		// would leave that line behind as a blank one. `lineExtendedSpan` falls back to the bare
 		// span when the statement shares its line, so a one-line `var r = null; if (…) …;` is safe.
@@ -460,15 +471,27 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	}
 
 	/**
-	 * `region` verbatim with the FIRST dot off the receiver ending at `rootSpan` turned into
-	 * `?.`, or null when there is no such dot inside the region or a comment sits between the
-	 * receiver and it (the comment would swallow the inserted `?`).
+	 * `region` verbatim with the `.` of each junction in `junctions` (field-access nodes, ascending) turned into `?.`.
+	 * The dot is the junction's own token; a tree with no token log scans the text after its receiver. Null when a
+	 * junction has no dot inside the region or a comment sits between its receiver and the dot (the comment would
+	 * swallow the inserted `?`).
 	 */
-	private static function safeNavText(source: String, regions: Array<LexRegion>, rootSpan: Span, region: Span): Null<String> {
-		final dotPos: Int = source.indexOf('.', rootSpan.to);
-		return dotPos < 0 || dotPos >= region.to || LexicalRegions.commentIntersects(rootSpan.to, dotPos, regions)
-			? null
-			: '${source.substring(region.from, dotPos)}?.${source.substring(dotPos + 1, region.to)}';
+	private static function safeNavText(
+		source: String, regions: Array<LexRegion>, junctions: Array<QueryNode>, region: Span
+	): Null<String> {
+		final out: StringBuf = new StringBuf();
+		var copied: Int = region.from;
+		for (junction in junctions) {
+			final receiverEnd: Null<Span> = junction.children[0].span;
+			if (receiverEnd == null) return null;
+			final dotPos: Int = junction.tokenSpelled('.', source)?.from ?? source.indexOf('.', receiverEnd.to);
+			if (dotPos < 0 || dotPos >= region.to || LexicalRegions.commentIntersects(receiverEnd.to, dotPos, regions)) return null;
+			out.add(source.substring(copied, dotPos));
+			out.add('?.');
+			copied = dotPos + 1;
+		}
+		out.add(source.substring(copied, region.to));
+		return out.toString();
 	}
 
 	/** The candidate `node` yields — the `if`-statement guard or the ternary guard, whichever arm its kind selects. */
@@ -515,7 +538,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		return hasComment ? null : {
 			condIdent: condIdent,
 			stmt: branch,
-			rootIdent: access.children[0],
+			junctions: [access],
 			restCond: null
 		};
 	}
@@ -543,7 +566,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 
 	/**
 	 * Descend `node`'s receiver spine through CHAIN steps only (`chainKinds` — field access,
-	 * call, index) until the receiver IS `subject`, returning the step that directly holds it,
+	 * call, index, an already-safe access further along) until the receiver IS `subject`, returning the step that directly holds it,
 	 * and only when that step is a plain `.` field access. Null when `node` is not a chain at
 	 * all (`x.f + 1`), when the spine bottoms out without meeting the subject, or when the
 	 * junction off it is an index / already-safe access.
@@ -563,22 +586,36 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	 * operand, the body statement, the chain-root subject and the surviving
 	 * condition (`restCond`, null for a sole guard); else null. Two condition shapes:
 	 * `if (x != null) x.chain(...)` (sole) and `if (C && ... && x != null) x.chain(...)`
-	 * (the null-check is the LAST conjunct — see `guardCondition`). Bails when `x`
+	 * (the null-checks are the trailing run of conjuncts — see `guardRuns`). Bails when `x`
 	 * appears in the call ARGUMENTS (`x.m(x)` — `x?.m(x)` would leave it `Null<T>`),
 	 * and when a comment sits in a DROPPED part of the removed `if` region.
 	 */
 	private static function match(ifNode: QueryNode, source: String, regions: () -> Array<LexRegion>, s: Seams): Null<Candidate> {
 		if (BranchChain.hasElse(ifNode)) return null;
-		final guard: Null<{ operand: QueryNode, rest: Null<QueryNode> }> = guardCondition(BranchChain.condOf(ifNode), s);
-		if (guard == null) return null;
-		final condIdent: QueryNode = guard.operand;
-		final rest: Null<QueryNode> = guard.rest;
 		final stmt: Null<QueryNode> = singleCallStatement(BranchChain.thenOf(ifNode), s);
 		if (stmt == null) return null;
+		for (run in guardRuns(BranchChain.condOf(ifNode), s)) {
+			final m: Null<Candidate> = matchRun(ifNode, stmt, run, source, regions, s);
+			if (m != null) return m;
+		}
+		return null;
+	}
+
+	/**
+	 * The candidate `run` yields for the single-call body `stmt` of `ifNode`: every subject of the run must be met by the
+	 * body's receiver chain, each as a prefix of the one after it, and none may be mentioned elsewhere in the body.
+	 */
+	private static function matchRun(
+		ifNode: QueryNode, stmt: QueryNode, run: GuardRun, source: String, regions: () -> Array<LexRegion>, s: Seams
+	): Null<Candidate> {
+		final subjects: Array<QueryNode> = run.subjects;
+		final condIdent: QueryNode = subjects[subjects.length - 1];
+		final rest: Null<QueryNode> = run.rest;
 		final access: Null<QueryNode> = subjectAccess(stmt.children[0], condIdent, s);
 		if (access == null) return null;
-		final root: QueryNode = access.children[0];
-		if (mentionsOutsideRoot(stmt.children[0], root, condIdent, s)) return null;
+		final junctions: Array<QueryNode> = [access];
+		for (_ in 1...subjects.length) junctions.unshift(junctions[0].children[0]);
+		for (i => subject in subjects) if (mentionsOutsideRoot(stmt.children[0], junctions[i].children[0], subject, s)) return null;
 		final ifSpan: Null<Span> = ifNode.span;
 		final stmtSpan: Null<Span> = stmt.span;
 		if (ifSpan == null || stmtSpan == null) return null;
@@ -592,7 +629,7 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 		return hasComment ? null : {
 			condIdent: condIdent,
 			stmt: stmt,
-			rootIdent: root,
+			junctions: junctions,
 			restCond: rest
 		};
 	}
@@ -645,30 +682,6 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 	}
 
 	/**
-	 * Analyse an `if` condition for a null guard on a guard subject, returning the
-	 * guarded operand and the surviving REMAINING condition (null for a sole guard):
-	 *
-	 * - `x != null` / `null != x` — the sole condition, `rest` is null;
-	 * - `C && ... && x != null` — the guard is the LAST conjunct, so it is evaluated
-	 *   last and no later conjunct can depend on `x` being non-null (`if (x != null &&
-	 *   x.len > 0) …` is thus NOT matched); `rest` is the preceding `C && ...`, kept
-	 *   verbatim by the fix as the surviving `if` condition.
-	 *
-	 * Any other shape (a guard that is not the last conjunct, a top-level `||`, …)
-	 * returns null.
-	 */
-	private static function guardCondition(cond: QueryNode, s: Seams): Null<{ operand: QueryNode, rest: Null<QueryNode> }> {
-		final sole: Null<QueryNode> = guardOperand(cond, s);
-		if (sole != null) return { operand: sole, rest: null };
-		final andKind: Null<String> = s.andKind;
-		if (andKind == null) return null;
-		final c: QueryNode = BoolExprShape.unwrapParens(cond, s.parenKind);
-		if (c.kind != andKind || c.children.length != AND_CHILD_COUNT) return null;
-		final operand: Null<QueryNode> = guardOperand(c.children[1], s);
-		return operand == null ? null : { operand: operand, rest: c.children[0] };
-	}
-
-	/**
 	 * Whether the guard subject appears in `node`'s subtree anywhere OTHER than at the chain
 	 * root `root`. The rewrite narrows nothing after the `?.`, so any other occurrence — a call
 	 * argument (`x.m(x)`), an intermediate-chain argument (`x.a(x).b()`), an index
@@ -712,6 +725,59 @@ final class PreferSafeNav extends RuleBase implements VersionGated {
 			node.name
 		else
 			null;
+	}
+
+	/**
+	 * The guard runs of an `if` condition, longest first. The conjuncts are read from the RIGHT: the last one is the deepest
+	 * subject, and each conjunct before it joins the run only when its subject is the one-step prefix of the subject after it
+	 * (`C && x != null && x.f != null` reads `x.f`, then `x`, then stops at `C`). Conjuncts evaluate left-to-right, so a
+	 * null-check that precedes a conjunct that is not a prefix of it (`x != null && x.len > 0`) is never dropped.
+	 *
+	 * A run keeps only a head `subjectOf` admits, so a lone deep path still refuses. A shorter run is offered after the longer
+	 * one: when the full run cannot fold (the body mentions its root elsewhere) the last conjunct alone still can, leaving the
+	 * prefix conjuncts as the surviving `if` condition.
+	 */
+	private static function guardRuns(cond: QueryNode, s: Seams): Array<GuardRun> {
+		final deepestFirst: Array<QueryNode> = [];
+		final leftOvers: Array<Null<QueryNode>> = [];
+		final andKind: Null<String> = s.andKind;
+		var remaining: Null<QueryNode> = cond;
+		while (remaining != null) {
+			final c: QueryNode = BoolExprShape.unwrapParens(remaining, s.parenKind);
+			final split: Bool = andKind != null && c.kind == andKind && c.children.length == AND_CHILD_COUNT;
+			final subject: Null<QueryNode> = pathOperand(split ? c.children[1] : c, s);
+			if (subject == null || (deepestFirst.length > 0 && !isStepOf(deepestFirst[deepestFirst.length - 1], subject, s))) break;
+			deepestFirst.push(subject);
+			remaining = split ? c.children[0] : null;
+			leftOvers.push(remaining);
+		}
+		final runs: Array<GuardRun> = [];
+		var length: Int = deepestFirst.length;
+		while (length > 0) {
+			final subjects: Array<QueryNode> = deepestFirst.slice(0, length);
+			subjects.reverse();
+			if (subjectOf(subjects[0], s) != null) runs.push({ subjects: subjects, rest: leftOvers[length - 1] });
+			length--;
+		}
+		return runs;
+	}
+
+	/** The subject of a `<path> != null` / `null != <path>` conjunct: an identifier or a plain `.` chain over one, else null. */
+	private static function pathOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
+		final c: QueryNode = BoolExprShape.unwrapParens(cond, s.parenKind);
+		if (c.kind != s.notEqKind || !NodeShape.hasComparisonShape(c)) return null;
+		final operand: Null<QueryNode> = NodeShape.nullComparedSide(c, s.nullKind);
+		return operand != null && isPath(operand, s) ? operand : null;
+	}
+
+	/** Whether `node` is a plain identifier or a chain of plain `.` field steps over one. */
+	private static function isPath(node: QueryNode, s: Seams): Bool {
+		return node.kind == s.identKind || (node.kind == s.fieldAccessKind && node.children.length == 1 && isPath(node.children[0], s));
+	}
+
+	/** Whether `deeper` is `shallower` plus exactly one plain `.` step. */
+	private static function isStepOf(deeper: QueryNode, shallower: QueryNode, s: Seams): Bool {
+		return deeper.kind == s.fieldAccessKind && deeper.children.length == 1 && sameSubject(deeper.children[0], shallower, s);
 	}
 
 }
