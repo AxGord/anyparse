@@ -378,7 +378,7 @@ states:
       {{stdout}}
       Line {{context.slice}} is cut into new queue lines by ONE splitter agent; the engine checks the list and adds it whole.
       1. Spawn ONE splitter: Agent (plain, no `subagent_type`), model {{context.model_split}}, effort {{context.effort_split}},
-         `run_in_background: true`, prompt exactly:
+         prompt exactly:
 
            You are the SPLITTER of anyparse line {{context.slice}}: you cut it into queue lines; you change no file, no queue, no tree.
            Read: the line (`awk '/^  - id: {{context.slice}}$/{f=1;print;next} f&&/^  - /{exit} f' {{project_root}}/.claude/batch/queue.yaml`),
@@ -394,6 +394,7 @@ states:
            {{stdout}}
            Deliver it: ToolSearch query `select:mcp__plugin_workflow_wf__context_set` (max_results 1), then ONE call
            `context_set({session_id: "{{session_id}}", key: "split_lines", value: <the JSON list>, force: true})`.
+           You own no live background shell when you send it: wait for a long command in ONE foreground call, and await or stop (TaskStop) any shell the harness moved to the background.
            Your LAST message is exactly `SPLIT LINES context split_lines`.
 
       2. context_set `splitter_agent` = the id Agent returned. END your turn with the WAITING line. Its `context_set` of

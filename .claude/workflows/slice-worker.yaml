@@ -456,7 +456,7 @@ states:
         never call `status` after it; read by declaration (`hxq show --select`), never `git diff` on .hx (`hxq changed`);
         a log is never `cat`/`tail`ed whole — `grep -m 20 '<the failing name>'` (a log is not a .hx).
       - Long commands and waits: a command you wait for runs in the FOREGROUND with `timeout: 600000` (a build, a
-        filtered suite, an op over many files fit), never with `run_in_background`. One that may outlast a call you
+        filtered suite, an op over many files fit), never moved to the background. One that may outlast a call you
         start detached with a done-marker, from your logs dir and NOT chained after a `cd … &&` (the `&` would put the
         whole chain in the background): `nohup sh -c '<cmd>; echo $? > L.done' > L.log 2>&1 & echo $! > L.pid`, then
         wait in FOREGROUND calls of

@@ -16,6 +16,7 @@ final class TrackedWorkflowsTest extends Test {
 
 	private static final ROOT: String = '.claude/workflows';
 	private static final MACHINE_PATHS: Array<String> = ['/Users/', '/home/', 'C:\\', '$$HOME/dev', 'mcp-workflow-engine/'];
+	private static final NO_BACKGROUND_FLOWS: Array<String> = ['research-task', 'slice-pipeline', 'slice-worker'];
 
 	public function testNoTrackedWorkflowFileNamesAPathOfOneMachine(): Void {
 		final files: Array<String> = filesUnder(ROOT);
@@ -95,6 +96,25 @@ final class TrackedWorkflowsTest extends Test {
 				utest.Assert.isFalse(text.contains(status), '$file writes status into memory: $status');
 			utest.Assert.isTrue(text.contains('knowledge-placement'), '$file places a lesson through the skill');
 		}
+	}
+
+	/**
+	 * A brief that names `run_in_background` teaches the leak it forbids: a shell its agent leaves live at a turn end sends the
+	 * wake to the main conversation. The three flows that brief agents wait in the foreground, and each agent brief states
+	 * the rule instead.
+	 */
+	public function testNoAgentBriefNamesRunInBackgroundAndEachStatesTheForegroundRule(): Void {
+		for (flow in NO_BACKGROUND_FLOWS) {
+			final text: String = File.getContent('$ROOT/$flow.yaml');
+			utest.Assert.isFalse(text.contains('run_in_background'), '$flow names run_in_background');
+		}
+		final rule: String = 'you own no live background shell';
+		utest.Assert.equals(
+			2, File.getContent('$ROOT/research-task.yaml').toLowerCase().split(rule).length - 1, 'investigator and verifier carry the rule'
+		);
+		utest.Assert.equals(
+			1, File.getContent('$ROOT/slice-pipeline.yaml').toLowerCase().split(rule).length - 1, 'the splitter carries the rule'
+		);
 	}
 
 	private static function filesUnder(dir: String): Array<String> {
