@@ -15,6 +15,10 @@
 
 **Consequence**: parallelism is **processes**, not threads. That is a deliberate position, not a defeat — process fan-out is measured at 3.15x with bit-exact output on the target benchmark, and independently at 3.06x on the round-trip workload (2026-08-18), with the knee at four processes and saturation near 3.1x. Note what that is *not*: the earlier claim here read "an 8-core machine gets 8x throughput, not 1x". It does not. Anything that keeps per-run state must therefore be **run-scoped** — an instance field on a wrapper created per lint run or fix run — and adding a fourth process-scoped cache is a regression against this principle even when it is faster.
 
+## Runtime shootout, 2026-10-17 (not re-measured)
+
+One reading of the query engine's full lint run on a large client tree, median of three, a loaded machine: node 25.4 s, JVM 23.5-24.5 s (twice the CPU, three to eleven times the memory), hxcpp 84 s, HashLink/C 137 s (with a patched runtime) and 259 s (stock). The thread-safety rule alone: node 6.75 s, JVM 5.97-6.54 s, hxcpp 15.9 s, HashLink 37 s. About a fifth of the hxcpp time sat in `__cxa_throw`: the PEG parser backtracks by exception, which is cheap on node and the JVM and expensive in hxcpp. HashLink has no arm64 JIT and a non-generational collector, and its allocation path costs a syscall on macOS. The reading kept node as the runtime; the lever a faster run would pull is threads over one shared index, which the process-scoped caches of § 2 rule out. The numbers describe that tree and that day.
+
 ## From § 6. Parsing loses formatting; writing is `format(ast, options)`
 
 **Rule**: the parser does not preserve whitespace, comments, or stylistic choices (quote styles, trailing commas). The writer regenerates output from AST + FormatOptions. If byte-identical round-trip matters, an optional pass detects options from a sample and passes them to the writer.

@@ -720,6 +720,8 @@ The one surface that predates the envelope convention: a BARE top-level array (`
 
 #### `lint-score --format json` and the truth file
 
+The truth file is anyparse development data: it is kept beside the checkouts the rules are scored on and lives in no client repository.
+
 The truth file `lint-score` reads (`LintTruthJson`). The schema refuses a missing key or a wrong type; `LintScore.validate` refuses, with exit 2, an empty `rule` / `project` / `commit` or key part, an unknown `verdict` or evidence `kind`, a negative `ms`, a `real-long` entry marked `"recall": false` (every real-long entry is recalled), a `dupOf` on any verdict but `dup-of`, a `dup-of` whose `dupOf` is missing, names the entry itself, or names no entry of the file, and one key labelled twice:
 
 ```

@@ -103,6 +103,8 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 
 **Goal**: write the AS3 grammar and build an AS3→Haxe conversion tool on anyparse's transform framework. This replaces the ax3 tool.
 
+**Status**: frozen 2026-11-01 (a pause, unfrozen only on the user's word). The goal of 2026-10-16 stands: permanent cross-compilation, AS3 stays the source, Haxe is generated on every build, so the translation is automatic, deterministic and exact.
+
 **Deliverables**:
 - `anyparse-grammar-as3` package with full AS3 grammar including E4X via `@:capture`/`@:match`, ASI via `@:commit`, and namespaces.
 - `anyparse.transform` framework with reusable helpers: visitor, query, scope tracking, import manager, type mapping registry, library mapping registry.
@@ -159,6 +161,8 @@ Each one validates or stress-tests a specific axis of the platform:
 The aspirational endpoint. A Haxe compiler implemented in Haxe, using anyparse for the parser/writer/formatter/codegen foundation. Not a planned deliverable — a north star that informs architectural decisions so that we do not accidentally close doors to it.
 
 This goal is a call of the user; calls like it are kept as `docs/README.md` § "Where a new sentence goes" row 6 says.
+
+**Research, not started**: an own C++ generator over the official compiler's typed AST (`Context.onAfterTyping`), and two readings of other routes to native code (the OxCaml compiler, the hxmc backend). They are reconnaissance of 2026-10-16/17, not decisions; nothing is planned from them.
 
 ## How to update this roadmap
 

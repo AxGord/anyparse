@@ -1103,6 +1103,10 @@ apq sweep --run --corpus <dir> --save <path>   # a census of any fixture tree
 
 **`apq fmt` refuses a `.hxtest` by name** rather than reporting a parse failure, and names both replacements: `fmt --write` on a fixture, had it learned to read the input section, would have overwritten the fixture with a third of itself.
 
+### The formatter fork the corpus reads
+
+`ANYPARSE_HXFORMAT_FORK` points at a checkout of the reference formatter's fork; its fixes are made on `fx/` branches, not on its default branch. After a change in it, rebuild BOTH `run.n` and `run.js`: the neko binary hands the work to `run.js`, so rebuilding only one leaves a stale formatter that looks as if the change did nothing. `haxelib dev formatter` with no path UNLINKS the dev copy. A passing `test.hxml` run prints nothing, so a silent exit 0 proves nothing until a deliberate failing fixture has been seen to fail. `test/single-run.txt` names one test and needs its full relative path; a short name matches nothing and the run passes vacuously. `buildNeko` regenerates `resources/default-hxformat.json`; revert it.
+
 ### The cross-config `--one-pass` arm
 
 The `fmt` branch's first two arms pair each tree with its own `hxformat.json`. Between them they cover two (tree, config) pairs and no third, and the third is where the writer's convergence tail lives: a file settles in one rewrite under one config and needs two under another, so "`--one-pass` is green here" says nothing about any config but ours. The third arm formats `src test tools` under `tools/data/xconfig-hxformat.json` — a vendored, fully specified config kept in the repo so the arm is hermetic (the source tree's working copy differs from its committed one; re-vendor from a commit). It runs on a scratch root of SYMLINKS with the vendored config at the root, because config discovery walks up from each file's directory lexically, so an interrupted battery cannot leave the repo holding a foreign config the way a swap could.

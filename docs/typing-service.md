@@ -7,6 +7,10 @@ Haxe written in Haxe: answers cached by declaration, signatures apart from bodie
 global state, one set of declarations shared by every compiler configuration of a project. What it DOES today is only
 what its consumers and the harness ask; this note says where each later step plugs in.
 
+## Why not a port
+
+anyparse is MIT. A translation of the OCaml compiler's typer, or a vendored port of it (the compiler is GPL), cannot enter this repository, so the typer is written from the specification and ports of the compiler are read as specification only. The harness (T1) reads a pinned compiler clone, it never copies from it.
+
 ## Where it lives and how long
 
 One `SymbolIndex` builds one service (`index.typing`) over its own immutable tables — the files, the name resolver
