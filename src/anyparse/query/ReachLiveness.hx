@@ -179,4 +179,23 @@ final class ReachLiveness {
 		return dead;
 	}
 
+	/**
+	 * The liveness of the builds the run `plugin` hosts declared, read on first demand and once; the answer is null when the
+	 * run knows none (`SymbolIndexHost.reachBuilds`), so every branch is then in play.
+	 */
+	public static function ofRun(plugin: GrammarPlugin): () -> Null<ReachLiveness> {
+		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
+		final read: () -> Null<ReachBuilds> = host == null ? () -> null : host.reachBuilds;
+		var asked: Bool = false;
+		var held: Null<ReachLiveness> = null;
+		return () -> {
+			if (!asked) {
+				asked = true;
+				final builds: Null<ReachBuilds> = read();
+				held = builds == null ? null : new ReachLiveness(plugin, builds.configurations);
+			}
+			held;
+		};
+	}
+
 }

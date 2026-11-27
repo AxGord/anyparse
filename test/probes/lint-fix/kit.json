@@ -3642,6 +3642,38 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PFTF-DEAD-BRANCH-UNIFICATION",
+			"note": "prefer-final-typedef-fields: Pt is unified with a writable inline structure only inside `#if dflag`, which the oracle build never defines; the typedef stays as written, so the build that defines it still compiles",
+			"argv": [
+				"hxq",
+				"lint",
+				"Main.hx",
+				"--rule",
+				"prefer-final-typedef-fields",
+				"--all",
+				"--fix"
+			],
+			"files": {
+				"Main.hx": "typedef Pt = {x:Int, y:Int}\n\nclass Main {\n\tstatic function main() {\n\t\tvar p:Pt = {x: 1, y: 2};\n\t\ttrace(p.x + p.y);\n\t\t#if dflag\n\t\ttake(p);\n\t\t#end\n\t}\n\n\t#if dflag\n\tstatic function take(w:{x:Int, y:Int}):Void {\n\t\ttrace(w);\n\t}\n\t#end\n}\n",
+				"check.hxml": "-cp .\n-main Main\n--interp\n",
+				"apq.json": "{\"compilerOracle\": \"check.hxml\", \"rules\": {\"prefer-final-typedef-fields\": {\"enabled\": true}}}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "9267bdb8ddb9afbd",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
 		}
 	]
 }

@@ -63,6 +63,8 @@ final class LintArgs {
 		final fullScopeIds: Array<String> = [
 			'unused-private',
 			'prefer-final-field',
+			// A write of a field name in a file outside the active subset is a write the rule must see.
+			'prefer-final-typedef-fields',
 			'unused-parameter',
 			'prefer-final-public-field',
 			'prefer-read-only-field',

@@ -1642,6 +1642,124 @@
 			"find": "final anchor: Null<QueryNode> = SameValueRuns.hoistPoint(part, block, writes, ctx.shape);",
 			"replace": "final anchor: Null<QueryNode> = TreePath.ancestorsAt(block, part[0].span.from)[1];",
 			"note": "the local goes before the statement holding the earliest read whatever guards or writes precede the read inside it"
+		},
+		{
+			"name": "M-PFTF-NO-FIX",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "fix",
+			"force": "[]",
+			"note": "the check returns no edit, so a flagged typedef is reported and never rewritten"
+		},
+		{
+			"name": "M-PFTF-IGNORE-WRITES",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "noteWrite",
+			"find": "written[name] = true;",
+			"replace": "{}",
+			"note": "an assignment, compound assignment or increment of a field name is taken to write nothing, so a typedef whose field the project writes is flagged"
+		},
+		{
+			"name": "M-PFTF-INDEX-KEY",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "noteWrite",
+			"find": "if (key != null) written[key.content] = true;",
+			"replace": "if (key != null) {}",
+			"note": "an index write with a literal key is taken to write no field, so a field written as o['x'] is flagged"
+		},
+		{
+			"name": "M-PFTF-REFLECT-KEY",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "noteReflectiveWrite",
+			"find": "if (literal != null) written[literal.content] = true;",
+			"replace": "if (literal != null) {}",
+			"note": "a Reflect.setField with a literal name is taken to write no field, so the field it names is flagged"
+		},
+		{
+			"name": "M-PFTF-THIS-IN-CLASS",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "noteWrite",
+			"find": "!(inClass && isSelf(target.children[0], seams))",
+			"replace": "true",
+			"note": "a write through `this` inside a class counts as a write of the typedef's field, so a class's own field of that name keeps the typedef a var"
+		},
+		{
+			"name": "M-PFTF-THIS-IN-ABSTRACT",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "noteWrite",
+			"find": "!(inClass && isSelf(target.children[0], seams))",
+			"replace": "!isSelf(target.children[0], seams)",
+			"note": "a write through `this` inside an abstract is taken for the abstract's own, so a typedef written through an abstract over it is flagged"
+		},
+		{
+			"name": "M-PFTF-WHOLE-TYPE",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "rewrite",
+			"find": "(!ctx.perField && ready.length != open.length)",
+			"replace": "false",
+			"note": "wholeType mode flags a typedef with one written field, rewriting the others and leaving the typedef half final"
+		},
+		{
+			"name": "M-PFTF-PER-FIELD-VAR",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "shortEdits",
+			"find": "ready.exists(node.name ?? '') ? FINAL_KEYWORD : VAR_KEYWORD",
+			"replace": "FINAL_KEYWORD",
+			"note": "a short body rewritten in perField mode makes the written field final too, which the compiler rejects"
+		},
+		{
+			"name": "M-PFTF-META",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "carriesMetaOrCondition",
+			"force": "false",
+			"note": "a typedef led by metadata or a conditional region is rewritten like any other"
+		},
+		{
+			"name": "M-PFTF-MEMBER-KINDS",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "bodyOf",
+			"find": "} else if (!(seams.metaKinds.contains(kind) || kind == seams.publicKind)) {",
+			"replace": "} else if (false) {",
+			"note": "an extension clause or a function member no longer keeps the typedef as written"
+		},
+		{
+			"name": "M-PFTF-MIXED-FORMS",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "bodyOf",
+			"find": "(shortCount != 0 && shortCount != fields.length)",
+			"replace": "false",
+			"note": "a body mixing short and long fields is rewritten, splicing class-notation text into a short body"
+		},
+		{
+			"name": "M-PFTF-STALE-BODY",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "fix",
+			"find": "source.substring(at.from, at.to) == plan.body",
+			"replace": "true",
+			"note": "an edit planned for one text applies to another, splicing at offsets that no longer hold the typedef"
+		},
+		{
+			"name": "M-PFTF-UNVERIFIED-REGION",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "collectUnverified",
+			"find": "out[name] = true;",
+			"replace": "{}",
+			"note": "a name inside conditional code no configuration is known to compile is taken for verified, so a typedef used only there is flagged and the rewrite breaks the other define sets"
+		},
+		{
+			"name": "M-PFTF-DEAD-BRANCH-LIVE",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "collectUnverified",
+			"find": "!liveness.live(entry.file, entry.source, node.span)",
+			"replace": "false",
+			"note": "a branch the declared builds never take is taken for compiled, so a typedef used only there is flagged though no configuration types the use"
+		},
+		{
+			"name": "M-PFTF-LIVE-BRANCH-DEAD",
+			"type": "anyparse.check.common.design.PreferFinalTypedefFields",
+			"method": "collectUnverified",
+			"find": "!liveness.live(entry.file, entry.source, node.span)",
+			"replace": "true",
+			"note": "a branch a declared build takes is taken for unverified, so a typedef the oracle checks through that branch is refused for nothing"
 		}
 	]
 }

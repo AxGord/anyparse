@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex.DeclBranch;
 import anyparse.query.SymbolIndex.MemberInfo;
 import anyparse.query.SymbolIndex.ResolvedType;
@@ -31,18 +30,7 @@ final class BuildBranches {
 	/** Built by the owning `SymbolIndex`, over its `plugin` — the run's host, when it is one — and its files' texts. */
 	public function new(plugin: GrammarPlugin, sourceOf: String -> Null<String>) {
 		_sourceOf = sourceOf;
-		final host: Null<SymbolIndexHost> = plugin is SymbolIndexHost ? cast plugin : null;
-		final read: () -> Null<ReachBuilds> = host == null ? () -> null : host.reachBuilds;
-		var asked: Bool = false;
-		var held: Null<ReachLiveness> = null;
-		_liveness = () -> {
-			if (!asked) {
-				asked = true;
-				final builds: Null<ReachBuilds> = read();
-				held = builds == null ? null : new ReachLiveness(plugin, builds.configurations);
-			}
-			held;
-		};
+		_liveness = ReachLiveness.ofRun(plugin);
 	}
 
 	/**

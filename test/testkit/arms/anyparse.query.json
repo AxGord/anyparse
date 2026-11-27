@@ -13389,16 +13389,16 @@
 		},
 		{
 			"name": "M-BUILDS-ASKED-ONCE",
-			"type": "anyparse.query.BuildBranches",
-			"method": "new",
+			"type": "anyparse.query.ReachLiveness",
+			"method": "ofRun",
 			"find": "if (!asked) {",
 			"replace": "if (true) {",
 			"note": "the builds are read again for every question about a declaration with several branches"
 		},
 		{
 			"name": "M-BUILDS-HOST-OFF",
-			"type": "anyparse.query.BuildBranches",
-			"method": "new",
+			"type": "anyparse.query.ReachLiveness",
+			"method": "ofRun",
 			"find": "final read: () -> Null<ReachBuilds> = host == null ? () -> null : host.reachBuilds;",
 			"replace": "final read: () -> Null<ReachBuilds> = () -> null;",
 			"note": "the run's builds are never read, so every branch stays read under builds that leave one out"

@@ -812,6 +812,7 @@ final class HaxeRefShape {
 		};
 		table.structureFieldHostKinds = ['Anon', 'ObjectLit'];
 		table.structureVarFieldKind = 'VarField';
+		table.structureFinalFieldKind = 'FinalField';
 		table.nullableWrapperTypeNames = ['Null', 'Dynamic', 'Any'];
 		table.memberTransparentWrapperTypeNames = ['Null'];
 		table.nullSafetyDisableArg = 'Off';

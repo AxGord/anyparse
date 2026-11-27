@@ -213,6 +213,43 @@ carries metadata (`@:structInit` included), is declared under `#if`, has type pa
 module. The rule sees only the typedefs among the files of the run, so lint the whole project: one file alone finds no
 typedef declared elsewhere. `anon-type-dup` counts the repeats of a structure no typedef names yet.
 
+## `prefer-final-typedef-fields`
+
+A typedef of an anonymous structure whose fields nothing writes, rewritten to the class notation with `final` fields.
+`Info`, DEFAULT OFF, a risky fix: with a `compilerOracle` the edit is applied, the project typechecked and a file the
+compiler rejects reverted (the finding stays report-only there); with none the rule only reports. Run it over the whole
+project: a write in a file that is not linted reads as absent, and only the oracle can catch it. Key `mode`:
+`"wholeType"` (default) flags a typedef only when ALL its non-final fields can become final; `"perField"` finalizes the
+ones that can and leaves the others writable in the class notation.
+
+```haxe
+typedef Pt = { x:Int, ?y:Int }          // -> typedef Pt = { final x:Int; final ?y:Int; }
+typedef Q = { var a:Int; var b:Int; }   // -> typedef Q = { final a:Int; final b:Int; }
+```
+
+The short form cannot carry `final` and cannot be mixed with the class notation, so a short body is rewritten whole: `final `
+before each field (`var ` before one `perField` keeps writable), `,` between fields becomes `;`. A long-form field only swaps
+its `var` keyword. `anon-short-fields` keeps any body holding a `final` field as written, so the two rules never undo each
+other. A final field does not unify with a writable one in either direction, so a typedef compared with another structure of
+the same shape stays a `var` through the oracle's rejection.
+
+A field is not a candidate when any file of the run writes a field of its NAME: an assignment, a compound assignment, `++` /
+`--`, `??=`, an index write with that string literal (`o["x"] = …`), or `Reflect.setField` / `setProperty` / `deleteField`
+with that literal key. The name is the whole test: a same-named field of an unrelated class keeps the typedef as written,
+except `this.<name> = …` inside a class, which writes the class's own field. Every branch of an `#if` is read, so a write in
+a branch no oracle configuration compiles keeps the field a `var`. A typedef whose name or any field name occurs in such a
+branch is refused whole, since a unification there (a value passed to a writable inline structure) is a build the oracle
+never types; when the project declared no complete list of builds, every `#if` region counts as such a branch, and only
+with `reachConfigurationsComplete` do the declared builds' defines decide which branches are taken. A use under a name that
+spells neither the typedef nor a field (a value of the type handed on through a differently named variable) is not seen.
+What no scan sees: a write with a computed key, a write in a file outside the run, and a macro-generated one. A
+reflective write never breaks the rewrite: `final` on a structure field is compile-time only, so `Reflect.setField` still
+writes at runtime and the compiler never rejects it; only typed writes and unifications matter, and the oracle sees those.
+
+Never rewritten: a typedef carrying metadata (`@:structInit`, a schema or build annotation), declared under `#if`, extending a
+structure (`> Base`), holding anything but fields, or mixing short and long fields; a long-form field with an accessor clause
+or a comment between `var` and its name. Inline structure types in signatures are out of scope.
+
 ## `prefer-helper`
 
 A run of statements that repeats the body of a helper the project marks as a TEMPLATE, replaceable with a call of

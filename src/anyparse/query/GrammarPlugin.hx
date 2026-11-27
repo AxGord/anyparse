@@ -1695,6 +1695,12 @@ final class RefShape {
 	public var structureVarFieldKind: Null<String>;
 
 	/**
+	 * The `final` field of a structure TYPE (Haxe `FinalField`, `{ final x: T; }`) — the long-form field that cannot be
+	 * written, the counterpart of `structureVarFieldKind`. Optional.
+	 */
+	public var structureFinalFieldKind: Null<String>;
+
+	/**
 	 * Node kinds that CONTINUE a variable declaration — every binding after the first in
 	 * `var a = 1, b = 2;` (Haxe `VarMore`). Each is a declaration node in its own right,
 	 * nested right-recursively inside the head declaration, so a consumer enumerating a
