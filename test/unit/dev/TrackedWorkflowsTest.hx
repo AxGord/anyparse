@@ -1,5 +1,6 @@
 package unit.dev;
 
+import anyparse.util.Compare;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -114,6 +115,41 @@ final class TrackedWorkflowsTest extends Test {
 		);
 		utest.Assert.equals(
 			1, File.getContent('$ROOT/slice-pipeline.yaml').toLowerCase().split(rule).length - 1, 'the splitter carries the rule'
+		);
+	}
+
+	/**
+	 * A reviewed MERGE reaches `land` only through `look_route`, which sends a line whose `human_gate:` is due to the `owner_look`
+	 * wait; no other state may route to `land` except the retries after a land attempt, so a new route here fails this test.
+	 */
+	public function testALineWithAHumanGateCannotReachTheLandWithoutPassingTheWait(): Void {
+		final pipeline: String = File.getContent('$ROOT/slice-pipeline.yaml');
+		final branch: String = stateBlock(pipeline, 'review_branch');
+		utest.Assert.isTrue(branch.contains('"0": look_route'), 'a MERGE verdict goes to the gate check');
+		utest.Assert.isFalse(branch.contains(': land'), 'review_branch never routes to land itself');
+		final look: String = stateBlock(pipeline, 'look_route');
+		utest.Assert.isTrue(look.contains('--gate "$$SLICE"'), 'look_route asks the queue whether the gate is due');
+		utest.Assert.isTrue(look.contains('"10": owner_look'), 'exit 10 (gate due) enters the owner wait');
+		utest.Assert.isTrue(look.contains('"0": land'), 'exit 0 (no gate due) lands');
+		utest.Assert.isTrue(look.contains('default: look_failed'), 'an unreadable queue never lands');
+		final owner: String = stateBlock(pipeline, 'owner_look');
+		utest.Assert.isTrue(owner.contains('\n    human:'), 'owner_look is a human wait');
+		utest.Assert.isTrue(owner.contains('passes: [go]'), 'only go passes the gate');
+		for (route in ['go: land', 'fix: owner_fix', 'close: mark_closed'])
+			utest.Assert.isTrue(owner.contains('      $route'), 'owner_look routes $route');
+		utest.Assert.isTrue(
+			stateBlock(pipeline, 'owner_fix').contains('      worker_done: worker_end'), 'an owner fix returns through review'
+		);
+		final routers: Array<String> = [];
+		var state: String = '';
+		for (line in pipeline.split('\n')) {
+			if (line.startsWith('  ') && !line.startsWith('   ') && !line.startsWith('  #') && line.endsWith(':')) state = line.trim();
+			final text: String = line.trim();
+			if (!text.startsWith('#') && text.endsWith(': land') && !routers.contains(state)) routers.push(state);
+		}
+		routers.sort(Compare.compareString);
+		utest.Assert.equals(
+			'fmt_race_skip:,land_stray:,land_timeout:,look_route:,owner_look:,triage:', routers.join(','), 'the states that route to land'
 		);
 	}
 

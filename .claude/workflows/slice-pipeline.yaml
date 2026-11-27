@@ -667,10 +667,84 @@ states:
       VERDICT: "{{context.verdict}}"
     timeout: 10000
     cases:
-      "0": land
+      "0": look_route
       "1": fixes
       "2": reject
     default: review_dead
+
+  look_route:
+    station: false
+    type: exec
+    # A MERGE verdict reaches `land` only through this check: a line whose `human_gate:` is not yet passed (exit 10) waits for
+    # its owner first, as the engine's batch-task does. The engine refuses the `done` mark of such a line only after the merge.
+    command: '"$WF_PLUGIN_ROOT/scripts/wf-queue" "$QUEUE" --gate "$SLICE"'
+    env:
+      SLICE: "{{context.slice}}"
+      QUEUE: "{{project_root}}/.claude/batch/queue.yaml"
+    timeout: 60000
+    cases:
+      "0": land
+      "10": owner_look
+    default: look_failed
+
+  look_failed:
+    max_visits: 3
+    on_exhausted: stopped
+    prompt: |-
+      The gate check of {{context.slice}} failed (exit {{exit_code}}):
+      {{stdout}}
+      {{stderr}}
+      The queue could not be read (a held lock, a malformed file) or its wf-queue has no `--gate`: `retry` once it reads; `stop` otherwise.
+      Never `land` by hand: the line's `human_gate:` is unchecked.
+    transitions:
+      retry: look_route
+      stop: stopped
+
+  owner_look:
+    # The owner looks before the land. Entering frees the slot (the line goes `awaiting`); the answer resumes the slice on a
+    # fresh driver. `go` is the only answer that passes the line's `human_gate:`, and it goes straight to `land`.
+    max_visits: 5
+    on_exhausted: stopped
+    human:
+      question: "Look at {{context.slice}} before it lands (`git -C {{context.wt}} show HEAD`, worktree {{context.wt}}). go = land it, fix = send your words to the worker, close = do not land."
+      show:
+        - "{{context.wt}}-logs/review.md"
+        - "{{context.wt}}-logs/report.md"
+        - "{{context.wt}}-logs/slice-gate/printed-table.txt"
+      answer_key: owner_words
+      passes: [go]
+    prompt: |-
+      A slice driver: {{context.slice}} is reviewed (MERGE) and waits for its owner (`human_gate:` on its line), its slot free.
+      Hand back ONE line, the question's own `AWAITING task=<ID> session=<P> question=…`, and stop; take NO transition.
+      A fresh driver is spawned once the answer is recorded: its `status` shows `HUMAN-ANSWER route=<r>`. Take that route:
+      `go` (the land), `fix` (the owner's words are `{{context.owner_words}}`), or `close`.
+    transitions:
+      go: land
+      fix: owner_fix
+      close: mark_closed
+
+  owner_fix:
+    # The owner's own round: its counter is apart from the review rounds of `fixes`, and the words reach the reviewer
+    # through decisions.md like a parent call. The round returns through the gate and a review to `owner_look`.
+    full_on_revisit: true
+    max_visits: 3
+    on_exhausted: stopped
+    prompt: |-
+      Owner round {{visits.owner_fix}} of 3 (entered from `owner_look`: the owner's words are `{{context.owner_words}}`).
+      1. Append to {{context.wt}}-logs/decisions.md: `## owner call (supersedes any earlier ruling on this choice)` /
+         `decision: <the words verbatim>` / `why: user`. The reviewer and the worker read that file.
+      2. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context:
+         {gate_flags: "{{context.gate_flags}}"}})` → W2; context_set `worker_session` = W2;
+         `link_agent({session_id: W2, agent_id: "{{context.worker_agent}}"})`.
+      3. `tokens_worker` is {{context.tokens_worker}}. Above 250000, or a worker that no longer answers → NO SendMessage: spawn a fresh worker (Agent with NO subagent_type (general-purpose: a `workflow:*` type lacks Bash/Edit or the workflow tools), model {{context.model_fix}}, effort {{context.effort_fix}}) with the text below, then link_agent it to W2 and context_set `worker_agent`. Otherwise SendMessage `{{context.worker_agent}}`:
+
+           Owner fix round: the owner's words are in {{context.wt}}-logs/decisions.md — read it whole. Your NEW session is W2 (already
+           started — do NOT call start()): `status({session_id: "W2"})`, drive it to its terminal — this is a fix round.
+
+      END your turn on this pipeline (`WAITING …`) — no transition before W2's own DONE/BLOCKED line. On its
+      report: ONE `transition` `worker_done` with `set: {tokens_worker: <digits only>}`.
+    transitions:
+      worker_done: worker_end
 
   review_running:
     max_visits: 8

@@ -62,6 +62,7 @@ final class TrackedWorkflowRoutesTest extends Test {
 		'slice-pipeline.yaml:worker_end/gate_flags/decided' => FLAGS_ACCUMULATE,
 		'slice-pipeline.yaml:worker_end/gate_flags/fixes' => FLAGS_ACCUMULATE,
 		'slice-pipeline.yaml:worker_end/gate_flags/gate_fix' => FLAGS_ACCUMULATE,
+		'slice-pipeline.yaml:worker_end/gate_flags/owner_fix' => FLAGS_ACCUMULATE,
 		'slice-pipeline.yaml:worker_end/gate_flags/land' => FLAGS_ACCUMULATE,
 		'slice-pipeline.yaml:worker_end/gate_flags/regate' => FLAGS_ACCUMULATE,
 		'slice-pipeline.yaml:worker_end/gate_flags/round_not_started' => FLAGS_ACCUMULATE,
@@ -152,7 +153,7 @@ final class TrackedWorkflowRoutesTest extends Test {
 		utest.Assert.equals('review_running', WorkflowRoutes.nextOf(end, 3));
 		utest.Assert.equals('review_dead', WorkflowRoutes.nextOf(end, 4));
 		utest.Assert.equals('review_dead', WorkflowRoutes.nextOf(end, 99));
-		utest.Assert.equals('land', WorkflowRoutes.nextOf(branch, 0));
+		utest.Assert.equals('look_route', WorkflowRoutes.nextOf(branch, 0));
 		utest.Assert.equals('fixes', WorkflowRoutes.nextOf(branch, 1));
 		utest.Assert.equals('reject', WorkflowRoutes.nextOf(branch, 2));
 		utest.Assert.equals('review_dead', WorkflowRoutes.nextOf(branch, 4));
