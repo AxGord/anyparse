@@ -13,7 +13,8 @@ import unit.cli.CliFixture;
 /**
  * The `prefer-existing-typedef` check: an anonymous structure TYPE that exactly one project typedef already spells is
  * rewritten to the typedef's name, with the import the printer decides. No configuration names anything — the typedef IS the
- * decision. A shape two typedefs spell, a typedef that carries metadata, sits under `#if`, takes type parameters or is private
+ * decision; `PreferExistingTypedefAcrossModulesTest` holds which typedefs the file may be offered. A shape
+ * two typedefs spell, a typedef that carries metadata, sits under `#if`, takes type parameters or is private
  * to another module, and a structure whose type names bind to other declarations than the typedef's, are never rewritten.
  */
 class PreferExistingTypedefCheckTest extends Test {
@@ -26,7 +27,10 @@ class PreferExistingTypedefCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-PET-NO-PLAN')
 	public function testAReorderedStructureBecomesTheTypedef(): Void {
-		final files: Array<SourceEntry> = [pair('typedef Pair = { a:Int, b:String };'), user('app')];
+		final files: Array<SourceEntry> = [
+			pair('typedef Pair = { a:Int, b:String };'),
+			user('app', STRUCTURE, 'import pkg.Pair;')
+		];
 		final found: Array<Violation> = violations(files);
 		Assert.equals(1, found.length);
 		Assert.isTrue(found[0].message.contains('typedef pkg.Pair'), found[0].message);
@@ -133,7 +137,7 @@ class PreferExistingTypedefCheckTest extends Test {
 	@:killer('M-PET-NO-PLAN')
 	public function testTheCliFixWritesTheNameAndTheImport(): Void {
 		final dir: String = CliFixture.writeTree('prefer-existing-typedef-fix', [
-			{ name: 'apq.json', source: '{"rules":{"prefer-existing-typedef":{"enabled":true}}}' },
+			{ name: 'apq.json', source: '{"rules":{"prefer-existing-typedef":{"enabled":true,"acrossModules":true}}}' },
 			{ name: 'src/pkg/Pair.hx', source: 'package pkg;\n\ntypedef Pair = {a:Int, b:String};\n' },
 			{
 				name: 'src/app/User.hx',
@@ -210,8 +214,12 @@ class PreferExistingTypedefCheckTest extends Test {
 	}
 
 	/** A class of package `pkg` with one method returning `structure`. */
-	private static function user(pkg: String, structure: String = STRUCTURE): SourceEntry {
-		return { file: 'src/$pkg/User.hx', source: 'package $pkg;\n\nclass User {\n\tpublic function f(): $structure return null;\n}\n' };
+	private static function user(pkg: String, structure: String = STRUCTURE, ?imports: String): SourceEntry {
+		final head: String = imports == null ? '' : '$imports\n\n';
+		return {
+			file: 'src/$pkg/User.hx',
+			source: 'package $pkg;\n\n${head}class User {\n\tpublic function f(): $structure return null;\n}\n'
+		};
 	}
 
 	/** `files` with the slices applied: an edit list is spliced into the file's source. */

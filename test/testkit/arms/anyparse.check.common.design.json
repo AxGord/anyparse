@@ -1830,6 +1830,34 @@
 			"find": "refs.length == 2",
 			"replace": "refs.length >= 2",
 			"note": "a short typedef field of a function type taking an array is retyped at its first argument"
+		},
+		{
+			"name": "M-PET-VISIBLE",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "visibleFrom",
+			"force": "true",
+			"note": "a typedef of an unrelated module is rewritten to like any visible one"
+		},
+		{
+			"name": "M-PET-REACHES",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "reaches",
+			"force": "false",
+			"note": "an imported typedef or one of the file's own package counts as not visible"
+		},
+		{
+			"name": "M-PET-SPELLS",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "spells",
+			"force": "false",
+			"note": "a typedef an implemented interface spells counts as not visible"
+		},
+		{
+			"name": "M-PET-ACROSS-OPTION",
+			"type": "anyparse.check.common.design.PreferExistingTypedef",
+			"method": "acrossModules",
+			"force": "false",
+			"note": "the acrossModules option is ignored"
 		}
 	]
 }

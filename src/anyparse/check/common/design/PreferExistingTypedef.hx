@@ -1,9 +1,12 @@
 package anyparse.check.common.design;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OptionKeyed;
 import anyparse.check.Check.ScopeDependent;
+import anyparse.check.LintConfig;
 import anyparse.check.common.design.AnonTypeDup.AnonCtx;
 import anyparse.check.common.design.AnonTypeDup.Occurrence;
 import anyparse.check.common.design.AnonTypeDup.RewriteSite;
@@ -12,6 +15,7 @@ import anyparse.query.ModuleScan;
 import anyparse.query.ParseGate;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeRefPrinter;
+import anyparse.query.Uses;
 import anyparse.util.Compare;
 
 using anyparse.util.Groups;
@@ -64,25 +68,49 @@ private typedef Seams = {
  * ## Refused (reported, not fixed)
  *
  * Two or more typedefs equal to the structure (ambiguous); a typedef with metadata, under `#if`, with type parameters, or
- * private to another module. The body of a typedef is never an occurrence. The rule only sees the typedefs of the files of
- * the run: lint the whole project.
+ * private to another module, and one the file does not already see (its package, an import, a type its supertypes spell):
+ * that match is by shape alone, and `acrossModules` restores the rewrite. The body of a typedef is never an occurrence. The
+ * rule only sees the typedefs of the files of the run: lint the whole project.
  */
 @:nullSafety(Strict)
-final class PreferExistingTypedef extends RuleBase implements CrossFileFix implements DefaultOff implements ScopeDependent {
+final class PreferExistingTypedef extends RuleBase implements CrossFileFix implements DefaultOff implements ScopeDependent
+		implements ConfigAware implements OptionKeyed {
 
 	private static inline final RULE_ID: String = 'prefer-existing-typedef';
+	private static final ACROSS_MODULES_KEY: String = 'acrossModules';
+
+	/** The source of each file of the run, by path: what a supertype's module is read from. Rebuilt by every `run`. */
+	private final _sources: Map<String, String> = [];
+
+	/** The type-reference projection of each module a supertype check read, by path (null: unreadable). Rebuilt by every `run`. */
+	private final _typeTrees: Map<String, Null<QueryNode>> = [];
 
 	/** The rewrite of each fixable finding, keyed by its anchor (`file:from`): the typedef path it becomes. Rebuilt by every `run`. */
 	private final _plans: Map<String, String> = [];
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {
 		super(RULE_ID, 'an anonymous structure type that a project typedef already names', RuleCategory.Design);
 	}
 
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
+
+	public function acceptedOptions(): Array<String> {
+		return [ACROSS_MODULES_KEY];
+	}
+
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		_plans.clear();
+		_sources.clear();
+		_typeTrees.clear();
 		final seams: Null<Seams> = seamsOf(plugin);
 		if (seams == null || files.length == 0) return [];
+
+		for (entry in files) _sources[entry.file] = entry.source;
 		final groups: Map<String, Array<Occurrence>> = [];
 		final order: Array<String> = [];
 		final raws: Map<String, Array<RawAlias>> = [];
@@ -162,17 +190,49 @@ final class PreferExistingTypedef extends RuleBase implements CrossFileFix imple
 			'its typedef is private to ${only.raw.file}'
 		else
 			only.refusal;
+		final byShape: Bool = refusal == null && !acrossModules(hit.file) && !visibleFrom(only, hit, index, plugin);
+		final reason: Null<String> = byShape ? 'matches ${only.path} by shape; name it if it means the same thing' : refusal;
 		out.push({
 			file: hit.file,
 			span: hit.at,
 			rule: RULE_ID,
 			severity: Severity.Info,
-			message: refusal == null
+			message: reason == null
 				? 'this structure is the typedef ${only.path} — write the name'
-				: 'this structure is the typedef ${only.path}, not rewritten: $refusal',
-			declineReason: refusal
+				: byShape ? 'this structure $reason' : 'this structure is the typedef ${only.path}, not rewritten: $reason',
+			declineReason: reason
 		});
-		if (refusal == null) _plans['${hit.file}:${hit.at.from}'] = only.path;
+		if (reason == null) _plans['${hit.file}:${hit.at.from}'] = only.path;
+	}
+
+	/** `acrossModules: true` restores the rewrite to a typedef the file does not already see. */
+	private function acrossModules(file: String): Bool {
+		return LintConfig.resolveWith(_resolveConfig, file).boolOption(RULE_ID, ACROSS_MODULES_KEY) ?? false;
+	}
+
+	/**
+	 * Whether the typedef is one the hit's file already sees — its own package, an import, or the member type of a supertype
+	 * (an implemented interface) that spells it — so naming it adds no coupling the file has not accepted.
+	 */
+	private function visibleFrom(alias: Alias, hit: Occurrence, index: SymbolIndex, plugin: GrammarPlugin): Bool {
+		if (reaches(alias, hit.file, index, hit.at.from)) return true;
+		final info: Null<FileInfo> = index.fileInfo(hit.file);
+		if (info == null) return false;
+		for (type in info.types)
+			for (raw in type.supertypesRaw)
+				for (found in index.resolveTypeRefsFrom(raw, hit.file))
+					if (reaches(alias, found.file.file, index) && spells(alias.raw.name, found.file.file, plugin)) return true;
+		return false;
+	}
+
+	/** Whether the module `file` writes the simple type `name` in a type position (the parallel type-reference projection). */
+	private function spells(name: String, file: String, plugin: GrammarPlugin): Bool {
+		if (!_typeTrees.exists(file)) {
+			final source: Null<String> = _sources[file];
+			_typeTrees[file] = source == null || ParseGate.parseOrNull(plugin, source) == null ? null : plugin.parseFileTypeRefs(source);
+		}
+		final tree: Null<QueryNode> = _typeTrees[file];
+		return tree != null && Uses.find(name, tree, plugin.typeRefShape()).length > 0;
 	}
 
 	/**
@@ -209,6 +269,15 @@ final class PreferExistingTypedef extends RuleBase implements CrossFileFix imple
 		final scopes: Map<String, Array<Span>> = known ?? parameterScopes(hit, plugin, memo);
 		final at: Int = hit.at.from;
 		return hit.typeNames.exists(name -> (scopes[name] ?? []).exists(s -> s.from <= at && at < s.to));
+	}
+
+	/** Whether `file` binds the typedef's simple name to the typedef, or shares its package. */
+	private static function reaches(alias: Alias, file: String, index: SymbolIndex, ?at: Int): Bool {
+		final home: Null<FileInfo> = index.fileInfo(alias.raw.file);
+		final here: Null<FileInfo> = index.fileInfo(file);
+		if (home != null && here != null && home.pkg == here.pkg) return true;
+		return index.resolveTypeRefsFrom(alias.raw.name, file, at)
+			.find(f -> f.file.file == alias.raw.file && f.type.name == alias.raw.name) != null;
 	}
 
 	/** The structure-bodied typedefs of a module, `guarded` once the walk is inside a conditional region. */

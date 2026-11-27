@@ -3301,7 +3301,7 @@
 				"--fix"
 			],
 			"files": {
-				"apq.json": "{\"rules\":{\"prefer-existing-typedef\":{\"enabled\":true}}}",
+				"apq.json": "{\"rules\":{\"prefer-existing-typedef\":{\"enabled\":true,\"acrossModules\":true}}}",
 				"Main.hx": "class Main {\n\tstatic function main() {\n\t\ttrace(new app.User().f());\n\t}\n}\n",
 				"pkg/Inner.hx": "package pkg;\n\ntypedef Inner = {a:Int, b:String};\n",
 				"pkg/Outer.hx": "package pkg;\n\ntypedef Outer = {x:{a:Int, b:String}};\n",
@@ -3665,6 +3665,72 @@
 				"out": "e3b0c44298fc1c14",
 				"err": "9267bdb8ddb9afbd",
 				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "PET-BY-SHAPE-NOT-REWRITTEN",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"prefer-existing-typedef",
+				"--no-oracle",
+				"--fix"
+			],
+			"note": "default (no acrossModules): a structure matching a typedef of an unrelated module (a.media.Export.OutputSize) is reported by shape and NOT rewritten; base rewrote canvas() to OutputSize with an import. Tip answers right; row pins the new default at the CLI",
+			"files": {
+				"apq.json": "{\"rules\":{\"prefer-existing-typedef\":{\"enabled\":true}}}",
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\ttrace(new b.scene.Layout().canvas());\n\t}\n}\n",
+				"a/media/Export.hx": "package a.media;\n\ntypedef OutputSize = { width:Int, height:Int }\n",
+				"b/scene/Layout.hx": "package b.scene;\n\nclass Layout {\n\tpublic function new() {}\n\n\tpublic function canvas():{width:Int, height:Int} {\n\t\treturn null;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "5678d39b7d2354fe",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true,
+					true
+				],
+				"sameRun": [
+					true,
+					true
+				]
+			}
+		},
+		{
+			"name": "PET-IMPORTED-MODULE-REWRITTEN",
+			"argv": [
+				"hxq",
+				"lint",
+				".",
+				"--rule",
+				"prefer-existing-typedef",
+				"--no-oracle",
+				"--fix"
+			],
+			"note": "default: the same structure in a file that imports a.media.Export is rewritten to OutputSize (visible typedef). Tip answers right",
+			"files": {
+				"apq.json": "{\"rules\":{\"prefer-existing-typedef\":{\"enabled\":true}}}",
+				"Main.hx": "class Main {\n\tstatic function main() {\n\t\ttrace(new b.scene.Layout().canvas());\n\t}\n}\n",
+				"a/media/Export.hx": "package a.media;\n\ntypedef OutputSize = { width:Int, height:Int }\n",
+				"b/scene/Layout.hx": "package b.scene;\n\nimport a.media.Export;\n\nclass Layout {\n\tpublic function new() {}\n\n\tpublic function canvas():{width:Int, height:Int} {\n\t\treturn null;\n\t}\n}\n"
+			},
+			"expect": {
+				"exit": 0,
+				"out": "e3b0c44298fc1c14",
+				"err": "1c5e8f0db00b8975",
+				"files": "76c961cb0fb93286",
 				"compiles": [
 					true,
 					true

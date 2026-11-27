@@ -194,9 +194,9 @@ adjacent writes of EVERY field a project-declared idiom names, on one receiver o
 ## `prefer-existing-typedef`
 
 An anonymous structure type that exactly one project typedef already spells, written as that typedef's name.
-`Info` and DEFAULT OFF; no keys — the typedef is the decision, so nothing names it in `apq.json`. `lint --fix`
-rewrites the structure to the typedef's name and adds the import the file needs; the files that change are written
-together or not at all.
+`Info` and DEFAULT OFF; the typedef is the decision, so nothing names it in `apq.json`. The one key is
+`acrossModules` (below). `lint --fix` rewrites the structure to the typedef's name and adds the import the file needs;
+the files that change are written together or not at all.
 
 ```haxe
 // pkg/Pair.hx   typedef Pair = { a:Int, b:String };
@@ -207,6 +207,12 @@ A structure equals a typedef when both have the same fields (name, optionality, 
 type name they spell binds to the same declaration from each file — `{ a:Foo }` over two different `Foo` types is not
 the same type. A nested structure written with its fields in another order is not matched. The body of a `typedef` is
 never an occurrence.
+
+The rewrite is offered only for a typedef the file already sees: the typedef's own package, an import of its module or
+of the type, or a typedef that an interface (or superclass) of the file's types spells in its own source. A typedef of an
+unrelated module that agrees on shape by chance stays a finding without a fix, saying `matches <path> by shape; name it
+if it means the same thing` — naming it couples the two types, a decision for the author. `"acrossModules": true` (per
+file; default `false`) restores the rewrite to any typedef of the run.
 
 Reported but not rewritten, the message naming why: two or more typedefs have the structure (ambiguous), the typedef
 carries metadata (`@:structInit` included), is declared under `#if`, has type parameters, or is `private` to another
