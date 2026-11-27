@@ -225,6 +225,9 @@ final class LintArgs {
 		CliIo.sysPrint('                    distinct apq.json chain (config, default-off and\n');
 		CliIo.sysPrint('                    languageVersion resolved); nothing is linted\n');
 		CliIo.sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
+		CliIo.sysPrint('  --dry-run        With --fix: run the whole fix pipeline (passes, oracle, guards), print\n');
+		CliIo.sysPrint('                    the edits it keeps as a per-file diff and put every file back.\n');
+		CliIo.sysPrint('                    The tree is rewritten while the run goes: do not edit it meanwhile\n');
 		CliIo.sysPrint('  --fix-probes <n>  With --fix: the typechecks the safe-pass net may spend in one\n');
 		CliIo.sysPrint('                    run isolating the edits that broke the build (default 32);\n');
 		CliIo.sysPrint('                    past it the safe pass is reverted whole\n');
@@ -303,6 +306,7 @@ final class LintArgs {
 		var flat: Bool = false;
 		var includeInfo: Bool = false;
 		var fix: Bool = false;
+		var dryRun: Bool = false;
 		var noOracle: Bool = false;
 		var noStoredBuilds: Bool = false;
 		var fixProbes: Int = LintFixSafePass.PROBE_CAP;
@@ -335,6 +339,8 @@ final class LintArgs {
 					flat = true;
 				case '--fix':
 					fix = true;
+				case '--dry-run':
+					dryRun = true;
 				case '--no-oracle':
 					noOracle = true;
 				case '--no-stored-builds':
@@ -410,6 +416,7 @@ final class LintArgs {
 			flat: flat,
 			includeInfo: includeInfo,
 			fix: fix,
+			dryRun: dryRun,
 			noOracle: noOracle,
 			noStoredBuilds: noStoredBuilds,
 			fixProbes: fixProbes,
@@ -467,6 +474,10 @@ final class LintArgs {
 			CliIo.stderr('apq lint: --baseline narrows the REPORT and cannot be combined with --fix (--range narrows both)\n');
 			return EXIT_USAGE;
 		}
+		if (o.dryRun && !o.fix) {
+			CliIo.stderr('apq lint: --dry-run previews --fix and applies to --fix only\n');
+			return EXIT_USAGE;
+		}
 		if (o.reviewBudget != null && !o.fix) {
 			CliIo.stderr('apq lint: --review-budget sets the budget of a REORDER and applies to --fix only\n');
 			return EXIT_USAGE;
@@ -510,6 +521,7 @@ final class LintArgs {
 			flat: false,
 			includeInfo: false,
 			fix: false,
+			dryRun: false,
 			noOracle: false,
 			noStoredBuilds: false,
 			fixProbes: LintFixSafePass.PROBE_CAP,

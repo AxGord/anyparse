@@ -71,6 +71,9 @@ typedef LintOpts = {
 	var flat: Bool;
 	var includeInfo: Bool;
 	var fix: Bool;
+
+	/** `--dry-run` — with `--fix`, the run's edits are printed as a per-file diff and put back (`LintFixDriver.dryRun`). */
+	var dryRun: Bool;
 	var noOracle: Bool;
 
 	/** `--no-stored-builds` — a `--no-oracle` run reads no stored reach builds (`LintOracleRun.withReachConfigurations`). */
@@ -156,6 +159,7 @@ final class LintCommand implements CliCommand {
 		return new CliFlags(
 			[
 				'--all',
+				'--dry-run',
 				'--explain-long',
 				'--fix',
 				'--flat',
@@ -325,15 +329,15 @@ final class LintCommand implements CliCommand {
 			oracles, early, reflective, holders, ahead, o
 		);
 
-		if (o.fix)
-			return LintOracleRun.endingCompiles(
-				compiler, early, ahead, oracles,
-				() ->
-					LintFixDriver.runLintFix(
-						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
-						o.noOracle, windowOf, o.verbose, ledger, o.fixProbes, o.reviewBudget
-					)
-			);
+		if (o.fix) return LintOracleRun.endingCompiles(compiler, early, ahead, oracles, () -> {
+			function fix(): Int {
+				return LintFixDriver.runLintFix(
+					files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles), o.noOracle,
+					windowOf, o.verbose, ledger, o.fixProbes, o.reviewBudget
+				);
+			}
+			return LintFixDriver.dryRun(o.dryRun, fix);
+		});
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report

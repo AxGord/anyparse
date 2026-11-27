@@ -1700,6 +1700,22 @@
 			"find": "plugin.parseFile(original);",
 			"replace": "plugin.reconParse(original);",
 			"note": "the probe reads the trivia parse again, so a file ast rejects reports PARSE OK"
+		},
+		{
+			"name": "M-LINT-DRY-RUN-KEEPS-WRITES",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "dryRun",
+			"find": "journal.rollback();\n\t\t\tfor (i => was in before)",
+			"replace": "for (i => was in before)",
+			"note": "a dry run no longer puts the files back, so the run it previewed stays written"
+		},
+		{
+			"name": "M-LINT-DRY-RUN-SAYS-NOTHING",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "dryRun",
+			"find": "for (i => was in before) printFileDiff(was.path, was.content, after[i].content);",
+			"replace": "",
+			"note": "a dry run puts the files back but prints no diff, so the preview shows nothing"
 		}
 	]
 }

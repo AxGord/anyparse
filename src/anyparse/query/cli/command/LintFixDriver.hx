@@ -17,6 +17,7 @@ import anyparse.query.LineDiff;
 import anyparse.query.LintDiff;
 import anyparse.query.LintFixSafePass;
 import anyparse.query.OracleProvider;
+import anyparse.query.cli.WriteJournal.JournalState;
 import anyparse.query.cli.command.LintCommand.CheckPartition;
 import anyparse.query.cli.command.LintCommand.LintWindowOf;
 import anyparse.query.cli.command.LintFixVerify.AssistedOutcome;
@@ -1588,5 +1589,38 @@ final class LintFixDriver {
 		for (line in freshNoteLines(said, rule, answer.notes)) CliIo.stderr('$line\n');
 		return answer.edits;
 	}
+
+	/**
+	 * `--dry-run` when `enabled`, else plain `fix()`: `fix` runs for real (the oracle and the revert nets judge bytes on disk)
+	 * under its own `WriteJournal`; what the run kept is printed as a per-file diff and every path is put back before the journal closes.
+	 * The put-back stays inside `during`, so an enclosing journal (the post-write typecheck) never sees a write.
+	 */
+	public static function dryRun(enabled: Bool, fix: () -> Int): Int {
+		if (!enabled) return fix();
+		final journal: WriteJournal = new WriteJournal();
+		return WriteJournal.during(journal, () -> {
+			final exit: Int = try {
+				fix();
+			} catch (exception: Exception) {
+				journal.rollback();
+				throw exception;
+			}
+			final before: Array<JournalState> = journal.originals();
+			final after: Array<JournalState> = journal.current();
+			journal.rollback();
+			for (i => was in before) printFileDiff(was.path, was.content, after[i].content);
+			return exit;
+		});
+	}
+
+	/** One file's change as `---` / `+++` headers and `DeclarationDelta.hunk` rows; nothing for a file left as it was. */
+	private static function printFileDiff(path: String, was: Null<String>, now: Null<String>): Void {
+		if (was == now) return;
+		CliIo.sysPrint('--- ${was == null ? '/dev/null' : path}\n+++ ${now == null ? '/dev/null' : path}\n');
+		for (row in DeclarationDelta.hunk(was?.split('\n') ?? [], now?.split('\n') ?? [], DIFF_CONTEXT)) CliIo.sysPrint('$row\n');
+	}
+
+	/** The unchanged lines `--dry-run` keeps on each side of an edit. */
+	private static inline final DIFF_CONTEXT: Int = 3;
 
 }
