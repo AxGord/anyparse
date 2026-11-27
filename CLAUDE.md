@@ -23,6 +23,8 @@ Every code decision must respect these; the motivating pain point behind each li
 
 [README.md](docs/README.md) maps every doc and where a new sentence goes. Most read: [testing.md](docs/testing.md) (test layers, registries, battery, slice gate), [cli-query-tool.md](docs/cli-query-tool.md) (apq/hxq contract), [design-principles.md](docs/design-principles.md) (each invariant), [architecture.md](docs/architecture.md), [strategies.md](docs/strategies.md), [formats.md](docs/formats.md), [cross-family-contract.md](docs/cross-family-contract.md), [roadmap.md](docs/roadmap.md), [guide/](docs/guide/README.md) (user reference; a feature is documented there). Readings: [journal/testing-log.md](docs/journal/testing-log.md), [journal/cli-query-log.md](docs/journal/cli-query-log.md). [decisions.md](docs/decisions.md): append only via `node bin/dev.js decision`, `grep -n`, never read whole.
 
+Placement: where a new piece of knowledge goes (docs, memory, skills, workflows) — [docs/README.md](docs/README.md) § Where a new sentence goes.
+
 **Scope, strategic framing, current phase, architecture at a glance, session handoff, references and the parent/curator commands** live in [project-context.md](docs/project-context.md). Read it before planning work, reviewing scope or proposing a queue line. The one-line rule: anyparse is a PLATFORM. A decision must serve a concrete validation case (ax3, haxe-formatter) AND generalize to the next ten formats; never narrow the scope.
 
 ## Working on this project

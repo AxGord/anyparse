@@ -43,7 +43,7 @@ Sessions should align with phase boundaries — start a new Claude Code session 
 8. ✅ **Refactor hand-written `JsonParser`** to use `Input`/`Parser`/`ParseError` from the new runtime. Hand-written behavior preserved; runtime types validated as usable.
 9. ✅ **Refactor hand-written `JsonWriter`** to read literals and policies from `JsonFormat` instead of hardcoding. No behavior change, only source.
 10. ✅ All 288 existing tests remain green after refactor (plus 27 new foundation tests; 328 passing assertions total on neko, js, and interp targets).
-11. ✅ Project memory updated with session handoff notes for Phase 2 (`session_state.md` carries design decisions D1–D8).
+11. ✅ Phase 2 handoff notes written.
 12. ✅ First commit — initial public release at `AxGord/anyparse` on GitHub (commit `b1cdccf`).
 
 **Non-deliverables for this phase** (explicitly deferred):
@@ -158,7 +158,7 @@ Each one validates or stress-tests a specific axis of the platform:
 
 The aspirational endpoint. A Haxe compiler implemented in Haxe, using anyparse for the parser/writer/formatter/codegen foundation. Not a planned deliverable — a north star that informs architectural decisions so that we do not accidentally close doors to it.
 
-See the project memory entry `long_term_goal.md` for details.
+This goal is a call of the user; calls like it are kept as `docs/README.md` § "Where a new sentence goes" row 6 says.
 
 ## How to update this roadmap
 

@@ -36,14 +36,14 @@ Strategies are plugins that own metadata tags and lower grammar nodes into CoreI
 
 ✅ Phase 0 walking skeleton · ✅ Phase 1 macro foundation · ✅ Phase 2 first macro-generated parser · 🔶 **Phase 3: Haxe grammar + formatter replacement — in progress** · ✅ binary format support (ar archive) · ⬜ Phase 4 AS3 grammar + AS3→Haxe transform · ⬜ Phase 5+ family IRs, cross-family bridge.
 
-Phase deliverables and corpus pass/fail counts go stale fast — the authoritative source is `docs/roadmap.md` and project memory, never this file.
+Phase deliverables and corpus pass/fail counts go stale fast — the authoritative source is `docs/roadmap.md` and the gates' own output, never this file.
 
 
 ### Session handoff
 
-Starting: read this file, `docs/roadmap.md`, project memory (`~/.claude/projects/-Users-axg-dev-lab-anyparse/memory/MEMORY.md` and linked files); run `haxe test-js.hxml && node bin/test.js` before changing anything.
+Starting: read this file and `docs/roadmap.md`; the memory index (`MEMORY.md`) loads on its own; run `haxe test-js.hxml && node bin/test.js` before changing anything.
 
-Ending: leave the project green; update `docs/roadmap.md` on a phase boundary; update project memory with anything load-bearing; do not commit unless asked.
+Ending: leave the project green; update `docs/roadmap.md` on a phase boundary; what shipped goes in the commit message and the journal, a lesson where `docs/README.md` § "Where a new sentence goes" sends it (status of work never goes into memory); do not commit unless asked.
 
 
 ## References this project builds against

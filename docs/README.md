@@ -54,3 +54,17 @@ A contract lives in ONE place. When a class doc owns it (a registry's record sha
 - "We tried X, measured Y, so no" → one line in `decisions.md`, appended by `node bin/dev.js decision --slice <ID> "<text>"` (never an edit of the file).
 - A phase boundary → `roadmap.md`.
 - A comment in code → an invariant, a contract, or a non-obvious "why", in one to three sentences; `doc-measurement-claim` and `doc-length` are the lint half of that rule (`cli-query-tool.md` § "The report-only rules that read comments").
+
+The bullets above are row 5 of the order below; a piece of knowledge takes the FIRST row that fits (one lesson may split across rows):
+
+1. **A check a tool, hook, lint rule or gate can hold** → a queue line against the tool's owner; a stop-gap prose rule names that line. A lint finding that is by design → the baseline or suppression in `apq.json` / `apqlint.json`, never memory.
+2. **How a flow routes, its order, or a rule needed at ONE process moment** → the workflow prompt that runs at that moment (`.claude/workflows/`).
+3. **True across projects** (a gotcha, a tool's behaviour, a process habit) → a skill, not this repo.
+4. **True of this project and every agent obeys it at every command** (an invariant, a command, a prohibition) → `CLAUDE.md`: a rule change there carries the user's quote and a declared touch, and stays inside its byte budget.
+5. **Project knowledge read on demand** → the bullets above.
+6. **A call of the user** (taste, scope, a prohibition, a long-term goal) → the project's decision home: memory taste-call files (`feedback_*.md`, `project_*.md`) and `.claude/workflows/lib/principles.md` (the maintainer's standing principles), with the user's quote and date; a superseded value is marked, not deleted.
+7. **None of the above** (not findable in the tree; only on the user's ask, or an un-findable fact) → project memory: one file, one index line in `MEMORY.md`, and a `why-memory:` line saying why no row above fits.
+
+Never in memory: the status of work (what shipped, what is next — the commit message, the journal and the queue hold it), anything a tool or workflow already enforces, a designed lint finding, an optimization log.
+
+Which memory directory: knowledge for operating anyparse (its commands, its owner's calls) → the anyparse project's memory dir; knowledge for developing the workflow engine → the engine's own memory dir.
