@@ -18075,6 +18075,14 @@
 			"find": "source.fastCodeAt(at) == '{'.code || ",
 			"replace": "",
 			"note": "a heading right under the body's opening brace is not taken across a blank line, so the weld refusal stands"
+		},
+		{
+			"name": "M-ADD-MEMBER-ANY-CONSTRUCT",
+			"type": "anyparse.query.AddMember",
+			"method": "memberEdit",
+			"find": "member.kind == Member",
+			"replace": "true",
+			"note": "a built construct of any kind is spliced into the type body, so an import reaches the member slot and only the re-parse refuses it"
 		}
 	]
 }

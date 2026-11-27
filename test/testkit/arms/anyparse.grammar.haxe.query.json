@@ -448,6 +448,38 @@
 			"find": "HaxeQueryWalker.parseTokens(source)",
 			"replace": "null",
 			"note": "the root handle carries no token log, so no tree a caching host projects has tokens"
+		},
+		{
+			"name": "M-CONSTRUCTS-WORD-PUBLIC",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "word",
+			"find": "case Public: 'public';",
+			"replace": "case Public: 'private';",
+			"note": "the public modifier is spelled as private, so a built member no longer carries the modifiers it was asked for"
+		},
+		{
+			"name": "M-CONSTRUCTS-ANY-ROOT",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "rooted",
+			"find": "nodes.length == 1 && kinds.contains(nodes[0].kind)",
+			"replace": "nodes.length == 1",
+			"note": "a construct is accepted whatever node it parses to, so a lambda callee regroups the call around its body instead of being parenthesized"
+		},
+		{
+			"name": "M-CONSTRUCTS-UNCHECKED",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "whole",
+			"find": "nodes != null && nodes.length == 1",
+			"replace": "true",
+			"note": "a copied fragment is taken without parsing it back, so two statements pass as one expression"
+		},
+		{
+			"name": "M-CONSTRUCTS-MEMBER-COUNT",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "declared",
+			"find": "nodes.length != modifiers + 1 || ",
+			"replace": "",
+			"note": "a member text that parses to two members is accepted, so a name can smuggle a second declaration into the type"
 		}
 	]
 }

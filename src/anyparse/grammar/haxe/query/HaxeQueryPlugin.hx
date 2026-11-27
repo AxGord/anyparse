@@ -35,6 +35,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.CompilerFacts;
 import anyparse.query.CondBranchProjection;
 import anyparse.query.CondDirectives;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.GrammarPlugin;
@@ -531,6 +532,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function booleanLogicSupport(): Null<BooleanLogicSupport> {
 		return new HaxeBooleanLogicSupport();
+	}
+
+	public function constructs(): Null<Constructs> {
+		return new HaxeConstructs(this);
 	}
 
 	/**

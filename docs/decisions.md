@@ -5697,3 +5697,4 @@ over-wide COMMENT lines, 41 single long literals (unbreakable, left).
 - built-in odd-prefix strip list or naming arm refused 2026-07-25: hxq rename --scope already does it (DOCS-SIBLING-TAKE) → DOCS-SIBLING-TAKE
 - translating or vendoring a GPL compiler port as the typer refused: anyparse is MIT, ports are read as specification only (DOCS-SIBLING-TAKE) → DOCS-SIBLING-TAKE
 - a rule deleting a parameter that no caller passes, public methods included, refused 2026-10-06: a public parameter may be room for extension → only a confined private method or local function is judged, report-only (never-passed-parameter) → NEVER-PASSED-PARAM-PRIVATE
+- a fix could build a typed node and spell it through the generated writer as is → no: the writer's only public entries are root-level write/writeDoc, no code builds a typed node, QueryNode drops type slots and has no way back → FIX-CONSTRUCT-SEAM

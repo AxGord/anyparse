@@ -160,6 +160,13 @@
 			"find": "NodeTokens.attach(document, JsonQueryWalker.parseTokens(source));",
 			"replace": "",
 			"note": "a JSON document is projected without its token log, so a member does not know its colon"
+		},
+		{
+			"name": "M-CONSTRUCTS-JSON",
+			"type": "anyparse.grammar.json.JsonQueryPlugin",
+			"method": "constructs",
+			"force": "new anyparse.grammar.haxe.query.HaxeConstructs(this)",
+			"note": "the JSON grammar answers the Haxe construct builder, so a fix would spell Haxe into a JSON document"
 		}
 	]
 }

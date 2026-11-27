@@ -1071,6 +1071,8 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		return _inner.typedOptionsRewrite(source, kit, reformat, optsJson, subjects);
 	}
 
+	public function constructs(): Null<Constructs> return _inner.constructs();
+
 	/** The injected scope's two-and-a-half views, forced (the library read happens here), or null when none was injected. */
 	private inline function scopeSources(): Null<ResolutionSources> {
 		return _resolutionScope?.sources();

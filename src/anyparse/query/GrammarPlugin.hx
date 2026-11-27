@@ -4404,6 +4404,12 @@ interface GrammarPlugin {
 	public function booleanLogicSupport(): Null<BooleanLogicSupport>;
 
 	/**
+	 * Optional: the grammar's construct builder, which a fix asks for new code by meaning instead of spelling it. Null when
+	 * the grammar builds no constructs — a fix that needs one then refuses, like the other optional support methods above.
+	 */
+	public function constructs(): Null<Constructs>;
+
+	/**
 	 * Optional: the extension-method names a `using <modulePath>` brings into
 	 * scope, for module paths the grammar knows from its standard library. The
 	 * `unused-import` check uses this to verify that a `using` whose bound name is

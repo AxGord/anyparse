@@ -9,6 +9,7 @@ import anyparse.check.haxe.expressions.CompareFunctions.ConfigProblem;
 import anyparse.check.haxe.expressions.CompareFunctions.NamedCompare;
 import anyparse.check.haxe.expressions.SortComparatorWalk.SortKinds;
 import anyparse.query.AddMember;
+import anyparse.query.Constructs;
 import anyparse.query.MemberEdit;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceText;
@@ -518,6 +519,8 @@ final class DuplicateComparator extends HaxeRule implements DefaultOff implement
 		}
 		if (named == null) return refused('no name derives from its body');
 		if (index == null) return refused('the scope has no symbol index');
+		final build: Null<Constructs> = plugin.constructs();
+		if (build == null) return refused('the grammar builds no members');
 		final name: String = named;
 		final placed: { host: Null<Host>, why: String } = hostOf(sites, s, plugin, index);
 		final found: Null<Host> = placed.host;
@@ -542,9 +545,10 @@ final class DuplicateComparator extends HaxeRule implements DefaultOff implement
 			hostName
 		else
 			hostPrinter.printTypeExpr(pathOf(declared.file, declared.type), at);
-		final member: String = memberOf(
-			origin, name, element, outside, sites.exists(site -> site.ordered), path -> hostPrinter.printTypeExpr(path, at), s
+		final member: Null<Built> = memberOf(
+			origin, name, element, outside, sites.exists(site -> site.ordered), path -> hostPrinter.printTypeExpr(path, at), s, build
 		);
+		if (member == null) return refused('the grammar builds no member of its body');
 		final insert: MemberEdit = AddMember.memberEdit(host.source, host.tree, hostName, member, plugin);
 		final added: Null<{ span: Span, text: String }> = insert.edit;
 		if (added == null) return refused(insert.refusal);
@@ -552,10 +556,10 @@ final class DuplicateComparator extends HaxeRule implements DefaultOff implement
 		byFile.push(host.file, added);
 		for (site in sites) {
 			final printer: TypeRefPrinter = printerOf(printers, plugin, index, site.file, site.source, site.tree);
-			byFile.push(
-				site.file,
-				{ span: site.span, text: inside(site, host) ? name : '${printer.printTypeExpr(host.path, site.span.from)}.$name' }
-			);
+			final reference: Null<String> = referenceAt(site, host, name, printer, build);
+			if (reference == null) return refused('the grammar builds no reference to $hostName.$name');
+			final text: String = reference;
+			byFile.push(site.file, { span: site.span, text: text });
 		}
 		for (file => printer in printers) for (edit in printer.pendingImportEdits())
 			byFile.push(file, { span: edit.span, text: edit.text });
@@ -568,47 +572,96 @@ final class DuplicateComparator extends HaxeRule implements DefaultOff implement
 		};
 	}
 
+	/** The text naming the extracted member at `site`: its bare name inside the host, else the name on the host's type. */
+	private static function referenceAt(site: Site, host: Host, name: String, printer: TypeRefPrinter, build: Constructs): Null<String> {
+		if (inside(site, host)) return name;
+		final owner: Null<Built> = build.typeRef(printer.printTypeExpr(host.path, site.span.from));
+		return owner == null ? null : build.qualified(owner, name)?.text;
+	}
+
 	/**
 	 * The extracted member: a typed `static final` over the configured macro for keys proved orderable when the options name a
 	 * macro for each direction the keys take, else a static function returning the body, its compare function spelled for the host.
 	 */
 	private static function memberOf(
-		origin: Site, name: String, element: String, outside: Bool, ordered: Bool, typeAt: (String) -> String, s: Seams
-	): String {
-		final visibility: String = outside ? 'public' : 'private';
-		final spell: (NamedCompare) -> String = compare -> '${typeAt(compare.typePath)}.${compare.member}';
-		final callback: Callback = origin.callback;
-		final keys: Null<Array<Key>> = callback.keys;
-		if (keys != null && ordered) {
-			final ascending: Bool = keys[0].ascending;
-			final outer: Null<NamedCompare> = ascending ? origin.options.asc : origin.options.desc;
-			final inner: Null<NamedCompare> = ascending ? origin.options.desc : origin.options.asc;
-			if (outer != null && (inner != null || keys.foreach(k -> k.ascending == ascending))) {
-				final lambdas: Array<String> = [ for (k in keys) {
-					final lambda: String = '${k.param} -> ${textOf(k.key, origin.source)}';
-					k.ascending == ascending || inner == null ? lambda : '${spell(inner)}($lambda)';
-				} ];
-				final declared: String = '$visibility static final $name: ($element, $element) -> ${s.intType}';
-				return '$declared = ${spell(outer)}(${lambdas.join(', ')});';
+		origin: Site, name: String, element: String, outside: Bool, ordered: Bool, typeAt: (String) -> String, s: Seams, build: Constructs
+	): Null<Built> {
+		final set: Array<Modifier> = [outside ? Public : Private, Static];
+		final elementType: Null<Built> = build.typeRef(element);
+		final intType: Null<Built> = build.typeRef(s.intType);
+		if (elementType == null || intType == null) return null;
+		final keys: Null<Array<Key>> = origin.callback.keys;
+		final ascending: Bool = keys != null && keys[0].ascending;
+		final outer: Null<NamedCompare> = ascending ? origin.options.asc : origin.options.desc;
+		final inner: Null<NamedCompare> = ascending ? origin.options.desc : origin.options.asc;
+		if (keys == null || !ordered || outer == null || (inner == null && !keys.foreach(k -> k.ascending == ascending)))
+			return methodOf(origin, set, name, elementType, intType, typeAt, build);
+		final value: Null<Built> = keyedValue(origin, keys, ascending, outer, inner, typeAt, build);
+		final declared: Null<Built> = build.functionType([elementType, elementType], intType);
+		return value == null || declared == null ? null : build.member(set, Constant, name, declared, value);
+	}
+
+	/** The static function taking two `element` parameters and returning the callback's body. */
+	private static function methodOf(
+		origin: Site, set: Array<Modifier>, name: String, element: Built, int: Built, typeAt: (String) -> String, build: Constructs
+	): Null<Built> {
+		final body: Null<Built> = bodyOf(origin, typeAt, build);
+		final returned: Null<Built> = body == null ? null : build.returning(body);
+		final params: Array<Parameter> = origin.callback.params.slice(0, 2).map(param -> { name: param, type: element });
+		return returned == null ? null : build.member(set, Method(params), name, int, returned);
+	}
+
+	/** The macro call over one lambda per key, each key against the macro's direction wrapped in the other one. */
+	private static function keyedValue(
+		origin: Site, keys: Array<Key>, ascending: Bool, outer: NamedCompare, inner: Null<NamedCompare>, typeAt: (String) -> String,
+		build: Constructs
+	): Null<Built> {
+		final lambdas: Array<Built> = [];
+		for (k in keys) {
+			final key: Null<Built> = copiedOf(k.key, origin.source, build);
+			final lambda: Null<Built> = key == null ? null : build.lambda([k.param], key);
+			if (lambda == null) return null;
+			if (k.ascending == ascending) {
+				lambdas.push(lambda);
+				continue;
 			}
+			// A key against the macro's direction keeps its order only wrapped: a reverser the grammar refuses refuses the fix.
+			final reversed: Null<Built> = inner == null ? null : spelled(inner, typeAt, build);
+			final part: Null<Built> = reversed == null ? null : build.call(reversed, [lambda]);
+			if (part == null) return null;
+			lambdas.push(part);
 		}
-		final value: Null<QueryNode> = callback.value;
-		final named: Null<NamedCompare> = callback.named;
+		final head: Null<Built> = spelled(outer, typeAt, build);
+		return head == null ? null : build.call(head, lambdas);
+	}
+
+	/** The returned body, its compare function's receiver spelled for the host. */
+	private static function bodyOf(origin: Site, typeAt: (String) -> String, build: Constructs): Null<Built> {
+		final value: Null<QueryNode> = origin.callback.value;
+		final named: Null<NamedCompare> = origin.callback.named;
 		final receiver: Null<QueryNode> = value?.children[0]?.children[0];
-		final body: String = value == null || named == null || receiver == null
-			? textOf(value, origin.source)
-			: respelled(value, receiver, typeAt(named.typePath), origin.source);
-		return '$visibility static function $name(${callback.params[0]}: $element, ${callback.params[1]}: $element): ${s.intType} '
-			+ 'return $body;';
+		if (value == null || named == null || receiver == null) return copiedOf(value, origin.source, build);
+		// A compare function the host would spell otherwise than the origin file is respelled, never copied: a refused spelling refuses.
+		final type: Null<Built> = build.typeRef(typeAt(named.typePath));
+		return type == null ? null : respelled(value, receiver, type, origin.source, build);
+	}
+
+	/** The compare function `compare`, its type spelled for the host. */
+	private static function spelled(compare: NamedCompare, typeAt: (String) -> String, build: Constructs): Null<Built> {
+		final owner: Null<Built> = build.typeRef(typeAt(compare.typePath));
+		return owner == null ? null : build.qualified(owner, compare.member);
 	}
 
 	/** The source of `value` with the type `receiver` spells replaced by `type`. */
-	private static function respelled(value: QueryNode, receiver: QueryNode, type: String, source: String): String {
+	private static function respelled(value: QueryNode, receiver: QueryNode, type: Built, source: String, build: Constructs): Null<Built> {
 		final whole: Null<Span> = value.span;
 		final part: Null<Span> = receiver.span;
-		return whole == null || part == null
-			? textOf(value, source)
-			: source.substring(whole.from, part.from) + type + source.substring(part.to, whole.to);
+		return if (whole == null)
+			null
+		else if (part == null)
+			build.copied(source, whole, Expression)
+		else
+			build.substituted(source, whole, part, type, Expression);
 	}
 
 	/**
@@ -661,9 +714,9 @@ final class DuplicateComparator extends HaxeRule implements DefaultOff implement
 		return SourceText.lastSegment(info.module) == type.name ? info.module : '${info.module}.${type.name}';
 	}
 
-	private static function textOf(node: Null<QueryNode>, source: String): String {
+	private static function copiedOf(node: Null<QueryNode>, source: String, build: Constructs): Null<Built> {
 		final span: Null<Span> = node?.span;
-		return span == null ? '' : source.substring(span.from, span.to);
+		return span == null ? null : build.copied(source, span, Expression);
 	}
 
 	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {

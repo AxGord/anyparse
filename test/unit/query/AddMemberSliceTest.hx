@@ -2,6 +2,8 @@ package unit.query;
 
 import anyparse.query.AddMember;
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.Constructs;
+import anyparse.query.QueryNode;
 import haxe.Exception;
 
 using StringTools;
@@ -26,6 +28,26 @@ class AddMemberSliceTest extends Test {
 	 * doubling.
 	 */
 	private static final TWO_BLANK_LINES: String = '{"emptyLines": {"maxAnywhereInFile": 2, "beforeRightCurly": "keep"}}';
+
+	/**
+	 * A fix hands `memberEdit` a member the grammar built, and the edit appends it; a construct of another kind is refused
+	 * before it reaches the type body.
+	 */
+	@:pin('control')
+	@:killer('M-ADD-MEMBER-ANY-CONSTRUCT')
+	public function testMemberEditTakesOnlyABuiltMember(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final build: Null<Constructs> = plugin.constructs();
+		final source: String = 'class C {\n\tvar x:Int;\n}\n';
+		final tree: QueryNode = plugin.parseFile(source);
+		final member: Null<Built> = build?.member([Public], Variable, 'y', null, null);
+		Assert.equals('\npublic var y;\n', member == null ? null : AddMember.memberEdit(source, tree, 'C', member, plugin).edit?.text);
+		final imported: Null<Built> = build?.importOf('a.B');
+		Assert.equals(
+			'only a member is added to a type; the construct is a Import',
+			imported == null ? null : AddMember.memberEdit(source, tree, 'C', imported, plugin).refusal
+		);
+	}
 
 	/** Append a method to a class that already has a member. */
 	public function testAppendToClassWithMembers(): Void {

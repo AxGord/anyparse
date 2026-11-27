@@ -65,6 +65,7 @@ Rules behind the commands (detail and measurements: `docs/testing.md`):
 - Don't store a constructor argument in a field only to convert it back later — use the parameter.
 - Never `@:nullSafety(Off)` as a workaround; if stuck, ask the user.
 - Text in a language this project has a grammar for is never parsed by hand: read the AST node, or declare the construct in the grammar and generate the reader. Merging hand scanners into one is not the fix.
+- Code a fix or refactoring op creates in a language this project has a grammar for is never spelled by hand: no syntax template in `src/anyparse/check` or `src/anyparse/query` — ask the grammar's `Constructs` for the construct by meaning; text is only a fragment copied from the source by span. `AddMember.memberEdit` takes only a built member. User, 2026-11-26: «Вижу что захордкодены вещи, которые не должны в коде … это разве вообще не зона парсера? Она же у нас создаёт конструкции через аст? А тут как будто в ручную опять код пишется? Почему постоянно такое низкое качество кода?»
 
 ### What a comment may say
 

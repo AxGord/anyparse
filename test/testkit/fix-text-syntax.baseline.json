@@ -1408,38 +1408,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/haxe/expressions/DuplicateComparator.hx",
-    "line": 575,
-    "col": 17,
-    "endLine": 603,
-    "endCol": 3,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "helper `memberOf` returns text that spells syntax of the grammar it edits, and its result reaches AddMember.memberEdit — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "helper",
-      "function": "DuplicateComparator.memberOf",
-      "subject": "memberOf -> AddMember.memberEdit",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/expressions/DuplicateComparator.hx",
-    "line": 557,
-    "col": 30,
-    "endLine": 557,
-    "endCol": 118,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "DuplicateComparator.planOf",
-      "subject": ".",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/haxe/expressions/PreferCopyMethod.hx",
     "line": 150,
     "col": 32,

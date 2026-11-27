@@ -8,6 +8,7 @@ import anyparse.query.Cli;
 import anyparse.query.GrammarPlugin;
 import sys.FileSystem;
 import sys.io.File;
+import unit.check.haxe.expressions.RefusingConstructsPlugin.RefusingConstructs;
 import unit.cli.CliFixture;
 
 using Lambda;
@@ -458,6 +459,29 @@ class DuplicateComparatorTest extends Test {
 		Assert.equals(before[1].message, after[1].message);
 	}
 
+	/**
+	 * A construct the grammar refuses refuses the fix with a reason, never a fix spelled some other way: the macro of a key
+	 * comparator, and the compare function a function body names, which copied would keep the origin file's spelling.
+	 */
+	@:pin('control')
+	@:killer('M-DUPCMP-REFUSED-SPELLING-COPIED')
+	public function testRefusedConstructRefusesTheFix(): Void {
+		final keyed: String = 'xs.sort(Order.desc(r -> r.k));\n\t\tys.sort((a, b) -> Order.ints(b.k, a.k));';
+		final noDesc: GrammarPlugin = new RefusingConstructsPlugin(c -> new RefusingConstructs(c, [], ['desc']));
+		assertRefused(keyed, NAMED, noDesc, 'the grammar builds no member of its body');
+		final compared: String = 'xs.sort((a, b) -> Order.ints(a.k, b.k));\n\t\tys.sort((p, q) -> Order.ints(p.k, q.k));';
+		final noOrder: GrammarPlugin = new RefusingConstructsPlugin(c -> new RefusingConstructs(c, ['Order'], []));
+		assertRefused(compared, COMPARE_ONLY, noOrder, 'the grammar builds no member of its body');
+	}
+
+	/** A grammar that builds no constructs reports each group with that refusal and writes nothing. */
+	@:pin('control')
+	@:killer('M-DUPCMP-NO-BUILDER-UNREPORTED')
+	public function testGrammarWithoutConstructsRefuses(): Void {
+		final body: String = 'xs.sort((a, b) -> a.k - b.k);\n\t\tys.sort((a, b) -> a.k - b.k);';
+		assertRefused(body, BARE, new RefusingConstructsPlugin(_ -> null), 'the grammar builds no members');
+	}
+
 	/** The rule's findings over `files` under the config `json` and each file after its cross-file fix. */
 	private static function run(
 		files: Array<{ file: String, source: String }>, ?notes: Array<ConfigNote>, ?json: String,
@@ -510,6 +534,16 @@ class DuplicateComparatorTest extends Test {
 			{ file: 'C.hx', source: ORDER_IMPORT + inClass(body) },
 			{ file: 'lib/Order.hx', source: ORDER }
 		];
+	}
+
+	/** Every site of `body` under `json` reports the group with the refusal `why`, and the fix offers no edit. */
+	private static function assertRefused(body: String, json: String, plugin: GrammarPlugin, why: String): Void {
+		final rule: DuplicateComparator = new DuplicateComparator();
+		final config: LintConfig = LintConfig.parse(json);
+		final violations: Array<Violation> = CheckFixture.violationsIn(rule, ordered(body), plugin, _ -> config);
+		Assert.equals(2, violations.length);
+		for (v in violations) Assert.equals(why, v.declineReason);
+		Assert.equals(0, rule.crossFileFix(ordered(body), violations, plugin).length);
 	}
 
 }

@@ -1014,6 +1014,22 @@
 			"find": "$named passed by reference',",
 			"replace": "$named passed by reference${plan.noFix ?? ''}',",
 			"note": "the finding's text carries the group's refusal, so a site joining from another package changes the text of every site's finding"
+		},
+		{
+			"name": "M-DUPCMP-REFUSED-SPELLING-COPIED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "bodyOf",
+			"find": "return type == null ? null : respelled(",
+			"replace": "return type == null ? copiedOf(value, origin.source, build) : respelled(",
+			"note": "a compare function the grammar refuses to spell for the host is copied as the origin file spelled it, and the extracted body names another function than the source"
+		},
+		{
+			"name": "M-DUPCMP-NO-BUILDER-UNREPORTED",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "planOf",
+			"find": "if (build == null) return refused('the grammar builds no members');",
+			"replace": "if (build == null) return { name: named, slices: [], noFix: null, sites: sites };",
+			"note": "a grammar that builds no constructs leaves each group with no fix and no reason, so the unfixed ledger names nothing"
 		}
 	]
 }

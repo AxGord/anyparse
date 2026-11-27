@@ -2,6 +2,7 @@ package unit.query;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -158,6 +159,10 @@ final class OrphanInjectingPlugin implements GrammarPlugin {
 		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
 	): Null<EditResult> {
 		return null;
+	}
+
+	public function constructs(): Null<Constructs> {
+		return _inner.constructs();
 	}
 
 }

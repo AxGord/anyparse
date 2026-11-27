@@ -2,6 +2,7 @@ package anyparse.grammar.json;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -202,6 +203,10 @@ final class JsonQueryPlugin implements GrammarPlugin {
 	public function typedOptionsRewrite(
 		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
 	): Null<EditResult> {
+		return null;
+	}
+
+	public function constructs(): Null<Constructs> {
 		return null;
 	}
 

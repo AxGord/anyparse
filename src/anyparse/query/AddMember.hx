@@ -1,6 +1,8 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.Constructs.Built;
+import anyparse.query.Constructs.ConstructKind;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -50,17 +52,27 @@ final class AddMember {
 
 		final trimmed: String = memberText.trim();
 		if (trimmed.length == 0) return Err('add-member requires a non-empty member text');
-		final planned: MemberEdit = memberEdit(source, tree, typeName, trimmed, plugin);
+		final planned: MemberEdit = appended(source, tree, typeName, trimmed, plugin);
 		final edit: Null<{ span: Span, text: String }> = planned.edit;
 		return edit == null ? Err(planned.refusal) : CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**
-	 * The one edit that appends `memberText`, trimmed and not empty, as the last member of the type `typeName` of `source`
-	 * parsed as `tree`, with the blank line the body's layout wants — or, with no edit, why it cannot. `addMember` reads it,
-	 * and so does a fix that inserts a member among edits of its own.
+	 * The one edit that appends `member` as the last member of the type `typeName` of `source` parsed as `tree` — or, with
+	 * no edit, why it cannot. A fix that inserts a member among edits of its own reads it; the member is one the grammar's
+	 * `Constructs` built, so a fix has no way to hand this op syntax it spelled itself.
 	 */
-	public static function memberEdit(
+	public static function memberEdit(source: String, tree: QueryNode, typeName: String, member: Built, plugin: GrammarPlugin): MemberEdit {
+		return member.kind == Member
+			? appended(source, tree, typeName, member.text, plugin)
+			: { edit: null, refusal: 'only a member is added to a type; the construct is a ${member.kind}' };
+	}
+
+	/**
+	 * The one edit that appends `memberText`, trimmed and not empty, as the last member of the type `typeName` of `source`
+	 * parsed as `tree`, with the blank line the body's layout wants — or, with no edit, why it cannot.
+	 */
+	private static function appended(
 		source: String, tree: QueryNode, typeName: String, memberText: String, plugin: GrammarPlugin
 	): MemberEdit {
 		function refused(why: String): MemberEdit {

@@ -2,6 +2,7 @@ package unit.check;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -154,6 +155,10 @@ final class RenamedAnnotationPlugin implements GrammarPlugin {
 		source: String, kit: String, reformat: Bool, ?optsJson: String, ?subjects: Array<String>
 	): Null<EditResult> {
 		return null;
+	}
+
+	public function constructs(): Null<Constructs> {
+		return _inner.constructs();
 	}
 
 	/** `node` and its descendants under the renamed annotation kinds, each annotation moved behind the `private` that follows it. */
