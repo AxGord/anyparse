@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.runtime.Span;
 
 /**
@@ -56,6 +57,9 @@ enum MemberKind {
 /** A method parameter: its name and its type. */
 typedef Parameter = { final name: String; final type: Built; }
 
+/** The modifier nodes a declaration carries, in source order, and the offset where the declaration itself starts. */
+typedef DeclarationHead = { final modifiers: Array<QueryNode>; final start: Int; }
+
 /**
  * A grammar's construct builder: the one answer to "how does a fix get new code of the target language built by meaning".
  * A fix or a refactoring op never spells target syntax itself; it names WHAT it wants (a member, a call, an import, a
@@ -99,6 +103,19 @@ interface Constructs {
 
 	/** The modifier set `set`, in the order given. */
 	public function modifiers(set: Array<Modifier>): Null<Built>;
+
+	/**
+	 * The edit that gives the declaration `head` the modifier `modifier`, in the grammar's canonical modifier order among the
+	 * modifiers it already carries; a visibility the declaration carries instead is replaced. Null when it already carries
+	 * `modifier`, or the grammar does not rank it.
+	 */
+	public function withModifier(head: DeclarationHead, modifier: Modifier): Null<FixEdit>;
+
+	/**
+	 * The edit that turns the variable declaration starting at `start` in `source` into a constant one: its keyword replaced.
+	 * Null when no variable declaration starts there.
+	 */
+	public function asConstant(source: String, start: Int): Null<FixEdit>;
 
 	/**
 	 * A type member `name` carrying `set`. `type` is the value's type, or a method's return type; `value` is the initial value

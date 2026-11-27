@@ -3,6 +3,7 @@ package anyparse.check.common.members;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.OptionKeyed;
 import anyparse.check.LintConfig;
 import anyparse.check.scan.CheckScan;
@@ -370,7 +371,7 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 				if (accessorReachedOutside(subtypeIndex, owner, c.deletedAccessors, plugin)) return null;
 				if (!backingFieldReachedOutside(subtypeIndex, owner, c.field, false, null, plugin)) return null;
 				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(
-					cls, source, prop.span, prop.name, prop.isStatic, c, shape
+					cls, source, prop.span, prop.name, prop.isStatic, c, shape, plugin
 				);
 				if (ownerEdits == null) return null;
 				final oe: Array<{ span: Span, text: String }> = ownerEdits;
@@ -545,7 +546,9 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			if (c == null) continue;
 			if (backingFieldReachedOutside(index, className, c.field, c.selfBacked, c.inlineGetter, plugin)) continue;
 			if (c.inlineGetter == null && accessorReachedOutside(index, className, c.deletedAccessors, plugin)) continue;
-			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c, shape);
+			final e: Null<Array<{ span: Span, text: String }>> = buildFix(
+				cls, source, prop.span, prop.name, prop.isStatic, c, shape, plugin
+			);
 			if (e != null) for (edit in e) out.push(edit);
 		}
 	}
@@ -574,14 +577,17 @@ final class TrivialGetter extends RuleBase implements ConfigAware implements Cro
 			selfBacked: Bool,
 			metaSpan: Null<Span>
 		},
-		shape: RefShape
+		shape: RefShape, plugin: GrammarPlugin
 	): Null<Array<{ span: Span, text: String }>> {
 		final inlineGetter: Null<QueryNode> = c.inlineGetter;
 		if (inlineGetter != null) {
 			// The inline arm keeps the property and backing field untouched — a single `inline `
 			// insertion before the getter's `function` keyword (the FnMember span start).
 			final gSpan: Null<Span> = inlineGetter.span;
-			return gSpan == null ? null : [{ span: new Span(gSpan.from, gSpan.from), text: 'inline ' }];
+			final edit: Null<FixEdit> = gSpan == null
+				? null
+				: plugin.constructs()?.withModifier(ElementSpan.declarationHeadAt(cls, gSpan.from), Inline);
+			return edit == null ? null : [edit];
 		}
 		if (c.selfBacked) return buildSelfBackedFix(cls, source, c.clauseSpan, c.clauseText, c.deletedAccessors, c.metaSpan);
 		final edits: Array<{ span: Span, text: String }> = [{ span: c.clauseSpan, text: c.clauseText }];

@@ -1,5 +1,7 @@
 package anyparse.check.common.expressions;
 
+import anyparse.check.Check.FixEdit;
+import anyparse.query.Constructs;
 import anyparse.query.CtorFieldWrite;
 import anyparse.query.IndexScope;
 import anyparse.query.OccurrenceScan;
@@ -111,13 +113,11 @@ final class PreferFinal extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final keyword: String = 'var';
-		return [ for (v in violations) {
+		final constructs: Null<Constructs> = plugin.constructs();
+		return constructs == null ? [] : [ for (v in violations) {
 			final span: Null<Span> = v.span;
-			if (span != null) {
-				final end: Int = span.from + keyword.length;
-				if (source.substring(span.from, end) == keyword) { span: new Span(span.from, end), text: 'final' };
-			}
+			final edit: Null<FixEdit> = span == null ? null : constructs.asConstant(source, span.from);
+			if (edit != null) edit;
 		} ];
 	}
 

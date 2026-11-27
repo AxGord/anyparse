@@ -1,5 +1,6 @@
 package unit.check.haxe.expressions;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.query.AccessorClause;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CanonicalEdit.EditResult;
@@ -16,18 +17,23 @@ import anyparse.query.TokenSpans.TokenSpan;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 
-/** The Haxe builder refusing every type spelled as one of `types` and every member of `members`, the rest delegating. */
+/**
+ * The Haxe builder refusing every type spelled as one of `types`, every member of `members` and, when `modifiers`, every
+ * modifier or constant-keyword edit, the rest delegating.
+ */
 @:nullSafety(Strict)
 final class RefusingConstructs implements Constructs {
 
 	private final _inner: Constructs;
 	private final _types: Array<String>;
 	private final _members: Array<String>;
+	private final _modifiers: Bool;
 
-	public function new(inner: Constructs, types: Array<String>, members: Array<String>) {
+	public function new(inner: Constructs, types: Array<String>, members: Array<String>, modifiers: Bool = false) {
 		_inner = inner;
 		_types = types;
 		_members = members;
+		_modifiers = modifiers;
 	}
 
 	public function copied(source: String, span: Span, kind: ConstructKind): Null<Built> {
@@ -72,6 +78,14 @@ final class RefusingConstructs implements Constructs {
 
 	public function modifiers(set: Array<Modifier>): Null<Built> {
 		return _inner.modifiers(set);
+	}
+
+	public function withModifier(head: DeclarationHead, modifier: Modifier): Null<FixEdit> {
+		return _modifiers ? null : _inner.withModifier(head, modifier);
+	}
+
+	public function asConstant(source: String, start: Int): Null<FixEdit> {
+		return _modifiers ? null : _inner.asConstant(source, start);
 	}
 
 	public function member(set: Array<Modifier>, kind: MemberKind, name: String, type: Null<Built>, value: Null<Built>): Null<Built> {

@@ -1,12 +1,14 @@
 package anyparse.check.common.members;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.OperandBinder;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.ElementSpan;
 import anyparse.query.Lit;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberKinds;
@@ -328,7 +330,8 @@ final class PreferInline extends RuleBase implements RiskyFix implements OracleR
 					final span: Null<Span> = fn.span;
 					if (span == null || mods.exists(m -> m == shape.inlineModifierKind) || !wanted.contains('${span.from}:${span.to}'))
 						return;
-					edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
+					final edit: Null<FixEdit> = plugin.constructs()?.withModifier(ElementSpan.declarationHeadAt(tree, span.from), Inline);
+					if (edit != null) edits.push(edit);
 				}
 			);
 			return edits;

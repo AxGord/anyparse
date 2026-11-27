@@ -1,8 +1,11 @@
 package anyparse.check.common.members;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.ConstantDemandScan;
 import anyparse.check.scan.ConstantFieldScan;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.Constructs;
+import anyparse.query.ElementSpan;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.ParseGate;
@@ -287,6 +290,8 @@ final class InlineConstant extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		final constructs: Null<Constructs> = plugin.constructs();
+		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -296,15 +301,19 @@ final class InlineConstant extends RuleBase {
 			// `static inline var` host (span starts at `var`) - swap the keyword. The String
 			// arm flags the `inline` token - delete it. The byte check gates each, so an
 			// unexpected span simply produces no edit.
-			if (source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD)
-				edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
-			else if (source.substring(span.from, span.from + VAR_KEYWORD.length) == VAR_KEYWORD)
+			if (source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD) {
+				final edit: Null<FixEdit> = tree == null
+					? null
+					: constructs?.withModifier(ElementSpan.declarationHeadAt(tree, span.from), Inline);
+				if (edit != null) edits.push(edit);
+			} else if (source.substring(span.from, span.from + VAR_KEYWORD.length) == VAR_KEYWORD) {
 				edits.push({ span: new Span(span.from, span.from + VAR_KEYWORD.length), text: FINAL_KEYWORD });
-			else if (source.substring(span.from, span.from + INLINE_KEYWORD.length) == INLINE_KEYWORD)
+			} else if (source.substring(span.from, span.from + INLINE_KEYWORD.length) == INLINE_KEYWORD) {
 				edits.push({
 					span: new Span(span.from, SourceText.skipSpaces(source, span.from + INLINE_KEYWORD.length, source.length)),
 					text: ''
 				});
+			}
 		}
 		return edits;
 	}

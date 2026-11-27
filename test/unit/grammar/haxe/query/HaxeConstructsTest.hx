@@ -1,9 +1,12 @@
 package unit.grammar.haxe.query;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.grammar.haxe.query.HaxeQueryPlugin;
 import anyparse.grammar.json.JsonQueryPlugin;
 import anyparse.grammar.mermaid.MermaidQueryPlugin;
 import anyparse.query.Constructs;
+import anyparse.query.ElementSpan;
+import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
 import utest.Assert;
 import utest.Test;
@@ -98,6 +101,41 @@ class HaxeConstructsTest extends Test {
 		Assert.isNull(build.importOf('a.b.C as'), 'an alias with no name');
 	}
 
+	/** A modifier lands in the grammar's canonical order among the ones the declaration carries, whatever order they stand in. */
+	@:pin('control')
+	@:killer('M-CONSTRUCTS-MODIFIER-ORDER')
+	public function testAModifierIsPlacedInCanonicalOrder(): Void {
+		Assert.equals(
+			'class A { private static inline final X = 1; }', withModifier('class A { private static final X = 1; }', 'final', Inline)
+		);
+		Assert.equals('class A { public static function f() {} }', withModifier('class A { static function f() {} }', 'function', Public));
+		Assert.equals(
+			'class A { override public function f() {} }', withModifier('class A { override function f() {} }', 'function', Public)
+		);
+		Assert.equals('class A { static function f() {} }', withModifier('class A { function f() {} }', 'function', Static));
+		Assert.equals('class A { @:keep public function f() {} }', withModifier('class A { @:keep function f() {} }', 'function', Public));
+	}
+
+	/** A visibility the declaration already carries is replaced, never doubled, and a modifier it already carries adds nothing. */
+	@:pin('control')
+	@:killer('M-CONSTRUCTS-MODIFIER-VISIBILITY')
+	public function testAVisibilityIsReplacedAndACarriedModifierAddsNothing(): Void {
+		Assert.equals('class A { public function f() {} }', withModifier('class A { private function f() {} }', 'function', Public));
+		Assert.equals('class A { private function f() {} }', withModifier('class A { public function f() {} }', 'function', Private));
+		Assert.equals('class A { public function f() {} }', withModifier('class A { public function f() {} }', 'function', Public));
+	}
+
+	/** A variable declaration's keyword becomes the constant one, and only where a variable declaration starts. */
+	@:pin('control')
+	@:killer('M-CONSTRUCTS-CONSTANT-KEYWORD')
+	public function testAVariableDeclarationBecomesAConstantOne(): Void {
+		final source: String = 'class A { var x = 1; }';
+		final edit: Null<FixEdit> = constructs().asConstant(source, source.indexOf('var'));
+		Assert.equals('class A { final x = 1; }', edit == null ? null : apply(source, edit));
+		Assert.isNull(constructs().asConstant(source, source.indexOf('x')), 'not at a keyword');
+		Assert.isNull(constructs().asConstant('class A { final x = 1; }', 10), 'a constant is not a variable');
+	}
+
 	private static function constructs(): Constructs {
 		return sure(new HaxeQueryPlugin().constructs());
 	}
@@ -109,6 +147,18 @@ class HaxeConstructsTest extends Test {
 	private static function sure<T>(value: Null<T>): T {
 		if (value == null) throw 'the construct was refused';
 		return value;
+	}
+
+	private static function withModifier(source: String, memberKeyword: String, modifier: Modifier): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final edit: Null<FixEdit> = sure(plugin.constructs())
+			.withModifier(ElementSpan.declarationHeadAt(tree, source.indexOf(memberKeyword)), modifier);
+		return edit == null ? source : apply(source, edit);
+	}
+
+	private static function apply(source: String, edit: FixEdit): String {
+		return source.substring(0, edit.span.from) + edit.text + source.substring(edit.span.to);
 	}
 
 }

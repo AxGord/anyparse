@@ -1642,6 +1642,38 @@
 			"method": "fix",
 			"force": "[]",
 			"note": "the trusted arm returns no edit, so a @:final meta is reported and never rewritten"
+		},
+		{
+			"name": "M-INLINE-CONSTANT-FIX-SPELLED",
+			"type": "anyparse.check.common.members.InlineConstant",
+			"method": "fix",
+			"find": "constructs?.withModifier(ElementSpan.declarationHeadAt(tree, span.from), Inline)",
+			"replace": "{ span: new Span(span.from, span.from), text: 'inline ' }",
+			"note": "the fix writes the inline keyword itself again, so a grammar that builds no modifier still gets text spelled by the rule"
+		},
+		{
+			"name": "M-PREFER-INLINE-FIX-SPELLED",
+			"type": "anyparse.check.common.members.PreferInline",
+			"method": "fix",
+			"find": "plugin.constructs()?.withModifier(ElementSpan.declarationHeadAt(tree, span.from), Inline)",
+			"replace": "{ span: new Span(span.from, span.from), text: 'inline ' }",
+			"note": "the fix writes the inline keyword itself again, so a grammar that builds no modifier still gets text spelled by the rule"
+		},
+		{
+			"name": "M-STATIC-CONSTANT-FIX-SPELLED",
+			"type": "anyparse.check.common.members.StaticConstant",
+			"method": "fix",
+			"find": "plugin.constructs()?.withModifier(ElementSpan.declarationHeadAt(tree, span.from), Static)",
+			"replace": "{ span: new Span(span.from, span.from), text: 'static ' }",
+			"note": "the fix writes the static keyword itself again, so a grammar that builds no modifier still gets text spelled by the rule"
+		},
+		{
+			"name": "M-TRIVIAL-GETTER-INLINE-FIX-SPELLED",
+			"type": "anyparse.check.common.members.TrivialGetter",
+			"method": "buildFix",
+			"find": "plugin.constructs()?.withModifier(ElementSpan.declarationHeadAt(cls, gSpan.from), Inline)",
+			"replace": "{ span: new Span(gSpan.from, gSpan.from), text: 'inline ' }",
+			"note": "the inline arm writes the inline keyword itself again, so a grammar that builds no modifier still gets text spelled by the rule"
 		}
 	]
 }

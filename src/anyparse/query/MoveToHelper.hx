@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveMember.MemberGroup;
 import anyparse.query.MoveMember.MovePrep;
@@ -98,9 +99,17 @@ final class MoveToHelper {
 		};
 		final rewriteError: Null<String> = MoveToHelperRefs.rewrite(edits);
 		if (rewriteError != null) return Err(rewriteError);
-		for (m in prep.moved) if (!m.isStatic) signatureEdits(prep, m, paramName, edits.movedTextEdits);
+		for (m in prep.moved) if (!m.isStatic) {
+			final signatureError: Null<String> = signatureEdits(prep, m, paramName, edits.movedTextEdits, plugin);
+			if (signatureError != null) return Err(signatureError);
+		}
 		MoveMember.applySiblingOutcome(prep, edits.accessMembers, [], edits.movedTextEdits, edits.editsByFile, edits.advisory);
-		for (m in prep.moved) MoveMember.promotionEdit(prep, m, edits.outsideCallersOf[m.name] ?? 0, edits.movedTextEdits, edits.advisory);
+		for (m in prep.moved) {
+			final promotionError: Null<String> = MoveMember.promotionEdit(
+				prep, m, edits.outsideCallersOf[m.name] ?? 0, edits.movedTextEdits, edits.advisory, plugin
+			);
+			if (promotionError != null) return Err(promotionError);
+		}
 		MoveToHelperTypes.relocate(prep, types, edits.editsByFile, edits.advisory);
 		final destError: Null<String> = MoveMember.assembleDestination(
 			prep, [], edits.movedTextEdits, edits.editsByFile, edits.advisory, plugin.lexicalRegions
@@ -329,16 +338,11 @@ final class MoveToHelper {
 	 * land in reverse push order, and `public static` is the order the project writes.
 	 */
 	private static function signatureEdits(
-		prep: MovePrep, m: MovedMember, paramName: String, movedTextEdits: Array<{ span: Span, text: String }>
-	): Void {
-		final visibility: Null<QueryNode> = m.group.modifiers.find(mod -> mod.kind == 'Public' || mod.kind == 'Private');
-		final visibilityEnd: Null<Int> = visibility?.span?.to;
-		if (visibilityEnd != null) {
-			movedTextEdits.push({ span: new Span(visibilityEnd, visibilityEnd), text: ' static' });
-		} else {
-			final at: Int = m.group.modifiers.find(mod -> !MemberKinds.META_KINDS.contains(mod.kind))?.span?.from ?? m.span.from;
-			movedTextEdits.push({ span: new Span(at, at), text: 'static ' });
-		}
+		prep: MovePrep, m: MovedMember, paramName: String, movedTextEdits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin
+	): Null<String> {
+		final staticEdit: Null<FixEdit> = plugin.constructs()?.withModifier({ modifiers: m.group.modifiers, start: m.span.from }, Static);
+		if (staticEdit == null) return 'the grammar builds no static modifier for "${m.name}"';
+		movedTextEdits.push(staticEdit);
 		final params: Array<QueryNode> = [ for (c in m.group.member.children) if (AddParam.PARAM_KINDS.contains(c.kind)) c ];
 		final first: Null<Int> = params.length > 0 ? params[0].span?.from : null;
 		final declared: String = '$paramName: ${prep.srcTypeName}';
@@ -348,6 +352,7 @@ final class MoveToHelper {
 			final open: Int = AddParam.emptyParenInsertOffset(prep.srcSource, m.group.member, m.span);
 			if (open >= 0) movedTextEdits.push({ span: new Span(open, open), text: declared });
 		}
+		return null;
 	}
 
 	/**

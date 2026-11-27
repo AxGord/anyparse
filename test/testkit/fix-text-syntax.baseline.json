@@ -448,22 +448,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/expressions/PreferFinal.hx",
-    "line": 119,
-    "col": 94,
-    "endLine": 119,
-    "endCol": 101,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferFinal.fix",
-      "subject": "final",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/expressions/PreferLocalFunction.hx",
     "line": 601,
     "col": 17,
@@ -864,22 +848,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/members/InlineConstant.hx",
-    "line": 300,
-    "col": 62,
-    "endLine": 300,
-    "endCol": 71,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`inline`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "InlineConstant.fix",
-      "subject": "inline",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/members/OptionalParamShorthand.hx",
     "line": 707,
     "col": 34,
@@ -908,22 +876,6 @@
       "family": "literal",
       "function": "OptionalParamShorthand.collectEdits",
       "subject": ":",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/members/PreferInline.hx",
-    "line": 331,
-    "col": 63,
-    "endLine": 331,
-    "endCol": 72,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`inline`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferInline.fix",
-      "subject": "inline",
       "chain": []
     }
   },
@@ -960,42 +912,10 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/members/StaticConstant.hx",
-    "line": 189,
-    "col": 51,
-    "endLine": 189,
-    "endCol": 60,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`static`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "StaticConstant.fix",
-      "subject": "static",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/members/TrivialGetter.hx",
-    "line": 584,
-    "col": 83,
-    "endLine": 584,
-    "endCol": 92,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`inline`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "TrivialGetter.buildFix",
-      "subject": "inline",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/members/TrivialGetter.hx",
-    "line": 597,
+    "line": 603,
     "col": 51,
-    "endLine": 597,
+    "endLine": 603,
     "endCol": 103,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1729,25 +1649,9 @@
   },
   {
     "file": "src/anyparse/query/CtorFieldFold.hx",
-    "line": 156,
-    "col": 94,
-    "endLine": 156,
-    "endCol": 101,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "CtorFieldFold.varKeywordToFinalEdits",
-      "subject": "final",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/CtorFieldFold.hx",
-    "line": 240,
+    "line": 244,
     "col": 42,
-    "endLine": 240,
+    "endLine": 244,
     "endCol": 118,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1953,9 +1857,9 @@
   },
   {
     "file": "src/anyparse/query/MoveMember.hx",
-    "line": 774,
+    "line": 780,
     "col": 103,
-    "endLine": 774,
+    "endLine": 780,
     "endCol": 124,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1969,41 +1873,9 @@
   },
   {
     "file": "src/anyparse/query/MoveMember.hx",
-    "line": 866,
-    "col": 51,
-    "endLine": 866,
-    "endCol": 59,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`public`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "MoveMember.promotionEdit",
-      "subject": "public",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/MoveMember.hx",
-    "line": 871,
-    "col": 56,
-    "endLine": 871,
-    "endCol": 65,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`public`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "MoveMember.promotionEdit",
-      "subject": "public",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/MoveMember.hx",
-    "line": 892,
+    "line": 893,
     "col": 70,
-    "endLine": 892,
+    "endLine": 893,
     "endCol": 102,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -2017,9 +1889,9 @@
   },
   {
     "file": "src/anyparse/query/MoveMember.hx",
-    "line": 894,
+    "line": 895,
     "col": 96,
-    "endLine": 894,
+    "endLine": 895,
     "endCol": 120,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -2033,9 +1905,9 @@
   },
   {
     "file": "src/anyparse/query/MoveMember.hx",
-    "line": 1157,
+    "line": 1158,
     "col": 83,
-    "endLine": 1157,
+    "endLine": 1158,
     "endCol": 97,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -2097,41 +1969,9 @@
   },
   {
     "file": "src/anyparse/query/MoveToHelper.hx",
-    "line": 337,
-    "col": 78,
-    "endLine": 337,
-    "endCol": 87,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`static`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "MoveToHelper.signatureEdits",
-      "subject": "static",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/MoveToHelper.hx",
-    "line": 340,
-    "col": 56,
-    "endLine": 340,
-    "endCol": 65,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`static`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "MoveToHelper.signatureEdits",
-      "subject": "static",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/MoveToHelper.hx",
-    "line": 346,
+    "line": 350,
     "col": 62,
-    "endLine": 346,
+    "endLine": 350,
     "endCol": 75,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -2145,9 +1985,9 @@
   },
   {
     "file": "src/anyparse/query/MoveToHelper.hx",
-    "line": 349,
+    "line": 353,
     "col": 75,
-    "endLine": 349,
+    "endLine": 353,
     "endCol": 83,
     "severity": "info",
     "rule": "fix-text-syntax",

@@ -1,5 +1,6 @@
 package anyparse.grammar.haxe.query;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.query.Constructs;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.ParseError;
@@ -28,6 +29,11 @@ final class HaxeConstructs implements Constructs {
 	private static final CONSTANT: Array<String> = ['FinalMember'];
 	private static final VARIABLE: Array<String> = ['VarMember'];
 	private static final METHOD: Array<String> = ['FnMember'];
+
+	/** The keyword that opens a variable declaration, and the one a constant declaration opens with. */
+	private static final VARIABLE_WORD: String = 'var';
+
+	private static final CONSTANT_WORD: String = 'final';
 
 	private final _plugin: GrammarPlugin;
 
@@ -93,6 +99,39 @@ final class HaxeConstructs implements Constructs {
 		final nodes: Null<Array<QueryNode>> = slot(text, ModifierSet);
 		return nodes != null && set.length > 0 && nodes.length == set.length && nodes.foreach(isModifier)
 			? new Built(text, ModifierSet)
+			: null;
+	}
+
+	public function withModifier(head: DeclarationHead, modifier: Modifier): Null<FixEdit> {
+		final spelled: Null<Built> = modifiers([modifier]);
+		final shape: RefShape = _plugin.refShape();
+		final order: Array<String> = shape.modifierOrderKinds ?? [];
+		final kind: String = kindOf(modifier);
+		final rank: Int = order.indexOf(kind);
+		if (spelled == null || rank < 0) return null;
+		final carried: Array<QueryNode> = head.modifiers.filter(isModifier);
+		if (carried.exists(node -> node.kind == kind)) return null;
+		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
+		final other: Null<Span> = visibility.contains(kind) ? carried.find(node -> visibility.contains(node.kind))?.span : null;
+		if (other != null) return { span: other, text: spelled.text };
+		var after: Int = -1;
+		var first: Int = head.start;
+		for (node in carried) {
+			final span: Null<Span> = node.span;
+			if (span == null) continue;
+			if (span.from < first) first = span.from;
+			final carriedRank: Int = order.indexOf(node.kind);
+			if (carriedRank >= 0 && carriedRank <= rank && span.to > after) after = span.to;
+		}
+		return after >= 0
+			? { span: new Span(after, after), text: ' ${spelled.text}' }
+			: { span: new Span(first, first), text: '${spelled.text} ' };
+	}
+
+	public function asConstant(source: String, start: Int): Null<FixEdit> {
+		final end: Int = start + VARIABLE_WORD.length;
+		return source.substring(start, end) == VARIABLE_WORD && member([], Constant, '_v', null, null) != null
+			? { span: new Span(start, end), text: CONSTANT_WORD }
 			: null;
 	}
 
@@ -201,6 +240,17 @@ final class HaxeConstructs implements Constructs {
 
 	private static function spans(node: QueryNode, from: Int, to: Int): Bool {
 		return startOf(node) == from && endOf(node) == to;
+	}
+
+	/** The node kind the grammar projects `modifier` as. */
+	private static function kindOf(modifier: Modifier): String {
+		return switch modifier {
+			case Public: 'Public';
+			case Private: 'Private';
+			case Static: 'Static';
+			case Inline: 'Inline';
+			case Override: 'Override';
+		};
 	}
 
 }

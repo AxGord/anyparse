@@ -18083,6 +18083,30 @@
 			"find": "member.kind == Member",
 			"replace": "true",
 			"note": "a built construct of any kind is spliced into the type body, so an import reaches the member slot and only the re-parse refuses it"
+		},
+		{
+			"name": "M-CTOR-FIELD-FOLD-KEYWORD-SPELLED",
+			"type": "anyparse.query.CtorFieldFold",
+			"method": "varKeywordToFinalEdits",
+			"find": "constructs.asConstant(source, span.from)",
+			"replace": "{ span: new Span(span.from, span.from + 3), text: 'final' }",
+			"note": "the keyword swap is written by the helper again, so a grammar that refuses the constant keyword still gets text spelled by the helper"
+		},
+		{
+			"name": "M-MOVE-MEMBER-PROMOTION-REFUSAL",
+			"type": "anyparse.query.MoveMember",
+			"method": "promotionEdit",
+			"find": "if (edit == null) return 'the grammar builds no public modifier for \"${m.name}\", which has callers outside \"${prep.destTypeName}\"';",
+			"replace": "if (edit == null) return null;",
+			"note": "a grammar that builds no public modifier leaves the moved member private with callers outside, instead of refusing the move"
+		},
+		{
+			"name": "M-MOVE-TO-HELPER-STATIC-REFUSAL",
+			"type": "anyparse.query.MoveToHelper",
+			"method": "signatureEdits",
+			"find": "if (staticEdit == null) return 'the grammar builds no static modifier for \"${m.name}\"';",
+			"replace": "if (staticEdit == null) return null;",
+			"note": "a grammar that builds no static modifier lets the move proceed, leaving the moved instance method without static in the helper"
 		}
 	]
 }

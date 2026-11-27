@@ -480,6 +480,30 @@
 			"find": "nodes.length != modifiers + 1 || ",
 			"replace": "",
 			"note": "a member text that parses to two members is accepted, so a name can smuggle a second declaration into the type"
+		},
+		{
+			"name": "M-CONSTRUCTS-MODIFIER-ORDER",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "withModifier",
+			"find": "carriedRank >= 0 && carriedRank <= rank && span.to > after",
+			"replace": "carriedRank >= 0 && span.to > after",
+			"note": "a modifier goes after every ranked modifier the declaration carries, whatever its rank, so a visibility added to a static member lands behind static"
+		},
+		{
+			"name": "M-CONSTRUCTS-MODIFIER-VISIBILITY",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "withModifier",
+			"find": "if (other != null) return { span: other, text: spelled.text };",
+			"replace": "",
+			"note": "a visibility is added beside the one the declaration carries instead of replacing it, so a promoted member reads public private"
+		},
+		{
+			"name": "M-CONSTRUCTS-CONSTANT-KEYWORD",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "asConstant",
+			"find": "source.substring(start, end) == VARIABLE_WORD && ",
+			"replace": "",
+			"note": "the keyword is swapped wherever the offset points, so a constant or a name is overwritten with the constant keyword"
 		}
 	]
 }

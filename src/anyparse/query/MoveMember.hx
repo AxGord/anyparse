@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.LexicalRegions.LexRegion;
@@ -316,7 +317,12 @@ final class MoveMember {
 			prep, viaField, scaffold, keepBare, scaffoldFields, plugin, editsByFile, movedTextEdits, outsideCallersOf, advisoryExtras
 		);
 		if (rewireError != null) return Err(rewireError);
-		for (m in prep.moved) promotionEdit(prep, m, outsideCallersOf[m.name] ?? 0, movedTextEdits, advisoryExtras);
+		for (m in prep.moved) {
+			final promotionError: Null<String> = promotionEdit(
+				prep, m, outsideCallersOf[m.name] ?? 0, movedTextEdits, advisoryExtras, plugin
+			);
+			if (promotionError != null) return Err(promotionError);
+		}
 
 		// Destination scaffold (fields + constructor) — either prepended to
 		// the moved-member insert (no dest ctor) or replacing a trivial one.
@@ -858,21 +864,16 @@ final class MoveMember {
 	 */
 	private static function promotionEdit(
 		prep: MovePrep, m: MovedMember, outsideCallers: Int, movedTextEdits: Array<{ span: Span, text: String }>,
-		advisoryExtras: Array<String>
-	): Void {
-		if (m.group.modifiers.exists(mod -> mod.kind == 'Public') || outsideCallers == 0) return;
-		final privateSpan: Null<Span> = m.group.modifiers.find(mod -> mod.kind == 'Private')?.span;
-		if (privateSpan != null) {
-			movedTextEdits.push({ span: privateSpan, text: 'public' });
-		} else {
-			// Insert after any leading @:meta run — `public` before a meta
-			// line would not parse.
-			final at: Int = m.group.modifiers.find(mod -> !MemberKinds.META_KINDS.contains(mod.kind))?.span?.from ?? m.span.from;
-			movedTextEdits.push({ span: new Span(at, at), text: 'public ' });
-		}
+		advisoryExtras: Array<String>, plugin: GrammarPlugin
+	): Null<String> {
+		if (m.group.modifiers.exists(mod -> mod.kind == 'Public') || outsideCallers == 0) return null;
+		final edit: Null<FixEdit> = plugin.constructs()?.withModifier({ modifiers: m.group.modifiers, start: m.span.from }, Public);
+		if (edit == null) return 'the grammar builds no public modifier for "${m.name}", which has callers outside "${prep.destTypeName}"';
+		movedTextEdits.push(edit);
 		advisoryExtras.push(
 			'visibility of "${m.name}" promoted to public ($outsideCallers caller site(s) remain outside "${prep.destTypeName}")'
 		);
+		return null;
 	}
 
 	/**

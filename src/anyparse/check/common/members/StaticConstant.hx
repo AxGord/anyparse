@@ -1,8 +1,10 @@
 package anyparse.check.common.members;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.FixEdit;
 import anyparse.check.scan.ConstantFieldScan;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.query.ElementSpan;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.ParseGate;
@@ -183,11 +185,15 @@ final class StaticConstant extends RuleBase implements DefaultOff {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [ for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span != null && source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD)
-				{ span: new Span(span.from, span.from), text: 'static ' };
-		} ];
+		return RunScan.edits(
+			plugin, source, tree -> [ for (v in violations) {
+				final span: Null<Span> = v.span;
+				final edit: Null<FixEdit> = span != null && source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD
+					? plugin.constructs()?.withModifier(ElementSpan.declarationHeadAt(tree, span.from), Static)
+					: null;
+				if (edit != null) edit;
+			} ]
+		);
 	}
 
 	/**

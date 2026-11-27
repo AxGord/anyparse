@@ -494,6 +494,14 @@
 			"find": "restates: (annotation, at) -> ask(fn, annotation, at)",
 			"replace": "restates: null",
 			"note": "an untyped lambda asks nothing of its position, so an annotation the parameter's function type restates is kept as an ascription"
+		},
+		{
+			"name": "M-PREFER-FINAL-FIX-SPELLED",
+			"type": "anyparse.check.common.expressions.PreferFinal",
+			"method": "fix",
+			"find": "constructs.asConstant(source, span.from)",
+			"replace": "{ span: new Span(span.from, span.from + 3), text: 'final' }",
+			"note": "the fix swaps the keyword itself again, so a grammar that refuses the constant keyword still gets text spelled by the rule"
 		}
 	]
 }

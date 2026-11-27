@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.Constructs.DeclarationHead;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.SourceComments.CommentTok;
@@ -808,6 +809,28 @@ final class ElementSpan {
 			at = eol + 1;
 		}
 		return false;
+	}
+
+	/**
+	 * The one answer to "which prefix siblings lead the declaration that starts at `start`": the modifier / `@:meta` run among
+	 * `root`'s descendants directly before the outermost node starting there, as the head a `Constructs.withModifier` edit reads.
+	 * A declaration with no prefix sibling, or none starting at `start`, answers an empty run.
+	 */
+	public static function declarationHeadAt(root: QueryNode, start: Int): DeclarationHead {
+		final pending: Array<QueryNode> = [root];
+		while (pending.length > 0) {
+			final node: Null<QueryNode> = pending.shift();
+			if (node == null) break;
+			for (i => child in node.children) {
+				if (child.span?.from == start && !isDeclPrefixSibling(child)) {
+					var first: Int = i;
+					while (first > 0 && isDeclPrefixSibling(node.children[first - 1])) first--;
+					return { modifiers: node.children.slice(first, i), start: start };
+				}
+				pending.push(child);
+			}
+		}
+		return { modifiers: [], start: start };
 	}
 
 	/** `n` with its noun, singular or plural — the one place the report's `s` is decided. */

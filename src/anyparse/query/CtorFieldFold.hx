@@ -1,7 +1,9 @@
 package anyparse.query;
 
+import anyparse.check.Check.FixEdit;
 import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
+import anyparse.query.Constructs;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.TokenSpans;
@@ -148,12 +150,14 @@ final class CtorFieldFold {
 	 * and `prefer-final-public-field` autofixes. Each edit fires only when the bytes at
 	 * the span start are literally `var`, so an unexpected span is silently skipped.
 	 */
-	public static function varKeywordToFinalEdits(source: String, spans: Array<Null<Span>>): Array<{ span: Span, text: String }> {
-		final keyword: String = 'var';
-		return [
+	public static function varKeywordToFinalEdits(
+		source: String, spans: Array<Null<Span>>, plugin: GrammarPlugin
+	): Array<{ span: Span, text: String }> {
+		final constructs: Null<Constructs> = plugin.constructs();
+		return constructs == null ? [] : [
 			for (span in spans) if (span != null) {
-				final end: Int = span.from + keyword.length;
-				if (source.substring(span.from, end) == keyword) { span: new Span(span.from, end), text: 'final' };
+				final edit: Null<FixEdit> = constructs.asConstant(source, span.from);
+				if (edit != null) edit;
 			}
 		];
 	}
@@ -219,7 +223,7 @@ final class CtorFieldFold {
 			ctor: QueryNode
 		}> = foldableCtorDefault(source, declSpan, plugin, shape);
 		if (coalesce == null || base == null) return null;
-		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, [declSpan]);
+		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, [declSpan], plugin);
 		final decl: FoldableDecl = base.decl;
 		final ctor: QueryNode = base.ctor;
 		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(
@@ -261,7 +265,7 @@ final class CtorFieldFold {
 			else
 				for (edit in fold) edits.push(edit);
 		}
-		for (edit in varKeywordToFinalEdits(source, plain)) edits.push(edit);
+		for (edit in varKeywordToFinalEdits(source, plain, plugin)) edits.push(edit);
 		return edits;
 	}
 
@@ -831,7 +835,7 @@ final class CtorFieldFold {
 		ctor: QueryNode
 	}> {
 		if (source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
-		if (varKeywordToFinalEdits(source, [declSpan]).length != 1) return null;
+		if (varKeywordToFinalEdits(source, [declSpan], plugin).length != 1) return null;
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
 		if (tree == null) return null;
 		final loc: Null<{ container: QueryNode, field: QueryNode }> = CtorFieldWrite.classLikeFieldAt(tree, declSpan.from, shape);
