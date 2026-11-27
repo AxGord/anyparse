@@ -536,6 +536,15 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(0, violations(axisSource('if (mk() != null && mk().bar != null) mk().bar.on();')).length);
 	}
 
+	@:pin('control')
+	@:killer('M-PSN-TERNARY-NULL-FALLBACK')
+	public function testValueTypeTernaryNotFlagged(): Void {
+		Assert.equals(0, violations(local('final n: Int = x != null ? x.len : 0;')).length);
+		Assert.equals(0, violations(local('final n: Int = x == null ? 0 : x.len;')).length);
+		Assert.equals(0, violations(local('final r: Float = x != null ? x.ratio : 0.0;')).length);
+		Assert.equals(0, violations(local('final b: Bool = x == null ? false : x.ok;')).length);
+	}
+
 	private function fixCanonical(source: String): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: PreferSafeNav = new PreferSafeNav();

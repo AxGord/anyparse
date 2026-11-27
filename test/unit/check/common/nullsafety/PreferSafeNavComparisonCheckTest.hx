@@ -285,6 +285,14 @@ class PreferSafeNavComparisonCheckTest extends Test {
 		Assert.equals(1, violations(local('final g = () -> x != null && x.b != null;\n\t\tuse(x.b);')).length);
 	}
 
+	@:pin('control')
+	@:killer('M-PSN-COMPARISON-PLAIN-CONJUNCT')
+	public function testValueTypeConjunctNotFlagged(): Void {
+		Assert.equals(0, violations(local('final ok: Bool = x != null && x.ok;')).length);
+		Assert.equals(0, violations(local('final big: Bool = x != null && x.len > 0;')).length);
+		Assert.equals(0, violations(local('final r: Bool = x != null && x.ratio < 1.0;')).length);
+	}
+
 	private function local(stmt: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x:Sys = mk();\n\t\t$stmt\n\t}\n}';
 	}

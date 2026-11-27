@@ -495,6 +495,36 @@
 			"find": "for (i => subject in subjects) if (mentionsOutsideRoot(stmt.children[0], junctions[i].children[0], subject, s)) return null;",
 			"replace": "if (mentionsOutsideRoot(stmt.children[0], junctions[subjects.length - 1].children[0], condIdent, s)) return null;",
 			"note": "only the deepest subject is checked for a mention outside the chain, so a prefix subject passed as an argument is folded into `?.` and stays typed Null<T>"
+		},
+		{
+			"name": "M-PSN-TERNARY-NULL-FALLBACK",
+			"type": "anyparse.check.common.nullsafety.PreferSafeNav",
+			"method": "matchTernary",
+			"find": "if (fallback.kind != s.nullKind) return null;",
+			"replace": "",
+			"note": "the ternary arm accepts any fallback, so a value-typed `x != null ? x.len : 0` reads as a safe-navigation candidate"
+		},
+		{
+			"name": "M-NULLCOAL-VALUE-GUARD-IDENTITY",
+			"type": "anyparse.check.common.nullsafety.PreferNullCoalescing",
+			"method": "guardOf",
+			"find": [
+				"cond.kind == seams.notEqKind && MemberKinds.sameSource(guarded, thenBranch, source)",
+				"cond.kind == seams.eqKind && MemberKinds.sameSource(guarded, elseBranch, source)"
+			],
+			"replace": [
+				"cond.kind == seams.notEqKind",
+				"cond.kind == seams.eqKind"
+			],
+			"note": "the guarded value need not be the one the ternary returns, so `x != null ? x.len : 0` reads as a null-guard fallback"
+		},
+		{
+			"name": "M-PSN-COMPARISON-PLAIN-CONJUNCT",
+			"type": "anyparse.check.common.nullsafety.PreferSafeNavComparison",
+			"method": "nullCompOperand",
+			"find": "NodeShape.nullComparedSide(c, s.nullKind) : null;",
+			"replace": "NodeShape.nullComparedSide(c, s.nullKind) : c;",
+			"note": "a conjunct that is not a null check counts as a run operand, so `x != null && x.ok` reads as a null-check chain"
 		}
 	]
 }

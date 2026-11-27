@@ -116,6 +116,15 @@ class PreferNullCoalescingCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
+	@:pin('control')
+	@:killer('M-NULLCOAL-VALUE-GUARD-IDENTITY')
+	public function testValueTypeFallbackNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('x != null ? x.len : 0')).length);
+		Assert.equals(0, violations(wrap('x == null ? 0 : x.len')).length);
+		Assert.equals(0, violations(wrap('x != null ? x.ratio : 0.0')).length);
+		Assert.equals(0, violations(wrap('x != null ? x.ok : false')).length);
+	}
+
 	private function wrap(expr: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x = $expr;\n\t}\n}';
 	}

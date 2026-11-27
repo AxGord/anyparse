@@ -2,6 +2,8 @@
 
 Null: flow-sensitive and declared proofs, safe navigation, null coalescing. One section per rule, by id; each rule's language, default and fix marker are in the [rule index](../../lint-rules.md#nullsafety), and a suite test fails when a registered rule has no section here or a section names no rule of this category.
 
+The three rules that suggest `?.` or `??` (`prefer-safe-nav`, `prefer-safe-nav-comparison`, `prefer-null-coalescing`) do not fire on the `Int`, `Float` or `Bool` value shapes the suite pins (`x != null ? x.len : 0`, `x != null && x.ok`), because a `Null<value type>` boxes on hxcpp.
+
 ## `always-null-comparison`
 
 a null comparison (`x == null` / `x != null`) whose operand is provably **null** by flow on every path reaching it — a constant comparison (`== null` always true, `!= null` always false), so the controlled branch is dead; `Info`, report-only. The mirror of `dead-null-guard` (the non-null operand) on the same `NullFlow` engine, now three-valued (`NonNull` / `Null` / `Unknown`): null-ness is established only by flow events — an earlier `x = null` / `var x = null`, or the `== null` arm of a guard narrowing this path — with the same sound joins and conservative `Unknown` collapse (reassignment, loop back-edge, closure capture, `macro` subtree). Only a function unit's own names (its parameters and locally-declared `var`/`final`s) are narrowed — a captured outer variable or an implicit-`this` field is a non-local a call could mutate, so it is left `Unknown` (mirroring the language's own strict null-safety). No point-wise twin (no declared type is "always null"), so unlike `dead-null-guard` there is nothing to defer to. Report-only: the correct rewrite (drop the dead branch) is context-dependent
