@@ -15,6 +15,7 @@ import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ConfigFinder;
 import anyparse.query.FileIdentity;
 import anyparse.query.FormatConfigDiscovery;
+import anyparse.query.ImportSpelling;
 import anyparse.query.ReachLiveness.ReachBuilds;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndexHost;
@@ -558,7 +559,11 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		usings.reverse();
 		final ordered: Array<Hoistable> = statements.filter(s -> !s.isUsing).concat(usings);
 		if (ordered.length == 0) return null;
-		var text: String = existing ?? '${ordered[0].isUsing ? USING_WORD : IMPORT_WORD} ${ordered[0].path};\n';
+		final seed: Null<String> = existing == null
+			? ImportSpelling.statementOf(plugin.constructs(), ordered[0].path, ordered[0].isUsing)
+			: null;
+		if (existing == null && seed == null) return null;
+		var text: String = existing ?? '$seed\n';
 		for (i in (existing == null ? 1 : 0) ... ordered.length) {
 			final statement: Hoistable = ordered[i];
 			switch AddImport.addImport(text, statement.path, statement.isUsing, false, plugin, optsJson) {

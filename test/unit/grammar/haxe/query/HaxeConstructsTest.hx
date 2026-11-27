@@ -89,6 +89,15 @@ class HaxeConstructsTest extends Test {
 		Assert.isNull(new MermaidQueryPlugin().constructs());
 	}
 
+	/** A wildcard and an aliased path, in either alias keyword, are the import declarations they spell. */
+	public function testWildcardAndAliasedImportsAreBuilt(): Void {
+		final build: Constructs = constructs();
+		Assert.equals('import a.b.*;', build.importOf('a.b.*')?.text);
+		Assert.equals('import a.b.C as D;', build.importOf('a.b.C as D')?.text);
+		Assert.equals('import a.b.C in D;', build.importOf('a.b.C in D')?.text);
+		Assert.isNull(build.importOf('a.b.C as'), 'an alias with no name');
+	}
+
 	private static function constructs(): Constructs {
 		return sure(new HaxeQueryPlugin().constructs());
 	}

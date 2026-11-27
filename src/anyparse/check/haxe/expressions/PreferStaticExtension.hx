@@ -721,9 +721,9 @@ final class PreferStaticExtension extends HaxeRule implements ConfigAware implem
 	 * from "inserted", which is the shape `UsingScan.appendUsingInsert` had on the same branch.
 	 */
 	private static function appendUsingInserts(header: UsingHeader, modules: Array<String>, edits: Array<FixEdit>): Bool {
+		if (modules.length == 0) return true;
 		final edit: Null<FixEdit> = UsingScan.usingInsertsEdit(header, modules);
-		if (edit == null) return true;
-		if (CanonicalEdit.editsOverlapAny([edit], edits)) return false;
+		if (edit == null || CanonicalEdit.editsOverlapAny([edit], edits)) return false;
 		edits.push(edit);
 		return true;
 	}

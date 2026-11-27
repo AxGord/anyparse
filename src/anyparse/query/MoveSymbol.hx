@@ -205,6 +205,8 @@ final class MoveSymbol {
 		cursorFile: String, line: Int, col: Int, destFile: String, scopeFiles: Array<{ file: String, source: String }>,
 		plugin: GrammarPlugin, typeRefShape: TypeRefShape
 	): MoveResult {
+		// A move rewrites import statements, which only the grammar's own constructs may spell.
+		if (plugin.constructs() == null) return Err('the grammar builds no import statements, so a type cannot be moved');
 		// 1-3. Build the index, resolve the type at the cursor, and run the guards.
 		final index: SymbolIndex = IndexScope.over(scopeFiles, plugin);
 		final prep: MovePrep = resolveMoveTarget(index, scopeFiles, cursorFile, destFile, line, col, plugin);
@@ -280,8 +282,7 @@ final class MoveSymbol {
 		//     a MODULE import of the source keeps that statement or gains one.
 		//     Computed BEFORE the move via the index.
 		buildImporterEdits(
-			editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName, target.bindings,
-			plugin.lexicalRegions
+			editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile, cursorInfo, typeName, target.bindings, plugin
 		);
 		if (oldImportPath != null)
 			statementlessRepairEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, target, destFile, plugin);
@@ -315,7 +316,7 @@ final class MoveSymbol {
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, plugin, newImportPath);
 				if (insert != null) ScopeFiles.editsFor(editsByFile, cursorFile).push(insert);
 			}
-			destinationImportEdits(editsByFile, target, destSource, declText, oldImportPath, newImportPath, plugin.lexicalRegions);
+			destinationImportEdits(editsByFile, target, destSource, declText, oldImportPath, newImportPath, plugin);
 		}
 
 		// 7d. Cut the decl from the source file — LAST, because `cutEditSpan` has to see every other
@@ -346,7 +347,10 @@ final class MoveSymbol {
 		final already: Bool = info.imports.exists(imp -> !imp.guarded && imp.kind == ImportKind.Import && imp.raw == path);
 		if (already) return null;
 		final anchor: ImportAnchor = importAnchor(source, plugin, path);
-		return { span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}import $path;\n${anchor.trail}' };
+		return {
+			span: new Span(anchor.offset, anchor.offset),
+			text: '${anchor.lead}${ImportSpelling.requiredStatement(plugin.constructs(), path, false)}\n${anchor.trail}'
+		};
 	}
 
 	/**
@@ -888,15 +892,14 @@ final class MoveSymbol {
 	 * The alias spelling is `imp.aliasKeyword`, the keyword the grammar declares for the
 	 * statement's node kind (both forms share one `ImportKind`).
 	 */
-	private static function importStatementText(imp: ImportInfo, newImportPath: String): String {
-		final keyword: String = imp.kind == ImportKind.Using ? 'using' : 'import';
+	private static function importStatementText(imp: ImportInfo, newImportPath: String, plugin: GrammarPlugin): String {
 		final alias: Null<String> = imp.alias;
-		if (alias == null) return '$keyword $newImportPath;';
+		if (alias == null) return ImportSpelling.requiredStatement(plugin.constructs(), newImportPath, imp.kind == ImportKind.Using);
 		// The two spellings are interchangeable to the compiler but not to the file's author, and
 		// this rewrite is a repoint, not a restyle — so the statement's own keyword is re-emitted.
 		final spelling: Null<String> = imp.aliasKeyword;
 		if (spelling == null) throw new Exception('the grammar declares no keyword for the alias import "$alias" (importAliasKeywords)');
-		return '$keyword $newImportPath $spelling $alias;';
+		return ImportSpelling.requiredStatement(plugin.constructs(), '$newImportPath $spelling $alias', false);
 	}
 
 	/**
@@ -906,8 +909,9 @@ final class MoveSymbol {
 	 */
 	private static function destinationImportEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, target: MoveTarget, destSource: String, declText: String,
-		oldImportPath: String, newImportPath: String, lexicalRegions: (String) -> Array<LexRegion>
+		oldImportPath: String, newImportPath: String, plugin: GrammarPlugin
 	): Void {
+		final lexicalRegions: (String) -> Array<LexRegion> = plugin.lexicalRegions;
 		final destInfo: FileInfo = target.destInfo;
 		final typeName: String = target.typeName;
 		final remaining: Array<String> = target.bindings.boundBesidesType(target.cursorInfo, typeName);
@@ -941,7 +945,8 @@ final class MoveSymbol {
 				final statement: String = destSource.substring(imp.span.from, imp.span.to);
 				ScopeFiles.editsFor(editsByFile, destInfo.file).push({
 					span: imp.span,
-					text: (keepsOthers ? '$statement\n${importIndent(destSource, imp)}' : '') + importStatementText(imp, newImportPath)
+					text: (keepsOthers ? '$statement\n${importIndent(destSource, imp)}' : '')
+					+ importStatementText(imp, newImportPath, plugin)
 				});
 				continue;
 			}
@@ -960,10 +965,10 @@ final class MoveSymbol {
 			ScopeFiles.editsFor(editsByFile, destInfo.file).push(
 				redundant
 					? { span: removeImportSpan(destSource, imp), text: '' }
-					: { span: imp.span, text: importStatementText(imp, newImportPath) }
+					: { span: imp.span, text: importStatementText(imp, newImportPath, plugin) }
 			);
 		}
-		destinationUsingMirror(editsByFile, target, destSource, oldImportPath, newImportPath);
+		destinationUsingMirror(editsByFile, target, destSource, oldImportPath, newImportPath, plugin);
 	}
 
 	/**
@@ -980,7 +985,7 @@ final class MoveSymbol {
 	 */
 	private static function destinationUsingMirror(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, target: MoveTarget, destSource: String, oldImportPath: String,
-		newImportPath: String
+		newImportPath: String, plugin: GrammarPlugin
 	): Void {
 		final destInfo: FileInfo = target.destInfo;
 		final sourceModule: String = target.cursorInfo.module;
@@ -995,8 +1000,9 @@ final class MoveSymbol {
 		if (destInfo.imports.exists(imp -> imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == oldImportPath)) return;
 		for (imp in destInfo.imports) if (imp.kind == ImportKind.Using && SymbolIndex.pathImportedBy(imp) == sourceModule) {
 			final statement: String = destSource.substring(imp.span.from, imp.span.to);
-			ScopeFiles.editsFor(editsByFile, destInfo.file)
-				.push({ span: imp.span, text: '$statement\n${importIndent(destSource, imp)}${importStatementText(imp, newImportPath)}' });
+			ScopeFiles.editsFor(editsByFile, destInfo.file).push(
+				{ span: imp.span, text: '$statement\n${importIndent(destSource, imp)}${importStatementText(imp, newImportPath, plugin)}' }
+			);
 		}
 	}
 
@@ -1011,7 +1017,7 @@ final class MoveSymbol {
 	 * so its repoint is already complete.
 	 */
 	private static function importerStatementEdit(
-		imp: ImportInfo, src: String, plan: ImporterRepoint, needsRemaining: Bool, needsMoved: Bool
+		imp: ImportInfo, src: String, plan: ImporterRepoint, needsRemaining: Bool, needsMoved: Bool, plugin: GrammarPlugin
 	): Null<{ span: Span, text: String }> {
 		final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 		if (path == null) return null;
@@ -1028,14 +1034,17 @@ final class MoveSymbol {
 			// no name scan can see.
 			final keep: Bool = moduleWide && plan.mainMoved && plan.remaining.length > 0
 				&& (imp.kind == ImportKind.Using || needsRemaining);
-			return { span: imp.span, text: (keep ? '$statement\n${importIndent(src, imp)}' : '') + importStatementText(imp, plan.newPath) };
+			return {
+				span: imp.span,
+				text: (keep ? '$statement\n${importIndent(src, imp)}' : '') + importStatementText(imp, plan.newPath, plugin)
+			};
 		}
 		// The mirror: a SECONDARY type leaving a module this file imports as a module. Nothing here
 		// spells the OLD path, so the repoint above never sees the statement and the moved type simply
 		// leaves this file's scope. The new statement goes in the old one's SLOT so that a later import
 		// binding the same name still wins.
 		return moduleWide && !plan.mainMoved && path == plan.sourceModule && needsMoved
-			? { span: imp.span, text: '$statement\n${importIndent(src, imp)}${importStatementText(imp, plan.newPath)}' }
+			? { span: imp.span, text: '$statement\n${importIndent(src, imp)}${importStatementText(imp, plan.newPath, plugin)}' }
 			: null;
 	}
 
@@ -1249,8 +1258,9 @@ final class MoveSymbol {
 	private static function buildImporterEdits(
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
 		oldImportPath: Null<String>, newImportPath: String, destFile: String, cursorInfo: FileInfo, typeName: String,
-		bindings: ImportBindings, lexicalRegions: (String) -> Array<LexRegion>
+		bindings: ImportBindings, plugin: GrammarPlugin
 	): Void {
+		final lexicalRegions: (String) -> Array<LexRegion> = plugin.lexicalRegions;
 		if (oldImportPath == null || oldImportPath == newImportPath) return;
 		// `moduleOf` reads the path's SHAPE (up to its first upper-initial segment) while
 		// `cursorInfo.module` comes from the file path, which is what a statement's binding set
@@ -1301,7 +1311,7 @@ final class MoveSymbol {
 			final needsMoved: Bool = !plan.mainMoved && !spellsOldPath
 				&& NameMentionScan.sourceNamesAny(src, plan.moved, excluded, lexicalRegions(src));
 			for (imp in importer.imports) {
-				final edit: Null<{ span: Span, text: String }> = importerStatementEdit(imp, src, plan, needsRemaining, needsMoved);
+				final edit: Null<{ span: Span, text: String }> = importerStatementEdit(imp, src, plan, needsRemaining, needsMoved, plugin);
 				if (edit != null) ScopeFiles.editsFor(editsByFile, importer.file).push(edit);
 			}
 		}

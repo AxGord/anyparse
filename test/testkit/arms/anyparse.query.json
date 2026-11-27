@@ -883,8 +883,8 @@
 			"name": "M-MOVE-ALIAS-SUFFIX-DROPPED",
 			"type": "anyparse.query.MoveSymbol",
 			"method": "importStatementText",
-			"find": "if (alias == null) return '$keyword $newImportPath;';",
-			"replace": "return '$keyword $newImportPath;';",
+			"find": "if (alias == null) return ImportSpelling.requiredStatement(plugin.constructs(), newImportPath, imp.kind == ImportKind.Using);",
+			"replace": "return ImportSpelling.requiredStatement(plugin.constructs(), newImportPath, imp.kind == ImportKind.Using);",
 			"note": "a repointed alias import loses its binding suffix, so a file that only ever names the type through the alias is left with no binding for it"
 		},
 		{

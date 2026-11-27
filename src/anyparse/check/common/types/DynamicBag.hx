@@ -3,6 +3,7 @@ package anyparse.check.common.types;
 import anyparse.check.Check.OracleType;
 import anyparse.check.Check.TypeOracle;
 import anyparse.check.common.types.DynamicShape.DynCtx;
+import anyparse.query.ImportSpelling;
 import anyparse.query.ParseGate;
 import anyparse.query.Refs;
 import anyparse.query.TreePath;
@@ -80,6 +81,8 @@ final class DynamicBag {
 	 */
 	private static final BAG_METHODS: Array<String> = ['setField', 'field', 'hasField', 'deleteField', 'fields'];
 
+	private static final IMPORTED_TYPE: String = 'haxe.DynamicAccess';
+
 	/**
 	 * The DynamicAccess bag edits for `violations`, which the caller has already narrowed to its own rule: the arm
 	 * reads no rule id, since the id belongs to the rule. `oracle` (optional) resolves the value-type inference tail.
@@ -91,6 +94,8 @@ final class DynamicBag {
 		final dynName: Null<String> = shape.rawDynamicTypeName;
 		final tree: Null<QueryNode> = dynName == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (dynName == null || tree == null) return [];
+		final statement: Null<String> = ImportSpelling.statementOf(plugin.constructs(), IMPORTED_TYPE, false);
+		if (statement == null) return [];
 		final ctx: DynCtx = DynamicShape.buildCtx(shape, dynName, plugin.typeSyntax);
 		final provider: Null<TypeInfoProvider> = RunScan.typeInfoOf(plugin);
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
@@ -110,7 +115,7 @@ final class DynamicBag {
 					edits.push({ span: span, text: 'DynamicAccess<$t>' });
 					for (op in bag.ops) edits.push({ span: op.call.span ?? span, text: bagOpText(op, source) });
 					if (!importAdded) {
-						final ie: Null<{ span: Span, text: String }> = importEdit(tree);
+						final ie: Null<{ span: Span, text: String }> = importEdit(tree, statement);
 						if (ie != null) {
 							edits.push(ie);
 							importAdded = true;
@@ -437,20 +442,20 @@ final class DynamicBag {
 	}
 
 	/** The `import haxe.DynamicAccess;` insertion edit, or null when already imported. Mirrors `AddImport`'s site selection. */
-	private static function importEdit(tree: QueryNode): Null<{ span: Span, text: String }> {
+	private static function importEdit(tree: QueryNode, stmt: String): Null<{ span: Span, text: String }> {
 		var lastImportTo: Int = -1;
 		var packageTo: Int = -1;
 		for (c in tree.children) switch c.kind {
 			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
 				final s: Null<Span> = c.span;
 				if (s != null) lastImportTo = s.to;
-				if (c.kind == 'ImportDecl' && (c.name == 'haxe.DynamicAccess' || c.name == 'DynamicAccess')) return null;
+				if (c.kind == 'ImportDecl' && (c.name == IMPORTED_TYPE || c.name == 'DynamicAccess')) return null;
 			case 'PackageDecl':
 				final s: Null<Span> = c.span;
 				if (s != null) packageTo = s.to;
 			case _:
 		}
-		final stmt: String = 'import haxe.DynamicAccess;';
+
 		return if (lastImportTo >= 0)
 			{ span: new Span(lastImportTo, lastImportTo), text: '\n$stmt' }
 		else if (packageTo >= 0)

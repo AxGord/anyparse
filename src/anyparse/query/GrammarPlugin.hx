@@ -3401,18 +3401,6 @@ final class RefShape {
 	public var grantsPrivateAccessMetaName: Null<String>;
 
 	/**
-	 * How the grammar spells a statement importing the module path `%` (Haxe `import %;`) — what an op writes when it ADDS
-	 * an import. Optional; unset → an op that would add one refuses instead.
-	 */
-	public var importLineTemplate: Null<String>;
-
-	/**
-	 * How the grammar spells a statement bringing `%`'s static extensions into scope (Haxe `using %;`). Optional; unset →
-	 * an op that would add one refuses instead.
-	 */
-	public var usingLineTemplate: Null<String>;
-
-	/**
 	 * Whether a TYPE name begins upper-case and a package segment never does (Haxe's convention, which the compiler leans
 	 * on to read `a.b.C.d` as package, type, member). Optional; unset → every identifier may name a type.
 	 */

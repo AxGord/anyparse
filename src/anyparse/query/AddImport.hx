@@ -67,10 +67,12 @@ final class AddImport {
 		// A `using` takes the seat every `using`-inserting rule takes: ABOVE the header's first `using`,
 		// the lowest static-extension priority, since Haxe ranks them in REVERSE declaration order and an
 		// insert below the group would re-target every same-named extension call the file already makes.
-		final edit: { span: Span, text: String } = asUsing
+		final edit: Null<{ span: Span, text: String }> = asUsing
 			? UsingScan.usingInsertEdit(UsingScan.headerOf(tree, source, plugin, null), trimmed)
 			: importEdit(source, tree, plugin, trimmed);
-		return CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return edit == null
+			? Err('the grammar builds no ${asUsing ? ImportSpelling.USING_WORD : ImportSpelling.IMPORT_WORD} for "$trimmed"')
+			: CanonicalEdit.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 	/**
@@ -89,12 +91,13 @@ final class AddImport {
 	 * passes no path, so it takes the ladder rather than a slot the plain-import ordering cannot see.
 	 * Exact whitespace is the writer's concern — the canonicalize finalize re-emits the whole file.
 	 */
-	private static function importEdit(source: String, tree: QueryNode, plugin: GrammarPlugin, path: String): { span: Span, text: String } {
+	private static function importEdit(
+		source: String, tree: QueryNode, plugin: GrammarPlugin, path: String
+	): Null<{ span: Span, text: String }> {
+		final statement: Null<String> = ImportSpelling.statementOf(plugin.constructs(), path, false);
+		if (statement == null) return null;
 		final anchor: ImportAnchor = ImportOrder.insertionFor(source, tree, plugin, orderable(path) ? path : null);
-		return {
-			span: new Span(anchor.offset, anchor.offset),
-			text: '${anchor.lead}${ImportSpelling.IMPORT_WORD} $path;\n${anchor.trail}'
-		};
+		return { span: new Span(anchor.offset, anchor.offset), text: '${anchor.lead}$statement\n${anchor.trail}' };
 	}
 
 	/**

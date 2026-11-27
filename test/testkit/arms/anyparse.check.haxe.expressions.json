@@ -7,8 +7,8 @@
 			"name": "M-PSE-USING-INSERT-SILENT",
 			"type": "anyparse.check.haxe.expressions.PreferStaticExtension",
 			"method": "appendUsingInserts",
-			"find": "if (CanonicalEdit.editsOverlapAny([edit], edits)) return false;\n\tedits.push(edit);\n\treturn true;",
-			"replace": "if (!CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);\n\treturn true;",
+			"find": "if (edit == null || CanonicalEdit.editsOverlapAny([edit], edits)) return false;\n\tedits.push(edit);\n\treturn true;",
+			"replace": "if (edit != null && !CanonicalEdit.editsOverlapAny([edit], edits)) edits.push(edit);\n\treturn true;",
 			"note": "the merged `using` insert answers `true` whether or not it was appended, so `prefer-static-extension` keeps rewrites whose declaration never landed"
 		},
 		{

@@ -203,11 +203,6 @@ final class ModuleMove {
 		return module.startsWith('$pkg.');
 	}
 
-	/** `template` (a `RefShape` statement spelling, `%` for the path) applied to `path`, or null when the grammar has none. */
-	private static inline function statementOf(template: Null<String>, path: String): Null<String> {
-		return template?.replace('%', path);
-	}
-
 	/** The companion of module `module` under `mirror`, at the directory `rel` of the layout's source root, for one `suffix`. */
 	private static inline function companionPath(mirror: TestMirror, rel: String, module: String, suffix: String, ext: String): String {
 		return Path.join([mirror.test, rel, '$module$suffix.$ext']);
@@ -846,13 +841,12 @@ final class ModuleMove {
 	}
 
 	/** The statements importing `imports` and bringing `usings` into scope, or the first path the grammar cannot spell one for. */
-	private static function repairLines(imports: Array<String>, usings: Array<String>, shape: RefShape): Either<String, Array<String>> {
+	private static function repairLines(
+		imports: Array<String>, usings: Array<String>, plugin: GrammarPlugin
+	): Either<String, Array<String>> {
 		final out: Array<String> = [];
-		for (pair in [
-			{ paths: imports, template: shape.importLineTemplate },
-			{ paths: usings, template: shape.usingLineTemplate }
-		]) for (p in pair.paths) {
-			final line: Null<String> = statementOf(pair.template, p);
+		for (pair in [{ paths: imports, isUsing: false }, { paths: usings, isUsing: true }]) for (p in pair.paths) {
+			final line: Null<String> = ImportSpelling.statementOf(plugin.constructs(), p, pair.isUsing);
 			if (line == null) return Left(p);
 			out.push(line);
 		}
@@ -989,11 +983,11 @@ final class ModuleMove {
 		final infoOf: Map<String, FileInfo> = [ for (fi in post.allFiles()) fi.file => fi ];
 		for (file in [ for (f in byFile.keys()) f ].concat([ for (f in lost.keys()) if (!byFile.exists(f)) f ])) {
 			final paths: Array<String> = [ for (p in byFile[file] ?? []) exactRepair(p, infoOf[file], post, plugin.refShape()) ];
-			final importLines: Array<String> = switch repairLines(paths, [], plugin.refShape()) {
+			final importLines: Array<String> = switch repairLines(paths, [], plugin) {
 				case Left(path): return '$file: the grammar declares no statement spelling to write $path';
 				case Right(l): l;
 			};
-			final usingLines: Array<String> = switch repairLines([], lost[file] ?? [], plugin.refShape()) {
+			final usingLines: Array<String> = switch repairLines([], lost[file] ?? [], plugin) {
 				case Left(path): return '$file: the grammar declares no statement spelling to write $path';
 				case Right(l): l;
 			};

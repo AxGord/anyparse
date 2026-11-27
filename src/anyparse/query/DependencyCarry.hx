@@ -214,7 +214,7 @@ final class DependencyCarry {
 			);
 			if (collision != null) return CarryErr(collision);
 			if (ownSub != null) {
-				carryOwnSub(ownSub, dep, wanted, destInfo, names, carried);
+				carryOwnSub(ownSub, dep, wanted, destInfo, names, carried, plugin);
 				continue;
 			}
 			final statement: Null<ImportInfo> = mine.statement;
@@ -229,7 +229,7 @@ final class DependencyCarry {
 				if (guardedImportPath(dep, destInfo) != null || bindingOf(dep, destInfo, names) != null) continue;
 				final directives: Array<CondDirective> = cursorDirectives ?? GuardedImportCarry.directivesOf(source, plugin);
 				cursorDirectives = directives;
-				final refusal: Null<String> = foldGuardedCarry(dep, source, cursorInfo, directives, shape, guarded);
+				final refusal: Null<String> = foldGuardedCarry(dep, source, cursorInfo, directives, shape, guarded, plugin);
 				if (refusal != null) return CarryErr(refusal);
 				continue;
 			}
@@ -249,7 +249,7 @@ final class DependencyCarry {
 			// and via a MODULE import, which now reaches here and repeats).
 			// An ambient statement's span addresses its own file, whose text is not at hand; only an alias reads the
 			// text, for its `as` / `in` keyword, and the compiler takes either.
-			final line: String = DependencyCarry.importLineFor(statement);
+			final line: String = DependencyCarry.importLineFor(statement, plugin);
 			carried.pushUnique(line);
 		}
 		final wildRefusal: Null<String> = foldWildcardCarry(
@@ -416,9 +416,10 @@ final class DependencyCarry {
 	 * module, or an import of its own — or an earlier dependency carried the line.
 	 */
 	private static function carryOwnSub(
-		ownSub: String, dep: String, wanted: Null<String>, destInfo: FileInfo, names: TypeNameBinding, carried: Array<String>
+		ownSub: String, dep: String, wanted: Null<String>, destInfo: FileInfo, names: TypeNameBinding, carried: Array<String>,
+		plugin: GrammarPlugin
 	): Void {
-		final line: String = 'import $ownSub;';
+		final line: String = ImportSpelling.requiredStatement(plugin.constructs(), ownSub, false);
 		if (bindingOf(dep, destInfo, names)?.path != wanted && !carried.contains(line)) carried.push(line);
 	}
 
@@ -484,9 +485,9 @@ final class DependencyCarry {
 	 */
 	private static function foldGuardedCarry(
 		dep: String, source: String, cursorInfo: FileInfo, directives: Array<CondDirective>, shape: RefShape,
-		guarded: Array<{ condition: String, lines: Array<String> }>
+		guarded: Array<{ condition: String, lines: Array<String> }>, plugin: GrammarPlugin
 	): Null<String> {
-		return foldGuardedResult(GuardedImportCarry.carryFor(dep, cursorInfo.file, source, cursorInfo, directives, shape), guarded);
+		return foldGuardedResult(GuardedImportCarry.carryFor(dep, cursorInfo.file, source, cursorInfo, directives, shape), guarded, plugin);
 	}
 
 	/**
@@ -498,7 +499,7 @@ final class DependencyCarry {
 	 * `GuardedImportCarry.carryFor` does), and everything after the selection is identical.
 	 */
 	private static function foldGuardedResult(
-		result: GuardedCarry, guarded: Array<{ condition: String, lines: Array<String> }>
+		result: GuardedCarry, guarded: Array<{ condition: String, lines: Array<String> }>, plugin: GrammarPlugin
 	): Null<String> {
 		switch result {
 			case GuardedNone:
@@ -510,7 +511,7 @@ final class DependencyCarry {
 				) ?? { condition: condition, lines: [] };
 				guarded.pushUnique(group);
 				for (imp in imports) {
-					final line: String = DependencyCarry.importLineFor(imp);
+					final line: String = DependencyCarry.importLineFor(imp, plugin);
 					if (!group.lines.contains(line)) group.lines.push(line);
 				}
 		}
@@ -993,7 +994,7 @@ final class DependencyCarry {
 				SourceText.lastSegment(imp.raw), path, cursorInfo, destInfo, destSource, index, files, true, destRegions, null
 			) != null)
 				continue;
-			final line: String = DependencyCarry.importLineFor(imp);
+			final line: String = DependencyCarry.importLineFor(imp, plugin);
 			carried.pushUnique(line);
 		}
 		return carried;
@@ -1094,10 +1095,10 @@ final class DependencyCarry {
 	 * that filter without widening this is what the throw is here to catch.
 	 */
 	@:access(anyparse.query.MoveSymbol)
-	private static function importLineFor(imp: ImportInfo): String {
+	private static function importLineFor(imp: ImportInfo, plugin: GrammarPlugin): String {
 		final path: Null<String> = SymbolIndex.pathImportedBy(imp);
 		if (path == null) throw new Exception('importLineFor: carried import "${imp.raw}" names no module path');
-		return MoveSymbol.importStatementText(imp, path);
+		return MoveSymbol.importStatementText(imp, path, plugin);
 	}
 
 	/**
@@ -1148,7 +1149,7 @@ final class DependencyCarry {
 			final refusal: Null<String> = rivalWildcardCollision(provider, wanted, destInfo, files, shape);
 			if (refusal != null) return refusal;
 			if (!provider.imp.guarded) {
-				final line: String = DependencyCarry.importLineFor(provider.imp);
+				final line: String = DependencyCarry.importLineFor(provider.imp, plugin);
 				carried.pushUnique(line);
 				continue;
 			}
@@ -1159,7 +1160,7 @@ final class DependencyCarry {
 			final walk: Array<CondDirective> = scanned ?? GuardedImportCarry.directivesOf(source, plugin);
 			scanned = walk;
 			final guardRefusal: Null<String> = foldGuardedResult(
-				GuardedImportCarry.carryForProviders([provider.imp], wanted[0], cursorInfo.file, source, walk, shape), guarded
+				GuardedImportCarry.carryForProviders([provider.imp], wanted[0], cursorInfo.file, source, walk, shape), guarded, plugin
 			);
 			if (guardRefusal != null) return guardRefusal;
 		}

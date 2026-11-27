@@ -3,6 +3,8 @@ package anyparse.check.scan;
 import anyparse.check.Check.FixEdit;
 import anyparse.check.LintConfig;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
+import anyparse.query.ImportSpelling;
 import anyparse.query.ModuleScan;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -17,6 +19,9 @@ typedef UsingHeader = {
 
 	final root: QueryNode;
 	final guard: Null<QueryNode>;
+
+	/** The grammar's construct builder, which spells the `using` an insert declares; null when the grammar builds none. */
+	final constructs: Null<Constructs>;
 
 	/** The unguarded `using` paths the file's folder chain (`import.hx`) supplies, empty when the caller holds no index. */
 	final ambientUsings: Array<String>;
@@ -144,6 +149,7 @@ final class UsingScan {
 	public static function headerOf(tree: QueryNode, source: String, plugin: GrammarPlugin, ambient: Null<FileInfo>): UsingHeader {
 		return {
 			root: tree,
+			constructs: plugin.constructs(),
 			ambientUsings: ambient == null ? [] : TypeRefIndex.unguardedAmbientUsings(ambient),
 			guard: ModuleScan.guardedBodyRegion(tree, source, plugin),
 			guardedUsings: [ for (g in ModuleScan.guardedImportScopes(tree, source, plugin)) if (g.decl.kind == USING_DECL_KIND) g ]
@@ -315,7 +321,11 @@ final class UsingScan {
 	public static function insertUnlessCovered(
 		header: UsingHeader, module: String, edits: Array<FixEdit>, violations: Array<Violation>
 	): Null<FixEdit> {
-		final insert: FixEdit = usingInsertEdit(header, module);
+		final insert: Null<FixEdit> = usingInsertEdit(header, module);
+		if (insert == null) {
+			noteDeclineWhereUnset(violations, unspellableUsingDecline(module));
+			return null;
+		}
 		if (!CanonicalEdit.editsOverlapAny([insert], edits)) return insert;
 		noteDeclineWhereUnset(violations, coveredUsingDecline([module]));
 		return null;
@@ -353,30 +363,34 @@ final class UsingScan {
 	 * insert below it — inside the guard included — would outrank it. Only when the file has none does
 	 * the guard's own header take over, which is where the rewrites and their imports live.
 	 */
-	public static function usingInsertEdit(header: UsingHeader, module: String): FixEdit {
+	public static function usingInsertEdit(header: UsingHeader, module: String): Null<FixEdit> {
+		final statement: Null<String> = ImportSpelling.statementOf(header.constructs, module, true);
+		if (statement == null) return null;
 		final unguarded: Null<Span> = firstUsing(header.root);
-		if (unguarded != null) return { span: new Span(unguarded.from, unguarded.from), text: 'using $module;\n' };
+		if (unguarded != null) return { span: new Span(unguarded.from, unguarded.from), text: '$statement\n' };
 		final guard: Null<QueryNode> = header.guard;
 		if (guard != null) {
 			final guarded: Null<Span> = firstUsing(guard);
-			if (guarded != null) return { span: new Span(guarded.from, guarded.from), text: 'using $module;\n' };
+			if (guarded != null) return { span: new Span(guarded.from, guarded.from), text: '$statement\n' };
 			final inner: Null<Span> = lastAnchor(guard);
-			if (inner != null) return { span: new Span(inner.to, inner.to), text: '\nusing $module;' };
+			if (inner != null) return { span: new Span(inner.to, inner.to), text: '\n$statement' };
 		}
 		final at: Null<Span> = lastAnchor(header.root);
-		return at == null
-			? { span: new Span(0, 0), text: 'using $module;\n\n' }
-			: { span: new Span(at.to, at.to), text: '\nusing $module;' };
+		return at == null ? { span: new Span(0, 0), text: '$statement\n\n' } : { span: new Span(at.to, at.to), text: '\n$statement' };
 	}
 
 	/**
 	 * The ONE edit that declares `modules` together: every module's `using` line at the one anchor
-	 * `usingInsertEdit` picks, in the order given. Null when `modules` is empty.
+	 * `usingInsertEdit` picks, in the order given. Null when `modules` is empty, and also when the grammar spells none of
+	 * them: a caller that owes the declaration tests `modules` first, so a null it gets back is a refusal.
 	 */
 	public static function usingInsertsEdit(header: UsingHeader, modules: Array<String>): Null<FixEdit> {
 		if (modules.length == 0) return null;
-		final inserts: Array<FixEdit> = modules.map(module -> usingInsertEdit(header, module));
-		return { span: inserts[0].span, text: inserts.map(insert -> insert.text).join('') };
+		final inserts: Array<Null<FixEdit>> = modules.map(module -> usingInsertEdit(header, module));
+		final first: Null<FixEdit> = inserts[0];
+		return first == null || !inserts.foreach(insert -> insert != null)
+			? null
+			: { span: first.span, text: inserts.map(insert -> insert?.text ?? '').join('') };
 	}
 
 	/**
@@ -526,6 +540,12 @@ final class UsingScan {
 			if (name != null && !out.contains(name)) out.push(name);
 		}
 		return out;
+	}
+
+	/** Why a rewrite is refused when the grammar cannot spell the `using` it needs: no edit may assume a declaration that is not there. */
+	public static function unspellableUsingDecline(module: String): String {
+		return 'the grammar builds no `using` declaration for `$module`, and a rewritten extension call whose declaration never'
+			+ ' landed does not compile, so the whole edit set goes';
 	}
 
 	/** The graver of two verdicts. */

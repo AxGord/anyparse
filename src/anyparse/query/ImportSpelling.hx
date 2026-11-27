@@ -2,6 +2,9 @@ package anyparse.query;
 
 using anyparse.util.Strings;
 
+import anyparse.query.Constructs.Built;
+import haxe.Exception;
+
 /**
  * An `import` / `using` argument as the caller spelled it: the keyword it opened with, or null for
  * a bare module path, and the path with the keyword and the closing `;` taken off.
@@ -72,6 +75,22 @@ final class ImportSpelling {
 		final segments: Array<String> = (aliasAt < 0 ? path : path.substring(0, aliasAt)).split('.');
 		for (i => segment in segments) if (!(segment == '*' && i > 0 && i == segments.length - 1) && !segment.isIdentifier()) return false;
 		return true;
+	}
+
+	/**
+	 * The one answer to "the import or `using` statement the grammar spells for `path`": its text without a line end, or
+	 * null when the grammar builds no constructs or refuses the path — a caller then refuses its edit rather than spell the
+	 * statement itself.
+	 */
+	public static function statementOf(constructs: Null<Constructs>, path: String, isUsing: Bool): Null<String> {
+		if (constructs == null) return null;
+		final built: Null<Built> = isUsing ? constructs.usingOf(path) : constructs.importOf(path);
+		return built?.text;
+	}
+
+	/** `statementOf` for a caller that refuses up front when the grammar builds no constructs: throws where that guard was missed. */
+	public static function requiredStatement(constructs: Null<Constructs>, path: String, isUsing: Bool): String {
+		return statementOf(constructs, path, isUsing) ?? throw new Exception('the grammar builds no statement for "$path"');
 	}
 
 	private static inline function withoutSemicolon(body: String): String {

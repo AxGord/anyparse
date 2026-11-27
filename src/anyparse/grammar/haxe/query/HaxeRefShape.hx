@@ -1311,8 +1311,6 @@ final class HaxeRefShape {
 		table.packageDeclKind = 'PackageDecl';
 		table.typeAliasDeclKind = 'TypedefDecl';
 		table.grantsPrivateAccessMetaName = '@:allow';
-		table.importLineTemplate = 'import %;';
-		table.usingLineTemplate = 'using %;';
 		table.typeNamesUpperInitial = true;
 		table.qualifiedSubTypeByModulePath = true;
 		table.packageSegmentPattern = '^[a-z_][A-Za-z0-9_]*$';

@@ -1201,9 +1201,9 @@
   },
   {
     "file": "src/anyparse/check/common/types/DynamicBag.hx",
-    "line": 110,
+    "line": 114,
     "col": 37,
-    "endLine": 110,
+    "endLine": 114,
     "endCol": 56,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1648,86 +1648,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/scan/UsingScan.hx",
-    "line": 358,
-    "col": 89,
-    "endLine": 358,
-    "endCol": 107,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "UsingScan.usingInsertEdit",
-      "subject": "using",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/scan/UsingScan.hx",
-    "line": 362,
-    "col": 84,
-    "endLine": 362,
-    "endCol": 102,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "UsingScan.usingInsertEdit",
-      "subject": "using",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/scan/UsingScan.hx",
-    "line": 364,
-    "col": 74,
-    "endLine": 364,
-    "endCol": 92,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "UsingScan.usingInsertEdit",
-      "subject": "using",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/scan/UsingScan.hx",
-    "line": 368,
-    "col": 36,
-    "endLine": 368,
-    "endCol": 56,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "UsingScan.usingInsertEdit",
-      "subject": "using",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/scan/UsingScan.hx",
-    "line": 369,
-    "col": 44,
-    "endLine": 369,
-    "endCol": 62,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`using`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "UsingScan.usingInsertEdit",
-      "subject": "using",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/query/AddElement.hx",
     "line": 192,
     "col": 54,
@@ -1788,22 +1708,6 @@
       "family": "literal",
       "function": "AddElement.computeAppendEdit",
       "subject": ",",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/AddImport.hx",
-    "line": 96,
-    "col": 10,
-    "endLine": 96,
-    "endCol": 79,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`;\\n`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "AddImport.importEdit",
-      "subject": ";\\n",
       "chain": []
     }
   },
@@ -2188,38 +2092,6 @@
       "family": "literal",
       "function": "MoveScaffold.scaffoldViaField",
       "subject": "=",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/MoveSymbol.hx",
-    "line": 349,
-    "col": 64,
-    "endLine": 349,
-    "endCol": 110,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`import`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "MoveSymbol.addImportEdit",
-      "subject": "import",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/MoveSymbol.hx",
-    "line": 891,
-    "col": 17,
-    "endLine": 900,
-    "endCol": 3,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "helper `importStatementText` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "helper",
-      "function": "MoveSymbol.importStatementText",
-      "subject": "importStatementText -> edit text",
       "chain": []
     }
   },

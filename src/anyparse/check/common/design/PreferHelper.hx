@@ -315,7 +315,8 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 			}
 		];
 		final header: UsingHeader = UsingScan.headerOf(root, source, plugin, resolved.fileInfo(file));
-		return edits.concat(imports.edits).concat(usingInsertOf(sites, header, usingGroup));
+		final usingInsert: Null<Array<GroupedEdit>> = usingInsertOf(sites, header, usingGroup);
+		return usingInsert == null ? [] : edits.concat(imports.edits).concat(usingInsert);
 	}
 
 	public function messageIdentity(message: String): String {
@@ -844,11 +845,12 @@ final class PreferHelper extends RuleBase implements ConfigAware implements File
 	}
 
 	/** The one `using` insert the sites that need it share, grouped with them; none when every site's module is in scope. */
-	private static function usingInsertOf(sites: Array<Site>, header: UsingHeader, group: Int): Array<GroupedEdit> {
+	private static function usingInsertOf(sites: Array<Site>, header: UsingHeader, group: Int): Null<Array<GroupedEdit>> {
 		final modules: Array<String> = [];
 		for (site in sites) if (site.spelling.needsUsing) modules.pushUnique(site.template.typePath);
+		if (modules.length == 0) return [];
 		final insert: Null<FixEdit> = UsingScan.usingInsertsEdit(header, modules);
-		return insert == null ? [] : [{ span: insert.span, text: insert.text, group: group }];
+		return insert == null ? null : [{ span: insert.span, text: insert.text, group: group }];
 	}
 
 }

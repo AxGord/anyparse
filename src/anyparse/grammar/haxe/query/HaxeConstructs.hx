@@ -23,7 +23,7 @@ final class HaxeConstructs implements Constructs {
 	private static final FIELD_ACCESS: Array<String> = ['FieldAccess'];
 	private static final LAMBDA: Array<String> = ['ThinArrow', 'ThinParenLambdaExpr'];
 	private static final RETURN: Array<String> = ['ReturnStmt'];
-	private static final IMPORT: Array<String> = ['ImportDecl'];
+	private static final IMPORT: Array<String> = ['ImportDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl'];
 	private static final USING: Array<String> = ['UsingDecl'];
 	private static final CONSTANT: Array<String> = ['FinalMember'];
 	private static final VARIABLE: Array<String> = ['VarMember'];

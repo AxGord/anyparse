@@ -156,7 +156,7 @@ class UsingInsertRefusalTest extends Test {
 
 	/** The zero-width byte the insert would go at — derived, never spelled, so a header change cannot make the fixture lie. */
 	private function anchorOf(header: UsingHeader): Int {
-		return UsingScan.usingInsertEdit(header, 'Lambda').span.from;
+		return UsingScan.usingInsertEdit(header, 'Lambda')?.span.from ?? -1;
 	}
 
 	private function violation(from: Int, to: Int): Violation {

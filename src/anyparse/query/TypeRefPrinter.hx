@@ -135,8 +135,8 @@ final class TypeRefPrinter {
 		_usingModules = root == null ? [] : ModuleScan.usingModulesOf(root);
 		// A `package` declaration with no recoverable span leaves no legal anchor: the file-start
 		// fallback would splice the import AHEAD of `package`, which does not parse. Refuse to
-		// import at all rather than emit that.
-		_canAnchorImports = root == null || !ModuleScan.hasSpanlessPackage(root);
+		// import at all rather than emit that. A grammar that builds no import statement is refused the same way: nothing here spells one.
+		_canAnchorImports = (root == null || !ModuleScan.hasSpanlessPackage(root)) && plugin?.constructs() != null;
 	}
 
 	/** Whether `print` has promised at least one import that `pendingImportEdits` will materialise. */
@@ -319,7 +319,9 @@ final class TypeRefPrinter {
 			bucket.paths.sort((a, b) -> ImportOrder.compare(bucket.anchor.order, a, b));
 			{
 				span: new Span(bucket.anchor.offset, bucket.anchor.offset),
-				text: bucket.anchor.lead + [ for (path in bucket.paths) 'import $path;\n' ].join('') + bucket.anchor.trail,
+				text: bucket.anchor.lead
+					+ [ for (path in bucket.paths) '${ImportSpelling.requiredStatement(_plugin?.constructs(), path, false)}\n' ].join('')
+					+ bucket.anchor.trail,
 				paths: bucket.paths
 			};
 		} ];

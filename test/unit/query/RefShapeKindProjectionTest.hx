@@ -176,9 +176,9 @@ final class RefShapeKindProjectionTest extends Test {
 	/**
 	 * Slots whose token-shaped string is an EMISSION template or a PATTERN, not text any parse captures.
 	 *
-	 * `enumAbstractSyntax.head` carries `{name}` / `{under}` holes a fixer fills; `importLineTemplate` / `usingLineTemplate`
-	 * carry the `%` a module relocation fills with a path, and `packageSegmentPattern` is the regex it checks a package
-	 * segment against — no source slice contains any of them verbatim, so a capture probe would assert the wrong thing.
+	 * `enumAbstractSyntax.head` carries `{name}` / `{under}` holes a fixer fills;
+	 * `packageSegmentPattern` is the regex a module relocation checks a package
+	 * segment against — no source slice contains either verbatim, so a capture probe would assert the wrong thing.
 	 * What owns each is its emitter (`unit.check.common.members.PreferEnumAbstractCheckTest`, `unit.query.ModuleMoveTest`), recorded here
 	 * so the census admits the slot by ADDRESS and another template slot cannot join in silence.
 	 *
@@ -186,12 +186,7 @@ final class RefShapeKindProjectionTest extends Test {
 	 * also freed the same structure's `bodyOpen: '{'`, a real token the parser does capture — a
 	 * template by a field it merely shares, and probed by nothing for it.
 	 */
-	private static final TEMPLATE_SLOTS: Array<String> = [
-		'enumAbstractSyntax#head',
-		'importLineTemplate#',
-		'packageSegmentPattern#',
-		'usingLineTemplate#'
-	];
+	private static final TEMPLATE_SLOTS: Array<String> = ['enumAbstractSyntax#head', 'packageSegmentPattern#'];
 
 	/**
 	 * Per grammar, one probe per token-bearing slot: the smallest source that can carry the
