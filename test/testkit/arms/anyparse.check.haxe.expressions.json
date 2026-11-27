@@ -998,6 +998,22 @@
 			"find": " || stmts.length != params.length",
 			"replace": "",
 			"note": "a constructor statement beyond the parameter stores, a call or a store of a non-parameter, is taken for a plain constructor"
+		},
+		{
+			"name": "M-DUPCMP-MESSAGE-COUNTS-GROUP",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "run",
+			"find": "message: 'the same comparator as other sort call(s) on ${site.element}",
+			"replace": "message: 'the same comparator as ${sites.length - 1} other sort call(s) on ${site.element}",
+			"note": "the finding names how many other sites its group holds, so a sort added in any file changes the text of every site's finding"
+		},
+		{
+			"name": "M-DUPCMP-MESSAGE-CARRIES-REFUSAL",
+			"type": "anyparse.check.haxe.expressions.DuplicateComparator",
+			"method": "run",
+			"find": "$named passed by reference',",
+			"replace": "$named passed by reference${plan.noFix ?? ''}',",
+			"note": "the finding's text carries the group's refusal, so a site joining from another package changes the text of every site's finding"
 		}
 	]
 }

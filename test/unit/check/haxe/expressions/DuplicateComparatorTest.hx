@@ -10,6 +10,7 @@ import sys.FileSystem;
 import sys.io.File;
 import unit.cli.CliFixture;
 
+using Lambda;
 using StringTools;
 
 /** The findings of one run and every file after the fix. */
@@ -239,7 +240,7 @@ class DuplicateComparatorTest extends Test {
 			{ file: 'q/B.hx', source: sorting('B') }
 		]);
 		Assert.equals(2, found.violations.length);
-		Assert.isTrue(found.violations[0].message.indexOf('no fix, its body names Unknown') != -1, found.violations[0].message);
+		Assert.isTrue((found.violations[0].declineReason ?? '').indexOf('its body names Unknown') != -1, found.violations[0].declineReason);
 		Assert.equals(row, found.fixed['p/Row.hx']);
 	}
 
@@ -251,7 +252,7 @@ class DuplicateComparatorTest extends Test {
 			+ '\t\txs.sort((a, b) -> a.k - b.k);\n\t\tys.sort((a, b) -> a.k - b.k);\n\t}\n}\n$ROW';
 		final found: Found = run([{ file: 'C.hx', source: source }]);
 		Assert.equals(2, found.violations.length);
-		Assert.isTrue(found.violations[0].message.indexOf('no fix, C already declares byK') != -1, found.violations[0].message);
+		Assert.isTrue(found.violations[0].declineReason == 'C already declares byK', found.violations[0].declineReason);
 		Assert.equals(source, found.fixed['C.hx']);
 	}
 
@@ -264,7 +265,9 @@ class DuplicateComparatorTest extends Test {
 		}
 		final found: Found = run([{ file: 'p/S.hx', source: anon('p') }, { file: 'q/S.hx', source: anon('q') }]);
 		Assert.equals(2, found.violations.length);
-		Assert.isTrue(found.violations[0].message.indexOf('no fix, the sites span packages') != -1, found.violations[0].message);
+		Assert.isTrue(
+			(found.violations[0].declineReason ?? '').indexOf('the sites span packages') != -1, found.violations[0].declineReason
+		);
 		Assert.equals(anon('p'), found.fixed['p/S.hx']);
 	}
 
@@ -337,7 +340,7 @@ class DuplicateComparatorTest extends Test {
 		final b: String = 'package p;\n\nclass T {\n\tfunction f(xs:Array<{ k:Int }>) {\n$sort\t}\n}\n';
 		final found: Found = run([{ file: 'p/A.hx', source: a }, { file: 'p/B.hx', source: b }]);
 		Assert.equals(3, found.violations.length);
-		Assert.isTrue(found.violations[0].message.indexOf('no fix, S is private to its module') != -1, found.violations[0].message);
+		Assert.isTrue(found.violations[0].declineReason == 'S is private to its module', found.violations[0].declineReason);
 		Assert.equals(a, found.fixed['p/A.hx']);
 	}
 
@@ -354,8 +357,8 @@ class DuplicateComparatorTest extends Test {
 		final found: Found = run(files, null, null, [row]);
 		Assert.equals(2, found.violations.length);
 		Assert.isTrue(
-			found.violations[0].message.indexOf('no fix, Row is declared in p/Row.hx, which this run does not cover') != -1,
-			found.violations[0].message
+			found.violations[0].declineReason == 'Row is declared in p/Row.hx, which this run does not cover',
+			found.violations[0].declineReason
 		);
 		Assert.equals(sorter('A'), found.fixed['q/A.hx']);
 	}
@@ -410,6 +413,49 @@ class DuplicateComparatorTest extends Test {
 	public function testRegisteredDefaultOff(): Void {
 		Assert.notNull(Linter.byId('duplicate-comparator'));
 		Assert.isTrue(Std.isOfType(new DuplicateComparator(), DefaultOff));
+	}
+
+	/** A sort added in a third file leaves the text of the two findings already there unchanged: a message depends on its own site. */
+	@:pin('control')
+	@:killer('M-DUPCMP-MESSAGE-COUNTS-GROUP')
+	public function testMessageIgnoresSitesElsewhere(): Void {
+		final row: String = 'package p;\n\nclass Row {\n\tpublic var k:Int = 0;\n}\n';
+		final two: Array<{ file: String, source: String }> = [
+			{ file: 'p/Row.hx', source: row },
+			{ file: 'q/A.hx', source: sorter('A') },
+			{ file: 'q/B.hx', source: sorter('B') }
+		];
+		final three: Array<{ file: String, source: String }> = two.concat([{ file: 'q/C.hx', source: sorter('C') }]);
+		final before: Array<Violation> = run(two).violations;
+		final after: Array<Violation> = run(three).violations;
+		Assert.equals(2, before.length);
+		Assert.equals(3, after.length);
+		for (file in ['q/A.hx', 'q/B.hx']) {
+			final was: Null<Violation> = before.find(v -> v.file == file);
+			final now: Null<Violation> = after.find(v -> v.file == file);
+			Assert.notNull(was);
+			Assert.notNull(now);
+			Assert.equals(was?.message, now?.message);
+		}
+	}
+
+	/** A site joining from another package turns the group's fix into a refusal; the findings already there keep their text. */
+	@:pin('control')
+	@:killer('M-DUPCMP-MESSAGE-CARRIES-REFUSAL')
+	public function testMessageIgnoresTheGroupsRefusal(): Void {
+		function anon(pkg: String, name: String): { file: String, source: String } {
+			return {
+				file: '$pkg/$name.hx',
+				source: 'package $pkg;\n\nclass $name {\n\tfunction f(xs:Array<{ k:Int }>) {\n\t\txs.sort((a, b) -> a.k - b.k);\n\t}\n}\n'
+			};
+		}
+		final before: Array<Violation> = run([anon('p', 'S'), anon('p', 'T')]).violations;
+		final after: Array<Violation> = run([anon('p', 'S'), anon('p', 'T'), anon('q', 'S')]).violations;
+		Assert.equals(2, before.length);
+		Assert.equals(3, after.length);
+		Assert.isTrue((after[0].declineReason ?? '').indexOf('the sites span packages') != -1, after[0].declineReason);
+		Assert.equals(before[0].message, after[0].message);
+		Assert.equals(before[1].message, after[1].message);
 	}
 
 	/** The rule's findings over `files` under the config `json` and each file after its cross-file fix. */

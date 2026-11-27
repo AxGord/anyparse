@@ -170,8 +170,8 @@ final class DuplicateComparator extends HaxeRule implements DefaultOff implement
 			if (sites.length < 2) continue;
 			final plan: Plan = planOf(sites, s, plugin, index(), taken, inRun);
 			final named: String = plan.name == null ? 'one named static' : 'one named static ${plan.name}';
-			final noFix: String = plan.noFix == null ? '' : '; no fix, ${plan.noFix}';
-			final others: Int = sites.length - 1;
+			// A message depends on its own site only: a group's size and its refusal move with sites in files no edit touched, so the
+			// refusal travels in `declineReason`.
 			for (site in sites) {
 				_plans['${site.file}:${site.span.from}'] = plan;
 				out.push({
@@ -179,7 +179,7 @@ final class DuplicateComparator extends HaxeRule implements DefaultOff implement
 					span: site.span,
 					rule: RULE_ID,
 					severity: Severity.Info,
-					message: 'the same comparator as $others other sort call(s) on ${site.element}: $named passed by reference$noFix',
+					message: 'the same comparator as other sort call(s) on ${site.element}: $named passed by reference',
 					declineReason: plan.noFix
 				});
 			}
