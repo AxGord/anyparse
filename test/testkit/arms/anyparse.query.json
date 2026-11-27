@@ -17923,6 +17923,22 @@
 			"find": "!liveness.live(entry.file, entry.source, node.span)",
 			"replace": "true",
 			"note": "a branch a declared build takes is taken for unverified, so a typedef the oracle checks through that branch is refused for nothing"
+		},
+		{
+			"name": "M-INLINE-BRACELESS-READ-NOT-BRACED",
+			"type": "anyparse.query.Inline",
+			"method": "buildInlineEdits",
+			"find": "text: '$${$substitution}'",
+			"replace": "text: '$substitution'",
+			"note": "a braceless $name read is replaced by the bare expression, which Haxe reads as literal text plus a parenthesised call, so the braceless read test sees a different rewrite"
+		},
+		{
+			"name": "M-INLINE-BRACED-READ-DOUBLE-PAREN",
+			"type": "anyparse.query.Inline",
+			"method": "buildInlineEdits",
+			"find": "text: substitution })",
+			"replace": "text: '($substitution)' })",
+			"note": "a braced ${name} read takes the initializer wrapped in one more pair of parentheses, so the braced read test sees a different rewrite"
 		}
 	]
 }

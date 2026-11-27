@@ -26,10 +26,24 @@ class InlineSliceTest extends Test {
 	 * can follow `$`, so substituting the initializer would produce the LITERAL text
 	 * `$(a + b)` — a valid string, so the re-parse gate would pass a silent miscompile.
 	 */
-	public inline function testRefusesBracelessInterpolationRead(): Void {
-		assertRefused(
-			'braceless string interpolation',
-			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x';\n\t}\n}", 3, 3
+	@:pin('control')
+	@:killer('M-INLINE-BRACELESS-READ-NOT-BRACED')
+	public inline function testInlinesBracelessInterpolationRead(): Void {
+		assertInline(
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x';\n\t}\n}", 3, 3,
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\treturn 'v ${(a + b)}';\n\t}\n}"
+		);
+		assertInline(
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v $x ${x}';\n\t}\n}", 3, 3,
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\treturn 'v ${(a + b)} ${(a + b)}';\n\t}\n}"
+		);
+	}
+
+	@:pin('guard')
+	public inline function testBracelessReadLeavesALongerNameAlone(): Void {
+		assertInline(
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\tvar xy = 1;\n\t\treturn 'v $x $xy';\n\t}\n}", 3, 3,
+			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar xy = 1;\n\t\treturn 'v ${(a + b)} $xy';\n\t}\n}"
 		);
 	}
 
@@ -37,6 +51,8 @@ class InlineSliceTest extends Test {
 	 * The braced `${x}` form IS an ordinary expression position, so the same initializer
 	 * inlines into it — the refusal above is about the braceless spelling only.
 	 */
+	@:killer('M-INLINE-BRACED-READ-DOUBLE-PAREN')
+	@:pin('control')
 	public inline function testInlinesIntoBracedInterpolationRead(): Void {
 		assertInline(
 			"class C {\n\tfunction f(a:Int, b:Int):String {\n\t\tvar x = a + b;\n\t\treturn 'v ${x}';\n\t}\n}", 3, 3,

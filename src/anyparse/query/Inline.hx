@@ -232,15 +232,8 @@ final class Inline {
 		final undecided: Null<String> = undecidedPatternRefusal(source, hits, binding, name);
 		if (undecided != null) return PErr(undecided);
 
-		// The "go edit the source and retry" refusals come LAST: that advice is wasted when an
-		// unconditional gate above would reject the inline anyway.
-		//
-		// A braceless `$name` read is a position only a bare IDENTIFIER may occupy:
-		// substituting an expression there yields literal text (`'$name'` becomes
-		// `'$(a + b)'`), and the re-parse gate cannot catch it because the rewrite is a
-		// perfectly valid string. The two blind-region refusals follow it.
-		if (reads.exists(h -> h.interpolated))
-			return PErr('"$name" is read through a braceless string interpolation ($$$name) - rebrace it as $${$name} first');
+		// The blind-region refusal comes LAST: its advice is wasted when an unconditional gate above
+		// would reject the inline anyway.
 		final blind: Null<String> = scopeBlindSpot(source, tree, binding, name, shape);
 		return blind != null
 			? PErr(blind)
@@ -310,12 +303,19 @@ final class Inline {
 		final edits: Array<{ span: Span, text: String }> = [];
 
 		// Each read's identifier token is replaced with the substitution.
-		final readFroms: Array<Int> = [];
+		// A braceless `$name` read is replaced over its whole `$name` span, so the substitution
+		// sits after a `${` prefix: `lead` records that prefix's length for the recapture check.
+		final readFroms: Array<{ from: Int, lead: Int }> = [];
 		for (read in target.reads) {
 			final identFrom: Int = SourceText.identTokenOffset(source, read.span, name);
 			if (identFrom < 0) continue;
-			readFroms.push(identFrom);
-			edits.push({ span: new Span(identFrom, identFrom + name.length), text: substitution });
+			if (read.interpolated) {
+				readFroms.push({ from: read.span.from, lead: 2 });
+				edits.push({ span: read.span, text: '$${$substitution}' });
+			} else {
+				readFroms.push({ from: identFrom, lead: 0 });
+				edits.push({ span: new Span(identFrom, identFrom + name.length), text: substitution });
+			}
 		}
 
 		// The decl line is deleted. The decl span includes its trailing
@@ -353,8 +353,8 @@ final class Inline {
 	 * initializer text inside the substitution.
 	 */
 	private static function recapturedIdent(
-		target: InlineTarget, readFroms: Array<Int>, edits: Array<{ span: Span, text: String }>, paren: Int, newTree: QueryNode,
-		shape: RefShape
+		target: InlineTarget, readFroms: Array<{ from: Int, lead: Int }>, edits: Array<{ span: Span, text: String }>, paren: Int,
+		newTree: QueryNode, shape: RefShape
 	): Null<Int> {
 		final idents: Array<NamedIdent> = namedIdents(target.initializer);
 		final newHits: Map<String, Array<RefHit>> = Refs.findMulti(idents.map(id -> id.name), newTree, shape);
@@ -364,8 +364,8 @@ final class Inline {
 			if (bound == null) continue;
 			final expected: Int = shifted(bound.from, edits);
 			final hits: Array<RefHit> = newHits[id.name] ?? [];
-			for (readFrom in readFroms) {
-				final at: Int = shifted(readFrom, edits) + paren + (from - target.initRange.from);
+			for (read in readFroms) {
+				final at: Int = shifted(read.from, edits) + read.lead + paren + (from - target.initRange.from);
 				final hit: Null<RefHit> = hits.find(h -> h.span.from == at);
 				if (hit == null || hit.bindingSpan?.from != expected) return at;
 			}
