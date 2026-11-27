@@ -349,6 +349,13 @@ class StringLiteralDupCheckTest extends Test {
 		Assert.equals(0, findingsWithConfig('sld_macro_bare', macroConfig('cpp.Prime.load'), calls));
 	}
 
+	@:pin('control')
+	@:killer('M-STRING-LITERAL-DUP-MACRO-ARG-UNNAMED-RECEIVER')
+	public function testCallOnAnUnnamedReceiverIsNotListed(): Void {
+		final calls: String = body('make().load("mylibname", 1); make().load("mylibname", 2); make().load("mylibname", 3);');
+		Assert.equals(1, findingsWithConfig('sld_macro_unnamed', macroConfig('cpp.Prime.load'), calls));
+	}
+
 	/** Wrap `stmts` in a one-method class so the fixtures stay terse. */
 	private function body(stmts: String): String {
 		return 'class C {\n\tfunction f(x:Int) { $stmts }\n}';

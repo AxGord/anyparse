@@ -253,9 +253,17 @@
 			"name": "M-STRING-LITERAL-DUP-MACRO-ARG-BARE-QUALIFIED",
 			"type": "anyparse.check.common.literals.MacroGate",
 			"method": "listsCall",
-			"find": "receiver == null ? listed(entries, call.name) : listed(entries, '$receiver.${call.name}')",
-			"replace": "listed(entries, call.name) || (receiver != null && listed(entries, '$receiver.${call.name}'))",
+			"find": "receiver != null ? listed(entries, '$receiver.${call.name}')",
+			"replace": "receiver != null ? listed(entries, call.name) || listed(entries, '$receiver.${call.name}')",
 			"note": "a qualified call is also matched by its bare member name, so another type's same-named member (`cfg.load(...)` against a listed `cpp.Prime.load`) is exempt as well"
+		},
+		{
+			"name": "M-STRING-LITERAL-DUP-MACRO-ARG-UNNAMED-RECEIVER",
+			"type": "anyparse.check.common.literals.MacroGate",
+			"method": "listsCall",
+			"find": "call.bare && listed(entries, call.name)",
+			"replace": "listed(entries, call.name)",
+			"note": "a call on an expression that is no name (`make().load(...)`) is matched by its bare member name, so a listed `cpp.Prime.load` exempts every `load` written on such a receiver"
 		}
 	]
 }

@@ -95,12 +95,18 @@ final class MacroIndex {
 /**
  * One enclosing call as the macro gate reads it: the target member's simple name, plus
  * the immediate RECEIVER's when the call is written qualified — the last segment of a
- * dotted path (`pkg.Lang.t(…)` gives `Lang`), null for a bare `f(…)`.
+ * dotted path (`pkg.Lang.t(…)` gives `Lang`), null for `f(…)` and for a call on an
+ * expression that is no name (`make().f(…)`); `bare` is what tells `f(…)` apart.
  *
  * The receiver is carried because it is the caller's own statement of which TYPE it
  * means, and the gate's second refusal asks whether the index carries that type.
  */
-typedef CallRef = { final name: String; final receiver: Null<String>; final qualified: Bool; };
+typedef CallRef = {
+	final name: String;
+	final receiver: Null<String>;
+	final qualified: Bool;
+	final bare: Bool;
+};
 
 /**
  * Which enclosing calls forbid re-segmenting their arguments. A `macro` function
@@ -272,7 +278,9 @@ final class MacroGate {
 	 */
 	public static function listsCall(entries: Array<String>, call: CallRef): Bool {
 		final receiver: Null<String> = call.receiver;
-		return receiver == null ? listed(entries, call.name) : listed(entries, '$receiver.${call.name}');
+		// A call on an expression that is no name (`make().f(…)`) has no dotted
+		// path to match, so only the bare `f(…)` is matched by its member name.
+		return receiver != null ? listed(entries, '$receiver.${call.name}') : call.bare && listed(entries, call.name);
 	}
 
 	/**
@@ -291,12 +299,27 @@ final class MacroGate {
 		final callee: QueryNode = node.children[0];
 		final name: Null<String> = callee.name;
 		if (name == null) return null;
-		if (callee.kind == identKind) return { name: name, receiver: null, qualified: false };
+		if (callee.kind == identKind) return {
+			name: name,
+			receiver: null,
+			qualified: false,
+			bare: true
+		};
 		if (callee.kind != fieldAccessKind || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];
 		return receiver.kind == identKind || receiver.kind == fieldAccessKind
-			? { name: name, receiver: receiver.name, qualified: receiver.kind == fieldAccessKind }
-			: { name: name, receiver: null, qualified: false };
+			? {
+				name: name,
+				receiver: receiver.name,
+				qualified: receiver.kind == fieldAccessKind,
+				bare: false
+			}
+			: {
+				name: name,
+				receiver: null,
+				qualified: false,
+				bare: false
+			};
 	}
 
 }
