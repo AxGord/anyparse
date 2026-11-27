@@ -17979,6 +17979,14 @@
 			"find": "if (refused != null) refused(made.file, message);",
 			"replace": "{}",
 			"note": "a create the writer refuses sinks the set without its message"
+		},
+		{
+			"name": "M-REMOVE-PARAM-SOLE-SLOT-KEEPS-BLANKS",
+			"type": "anyparse.query.RemoveParam",
+			"method": "soleSlotSpan",
+			"find": "return new Span(from, to);",
+			"replace": "return slot;",
+			"note": "the only slot of a hand-wrapped list is cut without the whitespace around it, so a raw-splice removal leaves hollow parens"
 		}
 	]
 }

@@ -290,6 +290,21 @@ class RemoveParamSliceTest extends Test {
 		Assert.equals(canonical(text), text, 'and the file is canonical');
 	}
 
+	/**
+	 * PIN. A hand-wrapped list is not writer-canonical, so the op splices raw: removing its ONLY parameter must still not
+	 * leave hollow parens (`f(` newline `)`), and the call's lone argument goes the same way.
+	 *
+	 * Cutting just the slot (the killing arm) leaves the line breaks the wrap put around it.
+	 */
+	@:pin('control')
+	@:killer('M-REMOVE-PARAM-SOLE-SLOT-KEEPS-BLANKS')
+	public function testASoleParamOfAHandWrappedListLeavesNoHollowParens(): Void {
+		final iface: String = 'interface I {\n  function f(\n    a:Int\n  ):Void;\n}';
+		Assert.equals('interface I {\n  function f():Void;\n}', okText(removeOf(iface, 2, 12, 0)));
+		final cls: String = 'class C {\n  function f(\n    a:Int\n  ):Void {}\n  function g():Void {\n    f(\n      1\n    );\n  }\n}';
+		Assert.equals('class C {\n  function f():Void {}\n  function g():Void {\n    f();\n  }\n}', okText(removeOf(cls, 2, 12, 0)));
+	}
+
 	private function assertRemove(source: String, line: Int, col: Int, index: Int, expected: String, advisoryNonNull: Bool): Void {
 		final result: RemoveParamResult = removeOf(source, line, col, index);
 		switch result {

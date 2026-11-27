@@ -172,10 +172,10 @@ final class RemoveParam {
 		if (arity != null) return { edits: [], error: arity, callSites: 0 };
 
 		final edits: Array<{ span: Span, text: String }> = [];
-		appendSlotRemoval(edits, params, index);
+		appendSlotRemoval(edits, source, params, index);
 		for (call in callSites) {
 			final args: Array<QueryNode> = call.children.slice(1);
-			appendSlotRemoval(edits, args, index);
+			appendSlotRemoval(edits, source, args, index);
 		}
 		return { edits: edits, error: null, callSites: callSites.length };
 	}
@@ -195,13 +195,15 @@ final class RemoveParam {
 	 * A null span on either the target or the adjacency anchor aborts the
 	 * edit (no removal pushed) rather than splicing a wrong range.
 	 */
-	private static function appendSlotRemoval(edits: Array<{ span: Span, text: String }>, slots: Array<QueryNode>, index: Int): Void {
+	private static function appendSlotRemoval(
+		edits: Array<{ span: Span, text: String }>, source: String, slots: Array<QueryNode>, index: Int
+	): Void {
 		final n: Int = slots.length;
 		final targetSpan: Null<Span> = slots[index].span;
 		if (targetSpan == null) return;
 		final target: Span = targetSpan;
 
-		final range: Null<Span> = if (n == 1) new Span(target.from, target.to); else if (index == 0) {
+		final range: Null<Span> = if (n == 1) soleSlotSpan(source, target); else if (index == 0) {
 			final nextSpan: Null<Span> = slots[1].span;
 			nextSpan == null ? null : new Span(target.from, nextSpan.from);
 		} else {
@@ -210,6 +212,23 @@ final class RemoveParam {
 		}
 		if (range == null) return;
 		edits.push({ span: range, text: '' });
+	}
+
+	/**
+	 * The cut of a list's ONLY slot: the slot together with the whitespace on both sides of it, so a hand-wrapped
+	 * `f(\n\ta\n)` comes back `f()` instead of a hollow `f(\n)` — a raw splice must not leave the list worse than it
+	 * found it. A comment beside the slot stops the widening: it is not whitespace and stays.
+	 */
+	private static function soleSlotSpan(source: String, slot: Span): Span {
+		var from: Int = slot.from;
+		while (from > 0 && isBlank(source.charCodeAt(from - 1))) from--;
+		var to: Int = slot.to;
+		while (to < source.length && isBlank(source.charCodeAt(to))) to++;
+		return new Span(from, to);
+	}
+
+	private static function isBlank(c: Null<Int>): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/**
