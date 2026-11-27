@@ -145,6 +145,11 @@ class BuiltinFixClassCensusTest extends Test {
 		Assert.same(['avoid-dynamic', 'explicit-local-type', 'explicit-type'], idsImplementing(c -> c is OracleAssisted));
 	}
 
+	/** The builtins with a risky arm beside a trusted fix: the arm's findings reach the tree only through the oracle. */
+	public function testTheseAreTheRiskyArmRules(): Void {
+		Assert.same(['naming', 'prefer-final-class', 'redundant-lambda-wrapper', 'unused-import'], idsImplementing(c -> c is RiskyArm));
+	}
+
 	public function testTheseRulesDeclareNoAutofixAtAll(): Void {
 		Assert.same([
 			'assignment-in-condition',

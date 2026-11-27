@@ -1550,6 +1550,98 @@
 			"find": "fieldSpan, plugin.lexicalRegions(source), [c.field])",
 			"replace": "fieldSpan, plugin.lexicalRegions(source), [])",
 			"note": "the field's deletion no longer names the field as deleted, so the lone heading of its section stays behind above the next member"
+		},
+		{
+			"name": "M-PFC-CLOSED-NO-FINDINGS",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "unextendedFindings",
+			"force": "[]",
+			"note": "the closed-world arm flags no class"
+		},
+		{
+			"name": "M-PFC-CLOSED-WORLD-IGNORED",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "unextendedFindings",
+			"find": "LintConfig.resolveWith(_resolveConfig, item.file).boolOption(RULE_ID, CLOSED_WORLD_KEY) == true",
+			"replace": "true",
+			"note": "the closedWorld option is no longer read, so every file is judged"
+		},
+		{
+			"name": "M-PFC-SUBTYPE-IGNORED",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "unextendedFindings",
+			"find": "!index.subtypes.hasSubtype(h.name, h.file)",
+			"replace": "true",
+			"note": "an extended class is flagged final"
+		},
+		{
+			"name": "M-PFC-BUILD-MACRO-IGNORED",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "unextendedFindings",
+			"find": "&& !index.traits.transitivelyCarriesBuildMacro(h.name, h.file)",
+			"replace": "",
+			"note": "a class a build macro reaches is flagged final"
+		},
+		{
+			"name": "M-PFC-STRING-NAME-IGNORED",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "unextendedFindings",
+			"find": "&& !ReflectionScan.runtimeTypePath(surface.whole, h.name)",
+			"replace": "",
+			"note": "a class a string literal names is flagged final"
+		},
+		{
+			"name": "M-PFC-SKIPPED-IGNORED",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "unextendedFindings",
+			"find": "&& !index.text.skippedMayReference(h.name, h.file)",
+			"replace": "",
+			"note": "a class an unreadable file spells is flagged final"
+		},
+		{
+			"name": "M-PFC-EXTERN-IGNORED",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "headOf",
+			"find": "m.kind == seams.externKind || ",
+			"replace": "",
+			"note": "an extern class is flagged final"
+		},
+		{
+			"name": "M-PFC-META-ARM-OVERLAP",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "headOf",
+			"find": " || m.name == seams.finalMetaName",
+			"replace": "",
+			"note": "a class the meta arm owns is flagged by the closed-world arm too"
+		},
+		{
+			"name": "M-PFC-RISKY-FINDINGS-EMPTY",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "riskyArmFindings",
+			"force": "[]",
+			"note": "the risky arm owns no finding"
+		},
+		{
+			"name": "M-PFC-RISKY-FIX-EMPTY",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "riskyFix",
+			"force": "[]",
+			"note": "the risky arm writes no edit"
+		},
+		{
+			"name": "M-PFC-NOT-HANDED-OFF",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "fix",
+			"find": "for (v in violations) if (handedOff(v)) v.declineReason = RISKY_ARM;",
+			"replace": "",
+			"note": "the trusted arm no longer says it hands the closed-world finding over"
+		},
+		{
+			"name": "M-PFC-METADATA-FIX-LOST",
+			"type": "anyparse.check.common.members.PreferFinalClass",
+			"method": "fix",
+			"force": "[]",
+			"note": "the trusted arm returns no edit, so a @:final meta is reported and never rewritten"
 		}
 	]
 }
