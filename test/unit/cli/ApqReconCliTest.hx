@@ -168,6 +168,22 @@ class ApqReconCliTest extends Test {
 		#end
 	}
 
+	@:pin('control')
+	@:killer('M-RECON-PROBE-AST-PARSE')
+	public function testReconProbeRejectsWhatAstRejects(): Void {
+		#if (sys || nodejs)
+		final dir: String = mkTempDir('apq_recon_probe_ast');
+		final path: String = '$dir/R1.hx';
+		File.saveContent(path, 'class R1 {\n  static function f() {\n    var a = 1\n    foo();\n  }\n}\n');
+		Assert.equals(
+			1, Cli.run(['recon', '--probe', path]), 'a file ast rejects (a missing `;` before a statement) is PARSE FAIL / exit 1'
+		);
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	// -- --cluster: exact-match drill into a single cluster --
 
 	public function testReconClusterDrillExactMatchExitsClean(): Void {

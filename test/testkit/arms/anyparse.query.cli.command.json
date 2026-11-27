@@ -1692,6 +1692,14 @@
 			"find": "refuse(removes.join(', '), 'a file it removes is not held by this run, or another slice of the fix writes it');",
 			"replace": "{}",
 			"note": "a component removing a file the run does not hold is dropped without a word"
+		},
+		{
+			"name": "M-RECON-PROBE-AST-PARSE",
+			"type": "anyparse.query.cli.command.ReconCommand",
+			"method": "runReconProbe",
+			"find": "plugin.parseFile(original);",
+			"replace": "plugin.reconParse(original);",
+			"note": "the probe reads the trivia parse again, so a file ast rejects reports PARSE OK"
 		}
 	]
 }

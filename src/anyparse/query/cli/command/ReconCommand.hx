@@ -929,15 +929,13 @@ final class ReconCommand implements CliCommand {
 		// corpus walk. Per-pattern match totals are printed for the typo
 		// guard (a `--replace` pattern matching 0 occurrences is the
 		// canonical pre-edit signal of a typo or whitespace mismatch).
-		// Without `--predict-strip`, the legacy PARSE OK / PARSE FAIL
-		// output is byte-identical to before.
+		// Without `--predict-strip`, the verdict is the parse `apq ast` makes (`plugin.parseFile`), so a file this
+		// probe reports PARSE OK parses under `ast`; the corpus sweep keeps the trivia parse (`reconParse`).
 		if (predictStrip)
 			return ReconPredict.runReconProbePredict(plugin, path, original, patterns, replacements, compiledRegex, showSource);
 		try {
-			if (!plugin.reconParse(original)) {
-				CliIo.stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-				return EXIT_RUNTIME;
-			}
+			// The verdict is the parse itself: a throw is the PARSE FAIL below, the tree is not needed here.
+			plugin.parseFile(original); // noqa: unused-return-value
 			CliIo.sysPrint('PARSE OK\n');
 			return writerEqualsAfter
 				? runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang, ledger)
