@@ -807,6 +807,11 @@ final class HxModuleWriteOptions {
 	// ternary does not. `0` (the default) is off. Fed by `sameLine.ternaryTailBlockMaxThenLength`; read through the Ternary
 	// ctor's `@:fmt(tailBlockHug)`.
 	public var ternaryTailBlockMaxThenLength: Int = 0;
+	// The widest `? a : b` that rides the closing line of a ternary condition broken only inside the construct it ends in
+	// (`return ok && xs.exists(x ->` … `) ? v : null;`), for branches that are each a literal, an identifier or a one-step
+	// field, in a ternary not nested in another. `0` (the default) is off. Fed by `sameLine.ternaryTailGlueMaxLength`; read
+	// through the Ternary ctor's `@:fmt(closerTailGlue)`.
+	public var ternaryTailGlueMaxLength: Int = 0;
 	public var functionSignatureWrap: WrapRules = HaxeFormat.defaultFunctionSignatureWrap();
 	public var anonFunctionSignatureWrap: WrapRules = HaxeFormat.defaultAnonFunctionSignatureWrap();
 	public var metadataCallParameterWrap: WrapRules = HaxeFormat.defaultMetadataCallParameterWrap();
@@ -1125,6 +1130,9 @@ final class HxModuleWriteOptions {
 	// non-ternary compare (assignment / chain operand / statement condition)
 	// still breaks on a genuine line overflow.
 	public var _inTernaryCond: Bool = false; // noqa: naming
+	// Set on a ternary BRANCH's opt (via `_setInTernaryBranch`) while `ternaryTailGlueMaxLength` is on, so a ternary below it
+	// knows it is nested and keeps its own layout. Default false.
+	public var _inTernaryBranch: Bool = false; // noqa: naming
 	// omega-call-grouprestprobe-subposition: set on a `Call` subtree that is NOT
 	// in statement/expression position, so the `Call` ctor skips the
 	// `groupRestProbe` rest-of-line fit bias. Set-sites, all via

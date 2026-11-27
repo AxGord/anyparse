@@ -20,7 +20,8 @@ using Lambda;
  * `MarkWrapping.hasMultilineBlockBranch`, so both tools act on the same ternaries.
  *
  * `endsInTailBlock` answers the narrower question `sameLine.ternaryTailBlockMaxThenLength` asks of
- * an else branch: does it break only inside the block or collection it ends in.
+ * an else branch: does it break only inside the block or collection it ends in; `isSimpleBranch`
+ * the one `sameLine.ternaryTailGlueMaxLength` asks of both: is it a single short token run.
  */
 final class HxTernaryBranchBlocks {
 
@@ -84,6 +85,22 @@ final class HxTernaryBranchBlocks {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * True iff `branch` is a literal, an identifier or a one-step field of an identifier (`a.b`): the branches whose
+	 * `? a : b` may ride the closing line of the condition (`sameLine.ternaryTailGlueMaxLength`).
+	 */
+	public static function isSimpleBranch(branch: Null<Any>): Bool {
+		final node: Null<Any> = unwrap(branch);
+		if (node == null || !Reflect.isEnumValue(node)) return false;
+		return switch Type.enumConstructor(node) {
+			case 'IdentExpr', 'NullLit', 'BoolLit', 'IntLit', 'HexLit', 'FloatLit', 'DoubleStringExpr', 'SingleStringExpr': true;
+			case 'FieldAccess':
+				final operand: Null<Any> = unwrap(Type.enumParameters(node)[0]);
+				operand != null && Reflect.isEnumValue(operand) && Type.enumConstructor(operand) == 'IdentExpr';
+			case _: false;
+		};
 	}
 
 	private static inline function nonEmpty(v: Null<Any>): Bool {

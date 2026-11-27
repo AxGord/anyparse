@@ -186,6 +186,14 @@ typedef HxFormatSameLineSection = {
 	@:optional
 	var ternaryTailBlockMaxThenLength: Int;
 
+	/**
+	 * Widest `? a : b` that rides the closing line of a ternary condition broken only inside the construct it ends in
+	 * (`ok && xs.exists(x ->` … `) ? v : null`), when each branch is a literal, an identifier or a one-step field; `0`
+	 * (default) is off.
+	 */
+	@:optional
+	var ternaryTailGlueMaxLength: Int;
+
 	@:optional
 	var elseIfCommentReflow: Bool;
 

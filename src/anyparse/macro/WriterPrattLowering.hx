@@ -1206,8 +1206,12 @@ final class WriterPrattLowering {
 			makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1, macro _setInTernaryCond(opt, true))
 		);
 		// Both arms follow a token of the ternary (`?` / `:`), so neither is the arrow-body lead.
-		final middleCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt));
-		final rightCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt));
+		final middleCall: Expr = makeWriteCall(
+			writeFnName, macro $i{argNames[1]}, hasPratt, -1, closerTailGlueBranchOpt(branch, macro _clearArrowBodyLead(opt, opt))
+		);
+		final rightCall: Expr = makeWriteCall(
+			writeFnName, macro $i{argNames[2]}, hasPratt, -1, closerTailGlueBranchOpt(branch, macro _clearArrowBodyLead(opt, opt))
+		);
 		// ω-ternary-wrap: dispatch to the chain-emit engine with a
 		// degenerate 3-item / 2-op chain (items = [cond, then, else],
 		// ops = [ternaryOp, sep]). `BinaryChainEmit.shapeNoWrap`
@@ -1225,6 +1229,7 @@ final class WriterPrattLowering {
 		final rulesExpr: Expr = optFieldAccess('ternaryWrap');
 		final inlineBranchExpr: Expr = multilineBranchInlineExpr(pc, branch, argNames);
 		final tailBlockExpr: Expr = tailBlockHugExpr(pc, branch, argNames);
+		final tailGlueExpr: Expr = closerTailGlueExpr(pc, branch, argNames);
 		// ω-keep-ternary-operand-comment: the two operand-trailing slots grown by
 		// `@:fmt(captureTernaryTrail)`. Each attaches to its operand's Doc so the
 		// comment travels with the operand under EVERY shape the cascade can pick.
@@ -1306,7 +1311,7 @@ final class WriterPrattLowering {
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $rulesExpr, false, false, _ternaryBreaks, _forceKeep, null,
 				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc,
-				$inlineBranchExpr, null, null, null, $tailBlockExpr
+				$inlineBranchExpr, null, null, null, $tailBlockExpr, $tailGlueExpr
 			);
 			if ($v{tPrec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])
@@ -1374,6 +1379,36 @@ final class WriterPrattLowering {
 		final optAccess: Expr = read.opt;
 		final pred: Expr = read.pred;
 		return macro $optAccess > 0 && $pred($i{argNames[2]}) ? $optAccess : 0;
+	}
+
+	/**
+	 * The ternary's `tailGlueMax` for `BinaryChainEmit.emit`, read off
+	 * `@:fmt(closerTailGlue('<optIntField>', '<predicate>'))`: the option's cap when it is positive, the grammar's predicate
+	 * accepts BOTH branches, the ternary is not nested in another one (neither in its condition, `_inTernaryCond`, nor in a
+	 * branch, `_inTernaryBranch`) and not the content of an explicit paren, which owns its wrap (`_keepChainInParen`), else
+	 * `0`, the glue off.
+	 */
+	private static function closerTailGlueExpr(pc: PrattLoweringCtx, branch: ShapeNode, argNames: Array<String>): Expr {
+		final read: Null<{ opt: Expr, pred: Expr }> = optPredArgs(pc, branch, 'closerTailGlue', 'optIntField');
+		return read == null
+			? macro 0
+			: macro ${read.opt} > 0
+				&& !opt._inTernaryCond && !opt._inTernaryBranch && !opt._keepChainInParen
+				&& ${read.pred}($i{argNames[1]})
+				&& ${read.pred}($i{argNames[2]})
+				? ${read.opt}
+				: 0;
+	}
+
+	/**
+	 * The opt a ternary branch is written with: `base`, marked `_inTernaryBranch` while the `@:fmt(closerTailGlue)` option is
+	 * on, so a ternary inside the branch keeps its own layout. `base` itself for a branch with no such flag.
+	 */
+	private static function closerTailGlueBranchOpt(branch: ShapeNode, base: Expr): Expr {
+		final args: Null<Array<String>> = branch.fmtReadStringArgs('closerTailGlue');
+		if (args == null || args.length == 0) return base;
+		final optAccess: Expr = optFieldAccess(args[0]);
+		return macro _setInTernaryBranch($base, $optAccess > 0, opt);
 	}
 
 	/**

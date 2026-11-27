@@ -426,6 +426,28 @@ The ladder also stays when the then branch is wider, when the head line does not
 before its block (call arguments laid one per line), when an argument before the block holds a block, and when the
 block is in the then branch (`c ? {…} : x` would hide `: x`). `0` (the default) is off.
 
+## A ternary tail on the closing line: `sameLine.ternaryTailGlueMaxLength`
+
+A ternary whose condition breaks inside the construct it ends in keeps `?` and `:` on lines of their own by default.
+With `"ternaryTailGlueMaxLength": 20` a `? a : b` of at most 20 columns rides the construct's closing line, and an
+`&&` / `||` condition keeps its earlier operands on the head line with the construct that breaks (here at
+`"maxLineLength": 80`):
+
+```haxe
+return k != null && xs.exists(x ->
+	x > 0
+		&& k.length > x
+		&& k.charCodeAt(x) == 32
+		&& k.charCodeAt(x) == 33
+) ? k : null;
+```
+
+Every branch must be a literal, an identifier or a one-step field (`a.b`, `this.c`); the condition must end in the
+`)`, `}` or `]` of a call, lambda or literal that is multi-line anyway, the head line must fit and end at its opener,
+and the closing line must fit with what follows it. The ladder stays for a wider tail, a call or longer field branch,
+a ternary nested in another one, a condition ending past its closer (`xs.filter(…).length > 0`), a last operand that
+fits its own line, and an `if` condition, which is not a ternary. `0` (the default) is off.
+
 ## Metadata placed by width: `lineEnds.metadata*: fit`
 
 `fit` is a value of `lineEnds.metadataType`, `metadataFunction`, `metadataVar` and `metadataOther`, not part of

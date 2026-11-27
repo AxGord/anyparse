@@ -2648,16 +2648,16 @@
 			"name": "M-ARROW-LEAD-TERNARY-THEN",
 			"type": "anyparse.macro.WriterPrattLowering",
 			"method": "lowerTernaryBranch",
-			"find": "macro $i{argNames[1]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt)",
-			"replace": "macro $i{argNames[1]}, hasPratt, -1, macro opt",
+			"find": "macro $i{argNames[1]}, hasPratt, -1, closerTailGlueBranchOpt(branch, macro _clearArrowBodyLead(opt, opt))",
+			"replace": "macro $i{argNames[1]}, hasPratt, -1, closerTailGlueBranchOpt(branch, macro opt)",
 			"note": "a ternary then-arm keeps the arrow-body lead, so its object literal loses the open pad"
 		},
 		{
 			"name": "M-ARROW-LEAD-TERNARY-ELSE",
 			"type": "anyparse.macro.WriterPrattLowering",
 			"method": "lowerTernaryBranch",
-			"find": "macro $i{argNames[2]}, hasPratt, -1, macro _clearArrowBodyLead(opt, opt)",
-			"replace": "macro $i{argNames[2]}, hasPratt, -1, macro opt",
+			"find": "macro $i{argNames[2]}, hasPratt, -1, closerTailGlueBranchOpt(branch, macro _clearArrowBodyLead(opt, opt))",
+			"replace": "macro $i{argNames[2]}, hasPratt, -1, closerTailGlueBranchOpt(branch, macro opt)",
 			"note": "a ternary else-arm keeps the arrow-body lead, so its object literal loses the open pad"
 		},
 		{
@@ -3968,6 +3968,30 @@
 			"find": "macro Lambda.exists(_omArr.slice(1), _fe -> _fe.newlineBefore);",
 			"replace": "macro false;",
 			"note": "under lineEnds metadata none a break between two annotations of the run is not read, so an annotation on its own line above one glued to the declaration leaves a plain member"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GLUE-NESTED",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "closerTailGlueExpr",
+			"find": "!opt._inTernaryBranch",
+			"replace": "true",
+			"note": "a ternary inside another's branch glues its own tail"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GLUE-NESTED-COND",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "closerTailGlueExpr",
+			"find": "!opt._inTernaryCond",
+			"replace": "true",
+			"note": "a ternary inside another's condition glues its own tail"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GLUE-IN-PAREN",
+			"type": "anyparse.macro.WriterPrattLowering",
+			"method": "closerTailGlueExpr",
+			"find": "!opt._keepChainInParen",
+			"replace": "true",
+			"note": "a ternary inside an explicit paren offers the glue the paren owns"
 		}
 	]
 }

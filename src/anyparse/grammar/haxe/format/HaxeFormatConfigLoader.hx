@@ -294,6 +294,7 @@ final class HaxeFormatConfigLoader {
 		if (section.expressionIfArrowBodyReflow != null) opt.expressionIfArrowBodyReflow = section.expressionIfArrowBodyReflow;
 		applyValueIfFit(section, opt);
 		if (section.ternaryTailBlockMaxThenLength != null) opt.ternaryTailBlockMaxThenLength = section.ternaryTailBlockMaxThenLength;
+		if (section.ternaryTailGlueMaxLength != null) opt.ternaryTailGlueMaxLength = section.ternaryTailGlueMaxLength;
 		// omega-elseif-comment-reflow: an independent Bool knob on the `elseIf`
 		// glue path - it changes no body policy, it decides whether ONE interposed
 		// line comment may move to the nested if's head line.

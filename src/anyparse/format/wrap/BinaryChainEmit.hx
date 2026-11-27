@@ -1,8 +1,10 @@
 package anyparse.format.wrap;
 
 import anyparse.core.BreakCommits;
+import anyparse.core.CollapsePass;
 import anyparse.core.D;
 import anyparse.core.Doc;
+import anyparse.core.DocIdentityMap;
 import anyparse.core.DocMeasure;
 import anyparse.core.LeafTag;
 import anyparse.format.IndentChar;
@@ -122,12 +124,15 @@ final class BinaryChainEmit {
 	 *
 	 * `tailBlockMaxThen` is the caller's verdict that a ternary's else branch ends in the block or collection that
 	 * is its only multi-line part, as the widest then branch that still lets the head hug that block; `0` is no hug.
+	 *
+	 * `tailGlueMax` is the caller's verdict that a ternary's branches are short enough to ride the closing line of its
+	 * condition, as the widest `? a : b` that may (`closerTailGlue`); `0` is no glue.
 	 */
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, forceKeep: Bool = false, ?afterComments: Array<Null<Doc>>,
 		restAware: Bool = false, ?forceKeepLocation: Null<WrappingLocation>, inlineMultilineBranch: Bool = false,
-		?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList, tailBlockMaxThen: Int = 0
+		?ownComments: Array<Null<Doc>>, ?aboveComments: Array<Null<Doc>>, ?list: ChainList, tailBlockMaxThen: Int = 0, tailGlueMax: Int = 0
 	): Doc {
 		final items: Array<Doc> = isTernaryOps(ops)
 			? items.map(item -> WrapList.namedThresholdLiteral(item, true))
@@ -135,7 +140,7 @@ final class BinaryChainEmit {
 		function laidOut(with: Array<Doc>, _: Int): Doc {
 			return layout(
 				with, ops, opt, rules, nestSuppress, condWrapForced, sourceBreakBefore, forceKeep, afterComments, restAware,
-				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list, tailBlockMaxThen
+				forceKeepLocation, inlineMultilineBranch, ownComments, aboveComments, list, tailBlockMaxThen, tailGlueMax
 			);
 		}
 		return BreakCommits.offerItemBreaks(
@@ -306,7 +311,7 @@ final class BinaryChainEmit {
 		?aboveComments: Array<Null<Doc>>,
 		// The list this chain writes (`ElemChainEmit`). Null for every plain chain.
 		?list: ChainList,
-		tailBlockMaxThen: Int = 0
+		tailBlockMaxThen: Int = 0, tailGlueMax: Int = 0
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -437,12 +442,12 @@ final class BinaryChainEmit {
 			? ternaryHugCollectionBranchIndex(items, ops)
 			: -1;
 
-		return if (forceKeep)
-			WrapBoundary(shapeKeep(
+		if (forceKeep)
+			return WrapBoundary(shapeKeep(
 				items, ops, cols, forceKeepLocation ?? evalAt(true, []).location, sourceBreakBefore, afterComments,
 				{ own: ownComments, above: aboveComments, lineWidth: opt.lineWidth }
-			))
-		else if (anyHardline)
+			));
+		final laid: Doc = if (anyHardline)
 			WrapBoundary(hardlineChainShape(
 				items, ops, opt, extraThresholds, evalAt, shapeAt, shapeNoWrapAt, inlineMultilineBranch, tailBlockMaxThen
 			))
@@ -456,6 +461,7 @@ final class BinaryChainEmit {
 				items, ops, opt, cols, evalAt, shapeAt, extraThresholds.length == 0,
 				emitCascadePivot(items, ops, opt, nestSuppress, condWrapForced, restAware, evalAt, shapeAt, shapeNoWrapAt, extraThresholds)
 			);
+		return closerTailGlue(laid, items, ops, opt, tailGlueMax);
 	}
 
 	/**
@@ -1596,6 +1602,79 @@ final class BinaryChainEmit {
 		return thenWidth >= 0 && thenWidth <= maxThen
 			&& WrapList.flatLength(items[0]) >= 0
 			&& DocMeasure.breakTailCollectionCloseNest(items[2]) == 0; // noqa: magic-number
+	}
+
+	/**
+	 * `laid`, a ternary's own layout, offered once more with `? a : b` on the closing line of its condition: the condition
+	 * breaks only inside the construct it ends in, its head line fits and ends at that construct's opener, and the closing
+	 * line fits with what follows it (`return ok && xs.exists(x ->` … `) ? v : null;`). An `&&` / `||` condition glues only
+	 * when its last operand is multi-line in `laid` too, too wide for its own continuation line. `maxTail` caps the width of
+	 * `? a : b`; `0`, a branch that breaks, or a condition that does not end in a closer at its own indent keeps `laid`.
+	 */
+	private static function closerTailGlue(laid: Doc, items: Array<Doc>, ops: Array<String>, opt: WriteOptions, maxTail: Int): Doc {
+		if (maxTail <= 0 || items.length != 3 || !isTernaryOps(ops)) return laid;
+		final thenWidth: Int = WrapList.flatLength(items[1]);
+		final elseWidth: Int = WrapList.flatLength(items[2]);
+		if (thenWidth < 0 || elseWidth < 0) return laid;
+		final tail: Int = '${ops[0]} '.length + thenWidth + ' ${ops[1]} '.length + elseWidth;
+		if (tail > maxTail) return laid;
+		final head: Null<{ cond: Doc, lastLine: Int }> = headLiftedCondition(items[0]);
+		if (head == null) return laid;
+		final run: Int = DocMeasure.breakingCloseLineRun(head.cond);
+		if (run < 0) return laid;
+		final limit: Int = opt.lineWidth + 1;
+		final glued: Doc = shapeNoWrap([head.cond, items[1], items[2]], ops);
+		final closing: Doc = IfArrowContinuationFitsWithRest(0, run + ' '.length + tail, limit, laid, glued);
+		final glue: Doc = IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, laid, closing);
+		// Slot inversion as in `emitCascadePivot`'s paren-tail break: a last operand fitting its continuation keeps `laid`. Every
+		// walker reads `laid` from this slot, so a host measuring the ternary sees the layout it has without the key; with no
+		// chain to measure the probe never fits and only the render reaches `glue`. No `WrapBoundary` around the probe: one
+		// there moves which paren an enclosing expression opens, even where the glue never fires.
+		final keep: Int = head.lastLine < 0 ? limit : head.lastLine;
+		return IfArrowContinuationFits(head.lastLine < 0 ? 0 : indentUnitOf(opt), keep, limit, glue, laid);
+	}
+
+	/**
+	 * A ternary's condition `cond` as `closerTailGlue` writes its head line: an `&&` / `||` chain glued, every operand before
+	 * the last pinned flat so the head breaks only inside the last one; any other condition as it is. `lastLine` is what the
+	 * chain's last operand, operator included, takes on its own continuation line flat, `-1` for no chain or an operand that
+	 * cannot be one line. Null for such a chain with an operand before the last that cannot be one line.
+	 */
+	private static function headLiftedCondition(cond: Doc): Null<{ cond: Doc, lastLine: Int }> {
+		final glued: Null<Doc> = switch cond {
+			case WrapBoundary(Group(IfBreak(_, flat))), WrapBoundary(GroupWithRestProbe(IfBreak(_, flat), _)): flat;
+			// `hardlineChainShape`'s last-operand hug, the chain's own glue when its last operand carries a hardline.
+			case WrapBoundary(IfFirstLineExceeds(_, _, IfNaturalFirstLineFitsOpenDelim(_, _, flat))): flat;
+			case _: null;
+		};
+		final parts: Array<Doc> = switch glued {
+			case Concat(items) if (isBoolChainGlue(items)): items;
+			case _: return { cond: cond, lastLine: -1 };
+		};
+		final last: Int = parts.length - 1;
+		final lifted: Array<Doc> = [];
+		final decided: DocIdentityMap<Bool> = new DocIdentityMap();
+		for (i => part in parts) {
+			if (i % 2 == 1 || i == last)
+				lifted.push(part);
+			// A render decision `CollapsePass` reads by node identity (a paren it commits open) is taken on `laid`'s copy of
+			// the operand and rewrites this one too, breaking it inside the pin: only the last operand may open the block.
+			else if (WrapList.flatLength(part) < 0 || CollapsePass.holdsDecision(part, decided))
+				return null;
+			else
+				lifted.push(HardFlatten(part));
+		}
+		final lastLine: Int = WrapList.flatLength(parts[last]) < 0
+			? -1
+			: DocMeasure.flatText(parts[last - 1]).ltrim().length + DocMeasure.flatTokenWidth(parts[last]);
+		return { cond: Concat(lifted), lastLine: lastLine };
+	}
+
+	/** True iff `parts` is the glued shape of an `&&` / `||` chain: operands joined by boolean operators alone. */
+	private static function isBoolChainGlue(parts: Array<Doc>): Bool {
+		if (parts.length < 3 || parts.length % 2 == 0) return false;
+		for (i in 0...parts.length >> 1) if (!parts[2 * i + 1].match(Text(' && ' | ' || '))) return false;
+		return true;
 	}
 
 	/**

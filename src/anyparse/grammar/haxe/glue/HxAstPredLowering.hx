@@ -341,6 +341,11 @@ final class HxAstPredLowering extends AstPredLowering {
 				macro : Bool, macro anyparse.grammar.haxe.glue.HxTernaryBranchBlocks.endsInTailBlock(e),
 				'True iff a ternary operand ends in a non-empty block or collection with no block ahead of it.'
 			),
+			predField(
+				'ternaryBranchIsSimple', [valueArg('e', HX_EXPR)],
+				macro : Bool, macro anyparse.grammar.haxe.glue.HxTernaryBranchBlocks.isSimpleBranch(e),
+				'True iff a ternary operand is a literal, an identifier or a one-step field of an identifier.'
+			),
 			fnBodyEmptyField('fnBodyEmpty', HX_FN_BODY, ['NoBody']),
 			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, []),
 			memberBeyondValueField(),

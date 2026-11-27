@@ -499,10 +499,13 @@ enum HxExpr {
 	// `multilineBranchInline`: `wrapping.ternaryMultilineBranch: "inline"` keeps a branch's
 	// multi-line block on the condition's line (`cond ? macro {`) while that line fits. `tailBlockHug`:
 	// `sameLine.ternaryTailBlockMaxThenLength` keeps `cond ? x : f(a -> {` on one line for a short `x`.
-	// `captureAfterOp`: the comments between `?` or `:` and the operand after it.
+	// `captureAfterOp`: the comments between `?` or `:` and the operand after it. `closerTailGlue`:
+	// `sameLine.ternaryTailGlueMaxLength` puts a short `? a : b` on the closing line of a condition that breaks only
+	// inside the construct it ends in (`) ? v : null`).
 	@:ternary('?', ':', 1)
 	@:fmt(captureTernaryTrail, captureAfterOp, multilineBranchInline('ternaryMultilineBranchInline', 'ternaryBranchHoldsMultilineBlock'),
-		tailBlockHug('ternaryTailBlockMaxThenLength', 'ternaryBranchEndsInTailBlock'))
+		tailBlockHug('ternaryTailBlockMaxThenLength', 'ternaryBranchEndsInTailBlock'),
+		closerTailGlue('ternaryTailGlueMaxLength', 'ternaryBranchIsSimple'))
 	Ternary(cond: HxExpr, thenExpr: HxExpr, elseExpr: HxExpr);
 
 	// ASYMMETRIC (probed on 4.3.7): Haxe's tightest binary operator on its LEFT — `a + b in c` is

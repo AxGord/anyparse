@@ -908,6 +908,33 @@ final class WriterOptFanout {
 	}
 
 	/**
+	 * Opt-fanout shim for a ternary BRANCH (`lowerTernaryBranch`), sister to `_setInTernaryCond`: sets `_inTernaryBranch`
+	 * to the supplied value (idempotent). Read ONLY by the ternary's own `@:fmt(closerTailGlue)` gate, so a ternary nested
+	 * in another's branch keeps its layout. Gated on `_inTernaryBranch:Bool`.
+	 */
+	private static function setInTernaryBranchField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setInTernaryBranch',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro : Bool },
+					chainBaseArg(optionsCT)
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inTernaryBranch == v) return o;
+					final _c: $optionsCT = _b != null && o != _b ? o : _copyOpt(o);
+					_c._inTernaryBranch = v;
+					return _c;
+				}
+			}),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
 	 * omega-call-grouprestprobe-subposition — opt-fanout shim for a `Call`
 	 * subtree that is NOT in statement/expression position (case-pattern body
 	 * via `HxCasePattern.expr`'s `@:fmt(suppressCallRestProbe)`; `??` operands
@@ -1350,10 +1377,11 @@ final class WriterOptFanout {
 			fields.push(setParenInConditionField(optionsCT));
 			fields.push(clearParenInConditionField(optionsCT));
 		}
-		// ω-compare-operand-linewrap: gate `_setInTernaryCond` on the field it
-		// touches (its own block, matching the one-field-per-block precedent) so
-		// it is emitted iff the grammar declares `_inTernaryCond`.
+		// ω-compare-operand-linewrap: gate `_setInTernaryCond` and `_setInTernaryBranch`
+		// each on the field it touches (its own line, matching the one-field-per-block
+		// precedent) so each is emitted iff the grammar declares its flag.
 		if (optionsHasField(optionsTypePath, '_inTernaryCond')) fields.push(setInTernaryCondField(optionsCT));
+		if (optionsHasField(optionsTypePath, '_inTernaryBranch')) fields.push(setInTernaryBranchField(optionsCT));
 		// omega-call-grouprestprobe-subposition: gate `_setSuppressCallRestProbe`
 		// on the field it touches (one-field-per-block precedent) so it is emitted
 		// iff the grammar declares `_suppressCallRestProbe`.

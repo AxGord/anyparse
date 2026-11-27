@@ -362,6 +362,22 @@
 			"find": "macro ${operand('_l')} && ${operand('_r')}",
 			"replace": "macro true",
 			"note": "a binary operator argument is simple whatever its operands, so an operator over a call joins the declaration's line"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GLUE-ANY-BRANCH",
+			"type": "anyparse.grammar.haxe.glue.HxTernaryBranchBlocks",
+			"method": "isSimpleBranch",
+			"find": "case _: false;",
+			"replace": "case _: true;",
+			"note": "every branch counts as simple, so a call branch rides the closing line"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GLUE-DEEP-FIELD",
+			"type": "anyparse.grammar.haxe.glue.HxTernaryBranchBlocks",
+			"method": "isSimpleBranch",
+			"find": "Type.enumConstructor(operand) == 'IdentExpr'",
+			"replace": "true",
+			"note": "a field of any receiver counts as simple, so a two-step field rides the closing line"
 		}
 	]
 }

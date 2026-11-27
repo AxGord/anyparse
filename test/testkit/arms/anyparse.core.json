@@ -1195,6 +1195,14 @@
 			"find": "hashOf(outlinePaths())",
 			"replace": "hashOf(outlinePaths().filter(path -> !path.startsWith('query/')))",
 			"note": "the record key leaves out the query code that derives a record, so an edit of OwnerIndex or SymbolIndexBuilder leaves stale records in use"
+		},
+		{
+			"name": "M-TERNARY-TAIL-GLUE-ALL-BREAKS",
+			"type": "anyparse.core.DocMeasure",
+			"method": "scanTailAt",
+			"find": "final slot: Doc = resolveAllBreaks || (resolveForcedBreaks && hasForcedBreak(flatDoc)) ? breakDoc : flatDoc;",
+			"replace": "final slot: Doc = resolveForcedBreaks && hasForcedBreak(flatDoc) ? breakDoc : flatDoc;",
+			"note": "the closing line of a construct broken by width is not found, so only a block body glues its tail"
 		}
 	]
 }

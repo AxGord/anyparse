@@ -815,6 +815,15 @@ final class DocMeasure {
 	}
 
 	/**
+	 * `closeLineRun` of `d` with every conditional on its break slot: what the closing line costs when the construct `d` ends in
+	 * breaks, for a caller that glues text there only when that break fires and so must measure before the render decides it.
+	 */
+	public static function breakingCloseLineRun(d: Doc): Int {
+		final out: TailOut = { nest: 0, closer: -1, closeWidth: 0 };
+		return scanTailAt(d, 0, false, out, true) == TailBreak && out.nest == 0 ? out.closeWidth : -1;
+	}
+
+	/**
 	 * Columns the closer run opening a rest-probe group's BROKEN closing line takes before the rest resumes: the
 	 * `}` of `{\n…\n}]) {` that both layouts put ahead of the rest, so a later sibling's "breaks by itself"
 	 * prediction measures from past it. `0` when the broken tail is not a closing line under the group's indent.
@@ -975,7 +984,8 @@ final class DocMeasure {
 	 * `resolveForcedBreaks` picks which slot every `If*` ctor resolves to.
 	 * `false` — the `scanTail` reading — always takes the flat slot, because its
 	 * cuddled-chain consumer asks about a shape it may ride on and must not turn
-	 * on a render-time width decision. `true` takes the BREAK slot for the nodes
+	 * on a render-time width decision. `resolveAllBreaks` takes the BREAK slot of
+	 * every one (`breakingCloseLineRun`). `true` takes the BREAK slot for the nodes
 	 * whose flat slot carries a forced hardline (`hasForcedBreak`) and therefore
 	 * cannot be the one-line shape that slot promises, and the flat slot
 	 * everywhere else. Reading the break slot unconditionally instead over-reports
@@ -995,7 +1005,9 @@ final class DocMeasure {
 	 * renders after the last item. Skipping it can only UNDER-report (a
 	 * hardline separator is not seen), never manufacture a false `TailBreak`.
 	 */
-	private static function scanTailAt(d: Doc, nest: Int, resolveForcedBreaks: Bool, out: Null<TailOut>): DocTailScan {
+	private static function scanTailAt(
+		d: Doc, nest: Int, resolveForcedBreaks: Bool, out: Null<TailOut>, resolveAllBreaks: Bool = false
+	): DocTailScan {
 		return switch d {
 			// No visible tail content. A trailing `OptHardline*` is treated as
 			// transparent rather than as a break — no emitter produces one in
@@ -1029,22 +1041,23 @@ final class DocMeasure {
 					TailOther;
 				}
 			case Concat(items), Fill(items, _, _), FillWithRestProbe(items, _, _), FillBreakAfterWrap(items, _, _):
-				scanTailItemsAt(items, nest, resolveForcedBreaks, out);
-			case Nest(n, inner): scanTailAt(inner, nest + n, resolveForcedBreaks, out);
+				scanTailItemsAt(items, nest, resolveForcedBreaks, out, resolveAllBreaks);
+			case Nest(n, inner): scanTailAt(inner, nest + n, resolveForcedBreaks, out, resolveAllBreaks);
 			case Group(inner), BodyGroup(inner), GroupWithRestProbe(inner), Flatten(inner), WrapBoundary(inner), LeadingBreak(_, inner),
 				BreakCommit(_, inner), HardFlatten(inner), CollapseProbe(inner), CollapseAddProbe(inner), CollapseBoolProbe(inner),
 				CollapseChainProbe(inner), ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner), BreakMark(inner, _):
-				scanTailAt(inner, nest, resolveForcedBreaks, out);
+				scanTailAt(inner, nest, resolveForcedBreaks, out, resolveAllBreaks);
 			case IfBreak(breakDoc, flatDoc), IfWidthExceeds(_, breakDoc, flatDoc), IfFirstLineExceeds(_, breakDoc, flatDoc),
 				IfLineExceeds(_, breakDoc, flatDoc), IfResidualLineExceeds(_, breakDoc, flatDoc), IfFullLineExceeds(_, breakDoc, flatDoc),
 				IfNaturalFirstLineExceeds(_, breakDoc, flatDoc), IfNaturalFirstLineExceedsWithRest(_, breakDoc, flatDoc),
 				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, flatDoc), IfArrowContinuationFits(_, _, _, breakDoc, flatDoc),
 				IfArrowContinuationFitsWithRest(_, _, _, breakDoc, flatDoc), IfIndentWidthExceeds(_, _, breakDoc, flatDoc),
 				IfGluedFirstLineExceeds(_, _, breakDoc, flatDoc):
-				scanTailAt(resolveForcedBreaks && hasForcedBreak(flatDoc) ? breakDoc : flatDoc, nest, resolveForcedBreaks, out);
+				final slot: Doc = resolveAllBreaks || (resolveForcedBreaks && hasForcedBreak(flatDoc)) ? breakDoc : flatDoc;
+				scanTailAt(slot, nest, resolveForcedBreaks, out, resolveAllBreaks);
 			case IfTrailingCommentOverflows(_, _, _, _, flatDoc):
 				// Forwards to the pre-knob emit: the relocation choice only ever moves a comment.
-				scanTailAt(flatDoc, nest, resolveForcedBreaks, out);
+				scanTailAt(flatDoc, nest, resolveForcedBreaks, out, resolveAllBreaks);
 		};
 	}
 
@@ -1053,10 +1066,12 @@ final class DocMeasure {
 	 * that is not `TailCloses` — that child's own verdict is the container's. A
 	 * container whose every child is closes-only is itself closes-only.
 	 */
-	private static function scanTailItemsAt(items: Array<Doc>, nest: Int, resolveForcedBreaks: Bool, out: Null<TailOut>): DocTailScan {
+	private static function scanTailItemsAt(
+		items: Array<Doc>, nest: Int, resolveForcedBreaks: Bool, out: Null<TailOut>, resolveAllBreaks: Bool
+	): DocTailScan {
 		var i: Int = items.length - 1;
 		while (i >= 0) {
-			final r: DocTailScan = scanTailAt(items[i], nest, resolveForcedBreaks, out);
+			final r: DocTailScan = scanTailAt(items[i], nest, resolveForcedBreaks, out, resolveAllBreaks);
 			if (r != TailCloses) return r;
 			i--;
 		}
