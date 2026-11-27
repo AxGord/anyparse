@@ -8,8 +8,12 @@ import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.CanonicalEdit;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.IndexScope;
+import anyparse.query.RunLedger;
 import anyparse.query.SymbolIndex;
+import anyparse.query.cli.command.LintFixDriver;
 import anyparse.runtime.Span;
+import sys.io.File;
+import unit.cli.CliFixture;
 import utest.Assert;
 
 using Lambda;
@@ -19,6 +23,11 @@ using Lambda;
  * fix wrote needs the very `Violation` objects the edits came from.
  */
 typedef FixRun = { final violations: Array<Violation>; final edits: Array<FixEdit>; };
+/**
+ * What one `lint --fix` run left: every file as it stands afterwards (by the path the fixture gave it), its stderr
+ * and the lines that say a fix was not written.
+ */
+typedef LintFixRun = { final files: Map<String, String>; final stderr: String; final refusals: Array<String>; };
 
 /**
  * The one test kit every rule test runs a rule through, the way `lint` runs it.
@@ -200,6 +209,51 @@ final class CheckFixture {
 	 */
 	public static function assertRegistered(id: String, ?pos: haxe.PosInfos): Void {
 		Assert.notNull(Linter.byId(id), 'rule `$id` is not in Linter.builtins()', pos);
+	}
+
+	/**
+	 * One real `lint --fix` run of `check` over `files`, written to a scratch directory and run through `LintFixDriver.runLintFix`
+	 * — the path a `CrossFileFix` rule's edits take in production (grouped, staged all-or-nothing, canonicalized, committed), which
+	 * a test that splices `crossFileFix` edits itself with `CanonicalEdit.applyEdits` never meets: a fixture the writer does not
+	 * hold canonical is refused here and spliced happily there. `outside` are files the run resolves against but does not lint (a
+	 * host module beyond the lint scope); `json` is the `apq.json` text every file reads.
+	 */
+	public static function lintFixed(
+		check: Check, files: Array<{ file: String, source: String }>, json: String = '{}', ?outside: Array<{ file: String, source: String }>
+	): LintFixRun {
+		#if (sys || nodejs)
+		final beside: Array<{ file: String, source: String }> = outside ?? [];
+		final root: String = CliFixture.writeTree('checkfix', files.concat(beside).map(f -> { name: f.file, source: f.source }));
+		final config: LintConfig = LintConfig.parse(json);
+		final after: Map<String, String> = [];
+		var said: String = '';
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final held: Array<{ file: String, source: String }> = files.map(f -> { file: '$root/${f.file}', source: f.source });
+			final resolution: Null<ResolutionScope> = outside == null
+				? null
+				: {
+					declared: true,
+					sources: () -> {
+						report: held.concat(beside.map(f -> { file: '$root/${f.file}', source: f.source })),
+						projectRoots: [],
+						library: new LibrarySources([])
+					}
+				};
+			said = CliFixture.captureStderr(() ->
+				LintFixDriver.runLintFix(
+					held, [check], new HaxeQueryPlugin(), _ -> config, false, resolution, [], true, null, false, new RunLedger()
+				)
+			);
+			for (f in files.concat(beside)) after[f.file] = File.getContent('$root/${f.file}');
+		});
+		return {
+			files: after,
+			stderr: said,
+			refusals: said.split('\n').filter(line -> line.indexOf('cross-file fix') != -1 && line.indexOf('not written') != -1)
+		};
+		#else
+		return { files: [ for (f in files) f.file => f.source ], stderr: '', refusals: [] };
+		#end
 	}
 
 	/**

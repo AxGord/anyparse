@@ -380,6 +380,7 @@ final class LintFixDriver {
 		// passes. A committed file joins `touchedThisPass`, so the per-file loop skips it this pass.
 		final touchedThisPass: Array<String> = [];
 		final crossRenames: Array<Array<CrossFileEdits>> = [];
+		final crossRules: Array<String> = [];
 		for (check in checks) if (check is CrossFileFix) {
 			final own: Array<Violation> = violations.filter(v -> v.rule == check.id());
 			// A cross-file fix is offered nowhere a revert banned its rule: its finding sits in one file, its edits in others.
@@ -387,6 +388,7 @@ final class LintFixDriver {
 				trail, (cast check: CrossFileFix).crossFileFix(files, own, cached, index), check.id()
 			)) {
 				crossRenames.push(rename);
+				crossRules.push(check.id());
 				// The ledger's "produced N edit(s) elsewhere" arm is a claim about the WHOLE rule, so it
 				// has to see this path too. `naming` fixes a non-confined member ONLY here, and a ledger
 				// blind to it would report the one rule that renames across files as having answered
@@ -399,7 +401,7 @@ final class LintFixDriver {
 		}
 		fixedDelta += applyCrossFileRenames(
 			crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive, coupled, created ?? [],
-			baselineBeforeCreate, editsOf, said
+			baselineBeforeCreate, editsOf, said, rename -> crossRules[crossRenames.indexOf(rename)]
 		);
 		for (entry in active) if (!touchedThisPass.contains(entry.file)) {
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
@@ -473,7 +475,7 @@ final class LintFixDriver {
 		renames: Array<Array<CrossFileEdits>>, files: Array<{ file: String, source: String }>, optsByFile: Map<String, Null<String>>,
 		cached: GrammarPlugin, touchedThisPass: Array<String>, changedFiles: Array<String>,
 		nextActive: Array<{ file: String, source: String }>, coupled: Array<Array<String>>, created: Array<String>,
-		beforeCreate: Null<() -> Void>, editsOf: Null<Map<String, Int>>, said: RunLedger
+		beforeCreate: Null<() -> Void>, editsOf: Null<Map<String, Int>>, said: RunLedger, ruleOf: (Array<CrossFileEdits>) -> String
 	): Int {
 		var total: Int = 0;
 		for (component in crossFileComponents(renames)) {
@@ -481,7 +483,17 @@ final class LintFixDriver {
 			final creates: Array<{ file: String, text: String }> = [];
 			final removes: Array<String> = [];
 			splitComponent(component, slices, creates, removes);
-			if (!removesHold(removes, slices, creates, files)) continue;
+			// A component the staging seat refuses writes nothing, and a fix that vanishes without a word reads as "no
+			// finding" — so each refusal is said once per run, with the rule, the file and the reason.
+			final ruleIds: Array<String> = [];
+			for (rename in component) if (!ruleIds.contains(ruleOf(rename))) ruleIds.push(ruleOf(rename));
+			final rules: String = ruleIds.join(', ');
+			final refuse: (String, String) -> Void = (file, reason) -> if (said.first('cross-file-refused', '$rules\n$file\n$reason'))
+				CliIo.stderr('apq lint --fix: cross-file fix ($rules) not written, $file: $reason\n');
+			if (!removesHold(removes, slices, creates, files)) {
+				refuse(removes.join(', '), 'a file it removes is not held by this run, or another slice of the fix writes it');
+				continue;
+			}
 			final clash: Null<String> = overlappingFile(slices);
 			if (clash != null) {
 				CliIo.stderr('apq lint --fix: two cross-file fixes edit one span of $clash — their component is skipped this pass\n');
@@ -492,7 +504,7 @@ final class LintFixDriver {
 			// the half that must be known good first.
 			final made: Null<Array<{ file: String, source: String }>> = CanonicalEdit.stageCrossFileCreates(
 				creates, file -> fileSourceOf(files, file) != null || ConfigFinder.fileExists(file),
-				(file, text) -> NewFile.createRaw(text, cached, CliArgs.discoverFormatConfig(file, said))
+				(file, text) -> NewFile.createRaw(text, cached, CliArgs.discoverFormatConfig(file, said)), refuse
 			);
 			if (made == null) continue;
 			// Re-bound: strict null-safety does not carry a narrowed local into a comprehension.
@@ -502,7 +514,7 @@ final class LintFixDriver {
 				? []
 				: CanonicalEdit.stageCrossFileRename(
 					slices, file -> fileSourceOf(files, file),
-					(file, source, edits) -> CanonicalEdit.canonicalize(source, edits, false, cached, optsByFile[file])
+					(file, source, edits) -> CanonicalEdit.canonicalize(source, edits, false, cached, optsByFile[file]), refuse
 				);
 			if (staged == null) continue;
 			// On DISK inside the pass, not with the wave at the end, because an ambient source is read

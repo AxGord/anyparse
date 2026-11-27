@@ -1684,6 +1684,14 @@
 			"find": "'duplicate-comparator',",
 			"replace": "'duplicate-comparator-cut',",
 			"note": "duplicate-comparator runs over the files a pass changed, so a group refused in pass 1 for spanning packages is partly extracted in pass 2"
+		},
+		{
+			"name": "M-REMOVE-UNHELD-SILENT",
+			"type": "anyparse.query.cli.command.LintFixDriver",
+			"method": "applyCrossFileRenames",
+			"find": "refuse(removes.join(', '), 'a file it removes is not held by this run, or another slice of the fix writes it');",
+			"replace": "{}",
+			"note": "a component removing a file the run does not hold is dropped without a word"
 		}
 	]
 }

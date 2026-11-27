@@ -17939,6 +17939,46 @@
 			"find": "text: substitution })",
 			"replace": "text: '($substitution)' })",
 			"note": "a braced ${name} read takes the initializer wrapped in one more pair of parentheses, so the braced read test sees a different rewrite"
+		},
+		{
+			"name": "M-DUPCMP-REFUSAL-SILENT",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "stageCrossFileRename",
+			"find": "if (refused != null) refused(slice.file, message);",
+			"replace": "{}",
+			"note": "a slice the writer refuses sinks its whole set without a word, so `lint --fix` writes nothing and says nothing"
+		},
+		{
+			"name": "M-STAGE-REFUSE-NOT-HELD",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "stageCrossFileRename",
+			"find": "if (refused != null) refused(slice.file, 'the run does not hold the file');",
+			"replace": "{}",
+			"note": "a slice whose file the run does not hold sinks the set without naming it"
+		},
+		{
+			"name": "M-STAGE-REFUSE-UNCHANGED",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "stageCrossFileRename",
+			"find": "if (refused != null) refused(slice.file, 'its edits leave the file unchanged');",
+			"replace": "{}",
+			"note": "a slice whose edits change nothing sinks the set without naming it"
+		},
+		{
+			"name": "M-STAGE-REFUSE-CREATE-EXISTS",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "stageCrossFileCreates",
+			"find": "if (refused != null) refused(made.file, 'the file it would create already exists');",
+			"replace": "{}",
+			"note": "a create over an existing path sinks the set without naming it"
+		},
+		{
+			"name": "M-STAGE-REFUSE-CREATE-ERR",
+			"type": "anyparse.query.CanonicalEdit",
+			"method": "stageCrossFileCreates",
+			"find": "if (refused != null) refused(made.file, message);",
+			"replace": "{}",
+			"note": "a create the writer refuses sinks the set without its message"
 		}
 	]
 }

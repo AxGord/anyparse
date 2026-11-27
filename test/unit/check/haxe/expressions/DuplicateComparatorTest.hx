@@ -4,7 +4,6 @@ import anyparse.check.Check;
 import anyparse.check.Severity;
 import anyparse.check.haxe.expressions.DuplicateComparator;
 import anyparse.query.CachingGrammarPlugin;
-import anyparse.query.CanonicalEdit;
 import anyparse.query.Cli;
 import anyparse.query.GrammarPlugin;
 import sys.FileSystem;
@@ -14,7 +13,12 @@ import unit.cli.CliFixture;
 using StringTools;
 
 /** The findings of one run and every file after the fix. */
-private typedef Found = { final violations: Array<Violation>; final fixed: Map<String, String>; }
+private typedef Found = {
+	final violations: Array<Violation>;
+	final fixed: Map<String, String>;
+	final refusals: Array<String>;
+	final stderr: String;
+}
 
 /**
  * The `duplicate-comparator` check: the same comparator lambda, up to parameter names and on one resolved element type, at
@@ -22,7 +26,7 @@ private typedef Found = { final violations: Array<Violation>; final fixed: Map<S
  */
 class DuplicateComparatorTest extends Test {
 
-	private static final ROW: String = 'typedef Row = { k:Int, j:Int }\n';
+	private static final ROW: String = '\ntypedef Row = {k:Int, j:Int};\n';
 	private static final ORDER_IMPORT: String = 'import lib.Order;\n\n';
 
 	/** A project's compare function and key macros, as the options name them. */
@@ -47,9 +51,29 @@ class DuplicateComparatorTest extends Test {
 		Assert.equals('duplicate-comparator', found.violations[0].rule);
 		Assert.equals(Severity.Info, found.violations[0].severity);
 		Assert.equals(
-			fixedClass('xs.sort(byK);\n\t\tys.sort(byK);', 'private static function byK(a: Row, b: Row): Int return a.k - b.k;'),
+			fixedClass('xs.sort(byK);\n\t\tys.sort(byK);', 'private static function byK(a:Row, b:Row):Int\n\t\treturn a.k - b.k;'),
 			found.fixed['C.hx']
 		);
+	}
+
+	/**
+	 * A host the writer does not hold canonical is refused by `lint --fix` — the splice a direct `applyEdits` pin makes would
+	 * have written it — and the run says which rule, which file and why instead of dropping the fix.
+	 */
+	@:pin('control')
+	@:killer('M-DUPCMP-REFUSAL-SILENT')
+	public function testNonCanonicalHostRefusalIsReported(): Void {
+		final source: String = inClass('xs.sort((a, b) -> a.k - b.k);\n\t\tys.sort((p, q) -> p.k - q.k);')
+			.replace(ROW, '\ntypedef Row = { k:Int, j:Int }\n');
+		final found: Found = run([{ file: 'C.hx', source: source }]);
+		final site: Null<Span> = found.violations[0].span;
+		Assert.notNull(site, 'the finding stays reported at its site');
+		Assert.equals(2, found.violations.length);
+		Assert.equals(source, found.fixed['C.hx']);
+		Assert.equals(1, found.refusals.length, found.refusals.join('\n'));
+		final line: String = found.refusals[0];
+		Assert.isTrue(line.indexOf('(duplicate-comparator)') != -1 && line.indexOf('C.hx') != -1, line);
+		Assert.isTrue(line.indexOf('not in canonical form') != -1, line);
 	}
 
 	/** A site the fix is not handed (a suppressed one) keeps its lambda, and so does every other site of its group. */
@@ -137,7 +161,7 @@ class DuplicateComparatorTest extends Test {
 		Assert.equals(2, found.violations.length);
 		Assert.equals(
 			ORDER_IMPORT
-			+ fixedClass('xs.sort(byK);\n\t\tys.sort(byK);', 'private static final byK: (Row, Row) -> Int = Order.asc(a -> a.k);'),
+			+ fixedClass('xs.sort(byK);\n\t\tys.sort(byK);', 'private static final byK:(Row, Row) -> Int = Order.asc(a -> a.k);'),
 			found.fixed['C.hx']
 		);
 	}
@@ -152,7 +176,7 @@ class DuplicateComparatorTest extends Test {
 		Assert.equals(
 			ORDER_IMPORT
 			+ fixedClass(
-				'xs.sort(byKDesc);\n\t\tys.sort(byKDesc);', 'private static final byKDesc: (Row, Row) -> Int = Order.desc(r -> r.k);'
+				'xs.sort(byKDesc);\n\t\tys.sort(byKDesc);', 'private static final byKDesc:(Row, Row) -> Int = Order.desc(r -> r.k);'
 			),
 			found.fixed['C.hx']
 		);
@@ -171,7 +195,7 @@ class DuplicateComparatorTest extends Test {
 		Assert.equals(2, found.violations.length);
 		Assert.equals(
 			'package p;\n\nclass Row {\n\tpublic var k:Int = 0;\n\n\tpublic function new() {}\n'
-			+ '\npublic static function byK(a: Row, b: Row): Int return a.k - b.k;\n}\n',
+			+ '\n\tpublic static function byK(a:Row, b:Row):Int\n\t\treturn a.k - b.k;\n}\n',
 			found.fixed['p/Row.hx']
 		);
 		Assert.equals(sorter('A').replace('(a, b) -> a.k - b.k', 'Row.byK'), found.fixed['q/A.hx']);
@@ -183,7 +207,7 @@ class DuplicateComparatorTest extends Test {
 	public function testAcrossModulesImportsWhatTheHostLacks(): Void {
 		final row: String = 'package p;\n\nclass Row {\n\tpublic var k:Int = 0;\n}\n';
 		function keyed(name: String): String {
-			return 'package q;\n\n${ORDER_IMPORT}import p.Row;\n\nclass $name {\n\tfunction f(xs:Array<Row>) {\n'
+			return 'package q;\n\nimport lib.Order;\nimport p.Row;\n\nclass $name {\n\tfunction f(xs:Array<Row>) {\n'
 				+ '\t\txs.sort((a, b) -> Order.ints(a.k, b.k));\n\t}\n}\n';
 		}
 		final found: Found = run([
@@ -195,8 +219,8 @@ class DuplicateComparatorTest extends Test {
 		Assert.equals(2, found.violations.length);
 		Assert.equals(
 			'package p;\n\n${ORDER_IMPORT}class Row {\n\tpublic var k:Int = 0;\n'
-			+ '\npublic static final byK: (Row, Row) -> Int = Order.asc(a -> a.k);\n}\n',
-			found.fixed['p/Row.hx']
+			+ '\n\tpublic static final byK:(Row, Row) -> Int = Order.asc(a -> a.k);\n}\n',
+			found.fixed['p/Row.hx'], found.stderr
 		);
 	}
 
@@ -251,7 +275,7 @@ class DuplicateComparatorTest extends Test {
 		final body: String = 'xs.sort((a, b) -> Order.ints(a.k, b.k));\n\t\tys.sort((p, q) -> Order.ints(p.k, q.k));';
 		final expected: String = ORDER_IMPORT
 			+ fixedClass(
-				'xs.sort(byK);\n\t\tys.sort(byK);', 'private static function byK(a: Row, b: Row): Int return Order.ints(a.k, b.k);'
+				'xs.sort(byK);\n\t\tys.sort(byK);', 'private static function byK(a:Row, b:Row):Int\n\t\treturn Order.ints(a.k, b.k);'
 			);
 		Assert.equals(expected, run(ordered(body), null, COMPARE_ONLY).fixed['C.hx']);
 		Assert.equals(expected, run(ordered(body), null, BARE).fixed['C.hx']);
@@ -269,7 +293,7 @@ class DuplicateComparatorTest extends Test {
 		Assert.equals(
 			ORDER_IMPORT
 			+ fixedClass(
-				'xs.sort(byK);\n\t\tys.sort(byK);', 'private static function byK(a: Row, b: Row): Int return Order.ints(a.k, b.k);'
+				'xs.sort(byK);\n\t\tys.sort(byK);', 'private static function byK(a:Row, b:Row):Int\n\t\treturn Order.ints(a.k, b.k);'
 			).replace('k:Int', 'k:Null<Int>'),
 			found.fixed['C.hx']
 		);
@@ -327,11 +351,7 @@ class DuplicateComparatorTest extends Test {
 		};
 		final files: Array<{ file: String, source: String }> =
 			[{ file: 'q/A.hx', source: sorter('A') }, { file: 'q/B.hx', source: sorter('B') }];
-		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		plugin.setResolutionScope(
-			{ declared: true, sources: () -> { report: files.concat([row]), projectRoots: [], library: new LibrarySources([]) } }
-		);
-		final found: Found = run(files, null, null, plugin);
+		final found: Found = run(files, null, null, [row]);
 		Assert.equals(2, found.violations.length);
 		Assert.isTrue(
 			found.violations[0].message.indexOf('no fix, Row is declared in p/Row.hx, which this run does not cover') != -1,
@@ -394,19 +414,33 @@ class DuplicateComparatorTest extends Test {
 
 	/** The rule's findings over `files` under the config `json` and each file after its cross-file fix. */
 	private static function run(
-		files: Array<{ file: String, source: String }>, ?notes: Array<ConfigNote>, ?json: String, ?plugin: GrammarPlugin
+		files: Array<{ file: String, source: String }>, ?notes: Array<ConfigNote>, ?json: String,
+		?outside: Array<{ file: String, source: String }>
 	): Found {
-		final host: GrammarPlugin = plugin ?? new HaxeQueryPlugin();
 		final rule: DuplicateComparator = new DuplicateComparator();
 		rule.setConfigNotes(notes ?? []);
 		final config: LintConfig = LintConfig.parse(json ?? BARE);
-		final violations: Array<Violation> = CheckFixture.violationsIn(rule, files, host, _ -> config);
-		final edits: Map<String, Array<{ span: Span, text: String }>> = [];
-		for (group in rule.crossFileFix(files, violations, host)) for (slice in group) {
-			final known: Array<{ span: Span, text: String }> = edits[slice.file] ?? [];
-			edits[slice.file] = known.concat(slice.edits);
-		}
-		return { violations: violations, fixed: [ for (f in files) f.file => CanonicalEdit.applyEdits(f.source, edits[f.file] ?? []) ] };
+		final violations: Array<Violation> = CheckFixture.violationsIn(
+			rule, files, outside == null ? new HaxeQueryPlugin() : scoped(files, outside), _ -> config
+		);
+		final ran: LintFixRun = CheckFixture.lintFixed(new DuplicateComparator(), files, json ?? BARE, outside);
+		return {
+			violations: violations,
+			fixed: ran.files,
+			refusals: ran.refusals,
+			stderr: ran.stderr
+		};
+	}
+
+	/** A run host whose resolution scope also holds `outside`: modules the run resolves against and does not lint. */
+	private static function scoped(
+		files: Array<{ file: String, source: String }>, outside: Array<{ file: String, source: String }>
+	): GrammarPlugin {
+		final plugin: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		plugin.setResolutionScope(
+			{ declared: true, sources: () -> { report: files.concat(outside), projectRoots: [], library: new LibrarySources([]) } }
+		);
+		return plugin;
 	}
 
 	/** A class sorting two arrays of `Row` with `body`. */
@@ -416,7 +450,7 @@ class DuplicateComparatorTest extends Test {
 
 	/** `inClass(body)` with `member` inserted before the class's closing brace, as the fix inserts it. */
 	private static function fixedClass(body: String, member: String): String {
-		return 'class C {\n\tfunction f(xs:Array<Row>, ys:Array<Row>) {\n\t\t$body\n\t}\n\n$member\n}\n$ROW';
+		return 'class C {\n\tfunction f(xs:Array<Row>, ys:Array<Row>) {\n\t\t$body\n\t}\n\n\t$member\n}\n$ROW';
 	}
 
 	/** A module of package `q` declaring `name`, which sorts an array of `p.Row`. */

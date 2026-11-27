@@ -302,15 +302,20 @@ final class CanonicalEdit {
 	 * op on the file does not refuse it as drifted.
 	 */
 	public static function stageCrossFileCreates(
-		creates: Array<{ file: String, text: String }>, exists: (String) -> Bool, canon: (String, String) -> EditResult
+		creates: Array<{ file: String, text: String }>, exists: (String) -> Bool, canon: (String, String) -> EditResult,
+		?refused: (String, String) -> Void
 	): Null<Array<{ file: String, source: String }>> {
 		final out: Array<{ file: String, source: String }> = [];
 		for (made in creates) {
-			if (exists(made.file)) return null;
+			if (exists(made.file)) {
+				if (refused != null) refused(made.file, 'the file it would create already exists');
+				return null;
+			}
 			switch canon(made.file, made.text) {
 				case Ok(text, _):
 					out.push({ file: made.file, source: text });
-				case Err(_):
+				case Err(message):
+					if (refused != null) refused(made.file, message);
 					return null;
 			}
 		}
@@ -326,22 +331,30 @@ final class CanonicalEdit {
 	 * `canonicalize`, so a partial application can never reach disk. Pure:
 	 * `sourceOf` supplies each file's current source and `canon` performs the
 	 * per-file canonicalization (`file, source, edits`), both injected by the
-	 * caller.
+	 * caller. A refusal is never silent: `refused` hears the file that sank the set and why,
+	 * so the caller can say what it did not write.
 	 */
 	public static function stageCrossFileRename(
 		slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }>, sourceOf: (String) -> Null<String>,
-		canon: (String, String, Array<{ span: Span, text: String }>) -> EditResult
+		canon: (String, String, Array<{ span: Span, text: String }>) -> EditResult, ?refused: (String, String) -> Void
 	): Null<Array<{ file: String, source: String }>> {
 		final out: Array<{ file: String, source: String }> = [];
 		for (slice in slices) {
 			final src: Null<String> = sourceOf(slice.file);
-			if (src == null) return null;
+			if (src == null) {
+				if (refused != null) refused(slice.file, 'the run does not hold the file');
+				return null;
+			}
 			if (slice.edits.length == 0) continue;
 			switch canon(slice.file, src, slice.edits) {
 				case Ok(text):
-					if (text == src) return null;
+					if (text == src) {
+						if (refused != null) refused(slice.file, 'its edits leave the file unchanged');
+						return null;
+					}
 					out.push({ file: slice.file, source: text });
-				case Err(_):
+				case Err(message):
+					if (refused != null) refused(slice.file, message);
 					return null;
 			}
 		}

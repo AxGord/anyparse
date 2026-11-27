@@ -61,6 +61,53 @@ private class LoadBearingRemove implements Check implements CrossFileFix {
 
 }
 
+/** Reports every module and asks to delete a file the run was never handed. */
+private class RemoveUnheld implements Check implements CrossFileFix {
+
+	public function new() {}
+
+	public function id(): String {
+		return 'remove-unheld';
+	}
+
+	public function description(): String {
+		return 'deletes a file the run does not hold';
+	}
+
+	public function category(): RuleCategory {
+		return RuleCategory.Design;
+	}
+
+	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		return files.map(entry -> found(entry.file, entry.source.length));
+	}
+
+	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
+		return [];
+	}
+
+	public function crossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<Array<CrossFileEdits>> {
+		return violations.map(v -> removal('${v.file}.nowhere'));
+	}
+
+	private function found(file: String, length: Int): Violation {
+		return {
+			file: file,
+			span: new Span(0, length),
+			rule: id(),
+			severity: Severity.Warning,
+			message: 'a module'
+		};
+	}
+
+	private static function removal(file: String): Array<CrossFileEdits> {
+		return [{ file: file, edits: [], remove: true }];
+	}
+
+}
+
 /** Reads one file from DISK each time it is run — what the pass about to judge it would find there. */
 private class DiskWitness implements Check {
 
@@ -248,6 +295,30 @@ class LintFixRemoveTest extends Test {
 			out = '$code|${File.getContent('$root/src/aqq/Mqq.hx') == MODULES[2].source}';
 		});
 		Assert.equals('0|true', out);
+		#else
+		Assert.pass();
+		#end
+	}
+
+	/** A component removing a file the run was never handed writes nothing, and the run names the rule, the path and the reason once. */
+	@:pin('control')
+	@:killer('M-REMOVE-UNHELD-SILENT')
+	public function testARemoveOfAFileTheRunDoesNotHoldIsReported(): Void {
+		#if (sys || nodejs)
+		final root: String = CliFixture.writeTree('apq_fix_remove_unheld', [MODULES[0]]);
+		var said: String = '';
+		CliFixture.always(CliFixture.removeDir.bind(root), () -> {
+			final held: Array<{ file: String, source: String }> = [{ file: '$root/${MODULES[0].name}', source: MODULES[0].source }];
+			said = CliFixture.captureStderr(() ->
+				LintFixDriver.runLintFix(
+					held, [new RemoveUnheld()],
+					new HaxeQueryPlugin(), _ -> LintConfig.parse('{}'), false, null, [], true, null, false, new RunLedger()
+				)
+			);
+		});
+		final lines: Array<String> = said.split('\n').filter(line -> line.indexOf('cross-file fix (remove-unheld) not written, ') != -1);
+		Assert.equals(1, lines.length, said);
+		Assert.isTrue(lines[0].indexOf('Liveqqw.hx.nowhere: a file it removes is not held by this run') != -1, lines[0]);
 		#else
 		Assert.pass();
 		#end
