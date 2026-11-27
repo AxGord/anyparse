@@ -196,8 +196,10 @@ states:
       (wipes uncommitted work) — verify RunTests.hx registrations survived after
       review.
 
-      3. Update project memory (topic file + one MEMORY.md line): what shipped,
-      gotchas, residual debt.
+      3. What shipped goes in the commit messages (and the matching docs/journal
+      reading), residual debt in the report; project memory is not a status
+      log. A gotcha that is a lesson goes where the knowledge-placement skill
+      says.
 
       4. Report to user: counts, files touched, suite/corpus results. Do NOT
       commit or push — the user batch-pushes.

@@ -91,8 +91,9 @@ states:
     prompt: "Night-cleanup REPORT. Compose the morning summary: git log
       <baseline>..HEAD --oneline; lint counts before → after; suite + corpus
       verdicts; per-item queue outcomes incl. skipped/failed reasons; hxq gaps
-      encountered. Update project memory (topic file + one MEMORY.md index
-      line). Leave the tree green and committed. Do NOT push."
+      encountered. What shipped lives in the commit messages and the morning
+      summary, never in project memory; a lesson goes where the
+      knowledge-placement skill says. Leave the tree green and committed. Do NOT push."
     transitions:
       done: finish
     task: Morning report
@@ -102,6 +103,7 @@ states:
   failed:
     prompt: Campaign failed. Restore the last green commit (git reset --hard
       <last-green> only if the tree is broken — never discard verified green
-      commits), report what broke with verbatim evidence, update memory.
+      commits), report what broke with verbatim evidence (the report and the commit
+      messages carry it, not project memory).
     terminal: true
     outcome: fail

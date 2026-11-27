@@ -76,6 +76,27 @@ final class TrackedWorkflowsTest extends Test {
 		}
 	}
 
+	public function testLessonRecordsCarryADestAndNoTaskFlowWritesStatusIntoMemory(): Void {
+		for (file in ['slice-worker', 'slice-review']) {
+			final text: String = File.getContent('$ROOT/$file.yaml');
+			utest.Assert.isTrue(text.contains('"kind": "<class>", "dest": "<dest>"'), '$file: a lesson record has the dest key');
+			utest.Assert.isTrue(text.contains('memory (none of the others fits)'), '$file: the dest words are listed');
+		}
+		utest.Assert.isTrue(
+			File.getContent('$ROOT/research-task.yaml').contains('`- <dest> | <repo> | <exact text or edit>`'),
+			'the research close carries dest rows'
+		);
+		utest.Assert.isTrue(
+			File.getContent('$ROOT/slice-dispatch.yaml').contains('knowledge-placement'), 'the memory-note fork cites the skill'
+		);
+		for (file in ['task-night-cleanup', 'task-lint-cleanup', 'task-deferred-followups']) {
+			final text: String = File.getContent('$ROOT/$file.yaml').replace('\n', ' ').replace('  ', ' ');
+			for (status in ['Update project memory', 'update memory', 'memory topic file'])
+				utest.Assert.isFalse(text.contains(status), '$file writes status into memory: $status');
+			utest.Assert.isTrue(text.contains('knowledge-placement'), '$file places a lesson through the skill');
+		}
+	}
+
 	private static function filesUnder(dir: String): Array<String> {
 		final out: Array<String> = [];
 		if (!FileSystem.exists(dir)) return out;

@@ -63,8 +63,10 @@ states:
       unchanged or improved; 3) focused review of the merged diff (the
       config-seam and reflection-guard are the risky parts — verify
       thread-safety invariant: no new global mutable state); 4) commit in
-      logical chunks (Co-Authored-By trailer, no push); 5) update the campaign
-      memory topic file (mark follow-ups DONE, note surprises); 6) report to
+      logical chunks (Co-Authored-By trailer, no push); 5) record what shipped in the commit
+      messages and the matching docs/journal reading, not in project memory (a
+      surprise that is a lesson goes where the knowledge-placement skill
+      says); 6) report to
       user. Transition done."
     transitions:
       done: finish
