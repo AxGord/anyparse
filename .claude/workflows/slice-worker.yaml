@@ -729,6 +729,8 @@ states:
       And two more keys in the same `set` (never the Write tool, never a shell redirect: the engine writes the files):
         report_text  — your full report (≤40 lines): branch, tip, porcelain, the gate verdict line, reuse,
                        mechanism verdict with its number, open items. It is what the reviewer and the parent read.
+                       A rule or check you shipped is summarised as `does Y, does NOT do Z (reason)`: name what it leaves
+                       silent or gates off and why (the user's call: otherwise each hidden gate is found by his own sighting).
         handoff_text — for whoever continues this slice WITHOUT your context (a fix round may be a fresh agent):
                        the decisions you took and why; approaches you tried and dropped, and why; where the change
                        lives (files, declarations); the claims you are LEAST sure of, what you ran against each and what it showed, and any refuter you could not run and why; anything a fix round must know (fixtures, probes, commands that reproduce).

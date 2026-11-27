@@ -164,6 +164,13 @@ states:
          that option to a pipeline command → a FIXES item.
       4. Waivers — every `allowed:` row carries a reason the slice line names.
       5. Prose — comments without measurements; decisions lines end `→ <SLICE-ID>`, added by `dev decision`.
+      6. Report — a rule or check the report says shipped carries its exclusions in the form `does Y, does NOT do Z (reason)`
+         (what it leaves silent and why); a rule summary with no `does NOT` part, or one that hides a gate or exemption the diff
+         holds, is a FIXES finding (the user's call: otherwise each hidden gate is found by his own sighting).
+      Pre-existing: before a defect becomes a fix item, re-run its probe on the slice's base (`dev base-engine <base-sha>` gives
+      the engine). It fails there too → it is NOT a fix item and not a round: list it in review_text under `pre-existing:` and as a
+      `review_lessons` record (kind reproduced-on-real-tree, repro = the probe) for the parent to queue; the verdict is then
+      decided by the slice's own findings alone (MERGE when none). Only a defect the slice introduced or worsened is a fix item.
       Then transition `verdict`.
     transitions:
       verdict: verdict
@@ -174,7 +181,7 @@ states:
         verdict —MERGE | FIXES | REJECT. A list you can write item by item is FIXES, whatever its length. REJECT only
                   when no such list exists: the line's premise is false, an owner already answers its whole question,
                   or the change has to be redone from its design.
-        fixes   — FIXES: the exact fix list (each item: file, selector, what and why); else omit
+        fixes   — FIXES: the exact fix list (each item: file, selector, what and why; never a defect that fails on the base too: that goes to `pre-existing:` in review_text); else omit
         reasons — REJECT: why; else omit
         review_text — `session {{session_id}}`, the verdict, the full fix list (each item: file, selector, what and
                   why) or the reject reasons, one line per axis, and the readings you quoted (parity, kits). Never the

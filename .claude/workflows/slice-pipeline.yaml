@@ -700,7 +700,8 @@ states:
     max_visits: 3
     on_exhausted: reject
     prompt: |-
-      Review round {{visits.fixes}} of 3 (a fourth FIXES verdict lands in `reject`).
+      Review round {{visits.fixes}} of 3 (a fourth FIXES verdict lands in `reject`). The fix list holds only defects the slice
+      introduced: a finding that fails on the base too is the reviewer's `pre-existing:` line, queued by the parent, not a round.
       1. `start({workflow: "slice-worker", parent_session_id: "{{session_id}}", cwd: "{{context.wt}}", context:
          {gate_flags: "{{context.gate_flags}}"}})` → W2 (its gate runs with the flags this slice already carries,
          a parent waiver included); context_set `worker_session` = W2;
