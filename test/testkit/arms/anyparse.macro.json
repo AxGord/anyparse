@@ -4095,6 +4095,38 @@
 			"method": "fitKeepsLineExpr",
 			"force": "macro (_metaFit == 1)",
 			"note": "only a lone simple metadata keeps the declaration's line, so the short last one of a run breaks above it"
+		},
+		{
+			"name": "M-PARSER-ENTRY-UNCHECKED-TAIL",
+			"type": "anyparse.macro.Codegen",
+			"method": "nodeEntry",
+			"find": "final checked: Expr = checkedParse(parseCall);",
+			"replace": "final checked: Expr = macro return $parseCall;",
+			"note": "a node entry returns the first node its text begins with, so a text making a second node is answered with the first and the rest silently dropped"
+		},
+		{
+			"name": "M-PARSER-ENTRY-INTERIOR-GLUED",
+			"type": "anyparse.macro.Codegen",
+			"method": "nodeEntry",
+			"find": "macro $v{interior.lead + '\\n'} + source + $v{'\\n' + interior.trail}",
+			"replace": "macro $v{interior.lead} + source + $v{interior.trail}",
+			"note": "an interior is read glued to its lead and trail, so a comment opening it becomes the lead's trailing comment and one closing it swallows the trail"
+		},
+		{
+			"name": "M-PARSER-ENTRY-ANY-CTOR",
+			"type": "anyparse.macro.Codegen",
+			"method": "ctorChecked",
+			"find": "throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(0, 0), $v{'expected $ctor'});",
+			"replace": "_node;",
+			"note": "an interior entry answers whatever node its rule reads between the lead and the trail, so a text that is no list interior comes back as some other constructor"
+		},
+		{
+			"name": "M-PARSER-ENTRY-COMMENT-DROPPED",
+			"type": "anyparse.macro.Codegen",
+			"method": "bareWhitespaceStep",
+			"find": "if (ctx.pos != _bare)",
+			"replace": "if (false)",
+			"note": "a comment standing before or after the one node a text spells is skipped, so the part is taken and the comment silently dropped"
 		}
 	]
 }

@@ -530,22 +530,6 @@
 			"note": "the public modifier is built as private, so a built member no longer carries the modifiers it was asked for"
 		},
 		{
-			"name": "M-NODES-TYPE-EXTRA-DECLARATORS",
-			"type": "anyparse.grammar.haxe.query.HaxeNodes",
-			"method": "typeOf",
-			"find": "case VarMember(decl, _) if (decl.more.length == 0): decl.type;",
-			"replace": "case VarMember(decl, _): decl.type;",
-			"note": "a type text that makes a second declarator is answered with its first type and the rest silently dropped"
-		},
-		{
-			"name": "M-NODES-VALUE-EXTRA-DECLARATORS",
-			"type": "anyparse.grammar.haxe.query.HaxeNodes",
-			"method": "valueOf",
-			"find": " && decl.more.length == 0",
-			"replace": "",
-			"note": "a value text that makes a second declarator is answered with its first initializer and the rest silently dropped"
-		},
-		{
 			"name": "M-CONSTRUCTS-GUARD-ANY-EXIT",
 			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
 			"method": "guard",
@@ -568,15 +552,6 @@
 			"find": " || !isName(binder)",
 			"replace": "",
 			"note": "a loop binder is taken without reading it as one name, so a binder can carry code that regroups the loop it heads"
-		},
-		{
-			"name": "M-NODES-RUN-GLUED",
-			"type": "anyparse.grammar.haxe.query.HaxeNodes",
-			"method": "RUN_SLOT",
-			"kind": "FinalMember",
-			"find": "{ before: 'class _C { function _f() { {\\n', after: '\\n} } }' }",
-			"replace": "{ before: 'class _C { function _f() { {', after: '} } }' }",
-			"note": "a run is read glued to its braces, so a comment opening it becomes the brace's trailing comment and one closing it swallows the brace"
 		},
 		{
 			"name": "M-CONSTRUCTS-SEQUENCE-UNCOUNTED",

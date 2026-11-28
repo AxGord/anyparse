@@ -5,7 +5,15 @@ A `@:build` macro reads a grammar (Haxe types annotated with `@:lit`, `@:kw`,
 
 - **`buildParser`** — a specialized parser, in either **Fast** mode (bare types, throw
   on error, maximum throughput) or **Tolerant** mode (spans, error recovery, IDE-class
-  use). Two parsers from one grammar, chosen at the call site.
+  use). Two parsers from one grammar, chosen at the call site. Its public `parse`/`parseWith`
+  take the root; the build option `entries: [<type path>, …]` adds a `parse<Type>Node(text)` per
+  listed grammar type, which reads a text as exactly one node of that type (whitespace only
+  around it; a comment there is refused, the node having no slot to keep it) and throws
+  `ParseError` on anything else, and `<type path>.<Ctor>` of a
+  constructor holding a list between a lead and a trail literal adds `parse<Type><Ctor>Interior(text)`,
+  which reads the list between them. The Haxe trivia parser lists the types a copied part fills
+  (type, expression, function body, lambda parameter, import paths) and `HxStatement.BlockStmt`;
+  `HaxeNodes` reads each part through them, with no Haxe text of its own around it.
 - **`buildWriter`** — a writer/pretty-printer driving a Wadler-style Doc IR. **One AST,
   one writer** — no "emit text, then re-parse and reformat" two-pass pipeline. Its public
   `write`/`writeDoc` take the root; the build option `entries: [<type path>, …]` adds a

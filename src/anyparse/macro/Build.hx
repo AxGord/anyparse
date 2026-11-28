@@ -19,6 +19,8 @@ import haxe.macro.ExprTools;
 import haxe.macro.Type;
 import anyparse.macro.MacroNames.*;
 
+using Lambda;
+
 /** The grammar root, its schema path and the resolved format — what every `@:build` entry starts from. */
 private typedef ResolvedTarget = {
 	typePath: String,
@@ -108,8 +110,13 @@ class Build {
 			'parse${rootSimple}T';
 		else
 			'parse$rootSimple';
+		final entries: Array<Codegen.ParserEntry> = readTypeListOption(options, 'entries').map(path -> parserEntryOf(path, shape, ctx));
+		if (entries.length > 0 && (formatInfo.isBinary || ctx.spans))
+			Context.fatalError(
+				'Build.buildParser: the entries option is supported for text parsers without spans only', Context.currentPos()
+			);
 		final fields: Array<Field> = Codegen.emit(
-			rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName, CondConditionReader.of(shape)
+			rules, shape.root, rootReturnCT, formatInfo, ctx.trivia, rootFnName, CondConditionReader.of(shape), entries
 		);
 		if (!ctx.trivia && !ctx.spans) NativeDocLowering.overParser(fields, shape, formatInfo, rootReturnCT);
 
@@ -491,6 +498,44 @@ class Build {
 		registry.register(new Skip());
 		registry.prepare();
 		registry.runAnnotate(shape, ctx);
+	}
+
+	/**
+	 * The parser entry the `entries` option asks for by `path`: a rule of the grammar is read as one node of it, and a
+	 * constructor `<rule>.<Ctor>` holding a list between a lead and a trail literal is read as the list between them.
+	 */
+	private static function parserEntryOf(path: String, shape: ShapeBuilder.ShapeResult, ctx: LoweringCtx): Codegen.ParserEntry {
+		final node: Null<anyparse.core.ShapeTree.ShapeNode> = shape.rules[path];
+		if (node != null) return { name: 'parse${simpleName(path)}Node', ruleFn: parseFnOf(path, node, ctx), interior: null };
+		final cut: Int = path.lastIndexOf('.');
+		final owner: String = path.substring(0, cut);
+		final ctor: String = path.substring(cut + 1);
+		final ownerNode: Null<anyparse.core.ShapeTree.ShapeNode> = cut < 0 ? null : shape.rules[owner];
+		final branch: Null<anyparse.core.ShapeTree.ShapeNode> = ownerNode?.children.find(b ->
+			b.annotations[AnnotationKeys.BASE_CTOR] == ctor
+		);
+		if (ownerNode == null || branch == null)
+			return Context.fatalError(
+				'Build.buildParser: the entries option names $path, which is no rule or constructor of this grammar', Context.currentPos()
+			);
+		final lead: Null<String> = branch.annotations[AnnotationKeys.LIT_LEAD_TEXT];
+		final trail: Null<String> = branch.annotations[AnnotationKeys.LIT_TRAIL_TEXT];
+		return lead == null || trail == null || branch.children.length != 1 || branch.children[0].kind != Star
+			? Context.fatalError(
+				'Build.buildParser: the entries option names $path, which holds no list between a lead and a trail literal',
+				Context.currentPos()
+			)
+			: {
+				name: 'parse${simpleName(owner)}${ctor}Interior',
+				ruleFn: parseFnOf(owner, ownerNode, ctx),
+				interior: { ctor: ctor, lead: lead, trail: trail }
+			};
+	}
+
+	/** The name of the rule function that parses `typePath`: its trivia twin's when the build keeps trivia and the rule bears it. */
+	private static function parseFnOf(typePath: String, node: anyparse.core.ShapeTree.ShapeNode, ctx: LoweringCtx): String {
+		final simple: String = simpleName(typePath);
+		return ctx.trivia && node.annotations[AnnotationKeys.TRIVIA_BEARING] == true ? 'parse${simple}T' : 'parse$simple';
 	}
 
 }

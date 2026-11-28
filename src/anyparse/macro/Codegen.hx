@@ -3,8 +3,10 @@ package anyparse.macro;
 #if macro
 import anyparse.macro.MacroNames.*;
 import anyparse.runtime.ByteOrderMark;
+import haxe.macro.ComplexTypeTools;
 import haxe.macro.Context;
 import haxe.macro.Expr;
+import haxe.macro.Type;
 
 using StringTools;
 
@@ -27,6 +29,13 @@ private enum abstract TrailingRunOn(Int) {
 	var BeforeSeparator;
 
 }
+/**
+ * One public `name(source)` entry reading `source` as exactly one node through the rule function `ruleFn`; only
+ * whitespace may stand around it, and a comment there is refused, since the node has no slot to keep it. With
+ * `interior`, `source` is the list the constructor `ctor` holds between its `lead` and `trail` literals, read between
+ * them on lines of its own, and any other node is refused.
+ */
+typedef ParserEntry = { name: String, ruleFn: String, interior: Null<{ ctor: String, lead: String, trail: String }> };
 /**
  * Pass 4 of the macro pipeline — codegen.
  *
@@ -54,14 +63,21 @@ class Codegen {
 	/** Byte-order mark code point, skipped as whitespace by generated parsers. */
 	private static inline final BOM: Int = ByteOrderMark.CODE;
 
+	/**
+	 * The parameter of a text entry that holds the source it reads.
+	 */
+	private static final SOURCE_ARG: String = 'source';
+
 	public static function emit(
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
-		trivia: Bool = false, ?rootFnName: Null<String>, ?conditionReader: Null<CondConditionReader.CondReaders>
+		trivia: Bool = false, ?rootFnName: Null<String>, ?conditionReader: Null<CondConditionReader.CondReaders>,
+		?entries: Null<Array<ParserEntry>>
 	): Array<Field> {
 		final fields: Array<Field> = formatInfo.isBinary ? [binaryEntry(rootTypePath, rootReturnCT, rootFnName)] : [
 			publicEntryWith(rootTypePath, rootReturnCT, rootFnName),
 			publicEntry(rootReturnCT)
 		];
+		if (entries != null) for (entry in entries) fields.push(nodeEntry(entry, rules, formatInfo));
 		for (rule in rules) {
 			for (ereg in rule.eregs) fields.push(eregField(ereg));
 			fields.push(ruleField(rule));
@@ -109,7 +125,7 @@ class Codegen {
 		return {
 			name: 'parse',
 			access: [APublic, AStatic],
-			kind: FFun({ args: [{ name: 'source', type: macro : String }], ret: rootReturnCT, expr: body }),
+			kind: FFun({ args: [{ name: SOURCE_ARG, type: macro : String }], ret: rootReturnCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -138,7 +154,22 @@ class Codegen {
 		// the file head ("expected <root>"); `ctx.maxFailPos` recovers
 		// the real innermost blocker for recon / diagnostics. Success
 		// path is unchanged — only the error path is rewritten.
-		final body: Expr = macro {
+		return {
+			name: 'parseWith',
+			access: [APublic, AStatic],
+			kind: FFun(
+				{ args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }], ret: rootReturnCT, expr: checkedParse(parseCall) }
+			),
+			pos: Context.currentPos()
+		};
+	}
+
+	/**
+	 * `parseCall` run over the fresh `ctx` in scope: its value when only whitespace and comments follow it, else the
+	 * failure, decorated with the source and re-surfaced at the farthest terminal failure when that lies deeper.
+	 */
+	private static function checkedParse(parseCall: Expr): Expr {
+		return macro {
 			try {
 				final _v = $parseCall;
 				skipWs(ctx);
@@ -164,11 +195,70 @@ class Codegen {
 				throw e;
 			}
 		};
-		return {
-			name: 'parseWith',
-			access: [APublic, AStatic],
-			kind: FFun({ args: [{ name: 'ctx', type: macro : anyparse.runtime.Parser }], ret: rootReturnCT, expr: body }),
+	}
+
+	/** The public entry `entry` names, over the rule it reads with. */
+	private static function nodeEntry(entry: ParserEntry, rules: Array<GeneratedRule>, formatInfo: FormatReader.FormatInfo): Field {
+		for (rule in rules) if (rule.fnName == entry.name)
+			Context.fatalError('Codegen: the node entry ${entry.name} would shadow a parser rule of that name', Context.currentPos());
+		for (rule in rules) if (rule.fnName == entry.ruleFn) {
+			if (rule.extraArgs.length > 0)
+				Context.fatalError(
+					'Codegen: the rule ${entry.ruleFn} takes arguments of its own, so it has no node entry', Context.currentPos()
+				);
+			final call: Expr = { expr: ECall(macro $i{entry.ruleFn}, [macro ctx]), pos: Context.currentPos() };
+			final interior: Null<{ ctor: String, lead: String, trail: String }> = entry.interior;
+			final bare: Expr = bareWhitespaceStep(formatInfo);
+			final parseCall: Expr = interior == null
+				? macro {
+					$bare;
+					final _node = $call;
+					$bare;
+					_node;
+				}
+				: ctorChecked(call, rule.returnCT, interior.ctor);
+			final input: Expr = interior == null ? macro source : macro $v{interior.lead + '\n'} + source + $v{'\n' + interior.trail};
+			final checked: Expr = checkedParse(parseCall);
+			final body: Expr = macro {
+				final ctx: anyparse.runtime.Parser = new anyparse.runtime.Parser(new anyparse.runtime.StringInput($input));
+				$checked;
+			};
+			return {
+				name: entry.name,
+				access: [APublic, AStatic],
+				kind: FFun({ args: [{ name: SOURCE_ARG, type: macro : String }], ret: rule.returnCT, expr: body }),
+				pos: Context.currentPos()
+			};
+		}
+		return Context.fatalError('Codegen: no parser rule ${entry.ruleFn} for the node entry ${entry.name}', Context.currentPos());
+	}
+
+	/** `call`'s node when it is the constructor `ctor` of the type `returnCT` names, else a parse failure. */
+	private static function ctorChecked(call: Expr, returnCT: ComplexType, ctor: String): Expr {
+		final pattern: Expr = {
+			expr: ECall(macro $i{ctor}, [ for (_ in 0...ctorArity(returnCT, ctor)) macro _ ]),
 			pos: Context.currentPos()
+		};
+		return macro {
+			final _node = $call;
+			switch _node {
+				case $pattern:
+					_node;
+				case _:
+					throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(0, 0), $v{'expected $ctor'});
+			}
+		};
+	}
+
+	/** The number of arguments the constructor `ctor` of the enum `ct` names takes. */
+	private static function ctorArity(ct: ComplexType, ctor: String): Int {
+		return switch Context.follow(ComplexTypeTools.toType(ct)) {
+			case TEnum(_.get() => decl, _) if (decl.constructs.exists(ctor)):
+				switch decl.constructs[ctor].type {
+					case TFun(args, _): args.length;
+					case _: 0;
+				}
+			case _: Context.fatalError('Codegen: $ctor is no constructor of the node its rule reads', Context.currentPos());
 		};
 	}
 
@@ -185,7 +275,7 @@ class Codegen {
 		return {
 			name: 'parse',
 			access: [APublic, AStatic],
-			kind: FFun({ args: [{ name: 'source', type: macro : haxe.io.Bytes }], ret: rootReturnCT, expr: body }),
+			kind: FFun({ args: [{ name: SOURCE_ARG, type: macro : haxe.io.Bytes }], ret: rootReturnCT, expr: body }),
 			pos: Context.currentPos()
 		};
 	}
@@ -1378,6 +1468,25 @@ class Codegen {
 		var test: Expr = macro c == $v{BOM};
 		for (k in 0...whitespace.length) test = macro c == $v{whitespace.charCodeAt(k)} || $test;
 		return test;
+	}
+
+	/**
+	 * The step skipping the whitespace at `ctx.pos` that refuses a comment there: a node read alone has no slot to keep a
+	 * comment standing outside it, so taking the text would drop the comment.
+	 */
+	private static function bareWhitespaceStep(formatInfo: FormatReader.FormatInfo): Expr {
+		final isWhitespace: Expr = whitespaceTest(formatInfo.whitespace);
+		return macro {
+			while (ctx.pos < ctx.input.length) {
+				final c: Int = ctx.input.charCodeAt(ctx.pos);
+				if (!($isWhitespace)) break;
+				ctx.pos++;
+			}
+			final _bare: Int = ctx.pos;
+			skipWs(ctx);
+			if (ctx.pos != _bare)
+				throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(_bare, _bare), 'a comment outside the node');
+		};
 	}
 
 }

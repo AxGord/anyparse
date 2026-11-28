@@ -43,17 +43,28 @@ class HaxeNodesTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-NODES-TYPE-EXTRA-DECLARATORS')
+	@:killer('M-PARSER-ENTRY-UNCHECKED-TAIL')
 	public function testATypeTextMakingASecondDeclaratorIsNoType(): Void {
 		Assert.isNull(HaxeNodes.typeOf('Int, _w: String'));
 		Assert.notNull(HaxeNodes.typeOf('Int'));
 	}
 
 	@:pin('control')
-	@:killer('M-NODES-VALUE-EXTRA-DECLARATORS')
+	@:killer('M-PARSER-ENTRY-UNCHECKED-TAIL')
 	public function testAValueTextMakingASecondDeclaratorIsNoValue(): Void {
 		Assert.isNull(HaxeNodes.valueOf('1, _w = 2'));
 		Assert.notNull(HaxeNodes.valueOf('1'));
+	}
+
+	/** A part whose text carries a comment outside the node it spells is no part, so an op building with it refuses. */
+	@:pin('control')
+	@:killer('M-PARSER-ENTRY-COMMENT-DROPPED')
+	public function testAPartCarryingAnOuterCommentIsNoPart(): Void {
+		Assert.isNull(HaxeNodes.valueOf('x // c'));
+		Assert.isNull(HaxeNodes.typeOf('Int // c'));
+		Assert.isNull(HaxeNodes.importOf('a.b.C // c'));
+		Assert.isNull(HaxeNodes.bodyOf('{ a(); }\n// c'));
+		Assert.notNull(HaxeNodes.valueOf('x'));
 	}
 
 	private static function constant(): HxMemberDeclT {

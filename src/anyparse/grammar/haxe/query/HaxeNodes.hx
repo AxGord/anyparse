@@ -1,7 +1,10 @@
 package anyparse.grammar.haxe.query;
 
 import anyparse.grammar.haxe.decl.HxClassMember;
+import anyparse.grammar.haxe.decl.HxImportAlias;
+import anyparse.grammar.haxe.decl.HxImportAliasIn;
 import anyparse.grammar.haxe.decl.HxParam;
+import anyparse.grammar.haxe.decl.HxWildPath;
 import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.meta.HxMemberModifier;
 import anyparse.grammar.haxe.stmt.HxStatement;
@@ -17,42 +20,27 @@ import anyparse.grammar.haxe.trivia.Pairs.HxForStmtT;
 import anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT;
 import anyparse.grammar.haxe.trivia.Pairs.HxLambdaParamT;
 import anyparse.grammar.haxe.trivia.Pairs.HxMemberDeclT;
-import anyparse.grammar.haxe.trivia.Pairs.HxModuleT;
 import anyparse.grammar.haxe.trivia.Pairs.HxStatementT;
 import anyparse.grammar.haxe.trivia.Pairs.HxThinParenLambdaT;
 import anyparse.grammar.haxe.trivia.Pairs.HxTypeT;
 import anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT;
 import anyparse.grammar.haxe.types.HxType;
+import anyparse.grammar.haxe.types.HxTypeName;
 import anyparse.query.Constructs.Arithmetic;
 import anyparse.query.Constructs.Modifier;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Trivial;
 import haxe.Exception;
 
-/** The text around a part that makes it the one member of a class, so the part is read in the slot it fills. */
-private typedef Slot = { final before: String; final after: String; }
-
 /**
  * Typed trivia-mode Haxe nodes made from their parts: the one answer to "how is a Haxe member or statement built as a
  * typed node rather than spelled as text". A node is built of the plain grammar types and lifted by the generated
  * `Converters.rawToPaired_*`, so every trivia slot holds its no-source default and the writer lays the node out by its
  * own policy alone. A part that arrives as text (a copied source fragment, a construct built as text) is read by the
- * grammar in the slot it fills and keeps its own trivia.
+ * generated parser's entry for the node it fills, as exactly that one node, and keeps its own trivia.
  */
 @:nullSafety(Strict)
 final class HaxeNodes {
-
-	private static final TYPE_SLOT: Slot = { before: 'class _C { var _v: ', after: '; }' };
-	private static final VALUE_SLOT: Slot = { before: 'class _C { var _v = ', after: '; }' };
-	private static final BODY_SLOT: Slot = { before: 'class _C { function _f() ', after: ' }' };
-	private static final PARAM_SLOT: Slot = { before: 'class _C { var _v = (', after: ') -> 0; }' };
-	private static final IMPORT_SLOT: Slot = { before: 'import ', after: ';' };
-
-	/**
-	 * A block interior is read on lines of its own, so a comment opening it
-	 * stands before its first statement and one closing it cannot reach the brace.
-	 */
-	private static final RUN_SLOT: Slot = { before: 'class _C { function _f() { {\n', after: '\n} } }' };
 
 	/** The body of a method that has none: a declaration only. */
 	public static inline function noBody(): HxFnBodyT {
@@ -84,9 +72,49 @@ final class HaxeNodes {
 		return BoolLit(value);
 	}
 
-	/** The import or using declaration of `path`, a name, a wildcard or an aliased name; null when `path` is none of them. */
-	public static inline function importOf(path: String): Null<HxDeclT> {
-		return declOf(IMPORT_SLOT, path);
+	/** The block whose interior is `text`, statements and the comments among them; null when `text` is no such interior. */
+	public static inline function runOf(text: String): Null<HxStatementT> {
+		return read(HaxeModuleTriviaParser.parseHxStatementBlockStmtInterior, text);
+	}
+
+	/** `owner` with its member `name`. */
+	public static inline function fieldExpr(owner: HxExprT, name: String): HxExprT {
+		return FieldAccess(owner, name, null);
+	}
+
+	/** `inner` held together as one operand. */
+	public static inline function parenExpr(inner: HxExprT): HxExprT {
+		return ParenExpr(inner, false, null);
+	}
+
+	/** The one type `text` spells; null when it is not exactly one. */
+	public static inline function typeOf(text: String): Null<HxTypeT> {
+		return read(HaxeModuleTriviaParser.parseHxTypeNode, text);
+	}
+
+	/** The one expression `text` spells; null when it is not exactly one. */
+	public static inline function valueOf(text: String): Null<HxExprT> {
+		return read(HaxeModuleTriviaParser.parseHxExprNode, text);
+	}
+
+	/** The one method body `text` spells; null when it is not exactly one. */
+	public static inline function bodyOf(text: String): Null<HxFnBodyT> {
+		return read(HaxeModuleTriviaParser.parseHxFnBodyNode, text);
+	}
+
+	/**
+	 * The import declaration of `path`, a name, a wildcard or an aliased name, tried in the order the grammar tries the
+	 * import declarations; null when `path` is none.
+	 */
+	public static function importOf(path: String): Null<HxDeclT> {
+		final wild: Null<HxWildPath> = read(HaxeModuleTriviaParser.parseHxWildPathNode, path);
+		if (wild != null) return ImportWildDecl(wild);
+		final alias: Null<HxImportAlias> = read(HaxeModuleTriviaParser.parseHxImportAliasNode, path);
+		if (alias != null) return ImportAliasDecl(alias);
+		final aliasIn: Null<HxImportAliasIn> = read(HaxeModuleTriviaParser.parseHxImportAliasInNode, path);
+		if (aliasIn != null) return ImportAliasInDecl(aliasIn);
+		final name: Null<HxTypeName> = read(HaxeModuleTriviaParser.parseHxTypeNameNode, path);
+		return name == null ? null : ImportDecl(name);
 	}
 
 	/** A type member carrying `modifiers` in the order given. */
@@ -189,18 +217,6 @@ final class HaxeNodes {
 		};
 	}
 
-	/** The block whose interior is `text`, statements and the comments among them; null when `text` is no such interior. */
-	public static function runOf(text: String): Null<HxStatementT> {
-		final only: Null<HxStatementT> = switch member(RUN_SLOT, text) {
-			case FnMember({ body: BlockBody({ stmts: [element] }) }): element.node;
-			case _: null;
-		};
-		return switch only {
-			case BlockStmt(_, _, _, _, _, _): only;
-			case _: null;
-		};
-	}
-
 	/** The one statement `text` spells, with no comment around it; null when it is not exactly one. */
 	public static function statementOf(text: String): Null<HxStatementT> {
 		return switch runOf(text) {
@@ -251,16 +267,6 @@ final class HaxeNodes {
 		return ArrowFn(fn);
 	}
 
-	/** `owner` with its member `name`. */
-	public static function fieldExpr(owner: HxExprT, name: String): HxExprT {
-		return FieldAccess(owner, name, null);
-	}
-
-	/** `inner` held together as one operand. */
-	public static function parenExpr(inner: HxExprT): HxExprT {
-		return ParenExpr(inner, false, null);
-	}
-
 	/** The call of `callee` with `args` in order. */
 	public static function callExpr(callee: HxExprT, args: Array<HxExprT>): HxExprT {
 		final call: HxExprT = Converters.rawToPaired_HxExpr(HxExpr.Call(HxExpr.BoolLit(true), [ for (_ in args) HxExpr.BoolLit(true) ]));
@@ -300,30 +306,6 @@ final class HaxeNodes {
 		};
 	}
 
-	/** The type `text` spells, read as a declared type; null when it is not one. */
-	public static function typeOf(text: String): Null<HxTypeT> {
-		return switch member(TYPE_SLOT, text) {
-			case VarMember(decl, _) if (decl.more.length == 0): decl.type;
-			case _: null;
-		};
-	}
-
-	/** The expression `text` spells, read as an initial value; null when it is not one. */
-	public static function valueOf(text: String): Null<HxExprT> {
-		return switch member(VALUE_SLOT, text) {
-			case VarMember(decl, _) if (decl.type == null && decl.more.length == 0): decl.init;
-			case _: null;
-		};
-	}
-
-	/** The method body the statement `text` spells; null when it is not one. */
-	public static function bodyOf(text: String): Null<HxFnBodyT> {
-		return switch member(BODY_SLOT, text) {
-			case FnMember(decl): decl.body;
-			case _: null;
-		};
-	}
-
 	/** `modifier` as a Haxe member modifier. */
 	public static function memberModifier(modifier: Modifier): HxMemberModifier {
 		return switch modifier {
@@ -342,6 +324,11 @@ final class HaxeNodes {
 		return options;
 	}
 
+	/** The one lambda parameter `text` spells; null when it is not exactly one. */
+	private static inline function lambdaParamOf(text: String): Null<HxLambdaParamT> {
+		return read(HaxeModuleTriviaParser.parseHxLambdaParamNode, text);
+	}
+
 	private static function varDecl(name: String, type: Null<HxTypeT>, init: Null<HxExprT>): HxVarDeclT {
 		final decl: HxVarDeclT = Converters.rawToPaired_HxVarDecl({
 			meta: [],
@@ -357,42 +344,9 @@ final class HaxeNodes {
 		return decl;
 	}
 
-	/** The one lambda parameter `text` spells; null when it is not exactly one. */
-	private static function lambdaParamOf(text: String): Null<HxLambdaParamT> {
-		return switch member(PARAM_SLOT, text) {
-			case VarMember(decl, _) if (decl.more.length == 0):
-				switch decl.init {
-					case ThinParenLambdaExpr(lambda) if (lambda.params.length == 1): lambda.params[0];
-					case _: null;
-				}
-			case _: null;
-		};
-	}
-
-	/** The one top-level declaration `text` makes inside `slot`; null when the whole does not parse to exactly one. */
-	private static function declOf(slot: Slot, text: String): Null<HxDeclT> {
-		final tree: Null<HxModuleT> = moduleOf(slot, text);
-		return tree == null || tree.decls.length != 1 ? null : tree.decls[0].node.decl;
-	}
-
-	/** The module `text` makes inside `slot`; null when the whole does not parse. */
-	private static function moduleOf(slot: Slot, text: String): Null<HxModuleT> {
-		return try
-			HaxeModuleTriviaParser.parse(slot.before + text + slot.after)
-		catch (exception: ParseError)
-			null
-		catch (exception: Exception)
-			null;
-	}
-
-	/** The one member `text` makes inside `slot`; null when the whole does not parse to exactly one member. */
-	private static function member(slot: Slot, text: String): Null<HxClassMemberT> {
-		final tree: Null<HxModuleT> = moduleOf(slot, text);
-		if (tree == null || tree.decls.length != 1) return null;
-		return switch tree.decls[0].node.decl {
-			case ClassDecl(body) if (body.members.length == 1): body.members[0].node.member;
-			case _: null;
-		};
+	/** The node `entry` reads from `text`; null when the generated parser refuses `text` as exactly one such node. */
+	private static function read<T>(entry: String -> T, text: String): Null<T> {
+		return try entry(text) catch (exception: ParseError) null catch (exception: Exception) null;
 	}
 
 }

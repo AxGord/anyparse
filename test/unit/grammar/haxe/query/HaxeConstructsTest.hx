@@ -198,7 +198,7 @@ class HaxeConstructsTest extends Test {
 	 * neither takes a join that regroups its parts or a comment closing a run that something follows.
 	 */
 	@:pin('control')
-	@:killer('M-NODES-RUN-GLUED')
+	@:killer('M-PARSER-ENTRY-INTERIOR-GLUED')
 	@:killer('M-CONSTRUCTS-SEQUENCE-UNCOUNTED')
 	@:killer('M-CONSTRUCTS-SEQUENCE-OWN-LAYOUT-SPLIT')
 	@:killer('M-PARSEBACK-RUN-LAYOUT-TRIMMED')
