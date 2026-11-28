@@ -1344,22 +1344,6 @@
     }
   },
   {
-    "file": "src/anyparse/query/ExtractVar.hx",
-    "line": 185,
-    "col": 10,
-    "endLine": 185,
-    "endCol": 47,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`final`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "ExtractVar.extractVar",
-      "subject": "final",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/query/FieldRename.hx",
     "line": 55,
     "col": 24,

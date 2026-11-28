@@ -4,6 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.Severity;
 import anyparse.check.common.design.ExtractRepeatedExpression;
 import anyparse.check.common.types.ExplicitLocalType;
+import anyparse.query.Constructs;
 import anyparse.runtime.Span;
 
 using anyparse.util.Strings;
@@ -178,12 +179,12 @@ final class ExtractVar {
 		final indent: String = source.substring(lineStart, hoistSpan.from);
 		if (!isAllWhitespace(indent)) return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
 
-		final exprText: String = source.substring(targetSpan.from, trimmedEnd(source, targetSpan));
+		final declaration: Null<String> = hoistedDeclaration(
+			plugin, source, new Span(targetSpan.from, trimmedEnd(source, targetSpan)), name
+		);
+		if (declaration == null) return Err('"$name": cannot extract — the grammar builds no declaration of the extracted value');
 
-		final edits: Array<{ span: Span, text: String }> = [{
-			span: new Span(lineStart, lineStart),
-			text: '${indent}final $name = $exprText;\n'
-		}];
+		final edits: Array<{ span: Span, text: String }> = [{ span: new Span(lineStart, lineStart), text: '$indent$declaration\n' }];
 		for (s in run) edits.push({ span: new Span(s.from, trimmedEnd(source, s)), text: name });
 
 		final rewritten: String = CanonicalEdit.applyEdits(source, edits);
@@ -324,6 +325,15 @@ final class ExtractVar {
 		};
 		final edits: Array<{ span: Span, text: String }> = new ExplicitLocalType().fix(source, [finding], plugin);
 		return edits.length == 0 ? source : CanonicalEdit.applyEdits(source, edits);
+	}
+
+	/**
+	 * The constant `name`, initialised to the expression copied from `span`, as the grammar spells it; null when it builds none.
+	 */
+	private static function hoistedDeclaration(plugin: GrammarPlugin, source: String, span: Span, name: String): Null<String> {
+		final build: Null<Constructs> = plugin.constructs();
+		final value: Null<Built> = build?.copied(source, span, Expression);
+		return value == null ? null : build?.local(Constant, name, null, value)?.text;
 	}
 
 }

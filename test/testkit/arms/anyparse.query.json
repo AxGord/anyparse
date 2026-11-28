@@ -18131,6 +18131,13 @@
 			"find": "if (member == null) return Err('the grammar cannot spell the constant');",
 			"replace": "if (member == null) return Ok([], '', false);",
 			"note": "a constant the grammar cannot spell is reported as written to an empty module"
+		},
+		{
+			"name": "M-EXTRACTVAR-DECL-SPELLED",
+			"type": "anyparse.query.ExtractVar",
+			"method": "hoistedDeclaration",
+			"force": "'final $name = ' + source.substring(span.from, span.to) + ';'",
+			"note": "the hoisted declaration spelled by the op writes an edit where the grammar builds none"
 		}
 	]
 }

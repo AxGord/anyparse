@@ -1,7 +1,9 @@
 package unit.query;
 
+import anyparse.query.Constructs;
 import anyparse.query.ExtractVar;
 import haxe.Exception;
+import unit.check.haxe.expressions.RefusingConstructsPlugin;
 
 /**
  * `ExtractVar.extractVar` — scope-correct, format-preserving
@@ -165,6 +167,26 @@ class ExtractVarSliceTest extends Test {
 			'class C {\n\tfunction f(a:Int, b:Int, m:Map<Int, Int>):Int {\n\t\tfor (k => v in m) trace(k + v);\n\t\treturn a + b;\n\t}\n}';
 		// Line 4 col 10 — the `a`; name `v` already names the loop's value binder.
 		assertRefused('already names a parameter or local', source, 4, 10, 'v');
+	}
+
+	/**
+	 * The hoisted declaration is the grammar's: a grammar that builds no constructs, or none of a statement, makes the
+	 * extraction an error and writes nothing.
+	 */
+	@:pin('control')
+	@:killer('M-EXTRACTVAR-DECL-SPELLED')
+	public function testRefusedWhereTheGrammarBuildsNoDeclaration(): Void {
+		final source: String = 'class C {\n\tfunction f(a:Int, b:Int):Int {\n\t\tvar y = a + b;\n\t\treturn y;\n\t}\n}';
+		Assert.isTrue(ExtractVar.extractVar(source, 3, 11, 't', new HaxeQueryPlugin()).match(Ok(_, _, _, _)));
+		for (wrap in [
+			(_: Constructs) -> null,
+			(real: Constructs) -> new RefusingConstructs(real, [], [], false, true)
+		]) switch ExtractVar.extractVar(source, 3, 11, 't', new RefusingConstructsPlugin(wrap)) {
+			case Ok(text, _, _, _):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('builds no declaration') >= 0, message);
+		}
 	}
 
 	private function assertExtract(source: String, line: Int, col: Int, name: String, expected: String): Void {
