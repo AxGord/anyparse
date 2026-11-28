@@ -348,7 +348,7 @@
 			"name": "M-UPM-FIELD-INITIALIZER-PURITY",
 			"type": "anyparse.check.common.unused.UnusedPublicMember",
 			"method": "inertInitializer",
-			"find": "return init == null || MemberKinds.isSideEffectFree(init, shape);",
+			"find": "return init == null || pure(init);",
 			"replace": "return true;",
 			"note": "every unreferenced static field is deletable whatever its initializer, so a construction or call that runs at class load is deleted with it"
 		},
@@ -520,6 +520,38 @@
 			"method": "isContractCandidate",
 			"force": "false",
 			"note": "a type with an extends or implements clause is no contract candidate, so its private methods are judged like those of a plain class"
+		},
+		{
+			"name": "M-UPM-SITE-PURITY-ARRAY",
+			"type": "anyparse.check.common.unused.UnusedPublicMember",
+			"method": "siteOf",
+			"find": "return TypeResolver.isDeletionPure(node, tree, shape, declared[0], scope);",
+			"replace": "return MemberKinds.isSideEffectFree(node, shape);",
+			"note": "the initializer purity falls back to the kind-only test, which reads an array literal as effectful, so a pure array-literal static field is reported and then silently kept"
+		},
+		{
+			"name": "M-UPM-SITE-FENCE",
+			"type": "anyparse.check.common.unused.UnusedPublicMember",
+			"method": "siteOf",
+			"find": "return found.exists(fence -> fence.from <= last && fence.to >= first);",
+			"replace": "return false;",
+			"note": "no declaration is ever fenced, so a member under `// @formatter:off` is deleted along with the marker that guards it"
+		},
+		{
+			"name": "M-UPM-FRAGMENT-DECLINE",
+			"type": "anyparse.check.common.unused.UnusedPublicMember",
+			"method": "declineReason",
+			"find": "if (!noRuntimeNameFragment(ctx, candidate.name))",
+			"replace": "if (false)",
+			"note": "a name an interpolated string may spell at runtime no longer holds the member back, so the finding carries no reason and the member is deleted"
+		},
+		{
+			"name": "M-UPM-REGION-DECLINE",
+			"type": "anyparse.check.common.unused.UnusedPublicMember",
+			"method": "considerClass",
+			"find": "found.declineReason = 'every member of its `#if` branch would go with it, '",
+			"replace": "found.declineReason = null; final dropped: String = 'every member of its `#if` branch would go with it, '",
+			"note": "the region guard drops the deletion without writing its reason, so the finding is reported and then skipped with no line"
 		}
 	]
 }

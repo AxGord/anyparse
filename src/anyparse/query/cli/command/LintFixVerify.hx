@@ -209,8 +209,10 @@ final class LintFixVerify {
 			final entry: RuleFixOutcome = LintFixDriver.ledgerFor(ledger, tally.rule);
 			if (!armRules.contains(tally.rule)) entry.reported += tally.findings;
 			entry.edits += tally.edits;
-			if (tally.edits != 0) continue;
-			entry.declined += tally.findings;
+			// A file where the rule also landed an edit is a decline only for the findings the check itself spoke for:
+			// the rest were fixed, and charging them would count a landed edit as a refusal.
+			final landed: Bool = tally.edits != 0;
+			if (!landed) entry.declined += tally.findings;
 			// The check's OWN sentences first, per finding, because they answer a DIFFERENT question
 			// than the verifier's: a finding the check declined never produced a candidate edit, so
 			// "the oracle does not compile this file" is not why IT got no edit — it is why the
@@ -220,8 +222,10 @@ final class LintFixVerify {
 			var spoken: Int = 0;
 			for (own in tally.declineReasons) {
 				LintFixDriver.bumpReason(entry.reasons, own.text, own.count);
+				if (landed) entry.declined += own.count;
 				spoken += own.count;
 			}
+			if (landed) continue;
 			// The REMAINDER only — the findings the check left silent. `reasonLines` already reads a
 			// reason total below `declined` as "the check spoke for some of these and not the rest",
 			// so the split needs no new sentence form and cannot double-count.

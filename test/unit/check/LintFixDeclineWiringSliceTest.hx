@@ -1123,6 +1123,33 @@ class LintFixDeclineWiringSliceTest extends Test {
 		Assert.equals(5, row == null ? -1 : row.reported);
 	}
 
+	/**
+	 * A file where a risky rule landed an edit still names the findings the check itself declined: the rule deleted one
+	 * member and kept another under its own sentence, and that sentence must reach the ledger row.
+	 *
+	 * Before the fix the whole tally was skipped as soon as `edits != 0`, so `Violation.declineReason` reached no reader in
+	 * any file the rule also fixed something in. The landed finding is no decline: `declined` counts the spoken one only.
+	 */
+	@:pin('control')
+	@:killer('M-LEDGER-LANDED-FILE-DROPS-REASONS')
+	public function testALandedFileStillNamesWhatTheCheckDeclined(): Void {
+		#if (sys || nodejs)
+		final ledger: Map<String, RuleFixOutcome> = [];
+		LintFixVerify.ledgerRiskyTallies(ledger, landedAndSpokenResult(), []);
+		final row: Null<RuleFixOutcome> = ledger['unused-public-member'];
+		if (row == null) {
+			Assert.fail('the risky rule has no ledger row');
+			return;
+		}
+		Assert.equals(2, row.reported, 'both findings of the file');
+		Assert.equals(1, row.edits, 'one landed');
+		Assert.equals(1, row.declined, 'only the finding the check spoke for is a decline');
+		Assert.same([{ text: 'it sits under a fence', count: 1 }], row.reasons);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/** One violation carrying `reason`, or none — the shape a check hands back from `fix`. */
 	private static function reasoned(reason: Null<String>): Violation {
 		return {
@@ -1189,6 +1216,28 @@ class LintFixDeclineWiringSliceTest extends Test {
 			severity: Severity.Info,
 			message: 'an arm finding',
 			declineReason: reason
+		};
+	}
+
+	private static function landedAndSpokenResult(): FixVerifyResult {
+		return {
+			baseline: Confirmed,
+			rounds: [],
+			applied: ['Landed.hx'],
+			appliedEdits: 1,
+			reverted: [],
+			excluded: [],
+			partials: [],
+			declined: [],
+			coverageUnknown: null,
+			coverage: null,
+			tallies: [{
+				rule: 'unused-public-member',
+				file: 'Landed.hx',
+				findings: 2,
+				edits: 1,
+				declineReasons: [{ text: 'it sits under a fence', count: 1 }]
+			}]
 		};
 	}
 

@@ -6,12 +6,16 @@ import anyparse.check.Check.FrameworkAware;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.scan.PublicReach;
 import anyparse.check.scan.ReflectionScan;
+import anyparse.format.comment.FormatterOff;
 import anyparse.query.CtorFieldFold;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.MemberBranchScan;
 import anyparse.query.NamingPolicy.FrameworkContract;
 import anyparse.query.NamingPolicy.NamingSupport;
+import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
+import anyparse.runtime.LineIndex;
 
 using StringTools;
 
@@ -23,6 +27,9 @@ private typedef Candidate = {
 
 	/** The member declaration's own span, which the finding reports and `fix` looks up. */
 	final span: Span;
+
+	/** The span a deletion takes: the member with its modifier run and leading doc. */
+	final region: Span;
 
 	/** The declaration node — read to tell whether deleting it would empty a `#if` region. */
 	final node: QueryNode;
@@ -52,6 +59,17 @@ private typedef Ctx = {
 
 	/** The grammar's reference shape — the vocabulary the field-initializer purity gate reads. */
 	final shape: RefShape;
+
+};
+
+/** The per-file gates `fix` asks of a member: how pure an initializer is, and whether a declaration is fenced off. */
+private typedef Site = {
+
+	/** Whether deleting the initializer expression drops no behaviour — the type-aware deletion purity `unused-private` asks. */
+	final pure: (QueryNode) -> Bool;
+
+	/** Whether a declaration's span lies in, or directly under, an `@formatter:off` region. */
+	final fenced: (Span) -> Bool;
 
 };
 
@@ -300,7 +318,8 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 				plugin.refShape(), entry.source, plugin.lexicalRegions.bind(entry.source)
 			);
 			final regions: Array<LexRegion> = plugin.lexicalRegions(entry.source);
-			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, entry.source, index, scope, info, ctx, branch, regions);
+			final site: Site = siteOf(entry.source, tree, scope, ctx.shape, plugin, regions);
+			for (cls in CheckScan.classBodies(tree)) considerClass(out, cls, entry.source, index, scope, info, ctx, branch, regions, site);
 		});
 	}
 
@@ -330,7 +349,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 	 */
 	private function considerClass(
 		out: Array<Violation>, cls: QueryNode, source: String, index: SymbolIndex, scope: SymbolIndex, host: FileInfo, ctx: Ctx,
-		branch: MemberBranchSeams, regions: Array<LexRegion>
+		branch: MemberBranchSeams, regions: Array<LexRegion>, site: Site
 	): Void {
 		final owner: Null<String> = cls.name;
 		if (owner == null) return;
@@ -342,25 +361,38 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 		if (candidates.length == 0) return;
 		if (PublicReach.chainOutOfReach(scope, host, declared, true)) return;
 		final deleting: Array<QueryNode> = [];
+		final attempted: Map<QueryNode, Violation> = [];
 		for (candidate in candidates) {
 			final name: String = candidate.name;
 			if (frameworkReachable(ctx, name, owner, candidate.span, scope, candidate.isStatic)) continue;
-			out.push({
+			// Every finding the fix will not delete carries the sentence of the gate that held it back.
+			final reason: Null<String> = declineReason(candidate, ctx, site);
+			final found: Violation = {
 				file: host.file,
 				span: candidate.span,
 				rule: RULE_ID,
 				severity: Severity.Warning,
-				message: 'unused public ${candidate.isField ? 'static field ' : ''}$name: no reference to it anywhere in scope'
-			});
-			if (noRuntimeNameFragment(ctx, name) && (!candidate.isField || inertInitializer(candidate.node, ctx.shape)))
-				deleting.push(candidate.node);
+				message: 'unused public ${candidate.isField ? 'static field ' : ''}$name: no reference to it anywhere in scope',
+				declineReason: reason
+			};
+			out.push(found);
+			if (reason != null) continue;
+			deleting.push(candidate.node);
+			attempted[candidate.node] = found;
 		}
 		// Emptying a `#if` region of members leaves a shape the grammar does not model, and the
 		// re-parse gate would then drop EVERY edit the pass had for this file — so the question is
 		// asked once over the whole class's edit set, not per member. The findings above stay.
-		for (member in MemberBranchScan.survivingDeletions(branch, cls, deleting, MemberKinds.isMemberDeclNode)) {
-			final span: Null<Span> = member.span;
-			if (span != null) _deletable.push(CheckScan.spanKey(host.file, span));
+		final surviving: Array<QueryNode> = MemberBranchScan.survivingDeletions(branch, cls, deleting, MemberKinds.isMemberDeclNode);
+		for (node in deleting) {
+			final span: Null<Span> = node.span;
+			final found: Null<Violation> = attempted[node];
+			if (span == null || found == null) continue;
+			if (surviving.contains(node))
+				_deletable.push(CheckScan.spanKey(host.file, span));
+			else
+				found.declineReason = 'every member of its `#if` branch would go with it, '
+					+ 'and emptying a conditional region loses the branch itself';
 		}
 	}
 
@@ -386,6 +418,56 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 		ctx: Ctx, name: String, owner: String, span: Span, scope: SymbolIndex, isStatic: Bool
 	): Bool {
 		return CheckScan.frameworkReachableMethod(ctx.naming, name, owner, span, () -> scope, ctx.contracts, isStatic);
+	}
+
+	/**
+	 * Why `fix` must keep the finding `candidate`, in the sentence of the gate that decides it, or null when
+	 * deleting it is safe: an interpolation fragment could spell its name at runtime, a field's initializer
+	 * may do something at class load, or the author fenced the declaration off from tools with `@formatter:off`.
+	 */
+	private static function declineReason(candidate: Candidate, ctx: Ctx, site: Site): Null<String> {
+		if (!noRuntimeNameFragment(ctx, candidate.name))
+			return 'an interpolated string in scope spells a fragment of its name, so a runtime lookup could reach it';
+		if (candidate.isField && !inertInitializer(candidate.node, ctx.shape, site.pure))
+			return 'the initializer is not provably side-effect-free, so deleting the field would drop whatever it does';
+		return site.fenced(candidate.region)
+			? 'it sits in or directly under a `// @formatter:off` region, whose bytes the author keeps verbatim'
+			: null;
+	}
+
+	/**
+	 * The per-file seams the deletion gates read: the initializer purity test over this file's tree and
+	 * declared types (a pure array literal, a plain field read and a pure stdlib call are as deletable as a
+	 * constant, as for `unused-private`), and the `@formatter:off` fence, whose regions are read lazily from
+	 * the grammar's own comment regions.
+	 */
+	private static function siteOf(
+		source: String, tree: QueryNode, scope: SymbolIndex, shape: RefShape, plugin: GrammarPlugin, regions: Array<LexRegion>
+	): Site {
+		// One-slot memos: the first ask pays, the rest of the file's members read the answer.
+		final declared: Array<Map<Int, String>> = [];
+		final fences: Array<Array<Region>> = [];
+		final lines: Array<LineIndex> = [];
+		return {
+			pure: node -> {
+				if (declared.length == 0) declared.push(RunScan.typeInfoOf(plugin)?.declaredTypes(source) ?? []);
+				return TypeResolver.isDeletionPure(node, tree, shape, declared[0], scope);
+			},
+			fenced: region -> {
+				if (fences.length == 0) {
+					final comments: Array<Span> = SourceComments.collectCommentRegions(regions);
+					fences.push(FormatterOff.regionsOf(source, (text, onComment) -> for (comment in comments)
+						onComment(comment.from, comment.to)));
+					lines.push(new LineIndex(source));
+				}
+				final found: Array<Region> = fences[0];
+				final index: LineIndex = lines[0];
+				// One line above the declaration is covered: a marker directly over it travels with it as its heading.
+				final first: Int = index.lineColAt(region.from).line - 2;
+				final last: Int = index.lineColAt(region.to).line - 1;
+				return found.exists(fence -> fence.from <= last && fence.to >= first);
+			}
+		};
 	}
 
 	/**
@@ -427,6 +509,7 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 			if (provablyUnreferenced(memberName, file, source, region, index, ctx)) out.push({
 				name: memberName,
 				span: memberSpan,
+				region: region,
 				node: child,
 				isStatic: mods.isStatic,
 				isField: isField
@@ -478,9 +561,9 @@ final class UnusedPublicMember extends RuleBase implements DefaultOff implements
 	 * that `MemberKinds.isSideEffectFree` proves inert — a static initializer runs at class load,
 	 * so a call or a construction in it is kept and the finding stays report-only.
 	 */
-	private static function inertInitializer(field: QueryNode, shape: RefShape): Bool {
+	private static function inertInitializer(field: QueryNode, shape: RefShape, pure: (QueryNode) -> Bool): Bool {
 		final init: Null<QueryNode> = CtorFieldFold.declInitializer(field, shape);
-		return init == null || MemberKinds.isSideEffectFree(init, shape);
+		return init == null || pure(init);
 	}
 
 }

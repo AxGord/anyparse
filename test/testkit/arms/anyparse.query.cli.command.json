@@ -1716,6 +1716,14 @@
 			"find": "for (i => was in before) printFileDiff(was.path, was.content, after[i].content);",
 			"replace": "",
 			"note": "a dry run puts the files back but prints no diff, so the preview shows nothing"
+		},
+		{
+			"name": "M-LEDGER-LANDED-FILE-DROPS-REASONS",
+			"type": "anyparse.query.cli.command.LintFixVerify",
+			"method": "ledgerRiskyTallies",
+			"find": "final landed: Bool = tally.edits != 0;",
+			"replace": "final landed: Bool = tally.edits != 0;\n\t\tif (landed) continue;",
+			"note": "a file where the rule also landed an edit is skipped whole, so the sentences the check wrote for the findings it declined there reach no ledger row"
 		}
 	]
 }
