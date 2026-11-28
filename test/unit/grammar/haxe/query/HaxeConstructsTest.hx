@@ -20,7 +20,7 @@ class HaxeConstructsTest extends Test {
 
 	/** A member built from parts reads as the declaration a hand would write, modifiers in the order given. */
 	@:pin('control')
-	@:killer('M-CONSTRUCTS-WORD-PUBLIC')
+	@:killer('M-NODES-MODIFIER-PUBLIC')
 	public function testMembersAreSpelledFromTheirParts(): Void {
 		final build: Constructs = constructs();
 		final item: Built = sure(build.typeRef('Item'));
@@ -29,12 +29,12 @@ class HaxeConstructsTest extends Test {
 		final value: Built = sure(build.call(sure(build.qualified(sure(build.typeRef('Cmp')), 'asc')), [key]));
 		final comparator: Built = sure(build.functionType([item, item], int));
 		Assert.equals(
-			'private static final byX: (Item, Item) -> Int = Cmp.asc(a -> a.x);',
+			'private static final byX:(Item, Item) -> Int = Cmp.asc(a -> a.x);',
 			build.member([Private, Static], Constant, 'byX', comparator, value)?.text
 		);
 		final body: Built = sure(build.returning(copied(build, 'a.x - b.x')));
 		Assert.equals(
-			'public static function byX(a: Item, b: Item): Int return a.x - b.x;',
+			'public static function byX(a:Item, b:Item):Int\n\treturn a.x - b.x;',
 			build.member([Public, Static], Method([{ name: 'a', type: item }, { name: 'b', type: item }]), 'byX', int, body)?.text
 		);
 		Assert.equals('var count;', build.member([], Variable, 'count', null, null)?.text);
@@ -48,6 +48,8 @@ class HaxeConstructsTest extends Test {
 	}
 
 	/** Imports, modifier sets and statements are constructs of their own kinds. */
+	@:pin('control')
+	@:killer('M-CONSTRUCTS-WORD-PUBLIC')
 	public function testDeclarationsOfEachKind(): Void {
 		final build: Constructs = constructs();
 		Assert.equals('import a.b.C;', build.importOf('a.b.C')?.text);

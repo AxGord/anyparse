@@ -6,6 +6,8 @@ import anyparse.macro.WriterOptFanout.*;
 import haxe.macro.Context;
 import haxe.macro.Expr;
 
+/** A public writer entry for one grammar type: its name and the rule function that writes a node of that type. */
+typedef NodeEntry = { name: String, ruleFn: String };
 /**
  * Pass 4W of the macro pipeline — writer codegen.
  *
@@ -16,7 +18,9 @@ import haxe.macro.Expr;
  * What WriterCodegen owns:
  *  - Writing the `write(value, ?options)` public entry point that
  *    resolves options against the format's defaults, calls the root
- *    write function, and hands the Doc to Renderer.
+ *    write function, and hands the Doc to Renderer; and one such entry
+ *    per type the build's `entries` option names, which writes a node
+ *    of that type alone.
  *  - Emitting the per-rule `writeXxx(value, opt)` functions. Internal
  *    helpers operate on a fully resolved `WriteOptions` struct — no
  *    nullable fields, no per-call defaulting.
@@ -40,7 +44,7 @@ class WriterCodegen {
 
 	public static function emit(
 		rules: Array<WriterLowering.WriterRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
-		optionsTypePath: Null<String>, ?rootFnName: Null<String>
+		optionsTypePath: Null<String>, ?rootFnName: Null<String>, ?entries: Null<Array<NodeEntry>>
 	): Array<Field> {
 		final fields: Array<Field> = [];
 		if (formatInfo.isBinary) {
@@ -51,8 +55,9 @@ class WriterCodegen {
 				Context.fatalError('WriterCodegen.emit: text writer requires optionsTypePath', Context.currentPos());
 			final optionsCT: ComplexType = optionsComplexType(optionsTypePath);
 			final resolvedRootFn: String = rootFnName ?? ('write${simpleName(rootTypePath)}');
-			fields.push(publicEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
+			fields.push(renderedEntry('write', resolvedRootFn, rootReturnCT, formatInfo, optionsCT, false));
 			fields.push(publicDocEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
+			if (entries != null) for (entry in entries) fields.push(nodeEntry(entry, rules, formatInfo, optionsCT));
 			for (rule in rules) fields.push(ruleField(rule, optionsCT));
 			// Doc wrapper helpers
 			for (f in docHelperFields()) fields.push(f);
@@ -141,28 +146,45 @@ class WriterCodegen {
 		return fields;
 	}
 
-	// -------- public entry point --------
-
-	private static function publicEntry(
-		rootFn: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo, optionsCT: ComplexType
+	/**
+	 * The public entry that writes one node of the type `entry` was asked for, rendered as `write` renders the root: a construct
+	 * built alone (a member, a statement) is spelled by the very rule that spells it inside a whole file.
+	 */
+	private static function nodeEntry(
+		entry: NodeEntry, rules: Array<WriterLowering.WriterRule>, formatInfo: FormatReader.FormatInfo, optionsCT: ComplexType
 	): Field {
+		for (rule in rules) if (rule.fnName == entry.name)
+			Context.fatalError('WriterCodegen: the node entry ${entry.name} would shadow a writer rule of that name', Context.currentPos());
+		for (rule in rules) if (rule.fnName == entry.ruleFn)
+			return renderedEntry(entry.name, entry.ruleFn, rule.valueCT, formatInfo, optionsCT, true);
+		return Context.fatalError('WriterCodegen: no writer rule ${entry.ruleFn} for the node entry ${entry.name}', Context.currentPos());
+	}
+
+	/**
+	 * A public `name(value, ?options): String` that resolves options against the format's defaults, writes `value` by `ruleFn`
+	 * and renders the Doc. A node written `alone` is no file, so it never ends in the file's final newline.
+	 */
+	private static function renderedEntry(
+		name: String, ruleFn: String, valueCT: ComplexType, formatInfo: FormatReader.FormatInfo, optionsCT: ComplexType, alone: Bool
+	): Field {
+		final finalNewline: Expr = alone ? macro false : macro _opt.finalNewline;
 		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
 		final defaultOptsExpr: Expr = { expr: EField(macro $p{fmtParts}.instance, 'defaultWriteOptions'), pos: Context.currentPos() };
-		final writeCall: Expr = { expr: ECall(macro $i{rootFn}, [macro value, macro _opt]), pos: Context.currentPos() };
+		final writeCall: Expr = { expr: ECall(macro $i{ruleFn}, [macro value, macro _opt]), pos: Context.currentPos() };
 		final body: Expr = macro {
 			final _opt: $optionsCT = options ?? $defaultOptsExpr;
 			return anyparse.core.Renderer.render(
 				anyparse.core.CollapsePass.run($writeCall, _opt.lineWidth, _opt.indentChar, _opt.tabWidth, _opt.indentSize), _opt.lineWidth,
-				_opt.indentChar, _opt.tabWidth, _opt.indentSize, _opt.lineEnd, _opt.finalNewline, _opt.trailingWhitespace,
+				_opt.indentChar, _opt.tabWidth, _opt.indentSize, _opt.lineEnd, $finalNewline, _opt.trailingWhitespace,
 				_opt.maxConsecutiveBlanks
 			);
 		};
 		return {
-			name: 'write',
+			name: name,
 			access: [APublic, AStatic],
 			kind: FFun({
 				args: [
-					{ name: 'value', type: rootReturnCT },
+					{ name: 'value', type: valueCT },
 					{ name: 'options', type: macro : Null<$optionsCT>, value: macro null }
 				],
 				ret: macro : String,
@@ -173,7 +195,7 @@ class WriterCodegen {
 	}
 
 	/**
-	 * Doc-returning counterpart of `publicEntry` — resolves options the
+	 * Doc-returning counterpart of the root `write` — resolves options the
 	 * same way, calls the root rule function, but skips the final
 	 * `Renderer.render` step and hands the raw Doc tree to the caller.
 	 *

@@ -215,7 +215,11 @@ class Build {
 			})
 			: TPath({ pack: packOf(shape.root), name: rootSimple, params: [] });
 		final rootFnName: String = rootBearing ? 'write${rootSimple}T' : 'write$rootSimple';
-		final fields: Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath, rootFnName);
+		final entries: Array<WriterCodegen.NodeEntry> = readTypeListOption(buildOptions, 'entries')
+			.map(typePath -> nodeEntryOf(typePath, shape, ctx));
+		if (entries.length > 0 && formatInfo.isBinary)
+			Context.fatalError('Build.buildWriter: the entries option is not supported for binary writers', Context.currentPos());
+		final fields: Array<Field> = WriterCodegen.emit(rules, shape.root, rootReturnCT, formatInfo, optionsTypePath, rootFnName, entries);
 		if (textLowering != null) for (f in textLowering.extraFields) fields.push(f);
 		if (!ctx.trivia) NativeDocLowering.overWriter(fields, shape, formatInfo, readBoolOption(buildOptions, 'direct', false));
 
@@ -425,6 +429,34 @@ class Build {
 					Context.fatalError('Build: options argument must be an anonymous-struct literal (e.g. `{trivia: true}`)', options.pos);
 					throw 'unreachable';
 			};
+	}
+
+	/** The dotted type paths of the array literal `fieldName` holds in `options`; none when the option is absent. */
+	private static function readTypeListOption(options: Null<Expr>, fieldName: String): Array<String> {
+		if (options != null) switch options.expr {
+			case EObjectDecl(fields):
+				for (f in fields) if (f.field == fieldName) switch f.expr.expr {
+					case EArrayDecl(values): return values.map(ExprTools.toString);
+					case _: Context.fatalError('Build: option "$fieldName" must be an array literal of type paths', f.expr.pos);
+				}
+			case _:
+		}
+		return [];
+	}
+
+	/**
+	 * The public writer entry `write<Type>Node` for the grammar type at `typePath`: it writes a node of the type's trivia twin
+	 * when the type bears trivia in this build, else of the type itself.
+	 */
+	private static function nodeEntryOf(typePath: String, shape: ShapeBuilder.ShapeResult, ctx: LoweringCtx): WriterCodegen.NodeEntry {
+		final node: Null<anyparse.core.ShapeTree.ShapeNode> = shape.rules[typePath];
+		if (node == null)
+			Context.fatalError(
+				'Build.buildWriter: the entries option names $typePath, which is no rule of this grammar', Context.currentPos()
+			);
+		final simple: String = simpleName(typePath);
+		final bearing: Bool = ctx.trivia && node?.annotations[AnnotationKeys.TRIVIA_BEARING] == true;
+		return { name: 'write${simple}Node', ruleFn: bearing ? 'write${simple}T' : 'write$simple' };
 	}
 
 	private static function readSchemaMeta(meta: Metadata, targetTypePath: String): String {

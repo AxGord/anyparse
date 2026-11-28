@@ -7,7 +7,12 @@ A `@:build` macro reads a grammar (Haxe types annotated with `@:lit`, `@:kw`,
   on error, maximum throughput) or **Tolerant** mode (spans, error recovery, IDE-class
   use). Two parsers from one grammar, chosen at the call site.
 - **`buildWriter`** — a writer/pretty-printer driving a Wadler-style Doc IR. **One AST,
-  one writer** — no "emit text, then re-parse and reformat" two-pass pipeline.
+  one writer** — no "emit text, then re-parse and reformat" two-pass pipeline. Its public
+  `write`/`writeDoc` take the root; the build option `entries: [<type path>, …]` adds a
+  `write<Type>Node(value, ?options): String` per listed grammar type, which writes one node of
+  that type alone (no final newline) by the same rules that write it inside a file. The Haxe
+  trivia writer lists its member and statement types, and `HaxeConstructs` builds those
+  constructs as typed nodes (`HaxeNodes`) and spells them through these entries.
 - **`buildTransform`** — a deep, bottom-up whole-tree rewrite with per-node-type hooks
   (the multi-type generalization of `ExprTools.map`).
 

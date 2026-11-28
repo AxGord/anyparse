@@ -1,6 +1,10 @@
 package anyparse.grammar.haxe.query;
 
 import anyparse.check.Check.FixEdit;
+import anyparse.grammar.haxe.trivia.Pairs.HxClassMemberT;
+import anyparse.grammar.haxe.trivia.Pairs.HxExprT;
+import anyparse.grammar.haxe.trivia.Pairs.HxFnBodyT;
+import anyparse.grammar.haxe.trivia.Pairs.HxTypeT;
 import anyparse.query.Constructs;
 import anyparse.query.GrammarPlugin;
 import anyparse.runtime.ParseError;
@@ -12,10 +16,11 @@ using Lambda;
 private typedef Host = { final before: String; final after: String; }
 
 /**
- * The Haxe `Constructs`: each construct is one named template here, and each result is parsed back by the grammar inside a
- * host made for its kind and refused unless it parses to exactly the construct asked for: one node of the expected kind
- * covering the whole text, not a regrouping of its parts. A template the grammar rejects so fails a plugin test, never a
- * user's file.
+ * The Haxe `Constructs`: a member and a return statement are built as typed nodes (`HaxeNodes`) and spelled by the
+ * generated writer's per-type entries; every other construct is still one named template here. Each result is parsed back
+ * by the grammar inside a host made for its kind and refused unless it parses to exactly the construct asked for: one node
+ * of the expected kind covering the whole text, not a regrouping of its parts. A template the grammar rejects so fails a
+ * plugin test, never a user's file.
  */
 @:nullSafety(Strict)
 final class HaxeConstructs implements Constructs {
@@ -83,7 +88,8 @@ final class HaxeConstructs implements Constructs {
 	}
 
 	public function returning(value: Built): Null<Built> {
-		return value.kind == Expression ? rooted('return ${value.text};', Statement, RETURN) : null;
+		final expr: Null<HxExprT> = value.kind == Expression ? HaxeNodes.valueOf(value.text) : null;
+		return expr == null ? null : rooted(HaxeModuleTriviaWriter.writeHxStatementNode(HaxeNodes.returnStmt(expr)), Statement, RETURN);
 	}
 
 	public function importOf(path: String): Null<Built> {
@@ -137,21 +143,36 @@ final class HaxeConstructs implements Constructs {
 
 	public function member(set: Array<Modifier>, kind: MemberKind, name: String, type: Null<Built>, value: Null<Built>): Null<Built> {
 		if (type != null && type.kind != TypeExpr) return null;
-		final prefix: String = set.map(modifier -> '${word(modifier)} ').join('');
-		final typed: String = type == null ? '' : ': ${type.text}';
-		return switch kind {
+		final typeNode: Null<HxTypeT> = type == null ? null : HaxeNodes.typeOf(type.text);
+		if (type != null && typeNode == null) return null;
+		final node: Null<HxClassMemberT> = switch kind {
 			case Constant, Variable:
 				if (value != null && value.kind != Expression) return null;
-				final init: String = value == null ? '' : ' = ${value.text}';
-				kind == Constant
-					? declared('${prefix}final $name$typed$init;', CONSTANT, set.length)
-					: declared('${prefix}var $name$typed$init;', VARIABLE, set.length);
-			case Method(params):
-				if (value != null && value.kind != Statement) return null;
-				if (!params.foreach(param -> param.type.kind == TypeExpr)) return null;
-				final list: String = [ for (param in params) '${param.name}: ${param.type.text}' ].join(', ');
-				declared('${prefix}function $name($list)$typed${value == null ? ';' : ' ${value.text}'}', METHOD, set.length);
+				final init: Null<HxExprT> = value == null ? null : HaxeNodes.valueOf(value.text);
+				if (value != null && init == null) return null;
+				kind == Constant ? HaxeNodes.constant(name, typeNode, init) : HaxeNodes.variable(name, typeNode, init);
+			case Method(params): methodOf(name, params, typeNode, value);
 		};
+		if (node == null) return null;
+		final kinds: Array<String> = switch kind {
+			case Constant: CONSTANT;
+			case Variable: VARIABLE;
+			case Method(_): METHOD;
+		};
+		return declared(HaxeModuleTriviaWriter.writeHxMemberDeclNode(HaxeNodes.memberDecl(set, node)), kinds, set.length);
+	}
+
+	/** The method `name` taking `params` and answering `result` with `body`, a statement, or with none when `body` is null. */
+	private function methodOf(name: String, params: Array<Parameter>, result: Null<HxTypeT>, body: Null<Built>): Null<HxClassMemberT> {
+		if (body != null && body.kind != Statement) return null;
+		final typed: Array<{ name: String, type: HxTypeT }> = [];
+		for (param in params) {
+			final paramType: Null<HxTypeT> = param.type.kind == TypeExpr ? HaxeNodes.typeOf(param.type.text) : null;
+			if (paramType == null) return null;
+			typed.push({ name: param.name, type: paramType });
+		}
+		final bodyNode: Null<HxFnBodyT> = body == null ? HaxeNodes.noBody() : HaxeNodes.bodyOf(body.text);
+		return bodyNode == null ? null : HaxeNodes.method(name, typed, result, bodyNode);
 	}
 
 	/** `text` as a construct of `kind` when it parses to exactly one: a type the grammar reads whole, else one node covering it. */

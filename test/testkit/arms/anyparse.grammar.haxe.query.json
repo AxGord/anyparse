@@ -504,6 +504,46 @@
 			"find": "source.substring(start, end) == VARIABLE_WORD && ",
 			"replace": "",
 			"note": "the keyword is swapped wherever the offset points, so a constant or a name is overwritten with the constant keyword"
+		},
+		{
+			"name": "M-NODES-CONSTANT-AS-VARIABLE",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "constant",
+			"find": "FinalMember(varDecl(name, type, init), true)",
+			"replace": "VarMember(varDecl(name, type, init), true)",
+			"note": "a constant is built as a variable, so the member written alone no longer says what it was asked to be"
+		},
+		{
+			"name": "M-NODES-RETURN-UNTERMINATED",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "returnStmt",
+			"find": "ReturnStmt(value, true, null, [])",
+			"replace": "ReturnStmt(value, false, null, [])",
+			"note": "a built return statement claims no terminator, so it is written without its semicolon"
+		},
+		{
+			"name": "M-NODES-MODIFIER-PUBLIC",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "memberModifier",
+			"find": "case Public: HxMemberModifier.Public;",
+			"replace": "case Public: HxMemberModifier.Private;",
+			"note": "the public modifier is built as private, so a built member no longer carries the modifiers it was asked for"
+		},
+		{
+			"name": "M-NODES-TYPE-EXTRA-DECLARATORS",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "typeOf",
+			"find": "case VarMember(decl, _) if (decl.more.length == 0): decl.type;",
+			"replace": "case VarMember(decl, _): decl.type;",
+			"note": "a type text that makes a second declarator is answered with its first type and the rest silently dropped"
+		},
+		{
+			"name": "M-NODES-VALUE-EXTRA-DECLARATORS",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "valueOf",
+			"find": " && decl.more.length == 0",
+			"replace": "",
+			"note": "a value text that makes a second declarator is answered with its first initializer and the rest silently dropped"
 		}
 	]
 }
