@@ -1054,9 +1054,9 @@
 		{
 			"name": "M-PMW-FIX-TEXT",
 			"type": "anyparse.check.common.loops.PreferModuloWrap",
-			"method": "matchPair",
-			"find": "{ span: from, text: '$name %= $amount;' }",
-			"replace": "{ span: from, text: '' }",
+			"method": "wrapEdits",
+			"find": "{ span: first, text: wrapped.text }",
+			"replace": "{ span: first, text: '' }",
 			"note": "the first loop of a flagged pair is replaced by nothing, so the fix drops the modulo statement"
 		},
 		{
@@ -1217,6 +1217,20 @@
 			"find": "if (at == null || LexicalRegions.commentIntersects(at.from, at.to, f.regions())) return null;",
 			"replace": "if (at == null) return null;",
 			"note": "a comment inside the exists test or a read is matched, so the rewrite deletes it with the span it re-spells"
+		},
+		{
+			"name": "M-NEW-LITERAL-EMPTY-ARRAY-SPELLED",
+			"type": "anyparse.check.common.loops.NewLiteral",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: '[]' }]",
+			"note": "the collection-literal fix writes its empty array without asking the grammar, so a grammar that builds none still gets text the rule spelled"
+		},
+		{
+			"name": "M-PMW-WRAP-SPELLED",
+			"type": "anyparse.check.common.loops.PreferModuloWrap",
+			"method": "wrapEdits",
+			"force": "[{ span: first, text: '' }]",
+			"note": "the modulo-wrap fix writes its statements without asking the grammar, so a grammar that builds none still gets an edit"
 		}
 	]
 }

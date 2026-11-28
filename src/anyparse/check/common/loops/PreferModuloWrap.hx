@@ -4,6 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.control.CollapsibleIf;
 import anyparse.check.scan.NumericLiteral;
+import anyparse.query.Constructs;
 import anyparse.query.MemberKinds;
 import anyparse.query.SourceComments;
 import anyparse.query.StableChain;
@@ -38,6 +39,7 @@ private typedef Ctx = {
 	var locals: UnchangedLocal;
 	var chains: StableChain;
 	var declared: Null<Map<Int, String>>;
+	var build: Null<Constructs>;
 }
 
 /** One loop of a wrap: its statement span, which edge it walks, the wrapped identifier and the step or bound it names. */
@@ -46,6 +48,7 @@ private typedef Half = {
 	var upper: Bool;
 	var target: QueryNode;
 	var amount: QueryNode;
+	var condition: QueryNode;
 }
 
 /** A flagged pair: the span covering both loops, the two replacement edits (null = report-only) and why it is report-only. */
@@ -156,7 +159,8 @@ final class PreferModuloWrap extends RuleBase {
 			comments: SourceComments.collectCommentTokens(plugin.lexicalRegions(source)),
 			locals: locals,
 			chains: new StableChain(tree, seams.shape, locals, TypeInfoMemo.declaredTypeSources(typed, source), symbols, file),
-			declared: typed?.declaredTypes(source)
+			declared: typed?.declaredTypes(source),
+			build: plugin.constructs()
 		}, out);
 		return out;
 	}
@@ -189,15 +193,7 @@ final class PreferModuloWrap extends RuleBase {
 		final bound: Null<Span> = upper.amount.span;
 		if (bound == null) return null;
 		final note: String = refusal(a.target, span, ctx);
-		final amount: String = ctx.source.substring(bound.from, bound.to);
-		return {
-			span: span,
-			note: note,
-			edits: note == '' ? [
-				{ span: from, text: '$name %= $amount;' },
-				{ span: to, text: 'if ($name < 0) $name += $amount;' }
-			] : null
-		};
+		return { span: span, note: note, edits: note == '' ? wrapEdits(from, to, upper, lower, bound, ctx) : null };
 	}
 
 	/** The loop `stmt` is when it walks one edge of a wrap — `while (v >= N) v -= N;` or `while (v < 0) v += N;` — else null. */
@@ -216,7 +212,8 @@ final class PreferModuloWrap extends RuleBase {
 			span: span,
 			upper: upper,
 			target: target,
-			amount: upper ? bound : step.children[1]
+			amount: upper ? bound : step.children[1],
+			condition: cond
 		};
 	}
 
@@ -265,6 +262,25 @@ final class PreferModuloWrap extends RuleBase {
 	/** The kinds whose meaning is `meaning`, read off `from` or, given `via`, through the operator kind `from` names. */
 	private static function kindsOf(from: Map<String, String>, via: Null<Map<String, String>>, meaning: String): Array<String> {
 		return [ for (kind => name in from) if ((via == null ? name : via[name]) == meaning) kind ];
+	}
+
+	/**
+	 * The two statements replacing a wrap's loops, asked of the grammar: `v %= N;` over `first` and `if (v < 0) v += N;` over
+	 * `second`, with the bound `bound` and the lower loop's own condition copied. Null when the grammar builds either one not.
+	 */
+	private static function wrapEdits(first: Span, second: Span, upper: Half, lower: Half, bound: Span, ctx: Ctx): Null<Array<FixEdit>> {
+		final build: Null<Constructs> = ctx.build;
+		final targetSpan: Null<Span> = upper.target.span;
+		final belowSpan: Null<Span> = lower.condition.span;
+		if (build == null || targetSpan == null || belowSpan == null) return null;
+		final target: Null<Built> = build.copied(ctx.source, targetSpan, Expression);
+		final amount: Null<Built> = build.copied(ctx.source, bound, Expression);
+		final below: Null<Built> = build.copied(ctx.source, belowSpan, Expression);
+		if (target == null || amount == null || below == null) return null;
+		final wrapped: Null<Built> = build.compoundAssignment(target, Remainder, amount);
+		final step: Null<Built> = build.compoundAssignment(target, Add, amount);
+		final raised: Null<Built> = step == null ? null : build.conditional(below, step);
+		return wrapped == null || raised == null ? null : [{ span: first, text: wrapped.text }, { span: second, text: raised.text }];
 	}
 
 }

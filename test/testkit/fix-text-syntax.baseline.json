@@ -464,22 +464,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/loops/NewLiteral.hx",
-    "line": 76,
-    "col": 37,
-    "endLine": 76,
-    "endCol": 41,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`[]`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "NewLiteral.fix",
-      "subject": "[]",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/loops/PreferForIn.hx",
     "line": 265,
     "col": 45,
@@ -556,38 +540,6 @@
       "family": "literal",
       "function": "PreferKeyValueLoop.buildEdit",
       "subject": "for",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/loops/PreferModuloWrap.hx",
-    "line": 197,
-    "col": 25,
-    "endLine": 197,
-    "endCol": 44,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`%=`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferModuloWrap.matchPair",
-      "subject": "%=",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/loops/PreferModuloWrap.hx",
-    "line": 198,
-    "col": 23,
-    "endLine": 198,
-    "endCol": 57,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferModuloWrap.matchPair",
-      "subject": "if",
       "chain": []
     }
   },

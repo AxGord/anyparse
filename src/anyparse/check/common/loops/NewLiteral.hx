@@ -1,5 +1,6 @@
 package anyparse.check.common.loops;
 
+import anyparse.query.Constructs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax.TypeSyntaxReader;
@@ -46,37 +47,40 @@ final class NewLiteral {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, typeName: String, ?symbolIndex: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
+		final empty: Null<Built> = plugin.constructs()?.arrayOf([]);
+		return empty == null
+			? []
+			: RunScan.editsWith(plugin, source, shape.newExprKind, (tree, newExprKind) -> {
+				final nodeByKey: Map<String, QueryNode> = [];
+				final parentByKey: Map<String, QueryNode> = [];
+				index(tree, null, newExprKind, nodeByKey, parentByKey);
 
-		return RunScan.editsWith(plugin, source, shape.newExprKind, (tree, newExprKind) -> {
-			final nodeByKey: Map<String, QueryNode> = [];
-			final parentByKey: Map<String, QueryNode> = [];
-			index(tree, null, newExprKind, nodeByKey, parentByKey);
+				// A plain-assignment target's declared type comes from the binding's WRITTEN annotation
+				// via `TypeInfoProvider.declaredTypeSources` — resolved lazily, so a file whose findings
+				// are all annotated declarations never pays for the parse.
+				final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 
-			// A plain-assignment target's declared type comes from the binding's WRITTEN annotation
-			// via `TypeInfoProvider.declaredTypeSources` — resolved lazily, so a file whose findings
-			// are all annotated declarations never pays for the parse.
-			final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
-
-			final edits: Array<{ span: Span, text: String }> = [];
-			for (v in violations) {
-				final span: Null<Span> = v.span;
-				if (span == null) continue;
-				final key: String = '${span.from}:${span.to}';
-				final node: Null<QueryNode> = nodeByKey[key];
-				if (node == null || !matches(node, source, newExprKind, typeName)) continue;
-				final parent: Null<QueryNode> = parentByKey[key];
-				if (parent == null) continue;
-				// Rewrite when the `new` is the direct initializer of an annotated declaration
-				// (`var xs:Array<Int> = new …`), OR the RHS of a plain assignment whose lvalue's
-				// declaration pins the collection type.
-				if (
-					pinningTypeHint(source, parent, shape.typedCastKinds ?? []) != null
-					|| assignmentTargetPinsType(parent, node, shape, tree, symbolIndex, declaredTypeSources, typeName, plugin.typeSyntax)
-				)
-					edits.push({ span: span, text: '[]' });
-			}
-			return edits;
-		});
+				final edits: Array<{ span: Span, text: String }> = [];
+				for (v in violations) {
+					final span: Null<Span> = v.span;
+					if (span == null) continue;
+					final key: String = '${span.from}:${span.to}';
+					final node: Null<QueryNode> = nodeByKey[key];
+					if (node == null || !matches(node, source, newExprKind, typeName)) continue;
+					final parent: Null<QueryNode> = parentByKey[key];
+					if (parent == null) continue;
+					// Rewrite when the `new` is the direct initializer of an annotated declaration
+					// (`var xs:Array<Int> = new …`), OR the RHS of a plain assignment whose lvalue's
+					// declaration pins the collection type.
+					if (
+						pinningTypeHint(source, parent, shape.typedCastKinds ?? []) != null || assignmentTargetPinsType(
+							parent, node, shape, tree, symbolIndex, declaredTypeSources, typeName, plugin.typeSyntax
+						)
+					)
+						edits.push({ span: span, text: empty.text });
+				}
+				return edits;
+			});
 	}
 
 	/**
