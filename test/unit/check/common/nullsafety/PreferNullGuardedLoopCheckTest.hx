@@ -67,7 +67,7 @@ class PreferNullGuardedLoopCheckTest extends Test {
 	@:pin('control')
 	@:killer('M-GUARDED-LOOP-TWICE')
 	public function testCallReportedNotRewritten(): Void {
-		assertRefused('twice', host('function g(): Null<Array<Int>> return null;', 'for (x in g() ?? []) trace(x);'));
+		assertRefused('evaluate the call', host('function g(): Null<Array<Int>> return null;', 'for (x in g() ?? []) trace(x);'));
 	}
 
 	@:pin('control')
