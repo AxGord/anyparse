@@ -96,19 +96,19 @@ class DeadSafeNavTest extends Test {
 
 	/**
 	 * `CallGraph`'s `under?.name == null ? null : f(under?.name)`: the else-arm proves `under` non-null only through
-	 * the safe-navigation comparison, which strict null-safety does not narrow on — reported, but no `.` rewrite.
+	 * the safe-navigation comparison, which strict null-safety does not narrow on — not reported.
 	 */
 	@:pin('control')
 	@:killer('M-DSN-UNSEEN-DROPPED')
 	public function testSafeNavComparisonProofKeepsNoFixUnderNullSafety(): Void {
-		assertDeclined('@:nullSafety(Strict) class C { function f(u:Null<Foo>) { var a = u?.name == null ? null : g(u?.name); } }');
+		assertSilent('@:nullSafety(Strict) class C { function f(u:Null<Foo>) { var a = u?.name == null ? null : g(u?.name); } }');
 	}
 
 	/** `CallGraph`'s `final writeSlot = parent != null && …; … writeSlot && parent?.kind`: a proof through a Bool local. */
 	@:pin('control')
 	@:killer('M-DSN-UNSEEN-DROPPED')
 	public function testBoolLocalProofKeepsNoFixUnderNullSafety(): Void {
-		assertDeclined(
+		assertSilent(
 			'@:nullSafety(Strict) class C { function f(parent:Null<Foo>, b:Bool) {'
 			+ ' final w = parent != null && b; final r = !(w && parent?.kind == k); } }'
 		);
@@ -118,7 +118,7 @@ class DeadSafeNavTest extends Test {
 	@:pin('control')
 	@:killer('M-DSN-UNSEEN-DROPPED')
 	public function testAliasProofKeepsNoFixUnderNullSafety(): Void {
-		assertDeclined('@:nullSafety(Strict) class C { function f(u:Null<Foo>) { var v = u; if (u != null) { var n = v?.bar; } } }');
+		assertSilent('@:nullSafety(Strict) class C { function f(u:Null<Foo>) { var v = u; if (u != null) { var n = v?.bar; } } }');
 	}
 
 	/** The control: an early-return guard is a narrowing the compiler performs too, so the fix stays. */
@@ -142,7 +142,7 @@ class DeadSafeNavTest extends Test {
 	@:pin('control')
 	@:killer('M-DSN-JOIN-EITHER')
 	public function testJoinWithOneUnseenArmKeepsNoFix(): Void {
-		assertDeclined(
+		assertSilent(
 			'@:nullSafety(Strict) class C { function f(x:Null<Foo>, b:Bool) { if (b) { if (x == null) return; } else {'
 			+ ' final ok = x != null; if (ok) {} else return; } var n = x?.bar; } }'
 		);
@@ -229,8 +229,8 @@ class DeadSafeNavTest extends Test {
 	@:pin('control')
 	@:killer('M-DSN-TRY-KEEPS-ALL')
 	public function testTryProofKeepsNoFix(): Void {
-		assertDeclined(nullSafe('try { x = new Foo(); } catch (e:Dynamic) { return; } var n = x?.bar;'));
-		assertDeclined(nullSafe('try { if (x == null) return; } catch (e:Dynamic) { return; } var n = x?.bar;'));
+		assertSilent(nullSafe('try { x = new Foo(); } catch (e:Dynamic) { return; } var n = x?.bar;'));
+		assertSilent(nullSafe('try { if (x == null) return; } catch (e:Dynamic) { return; } var n = x?.bar;'));
 	}
 
 	/** A proof made before a `try` that writes nothing survives it. */
@@ -244,8 +244,8 @@ class DeadSafeNavTest extends Test {
 	@:pin('control')
 	@:killer('M-DSN-LONE-ARM-KEEPS-BODY')
 	public function testLoneArmBodyProofKeepsNoFix(): Void {
-		assertDeclined(nullSafe('if (b) { x = new Foo(); } else return; var n = x?.bar;'));
-		assertDeclined(nullSafe('if (!b) return; else { if (x == null) return; } var n = x?.bar;'));
+		assertSilent(nullSafe('if (b) { x = new Foo(); } else return; var n = x?.bar;'));
+		assertSilent(nullSafe('if (!b) return; else { if (x == null) return; } var n = x?.bar;'));
 	}
 
 	/** Past a lone surviving `if` arm the condition's own narrowing still holds. */
@@ -266,7 +266,7 @@ class DeadSafeNavTest extends Test {
 	@:pin('control')
 	@:killer('M-DSN-LONE-BRANCH-KEEPS-BODY')
 	public function testLoneSwitchBranchProofKeepsNoFix(): Void {
-		assertDeclined(nullSafe('switch k { case 0: if (x == null) return; case _: return; } var n = x?.bar;'));
+		assertSilent(nullSafe('switch k { case 0: if (x == null) return; case _: return; } var n = x?.bar;'));
 	}
 
 	/** Two live `switch` branches that each prove the name visibly join into a visible proof. */
@@ -363,12 +363,8 @@ class DeadSafeNavTest extends Test {
 		#end
 	}
 
-	private function assertDeclined(src: String): Void {
-		final check: DeadSafeNav = new DeadSafeNav();
-		final vs: Array<Violation> = CheckFixture.violations(check, src);
-		Assert.equals(1, vs.length, 'the redundant `?.` is still reported');
-		Assert.notNull(vs[0].declineReason, 'and says why it gets no fix');
-		Assert.equals(0, CheckFixture.fixOf(check, src, vs).length, 'no `.` rewrite the compiler would reject');
+	private function assertSilent(src: String): Void {
+		Assert.equals(0, violations(src).length, 'a proof the compiler does not follow leaves the `?.` required');
 	}
 
 	private function assertFixed(src: String): Void {
@@ -387,8 +383,7 @@ class DeadSafeNavTest extends Test {
 		final dir: String = CliFixture.writeDir('dsnbuild', [{ name: 'apq.json', source: config }].concat(files));
 		final vs: Array<Violation> = CheckFixture.violationsIn(new DeadSafeNav(), [{ file: '$dir/C.hx', source: src }]);
 		CliFixture.removeDir(dir);
-		Assert.equals(1, vs.length);
-		Assert.equals(declined, vs[0].declineReason != null, declined ? 'the build may enable null-safety' : 'the build is plain');
+		Assert.equals(declined ? 0 : 1, vs.length, declined ? 'the build may enable null-safety' : 'the build is plain');
 		#else
 		Assert.pass('non-sys target');
 		#end

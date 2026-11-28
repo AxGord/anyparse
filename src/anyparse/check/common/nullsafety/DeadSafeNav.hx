@@ -23,13 +23,10 @@ import anyparse.query.SymbolIndex;
  * `Unknown`, so only a genuinely redundant `?.` is reported. `Severity.Info`;
  * `fix` rewrites `?.`→`.`, the same rewrite `unnecessary-safe-nav` applies. Under null-safety (`@:nullSafety`
  * in scope, or an oracle build that may enable it) the compiler must see the proof too, so a receiver whose
- * proof it does not follow keeps its finding with a `declineReason` and no edit (`NullFacts.nonNullVisible`).
+ * proof it does not follow — only `NullFacts.nonNullVisible` ones count — is not reported at all.
  */
 @:nullSafety(Strict)
 final class DeadSafeNav extends RuleBase implements ConfigAware {
-
-	/** What a `.` rewrite of a proof the compiler's null-safety does not share would do (`NullSafetyGate.unseenProofReason`). */
-	private static final UNSEEN_CONSEQUENCE: String = ', so a plain `.` would not compile';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -62,13 +59,15 @@ final class DeadSafeNav extends RuleBase implements ConfigAware {
 				// Owned by `unnecessary-safe-nav` when the declared type proves it.
 				if (TypeResolver.isProvablyNonNull(receiver.operand, root, shape, types)) return;
 				if (!facts.nonNull(receiver.name)) return;
+				// Under null-safety a proof the compiler does not follow (a `?.` comparison, a Bool local, an alias) leaves the
+				// `?.` required to it, so the access is not redundant there.
+				if (gate.unseenProofReason(entry.file, root, receiver.span, shape, facts, receiver.name, '') != null) return;
 				violations.push({
 					file: entry.file,
 					span: receiver.span,
 					rule: 'dead-safe-nav',
 					severity: Severity.Info,
-					message: 'null-safe access is redundant — receiver is already non-null on this path',
-					declineReason: gate.unseenProofReason(entry.file, root, receiver.span, shape, facts, receiver.name, UNSEEN_CONSEQUENCE)
+					message: 'null-safe access is redundant — receiver is already non-null on this path'
 				});
 			});
 		});
@@ -80,7 +79,7 @@ final class DeadSafeNav extends RuleBase implements ConfigAware {
 		final marker: String = '?.';
 		return RunScan.spanEdits(violations, (violation, span) -> {
 			final rel: Int = source.substring(span.from, span.to).indexOf(marker);
-			if (violation.declineReason != null || rel < 0) return null;
+			if (rel < 0) return null;
 			final at: Int = span.from + rel;
 			return { span: new Span(at, at + marker.length), text: '.' };
 		});
