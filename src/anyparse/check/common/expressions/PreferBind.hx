@@ -3,6 +3,7 @@ package anyparse.check.common.expressions;
 import anyparse.check.scan.CasePatternScan;
 import anyparse.check.scan.CheckScan;
 import anyparse.check.scan.OperandBinder;
+import anyparse.query.CallSignature.ParamForm;
 import anyparse.query.IndexScope;
 import anyparse.query.Refs;
 import anyparse.query.ShapeVocab;
@@ -132,7 +133,7 @@ final class PreferBind extends RuleBase {
 		return (call, free) -> {
 			if (call.kind != callKind || free < 0 || free >= call.children.length - 1) return null;
 			for (i in 1...call.children.length) if (i - 1 != free && !stableArg(call.children[i], call, ctx)) return null;
-			return stableCallee(call.children[0], call, ctx) ? bindSpelling(call, free, source) : null;
+			return stableCallee(call.children[0], call, call.children.length - 1, ctx) ? bindSpelling(call, free, source) : null;
 		};
 	}
 
@@ -206,10 +207,11 @@ final class PreferBind extends RuleBase {
 		final call: QueryNode = node.children[0];
 		// callee + at least one argument; a parameter-bearing lambda has Required/Optional
 		// children, so children.length != 1 excludes it.
-		if (call.kind != seams.callKind || call.children.length < 2) return null;
-		for (i in 1...call.children.length) if (!stableArg(call.children[i], node, ctx)) return null;
+		final count: Int = call.children.length;
+		if (call.kind != seams.callKind || count < 2) return null;
+		for (i in 1...count) if (!stableArg(call.children[i], node, ctx)) return null;
 		// The callee last: its proof may build the index, which a lambda with a computed argument never needs.
-		return stableCallee(call.children[0], node, ctx) ? call : null;
+		return stableCallee(call.children[0], node, count - 1, ctx) ? call : null;
 	}
 
 	/**
@@ -235,20 +237,20 @@ final class PreferBind extends RuleBase {
 	 * over: a bare name or `this.m` the enclosing type declares, `local.m` over an unchanging local, or
 	 * `Type.m` on a type name — each proven by `plainMethod`; or a bare name bound to a local function.
 	 */
-	private static function stableCallee(callee: QueryNode, site: QueryNode, ctx: Ctx): Bool {
+	private static function stableCallee(callee: QueryNode, site: QueryNode, arity: Int, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
-		if (callee.kind == shape.identKind) return bareCalleeIsMethod(callee, ctx);
+		if (callee.kind == shape.identKind) return bareCalleeIsMethod(callee, arity, ctx);
 		final method: Null<String> = callee.name;
 		if (callee.kind != shape.fieldAccessKind || callee.children.length != 1 || method == null) return false;
 		final receiver: QueryNode = callee.children[0];
 		final receiverName: Null<String> = receiver.name;
 		if (receiver.kind != shape.identKind || receiverName == null) return false;
-		if (receiverName == shape.selfReferenceText) return enclosingDeclares(callee, method, ctx);
+		if (receiverName == shape.selfReferenceText) return enclosingDeclares(callee, method, arity, ctx);
 		final local: Bool = TypeResolver.identBindingFrom(receiver, ctx.root, shape) != null;
 		// A bound receiver must be a local `bind` reads unchanged; an unbound one must name a type.
 		if (local ? !unchangingBinding(receiver, site, ctx) : !CasePatternScan.startsUpper(receiverName)) return false;
 		final owners: Null<Array<ResolvedType>> = binderOf(ctx)?.receiverDecls(receiver);
-		return owners != null && owners.length == 1 && plainMethod(owners[0], method, !local, ctx);
+		return owners != null && owners.length == 1 && plainMethod(owners[0], method, !local, arity, ctx);
 	}
 
 	/**
@@ -257,18 +259,19 @@ final class PreferBind extends RuleBase {
 	 * argument test can prove), and so is a name the enclosing type does not declare: an inherited member,
 	 * a static import, a module-level function.
 	 */
-	private static function bareCalleeIsMethod(callee: QueryNode, ctx: Ctx): Bool {
+	private static function bareCalleeIsMethod(callee: QueryNode, arity: Int, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
 		final name: Null<String> = callee.name;
 		final span: Null<Span> = callee.span;
 		if (name == null || span == null) return false;
 		final binding: Null<QueryNode> = TypeResolver.bindingNodeFrom(name, span, ctx.root, shape);
-		if (binding != null && (shape.localFunctionKinds ?? []).contains(binding.kind)) return true;
-		return (binding == null || !isLocalOrParam(binding.kind, shape)) && enclosingDeclares(callee, name, ctx);
+		return binding != null && (shape.localFunctionKinds ?? []).contains(binding.kind)
+			? takesArity(binding, arity, shape)
+			: (binding == null || !isLocalOrParam(binding.kind, shape)) && enclosingDeclares(callee, name, arity, ctx);
 	}
 
 	/** Whether the type enclosing `node` declares `name` as a `plainMethod`, static or not. */
-	private static function enclosingDeclares(node: QueryNode, name: String, ctx: Ctx): Bool {
+	private static function enclosingDeclares(node: QueryNode, name: String, arity: Int, ctx: Ctx): Bool {
 		final span: Null<Span> = node.span;
 		final index: Null<SymbolIndex> = ctx.index();
 		final fi: Null<FileInfo> = index?.fileInfo(ctx.file);
@@ -280,18 +283,19 @@ final class PreferBind extends RuleBase {
 		// Called through an implicit `this`, an ABSTRACT's instance method is bound to the value `this`
 		// holds NOW, and an abstract may reassign `this` before the call; a class `this` never changes.
 		final abstractSelf: Bool = (ctx.seams.shape.underlyingThisTypeKinds ?? []).contains(owner.kind);
-		return plainMethod({ type: owner, file: file }, name, abstractSelf ? true : null, ctx);
+		return plainMethod({ type: owner, file: file }, name, abstractSelf ? true : null, arity, ctx);
 	}
 
 	/**
 	 * Whether `owner` declares `name` exactly once, as a method `bind` can close over and nothing can rebind:
 	 * a function member (not a function-typed `var` / `final` field), outside any `#if`, and not `dynamic`,
 	 * a macro, generic, one of several overloads (by modifier or `@:overload`), or `extern inline`. The
-	 * owner must be a non-extern type from the project's own roots: a library or standard-library
+	 * owner must be a non-extern type from the project's own roots, and the one signature it has takes `arity` parameters
+	 * (an optional one the call leaves out stays in the bound function's type): a library or standard-library
 	 * declaration is one view among the target's overrides (`std/js/_std` makes `String.charCodeAt`
 	 * `extern inline`, which has no closure). `isStatic`, when given, is what the access demands.
 	 */
-	private static function plainMethod(owner: ResolvedType, name: String, isStatic: Null<Bool>, ctx: Ctx): Bool {
+	private static function plainMethod(owner: ResolvedType, name: String, isStatic: Null<Bool>, arity: Int, ctx: Ctx): Bool {
 		final shape: RefShape = ctx.seams.shape;
 		final members: Array<MemberInfo> = owner.type.members.filter(m -> m.name == name);
 		if (members.length != 1) return false;
@@ -304,6 +308,9 @@ final class PreferBind extends RuleBase {
 			&& (shape.functionKinds ?? []).contains(m.kind)
 			&& !m.guarded && !m.isDynamic && !m.isMacro && !m.isOverload && !m.hasOverloadMeta
 			&& !(m.isInline && m.isExtern)
+			&& m.signatures.length == 1
+			&& m.signatures[0].params.length == arity
+			&& !m.signatures[0].params.exists(p -> p.form == ParamForm.Rest)
 			&& (generic == null || !m.metaNames.contains(generic))
 			&& (isStatic == null || isStatic == m.isStatic);
 	}
@@ -420,6 +427,12 @@ final class PreferBind extends RuleBase {
 		if (lambdaKind == null) return null;
 		final callKind: Null<String> = shape.callKind;
 		return callKind == null ? null : { lambdaKind: lambdaKind, callKind: callKind, shape: shape };
+	}
+
+	/** Whether the local function `fn` takes exactly `arity` parameters and none of them is the rest parameter. */
+	private static function takesArity(fn: QueryNode, arity: Int, shape: RefShape): Bool {
+		final params: Array<QueryNode> = fn.children.filter(c -> (shape.paramKinds ?? []).contains(c.kind));
+		return params.length == arity && !fn.children.exists(c -> c.kind == shape.restParamKind);
 	}
 
 }

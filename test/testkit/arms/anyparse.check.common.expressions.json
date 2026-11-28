@@ -195,7 +195,7 @@
 			"name": "M-BIND-UNDECLARED-BARE",
 			"type": "anyparse.check.common.expressions.PreferBind",
 			"method": "bareCalleeIsMethod",
-			"find": "&& enclosingDeclares(callee, name, ctx)",
+			"find": "&& enclosingDeclares(callee, name, arity, ctx)",
 			"replace": "",
 			"note": "a bare callee name the enclosing type does not declare is taken as a method"
 		},
@@ -502,6 +502,22 @@
 			"find": "constructs.asConstant(source, span.from)",
 			"replace": "{ span: new Span(span.from, span.from + 3), text: 'final' }",
 			"note": "the fix swaps the keyword itself again, so a grammar that refuses the constant keyword still gets text spelled by the rule"
+		},
+		{
+			"name": "M-BIND-ARITY",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "plainMethod",
+			"find": "&& m.signatures[0].params.length == arity",
+			"replace": "",
+			"note": "a callee with a parameter more than the call passes is bound or named bare, and the function value keeps that parameter"
+		},
+		{
+			"name": "M-BIND-ARITY-LOCAL",
+			"type": "anyparse.check.common.expressions.PreferBind",
+			"method": "bareCalleeIsMethod",
+			"find": "? takesArity(binding, arity, shape)",
+			"replace": "? true",
+			"note": "a local function with a parameter more than the call passes is bound or named bare, and the function value keeps that parameter"
 		}
 	]
 }

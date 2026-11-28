@@ -241,13 +241,19 @@ final class OperandBinder {
 	 * where it is written (`WrittenTypeIdentity`). False where nothing written fixes the result.
 	 */
 	public function expectsResult(lambda: QueryNode, written: Located): Bool {
-		final found: Null<Lineage> = ExpectedTypes.lineageOf(_tree, lambda);
-		if (found == null || !_expectation.isLambda(lambda) || lambda.children.length == 0) return false;
-		final nodes: Array<QueryNode> = found.nodes.concat([lambda]);
-		final indices: Array<Int> = found.indices.concat([lambda.children.length - 1]);
-		final expected: Null<Located> = _expectation.expectedAt(nodes, indices, nodes.length - 1, EXPECTATION, this);
+		if (!_expectation.isLambda(lambda) || lambda.children.length == 0) return false;
+		final expected: Null<Located> = expectedTypeOf(lambda.children[lambda.children.length - 1]);
 		return expected != null
 			&& new WrittenTypeIdentity(_index, writtenTier, _declared.typeParamOwnerAt, _wrappers, _builtins).same(written, expected);
+	}
+
+	/**
+	 * The type the value `node` is expected to have where it is written (`ExpectedTypes.expectedAt` over `EXPECTATION`), with
+	 * where that type is written. Null where nothing written fixes it: the value is typed alone.
+	 */
+	public function expectedTypeOf(node: QueryNode): Null<Located> {
+		final found: Null<Lineage> = ExpectedTypes.lineageOf(_tree, node);
+		return found == null ? null : _expectation.expectedAt(found.nodes, found.indices, found.nodes.length - 1, EXPECTATION, this);
 	}
 
 	/**
@@ -557,11 +563,6 @@ final class OperandBinder {
 		final out: Array<String> = [ for (name in shape.literalTypeNames ?? []) name ];
 		if (shape.nonNullableTypeNames != null) out.pushAllUnique(shape.nonNullableTypeNames);
 		return out;
-	}
-
-	/** Whether `a` and `b` are the one declaration: the same file, the same type at the same offset. */
-	private static inline function sameDeclaration(a: ResolvedType, b: ResolvedType): Bool {
-		return a.file.file == b.file.file && a.type.name == b.type.name && a.type.span.from == b.type.span.from;
 	}
 
 	/**

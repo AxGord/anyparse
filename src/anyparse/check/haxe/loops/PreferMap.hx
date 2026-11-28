@@ -6,10 +6,14 @@ import anyparse.check.common.control.BranchChain;
 import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
 import anyparse.check.haxe.loops.MappedComprehension.Mapping;
+import anyparse.check.scan.OperandBinder;
 import anyparse.query.BinderScan;
 import anyparse.query.LexicalRegions;
+import anyparse.query.NominalTypes;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
+
+using StringTools;
 
 /** The resolved seams `PreferMap` reads in both `run` and `fix`. */
 private typedef Seams = {
@@ -61,9 +65,16 @@ private typedef Seams = {
  * `.map` to its text. Equivalence assumes the body does not resize the very array it is mapped over, and `o.m.bind(a)`
  * reads `o.m` even when the array is empty.
  *
- * `RiskyFix`: a comprehension takes its element type from where it is written (`final ys: Array<Float> = [for (x in
- * xs) f(x)]` with an `Int` result), and `map` takes the callee's or body's own type, which an invariant `Array` then
- * refuses; a closure also loses the null-safety narrowing of a mutable local it captures. With a compiler oracle the
+ * A comprehension takes its element type from where it is written (`final ys: Array<Base> = [for (x in xs) new Sub()]`),
+ * and `map` takes the body's own type, which an invariant `Array` then refuses. So a comprehension in a position that
+ * writes an expected type is flagged only where that type is an `Array` of the one plain type name the body has
+ * (`OperandBinder.expectedTypeOf`); an expectation the rule cannot prove equal, an object literal, a ternary or a
+ * subclass included, is left alone with no finding. That includes a body whose type `CheckScan.typeNominalResolver`
+ * cannot name (a call of a local function) and an expected element that is not one plain type name (`Null<T>`, a generic),
+ * though `map` would compile there: a recall loss, never a wrong edit. A callee that declares a parameter the call leaves out is never
+ * spelled bare or `bind`: the parameter stays in its function type.
+ *
+ * `RiskyFix`: a closure also loses the null-safety narrowing of a mutable local it captures. With a compiler oracle the
  * rewrite stands where it compiles; without one the rule is report-only. `DefaultOff`: a style preference, opted in with
  * `"prefer-map": { "enabled": true }`.
  */
@@ -120,6 +131,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		var bind: Null<(QueryNode, Int) -> Null<String>> = null;
 		var nominal: Null<(QueryNode) -> Null<String>> = null;
 		var built: Bool = false;
+		var keeps: Null<(QueryNode, QueryNode) -> Bool> = null;
 		function walk(node: QueryNode): Void {
 			if (seams.opaqueKinds.contains(node.kind)) return;
 			final head: Null<Mapping> = MappedComprehension.of(node, seams);
@@ -137,8 +149,11 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 					? boundMapper(head, bind, regions, seams) ?? lambdaMapper(head, source, seams)
 					: null;
 				if (mapper != null) {
-					out.push({ span: at, text: '${source.substring(head.iterableSpan.from, head.iterableSpan.to)}.map($mapper)' });
-					return;
+					final holds: (QueryNode, QueryNode) -> Bool = keeps ?? (keeps = elementProof(source, plugin, tree, file, index));
+					if (holds(node, head.body)) {
+						out.push({ span: at, text: '${source.substring(head.iterableSpan.from, head.iterableSpan.to)}.map($mapper)' });
+						return;
+					}
 				}
 			}
 			for (c in node.children) walk(c);
@@ -261,6 +276,49 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	/** Whether `node` is the binder under a type ascription, `(x : T)` — the copy that `identity-map` reads. */
 	private static function isAscribedBinder(node: QueryNode, binder: String, s: Seams): Bool {
 		return node.kind == s.checkTypeKind && node.children.length == 1 && MappedComprehension.isBinder(node.children[0], binder, s);
+	}
+
+	/**
+	 * Whether `xs.map(...)` types the elements as the comprehension does where it is written. A comprehension takes the type
+	 * expected of its position into its body (a subclass element, an object literal leaving out optional fields); the lambda of
+	 * `map` infers its result alone, and an invariant `Array` then refuses it. The answer is yes where nothing written fixes the
+	 * position's type, and where the expected `Array` holds one plain type name that is the body's own type; else no.
+	 */
+	private static function elementProof(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, index: String -> Null<SymbolIndex>
+	): (QueryNode, QueryNode) -> Bool {
+		final scope: Null<SymbolIndex> = index(file);
+		final binder: Null<OperandBinder> = scope == null ? null : OperandBinder.forFile(plugin, file, source, tree, scope);
+		final bodyType: Null<(QueryNode) -> Null<String>> = scope == null
+			? null
+			: CheckScan.typeNominalResolver(source, plugin, tree, file, scope);
+		if (scope == null || binder == null || bodyType == null) return (_, _) -> true;
+		final arrayNames: Array<String> = plugin.refShape().arrayTypeNames ?? [];
+		return elementCheck(binder, scope, bodyType, arrayNames);
+	}
+
+	/** The one plain type name `text` holds as the element of the standard `Array`; null for any other type. */
+	private static function arrayElementName(text: String, arrayNames: Array<String>, index: SymbolIndex): Null<String> {
+		return switch index.typeSyntax(text.trim())?.shape {
+			case Nominal(path, [element]) if (arrayNames.contains(path) && !NominalTypes.shadowedByNonStdType(index, path)):
+				switch element.shape {
+					case Nominal(name, []): name;
+					case _: null;
+				}
+			case _: null;
+		}
+	}
+
+	/** `elementProof`'s answer once the binder and the index it asks are known. */
+	private static function elementCheck(
+		binder: OperandBinder, scope: SymbolIndex, bodyType: (QueryNode) -> Null<String>, arrayNames: Array<String>
+	): (QueryNode, QueryNode) -> Bool {
+		return (literal, body) -> {
+			final expected: Null<Located> = binder.expectedTypeOf(literal);
+			if (expected == null) return true;
+			final element: Null<String> = arrayElementName(expected.text, arrayNames, scope);
+			return element != null && element == bodyType(body);
+		};
 	}
 
 }

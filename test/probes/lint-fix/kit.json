@@ -3740,6 +3740,80 @@
 					true
 				]
 			}
+		},
+		{
+			"name": "PM-OPT-METHOD-NAMED-LAMBDA",
+			"note": "a comprehension over a method with a defaulted trailing parameter is offered as the lambda, never as the bare method, whose function type keeps the parameter",
+			"argv": [
+				"hxq",
+				"lint",
+				"OptMethod.hx",
+				"--rule",
+				"prefer-map",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"OptMethod.hx": "class OptMethod {\n\tstatic function opt(s: String, defer: Bool = false): Bool {\n\t\treturn defer;\n\t}\n\n\tstatic function f(ss: Array<String>): Void {\n\t\tfinal ys: Array<Bool> = [for (x in ss) opt(x)];\n\t\ttrace(ys);\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"--no-output",
+					"OptMethod"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "996258646388a406",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
+		},
+		{
+			"name": "PM-OPT-LOCAL-NAMED-LAMBDA",
+			"note": "a comprehension over a local function with an optional trailing parameter is offered as the lambda, never as the bare local function",
+			"argv": [
+				"hxq",
+				"lint",
+				"LocalOpt.hx",
+				"--rule",
+				"prefer-map",
+				"--no-oracle",
+				"--all"
+			],
+			"files": {
+				"LocalOpt.hx": "class LocalOpt {\n\tstatic function f(ns: Array<Int>): Void {\n\t\tfunction opt(n: Int, ?k: Int): Int return n;\n\t\tfinal e = [for (n in ns) opt(n)];\n\t\ttrace(e);\n\t}\n}\n",
+				"apq.json": "{}\n"
+			},
+			"compile": {
+				"args": [
+					"-cp",
+					".",
+					"--no-output",
+					"LocalOpt"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "089ad4f0df9a9911",
+				"err": "ded6b5879382d603",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				]
+			}
 		}
 	]
 }

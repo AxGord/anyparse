@@ -43,6 +43,11 @@ final class OperandCallees {
 			: memberCallParams(binder, callee.children[0], name, call);
 	}
 
+	/** Whether `a` and `b` are the one declaration: the same file, the same type at the same offset. */
+	private static inline function sameDeclaration(a: ResolvedType, b: ResolvedType): Bool {
+		return a.file.file == b.file.file && a.type.name == b.type.name && a.type.span.from == b.type.span.from;
+	}
+
 	/**
 	 * Whether a call to `m`, a member of this file, selects a signature its declaration writes: the one declaration of the
 	 * name in its type (a `#if` twin is another build's signature) — its own, or one of its `@:overload` annotations', which
@@ -150,7 +155,7 @@ final class OperandCallees {
 			final span: Null<Span> = node.children[i].span;
 			span == null ? '' : binder._source.substring(span.from, span.to);
 		} ];
-		final bindings: Map<String, Located> = OperandBinder.sameDeclaration(owner, declared.host)
+		final bindings: Map<String, Located> = sameDeclaration(owner, declared.host)
 			? bindAll(owner.type.typeParamNames, args, at.from)
 			: [];
 		return memberParams(binder, declared, bindings, 0, [], node.children.slice(node.typeArgCount));
@@ -233,9 +238,7 @@ final class OperandCallees {
 		final args: Null<Array<String>> = written == null
 			? null
 			: binder._index.typeSyntax(NominalTypes.unwrapNullable(written.text.trim(), binder._wrappers, binder._index.typeSyntax))?.argumentTexts();
-		return written == null || args == null || !OperandBinder.sameDeclaration(owner, host)
-			? []
-			: bindAll(owner.type.typeParamNames, args, written.at);
+		return written == null || args == null || !sameDeclaration(owner, host) ? [] : bindAll(owner.type.typeParamNames, args, written.at);
 	}
 
 	/**

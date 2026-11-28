@@ -316,6 +316,26 @@ class PreferBindCheckTest extends Test {
 		);
 	}
 
+	/** A callee declaring a parameter the call leaves out keeps it in its function type, so `bind` is not the same callback. */
+	@:pin('control')
+	@:killer('M-BIND-ARITY')
+	public function testCalleeWithUnpassedParameterNotFlagged(): Void {
+		final cls: String =
+			'class C {\n\tfunction h(a:Int, ?b:Int, c:Int = 0):Int return a;\n\tfunction f():Void {\n\t\tfinal g = () -> h(1);\n\t}\n}';
+		Assert.equals(0, violations(cls).length);
+		Assert.equals(1, violations(cls.replace('h(1)', 'h(1, 2, 3)')).length);
+	}
+
+	/** A local function declaring a parameter the call leaves out keeps it in its function type, as a method does. */
+	@:pin('control')
+	@:killer('M-BIND-ARITY-LOCAL')
+	public function testLocalFunctionWithUnpassedParameterNotFlagged(): Void {
+		final cls: String =
+			'class C {\n\tfunction f():Void {\n\t\tfunction h(a:Int, ?b:Int):Int return a;\n\t\tfinal g = () -> h(1);\n\t}\n}';
+		Assert.equals(0, violations(cls).length);
+		Assert.equals(1, violations(cls.replace('h(1)', 'h(1, 2)')).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return CheckFixture.violations(new PreferBind(), src);
 	}

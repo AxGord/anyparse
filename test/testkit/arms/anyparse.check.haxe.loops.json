@@ -353,6 +353,22 @@
 			"find": "if (method != EXISTS && method != FOREACH) return null;",
 			"replace": "",
 			"note": "filter, map, count and find are rewritten as if they were exists"
+		},
+		{
+			"name": "M-PM-EXPECTED-ELEMENT-ANY",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "elementCheck",
+			"find": "element != null && element == bodyType(body)",
+			"replace": "true",
+			"note": "a comprehension written where an element type is expected becomes the map whose lambda infers a narrower one"
+		},
+		{
+			"name": "M-PM-EXPECTED-ELEMENT-NONE",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "elementCheck",
+			"find": "element != null && element == bodyType(body)",
+			"replace": "false",
+			"note": "a comprehension whose expected element is the type its body has is left as written"
 		}
 	]
 }
