@@ -110,7 +110,7 @@ final class StringsTest extends Test {
 	}
 
 	@:pin('control')
-	@:killer('M-UTIL-IDENT-START-UNDERSCORE')
+	@:killer('M-UTIL-IDENT-START-CAPITAL-Z')
 	public function testAnIdentifierStartsWithALetterOrUnderscore(): Void {
 		Assert.isTrue(Strings.isIdentStart('_'.code));
 		Assert.isTrue(Strings.isIdentStart('a'.code));

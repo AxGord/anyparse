@@ -108,12 +108,12 @@
 			"note": "the empty text is not blank"
 		},
 		{
-			"name": "M-UTIL-IDENT-START-UNDERSCORE",
+			"name": "M-UTIL-IDENT-START-CAPITAL-Z",
 			"type": "anyparse.util.Strings",
 			"method": "isIdentStart",
-			"find": "c == '_'.code",
-			"replace": "c == '-'.code",
-			"note": "an underscore does not start an identifier"
+			"find": "c <= 'Z'.code",
+			"replace": "c < 'Z'.code",
+			"note": "a capital Z does not start an identifier"
 		},
 		{
 			"name": "M-UTIL-IDENT-CHAR-DIGIT",
