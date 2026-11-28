@@ -33,25 +33,9 @@
   },
   {
     "file": "src/anyparse/check/common/control/ComparisonToBoolean.hx",
-    "line": 573,
-    "col": 31,
-    "endLine": 573,
-    "endCol": 64,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`true`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "ComparisonToBoolean.comparisonEdit",
-      "subject": "true",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/control/ComparisonToBoolean.hx",
-    "line": 538,
+    "line": 540,
     "col": 17,
-    "endLine": 543,
+    "endLine": 545,
     "endCol": 3,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -64,26 +48,10 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/control/ConstantCondition.hx",
-    "line": 169,
-    "col": 108,
-    "endLine": 169,
-    "endCol": 112,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`{}`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "ConstantCondition.branchEdit",
-      "subject": "{}",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/control/PreferIfExpressionAssignment.hx",
-    "line": 277,
+    "line": 279,
     "col": 57,
-    "endLine": 277,
+    "endLine": 279,
     "endCol": 83,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -91,22 +59,6 @@
     "data": {
       "family": "literal",
       "function": "PreferIfExpressionAssignment.buildEdit",
-      "subject": "=",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/control/PreferIfExpressionAssignment.hx",
-    "line": 299,
-    "col": 80,
-    "endLine": 299,
-    "endCol": 114,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferIfExpressionAssignment.declEdits",
       "subject": "=",
       "chain": []
     }
@@ -172,38 +124,6 @@
       "family": "literal",
       "function": "PreferTernaryReturn.buildEdit",
       "subject": "?",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/control/PreferTryExpressionReturn.hx",
-    "line": 105,
-    "col": 55,
-    "endLine": 105,
-    "endCol": 71,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferTryExpressionReturn.fix",
-      "subject": "return",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/control/SimplifyBooleanReturnChain.hx",
-    "line": 106,
-    "col": 55,
-    "endLine": 106,
-    "endCol": 70,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "SimplifyBooleanReturnChain.fix",
-      "subject": "return",
       "chain": []
     }
   },
@@ -913,9 +833,9 @@
   },
   {
     "file": "src/anyparse/check/common/naming/ShadowingLocal.hx",
-    "line": 618,
+    "line": 617,
     "col": 75,
-    "endLine": 618,
+    "endLine": 617,
     "endCol": 85,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1073,9 +993,9 @@
   },
   {
     "file": "src/anyparse/check/common/types/DynamicBag.hx",
-    "line": 114,
+    "line": 115,
     "col": 37,
-    "endLine": 114,
+    "endLine": 115,
     "endCol": 56,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1441,10 +1361,10 @@
   },
   {
     "file": "src/anyparse/check/haxe/loops/PreferMap.hx",
-    "line": 140,
-    "col": 33,
-    "endLine": 140,
-    "endCol": 113,
+    "line": 154,
+    "col": 34,
+    "endLine": 154,
+    "endCol": 114,
     "severity": "info",
     "rule": "fix-text-syntax",
     "message": "the text of this edit spells syntax of the grammar it edits (`.map(`) — a fix names what it needs and a grammar component spells it",
@@ -1500,22 +1420,6 @@
       "family": "literal",
       "function": "PreferMapType.rewriteEdits",
       "subject": "<",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/scan/CheckScan.hx",
-    "line": 934,
-    "col": 24,
-    "endLine": 934,
-    "endCol": 28,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`{}`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "CheckScan.ifShapeEdit",
-      "subject": "{}",
       "chain": []
     }
   },

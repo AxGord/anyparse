@@ -1965,6 +1965,13 @@
 			"find": "deletionEdit(source, child, host, span, regions, dead)",
 			"replace": "deletionEdit(source, child, host, span, regions, [child])",
 			"note": "each deleted member is judged alone, so a section whose members all go keeps its heading because each sees the others as live"
+		},
+		{
+			"name": "M-IF-SHAPE-EMPTY-BLOCK-SPELLED",
+			"type": "anyparse.check.scan.CheckScan",
+			"method": "ifShapeEdit",
+			"force": "{ span: new Span(0, 0), text: '{}' }",
+			"note": "an always-false guard that is a branch body becomes an empty block the scan spelled, so a grammar that builds none still gets it"
 		}
 	]
 }

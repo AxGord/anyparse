@@ -5,6 +5,7 @@ import anyparse.check.common.control.DeclFallbackChain.DeclSeams;
 import anyparse.check.scan.AssignmentTreeHoist;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
 import anyparse.query.ParseGate;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
@@ -150,11 +151,12 @@ final class PreferIfExpressionAssignment extends RuleBase implements QuotationAw
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final read: Null<Seams> = readSeams(plugin.refShape());
 		final decl: Null<DeclSeams> = DeclFallbackChain.readSeams(plugin, read?.tree);
+		final build: Null<Constructs> = plugin.constructs();
 		return RunScan.collectWith(files, plugin, read, (entry, tree, seams, violations) -> {
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
 				SourceComments.collectCommentTokens(plugin.lexicalRegions(entry.source));
 			walk(tree, violations, entry.file, entry.source, comments, seams);
-			if (decl != null) for (e in declEdits(tree, entry.source, comments, decl)) violations.push({
+			if (decl != null) for (e in declEdits(tree, entry.source, comments, decl, build)) violations.push({
 				file: entry.file,
 				span: e.key,
 				rule: 'prefer-if-expression-assignment',
@@ -179,7 +181,7 @@ final class PreferIfExpressionAssignment extends RuleBase implements QuotationAw
 		final tree: Null<QueryNode> = decl == null ? null : ParseGate.parseOrNull(plugin, source);
 		if (decl != null && tree != null) {
 			final byKey: Map<String, { span: Span, text: String }> = [];
-			for (e in declEdits(tree, source, comments, decl)) byKey['${e.key.from}:${e.key.to}'] = e.edit;
+			for (e in declEdits(tree, source, comments, decl, plugin.constructs())) byKey['${e.key.from}:${e.key.to}'] = e.edit;
 			for (edit in CheckScan.collectSpanEdits(violations, byKey, (edit, _) -> edit)) edits.push(edit);
 		}
 		return CanonicalEdit.dropContainedEdits(edits);
@@ -285,9 +287,10 @@ final class PreferIfExpressionAssignment extends RuleBase implements QuotationAw
 	 * replaced region — between the two statements, around the `=` — leaves the pair unflagged.
 	 */
 	private static function declEdits(
-		tree: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, d: DeclSeams
+		tree: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, d: DeclSeams, build: Null<Constructs>
 	): Array<{ key: Span, edit: { span: Span, text: String } }> {
 		final out: Array<{ key: Span, edit: { span: Span, text: String } }> = [];
+		if (build == null) return out;
 		for (m in DeclFallbackChain.collect(tree, source, comments, d)) if (!DeclFallbackChain.ownedByTernary(m, d)) {
 			final kept: Array<Span> = m.probe.kept.copy();
 			kept.push(new Span(m.declSpan.from, m.prefix.keptTo));
@@ -296,7 +299,10 @@ final class PreferIfExpressionAssignment extends RuleBase implements QuotationAw
 			final unit: Null<UnitValue> = AssignmentTreeHoist.fallbackChainValue(
 				m.branches, m.init, { lvalue: null }, source, d.tree, carried
 			);
-			if (unit != null) out.push({ key: m.declSpan, edit: { span: m.region, text: '${m.prefix.text} = ${unit.text};' } });
+			final init: Null<Span> = m.init.span;
+			final value: Null<Built> = unit == null ? null : build.copied(unit.text, new Span(0, unit.text.length), Expression);
+			final decl: Null<Built> = init == null || value == null ? null : build.substituted(source, m.declSpan, init, value, Statement);
+			if (decl != null) out.push({ key: m.declSpan, edit: { span: m.region, text: decl.text } });
 		}
 		return out;
 	}

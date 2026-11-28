@@ -1558,6 +1558,41 @@
 			"find": "inner.trim() != ''",
 			"replace": "false",
 			"note": "a body the grammar refuses to copy is left out instead of refusing the fix, so the edit deletes the loop body and keeps only the guard"
+		},
+		{
+			"name": "M-TRY-RETURN-FIX-SPELLED",
+			"type": "anyparse.check.common.control.PreferTryExpressionReturn",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: 'return 0;' }]",
+			"note": "the try-expression return fix writes its return without asking the grammar, so a grammar that builds none still gets text the rule spelled"
+		},
+		{
+			"name": "M-BOOLEAN-RETURN-CHAIN-FIX-SPELLED",
+			"type": "anyparse.check.common.control.SimplifyBooleanReturnChain",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: 'return true;' }]",
+			"note": "the boolean return chain fix writes its return without asking the grammar, so a grammar that builds none still gets text the rule spelled"
+		},
+		{
+			"name": "M-COMPARISON-TO-BOOLEAN-FOLD-SPELLED",
+			"type": "anyparse.check.common.control.ComparisonToBoolean",
+			"method": "comparisonEdit",
+			"force": "{ span: span, text: 'false' }",
+			"note": "a comparison of two boolean literals folds to a literal the rule spelled, so a grammar that builds none still gets it"
+		},
+		{
+			"name": "M-DECL-CHAIN-FIX-SPELLED",
+			"type": "anyparse.check.common.control.PreferIfExpressionAssignment",
+			"method": "declEdits",
+			"force": "[{ key: new Span(0, 0), edit: { span: new Span(0, 0), text: 'var x:Int = 0;' } }]",
+			"note": "the declaration-chain fix writes its declaration without asking the grammar, so a grammar that builds none still gets text the rule spelled"
+		},
+		{
+			"name": "M-CONSTANT-CONDITION-EMPTY-BLOCK-SPELLED",
+			"type": "anyparse.check.common.control.ConstantCondition",
+			"method": "branchEdit",
+			"force": "{ span: cspan, text: '{}' }",
+			"note": "a constant condition's eliminated branch body becomes an empty block the rule spelled, so a grammar that builds none still gets it"
 		}
 	]
 }

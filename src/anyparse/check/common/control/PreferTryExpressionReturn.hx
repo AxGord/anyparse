@@ -4,6 +4,7 @@ import anyparse.check.common.control.TryExpressionShape.TryParts;
 import anyparse.check.common.control.TryExpressionShape.TrySeams;
 import anyparse.check.scan.IfExpressionChain;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
 import anyparse.query.SourceComments;
 import anyparse.query.SymbolIndex;
 
@@ -96,13 +97,17 @@ final class PreferTryExpressionReturn extends RuleBase {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
+		final build: Null<Constructs> = plugin.constructs();
+		if (build == null) return [];
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
 		final edits: Array<{ span: Span, text: String }> =
 			CheckScan.applyBySpan(plugin, source, violations, seams.tryKinds, (node, span) -> {
 				final parts: Null<TryParts> = match(node, source, comments, seams);
 				if (parts == null) return null;
 				final value: Null<String> = TryExpressionShape.buildValue(parts, source, seams.tryShape);
-				return value == null ? null : { span: span, text: 'return $value;' };
+				final built: Null<Built> = value == null ? null : build.copied(value, new Span(0, value.length), Expression);
+				final exit: Null<Built> = built == null ? null : build.returning(built);
+				return exit == null ? null : { span: span, text: exit.text };
 			});
 		return CanonicalEdit.dropContainedEdits(edits);
 	}

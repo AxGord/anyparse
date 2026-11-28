@@ -1,6 +1,7 @@
 package anyparse.check.common.control;
 
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.LexicalRegions;
 import anyparse.query.SymbolIndex;
@@ -81,7 +82,8 @@ final class SimplifyBooleanReturnChain extends RuleBase {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final ctx: Null<Ctx> = context(plugin);
-		return ctx == null || violations.length == 0
+		final build: Null<Constructs> = plugin.constructs();
+		return ctx == null || build == null || violations.length == 0
 			? []
 			: RunScan.edits(plugin, source, tree -> {
 				final bySpan: Map<String, Chain> = [];
@@ -103,7 +105,9 @@ final class SimplifyBooleanReturnChain extends RuleBase {
 						return null;
 					}
 					final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source, types);
-					return expr == null ? null : { span: span, text: 'return $expr;' };
+					final value: Null<Built> = expr == null ? null : build.copied(expr, new Span(0, expr.length), Expression);
+					final exit: Null<Built> = value == null ? null : build.returning(value);
+					return exit == null ? null : { span: span, text: exit.text };
 				});
 			});
 	}

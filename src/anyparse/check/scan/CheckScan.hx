@@ -1,6 +1,7 @@
 package anyparse.check.scan;
 
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
@@ -356,8 +357,9 @@ final class CheckScan {
 		final frames: Map<QueryNode, Array<String>> = ScopeFrames.frameIndex(tree, seams);
 		final byKey: Map<String, QueryNode> = [];
 		MemberKinds.indexNodesByKind(tree, flaggedKinds, byKey);
+		final build: Null<Constructs> = plugin.constructs();
 		return nonOverlappingEdits(
-			collectSpanEdits(violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, frames, source, seams))
+			collectSpanEdits(violations, byKey, (node, _) -> conditionEdit(node, alwaysTrueOf(node), parents, frames, source, seams, build))
 		);
 	}
 
@@ -890,12 +892,12 @@ final class CheckScan {
 	 */
 	private static function conditionEdit(
 		node: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, frames: Map<QueryNode, Array<String>>, source: String,
-		seams: CondSimplifySeams
+		seams: CondSimplifySeams, build: Null<Constructs>
 	): Null<{ span: Span, text: String }> {
 		final parent: Null<QueryNode> = parents[node];
 		if (parent == null) return null;
 		if (seams.ifKinds.contains(parent.kind) && parent.children.length == 2 && parent.children[0] == node)
-			return ifShapeEdit(parent, alwaysTrue, parents, frames, source, seams);
+			return ifShapeEdit(parent, alwaysTrue, parents, frames, source, seams, build);
 		final wantKind: String = alwaysTrue ? seams.andKind : seams.orKind;
 		return wantKind != '' && parent.kind == wantKind && homogeneousChain(parent, wantKind, parents, seams)
 			? dropOperandEdit(parent, node, seams.regions)
@@ -911,7 +913,7 @@ final class CheckScan {
 	 */
 	private static function ifShapeEdit(
 		ifNode: QueryNode, alwaysTrue: Bool, parents: Map<QueryNode, QueryNode>, frames: Map<QueryNode, Array<String>>, source: String,
-		seams: CondSimplifySeams
+		seams: CondSimplifySeams, build: Null<Constructs>
 	): Null<{ span: Span, text: String }> {
 		final ns: Null<Span> = ifNode.span;
 		final body: QueryNode = ifNode.children[1];
@@ -928,10 +930,10 @@ final class CheckScan {
 		if (LexicalRegions.commentIntersects(ns.from, ns.to, seams.regions())) return null;
 		final inBlock: Bool = ifParent != null && seams.blockKinds.contains(ifParent.kind);
 		// A collapsed-away `if` is a PURE deletion like a member removal, so it gives back its
-		// flanking blank line the same way; the `{}` arm replaces rather than deletes and must not.
-		return inBlock
-			? { span: ElementSpan.blankExtendedSpan(source, ElementSpan.lineExtendedSpan(source, ns)), text: '' }
-			: { span: ns, text: '{}' };
+		// flanking blank line the same way; the empty-block arm replaces rather than deletes and must not.
+		if (inBlock) return { span: ElementSpan.blankExtendedSpan(source, ElementSpan.lineExtendedSpan(source, ns)), text: '' };
+		final empty: Null<Built> = build?.block([]);
+		return empty == null ? null : { span: ns, text: empty.text };
 	}
 
 	/**

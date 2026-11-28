@@ -1,6 +1,7 @@
 package anyparse.check.common.control;
 
 import anyparse.query.BoolExprShape;
+import anyparse.query.Constructs;
 import anyparse.query.DeclaredNullity;
 import anyparse.query.IndexScope;
 import anyparse.query.MemberKinds;
@@ -203,8 +204,9 @@ final class ComparisonToBoolean extends RuleBase {
 		// only then builds over `source` alone — enough for a same-file receiver type.
 		final resolver: () -> Null<SymbolIndex> = IndexScope.lazySymbolIndex([{ file: file, source: source }], plugin, index);
 		final proof: TypeProof = proofOf(file, source, root, seams.shape, provider, plugin.typeSyntax, resolver);
+		final build: Null<Constructs> = plugin.constructs();
 		return CheckScan.applyBySpan(
-			plugin, source, violations, seams.equalityKinds, (node, span) -> comparisonEdit(node, span, source, seams, proof, eqKind)
+			plugin, source, violations, seams.equalityKinds, (node, span) -> comparisonEdit(node, span, source, seams, proof, eqKind, build)
 		);
 	}
 
@@ -555,7 +557,7 @@ final class ComparisonToBoolean extends RuleBase {
 	 * negation (`negate` parenthesises unless the operand is an ident / paren).
 	 */
 	private static function comparisonEdit(
-		node: QueryNode, span: Span, source: String, seams: Seams, proof: TypeProof, eqKind: String
+		node: QueryNode, span: Span, source: String, seams: Seams, proof: TypeProof, eqKind: String, build: Null<Constructs>
 	): Null<{ span: Span, text: String }> {
 		if (node.children.length != 2) return null;
 		final boolLitKind: String = seams.boolLitKind;
@@ -570,7 +572,8 @@ final class ComparisonToBoolean extends RuleBase {
 			final rightText: String = spanText(rightSpan, source);
 			final equal: Bool = leftText == rightText;
 			final isEq: Bool = node.kind == eqKind;
-			return { span: span, text: isEq == equal ? 'true' : 'false' };
+			final folded: Null<Built> = build?.boolean(isEq == equal);
+			return folded == null ? null : { span: span, text: folded.text };
 		}
 		final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
 		final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];

@@ -1,6 +1,7 @@
 package anyparse.check.common.control;
 
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.NodeShape;
@@ -95,7 +96,7 @@ final class ConstantCondition extends RuleBase {
 		return RunScan.editsWith(plugin, source, resolveSeams(plugin), (tree, seams) -> {
 			final flagged: Array<String> = RunScan.spanKeys(violations);
 			final edits: Array<{ span: Span, text: String }> = [];
-			collectBranchEdits(tree, null, source, seams, flagged, edits);
+			collectBranchEdits(tree, null, source, seams, flagged, edits, plugin.constructs());
 			return CanonicalEdit.dropContainedEdits(edits);
 		});
 	}
@@ -127,17 +128,17 @@ final class ConstantCondition extends RuleBase {
 	/** Walk `node` with its `parent`, collecting a fix edit for each flagged branch. */
 	private static function collectBranchEdits(
 		node: QueryNode, parent: Null<QueryNode>, source: String, seams: Seams, flagged: Array<String>,
-		edits: Array<{ span: Span, text: String }>
+		edits: Array<{ span: Span, text: String }>, build: Null<Constructs>
 	): Void {
 		if (seams.branchKinds.contains(node.kind) && node.children.length > 0 && node.children[0].kind == seams.boolLitKind) {
 			final cond: QueryNode = node.children[0];
 			final cspan: Null<Span> = cond.span;
 			if (cspan != null && flagged.contains('${cspan.from}:${cspan.to}')) {
-				final edit: Null<{ span: Span, text: String }> = branchEdit(node, parent, source, cspan, seams);
+				final edit: Null<{ span: Span, text: String }> = branchEdit(node, parent, source, cspan, seams, build);
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectBranchEdits(c, node, source, seams, flagged, edits);
+		for (c in node.children) collectBranchEdits(c, node, source, seams, flagged, edits, build);
 	}
 
 	/**
@@ -150,7 +151,7 @@ final class ConstantCondition extends RuleBase {
 	 * the violation still reports, just without an edit here).
 	 */
 	private static function branchEdit(
-		node: QueryNode, parent: Null<QueryNode>, source: String, cspan: Span, seams: Seams
+		node: QueryNode, parent: Null<QueryNode>, source: String, cspan: Span, seams: Seams, build: Null<Constructs>
 	): Null<{ span: Span, text: String }> {
 		final blockKinds: Array<String> = seams.blockKinds;
 		final emptyStmtKind: Null<String> = seams.emptyStmtKind;
@@ -166,7 +167,9 @@ final class ConstantCondition extends RuleBase {
 			// expression-position one sits in a value slot, so it stays report-only).
 			if (!seams.ifStatementKinds.contains(node.kind)) return null;
 			final inBlock: Bool = parent != null && blockKinds.contains(parent.kind);
-			return inBlock ? { span: ElementSpan.lineExtendedSpan(source, nspan), text: '' } : { span: nspan, text: '{}' };
+			if (inBlock) return { span: ElementSpan.lineExtendedSpan(source, nspan), text: '' };
+			final empty: Null<Built> = build?.block([]);
+			return empty == null ? null : { span: nspan, text: empty.text };
 		}
 		final tspan: Null<Span> = taken.span;
 		return tspan == null ? null : { span: nspan, text: source.substring(tspan.from, tspan.to) };
