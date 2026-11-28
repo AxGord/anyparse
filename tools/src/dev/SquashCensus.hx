@@ -41,6 +41,7 @@ typedef SquashReport = { final rows: Array<SquashRow>; final newOnePass: Array<S
 
 /** What the battery row says of a census: the failing line (null when it holds) and the lines beneath it, notes of progress included. */
 typedef SquashVerdict = { final failure: Null<String>; final detail: Array<String>; }
+
 /** What one formatter run over a tree reported: the files it settles only on a second rewrite, and the ones it could not format. */
 private typedef FmtRun = { final onePass: Array<String>; final unparsed: Array<String>; }
 

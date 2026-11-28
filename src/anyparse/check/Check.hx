@@ -801,6 +801,7 @@ interface CrossFileAnchored extends ScopeDependent {
  * `apq lint --list-rules --format json`.
  */
 interface ScopeDependent {}
+
 /**
  * A `ScopeDependent` check whose finding in one file depends only on the modules an ambient source at or above the file's
  * folder governs or would govern, and that weighs such a site only when the run holds every module the site governs: a run

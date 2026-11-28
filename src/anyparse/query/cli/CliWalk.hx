@@ -27,6 +27,7 @@ typedef SkipEntry = { path: String, locus: String };
  * pass over the failures.
  */
 typedef QuerySkip = { var source: String; var entry: SkipEntry; };
+
 /**
  * The shared multi-file walk of the read-only `apq` commands: parse a visited
  * file or record why it was skipped, cap how many hits are rendered, and build

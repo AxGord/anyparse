@@ -12,8 +12,10 @@ typedef NamedCompare = { final typePath: String; final member: String; final nul
 
 /** What a member path names: the type's path, the member's name, and every member of that name the type declares. */
 private typedef NamedMembers = { final typePath: String; final member: String; final found: Array<MemberInfo>; }
+
 /** A configuration error, and the file it is reported on; `enabled` says the rule runs on that file. */
 typedef ConfigProblem = { message: String, file: String, enabled: Bool }
+
 /**
  * The compare functions one config chain names, each checked against the resolution index: the one answer to "which
  * function compares two values of this type in this file". A name the index cannot find, or whose signature is not

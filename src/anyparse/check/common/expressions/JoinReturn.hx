@@ -45,8 +45,10 @@ private typedef Match = {
  * position expects of the lambda's result restates an annotation written at an offset (null when nothing is asked).
  */
 private typedef Judge = { final retType: Null<String>; final restates: Null<(annotation: String, at: Int) -> Bool>; }
+
 /** Whether the type the position of the untyped lambda `lambda` expects of its result restates `annotation`, written at `at`. */
 private typedef Expected = (lambda: QueryNode, annotation: String, at: Int) -> Bool;
+
 /**
  * Flags a value that is IMMEDIATELY returned right after it is produced, collapsing the pair
  * to a single return. The value is produced either by a local DECLARATION or by a plain

@@ -24,6 +24,7 @@ typedef ArmTarget = { final name: String; final type: String; final method: Stri
 
 /** One structure a rule's config names: the typedef path it is to get and the `name: Type` fields it is written with. */
 typedef NamedFields = { final path: String; final fields: Array<String>; }
+
 /**
  * The readers of the rule options that DECLARE framework knowledge rather than tune a threshold —
  * `prefer-api-idiom`'s `idioms` and `typed-event-constant`'s event types — and of the mutation-arm

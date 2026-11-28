@@ -47,6 +47,7 @@ typedef TrackRow = {
 
 /** A run's totals: the line it prints and the status it answers. */
 typedef VerdictTally = { var line: String; var status: Int; }
+
 /** The job slots a run takes: their count and a note when an ask was cut down, or why the ask is refused. */
 enum JobCount {
 	Count(n: Int, note: Null<String>);

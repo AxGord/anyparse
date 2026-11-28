@@ -23,6 +23,7 @@ using Lambda;
  * fix wrote needs the very `Violation` objects the edits came from.
  */
 typedef FixRun = { final violations: Array<Violation>; final edits: Array<FixEdit>; };
+
 /**
  * What one `lint --fix` run left: every file as it stands afterwards (by the path the fixture gave it), its stderr
  * and the lines that say a fix was not written.

@@ -75,6 +75,7 @@ typedef GrammarEntry = {
 
 /** A `<file>:<line>[:<col>]` address: the file and the 1-based position; `col` is null when only the line was given. */
 typedef FileAddress = { final file: String; final line: Int; final col: Null<Int>; };
+
 /**
  * The argument door of the `apq` CLI: everything that turns argv and the path
  * specs on it into the values a command actually runs on — one flag's value,

@@ -41,6 +41,7 @@ typedef StoredCompile = { var index: Int; var oracle: OracleConfig; var stored: 
 
 /** The key of each configuration of a run and the record an earlier run stored under it (`TypedFactsCache`), in order. */
 typedef StoreLookup = { var keys: Array<Null<TypedFactsKey>>; var held: Array<Null<TypedFactsStored>>; }
+
 /**
  * The facts compiles `TypedFactsProbe.start` left running, and what `finish` needs to read them: the configurations
  * dropped before any compile, the compiles in job order with the fingerprint each input had when it started (`inputs`,

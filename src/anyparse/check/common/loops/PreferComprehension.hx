@@ -93,6 +93,7 @@ typedef ComprehensionCtx = {
 
 /** The declared key and value types of a `Map<K, V>` binding, as written. */
 typedef MapTypes = { var key: String; var value: String; }
+
 /**
  * Per-match accumulators: nodes the self-reference gate must scan, comment texts to hoist above the
  * result, and the ARRAY declaration's ELEMENT type — the one thing that can restate a link sitting at

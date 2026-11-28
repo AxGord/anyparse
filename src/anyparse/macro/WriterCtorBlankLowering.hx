@@ -505,11 +505,20 @@ final class WriterCtorBlankLowering {
 		final exclude: WriterLowering.CtorBlankResolution = resolveCtorBlankArgs(
 			cb, elemRefName, excludeArgs, 'blankLinesBeforeCtorIfPrevNot', null
 		);
+		// Previous side of the `prev != 1` veto: the same predicate without the leading-trivia term, i.e. the
+		// answer `blankLinesAfterCtorIf` reads. A doc-commented single-line previous type then leaves the
+		// blank to this rule instead of vetoing it while the after-side declines it too.
+		final prevClassifyCases: Null<Array<Case>> = triviaMultilineExpr == null
+			? null
+			: resolveCtorBlankArgs(
+				cb, elemRefName, targetArgs, 'blankLinesBeforeCtorIfPrevNot', predicateName, false, null, measuredMultilineExpr
+			).cases;
 		return {
 			classifierFieldName: target.fieldName,
 			classifyCases: target.cases,
 			optField: target.optField,
-			prevExcludeCases: exclude.cases
+			prevExcludeCases: exclude.cases,
+			prevClassifyCases: prevClassifyCases
 		};
 	}
 

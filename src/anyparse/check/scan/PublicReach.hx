@@ -13,6 +13,7 @@ typedef ReachRegion = { final file: String; final source: String; final span: Sp
 
 /** The scope a reach proof reads: the report index, the resolution index (the report one if none is declared), the token counts. */
 typedef ReachScope = { final index: SymbolIndex; final wide: SymbolIndex; final tokens: Map<String, Int>; };
+
 /** What a member's modifier / metadata run says, as `PublicReach.readRun` reads it. */
 typedef MemberRun = {
 

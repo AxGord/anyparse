@@ -755,7 +755,11 @@ typedef BeforeCtorBlankInfo = {
 	// class no longer forces `beforeMultilineDecl` regardless of source.
 	// Null for the plain `blankLinesBeforeCtor{,If}` builders → no extra
 	// tracker, byte-identical cascade.
-	?prevExcludeCases: Null<Array<Case>>
+	?prevExcludeCases: Null<Array<Case>>,
+	// The previous sibling's kind for the `prev != 1` veto, when it must be read without the leading-trivia
+	// term the current element's kind carries: a doc comment on the previous type is ITS leading layout,
+	// so it never makes that type multi-line for the after-side. Null → the veto reads `classifyCases`.
+	?prevClassifyCases: Null<Array<Case>>
 };
 
 /**

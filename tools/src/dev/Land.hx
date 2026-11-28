@@ -55,6 +55,7 @@ typedef MergedPaths = (tree: String) -> Null<Array<String>>;
 
 /** The run of `dev battery`: its flags, the tree it runs over and the log it leaves. */
 typedef BatteryExec = (flags: Array<String>, tree: String, log: String) -> Outcome;
+
 /** The scope of the suite a merge needs: the tree and the commit it is compared with. */
 typedef ImpactScope = (tree: String, base: String) -> SuiteScope;
 

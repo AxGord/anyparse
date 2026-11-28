@@ -205,8 +205,14 @@ final class WriterCascadeLowering {
 			final lhs: Expr = { expr: EConst(CIdent('_currKindBefore$i')), pos: pos };
 			acc.currCompute.push(macro $lhs = $switchExpr);
 			final tlhs: Expr = { expr: EConst(CIdent('_prevKindBefore$i')), pos: pos };
-			final trhs: Expr = { expr: EConst(CIdent('_currKindBefore$i')), pos: pos };
-			acc.trackPrev.push(macro $tlhs = $trhs);
+			final prevClassifyCases: Null<Array<Case>> = info.prevClassifyCases;
+			if (prevClassifyCases == null) {
+				final trhs: Expr = { expr: EConst(CIdent('_currKindBefore$i')), pos: pos };
+				acc.trackPrev.push(macro $tlhs = $trhs);
+			} else {
+				final prevSwitch: Expr = { expr: ESwitch(classifierAccess, prevClassifyCases, null), pos: pos };
+				acc.trackPrev.push(macro $tlhs = $prevSwitch);
+			}
 			// ω-before-multiline-prev-not — second binary classify-switch on
 			// the same classifier field, tracking whether the element matched
 			// an excluded-prev ctor (e.g. `Conditional`). Only built when the

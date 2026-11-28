@@ -4127,6 +4127,14 @@
 			"find": "if (ctx.pos != _bare)",
 			"replace": "if (false)",
 			"note": "a comment standing before or after the one node a text spells is skipped, so the part is taken and the comment silently dropped"
+		},
+		{
+			"name": "M-DOC-TYPE-PREV-VETO-TRIVIA",
+			"type": "anyparse.macro.WriterCtorBlankLowering",
+			"method": "buildBeforeCtorBlankInfoIfPrevNot",
+			"find": "prevClassifyCases: prevClassifyCases",
+			"replace": "prevClassifyCases: null",
+			"note": "the before-rule's prev veto reads the leading-trivia term again, so a doc-commented single-line type vetoes the blank before the next doc-commented type and the gap stays glued"
 		}
 	]
 }

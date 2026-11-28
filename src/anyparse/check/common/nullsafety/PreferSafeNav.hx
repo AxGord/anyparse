@@ -63,6 +63,7 @@ private typedef Candidate = {
  * plain `.` step, and `rest` the condition to their left that survives the fold (null when the run is the whole condition).
  */
 private typedef GuardRun = { var subjects: Array<QueryNode>; var rest: Null<QueryNode>; }
+
 /**
  * A matched ASSIGNMENT-arm guard: the null-checked identifier, the guarding `if` statement the
  * fold deletes, the assigned right-hand side and its chain-root identifier, and the `null`

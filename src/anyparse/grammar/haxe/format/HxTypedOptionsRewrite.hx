@@ -53,6 +53,7 @@ private typedef Edit = { span: Span, text: String };
 
 /** A match of a call shape with the shape it matched. */
 private typedef Found = { match: Match, site: Site };
+
 /**
  * A `final` the rewrite retypes: its name, its declaration, the constant it holds, whether its modifiers let it be retyped, and each
  * configuration call reading it, by argument.

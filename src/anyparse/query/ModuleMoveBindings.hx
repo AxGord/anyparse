@@ -94,6 +94,7 @@ private typedef MeaningSides = {
 
 /** One written occurrence of a probed name: the name and where it starts. */
 private typedef Occurrence = { name: String, at: Int }
+
 /**
  * The proof a module relocation owes: every simple type name a moved module or one of its readers writes MEANS the same
  * declaration after the move as before — read through the resolution index's own reading of a bare name

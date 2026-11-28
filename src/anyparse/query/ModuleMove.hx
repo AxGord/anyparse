@@ -92,6 +92,7 @@ private typedef UsingOrder = { final chain: Array<String>; final own: Array<Stri
 
 /** The relocations one request plans: the modules, and the ambient sources that travel with the modules they govern. */
 private typedef PlannedSet = { final modules: Array<PlannedMove>; final sources: Array<ModuleRelocation>; }
+
 /**
  * Relocate whole MODULES to another package — every type of the module, its module-private ones included, travels with
  * the file — and rewrite every reference so that each name means what it meant before.

@@ -11,6 +11,7 @@ using Lambda;
  * values, so one pair serves the whole walk.
  */
 private typedef RewriteRec = { flat: Doc -> Doc, broken: Doc -> Doc };
+
 /**
  * A tagged opAddSub chain `WrapBoundary(Group(IfBreak(CollapseAddProbe(brk), flat)))`, destructured.
  * `restAware` says the pivot was the rest-aware `GroupWithRestProbe`, which a rebuild keeps.

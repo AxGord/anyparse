@@ -43,6 +43,7 @@ typedef SlotContext = {
 
 /** How a track's build ended: `kind` says how it was built, null when it was not, and `cut` says why when the compiler had to be killed. */
 typedef Built = { var kind: Null<String>; var cut: Null<String>; }
+
 /** One classified run: the verdict label, the row detail, and the uncapped detail when the row elided names. */
 typedef Classified = { var verdict: String; var detail: String; var full: Null<String>; }
 

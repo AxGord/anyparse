@@ -63,6 +63,7 @@ private typedef Field = {
 
 /** The field members of a structure body and whether they are written in the short form. */
 private typedef Body = { final fields: Array<QueryNode>; final short: Bool; }
+
 /**
  * The one answer to "which fields of a typedef's structure does nothing write, so that they may be `final`": a typedef of an
  * anonymous structure, `{ x:Int, y:Int }` or `{ var x:Int; }`, whose fields no write in the run names is flagged and rewritten

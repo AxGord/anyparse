@@ -35,6 +35,7 @@ typedef LexRegion = {
  * `regions` are the comments and literals written inside it, nested the same way.
  */
 typedef LexHole = { final from: Int; final to: Int; final regions: Array<LexRegion>; };
+
 /**
  * An occurrence of a conditional-compilation directive keyword: its offset and the keyword as the grammar declares
  * it. One followed by an identifier character is a longer word and never reported; whether it sits in code is the

@@ -52,6 +52,7 @@ typedef CheckPartition = {
  * would leave the file broken, which is the opposite of a safety net.
  */
 typedef LintRange = Array<LineWindow>;
+
 /**
  * What narrows a lint run per file: the `LintRange` a file's findings must fall in, or null for the whole file (`LintWindows`).
  */

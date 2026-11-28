@@ -8,6 +8,7 @@ import sys.io.File;
 
 /** What a meter reads at one moment: the cpu of the processes that ended, and how many started ones have left no usage. */
 typedef CpuStamp = { var used: Float; var lost: Int; }
+
 /**
  * The one answer to "how much cpu did the processes a tool run started use, between two moments of it": every process the run
  * starts through `Command` or `Pool` is put under time(1), and `reading` is the cpu seconds of those that have ended. A step reads

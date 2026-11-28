@@ -10,6 +10,7 @@ using Lambda;
 
 /** The text around a construct that makes it a whole file of the grammar. */
 private typedef Host = { final before: String; final after: String; }
+
 /**
  * The parse-back check of a Haxe construct a `HaxeConstructs` method built: the one answer to "does this text parse back
  * to exactly the Haxe construct asked for". The text is parsed by the grammar inside a host made for its kind and refused

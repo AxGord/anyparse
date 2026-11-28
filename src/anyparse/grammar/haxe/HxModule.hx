@@ -38,7 +38,8 @@ import anyparse.grammar.haxe.decl.HxTopLevelDecl;
  * 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock')` forces the after-count when the
  * conditional's tail leaf is neither an import / using nor a type decl.
  * `multilineWhenLeadingTriviaSpansLines('meta', 'decl')` OR-s into the `multiline` predicate an
- * element whose leading trivia holds a comment or whose metadata sits on its own line.
+ * element whose leading trivia holds a comment or whose metadata sits on its own line — for the
+ * element the before-rule fires on only: the previous element's veto reads the after-rule's answer.
  */
 @:peg
 @:schema(anyparse.grammar.haxe.HaxeFormat)
