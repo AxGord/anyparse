@@ -22,7 +22,8 @@ package anyparse.format;
  * `Fit` — decided by width, from simplicity the grammar's predicate reads
  * off each element: one simple element stays on the declaration's line
  * when that line fits, several simple ones share one line of their own
- * above it when that row fits, and anything else is one per line.
+ * above it when that row fits, and anything else is one per line; a grammar may name a predicate
+ * over what follows the run that sends the one simple element to its own line all the same.
  *
  * Consumed by `@:fmt(metaLineEndPolicy('<optField>'))` and its
  * `metaLineEndIfCtor` / `metaLineEndChain` refinements, which name a

@@ -2854,7 +2854,7 @@
 			"name": "M-META-FIT-ROW-GLUES",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitDecls",
-			"find": "($arr.length == 1 ? 1 : 2)",
+			"find": "($arr.length == 1 ? ($loneBreak ? 0 : 1) : 2)",
 			"replace": "1",
 			"note": "several simple metadata are read as one, so a fitting run glues to the declaration"
 		},
@@ -4000,6 +4000,30 @@
 			"find": "!opt._keepChainInParen",
 			"replace": "true",
 			"note": "a chain inside an explicit paren lifts its head, though the paren owns its wrap"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-TRIVIA-UNWIRED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "decisionDecls",
+			"find": "broken, loneBreak)",
+			"replace": "broken, macro false)",
+			"note": "the trivia writer no longer asks the lone-break predicate"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-FIT-IGNORES-BREAK",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitDecls",
+			"find": "($loneBreak ? 0 : 1)",
+			"replace": "1",
+			"note": "the Fit decision keeps a lone metadata's line whatever the lone-break predicate says"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-PLAIN-UNWIRED",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparseRunEmit",
+			"find": "WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess)",
+			"replace": "macro false",
+			"note": "the plain writer no longer asks the lone-break predicate"
 		}
 	]
 }

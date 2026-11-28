@@ -152,7 +152,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxMemberDecl",
 			"method": "HxMemberDecl",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'),\n\t\tmetaLineEndBreakIf('modifiersLeadWithComplexRegion'))\n\t",
 			"replace": "",
 			"note": "member metadata names no simplicity predicate, so fit breaks it one per line"
 		},

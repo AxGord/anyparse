@@ -251,6 +251,22 @@
 			"find": "{ open: '/*', close: '*/', doc: '/**' }",
 			"replace": "null",
 			"note": "a block comment is no blank of a condition, so `a /* c */ && b` no longer reads as `a && b`"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-COMPOUND-IGNORED",
+			"type": "anyparse.grammar.haxe.cond.HxCondExprReader",
+			"method": "isOneTest",
+			"find": "!joinsTests(tree)",
+			"replace": "true",
+			"note": "a condition joining tests with && or || reads as one test"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-NOT-UNWALKED",
+			"type": "anyparse.grammar.haxe.cond.HxCondExprReader",
+			"method": "joinsTests",
+			"find": "case Not(operand): joinsTests(operand);",
+			"replace": "case Not(operand): false;",
+			"note": "a negation is not read through, so `!(a || b)` counts as one test"
 		}
 	]
 }

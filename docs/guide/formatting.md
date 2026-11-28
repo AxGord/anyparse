@@ -497,6 +497,21 @@ haxe-formatter's schema. It is decided by width and never reads the source layou
 - several simple metadata share one line above the declaration when that row fits, and are never joined to the declaration itself;
 - otherwise — a complex metadata, a row that does not fit, a comment between metadata or after the last one, a `#if` in the run — one per line, as `after`.
 
+A conditional modifier region after one simple metadata shares the metadata's line, the declaration staying on the next,
+when the region is simple and the joined line fits: a condition of one test (a flag, `!flag`, one comparison, with or without
+parentheses), no `#elseif`, one modifier in the `#if` branch, at most one modifier or simple metadata in `#else`, no comment.
+Any other region (`#if (sys && !js)`, an `#elseif`, `#if sys extern inline`) puts the metadata on a line of its own and the
+region on the next; after several metadata the region always takes its own line. `none` keeps the source's break.
+
+```haxe
+@:op(A && B) #if (haxe_ver >= 4.2) extern #else @:extern #end
+public inline function and(s:Event):Event {}
+
+@:a
+#if (sys && !js) extern #end
+function f():Void {}
+```
+
 Simple is no argument, or exactly one that is a number, `true` / `false` / `null`, an identifier, a dotted path, a
 one-line string without interpolation, a prefix or binary operator over such operands, or a call of a dotted path whose
 arguments are all such operands (`@:nullSafety(Strict)`, `@:access(pkg.Type)`, `@:xml('action')`, `@:op(A + B)`, `@:op(-A)`,

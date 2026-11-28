@@ -402,6 +402,54 @@
 			"find": "macro $callee && Lambda.foreach(_a, _x -> ${operandOf(ctorStarElem(HX_EXPR, 'Call', macro _x))})",
 			"replace": "macro $callee",
 			"note": "a call reads as simple whatever its arguments, so a complex argument no longer breaks the run"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-ALWAYS-COMPLEX",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "modifiersLeadWithComplexRegionField",
+			"find": "macro !$simple",
+			"replace": "macro true",
+			"note": "every conditional modifier region reads as complex, so a simple one leaves the lone metadata's line"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-ELSEIF-IGNORED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "modifiersLeadWithComplexRegionField",
+			"find": "_i.elseifs.length == 0",
+			"replace": "true",
+			"note": "an #elseif branch no longer makes a region complex"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-BODY-COUNT-IGNORED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "modifiersLeadWithComplexRegionField",
+			"find": "_i.body.length == 1",
+			"replace": "_i.body.length > 0",
+			"note": "several modifiers in the #if branch no longer make a region complex"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-ELSE-COUNT-IGNORED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "modifiersLeadWithComplexRegionField",
+			"find": "_e.length == 1",
+			"replace": "_e.length > 0",
+			"note": "several elements in the #else branch no longer make a region complex"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-ELSE-META-UNCHECKED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "modifiersLeadWithComplexRegionField",
+			"find": "macro metadataIsSimple(_m)",
+			"replace": "macro true",
+			"note": "a complex metadata in the #else branch reads as simple"
+		},
+		{
+			"name": "M-COND-MOD-GLUE-COMMENT-IGNORED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "modifiersLeadWithComplexRegionField",
+			"find": "macro $elem.leadingComments.length == 0 && $elem.trailingComment == null",
+			"replace": "macro true",
+			"note": "a comment inside the region no longer makes it complex"
 		}
 	]
 }

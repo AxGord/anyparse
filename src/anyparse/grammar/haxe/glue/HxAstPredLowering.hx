@@ -352,6 +352,7 @@ final class HxAstPredLowering extends AstPredLowering {
 			abstractBodyBeyondValuesField(),
 			metadataIsSimpleField(),
 			metaArgIsSimpleField(),
+			modifiersLeadWithComplexRegionField(),
 			exprIsPathField(),
 			interpStringIsPlainField()
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
@@ -1296,6 +1297,47 @@ final class HxAstPredLowering extends AstPredLowering {
 			macro : Bool, nullSwitch(ident('e'), macro false, cases, path),
 			'True iff a metadata argument is a literal, a dotted path, an operator over simple operands or a call of a path over simple '
 			+ 'arguments.'
+		);
+	}
+
+	/**
+	 * Whether a member's modifier run opens with a conditional region that is not simple. A simple region has no `#elseif`,
+	 * one test for its condition, one keyword in its `#if` branch, at most one keyword or simple metadata in its `#else`,
+	 * and no comment on any of them: the shape that may share the line of the metadata before it.
+	 */
+	private function modifiersLeadWithComplexRegionField(): Field {
+		final prefix: String = 'anyparse.grammar.haxe.cond.HxCondModPrefix';
+		final inner: String = ShapeBuilder.instancePath('anyparse.grammar.haxe.cond.HxConditionalInline', [prefix]);
+		// A comment is a trivia slot of the element, so it exists only where the Star's elements carry trivia.
+		final uncommented: (Expr, String) -> Expr = (elem, fieldName) ->
+			starElemWrapped(inner, fieldName) ? macro $elem.leadingComments.length == 0 && $elem.trailingComment == null : macro true;
+		final first: Expr = starElem(HX_MEMBER_DECL, 'modifiers', macro m.modifiers[0]);
+		final ifElem: Expr = starElem(inner, 'body', macro _i.body[0]);
+		final elseElem: Expr = starElem(inner, 'elseBody', macro _e[0]);
+		final ifKeyword: Expr = nullSwitch(ifElem, macro false, [caseOf(prefix, ['Conditional', 'Meta'], macro false)], macro true);
+		final elseOne: Expr = nullSwitch(elseElem, macro false, [
+			caseOf(prefix, ['Conditional'], macro false),
+			caseBind(prefix, 'Meta', [0 => '_m'], macro metadataIsSimple(_m))
+		], macro true);
+		final ifClean: Expr = uncommented(macro _i.body[0], 'body');
+		final elseClean: Expr = uncommented(macro _e[0], 'elseBody');
+		final elseSimple: Expr = macro switch _i.elseBody {
+			case null: true;
+			case _e:
+				_e.length == 1 && $elseOne && $elseClean;
+		};
+		final simple: Expr = macro _i.elseifs.length == 0
+			&& anyparse.grammar.haxe.cond.HxCondExprReader.isOneTest(_i.cond)
+			&& _i.body.length == 1 && $ifKeyword && $ifClean && $elseSimple;
+		final region: Expr = nullSwitch(
+			first, macro false,
+			[caseBind(HX_MEMBER_MODIFIER, CONDITIONAL_CTOR, [0 => '_i'], macro !$simple)],
+			macro false
+		);
+		return predField(
+			'modifiersLeadWithComplexRegion', [valueArg('m', HX_MEMBER_DECL)],
+			macro : Bool, macro m != null && m.modifiers.length > 0 && $region,
+			'True iff a member\'s modifiers open with a conditional region of more than one test, branch or element, or with a comment.'
 		);
 	}
 

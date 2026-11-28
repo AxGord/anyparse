@@ -118,7 +118,8 @@ final class WriterStarPadLowering {
 		final policyDecl: Expr = metaPolicy == null
 			? macro {}
 			: WriterMetaLineEndLowering.fitDecls(
-				WriterMetaLineEndLowering.simplePred(f.metaNode, f.rootTypePath, f.trivia), metaPolicy, macro _arr, e -> e, macro false
+				WriterMetaLineEndLowering.simplePred(f.metaNode, f.rootTypePath, f.trivia), metaPolicy, macro _arr, e -> e, macro false,
+				WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess)
 			);
 		final fitSep: Expr = WriterMetaLineEndLowering.fitSepExpr();
 		final elemSep: Expr = metaPolicy == null

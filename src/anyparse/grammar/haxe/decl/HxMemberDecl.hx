@@ -37,13 +37,19 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  * ENDS in a region: the fork deletes the blank after an ordinary metadata prefix and keeps it
  * after a region, and the parser folds both into the same `meta` Star, so the run's last ctor
  * is the only thing that tells them apart.
+ *
+ * `metaLineEndBreakIf('modifiersLeadWithComplexRegion')`: under `Fit` a lone simple metadata shares
+ * its line with a conditional modifier region after it only when the region is simple (one test, no
+ * `#elseif`, one keyword per branch, a simple metadata allowed in `#else`); any other region sends
+ * the metadata to a line of its own.
  */
 @:peg
 typedef HxMemberDecl = {
 
 	@:trivia
 	@:tryparse
-	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))
+	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'),
+		metaLineEndBreakIf('modifiersLeadWithComplexRegion'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'),
 		metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),
 		metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'))

@@ -25,6 +25,8 @@ typedef ChainWalk = { final decls: Array<Expr>; final pattern: Expr; }
  * the wrapper's annotation field after it. A site that names none has no simple annotation.
  * `@:fmt(metaLineEndInlineMax('<optField>'))` names the Int knob that caps the written width of a lone simple
  * annotation kept on its declaration's line; `0` is no cap, and so is a site that names none.
+ * `@:fmt(metaLineEndBreakIf('<predicate>'))` names the generated predicate over the struct holding the run that sends
+ * a lone simple annotation to a line of its own all the same, for a sibling whose head may not share its line.
  */
 @:access(anyparse.macro.WriterCtorPatternLowering, anyparse.macro.WriterLoweringSupport)
 final class WriterMetaLineEndLowering {
@@ -32,16 +34,18 @@ final class WriterMetaLineEndLowering {
 	private static final SIMPLE_META: String = 'metaLineEndSimple';
 	private static final CHAIN_META: String = 'metaLineEndChain';
 	private static final INLINE_MAX_META: String = 'metaLineEndInlineMax';
+	private static final LONE_BREAK_META: String = 'metaLineEndBreakIf';
 	private static final TRIVIA_META: String = ':trivia';
 
 	/**
 	 * The runtime locals of a metadata run under its knob `raw`: `_metaFit` is `1` for one simple element, which
 	 * keeps the declaration's line when that line fits, `2` for several, which share one row of their own when it
 	 * fits, and `0` otherwise; `_metaPolicy` is the knob with `Fit` read as `After` (when `_metaFit` is `0`) or `AfterLast`. A run
-	 * holding a comment (`broken`) is never fit: its row breaks as under `After`. `pred` is `simplePred`'s answer.
+	 * holding a comment (`broken`) is never fit: its row breaks as under `After`; so is a lone element when `loneBreak`
+	 * (`loneBreakExpr`'s answer) holds. `pred` is `simplePred`'s answer.
 	 * `_metaFit` stays assignable for `fitInlineCapExpr`, which reads the element once it is written.
 	 */
-	public static function fitDecls(pred: Null<Expr>, raw: Expr, arr: Expr, elemNode: Expr -> Expr, broken: Expr): Expr {
+	public static function fitDecls(pred: Null<Expr>, raw: Expr, arr: Expr, elemNode: Expr -> Expr, broken: Expr, loneBreak: Expr): Expr {
 		final pos: Position = Context.currentPos();
 		final fit: Expr = if (pred == null) {
 			macro 0;
@@ -49,7 +53,7 @@ final class WriterMetaLineEndLowering {
 			final test: Expr = { expr: ECall(pred, [elemNode(macro _fe)]), pos: pos };
 			macro _metaRaw == anyparse.format.MetadataLineEndPolicy.Fit && $arr.length > 0 && !$broken
 				&& !Lambda.exists($arr, _fe -> !$test)
-				? ($arr.length == 1 ? 1 : 2)
+				? ($arr.length == 1 ? ($loneBreak ? 0 : 1) : 2)
 				: 0;
 		};
 		final policy: Expr = macro _metaRaw == anyparse.format.MetadataLineEndPolicy.Fit
@@ -269,6 +273,21 @@ final class WriterMetaLineEndLowering {
 	}
 
 	/**
+	 * Whether a lone simple element of the run read by `fieldAccess` breaks as under `After` all the same: the call of the
+	 * predicate `@:fmt(metaLineEndBreakIf('<pred>'))` names, over the struct holding the run; `macro false` when it names none.
+	 */
+	public static function loneBreakExpr(field: ShapeNode, rootTypePath: String, trivia: Bool, fieldAccess: Expr): Expr {
+		final names: Null<Array<String>> = MetaInspect.fmtReadStringArgs(field, LONE_BREAK_META);
+		if (names == null || names.length == 0) return macro false;
+		final owner: Expr = switch fieldAccess.expr {
+			case EField(o, _): o;
+			case _:
+				Context.fatalError('WriterLowering: @:fmt($LONE_BREAK_META) needs a run read as a field of its struct', fieldAccess.pos);
+		};
+		return { expr: ECall(AstPredLowering.predFnExpr(rootTypePath, trivia, false, names[0]), [owner]), pos: fieldAccess.pos };
+	}
+
+	/**
 	 * Whether a comment stands between the run in `field` and what it annotates: the leading comments of the first
 	 * element of the next non-empty trivia run, or those the parser keeps in the gap before the next bare field
 	 * (`TriviaPairSlots.isBareNonFirstRef`). A run followed by such a comment is broken, as one holding a comment.
@@ -355,7 +374,8 @@ final class WriterMetaLineEndLowering {
 		final broken: Expr = macro ${gapCommentExpr(ctx, field, typePath, fieldAccess)}
 			|| $trailLC.length > 0
 			|| Lambda.exists($arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);
-		return fitDecls(simplePred(field, ctx.shape.root, true), raw, arr, e -> macro $e.node, broken);
+		final loneBreak: Expr = loneBreakExpr(field, ctx.shape.root, true, fieldAccess);
+		return fitDecls(simplePred(field, ctx.shape.root, true), raw, arr, e -> macro $e.node, broken, loneBreak);
 	}
 
 	/** Whether the written `doc` of one annotation is wider than the cap `field` names, or `null` when it names none. */

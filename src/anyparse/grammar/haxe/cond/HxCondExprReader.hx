@@ -17,6 +17,26 @@ final class HxCondExprReader {
 		return tree == null || chainsComparisons(tree) ? null : exprOf(tree);
 	}
 
+	/**
+	 * Whether `condition` states one test: a flag, a literal, a negation or one comparison, in any parentheses, with no
+	 * `&&` or `||` anywhere in it. A condition that does not parse is no one test.
+	 */
+	public static function isOneTest(condition: String): Bool {
+		final tree: Null<HxCondValue> = try HxCondValueParser.parse(condition) catch (_: Exception) null;
+		return tree != null && !joinsTests(tree);
+	}
+
+	private static function joinsTests(tree: HxCondValue): Bool {
+		return switch tree {
+			case And(_, _), Or(_, _): true;
+			case Eq(left, right), NotEq(left, right), GtEq(left, right), LtEq(left, right), Gt(left, right), Lt(left, right):
+				joinsTests(left) || joinsTests(right);
+			case Not(operand): joinsTests(operand);
+			case Group(inner): joinsTests(inner);
+			case VersionCall(_), Quoted(_), Flag(_), Number(_): false;
+		};
+	}
+
 	/** `tree` as a `CondExpr`: a group is its inner condition, a literal loses its quotes. */
 	private static function exprOf(tree: HxCondValue): CondExpr {
 		return switch tree {
