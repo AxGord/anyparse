@@ -441,12 +441,11 @@ final class DependencyCarry {
 		if (!destInfo.imports.exists(imp -> imp.guarded && same(imp))) return false;
 		final body: Null<QueryNode> = ModuleScan.guardedBodyRegion(plugin.parseFileTypeRefs(destSource), destSource, plugin);
 		// A DIRECT child only: an import under a further `#if` inside the body guard holds in fewer builds than the arriving declaration.
-		return body != null
-			&& destInfo.imports.exists(imp ->
-				imp.guarded
-				&& same(imp)
-				&& body.children.exists(c -> c.span != null && c.span.from == imp.span.from && c.span.to == imp.span.to)
-			);
+		return body != null && destInfo.imports.exists(imp ->
+			imp.guarded
+			&& same(imp)
+			&& body.children.exists(c -> c.span != null && c.span.from == imp.span.from && c.span.to == imp.span.to)
+		);
 	}
 
 	/**

@@ -5073,7 +5073,7 @@
 			"name": "M-FACTS-TEXT-LITERAL-FLAGS",
 			"type": "anyparse.query.FactsProvenance",
 			"method": "builds",
-			"find": "p.span.to <= l.span.to\n\t\t\t\t&& FLAGS.match(_text.substring(p.span.to, l.span.to))",
+			"find": "p.span.to <= l.span.to\n\t\t\t&& FLAGS.match(_text.substring(p.span.to, l.span.to))",
 			"replace": "p.span.to == l.span.to",
 			"note": "a regular expression written with flags is no construction the text writes: the compiler's position of it leaves them out, so openfl's `TextField` is not its text"
 		},

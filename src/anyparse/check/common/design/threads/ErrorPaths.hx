@@ -104,10 +104,9 @@ final class ErrorPaths {
 	private function runsOnlyIn(file: String, fnSpan: Span, clause: Span): Bool {
 		final id: Null<String> = _graph.functionAt(file, fnSpan.from);
 		final ways: Array<CallEdge> = id == null ? [] : _graph.inEdges(id).filter(e -> e.kind != Contains);
-		return ways.length > 0
-			&& ways.foreach(
-				e -> e.kind.isInvocation() && e.file == file && e.span != null && e.span.from >= clause.from && e.span.to <= clause.to
-			);
+		return ways.length > 0 && ways.foreach(
+			e -> e.kind.isInvocation() && e.file == file && e.span != null && e.span.from >= clause.from && e.span.to <= clause.to
+		);
 	}
 
 	/** The 1-based line of `offset` in `file`. */

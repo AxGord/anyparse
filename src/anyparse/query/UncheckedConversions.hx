@@ -133,10 +133,9 @@ final class UncheckedConversions {
 				else if (fact.kind == FactKinds.TYPEDEF)
 					fact.targets.length > 0 && fact.targets.foreach(target -> {
 						final read: Null<FactsType> = FactsTypeTree.read(target);
-						read != null
-							&& noneBy(
-								FactsEscapes.substitute(read, FactsEscapes.bindings(id, fact, args)), foreign, seen.concat([id]), false
-							);
+						read != null && noneBy(
+							FactsEscapes.substitute(read, FactsEscapes.bindings(id, fact, args)), foreign, seen.concat([id]), false
+						);
 					})
 				else
 					coreValue(fact);

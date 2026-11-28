@@ -168,10 +168,9 @@ final class CaseSlotTypes {
 		final node: QueryNode = peeled(arg);
 		if (node.kind == _shape.identKind && node.name == _shape.wildcardPatternName) return true;
 		final ident: Null<PatternIdent> = idents.find(i -> i.node == node);
-		return ident != null
-			&& CasePatterns.isDecidedCapture(
-				ident, { typed: false, isDynamic: false }, scope, i -> slot != null && rulesOutConstant(slot, i.name)
-			);
+		return ident != null && CasePatterns.isDecidedCapture(
+			ident, { typed: false, isDynamic: false }, scope, i -> slot != null && rulesOutConstant(slot, i.name)
+		);
 	}
 
 	/** The type `target` meets inside `pattern`, itself matched against `expected`. */

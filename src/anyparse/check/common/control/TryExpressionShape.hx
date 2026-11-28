@@ -252,10 +252,9 @@ final class TryExpressionShape {
 	public static function danglingLineComment(
 		source: String, span: Null<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
 	): Bool {
-		return span != null
-			&& comments.exists(
-				tok -> tok.isLine && tok.from >= span.from && tok.to <= span.to && source.substring(tok.to, span.to).indexOf('\n') < 0
-			);
+		return span != null && comments.exists(
+			tok -> tok.isLine && tok.from >= span.from && tok.to <= span.to && source.substring(tok.to, span.to).indexOf('\n') < 0
+		);
 	}
 
 	/**

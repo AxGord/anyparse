@@ -317,10 +317,9 @@ final class OperatorSelection {
 			for (member in r.type.members)
 				for (overloaded in member.operatorOverloads)
 					if (kinds.contains(overloaded)) return Overloaded(r.type.name);
-		return decls.length > 0
-			&& decls.foreach(r ->
-				_plainKinds.contains(r.type.kind) || (_abstractKinds.contains(r.type.kind) && !r.type.hasBuild && !r.type.hasAutoBuild)
-			)
+		return decls.length > 0 && decls.foreach(
+			r -> _plainKinds.contains(r.type.kind) || (_abstractKinds.contains(r.type.kind) && !r.type.hasBuild && !r.type.hasAutoBuild)
+		)
 			? Builtin
 			: Unproven;
 	}

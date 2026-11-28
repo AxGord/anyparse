@@ -577,12 +577,11 @@ final class ShadowingLocal extends RuleBase {
 	 */
 	private static function readAfter(hits: Array<RefHit>, frame: QueryNode, declSpan: Span): Bool {
 		final frameSpan: Null<Span> = frame.span;
-		return frameSpan == null
-			|| hits.exists(hit ->
-				hit.kind == RefKind.Read && hit.span.from >= declSpan.to
-				&& within(hit.span, frameSpan)
-				&& !bindsWithin(hit.bindingSpan, declSpan)
-			);
+		return frameSpan == null || hits.exists(hit ->
+			hit.kind == RefKind.Read && hit.span.from >= declSpan.to
+			&& within(hit.span, frameSpan)
+			&& !bindsWithin(hit.bindingSpan, declSpan)
+		);
 	}
 
 	/**
@@ -682,8 +681,7 @@ final class ShadowingLocal extends RuleBase {
 		final frameSpan: Null<Span> = frame.span;
 		final regions: Array<LexRegion> = site.plugin.lexicalRegions(site.source);
 		if (
-			frameSpan == null
-			|| regions.exists(r ->
+			frameSpan == null || regions.exists(r ->
 				r.kind == LexRegionKind.StringLit && r.from >= frameSpan.from && r.to <= frameSpan.to
 				&& SourceText.mentionsIdent(site.source, new Span(r.from, r.to), name)
 			)

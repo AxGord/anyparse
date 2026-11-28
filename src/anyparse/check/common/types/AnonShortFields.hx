@@ -198,8 +198,7 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 			} else {
 				if (isVar && foreignMeta) return null;
 				if (
-					isVar
-					&& !longFieldEdits(
+					isVar && !longFieldEdits(
 						edits, member, runFrom ?? span.from, optionalMeta, member == lastMember, source, lexed, accessors, seams
 					)
 				)

@@ -484,10 +484,9 @@ final class PostLand {
 	private static function alive(cache: String, sha: String): Bool {
 		final file: String = fileOf(cache, sha, PID);
 		final pid: Null<Int> = FileSystem.exists(file) ? Std.parseInt(File.getContent(file)) : null;
-		return pid != null
-			&& js.Syntax.code(
-				"(function (p) { try { process.kill(p, 0); return true; } catch (e) { return e.code === 'EPERM'; } })({0})", pid
-			);
+		return pid != null && js.Syntax.code(
+			"(function (p) { try { process.kill(p, 0); return true; } catch (e) { return e.code === 'EPERM'; } })({0})", pid
+		);
 	}
 
 	private static function run(repo: String, sha: String, cache: String, suite: Bool): Int {

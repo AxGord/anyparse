@@ -198,6 +198,7 @@
 		"expressionIf": "next",
 		"expressionIfFit": true,
 		"expressionIfFitMaxBranches": 3,
-		"expressionIfFitMaxValueWidth": 8
+		"expressionIfFitMaxValueWidth": 8,
+		"chainHeadLift": true
 	}
 }

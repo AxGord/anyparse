@@ -82,10 +82,9 @@ final class LockDominance {
 		final under: Array<String> = valuation != null
 			? [valuation]
 			: [ for (s in _states.statesOf(take.from)) if (_conditions.carried(take, s.valuation, s.ctx) != 0) s.valuation ];
-		return under.length > 0
-			&& under.foreach(v ->
-				_must.at(take.from, v, take.file, at.from).exists(h -> MustHeld.objectOf(h) == object && by.contains(MustHeld.lockOf(h)))
-			);
+		return under.length > 0 && under.foreach(
+			v -> _must.at(take.from, v, take.file, at.from).exists(h -> MustHeld.objectOf(h) == object && by.contains(MustHeld.lockOf(h)))
+		);
 	}
 
 	/**

@@ -1009,10 +1009,9 @@ final class ElementSpan {
 	 * between `from` and `to`.
 	 */
 	private static function sectionBreakWithin(source: String, tokens: Array<CommentTok>, from: Int, to: Int): Bool {
-		return blankLineWithin(source, from, to)
-			|| tokens.exists(
-				t -> t.from >= from && t.to <= to && SourceText.startsItsLine(source, t.from) && !SourceComments.isDocBlock(source, t)
-			);
+		return blankLineWithin(source, from, to) || tokens.exists(
+			t -> t.from >= from && t.to <= to && SourceText.startsItsLine(source, t.from) && !SourceComments.isDocBlock(source, t)
+		);
 	}
 
 	/**

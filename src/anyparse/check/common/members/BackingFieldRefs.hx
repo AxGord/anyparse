@@ -296,10 +296,9 @@ final class BackingFieldRefs {
 			fieldAccessTokenOffset(node, span, source, field, shape.identKind)
 		else
 			-1;
-		return off < 0
-			|| classifyOwnerBinding(
-				off, bareIdent, owner, field, propName, index, ownerFileScan, cls, writePos, shadowsProp, renameEdits, excludeSpans
-			);
+		return off < 0 || classifyOwnerBinding(
+			off, bareIdent, owner, field, propName, index, ownerFileScan, cls, writePos, shadowsProp, renameEdits, excludeSpans
+		);
 	}
 
 	/**
@@ -325,8 +324,7 @@ final class BackingFieldRefs {
 		}
 		final cls2: Null<String> = isClass && node.name != null ? node.name : cls;
 		if (
-			node.name == field
-			&& !attributeOccurrence(
+			node.name == field && !attributeOccurrence(
 				node, field, owner, propName, index, source, ownerFileScan, cls2, writePos, shadowsProp, renameEdits, excludeSpans, shape
 			)
 		)

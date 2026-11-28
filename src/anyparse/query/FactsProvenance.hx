@@ -107,12 +107,11 @@ private final class BodyText {
 	 * nothing but letters — the flags of a regular expression, which the compiler's position of the construction leaves out.
 	 */
 	public function builds(p: FactPos, built: String, constructions: Map<String, String>): Bool {
-		return holds(p)
-			&& _literals.exists(l ->
-				l.span.from == p.span.from && p.span.to <= l.span.to
-				&& FLAGS.match(_text.substring(p.span.to, l.span.to))
-				&& constructions[l.kind] == built
-			);
+		return holds(p) && _literals.exists(l ->
+			l.span.from == p.span.from && p.span.to <= l.span.to
+			&& FLAGS.match(_text.substring(p.span.to, l.span.to))
+			&& constructions[l.kind] == built
+		);
 	}
 
 	/**
