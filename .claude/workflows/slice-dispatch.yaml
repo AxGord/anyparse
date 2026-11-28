@@ -64,10 +64,11 @@ states:
         (a rejected line is already `[!]`; a blocked one stays `[>]` until you message its driver `close`/`stop`,
         which writes `[!]`; then `slot_free`; a `regate` keeps the slot); a blocked slice whose block is a call only the user
         makes → message its driver `ask_user` with the one-line question (it enters the human wait and hands back AWAITING);
-        a blocked slice you HOLD (it waits on something another line or the tree brings; it keeps its slot) → name a condition
-        you can run (a command that passes, e.g. a check script; never "after line X lands"), check that condition itself at
-        every LANDED, and set `on_end_tell_parent` on the line expected to bring it; never tell the dispatcher to silence its
-        stale/unanswered marks without a deadline (stop-gap until ENG-PARENT-HOLD-UNTIL-CONDITION; user 2026-11-27);
+        a blocked slice you HOLD (it waits on something another line or the tree brings; it keeps its slot) → message its
+        driver the answer `hold until_cmd: <command>` (exit 0 = met, run in the task's repo) or `hold until_done: <queue id>`,
+        optionally `hold deadline=<N>m|h until_…` (default 1h, max 4h); the engine checks it at every collect and hands back
+        `reason=hold condition met: …` (route it then) or, past the deadline, `reason=hold <age>, condition not met: …; still hold?`;
+        a driver's `HELD task=… until=…` line needs nothing; also set `on_end_tell_parent` on the line expected to bring it;
         any other need of the user → tell the user, keep the slot. Never take over the slice's work yourself.
       - `AWAITING task=<ID> session=<P> question=…` — a human wait: the line is `awaiting` and holds no slot. Relay the
         question to the user verbatim, drop the task from `tasks`, `slot_free`. The user's answer → `answer({session_id: P,
