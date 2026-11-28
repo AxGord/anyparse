@@ -5262,6 +5262,86 @@
 			"find": "if (!run.ok) {",
 			"replace": "if (false) {",
 			"note": "a list the queue CLI refused is reported as applied and its record stays"
+		},
+		{
+			"name": "M-DOCS-GEN-SECTIONS-RULE-OPTIONS-EMPTY",
+			"type": "dev.DocsGen",
+			"method": "sections",
+			"find": "ruleOptionTable(Linter.acceptedOptions())",
+			"replace": "ruleOptionTable([])",
+			"note": "the rule-options region is generated from no options, so the committed page no longer equals the generated one"
+		},
+		{
+			"name": "M-DOCS-GEN-SPLICE-DROPS-TAIL",
+			"type": "dev.DocsGen",
+			"method": "splice",
+			"find": "${page.substring(to)}",
+			"replace": "",
+			"note": "the text after the region's body, its end marker included, is cut from the page"
+		},
+		{
+			"name": "M-DOCS-GEN-SPLICE-NO-MARKER-ACCEPTED",
+			"type": "dev.DocsGen",
+			"method": "splice",
+			"find": "from < 0 || to < from",
+			"replace": "false",
+			"note": "a page without the region's markers is spliced into anyway, mangling it instead of refusing it"
+		},
+		{
+			"name": "M-DOCS-GEN-CHECK-WRITES",
+			"type": "dev.DocsGen",
+			"method": "apply",
+			"find": "if (write) for",
+			"replace": "for",
+			"note": "the check mode rewrites the stale pages it was only to name"
+		},
+		{
+			"name": "M-DOCS-GEN-CURRENT-PAGE-REPORTED",
+			"type": "dev.DocsGen",
+			"method": "apply",
+			"find": "after != File.getContent(file)",
+			"replace": "true",
+			"note": "a page already holding the generated text is reported stale, so the check can never pass"
+		},
+		{
+			"name": "M-DOCS-GEN-TWO-REGIONS-ONE-PAGE",
+			"type": "dev.DocsGen",
+			"method": "apply",
+			"find": "texts[section.path] ?? File.getContent(file)",
+			"replace": "File.getContent(file)",
+			"note": "a second region of a page is spliced into the file as read, so the first region's text is lost"
+		},
+		{
+			"name": "M-DOCS-GEN-COMMAND-FLAGS-DROPPED",
+			"type": "dev.DocsGen",
+			"method": "commandTable",
+			"find": "command.flags().names()",
+			"replace": "([]: Array<String>)",
+			"note": "the command table lists no flag of any command"
+		},
+		{
+			"name": "M-DOCS-GEN-RULE-WITHOUT-OPTIONS-LISTED",
+			"type": "dev.DocsGen",
+			"method": "ruleOptionTable",
+			"find": "keys.length > 0 && ",
+			"replace": "",
+			"note": "a rule that reads no option gets a row with an empty options cell"
+		},
+		{
+			"name": "M-DOCS-GEN-CONFIG-KEY-TYPE-FLATTENED",
+			"type": "dev.ConfigKeys",
+			"method": "declared",
+			"find": "type: typeName(field.type)",
+			"replace": "type: 'Dynamic'",
+			"note": "a key's type is no longer read from the schema, so `Map<String, JValue>` reads as `Dynamic`"
+		},
+		{
+			"name": "M-DOCS-GEN-MAIN-NEVER-WRITES",
+			"type": "dev.DocsGen",
+			"method": "main",
+			"find": "!check",
+			"replace": "false",
+			"note": "the default mode names the stale pages but writes none, so a second run still finds them stale"
 		}
 	]
 }

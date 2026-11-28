@@ -45,6 +45,7 @@ final class Dev {
 		{ name: 'probe', main: Probe.main, usage: Probe.USAGE },
 
 		{ name: 'decision', main: Decision.main, usage: Decision.USAGE },
+		{ name: 'docs-gen', main: DocsGen.main, usage: DocsGen.USAGE },
 		{ name: 'main-commit', main: MainCommit.main, usage: MainCommit.USAGE },
 		{ name: 'lessons-file', main: LessonsFile.main, usage: LessonsFile.USAGE },
 		{ name: 'recon-facts', main: ReconFacts.main, usage: ReconFacts.USAGE },

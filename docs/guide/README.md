@@ -12,6 +12,8 @@ any command are its `--help`; the CLI contract (exit codes, pattern and selector
   ([`hxformat.json` values](../haxe-format-config.md))
 - [Lint](lint.md) — running the checks, `--fix`, suppression, report formats
 - [Lint configuration](lint-config.md) — every `apq.json` key
+- [Commands](commands.md) — every command with its summary and flags (generated)
+- [Rule options](rule-options.md) — the keys each rule reads from its `rules` entry (generated)
 - Lint rules — the [index by category](../lint-rules.md) (generated from the registry), and each rule's prose:
   [`imports`](lint/imports.md) · [`docs`](lint/docs.md) · [`naming`](lint/naming.md) ·
   [`nullsafety`](lint/nullsafety.md) · [`types`](lint/types.md) · [`members`](lint/members.md) ·
