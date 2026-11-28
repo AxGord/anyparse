@@ -609,6 +609,14 @@
 			"find": "text.rtrim()",
 			"replace": "text.trim()",
 			"note": "a copied run loses the layout opening it, so a fix that puts it after a guard drops its blank line and moves the comment of its opening line"
+		},
+		{
+			"name": "M-HAXE-LAMBDA-LONE-TYPED-PARAM",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "lambda",
+			"find": "HaxeParseBack.LAMBDA) ?? listed;",
+			"replace": "HaxeParseBack.LAMBDA);",
+			"note": "a lone typed parameter is spelled bare, which does not parse as a lambda, so no lambda is built"
 		}
 	]
 }

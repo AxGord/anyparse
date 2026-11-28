@@ -4384,10 +4384,13 @@ class MemberReachFactsTest extends Test {
 		final mark: Map<String, String> = ['Mark.hx' => 'enum Mark {\n\tPlain;\n\tNum(i:Int);\n}\n'];
 		final escape: String = 'var d:Dynamic = Mark.Plain;';
 		assertMatch(truthLibAsk(escape, 'throw last;', mark), r -> r.match(Proven));
-		function unread(table: CompilerFacts): Void {
-			for (c in table.type('Mark')?.constructors ?? []) if (c.name == 'Plain') Reflect.setField(c, 'type', '?');
-		}
-		assertMatch(rewritten(unread, () -> truthLibAsk(escape, 'throw last;', mark)), r -> !r.match(Proven)); // noqa: prefer-bind
+		assertMatch(
+			rewritten((table: CompilerFacts) -> {
+				for (c in table.type('Mark')?.constructors ?? []) if (c.name == 'Plain')
+					Reflect.setField(c, 'type', '?');
+			}, () -> truthLibAsk(escape, 'throw last;', mark)),
+			r -> !r.match(Proven)
+		); // noqa: prefer-bind
 	}
 
 	@:pin('control')

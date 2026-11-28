@@ -518,6 +518,89 @@
 			"find": "? takesArity(binding, arity, shape)",
 			"replace": "? true",
 			"note": "a local function with a parameter more than the call passes is bound or named bare, and the function value keeps that parameter"
+		},
+		{
+			"name": "M-SULF-COUNT",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "soleValueRead",
+			"find": "if (bound.length != 1) return null;",
+			"replace": "if (bound.length == 0) return null;",
+			"note": "a function read twice is flagged on its first read, so the fix deletes a declaration the second read still needs"
+		},
+		{
+			"name": "M-SULF-BARRIER",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "soleValueRead",
+			"find": "path.slice(from + 1, path.length - 1).exists(n -> s.barrierKinds.contains(n.kind))",
+			"replace": "false",
+			"note": "a read under a loop, a closure or the function's own body becomes a lambda built anew on every pass"
+		},
+		{
+			"name": "M-SULF-VALUE-POSITION-ANY",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "isValuePosition",
+			"force": "true",
+			"note": "a function called by name is turned into a lambda that is called in place"
+		},
+		{
+			"name": "M-SULF-VALUE-POSITION-NONE",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "isValuePosition",
+			"force": "false",
+			"note": "no value position is recognised, so nothing is ever flagged"
+		},
+		{
+			"name": "M-SULF-SHADOW",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "capturesSurvive",
+			"force": "true",
+			"note": "a body moved under a declaration shadowing a name it reads binds that new declaration"
+		},
+		{
+			"name": "M-SULF-TYPE-PARAMS",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "matchOf",
+			"find": "if ((f.typeParams()[span.from] ?? []).length > 0) return null;",
+			"replace": "if (false) return null;",
+			"note": "a generic local function becomes a lambda, which cannot declare its type parameters"
+		},
+		{
+			"name": "M-SULF-PARAM-FORMS",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "partsOf",
+			"find": "if (c.kind == s.shape.restParamKind || c.kind == s.shape.optionalParamKind || c.children.length > 0) return null;",
+			"replace": "if (false) return null;",
+			"note": "an optional, defaulted or rest parameter is copied into a lambda head"
+		},
+		{
+			"name": "M-SULF-COMMENT",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "commentDropped",
+			"force": "false",
+			"note": "a doc above the function, or a comment in its dropped head or line, is deleted with the declaration"
+		},
+		{
+			"name": "M-SULF-RESULT",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "resultSurvives",
+			"force": "true",
+			"note": "a result no shape or position proves is rewritten, so a generic callee infers another type"
+		},
+		{
+			"name": "M-SULF-SHAPE-PROOF-OFF",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "resultSurvives",
+			"find": "if (voidHint && ArrowTail.of(parts.body, s.shape) != Open) return true;",
+			"replace": "if (false) return true;",
+			"note": "a body whose returns pin its result still asks the position, so an untyped callee refuses it"
+		},
+		{
+			"name": "M-SULF-BINDER-OFF",
+			"type": "anyparse.check.common.expressions.SingleUseLocalFunction",
+			"method": "resultSurvives",
+			"find": "binder != null && binder.expectsResult(",
+			"replace": "binder != null && !binder.expectsResult(",
+			"note": "a hint the callee parameter restates is refused, so the motivating site stays a local function"
 		}
 	]
 }

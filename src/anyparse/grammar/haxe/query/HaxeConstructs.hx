@@ -78,8 +78,9 @@ final class HaxeConstructs implements Constructs {
 
 	public function lambda(params: Array<String>, body: Built): Null<Built> {
 		if (body.kind != Expression) return null;
-		final head: String = params.length == 1 ? params[0] : '(${params.join(', ')})';
-		return _parseBack.rooted('$head -> ${body.text}', Expression, HaxeParseBack.LAMBDA);
+		final listed: Null<Built> = _parseBack.rooted('(${params.join(', ')}) -> ${body.text}', Expression, HaxeParseBack.LAMBDA);
+		// A lone parameter goes bare only where it is a bare name: a typed `x: T` needs the parentheses.
+		return params.length != 1 ? listed : _parseBack.rooted('${params[0]} -> ${body.text}', Expression, HaxeParseBack.LAMBDA) ?? listed;
 	}
 
 	public function returning(value: Built): Null<Built> {

@@ -104,8 +104,11 @@ final class WrittenTypeIdentity {
 			: DeclaredNullity.headTierIn(path, host.file, written.at, _index, host.params, _wrappers, _builtins);
 	}
 
-	/** The part `text` of the type `of`, written where `of` is. */
-	private static inline function partOf(of: Located, text: String): Located {
+	/**
+	 * The part `text` of the type `of`, written where `of` is. Not `inline`: inlined into the second operand of a `||`, the JVM
+	 * target leaves a string temporary the first operand never assigns, and its verifier refuses the whole class.
+	 */
+	private static function partOf(of: Located, text: String): Located {
 		return {
 			text: text,
 			at: of.at,

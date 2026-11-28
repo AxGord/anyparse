@@ -213,6 +213,7 @@
 	"simplify-boolean-return-chain",
 	"simplify-boolean-ternary",
 	"simplify-negated-compound",
+	"single-use-local-function",
 	"split-var-declaration",
 	"static-constant",
 	"static-init-order",

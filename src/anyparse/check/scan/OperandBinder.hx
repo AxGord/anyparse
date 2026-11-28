@@ -236,13 +236,12 @@ final class OperandBinder {
 	}
 
 	/**
-	 * Whether the result of the lambda `lambda` is expected to have the type `written`: the result of the function type the
-	 * lambda is expected to be (`ExpectedTypes.expectedAt` over `EXPECTATION`, asked of its body) is that type, each bound
-	 * where it is written (`WrittenTypeIdentity`). False where nothing written fixes the result.
+	 * Whether the function `value` — a lambda, or any value standing for a function — is expected to answer the type `written`:
+	 * the result of the function type expected where `value` is written (`ExpectedTypes.functionResult` over `EXPECTATION`) is
+	 * that type, each bound where it is written (`WrittenTypeIdentity`). False where nothing written fixes the result.
 	 */
-	public function expectsResult(lambda: QueryNode, written: Located): Bool {
-		if (!_expectation.isLambda(lambda) || lambda.children.length == 0) return false;
-		final expected: Null<Located> = expectedTypeOf(lambda.children[lambda.children.length - 1]);
+	public function expectsResult(value: QueryNode, written: Located): Bool {
+		final expected: Null<Located> = ExpectedTypes.functionResult(expectedTypeOf(value), EXPECTATION, this);
 		return expected != null
 			&& new WrittenTypeIdentity(_index, writtenTier, _declared.typeParamOwnerAt, _wrappers, _builtins).same(written, expected);
 	}

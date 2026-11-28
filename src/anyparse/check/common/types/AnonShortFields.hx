@@ -240,15 +240,14 @@ final class AnonShortFields extends RuleBase implements DefaultOff {
 
 	private static function lazyLexed(plugin: GrammarPlugin, source: String): () -> Lexed {
 		var cached: Null<Lexed> = null;
-		function resolve(): Lexed {
+		return () -> {
 			final have: Null<Lexed> = cached;
 			if (have != null) return have;
 			final regions: Array<LexRegion> = plugin.lexicalRegions(source);
 			final built: Lexed = { regions: regions, docEnds: CheckScan.docBlockEnds(source, regions) };
 			cached = built;
 			return built;
-		}
-		return resolve;
+		};
 	}
 
 	/**

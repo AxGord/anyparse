@@ -495,14 +495,13 @@ final class SwitchChain {
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?given: SymbolIndex
 	): () -> Null<SymbolIndex> {
 		var cached: Null<SymbolIndex> = null;
-		function resolve(): Null<SymbolIndex> {
+		return () -> {
 			final have: Null<SymbolIndex> = cached;
 			if (have != null) return have;
 			final built: SymbolIndex = IndexScope.resolutionIndexOf(plugin) ?? given ?? IndexScope.report(files, plugin);
 			cached = built;
 			return built;
-		}
-		return resolve;
+		};
 	}
 
 	/**

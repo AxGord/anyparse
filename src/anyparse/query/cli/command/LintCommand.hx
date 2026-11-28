@@ -330,13 +330,14 @@ final class LintCommand implements CliCommand {
 		);
 
 		if (o.fix) return LintOracleRun.endingCompiles(compiler, early, ahead, oracles, () -> {
-			function fix(): Int {
-				return LintFixDriver.runLintFix(
-					files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles), o.noOracle,
-					windowOf, o.verbose, ledger, o.fixProbes, o.reviewBudget
-				);
-			}
-			return LintFixDriver.dryRun(o.dryRun, fix);
+			return LintFixDriver.dryRun(
+				o.dryRun,
+				() ->
+					LintFixDriver.runLintFix(
+						files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, LintFixVerify.verifiable(oracles),
+						o.noOracle, windowOf, o.verbose, ledger, o.fixProbes, o.reviewBudget
+					)
+			);
 		});
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a

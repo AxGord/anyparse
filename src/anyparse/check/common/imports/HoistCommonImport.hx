@@ -646,14 +646,13 @@ final class HoistCommonImport extends RuleBase implements CrossFileFix implement
 		for (entry in files) sourceOf[entry.file] = entry.source;
 		final methodsOf: (String) -> Null<Array<String>> = UsingSites.methodsOfModules(plugin, widest);
 		final sitesOf: Map<String, UsingSites> = [];
-		function contested(file: String, path: String, other: String): Bool {
+		return (file: String, path: String, other: String) -> {
 			final source: Null<String> = sourceOf[file];
 			if (source == null) return true;
 			final sites: UsingSites = sitesOf[file] ?? new UsingSites(source, plugin, file, report);
 			sitesOf[file] = sites;
 			return sites.contested(path, other, methodsOf);
-		}
-		return contested;
+		};
 	}
 
 	/** Record one sound statement's hoist into `site`, so a parent site counts the modules this one serves. */

@@ -241,6 +241,13 @@ final class ExpectedTypes {
 		return { nodes: nodes, indices: [ for (i in 0...nodes.length) nodes[i].children.indexOf(path[i + 1]) ] };
 	}
 
+	/** The result type of the function type `written`, as `host` spells a part of it; null for any other type. */
+	public static function functionResult<W, C>(written: Null<W>, host: ExpectationHost<W, C>, ctx: C): Null<W> {
+		if (written == null) return null;
+		final result: Null<String> = CallGraphNames.functionReturnSource(host.read(written, ctx));
+		return result == null ? null : host.part(written, result, ctx);
+	}
+
 	/** The element a container literal of the type `outer` holds; null for none. */
 	private static inline function elementOf<W, C>(outer: Null<W>, host: ExpectationHost<W, C>, ctx: C): Null<W> {
 		return outer == null ? null : host.element(outer, ctx);
@@ -249,13 +256,6 @@ final class ExpectedTypes {
 	/** Whether `lineage[level]` sits directly inside a node of `kind`. */
 	private static inline function parentIs(lineage: Array<QueryNode>, level: Int, kind: Null<String>): Bool {
 		return level > 0 && lineage[level - 1].kind == kind;
-	}
-
-	/** The result type of the function type `written`, as `host` spells a part of it; null for any other type. */
-	private static function functionResult<W, C>(written: Null<W>, host: ExpectationHost<W, C>, ctx: C): Null<W> {
-		if (written == null) return null;
-		final result: Null<String> = CallGraphNames.functionReturnSource(host.read(written, ctx));
-		return result == null ? null : host.part(written, result, ctx);
 	}
 
 }

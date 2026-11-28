@@ -149,7 +149,7 @@ final class PreferBind extends RuleBase {
 		var wide: Null<SymbolIndex> = null;
 		var widened: Bool = false;
 		var own: Null<SymbolIndex> = given;
-		function covering(file: String): Null<SymbolIndex> {
+		return (file: String) -> {
 			if (!widened) {
 				wide = IndexScope.resolutionIndexOf(plugin);
 				widened = true;
@@ -159,8 +159,7 @@ final class PreferBind extends RuleBase {
 			final built: SymbolIndex = own ?? IndexScope.report(files, plugin);
 			own = built;
 			return built;
-		}
-		return covering;
+		};
 	}
 
 	/** Every bindable lambda under `tree` with its rewrite — the outermost one of a nest only. */

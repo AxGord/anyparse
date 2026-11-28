@@ -257,14 +257,13 @@ final class ExpectedType {
 	 */
 	public static function lazyResolutionIndex(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): () -> SymbolIndex {
 		var index: Null<SymbolIndex> = null;
-		function resolve(): SymbolIndex {
+		return () -> {
 			final cached: Null<SymbolIndex> = index;
 			if (cached != null) return cached;
 			final built: SymbolIndex = IndexScope.resolution(files, plugin);
 			index = built;
 			return built;
-		}
-		return resolve;
+		};
 	}
 
 	/**

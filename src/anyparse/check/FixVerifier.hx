@@ -852,7 +852,7 @@ final class FixVerifier {
 		// applies the confirmed half. What the refusal is kept for is the REPORTED cause at
 		// the ONE seat that reaches no complement — see below.
 		var uncanonical: Null<String> = null;
-		function probe(indices: Array<Int>): Bool {
+		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(n, searchBudget, (indices: Array<Int>) -> {
 			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);
 			return switch CanonicalEdit.canonicalize(before, subset, false, plugin, opts) {
 				case Ok(text): ask(text).match(Confirmed);
@@ -860,8 +860,7 @@ final class FixVerifier {
 					if (uncanonical == null) uncanonical = message;
 					false;
 			};
-		}
-		final failers: Null<Array<Int>> = FailerBisect.isolateFailers(n, searchBudget, probe, spent);
+		}, spent);
 		final refusal: Null<String> = uncanonical;
 		// The full-set typecheck plus every probe that produced a candidate, across every covering
 		// configuration — read HERE because the confirm below spends more, and only the seats that

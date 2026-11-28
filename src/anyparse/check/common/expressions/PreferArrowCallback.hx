@@ -1,12 +1,12 @@
 package anyparse.check.common.expressions;
 
+import anyparse.check.scan.ArrowTail;
 import anyparse.ds.Set;
 import anyparse.query.ElementSpan;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NominalTypes;
 import anyparse.query.ParseGate;
-import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeSyntax;
@@ -44,13 +44,6 @@ private enum Verdict {
 	Fixable;
 	ReportOnly;
 	Silent;
-}
-
-/** A convertible body's tail class — see `tailOf`. */
-private enum Tail {
-	Preserving;
-	VoidTail;
-	Open;
 }
 
 /**
@@ -254,7 +247,7 @@ final class PreferArrowCallback extends RuleBase {
 	private static function verdictOf(ctx: Ctx, call: QueryNode, fnArg: QueryNode): Verdict {
 		final parts: Null<FnParts> = partsOf(ctx, fnArg);
 		if (parts == null) return Silent;
-		final tail: Tail = tailOf(ctx, parts.body);
+		final tail: BodyTail = ArrowTail.of(parts.body, ctx.shape);
 		if (parts.hint == null && tail != Open) return Fixable;
 		final hint: Null<QueryNode> = parts.hint;
 		return hint != null && hintIsVoid(ctx, hint) && tail != Open
@@ -295,39 +288,6 @@ final class PreferArrowCallback extends RuleBase {
 	private static function hintIsVoid(ctx: Ctx, hint: QueryNode): Bool {
 		final span: Null<Span> = hint.span;
 		return span != null && ctx.source.substring(span.from, span.to).trim() == 'Void';
-	}
-
-	/**
-	 * The body's tail class: `Preserving` when explicit returns pin the inferred type in
-	 * both forms, `VoidTail` when the last statement is syntactically `Void`, `Open` when
-	 * the implicit arrow return could pick up the last expression's type. A `throw` tail
-	 * is `Open`: the `function` form is `Void` while the arrow form infers an open
-	 * monomorph — a silent drift in generic positions.
-	 */
-	private static function tailOf(ctx: Ctx, body: QueryNode): Tail {
-		final shape: RefShape = ctx.shape;
-		final valueReturns: Array<String> = shape.valueReturnKinds ?? [];
-		if (body.kind != shape.blockBodyKind) {
-			final expr: Null<QueryNode> = body.children[0];
-			return expr != null && valueReturns.contains(expr.kind) ? Preserving : Open;
-		}
-		if (body.children.length == 0) return VoidTail;
-		final last: QueryNode = body.children[body.children.length - 1];
-		if (valueReturns.contains(last.kind) || last.kind == shape.voidReturnKind) return Preserving;
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		if (ifKinds.contains(last.kind)) return last.children.length <= 2 ? VoidTail : Open;
-		final voidTails: Array<String> = voidTailKinds(shape);
-		return voidTails.contains(last.kind) ? VoidTail : Open;
-	}
-
-	/** Statement kinds that are `Void`-typed by construction when they close a block body. */
-	private static function voidTailKinds(shape: RefShape): Array<String> {
-		final out: Array<String> = ShapeVocab.statementLoopKinds(shape);
-		if (shape.localDeclKinds != null) for (k in shape.localDeclKinds) out.push(k);
-		if (shape.localFunctionKinds != null) for (k in shape.localFunctionKinds) out.push(k);
-		final empty: Null<String> = shape.emptyStmtKind;
-		if (empty != null) out.push(empty);
-		return out;
 	}
 
 	/** The arrow-form replacement text for a fixable literal, or null when a stranded comment blocks it. */

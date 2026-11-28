@@ -956,14 +956,13 @@ final class OptionalParamShorthand extends RuleBase {
 	 */
 	private static function lazyCommentRegions(plugin: GrammarPlugin, source: String): () -> Array<Span> {
 		var cached: Null<Array<Span>> = null;
-		function resolve(): Array<Span> {
+		return () -> {
 			final have: Null<Array<Span>> = cached;
 			if (have != null) return have;
 			final built: Array<Span> = SourceComments.collectCommentRegions(plugin.lexicalRegions(source));
 			cached = built;
 			return built;
-		}
-		return resolve;
+		};
 	}
 
 	/**
@@ -973,14 +972,13 @@ final class OptionalParamShorthand extends RuleBase {
 	 */
 	private static function lazyMatchMask(plugin: GrammarPlugin, source: String): () -> Array<Span> {
 		var cached: Null<Array<Span>> = null;
-		function resolve(): Array<Span> {
+		return () -> {
 			final have: Null<Array<Span>> = cached;
 			if (have != null) return have;
 			final built: Array<Span> = OccurrenceScan.inertMask(source, plugin);
 			cached = built;
 			return built;
-		}
-		return resolve;
+		};
 	}
 
 	/**
