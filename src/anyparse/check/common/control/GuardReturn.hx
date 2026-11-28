@@ -8,14 +8,13 @@ import anyparse.check.scan.ScopeFrames;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.CondRegionScan;
+import anyparse.query.Constructs;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.MemberKinds;
 import anyparse.query.ShapeVocab;
 import anyparse.query.SymbolIndex;
-
-using StringTools;
 
 /** The `RefShape` kinds `GuardReturn` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
@@ -262,11 +261,14 @@ final class GuardReturn extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		final build: Null<Constructs> = plugin.constructs();
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
 			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 			walk(tree, source, regions, seams, [], null, GuardScan.index.bind(byIf));
-			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, regions, seams, types));
+			return GuardScan.edits(
+				plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, regions, seams, build, types)
+			);
 		}, CheckScan.parseBranchAwareOrNull);
 	}
 
@@ -531,25 +533,26 @@ final class GuardReturn extends RuleBase {
 	}
 
 	/**
-	 * Replace the flagged `if` - together with the trailing `return` when there is one - with an
-	 * `if (!cond) return …;` guard followed by the then-branch's inner statements (the writer
-	 * re-indents the de-nested run).
-	 *
-	 * The implicit-tail arm emits the literal `return;`, the family convention: `guard-continue`
-	 * likewise gates on a seam (`continueStatementKind`) and then emits the literal `continue;`.
+	 * Replace the flagged `if` - together with the trailing `return` when there is one - with a guard leaving by that
+	 * `return` (by a bare one for an implicit tail) when the condition fails, followed by the then-branch's inner statements:
+	 * the grammar's `Constructs` builds each part, so a grammar that builds none gets no edit (the writer re-indents the
+	 * de-nested run).
 	 */
 	private static function editFor(
-		m: Candidate, source: String, regions: () -> Array<LexRegion>, s: Seams, ?types: (QueryNode) -> Null<String>
+		m: Candidate, source: String, regions: () -> Array<LexRegion>, s: Seams, build: Null<Constructs>,
+		?types: (QueryNode) -> Null<String>
 	): Null<{ span: Span, text: String }> {
 		final cut: Null<GuardSplice> = GuardScan.splice(m, source, regions, s.negation, s.logic, types);
-		if (cut == null) return null;
-		final inner: String = cut.inner.rtrim();
+		if (cut == null || build == null) return null;
 		final tail: Null<QueryNode> = m.tail;
-		if (tail == null) return { span: new Span(cut.ifSpan.from, cut.ifSpan.to), text: 'if (${cut.neg}) return;$inner' };
-		final tailSpan: Null<Span> = tail.span;
-		if (tailSpan == null) return null;
-		final tailSource: String = source.substring(tailSpan.from, tailSpan.to);
-		return { span: new Span(cut.ifSpan.from, tailSpan.to), text: 'if (${cut.neg}) $tailSource$inner' };
+		final tailSpan: Null<Span> = tail?.span;
+		if (tail != null && tailSpan == null) return null;
+		final exit: Null<Built> = tailSpan == null ? build.returningNothing() : build.copied(source, tailSpan, Statement);
+		final condition: Null<Built> = build.copied(cut.neg, new Span(0, cut.neg.length), Expression);
+		final guard: Null<Built> = exit == null || condition == null ? null : build.guard(condition, exit);
+		final inner: Null<Built> = build.copied(source, new Span(cut.innerFrom, cut.innerFrom + cut.inner.length), Statements);
+		final run: Null<Built> = guard == null || inner == null ? null : build.sequence([guard, inner]);
+		return run == null ? null : { span: new Span(cut.ifSpan.from, tailSpan?.to ?? cut.ifSpan.to), text: run.text };
 	}
 
 }

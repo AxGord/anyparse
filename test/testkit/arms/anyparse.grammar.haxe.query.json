@@ -459,7 +459,7 @@
 		},
 		{
 			"name": "M-CONSTRUCTS-ANY-ROOT",
-			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"type": "anyparse.grammar.haxe.query.HaxeParseBack",
 			"method": "rooted",
 			"find": "nodes.length == 1 && kinds.contains(nodes[0].kind)",
 			"replace": "nodes.length == 1",
@@ -467,7 +467,7 @@
 		},
 		{
 			"name": "M-CONSTRUCTS-UNCHECKED",
-			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"type": "anyparse.grammar.haxe.query.HaxeParseBack",
 			"method": "whole",
 			"find": "nodes != null && nodes.length == 1",
 			"replace": "true",
@@ -475,7 +475,7 @@
 		},
 		{
 			"name": "M-CONSTRUCTS-MEMBER-COUNT",
-			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"type": "anyparse.grammar.haxe.query.HaxeParseBack",
 			"method": "declared",
 			"find": "nodes.length != modifiers + 1 || ",
 			"replace": "",
@@ -544,6 +544,71 @@
 			"find": " && decl.more.length == 0",
 			"replace": "",
 			"note": "a value text that makes a second declarator is answered with its first initializer and the rest silently dropped"
+		},
+		{
+			"name": "M-CONSTRUCTS-GUARD-ANY-EXIT",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "guard",
+			"find": "flow != null && flow.isTerminal(exits[0])",
+			"replace": "flow != null",
+			"note": "a guard takes any statement as its exit, so a fix asking for an early leave gets a statement after which the code it de-nested still runs"
+		},
+		{
+			"name": "M-NODES-REMAINDER-AS-ADD",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "assignExpr",
+			"find": "case Remainder: ModAssign(target, value);",
+			"replace": "case Remainder: AddAssign(target, value);",
+			"note": "a remainder assignment is built as an addition one, so the statement still parses and computes something else"
+		},
+		{
+			"name": "M-CONSTRUCTS-BINDER-UNCHECKED",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "looped",
+			"find": " || !isName(binder)",
+			"replace": "",
+			"note": "a loop binder is taken without reading it as one name, so a binder can carry code that regroups the loop it heads"
+		},
+		{
+			"name": "M-NODES-RUN-GLUED",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "RUN_SLOT",
+			"kind": "FinalMember",
+			"find": "{ before: 'class _C { function _f() { {\\n', after: '\\n} } }' }",
+			"replace": "{ before: 'class _C { function _f() { {', after: '} } }' }",
+			"note": "a run is read glued to its braces, so a comment opening it becomes the brace's trailing comment and one closing it swallows the brace"
+		},
+		{
+			"name": "M-CONSTRUCTS-SEQUENCE-UNCOUNTED",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "sequence",
+			"find": "parts.length > 0 && HaxeNodes.countOf(text) == count",
+			"replace": "parts.length > 0",
+			"note": "a run is taken whatever its join parses to, so two statements whose join regroups into one pass as a run of both"
+		},
+		{
+			"name": "M-NODES-BOOLEAN-NEGATED",
+			"type": "anyparse.grammar.haxe.query.HaxeNodes",
+			"method": "boolExpr",
+			"find": "BoolLit(value)",
+			"replace": "BoolLit(!value)",
+			"note": "a boolean literal is built as its negation, which still parses as a boolean"
+		},
+		{
+			"name": "M-CONSTRUCTS-SEQUENCE-OWN-LAYOUT-SPLIT",
+			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
+			"method": "sequence",
+			"find": "i > 0 && !part.text.isSpace(0)",
+			"replace": "i > 0",
+			"note": "a run opening on its own layout is put on a line of its own, so a comment on the line it opened on moves onto the next statement and a blank line opening it doubles"
+		},
+		{
+			"name": "M-PARSEBACK-RUN-LAYOUT-TRIMMED",
+			"type": "anyparse.grammar.haxe.query.HaxeParseBack",
+			"method": "whole",
+			"find": "text.rtrim()",
+			"replace": "text.trim()",
+			"note": "a copied run loses the layout opening it, so a fix that puts it after a guard drops its blank line and moves the comment of its opening line"
 		}
 	]
 }

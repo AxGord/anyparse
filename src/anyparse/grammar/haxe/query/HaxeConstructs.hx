@@ -4,36 +4,25 @@ import anyparse.check.Check.FixEdit;
 import anyparse.grammar.haxe.trivia.Pairs.HxClassMemberT;
 import anyparse.grammar.haxe.trivia.Pairs.HxExprT;
 import anyparse.grammar.haxe.trivia.Pairs.HxFnBodyT;
+import anyparse.grammar.haxe.trivia.Pairs.HxStatementT;
 import anyparse.grammar.haxe.trivia.Pairs.HxTypeT;
 import anyparse.query.Constructs;
+import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
-import anyparse.runtime.ParseError;
-import haxe.Exception;
 
+using StringTools;
 using Lambda;
 
-/** The text around a construct that makes it a whole file of the grammar. */
-private typedef Host = { final before: String; final after: String; }
-
 /**
- * The Haxe `Constructs`: a member and a return statement are built as typed nodes (`HaxeNodes`) and spelled by the
- * generated writer's per-type entries; every other construct is still one named template here. Each result is parsed back
- * by the grammar inside a host made for its kind and refused unless it parses to exactly the construct asked for: one node
- * of the expected kind covering the whole text, not a regrouping of its parts. A template the grammar rejects so fails a
- * plugin test, never a user's file.
+ * The Haxe `Constructs`: a member, a statement and a literal built of parts are typed nodes (`HaxeNodes`) spelled by the
+ * generated writer's per-type entries; a call, a lambda, a qualified name, a function type and an import are still one named
+ * template here. Each result is parsed back (`HaxeParseBack`) and refused unless it reads as exactly the construct asked for.
  */
 @:nullSafety(Strict)
 final class HaxeConstructs implements Constructs {
 
-	private static final CALL: Array<String> = ['Call'];
-	private static final FIELD_ACCESS: Array<String> = ['FieldAccess'];
-	private static final LAMBDA: Array<String> = ['ThinArrow', 'ThinParenLambdaExpr'];
-	private static final RETURN: Array<String> = ['ReturnStmt'];
-	private static final IMPORT: Array<String> = ['ImportDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl'];
-	private static final USING: Array<String> = ['UsingDecl'];
-	private static final CONSTANT: Array<String> = ['FinalMember'];
-	private static final VARIABLE: Array<String> = ['VarMember'];
-	private static final METHOD: Array<String> = ['FnMember'];
+	/** What stands between the parts of a run that do not open on a layout of their own. */
+	private static final LINE_BREAK: String = '\n';
 
 	/** The keyword that opens a variable declaration, and the one a constant declaration opens with. */
 	private static final VARIABLE_WORD: String = 'var';
@@ -41,36 +30,40 @@ final class HaxeConstructs implements Constructs {
 	private static final CONSTANT_WORD: String = 'final';
 
 	private final _plugin: GrammarPlugin;
+	private final _parseBack: HaxeParseBack;
 
 	public function new(plugin: GrammarPlugin) {
 		_plugin = plugin;
+		_parseBack = new HaxeParseBack(plugin);
 	}
 
 	public function copied(source: String, span: Span, kind: ConstructKind): Null<Built> {
-		return whole(source.substring(span.from, span.to), kind);
+		return _parseBack.whole(source.substring(span.from, span.to), kind);
 	}
 
 	public function substituted(source: String, span: Span, part: Span, by: Built, kind: ConstructKind): Null<Built> {
 		return part.from < span.from || part.to > span.to
 			? null
-			: whole(source.substring(span.from, part.from) + by.text + source.substring(part.to, span.to), kind);
+			: _parseBack.whole(source.substring(span.from, part.from) + by.text + source.substring(part.to, span.to), kind);
 	}
 
 	public function typeRef(spelled: String): Null<Built> {
-		return whole(spelled, TypeExpr);
+		return _parseBack.whole(spelled, TypeExpr);
 	}
 
 	public function functionType(params: Array<Built>, result: Built): Null<Built> {
 		return result.kind != TypeExpr || !params.foreach(param -> param.kind == TypeExpr)
 			? null
-			: whole('(${params.map(param -> param.text).join(', ')}) -> ${result.text}', TypeExpr);
+			: _parseBack.whole('(${params.map(param -> param.text).join(', ')}) -> ${result.text}', TypeExpr);
 	}
 
 	public function qualified(owner: Built, name: String): Null<Built> {
 		return switch owner.kind {
-			case TypeExpr: rooted('${owner.text}.$name', Expression, FIELD_ACCESS);
+			case TypeExpr: _parseBack.rooted('${owner.text}.$name', Expression, HaxeParseBack.FIELD_ACCESS);
 			case Expression:
-				rooted('${owner.text}.$name', Expression, FIELD_ACCESS) ?? rooted('(${owner.text}).$name', Expression, FIELD_ACCESS);
+				_parseBack.rooted('${owner.text}.$name', Expression, HaxeParseBack.FIELD_ACCESS) ?? _parseBack.rooted(
+					'(${owner.text}).$name', Expression, HaxeParseBack.FIELD_ACCESS
+				);
 			case _: null;
 		};
 	}
@@ -78,32 +71,136 @@ final class HaxeConstructs implements Constructs {
 	public function call(callee: Built, args: Array<Built>): Null<Built> {
 		if (callee.kind != Expression || !args.foreach(arg -> arg.kind == Expression)) return null;
 		final list: String = args.map(arg -> arg.text).join(', ');
-		return rooted('${callee.text}($list)', Expression, CALL) ?? rooted('(${callee.text})($list)', Expression, CALL);
+		return _parseBack.rooted('${callee.text}($list)', Expression, HaxeParseBack.CALL) ?? _parseBack.rooted(
+			'(${callee.text})($list)', Expression, HaxeParseBack.CALL
+		);
 	}
 
 	public function lambda(params: Array<String>, body: Built): Null<Built> {
 		if (body.kind != Expression) return null;
 		final head: String = params.length == 1 ? params[0] : '(${params.join(', ')})';
-		return rooted('$head -> ${body.text}', Expression, LAMBDA);
+		return _parseBack.rooted('$head -> ${body.text}', Expression, HaxeParseBack.LAMBDA);
 	}
 
 	public function returning(value: Built): Null<Built> {
 		final expr: Null<HxExprT> = value.kind == Expression ? HaxeNodes.valueOf(value.text) : null;
-		return expr == null ? null : rooted(HaxeModuleTriviaWriter.writeHxStatementNode(HaxeNodes.returnStmt(expr)), Statement, RETURN);
+		return expr == null
+			? null
+			: _parseBack.rooted(HaxeModuleTriviaWriter.writeHxStatementNode(HaxeNodes.returnStmt(expr)), Statement, HaxeParseBack.RETURN);
+	}
+
+	public function returningNothing(): Null<Built> {
+		return statement(HaxeNodes.voidReturnStmt(), HaxeParseBack.VOID_RETURN);
+	}
+
+	public function continuing(): Null<Built> {
+		return statement(HaxeNodes.continueStmt(), HaxeParseBack.CONTINUE);
+	}
+
+	public function guard(condition: Built, exit: Built): Null<Built> {
+		final node: Null<HxStatementT> = statementOf(exit);
+		final exits: Null<Array<QueryNode>> = node == null ? null : _parseBack.slot(exit.text, Statement);
+		final flow: Null<ControlFlowSupport> = _plugin.controlFlowSupport();
+		final leaves: Bool = exits != null && exits.length == 1 && flow != null && flow.isTerminal(exits[0]);
+		return node != null && leaves ? conditionalOf(condition, node) : null;
+	}
+
+	public function conditional(condition: Built, body: Built): Null<Built> {
+		final node: Null<HxStatementT> = statementOf(body);
+		return node == null ? null : conditionalOf(condition, node);
+	}
+
+	public function assignment(target: Built, value: Built): Null<Built> {
+		return assigned(target, null, value, HaxeParseBack.ASSIGN);
+	}
+
+	public function compoundAssignment(target: Built, op: Arithmetic, value: Built): Null<Built> {
+		return assigned(target, op, value, HaxeParseBack.COMPOUND_ASSIGN);
+	}
+
+	public function local(kind: MemberKind, name: String, type: Null<Built>, value: Null<Built>): Null<Built> {
+		final constant: Bool = switch kind {
+			case Constant: true;
+			case Variable: false;
+			case Method(_): return null;
+		};
+		final typeNode: Null<HxTypeT> = type == null || type.kind != TypeExpr ? null : HaxeNodes.typeOf(type.text);
+		if (type != null && typeNode == null) return null;
+		final init: Null<HxExprT> = value == null ? null : expression(value);
+		return value != null && init == null
+			? null
+			: statement(
+				HaxeNodes.localDecl(constant, name, typeNode, init), constant ? HaxeParseBack.LOCAL_CONSTANT : HaxeParseBack.LOCAL_VARIABLE
+			);
+	}
+
+	public function forEach(binder: String, iterable: Built, body: Built): Null<Built> {
+		return looped(binder, null, iterable, body);
+	}
+
+	public function forEachPair(key: String, value: String, iterable: Built, body: Built): Null<Built> {
+		return isName(value) ? looped(key, value, iterable, body) : null;
+	}
+
+	public function block(parts: Array<Built>): Null<Built> {
+		final runs: Array<HxStatementT> = [];
+		for (part in parts) {
+			final run: Null<HxStatementT> = runOf(part);
+			if (run == null) return null;
+			runs.push(run);
+		}
+		final node: Null<HxStatementT> = HaxeNodes.blockOf(runs);
+		return node == null ? null : statement(node, HaxeParseBack.BLOCK);
+	}
+
+	public function sequence(parts: Array<Built>): Null<Built> {
+		var count: Int = 0;
+		for (part in parts) {
+			final statements: Null<Int> = isStatement(part) ? HaxeNodes.countOf(part.text) : null;
+			if (statements == null) return null;
+			count += statements;
+		}
+		final glued: StringBuf = new StringBuf();
+		for (i => part in parts) {
+			if (i > 0 && !part.text.isSpace(0)) glued.add(LINE_BREAK);
+			glued.add(part.text);
+		}
+		final text: String = glued.toString();
+		return parts.length > 0 && HaxeNodes.countOf(text) == count ? new Built(text, Statements) : null;
+	}
+
+	public function range(from: Built, to: Built): Null<Built> {
+		final low: Null<HxExprT> = expression(from);
+		final high: Null<HxExprT> = expression(to);
+		return low == null || high == null ? null : expressed(HaxeNodes.intervalExpr(low, high), HaxeParseBack.INTERVAL);
+	}
+
+	public function arrayOf(items: Array<Built>): Null<Built> {
+		final nodes: Array<HxExprT> = [];
+		for (item in items) {
+			final node: Null<HxExprT> = expression(item);
+			if (node == null) return null;
+			nodes.push(node);
+		}
+		return expressed(HaxeNodes.arrayExpr(nodes), HaxeParseBack.ARRAY);
+	}
+
+	public function boolean(value: Bool): Null<Built> {
+		return expressed(HaxeNodes.boolExpr(value), HaxeParseBack.BOOLEAN);
 	}
 
 	public function importOf(path: String): Null<Built> {
-		return rooted('import $path;', Import, IMPORT);
+		return _parseBack.rooted('import $path;', Import, HaxeParseBack.IMPORT);
 	}
 
 	public function usingOf(path: String): Null<Built> {
-		return rooted('using $path;', Import, USING);
+		return _parseBack.rooted('using $path;', Import, HaxeParseBack.USING);
 	}
 
 	public function modifiers(set: Array<Modifier>): Null<Built> {
 		final text: String = set.map(word).join(' ');
-		final nodes: Null<Array<QueryNode>> = slot(text, ModifierSet);
-		return nodes != null && set.length > 0 && nodes.length == set.length && nodes.foreach(isModifier)
+		final nodes: Null<Array<QueryNode>> = _parseBack.slot(text, ModifierSet);
+		return nodes != null && set.length > 0 && nodes.length == set.length && nodes.foreach(_parseBack.isModifier)
 			? new Built(text, ModifierSet)
 			: null;
 	}
@@ -115,7 +212,7 @@ final class HaxeConstructs implements Constructs {
 		final kind: String = kindOf(modifier);
 		final rank: Int = order.indexOf(kind);
 		if (spelled == null || rank < 0) return null;
-		final carried: Array<QueryNode> = head.modifiers.filter(isModifier);
+		final carried: Array<QueryNode> = head.modifiers.filter(_parseBack.isModifier);
 		if (carried.exists(node -> node.kind == kind)) return null;
 		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
 		final other: Null<Span> = visibility.contains(kind) ? carried.find(node -> visibility.contains(node.kind))?.span : null;
@@ -155,11 +252,11 @@ final class HaxeConstructs implements Constructs {
 		};
 		if (node == null) return null;
 		final kinds: Array<String> = switch kind {
-			case Constant: CONSTANT;
-			case Variable: VARIABLE;
-			case Method(_): METHOD;
+			case Constant: HaxeParseBack.CONSTANT;
+			case Variable: HaxeParseBack.VARIABLE;
+			case Method(_): HaxeParseBack.METHOD;
 		};
-		return declared(HaxeModuleTriviaWriter.writeHxMemberDeclNode(HaxeNodes.memberDecl(set, node)), kinds, set.length);
+		return _parseBack.declared(HaxeModuleTriviaWriter.writeHxMemberDeclNode(HaxeNodes.memberDecl(set, node)), kinds, set.length);
 	}
 
 	/** The method `name` taking `params` and answering `result` with `body`, a statement, or with none when `body` is null. */
@@ -175,66 +272,68 @@ final class HaxeConstructs implements Constructs {
 		return bodyNode == null ? null : HaxeNodes.method(name, typed, result, bodyNode);
 	}
 
-	/** `text` as a construct of `kind` when it parses to exactly one: a type the grammar reads whole, else one node covering it. */
-	private function whole(text: String, kind: ConstructKind): Null<Built> {
-		if (kind == TypeExpr) return _plugin.typeSyntax(text) == null ? null : new Built(text, kind);
-		final nodes: Null<Array<QueryNode>> = slot(text, kind);
-		return nodes != null && nodes.length == 1 ? new Built(text, kind) : null;
+	/** The `if` running `body` when `condition`, an expression, holds. */
+	private function conditionalOf(condition: Built, body: HxStatementT): Null<Built> {
+		final cond: Null<HxExprT> = expression(condition);
+		return cond == null ? null : statement(HaxeNodes.ifStmt(cond, body), HaxeParseBack.IF);
 	}
 
-	/** `text` as a construct of `kind` when it parses to ONE node of `kinds` covering it, not to a regrouping of its parts. */
-	private function rooted(text: String, kind: ConstructKind, kinds: Array<String>): Null<Built> {
-		final nodes: Null<Array<QueryNode>> = slot(text, kind);
-		return nodes != null && nodes.length == 1 && kinds.contains(nodes[0].kind) ? new Built(text, kind) : null;
-	}
-
-	/** `text` as a member of `kinds` carrying `modifiers` modifiers when it parses to exactly that. */
-	private function declared(text: String, kinds: Array<String>, modifiers: Int): Null<Built> {
-		final nodes: Null<Array<QueryNode>> = slot(text, Member);
-		if (nodes == null || nodes.length != modifiers + 1 || !kinds.contains(nodes[modifiers].kind)) return null;
-		for (i in 0...modifiers) if (!isModifier(nodes[i])) return null;
-		return new Built(text, Member);
-	}
-
-	private function isModifier(node: QueryNode): Bool {
-		return _plugin.refShape().modifierKinds?.contains(node.kind) == true;
-	}
-
-	/**
-	 * The nodes `text` parses to inside a host for `kind`, when they cover it exactly: the outermost node spanning it alone,
-	 * else the children of the deepest node holding it — null when the host does not parse or a node crosses its edge.
-	 */
-	private function slot(text: String, kind: ConstructKind): Null<Array<QueryNode>> {
-		final host: Host = hostOf(kind);
-		final tree: QueryNode = try
-			_plugin.parseFile(host.before + text + host.after)
-		catch (exception: ParseError)
-			return null
-		catch (exception: Exception)
-			return null;
-		final from: Int = host.before.length;
-		final to: Int = from + text.length;
-		var holder: QueryNode = tree;
-		while (true) {
-			final next: Null<QueryNode> = holder.children.find(child -> startOf(child) <= from && endOf(child) >= to);
-			if (next == null) break;
-			if (spans(next, from, to)) return [next];
-			holder = next;
-		}
-		final inside: Array<QueryNode> = holder.children.filter(child -> endOf(child) > from && startOf(child) < to);
-		return inside.length != 0
-			&& inside.foreach(child -> startOf(child) >= from && endOf(child) <= to)
-			&& (startOf(inside[0]) == from && endOf(inside[inside.length - 1]) == to)
-			? inside
+	/** The statement assigning `value` to `target`, combined by `op` when given, when it parses back to an assignment of `kinds`. */
+	private function assigned(target: Built, op: Null<Arithmetic>, value: Built, kinds: Array<String>): Null<Built> {
+		final left: Null<HxExprT> = expression(target);
+		final right: Null<HxExprT> = expression(value);
+		if (left == null || right == null) return null;
+		final text: String = HaxeModuleTriviaWriter.writeHxStatementNode(HaxeNodes.exprStmt(HaxeNodes.assignExpr(left, op, right)));
+		final nodes: Null<Array<QueryNode>> = _parseBack.slot(text, Statement);
+		return nodes != null && nodes.length == 1
+			&& HaxeParseBack.EXPRESSION_STATEMENT.contains(nodes[0].kind)
+			&& nodes[0].children.length == 1
+			&& kinds.contains(nodes[0].children[0].kind)
+			? new Built(text, Statement)
 			: null;
 	}
 
-	private static inline function startOf(node: QueryNode): Int {
-		return node.span?.from ?? -1;
+	/** The loop over `iterable` binding `binder`, and `valueBinder` when given, running `body`. */
+	private function looped(binder: String, valueBinder: Null<String>, iterable: Built, body: Built): Null<Built> {
+		final over: Null<HxExprT> = expression(iterable);
+		final node: Null<HxStatementT> = statementOf(body);
+		return over == null || node == null || !isName(binder)
+			? null
+			: statement(HaxeNodes.forStmt(binder, valueBinder, over, node), HaxeParseBack.FOR);
 	}
 
-	private static inline function endOf(node: QueryNode): Int {
-		return node.span?.to ?? -1;
+	/** Whether `text` is one name the grammar reads as such, so a binder cannot carry code of its own. */
+	private function isName(text: String): Bool {
+		return _parseBack.rooted(text, Expression, HaxeParseBack.NAME) != null;
+	}
+
+	/** `node` written alone as a statement, when it parses back to one node of `kinds`. */
+	private function statement(node: HxStatementT, kinds: Array<String>): Null<Built> {
+		return _parseBack.rooted(HaxeModuleTriviaWriter.writeHxStatementNode(node), Statement, kinds);
+	}
+
+	/** `node` written alone as an expression, when it parses back to one node of `kinds`. */
+	private function expressed(node: HxExprT, kinds: Array<String>): Null<Built> {
+		return _parseBack.rooted(HaxeModuleTriviaWriter.writeHxExprNode(node), Expression, kinds);
+	}
+
+	private static inline function isStatement(part: Built): Bool {
+		return part.kind == Statement || part.kind == Statements;
+	}
+
+	/** The expression `part` holds as a typed node; null when it is no expression. */
+	private static function expression(part: Built): Null<HxExprT> {
+		return part.kind == Expression ? HaxeNodes.valueOf(part.text) : null;
+	}
+
+	/** The one statement `part` holds as a typed node; null when it is no statement. */
+	private static function statementOf(part: Built): Null<HxStatementT> {
+		return part.kind == Statement ? HaxeNodes.statementOf(part.text) : null;
+	}
+
+	/** The block whose interior is `part`, a statement or a run of them; null when it is neither. */
+	private static function runOf(part: Built): Null<HxStatementT> {
+		return isStatement(part) ? HaxeNodes.runOf(part.text.ltrim()) : null;
 	}
 
 	/** `modifier` as Haxe spells it. */
@@ -246,21 +345,6 @@ final class HaxeConstructs implements Constructs {
 			case Inline: 'inline';
 			case Override: 'override';
 		};
-	}
-
-	/** The text around a construct of `kind` that makes it a whole file. */
-	private static function hostOf(kind: ConstructKind): Host {
-		return switch kind {
-			case Expression: { before: 'class _C { static final _v = ', after: '; }' };
-			case Statement: { before: 'class _C { static function _f() { ', after: ' } }' };
-			case Member: { before: 'class _C { ', after: ' }' };
-			case ModifierSet: { before: 'class _C { ', after: ' var _v; }' };
-			case Import, TypeExpr: { before: '', after: '' };
-		};
-	}
-
-	private static function spans(node: QueryNode, from: Int, to: Int): Bool {
-		return startOf(node) == from && endOf(node) == to;
 	}
 
 	/** The node kind the grammar projects `modifier` as. */

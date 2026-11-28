@@ -377,7 +377,7 @@ class GuardReturnCheckTest extends Test {
 		final es: Array<{ span: Span, text: String }> =
 			edits(wrap('if (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn /* why */ false;'));
 		Assert.equals(1, es.length);
-		Assert.isTrue(es[0].text.indexOf('if (!ok) return /* why */ false;') != -1);
+		Assert.isTrue(es[0].text.indexOf('if (!ok) return /* why */') != -1);
 	}
 
 	// --- idempotence + robustness -------------------------------------------------------
@@ -625,6 +625,16 @@ class GuardReturnCheckTest extends Test {
 	/** Without the comment the annotation proves Void and the pair is flagged. */
 	public function testNoParamAnnotationProvesVoid(): Void {
 		Assert.equals(1, vSource(noParamAnnotated(' ')).length);
+	}
+
+	/** The guard takes the then-block's place, the layout opening that block staying where it stood: a blank line after it. */
+	@:pin('control')
+	@:killer('M-PARSEBACK-RUN-LAYOUT-TRIMMED')
+	public function testABlankLineOpeningTheThenBlockStaysAfterTheGuard(): Void {
+		Assert.equals(
+			canon(wrap('if (!ok) return false;\n\n\t\tlog(a);\n\t\treturn true;')),
+			fx('if (ok) {\n\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;')
+		);
 	}
 
 	/** The member-path fixture the resolution tests share: `res.count > 0` wrapping a two-statement branch. */

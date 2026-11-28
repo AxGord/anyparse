@@ -1536,6 +1536,28 @@
 			"find": "if (LexicalRegions.commentIntersects(span.from, span.to, regions)) {",
 			"replace": "if (source.substring(span.from, span.to).indexOf('//') != -1) {",
 			"note": "a comment marker inside a string literal of the chain counts as a comment, so the chain is left unreduced"
+		},
+		{
+			"name": "M-GUARD-RETURN-FIX-SPELLED",
+			"type": "anyparse.check.common.control.GuardReturn",
+			"method": "editFor",
+			"force": "{ span: new Span(0, 0), text: 'return;' }",
+			"note": "the guard-return fix writes its edit without asking the grammar, so a grammar that builds no statement still gets text the rule spelled"
+		},
+		{
+			"name": "M-GUARD-CONTINUE-FIX-SPELLED",
+			"type": "anyparse.check.common.control.GuardContinue",
+			"method": "editFor",
+			"force": "{ span: new Span(0, 0), text: 'continue;' }",
+			"note": "the guard-continue fix writes its edit without asking the grammar, so a grammar that builds no statement still gets text the rule spelled"
+		},
+		{
+			"name": "M-GUARD-CONTINUE-REFUSED-RUN-DROPPED",
+			"type": "anyparse.check.common.control.GuardContinue",
+			"method": "editFor",
+			"find": "inner.trim() != ''",
+			"replace": "false",
+			"note": "a body the grammar refuses to copy is left out instead of refusing the fix, so the edit deletes the loop body and keeps only the guard"
 		}
 	]
 }

@@ -702,6 +702,17 @@ class GuardContinueCheckTest extends Test {
 		}
 	}
 
+	/** A comment on the line the then-block opened on stays on the guard's line, never moving onto the first body statement. */
+	@:pin('control')
+	@:killer('M-PARSEBACK-RUN-LAYOUT-TRIMMED')
+	@:killer('M-CONSTRUCTS-SEQUENCE-OWN-LAYOUT-SPLIT')
+	public function testACommentOnTheOpeningLineStaysOnTheGuard(): Void {
+		Assert.equals(
+			wrap('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (x <= 0) continue; // why\n\t\t\tbody();\n\t\t}'),
+			fx('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (x > 0) { // why\n\t\t\t\tbody();\n\t\t\t}\n\t\t}')
+		);
+	}
+
 	// --- helpers -------------------------------------------------------------------
 
 	private function wrap(loopCode: String): String {

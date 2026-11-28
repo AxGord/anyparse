@@ -8,6 +8,7 @@ import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.NegationScan;
 import anyparse.query.BinderScan;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.Constructs;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
@@ -199,11 +200,14 @@ final class GuardContinue extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		final build: Null<Constructs> = plugin.constructs();
 		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
 			final byIf: Map<String, Candidate> = [];
 			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 			indexCandidates(tree, tree, source, regions, seams, byIf, true);
-			return GuardScan.edits(plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, regions, seams, types));
+			return GuardScan.edits(
+				plugin, source, tree, violations, index, byIf, (m, types) -> editFor(m, source, regions, seams, build, types)
+			);
 		});
 	}
 
@@ -623,26 +627,38 @@ final class GuardContinue extends RuleBase {
 	}
 
 	/**
-	 * Replace the flagged `if` (and its hoisted tail, when present) with the tail
-	 * statements, an `if (!cond) continue;` guard, and the then-branch's inner
-	 * statements (the writer re-indents the de-nested run).
+	 * Replace the flagged `if` (and its hoisted tail, when present) with the tail statements, a guard going on to the next
+	 * iteration when the condition fails, and the then-branch's inner statements: the grammar's `Constructs` builds each part,
+	 * so a grammar that builds none gets no edit (the writer re-indents the de-nested run).
 	 */
 	private static function editFor(
-		m: Candidate, source: String, regions: () -> Array<LexRegion>, s: Seams, ?types: (QueryNode) -> Null<String>
+		m: Candidate, source: String, regions: () -> Array<LexRegion>, s: Seams, build: Null<Constructs>,
+		?types: (QueryNode) -> Null<String>
 	): Null<{ span: Span, text: String }> {
 		final cut: Null<GuardSplice> = GuardScan.splice(m, source, regions, s.negation, s.support, types);
-		if (cut == null) return null;
-		final inner: String = applyRenames(cut.inner, cut.innerFrom, m.renames).rtrim();
+		if (cut == null || build == null) return null;
 		var to: Int = cut.ifSpan.to;
-		final hoisted: StringBuf = new StringBuf();
+		final parts: Array<Built> = [];
 		for (t in m.tail) {
 			final span: Null<Span> = t.span;
-			if (span == null) return null;
-			hoisted.add(source.substring(span.from, span.to));
-			hoisted.add('\n');
+			final hoisted: Null<Built> = span == null ? null : build.copied(source, span, Statement);
+			if (span == null || hoisted == null) return null;
+			parts.push(hoisted);
 			to = span.to;
 		}
-		return { span: new Span(cut.ifSpan.from, to), text: '${hoisted}if (${cut.neg}) continue;$inner' };
+		final condition: Null<Built> = build.copied(cut.neg, new Span(0, cut.neg.length), Expression);
+		final skip: Null<Built> = build.continuing();
+		final guard: Null<Built> = condition == null || skip == null ? null : build.guard(condition, skip);
+		if (guard == null) return null;
+		parts.push(guard);
+		final inner: String = applyRenames(cut.inner, cut.innerFrom, m.renames);
+		final rest: Null<Built> = build.copied(inner, new Span(0, inner.length), Statements);
+		if (rest != null)
+			parts.push(rest);
+		else if (inner.trim() != '')
+			return null;
+		final run: Null<Built> = build.sequence(parts);
+		return run == null ? null : { span: new Span(cut.ifSpan.from, to), text: run.text };
 	}
 
 	/**

@@ -80,54 +80,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/control/GuardContinue.hx",
-    "line": 645,
-    "col": 55,
-    "endLine": 645,
-    "endCol": 98,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "GuardContinue.editFor",
-      "subject": "if",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/control/GuardReturn.hx",
-    "line": 548,
-    "col": 84,
-    "endLine": 548,
-    "endCol": 115,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "GuardReturn.editFor",
-      "subject": "if",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/common/control/GuardReturn.hx",
-    "line": 552,
-    "col": 64,
-    "endLine": 552,
-    "endCol": 99,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`if`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "GuardReturn.editFor",
-      "subject": "if",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/control/PreferIfExpressionAssignment.hx",
     "line": 277,
     "col": 57,

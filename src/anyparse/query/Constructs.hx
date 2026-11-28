@@ -23,12 +23,21 @@ final class Built {
 
 /** What a built construct is, by its role in a file. */
 enum ConstructKind {
+
 	Expression;
 	TypeExpr;
 	Statement;
+
+	/**
+	 * A run of statements as it stands inside a block, with the comments among them: a copied run keeps the layout that opens
+	 * it (a blank line, a comment on the line it opened on), so a fix that puts it after a statement keeps both where they
+	 * stood; what closes it belongs to the place it is put.
+	 */
+	Statements;
 	Member;
 	Import;
 	ModifierSet;
+
 }
 
 /** A declaration modifier, by meaning; the grammar owns its spelling. */
@@ -38,6 +47,15 @@ enum Modifier {
 	Static;
 	Inline;
 	Override;
+}
+
+/** An arithmetic operation an assignment can combine its target with, by meaning; the grammar owns its spelling. */
+enum Arithmetic {
+	Add;
+	Subtract;
+	Multiply;
+	Divide;
+	Remainder;
 }
 
 /** What a type member holds. */
@@ -94,6 +112,54 @@ interface Constructs {
 
 	/** The statement that leaves the enclosing function with `value`. */
 	public function returning(value: Built): Null<Built>;
+
+	/** The statement that leaves the enclosing function with no value. */
+	public function returningNothing(): Null<Built>;
+
+	/** The statement that goes on to the next iteration of the enclosing loop. */
+	public function continuing(): Null<Built>;
+
+	/**
+	 * The statement that runs `exit`, a statement leaving the code around
+	 * it (a return, a continue, a break, a throw), when `condition` holds.
+	 */
+	public function guard(condition: Built, exit: Built): Null<Built>;
+
+	/** The statement that runs `body`, a statement, when `condition` holds and nothing otherwise. */
+	public function conditional(condition: Built, body: Built): Null<Built>;
+
+	/** The statement giving `target` the value `value`. */
+	public function assignment(target: Built, value: Built): Null<Built>;
+
+	/** The statement giving `target` its own value combined with `value` by `op`. */
+	public function compoundAssignment(target: Built, op: Arithmetic, value: Built): Null<Built>;
+
+	/** The local declaration of `name`, `kind` a constant or a variable, of `type` and initialised to `value` when given. */
+	public function local(kind: MemberKind, name: String, type: Null<Built>, value: Null<Built>): Null<Built>;
+
+	/** The loop running `body` once per element of `iterable`, the element bound to `binder`. */
+	public function forEach(binder: String, iterable: Built, body: Built): Null<Built>;
+
+	/** The loop running `body` once per entry of the map `iterable`, its key bound to `key` and its value to `value`. */
+	public function forEachPair(key: String, value: String, iterable: Built, body: Built): Null<Built>;
+
+	/** The block holding the statements of `parts`, each a statement or a run of them, in order. */
+	public function block(parts: Array<Built>): Null<Built>;
+
+	/**
+	 * The run of the statements of `parts`, each a statement or a run of them, in order: each part starts a line of its own,
+	 * except a copied run that opens on its own layout, which keeps it right after the part before.
+	 */
+	public function sequence(parts: Array<Built>): Null<Built>;
+
+	/** The values from `from` up to, not including, `to`. */
+	public function range(from: Built, to: Built): Null<Built>;
+
+	/** The array holding `items` in order. */
+	public function arrayOf(items: Array<Built>): Null<Built>;
+
+	/** The boolean `value`. */
+	public function boolean(value: Bool): Null<Built>;
 
 	/** The declaration that brings the type at `path` into a file's scope. */
 	public function importOf(path: String): Null<Built>;

@@ -2,19 +2,25 @@ package anyparse.grammar.haxe.query;
 
 import anyparse.grammar.haxe.decl.HxClassMember;
 import anyparse.grammar.haxe.decl.HxParam;
+import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.meta.HxMemberModifier;
+import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.grammar.haxe.trivia.Pairs.Converters;
 import anyparse.grammar.haxe.trivia.Pairs.HxClassMemberT;
 import anyparse.grammar.haxe.trivia.Pairs.HxExprT;
 import anyparse.grammar.haxe.trivia.Pairs.HxFnBodyT;
 import anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT;
+import anyparse.grammar.haxe.trivia.Pairs.HxForStmtT;
+import anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT;
 import anyparse.grammar.haxe.trivia.Pairs.HxMemberDeclT;
 import anyparse.grammar.haxe.trivia.Pairs.HxModuleT;
 import anyparse.grammar.haxe.trivia.Pairs.HxStatementT;
 import anyparse.grammar.haxe.trivia.Pairs.HxTypeT;
 import anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT;
+import anyparse.query.Constructs.Arithmetic;
 import anyparse.query.Constructs.Modifier;
 import anyparse.runtime.ParseError;
+import anyparse.runtime.Trivial;
 import haxe.Exception;
 
 /** The text around a part that makes it the one member of a class, so the part is read in the slot it fills. */
@@ -34,9 +40,40 @@ final class HaxeNodes {
 	private static final VALUE_SLOT: Slot = { before: 'class _C { var _v = ', after: '; }' };
 	private static final BODY_SLOT: Slot = { before: 'class _C { function _f() ', after: ' }' };
 
+	/**
+	 * A block interior is read on lines of its own, so a comment opening it
+	 * stands before its first statement and one closing it cannot reach the brace.
+	 */
+	private static final RUN_SLOT: Slot = { before: 'class _C { function _f() { {\n', after: '\n} } }' };
+
 	/** The body of a method that has none: a declaration only. */
 	public static inline function noBody(): HxFnBodyT {
 		return NoBody;
+	}
+
+	/** The statement that leaves the enclosing function with no value. */
+	public static inline function voidReturnStmt(): HxStatementT {
+		return VoidReturnStmt;
+	}
+
+	/** The statement that goes on to the next iteration of the enclosing loop. */
+	public static inline function continueStmt(): HxStatementT {
+		return ContinueStmt;
+	}
+
+	/** The statement evaluating `expr` for its effect. */
+	public static inline function exprStmt(expr: HxExprT): HxStatementT {
+		return ExprStmt(expr, true);
+	}
+
+	/** The values from `from` up to, not including, `to`. */
+	public static inline function intervalExpr(from: HxExprT, to: HxExprT): HxExprT {
+		return Interval(from, to);
+	}
+
+	/** The boolean literal `value`. */
+	public static inline function boolExpr(value: Bool): HxExprT {
+		return BoolLit(value);
 	}
 
 	/** A type member carrying `modifiers` in the order given. */
@@ -82,6 +119,115 @@ final class HaxeNodes {
 	/** The statement that leaves the enclosing function with `value`. */
 	public static function returnStmt(value: HxExprT): HxStatementT {
 		return ReturnStmt(value, true, null, []);
+	}
+
+	/** The statement running `body` when `cond` holds, with no other branch. */
+	public static function ifStmt(cond: HxExprT, body: HxStatementT): HxStatementT {
+		final stmt: HxIfStmtT = Converters.rawToPaired_HxIfStmt(
+			{ cond: HxExpr.BoolLit(true), thenBody: HxStatement.EmptyStmt, elseBody: null }
+		);
+		stmt.cond = cond;
+		stmt.thenBody = body;
+		return IfStmt(stmt);
+	}
+
+	/**
+	 * The loop running `body` once per element of `iterable` bound to `binder` or, when `valueBinder` is given, once per key
+	 * bound to `binder` with its value bound to `valueBinder`.
+	 */
+	public static function forStmt(binder: String, valueBinder: Null<String>, iterable: HxExprT, body: HxStatementT): HxStatementT {
+		final stmt: HxForStmtT = Converters.rawToPaired_HxForStmt({
+			varName: binder,
+			valueName: valueBinder == null ? null : { name: valueBinder },
+			iterable: HxExpr.BoolLit(true),
+			body: HxStatement.EmptyStmt
+		});
+		stmt.iterable = iterable;
+		stmt.body = body;
+		return ForStmt(stmt);
+	}
+
+	/** A local `name`, bound once when `constant`, of `type` when given, initialised to `init` when given. */
+	public static function localDecl(constant: Bool, name: String, type: Null<HxTypeT>, init: Null<HxExprT>): HxStatementT {
+		return constant ? FinalStmt(varDecl(name, type, init), true) : VarStmt(varDecl(name, type, init), true);
+	}
+
+	/**
+	 * One block holding the statements of `runs`, each a block read by `runOf`, in order: the comments closing the last run
+	 * close the block. Null when a run before the last closes on a comment, which has no statement left to stand before.
+	 */
+	public static function blockOf(runs: Array<HxStatementT>): Null<HxStatementT> {
+		final elements: Array<Trivial<HxStatementT>> = [];
+		var last: Null<HxStatementT> = null;
+		var closed: Bool = false;
+		for (run in runs) switch run {
+			case BlockStmt(stmts, closeTrailing, _, _, trailingLeading, _):
+				if (closed) return null;
+				closed = closeTrailing != null || trailingLeading.length > 0;
+				for (element in stmts) elements.push(element);
+				last = run;
+			case _:
+				return null;
+		}
+		return switch last {
+			case BlockStmt(_, closeTrailing, openTrailing, trailingBlankBefore, trailingLeading, trailPresent):
+				BlockStmt(elements, closeTrailing, openTrailing, trailingBlankBefore, trailingLeading, trailPresent);
+			case _: runOf('');
+		};
+	}
+
+	/** The block whose interior is `text`, statements and the comments among them; null when `text` is no such interior. */
+	public static function runOf(text: String): Null<HxStatementT> {
+		final only: Null<HxStatementT> = switch member(RUN_SLOT, text) {
+			case FnMember({ body: BlockBody({ stmts: [element] }) }): element.node;
+			case _: null;
+		};
+		return switch only {
+			case BlockStmt(_, _, _, _, _, _): only;
+			case _: null;
+		};
+	}
+
+	/** The one statement `text` spells, with no comment around it; null when it is not exactly one. */
+	public static function statementOf(text: String): Null<HxStatementT> {
+		return switch runOf(text) {
+			case BlockStmt(stmts, null, _, _, [], _) if (
+				stmts.length == 1 && stmts[0].leadingComments.length == 0 && stmts[0].trailingComment == null
+			):
+				stmts[0].node;
+			case _: null;
+		};
+	}
+
+	/** The number of statements the block interior `text` holds; null when it is no block interior. */
+	public static function countOf(text: String): Null<Int> {
+		return switch runOf(text) {
+			case BlockStmt(stmts, _, _, _, _, _): stmts.length;
+			case _: null;
+		};
+	}
+
+	/** The assignment of `value` to `target`, or of `target` combined with `value` by `op` when given. */
+	public static function assignExpr(target: HxExprT, op: Null<Arithmetic>, value: HxExprT): HxExprT {
+		return switch op {
+			case null: Assign(target, value);
+			case Add: AddAssign(target, value);
+			case Subtract: SubAssign(target, value);
+			case Multiply: MulAssign(target, value);
+			case Divide: DivAssign(target, value);
+			case Remainder: ModAssign(target, value);
+		};
+	}
+
+	/** The array literal holding `items` in order. */
+	public static function arrayExpr(items: Array<HxExprT>): HxExprT {
+		final literal: HxExprT = Converters.rawToPaired_HxExpr(HxExpr.ArrayExpr([ for (_ in items) HxExpr.BoolLit(true) ]));
+		switch literal {
+			case ArrayExpr(elems, _, _, _, _, _):
+				for (i => item in items) elems[i].node = item;
+			case _:
+		}
+		return literal;
 	}
 
 	/** The type `text` spells, read as a declared type; null when it is not one. */

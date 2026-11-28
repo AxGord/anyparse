@@ -138,12 +138,139 @@ class HaxeConstructsTest extends Test {
 		Assert.isNull(constructs().asConstant('class A { final x = 1; }', 10), 'a constant is not a variable');
 	}
 
+	/** A guard leaves by the statement it is given and refuses one that does not leave; a conditional runs any statement. */
+	@:pin('control')
+	@:killer('M-CONSTRUCTS-GUARD-ANY-EXIT')
+	public function testAGuardLeavesAndAConditionalRuns(): Void {
+		final build: Constructs = constructs();
+		final failed: Built = copied(build, '!ok');
+		Assert.equals('return;', build.returningNothing()?.text);
+		Assert.equals('continue;', build.continuing()?.text);
+		Assert.equals('if (!ok) return;', build.guard(failed, sure(build.returningNothing()))?.text);
+		Assert.equals('if (!ok) continue;', build.guard(failed, sure(build.continuing()))?.text);
+		Assert.equals('if (!ok) throw e;', build.guard(failed, statement(build, 'throw e;'))?.text);
+		Assert.equals(
+			'if (!(p /* keep */ && q)) return;', build.guard(copied(build, '!(p /* keep */ && q)'), sure(build.returningNothing()))?.text,
+			'a comment in the condition rides along'
+		);
+		Assert.isNull(build.guard(failed, statement(build, 'f();')), 'a statement that does not leave is no guard');
+		Assert.equals('if (c) f();', build.conditional(copied(build, 'c'), statement(build, 'f();'))?.text);
+		Assert.equals(Statement, build.conditional(copied(build, 'c'), statement(build, 'f();'))?.kind);
+	}
+
+	/** An assignment, a compound one and a local declaration are built of their parts, each a statement of its own. */
+	@:pin('control')
+	@:killer('M-NODES-REMAINDER-AS-ADD')
+	public function testAssignmentsAndLocalsAreBuiltOfTheirParts(): Void {
+		final build: Constructs = constructs();
+		final x: Built = copied(build, 'x');
+		final n: Built = copied(build, 'n');
+		Assert.equals('x = find(a);', build.assignment(x, copied(build, 'find(a)'))?.text);
+		Assert.equals('x %= n;', build.compoundAssignment(x, Remainder, n)?.text);
+		Assert.equals('x += n;', build.compoundAssignment(x, Add, n)?.text);
+		Assert.equals('x -= n;', build.compoundAssignment(x, Subtract, n)?.text);
+		Assert.equals('x *= n;', build.compoundAssignment(x, Multiply, n)?.text);
+		Assert.equals('x /= n;', build.compoundAssignment(x, Divide, n)?.text);
+		Assert.equals('final h = core;', build.local(Constant, 'h', null, copied(build, 'core'))?.text);
+		Assert.equals('var x:Int = 1;', build.local(Variable, 'x', build.typeRef('Int'), copied(build, '1'))?.text);
+		Assert.equals('var x;', build.local(Variable, 'x', null, null)?.text);
+		Assert.isNull(build.local(Method([]), 'x', null, null), 'a local method is no local value');
+		Assert.isNull(build.local(Variable, 'x = 1; var y', null, null), 'a name that smuggles a second declaration');
+	}
+
+	/** A loop binds the names it is given and nothing else, over a range or any iterable, by element or by key and value. */
+	@:pin('control')
+	@:killer('M-CONSTRUCTS-BINDER-UNCHECKED')
+	public function testLoopsBindTheirNames(): Void {
+		final build: Constructs = constructs();
+		final body: Built = sure(build.block([statement(build, 'f(i);')]));
+		Assert.equals(
+			'for (i in 0...n) {\n\tf(i);\n}', build.forEach('i', sure(build.range(copied(build, '0'), copied(build, 'n'))), body)?.text
+		);
+		Assert.equals('for (x in xs) f(x);', build.forEach('x', copied(build, 'xs'), statement(build, 'f(x);'))?.text);
+		Assert.equals('for (k => v in m) f(k, v);', build.forEachPair('k', 'v', copied(build, 'm'), statement(build, 'f(k, v);'))?.text);
+		Assert.isNull(build.forEach('x in a) if (b', copied(build, 'xs'), body), 'a binder carrying code of its own');
+		Assert.isNull(build.forEachPair('k', 'v in a) if (b', copied(build, 'm'), body), 'a value binder carrying code of its own');
+	}
+
+	/**
+	 * A block holds the statements of its parts and a run joins them a line each, keeping the comments of a copied run, and
+	 * neither takes a join that regroups its parts or a comment closing a run that something follows.
+	 */
+	@:pin('control')
+	@:killer('M-NODES-RUN-GLUED')
+	@:killer('M-CONSTRUCTS-SEQUENCE-UNCOUNTED')
+	@:killer('M-CONSTRUCTS-SEQUENCE-OWN-LAYOUT-SPLIT')
+	@:killer('M-PARSEBACK-RUN-LAYOUT-TRIMMED')
+	public function testBlocksAndRunsKeepTheirStatementsApart(): Void {
+		final build: Constructs = constructs();
+		final explained: Built = run(build, '\n\t\t// explain\n\t\tlog(a);\n\t\treturn true;\n\t');
+		Assert.equals('\n\t\t// explain\n\t\tlog(a);\n\t\treturn true;', explained.text, 'a copied run keeps the layout opening it');
+		Assert.equals('{}', build.block([])?.text);
+		Assert.equals('{\n\t// explain\n\tlog(a);\n\treturn true;\n}', build.block([explained])?.text);
+		Assert.equals('{\n\tlog(a);\n\t// end\n}', build.block([run(build, 'log(a);\n// end')])?.text);
+		Assert.isNull(build.block([run(build, 'log(a);\n// end'), statement(build, 'f();')]), 'a comment closing a run before another');
+		final guard: Built = sure(build.guard(copied(build, '!ok'), sure(build.returningNothing())));
+		final joined: Null<Built> = build.sequence([guard, explained]);
+		Assert.equals('if (!ok) return;\n\t\t// explain\n\t\tlog(a);\n\t\treturn true;', joined?.text);
+		Assert.equals(Statements, joined?.kind);
+		final opened: Built = run(build, ' // why\n\tf();');
+		Assert.equals('if (!ok) return; // why\n\tf();', build.sequence([guard, opened])?.text, 'the comment of the line it opened on');
+		Assert.equals('{\n\t// why\n\tf();\n}', build.block([opened])?.text);
+		Assert.equals('if (!ok) return;\n\n\tf();', build.sequence([guard, run(build, '\n\n\tf();')])?.text, 'a blank line opening it');
+		Assert.equals('if (!ok) return;\nf();', build.sequence([guard, statement(build, 'f();')])?.text);
+		Assert.equals('// only', build.copied('// only', new Span(0, 7), Statements)?.text, 'a run of comments alone');
+		Assert.isNull(build.sequence([run(build, 'x = 1'), statement(build, '-y;')]), 'a join that regroups two statements into one');
+		Assert.isNull(build.copied(' \n ', new Span(0, 3), Statements), 'an empty run');
+		Assert.isNull(build.sequence([]), 'a run of nothing');
+	}
+
+	/** A range, an array and a boolean are expressions; a range operand that would regroup it is parenthesized. */
+	@:pin('control')
+	@:killer('M-NODES-BOOLEAN-NEGATED')
+	public function testLiteralsAreExpressions(): Void {
+		final build: Constructs = constructs();
+		Assert.equals('0...n + 1', build.range(copied(build, '0'), copied(build, 'n + 1'))?.text);
+		Assert.equals('(a ? b : c)...n', build.range(copied(build, 'a ? b : c'), copied(build, 'n'))?.text);
+		Assert.equals('[a, b]', build.arrayOf([copied(build, 'a'), copied(build, 'b')])?.text);
+		Assert.equals('[]', build.arrayOf([])?.text);
+		Assert.equals('true', build.boolean(true)?.text);
+		Assert.equals('false', build.boolean(false)?.text);
+		Assert.equals(Expression, build.boolean(true)?.kind);
+	}
+
+	/** A part of the wrong kind is refused by every statement and literal construct. */
+	@:pin('guard')
+	public function testAPartOfTheWrongKindIsRefused(): Void {
+		final build: Constructs = constructs();
+		final stmt: Built = statement(build, 'f();');
+		final expr: Built = copied(build, 'c');
+		Assert.isNull(build.guard(stmt, sure(build.returningNothing())), 'a statement as a condition');
+		Assert.isNull(build.conditional(expr, expr), 'an expression as a body');
+		Assert.isNull(build.assignment(stmt, expr), 'a statement as a target');
+		Assert.isNull(build.compoundAssignment(expr, Add, stmt), 'a statement as a value');
+		Assert.isNull(build.local(Variable, 'x', expr, null), 'an expression as a type');
+		Assert.isNull(build.forEach('x', stmt, stmt), 'a statement as an iterable');
+		Assert.isNull(build.block([expr]), 'an expression in a block');
+		Assert.isNull(build.sequence([expr]), 'an expression in a run');
+		Assert.isNull(build.range(stmt, expr), 'a statement as a bound');
+		Assert.isNull(build.arrayOf([stmt]), 'a statement as an item');
+	}
+
 	private static function constructs(): Constructs {
 		return sure(new HaxeQueryPlugin().constructs());
 	}
 
 	private static function copied(build: Constructs, source: String): Built {
 		return sure(build.copied(source, new Span(0, source.length), Expression));
+	}
+
+	private static function statement(build: Constructs, source: String): Built {
+		return sure(build.copied(source, new Span(0, source.length), Statement));
+	}
+
+	private static function run(build: Constructs, source: String): Built {
+		return sure(build.copied(source, new Span(0, source.length), Statements));
 	}
 
 	private static function sure<T>(value: Null<T>): T {

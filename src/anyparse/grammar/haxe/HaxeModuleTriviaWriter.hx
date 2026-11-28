@@ -17,13 +17,18 @@ package anyparse.grammar.haxe;
  * Plain-mode callers keep using `HxModuleWriter` against plain
  * `HxModule` — this marker is a sibling, not a replacement.
  *
- * `entries` adds `writeHxMemberDeclNode` and `writeHxStatementNode`: a member or a statement a
- * grammar's `Constructs` built as a typed node, written alone by the rules that write it in a file.
+ * `entries` adds `writeHxMemberDeclNode`, `writeHxStatementNode` and `writeHxExprNode`: a member, a
+ * statement or an expression a grammar's `Constructs` built as a typed node, written alone by the
+ * rules that write it in a file.
  */
 @:keep
-@:build(anyparse.macro.Build.buildWriter(
-	anyparse.grammar.haxe.HxModule, anyparse.grammar.haxe.HxModuleWriteOptions,
-	{ trivia: true, entries: [anyparse.grammar.haxe.decl.HxMemberDecl, anyparse.grammar.haxe.stmt.HxStatement] }
-))
+@:build(anyparse.macro.Build.buildWriter(anyparse.grammar.haxe.HxModule, anyparse.grammar.haxe.HxModuleWriteOptions, {
+	trivia: true,
+	entries: [
+		anyparse.grammar.haxe.decl.HxMemberDecl,
+		anyparse.grammar.haxe.stmt.HxStatement,
+		anyparse.grammar.haxe.expr.HxExpr
+	]
+}))
 @:nullSafety(Strict)
 final class HaxeModuleTriviaWriter {}

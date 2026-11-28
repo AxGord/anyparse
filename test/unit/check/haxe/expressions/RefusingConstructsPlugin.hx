@@ -18,8 +18,9 @@ import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeSyntax;
 
 /**
- * The Haxe builder refusing every type spelled as one of `types`, every member of `members` and, when `modifiers`, every
- * modifier or constant-keyword edit, the rest delegating.
+ * The Haxe builder refusing every type spelled as one of `types`, every member of `members`, when `modifiers` every
+ * modifier or constant-keyword edit, when `statements` every statement, run and literal it would build of parts and, when
+ * `runs`, every run of statements it would copy, the rest delegating.
  */
 @:nullSafety(Strict)
 final class RefusingConstructs implements Constructs {
@@ -28,16 +29,23 @@ final class RefusingConstructs implements Constructs {
 	private final _types: Array<String>;
 	private final _members: Array<String>;
 	private final _modifiers: Bool;
+	private final _statements: Bool;
+	private final _runs: Bool;
 
-	public function new(inner: Constructs, types: Array<String>, members: Array<String>, modifiers: Bool = false) {
+	public function new(
+		inner: Constructs, types: Array<String>, members: Array<String>, modifiers: Bool = false, statements: Bool = false,
+		runs: Bool = false
+	) {
 		_inner = inner;
 		_types = types;
 		_members = members;
 		_modifiers = modifiers;
+		_statements = statements;
+		_runs = runs;
 	}
 
 	public function copied(source: String, span: Span, kind: ConstructKind): Null<Built> {
-		return _inner.copied(source, span, kind);
+		return _runs && kind == Statements ? null : _inner.copied(source, span, kind);
 	}
 
 	public function substituted(source: String, span: Span, part: Span, by: Built, kind: ConstructKind): Null<Built> {
@@ -66,6 +74,62 @@ final class RefusingConstructs implements Constructs {
 
 	public function returning(value: Built): Null<Built> {
 		return _inner.returning(value);
+	}
+
+	public function returningNothing(): Null<Built> {
+		return _statements ? null : _inner.returningNothing();
+	}
+
+	public function continuing(): Null<Built> {
+		return _statements ? null : _inner.continuing();
+	}
+
+	public function guard(condition: Built, exit: Built): Null<Built> {
+		return _statements ? null : _inner.guard(condition, exit);
+	}
+
+	public function conditional(condition: Built, body: Built): Null<Built> {
+		return _statements ? null : _inner.conditional(condition, body);
+	}
+
+	public function assignment(target: Built, value: Built): Null<Built> {
+		return _statements ? null : _inner.assignment(target, value);
+	}
+
+	public function compoundAssignment(target: Built, op: Arithmetic, value: Built): Null<Built> {
+		return _statements ? null : _inner.compoundAssignment(target, op, value);
+	}
+
+	public function local(kind: MemberKind, name: String, type: Null<Built>, value: Null<Built>): Null<Built> {
+		return _statements ? null : _inner.local(kind, name, type, value);
+	}
+
+	public function forEach(binder: String, iterable: Built, body: Built): Null<Built> {
+		return _statements ? null : _inner.forEach(binder, iterable, body);
+	}
+
+	public function forEachPair(key: String, value: String, iterable: Built, body: Built): Null<Built> {
+		return _statements ? null : _inner.forEachPair(key, value, iterable, body);
+	}
+
+	public function block(parts: Array<Built>): Null<Built> {
+		return _statements ? null : _inner.block(parts);
+	}
+
+	public function sequence(parts: Array<Built>): Null<Built> {
+		return _statements ? null : _inner.sequence(parts);
+	}
+
+	public function range(from: Built, to: Built): Null<Built> {
+		return _statements ? null : _inner.range(from, to);
+	}
+
+	public function arrayOf(items: Array<Built>): Null<Built> {
+		return _statements ? null : _inner.arrayOf(items);
+	}
+
+	public function boolean(value: Bool): Null<Built> {
+		return _statements ? null : _inner.boolean(value);
 	}
 
 	public function importOf(path: String): Null<Built> {

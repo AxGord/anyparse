@@ -11,8 +11,8 @@ A `@:build` macro reads a grammar (Haxe types annotated with `@:lit`, `@:kw`,
   `write`/`writeDoc` take the root; the build option `entries: [<type path>, …]` adds a
   `write<Type>Node(value, ?options): String` per listed grammar type, which writes one node of
   that type alone (no final newline) by the same rules that write it inside a file. The Haxe
-  trivia writer lists its member and statement types, and `HaxeConstructs` builds those
-  constructs as typed nodes (`HaxeNodes`) and spells them through these entries.
+  trivia writer lists its member, statement and expression types, and `HaxeConstructs` builds
+  those constructs as typed nodes (`HaxeNodes`) and spells them through these entries.
 - **`buildTransform`** — a deep, bottom-up whole-tree rewrite with per-node-type hooks
   (the multi-type generalization of `ExprTools.map`).
 
