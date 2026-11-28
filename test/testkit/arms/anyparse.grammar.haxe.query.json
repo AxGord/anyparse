@@ -453,9 +453,9 @@
 			"name": "M-CONSTRUCTS-WORD-PUBLIC",
 			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
 			"method": "word",
-			"find": "case Public: 'public';",
-			"replace": "case Public: 'private';",
-			"note": "the public modifier is spelled as private, so a built member no longer carries the modifiers it was asked for"
+			"find": "HaxeNodes.memberModifier(modifier)",
+			"replace": "anyparse.grammar.haxe.meta.HxMemberModifier.Private",
+			"note": "every modifier word is spelled as private, so a modifier set reads as one that was not asked for"
 		},
 		{
 			"name": "M-CONSTRUCTS-ANY-ROOT",
@@ -501,8 +501,8 @@
 			"name": "M-CONSTRUCTS-CONSTANT-KEYWORD",
 			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
 			"method": "asConstant",
-			"find": "source.substring(start, end) == VARIABLE_WORD && ",
-			"replace": "",
+			"find": "source.substr(start, variable.length) == variable",
+			"replace": "true",
 			"note": "the keyword is swapped wherever the offset points, so a constant or a name is overwritten with the constant keyword"
 		},
 		{
@@ -614,8 +614,8 @@
 			"name": "M-HAXE-LAMBDA-LONE-TYPED-PARAM",
 			"type": "anyparse.grammar.haxe.query.HaxeConstructs",
 			"method": "lambda",
-			"find": "HaxeParseBack.LAMBDA) ?? listed;",
-			"replace": "HaxeParseBack.LAMBDA);",
+			"find": "params.length != 1 ? listed : bare ?? listed;",
+			"replace": "params.length != 1 ? listed : bare;",
 			"note": "a lone typed parameter is spelled bare, which does not parse as a lambda, so no lambda is built"
 		}
 	]

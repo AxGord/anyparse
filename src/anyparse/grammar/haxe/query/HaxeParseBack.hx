@@ -107,6 +107,22 @@ final class HaxeParseBack {
 			: null;
 	}
 
+	/** The first keyword or delimiter the one node `text` parses to matched, as `text` spells it; null when there is none. */
+	public function opening(text: String, kind: ConstructKind): Null<String> {
+		final nodes: Null<Array<QueryNode>> = slot(text, kind);
+		final tokens: Array<Span> = nodes != null && nodes.length == 1 ? nodes[0].tokenSpans() : [];
+		final offset: Int = hostOf(kind).before.length;
+		return tokens.length == 0 ? null : text.substring(tokens[0].from - offset, tokens[0].to - offset);
+	}
+
+	/** Where the last identifier `name` stands in `text`, a `kind` that parses; null when `text` does not parse or holds none. */
+	public function nameSpan(text: String, kind: ConstructKind, name: String): Null<Span> {
+		final nodes: Null<Array<QueryNode>> = slot(text, kind);
+		final found: Null<Span> = nodes == null ? null : lastNamed(nodes, name);
+		final offset: Int = hostOf(kind).before.length;
+		return found == null ? null : new Span(found.from - offset, found.to - offset);
+	}
+
 	private static inline function startOf(node: QueryNode): Int {
 		return node.span?.from ?? -1;
 	}
@@ -128,6 +144,19 @@ final class HaxeParseBack {
 
 	private static function spans(node: QueryNode, from: Int, to: Int): Bool {
 		return startOf(node) == from && endOf(node) == to;
+	}
+
+	/** The span of the last node of `nodes`, or beneath them, that is the identifier `name`, in document order. */
+	private static function lastNamed(nodes: Array<QueryNode>, name: String): Null<Span> {
+		var found: Null<Span> = null;
+		for (node in nodes) {
+			final inner: Null<Span> = lastNamed(node.children, name);
+			if (inner != null)
+				found = inner;
+			else if (NAME.contains(node.kind) && node.name == name)
+				found = node.span;
+		}
+		return found;
 	}
 
 }

@@ -257,6 +257,26 @@ class HaxeConstructsTest extends Test {
 		Assert.isNull(build.arrayOf([stmt]), 'a statement as an item');
 	}
 
+	/** Calls, lambdas and function types take the shape the grammar gives their parts, and a lone typed parameter keeps its parentheses. */
+	@:pin('guard')
+	public function testCallsLambdasAndFunctionTypesAreSpelledFromTheirParts(): Void {
+		final build: Constructs = constructs();
+		final a: Built = copied(build, 'a');
+		final b: Built = copied(build, 'b');
+		Assert.equals('f(a, b)', build.call(copied(build, 'f'), [a, b])?.text);
+		Assert.equals('f()', build.call(copied(build, 'f'), [])?.text);
+		Assert.equals('() -> a', build.lambda([], a)?.text);
+		Assert.equals('(x, y) -> a', build.lambda(['x', 'y'], a)?.text);
+		Assert.equals('(x: Int) -> a', build.lambda(['x: Int'], a)?.text);
+		Assert.isNull(build.lambda(['x y'], a), 'a parameter that is two names');
+		Assert.equals('() -> Int', build.functionType([], sure(build.typeRef('Int')))?.text);
+		Assert.equals('Cmp.asc', build.qualified(sure(build.typeRef('Cmp')), 'asc')?.text);
+		Assert.equals('pkg.Cmp.asc', build.qualified(sure(build.typeRef('pkg.Cmp')), 'asc')?.text);
+		Assert.isNull(build.functionType([a], sure(build.typeRef('Int'))), 'an expression as a parameter type');
+		Assert.isNull(build.call(a, [sure(build.returningNothing())]), 'a statement as an argument');
+		Assert.isNull(build.usingOf('a.b.*'), 'a wildcard is no plain using');
+	}
+
 	private static function constructs(): Constructs {
 		return sure(new HaxeQueryPlugin().constructs());
 	}

@@ -6,17 +6,23 @@ import anyparse.grammar.haxe.expr.HxExpr;
 import anyparse.grammar.haxe.meta.HxMemberModifier;
 import anyparse.grammar.haxe.stmt.HxStatement;
 import anyparse.grammar.haxe.trivia.Pairs.Converters;
+import anyparse.grammar.haxe.trivia.Pairs.HxArrowFnTypeT;
+import anyparse.grammar.haxe.trivia.Pairs.HxArrowParamT;
 import anyparse.grammar.haxe.trivia.Pairs.HxClassMemberT;
+import anyparse.grammar.haxe.trivia.Pairs.HxDeclT;
 import anyparse.grammar.haxe.trivia.Pairs.HxExprT;
 import anyparse.grammar.haxe.trivia.Pairs.HxFnBodyT;
 import anyparse.grammar.haxe.trivia.Pairs.HxFnDeclT;
 import anyparse.grammar.haxe.trivia.Pairs.HxForStmtT;
 import anyparse.grammar.haxe.trivia.Pairs.HxIfStmtT;
+import anyparse.grammar.haxe.trivia.Pairs.HxLambdaParamT;
 import anyparse.grammar.haxe.trivia.Pairs.HxMemberDeclT;
 import anyparse.grammar.haxe.trivia.Pairs.HxModuleT;
 import anyparse.grammar.haxe.trivia.Pairs.HxStatementT;
+import anyparse.grammar.haxe.trivia.Pairs.HxThinParenLambdaT;
 import anyparse.grammar.haxe.trivia.Pairs.HxTypeT;
 import anyparse.grammar.haxe.trivia.Pairs.HxVarDeclT;
+import anyparse.grammar.haxe.types.HxType;
 import anyparse.query.Constructs.Arithmetic;
 import anyparse.query.Constructs.Modifier;
 import anyparse.runtime.ParseError;
@@ -39,6 +45,8 @@ final class HaxeNodes {
 	private static final TYPE_SLOT: Slot = { before: 'class _C { var _v: ', after: '; }' };
 	private static final VALUE_SLOT: Slot = { before: 'class _C { var _v = ', after: '; }' };
 	private static final BODY_SLOT: Slot = { before: 'class _C { function _f() ', after: ' }' };
+	private static final PARAM_SLOT: Slot = { before: 'class _C { var _v = (', after: ') -> 0; }' };
+	private static final IMPORT_SLOT: Slot = { before: 'import ', after: ';' };
 
 	/**
 	 * A block interior is read on lines of its own, so a comment opening it
@@ -76,6 +84,11 @@ final class HaxeNodes {
 		return BoolLit(value);
 	}
 
+	/** The import or using declaration of `path`, a name, a wildcard or an aliased name; null when `path` is none of them. */
+	public static inline function importOf(path: String): Null<HxDeclT> {
+		return declOf(IMPORT_SLOT, path);
+	}
+
 	/** A type member carrying `modifiers` in the order given. */
 	public static function memberDecl(modifiers: Array<Modifier>, member: HxClassMemberT): HxMemberDeclT {
 		final decl: HxMemberDeclT = Converters.rawToPaired_HxMemberDecl(
@@ -102,7 +115,7 @@ final class HaxeNodes {
 		final decl: HxFnDeclT = Converters.rawToPaired_HxFnDecl({
 			name: name,
 			typeParams: null,
-			params: params.map(param -> Required({ name: param.name, type: null, defaultValue: null })),
+			params: params.map(param -> HxParam.Required({ name: param.name, type: null, defaultValue: null })),
 			returnType: null,
 			body: NoBody
 		});
@@ -230,6 +243,63 @@ final class HaxeNodes {
 		return literal;
 	}
 
+	/** The function type taking `params` and answering `result`. */
+	public static function functionTypeOf(params: Array<HxTypeT>, result: HxTypeT): HxTypeT {
+		final fn: HxArrowFnTypeT = Converters.rawToPaired_HxArrowFnType({ args: [], ret: HxType.Anon([]) });
+		fn.args = params.map(param -> HxArrowParamT.Positional(param));
+		fn.ret = result;
+		return ArrowFn(fn);
+	}
+
+	/** `owner` with its member `name`. */
+	public static function fieldExpr(owner: HxExprT, name: String): HxExprT {
+		return FieldAccess(owner, name, null);
+	}
+
+	/** `inner` held together as one operand. */
+	public static function parenExpr(inner: HxExprT): HxExprT {
+		return ParenExpr(inner, false, null);
+	}
+
+	/** The call of `callee` with `args` in order. */
+	public static function callExpr(callee: HxExprT, args: Array<HxExprT>): HxExprT {
+		final call: HxExprT = Converters.rawToPaired_HxExpr(HxExpr.Call(HxExpr.BoolLit(true), [ for (_ in args) HxExpr.BoolLit(true) ]));
+		return switch call {
+			case Call(_, elems, slotA, slotB, slotC):
+				for (i => arg in args) elems[i].node = arg;
+				Call(callee, elems, slotA, slotB, slotC);
+			case _: call;
+		};
+	}
+
+	/** The lambda taking the one name `param` and answering `body`. */
+	public static function nameLambdaExpr(param: HxExprT, body: HxExprT): HxExprT {
+		return ThinArrow(param, body, null, []);
+	}
+
+	/**
+	 * The lambda in parentheses taking `params`, each read as a lambda parameter, and answering `body`; null when a
+	 * parameter is none.
+	 */
+	public static function lambdaExpr(params: Array<String>, body: HxExprT): Null<HxExprT> {
+		final lambda: HxThinParenLambdaT = Converters.rawToPaired_HxThinParenLambda({ params: [], body: HxExpr.BoolLit(true) });
+		for (text in params) {
+			final read: Null<HxLambdaParamT> = lambdaParamOf(text);
+			if (read == null) return null;
+			lambda.params.push(read);
+		}
+		lambda.body = body;
+		return ThinParenLambdaExpr(lambda);
+	}
+
+	/** The using declaration of the plain name `path`; null when `path` is not one. */
+	public static function usingOf(path: String): Null<HxDeclT> {
+		return switch importOf(path) {
+			case ImportDecl(name): UsingDecl(name);
+			case _: null;
+		};
+	}
+
 	/** The type `text` spells, read as a declared type; null when it is not one. */
 	public static function typeOf(text: String): Null<HxTypeT> {
 		return switch member(TYPE_SLOT, text) {
@@ -254,6 +324,24 @@ final class HaxeNodes {
 		};
 	}
 
+	/** `modifier` as a Haxe member modifier. */
+	public static function memberModifier(modifier: Modifier): HxMemberModifier {
+		return switch modifier {
+			case Public: HxMemberModifier.Public;
+			case Private: HxMemberModifier.Private;
+			case Static: HxMemberModifier.Static;
+			case Inline: HxMemberModifier.Inline;
+			case Override: HxMemberModifier.Override;
+		};
+	}
+
+	/** Write options that set a parameter's type off its name by a space after the colon, as a lambda's parameter is written in source. */
+	public static function spacedHints(): HxModuleWriteOptions {
+		final options: HxModuleWriteOptions = new HxModuleWriteOptions();
+		options.typeHintColon = After;
+		return options;
+	}
+
 	private static function varDecl(name: String, type: Null<HxTypeT>, init: Null<HxExprT>): HxVarDeclT {
 		final decl: HxVarDeclT = Converters.rawToPaired_HxVarDecl({
 			meta: [],
@@ -269,29 +357,41 @@ final class HaxeNodes {
 		return decl;
 	}
 
-	/** The one member `text` makes inside `slot`; null when the whole does not parse to exactly one member. */
-	private static function member(slot: Slot, text: String): Null<HxClassMemberT> {
-		final tree: Null<HxModuleT> = try
+	/** The one lambda parameter `text` spells; null when it is not exactly one. */
+	private static function lambdaParamOf(text: String): Null<HxLambdaParamT> {
+		return switch member(PARAM_SLOT, text) {
+			case VarMember(decl, _) if (decl.more.length == 0):
+				switch decl.init {
+					case ThinParenLambdaExpr(lambda) if (lambda.params.length == 1): lambda.params[0];
+					case _: null;
+				}
+			case _: null;
+		};
+	}
+
+	/** The one top-level declaration `text` makes inside `slot`; null when the whole does not parse to exactly one. */
+	private static function declOf(slot: Slot, text: String): Null<HxDeclT> {
+		final tree: Null<HxModuleT> = moduleOf(slot, text);
+		return tree == null || tree.decls.length != 1 ? null : tree.decls[0].node.decl;
+	}
+
+	/** The module `text` makes inside `slot`; null when the whole does not parse. */
+	private static function moduleOf(slot: Slot, text: String): Null<HxModuleT> {
+		return try
 			HaxeModuleTriviaParser.parse(slot.before + text + slot.after)
 		catch (exception: ParseError)
 			null
 		catch (exception: Exception)
 			null;
+	}
+
+	/** The one member `text` makes inside `slot`; null when the whole does not parse to exactly one member. */
+	private static function member(slot: Slot, text: String): Null<HxClassMemberT> {
+		final tree: Null<HxModuleT> = moduleOf(slot, text);
 		if (tree == null || tree.decls.length != 1) return null;
 		return switch tree.decls[0].node.decl {
 			case ClassDecl(body) if (body.members.length == 1): body.members[0].node.member;
 			case _: null;
-		};
-	}
-
-	/** `modifier` as a Haxe member modifier. */
-	private static function memberModifier(modifier: Modifier): HxMemberModifier {
-		return switch modifier {
-			case Public: HxMemberModifier.Public;
-			case Private: HxMemberModifier.Private;
-			case Static: HxMemberModifier.Static;
-			case Inline: HxMemberModifier.Inline;
-			case Override: HxMemberModifier.Override;
 		};
 	}
 
