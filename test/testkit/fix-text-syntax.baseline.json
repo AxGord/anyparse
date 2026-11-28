@@ -769,9 +769,9 @@
   },
   {
     "file": "src/anyparse/check/common/nullsafety/DeadSafeNav.hx",
-    "line": 85,
+    "line": 84,
     "col": 59,
-    "endLine": 85,
+    "endLine": 84,
     "endCol": 62,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1324,54 +1324,6 @@
       "family": "literal",
       "function": "DeclaredSortedLists.resort",
       "subject": "[",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/ExtractConstant.hx",
-    "line": 88,
-    "col": 10,
-    "endLine": 88,
-    "endCol": 57,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`private`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "ExtractConstant.extractConstant",
-      "subject": "private",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/ExtractConstant.hx",
-    "line": 125,
-    "col": 97,
-    "endLine": 125,
-    "endCol": 100,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "ExtractConstant.extractInto",
-      "subject": ".",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/query/ExtractConstantTo.hx",
-    "line": 191,
-    "col": 24,
-    "endLine": 195,
-    "endCol": 3,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "helper `memberText` returns text that spells syntax of the grammar it edits, and its result reaches ExtractConstant.buildModuleSource — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "helper",
-      "function": "ExtractConstantTo.memberText",
-      "subject": "memberText -> ExtractConstant.buildModuleSource",
       "chain": []
     }
   },

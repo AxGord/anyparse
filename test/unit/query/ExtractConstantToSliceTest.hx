@@ -3,6 +3,7 @@ package unit.query;
 import anyparse.check.common.members.InlineConstant;
 import anyparse.query.Address.AddressSpec;
 import anyparse.query.ExtractConstantTo;
+import unit.check.haxe.expressions.RefusingConstructsPlugin;
 
 using Lambda;
 using StringTools;
@@ -264,6 +265,23 @@ class ExtractConstantToSliceTest extends Test {
 	/** An invalid constant name is refused. */
 	public function testAnInvalidNameIsRefused(): Void {
 		refused(request(WORKER, { select: 'FinalStmt:timeout' }, '9T', other('pkg.b', 'Limits', null)), 'not a valid identifier');
+	}
+
+	/** A grammar that builds no constructs, or cannot spell the constant's type, refuses instead of writing hand-spelled code. */
+	@:pin('control')
+	@:killer('M-EXTRACT-TO-UNSPELLABLE-REFUSAL')
+	public function testAConstantTheGrammarCannotSpellRefusesTheMove(): Void {
+		final moved: ExtractToRequest = request(WORKER, { match: '60' }, 'MINUTE', other('pkg.b', 'Limits', null));
+		Assert.isTrue(ExtractConstantTo.extractTo(moved, new HaxeQueryPlugin()).match(Ok(_, _, _)), 'the real grammar moves it');
+		for (plugin in [
+			new RefusingConstructsPlugin(_ -> null),
+			new RefusingConstructsPlugin(c -> new RefusingConstructs(c, ['Int'], []))
+		]) switch ExtractConstantTo.extractTo(moved, plugin) {
+			case Ok(source, _, _):
+				Assert.fail('expected a refusal, got:\n$source');
+			case Err(message):
+				Assert.isTrue(message.contains('the grammar'), message);
+		}
 	}
 
 	private static function other(pkg: String, base: String, source: Null<String>): ExtractToModule {

@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.Constructs;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -81,12 +82,12 @@ final class ExtractConstant {
 		final insertAt: Int = firstMemberStart(source, declNN, shape, plugin.lexicalRegions(source));
 		if (insertAt < 0) return Err('type "$typeName" has no member to anchor the constant before');
 
-		final firstOcc: Span = occurrences[0];
-		final token: String = source.substring(firstOcc.from, firstOcc.to);
-		final edits: Array<{ span: Span, text: String }> = [{
-			span: new Span(insertAt, insertAt),
-			text: 'private static final $name:String = $token;\n'
-		}];
+		final build: Null<Constructs> = plugin.constructs();
+		if (build == null) return Err('the grammar builds no constructs');
+		final token: Null<Built> = build.copied(source, occurrences[0], Expression);
+		final member: Null<Built> = token == null ? null : stringConstant(build, [Private, Static], name, token);
+		if (member == null) return Err('the grammar cannot spell the constant');
+		final edits: Array<{ span: Span, text: String }> = [{ span: new Span(insertAt, insertAt), text: '${member.text}\n' }];
 		for (occ in occurrences) edits.push({ span: occ, text: name });
 
 		return CanonicalEdit.canonicalize(source, edits, reformat, plugin, optsJson);
@@ -106,9 +107,14 @@ final class ExtractConstant {
 		if (!name.isIdentifier()) return Err('"$name" is not a valid identifier for a constant name');
 
 		final modulePath: String = modulePkg == '' ? moduleClass : '$modulePkg.$moduleClass';
-		final ref: String = '$moduleClass.$name';
+		final build: Null<Constructs> = plugin.constructs();
+		if (build == null) return Err('the grammar builds no constructs');
+		final owner: Null<Built> = build.typeRef(moduleClass);
+		final reference: Null<Built> = owner == null ? null : build.qualified(owner, name);
+		if (reference == null) return Err('the grammar cannot spell a reference to the constant');
+		final ref: String = reference.text;
 		final changes: Array<{ file: String, newSource: String, count: Int }> = [];
-		var token: Null<String> = null;
+		var token: Null<Built> = null;
 		var total: Int = 0;
 
 		for (sf in scopeFiles) {
@@ -120,7 +126,8 @@ final class ExtractConstant {
 			final occurrences: Array<Span> = collectOccurrences(tree, literal, plugin.refShape());
 			if (occurrences.length == 0) continue;
 			total += occurrences.length;
-			if (token == null) token = sf.source.substring(occurrences[0].from, occurrences[0].to);
+			if (token == null) token = build.copied(sf.source, occurrences[0], Expression);
+			if (token == null) return Err('${sf.file}: the grammar cannot copy the literal');
 
 			final edits: Array<{ span: Span, text: String }> = occurrences.map(occ -> { span: occ, text: ref });
 			final replaced: String = switch CanonicalEdit.canonicalize(sf.source, edits, reformat, plugin, optsJson) {
@@ -141,11 +148,11 @@ final class ExtractConstant {
 		}
 
 		if (total == 0 || token == null) return Err('no plain literal \'$literal\' occurs across the scope');
-		final constToken: String = token;
-		final memberText: String = 'public static final $name:String = $constToken;';
+		final member: Null<Built> = stringConstant(build, [Public, Static], name, token);
+		if (member == null) return Err('the grammar cannot spell the constant');
 
 		return switch buildModuleSource(
-			moduleExists, moduleSource, modulePkg, moduleClass, modulePath, name, memberText, reformat, plugin, optsJson
+			moduleExists, moduleSource, modulePkg, moduleClass, modulePath, name, member, reformat, plugin, optsJson
 		) {
 			case Ok(moduleFinal): Ok(changes, moduleFinal, !moduleExists);
 			case Err(message): Err(message);
@@ -161,10 +168,10 @@ final class ExtractConstant {
 	 */
 	public static function buildModuleSource(
 		moduleExists: Bool, moduleSource: Null<String>, modulePkg: String, moduleClass: String, modulePath: String, name: String,
-		memberText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+		member: Built, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
 		if (!moduleExists) return switch NewFile.create(
-			{ className: moduleClass, pkg: modulePkg, fields: [memberText, 'private function new() {}'] }, plugin, optsJson
+			{ className: moduleClass, pkg: modulePkg, fields: [member.text, 'private function new() {}'] }, plugin, optsJson
 		)
 			.result {
 			case Ok(text): Ok(text);
@@ -187,13 +194,15 @@ final class ExtractConstant {
 		// appending — an appended `public static final` after the holder's `private new()`
 		// would sit out of canonical member order. Empty module (no member): fall back to append.
 		final insertAt: Int = firstMemberStart(existing, declNN, shape, plugin.lexicalRegions(existing));
-		return insertAt < 0
-			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
-			: CanonicalEdit.canonicalize(
+		if (insertAt >= 0)
+			return CanonicalEdit.canonicalize(
 				existing,
-				[{ span: new Span(insertAt, insertAt), text: '$memberText\n' }],
+				[{ span: new Span(insertAt, insertAt), text: '${member.text}\n' }],
 				reformat, plugin, optsJson
 			);
+		final appended: MemberEdit = AddMember.memberEdit(existing, mtree, moduleClass, member, plugin);
+		final edit: Null<{ span: Span, text: String }> = appended.edit;
+		return edit == null ? Err(appended.refusal) : CanonicalEdit.canonicalize(existing, [edit], reformat, plugin, optsJson);
 	}
 
 	/**
@@ -252,6 +261,12 @@ final class ExtractConstant {
 	 */
 	private static function alreadyImportsModule(tree: QueryNode, modulePath: String): Bool {
 		return tree.children.exists(c -> (c.kind == 'ImportDecl' || c.kind == 'UsingDecl') && c.name == modulePath);
+	}
+
+	/** The member `name` of `set`, a constant of type `String` holding `value`; null when the grammar cannot spell it. */
+	private static function stringConstant(build: Constructs, set: Array<Modifier>, name: String, value: Built): Null<Built> {
+		final type: Null<Built> = build.typeRef('String');
+		return type == null ? null : build.member(set, Constant, name, type, value);
 	}
 
 }

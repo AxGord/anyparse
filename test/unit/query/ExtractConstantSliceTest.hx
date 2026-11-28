@@ -2,7 +2,9 @@ package unit.query;
 
 import anyparse.query.CanonicalEdit.EditResult;
 import anyparse.query.ExtractConstant;
+import anyparse.query.GrammarPlugin;
 import haxe.Exception;
+import unit.check.haxe.expressions.RefusingConstructsPlugin;
 
 using StringTools;
 
@@ -237,6 +239,29 @@ class ExtractConstantSliceTest extends Test {
 		Assert.isTrue(StringTools.contains(res.changes[0].newSource, 'k == Keys.SHARED_KEY'), 'occurrence replaced');
 	}
 
+	/** A grammar that builds no constructs, or cannot spell `String`, refuses instead of writing a hand-spelled constant. */
+	@:pin('control')
+	@:killer('M-EXTRACT-CONSTANT-UNSPELLABLE-REFUSAL')
+	public function testAConstantTheGrammarCannotSpellRefusesTheExtraction(): Void {
+		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == 'base.ref';\n\t}\n}";
+		for (refusing in refusingPlugins())
+			assertErr('the grammar', ExtractConstant.extractConstant(src, 'K', 'BASE_REF', 'base.ref', true, refusing));
+	}
+
+	/** The cross-file form refuses the same way. */
+	@:pin('control')
+	@:killer('M-EXTRACT-INTO-UNSPELLABLE-REFUSAL')
+	public function testAConstantTheGrammarCannotSpellRefusesTheCrossFileExtraction(): Void {
+		final a: String = "package pkg;\n\nclass A {\n\tstatic function f(k: String): Bool {\n\t\treturn k == 'base.ref';\n\t}\n}";
+		for (refusing in refusingPlugins())
+			assertErrInto(
+				'the grammar',
+				ExtractConstant.extractInto(
+					[{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, 'BASE_REF', 'base.ref', true, refusing
+				)
+			);
+	}
+
 	private function okExtract(src: String, typeName: String, name: String, literal: String): String {
 		switch ExtractConstant.extractConstant(src, typeName, name, literal, true, plugin()) {
 			case Ok(text):
@@ -298,6 +323,13 @@ class ExtractConstantSliceTest extends Test {
 
 	private static function plugin(): HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
+	}
+
+	private static function refusingPlugins(): Array<GrammarPlugin> {
+		return [
+			new RefusingConstructsPlugin(_ -> null),
+			new RefusingConstructsPlugin(c -> new RefusingConstructs(c, ['String'], []))
+		];
 	}
 
 }

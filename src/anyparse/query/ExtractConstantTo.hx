@@ -3,6 +3,7 @@ package anyparse.query;
 import anyparse.check.scan.ConstantFieldScan;
 import anyparse.query.Address.AddressSpec;
 import anyparse.query.CanonicalEdit.EditResult;
+import anyparse.query.Constructs;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.ModulePath;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -55,8 +56,8 @@ enum ExtractToResult {
 /** The constant `extractTo` writes. */
 private typedef ConstantMember = {
 	final name: String;
-	final typeText: Null<String>;
-	final value: String;
+	final type: Null<Built>;
+	final value: Built;
 	final inlined: Bool;
 }
 
@@ -102,6 +103,9 @@ private typedef ConstantMember = {
 @:nullSafety(Strict)
 final class ExtractConstantTo {
 
+	/** What an op answers when the grammar cannot spell a part of the constant. */
+	private static final UNSPELLABLE: String = 'the grammar cannot spell the constant';
+
 	/**
 	 * Move the addressed expression of `request` into a `static final` named `request.name`, as described above.
 	 * Returns the rewritten source, the destination module's final text (null when it IS the source) and the
@@ -140,17 +144,14 @@ final class ExtractConstantTo {
 		if (typeText == null) advisories.push('the constant\'s type is left to the compiler\'s inference — --annotate <Type> spells it');
 		if (!ConstantFieldScan.isConstantExpression(init, source, seams, _ -> false))
 			advisories.push('the moved literal is now ONE shared instance (--shared)');
-		final value: String = source.substring(initSpan.from, initSpan.to);
-		final member: ConstantMember = {
-			name: name,
-			typeText: typeText,
-			value: value,
-			inlined: inlined
-		};
+		final build: Null<Constructs> = plugin.constructs();
+		if (build == null) return Err('the grammar builds no constructs');
+		final member: Null<ConstantMember> = constantMember(build, name, typeText, source, initSpan, inlined);
+		if (member == null) return Err(UNSPELLABLE);
 		final dest: Null<ExtractToModule> = request.dest;
 		return dest == null
-			? intoSameFile(request, tree, path, initSpan, member, plugin, advisories)
-			: intoOtherModule(request, dest, tree, initSpan, member, plugin, advisories);
+			? intoSameFile(request, tree, path, initSpan, member, plugin, build, advisories)
+			: intoOtherModule(request, dest, tree, initSpan, member, plugin, build, advisories);
 	}
 
 	/**
@@ -187,16 +188,21 @@ final class ExtractConstantTo {
 		return (shape.localDeclKinds ?? []).contains(node.kind) || MemberKinds.isDataFieldKind(node.kind);
 	}
 
-	/** The `static final` text of `member`, `visibility` first. */
-	private static inline function memberText(member: ConstantMember, visibility: String): String {
-		final annotation: String = member.typeText == null ? '' : ':${member.typeText}';
-		final modifiers: String = member.inlined ? 'static inline final' : 'static final';
-		return '$visibility $modifiers ${member.name}$annotation = ${member.value};';
-	}
-
 	/** The last segment of a dotted path. */
 	private static inline function lastSegment(path: String): String {
 		return path.substr(path.lastIndexOf('.') + 1);
+	}
+
+	/** The `static final` text of `member`, `visibility` first. */
+	private static function memberText(member: ConstantMember, visibility: Modifier, build: Constructs): Null<Built> {
+		final set: Array<Modifier> = member.inlined ? [visibility, Static, Inline] : [visibility, Static];
+		return build.member(set, Constant, member.name, member.type, member.value);
+	}
+
+	/** The reference to the constant `member` of `destType` that takes the place of the moved value. */
+	private static function referenceTo(destType: String, member: ConstantMember, build: Constructs): Null<Built> {
+		final owner: Null<Built> = build.typeRef(destType);
+		return owner == null ? null : build.qualified(owner, member.name);
 	}
 
 	/** A declaration's initializer: its last child, when that child is not part of its type annotation. */
@@ -285,7 +291,7 @@ final class ExtractConstantTo {
 	/** The constant goes into `request.destType`, declared in the source file itself. */
 	private static function intoSameFile(
 		request: ExtractToRequest, tree: QueryNode, path: Array<QueryNode>, initSpan: Span, member: ConstantMember, plugin: GrammarPlugin,
-		advisories: Array<String>
+		build: Constructs, advisories: Array<String>
 	): ExtractToResult {
 		final destType: Null<String> = request.destType;
 		if (destType == null) return Err('name the receiving type with --to <Type>, or its module with --into <file>');
@@ -294,15 +300,17 @@ final class ExtractConstantTo {
 		final shadow: Null<String> = localShadow(tree, initSpan, destType, plugin.refShape());
 		if (shadow != null) return Err(shadow);
 		final enclosing: Null<String> = enclosingTypeName(path);
-		final visibility: String = enclosing == destType ? 'private' : 'public';
-		final replaced: String = switch replaceUse(request, initSpan, '$destType.${member.name}', plugin, request.optsJson) {
+		final visibility: Modifier = enclosing == destType ? Private : Public;
+		final reference: Null<Built> = referenceTo(destType, member, build);
+		final built: Null<Built> = memberText(member, visibility, build);
+		if (reference == null || built == null) return Err(UNSPELLABLE);
+		final replaced: String = switch replaceUse(request, initSpan, reference.text, plugin, request.optsJson) {
 			case Ok(text, _): text;
 			case Err(message): return Err(message);
 		};
 		final pkg: String = ModuleScan.packageOf(tree);
 		return switch ExtractConstant.buildModuleSource(
-			true, replaced, pkg, destType, request.sourceFile, member.name, memberText(member, visibility), request.reformat, plugin,
-			request.optsJson
+			true, replaced, pkg, destType, request.sourceFile, member.name, built, request.reformat, plugin, request.optsJson
 		) {
 			case Ok(text, _): Ok(text, null, advisories);
 			case Err(message): Err(message);
@@ -312,7 +320,7 @@ final class ExtractConstantTo {
 	/** The constant goes into a type of the module `dest`, which the source reaches through an import. */
 	private static function intoOtherModule(
 		request: ExtractToRequest, dest: ExtractToModule, tree: QueryNode, initSpan: Span, member: ConstantMember, plugin: GrammarPlugin,
-		advisories: Array<String>
+		build: Constructs, advisories: Array<String>
 	): ExtractToResult {
 		final shape: RefShape = plugin.refShape();
 		final destType: String = request.destType ?? dest.base;
@@ -333,7 +341,10 @@ final class ExtractConstantTo {
 		if (rebinding != null) return Err(rebinding);
 		final shadow: Null<String> = localShadow(tree, initSpan, destType, shape);
 		if (shadow != null) return Err(shadow);
-		final replaced: String = switch replaceUse(request, initSpan, '$destType.${member.name}', plugin, request.optsJson) {
+		final reference: Null<Built> = referenceTo(destType, member, build);
+		final built: Null<Built> = memberText(member, Public, build);
+		if (reference == null || built == null) return Err(UNSPELLABLE);
+		final replaced: String = switch replaceUse(request, initSpan, reference.text, plugin, request.optsJson) {
 			case Ok(text, _): text;
 			case Err(message): return Err(message);
 		};
@@ -347,8 +358,7 @@ final class ExtractConstantTo {
 			case Err(message): return Err('import: $message');
 		};
 		return switch ExtractConstant.buildModuleSource(
-			destSource != null, destSource, dest.pkg, destType, dest.file, member.name, memberText(member, 'public'), request.reformat,
-			plugin, dest.optsJson
+			destSource != null, destSource, dest.pkg, destType, dest.file, member.name, built, request.reformat, plugin, dest.optsJson
 		) {
 			case Ok(text, _): Ok(newSource, text, advisories);
 			case Err(message): Err(message);
@@ -402,6 +412,20 @@ final class ExtractConstantTo {
 			i--;
 		}
 		return null;
+	}
+
+	/** The constant `name` over the value at `initSpan` of `source`; null when the grammar cannot spell a part of it. */
+	private static function constantMember(
+		build: Constructs, name: String, typeText: Null<String>, source: String, initSpan: Span, inlined: Bool
+	): Null<ConstantMember> {
+		final value: Null<Built> = build.copied(source, initSpan, Expression);
+		final type: Null<Built> = typeText == null ? null : build.typeRef(typeText);
+		return value == null || (typeText != null && type == null) ? null : {
+			name: name,
+			type: type,
+			value: value,
+			inlined: inlined
+		};
 	}
 
 }

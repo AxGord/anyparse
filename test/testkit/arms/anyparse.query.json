@@ -11754,8 +11754,8 @@
 			"name": "M-EXTRACT-TO-ALWAYS-PUBLIC",
 			"type": "anyparse.query.ExtractConstantTo",
 			"method": "intoSameFile",
-			"find": "final visibility: String = enclosing == destType ? 'private' : 'public';",
-			"replace": "final visibility: String = 'public';",
+			"find": "final visibility: Modifier = enclosing == destType ? Private : Public;",
+			"replace": "final visibility: Modifier = Public;",
 			"note": "a constant the enclosing type keeps for itself is exported"
 		},
 		{
@@ -18107,6 +18107,30 @@
 			"find": "if (staticEdit == null) return 'the grammar builds no static modifier for \"${m.name}\"';",
 			"replace": "if (staticEdit == null) return null;",
 			"note": "a grammar that builds no static modifier lets the move proceed, leaving the moved instance method without static in the helper"
+		},
+		{
+			"name": "M-EXTRACT-TO-UNSPELLABLE-REFUSAL",
+			"type": "anyparse.query.ExtractConstantTo",
+			"method": "extractTo",
+			"find": "if (member == null) return Err(UNSPELLABLE);",
+			"replace": "if (member == null) return Ok(source, null, []);",
+			"note": "a constant the grammar cannot spell is reported as moved instead of refused"
+		},
+		{
+			"name": "M-EXTRACT-CONSTANT-UNSPELLABLE-REFUSAL",
+			"type": "anyparse.query.ExtractConstant",
+			"method": "extractConstant",
+			"find": "if (member == null) return Err('the grammar cannot spell the constant');",
+			"replace": "if (member == null) return Ok(source);",
+			"note": "a constant the grammar cannot spell leaves the source unchanged and reports success"
+		},
+		{
+			"name": "M-EXTRACT-INTO-UNSPELLABLE-REFUSAL",
+			"type": "anyparse.query.ExtractConstant",
+			"method": "extractInto",
+			"find": "if (member == null) return Err('the grammar cannot spell the constant');",
+			"replace": "if (member == null) return Ok([], '', false);",
+			"note": "a constant the grammar cannot spell is reported as written to an empty module"
 		}
 	]
 }
