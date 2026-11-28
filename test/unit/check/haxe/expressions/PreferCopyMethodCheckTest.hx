@@ -27,6 +27,19 @@ class PreferCopyMethodCheckTest extends Test {
 		Assert.equals(holder('var c = p.clone();'), fixed(src));
 	}
 
+	/** The copy call is asked of the grammar's `Constructs`: a grammar that builds none gets no edit. */
+	@:pin('control')
+	@:killer('M-PCM-COPY-SPELLED')
+	public function testNoEditWhereTheGrammarBuildsNoCall(): Void {
+		final src: String = holder('var c = new Point(p.x, p.y);');
+		Assert.equals(holder('var c = p.clone();'), fixed(src));
+		final refused: Array<FixEdit> = CheckFixture.fixRun(
+			new PreferCopyMethod(), files(src), 'C.hx', new RefusingConstructsPlugin(_ -> null), _ -> LintConfig.parse(CONFIG)
+		)
+			.edits;
+		Assert.equals(0, refused.length);
+	}
+
 	public function testFieldPathReceiverIsCopied(): Void {
 		Assert.equals(holder('var c = h.p.clone();'), fixed(holder('var c = new Point(h.p.x, h.p.y);')));
 	}

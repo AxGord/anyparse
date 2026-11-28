@@ -4,6 +4,7 @@ import anyparse.check.Check.FixEdit;
 import anyparse.check.common.expressions.PreferBind;
 import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
 import anyparse.check.haxe.loops.MappedComprehension.Mapping;
+import anyparse.query.Constructs;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NominalTypes;
 import anyparse.query.StdTypes;
@@ -29,8 +30,11 @@ private typedef Seams = {
 /** One identity map: the array it copies and, when the body ascribes the element, where that type is written. */
 private typedef Hit = { final iterable: QueryNode; final iterableSpan: Span; final typeSpan: Null<Span>; };
 
-/** A finding's edit — its span and the text that replaces it — and whether the map widens a type or only copies. */
-private typedef Match = { final edit: FixEdit; final widens: Bool; };
+/**
+ * A finding's span, the edit the grammar built to replace it (null when
+ * it builds none), and whether the map widens a type or only copies.
+ */
+private typedef Match = { final span: Span; final edit: Null<FixEdit>; final widens: Bool; };
 
 /** What `IdentityMap` asks of one file: the nominal and written type of an expression, and the index its type names resolve in. */
 private typedef Typing = {
@@ -86,10 +90,11 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: String -> Null<SymbolIndex> = PreferBind.coveringIndex(files, plugin);
+		// The report keeps only spans: no constructs, so no edit is built per finding and thrown away.
 		return RunScan.collectWith(files, plugin, readSeams(plugin), (entry, tree, seams, violations) -> {
-			for (m in matches(tree, entry.file, entry.source, seams, plugin, index)) violations.push({
+			for (m in matches(tree, entry.file, entry.source, seams, plugin, null, index)) violations.push({
 				file: entry.file,
-				span: m.edit.span,
+				span: m.span,
 				rule: RULE_ID,
 				severity: Severity.Info,
 				message: m.widens ? MESSAGE_WIDEN : MESSAGE_COPY
@@ -102,17 +107,23 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null || violations.length == 0) return [];
 		final file: String = violations[0].file;
-		return CheckScan.applyTextMatches(
-			plugin, source, violations,
-			(tree, text) ->
-				matches(tree, file, text, seams, plugin, PreferBind.coveringIndex([{ file: file, source: source }], plugin, index))
-					.map(m -> m.edit)
-		);
+		final build: Null<Constructs> = plugin.constructs();
+		return CheckScan.applyTextMatches(plugin, source, violations, (tree, text) -> {
+			final edits: Array<FixEdit> = [];
+			for (m in matches(
+				tree, file, text, seams, plugin, build, PreferBind.coveringIndex([{ file: file, source: source }], plugin, index)
+			)) {
+				final edit: Null<FixEdit> = m.edit;
+				if (edit != null) edits.push(edit);
+			}
+			return edits;
+		});
 	}
 
 	/** Every identity map under `tree` with its rewrite; one inside a flagged map's iterable is the next `--fix` pass. */
 	private static function matches(
-		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
+		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, build: Null<Constructs>,
+		index: String -> Null<SymbolIndex>
 	): Array<Match> {
 		final out: Array<Match> = [];
 		var typing: Null<Typing> = null;
@@ -126,13 +137,11 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 				typing ??= typingOf(tree, file, source, plugin, index(file));
 				final ty: Null<Typing> = typing;
 				if (ty != null && provesIdentity(hit, at, source, regions, ty, seams)) {
-					final typeSpan: Null<Span> = hit.typeSpan;
-					final iterable: String = source.substring(hit.iterableSpan.from, hit.iterableSpan.to);
-					final base: String = typeSpan == null
-						? iterable
-						: '($iterable : $ARRAY_TYPE<${source.substring(typeSpan.from, typeSpan.to)}>)';
 					final held: Bool = copiedByParent(node, parent, seams);
-					out.push({ edit: { span: at, text: held ? base : '$base.$COPY_METHOD()' }, widens: typeSpan != null });
+					final rewritten: Null<Built> = rewrite(build, source, hit, held);
+					out.push(
+						{ span: at, edit: rewritten == null ? null : { span: at, text: rewritten.text }, widens: hit.typeSpan != null }
+					);
 					return;
 				}
 			}
@@ -140,6 +149,23 @@ final class IdentityMap extends HaxeRule implements DefaultOff implements RiskyF
 		}
 		walk(tree, null);
 		return out;
+	}
+
+	/** What the map `hit` says, built by the grammar: the array, ascribed to the element type the body writes, and copied unless `held`. */
+	private static function rewrite(build: Null<Constructs>, source: String, hit: Hit, held: Bool): Null<Built> {
+		if (build == null) return null;
+		final typeSpan: Null<Span> = hit.typeSpan;
+		// The grammar builds neither a type ascription nor a type application: the widening form is spelled, then parsed back.
+		final ascribed: Null<String> = typeSpan == null
+			? null
+			: '(${source.substring(hit.iterableSpan.from, hit.iterableSpan.to)} : $ARRAY_TYPE<'
+				+ '${source.substring(typeSpan.from, typeSpan.to)}>)';
+		final base: Null<Built> = ascribed == null
+			? build.copied(source, hit.iterableSpan, Expression)
+			: build.copied(ascribed, new Span(0, ascribed.length), Expression);
+		if (base == null || held) return base;
+		final callee: Null<Built> = build.qualified(base, COPY_METHOD);
+		return callee == null ? null : build.call(callee, []);
 	}
 
 	/** The iterable and the ascription when `node` maps each element to itself, or to itself ascribed; else null. */

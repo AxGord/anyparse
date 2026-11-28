@@ -77,6 +77,8 @@ class PreferMapCheckTest extends Test {
 	public function testFilterNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('final ys = [for (x in xs) if (x > 0) one(x)];')).length);
 		Assert.equals(0, violations(wrap('final ys = [for (p in ps) if (p.a > 0) p.a];')).length);
+		// Nested, the else-less `if` still drops elements: the grammar builds the lambda, so only this rule refuses it.
+		Assert.equals(0, violations(wrap('final ys = [for (x in xs) one(if (x > 0) x)];')).length);
 	}
 
 	/** A body that is not one value expression keeps the comprehension. */

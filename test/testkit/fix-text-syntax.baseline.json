@@ -256,22 +256,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/expressions/JoinDeclarationAssignment.hx",
-    "line": 115,
-    "col": 88,
-    "endLine": 115,
-    "endCol": 121,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "JoinDeclarationAssignment.fix",
-      "subject": "=",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/expressions/LambdaBranchingBodyBlock.hx",
     "line": 132,
     "col": 26,
@@ -288,26 +272,10 @@
     }
   },
   {
-    "file": "src/anyparse/check/common/expressions/NarrowLocalScope.hx",
-    "line": 172,
-    "col": 64,
-    "endLine": 172,
-    "endCol": 93,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`;\\n`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "NarrowLocalScope.fix",
-      "subject": ";\\n",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/common/expressions/PreferArrowCallback.hx",
-    "line": 334,
+    "line": 294,
     "col": 17,
-    "endLine": 359,
+    "endLine": 319,
     "endCol": 3,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1152,22 +1120,6 @@
     }
   },
   {
-    "file": "src/anyparse/check/haxe/expressions/PreferCopyMethod.hx",
-    "line": 150,
-    "col": 32,
-    "endLine": 150,
-    "endCol": 73,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`.`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferCopyMethod.fix",
-      "subject": ".",
-      "chain": []
-    }
-  },
-  {
     "file": "src/anyparse/check/haxe/expressions/PreferStaticExtension.hx",
     "line": 484,
     "col": 50,
@@ -1200,106 +1152,10 @@
     }
   },
   {
-    "file": "src/anyparse/check/haxe/loops/IdentityMap.hx",
-    "line": 135,
-    "col": 41,
-    "endLine": 135,
-    "endCol": 78,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`(`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "IdentityMap.matches",
-      "subject": "(",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/loops/LambdaLoopScan.hx",
-    "line": 1103,
+    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
+    "line": 748,
     "col": 50,
-    "endLine": 1103,
-    "endCol": 110,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "LambdaLoopScan.buildEdit",
-      "subject": "return",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/loops/LambdaLoopScan.hx",
-    "line": 1109,
-    "col": 32,
-    "endLine": 1109,
-    "endCol": 63,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "LambdaLoopScan.buildEdit",
-      "subject": "=",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
-    "line": 731,
-    "col": 31,
-    "endLine": 731,
-    "endCol": 55,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`=`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferFind.buildEdits",
-      "subject": "=",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
-    "line": 497,
-    "col": 17,
-    "endLine": 499,
-    "endCol": 3,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "helper `findCall` returns text that spells syntax of the grammar it edits, and its result reaches edit text — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "helper",
-      "function": "PreferFind.findCall",
-      "subject": "findCall -> edit text",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
-    "line": 745,
-    "col": 68,
-    "endLine": 745,
-    "endCol": 87,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`return`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferFind.buildEdits",
-      "subject": "return",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/loops/PreferFind.hx",
-    "line": 752,
-    "col": 50,
-    "endLine": 752,
+    "endLine": 748,
     "endCol": 64,
     "severity": "info",
     "rule": "fix-text-syntax",
@@ -1308,22 +1164,6 @@
       "family": "literal",
       "function": "PreferFind.buildEdits",
       "subject": ";",
-      "chain": []
-    }
-  },
-  {
-    "file": "src/anyparse/check/haxe/loops/PreferMap.hx",
-    "line": 154,
-    "col": 34,
-    "endLine": 154,
-    "endCol": 114,
-    "severity": "info",
-    "rule": "fix-text-syntax",
-    "message": "the text of this edit spells syntax of the grammar it edits (`.map(`) — a fix names what it needs and a grammar component spells it",
-    "data": {
-      "family": "literal",
-      "function": "PreferMap.matches",
-      "subject": ".map(",
       "chain": []
     }
   },

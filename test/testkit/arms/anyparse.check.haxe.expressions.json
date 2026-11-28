@@ -1030,6 +1030,13 @@
 			"find": "if (build == null) return refused('the grammar builds no members');",
 			"replace": "if (build == null) return { name: named, slices: [], noFix: null, sites: sites };",
 			"note": "a grammar that builds no constructs leaves each group with no fix and no reason, so the unfixed ledger names nothing"
+		},
+		{
+			"name": "M-PCM-COPY-SPELLED",
+			"type": "anyparse.check.haxe.expressions.PreferCopyMethod",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: '' }]",
+			"note": "a copy call spelled by the rule itself writes an edit where the grammar builds none"
 		}
 	]
 }

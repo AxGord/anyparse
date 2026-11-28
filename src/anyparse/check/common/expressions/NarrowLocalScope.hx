@@ -2,6 +2,7 @@ package anyparse.check.common.expressions;
 
 import anyparse.query.CanonicalEdit;
 import anyparse.query.CondRegionScan;
+import anyparse.query.Constructs;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions.LexRegion;
 import anyparse.query.NodeShape;
@@ -13,7 +14,6 @@ import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
 using anyparse.util.Strings;
-using StringTools;
 
 /** The kinds `NarrowLocalScope` reads, plus the `RefShape` the `Refs` walk needs. */
 private typedef Seams = {
@@ -33,7 +33,6 @@ private typedef Match = {
 	var name: String;
 	var declSpan: Span;
 	var removeSpan: Span;
-	var declText: String;
 	var insertAt: Int;
 	var indent: String;
 }
@@ -162,17 +161,24 @@ final class NarrowLocalScope extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
-			final byKey: Map<String, Match> = [];
-			for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source))) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
+		final build: Null<Constructs> = plugin.constructs();
+		return build == null
+			? []
+			: RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+				final byKey: Map<String, Match> = [];
+				for (m in collectMatches(tree, source, seams, plugin.lexicalRegions(source)))
+					byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
-			final edits: Array<{ span: Span, text: String }> = [];
-			RunScan.eachMatched(violations, byKey, (m, _) -> {
-				edits.push({ span: m.removeSpan, text: '' });
-				edits.push({ span: new Span(m.insertAt, m.insertAt), text: '${m.indent}${m.declText};\n' });
+				final edits: Array<{ span: Span, text: String }> = [];
+				RunScan.eachMatched(violations, byKey, (m, _) -> {
+					// The declaration moves whole, copied as the statement it is; only the line it lands on is laid out here.
+					final moved: Null<Built> = build.copied(source, m.declSpan, Statement);
+					if (moved == null) return;
+					edits.push({ span: m.removeSpan, text: '' });
+					edits.push({ span: new Span(m.insertAt, m.insertAt), text: '${m.indent}${moved.text}\n' });
+				});
+				return CanonicalEdit.dropContainedEdits(edits);
 			});
-			return CanonicalEdit.dropContainedEdits(edits);
-		});
 	}
 
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */
@@ -270,7 +276,6 @@ final class NarrowLocalScope extends RuleBase {
 			name: name,
 			declSpan: declSpan,
 			removeSpan: removeSpan,
-			declText: source.substring(declSpan.from, declSpan.to - 1).rtrim(),
 			insertAt: source.lineStart(targetSpan.from),
 			indent: SourceText.lineIndentAt(source, targetSpan.from)
 		};

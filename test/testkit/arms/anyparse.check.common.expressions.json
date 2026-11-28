@@ -601,6 +601,28 @@
 			"find": "binder != null && binder.expectsResult(",
 			"replace": "binder != null && !binder.expectsResult(",
 			"note": "a hint the callee parameter restates is refused, so the motivating site stays a local function"
+		},
+		{
+			"name": "M-JDA-JOIN-SPELLED",
+			"type": "anyparse.check.common.expressions.JoinDeclarationAssignment",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: '' }]",
+			"note": "a join spelled by the rule itself writes an edit where the grammar builds no declaration"
+		},
+		{
+			"name": "M-NLS-MOVE-SPELLED",
+			"type": "anyparse.check.common.expressions.NarrowLocalScope",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: '' }]",
+			"note": "a sink spelled by the rule itself moves a declaration the grammar would not copy"
+		},
+		{
+			"name": "M-JDA-NO-MUTABLE-KINDS-PERMISSIVE",
+			"type": "anyparse.check.common.expressions.JoinDeclarationAssignment",
+			"method": "readSeams",
+			"find": "if (mutableKinds == null || mutableKinds.length == 0) return null;",
+			"replace": "if (mutableKinds == null) return null;",
+			"note": "an empty mutable-kind list counts every declaration constant, so a joined `var` is written `final` and a later assignment no longer compiles"
 		}
 	]
 }

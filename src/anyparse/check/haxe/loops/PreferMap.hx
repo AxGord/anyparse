@@ -8,6 +8,7 @@ import anyparse.check.haxe.loops.MappedComprehension.ComprehensionSeams;
 import anyparse.check.haxe.loops.MappedComprehension.Mapping;
 import anyparse.check.scan.OperandBinder;
 import anyparse.query.BinderScan;
+import anyparse.query.Constructs;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NominalTypes;
 import anyparse.query.SourceText;
@@ -89,6 +90,9 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 	/** The lead-in of a finding's message; the rewrite it quotes follows, and `messageIdentity` masks that tail. */
 	private static final MESSAGE_LEAD: String = 'this comprehension maps each element — it can be ';
 
+	/** The method the rewrite calls on the array. */
+	private static final MAP_METHOD: String = 'map';
+
 	public function new() {
 		super(
 			RULE_ID, 'an array comprehension mapping each element, replaceable with xs.map(f.bind(a)) or xs.map(x -> body)',
@@ -127,6 +131,7 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 		tree: QueryNode, file: String, source: String, seams: Seams, plugin: GrammarPlugin, index: String -> Null<SymbolIndex>
 	): Array<FixEdit> {
 		final out: Array<FixEdit> = [];
+		final build: Null<Constructs> = plugin.constructs();
 		final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
 		var bind: Null<(QueryNode, Int) -> Null<String>> = null;
 		var nominal: Null<(QueryNode) -> Null<String>> = null;
@@ -145,13 +150,13 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 				}
 				final types: Null<(QueryNode) -> Null<String>> = nominal;
 				final type: Null<String> = types == null ? null : types(head.iterable);
-				final mapper: Null<String> = type != null && seams.arrayTypeNames.contains(type) && gapsHoldNoComment(head, at, regions)
-					? boundMapper(head, bind, regions, seams) ?? lambdaMapper(head, source, seams)
+				final mapped: Null<Built> = type != null && seams.arrayTypeNames.contains(type) && gapsHoldNoComment(head, at, regions)
+					? mapCall(build, source, head, bind, regions, seams)
 					: null;
-				if (mapper != null) {
+				if (mapped != null) {
 					final holds: (QueryNode, QueryNode) -> Bool = keeps ?? (keeps = elementProof(source, plugin, tree, file, index));
 					if (holds(node, head.body)) {
-						out.push({ span: at, text: '${source.substring(head.iterableSpan.from, head.iterableSpan.to)}.map($mapper)' });
+						out.push({ span: at, text: mapped.text });
 						return;
 					}
 				}
@@ -164,8 +169,8 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 
 	/** The partial application the body is when it is one call taking the binder as one bare argument and `bind` is proven. */
 	private static function boundMapper(
-		m: Mapping, bind: Null<(QueryNode, Int) -> Null<String>>, regions: () -> Array<LexRegion>, s: Seams
-	): Null<String> {
+		m: Mapping, bind: Null<(QueryNode, Int) -> Null<String>>, regions: () -> Array<LexRegion>, s: Seams, build: Constructs
+	): Null<Built> {
 		final call: QueryNode = m.body;
 		if (bind == null || call.kind != s.callKind || LexicalRegions.commentIntersects(m.bodySpan.from, m.bodySpan.to, regions()))
 			return null;
@@ -176,19 +181,38 @@ final class PreferMap extends HaxeRule implements DefaultOff implements RiskyFix
 			if (free >= 0) return null;
 			free = i - 1;
 		}
-		return free < 0 ? null : bind(call, free);
+		final bound: Null<String> = free < 0 ? null : bind(call, free);
+		return bound == null ? null : build.copied(bound, new Span(0, bound.length), Expression);
 	}
 
 	/** `x -> body` when the body is one value expression reading the binder. */
-	private static function lambdaMapper(m: Mapping, source: String, s: Seams): Null<String> {
-		return !s.lambdaForm
+	private static function lambdaMapper(m: Mapping, source: String, s: Seams, build: Constructs): Null<Built> {
+		if (
+			!s.lambdaForm
 			|| MappedComprehension.isBinder(m.body, m.binder, s)
 			|| isAscribedBinder(m.body, m.binder, s)
 			|| !readsName(m.body, m.binder, s)
 			|| leavesValue(m.body, m.binder, s)
 			|| BinderScan.boundNames(m.body, s.shape).contains(m.binder)
-			? null
-			: '${m.binder} -> ${source.substring(m.bodySpan.from, m.bodySpan.to)}';
+		)
+			return null;
+		final body: Null<Built> = build.copied(source, m.bodySpan, Expression);
+		return body == null ? null : build.lambda([m.binder], body);
+	}
+
+	/**
+	 * The `map` call the comprehension `m` folds into, mapping by the partial application
+	 * of its body or else by a lambda; built by the grammar, null when it builds none.
+	 */
+	private static function mapCall(
+		build: Null<Constructs>, source: String, m: Mapping, bind: Null<(QueryNode, Int) -> Null<String>>, regions: () -> Array<LexRegion>,
+		s: Seams
+	): Null<Built> {
+		if (build == null) return null;
+		final mapper: Null<Built> = boundMapper(m, bind, regions, s, build) ?? lambdaMapper(m, source, s, build);
+		final iterable: Null<Built> = mapper == null ? null : build.copied(source, m.iterableSpan, Expression);
+		final callee: Null<Built> = iterable == null ? null : build.qualified(iterable, MAP_METHOD);
+		return callee == null || mapper == null ? null : build.call(callee, [mapper]);
 	}
 
 	private static function readsName(node: QueryNode, name: String, s: Seams): Bool {

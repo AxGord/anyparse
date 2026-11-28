@@ -5,6 +5,7 @@ import anyparse.check.scan.LoopScan;
 import anyparse.check.scan.UsingScan;
 import anyparse.query.BinderScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
 import anyparse.query.IndexScope;
 import anyparse.query.LexicalRegions;
 import anyparse.query.NodeShape;
@@ -36,8 +37,6 @@ private typedef Seams = {
 	var fieldAccessKind: Null<String>;
 	var nullSafeAccessKind: Null<String>;
 	var forceFieldAccessKind: Null<String>;
-	var indexAccessKind: Null<String>;
-	var parenKind: Null<String>;
 
 	/**
 	 * The STATEMENT-LIST kinds (`ControlFlowSupport.blockKinds`) whose direct children may be
@@ -273,12 +272,14 @@ final class PreferFind extends HaxeRule {
 			// name: a `byKey` miss got no edit for its own reason, and the `using` gate did not decide it.
 			final accepted: Array<Violation> = [];
 			final regions: () -> Array<LexRegion> = ElementSpan.lazyRegions(source, plugin);
+			final build: Null<Constructs> = plugin.constructs();
+			if (build == null) return [];
 			for (v in violations) {
 				final span: Null<Span> = v.span;
 				if (span == null) continue;
 				final cand: Null<FixCandidate> = byKey['${span.from}:${span.to}'];
 				if (cand == null) continue;
-				final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, regions, s, plugin);
+				final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, regions, s, plugin, build);
 				if (candEdits == null || CanonicalEdit.editsOverlapAny(candEdits, edits)) continue;
 				for (e in candEdits) edits.push(e);
 				accepted.push(v);
@@ -337,8 +338,6 @@ final class PreferFind extends HaxeRule {
 			fieldAccessKind: shape.fieldAccessKind,
 			nullSafeAccessKind: shape.nullSafeAccessKind,
 			forceFieldAccessKind: shape.forceFieldAccessKind,
-			indexAccessKind: shape.indexAccessKind,
-			parenKind: shape.parenKind,
 			blockKinds: blockKinds
 		};
 	}
@@ -706,35 +705,29 @@ final class PreferFind extends HaxeRule {
 
 	/** The span edits rewriting `cand`'s loop to `xs.find(v -> cond)`, or null when a fix gate refuses it (then it stays a finding). */
 	private static function buildEdits(
-		cand: FixCandidate, source: String, regions: () -> Array<LexRegion>, s: Seams, plugin: GrammarPlugin
+		cand: FixCandidate, source: String, regions: () -> Array<LexRegion>, s: Seams, plugin: GrammarPlugin, build: Constructs
 	): Null<Array<{ span: Span, text: String }>> {
 		if (!condIsPure(cand.cond, s)) return null;
 		final iterSpan: Null<Span> = cand.iterable.span;
 		final condSpan: Null<Span> = cand.cond.span;
 		final forSpan: Null<Span> = cand.forNode.span;
 		if (iterSpan == null || condSpan == null || forSpan == null) return null;
-		// The QUALIFIED spelling puts the receiver in an ARGUMENT slot, where no expression needs
-		// parenthesising; only the extension form binds `.find(` onto it as a postfix.
-		final iterSrc: String = parenthesizeUnless(
-			source.substring(iterSpan.from, iterSpan.to), cand.qualified || postfixSafe(cand.iterable.kind, s)
-		);
-		final findExpr: String = findCall(iterSrc, cand.loopVar, source.substring(condSpan.from, condSpan.to), cand.qualified);
+		final findExpr: Null<Built> = findBuilt(build, source, cand, iterSpan, condSpan);
+		if (findExpr == null) return null;
 		if (cand.form == FindForm.GuardedBreak) {
 			// The declaration is NOT rewritten: its `null` is what the guard's false path must
 			// still observe. Only the loop — the guard's whole body — collapses to the assignment.
-			final decl: QueryNode = cand.sibling;
-			final declName: Null<String> = cand.declName;
-			return declName == null
-				|| !declTypeTolerable(decl, source)
+			final assigned: Null<Built> = !declTypeTolerable(cand.sibling, source)
 				|| CheckScan.regionHoldsComment(regions, forSpan, [iterSpan, condSpan])
 				? null
-				: [{ span: forSpan, text: '$declName = $findExpr;' }];
+				: assignmentOf(build, cand.declName, findExpr);
+			return assigned == null ? null : [{ span: forSpan, text: assigned.text }];
 		}
 		if (cand.form == FindForm.Break) {
 			final decl: QueryNode = cand.sibling;
 			if (!declTypeTolerable(decl, source) || decl.children.length < 1) return null;
 			final nullSpan: Null<Span> = decl.children[0].span;
-			return nullSpan == null ? null : [{ span: nullSpan, text: findExpr }, { span: forSpan, text: '' }];
+			return nullSpan == null ? null : [{ span: nullSpan, text: findExpr.text }, { span: forSpan, text: '' }];
 		}
 		final ret: QueryNode = cand.sibling;
 		final retSpan: Null<Span> = ret.span;
@@ -742,15 +735,42 @@ final class PreferFind extends HaxeRule {
 			return null;
 		final fallback: QueryNode = ret.children[0];
 		final whole: Span = new Span(forSpan.from, retSpan.to);
-		if (fallback.kind == s.nullLitKind) return [{ span: whole, text: 'return $findExpr;' }];
+		if (fallback.kind == s.nullLitKind) {
+			final returned: Null<Built> = build.returning(findExpr);
+			return returned == null ? null : [{ span: whole, text: returned.text }];
+		}
 		final fbSpan: Null<Span> = fallback.span;
 		if (fbSpan == null) return null;
 		// The fallback is a hole for `ParenGuard`, which parenthesises it exactly where it would bind across
 		// `??` bare — a ternary, an assignment, a comparison, `&&` / `||` (`??` binds tighter than all of them).
-		final head: String = 'return $findExpr ?? ';
+		final head: String = 'return ${findExpr.text} ?? ';
 		final fbSrc: String = source.substring(fbSpan.from, fbSpan.to);
 		final edit: GuardedEdit = { span: whole, text: '$head$fbSrc;', holes: [new Span(head.length, head.length + fbSrc.length)] };
 		return ParenGuard.guard(source, [edit], plugin);
+	}
+
+	/**
+	 * The `find` call `cand`'s loop folds into, built by the grammar: on the iterable, or through `Lambda` when a receiver
+	 * member shadows the extension. Null when the grammar builds none.
+	 */
+	private static function findBuilt(build: Constructs, source: String, cand: FixCandidate, iterSpan: Span, condSpan: Span): Null<Built> {
+		final iterable: Null<Built> = build.copied(source, iterSpan, Expression);
+		final cond: Null<Built> = build.copied(source, condSpan, Expression);
+		final predicate: Null<Built> = cond == null ? null : build.lambda([cand.loopVar], cond);
+		if (iterable == null || predicate == null) return null;
+		if (!cand.qualified) {
+			final extension: Null<Built> = build.qualified(iterable, FIND_METHOD);
+			return extension == null ? null : build.call(extension, [predicate]);
+		}
+		final module: Null<Built> = build.typeRef(LAMBDA_MODULE);
+		final routed: Null<Built> = module == null ? null : build.qualified(module, FIND_METHOD);
+		return routed == null ? null : build.call(routed, [iterable, predicate]);
+	}
+
+	/** The statement giving the local `name` the value `value`, built by the grammar; null without a name or a construct. */
+	private static function assignmentOf(build: Constructs, name: Null<String>, value: Built): Null<Built> {
+		final target: Null<Built> = name == null ? null : build.copied(name, new Span(0, name.length), Expression);
+		return target == null ? null : build.assignment(target, value);
 	}
 
 	/**
@@ -797,21 +817,6 @@ final class PreferFind extends HaxeRule {
 		if (colon == -1) return true;
 		final eq: Int = prefix.lastIndexOf('=');
 		return prefix.substring(colon + 1, eq == -1 ? prefix.length : eq).trim().startsWith('Null');
-	}
-
-
-	/** `src` verbatim when `safe`, else wrapped in parentheses — keeps a spliced sub-expression's precedence intact. */
-	private static function parenthesizeUnless(src: String, safe: Bool): String {
-		return safe ? src : '($src)';
-	}
-
-	/**
-	 * Whether `kind` is a postfix / primary expression that `.find(...)` binds directly onto
-	 * (no wrapping parens needed); a looser operator (ternary / binary) iterable is wrapped.
-	 */
-	private static function postfixSafe(kind: String, s: Seams): Bool {
-		return kind == s.identKind || kind == s.fieldAccessKind || kind == s.nullSafeAccessKind || kind == s.forceFieldAccessKind
-			|| kind == s.indexAccessKind || kind == s.parenKind || kind == s.callKind || kind == s.newExprKind;
 	}
 
 	/**

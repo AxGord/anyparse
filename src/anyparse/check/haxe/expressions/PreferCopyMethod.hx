@@ -7,6 +7,7 @@ import anyparse.check.haxe.expressions.CompareFunctions.ConfigProblem;
 import anyparse.check.haxe.expressions.CopyPairInference.InferredCopy;
 import anyparse.check.scan.PurityScan;
 import anyparse.grammar.json.JValue;
+import anyparse.query.Constructs;
 import anyparse.query.ElementSpan;
 import anyparse.query.LexicalRegions;
 import anyparse.query.ShapeVocab;
@@ -137,6 +138,7 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 	public function fix(source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex): Array<FixEdit> {
 		// A configuration error has no site to fix: said here, or `--fix`, which lists no findings, would never mention it.
 		for (v in violations) if (v.span == null) v.declineReason = v.message;
+		final build: Null<Constructs> = plugin.constructs();
 		return RunScan.matchedEdits(
 			plugin, source, readSeams(plugin), violations.filter(v -> v.span != null), index, (tree, seams, symbols, file) -> {
 				final declared: Pairs = pairsOf(file, plugin, symbols);
@@ -147,7 +149,10 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 						plugin, symbols()
 					);
 			},
-			c -> [{ span: c.span, text: '${c.site.receiverText}.${c.pair.copy}()' }]
+			c -> {
+				final copy: Null<Built> = copyCall(build, source, c.site.receiver, c.pair.copy);
+				return copy == null ? [] : [{ span: c.span, text: copy.text }];
+			}
 		);
 	}
 
@@ -362,6 +367,15 @@ final class PreferCopyMethod extends HaxeRule implements DefaultOff implements C
 			methodKinds: ShapeVocab.methodDeclKinds(shape),
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
+	}
+
+	/** The call of `method` on `receiver` as `source` spells it, built by the grammar; null when it builds none. */
+	private static function copyCall(build: Null<Constructs>, source: String, receiver: QueryNode, method: String): Null<Built> {
+		final span: Null<Span> = receiver.span;
+		if (build == null || span == null) return null;
+		final owner: Null<Built> = build.copied(source, span, Expression);
+		final callee: Null<Built> = owner == null ? null : build.qualified(owner, method);
+		return callee == null ? null : build.call(callee, []);
 	}
 
 }

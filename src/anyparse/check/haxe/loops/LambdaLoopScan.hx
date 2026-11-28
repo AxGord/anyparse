@@ -19,6 +19,7 @@ import anyparse.check.scan.UsingScan;
 import anyparse.check.common.loops.DeadBinderCounterLoop;
 import anyparse.query.NominalTypes;
 import anyparse.check.common.control.BranchChain;
+import anyparse.query.Constructs;
 
 /**
  * Which of the three loop directions a scan claims — disjoint by the sink: the
@@ -363,7 +364,8 @@ final class LambdaLoopScan {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, index: Null<SymbolIndex>, kind: LambdaLoopKind
 	): Array<GroupedEdit> {
 		final s: Null<Seams> = readSeams(plugin);
-		if (s == null) return [];
+		final build: Null<Constructs> = plugin.constructs();
+		if (s == null || build == null) return [];
 		final tree: Null<QueryNode> = ParseGate.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final symbols: Null<SymbolIndex> = IndexScope.resolutionIndexOf(plugin) ?? index;
@@ -398,7 +400,7 @@ final class LambdaLoopScan {
 			if (span == null) continue;
 			final cand: Null<Cand> = byKey['${span.from}:${span.to}'];
 			if (cand == null) continue;
-			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, regions, s, kind);
+			final edit: Null<{ span: Span, text: String }> = buildEdit(cand, source, regions, s, kind, build);
 			if (edit == null || CanonicalEdit.editsOverlapAny([edit], rewrites)) continue;
 			rewrites.push(edit);
 			extensionForm.push(cand.head.spelling == CallSpelling.Extension);
@@ -1087,7 +1089,7 @@ final class LambdaLoopScan {
 
 	/** The one edit replacing `cand`'s loop (and its trailing return) with the call, or null when a gate refuses it. */
 	private static function buildEdit(
-		cand: Cand, source: String, regions: () -> Array<LexRegion>, s: Seams, kind: LambdaLoopKind
+		cand: Cand, source: String, regions: () -> Array<LexRegion>, s: Seams, kind: LambdaLoopKind, build: Constructs
 	): Null<{ span: Span, text: String }> {
 		final anchorSpan: Null<Span> = cand.anchor.span;
 		final trailingSpan: Null<Span> = cand.trailing.span;
@@ -1100,13 +1102,21 @@ final class LambdaLoopScan {
 		final core: String = callText(cand.head, parts.iterable, parts.predicate, kind);
 		final guard: Null<String> = parts.guard;
 		final flag: Null<Flag> = cand.flag;
-		if (flag == null) return { span: region, text: guard == null ? 'return $core;' : 'return $guard && $core;' };
-		// `final`, not the original `var`: the fold leaves the binding written exactly once, at its
+		// The grammar builds no conjunction: a guarded fold's value is its spelled `guard && call`, parsed back.
+		final valueText: String = flag != null || guard == null ? core : '$guard && $core';
+		final value: Null<Built> = build.copied(valueText, new Span(0, valueText.length), Expression);
+		if (value == null) return null;
+		if (flag == null) {
+			final returned: Null<Built> = build.returning(value);
+			return returned == null ? null : { span: region, text: returned.text };
+		}
+		// A constant, not the original variable: the fold leaves the binding written exactly once, at its
 		// declaration, and the single-write gate is what proved that. The annotation rides along
 		// verbatim — it can be what TYPES the initializer, and the call's own type is not it.
 		final annotation: Null<String> = flag.annotation;
-		final head: String = annotation == null ? flag.name : '${flag.name}:$annotation';
-		return { span: region, text: '$FINAL_KEYWORD $head = $core;' };
+		final type: Null<Built> = annotation == null ? null : build.typeRef(annotation);
+		final declared: Null<Built> = annotation != null && type == null ? null : build.local(Constant, flag.name, type, value);
+		return declared == null ? null : { span: region, text: declared.text };
 	}
 
 	/**

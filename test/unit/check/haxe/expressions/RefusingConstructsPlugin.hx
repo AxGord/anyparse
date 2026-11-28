@@ -159,17 +159,20 @@ final class RefusingConstructs implements Constructs {
 }
 
 /**
- * The Haxe plugin whose `constructs()` answers what `wrap` makes of the Haxe builder, every other method delegating — the way
- * a fix is driven against a grammar that refuses a construct, or builds none, which the real Haxe builder never does.
+ * The Haxe plugin whose `constructs()` answers what `wrap` makes of the Haxe builder, and whose `refShape()` what `shape`
+ * makes of the Haxe shape, every other method delegating — the way a fix is driven against a grammar that refuses a
+ * construct, builds none, or leaves a seam unset, which the real Haxe plugin never does.
  */
 @:nullSafety(Strict)
 final class RefusingConstructsPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider {
 
 	private final _inner: HaxeQueryPlugin = new HaxeQueryPlugin();
 	private final _wrap: (Constructs) -> Null<Constructs>;
+	private final _shape: Null<(RefShape) -> RefShape>;
 
-	public function new(wrap: (Constructs) -> Null<Constructs>) {
+	public function new(wrap: (Constructs) -> Null<Constructs>, ?shape: (RefShape) -> RefShape) {
 		_wrap = wrap;
+		_shape = shape;
 	}
 
 	public function constructs(): Null<Constructs> {
@@ -190,7 +193,9 @@ final class RefusingConstructsPlugin implements GrammarPlugin implements TypeInf
 	}
 
 	public function refShape(): RefShape {
-		return _inner.refShape();
+		final real: RefShape = _inner.refShape();
+		final edit: Null<(RefShape) -> RefShape> = _shape;
+		return edit == null ? real : edit(real);
 	}
 
 	public function projectedKinds(): Array<String> {

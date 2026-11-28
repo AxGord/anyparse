@@ -3,6 +3,8 @@ package unit.check.common.expressions;
 import anyparse.check.Severity;
 import anyparse.check.common.expressions.JoinDeclarationAssignment;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.GrammarPlugin.RefShape;
+import unit.check.haxe.expressions.RefusingConstructsPlugin;
 
 /**
  * The `join-declaration-assignment` check: a bare local declaration immediately followed by
@@ -125,6 +127,29 @@ class JoinDeclarationAssignmentCheckTest extends Test {
 	 */
 	public function testGuardBetweenDeclarationAndAssignmentNotJoined(): Void {
 		Assert.equals(0, violations(wrap('var x:Int;\n\t\tif (c) return;\n\t\tx = f();\n\t\ttrace(x);')).length);
+	}
+
+	/**
+	 * A grammar that names no mutable declaration kind leaves the rule inert: the joined declaration is built by its kind,
+	 * and without the seam a `var` would come back a constant that a later assignment can no longer write.
+	 */
+	@:pin('control')
+	@:killer('M-JDA-NO-MUTABLE-KINDS-PERMISSIVE')
+	public function testNoMutableDeclarationKindsLeavesTheRuleInert(): Void {
+		final source: String = wrap('var x;\n\t\tx = 1;\n\t\tx = 2;');
+		Assert.equals(1, violations(source).length, 'the real grammar names its mutable kinds');
+		final empty: RefusingConstructsPlugin = new RefusingConstructsPlugin(c -> c, shape -> {
+			final copy: RefShape = Reflect.copy(shape);
+			copy.mutableLocalDeclKinds = [];
+			return copy;
+		});
+		Assert.equals(0, CheckFixture.violations(new JoinDeclarationAssignment(), source, empty).length, 'an empty list');
+		final unset: RefusingConstructsPlugin = new RefusingConstructsPlugin(c -> c, shape -> {
+			final copy: RefShape = Reflect.copy(shape);
+			Reflect.deleteField(copy, 'mutableLocalDeclKinds');
+			return copy;
+		});
+		Assert.equals(0, CheckFixture.violations(new JoinDeclarationAssignment(), source, unset).length, 'an unset seam');
 	}
 
 	/** Wrap a statement body in a minimal parseable class + method. */

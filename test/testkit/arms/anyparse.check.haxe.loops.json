@@ -369,6 +369,42 @@
 			"find": "element != null && element == bodyType(body)",
 			"replace": "false",
 			"note": "a comprehension whose expected element is the type its body has is left as written"
+		},
+		{
+			"name": "M-LAMBDA-LOOP-FOLD-SPELLED",
+			"type": "anyparse.check.haxe.loops.LambdaLoopScan",
+			"method": "edits",
+			"force": "[{ span: new Span(0, 0), text: '', group: null }]",
+			"note": "a fold spelled by the rule itself writes a return the grammar builds none of"
+		},
+		{
+			"name": "M-PREFER-FIND-SPELLED",
+			"type": "anyparse.check.haxe.loops.PreferFind",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: '' }]",
+			"note": "a find call spelled by the rule itself writes an edit where the grammar builds none"
+		},
+		{
+			"name": "M-PREFER-MAP-SPELLED",
+			"type": "anyparse.check.haxe.loops.PreferMap",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: '' }]",
+			"note": "a map call spelled by the rule itself writes an edit where the grammar builds none"
+		},
+		{
+			"name": "M-IDENTITY-MAP-SPELLED",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "fix",
+			"force": "[{ span: new Span(0, 0), text: '' }]",
+			"note": "a copy spelled by the rule itself writes an edit where the grammar builds none"
+		},
+		{
+			"name": "M-IDENTITY-MAP-RUN-NEEDS-EDIT",
+			"type": "anyparse.check.haxe.loops.IdentityMap",
+			"method": "run",
+			"find": "seams, plugin, null, index)) violations.push({",
+			"replace": "seams, plugin, null, index)) if (m.edit != null) violations.push({",
+			"note": "a finding whose edit the grammar cannot build is dropped from the report"
 		}
 	]
 }

@@ -2,18 +2,18 @@ package anyparse.check.common.expressions;
 
 import anyparse.check.scan.CheckScan;
 import anyparse.query.CanonicalEdit;
+import anyparse.query.Constructs;
 import anyparse.query.NodeShape;
 import anyparse.query.NodeTokens;
 import anyparse.query.SourceComments;
 import anyparse.query.SourceText;
 import anyparse.query.SymbolIndex;
 
-using StringTools;
-
 /** The kinds `JoinDeclarationAssignment` reads. */
 private typedef Seams = {
 	var localDeclKinds: Array<String>;
 	var localDeclContinuationKinds: Array<String>;
+	var mutableLocalDeclKinds: Array<String>;
 	var exprStmtKind: String;
 	var assignKind: String;
 	var identKind: String;
@@ -21,12 +21,14 @@ private typedef Seams = {
 	var blockKinds: Array<String>;
 }
 
-/** A joinable pair: the declaration span (finding key), the replaced span, and the two verbatim text pieces. */
+/** A joinable pair: the declaration span (finding key), the replaced span, the declared local and the r-value's span. */
 private typedef Match = {
 	var declSpan: Span;
 	var editSpan: Span;
-	var declText: String;
-	var rhsSource: String;
+	var name: String;
+	var kind: MemberKind;
+	var typeSpan: Null<Span>;
+	var rhsSpan: Span;
 }
 
 /**
@@ -69,8 +71,8 @@ private typedef Match = {
  *
  * ## Autofix
  *
- * `fix` replaces both statements with `<decl> = <rhs>;` -- the declaration verbatim minus
- * its trailing `;` (keyword and `:type` kept), the r-value verbatim from its span. Needs
+ * `fix` replaces both statements with the local declaration the grammar builds of the
+ * declared name, its keyword and its type, initialised to the r-value copied from its span. Needs
  * `localDeclKinds`, `exprStatementKind`, `assignKind` and `controlFlowSupport` (any unset
  * makes the check a no-op).
  */
@@ -104,17 +106,21 @@ final class JoinDeclarationAssignment extends RuleBase {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
-			final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
-				SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
-			final matches: Array<Match> = [];
-			collectMatches(tree, source, comments, seams, matches);
-			final byKey: Map<String, Match> = [ for (m in matches) '${m.declSpan.from}:${m.declSpan.to}' => m ];
+		final build: Null<Constructs> = plugin.constructs();
+		return build == null
+			? []
+			: RunScan.editsWith(plugin, source, readSeams(plugin), (tree, seams) -> {
+				final comments: Array<{ from: Int, to: Int, isLine: Bool }> =
+					SourceComments.collectCommentTokens(plugin.lexicalRegions(source));
+				final matches: Array<Match> = [];
+				collectMatches(tree, source, comments, seams, matches);
+				final byKey: Map<String, Match> = [ for (m in matches) '${m.declSpan.from}:${m.declSpan.to}' => m ];
 
-			return CanonicalEdit.dropContainedEdits(
-				CheckScan.collectSpanEdits(violations, byKey, (m, _) -> ({ span: m.editSpan, text: '${m.declText} = ${m.rhsSource};' }))
-			);
-		});
+				return CanonicalEdit.dropContainedEdits(CheckScan.collectSpanEdits(violations, byKey, (m, _) -> {
+					final joined: Null<Built> = joinedOf(build, source, m);
+					return joined == null ? null : { span: m.editSpan, text: joined.text };
+				}));
+			});
 	}
 
 	/** Bundle the required `RefShape` / control-flow kinds, or null when a required one is unset (the check is then a no-op). */
@@ -124,12 +130,15 @@ final class JoinDeclarationAssignment extends RuleBase {
 		if (localDeclKinds == null || localDeclKinds.length == 0) return null;
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		if (exprStmtKind == null) return null;
+		final mutableKinds: Null<Array<String>> = shape.mutableLocalDeclKinds;
+		if (mutableKinds == null || mutableKinds.length == 0) return null;
 		final assignKind: Null<String> = shape.assignKind;
 		if (assignKind == null) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		return support == null ? null : {
 			localDeclKinds: localDeclKinds,
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
+			mutableLocalDeclKinds: mutableKinds,
 			exprStmtKind: exprStmtKind,
 			assignKind: assignKind,
 			identKind: shape.identKind,
@@ -166,7 +175,7 @@ final class JoinDeclarationAssignment extends RuleBase {
 		if (name == null || declSpan == null) return null;
 		// A bare single-var decl ends in its own `;` token.
 		if (!NodeTokens.endsWithOwn(decl, source, ';')) return null;
-		final declText: String = source.substring(declSpan.from, declSpan.to - 1).rtrim();
+
 		if (SourceText.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
 
 		final binary: Null<QueryNode> = NodeShape.assignmentOf(assign, s.exprStmtKind, s.assignKind);
@@ -179,15 +188,30 @@ final class JoinDeclarationAssignment extends RuleBase {
 		final assignSpan: Null<Span> = assign.span;
 		final rhsSpan: Null<Span> = rhs.span;
 		if (assignSpan == null || rhsSpan == null) return null;
-		// Re-bind to a non-null local: narrowing does not reach the struct literal below.
+		// Re-bind to non-null locals: narrowing does not reach the struct literal below.
 		final keySpan: Span = declSpan;
+		final local: String = name;
+		final valueSpan: Span = rhsSpan;
 		final m: Match = {
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, assignSpan.to),
-			declText: declText,
-			rhsSource: source.substring(rhsSpan.from, rhsSpan.to)
+			name: local,
+			kind: s.mutableLocalDeclKinds.contains(decl.kind) ? Variable : Constant,
+			typeSpan: decl.type?.span,
+			rhsSpan: valueSpan
 		};
-		return droppedComment(keySpan, rhsSpan, assignSpan.to, comments) ? null : m;
+		return droppedComment(keySpan, valueSpan, assignSpan.to, comments) ? null : m;
+	}
+
+	/**
+	 * The declaration of `m`'s local, keyword and type kept, initialised
+	 * to its r-value: built by the grammar, null when it builds none.
+	 */
+	private static function joinedOf(build: Constructs, source: String, m: Match): Null<Built> {
+		final typeSpan: Null<Span> = m.typeSpan;
+		final type: Null<Built> = typeSpan == null ? null : build.copied(source, typeSpan, TypeExpr);
+		final value: Null<Built> = build.copied(source, m.rhsSpan, Expression);
+		return value == null || (typeSpan != null && type == null) ? null : build.local(m.kind, m.name, type, value);
 	}
 
 
